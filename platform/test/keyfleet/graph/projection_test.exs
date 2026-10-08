@@ -324,13 +324,11 @@ defmodule Keyfleet.Graph.ProjectionTest do
 
     assert List.last(pages).next_cursor == head
 
-    {:ok, synced} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, 0, nil)
+    {:ok, synced} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, 0, nil, false)
     assert {length(synced.graph.events), synced.graph.has_more} == {100, true}
-    assert synced.next_poll_seconds == 0
 
-    {:ok, caught_up} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], head, 0, nil)
+    {:ok, caught_up} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], head, 0, nil, false)
     assert {caught_up.graph.events, caught_up.graph.next_cursor} == {[], head}
-    assert caught_up.next_poll_seconds in 15..30
   end
 
   test "an object read answers its first 200 links, oldest first, and says more exist" do
@@ -382,7 +380,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     # queue for it; they are made one after another.
     answers =
       for n <- 1..1_000,
-          do: Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], rem(n, head), 0, nil)
+          do: Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], rem(n, head), 0, nil, false)
 
     assert Enum.all?(answers, &match?({:ok, %{graph: %{watermark: ^head}}}, &1))
     assert Enum.all?(answers, fn {:ok, synced} -> length(synced.graph.events) <= 100 end)
@@ -535,7 +533,9 @@ defmodule Keyfleet.Graph.ProjectionTest do
     {:ok, changes} = Graph.list_changes(@fleet, %{after_seq: 0, limit: 500}, actor: nil)
     assert {changes.run_id, changes.watermark} == {new_run, new_head}
 
-    {:ok, synced} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], old_head, 0, nil)
+    {:ok, synced} =
+      Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], old_head, 0, nil, false)
+
     assert {synced.graph.run_id, synced.graph.watermark} == {new_run, new_head}
 
     {old_head, new_head}

@@ -63,6 +63,13 @@ defmodule Keyfleet.Rooms.Message do
         where: "NOT in_key_thread"
       )
 
+      # One room's newest lines, without keys' threads: what the fleet's
+      # lines are to anyone without one of its keys, who reads only General.
+      index(["fleet_id", "room_id", "inserted_at DESC", "id"],
+        name: "messages_fleet_room_lines_index",
+        where: "NOT in_key_thread"
+      )
+
       # Each room's naming lines, counted to tell its posts from its lines.
       index(["room_id"], name: "messages_room_namings_index", where: "kind = 'room_named'")
 
@@ -316,7 +323,8 @@ defmodule Keyfleet.Rooms.Message do
     # the fleet's activity: posts and namings, without the posts written to
     # keys' threads. Ties in time come in id order. Each line comes with its
     # room and author but only the start of its words. It reads the fleet's
-    # lines index (`messages_fleet_lines_index`) from the given line down.
+    # lines index (`messages_fleet_lines_index`) from the given line down, or
+    # General's (`messages_fleet_room_lines_index`) for anyone without a key.
     read :fleet_lines_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_at, :utc_datetime_usec
@@ -386,9 +394,10 @@ defmodule Keyfleet.Rooms.Message do
 
     read :in_room do
       public? false
+      argument :fleet_id, :string, allow_nil?: false
       argument :id, :uuid, allow_nil?: false
       argument :room_id, :uuid, allow_nil?: false
-      filter expr(id == ^arg(:id) and room_id == ^arg(:room_id))
+      filter expr(fleet_id == ^arg(:fleet_id) and id == ^arg(:id) and room_id == ^arg(:room_id))
       get? true
     end
 
@@ -444,13 +453,45 @@ defmodule Keyfleet.Rooms.Message do
   end
 
   policies do
-    # Spec section 7: room history is public to read, and posting is gated.
-    policy action_type(:read) do
+    # Spec section 7: the people and agents holding the fleet's keys, or a
+    # shard of one, read every room and thread of it. Anyone else reads only
+    # General and the keys' threads. Posting is for the keys alone.
+    #
+    # Every key's thread is read by anyone.
+    policy action(:read_key_thread) do
       authorize_if always()
+    end
+
+    # A room only the keys read is refused to anyone else, never read as empty;
+    # so is a catch-up across rooms that names one.
+    policy action([:read_messages, :catch_up]) do
+      authorize_if Keyfleet.Rooms.Checks.RoomPoster
+      authorize_if Keyfleet.Rooms.Checks.PublicRoom
+    end
+
+    # The reads across the fleet's rooms, which leave the keys' threads out,
+    # show anyone else only General.
+    policy action([
+             :read,
+             :posts_as_key,
+             :recent_in_fleet,
+             :fleet_lines_before,
+             :room_posts_as_key,
+             :room_posts_by_wallet,
+             :in_room,
+             :under_send_key
+           ]) do
+      authorize_if Keyfleet.Rooms.Checks.RoomPoster
+      authorize_if Keyfleet.Rooms.Checks.InGeneral
     end
 
     policy action([:send_message, :send_to_key, :note_room_named]) do
       authorize_if Keyfleet.Rooms.Checks.RoomPoster
+    end
+
+    # The hourly count behind a person's posting limit is the server's own read.
+    policy action(:page_posts_last_hour) do
+      authorize_if actor_attribute_equals(:role, :system)
     end
   end
 

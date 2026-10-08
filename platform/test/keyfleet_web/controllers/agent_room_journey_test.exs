@@ -107,7 +107,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     %{app: app, signer: signer, secret: secret}
   end
 
-  test "an agent reads every room before it may post in any of them", c do
+  test "an agent with no key reads General and every room's name, and posts nowhere", c do
     assert send_signed(c, "POST", @join_path, @join_body).status == 200
 
     listed = send_signed(c, "GET", @rooms_path)
@@ -127,6 +127,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
                    "slug" => slug,
                    "name" => name,
                    "kind" => kind,
+                   "public" => slug == "general",
                    "topic" => nil,
                    "topic_set_by" => nil,
                    "topic_set_at" => nil,
@@ -138,6 +139,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert Keyfleet.ContractSchema.errors(listed.body, "RoomList") == []
 
     assert send_signed(c, "POST", @read_general).body["messages"] == []
+    assert key_thread(c, 1, "read").status == 200
 
     refused = send_signed(c, "POST", @send_general, send_body("Standing by", "k-1"))
     assert refused.status == 403
@@ -325,7 +327,6 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     first = send_signed(c, "POST", @sync_path, sync_body(%{"general" => 0, "coding" => 0}))
     assert first.status == 200
-    assert first.body["next_poll_seconds"] in 15..30
 
     assert %{
              "items" => [
@@ -394,6 +395,77 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     elsewhere = send_signed(c, "POST", "/api/v1/agent/fleets/hull_survey/sync", sync_body(%{}))
     assert {elsewhere.status, elsewhere.body} == {404, refused("fleet_unknown")}
+  end
+
+  # An address holds one waiting sync at a time here (`:agent_waits_per_address`).
+  test "past its address's cap, a sync with nothing new answers at once", c do
+    Application.put_env(:keyfleet, :agent_wait_ms, 1_000)
+    on_exit(fn -> Application.put_env(:keyfleet, :agent_wait_ms, 200) end)
+    quiet = sync_body(%{"general" => 0})
+
+    {waited, synced} =
+      :timer.tc(fn -> send_signed(c, "POST", @sync_path, quiet) end, :millisecond)
+
+    assert synced.status == 200
+    assert waited >= 1_000
+
+    holding(%Plug.Conn{remote_ip: {127, 0, 0, 1}})
+
+    {answered, again} =
+      :timer.tc(fn -> send_signed(c, "POST", @sync_path, quiet) end, :millisecond)
+
+    assert again.body == synced.body
+    assert answered < 1_000
+  end
+
+  # The machine holds one waiting request here (`:agent_waits_total`).
+  test "when the machine's waits are taken, a sync from another address answers at once", c do
+    Application.put_env(:keyfleet, :agent_wait_ms, 1_000)
+    on_exit(fn -> Application.put_env(:keyfleet, :agent_wait_ms, 200) end)
+    holding(%Plug.Conn{remote_ip: {10, 0, 0, 9}})
+
+    {answered, synced} =
+      :timer.tc(
+        fn -> send_signed(c, "POST", @sync_path, sync_body(%{"general" => 0})) end,
+        :millisecond
+      )
+
+    assert synced.status == 200
+    assert answered < 1_000
+  end
+
+  # A post in a room the agent may not read never ends its wait early.
+  test "an agent with no key waits through a Keys-only post and answers on a General one", c do
+    Application.put_env(:keyfleet, :agent_wait_ms, 1_000)
+    on_exit(fn -> Application.put_env(:keyfleet, :agent_wait_ms, 200) end)
+    person = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    topic = Rooms.fleet_topic("fibonacci_syndicate")
+
+    post = fn slug ->
+      Rooms.send_message!(
+        %{fleet_id: "fibonacci_syndicate", slug: slug, body: "In #{slug}", idempotency_key: slug},
+        actor: person
+      )
+    end
+
+    started = System.monotonic_time(:millisecond)
+    body = sync_body([{"general", 0}, {"business", 0}])
+    sync = Task.async(fn -> send_signed(c, "POST", @sync_path, body) end)
+
+    # Posts only once the sync is listening, so it hears both announcements.
+    listening(topic)
+
+    post.("business")
+    assert Task.yield(sync, 300) == nil
+
+    post.("general")
+    synced = Task.await(sync)
+    assert System.monotonic_time(:millisecond) - started < 1_000
+
+    assert [%{"slug" => "general", "messages" => [%{"body" => "In general"}]}, refused] =
+             synced.body["rooms"]
+
+    assert refused == %{"slug" => "business", "refused" => "not_a_member"}
   end
 
   test "only the canonical signed room path and body reach the room actions", c do
@@ -679,6 +751,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
                     "slug" => "hull-survey",
                     "name" => "Hull survey",
                     "kind" => "created",
+                    "public" => false,
                     "topic" => nil,
                     "topic_set_by" => nil,
                     "topic_set_at" => nil,
@@ -833,8 +906,10 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
         assert {refused.status, refused.body} == {503, refused("ownership_refreshing")}
       end
 
-      # Reading stays open to everyone.
-      assert send_signed(c, "POST", cascade_room("open-1", "read")).status == 200
+      # General stays open to everyone; who reads the other rooms waits too.
+      assert send_signed(c, "POST", cascade_room("general", "read")).status == 200
+      locked = send_signed(c, "POST", cascade_room("open-1", "read"))
+      assert {locked.status, locked.body} == {503, refused("ownership_refreshing")}
     end
 
     test "a room the database refuses for a reason of its own is answered, not a crash", c do
@@ -891,7 +966,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
       member = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
       cursors = Enum.map(one_more, fn {slug, seq} -> %{slug: slug, after_seq: seq} end)
-      assert Rooms.sync(@cascade, cursors, 0, 0, member) == {:error, :invalid_request}
+      assert Rooms.sync(@cascade, cursors, 0, 0, member, false) == {:error, :invalid_request}
     end
 
     test "only a slug and a name reach creating a room, and only a topic reaches naming one", c do
@@ -946,6 +1021,29 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
         "WHERE fleet_id = $1 AND slug = $2",
       [@cascade, slug]
     )
+  end
+
+  # Takes a waiting place for `conn`'s address until the test ends.
+  defp holding(conn) do
+    owner = self()
+
+    holder =
+      spawn(fn ->
+        KeyfleetWeb.AgentWaits.hold(KeyfleetWeb.ClientAddress.key(conn), fn _wait? ->
+          send(owner, :holding)
+          receive do: (:done -> :ok)
+        end)
+      end)
+
+    on_exit(fn -> send(holder, :done) end)
+    assert_receive :holding
+  end
+
+  defp listening(topic) do
+    if Registry.count_match(Keyfleet.PubSub, topic, :_) == 0 do
+      Process.sleep(5)
+      listening(topic)
+    end
   end
 
   defp create_room(c, body), do: send_signed(c, "POST", @create_cascade, Jason.encode!(body))

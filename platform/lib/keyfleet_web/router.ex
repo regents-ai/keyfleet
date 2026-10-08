@@ -215,10 +215,39 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/rooms/:slug/messages/read", AgentRoomController, :read_messages
     post "/fleets/:fleet_id/rooms/:slug/messages/send", AgentRoomController, :send_message
     post "/fleets/:fleet_id/sync", AgentRoomController, :sync
+    get "/fleets/:fleet_id/polls", AgentPollController, :index
+    post "/fleets/:fleet_id/polls/open", AgentPollController, :open
+    post "/fleets/:fleet_id/polls/:session_id/join", AgentPollController, :join
+    post "/fleets/:fleet_id/polls/:session_id/leave", AgentPollController, :leave
+    post "/fleets/:fleet_id/polls/:session_id/end", AgentPollController, :end_session
+    post "/fleets/:fleet_id/polls/:session_id/wait", AgentPollController, :wait
+    post "/fleets/:fleet_id/polls/:session_id/rounds/open", AgentPollController, :open_round
+    post "/fleets/:fleet_id/polls/:session_id/rounds/:number/vote", AgentPollController, :vote
     post "/fleets/:fleet_id/code/password", AgentCodeController, :password
     get "/fleets/:fleet_id/mutes", AgentMuteController, :index
     post "/fleets/:fleet_id/keys/:token_id/mute", AgentMuteController, :create
     post "/fleets/:fleet_id/keys/:token_id/unmute", AgentMuteController, :delete
+    get "/fleets/:fleet_id/keys/:token_id/dms", AgentDmController, :inbox
+    get "/fleets/:fleet_id/keys/:token_id/dms/blocks", AgentDmController, :blocked
+    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/read", AgentDmController, :read
+
+    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/send",
+         AgentDmController,
+         :send_message
+
+    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/delete", AgentDmController, :delete
+
+    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/auto_delete",
+         AgentDmController,
+         :auto_delete
+
+    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/block", AgentDmController, :block
+
+    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/unblock",
+         AgentDmController,
+         :unblock
+
+    post "/fleets/:fleet_id/dms/changes", AgentDmController, :changes
     post "/fleets/:fleet_id/proposals/read", AgentProposalController, :read
     post "/fleets/:fleet_id/presence", AgentChainController, :presence
     post "/fleets/:fleet_id/proposals/create", AgentChainController, :propose
@@ -255,6 +284,8 @@ defmodule KeyfleetWeb.Router do
       live "/account", ShellLive, :account
       live "/app/fleets/:fleet_id", ShellLive, :fleet
       live "/app/keys/:fleet_id/:token_id", ShellLive, :keys
+      live "/app/keys/:fleet_id/:token_id/dms", ShellLive, :dms
+      live "/app/keys/:fleet_id/:token_id/dms/:other_token_id", ShellLive, :dm
       live "/app/fleets/:fleet_id/rooms/:slug", ShellLive, :rooms
       live "/app/fleets/:fleet_id/workspace", ShellLive, :workspace
       live "/app/fleets/:fleet_id/workspace/:object_id", ShellLive, :workspace_item

@@ -136,8 +136,10 @@ defmodule Keyfleet.Activity do
   A page of the fleet's activity, newest first: `%{items: items, cursor: cursor}`.
 
   `cursor` is nil for the newest page, or the cursor a page answered to read
-  the one after it. Option: `:limit`, the most items a page holds (1 to
-  #{@page}, #{@page} by default).
+  the one after it. Options: `:limit`, the most items a page holds (1 to
+  #{@page}, #{@page} by default), and `:actor`, who reads it. Posts in rooms
+  other than General show only to the people and agents holding the fleet's
+  keys or a shard of one.
   """
   @spec page(String.t(), cursor() | nil, keyword()) :: %{items: [item()], cursor: cursor() | nil}
   def page(fleet_id, cursor, opts \\ []) do
@@ -145,16 +147,17 @@ defmodule Keyfleet.Activity do
     true = limit in 1..@page
     # One database session for the whole page: the clock the first page
     # reads is the one that stamped the posts it reads.
-    Repo.checkout(fn -> read_page(fleet_id, cursor, limit) end)
+    actor = Keyword.get(opts, :actor)
+    Repo.checkout(fn -> read_page(fleet_id, cursor, limit, actor) end)
   end
 
-  defp read_page(fleet_id, cursor, limit) do
+  defp read_page(fleet_id, cursor, limit, actor) do
     positions = cursor || start()
 
     # A read that came back full leaves out its last entry, which may be the
     # start of a group it did not read to the end.
     fetch = fn source, position, reads ->
-      {entries, more?, top} = read(source, fleet_id, position, limit)
+      {entries, more?, top} = read(source, fleet_id, position, limit, actor)
       entries = if more?, do: Enum.drop(entries, -1), else: entries
       %{entries: entries, more?: more?, position: position || top, reads: reads + 1}
     end
@@ -304,27 +307,27 @@ defmodule Keyfleet.Activity do
   # more beyond them, and, for a source kept in record order, the place just
   # past the newest record read, where a walk begins. Each entry carries the
   # place in its source just past it.
-  defp read(:posts, fleet_id, {at, id}, _limit) do
-    lines = Rooms.fleet_lines_before!(fleet_id, at, id, @posts_read)
+  defp read(:posts, fleet_id, {at, id}, _limit, actor) do
+    lines = Rooms.fleet_lines_before!(fleet_id, at, id, @posts_read, actor: actor)
     {group_lines(lines), length(lines) == @posts_read, nil}
   end
 
-  defp read(:graph, fleet_id, seq, limit) do
+  defp read(:graph, fleet_id, seq, limit, _actor) do
     events = Graph.notable_before!(fleet_id, seq, limit + 1)
     {Enum.map(events, &graph_entry/1), length(events) > limit, top(events, :seq)}
   end
 
-  defp read(:keys, fleet_id, seq, _limit) do
+  defp read(:keys, fleet_id, seq, _limit, _actor) do
     epochs = Keys.epochs_recorded_before!(fleet_id, seq, @keys_read)
     {group_epochs(epochs), length(epochs) == @keys_read, top(epochs, :record_seq)}
   end
 
-  defp read(:shards, fleet_id, seq, limit) do
+  defp read(:shards, fleet_id, seq, limit, _actor) do
     events = Keys.shard_events_recorded_before!(fleet_id, seq, limit + 1, load: [:agent_profile])
     {Enum.map(events, &shard_entry/1), length(events) > limit, top(events, :record_seq)}
   end
 
-  defp read(:proposals, fleet_id, seq, limit) do
+  defp read(:proposals, fleet_id, seq, limit, _actor) do
     reads = [
       {Proposals.proposals_recorded_before!(fleet_id, seq, limit + 1), limit + 1},
       {Proposals.votes_recorded_before!(fleet_id, seq, @votes_read), @votes_read},

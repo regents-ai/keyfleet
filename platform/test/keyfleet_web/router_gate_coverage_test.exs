@@ -39,6 +39,8 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     assert for({:get, path, :to_early} <- answers, do: path) ==
              ~w(/docs /about /opportunities /fleets/:file / /account) ++
                ~w(/app/fleets/:fleet_id /app/keys/:fleet_id/:token_id) ++
+               ~w(/app/keys/:fleet_id/:token_id/dms) ++
+               ~w(/app/keys/:fleet_id/:token_id/dms/:other_token_id) ++
                ~w(/app/fleets/:fleet_id/rooms/:slug /app/fleets/:fleet_id/workspace) ++
                ~w(/app/fleets/:fleet_id/workspace/:object_id /app/fleets/:fleet_id/proposals) ++
                ~w(/app/fleets/:fleet_id/proposals/:number)

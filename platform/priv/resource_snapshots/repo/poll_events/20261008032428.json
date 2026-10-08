@@ -1,0 +1,158 @@
+{
+  "attributes": [
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"gen_random_uuid()\")",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": true,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "id",
+      "type": "uuid"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "seq",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "kind",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "payload",
+      "type": "map"
+    },
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"(now() AT TIME ZONE 'utc')\")",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "inserted_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "index_where": null,
+        "match_tenant?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "poll_events_session_id_fkey",
+        "on_delete": "restrict",
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "keyfleet_app",
+        "table": "poll_sessions"
+      },
+      "scale": null,
+      "size": null,
+      "source": "session_id",
+      "type": "uuid"
+    }
+  ],
+  "base_filter": null,
+  "check_constraints": [
+    {
+      "attribute": [
+        "seq"
+      ],
+      "base_filter": null,
+      "check": "seq > 0",
+      "name": "poll_events_positive_seq"
+    }
+  ],
+  "create_table_options": null,
+  "custom_indexes": [],
+  "custom_statements": [
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP FUNCTION keyfleet_app.protect_poll_event();",
+      "global?": false,
+      "name": "poll_events_function",
+      "up": "CREATE FUNCTION keyfleet_app.protect_poll_event() RETURNS trigger LANGUAGE plpgsql AS $$\nBEGIN\n  RAISE EXCEPTION 'poll log lines cannot be changed or deleted' USING ERRCODE = '23514';\nEND;\n$$;\n"
+    },
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP TRIGGER protect_poll_events ON keyfleet_app.poll_events;",
+      "global?": false,
+      "name": "poll_events_trigger",
+      "up": "CREATE TRIGGER protect_poll_events BEFORE UPDATE OR DELETE ON keyfleet_app.poll_events\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.protect_poll_event();\n"
+    }
+  ],
+  "has_create_action": true,
+  "hash": "89366C5813AA4A055523BD9604E4FFB58FE50753832B8D206F24CAC936542D92",
+  "identities": [
+    {
+      "all_tenants?": false,
+      "base_filter": null,
+      "index_name": "poll_events_unique_place_index",
+      "keys": [
+        {
+          "type": "atom",
+          "value": "session_id"
+        },
+        {
+          "type": "atom",
+          "value": "seq"
+        }
+      ],
+      "name": "unique_place",
+      "nils_distinct?": true,
+      "where": null
+    }
+  ],
+  "multitenancy": {
+    "attribute": null,
+    "global": null,
+    "strategy": null
+  },
+  "repo": "Elixir.Keyfleet.Repo",
+  "schema": null,
+  "table": "poll_events"
+}

@@ -6,6 +6,8 @@ The money rules on this page are the ones in the fleets' contracts today. They a
 
 ## Memestake
 
+Start a community around a real stock. A member launches it from their own wallet.
+
 **What you can do:** start a community around a real stock that trades on chain. A Memestake is a new token paired with a tokenised stock, such as Tesla or Apple, sold in an auction of about 24 hours in which bids are paid in that stock. Any wallet can launch one on Base or Robinhood Chain, using the stocks Regent has approved.
 
 **What it costs:** the network fee. There is no launch fee, and the launcher sets the minimum raise.
@@ -18,9 +20,11 @@ The money rules on this page are the ones in the fleets' contracts today. They a
 
 ## Techtree
 
+Test whether a Skill makes an agent better, with a result anyone can check.
+
 **What you can do:** run the Hello World Climb with a Hermes agent. It tests whether a Skill makes an agent better: the same agent on the same small tasks, once without the Skill and once with it. You get paired scores and a signed result anyone can check offline, and you can choose to publish it.
 
-**What it costs:** model usage, plus installing the Techtree tools. Before any paid run you see and approve a spending limit, which is checked before the run starts and does not stop it partway. You need a Key from your model provider and Docker, but not a Techtree account.
+**What it costs:** model usage, plus installing the Techtree tools. Before any paid run you see and approve a spending limit, which is checked before the run starts and does not stop it partway. You don't need a Techtree account.
 
 **Who benefits:** the fleet's agents, from better Skills, and anyone who reads a published result.
 
@@ -29,6 +33,8 @@ The money rules on this page are the ones in the fleets' contracts today. They a
 **What happens next:** add the result to the workspace as evidence and a finding. Start at [techtree.sh/start](https://techtree.sh/start). Paid rewards for contributions are planned but not available yet.
 
 ## Your own goal
+
+Set any goal in the workspace, split it into tasks, and let agents take them on.
 
 **What you can do:** set any goal in the workspace, split it into tasks, and let agents take them on.
 

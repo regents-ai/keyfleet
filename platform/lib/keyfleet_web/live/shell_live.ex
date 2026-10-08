@@ -12,6 +12,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias Keyfleet.Accounts.LinkedIdentity.Providers
   alias Keyfleet.Actors.Human
   alias Keyfleet.Code
+  alias Keyfleet.Dms
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
@@ -23,6 +24,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias KeyfleetWeb.{
     AccountLive,
     CodePassword,
+    DmsLive,
     FleetLive,
     KeyMap,
     KeyProfileLive,
@@ -41,6 +43,7 @@ defmodule KeyfleetWeb.ShellLive do
   @fleet_events ~w(open_send_agent close_send_agent activity_earlier keymap_ready select_key)
   @room_events ~w(validate_post send_message validate_naming name_room mute_key unmute_key)
   @key_profile_events ~w(post_to_key close_key)
+  @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
 
   @impl true
   def mount(params, _session, socket) do
@@ -51,6 +54,8 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream(:posts, [])
      |> stream_configure(:fleet_keys, dom_id: &"fleet-key-#{&1.token_id}")
      |> stream(:fleet_keys, [])
+     |> stream_configure(:dm_thread, dom_id: &"dm-#{&1.id}")
+     |> stream(:dm_thread, [])
      |> stream_configure(:key_thread, dom_id: &"key-message-#{&1.id}")
      |> stream(:key_thread, [])
      |> stream_configure(:activity, dom_id: &FleetLive.activity_dom_id/1)
@@ -74,6 +79,11 @@ defmodule KeyfleetWeb.ShellLive do
        activity_refresh: nil,
        key_profile: nil,
        key: nil,
+       dms: nil,
+       dms_topic: nil,
+       dm_form: nil,
+       dm_notice: nil,
+       dm_confirm_delete: false,
        room: nil,
        room_notice: nil,
        room_topic: nil,
@@ -110,6 +120,7 @@ defmodule KeyfleetWeb.ShellLive do
        |> load_fleet(route_spec, params)
        |> load_key_profile(socket.assigns)
        |> load_key(route_spec, params)
+       |> load_dms(route_spec, params)
        |> load_room(route_spec, params)
        |> load_workspace(route_spec, params)
        |> load_proposals(route_spec, params)}
@@ -243,8 +254,13 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_event(event, params, socket) when event in @fleet_events,
     do: FleetLive.handle_event(event, params, socket)
 
+  def handle_event(event, params, socket) when event in @dm_events,
+    do: DmsLive.handle_event(event, params, socket)
+
   # A notice that the open room has taken a post it is not showing yet is only a
-  # nudge to look again. The new posts are read back from the room itself.
+  # nudge to look again. The new posts are read back from the room itself, and
+  # a room shown as for keys only looks again at whether the reader may read
+  # it; the place the notice names is never shown.
   @impl true
   def handle_info(
         %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}},
@@ -263,6 +279,10 @@ defmodule KeyfleetWeb.ShellLive do
     account = current_account(socket.assigns.access_context)
     {:noreply, assign(socket, :paired_agents, AccountLive.paired_agents(account))}
   end
+
+  def handle_info(%Broadcast{event: event} = notice, socket)
+      when event in ["dm_head", "dm_deleted"],
+      do: DmsLive.handle_info(notice, socket)
 
   def handle_info(%Broadcast{event: "key_activity"} = notice, socket),
     do: KeyProfileLive.handle_info(notice, socket)
@@ -305,6 +325,14 @@ defmodule KeyfleetWeb.ShellLive do
       {:patch, patch} -> {:noreply, push_event(socket, "keymap:patch", patch)}
     end
   end
+
+  # Keys changed in the fleet whose room is on show: who may read and post
+  # there is read afresh.
+  def handle_info(
+        {:keys_changed, fleet_id, _token_ids},
+        %{assigns: %{room: %{fleet_id: fleet_id}}} = socket
+      ),
+      do: {:noreply, RoomsLive.recheck_standing(socket)}
 
   # A notice for the key page on show, or for a fleet the page has since
   # left, or one not yet on sale.
@@ -444,6 +472,17 @@ defmodule KeyfleetWeb.ShellLive do
           lease={@session_lease}
         />
 
+        <DmsLive.inbox :if={@route_spec.route_id == :dms} dms={@dms} />
+
+        <DmsLive.conversation
+          :if={@route_spec.route_id == :dm}
+          dms={@dms}
+          messages={@streams.dm_thread}
+          form={@dm_form}
+          notice={@dm_notice}
+          confirm_delete={@dm_confirm_delete}
+        />
+
         <RoomsLive.page
           :if={@route_spec.route_id == :rooms}
           room={@room}
@@ -503,10 +542,10 @@ defmodule KeyfleetWeb.ShellLive do
       |> stream(:fleet_keys, [], reset: true)
       |> stream(:activity, [], reset: true)
 
-  # The fleet whose keys the page on show follows: the fleet's own page, or
-  # one of its keys' pages.
+  # The fleet whose keys the page on show follows: the fleet's own page, one
+  # of its keys' pages, or one of its rooms.
   defp keys_fleet(%{route_id: route_id}, %{"fleet_id" => fleet_id})
-       when route_id in [:fleet, :keys],
+       when route_id in [:fleet, :keys, :rooms],
        do: fleet_id
 
   defp keys_fleet(_route_spec, _params), do: nil
@@ -547,6 +586,43 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   defp load_key(socket, _route_spec, _params), do: assign(socket, :key, nil)
+
+  # The page starts listening to the Key's messages before it reads them, so
+  # one that lands while it loads still reaches it, and stops when it turns
+  # out not to be the Key's holder.
+  defp load_dms(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
+       when route_id in [:dms, :dm] do
+    token_id = String.to_integer(params["token_id"])
+    other_token_id = params["other_token_id"] && String.to_integer(params["other_token_id"])
+
+    socket =
+      socket
+      |> follow_dms(Dms.inbox_topic(fleet_id, token_id))
+      |> DmsLive.read_dms(route_id, fleet_id, token_id, other_token_id)
+
+    case socket.assigns.dms do
+      %{holder?: true} -> socket
+      _closed -> follow_dms(socket, nil)
+    end
+  end
+
+  defp load_dms(socket, _route_spec, _params) do
+    socket
+    |> follow_dms(nil)
+    |> assign(dms: nil, dm_form: nil, dm_notice: nil, dm_confirm_delete: false)
+    |> stream(:dm_thread, [], reset: true)
+  end
+
+  # One subscription to the messages of the Key on show, dropped on the way out.
+  defp follow_dms(socket, topic) do
+    if connected?(socket) and topic != socket.assigns.dms_topic do
+      stop_listening(socket.assigns.dms_topic)
+      start_listening(topic)
+      assign(socket, :dms_topic, topic)
+    else
+      socket
+    end
+  end
 
   # The page starts listening before it reads, so a post that lands while it
   # loads still reaches it; a notice for a post it already read is passed over.

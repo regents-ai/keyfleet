@@ -9,7 +9,12 @@ defmodule Keyfleet.Chain.Client do
   reader follows, so a stretch of blocks is always read whole.
   """
 
-  @type head :: %{number: non_neg_integer(), hash: String.t(), timestamp: DateTime.t()}
+  @type head :: %{
+          number: non_neg_integer(),
+          hash: String.t(),
+          timestamp: DateTime.t(),
+          base_fee: non_neg_integer()
+        }
 
   @callback chain_id() :: {:ok, pos_integer()} | {:error, term()}
   @callback head() :: {:ok, head()} | {:error, term()}
@@ -38,6 +43,14 @@ defmodule Keyfleet.Chain.Client do
   """
   @callback get_balance(address :: String.t(), block_hash :: String.t()) ::
               {:ok, non_neg_integer()} | {:error, term()}
+
+  @doc """
+  The code at `address`, as bytes, at the block whose hash is `block_hash`:
+  empty for a plain wallet, the contract's code for a smart wallet, and the
+  delegation for a wallet that delegates to one (EIP-7702).
+  """
+  @callback get_code(address :: String.t(), block_hash :: String.t()) ::
+              {:ok, binary()} | {:error, term()}
 
   @doc "The client this application is configured with."
   def configured, do: Application.fetch_env!(:keyfleet, Keyfleet.Chain)[:client]

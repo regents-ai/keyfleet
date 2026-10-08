@@ -7,6 +7,7 @@ defmodule Keyfleet.Rooms do
 
   require Ash.Query
 
+  alias Keyfleet.Rooms.Checks.RoomPoster
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Muter
   alias Keyfleet.Rooms.Room
@@ -48,7 +49,10 @@ defmodule Keyfleet.Rooms do
         action: :fleet_lines_before,
         args: [:fleet_id, :before_at, :before_id, :limit]
 
-      define :get_post_in_room, action: :in_room, args: [:id, :room_id], not_found_error?: false
+      define :get_post_in_room,
+        action: :in_room,
+        args: [:fleet_id, :id, :room_id],
+        not_found_error?: false
 
       define :get_post_under_send_key,
         action: :under_send_key,
@@ -111,9 +115,12 @@ defmodule Keyfleet.Rooms do
   fleet's workspace.
 
   Each entry of `cursors` is a `%{slug: slug, after_seq: seq}` saying how far the
-  caller has read that room. Every room answers with the posts after that point,
-  the cursor those posts reach, and the room's own head, so a caller that is
-  behind knows to come back for the rest.
+  caller has read that room. Every room the caller may read answers with the
+  posts after that point, the cursor those posts reach, and the room's own
+  head, so a caller that is behind knows to come back for the rest. A room
+  only the fleet's keys read, named by a caller without one, answers with its
+  slug alone and `refused: true`, and the rest of the answer stands. A caller
+  that names rooms and may read none of them is refused (`Ash.Error.Forbidden`).
 
   `graph_after_seq` says how far the caller has read the workspace's log. The
   workspace answers with at most 100 of its changes after that point, as
@@ -125,12 +132,20 @@ defmodule Keyfleet.Rooms do
   records. Proposals answer with the ones changed after that point, as
   `Keyfleet.Proposals.changes/2` does.
 
-  `next_poll_seconds` is when to ask again: at once while anything has more
-  waiting, otherwise between 15 and 30 seconds, spread so callers do not all
-  come back together. Nothing is marked as read, and asking again is always
-  safe.
+  Something new, or more waiting, is answered at once, and so is everything
+  when `wait?` is false. Otherwise the caller is answered as soon as the fleet
+  announces a workspace change, a proposal change or a post past the caller's
+  place in a room it follows, or after `:agent_wait_ms` with nothing, and asks
+  again straight away. The announcements only say when to read again:
+  everything the caller gets is read as the caller. Nothing is marked as read,
+  and asking again is always safe.
   """
-  def sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor) do
+  def sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor, wait?) do
+    read = fn -> read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor) end
+    if wait?, do: wait_for_news(fleet_id, read), else: read.()
+  end
+
+  defp read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor) do
     # The workspace is read first, since it answers for a fleet outside the catalog.
     with :ok <- validate_cursors(cursors),
          :ok <- in_log(graph_after_seq),
@@ -143,50 +158,149 @@ defmodule Keyfleet.Rooms do
            ),
          {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor) do
       proposals = Keyfleet.Proposals.changes(fleet_id, proposals_after_seq)
-
-      {:ok,
-       %{
-         rooms: rooms,
-         graph: graph,
-         proposals: proposals,
-         next_poll_seconds: next_poll_seconds(rooms, graph, proposals)
-       }}
+      {:ok, %{rooms: rooms, graph: graph, proposals: proposals}}
     end
   end
 
-  defp next_poll_seconds(rooms, graph, proposals) do
-    if graph.has_more or proposals.has_more or Enum.any?(rooms, &(&1.cursor < &1.head_seq)),
-      do: 0,
-      else: Enum.random(15..30)
+  defp news?(%{rooms: rooms, graph: graph, proposals: proposals}),
+    do:
+      graph.events != [] or graph.has_more or proposals.items != [] or proposals.has_more or
+        Enum.any?(rooms, &room_news?/1)
+
+  # A refused room answers with its slug alone, so it never brings news.
+  defp room_news?(%{refused: true}), do: false
+  defp room_news?(room), do: room.messages != [] or room.cursor < room.head_seq
+
+  # Subscribed before the first read, so nothing announced between that read
+  # and the wait is missed.
+  defp wait_for_news(fleet_id, read) do
+    topics = [
+      fleet_topic(fleet_id),
+      Keyfleet.Graph.head_topic(fleet_id),
+      Keyfleet.Proposals.topic(fleet_id)
+    ]
+
+    Enum.each(topics, &Phoenix.PubSub.subscribe(Keyfleet.PubSub, &1))
+
+    try do
+      with {:ok, synced} <- read.() do
+        if news?(synced),
+          do: {:ok, synced},
+          else:
+            await_news(fleet_id, read, synced, System.monotonic_time(:millisecond) + wait_ms())
+      end
+    after
+      Enum.each(topics, &Phoenix.PubSub.unsubscribe(Keyfleet.PubSub, &1))
+      flush_news(fleet_id)
+    end
   end
 
-  # The posts of every room named are read together, before the heads. A post
-  # is only ever seen once its room has counted it, so a head read afterwards
-  # is never behind the posts it is returned with.
-  defp sync_rooms(fleet_id, cursors, actor) do
-    posts =
-      catch_up!(
-        fleet_id,
-        Enum.map(cursors, & &1.slug),
-        Enum.map(cursors, & &1.after_seq),
-        @sync_page,
-        actor: actor
-      )
-      |> Enum.group_by(& &1.room_id)
+  # A new run or watermark of the workspace is answered whatever it brings, as
+  # the caller tells a log that started over by its `run_id`. A post is read
+  # only when it is past the caller's place in a room it follows, and answered
+  # once that read has something new; the fleet's other room announcements
+  # bring the caller nothing.
+  defp await_news(fleet_id, read, synced, until) do
+    receive do
+      {:graph_head, ^fleet_id, _run_id, _watermark} ->
+        read.()
 
+      {:proposals_changed, ^fleet_id} ->
+        read.()
+
+      %Phoenix.Socket.Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}} ->
+        if Enum.any?(
+             synced.rooms,
+             &match?(%{room_id: ^room_id, cursor: cursor} when seq > cursor, &1)
+           ),
+           do: read_again(fleet_id, read, until),
+           else: await_news(fleet_id, read, synced, until)
+
+      %Phoenix.Socket.Broadcast{} ->
+        await_news(fleet_id, read, synced, until)
+    after
+      Kernel.max(until - System.monotonic_time(:millisecond), 0) -> {:ok, synced}
+    end
+  end
+
+  defp read_again(fleet_id, read, until) do
+    case read.() do
+      {:ok, again} ->
+        if news?(again), do: {:ok, again}, else: await_news(fleet_id, read, again, until)
+
+      error ->
+        error
+    end
+  end
+
+  # A connection kept open for the next request must not carry this wait's
+  # announcements into it.
+  defp flush_news(fleet_id) do
+    receive do
+      {:graph_head, ^fleet_id, _run_id, _watermark} -> flush_news(fleet_id)
+      {:proposals_changed, ^fleet_id} -> flush_news(fleet_id)
+      %Phoenix.Socket.Broadcast{} -> flush_news(fleet_id)
+    after
+      0 -> :ok
+    end
+  end
+
+  defp wait_ms, do: Application.fetch_env!(:keyfleet, :agent_wait_ms)
+
+  # Every room named must be one the fleet has, whoever asks, since every
+  # room's name is public. Which of them the caller may read is decided once,
+  # from its standing read once. The posts are then read before the heads. A
+  # post is only ever seen once its room has counted it, so a head read
+  # afterwards is never behind the posts it is returned with.
+  defp sync_rooms(fleet_id, cursors, actor) do
+    standing = RoomPoster.standing(actor, fleet_id)
     rooms = Map.new(list_rooms!(fleet_id, actor: actor), &{&1.slug, &1})
 
-    case Enum.find(cursors, &(not Map.has_key?(rooms, &1.slug))) do
-      nil ->
-        {:ok, Enum.map(cursors, &synced(&1, Map.fetch!(rooms, &1.slug), posts))}
+    with :ok <- known_rooms(fleet_id, cursors, rooms),
+         {readable, refused} = Enum.split_with(cursors, &readable?(rooms[&1.slug], standing)),
+         :ok <- some_readable(readable, refused),
+         {:ok, posts} <- catch_up_rooms(fleet_id, readable, actor, standing) do
+      heads = Map.new(list_rooms!(fleet_id, actor: actor), &{&1.slug, &1})
+      synced = Map.new(readable, &{&1.slug, synced(&1, heads[&1.slug], posts)})
 
-      %{slug: slug} ->
-        {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)}
+      refused = MapSet.new(refused, & &1.slug)
+
+      {:ok,
+       Enum.map(cursors, fn %{slug: slug} ->
+         if MapSet.member?(refused, slug), do: %{slug: slug, refused: true}, else: synced[slug]
+       end)}
     end
+  end
+
+  defp known_rooms(fleet_id, cursors, rooms) do
+    case Enum.find(cursors, &(not Map.has_key?(rooms, &1.slug))) do
+      nil -> :ok
+      %{slug: slug} -> {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)}
+    end
+  end
+
+  # Anyone reads a public room; the fleet's keys read every room.
+  defp readable?(room, standing), do: room.public or RoomPoster.standing?(standing)
+
+  defp some_readable([], [_ | _]), do: {:error, Ash.Error.Forbidden.exception([])}
+  defp some_readable(_readable, _refused), do: :ok
+
+  # The posts of every readable room named are read together, in one query,
+  # and grouped by room.
+  defp catch_up_rooms(_fleet_id, [], _actor, _standing), do: {:ok, %{}}
+
+  defp catch_up_rooms(fleet_id, cursors, actor, standing) do
+    slugs = Enum.map(cursors, & &1.slug)
+    after_seqs = Enum.map(cursors, & &1.after_seq)
+
+    with {:ok, posts} <-
+           catch_up(fleet_id, slugs, after_seqs, @sync_page, actor: actor, context: standing),
+         do: {:ok, Enum.group_by(posts, & &1.room_id)}
   end
 
   defp synced(%{slug: slug, after_seq: after_seq}, room, posts) do
-    messages = Map.get(posts, room.id, [])
+    %{id: room_id, kind: kind, head_seq: head_seq} = room
+    messages = Map.get(posts, room_id, [])
 
     cursor =
       case List.last(messages) do
@@ -194,9 +308,8 @@ defmodule Keyfleet.Rooms do
         last -> last.seq
       end
 
-    %{kind: kind, head_seq: head_seq} = room
-
     %{
+      room_id: room_id,
       slug: slug,
       kind: kind,
       head_seq: head_seq,

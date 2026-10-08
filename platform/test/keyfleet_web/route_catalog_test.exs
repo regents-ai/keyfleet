@@ -9,6 +9,8 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     "/account",
     "/app/fleets/:fleet_id",
     "/app/keys/:fleet_id/:token_id",
+    "/app/keys/:fleet_id/:token_id/dms",
+    "/app/keys/:fleet_id/:token_id/dms/:other_token_id",
     "/app/fleets/:fleet_id/rooms/:slug",
     "/app/fleets/:fleet_id/workspace",
     "/app/fleets/:fleet_id/workspace/:object_id",
@@ -207,13 +209,15 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 9
+    assert length(decoded["routes"]) == 11
 
     assert Enum.map(decoded["routes"], & &1["route_id"]) == [
              "home",
              "account",
              "fleet",
              "keys",
+             "dms",
+             "dm",
              "rooms",
              "workspace",
              "workspace_item",
@@ -250,6 +254,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     Map.new(schema, fn
       {:fleet_id, _type} -> {"fleet_id", "fibonacci_syndicate"}
       {:token_id, _type} -> {"token_id", "1"}
+      {:other_token_id, _type} -> {"other_token_id", "2"}
       {:slug, _type} -> {"slug", "general"}
       {:object_id, _type} -> {"object_id", "task#12"}
       {:number, _type} -> {"number", "3"}

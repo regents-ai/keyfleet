@@ -46,7 +46,7 @@ defmodule KeyfleetWeb.EarlyControllerTest do
   test "the page shows the tech stack under the form" do
     page = build_conn() |> get("/early") |> html_response(200) |> LazyHTML.from_document()
 
-    assert text(page, "#early-tech-stack h2") == "Tech stack"
+    assert text(page, "details#early-tech-stack:not([open]) .rg-disclosure-title") == "Tech stack"
 
     assert page |> LazyHTML.query("#early-tech-stack li") |> Enum.map(&LazyHTML.text/1) == [
              "Bring your own agent: Hermes, OpenAI Dots, Muse, Grok Bot.",

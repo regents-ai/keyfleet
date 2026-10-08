@@ -441,7 +441,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     test "a visitor is asked to sign in", %{conn: conn} do
       {:ok, view, _html} = live(conn, @path <> "?key=12")
 
-      assert render(view) =~ "Everyone can read. Sign in to write to Key 12."
+      assert render(view) =~ "Everyone can read. Sign in to post on Key 12’s wall."
       assert has_element?(view, "#key-profile [data-account-target='sign-in']")
       refute has_element?(view, "#key-profile-composer")
     end
@@ -502,6 +502,39 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       assert text(view, "#key-profile-messages") == "1"
       assert text(view, "#key-profile-composer-body") == ""
     end
+  end
+
+  test "the holder opens the Key's messages; another holder writes as their lowest Key", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = conn |> signed_in_as(wallet("e")) |> live(@path <> "?key=12")
+    assert has_element?(view, ~s(#key-profile-dms[href="/app/keys/#{@fleet}/12/dms"]), "Messages")
+
+    {:ok, view, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
+
+    assert has_element?(
+             view,
+             ~s(#key-profile-dms[href="/app/keys/#{@fleet}/1/dms/12"]),
+             "Message"
+           )
+
+    for conn <- [signed_in_as(conn, wallet("9")), conn] do
+      {:ok, view, _html} = live(conn, @path <> "?key=12")
+      refute has_element?(view, "#key-profile-dms")
+    end
+  end
+
+  test "the Key changing hands moves its Messages button to the new holder", %{conn: conn} do
+    {:ok, view, _html} = conn |> signed_in_as(wallet("e")) |> live(@path <> "?key=12")
+
+    epoch!(12, 3, wallet("b"))
+    keys_changed([12])
+
+    assert has_element?(
+             view,
+             ~s(#key-profile-dms[href="/app/keys/#{@fleet}/3/dms/12"]),
+             "Message"
+           )
   end
 
   test "a message written elsewhere to the key on show appears", %{conn: conn} do
@@ -644,7 +677,12 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   # ledger pays out USDC alone.
   defp rewards_answer(calls) do
     StubClient.put_chain(
-      %{number: 1_000, hash: "0x" <> String.duplicate("c", 64), timestamp: DateTime.utc_now()},
+      %{
+        number: 1_000,
+        hash: "0x" <> String.duplicate("c", 64),
+        timestamp: DateTime.utc_now(),
+        base_fee: 0
+      },
       [],
       calls: fn
         @rewards, @reward_assets, _hash ->

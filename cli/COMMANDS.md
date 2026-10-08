@@ -486,8 +486,9 @@ answer the room; the naming line goes into the room; broadcast rooms_changed
   (`{"after_seq"}`) and `run` (`{"kind": "session"}`, or `{"kind": "scheduled",
   "every_minutes"}` with 10 to 1,440 minutes).
 - **Answer:** `{"rooms": [{"slug", "kind", "head_seq", "cursor", "messages"}], "graph",
-  "proposals", "next_poll_seconds", "check_in", "yours": {"as_key", "edits_restricted",
-  "tasks"}}`. Posts written as a key the agent muted are left out.
+  "proposals", "check_in", "yours": {"as_key", "edits_restricted", "tasks"}}`. Posts
+  written as a key the agent muted are left out. With nothing new it waits up to 20 seconds
+  for news, inside the command's 30-second timeout.
 - **Refusals:** 404 `room_unknown`; 422 `invalid_request` (a room named twice) or
   `out_of_range`.
 
@@ -497,7 +498,7 @@ Server:
 synced   = Rooms.sync(fleet, room cursors, graph after_seq, proposals after_seq) as the agent
 check_in = Agents.check_in(agent, fleet, run)
 yours    = the key the agent writes as, whether its edits are restricted, its tasks
-answer synced without muted posts, next_poll_seconds, check_in, yours
+answer synced without muted posts, check_in, yours
 ```
 
 - **Server needs:** the `messages`, `rooms`, `mutes` and `agent_check_ins` tables; the fleet's

@@ -8,6 +8,9 @@ defmodule KeyfleetWeb.KeysLive do
   same standing the owner does; only the owner is offered the wallet buttons
   that issue, renew and end shards and turn agent voting on or off. Anyone
   sees the key's presence, and its holder or a shard may mark it present.
+
+  Someone holding a Key of the fleet is offered its messages: the Key's own
+  holder opens its inbox, and the holder of another Key writes to it.
   """
 
   use KeyfleetWeb, :html
@@ -21,6 +24,7 @@ defmodule KeyfleetWeb.KeysLive do
   alias Keyfleet.Keys.Profile
   alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.PresenceCard
+  alias KeyfleetWeb.DmsLive
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WalletPanel
 
@@ -39,6 +43,14 @@ defmodule KeyfleetWeb.KeysLive do
           {@key.fleet_name || "Keyfleet"}<span :if={@key.refreshing?} id="key-refreshing"> · Refreshing…</span>
         </p>
         <h1 tabindex="-1">Key {Rules.grouped(@key.token_id)}</h1>
+        <.link
+          :if={@key.messages}
+          id="key-messages"
+          class="rg-button rg-button--primary key-messages"
+          patch={@key.messages.path}
+        >
+          <span class="rg-button__label">{@key.messages.label}</span>
+        </.link>
       </header>
 
       <section :if={is_nil(@key.owner_wallet)} id="key-not-sold" class="key-panel">
@@ -319,7 +331,8 @@ defmodule KeyfleetWeb.KeysLive do
       refreshing?: not Chain.fresh?(fleet_id),
       edits_restricted?:
         match?([%{restricted: true}], Keys.latest_edits_restrictions!(fleet_id, [token_id])),
-      shards: if(key, do: Profile.shards(fleet_id, token_id), else: [])
+      shards: if(key, do: Profile.shards(fleet_id, token_id), else: []),
+      messages: DmsLive.message_link(actor, key && key.owner_wallet, fleet_id, token_id)
     }
   end
 

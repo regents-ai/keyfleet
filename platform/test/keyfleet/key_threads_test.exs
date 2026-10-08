@@ -65,10 +65,10 @@ defmodule Keyfleet.KeyThreadsTest do
 
     refute Enum.any?(Rooms.list_rooms!(@fleet), &(&1.kind == :key))
     assert Rooms.get_room!(@fleet, "key-5") == nil
-    assert Rooms.read_messages!(@fleet, "key-5") == []
+    assert Rooms.read_messages!(@fleet, "key-5", actor: first) == []
 
     assert {:error, %RoomUnknownError{slug: "key-5"}} =
-             Rooms.sync(@fleet, [%{slug: "key-5", after_seq: 0}], 0, 0, first)
+             Rooms.sync(@fleet, [%{slug: "key-5", after_seq: 0}], 0, 0, first, false)
 
     assert {:error, %Ash.Error.Invalid{errors: [%RoomUnknownError{}]}} =
              Rooms.send_message(
@@ -173,9 +173,15 @@ defmodule Keyfleet.KeyThreadsTest do
     post!(fifth, "general", "Hello")
     post!(first, "general", "Anyone on the hull survey?")
 
-    assert Enum.map(Rooms.posts_as_key!(@fleet, 1), &{&1.room.slug, &1.body}) == [
+    assert Enum.map(Rooms.posts_as_key!(@fleet, 1, actor: first), &{&1.room.slug, &1.body}) == [
              {"general", "Anyone on the hull survey?"},
              {"coding", "Hull survey started"},
+             {"general", "Morning"}
+           ]
+
+    # Anyone else reads only what the key said in General.
+    assert Enum.map(Rooms.posts_as_key!(@fleet, 1), &{&1.room.slug, &1.body}) == [
+             {"general", "Anyone on the hull survey?"},
              {"general", "Morning"}
            ]
 

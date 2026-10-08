@@ -106,12 +106,12 @@
     .early__submit { flex-basis: 100%; }
   }
 
-  /* The tech stack: a small heading and four short lines under the form, each
-     marked with a Powder Blue rule. */
+  /* The tech stack: a small closed dropdown under the form, its four short
+     lines each marked with a Powder Blue rule. */
   .early__stack { margin-block-start: var(--space-5); max-width: 36rem; }
 
   /* A small label rather than a headline, so it takes the label face. */
-  .early__stack h2 {
+  .early__stack .rg-disclosure-title {
     --font-family-title: var(--early-label);
     font-size: .6875rem;
     letter-spacing: .18em;
@@ -122,7 +122,7 @@
   .early__stack ul {
     display: grid;
     gap: var(--space-1);
-    margin: var(--space-2) 0 0;
+    margin: 0;
     padding: 0;
     list-style: none;
   }

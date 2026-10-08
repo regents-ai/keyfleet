@@ -33,13 +33,38 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   @code_password_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/password\z"
+
+  # A poll session is named by its id as the API answers it, and a round by
+  # its number in the session.
+  @session ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+  @polls_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls\z"
+  @poll_open_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/open\z"
+  @poll_seat_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@session}/(join|leave|end)\z"
+  @poll_wait_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@session}/wait\z"
+  @round_open_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@session}/rounds/open\z"
+  @vote_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@session}/rounds/#{@token}/vote\z"
+  @empty_body_paths [@mutes_path, @mute_path, @code_password_path]
+  @poll_post_paths [
+    @poll_open_path,
+    @poll_seat_path,
+    @poll_wait_path,
+    @round_open_path,
+    @vote_path
+  ]
+
+  # Direct messages: a Key's conversations and blocks, what it does in one
+  # conversation with another Key, and catching up on the agent's Keys.
+  @dm_inbox_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/dms(/blocks)?\z"
+  @dm_ops ~w(read send delete auto_delete block unblock)
+  @dm_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/dms/#{@token}/(#{Enum.join(@dm_ops, "|")})\z"
+  @dm_changes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/dms/changes\z"
   # What an agent's own wallet sends to the fleet's contracts.
   @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|proposals/(?:create|vote|cancel|carry_out)|keys/#{@token}/claim)\z"
   @graph_ops ~w(get changes create patch link unlink archive)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
 
-  # The fields each room, sync and proposal read body holds: the ones it must
-  # name, then the ones it may add.
+  # The fields each room, sync, proposal read and poll body holds: the ones it
+  # must name, then the ones it may add.
   @body_fields [
     {@sync_path, {~w(rooms graph proposals run), []}},
     {@proposal_read_path, {~w(number votes_after_seq), []}},
@@ -48,7 +73,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@read_path, {[], ~w(after_seq limit)}},
     {@key_read_path, {[], ~w(after_seq limit)}},
     {@send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
-    {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}}
+    {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
+    {@poll_open_path, {~w(name mode minutes), []}},
+    {@poll_wait_path, {~w(after_seq), []}},
+    {@round_open_path, {~w(decision_ref observation actions deadline_seconds), []}},
+    {@vote_path, {~w(action), ~w(confidence reason)}}
   ]
 
   @editable ~w(name declared_harness proficiencies interests service_ideas current_status)
@@ -67,12 +96,20 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # A proposal holds its text, up to 4,000 bytes, and a launch's fields
   # beside it, escaped the same way.
   @propose_max_body 4_000 * 12 + 8 * 1024
+  # A round holds what the agents see, at most 8,192 bytes of JSON, and up to
+  # 32 moves; doubled by escaping, it still fits the broker's envelope.
+  @round_max_body 24 * 1024
+  @poll_modes ~w(poll delegate)
   # What a proposal's body may name: what every proposal has, then the
   # fields of its kind, each a string as the proposals page's form sends it.
   @propose_required ~w(kind key text)
   @propose_fields @propose_required ++
                     ~w(asset share recipient rate target restricted signature hash name symbol description website image)
   @choices ~w(yes no abstain)
+  # A direct message's parts sit beside its words, so it fits the same body
+  # as a post.
+  @max_dm_parts 8
+  @auto_delete_days [nil, 1, 7, 30, 90]
   # One catch-up names up to 110 rooms, as many as a fleet holds (five fixed
   # rooms, five open rooms and a hundred created ones), and how far the
   # workspace and the proposals were read.
@@ -325,7 +362,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("GET", @shards_path), do: true
 
   defp supported?("GET", path),
-    do: Regex.match?(@rooms_path, path) or Regex.match?(@mutes_path, path)
+    do:
+      Enum.any?([@rooms_path, @mutes_path, @polls_path, @dm_inbox_path], &Regex.match?(&1, path))
 
   defp supported?("POST", path) do
     Enum.any?(
@@ -341,7 +379,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @proposal_read_path,
         @code_password_path,
         @chain_path,
-        @graph_path
+        @graph_path,
+        @dm_path,
+        @dm_changes_path
+        | @poll_post_paths
       ],
       &Regex.match?(&1, path)
     )
@@ -354,7 +395,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp body_limit(path) do
     cond do
       Regex.match?(@send_path, path) or Regex.match?(@key_send_path, path) -> @send_max_body
+      dm_op(path) == "send" -> @send_max_body
       Regex.match?(@sync_path, path) -> @sync_max_body
+      Regex.match?(@round_open_path, path) -> @round_max_body
       chain_op(path) == "proposals/create" -> @propose_max_body
       graph_op(path) in ~w(create patch link unlink archive) -> @graph_write_max_body
       true -> 4096
@@ -389,13 +432,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   def check_body(path, params) do
     cond do
-      Regex.match?(@mutes_path, path) -> admit(params == %{})
-      Regex.match?(@mute_path, path) -> admit(params == %{})
-      Regex.match?(@code_password_path, path) -> admit(params == %{})
+      Enum.any?(@empty_body_paths, &Regex.match?(&1, path)) -> admit(params == %{})
       Regex.match?(@sync_path, path) -> check_sync_body(params)
       Regex.match?(@proposal_read_path, path) -> check_proposal_read_body(params)
+      op = dm_op(path) -> check_dm_body(op, params)
       op = chain_op(path) -> check_chain_body(op, params)
       op = graph_op(path) -> check_graph_body(op, params)
+      poll_path?(path) -> check_poll_body(path, params)
       true -> check_room_body(path, params)
     end
   end
@@ -452,6 +495,52 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_chain_body("keys/" <> _claim, params), do: admit(params == %{})
   defp check_chain_body(_op, _params), do: :invalid
+
+  # "inbox" for a Key's conversations and blocks, "changes" for catching up,
+  # or what is done in one conversation.
+  defp dm_op(path) do
+    case Regex.run(@dm_path, path, capture: :all_but_first) do
+      [op] -> op
+      nil -> dm_key_op(path)
+    end
+  end
+
+  defp dm_key_op(path) do
+    cond do
+      Regex.match?(@dm_inbox_path, path) -> "inbox"
+      Regex.match?(@dm_changes_path, path) -> "changes"
+      true -> nil
+    end
+  end
+
+  # A message names its words, the send key it is filed under and its parts;
+  # auto-delete names its days, null to keep messages; catching up names only
+  # where to start; the rest say nothing more than their path. The Key a
+  # message is from is always the path's.
+  defp check_dm_body("read", params), do: check_read_body(params)
+
+  defp check_dm_body("changes", %{"after_seq" => after_seq} = params)
+       when map_size(params) == 1 and is_integer(after_seq),
+       do: in_range(after_seq in 0..@max_seq)
+
+  defp check_dm_body("send", %{"body" => body, "idempotency_key" => key} = params) do
+    parts = Map.get(params, "parts", [])
+
+    admit(
+      is_binary(body) and is_binary(key) and is_list(parts) and
+        length(parts) <= @max_dm_parts and Enum.all?(parts, &is_map/1) and
+        Enum.all?(Map.keys(params), &(&1 in ~w(body idempotency_key parts)))
+    )
+  end
+
+  defp check_dm_body("auto_delete", %{"days" => days} = params)
+       when map_size(params) == 1 and (is_nil(days) or is_integer(days)),
+       do: in_range(days in @auto_delete_days)
+
+  defp check_dm_body(op, params) when op in ~w(inbox delete block unblock),
+    do: admit(params == %{})
+
+  defp check_dm_body(_op, _params), do: :invalid
 
   defp graph_op(path) do
     case Regex.run(@graph_path, path, capture: :all_but_first) do
@@ -561,6 +650,70 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_proposal_read_body(_params), do: :invalid
 
+  defp poll_path?(path), do: Enum.any?([@polls_path | @poll_post_paths], &Regex.match?(&1, path))
+
+  # Listing sessions, taking or giving up a seat and ending a session say
+  # nothing more than their path.
+  defp check_poll_body(path, params) do
+    cond do
+      Regex.match?(@poll_open_path, path) -> check_poll_open_body(params)
+      Regex.match?(@poll_wait_path, path) -> check_poll_wait_body(params)
+      Regex.match?(@round_open_path, path) -> check_round_body(params)
+      Regex.match?(@vote_path, path) -> check_vote_body(params)
+      true -> admit(params == %{})
+    end
+  end
+
+  # A session names what it is about, how it decides and how many minutes it
+  # stays open.
+  defp check_poll_open_body(%{"name" => name, "mode" => mode, "minutes" => minutes} = params)
+       when map_size(params) == 3 and is_binary(name) and mode in @poll_modes and
+              is_integer(minutes),
+       do: in_range(minutes in 5..1440)
+
+  defp check_poll_open_body(_params), do: :invalid
+
+  # Waiting names the last place in the session's log the agent has read.
+  defp check_poll_wait_body(%{"after_seq" => after_seq} = params)
+       when map_size(params) == 1 and is_integer(after_seq),
+       do: in_range(after_seq in 0..@max_seq)
+
+  defp check_poll_wait_body(_params), do: :invalid
+
+  # A round names the outside decision it is for, what the agents see, the
+  # moves they may choose from and how many seconds they have.
+  defp check_round_body(
+         %{
+           "decision_ref" => ref,
+           "observation" => observation,
+           "actions" => actions,
+           "deadline_seconds" => seconds
+         } = params
+       )
+       when map_size(params) == 4 and is_binary(ref) and is_map(observation) and
+              is_list(actions) and is_integer(seconds) do
+    if Enum.all?(actions, &move?/1), do: in_range(seconds in 1..600), else: :invalid
+  end
+
+  defp check_round_body(_params), do: :invalid
+
+  defp move?(%{"id" => id, "label" => label} = move),
+    do: map_size(move) == 2 and is_binary(id) and is_binary(label)
+
+  defp move?(_move), do: false
+
+  # A vote names the move, and may say how sure the agent is and why.
+  defp check_vote_body(%{"action" => action} = params) when is_binary(action) do
+    confidence = Map.get(params, "confidence", 0)
+
+    if Enum.all?(Map.keys(params), &(&1 in ~w(action confidence reason))) and
+         is_number(confidence) and is_binary(Map.get(params, "reason", "")),
+       do: in_range(confidence >= 0 and confidence <= 1),
+       else: :invalid
+  end
+
+  defp check_vote_body(_params), do: :invalid
+
   defp cursor?(%{"slug" => slug, "after_seq" => after_seq} = room),
     do: map_size(room) == 2 and is_binary(slug) and is_integer(after_seq)
 
@@ -629,6 +782,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       op = graph_op(path) ->
         graph_fields(op)
 
+      op = dm_op(path) ->
+        dm_fields(op)
+
       true ->
         Enum.find_value(@body_fields, {[], []}, fn {route, takes} ->
           Regex.match?(route, path) and takes
@@ -645,6 +801,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: {~w(number), []}
 
   defp chain_fields(_op), do: {[], []}
+
+  defp dm_fields("read"), do: {[], ~w(after_seq limit)}
+  defp dm_fields("send"), do: {~w(body idempotency_key), ~w(parts)}
+  defp dm_fields("auto_delete"), do: {~w(days), []}
+  defp dm_fields("changes"), do: {~w(after_seq), []}
+  defp dm_fields(_op), do: {[], []}
 
   defp graph_fields(op) do
     {required, optional} = Map.fetch!(@graph_bodies, op)

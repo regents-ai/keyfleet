@@ -296,7 +296,8 @@ defmodule Keyfleet.TreasuryReaderTest do
     do: %{
       number: number,
       hash: @head_hash,
-      timestamp: DateTime.from_unix!(1_700_000_000 + number)
+      timestamp: DateTime.from_unix!(1_700_000_000 + number),
+      base_fee: 0
     }
 
   defp text(string) do

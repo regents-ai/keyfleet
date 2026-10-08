@@ -7,6 +7,10 @@ defmodule KeyfleetWeb.Components.Shell do
   alias KeyfleetWeb.RouteCatalog.RouteTarget
   alias Phoenix.LiveView.JS
 
+  # Classic is the open fleet: "Get a Key" in the header opens its page with
+  # its own "Get a Key" pressed (`KeyfleetWeb.FleetLive`).
+  @get_key_path "/app/fleets/fleet_tech_classic?buy"
+
   attr(:route_spec, :map, required: true)
   attr(:account_control, Keyfleet.AccessContext.AccountControl, required: true)
   attr(:shell_instance, :integer, required: true)
@@ -61,6 +65,9 @@ defmodule KeyfleetWeb.Components.Shell do
           <RegentLinks.header_links id="shell-token-menu" />
         </div>
 
+        <div class="shell-get-key">
+          <.get_key id="shell-get-key" link={:patch} />
+        </div>
         <.account_control account_control={@account_control} />
       </header>
 
@@ -101,6 +108,27 @@ defmodule KeyfleetWeb.Components.Shell do
         </main>
       </div>
     </div>
+    """
+  end
+
+  attr :id, :string, required: true
+
+  attr :link, :atom,
+    required: true,
+    values: [:patch, :navigate],
+    doc: "`:patch` from the app's own pages, `:navigate` from any other"
+
+  @doc """
+  "Get a Key" in the site header, for everyone, signed in or not: it opens
+  Classic's page with its buying panel open.
+  """
+  def get_key(assigns) do
+    assigns = assign(assigns, :to, [{assigns.link, @get_key_path}])
+
+    ~H"""
+    <.link id={@id} class="rg-button rg-button--primary" {@to}>
+      <span class="rg-button__label">Get a Key</span>
+    </.link>
     """
   end
 

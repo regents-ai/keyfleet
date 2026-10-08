@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   One key's profile, open over its fleet's page while the address names the
   key: its card, what is known about it and the wallet holding it, the
   messages written to it with a box to write one, and what it has said in the
-  fleet's rooms.
+  fleet's General room, which anyone can read.
 
   Closing it takes the key out of the address: by going back when the page
   opened it, so Back and Close agree, and by replacing the address when the
@@ -25,6 +25,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias Keyfleet.Treasury
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.FleetRisks
+  alias KeyfleetWeb.DmsLive
   alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.Motion
@@ -67,11 +68,21 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <h2 id="key-profile-title" tabindex="-1" data-modal-title>
             Key {Rules.grouped(@profile.token_id)}
           </h2>
-          <form method="dialog">
-            <Regent.Primitives.button id="key-profile-close" type="submit" variant="secondary">
-              Close
-            </Regent.Primitives.button>
-          </form>
+          <div class="key-profile__actions">
+            <.link
+              :if={@profile.dms}
+              id="key-profile-dms"
+              class="rg-button rg-button--primary"
+              patch={@profile.dms.path}
+            >
+              <span class="rg-button__label">{@profile.dms.label}</span>
+            </.link>
+            <form method="dialog">
+              <Regent.Primitives.button id="key-profile-close" type="submit" variant="secondary">
+                Close
+              </Regent.Primitives.button>
+            </form>
+          </div>
         </header>
 
         <.next_key
@@ -216,11 +227,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </dd>
         </div>
         <div>
-          <dt>Posts</dt>
+          <dt>Posts in General</dt>
           <dd id="key-profile-posts">{Rules.grouped(@profile.posts)}</dd>
         </div>
         <div>
-          <dt>Messages</dt>
+          <dt>Wall posts</dt>
           <dd id="key-profile-messages">{Rules.grouped(@profile.messages)}</dd>
         </div>
         <div>
@@ -453,7 +464,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </dd>
         </div>
         <div>
-          <dt>Posts in this fleet</dt>
+          <dt>Posts in General</dt>
           <dd id="key-profile-holder-posts">{Rules.grouped(@profile.holder_posts)}</dd>
         </div>
       </dl>
@@ -484,7 +495,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp thread(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-thread-title">
-      <h3 id="key-profile-thread-title">Messages to Key {Rules.grouped(@profile.token_id)}</h3>
+      <h3 id="key-profile-thread-title">Key {Rules.grouped(@profile.token_id)}’s post wall</h3>
       <%!-- The tools a browser's own agent reads and writes the Key's messages with (page_tools.ts). --%>
       <div
         id="key-profile-tools"
@@ -494,7 +505,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       >
       </div>
       <p :if={@profile.messages == 0} class="key-profile-muted">
-        Nobody has written to this Key yet.
+        Nobody has posted on this wall yet.
       </p>
       <ol
         id="key-profile-thread"
@@ -534,7 +545,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         phx-submit="post_to_key"
       >
         <label for="key-profile-composer-body">
-          Write to Key {Rules.grouped(@profile.token_id)}
+          Post on Key {Rules.grouped(@profile.token_id)}’s wall
         </label>
         <textarea
           id="key-profile-composer-body"
@@ -547,14 +558,14 @@ defmodule KeyfleetWeb.KeyProfileLive do
       </.form>
 
       <div :if={@profile.composer == :sign_in} class="key-profile__signed-out">
-        <p>Everyone can read. Sign in to write to Key {Rules.grouped(@profile.token_id)}.</p>
+        <p>Everyone can read. Sign in to post on Key {Rules.grouped(@profile.token_id)}’s wall.</p>
         <Regent.Primitives.button type="button" variant="secondary" data-account-target="sign-in">
           Sign in
         </Regent.Primitives.button>
       </div>
 
       <p :if={@profile.composer == :no_key} class="key-profile-muted">
-        Only people who hold a Key in {@fleet.name} can write here. Everyone can read.
+        Only people who hold a Key in {@fleet.name} can post here. Everyone can read.
       </p>
 
       <p :if={@profile.composer == :refreshing} class="key-profile-muted">
@@ -571,10 +582,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-posts-title">
       <h3 id="key-profile-posts-title">
-        Recent posts by Key {Rules.grouped(@profile.token_id)}
+        Recent posts in General by Key {Rules.grouped(@profile.token_id)}
       </h3>
       <p :if={@profile.recent_posts == []} class="key-profile-muted">
-        This Key hasn’t posted in the fleet’s rooms yet.
+        This Key hasn’t posted in General yet.
       </p>
       <ol :if={@profile.recent_posts != []} id="key-profile-recent" class="rooms-thread-list">
         <li :for={post <- @profile.recent_posts} id={"key-profile-recent-#{post.id}"}>
@@ -698,7 +709,8 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   @doc "The profile of the key the address names, open over its fleet's page."
   def read_key_profile(socket, fleet, token_id, before) do
-    profile = Profile.read(fleet.fleet_id, token_id, ShellLive.human_actor(socket))
+    actor = ShellLive.human_actor(socket)
+    profile = Profile.read(fleet.fleet_id, token_id, actor)
 
     socket
     |> assign(
@@ -706,6 +718,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       profile
       |> Map.delete(:thread)
       |> Map.merge(%{
+        dms: dms(profile, actor),
         close: closing(before, fleet.fleet_id),
         news: nil,
         notice: nil,
@@ -800,7 +813,8 @@ defmodule KeyfleetWeb.KeyProfileLive do
   """
   def refresh_key_profile(%{assigns: %{key_profile: %{} = shown}} = socket, token_ids) do
     if holder_moved?(shown, token_ids) do
-      profile = Profile.read(shown.fleet_id, shown.token_id, ShellLive.human_actor(socket))
+      actor = ShellLive.human_actor(socket)
+      profile = Profile.read(shown.fleet_id, shown.token_id, actor)
 
       socket
       |> assign(
@@ -808,6 +822,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         profile
         |> Map.delete(:thread)
         |> Map.merge(Map.take(shown, [:close, :news, :notice, :draft, :send_key]))
+        |> Map.put(:dms, dms(profile, actor))
       )
       |> read_rewards(%{key_profile: shown})
       |> stream(:key_thread, key_thread(profile), limit: -@key_thread_kept)
@@ -823,6 +838,13 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp refresh_shards_among(socket, true), do: refresh_key_shards(socket)
   defp refresh_shards_among(socket, false), do: socket
 
+  # The Key's holder opens its direct messages from here, and the holder of another
+  # Key of the fleet writes to it; read again whenever the profile is.
+  defp dms(%{issued?: true} = profile, actor),
+    do: DmsLive.message_link(actor, profile.holder, profile.fleet_id, profile.token_id)
+
+  defp dms(_profile, _actor), do: nil
+
   defp holder_moved?(%{issued?: false, token_id: token_id}, token_ids), do: token_id in token_ids
 
   defp holder_moved?(%{issued?: true, fleet_id: fleet_id, holder: holder}, token_ids),
@@ -832,10 +854,15 @@ defmodule KeyfleetWeb.KeyProfileLive do
   # about the last message sent goes once what the profile says about writing
   # has changed, which explains it.
   defp recheck_composer(%{assigns: %{key_profile: %{issued?: true} = profile}} = socket) do
-    case Profile.composer(ShellLive.human_actor(socket), profile.fleet_id) do
-      composer when composer == profile.composer -> socket
-      composer -> assign(socket, :key_profile, %{profile | composer: composer, notice: nil})
-    end
+    actor = ShellLive.human_actor(socket)
+
+    socket =
+      case Profile.composer(actor, profile.fleet_id) do
+        composer when composer == profile.composer -> socket
+        composer -> assign(socket, :key_profile, %{profile | composer: composer, notice: nil})
+      end
+
+    update(socket, :key_profile, &%{&1 | dms: dms(&1, actor)})
   end
 
   defp recheck_composer(socket), do: socket

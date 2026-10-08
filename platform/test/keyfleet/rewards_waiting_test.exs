@@ -100,7 +100,7 @@ defmodule Keyfleet.Chain.RewardsWaitingTest do
 
   defp answering(calls) do
     StubClient.put_chain(
-      %{number: 1_000, hash: @head_hash, timestamp: DateTime.utc_now()},
+      %{number: 1_000, hash: @head_hash, timestamp: DateTime.utc_now(), base_fee: 0},
       [],
       calls: calls
     )

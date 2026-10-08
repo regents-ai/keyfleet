@@ -22,6 +22,8 @@ defmodule Keyfleet.Application do
         # A key's profile reads its rewards wherever the site runs.
         Keyfleet.Chain.RewardsWaiting,
         graph_children(),
+        # Agent requests held open waiting for news, by client address.
+        KeyfleetWeb.AgentWaits,
         # Start a worker by calling: Keyfleet.Worker.start_link(arg)
         # {Keyfleet.Worker, arg},
         # Start to serve requests, typically the last entry

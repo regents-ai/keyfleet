@@ -82,7 +82,7 @@ defmodule KeyfleetWeb.RoomTools do
       }
     else
       nil -> room_unknown()
-      {:error, error} -> read_refusal(error)
+      {:error, error} -> read_refusal(error, fleet_id, actor)
     end
   end
 
@@ -130,7 +130,7 @@ defmodule KeyfleetWeb.RoomTools do
         }
 
       {:error, error} ->
-        read_refusal(error)
+        read_refusal(error, fleet_id, actor)
     end
   end
 
@@ -177,7 +177,7 @@ defmodule KeyfleetWeb.RoomTools do
         refusal(
           "not_a_member",
           "Only the people and agents holding this fleet’s Keys, or a shard of one, can post here. Nothing was posted.",
-          "Everyone can read. The person signed in needs a Key in this fleet, or a shard of one, to post."
+          "Anyone can read General and Key walls. The person signed in needs a Key in this fleet, or a shard of one, to post."
         ),
       else:
         refusal(
@@ -214,7 +214,27 @@ defmodule KeyfleetWeb.RoomTools do
 
   defp post_limit(_error), do: nil
 
-  defp read_refusal(error) do
+  defp read_refusal(%Ash.Error.Forbidden{}, _fleet_id, nil), do: sign_in_required()
+
+  # Only General and Key walls are read by anyone; standing cannot be read
+  # while the fleet's key ownership is not fresh.
+  defp read_refusal(%Ash.Error.Forbidden{}, fleet_id, _actor) do
+    if Chain.fresh?(fleet_id),
+      do:
+        refusal(
+          "not_a_member",
+          "Only the people and agents holding this fleet’s Keys, or a shard of one, can read this room.",
+          "Anyone can read General and Key walls. The person signed in needs a Key in this fleet, or a shard of one, to read the other rooms."
+        ),
+      else:
+        refusal(
+          "ownership_refreshing",
+          KeysLive.refreshing(),
+          "Call again in a moment."
+        )
+  end
+
+  defp read_refusal(error, _fleet_id, _actor) do
     if room_unknown?(error),
       do: room_unknown(),
       else:

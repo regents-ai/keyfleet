@@ -1,0 +1,330 @@
+{
+  "attributes": [
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"gen_random_uuid()\")",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": true,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "id",
+      "type": "uuid"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "number",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "decision_ref",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "observation",
+      "type": "map"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "actions",
+      "type": [
+        "array",
+        "map"
+      ]
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "deadline_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "roster",
+      "type": [
+        "array",
+        "bigint"
+      ]
+    },
+    {
+      "allow_nil?": false,
+      "default": "\"open\"",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "status",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "outcome",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "winner",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "votes_cast",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "tally",
+      "type": "map"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "closed_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": false,
+      "default": "fragment(\"(now() AT TIME ZONE 'utc')\")",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "inserted_at",
+      "type": "utc_datetime_usec"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": {
+        "deferrable": false,
+        "destination_attribute": "id",
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null,
+        "index?": false,
+        "index_where": null,
+        "match_tenant?": false,
+        "match_type": null,
+        "match_with": null,
+        "multitenancy": {
+          "attribute": null,
+          "global": null,
+          "strategy": null
+        },
+        "name": "poll_rounds_session_id_fkey",
+        "on_delete": "restrict",
+        "on_update": null,
+        "primary_key?": true,
+        "schema": "keyfleet_app",
+        "table": "poll_sessions"
+      },
+      "scale": null,
+      "size": null,
+      "source": "session_id",
+      "type": "uuid"
+    }
+  ],
+  "base_filter": null,
+  "check_constraints": [
+    {
+      "attribute": [
+        "number"
+      ],
+      "base_filter": null,
+      "check": "number > 0",
+      "name": "poll_rounds_number"
+    },
+    {
+      "attribute": [
+        "status"
+      ],
+      "base_filter": null,
+      "check": "status IN ('open', 'closed')",
+      "name": "poll_rounds_status"
+    },
+    {
+      "attribute": [
+        "outcome"
+      ],
+      "base_filter": null,
+      "check": "(status = 'open' AND outcome IS NULL AND closed_at IS NULL) OR (status = 'closed' AND outcome IN ('decided', 'no_votes') AND closed_at IS NOT NULL)",
+      "name": "poll_rounds_closed_with_outcome"
+    }
+  ],
+  "create_table_options": null,
+  "custom_indexes": [
+    {
+      "all_tenants?": false,
+      "concurrently": false,
+      "error_fields": [
+        "session_id"
+      ],
+      "fields": [
+        {
+          "type": "string",
+          "value": "session_id"
+        }
+      ],
+      "include": null,
+      "include_base_filter?": true,
+      "message": null,
+      "name": "poll_rounds_one_open_index",
+      "nulls_distinct": true,
+      "prefix": null,
+      "table": null,
+      "unique": true,
+      "using": null,
+      "where": "status = 'open'"
+    }
+  ],
+  "custom_statements": [
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP FUNCTION keyfleet_app.protect_poll_round();",
+      "global?": false,
+      "name": "closed_poll_rounds_function",
+      "up": "CREATE FUNCTION keyfleet_app.protect_poll_round() RETURNS trigger LANGUAGE plpgsql AS $$\nBEGIN\n  IF TG_OP = 'DELETE' THEN\n    RAISE EXCEPTION 'poll rounds cannot be deleted' USING ERRCODE = '23514';\n  END IF;\n  IF OLD.status = 'closed' THEN\n    RAISE EXCEPTION 'a closed poll round cannot change' USING ERRCODE = '23514';\n  END IF;\n  RETURN NEW;\nEND;\n$$;\n"
+    },
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP TRIGGER protect_poll_rounds ON keyfleet_app.poll_rounds;",
+      "global?": false,
+      "name": "closed_poll_rounds_trigger",
+      "up": "CREATE TRIGGER protect_poll_rounds BEFORE UPDATE OR DELETE ON keyfleet_app.poll_rounds\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.protect_poll_round();\n"
+    }
+  ],
+  "has_create_action": true,
+  "hash": "54693E39F45D8348133AA063EED23019DC4FB54126FC8434B5CB70A9D8B209AC",
+  "identities": [
+    {
+      "all_tenants?": false,
+      "base_filter": null,
+      "index_name": "poll_rounds_unique_decision_index",
+      "keys": [
+        {
+          "type": "atom",
+          "value": "session_id"
+        },
+        {
+          "type": "atom",
+          "value": "decision_ref"
+        }
+      ],
+      "name": "unique_decision",
+      "nils_distinct?": true,
+      "where": null
+    },
+    {
+      "all_tenants?": false,
+      "base_filter": null,
+      "index_name": "poll_rounds_unique_number_index",
+      "keys": [
+        {
+          "type": "atom",
+          "value": "session_id"
+        },
+        {
+          "type": "atom",
+          "value": "number"
+        }
+      ],
+      "name": "unique_number",
+      "nils_distinct?": true,
+      "where": null
+    }
+  ],
+  "multitenancy": {
+    "attribute": null,
+    "global": null,
+    "strategy": null
+  },
+  "repo": "Elixir.Keyfleet.Repo",
+  "schema": null,
+  "table": "poll_rounds"
+}

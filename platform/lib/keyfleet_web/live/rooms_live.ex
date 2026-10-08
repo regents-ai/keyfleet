@@ -7,9 +7,11 @@ defmodule KeyfleetWeb.RoomsLive do
   The people holding the fleet's keys name its five open rooms, and name them
   again at most once a minute; each naming shows in the room itself.
 
-  Everyone can read. What somebody is offered to write with is decided by the
-  keys themselves, and the page is drawn from what the room holds rather than
-  from anything the browser was told along the way.
+  Anyone can read General. The fleet's other rooms are read only by the people
+  and agents holding its keys or a shard of one; everyone else sees their
+  names, marked as for keys only. What somebody is offered to read and write
+  with is decided by the keys themselves, and the page is drawn from what the
+  room holds rather than from anything the browser was told along the way.
 
   Anyone signed in can mute a key, which hides the posts written as it, by its
   owner or its shards, from them alone, and unmute it again.
@@ -118,6 +120,10 @@ defmodule KeyfleetWeb.RoomsLive do
                   aria-current={if room.slug == @room.slug, do: "page"}
                 >
                   {room_label(room)}
+                  <small :if={not room.public and not @room.key?} class="rooms-access">
+                    Keys only
+                  </small>
+                  <small :if={room.public and @room.key?} class="rooms-access">Public</small>
                 </.link>
               </li>
             </ul>
@@ -154,7 +160,24 @@ defmodule KeyfleetWeb.RoomsLive do
         </section>
 
         <section
-          :if={@room.room_id}
+          :if={@room.room_id != nil and not @room.readable?}
+          id="rooms-locked"
+          class="rooms-panel rooms-thread"
+          aria-labelledby="rooms-thread-title"
+        >
+          <h2 id="rooms-thread-title">{@room.name}</h2>
+          <.notice notice={@notice} />
+          <p :if={@room.refreshing?}>
+            Key ownership is being refreshed; try again in a moment.
+          </p>
+          <p :if={not @room.refreshing?}>
+            Only the people and agents holding this fleet’s Keys, or a shard of one, can read
+            this room. Anyone can read General.
+          </p>
+        </section>
+
+        <section
+          :if={@room.room_id != nil and @room.readable?}
           class="rooms-panel rooms-thread"
           aria-labelledby="rooms-thread-title"
         >
@@ -195,15 +218,7 @@ defmodule KeyfleetWeb.RoomsLive do
             </Regent.Primitives.button>
           </.form>
 
-          <p
-            :if={@notice}
-            id="rooms-notice"
-            class={["rooms-notice", @notice.tone == :error && "rooms-notice--error"]}
-            phx-hook="MotionRefusal"
-            data-refused={@notice.tone == :error}
-          >
-            {@notice.message}
-          </p>
+          <.notice notice={@notice} />
 
           <p :if={@room.last_seq == 0}>Nothing has been said here yet.</p>
 
@@ -282,9 +297,13 @@ defmodule KeyfleetWeb.RoomsLive do
             Key ownership is being refreshed; try again in a moment.
           </p>
 
+          <p :if={@room.can_post? and @room.public} class="rooms-detail">
+            Anyone can read this room.
+          </p>
+
           <p :if={not @room.can_post? and not @room.refreshing?} class="rooms-detail">
             Only the people and agents holding this fleet’s Keys, or a shard of one, can post here.
-            Everyone can read.
+            Anyone can read this room.
             <Regent.Primitives.tip id="rooms-who-posts" label="About who can post">
               An agent paired with a Key holder on regents.sh, with a person verified by World ID behind it, can post for them too. Its posts show its name.
             </Regent.Primitives.tip>
@@ -292,6 +311,22 @@ defmodule KeyfleetWeb.RoomsLive do
         </section>
       </div>
     </article>
+    """
+  end
+
+  attr :notice, :map, required: true
+
+  defp notice(assigns) do
+    ~H"""
+    <p
+      :if={@notice}
+      id="rooms-notice"
+      class={["rooms-notice", @notice.tone == :error && "rooms-notice--error"]}
+      phx-hook="MotionRefusal"
+      data-refused={@notice.tone == :error}
+    >
+      {@notice.message}
+    </p>
     """
   end
 
@@ -435,6 +470,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   defp show_room(socket, fleet_id, slug) do
     actor = ShellLive.human_actor(socket)
+    standing = RoomPoster.standing(actor, fleet_id)
     # A fleet outside the catalog has no rooms and no mutes, and the page says
     # it doesn't exist.
     {rooms, muted} =
@@ -445,7 +481,8 @@ defmodule KeyfleetWeb.RoomsLive do
       end
 
     room = Enum.find(rooms, &(&1.slug == slug))
-    posts = latest_posts(room, actor)
+    key? = RoomPoster.standing?(standing)
+    {readable?, posts} = read_latest(room, actor: actor, context: standing)
 
     socket
     |> assign(
@@ -458,7 +495,9 @@ defmodule KeyfleetWeb.RoomsLive do
             last_seq: last_seq(posts, 0),
             muted: muted,
             muter?: Muter.of(actor) != nil,
-            can_post?: room != nil and RoomPoster.may_post?(actor, fleet_id),
+            key?: key?,
+            readable?: readable?,
+            can_post?: room != nil and key?,
             refreshing?: posting_paused?(actor, rooms, fleet_id)
           },
           rooms
@@ -508,7 +547,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   # The room's latest posts read again without the keys muted now, when the
   # keys muted have changed.
-  defp show_unmuted(%{assigns: %{room: %{room_id: room_id} = shown}} = socket)
+  defp show_unmuted(%{assigns: %{room: %{room_id: room_id, readable?: true} = shown}} = socket)
        when is_binary(room_id) do
     actor = ShellLive.human_actor(socket)
     muted = Rooms.muted_keys!(shown.fleet_id, actor)
@@ -516,11 +555,9 @@ defmodule KeyfleetWeb.RoomsLive do
     if muted == shown.muted do
       socket
     else
-      posts = latest_posts(Rooms.get_room!(shown.fleet_id, shown.slug, actor: actor), actor)
-
       socket
-      |> assign(:room, %{shown | muted: muted, last_seq: last_seq(posts, 0)})
-      |> stream(:posts, Rooms.unmuted(posts, muted), reset: true, limit: -@thread_kept)
+      |> assign(:room, %{shown | muted: muted})
+      |> show_latest(actor: actor)
     end
   end
 
@@ -537,6 +574,7 @@ defmodule KeyfleetWeb.RoomsLive do
       rooms: rooms,
       room_id: room && room.id,
       kind: room && room.kind,
+      public: room != nil and room.public,
       name: room && room_label(room),
       topic: room && room.topic,
       topic_set_by: room && room.topic_set_by,
@@ -555,27 +593,111 @@ defmodule KeyfleetWeb.RoomsLive do
 
   defp posting_paused?(_actor, _rooms, _fleet_id), do: false
 
-  # Places in a room's order run unbroken, so the newest hundred posts start one
-  # hundred places back from where the room has got to.
-  defp latest_posts(nil, _actor), do: []
+  # The room's latest posts, read again from where the room has got to now, or
+  # the room cleared and shown as for keys only when the reader may not read
+  # it.
+  defp show_latest(%{assigns: %{room: shown}} = socket, opts) do
+    room = Rooms.get_room!(shown.fleet_id, shown.slug, actor: opts[:actor])
 
-  defp latest_posts(room, actor),
-    do: posts_after(room.fleet_id, room.slug, max(room.head_seq - @thread_page, 0), actor)
+    case read_latest(room, opts) do
+      {true, posts} ->
+        socket
+        |> assign(:room, %{shown | readable?: true, last_seq: last_seq(posts, 0)})
+        |> stream(:posts, Rooms.unmuted(posts, shown.muted), reset: true, limit: -@thread_kept)
 
-  @doc "Only the posts after the last one on the page are read and added to it."
-  def show_new_posts(%{assigns: %{room: room}} = socket) do
-    posts = posts_after(room.fleet_id, room.slug, room.last_seq, ShellLive.human_actor(socket))
-
-    socket
-    |> assign(:room, %{room | last_seq: last_seq(posts, room.last_seq)})
-    |> stream(:posts, Rooms.unmuted(posts, room.muted), limit: -@thread_kept)
+      {false, []} ->
+        lock_room(socket)
+    end
   end
 
-  defp posts_after(fleet_id, slug, after_seq, actor) do
-    Rooms.read_messages!(fleet_id, slug, %{after_seq: after_seq, limit: @thread_page},
-      actor: actor,
-      load: [:reply_to_seq]
-    )
+  # Whether the reader may read the room, as its own policy answers, and its
+  # latest posts when they may. Places in a room's order run unbroken, so the
+  # newest hundred posts start one hundred places back from where the room
+  # has got to.
+  defp read_latest(nil, _opts), do: {false, []}
+
+  defp read_latest(room, opts) do
+    page = %{after_seq: max(room.head_seq - @thread_page, 0), limit: @thread_page}
+
+    case Rooms.read_messages(room.fleet_id, room.slug, page, [load: [:reply_to_seq]] ++ opts) do
+      {:ok, posts} -> {true, posts}
+      {:error, %Ash.Error.Forbidden{}} -> {false, []}
+      {:error, failure} -> raise failure
+    end
+  end
+
+  @doc """
+  Only the posts after the last one on the page are read and added to it. A
+  room the reader may no longer read, because the key they read it with
+  changed hands, is cleared and shown as for keys only. A room shown as for
+  keys only is looked at afresh: a Key may have arrived.
+  """
+  def show_new_posts(socket, opts \\ [])
+
+  def show_new_posts(%{assigns: %{room: %{readable?: true} = room}} = socket, opts) do
+    case Rooms.read_messages(
+           room.fleet_id,
+           room.slug,
+           %{after_seq: room.last_seq, limit: @thread_page},
+           [actor: ShellLive.human_actor(socket), load: [:reply_to_seq]] ++ opts
+         ) do
+      {:ok, posts} ->
+        socket
+        |> assign(:room, %{room | last_seq: last_seq(posts, room.last_seq)})
+        |> stream(:posts, Rooms.unmuted(posts, room.muted), limit: -@thread_kept)
+
+      {:error, %Ash.Error.Forbidden{}} ->
+        lock_room(socket)
+
+      {:error, failure} ->
+        raise failure
+    end
+  end
+
+  def show_new_posts(%{assigns: %{room: %{readable?: false}}} = socket, _opts),
+    do: recheck_standing(socket)
+
+  def show_new_posts(socket, _opts), do: socket
+
+  @doc """
+  The reader's standing in the fleet, read afresh rather than carried over
+  from what the page showed, when their Keys or the fleet's rooms change and
+  after a refusal: a Key arriving opens a room shown as for keys only, and a
+  Key leaving closes one only the keys read.
+  """
+  def recheck_standing(%{assigns: %{room: %{room_id: room_id} = room}} = socket)
+      when is_binary(room_id) do
+    actor = ShellLive.human_actor(socket)
+    standing = RoomPoster.standing(actor, room.fleet_id)
+    key? = RoomPoster.standing?(standing)
+
+    socket =
+      assign(socket, :room, %{
+        room
+        | key?: key?,
+          can_post?: key?,
+          refreshing?: posting_paused?(actor, room.rooms, room.fleet_id)
+      })
+
+    if room.readable?,
+      do: show_new_posts(socket, context: standing),
+      else: show_latest(socket, actor: actor, context: standing)
+  end
+
+  def recheck_standing(socket), do: socket
+
+  defp lock_room(%{assigns: %{room: room}} = socket) do
+    actor = ShellLive.human_actor(socket)
+
+    socket
+    |> assign(:room, %{
+      room
+      | key?: false,
+        readable?: false,
+        can_post?: false,
+        refreshing?: posting_paused?(actor, room.rooms, room.fleet_id)
+    })
+    |> stream(:posts, [], reset: true)
   end
 
   defp last_seq([], shown), do: shown
@@ -598,7 +720,7 @@ defmodule KeyfleetWeb.RoomsLive do
           post_form: form,
           room_notice: %{tone: :error, message: post_refusal(refusal(form), fleet_id)}
         )
-        |> recheck_posting()
+        |> recheck_standing()
     end
   end
 
@@ -623,24 +745,8 @@ defmodule KeyfleetWeb.RoomsLive do
       {:error, form} ->
         socket
         |> assign(naming_form: form, room_notice: naming_notice(refusal(form), fleet_id))
-        |> recheck_posting()
+        |> recheck_standing()
     end
-  end
-
-  # A refusal may come from a key that changed hands, or from key ownership
-  # going out of date, after the page was drawn.
-  defp recheck_posting(%{assigns: %{room: %{fleet_id: fleet_id}}} = socket) do
-    actor = ShellLive.human_actor(socket)
-
-    update(
-      socket,
-      :room,
-      &%{
-        &1
-        | can_post?: &1.can_post? and RoomPoster.may_post?(actor, fleet_id),
-          refreshing?: posting_paused?(actor, &1.rooms, fleet_id)
-      }
-    )
   end
 
   # What turned a form down, as the one error the action would have answered.

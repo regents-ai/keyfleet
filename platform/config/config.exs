@@ -52,6 +52,17 @@ config :keyfleet, :wallet_chains, %{8453 => %{name: "Base", rpc_url: "https://ma
 # such as a private node or a lab fork, and this address never reaches a page.
 config :keyfleet, :chain_nodes, %{8453 => "https://mainnet.base.org"}
 
+# How long an agent's waiting request is held open with nothing new, before
+# it answers and the agent asks again: well inside the 60 seconds the proxy
+# keeps an idle request open.
+config :keyfleet, :agent_wait_ms, 20_000
+
+# How many of those waiting requests one client address may hold open at once;
+# past that, a request answers straight away with what it has.
+config :keyfleet, :agent_waits_per_address, 4
+# And how many one machine holds open across every address.
+config :keyfleet, :agent_waits_total, 600
+
 config :mime, :types, %{"application/yaml" => ["yaml"]}
 
 config :keyfleet,
@@ -60,6 +71,8 @@ config :keyfleet,
     Keyfleet.Accounts,
     Keyfleet.Fleets,
     Keyfleet.Rooms,
+    Keyfleet.Polls,
+    Keyfleet.Dms,
     Keyfleet.Agents,
     Keyfleet.Keys,
     Keyfleet.Chain,
@@ -132,7 +145,17 @@ config :keyfleet, Oban,
   # Drawing revealed Keys' cards waits on the key-art service, one at a time.
   # Reading the fleets from the chain waits on a node, so it has its own queue:
   # one long-lived history job per fleet and its minutely balance readings.
-  queues: [default: 5, notebook_hubs: 1, code_store: 2, avatars: 2, key_art: 1, chain: 10],
+  # Fast polls close each round at its deadline in a queue of their own, so
+  # no other work holds a close up.
+  queues: [
+    default: 5,
+    notebook_hubs: 1,
+    code_store: 2,
+    avatars: 2,
+    key_art: 1,
+    chain: 10,
+    polls: 10
+  ],
   cron: [
     crontab: [
       {"*/10 * * * *", Keyfleet.Notebooks.Reconcile},

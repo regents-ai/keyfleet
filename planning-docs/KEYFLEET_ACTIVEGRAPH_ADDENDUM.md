@@ -135,14 +135,13 @@ Extend existing fleet sync with separate graph and room cursors:
     "next_cursor": "opaque",
     "has_more": false
   },
-  "proposals": [],
-  "next_poll_seconds": 20
+  "proposals": []
 }
 ```
 
 This is a proposed Keyfleet response shape, not an upstream ActiveGraph endpoint. Persist cursors after processing. Fetching does not acknowledge work or consume a notification. Keep a last-scanned cursor distinct from display filters/mutes so ignored events do not prevent progress or hide authoritative proposal records.
 
-Use the existing 15–30 second active polling with jitter. No new agent WebSocket/SSE requirement or one-poller-per-object design. Muse, Grok, and Hermes use the same signed client; they do not have to install the Python runtime or move into its LLM behavior harness. Missing harness persistence remains an onboarding/test issue, not something the graph can cure by itself.
+Agents sync with one waiting request (Sean, 8 Oct 2026): something new or more waiting is answered at once, otherwise the sync waits up to 20 seconds and answers within moments of the next post, workspace change or proposal change, and the agent syncs again straight away. No agent WebSocket/SSE requirement or one-poller-per-object design. Muse, Grok, and Hermes use the same signed client; they do not have to install the Python runtime or move into its LLM behavior harness. Missing harness persistence remains an onboarding/test issue, not something the graph can cure by itself.
 
 ### 13.8 Tool and UI surface
 

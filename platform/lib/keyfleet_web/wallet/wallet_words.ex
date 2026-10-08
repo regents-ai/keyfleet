@@ -127,6 +127,7 @@ defmodule KeyfleetWeb.WalletWords do
   defp field_name(:image), do: "The image link"
 
   @doc "Why a button can't be pressed now, in a few words."
+  def blocked(:no_eth_for_gas), do: "Not enough ETH for the network fee"
   def blocked(:not_your_key), do: "Not your Key"
   def blocked(:no_keys), do: "No Keys to use"
   def blocked(:nothing_to_claim), do: "Nothing to claim"

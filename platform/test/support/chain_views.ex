@@ -12,7 +12,9 @@ defmodule Keyfleet.ChainViews do
   @head %{
     number: 1_000,
     hash: "0x" <> String.duplicate("c", 64),
-    timestamp: ~U[2026-10-07 12:00:00Z]
+    timestamp: ~U[2026-10-07 12:00:00Z],
+    # The network fee costs nothing unless a test's head names a base fee.
+    base_fee: 0
   }
 
   @doc "The head block every test chain answers at, unless one names another."
@@ -21,9 +23,10 @@ defmodule Keyfleet.ChainViews do
   @doc """
   Puts the chain answering `views`, each `{to, signature, arguments,
   answer}`: `answer` is `{types, values}`, like `{"uint256", [5]}`, or
-  `:revert`. `opts` may name `:head` and `:balances`, the ETH each address
-  holds. A later `put!/2` in the same test changes the answers every process
-  reads from then on, including a page that has read the chain already.
+  `:revert`. `opts` may name `:head`, `:balances`, the ETH each address
+  holds, and `:codes`, the chain's answer for the code at each address. A
+  later `put!/2` in the same test changes the answers every process reads
+  from then on, including a page that has read the chain already.
   """
   def put!(views, opts \\ []) do
     answers =
@@ -36,6 +39,7 @@ defmodule Keyfleet.ChainViews do
 
     StubClient.put_chain(Keyword.get(opts, :head, @head), [],
       balances: Keyword.get(opts, :balances, %{}),
+      codes: Keyword.get(opts, :codes, %{}),
       calls: fn to, data, _block_hash -> answer(test, to, data) end
     )
   end
