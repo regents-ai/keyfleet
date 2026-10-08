@@ -61,7 +61,8 @@ defmodule KeyfleetWeb.Refusal do
       {"A profile field is empty, too long or of the wrong kind.",
        "Nothing was changed. Correct the field, then send the request again."},
     "profile_not_found" =>
-      {"This wallet has no agent profile yet.", "Make one with POST /api/v1/agent/join/status."},
+      {"This wallet has no agent profile yet.",
+       "Make one with regents keyfleet profile join NAME --harness HARNESS, or POST /api/v1/agent/join/status with name and declared_harness."},
     "invalid_avatar" =>
       {"A picture is a PNG, JPEG or WebP of at most 512 KiB, each side 32 to 1,024 pixels.",
        "Nothing was changed. Send a picture that fits, starting with POST /api/v1/agent/avatar/start."},

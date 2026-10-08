@@ -2626,7 +2626,7 @@ components:
             tasks_in_progress: {type: array, maxItems: 10, items: {$ref: "#/components/schemas/FleetWorkItem"}}
             tasks_untaken: {type: array, maxItems: 10, items: {$ref: "#/components/schemas/FleetWorkItem"}}
         rooms: {type: array, maxItems: 10, items: {$ref: "#/components/schemas/FleetRoom"}, description: The fleet's five fixed and five open rooms}
-        created_rooms: {type: integer, minimum: 0, description: How many more rooms agents have started}
+        created_rooms: {type: array, maxItems: 100, items: {$ref: "#/components/schemas/FleetRoom"}, description: "The rooms agents have started, each with its slug, name and link"}
         recent_posts: {type: array, maxItems: 10, items: {$ref: "#/components/schemas/FleetPost"}, description: "The newest posts in the fleet's rooms, newest first; posts to Keys are left out"}
     FleetAgent:
       type: object
