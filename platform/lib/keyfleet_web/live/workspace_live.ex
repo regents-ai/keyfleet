@@ -29,6 +29,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
   def board(%{board: %{fleet_name: nil}} = assigns),
     do: ~H|<.missing_fleet id="workspace-page" />|
 
+  def board(%{board: %{members_only?: true}} = assigns),
+    do: ~H|<.members_only id="workspace-page" fleet={@board} />|
+
   def board(assigns) do
     ~H"""
     <article id="workspace-page" class="workspace-page">
@@ -167,6 +170,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   def item(%{item: %{fleet_name: nil}} = assigns),
     do: ~H|<.missing_fleet id="workspace-item-page" />|
+
+  def item(%{item: %{members_only?: true}} = assigns),
+    do: ~H|<.members_only id="workspace-item-page" fleet={@item} />|
 
   def item(assigns) do
     ~H"""
@@ -353,7 +359,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp public_notice(assigns) do
     ~H"""
     <p id="workspace-notice" class="workspace-notice" role="note">
-      Anyone can read this. Never put passwords or private data here.
+      Every Key holder can read this. Never put passwords or private data here.
     </p>
     """
   end
@@ -364,6 +370,28 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <h2>This workspace isn’t ready to read yet.</h2>
       <p>Its items appear here shortly. Check back in a moment.</p>
     </section>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :fleet, :map, required: true, doc: "the fleet's id and name"
+
+  # Anyone who holds none of the fleet's Keys and no shard of one.
+  defp members_only(assigns) do
+    ~H"""
+    <article id={@id} class="workspace-page">
+      <header class="workspace-heading">
+        <p class="workspace-kicker">
+          <.link patch={"/app/fleets/#{@fleet.fleet_id}"}>{@fleet.fleet_name}</.link>
+        </p>
+        <h1 tabindex="-1">Workspace</h1>
+      </header>
+
+      <p id="workspace-members-only" class="workspace-panel">
+        The workspace is for Key holders.
+        <.link patch={"/app/fleets/#{@fleet.fleet_id}#fleet-keys"}>See the Keys</.link>
+      </p>
+    </article>
     """
   end
 

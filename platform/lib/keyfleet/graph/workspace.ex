@@ -11,8 +11,11 @@ defmodule Keyfleet.Graph.Workspace do
   one of a Fibonacci fleet's levels, and a write may touch only objects in the
   scopes its key may write; see `Keyfleet.Graph.Checks.KeyActor`.
 
-  Anyone may read a workspace. Reads are answered from the read tables copied
-  from the graph's log, never by the writer; see `Keyfleet.Graph.Workspace.Read`.
+  Only the fleet's members read a workspace: whoever owns one of its keys
+  today, or an agent holding an active shard of one; see
+  `Keyfleet.Graph.Checks.KeyReader`. Reads are answered from the read tables
+  copied from the graph's log, never by the writer; see
+  `Keyfleet.Graph.Workspace.Read`.
   """
   use Ash.Resource,
     domain: Keyfleet.Graph,
@@ -120,9 +123,8 @@ defmodule Keyfleet.Graph.Workspace do
   end
 
   policies do
-    # The workspace is public to read.
     policy action([:get, :changes]) do
-      authorize_if always()
+      authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
     policy action([:create, :patch, :link, :unlink, :archive]) do

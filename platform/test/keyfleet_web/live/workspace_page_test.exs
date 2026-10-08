@@ -3,9 +3,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
   import Keyfleet.WorkspaceFixtures
 
+  alias Keyfleet.Accounts
+  alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
+  alias Keyfleet.Keys
   alias Keyfleet.Rooms
 
   @fleet "fibonacci_syndicate"
@@ -14,17 +17,34 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   @later "fleet_tech_classic"
   @too_far 9_223_372_036_854_775_808
   @board "/app/fleets/fibonacci_syndicate/workspace"
-  @notice "Anyone can read this. Never put passwords or private data here."
+  @notice "Every Key holder can read this. Never put passwords or private data here."
+  @holder "0x" <> String.duplicate("d", 40)
 
   # The fleet is recorded as deployed, because a fleet still coming soon
-  # has no workspace to show.
-  setup do
+  # has no workspace to show. Each page is read by the owner of one of its
+  # Keys, as only a Key holder reads the workspace.
+  setup %{conn: conn} do
     Fleets.bootstrap_catalog!()
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
     ChainHelpers.deploy!(@fleet)
+    ChainHelpers.seed_cursor!(@fleet)
 
-    :ok
+    Keys.record_epoch!(
+      %{
+        fleet_id: @fleet,
+        token_id: 1,
+        ownership_epoch: 1,
+        owner_wallet: @holder,
+        block_number: 10,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash: "0x" <> String.duplicate("a", 64),
+        log_index: 0
+      },
+      actor: %Actors.System{}
+    )
+
+    %{conn: signed_in_as(conn, @holder), visitor: conn}
   end
 
   describe "the fleet's items" do
@@ -653,7 +673,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       conn: conn
     } do
       task = create(@fleet, "task", %{"title" => "Draft", "progress" => "todo"})
-      sys = Graph.read_object!(@fleet, task, actor: nil).sys
+      [%{sys: sys}] = Graph.read_objects!(@fleet, [task], actor: %Actors.System{})
 
       event(@fleet, "patch.applied", %{
         "target" => task,
@@ -991,6 +1011,27 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
   end
 
+  test "a visitor who holds none of the fleet's Keys is shown only that the workspace is for Key holders",
+       %{visitor: visitor} do
+    open_log(@fleet)
+    task = create(@fleet, "task", %{"title" => "Draft the brief", "progress" => "todo"})
+
+    for conn <- [visitor, signed_in_as(visitor, "0x" <> String.duplicate("e", 40))],
+        path <- [@board, item_path(task)] do
+      {:ok, view, html} = live(conn, path)
+
+      assert has_element?(view, "#workspace-members-only", "The workspace is for Key holders.")
+
+      assert has_element?(
+               view,
+               ~s(#workspace-members-only a[href="/app/fleets/#{@fleet}#fleet-keys"])
+             )
+
+      refute html =~ "Draft the brief"
+      refute html =~ @notice
+    end
+  end
+
   test "the fleet's page leads to its workspace", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/app/fleets/#{@fleet}")
 
@@ -998,6 +1039,18 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   end
 
   defp item_path(id), do: KeyfleetWeb.WorkspacePage.item_path(@fleet, id)
+
+  defp signed_in_as(conn, wallet) do
+    account =
+      Accounts.register_verified!(
+        "did:privy:workspace-page:#{System.unique_integer([:positive])}",
+        wallet,
+        [wallet],
+        actor: %Actors.System{}
+      )
+
+    init_test_session(conn, %{human_account_id: account.id})
+  end
 
   defp id_number(id), do: id |> String.split("#") |> List.last()
 

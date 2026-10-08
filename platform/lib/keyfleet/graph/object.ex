@@ -8,7 +8,10 @@ defmodule Keyfleet.Graph.Object do
   `changed_at` its time. Nothing else moves them: linking the object,
   unlinking it, or a notice that it needs attention leaves them as they were.
 
-  Only the projector writes here; anyone may read.
+  Only the projector writes here. Only the fleet's members read its objects
+  (`Keyfleet.Graph.Checks.KeyReader`), except through the two reads a fleet
+  shows anyone: its open work, by title, and the titles of the items its
+  latest activity names, where anyone else reads only the goals'.
   """
   use Ash.Resource,
     domain: Keyfleet.Graph,
@@ -73,8 +76,8 @@ defmodule Keyfleet.Graph.Object do
     # The work still open in the fleet's workspace, the most recently changed
     # first: its open goals, the tasks in progress or the tasks nobody has
     # taken yet, as `kind` says (`Keyfleet.Graph.Preparations.OpenWork`).
-    # Each object comes with what its card shows, not its text. Callers bound
-    # it with a limit, or count it.
+    # Anyone may read it, so each object comes with its title alone. Callers
+    # bound it with a limit, or count it.
     read :open_work do
       argument :fleet_id, :string, allow_nil?: false
 
@@ -87,8 +90,8 @@ defmodule Keyfleet.Graph.Object do
 
       prepare build(
                 sort: [changed_seq: :desc],
-                select: [:fleet_id, :id, :type, :sys, :version, :changed_seq, :changed_at],
-                load: [:title, :card]
+                select: [:fleet_id, :id, :type, :changed_seq, :changed_at],
+                load: [:title]
               )
     end
 
@@ -117,7 +120,7 @@ defmodule Keyfleet.Graph.Object do
     end
 
     # The titles of a few of the fleet's objects, to name the objects a page
-    # mentions.
+    # mentions: every one for the fleet's members, the goals for anyone else.
     read :titled do
       argument :fleet_id, :string, allow_nil?: false
 
@@ -127,11 +130,6 @@ defmodule Keyfleet.Graph.Object do
 
       filter expr(fleet_id == ^arg(:fleet_id) and id in ^arg(:ids))
       prepare build(select: [:fleet_id, :id, :type, :sys], load: [:title])
-    end
-
-    # What a link's relationships to its two ends read through.
-    read :link_end do
-      public? false
     end
 
     read :with_ids do
@@ -150,11 +148,23 @@ defmodule Keyfleet.Graph.Object do
   end
 
   policies do
-    policy action_type(:read) do
+    # The summary a fleet shows anyone.
+    policy action(:open_work) do
       authorize_if always()
     end
 
-    policy action(:project) do
+    # Anyone may read a goal's title; only the fleet's members read the
+    # titles of its other items.
+    policy action(:titled) do
+      authorize_if expr(type == "goal")
+      authorize_if Keyfleet.Graph.Checks.KeyReader
+    end
+
+    policy action([:in_fleet, :cards, :assigned_to_keys]) do
+      authorize_if Keyfleet.Graph.Checks.KeyReader
+    end
+
+    policy action([:with_ids, :project]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end
@@ -243,15 +253,6 @@ defmodule Keyfleet.Graph.Object do
       source_attribute :fleet_id
       destination_attribute :fleet_id
       define_attribute? false
-    end
-
-    # The links of one type that point at this object, read with the
-    # relation's `:into` read.
-    has_many :links_in, Keyfleet.Graph.Relation do
-      source_attribute :id
-      destination_attribute :target
-      read_action :into
-      filter expr(fleet_id == parent(fleet_id))
     end
   end
 end

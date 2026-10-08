@@ -513,7 +513,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     # Catching up.
     general = %{"slug" => "general", "after_seq" => 0}
 
-    sync = fn address, rooms, status ->
+    sync = fn signer, address, rooms, status ->
       body = %{
         "rooms" => rooms,
         "graph" => %{"after_seq" => 0},
@@ -521,49 +521,15 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
         "run" => %{"kind" => "session"}
       }
 
-      answer(c, c.signer, "POST", @sync, address, body, status)
+      answer(c, signer, "POST", @sync, address, body, status)
     end
 
-    answer(
-      c,
-      stranger,
-      "POST",
-      @sync,
-      @address,
-      %{
-        "rooms" => [%{general | "slug" => "coding"}],
-        "graph" => %{"after_seq" => 0},
-        "proposals" => %{"after_seq" => 0},
-        "run" => %{"kind" => "session"}
-      },
-      403
-    )
-
-    # Naming General too, it reads General and is told which room it was kept
-    # out of, by the slug it sent alone.
-    outsider =
-      answer(
-        c,
-        stranger,
-        "POST",
-        @sync,
-        @address,
-        %{
-          "rooms" => [general, %{general | "slug" => "coding"}],
-          "graph" => %{"after_seq" => 0},
-          "proposals" => %{"after_seq" => 0},
-          "run" => %{"kind" => "session"}
-        },
-        200
-      ).body["rooms"]
-
-    assert [%{"slug" => "general", "messages" => [_, _, _]}, refused] = outsider
-    assert refused == %{"slug" => "coding", "refused" => "not_a_member"}
-
-    sync.(@address, [general, %{general | "slug" => "coding"}], 200)
-    sync.(@address, [%{general | "slug" => "hull-survey"}], 404)
-    sync.(@address, [%{general | "after_seq" => -1}], 422)
-    sync.(@address, [general, general], 422)
+    sync.(c.signer, @address, [general, %{general | "slug" => "coding"}], 200)
+    sync.(c.signer, @address, [%{general | "slug" => "hull-survey"}], 404)
+    sync.(c.signer, @address, [%{general | "after_seq" => -1}], 422)
+    sync.(c.signer, @address, [general, general], 422)
+    # A sync reads the workspace, which only a Key or a shard of one may.
+    sync.(stranger, @address, [general], 403)
 
     # Reading a proposal: recorded, not yet made, and no proposal at all.
     ProposalHelpers.proposal!(@fleet, 1)

@@ -68,6 +68,30 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
     end
   end
 
+  @doc """
+  Whether `actor` is in the fleet now, which is what reading its workspace
+  takes: `{:ok, true}` when its wallet owns one of the fleet's keys today or,
+  for an agent, it holds an active shard of one; `{:ok, false}` when it holds
+  neither; and `{:error, error}` when the fleet's key ownership can't be read
+  right now, a refreshing one included. A read names no key: the one asked
+  about is the key the actor is in the fleet as (`Keyfleet.Keys.identity/2`).
+  A key whose edits a vote has restricted still counts: holding it is what
+  counts here. Read within `within` milliseconds, as `command/5` is.
+  """
+  def member(actor, fleet_id, within) do
+    deadline = System.monotonic_time(:microsecond) + within * 1_000
+
+    with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
+         {:ok, _reading} <- fresh_reading(fleet_id, deadline),
+         {:ok, _standing} <- standing(actor, fleet_id, token_id, deadline) do
+      {:ok, true}
+    else
+      nil -> {:ok, false}
+      {:error, %NotKeyHolderError{}} -> {:ok, false}
+      {:error, error} -> {:error, error}
+    end
+  end
+
   defp authority(actor, fleet_id, token_id, deadline) do
     with {:ok, reading} <- fresh_reading(fleet_id, deadline),
          {:ok, key} <- key_coordinate(fleet_id, token_id, deadline),

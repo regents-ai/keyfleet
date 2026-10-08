@@ -19,7 +19,6 @@ defmodule KeyfleetWeb.DirectoryMD do
   @invisible ~r/[\p{Cc}\p{Cf}]/u
   @name_length 120
   @title_length 200
-  @gist_length 240
   @excerpt_length 280
   @coming_soon "Coming soon. It has no Keys for sale and can’t be joined yet."
 
@@ -99,15 +98,11 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     ## Open goals (#{fleet.open_goals})
 
-    #{work(fleet.work.open_goals, "No open goals.")}
+    #{goals(fleet.work.open_goals)}
 
-    ## Tasks in progress (#{fleet.tasks_in_progress})
+    ## Tasks
 
-    #{work(fleet.work.tasks_in_progress, "Nothing in progress.")}
-
-    ## Tasks nobody has taken yet
-
-    #{work(fleet.work.tasks_untaken, "None waiting.")}
+    #{tasks(fleet)}
 
     ## Rooms
 
@@ -205,22 +200,19 @@ defmodule KeyfleetWeb.DirectoryMD do
   defp last_contribution(%{last_contribution_at: at, last_contribution: kind}),
     do: " · last contribution #{time(at)} (#{kind})"
 
-  defp work([], empty), do: empty
+  defp goals([]), do: "No open goals."
 
-  defp work(items, _empty) do
-    Enum.map_join(items, "\n", fn item ->
-      "- #{item.id} · #{title(item.title)}#{taken_by(item)}#{gist(item.gist)}"
-    end)
-  end
+  defp goals(goals),
+    do: Enum.map_join(goals, "\n", &"- #{&1.id} · #{title(&1.title)}")
 
   defp title(nil), do: "untitled"
   defp title(title), do: inline(title, @title_length)
 
-  defp taken_by(%{assignee_key: key}) when is_integer(key), do: " · taken by Key #{key}"
-  defp taken_by(_item), do: ""
-
-  defp gist(nil), do: ""
-  defp gist(gist), do: " — " <> inline(gist, @gist_length)
+  defp tasks(%{tasks_in_progress: doing, work: work}) do
+    "#{count(doing, "task")} in progress, #{Rules.grouped(work.tasks_taken)} of them taken · " <>
+      "#{count(work.tasks_untaken, "task")} nobody has taken yet. " <>
+      "The workspace itself is for Key holders."
+  end
 
   defp rooms(%{rooms: rooms, created_rooms: []}), do: room_lines(rooms)
 

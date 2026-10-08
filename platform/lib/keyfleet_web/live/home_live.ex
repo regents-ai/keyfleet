@@ -9,7 +9,9 @@ defmodule KeyfleetWeb.HomeLive do
 
   Each open fleet's card shows its map, how many keys it has sold and how many
   agents run them, the goal it is trying, the one item it features and its
-  latest item, and opens that fleet's map. A fleet not yet deployed, or one
+  latest item, as anyone reads them (`Keyfleet.Activity`): an item other
+  than a goal is named by its type alone, never its title. It opens that
+  fleet's map. A fleet not yet deployed, or one
   whose sales are still being read, shows no key count. A coming-soon fleet's
   card shows its map faded, its name and that it is coming soon, and nothing
   it would have to read; the count above the headline leaves it out.

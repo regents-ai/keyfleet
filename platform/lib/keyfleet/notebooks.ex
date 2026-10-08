@@ -24,8 +24,6 @@ defmodule Keyfleet.Notebooks do
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Agent, Human, System}
   alias Keyfleet.Graph.Checks.KeyActor
-  alias Keyfleet.Graph.Errors.{EditsRestrictedError, NotKeyHolderError}
-  alias Keyfleet.Keys
   alias Keyfleet.Notebooks.{Handoff, Hub}
 
   resources do
@@ -109,22 +107,11 @@ defmodule Keyfleet.Notebooks do
   `{:ok, false}` when it holds neither, and `{:error, error}` when the fleet's
   key ownership can't be read right now.
 
-  The answer is the workspace's own (`KeyActor`), read while the fleet's
-  ownership is fresh. A key whose workspace edits a vote has restricted still
-  opens the notebooks: holding it is what counts here.
+  The answer is the workspace's own (`KeyActor.member/3`): who may read the
+  workspace may open its notebooks.
   """
   def member?(actor, fleet_id) do
-    within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
-
-    with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
-         {:ok, _command} <- KeyActor.command(actor, fleet_id, token_id, "notebooks", within) do
-      {:ok, true}
-    else
-      nil -> {:ok, false}
-      {:error, %EditsRestrictedError{}} -> {:ok, true}
-      {:error, %NotKeyHolderError{}} -> {:ok, false}
-      {:error, error} -> {:error, error}
-    end
+    KeyActor.member(actor, fleet_id, Application.fetch_env!(:keyfleet, :graph)[:check_timeout])
   end
 
   @doc """
