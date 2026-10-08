@@ -31,45 +31,7 @@ defmodule KeyfleetWeb.Components.Shell do
       data-shell-instance={@shell_instance}
     >
       <a class="shell-skip" href="#route-content">Skip to content</a>
-      <header id="shell-header">
-        <.link id="shell-brand" class="shell-brand" href="/">
-          <span class="shell-brand__mark" aria-hidden="true">
-            <img
-              class="shell-brand__mark-light"
-              src="/images/brand/mark-flat-light.svg"
-              alt=""
-            />
-            <img
-              class="shell-brand__mark-dark"
-              src="/images/brand/mark-flat-dark.svg"
-              alt=""
-            />
-          </span>
-          <span class="shell-brand__name">Keyfleet</span>
-        </.link>
-
-        <Regent.Primitives.button
-          variant="quiet"
-          id="mobile-menu-button"
-          class="mobile-menu-button"
-          type="button"
-          aria-controls="shell-sidebar"
-          aria-expanded="false"
-        >
-          Menu
-        </Regent.Primitives.button>
-
-        <span class="shell-spacer" />
-        <.theme_toggle id="theme-control" />
-        <div class="rl-header-links">
-          <RegentLinks.header_links id="shell-token-menu" />
-        </div>
-
-        <div class="shell-get-key">
-          <.get_key id="shell-get-key" link={:patch} />
-        </div>
-        <.account_control account_control={@account_control} />
-      </header>
+      <.header account_control={@account_control} get_key_link={:patch} menu theme />
 
       <nav
         id="shell-sidebar"
@@ -108,6 +70,69 @@ defmodule KeyfleetWeb.Components.Shell do
         </main>
       </div>
     </div>
+    """
+  end
+
+  attr :account_control, Keyfleet.AccessContext.AccountControl, required: true
+
+  attr :get_key_link, :atom,
+    required: true,
+    values: [:patch, :navigate],
+    doc: "`:patch` inside the app shell, `:navigate` from any other page"
+
+  attr :menu, :boolean,
+    required: true,
+    doc: "whether the page has a sidebar the Menu button opens"
+
+  attr :theme, :boolean, required: true, doc: "whether the page offers the theme switch"
+
+  @doc """
+  The site header: brand, Menu (only where there is a sidebar), the theme
+  switch (not on the always-dark homepage), links, "Get a Key" and the account
+  control. It fits one line on a phone.
+  """
+  def header(assigns) do
+    ~H"""
+    <header id="shell-header">
+      <.link id="shell-brand" class="shell-brand" href="/">
+        <span class="shell-brand__mark" aria-hidden="true">
+          <img
+            class="shell-brand__mark-light"
+            src="/images/brand/mark-flat-light.svg"
+            alt=""
+          />
+          <img
+            class="shell-brand__mark-dark"
+            src="/images/brand/mark-flat-dark.svg"
+            alt=""
+          />
+        </span>
+        <span class="shell-brand__name">Keyfleet</span>
+      </.link>
+
+      <Regent.Primitives.button
+        :if={@menu}
+        variant="quiet"
+        id="mobile-menu-button"
+        class="mobile-menu-button"
+        type="button"
+        aria-controls="shell-sidebar"
+        aria-expanded="false"
+      >
+        Menu
+      </Regent.Primitives.button>
+
+      <span class="shell-spacer" />
+      <.theme_toggle :if={@theme} id="theme-control" />
+      <div class="rl-header-links">
+        <RegentLinks.header_links id="shell-token-menu" />
+      </div>
+
+      <div class="shell-get-key">
+        <.get_key id="shell-get-key" link={@get_key_link} />
+      </div>
+      <.account_control account_control={@account_control} />
+    </header>
     """
   end
 

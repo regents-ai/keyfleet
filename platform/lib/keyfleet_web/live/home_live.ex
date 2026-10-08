@@ -336,7 +336,12 @@ defmodule KeyfleetWeb.HomeLive do
   def render(assigns) do
     ~H"""
     <Regent.Structure.frame id="public-home" class="rl-root">
-      <Regent.Structure.row rail={false}><.landing_header /></Regent.Structure.row>
+      <Shell.header
+        account_control={@account_control}
+        get_key_link={:navigate}
+        menu={false}
+        theme={false}
+      />
 
       <main>
         <Regent.Structure.row rail={false}>
@@ -376,32 +381,6 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp sales_read?(%{deployed?: false}), do: true
   defp sales_read?(%{current?: current?}), do: current?
-
-  # The homepage is always dark, so its mark is the dark one.
-  def landing_header(assigns) do
-    ~H"""
-    <header class="rl-header" data-home-header>
-      <div class="rl-header-bar">
-        <.link navigate={~p"/"} class="rl-brand" aria-label="Keyfleet home">
-          <img
-            src={~p"/images/brand/mark-flat-dark.svg"}
-            width="252"
-            height="186"
-            alt=""
-          />
-        </.link>
-
-        <div class="rl-header-links">
-          <RegentLinks.header_links id="home-brand-links" />
-          <Shell.get_key id="home-get-key" link={:navigate} />
-          <a href={~p"/account"} class="rg-button">
-            <span class="rg-button__label">Account</span>
-          </a>
-        </div>
-      </div>
-    </header>
-    """
-  end
 
   attr :tally, :map, required: true, doc: "the agents and keys across every fleet, or nil"
 

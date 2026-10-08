@@ -575,7 +575,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       ChainHelpers.seed_cursor!("fleet_tech_classic")
 
       {:ok, home, _html} = live(build_conn(), "/")
-      assert has_element?(home, ~s(#home-get-key[href="/app/fleets/fleet_tech_classic?buy"]))
+      assert has_element?(home, ~s(#shell-get-key[href="/app/fleets/fleet_tech_classic?buy"]))
 
       {:ok, view, _html} = live(conn, @path)
       view |> element("#shell-get-key") |> render_click()

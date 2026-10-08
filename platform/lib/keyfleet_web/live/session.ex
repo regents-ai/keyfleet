@@ -25,6 +25,13 @@ defmodule KeyfleetWeb.Live.Session do
     |> Map.put("render_route", local_route(conn.request_path, conn.query_string))
   end
 
+  # Pages outside the product shell only show who is signed in, in the site
+  # header; they act for nobody, so they hold no lease.
+  def on_mount(:show_account, _params, session, socket) do
+    {_lineage, account} = session |> SessionAuthority.claim() |> SessionAuthority.resolve()
+    {:cont, assign_principal(socket, account)}
+  end
+
   def on_mount(:load_human, _params, session, socket) do
     socket = assign(socket, session_lease: nil)
 

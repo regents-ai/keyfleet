@@ -222,11 +222,11 @@ test("a fleet's card opens that fleet's map", async ({page}) => {
   await expect(page.getByRole("heading", {level: 1, name: "Keyfleet Classic"})).toBeVisible()
 })
 
-test("the header reaches the account page", async ({page}) => {
+test("the header offers sign-in, as every app page does", async ({page}) => {
   await page.goto("/")
   await waitForHomepage(page)
 
-  await expect(page.locator(".rl-header").getByRole("link", {name: "Account"})).toHaveAttribute("href", "/account")
+  await expect(page.locator("#shell-header").getByRole("button", {name: "Sign In"})).toBeVisible()
 })
 
 test("the homepage settles immediately for reduced motion", async ({browser}) => {

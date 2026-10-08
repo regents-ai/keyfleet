@@ -268,7 +268,8 @@ defmodule KeyfleetWeb.Router do
   scope "/", KeyfleetWeb do
     pipe_through :browser
 
-    live_session :home, on_mount: [KeyfleetWeb.Live.LaunchGateHook] do
+    live_session :home,
+      on_mount: [KeyfleetWeb.Live.LaunchGateHook, {KeyfleetWeb.Live.Session, :show_account}] do
       live "/", HomeLive, :home
     end
 
