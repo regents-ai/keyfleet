@@ -124,6 +124,22 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert again.resp_cookies == %{}
   end
 
+  # Costly failure: a signature header alone makes the site read a large body,
+  # before anything about the sender is checked and as often as they like.
+  test "a signed request spends its address's budget first and is read only as far as a signature reaches" do
+    budget = Application.fetch_env!(:keyfleet, :api_rate_limit)
+    on_exit(fn -> Application.put_env(:keyfleet, :api_rate_limit, budget) end)
+    Application.put_env(:keyfleet, :api_rate_limit, limit: 1, window_seconds: 3600)
+
+    too_large = signed_post(String.duplicate("a", 64 * 1024 + 1))
+    assert json_response(too_large, 413)["error"]["code"] == "request_too_large"
+
+    past_budget = signed_post(String.duplicate("a", 1_000_000))
+    assert json_response(past_budget, 429)["error"]["code"] == "too_many_requests"
+    assert [_seconds] = get_resp_header(past_budget, "retry-after")
+    refute_received {:hub, _method, _path, _subject, _body}
+  end
+
   # Costly failure: one fleet's notebook sign-in opens another fleet's hub.
   test "a sign-in cookie for one fleet signs no one in on another fleet's host", c do
     cookie = enter!(c.holder)
@@ -287,6 +303,13 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       if cookie, do: put_req_header(conn, "cookie", "__Host-kf_notebooks=" <> cookie), else: conn
 
     dispatch(conn, @endpoint, method, path, nil)
+  end
+
+  defp signed_post(body) do
+    %{build_conn() | host: @host}
+    |> put_req_header("signature-input", "sig1=()")
+    |> put_req_header("content-type", "application/json")
+    |> dispatch(@endpoint, :post, "/api/v1/projects/proj-fleet/notebooks", body)
   end
 
   ## The hub

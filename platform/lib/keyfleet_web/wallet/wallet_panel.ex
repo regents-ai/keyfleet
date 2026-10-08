@@ -23,7 +23,9 @@ defmodule KeyfleetWeb.WalletPanel do
   The page renders it with `live_component`, giving:
 
     * `id`, `flow` (a `Keyfleet.WalletSteps` flow), `fleet` (its `fleet_id`
-      and `chain_id`) and `actor` (the signed-in person, or nil);
+      and `chain_id`), `actor` (the signed-in person, or nil) and `lease`
+      (the page's `session_lease`, which each of the panel's events checks
+      first: `KeyfleetWeb.Live.Session.check_component_events/1`);
     * `inputs`, each field the steps read with its first value; `proposal`,
       `token_id` or `advance_id` when the flow acts on one; `refresh`, anything whose
       change means the steps are built again; `tool`, the browser tool in
@@ -40,6 +42,7 @@ defmodule KeyfleetWeb.WalletPanel do
 
   alias Keyfleet.Proposals
   alias Keyfleet.WalletSteps
+  alias KeyfleetWeb.Live.Session
   alias KeyfleetWeb.OnchainSteps
   alias KeyfleetWeb.WalletWords
   alias RegentChain.{Presses, Review}
@@ -114,6 +117,7 @@ defmodule KeyfleetWeb.WalletPanel do
   def mount(socket) do
     {:ok,
      socket
+     |> Session.check_component_events()
      |> OnchainSteps.init()
      |> assign(
        active: nil,

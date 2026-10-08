@@ -10,7 +10,8 @@ defmodule Keyfleet.Actors.Agent do
   decide what those may do.
 
   `credential_ref` names the signed request's credential, `sha256:` over its
-  receipt and key id, so an audit record can cite it without holding it.
+  receipt and key id, so an audit record can cite it without holding it, and
+  `receipt_expires_at` is when that receipt, the agent's sign-in, runs out.
 
   `chain_id` is the chain the agent signed in on, Ethereum (1) or Base (8453),
   and `verification_method` how SIWA proved the wallet. A plain wallet's
@@ -41,6 +42,7 @@ defmodule Keyfleet.Actors.Agent do
     :verification_method,
     :audience,
     :credential_ref,
+    :receipt_expires_at,
     :registry_url,
     :human_id,
     :same_person_agent_count,
@@ -53,6 +55,7 @@ defmodule Keyfleet.Actors.Agent do
           verification_method: :eoa_recovery | :erc1271 | :erc6492,
           audience: String.t(),
           credential_ref: String.t() | nil,
+          receipt_expires_at: DateTime.t() | nil,
           registry_url: String.t() | nil,
           human_id: String.t() | nil,
           same_person_agent_count: pos_integer() | nil,

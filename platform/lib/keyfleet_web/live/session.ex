@@ -26,6 +26,8 @@ defmodule KeyfleetWeb.Live.Session do
   end
 
   def on_mount(:load_human, _params, session, socket) do
+    socket = assign(socket, session_lease: nil)
+
     if connected?(socket) do
       connected(socket, session, get_connect_info(socket, :session))
     else
@@ -68,19 +70,53 @@ defmodule KeyfleetWeb.Live.Session do
   # account's own provider evidence are re-read every time, and the principal is
   # rebuilt from that read rather than from the struct the mount captured. A
   # lapsed lease withdraws the principal, so nothing downstream can still
-  # present it as authority.
+  # present it as authority. Components receive the lease as `session_lease`
+  # and check it on their own events (`check_component_events/1`); one that
+  # finds it lapsed asks the page to withdraw the principal here.
   defp hold(socket, lineage, account) do
     lease = %{lineage: lineage, account_id: account.id}
 
     socket
     |> assign_principal(account)
     # Opening a fleet's notebooks names the sign-in they hang on.
-    |> assign(session_lineage: lineage)
+    |> assign(session_lineage: lineage, session_lease: lease)
     |> attach_hook(:session_authority_params, :handle_params, fn _params, _uri, socket ->
       recheck(socket, lease, &redirect(&1, to: @public_root))
     end)
     |> attach_hook(:session_authority_event, :handle_event, fn _event, _params, socket ->
       recheck(socket, lease, & &1)
+    end)
+    |> attach_hook(:session_authority_info, :handle_info, fn
+      {__MODULE__, :component_lease_lapsed}, socket ->
+        {_cont_or_halt, socket} = recheck(socket, lease, & &1)
+        {:halt, socket}
+
+      _message, socket ->
+        {:cont, socket}
+    end)
+  end
+
+  @doc """
+  A LiveComponent's events never reach the page's own event hook, so every
+  component that acts calls this from `mount/1`, and its page passes it the
+  page's `session_lease` as `lease`. Each event first re-reads that lease, as
+  the page does for its own events. A lapsed lease refuses the event with an
+  empty reply, so a wallet step it was asked for is not sent, and tells the
+  page, which withdraws the principal and renders signed out. A page with no
+  signed-in session passes a nil lease and its components act as before.
+  """
+  def check_component_events(socket) do
+    attach_hook(socket, :session_authority_event, :handle_event, fn
+      _event, _params, %{assigns: %{lease: nil}} = socket ->
+        {:cont, socket}
+
+      _event, _params, %{assigns: %{lease: lease}} = socket ->
+        if SessionAuthority.leased_account(lease.lineage, lease.account_id) do
+          {:cont, socket}
+        else
+          send(self(), {__MODULE__, :component_lease_lapsed})
+          {:halt, %{}, socket}
+        end
     end)
   end
 

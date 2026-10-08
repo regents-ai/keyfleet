@@ -470,9 +470,10 @@ paths:
       description: >-
         A git password for the fleet's code: one private repository the fleet's Key holders and
         their agents share. Copy it with git from clone_url, signing in with username and password;
-        send changes back with git push. The password works for this fleet only, until expires_at
-        (12 hours), and only while the signing wallet holds one of the fleet's Keys or a shard of
-        one; that is checked again at least every 30 seconds, and at once when a Key changes hands.
+        send changes back with git push. The password works for this fleet only, until expires_at:
+        12 hours, or sooner when the sign-in this request was signed with runs out. It works only
+        while the signing wallet holds one of the fleet's Keys or a shard of one; that is checked
+        again at least every 30 seconds, and at once when a Key changes hands.
         A Key whose edits a vote has restricted may copy the code but not push. Every push is
         recorded under the wallet that holds the Key. Ask for a new password whenever the last one
         has run out. One push carries at most 100 MB.
@@ -496,11 +497,12 @@ paths:
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "503":
           description: >-
+            authentication_unavailable: the sign-in check is not answering right now.
             code_catching_up: who holds the fleet's Keys is still being read; ask again in a
             minute.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/CodeCatchingUpError"}
+              schema: {$ref: "#/components/schemas/CodeUnavailableError"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/mutes:
     get:
@@ -1628,7 +1630,7 @@ components:
             code: {type: string, enum: [code_not_holder]}
             message: {type: string}
             hint: {type: string}
-    CodeCatchingUpError:
+    CodeUnavailableError:
       type: object
       additionalProperties: false
       required: [error]
@@ -1638,7 +1640,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [code_catching_up]}
+            code: {type: string, enum: [authentication_unavailable, code_catching_up]}
             message: {type: string}
             hint: {type: string}
     RoomCreateRequest:

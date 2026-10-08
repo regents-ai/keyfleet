@@ -24,7 +24,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   What reaches the hub carries a pass for that person or agent
   (`Keyfleet.Notebooks.Pass`) in place of any `Authorization`,
   `X-Keyfleet-Assertion`, forwarded-identity or SIWA header the client sent,
-  and without this site's cookie. Answers stream straight back. A WebSocket
+  and without this site's cookie. Answers stream straight back, with only the
+  headers a notebook page needs (`@kept_response`). A WebSocket
   is carried by `KeyfleetWeb.NotebookSocket`, which closes when the key's
   holder loses it.
   """
@@ -41,13 +42,27 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   @cookie "__Host-kf_notebooks"
   @salt "notebook session"
   @enter "/_keyfleet/enter"
+  # The sign-in server checks a signed request's body inside an envelope it
+  # refuses past 64 KiB, so no larger body can ever be verified.
+  @signed_max_body 64 * 1024
 
   # Only browser notebook content and the WebSocket handshake reach the hub.
   # Cookies and all caller identity headers are replaced by our signed pass.
   @kept_request ~w(accept accept-encoding accept-language content-type content-encoding
     if-none-match if-modified-since range user-agent sec-websocket-protocol)
-  @hop_by_hop ~w(connection keep-alive proxy-connection proxy-authenticate proxy-authorization te
-    trailer transfer-encoding upgrade)
+  # Only what a notebook page reads from the hub's answers comes back: the
+  # content and how it is encoded, what makes caching, ranges, downloads and
+  # redirects work, the two headers the notebook app reads on a snapshot, and
+  # the security headers the hub sets on its pages, which only restrict them.
+  # Cookies, credentials, cross-origin grants and caching rules never do; this
+  # site's own `no-store` stands.
+  @kept_response ~w(content-type content-encoding content-language content-disposition
+    content-range accept-ranges etag last-modified vary location retry-after
+    x-marimohub-version-id x-marimohub-captured-at
+    content-security-policy content-security-policy-report-only cross-origin-opener-policy
+    cross-origin-resource-policy cross-origin-embedder-policy origin-agent-cluster
+    referrer-policy strict-transport-security x-content-type-options x-frame-options
+    x-dns-prefetch-control x-download-options x-permitted-cross-domain-policies x-xss-protection)
   @handshake ~w(sec-websocket-key sec-websocket-version sec-websocket-extensions)
 
   # Notebook UI operations in marimohub f103eb2. Newly added routes stay closed
@@ -187,10 +202,15 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       get_req_header(conn, "signature-input") != [] or
         get_req_header(conn, "x-siwa-receipt") != []
 
+  # A signed request spends the sender's address's API budget before anything
+  # of it is read, and only as much body is read as a signature can cover.
   defp identify_agent(conn) do
-    cap = Notebooks.config()[:max_request_bytes]
+    conn = RegentAgentAccess.RateLimit.call(conn, KeyfleetWeb.Endpoint.api_rate_limit())
+    if conn.halted, do: {:refused, conn}, else: read_signed(conn)
+  end
 
-    case read_body(conn, length: cap, read_length: min(cap, 1_000_000)) do
+  defp read_signed(conn) do
+    case read_body(conn, length: @signed_max_body, read_length: @signed_max_body) do
       {:ok, raw, conn} ->
         conn =
           Siwa.AgentAuthPlug.call(assign(conn, :raw_body, raw),
@@ -347,9 +367,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   defp stream_back({:ok, %Req.Response{} = response}, conn) do
     conn =
       Enum.reduce(response.headers, conn, fn {name, values}, conn ->
-        if name in ["content-length" | @hop_by_hop],
-          do: conn,
-          else: Enum.reduce(values, conn, &prepend_resp_headers(&2, [{name, &1}]))
+        if name in @kept_response,
+          do: Enum.reduce(values, conn, &prepend_resp_headers(&2, [{name, &1}])),
+          else: conn
       end)
 
     if conn.method == "HEAD" or response.status in [204, 304] do
@@ -392,7 +412,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
           Map.merge(upstream, %{
             fleet_id: fleet_id,
             subject: subject,
-            sign_in_topic: conn.assigns[:notebook_sign_in_topic]
+            sign_in_topic: conn.assigns[:notebook_sign_in_topic],
+            sign_in_ends_at: sign_in_ends_at(conn)
           }),
           timeout: :infinity,
           compress: false
@@ -402,6 +423,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         Refusal.json(conn, 502, "notebooks_unavailable")
     end
   end
+
+  # An agent's sign-in is the receipt its request was signed with.
+  defp sign_in_ends_at(%Plug.Conn{assigns: %{agent_actor: agent}}), do: agent.receipt_expires_at
+  defp sign_in_ends_at(_conn), do: nil
 
   defp put_protocol(conn, nil), do: conn
   defp put_protocol(conn, protocol), do: put_resp_header(conn, "sec-websocket-protocol", protocol)

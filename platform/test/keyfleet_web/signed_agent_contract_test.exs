@@ -49,6 +49,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @carry_out "/api/v1/agent/fleets/{fleet_id}/proposals/carry_out"
   @split "/api/v1/agent/fleets/{fleet_id}/split"
   @claim "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim"
+  @code_password "/api/v1/agent/fleets/{fleet_id}/code/password"
 
   @address %{"fleet_id" => @fleet, "token_id" => "1", "slug" => "general"}
   @picture %{
@@ -123,6 +124,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @carry_out, [], %{"number" => 1}},
     {"POST", @split, [], %{}},
     {"POST", @claim, [], %{}},
+    {"POST", @code_password, [], %{}},
     {"POST", @graph <> "get", [], %{"id" => "goal#1"}},
     {"POST", @graph <> "changes", [], %{"after_seq" => 0, "limit" => 1}},
     {"POST", @graph <> "create", [],
@@ -546,6 +548,13 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert too_soon.body == refused("rename_too_soon")
     assert [_seconds] = Req.Response.get_header(too_soon, "retry-after")
 
+    # The fleet's code opens only to a wallet holding one of its Keys.
+    assert %{"username" => "agent", "password" => _password} =
+             answer(c, c.signer, "POST", @code_password, @address, %{}, 200).body
+
+    assert answer(c, stranger, "POST", @code_password, @address, %{}, 403).body ==
+             refused("code_not_holder")
+
     # A fleet outside the catalog is not found on every route that names one,
     # with the answer the workspace gives.
     nowhere = Map.put(@address, "fleet_id", "hull_survey")
@@ -562,6 +571,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @key_send, own, %{post | "idempotency_key" => "k-7"}, 503)
     answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "late"}, 503)
     answer(c, c.signer, "POST", @topic, open, %{"topic" => "Late"}, 503)
+
+    assert answer(c, c.signer, "POST", @code_password, @address, %{}, 503).body ==
+             refused("code_catching_up")
 
     # Every route: unsigned, too large, and with the sign-in check away.
     for {method, template} <- routes() do
@@ -795,7 +807,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {"POST", @cancel},
       {"POST", @carry_out},
       {"POST", @split},
-      {"POST", @claim}
+      {"POST", @claim},
+      {"POST", @code_password}
     ]
   end
 

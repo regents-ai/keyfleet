@@ -85,6 +85,11 @@ config :keyfleet, :api_rate_limit, limit: 120, window_seconds: 60
 # Tries at the early-access form per client address: five in ten minutes.
 config :keyfleet, :early_signup_rate_limit, limit: 5, window_seconds: 600
 
+# Saves of proposal words per signed-in person: twenty an hour. Each press of
+# Propose saves once, so this leaves room to redo a proposal many times while
+# keeping one account to about 80 KB of words an hour.
+config :keyfleet, :proposal_words_rate_limit, limit: 20, window_seconds: 3600
+
 # Rate limits key on the direct peer. Production turns on Fly's client header.
 config :keyfleet, :behind_fly_proxy, false
 

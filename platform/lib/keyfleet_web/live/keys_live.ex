@@ -28,6 +28,7 @@ defmodule KeyfleetWeb.KeysLive do
 
   attr :key, :map, required: true
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   def page(assigns) do
     ~H"""
@@ -64,6 +65,7 @@ defmodule KeyfleetWeb.KeysLive do
           class="key-panel"
           fleet={@key.fleet}
           actor={@actor}
+          lease={@lease}
           token_id={@key.token_id}
         />
 
@@ -84,6 +86,7 @@ defmodule KeyfleetWeb.KeysLive do
             flow={:end_shard}
             fleet={@key.fleet}
             actor={@actor}
+            lease={@lease}
             token_id={@key.token_id}
             refresh={@key.shards}
           >
@@ -117,6 +120,7 @@ defmodule KeyfleetWeb.KeysLive do
             flow={:issue_shard}
             fleet={@key.fleet}
             actor={@actor}
+            lease={@lease}
             inputs={%{"keys" => "#{@key.token_id}", "wallet" => "", "days" => "30"}}
           >
             <:fields :let={panel}>
@@ -164,6 +168,7 @@ defmodule KeyfleetWeb.KeysLive do
             flow={:agent_voting}
             fleet={@key.fleet}
             actor={@actor}
+            lease={@lease}
             refresh={@key.shards}
             inputs={%{"keys" => "#{@key.token_id}"}}
           >

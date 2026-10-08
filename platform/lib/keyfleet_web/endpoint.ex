@@ -93,16 +93,20 @@ defmodule KeyfleetWeb.Endpoint do
   plug KeyfleetWeb.Router
 
   defp limit_rate(%Plug.Conn{path_info: ["healthz"]} = conn, _opts),
-    do: RegentAgentAccess.RateLimit.call(conn, rate_limit())
+    do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
 
   defp limit_rate(%Plug.Conn{path_info: ["api" | _]} = conn, _opts),
-    do: RegentAgentAccess.RateLimit.call(conn, rate_limit())
+    do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
 
   defp limit_rate(conn, _opts), do: conn
 
-  # Read on each request, as the session budget is, so the test suite can run
-  # on a larger one and a focused test can put the release budget back.
-  defp rate_limit do
+  @doc """
+  The per-address budget above, which a signed request to a fleet's notebooks
+  also spends (`KeyfleetWeb.Plugs.NotebookGateway`). Read on each request, as
+  the session budget is, so the test suite can run on a larger one and a
+  focused test can put the release budget back.
+  """
+  def api_rate_limit do
     budget = Application.fetch_env!(:keyfleet, :api_rate_limit)
 
     RegentAgentAccess.RateLimit.init(

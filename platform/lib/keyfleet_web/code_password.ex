@@ -4,10 +4,11 @@ defmodule KeyfleetWeb.CodePassword do
   (`KeyfleetWeb.Plugs.CodeGateway`), with any user name. It is sealed by this
   site, names one fleet and lasts `password_ttl_seconds`.
 
-  An agent's names the wallet it signed in with; the agent may use the code
-  while that wallet holds one of the fleet's keys or a shard of one. A
-  person's names the Keyfleet sign-in it was made under and ends with it.
-  Either way, holding the key is checked again on use.
+  An agent's names the wallet it signed in with and ends when that sign-in
+  (the request's SIWA receipt) runs out; the agent may use the code while that
+  wallet holds one of the fleet's keys or a shard of one. A person's names the
+  Keyfleet sign-in it was made under and ends with it. Either way, the
+  sign-in and holding the key are checked again on every use.
   """
 
   alias Keyfleet.Accounts.SessionAuthority
@@ -24,12 +25,16 @@ defmodule KeyfleetWeb.CodePassword do
   def for_agent(%Agent{} = actor, fleet_id) do
     with :ok <- known(fleet_id),
          {:ok, %{}} <- holder(actor, fleet_id) do
-      issue(%{
-        "fleet_id" => fleet_id,
-        "wallet" => actor.wallet_address,
-        "chain_id" => actor.chain_id,
-        "method" => Atom.to_string(actor.verification_method)
-      })
+      issue(
+        %{
+          "fleet_id" => fleet_id,
+          "wallet" => actor.wallet_address,
+          "chain_id" => actor.chain_id,
+          "method" => Atom.to_string(actor.verification_method),
+          "signed_in_until" => DateTime.to_unix(actor.receipt_expires_at)
+        },
+        Enum.min([lasts_until(), actor.receipt_expires_at], DateTime)
+      )
     end
   end
 
@@ -42,18 +47,21 @@ defmodule KeyfleetWeb.CodePassword do
     with session_id when is_binary(session_id) <-
            SessionAuthority.current_id(lineage, account_id) || {:error, :signed_out},
          {:ok, %{}} <- holder(actor, fleet_id) do
-      issue(%{
-        "fleet_id" => fleet_id,
-        "account_id" => account_id,
-        "session_authority_id" => session_id
-      })
+      issue(
+        %{
+          "fleet_id" => fleet_id,
+          "account_id" => account_id,
+          "session_authority_id" => session_id
+        },
+        lasts_until()
+      )
     end
   end
 
   @doc """
   Who a password for the fleet stands for now: `{:ok, subject, actor}`, or
   `:error` when it is for another fleet, run out, not one of this site's, or
-  its person has signed out.
+  its agent's or person's sign-in has ended.
   """
   def read(password, fleet_id) do
     case Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, @salt, password, max_age: ttl()) do
@@ -62,14 +70,23 @@ defmodule KeyfleetWeb.CodePassword do
     end
   end
 
-  defp actor(%{"wallet" => wallet, "chain_id" => chain_id, "method" => method}) do
-    {:ok, "w_" <> wallet,
-     %Agent{
-       wallet_address: wallet,
-       chain_id: chain_id,
-       verification_method: Map.fetch!(@methods, method),
-       audience: "keyfleet"
-     }}
+  defp actor(%{
+         "wallet" => wallet,
+         "chain_id" => chain_id,
+         "method" => method,
+         "signed_in_until" => until
+       }) do
+    if DateTime.to_unix(DateTime.utc_now()) < until,
+      do:
+        {:ok, "w_" <> wallet,
+         %Agent{
+           wallet_address: wallet,
+           chain_id: chain_id,
+           verification_method: Map.fetch!(@methods, method),
+           audience: "keyfleet",
+           receipt_expires_at: DateTime.from_unix!(until)
+         }},
+      else: :error
   end
 
   defp actor(%{"account_id" => account_id, "session_authority_id" => session_id}) do
@@ -94,16 +111,20 @@ defmodule KeyfleetWeb.CodePassword do
     end
   end
 
-  defp issue(sealed) do
+  # `expires_at` is when the password stops working: `password_ttl_seconds`
+  # from now, or sooner when the agent's sign-in runs out first.
+  defp issue(sealed, expires_at) do
     # The store's repository is made the first time anyone asks.
     Code.owner(sealed["fleet_id"])
 
     {:ok,
      %{
        password: Phoenix.Token.encrypt(KeyfleetWeb.Endpoint, @salt, sealed, max_age: ttl()),
-       expires_at: DateTime.add(DateTime.utc_now(), ttl(), :second)
+       expires_at: expires_at
      }}
   end
+
+  defp lasts_until, do: DateTime.add(DateTime.utc_now(), ttl(), :second)
 
   defp ttl, do: Code.config()[:password_ttl_seconds]
 end

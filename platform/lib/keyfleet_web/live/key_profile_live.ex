@@ -43,6 +43,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   attr :params, :map, required: true, doc: "the fleet page's address, which links keep"
   attr :thread, :any, required: true, doc: "the messages written to the key, oldest first"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   def dialog(assigns) do
     ~H"""
@@ -73,16 +74,29 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </form>
         </header>
 
-        <.next_key :if={not @profile.issued?} profile={@profile} fleet={@fleet} actor={@actor} />
+        <.next_key
+          :if={not @profile.issued?}
+          profile={@profile}
+          fleet={@fleet}
+          actor={@actor}
+          lease={@lease}
+        />
 
         <%= if @profile.issued? do %>
           <.facts profile={@profile} />
-          <.reveal :if={is_nil(@profile.traits)} profile={@profile} fleet={@fleet} actor={@actor} />
+          <.reveal
+            :if={is_nil(@profile.traits)}
+            profile={@profile}
+            fleet={@fleet}
+            actor={@actor}
+            lease={@lease}
+          />
           <.claim
             :if={@profile.yours? or shard_yours?(@profile, @actor)}
             profile={@profile}
             fleet={@fleet}
             actor={@actor}
+            lease={@lease}
           />
           <.holder profile={@profile} params={@params} />
           <.thread profile={@profile} fleet={@fleet} params={@params} thread={@thread} />
@@ -128,6 +142,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   attr :profile, :map, required: true
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # The Key on sale, bought right here with the fleet's own Approve and Buy.
   defp next_key(assigns) do
@@ -145,7 +160,13 @@ defmodule KeyfleetWeb.KeyProfileLive do
         </div>
       </dl>
       <FleetRisks.disclosure id="key-profile-buy-risks" />
-      <FleetLive.buy_order id="key-profile-buy" fleet={@fleet} buy={@fleet.buy} actor={@actor} />
+      <FleetLive.buy_order
+        id="key-profile-buy"
+        fleet={@fleet}
+        buy={@fleet.buy}
+        actor={@actor}
+        lease={@lease}
+      />
     </section>
     """
   end
@@ -308,6 +329,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   attr :profile, :map, required: true
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # What the key has earned and not yet been paid, each token claimed with its
   # own button and always paid to the wallet that holds the key, whether its
@@ -332,6 +354,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         tool="claim"
         fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
         actor={@actor}
+        lease={@lease}
         token_id={@profile.token_id}
         refresh={@profile.rewards}
       >
@@ -353,6 +376,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   attr :profile, :map, required: true
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # A key whose request for its random draw was turned down has no traits
   # until someone asks again, which anyone may do. The chain says whether
@@ -376,6 +400,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         flow={:reveal}
         fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
         actor={@actor}
+        lease={@lease}
         token_id={@profile.token_id}
       >
         <:buttons :let={panel}>
