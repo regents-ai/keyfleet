@@ -142,7 +142,8 @@ defmodule KeyfleetWeb.CodeGatewayTest do
       wallet_address: @agent_wallet,
       chain_id: 1,
       verification_method: :eoa_recovery,
-      audience: "keyfleet"
+      audience: "keyfleet",
+      receipt_expires_at: DateTime.add(DateTime.utc_now(), 3600, :second)
     }
 
     {:ok, %{password: password}} = CodePassword.for_agent(agent, @fleet)
@@ -166,6 +167,26 @@ defmodule KeyfleetWeb.CodeGatewayTest do
 
     assert [%{token_id: 1, wallet: @agent_wallet, ref: "refs/heads/main", head: @new}] =
              Code.recent_pushes!(@fleet)
+  end
+
+  # Costly failure: an agent's password keeps opening the code after the
+  # sign-in it was made under has run out.
+  test "an agent's password is refused once its sign-in has run out" do
+    ChainHelpers.issue_shard!(@fleet, 1, @agent_wallet, 2)
+
+    agent = %Agent{
+      wallet_address: @agent_wallet,
+      chain_id: 1,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet",
+      receipt_expires_at: DateTime.add(DateTime.utc_now(), -1, :second)
+    }
+
+    {:ok, %{password: password}} = CodePassword.for_agent(agent, @fleet)
+
+    refused = git(:get, "/#{@fleet}.git/info/refs?service=git-upload-pack", password)
+    assert refused.status == 401
+    refute_received {:store, _method, _path, _claims, _body}
   end
 
   # Costly failure: a fleet's code is never set up, or set up twice.

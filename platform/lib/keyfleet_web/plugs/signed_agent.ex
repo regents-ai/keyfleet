@@ -32,6 +32,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
+  @code_password_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/password\z"
   # What an agent's own wallet sends to the fleet's contracts.
   @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|proposals/(?:create|vote|cancel|carry_out)|keys/#{@token}/claim)\z"
   @graph_ops ~w(get changes create patch link unlink archive)
@@ -194,7 +195,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
              is_list(required_headers) and is_list(required_components) and
              is_list(covered_components) do
     with {:ok, registry_url} <- registry_url(registration),
-         {:ok, backing} <- HumanBacking.read(book) do
+         {:ok, backing} <- HumanBacking.read(book),
+         {:ok, receipt_expires_at, _offset} <- DateTime.from_iso8601(expires) do
       actor =
         struct!(
           Agent,
@@ -204,13 +206,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
             verification_method: Map.fetch!(@verification_methods, method),
             audience: "keyfleet",
             credential_ref: credential_ref(conn),
+            receipt_expires_at: receipt_expires_at,
             registry_url: registry_url
           })
         )
 
       admit(conn, actor)
     else
-      :error -> invalid_principal()
+      _unreadable -> invalid_principal()
     end
   end
 
@@ -306,6 +309,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @key_send_path,
         @sync_path,
         @proposal_read_path,
+        @code_password_path,
         @chain_path,
         @graph_path
       ],
@@ -354,6 +358,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     cond do
       Regex.match?(@mutes_path, path) -> admit(params == %{})
       Regex.match?(@mute_path, path) -> admit(params == %{})
+      Regex.match?(@code_password_path, path) -> admit(params == %{})
       Regex.match?(@sync_path, path) -> check_sync_body(params)
       Regex.match?(@proposal_read_path, path) -> check_proposal_read_body(params)
       op = chain_op(path) -> check_chain_body(op, params)
