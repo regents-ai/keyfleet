@@ -28,16 +28,6 @@ way. Refusals every one of them shares:
   couldn't be read; nothing was built, send it again in a minute).
 - 429 `too_many_requests`, with `Retry-After`.
 
-## regents keyfleet health
-
-- **What it does:** says whether the web service is answering.
-- **Who may run it:** anyone (public).
-- **What it changes:** nothing (read).
-- **Route:** `GET /healthz` → `getServiceHealth`
-- **Inputs:** none.
-- **Answer:** the plain text `ok`.
-- **History:** added before this file.
-
 ## regents keyfleet fleets list
 
 - **What it does:** compares the fleets: pricing, sales, the next key, who's here and
