@@ -22,6 +22,17 @@ CLI, merging and releases.
   announcement once the caller's own read has something new, or after
   `:agent_wait_ms` (20 s; 200 ms in tests). Announcements carry nothing to the
   caller; every answer is read as the caller. Unsubscribes and flushes after.
+- **Waits per address** (Sentinel MEDIUM on d5255f9, KF-LIVE-SYNC-FLOOD b): any
+  signed agent, even one with no Key, could hold a sync open, so about 25
+  addresses could fill a machine. `KeyfleetWeb.AgentWaits` is a duplicate-key
+  `Registry` in the application supervisor, keyed by
+  `KeyfleetWeb.ClientAddress.key/1`. The sync controller registers, counts with
+  `Registry.count_match/3` and unregisters afterwards; `Rooms.sync/6` takes only
+  `wait?`. Past `:agent_waits_per_address` (4; 1 in tests) a sync answers at once
+  with the same shape. Registering before counting can undershoot the cap under a
+  race, never overshoot it. No table, sweep or GenServer.
+- A room announcement re-reads only when the announced room is one the caller
+  named and its seq is past the caller's cursor (Sentinel INFO 2).
 - `next_poll_seconds` is gone from the answer, the contract (1.1.0), docs.md,
   skill.md (23,978 of 24,000 chars), cli/COMMANDS.md and the tests: the agent
   syncs again straight away.
@@ -37,6 +48,14 @@ CLI, merging and releases.
   connections, and 25 waiting agents would queue everyone else. One waiting
   agent is one open request; a Bandit process each, no database connection
   while waiting.
+- **Fly and open websockets:** Fly's docs do not say whether an open LiveView
+  websocket counts against `type = "requests"` while connected. The nearest
+  lines: "requests: Load balance and scale based on the number of HTTP requests"
+  and hard_limit: "When a Fly Machine is at or over this number of concurrent
+  connections or requests, the system will stop sending new traffic to that
+  Machine." (docs.fly.io/reference/configuration, docs.fly.io/apps/concurrency).
+  Size as if each open page counts as one request for as long as it is open, or
+  check Fly's concurrency metric on staging with pages open.
 - **Command line timeout:** the 30 s default covers the 20 s hold, so
   `cli/commands.json` carries no `timeout_ms`. With regents-cli main carrying
   `timeout_ms` (regents-cli 1279aa1, waits on CLI-MAIN-PUSH), the hold may go

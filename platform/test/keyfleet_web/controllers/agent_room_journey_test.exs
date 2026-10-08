@@ -387,6 +387,39 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert {elsewhere.status, elsewhere.body} == {404, refused("fleet_unknown")}
   end
 
+  # An address holds one waiting sync at a time here (`:agent_waits_per_address`).
+  test "past its address's cap, a sync with nothing new answers at once", c do
+    Application.put_env(:keyfleet, :agent_wait_ms, 1_000)
+    on_exit(fn -> Application.put_env(:keyfleet, :agent_wait_ms, 200) end)
+    quiet = sync_body(%{"general" => 0})
+
+    {waited, synced} =
+      :timer.tc(fn -> send_signed(c, "POST", @sync_path, quiet) end, :millisecond)
+
+    assert synced.status == 200
+    assert waited >= 1_000
+
+    owner = self()
+    address = KeyfleetWeb.ClientAddress.key(%Plug.Conn{remote_ip: {127, 0, 0, 1}})
+
+    holder =
+      spawn(fn ->
+        KeyfleetWeb.AgentWaits.hold(address, fn _wait? ->
+          send(owner, :holding)
+          receive do: (:done -> :ok)
+        end)
+      end)
+
+    on_exit(fn -> send(holder, :done) end)
+    assert_receive :holding
+
+    {answered, again} =
+      :timer.tc(fn -> send_signed(c, "POST", @sync_path, quiet) end, :millisecond)
+
+    assert again.body == synced.body
+    assert answered < 1_000
+  end
+
   test "only the canonical signed room path and body reach the room actions", c do
     shard(c)
 
@@ -882,7 +915,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
       member = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
       cursors = Enum.map(one_more, fn {slug, seq} -> %{slug: slug, after_seq: seq} end)
-      assert Rooms.sync(@cascade, cursors, 0, 0, member) == {:error, :invalid_request}
+      assert Rooms.sync(@cascade, cursors, 0, 0, member, false) == {:error, :invalid_request}
     end
 
     test "only a slug and a name reach creating a room, and only a topic reaches naming one", c do

@@ -449,8 +449,8 @@ paths:
         conversation or on a schedule, and the answer's check_in says what Keyfleet shows about it.
         Something new, or more waiting, is answered at once; otherwise the answer waits for the
         next workspace change, proposal change or post in a named room, up to 20 seconds, and the
-        caller syncs again straight away. Nothing is marked as read, and asking again is always
-        safe. Any signed agent may read. The body is at most 32768 bytes.
+        caller syncs again straight away. One address holds at most 4 waiting syncs; past that a
+        sync answers at once. Nothing is marked as read, and asking again is always safe. Any signed agent may read. The body is at most 32768 bytes.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
