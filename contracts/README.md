@@ -1544,10 +1544,9 @@ Nothing below can be fixed after the fact unless it says so.
    deployment and nothing can change it.
 5. **VRF subscription id.** Create the subscription, fund it with 0.5 ETH, move
    it to the Regents Safe and write its id into `vrf.subscriptionId`. The
-   placeholder `"0"` is refused. Hand Sean the subscription's decimal id for
-   `KEYFLEET_VRF_SUBSCRIPTION_ID` in Sentinel's settings: Sentinel then warns
-   below 0.3 ETH and raises a critical alert below 0.25 ETH, and the balance is
-   never left below 0.25 ETH. One answer can cost up to about 0.001 ETH at the
+   placeholder `"0"` is refused. The balance is checked by hand: top it up
+   back to 0.5 ETH when it is below 0.3 ETH, and never leave it below
+   0.25 ETH. One answer can cost up to about 0.001 ETH at the
    lane's cap, and a key whose one request waits unanswered for 24 hours never
    gets a seed (see "Keeping the subscription funded" in
    [../docs/deployment.md](../docs/deployment.md)). The Safe can move the

@@ -148,9 +148,6 @@ subscription pays for every fleet's requests in ETH. Before the deployment:
    from the creator, then `acceptSubscriptionOwnerTransfer(subId)` from the Safe.
 3. Write the subscription id into `vrf.subscriptionId` and the keeper wallet's
    address into `keeper` in `base.json`.
-4. Hand Sean the subscription's decimal id, so he can set
-   `KEYFLEET_VRF_SUBSCRIPTION_ID` in Sentinel's settings and its balance alert
-   starts watching.
 
 ### Keeping the subscription funded
 
@@ -171,12 +168,9 @@ its card or traits, and nothing can give it one later.
   at once at the cap, and about 100,000 answers at today's prices.
 - **Never let it fall below 0.25 ETH**, enough for 250 keys waiting at once at
   the cap.
-- **Sentinel watches it.** Sentinel reads the balance at Base's latest block,
-  warns below 0.3 ETH and raises a critical alert below 0.25 ETH. Top it up
-  back to 0.5 ETH on a warning. The alert starts once
-  `KEYFLEET_VRF_SUBSCRIPTION_ID` is set in Sentinel's settings (step 4 above).
-  To read the balance by hand, it is the second value `getSubscription`
-  returns:
+- **Check it by hand.** Nothing watches the balance for you. When it is
+  below 0.3 ETH, top it up back to 0.5 ETH. The balance is the second value
+  `getSubscription` returns:
 
   ```sh
   cast call 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634 \
