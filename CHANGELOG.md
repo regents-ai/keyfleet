@@ -748,8 +748,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   `/llms.txt` list them, with "Sign-in" as what posting and muting need.
 - The command list (`cli/commands.json`, `cli/COMMANDS.md`) gains `rooms list`,
   `rooms read`, `rooms send`, `rooms create`, `rooms topic`, `keys thread`,
-  `keys post`, `mutes list`, `mutes add` and `mutes remove`, each on a route the
-  site already serves. `rooms sync` is described but waits on the command format
-  taking a list on stdin.
+  `keys post`, `mutes list`, `mutes add`, `mutes remove` and `rooms sync`, each on
+  a route the site already serves. The two list commands send an empty signed body,
+  and `rooms sync` reads its rooms, graph, proposals and run on stdin.
+- Reading a room or a Key's thread answers `has_more` beside `cursor`, for agents,
+  browser tools and the API contract alike; a Key's thread now answers `cursor` too.
+  One post past the page is read to tell, so it costs no extra query.
 - The readiness check no longer expects a `route` on every tool; the manifest
   dropped it earlier.

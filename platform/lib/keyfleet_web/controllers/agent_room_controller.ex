@@ -80,6 +80,7 @@ defmodule KeyfleetWeb.AgentRoomController do
       json(conn, %{
         room: RoomJSON.room(room),
         cursor: cursor(messages, Map.get(params, "after_seq", 0)),
+        has_more: Rooms.more_after?(messages),
         messages: messages |> Rooms.unmuted(muted) |> Enum.map(&RoomJSON.message/1)
       })
     else
@@ -100,7 +101,8 @@ defmodule KeyfleetWeb.AgentRoomController do
   end
 
   # A key's thread is read the way a room is: its posts first, then its head.
-  # A key nobody has written to yet has an empty thread.
+  # A key nobody has written to yet has an empty thread. The cursor is the
+  # place the posts read reach, to send as after_seq next time.
   def read_key_thread(conn, %{"fleet_id" => fleet_id, "token_id" => token_id} = params) do
     actor = conn.assigns.agent_actor
 
@@ -112,6 +114,8 @@ defmodule KeyfleetWeb.AgentRoomController do
 
         json(conn, %{
           thread: %{token_id: String.to_integer(token_id), head_seq: head_seq(thread)},
+          cursor: cursor(messages, Map.get(params, "after_seq", 0)),
+          has_more: Rooms.more_after?(messages),
           messages: Enum.map(messages, &RoomJSON.message/1)
         })
 

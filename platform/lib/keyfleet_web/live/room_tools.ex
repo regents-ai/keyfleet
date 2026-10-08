@@ -72,6 +72,7 @@ defmodule KeyfleetWeb.RoomTools do
         ok: true,
         room: RoomJSON.room(room),
         cursor: cursor(messages, input),
+        has_more: Rooms.more_after?(messages),
         messages:
           messages
           |> Rooms.unmuted(Rooms.muted_keys!(fleet_id, actor))
@@ -118,6 +119,8 @@ defmodule KeyfleetWeb.RoomTools do
         %{
           ok: true,
           thread: %{token_id: token_id, head_seq: if(thread, do: thread.head_seq, else: 0)},
+          cursor: cursor(messages, input),
+          has_more: Rooms.more_after?(messages),
           messages: Enum.map(messages, &RoomJSON.message/1)
         }
 

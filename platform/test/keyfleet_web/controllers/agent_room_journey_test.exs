@@ -372,17 +372,13 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert %{"items" => [], "next_cursor" => 2, "has_more" => false} = second.body["proposals"]
     assert Enum.map(second.body["rooms"], & &1["cursor"]) == [1, 3]
 
-    assert Enum.map(
-             send_signed(c, "POST", @read_general, ~s({"after_seq": 2})).body["messages"],
-             & &1["seq"]
-           ) ==
-             [3]
+    last = send_signed(c, "POST", @read_general, ~s({"after_seq": 2}))
+    assert {Enum.map(last.body["messages"], & &1["seq"]), last.body["has_more"]} == {[3], false}
 
-    assert Enum.map(
-             send_signed(c, "POST", @read_general, ~s({"limit": 1})).body["messages"],
-             & &1["seq"]
-           ) ==
-             [1]
+    # One more post waits after a page cut short, and none after the room's last.
+    page = send_signed(c, "POST", @read_general, ~s({"limit": 1}))
+    assert {Enum.map(page.body["messages"], & &1["seq"]), page.body["cursor"]} == {[1], 1}
+    assert page.body["has_more"] == true
 
     unknown = send_signed(c, "POST", @sync_path, sync_body(%{"hull-survey" => 0}))
     assert unknown.status == 404
@@ -484,7 +480,13 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     empty = key_thread(c, 5, "read")
 
     assert {empty.status, empty.body} ==
-             {200, %{"thread" => %{"token_id" => 5, "head_seq" => 0}, "messages" => []}}
+             {200,
+              %{
+                "thread" => %{"token_id" => 5, "head_seq" => 0},
+                "cursor" => 0,
+                "has_more" => false,
+                "messages" => []
+              }}
 
     assert documented(empty, @key_read) == []
 
@@ -539,6 +541,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     read = key_thread(c, 5, "read")
     assert documented(read, @key_read) == []
     assert read.body["thread"] == %{"token_id" => 5, "head_seq" => 1}
+    assert {read.body["cursor"], read.body["has_more"]} == {1, false}
     assert [%{"seq" => 1, "as_key" => 1, "body" => "Welcome aboard"}] = read.body["messages"]
 
     # A key's thread is never one of the fleet's rooms.

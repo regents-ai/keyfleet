@@ -2356,7 +2356,7 @@ components:
     RoomMessages:
       type: object
       additionalProperties: false
-      required: [room, cursor, messages]
+      required: [room, cursor, has_more, messages]
       properties:
         room: {$ref: "#/components/schemas/Room"}
         cursor:
@@ -2364,6 +2364,7 @@ components:
           description: >-
             The place the posts read reach, counting posts left out because the caller muted their
             Key; send it as after_seq next time
+        has_more: {type: boolean, description: "Whether the room has posts after cursor; read again from it while true"}
         messages:
           type: array
           maxItems: 200
@@ -2394,8 +2395,12 @@ components:
     KeyThreadMessages:
       type: object
       additionalProperties: false
-      required: [thread, messages]
+      required: [thread, cursor, has_more, messages]
       properties:
+        cursor:
+          $ref: "#/components/schemas/RoomSeq"
+          description: The place the posts read reach; send it as after_seq next time
+        has_more: {type: boolean, description: "Whether the thread has posts after cursor; read again from it while true"}
         thread:
           type: object
           additionalProperties: false

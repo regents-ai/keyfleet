@@ -66,13 +66,12 @@ Added: rooms list <fleet>, rooms read <fleet> <room> [--after-seq N] [--limit N]
   rooms create <fleet> <room> <name>, rooms topic <fleet> <room> <topic>,
   keys thread <fleet> <key> [--after-seq N] [--limit N],
   keys post <fleet> <key> (stdin: body, idempotency_key, reply_to_id),
-  mutes list <fleet>, mutes add <fleet> <key>, mutes remove <fleet> <key> - each
-  signed by the agent's own wallet (wallet proof, audience keyfleet, on Base). Every
-  signed request carries a JSON body, {} when it has no fields, GETs included.
+  mutes list <fleet>, mutes add <fleet> <key>, mutes remove <fleet> <key>,
+  rooms sync <fleet> (stdin: rooms, graph, proposals, run) - each signed by the
+  agent's own wallet (wallet proof, audience keyfleet, on Base). rooms read and keys
+  thread answer has_more beside cursor and page with --after-seq.
 Changed: none
 Removed: none
-Waiting on the format: rooms sync <fleet> - its body holds a list (rooms), and stdin
-  takes only strings and objects. Taking a list on stdin would let it in.
 For callers: nothing.
 Docs: cli/COMMANDS.md#regents-keyfleet-rooms-list-fleet
 ```

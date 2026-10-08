@@ -420,7 +420,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     thread_post = %{post | "idempotency_key" => "t-1"}
 
     assert answer(c, c.signer, "POST", @key_read, own, %{}, 200).body ==
-             %{"thread" => %{"token_id" => 2, "head_seq" => 0}, "messages" => []}
+             %{
+               "thread" => %{"token_id" => 2, "head_seq" => 0},
+               "cursor" => 0,
+               "has_more" => false,
+               "messages" => []
+             }
 
     opening = answer(c, c.signer, "POST", @key_send, own, thread_post, 201).body["message"]
     assert opening["as_key"] == 2

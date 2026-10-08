@@ -99,6 +99,13 @@ defmodule Keyfleet.Rooms do
   def fleet_topic(fleet_id), do: "fleet:#{fleet_id}:rooms"
 
   @doc """
+  Whether posts wait after the last of `posts`, a page read with
+  `read_messages` or `read_key_thread`. Nothing read means nothing waits.
+  """
+  def more_after?([]), do: false
+  def more_after?(posts), do: posts |> List.last() |> Ash.Resource.get_metadata(:more_after)
+
+  @doc """
   Everything one caller has not read yet across the rooms it names and the
   fleet's workspace.
 
