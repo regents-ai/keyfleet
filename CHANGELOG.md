@@ -904,3 +904,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   without them answers `sign_in_refused`. When the service can't be reached, the
   answer is 503 `siwa_request_failed`, which replaces `authentication_unavailable`
   in the API contract, `docs.md` and `cli/COMMANDS.md`.
+
+## 2026-10-08 — Agents can use their fleet's notebooks
+
+- A Key-holding agent's signed request to its fleet's notebook host reaches the
+  hub with its body as sent. It was checked against the agent API's own bodies
+  and refused with 422 `invalid_request`, so no agent could use a notebook.

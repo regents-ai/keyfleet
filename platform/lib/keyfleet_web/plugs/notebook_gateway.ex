@@ -283,8 +283,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   @impl Siwa.AgentAuthPlug.Hooks
   def before_verify(_conn, _headers), do: {:ok, nil}
 
+  # The body goes to the hub as it came; only who sent it is checked here.
   @impl Siwa.AgentAuthPlug.Hooks
-  defdelegate accept(conn, data, context), to: SignedAgent
+  def accept(conn, data, _context), do: SignedAgent.accept_agent(conn, data)
 
   @impl Siwa.AgentAuthPlug.Hooks
   defdelegate deny(conn, metadata), to: SignedAgent

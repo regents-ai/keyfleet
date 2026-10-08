@@ -198,63 +198,73 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       else: {:error, %{reason: :invalid_request}}
   end
 
+  @impl Siwa.AgentAuthPlug.Hooks
+  def accept(conn, data, _context) do
+    with {:ok, actor} <- actor(conn, data),
+         {:ok, conn} <- take_body(conn),
+         do: admit(conn, actor)
+  end
+
+  @doc """
+  Admits the agent a verified answer names without reading the request's
+  body. The notebook gateway carries that body to the fleet's hub as it
+  came, and the hub checks it.
+  """
+  def accept_agent(conn, data) do
+    with {:ok, actor} <- actor(conn, data), do: admit(conn, actor)
+  end
+
   # The fields Keyfleet acts on; anything else the sign-in server says is
   # its own. The agent's page in the agent registry and the World ID person
   # behind it, each null when there is none, ride on the actor, and the
   # agent's profile saves them.
-  @impl Siwa.AgentAuthPlug.Hooks
-  def accept(
-        conn,
-        %{
-          "verified" => true,
-          "walletAddress" => wallet,
-          "chainId" => chain_id,
-          "verificationMethod" => method,
-          "keyId" => wallet,
-          "receiptExpiresAt" => expires,
-          "requiredHeaders" => required_headers,
-          "requiredCoveredComponents" => required_components,
-          "coveredComponents" => covered_components,
-          "agentRegistration" => registration,
-          "agentBook" => book,
-          "principal" => %{
-            "kind" => "wallet",
-            "wallet_address" => wallet,
-            "chain_id" => chain_id,
-            "audience" => "keyfleet"
-          }
-        },
-        _context
-      )
-      when is_binary(expires) and is_map_key(@verification_methods, method) and
-             is_list(required_headers) and is_list(required_components) and
-             is_list(covered_components) do
-    with {:ok, conn} <- take_body(conn),
-         {:ok, registry_url} <- registry_url(registration),
+  defp actor(
+         conn,
+         %{
+           "verified" => true,
+           "walletAddress" => wallet,
+           "chainId" => chain_id,
+           "verificationMethod" => method,
+           "keyId" => wallet,
+           "receiptExpiresAt" => expires,
+           "requiredHeaders" => required_headers,
+           "requiredCoveredComponents" => required_components,
+           "coveredComponents" => covered_components,
+           "agentRegistration" => registration,
+           "agentBook" => book,
+           "principal" => %{
+             "kind" => "wallet",
+             "wallet_address" => wallet,
+             "chain_id" => chain_id,
+             "audience" => "keyfleet"
+           }
+         }
+       )
+       when is_binary(expires) and is_map_key(@verification_methods, method) and
+              is_list(required_headers) and is_list(required_components) and
+              is_list(covered_components) do
+    with {:ok, registry_url} <- registry_url(registration),
          {:ok, backing} <- HumanBacking.read(book),
          {:ok, receipt_expires_at, _offset} <- DateTime.from_iso8601(expires) do
-      actor =
-        struct!(
-          Agent,
-          Map.merge(backing, %{
-            wallet_address: wallet,
-            chain_id: chain_id,
-            verification_method: Map.fetch!(@verification_methods, method),
-            audience: "keyfleet",
-            credential_ref: credential_ref(conn),
-            receipt_expires_at: receipt_expires_at,
-            registry_url: registry_url
-          })
-        )
-
-      admit(conn, actor)
+      {:ok,
+       struct!(
+         Agent,
+         Map.merge(backing, %{
+           wallet_address: wallet,
+           chain_id: chain_id,
+           verification_method: Map.fetch!(@verification_methods, method),
+           audience: "keyfleet",
+           credential_ref: credential_ref(conn),
+           receipt_expires_at: receipt_expires_at,
+           registry_url: registry_url
+         })
+       )}
     else
-      {:error, %{reason: _reason}} = refused -> refused
       _unreadable -> invalid_principal()
     end
   end
 
-  def accept(_conn, _data, _context), do: invalid_principal()
+  defp actor(_conn, _data), do: invalid_principal()
 
   # Only a request whose signature verified is told what is wrong with its
   # body, and nothing it asks for is acted on until the body fits.

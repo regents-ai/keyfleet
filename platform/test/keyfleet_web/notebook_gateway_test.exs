@@ -363,6 +363,45 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     end
   end
 
+  # Costly failure: a Key-holding agent's signed request is checked against
+  # the agent API's own bodies and refused, so agents can't use notebooks.
+  test "a Key-holding agent's signed requests reach the hub as that agent, body as sent" do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_broker!(self(), secret)
+    wallet = String.downcase(signer.address)
+    epoch!(2, 1, wallet)
+
+    profile =
+      Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+        actor: %Keyfleet.Actors.Agent{
+          wallet_address: wallet,
+          chain_id: 8453,
+          verification_method: :eoa_recovery,
+          audience: "keyfleet"
+        }
+      )
+
+    subject = Notebooks.agent_subject(profile.id)
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    created = ~s({"name":"orbit.py"})
+
+    for {method, path, body, status} <- [{"GET", "/", "", 200}, {"POST", notebooks, created, 201}] do
+      request = SignedAgentHelpers.sign(signer, secret, method, path, body)
+
+      conn =
+        Enum.reduce(
+          request.headers,
+          %{build_conn() | host: @host, remote_ip: {198, 51, 100, 131}},
+          fn {name, value}, conn -> put_req_header(conn, name, value) end
+        )
+        |> dispatch(@endpoint, method, path, body)
+
+      assert conn.status == status
+      assert_receive {:hub, ^method, ^path, ^subject, ^body}
+    end
+  end
+
   ## The fleet and its people
 
   defp account!(privy_did, wallet) do
