@@ -422,6 +422,40 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert answered < 1_000
   end
 
+  # A post in a room the agent may not read never ends its wait early.
+  test "an agent with no key waits through a Keys-only post and answers on a General one", c do
+    Application.put_env(:keyfleet, :agent_wait_ms, 1_000)
+    on_exit(fn -> Application.put_env(:keyfleet, :agent_wait_ms, 200) end)
+    person = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    topic = Rooms.fleet_topic("fibonacci_syndicate")
+
+    post = fn slug ->
+      Rooms.send_message!(
+        %{fleet_id: "fibonacci_syndicate", slug: slug, body: "In #{slug}", idempotency_key: slug},
+        actor: person
+      )
+    end
+
+    started = System.monotonic_time(:millisecond)
+    body = sync_body([{"general", 0}, {"business", 0}])
+    sync = Task.async(fn -> send_signed(c, "POST", @sync_path, body) end)
+
+    # Posts only once the sync is listening, so it hears both announcements.
+    listening(topic)
+
+    post.("business")
+    assert Task.yield(sync, 300) == nil
+
+    post.("general")
+    synced = Task.await(sync)
+    assert System.monotonic_time(:millisecond) - started < 1_000
+
+    assert [%{"slug" => "general", "messages" => [%{"body" => "In general"}]}, refused] =
+             synced.body["rooms"]
+
+    assert refused == %{"slug" => "business", "refused" => "not_a_member"}
+  end
+
   test "only the canonical signed room path and body reach the room actions", c do
     shard(c)
 
@@ -975,6 +1009,13 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
         "WHERE fleet_id = $1 AND slug = $2",
       [@cascade, slug]
     )
+  end
+
+  defp listening(topic) do
+    if Registry.count_match(Keyfleet.PubSub, topic, :_) == 0 do
+      Process.sleep(5)
+      listening(topic)
+    end
   end
 
   defp create_room(c, body), do: send_signed(c, "POST", @create_cascade, Jason.encode!(body))
