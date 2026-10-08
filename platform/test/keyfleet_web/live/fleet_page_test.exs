@@ -233,7 +233,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       {:ok, view, _html} = live(conn, @path)
 
-      assert text(view, "#fleet-about #buy-key-title") == "Buying a Key"
+      assert text(view, "#fleet-about #buy-key-title") =~ ~r/^Buying a Key /
+      assert text(view, "#buy-key-tip") =~ "approves exactly 42.99817 USDC"
       assert text(view, "#buy-key-number") == "151"
       assert text(view, "#buy-key-price") == "42.99817 USDC"
       assert text(view, "#buy-key-level") == "9"
@@ -269,7 +270,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert buy.to == @contract
       assert "0x" <> _calldata = buy.data
 
-      assert text(view, "#buy-key-order-line") == "Key 151: 42.99817 USDC. Approve, then buy."
+      assert text(view, "#buy-key-order-line") == "Key 151: 42.99817 USDC."
 
       assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa..aaaa on Base."
       refute has_element?(view, "#buy-key-approve[hidden]")
@@ -374,7 +375,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
                  "Switch to a wallet on your account to send from here."
 
       assert has_element?(view, "#buy-key-order-from[hidden]")
-      assert text(view, "#buy-key-order-line") == "Key 151: 42.99817 USDC. Approve, then buy."
+      assert text(view, "#buy-key-order-line") == "Key 151: 42.99817 USDC."
 
       view
       |> with_target("#buy-key-order")

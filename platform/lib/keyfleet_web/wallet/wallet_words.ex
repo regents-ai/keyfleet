@@ -29,10 +29,9 @@ defmodule KeyfleetWeb.WalletWords do
   def line(_flow, %{problem: problem}, _inputs) when problem != nil, do: problem(problem)
   def line(flow, %{figures: figures}, _inputs), do: says(flow, figures)
 
-  defp says(:buy, %{token_id: token_id, price: price, approve?: true}),
-    do: "Key #{Rules.grouped(token_id)}: #{FleetLive.usdc(price)}. Approve, then buy."
-
-  defp says(:buy, %{token_id: token_id, price: price, approve?: false}),
+  # The same words whether or not Approve is showing: the numbered buttons
+  # carry the order, so the line never changes length under a press.
+  defp says(:buy, %{token_id: token_id, price: price}),
     do: "Key #{Rules.grouped(token_id)}: #{FleetLive.usdc(price)}."
 
   defp says(:ballot, %{keys: [_key | _more] = keys}), do: "With #{key_words(keys)}."

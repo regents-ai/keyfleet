@@ -817,10 +817,10 @@ defmodule KeyfleetWeb.FleetLive do
       </div>
 
       <div class="fleet-map-notes">
-        <p id="key-map-help">
+        <Regent.Primitives.tip id="key-map-help" label="About the Key map">
           Drag to look around. Arrow keys move between Keys, and Enter chooses one. Every Key is
           also in the list of Keys.
-        </p>
+        </Regent.Primitives.tip>
         <p id="key-map-selected" role="status">
           {if @fleet.chosen_key,
             do: "Key #{grouped(@fleet.chosen_key)} chosen.",
@@ -840,7 +840,13 @@ defmodule KeyfleetWeb.FleetLive do
   defp buy_key(assigns) do
     ~H"""
     <section id="buy-key" aria-labelledby="buy-key-title">
-      <h3 id="buy-key-title" tabindex="-1">Buying a Key</h3>
+      <h3 id="buy-key-title" tabindex="-1">
+        Buying a Key
+        <Regent.Primitives.tip :if={@buy.price} id="buy-key-tip" label="About paying">
+          Paid in USDC on Base from your wallet. If your wallet hasn’t already allowed this
+          much USDC, press Approve first: it approves exactly {usdc(@buy.price)}.
+        </Regent.Primitives.tip>
+      </h3>
 
       <div id="buy-key-offer" class="fleet-buy-offer" hidden={is_nil(@buy.price)}>
         <dl class="fleet-buy-facts">
@@ -881,11 +887,6 @@ defmodule KeyfleetWeb.FleetLive do
         You can still get a Key from someone who holds one: it moves like any other token on
         Base.
       </p>
-
-      <p :if={@buy.price} class="fleet-detail">
-        Paid in USDC on Base from your wallet. If your wallet hasn’t already allowed this
-        much USDC, press Approve first: it approves exactly {usdc(@buy.price)}.
-      </p>
     </section>
     """
   end
@@ -924,6 +925,7 @@ defmodule KeyfleetWeb.FleetLive do
           data-onchain-step="approve"
           hidden={not approve_shown?(panel)}
         >
+          <span class="fleet-step-mark" aria-hidden="true">1</span>
           <span data-press-label>Approve {@buy.price && usdc(@buy.price)}</span>
         </Regent.Primitives.button>
         <Regent.Primitives.button
@@ -938,6 +940,7 @@ defmodule KeyfleetWeb.FleetLive do
             end
           }
         >
+          <span :if={approve_shown?(panel)} class="fleet-step-mark" aria-hidden="true">2</span>
           <span data-press-label>Buy Key {@buy.token_id && grouped(@buy.token_id)}</span>
         </Regent.Primitives.button>
         <span :if={is_nil(@buy.price)} id={"#{@id}-sold-out"} class="wallet-panel-note">
