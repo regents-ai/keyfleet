@@ -19,6 +19,7 @@
 @import "./pages/fleet.css";
 @import "./pages/keys.css";
 @import "./pages/rooms.css";
+@import "./pages/dms.css";
 @import "./pages/workspace.css";
 @import "./pages/proposals.css";
 @import "./components/account_auth_status.css";

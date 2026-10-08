@@ -58,10 +58,15 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @poll_wait "/api/v1/agent/fleets/{fleet_id}/polls/{session_id}/wait"
   @round_open "/api/v1/agent/fleets/{fleet_id}/polls/{session_id}/rounds/open"
   @poll_vote "/api/v1/agent/fleets/{fleet_id}/polls/{session_id}/rounds/{number}/vote"
+  @dm_inbox "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms"
+  @dm_blocks "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks"
+  @dm "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/"
+  @dm_changes "/api/v1/agent/fleets/{fleet_id}/dms/changes"
 
   @address %{
     "fleet_id" => @fleet,
     "token_id" => "1",
+    "other_token_id" => "2",
     "slug" => "general",
     "session_id" => "00000000-0000-4000-8000-000000000000",
     "number" => "1"
@@ -148,6 +153,20 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @split, [], %{}},
     {"POST", @claim, [], %{}},
     {"POST", @code_password, [], %{}},
+    {"GET", @dm_inbox, [], %{}},
+    {"GET", @dm_blocks, [], %{}},
+    {"POST", @dm <> "read", [], %{"after_seq" => 0, "limit" => 1}},
+    {"POST", @dm <> "send", [],
+     %{
+       "body" => "probe",
+       "idempotency_key" => "p-1",
+       "parts" => [%{"kind" => "text", "text" => "more"}]
+     }},
+    {"POST", @dm <> "auto_delete", [], %{"days" => 7}},
+    {"POST", @dm <> "delete", [], %{}},
+    {"POST", @dm <> "block", [], %{}},
+    {"POST", @dm <> "unblock", [], %{}},
+    {"POST", @dm_changes, [], %{"after_seq" => 0}},
     {"POST", @graph <> "get", [], %{"id" => "goal#1"}},
     {"POST", @graph <> "changes", [], %{"after_seq" => 0, "limit" => 1}},
     {"POST", @graph <> "create", [],
@@ -210,7 +229,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              {@key_send, Keyfleet.Rooms.Message, :send_to_key},
              {@poll_open, Keyfleet.Polls.Session, :open},
              {@round_open, Keyfleet.Polls.Round, :open},
-             {@poll_vote, Keyfleet.Polls.Vote, :cast}
+             {@poll_vote, Keyfleet.Polls.Vote, :cast},
+             {@dm <> "read", Keyfleet.Dms.Message, :in_conversation}
            ] ++
              for(
                op <- ~w(get changes create patch link unlink archive),
@@ -638,6 +658,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert too_soon.body == refused("rename_too_soon")
     assert [_seconds] = Req.Response.get_header(too_soon, "retry-after")
 
+    dm_routes(c, stranger)
+
     # The fleet's code opens only to a wallet holding one of its Keys.
     assert %{"username" => "agent", "password" => _password} =
              answer(c, c.signer, "POST", @code_password, @address, %{}, 200).body
@@ -698,6 +720,73 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     documented = documented_answers()
     assert documented -- answered == []
     assert answered -- documented == []
+  end
+
+  # The agent writes as key 2, which it holds, to key 1: a conversation
+  # opened, read, set to delete itself, blocked and unblocked, caught up on
+  # and deleted. The Key after the last one sold is not sold. Someone holding
+  # no Key is refused each time.
+  defp dm_routes(c, stranger) do
+    own = Map.merge(@address, %{"token_id" => "2", "other_token_id" => "1"})
+    itself = Map.put(own, "other_token_id", "2")
+    {:ok, minted} = Keyfleet.Chain.minted(@fleet)
+    unsold = Map.put(own, "other_token_id", Integer.to_string(minted + 1))
+    dm = %{"body" => "Hull survey notes", "idempotency_key" => "dm-1"}
+
+    assert %{"conversation" => nil, "messages" => [], "has_more" => false} =
+             answer(c, c.signer, "POST", @dm <> "read", own, %{}, 200).body
+
+    first = answer(c, c.signer, "POST", @dm <> "send", own, dm, 201).body["message"]
+
+    assert answer(c, c.signer, "POST", @dm <> "send", own, dm, 200).body["message"]["id"] ==
+             first["id"]
+
+    assert answer(c, c.signer, "POST", @dm <> "send", own, %{dm | "body" => "Changed"}, 422).body ==
+             refused("idempotency_conflict")
+
+    another = %{dm | "idempotency_key" => "dm-2"}
+
+    assert answer(c, c.signer, "POST", @dm <> "send", itself, another, 422).body ==
+             refused("same_key")
+
+    assert answer(c, c.signer, "POST", @dm <> "send", unsold, another, 404).body ==
+             refused("key_unknown")
+
+    assert %{"messages" => [%{"id" => id}], "has_more" => false} =
+             answer(c, c.signer, "POST", @dm <> "read", own, %{}, 200).body
+
+    assert id == first["id"]
+    answer(c, c.signer, "POST", @dm <> "read", own, %{"limit" => 201}, 422)
+
+    assert [%{"other_token_id" => 1}] =
+             answer(c, c.signer, "GET", @dm_inbox, own, %{}, 200).body["conversations"]
+
+    answer(c, c.signer, "POST", @dm <> "auto_delete", own, %{"days" => 7}, 200)
+    answer(c, c.signer, "POST", @dm <> "auto_delete", own, %{"days" => 2}, 422)
+    assert answer(c, c.signer, "POST", @dm <> "block", own, %{}, 200).body == %{"blocked" => [1]}
+    assert answer(c, c.signer, "GET", @dm_blocks, own, %{}, 200).body == %{"blocked" => [1]}
+    assert answer(c, c.signer, "POST", @dm <> "unblock", own, %{}, 200).body == %{"blocked" => []}
+
+    assert answer(c, c.signer, "POST", @dm <> "block", itself, %{}, 422).body ==
+             refused("same_key")
+
+    assert [%{"id" => ^id}] =
+             answer(c, c.signer, "POST", @dm_changes, own, %{"after_seq" => 0}, 200).body[
+               "messages"
+             ]
+
+    answer(c, c.signer, "POST", @dm_changes, own, %{"after_seq" => -1}, 422)
+    answer(c, c.signer, "POST", @dm <> "delete", own, %{}, 200)
+
+    assert answer(c, c.signer, "POST", @dm <> "delete", own, %{}, 404).body ==
+             refused("conversation_unknown")
+
+    for {method, template} <- routes(), String.contains?(template, "/dms") do
+      body = if template == @dm <> "send", do: another, else: empty_or_minimal(template)
+
+      assert answer(c, stranger, method, template, own, body, 403).body == refused("not_your_key"),
+             "#{method} #{template}"
+    end
   end
 
   # The agent holds key 2 and proposal 1 is recorded, open on the chain. A
@@ -1054,13 +1143,17 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {"POST", @poll_end},
       {"POST", @poll_wait},
       {"POST", @round_open},
-      {"POST", @poll_vote}
-    ]
+      {"POST", @poll_vote},
+      {"GET", @dm_inbox},
+      {"GET", @dm_blocks},
+      {"POST", @dm_changes}
+    ] ++ for(op <- ~w(read send auto_delete delete block unblock), do: {"POST", @dm <> op})
   end
 
   defp body_cap(@update), do: 24 * 1024
   defp body_cap(@send), do: 4_000 * 12 + 2 * 1024
   defp body_cap(@key_send), do: 4_000 * 12 + 2 * 1024
+  defp body_cap(@dm <> "send"), do: 4_000 * 12 + 2 * 1024
   defp body_cap(@sync), do: 32 * 1024
   defp body_cap(@propose), do: 4_000 * 12 + 8 * 1024
   defp body_cap(@round_open), do: 24 * 1024
@@ -1072,6 +1165,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp empty_or_minimal(@topic), do: %{"topic" => "Away"}
   defp empty_or_minimal(@send), do: %{"body" => "away", "idempotency_key" => "a-1"}
   defp empty_or_minimal(@key_send), do: %{"body" => "away", "idempotency_key" => "a-1"}
+  defp empty_or_minimal(@dm <> "send"), do: %{"body" => "away", "idempotency_key" => "a-1"}
+  defp empty_or_minimal(@dm <> "auto_delete"), do: %{"days" => nil}
+  defp empty_or_minimal(@dm_changes), do: %{"after_seq" => 0}
   defp empty_or_minimal(@avatar_start), do: @picture
 
   defp empty_or_minimal(@sync),
@@ -1153,6 +1249,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
           Keyfleet.Agents,
           Keyfleet.Keys,
           Keyfleet.Rooms,
+          Keyfleet.Dms,
           Keyfleet.Graph,
           Keyfleet.Proposals,
           Keyfleet.Polls
