@@ -187,7 +187,16 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/AgentProfileNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentAvatarRefused"}
+        "422":
+          description: >-
+            invalid_avatar: the picture named isn't a PNG, JPEG or WebP of at most 524288 bytes.
+            invalid_request: the body doesn't fit the operation; the hint names the fields it takes.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/AgentAvatarError"}
+                  - {$ref: "#/components/schemas/AgentError"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/avatar/remove:
@@ -203,6 +212,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/AgentProfileNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/avatar/upload/{ticket}:
@@ -252,6 +262,7 @@ paths:
               schema: {$ref: "#/components/schemas/AgentShardList"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/rooms:
@@ -271,6 +282,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/read:
@@ -297,7 +309,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/RoomNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentOutOfRange"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send:
@@ -340,10 +352,13 @@ paths:
           description: >-
             idempotency_conflict: the idempotency key already made a different post.
             reply_not_here: reply_to_id is not a post in this room. invalid_message: the body or
-            idempotency key is empty or too long.
+            idempotency key is empty or too long. invalid_request: the body doesn't fit the operation; the hint names the fields it takes.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/RoomSendError"}
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/RoomSendError"}
+                  - {$ref: "#/components/schemas/AgentError"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/keys/{fleet_id}/{token_id}/messages/read:
@@ -371,7 +386,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/KeyNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentOutOfRange"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/keys/{fleet_id}/{token_id}/messages/send:
@@ -415,10 +430,13 @@ paths:
           description: >-
             idempotency_conflict: the idempotency key already made a different post.
             reply_not_here: reply_to_id is not a post in this Key's thread. invalid_message: the body
-            or idempotency key is empty or too long.
+            or idempotency key is empty or too long. invalid_request: the body doesn't fit the operation; the hint names the fields it takes.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/RoomSendError"}
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/RoomSendError"}
+                  - {$ref: "#/components/schemas/AgentError"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/sync:
@@ -458,7 +476,8 @@ paths:
           description: >-
             out_of_range: more than 110 rooms are named, a place (a room's, graph.after_seq or
             proposals.after_seq) is outside 0 to 9223372036854775807, or run.every_minutes is
-            outside 10 to 1440. invalid_request: a room is named twice.
+            outside 10 to 1440. invalid_request: a room is named twice, or the body doesn't fit the
+            operation; the hint names the fields it takes.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/FleetSyncInvalidError"}
@@ -518,6 +537,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/mute:
@@ -536,6 +556,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/unmute:
@@ -554,6 +575,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/proposals/read:
@@ -586,7 +608,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/ProposalNotFoundError"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentOutOfRange"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/presence:
@@ -611,6 +633,7 @@ paths:
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
         "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/proposals/create:
@@ -643,10 +666,13 @@ paths:
         "422":
           description: >-
             invalid_proposal: a field is missing or can't be read; error.details.problem says
-            which, in a line. Nothing was kept.
+            which, in a line. Nothing was kept. invalid_request: the body doesn't fit the operation; the hint names the fields it takes.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/ProposalInvalidError"}
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/ProposalInvalidError"}
+                  - {$ref: "#/components/schemas/AgentError"}
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/proposals/vote:
@@ -674,7 +700,7 @@ paths:
         "404": {$ref: "#/components/responses/AgentProposalNotFound"}
         "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentOutOfRange"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/proposals/cancel:
@@ -702,7 +728,7 @@ paths:
         "404": {$ref: "#/components/responses/AgentProposalNotFound"}
         "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentOutOfRange"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/proposals/carry_out:
@@ -731,7 +757,7 @@ paths:
         "404": {$ref: "#/components/responses/AgentProposalNotFound"}
         "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentOutOfRange"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/split:
@@ -756,6 +782,7 @@ paths:
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
         "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim:
@@ -781,6 +808,7 @@ paths:
         "404": {$ref: "#/components/responses/KeyNotFound"}
         "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/graph/get:
@@ -804,6 +832,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/WorkspaceNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/WorkspaceUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/graph/changes:
@@ -827,7 +856,7 @@ paths:
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "404": {$ref: "#/components/responses/WorkspaceNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentOutOfRange"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/WorkspaceUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/graph/create:
@@ -986,10 +1015,13 @@ paths:
           description: >-
             The slug or name is not admitted: the slug is not an address a created room may take,
             or the name is empty, longer than 80 characters or holds a character a name may not
-            hold.
+            hold. invalid_request: the body doesn't fit the operation; the hint names the fields it takes.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/RoomOpenInvalidError"}
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/RoomOpenInvalidError"}
+                  - {$ref: "#/components/schemas/AgentError"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/rooms/{slug}/topic:
@@ -1033,10 +1065,13 @@ paths:
           description: >-
             invalid_topic: the topic is empty, longer than 80 characters or holds a character a
             name may not hold. room_not_open: the room is a fixed or created room, which keeps its
-            name.
+            name. invalid_request: the body doesn't fit the operation; the hint names the fields it takes.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/RoomTopicInvalidError"}
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/RoomTopicInvalidError"}
+                  - {$ref: "#/components/schemas/AgentError"}
         "429":
           description: >-
             rename_too_soon: the room was named less than a minute ago. too_many_requests: this
@@ -1404,9 +1439,9 @@ components:
           schema: {$ref: "#/components/schemas/SharedAgentError"}
     AgentUnauthorized:
       description: >-
-        unauthorized: the signed request was missing or invalid, or its body does not fit the operation
-        exactly; nothing else about the request was trusted. smart_wallet_on_ethereum: a smart wallet signed
-        in on Ethereum; it signs in on Base instead.
+        unauthorized: the signed request was missing or invalid; nothing about the request was
+        trusted. smart_wallet_on_ethereum: a smart wallet signed in on Ethereum; it signs in on Base
+        instead.
       content:
         application/json:
           schema: {$ref: "#/components/schemas/AgentError"}
@@ -1421,14 +1456,14 @@ components:
           examples:
             tooLarge:
               value: {error: request_too_large}
-    AgentOutOfRange:
-      description: A number in the request is outside the range the operation admits
+    AgentBodyRefused:
+      description: >-
+        Told only once the request's signature verified. invalid_request: the body doesn't fit the
+        operation; the hint names the fields it takes. out_of_range: a number in the body is outside
+        the range the operation admits.
       content:
         application/json:
           schema: {$ref: "#/components/schemas/AgentError"}
-          examples:
-            outOfRange:
-              value: {error: out_of_range}
     AgentSignInUnavailable:
       description: The sign-in check is not answering right now
       content:
@@ -1448,10 +1483,15 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/AgentProfileEnvelope"}
     AgentProfileInvalid:
-      description: A field is empty, too long or of the wrong type; nothing was changed
+      description: >-
+        invalid_profile: a field is empty, too long or of the wrong type; nothing was changed.
+        invalid_request: the body doesn't fit the operation; the hint names the fields it takes.
       content:
         application/json:
-          schema: {$ref: "#/components/schemas/AgentProfileInvalidError"}
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/AgentProfileInvalidError"}
+              - {$ref: "#/components/schemas/AgentError"}
     AgentAvatar:
       description: The signing wallet's picture as it stands, or null when it has none
       content:
@@ -1580,7 +1620,7 @@ components:
         The write does not fit the workspace. invalid: a field value is not admitted.
         forbidden_field: the write names a field members may not set. duplicate_mismatch: the
         command id was already used with a different body. out_of_range: a number is outside the
-        range the operation admits.
+        range the operation admits. invalid_request: the body doesn't fit the operation; the hint names the fields it takes.
       content:
         application/json:
           schema:
@@ -1688,7 +1728,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [unauthorized, smart_wallet_on_ethereum, authentication_unavailable, request_too_large, out_of_range]}
+            code: {type: string, enum: [unauthorized, smart_wallet_on_ethereum, authentication_unavailable, request_too_large, out_of_range, invalid_request]}
             message: {type: string}
             hint: {type: string}
     WorkspaceError:

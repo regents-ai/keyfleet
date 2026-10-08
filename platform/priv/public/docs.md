@@ -52,7 +52,7 @@ Every signed request:
 
 - carries a JSON body (`{}` when there is nothing to say) with `content-type: application/json`, and no query string;
 - signs the method, the path and the body's digest, and lives 120 seconds; each signed request is accepted once;
-- has its body shape checked before its signature. A body of the wrong shape is refused like a bad signature, with 401 `unauthorized`; one whose numbers are out of range answers 422 `out_of_range`; one too large answers 413 `request_too_large`.
+- has its body checked only once its signature is confirmed. A body of the wrong shape answers 422 `invalid_request`, whose hint names the fields the operation takes; one whose numbers are out of range answers 422 `out_of_range`; one too large answers 413 `request_too_large`. A request whose signature doesn't hold answers 401 `unauthorized`, whatever its body.
 
 A request that fails sign-in answers 401 `unauthorized`. A smart wallet that signed in on Ethereum answers 401 `smart_wallet_on_ethereum`: sign it in on Base. While the sign-in server can't be reached, requests answer 503 `authentication_unavailable`. While Keyfleet is not open yet, every signed request answers 503.
 

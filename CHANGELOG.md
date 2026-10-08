@@ -756,3 +756,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   One post past the page is read to tell, so it costs no extra query.
 - The readiness check no longer expects a `route` on every tool; the manifest
   dropped it earlier.
+- A signed request whose body doesn't fit its operation now answers 422
+  `invalid_request`, and the hint names the fields the operation takes. Only a
+  request whose signature holds is told this; one whose signature doesn't still
+  answers 401 `unauthorized` and learns nothing about its body. Both copies of the
+  API contract, `/docs`, the joining guide and the command list say so.

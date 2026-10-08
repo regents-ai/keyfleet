@@ -36,6 +36,20 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|proposals/(?:create|vote|cancel|carry_out)|keys/#{@token}/claim)\z"
   @graph_ops ~w(get changes create patch link unlink archive)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
+
+  # The fields each room, sync and proposal read body holds: the ones it must
+  # name, then the ones it may add.
+  @body_fields [
+    {@sync_path, {~w(rooms graph proposals run), []}},
+    {@proposal_read_path, {~w(number votes_after_seq), []}},
+    {@create_room_path, {~w(slug name), []}},
+    {@topic_path, {~w(topic), []}},
+    {@read_path, {[], ~w(after_seq limit)}},
+    {@key_read_path, {[], ~w(after_seq limit)}},
+    {@send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
+    {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}}
+  ]
+
   @editable ~w(name declared_harness proficiencies interests service_ideas current_status)
   # Separate transport bound from Ash field limits: the broker embeds these raw
   # bytes in JSON inside its 64 KiB envelope, potentially doubling escape bytes.
@@ -112,7 +126,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       cap = body_limit(conn.request_path)
 
       case read_body(conn, length: cap, read_length: cap + 1) do
-        {:ok, raw, conn} when byte_size(raw) <= cap -> verify_body(conn, raw)
+        {:ok, raw, conn} when byte_size(raw) <= cap -> verify(assign(conn, :raw_body, raw))
         {:error, _reason} -> deny(conn, %{reason: :invalid_request})
         {_read, _raw, conn} -> answer(conn, 413, "request_too_large")
       end
@@ -121,23 +135,16 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
-  defp verify_body(conn, raw) do
-    with {:ok, params} <- Jason.decode(raw),
-         :ok <- check_body(conn.request_path, params) do
-      conn = %{conn | body_params: params, params: params} |> assign(:raw_body, raw)
-
-      Siwa.AgentAuthPlug.call(conn,
-        client: Keyfleet.SiwaBroker,
-        hooks: __MODULE__,
-        audience: "keyfleet",
-        signed_path: :path_only,
-        body: :always
-      )
-    else
-      :out_of_range -> answer(conn, 422, "out_of_range")
-      :room_named_twice -> answer(conn, 422, "invalid_request")
-      _ -> deny(conn, %{reason: :invalid_request})
-    end
+  # The raw body is signed, through its content digest, and checked against
+  # it before anything is read from it; `accept/3` then reads it.
+  defp verify(conn) do
+    Siwa.AgentAuthPlug.call(conn,
+      client: Keyfleet.SiwaBroker,
+      hooks: __MODULE__,
+      audience: "keyfleet",
+      signed_path: :path_only,
+      body: :always
+    )
   end
 
   @impl Siwa.AgentAuthPlug.Hooks
@@ -193,7 +200,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       when is_binary(expires) and is_map_key(@verification_methods, method) and
              is_list(required_headers) and is_list(required_components) and
              is_list(covered_components) do
-    with {:ok, registry_url} <- registry_url(registration),
+    with {:ok, conn} <- take_body(conn),
+         {:ok, registry_url} <- registry_url(registration),
          {:ok, backing} <- HumanBacking.read(book) do
       actor =
         struct!(
@@ -210,11 +218,24 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
       admit(conn, actor)
     else
+      {:error, %{reason: _reason}} = refused -> refused
       :error -> invalid_principal()
     end
   end
 
   def accept(_conn, _data, _context), do: invalid_principal()
+
+  # Only a request whose signature verified is told what is wrong with its
+  # body, and nothing it asks for is acted on until the body fits.
+  defp take_body(%{assigns: %{raw_body: raw}} = conn) do
+    with {:ok, params} <- Jason.decode(raw),
+         :ok <- check_body(conn.request_path, params) do
+      {:ok, %{conn | body_params: params, params: params}}
+    else
+      :out_of_range -> {:error, %{reason: :out_of_range}}
+      _invalid -> {:error, %{reason: :body_does_not_fit}}
+    end
+  end
 
   defp registry_url(nil), do: {:ok, nil}
   defp registry_url(%{"registryUrl" => "https://" <> _rest = url}), do: {:ok, url}
@@ -255,6 +276,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def deny(conn, %{reason: :smart_wallet_on_ethereum}),
     do: answer(conn, 401, "smart_wallet_on_ethereum")
 
+  def deny(conn, %{reason: :out_of_range}), do: answer(conn, 422, "out_of_range")
+
+  def deny(conn, %{reason: :body_does_not_fit}) do
+    body = KeyfleetWeb.Refusal.body("invalid_request", takes(conn.request_path))
+    send_refusal(conn, 422, body)
+  end
+
   def deny(conn, metadata) do
     unavailable? =
       metadata[:reason] in [:broker_unavailable, :siwa_request_failed] or
@@ -266,11 +294,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     answer(conn, status, code)
   end
 
-  defp answer(conn, status, code) do
+  defp answer(conn, status, code), do: send_refusal(conn, status, KeyfleetWeb.Refusal.body(code))
+
+  defp send_refusal(conn, status, body) do
     conn
     |> put_resp_header("cache-control", "no-store")
     |> put_resp_content_type("application/json")
-    |> send_resp(status, Jason.encode!(KeyfleetWeb.Refusal.body(code)))
+    |> send_resp(status, Jason.encode!(body))
     |> halt()
   end
 
@@ -327,9 +357,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
-  # A body of the wrong shape is refused like any request the product does not
-  # admit. One of the right shape whose numbers fall outside what a room can
-  # hold, or that names the same room twice, is told so.
+  # A body of the wrong shape, or one that names the same room twice, is told
+  # the fields its operation takes; one of the right shape whose numbers fall
+  # outside what the operation holds is told so.
   defp check_body(@join_path, %{"name" => name, "declared_harness" => harness} = params),
     do: admit(map_size(params) == 2 and is_binary(name) and is_binary(harness))
 
@@ -507,7 +537,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         :out_of_range
 
       length(Enum.uniq_by(rooms, & &1["slug"])) != length(rooms) ->
-        :room_named_twice
+        :invalid
 
       true ->
         :ok
@@ -554,6 +584,62 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp answers_a_post?(nil), do: true
   defp answers_a_post?(value), do: is_binary(value) and Regex.match?(@post_id, value)
+
+  # The fields each operation's body holds, which a body that doesn't fit is
+  # told: the ones it must name, then the ones it may add.
+  defp takes(path) do
+    case fields(path) do
+      {[], []} ->
+        "This operation takes an empty JSON object, {}."
+
+      {:any_of, fields} ->
+        "This operation takes a JSON object naming at least one of: #{Enum.join(fields, ", ")}."
+
+      {required, []} ->
+        "This operation takes a JSON object with exactly these fields: #{Enum.join(required, ", ")}."
+
+      {[], optional} ->
+        "This operation takes a JSON object with only these fields, each optional: #{Enum.join(optional, ", ")}."
+
+      {required, optional} ->
+        "This operation takes a JSON object with these fields: #{Enum.join(required, ", ")}; " <>
+          "and only these besides, each optional: #{Enum.join(optional, ", ")}."
+    end <> " Check each field's kind and range against the docs, then send it again."
+  end
+
+  defp fields(@join_path), do: {~w(name declared_harness), []}
+  defp fields(@update_path), do: {:any_of, @editable}
+  defp fields(@avatar_start_path), do: {~w(sha256 byte_size content_type), []}
+
+  defp fields(path) do
+    cond do
+      op = chain_op(path) ->
+        chain_fields(op)
+
+      op = graph_op(path) ->
+        graph_fields(op)
+
+      true ->
+        Enum.find_value(@body_fields, {[], []}, fn {route, takes} ->
+          Regex.match?(route, path) and takes
+        end)
+    end
+  end
+
+  defp chain_fields("proposals/create"),
+    do: {@propose_required, @propose_fields -- @propose_required}
+
+  defp chain_fields("proposals/vote"), do: {~w(number choice), []}
+
+  defp chain_fields(op) when op in ["proposals/cancel", "proposals/carry_out"],
+    do: {~w(number), []}
+
+  defp chain_fields(_op), do: {[], []}
+
+  defp graph_fields(op) do
+    {required, optional} = Map.fetch!(@graph_bodies, op)
+    {required |> Map.keys() |> Enum.sort(), optional |> Map.keys() |> Enum.sort()}
+  end
 
   defp admit(true), do: :ok
   defp admit(false), do: :invalid

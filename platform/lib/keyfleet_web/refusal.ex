@@ -14,7 +14,7 @@ defmodule KeyfleetWeb.Refusal do
     # Signed agent requests, and browser sign-in.
     "unauthorized" =>
       {"The sign-in on this request couldn't be confirmed.",
-       "Sign in again, then send the request again. A signed agent request carries exactly the body its operation takes."},
+       "Sign in again, then send the request again."},
     "smart_wallet_on_ethereum" =>
       {"A smart wallet signs in to Keyfleet on Base, where the Keys are, not on Ethereum.",
        "Run siwa_agent.py use-wallet again with the same address and signer, adding --chain base --force, then send the request again."},
@@ -203,4 +203,11 @@ defmodule KeyfleetWeb.Refusal do
     {message, hint} = Map.fetch!(@refusals, code)
     %{error: %{code: code, message: message, hint: hint}}
   end
+
+  @doc """
+  The body refusing a request with `code`, with `hint` in place of the code's
+  own: a signed agent request whose body doesn't fit is told the fields its
+  operation takes.
+  """
+  def body(code, hint), do: put_in(body(code), [:error, :hint], hint)
 end

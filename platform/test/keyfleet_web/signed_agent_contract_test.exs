@@ -205,7 +205,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     on_exit(fn -> Application.put_env(:keyfleet, :siwa_broker_url, old) end)
     budget = Application.fetch_env!(:keyfleet, :api_rate_limit)
     on_exit(fn -> Application.put_env(:keyfleet, :api_rate_limit, budget) end)
-    broker = server(:broker, &broker(&1, &2, secret))
+    # The sweep below signs tens of thousands of requests, so the broker keeps
+    # the requests it has seen in a table rather than the library's default store.
+    seen = :ets.new(:seen_requests, [:public])
+    broker = server(:broker, &broker(&1, &2, secret, seen))
     Application.put_env(:keyfleet, :siwa_broker_url, broker)
     app = server(:product, &KeyfleetWeb.Endpoint.call(&1, KeyfleetWeb.Endpoint.init(&2)))
     %{app: app, signer: signer, secret: secret}
@@ -258,6 +261,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
         |> Enum.uniq()
 
       assert admitted == [], "#{where} admits undocumented #{inspect(admitted)}"
+
+      if at == [] do
+        assert told_fields(c, method, template, Map.put(minimal, "unlisted", 1)) ==
+                 Enum.sort(documented),
+               "#{where} names other fields when it refuses a body"
+      end
     end
   end
 
@@ -568,10 +577,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "late"}, 503)
     answer(c, c.signer, "POST", @topic, open, %{"topic" => "Late"}, 503)
 
-    # Every route: unsigned, too large, and with the sign-in check away.
+    # Every route: unsigned, too large, signed with a body that fits none of
+    # them, and with the sign-in check away.
     for {method, template} <- routes() do
       answer_raw(c, method, template, "{}", 401)
       answer_raw(c, method, template, String.duplicate(" ", body_cap(template) + 1), 413)
+      answer(c, c.signer, method, template, @address, %{"not_a_field" => 1}, 422)
     end
 
     Application.put_env(:keyfleet, :siwa_broker_url, nil)
@@ -847,10 +858,21 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     response = send_signed(c, c.signer, method, fill(template, @address), Jason.encode!(body))
 
     case {response.status, response.body} do
-      {401, %{"error" => %{"code" => "unauthorized"}}} -> false
+      {422, %{"error" => %{"code" => "invalid_request"}}} -> false
       {401, other} -> flunk("#{method} #{template} refused with #{inspect(other)}")
       _admitted -> true
     end
+  end
+
+  # The fields a refused body is told its operation takes.
+  defp told_fields(c, method, template, body) do
+    response = send_signed(c, c.signer, method, fill(template, @address), Jason.encode!(body))
+    assert %{"error" => %{"code" => "invalid_request", "hint" => hint}} = response.body
+
+    ~r/: ([a-z0-9_, ]+)[;.]/
+    |> Regex.scan(hint, capture: :all_but_first)
+    |> Enum.flat_map(&String.split(hd(&1), ", "))
+    |> Enum.sort()
   end
 
   defp access(index) when is_integer(index), do: Access.at(index)
@@ -978,14 +1000,15 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     )
   end
 
-  defp broker(conn, _opts, secret) do
+  defp broker(conn, _opts, secret, seen) do
     {:ok, raw, conn} = read_body(conn)
     payload = Jason.decode!(raw)
 
     case Siwa.verify_authenticated_request(payload,
            secret: secret,
            audience: "keyfleet",
-           wallet_audiences: ["keyfleet"]
+           wallet_audiences: ["keyfleet"],
+           replay_store: &first_time(seen, &1, &2)
          ) do
       {:ok, %{claims: claims, covered_components: covered}} ->
         reply(conn, 200, %{
@@ -1019,6 +1042,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {:error, _reason} ->
         reply(conn, 401, %{error: %{code: "invalid_proof"}})
     end
+  end
+
+  defp first_time(seen, key, _expires) do
+    if :ets.insert_new(seen, {key}), do: :ok, else: {:error, :replayed_request}
   end
 
   defp server(id, plug) do

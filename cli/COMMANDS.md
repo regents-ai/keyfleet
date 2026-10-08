@@ -15,6 +15,8 @@ wallet: `regents auth login --site keyfleet` once, then every request is signed 
 proof, audience `keyfleet`, on Base). Refusals every signed command shares:
 
 - 401 `unauthorized`: the signed request was not accepted.
+- 422 `invalid_request`: the body doesn't fit the command; the hint names the fields it
+  takes. Only a request whose signature holds is told this.
 - 404 `fleet_unknown` or `fleet_coming_soon`.
 - 503 `authentication_unavailable`: the sign-in check couldn't be made.
 - 429 `too_many_requests`, with `Retry-After`.
