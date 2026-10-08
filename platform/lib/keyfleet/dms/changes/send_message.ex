@@ -10,10 +10,12 @@ defmodule Keyfleet.Dms.Changes.SendMessage do
   still holds the Key is read once more inside that turn: a Key that changed
   hands since the policy looked leaves nothing to write as.
 
-  The message keeps the wallet it came from: the person's wallet holding the
-  Key, or the agent's own. An agent writing it, for itself or for the person it
-  is paired with, is kept as `via_agent`; an agent with no profile yet has
-  nothing to write as.
+  The message keeps both Keys' ownership epochs as they are in that turn, so
+  each side's holder sees it only while that Key keeps its holder
+  (`Keyfleet.Dms.Message`'s `shown_to`). It keeps the wallet it came from: the
+  person's wallet holding the Key, or the agent's own. An agent writing it, for
+  itself or for the person it is paired with, is kept as `via_agent`; an agent
+  with no profile yet has nothing to write as.
 
   The same send key with the same words hands back the first message; with
   anything different it is a mistake and is refused, so a sender that never
@@ -26,6 +28,7 @@ defmodule Keyfleet.Dms.Changes.SendMessage do
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Actors.System
   alias Keyfleet.Dms
+  alias Keyfleet.Rooms.Errors.KeyUnknownError
   alias Keyfleet.Rooms.Errors.NoAgentProfileError
   alias Keyfleet.Rooms.Errors.NoKeyToWriteAsError
   alias Keyfleet.Rooms.Errors.SendConflictError
@@ -42,10 +45,11 @@ defmodule Keyfleet.Dms.Changes.SendMessage do
     from = Ash.Changeset.get_argument(changeset, :from_token_id)
     lock_fleet!(fleet_id)
 
-    with {:ok, sender} <- sender(actor, fleet_id, from),
-         {:ok, via_agent_id} <- via_agent(actor) do
-      to = Ash.Changeset.get_argument(changeset, :to_token_id)
+    to = Ash.Changeset.get_argument(changeset, :to_token_id)
 
+    with {:ok, sender} <- sender(actor, fleet_id, from),
+         {:ok, to_epoch} <- recipient_epoch(fleet_id, to),
+         {:ok, via_agent_id} <- via_agent(actor) do
       conversation =
         Dms.open_conversation!(
           %{fleet_id: fleet_id, key_a: min(from, to), key_b: max(from, to)},
@@ -60,7 +64,8 @@ defmodule Keyfleet.Dms.Changes.SendMessage do
         body: Ash.Changeset.get_argument(changeset, :body),
         parts: Ash.Changeset.get_argument(changeset, :parts),
         author_wallet: sender.wallet,
-        ownership_epoch: sender.ownership_epoch,
+        from_ownership_epoch: sender.ownership_epoch,
+        to_ownership_epoch: to_epoch,
         via_agent_id: via_agent_id,
         idempotency_key: Ash.Changeset.get_argument(changeset, :idempotency_key)
       })
@@ -80,6 +85,13 @@ defmodule Keyfleet.Dms.Changes.SendMessage do
     case Enum.find(Keyfleet.Keys.held_keys(actor, fleet_id), &(&1.token_id == from)) do
       nil -> {:error, NoKeyToWriteAsError.exception(fleet_id: fleet_id)}
       sender -> {:ok, sender}
+    end
+  end
+
+  defp recipient_epoch(fleet_id, to) do
+    case Keyfleet.Keys.current_key!(fleet_id, to, actor: %System{}) do
+      nil -> {:error, KeyUnknownError.exception(fleet_id: fleet_id, token_id: to)}
+      key -> {:ok, key.ownership_epoch}
     end
   end
 

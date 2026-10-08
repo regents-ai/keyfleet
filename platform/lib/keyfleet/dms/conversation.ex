@@ -7,6 +7,11 @@ defmodule Keyfleet.Dms.Conversation do
   Either Key's holder may delete it, which removes it and every message in it
   for both, or have its messages removed after 1, 7, 30 or 90 days
   (`auto_delete_days`, nil to keep them).
+
+  A Key reads a conversation only while it holds a message of it that its
+  holder may see (`Keyfleet.Dms.Message`'s `shown_to`), and its last message
+  is the last of those: a Key's new holder finds none of the old holder's
+  conversations until a new message arrives in one.
   """
   use Ash.Resource,
     otp_app: :keyfleet,
@@ -47,8 +52,8 @@ defmodule Keyfleet.Dms.Conversation do
       public? false
     end
 
-    # One Key's conversations, the newest message first: its main inbox, or
-    # with `blocked` those with the Keys it has blocked.
+    # One Key's conversations, the newest message it may see first: its main
+    # inbox, or with `blocked` those with the Keys it has blocked.
     read :inbox do
       argument :fleet_id, :string, allow_nil?: false
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
@@ -59,14 +64,12 @@ defmodule Keyfleet.Dms.Conversation do
       filter expr(
                fleet_id == ^arg(:fleet_id) and
                  (key_a == ^arg(:token_id) or key_b == ^arg(:token_id)) and
-                 blocked_by(token_id: ^arg(:token_id)) == ^arg(:blocked)
+                 blocked_by(token_id: ^arg(:token_id)) == ^arg(:blocked) and
+                 not is_nil(last_seq(token_id: ^arg(:token_id)))
              )
 
-      prepare build(
-                load: [:last_seq, :last_body, :last_from_token_id, :last_at],
-                sort: [last_seq: :desc_nils_last, id: :asc],
-                limit: @inbox_page
-              )
+      prepare {Keyfleet.Dms.Preparations.LastShown, newest_first: true}
+      prepare build(limit: @inbox_page)
     end
 
     # The conversation between two Keys, if they have one.
@@ -81,8 +84,11 @@ defmodule Keyfleet.Dms.Conversation do
       filter expr(
                fleet_id == ^arg(:fleet_id) and
                  ((key_a == ^arg(:token_id) and key_b == ^arg(:other_token_id)) or
-                    (key_a == ^arg(:other_token_id) and key_b == ^arg(:token_id)))
+                    (key_a == ^arg(:other_token_id) and key_b == ^arg(:token_id))) and
+                 not is_nil(last_seq(token_id: ^arg(:token_id)))
              )
+
+      prepare Keyfleet.Dms.Preparations.LastShown
     end
 
     # Opened by the first message between two Keys, inside its sending
@@ -169,31 +175,63 @@ defmodule Keyfleet.Dms.Conversation do
     has_many :messages, Keyfleet.Dms.Message
   end
 
-  # Read beside the conversation it belongs to, which the reader was already
-  # allowed to see; its messages are that conversation's own.
-  aggregates do
-    max :last_seq, :messages, :seq, authorize?: false, public?: true
-
-    first :last_body, :messages, :body do
-      sort seq: :desc
-      authorize? false
-      public? true
-    end
-
-    first :last_from_token_id, :messages, :from_token_id do
-      sort seq: :desc
-      authorize? false
-      public? true
-    end
-
-    first :last_at, :messages, :inserted_at do
-      sort seq: :desc
-      authorize? false
-      public? true
-    end
-  end
-
   calculations do
+    # The last message Key `token_id`, one side of the conversation, may see.
+    # Read beside the conversation, which that Key was already allowed to
+    # read; the messages are filtered to the ones its holder may see, so their
+    # own read policy (system only) is not asked again.
+    calculate :last_seq,
+              :integer,
+              expr(
+                max(messages,
+                  field: :seq,
+                  query: [filter: shown_to(token_id: ^arg(:token_id))],
+                  authorize?: false
+                )
+              ) do
+      public? true
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+    end
+
+    calculate :last_body,
+              :string,
+              expr(
+                first(messages,
+                  field: :body,
+                  query: [filter: shown_to(token_id: ^arg(:token_id)), sort: [seq: :desc]],
+                  authorize?: false
+                )
+              ) do
+      public? true
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+    end
+
+    calculate :last_from_token_id,
+              :integer,
+              expr(
+                first(messages,
+                  field: :from_token_id,
+                  query: [filter: shown_to(token_id: ^arg(:token_id)), sort: [seq: :desc]],
+                  authorize?: false
+                )
+              ) do
+      public? true
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+    end
+
+    calculate :last_at,
+              :utc_datetime_usec,
+              expr(
+                first(messages,
+                  field: :inserted_at,
+                  query: [filter: shown_to(token_id: ^arg(:token_id)), sort: [seq: :desc]],
+                  authorize?: false
+                )
+              ) do
+      public? true
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+    end
+
     # Whether Key `token_id`, one side of the conversation, has blocked the
     # other side.
     calculate :blocked_by,

@@ -84,17 +84,46 @@ defmodule Keyfleet.DmsTest do
     assert length(Dms.read_conversation!(@fleet, 1, 3, %{limit: 200}, actor: human("a"))) == 200
   end
 
-  test "a sold Key's messages go to its new holder and the old holder is refused" do
-    send!(human("b"), 2, 1, "For Key 1")
+  # Invariant: when a Key changes hands, its new holder (and an agent with a
+  # shard of it) sees only messages from then on, in every read; the seller
+  # sees none of them; the other side keeps the whole conversation.
+  test "a sold Key's buyer sees none of the seller's messages, and the seller none of the buyer's" do
+    send!(human("a"), 1, 2, "From the seller")
+    send!(human("b"), 2, 1, "To the seller")
     epoch!(1, "f", 2)
+    buyer = human("f")
 
-    assert [%{body: "For Key 1"}] = Dms.read_conversation!(@fleet, 1, 2, actor: human("f"))
-    assert [%{key_a: 1, key_b: 2}] = Dms.inbox!(@fleet, 1, actor: human("f"))
+    assert Dms.read_conversation!(@fleet, 1, 2, actor: buyer) == []
+    assert Dms.latest_in_conversation!(@fleet, 1, 2, actor: buyer) == []
+    assert Dms.inbox!(@fleet, 1, actor: buyer) == []
+    assert Dms.get_conversation!(@fleet, 1, 2, actor: buyer) == nil
+    assert {:ok, %{messages: [], next_cursor: 0, has_more: false}} = Dms.changes(@fleet, 0, buyer)
+
+    %{seq: seq} = send!(human("b"), 2, 1, "To the buyer")
+    shard = shard_agent("7", 1, 30)
+
+    for reader <- [buyer, shard] do
+      assert [%{body: "To the buyer"}] = Dms.read_conversation!(@fleet, 1, 2, actor: reader)
+      assert [%{body: "To the buyer"}] = Dms.latest_in_conversation!(@fleet, 1, 2, actor: reader)
+      assert [%{last_body: "To the buyer", last_seq: ^seq}] = Dms.inbox!(@fleet, 1, actor: reader)
+      assert %{last_body: "To the buyer"} = Dms.get_conversation!(@fleet, 1, 2, actor: reader)
+
+      assert {:ok, %{messages: [%{body: "To the buyer"}], next_cursor: ^seq, has_more: false}} =
+               Dms.changes(@fleet, 0, reader)
+    end
+
+    assert ["From the seller", "To the seller", "To the buyer"] =
+             @fleet |> Dms.read_conversation!(2, 1, actor: human("b")) |> Enum.map(& &1.body)
+
+    seller = human("a")
 
     assert {:error, %Ash.Error.Forbidden{}} =
-             Dms.read_conversation(@fleet, 1, 2, actor: human("a"))
+             Dms.read_conversation(@fleet, 1, 2, actor: seller)
 
-    assert {:error, %Ash.Error.Forbidden{}} = send_dm(human("a"), 1, 2, "Still mine?")
+    assert {:error, %Ash.Error.Forbidden{}} = send_dm(seller, 1, 2, "Still mine?")
+
+    epoch!(5, "a", 2)
+    assert {:ok, %{messages: []}} = Dms.changes(@fleet, 0, seller)
   end
 
   test "a Key's new holder starts with fresh send keys" do
@@ -133,11 +162,12 @@ defmodule Keyfleet.DmsTest do
     send!(human("a"), 1, 2, "To b")
     send!(human("c"), 3, 5, "To e")
     epoch!(3, "b", 2)
+    send!(human("e"), 5, 3, "To Key 3's new holder")
 
     assert Dms.inbox_topics(@fleet, human("b")) == ["dms:#{@fleet}:2", "dms:#{@fleet}:3"]
 
     assert {:ok, %{messages: messages, has_more: false}} = Dms.changes(@fleet, 0, human("b"))
-    assert Enum.map(messages, & &1.body) == ["To b", "To e"]
+    assert Enum.map(messages, & &1.body) == ["To b", "To Key 3's new holder"]
 
     assert {:error, %Ash.Error.Forbidden{}} = Dms.changes(@fleet, 0, human("c"))
     assert Dms.inbox_topics(@fleet, human("c")) == []

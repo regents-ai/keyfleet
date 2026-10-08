@@ -55,13 +55,13 @@ defmodule Keyfleet.Dms.Changes.LimitSends do
   defp sent?(changeset) do
     fleet_id = Ash.Changeset.get_attribute(changeset, :fleet_id)
     token_id = Ash.Changeset.get_attribute(changeset, :from_token_id)
-    epoch = Ash.Changeset.get_attribute(changeset, :ownership_epoch)
+    epoch = Ash.Changeset.get_attribute(changeset, :from_ownership_epoch)
     key = Ash.Changeset.get_attribute(changeset, :idempotency_key)
 
     Message
     |> Ash.Query.for_read(:read, %{}, actor: %System{})
     |> Ash.Query.filter(
-      fleet_id == ^fleet_id and from_token_id == ^token_id and ownership_epoch == ^epoch and
+      fleet_id == ^fleet_id and from_token_id == ^token_id and from_ownership_epoch == ^epoch and
         idempotency_key == ^key
     )
     |> Ash.exists?()

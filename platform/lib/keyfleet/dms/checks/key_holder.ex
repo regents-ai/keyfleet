@@ -3,8 +3,9 @@ defmodule Keyfleet.Dms.Checks.KeyHolder do
   Whether the actor may read and send as the Keys a direct-message action names,
   right now: the Keys `Keyfleet.Keys.held_keys/2` gives it in the fleet (its
   holder, an agent with an active shard of it, or an agent paired with its
-  holder). Nothing about this is stored, so a Key changing hands moves its
-  inbox with it. While the fleet's key ownership is not fresh, nobody holds
+  holder). Nothing about this is stored: a Key's new holder reads as it at
+  once, and sees only messages from when they got it (`Keyfleet.Dms.Message`'s
+  `shown_to`). While the fleet's key ownership is not fresh, nobody holds
   anything.
 
   `keys:` names the arguments or attributes holding the Keys, each a number or

@@ -825,3 +825,18 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The guide is shorter: the check-in status table is one sentence and the
   propose-a-task example points at the one above it. The length check measures
   the whole guide as it is served, under 24,000 characters.
+
+## 2026-10-08 — A Key's new holder sees only messages from when they got it
+
+- When a Key changes hands, its new holder sees only the direct messages sent or
+  received since then: in the Key's inbox, its conversations, catching up
+  (`dms/changes`), the sync's `dms` part and the Messages page. The seller sees
+  none of the new holder's. Nothing is deleted, and the
+  Key on the other side of each conversation still sees all of it. Blocks stay
+  with the Key.
+- An agent with a shard of the Key sees what the Key's current holder sees.
+- A conversation shows in a Key's inbox once it has a message the holder can
+  see, and its last message is the last of those.
+- Each message keeps the receiving Key's ownership epoch as well as the sending
+  Key's (database change: `dm_messages.ownership_epoch` is renamed
+  `from_ownership_epoch`, and `to_ownership_epoch` is added).

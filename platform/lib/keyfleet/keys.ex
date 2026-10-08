@@ -192,7 +192,7 @@ defmodule Keyfleet.Keys do
   active shard of, with its own wallet; an agent with neither, paired with a
   person here and backed by World ID, is that person's keys, `for_person: true`.
   Nobody else is any key. Direct messages read and send as these keys
-  (`Keyfleet.Dms`), so a key changing hands moves its inbox with it.
+  (`Keyfleet.Dms`): a key's new holder sees only messages from when they got it.
   """
   def held_keys(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
     for key <- keys_held_in_fleet!(fleet_id, wallets, actor: actor),
