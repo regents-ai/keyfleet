@@ -305,8 +305,10 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     dispatch(conn, @endpoint, method, path, nil)
   end
 
+  # Its own client address, so the budget it spends is not one another test
+  # spent first in the same window.
   defp signed_post(body) do
-    %{build_conn() | host: @host}
+    %{build_conn() | host: @host, remote_ip: {198, 51, 100, 129}}
     |> put_req_header("signature-input", "sig1=()")
     |> put_req_header("content-type", "application/json")
     |> dispatch(@endpoint, :post, "/api/v1/projects/proj-fleet/notebooks", body)
