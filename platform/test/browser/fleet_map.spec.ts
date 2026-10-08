@@ -150,7 +150,7 @@ test.describe("the fleet page's map", () => {
   test("a key chosen on the map opens its profile, which Back closes and Forward opens again", async ({page}) => {
     const key = sellKey(fleet, me)
     const errors = await openFleet(page)
-    const chosen = page.locator("#key-map-selected")
+    const chosen = page.locator("#key-map-selected .key-map-selected__chosen")
     await expect(chosen).toHaveText("No Key chosen yet.")
 
     const at = await tileAt(page, key)

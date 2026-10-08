@@ -227,18 +227,19 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
   describe "buying the next key" do
     # Key 151 opens level 9, whose price is the first to round up. The offer
-    # is in "How this fleet works", under "Buying a key".
+    # heads the panel in one line, with Buy straight under it.
     test "offers the next key's number, exact price and level", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
 
       {:ok, view, _html} = live(conn, @path)
 
-      assert text(view, "#fleet-about #buy-key-title") =~ ~r/^Buying a Key /
+      assert text(view, "#fleet-about #buy-key-title #buy-key-offer") ==
+               "Key 151 · 42.99817 USDC · Level 9"
+
       assert text(view, "#buy-key-tip") =~ "approves exactly 42.99817 USDC"
       assert text(view, "#buy-key-number") == "151"
       assert text(view, "#buy-key-price") == "42.99817 USDC"
-      assert text(view, "#buy-key-level") == "9"
       assert text(view, "#fleet-about #buy-key-order #buy-key-button") == "Buy Key 151"
       refute has_element?(view, "#buy-key-sold-out")
     end
@@ -563,6 +564,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         assert ["set_attr", %{"attr" => ["aria-expanded", "false"], "to" => "##{other}-toggle"}] in commands
       end
 
+      assert ["set_attr", %{"attr" => ["data-for", "buy"], "to" => "#fleet-about"}] in commands
       assert ["focus", %{"to" => "#buy-key-title"}] in commands
       assert has_element?(view, ~s(#fleet-about #buy-key #buy-key-title[tabindex="-1"]))
     end
@@ -596,6 +598,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, _html} = live(conn, @path)
       view |> element("#shell-get-key") |> render_click()
       assert_patch(view, "/app/fleets/fleet_tech_classic?buy")
+
+      # Drawn already open as "Get a Key", so it shows before the page connects.
+      assert has_element?(view, ~s(#fleet-about[data-for="buy"]))
+      refute has_element?(view, "#fleet-about[hidden]")
+      assert has_element?(view, "#fleet-now[hidden]")
 
       [arrival] =
         view
@@ -697,7 +704,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       render_hook(view, "select_key", %{"token_id" => 151})
       assert_patch(view, second_page <> "&key=151")
-      assert text(view, "#key-map-selected") == "Key 151 chosen."
+      assert text(view, "#key-map-selected .key-map-selected__chosen") == "Key 151 chosen."
       assert has_element?(view, ~s(#key-map-fibonacci_cascade[data-selected="151"]))
 
       for refused <- [0, 152, -1, "12", 1.5, nil] do
@@ -709,12 +716,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       StubClient.put_chain(chain_head(1_000), [])
       render_patch(view, @path <> "?key=12")
       assert_push_event(view, "keymap:select", %{token_id: 12})
-      assert text(view, "#key-map-selected") == "Key 12 chosen."
+      assert text(view, "#key-map-selected .key-map-selected__chosen") == "Key 12 chosen."
       assert has_element?(view, "#fleet-keys-next[href$='&key=12']")
 
       render_patch(view, @path <> "?key=152")
       assert_push_event(view, "keymap:select", %{token_id: nil})
-      assert text(view, "#key-map-selected") == "No Key chosen yet."
+      assert text(view, "#key-map-selected .key-map-selected__chosen") == "No Key chosen yet."
     end
 
     # A key sold, moved or given a shard reaches an open page as that key's new marks.
@@ -852,7 +859,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       for key <- ["abc", "-1", "0", "152", "99999999999999999999999", "1.5", ""] do
         {:ok, view, _html} = live(conn, @path <> "?" <> URI.encode_query(key: key))
 
-        assert text(view, "#key-map-selected") == "No Key chosen yet."
+        assert text(view, "#key-map-selected .key-map-selected__chosen") == "No Key chosen yet."
         refute has_element?(view, "#key-map-fibonacci_cascade[data-selected]")
       end
     end
