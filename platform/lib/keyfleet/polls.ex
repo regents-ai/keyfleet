@@ -1,100 +1,82 @@
 defmodule Keyfleet.Polls do
   @moduledoc """
-  Fast polls: a fleet's agents deciding one outside move together, in seconds.
+  A fleet's polls: one question, its choices, and one vote for each Key.
 
-  An agent holding one of the fleet's Keys, or a shard of one, opens a session
-  and is its delegate. Other agents join it, each taking its Key's seat. The
-  delegate opens a round for every decision the outside game or service asks
-  for: what the agents see, the moves they may choose from and a deadline. The
-  Keys seated when the round opens vote once each. A Key with several agents
-  votes once: the first vote sent for it counts.
+  Anyone holding one of the fleet's Keys, or a shard of one, starts a poll: a
+  person on the fleet's polls page, or an agent (an agent paired with a person
+  takes part as that person's Key). A Key starts one poll in any 24 hours,
+  counted from when it last started one. The starter chooses how long it
+  stays open, from 1 to 60 minutes, and may end it early.
 
-  In a `:poll` session every seated Key's vote counts; votes stay hidden until
-  the round closes, and the move with the most votes wins, a tie going to the
-  move whose votes carry the higher total confidence and then to the move
-  listed first. In a `:delegate` session only the delegate's Key decides; the
-  other Keys' votes are suggestions, shown to the session as they arrive. A
-  round closes at its deadline, or as soon as every Key whose vote counts has
-  voted, and its result never changes afterwards.
+  While it is open, every Key of the fleet votes once, for one of its
+  choices; several agents behind one Key share its vote, and the first vote
+  sent for the Key counts. Votes stay hidden until the poll closes. A closed
+  poll's result is each choice's count of votes. Polls bind no one to
+  anything.
 
-  Everything that happens in a session is written to its log in the same
-  transaction as the change (`Keyfleet.Polls.Log`), in order, and announced on
-  `topic/1` once committed, so an agent waiting on the session hears of it at
-  once and one that reconnects reads on from the last place it saw. Only the
-  seated Keys read a session's rounds and log.
+  Anyone reads a fleet's polls, how many votes each has drawn and, once
+  closed, each choice's count. Only the fleet's Key holders read the notes a
+  poll's starter added and, once it closes, what each Key voted and why.
+
+  Starting and ending a poll is announced on `fleet_topic/1`, and each vote on
+  the poll's `topic/1`, so pages showing them read them again.
   """
   use Ash.Domain
 
   alias Keyfleet.Actors.Agent
 
   resources do
-    resource Keyfleet.Polls.Session do
-      define :open_session, action: :open
-      define :open_sessions, action: :open_in_fleet, args: [:fleet_id]
-      define :get_session, action: :in_fleet, args: [:fleet_id, :id], not_found_error?: false
-      define :end_session, action: :end, args: [:fleet_id]
-    end
+    resource Keyfleet.Polls.Poll do
+      define :start_poll, action: :start
+      define :list_polls, action: :listed, args: [:fleet_id]
+      define :get_poll, action: :in_fleet, args: [:fleet_id, :id], not_found_error?: false
+      define :end_poll, action: :end, args: [:fleet_id]
 
-    resource Keyfleet.Polls.Seat do
-      define :join, action: :join
-      define :leave, action: :leave, args: [:fleet_id]
-
-      define :get_seat,
-        action: :of_key,
-        args: [:session_id, :token_id],
-        not_found_error?: false
-
-      define :seats_in_session, action: :in_session, args: [:session_id]
-    end
-
-    resource Keyfleet.Polls.Round do
-      define :open_round, action: :open
-      define :close_round, action: :close
-      define :get_round_by_id, action: :by_id, args: [:id], not_found_error?: false
-
-      define :get_round,
-        action: :in_session,
-        args: [:session_id, :number],
+      define :last_started,
+        action: :last_started,
+        args: [:fleet_id, :key],
         not_found_error?: false
     end
 
     resource Keyfleet.Polls.Vote do
       define :cast_vote, action: :cast
-      define :votes_in_round, action: :in_round, args: [:round_id]
-
-      define :get_vote,
-        action: :of_key,
-        args: [:round_id, :token_id],
-        not_found_error?: false
-    end
-
-    resource Keyfleet.Polls.Event do
-      define :append_event, action: :append
-      define :events_after, action: :after, args: [:fleet_id, :session_id, :after_seq]
+      define :votes_in_poll, action: :in_poll, args: [:fleet_id, :poll_id]
+      define :my_vote, action: :mine, args: [:fleet_id, :poll_id], not_found_error?: false
     end
   end
 
-  @doc "Where a session announces each line written to its log, as `\"poll_event\"`."
-  def topic(session_id), do: "poll:#{session_id}"
+  @doc "Where a poll announces each vote, and its ending, as `\"poll_changed\"`."
+  def topic(poll_id), do: "poll:#{poll_id}"
+
+  @doc "Where a fleet announces a poll started or ended, as `\"polls_changed\"`."
+  def fleet_topic(fleet_id), do: "polls:#{fleet_id}"
 
   @doc """
-  The Key an agent votes as in the fleet: the Key its own wallet holds, or
-  else the Key it holds an active shard of (`Keyfleet.Keys.identity/2`).
-
-  An agent writing for the person it is paired with has no Key of its own
-  here, and neither does anyone signed in on the site: nil.
+  The Key `actor` takes part as in the fleet's polls, as `%{key: token_id,
+  wallet: wallet}`, or nil: by `Keyfleet.Keys.identity/2`, so a person is the
+  highest-ranked Key their wallets hold, an agent the Key its own wallet holds
+  or holds a shard of, and an agent paired with a person here is that person's
+  Key. `wallet` is the one that acted: the agent's own, or the person's wallet
+  holding the Key.
   """
-  def key_of(%Agent{} = actor, fleet_id) do
+  def voter(actor, fleet_id) do
     case Keyfleet.Keys.identity(actor, fleet_id) do
-      %{for_person: true} -> nil
-      %{token_id: token_id} -> token_id
-      nil -> nil
+      nil ->
+        nil
+
+      %{token_id: token_id, wallet: wallet} ->
+        %{key: token_id, wallet: acting_wallet(actor, wallet)}
     end
   end
 
-  def key_of(_actor, _fleet_id), do: nil
+  defp acting_wallet(%Agent{wallet_address: wallet}, _key_wallet), do: wallet
+  defp acting_wallet(_person, key_wallet), do: key_wallet
 
-  @doc "Whether the session still takes seats and rounds: not ended, and not past its time."
-  def open?(session),
-    do: is_nil(session.ended_at) and DateTime.after?(session.expires_at, DateTime.utc_now())
+  @doc "Whether the poll still takes votes: not ended, and not past its time."
+  def open?(poll, now \\ DateTime.utc_now()),
+    do: is_nil(poll.ended_at) and DateTime.after?(poll.closes_at, now)
+
+  @doc "When the poll closed or will close: when it was ended, or else its chosen time."
+  def closed_at(%{ended_at: nil, closes_at: closes_at}), do: closes_at
+  def closed_at(%{ended_at: ended_at}), do: ended_at
 end

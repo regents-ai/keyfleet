@@ -1,15 +1,13 @@
 defmodule Keyfleet.Polls.Checks.Standing do
   @moduledoc """
-  Who may do what in a fleet's poll sessions, by the Key the agent votes as
-  (`Keyfleet.Polls.key_of/2`):
+  Who may do what in a fleet's polls, by the Key the actor takes part as
+  (`Keyfleet.Polls.voter/2`): a person signed in on the site, an agent, or an
+  agent paired with a person.
 
-    * `role: :member`: any agent holding one of the fleet's Keys, or an active
-      shard of one, lists the open sessions, opens one, joins one and votes.
-    * `role: :seated`: an agent whose Key has a seat in the session reads it
-      and waits on it.
-    * `role: :own_seat`: only an agent of the seat's own Key gives it up.
-    * `role: :delegate`: only an agent of the delegate's Key opens rounds and
-      ends the session.
+    * `role: :member`: anyone holding one of the fleet's Keys, or an active
+      shard of one, starts polls, votes, and reads polls' notes and, once a
+      poll closes, each Key's vote.
+    * `role: :starter`: only the Key that started a poll ends it early.
 
   Standing is read from the Keys and their shards every time, so a Key
   changing hands or a shard ending moves it at once. While the fleet's Key
@@ -17,7 +15,6 @@ defmodule Keyfleet.Polls.Checks.Standing do
   """
   use Ash.Policy.SimpleCheck
 
-  alias Keyfleet.Actors.System
   alias Keyfleet.Polls
 
   @impl true
@@ -27,8 +24,8 @@ defmodule Keyfleet.Polls.Checks.Standing do
   def match?(actor, %{subject: subject}, opts) do
     fleet_id = value(subject, :fleet_id)
 
-    with true <- Keyfleet.Chain.fresh?(fleet_id),
-         key when is_integer(key) <- Polls.key_of(actor, fleet_id) do
+    with true <- is_binary(fleet_id) and Keyfleet.Chain.fresh?(fleet_id),
+         %{key: key} <- Polls.voter(actor, fleet_id) do
       standing?(Keyword.fetch!(opts, :role), key, fleet_id, subject)
     else
       _no_standing -> false
@@ -37,33 +34,12 @@ defmodule Keyfleet.Polls.Checks.Standing do
 
   defp standing?(:member, _key, _fleet_id, _subject), do: true
 
-  defp standing?(:seated, key, fleet_id, subject) do
-    session_id = value(subject, :session_id) || value(subject, :id)
-
-    in_fleet?(session_id, fleet_id) and
-      Polls.get_seat!(session_id, key, actor: %System{}) != nil
-  end
-
-  defp standing?(:own_seat, key, fleet_id, %Ash.Changeset{
-         data: %{token_id: key, session_id: session_id}
+  defp standing?(:starter, key, fleet_id, %Ash.Changeset{
+         data: %{started_by_key: key, fleet_id: fleet_id}
        }),
-       do: in_fleet?(session_id, fleet_id)
+       do: true
 
-  defp standing?(:own_seat, _key, _fleet_id, _subject), do: false
-
-  defp standing?(:delegate, key, fleet_id, subject) do
-    case session(value(subject, :session_id) || value(subject, :id), fleet_id) do
-      %{delegate_key: ^key} -> true
-      _other -> false
-    end
-  end
-
-  defp in_fleet?(session_id, fleet_id), do: session(session_id, fleet_id) != nil
-
-  defp session(session_id, fleet_id) when is_binary(session_id),
-    do: Polls.get_session!(fleet_id, session_id, actor: %System{})
-
-  defp session(_session_id, _fleet_id), do: nil
+  defp standing?(:starter, _key, _fleet_id, _subject), do: false
 
   defp value(%Ash.Changeset{} = changeset, name),
     do: Ash.Changeset.get_argument_or_attribute(changeset, name)

@@ -145,16 +145,13 @@ config :keyfleet, Oban,
   # Drawing revealed Keys' cards waits on the key-art service, one at a time.
   # Reading the fleets from the chain waits on a node, so it has its own queue:
   # one long-lived history job per fleet and its minutely balance readings.
-  # Fast polls close each round at its deadline in a queue of their own, so
-  # no other work holds a close up.
   queues: [
     default: 5,
     notebook_hubs: 1,
     code_store: 2,
     avatars: 2,
     key_art: 1,
-    chain: 10,
-    polls: 10
+    chain: 10
   ],
   cron: [
     crontab: [

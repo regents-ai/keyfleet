@@ -34,23 +34,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   @code_password_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/password\z"
 
-  # A poll session is named by its id as the API answers it, and a round by
-  # its number in the session.
-  @session ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+  # A poll is named by its id as the API answers it.
+  @poll ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
   @polls_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls\z"
-  @poll_open_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/open\z"
-  @poll_seat_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@session}/(join|leave|end)\z"
-  @poll_wait_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@session}/wait\z"
-  @round_open_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@session}/rounds/open\z"
-  @vote_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@session}/rounds/#{@token}/vote\z"
-  @empty_body_paths [@mutes_path, @mute_path, @code_password_path]
-  @poll_post_paths [
-    @poll_open_path,
-    @poll_seat_path,
-    @poll_wait_path,
-    @round_open_path,
-    @vote_path
-  ]
+  @poll_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@poll}\z"
+  @poll_start_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/start\z"
+  @poll_vote_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@poll}/vote\z"
+  @poll_end_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@poll}/end\z"
+  @empty_body_paths [@mutes_path, @mute_path, @code_password_path, @poll_end_path]
+  @poll_post_paths [@poll_start_path, @poll_vote_path, @poll_end_path]
 
   # Direct messages: a Key's conversations and blocks, what it does in one
   # conversation with another Key, and catching up on the agent's Keys.
@@ -74,10 +66,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@key_read_path, {[], ~w(after_seq limit)}},
     {@send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
     {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
-    {@poll_open_path, {~w(name mode minutes), []}},
-    {@poll_wait_path, {~w(after_seq), []}},
-    {@round_open_path, {~w(decision_ref observation actions deadline_seconds), []}},
-    {@vote_path, {~w(action), ~w(confidence reason)}}
+    {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
+    {@poll_vote_path, {~w(choice), ~w(reason)}}
   ]
 
   @editable ~w(name declared_harness proficiencies interests service_ideas current_status)
@@ -96,10 +86,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # A proposal holds its text, up to 4,000 bytes, and a launch's fields
   # beside it, escaped the same way.
   @propose_max_body 4_000 * 12 + 8 * 1024
-  # A round holds what the agents see, at most 8,192 bytes of JSON, and up to
-  # 32 moves; doubled by escaping, it still fits the broker's envelope.
-  @round_max_body 24 * 1024
-  @poll_modes ~w(poll delegate)
+  # A poll holds its question (200 characters), up to 10 choices of 100 and
+  # notes of up to 2,000, each character escaped the way a post's can be; it
+  # fits the broker's envelope the same way. A vote's reason is up to 500.
+  @poll_start_max_body (200 + 10 * 100 + 2_000) * 12 + 2 * 1024
+  @poll_vote_max_body 500 * 12 + 2 * 1024
   # What a proposal's body may name: what every proposal has, then the
   # fields of its kind, each a string as the proposals page's form sends it.
   @propose_required ~w(kind key text)
@@ -369,7 +360,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp supported?("GET", path),
     do:
-      Enum.any?([@rooms_path, @mutes_path, @polls_path, @dm_inbox_path], &Regex.match?(&1, path))
+      Enum.any?(
+        [@rooms_path, @mutes_path, @polls_path, @poll_path, @dm_inbox_path],
+        &Regex.match?(&1, path)
+      )
 
   defp supported?("POST", path) do
     Enum.any?(
@@ -403,10 +397,18 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       Regex.match?(@send_path, path) or Regex.match?(@key_send_path, path) -> @send_max_body
       dm_op(path) == "send" -> @send_max_body
       Regex.match?(@sync_path, path) -> @sync_max_body
-      Regex.match?(@round_open_path, path) -> @round_max_body
+      limit = poll_body_limit(path) -> limit
       chain_op(path) == "proposals/create" -> @propose_max_body
       graph_op(path) in ~w(create patch link unlink archive) -> @graph_write_max_body
       true -> 4096
+    end
+  end
+
+  defp poll_body_limit(path) do
+    cond do
+      Regex.match?(@poll_start_path, path) -> @poll_start_max_body
+      Regex.match?(@poll_vote_path, path) -> @poll_vote_max_body
+      true -> nil
     end
   end
 
@@ -661,67 +663,39 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_proposal_read_body(_params), do: :invalid
 
-  defp poll_path?(path), do: Enum.any?([@polls_path | @poll_post_paths], &Regex.match?(&1, path))
+  defp poll_path?(path),
+    do: Enum.any?([@polls_path, @poll_path | @poll_post_paths], &Regex.match?(&1, path))
 
-  # Listing sessions, taking or giving up a seat and ending a session say
-  # nothing more than their path.
+  # Listing polls and reading one say nothing more than their path.
   defp check_poll_body(path, params) do
     cond do
-      Regex.match?(@poll_open_path, path) -> check_poll_open_body(params)
-      Regex.match?(@poll_wait_path, path) -> check_poll_wait_body(params)
-      Regex.match?(@round_open_path, path) -> check_round_body(params)
-      Regex.match?(@vote_path, path) -> check_vote_body(params)
+      Regex.match?(@poll_start_path, path) -> check_poll_start_body(params)
+      Regex.match?(@poll_vote_path, path) -> check_vote_body(params)
       true -> admit(params == %{})
     end
   end
 
-  # A session names what it is about, how it decides and how many minutes it
-  # stays open.
-  defp check_poll_open_body(%{"name" => name, "mode" => mode, "minutes" => minutes} = params)
-       when map_size(params) == 3 and is_binary(name) and mode in @poll_modes and
-              is_integer(minutes),
-       do: in_range(minutes in 5..1440)
-
-  defp check_poll_open_body(_params), do: :invalid
-
-  # Waiting names the last place in the session's log the agent has read.
-  defp check_poll_wait_body(%{"after_seq" => after_seq} = params)
-       when map_size(params) == 1 and is_integer(after_seq),
-       do: in_range(after_seq in 0..@max_seq)
-
-  defp check_poll_wait_body(_params), do: :invalid
-
-  # A round names the outside decision it is for, what the agents see, the
-  # moves they may choose from and how many seconds they have.
-  defp check_round_body(
-         %{
-           "decision_ref" => ref,
-           "observation" => observation,
-           "actions" => actions,
-           "deadline_seconds" => seconds
-         } = params
+  # A poll asks one question, offers its choices, stays open for the minutes
+  # it names and may carry notes for the fleet's Key holders.
+  defp check_poll_start_body(
+         %{"question" => question, "choices" => choices, "minutes" => minutes} = params
        )
-       when map_size(params) == 4 and is_binary(ref) and is_map(observation) and
-              is_list(actions) and is_integer(seconds) do
-    if Enum.all?(actions, &move?/1), do: in_range(seconds in 1..600), else: :invalid
-  end
-
-  defp check_round_body(_params), do: :invalid
-
-  defp move?(%{"id" => id, "label" => label} = move),
-    do: map_size(move) == 2 and is_binary(id) and is_binary(label)
-
-  defp move?(_move), do: false
-
-  # A vote names the move, and may say how sure the agent is and why.
-  defp check_vote_body(%{"action" => action} = params) when is_binary(action) do
-    confidence = Map.get(params, "confidence", 0)
-
-    if Enum.all?(Map.keys(params), &(&1 in ~w(action confidence reason))) and
-         is_number(confidence) and is_binary(Map.get(params, "reason", "")),
-       do: in_range(confidence >= 0 and confidence <= 1),
+       when is_binary(question) and is_list(choices) and is_integer(minutes) do
+    if Enum.all?(Map.keys(params), &(&1 in ~w(question choices minutes notes))) and
+         Enum.all?(choices, &is_binary/1) and is_binary(Map.get(params, "notes", "")),
+       do: in_range(minutes in 1..60),
        else: :invalid
   end
+
+  defp check_poll_start_body(_params), do: :invalid
+
+  # A vote names the choice, and may say why.
+  defp check_vote_body(%{"choice" => choice} = params) when is_binary(choice),
+    do:
+      admit(
+        Enum.all?(Map.keys(params), &(&1 in ~w(choice reason))) and
+          is_binary(Map.get(params, "reason", ""))
+      )
 
   defp check_vote_body(_params), do: :invalid
 
