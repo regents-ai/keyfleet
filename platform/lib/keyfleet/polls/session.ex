@@ -57,6 +57,12 @@ defmodule Keyfleet.Polls.Session do
       change Keyfleet.Polls.Changes.OpenSession
     end
 
+    # Only for filters that follow a round or seat to its session.
+    read :read do
+      primary? true
+      public? false
+    end
+
     # The fleet's sessions still taking seats and rounds, oldest first.
     read :open_in_fleet do
       argument :fleet_id, :string, allow_nil?: false
@@ -105,7 +111,7 @@ defmodule Keyfleet.Polls.Session do
       authorize_if {Keyfleet.Polls.Checks.Standing, role: :member}
     end
 
-    policy action([:listed, :in_fleet]) do
+    policy action([:read, :listed, :in_fleet]) do
       authorize_if always()
     end
 

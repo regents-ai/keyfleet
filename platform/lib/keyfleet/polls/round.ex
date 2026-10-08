@@ -119,7 +119,7 @@ defmodule Keyfleet.Polls.Round do
       argument :fleet_id, :string, allow_nil?: false
       argument :session_id, :uuid, allow_nil?: false
 
-      filter expr(session_id == ^arg(:session_id))
+      filter expr(session_id == ^arg(:session_id) and session.fleet_id == ^arg(:fleet_id))
       prepare build(sort: [number: :desc], limit: 50, load: [:totals])
     end
 
