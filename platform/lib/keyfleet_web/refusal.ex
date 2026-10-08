@@ -92,7 +92,7 @@ defmodule KeyfleetWeb.Refusal do
       {"This fleet has no room with this address.",
        "GET /api/v1/agent/fleets/FLEET_ID/rooms lists its rooms."},
     "key_unknown" =>
-      {"This fleet hasn't issued this Key, or its sale hasn't been seen yet.",
+      {"This Key's sale hasn't been seen yet.",
        "A Key sold moments ago is known shortly. Try again then."},
     "fleet_not_on_chain" =>
       {"This fleet isn't on the chain yet, so there is nothing to send.",
@@ -260,6 +260,28 @@ defmodule KeyfleetWeb.Refusal do
   def body(code) do
     {message, hint} = Map.fetch!(@refusals, code)
     %{error: %{code: code, message: message, hint: hint}}
+  end
+
+  @doc """
+  Answers 404 `key_unknown` for a Key the fleet hasn't recorded. A number
+  beyond the fleet's Keys sold hasn't been sold yet, and the answer says so; a
+  number within them was sold moments ago and is known once its sale is read.
+  """
+  def key_unknown(conn, fleet_id, token_id) do
+    {:ok, sold} = Keyfleet.Chain.minted(fleet_id)
+
+    body =
+      if token_id in 1..sold//1,
+        do: body("key_unknown"),
+        else:
+          body("key_unknown")
+          |> put_in([:error, :message], "Key #{token_id} has not been sold yet.")
+          |> put_in(
+            [:error, :hint],
+            "Only a sold Key can be named. GET /api/v1/fleets/#{fleet_id} says how many Keys are sold."
+          )
+
+    conn |> Plug.Conn.put_status(404) |> Phoenix.Controller.json(body)
   end
 
   @doc """

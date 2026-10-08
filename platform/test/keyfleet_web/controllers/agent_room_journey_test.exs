@@ -574,15 +574,24 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     {:ok, minted} = Keyfleet.Chain.minted("fibonacci_syndicate")
     unsold = minted + 1
 
+    # A Key beyond the fleet's Keys sold is named as not sold yet.
+    not_sold = %{
+      "error" => %{
+        "code" => "key_unknown",
+        "message" => "Key #{unsold} has not been sold yet.",
+        "hint" =>
+          "Only a sold Key can be named. GET /api/v1/fleets/fibonacci_syndicate says how many Keys are sold."
+      }
+    }
+
     for {fleet, token_id, action, body, error} <- [
-          {"fibonacci_syndicate", unsold, "read", "{}", "key_unknown"},
-          {"fibonacci_syndicate", unsold, "send", send_body("Anyone there?", "k-0"),
-           "key_unknown"},
-          {"hull_survey", 1, "read", "{}", "fleet_unknown"},
-          {"hull_survey", 1, "send", send_body("Anyone there?", "k-0"), "fleet_unknown"}
+          {"fibonacci_syndicate", unsold, "read", "{}", not_sold},
+          {"fibonacci_syndicate", unsold, "send", send_body("Anyone there?", "k-0"), not_sold},
+          {"hull_survey", 1, "read", "{}", refused("fleet_unknown")},
+          {"hull_survey", 1, "send", send_body("Anyone there?", "k-0"), refused("fleet_unknown")}
         ] do
       refused = key_thread(c, token_id, action, body, fleet)
-      assert {refused.status, refused.body} == {404, refused(error)}, "#{fleet} #{token_id}"
+      assert {refused.status, refused.body} == {404, error}, "#{fleet} #{token_id}"
       assert documented(refused, if(action == "read", do: @key_read, else: @key_send)) == []
     end
 

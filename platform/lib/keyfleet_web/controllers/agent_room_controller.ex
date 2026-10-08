@@ -288,8 +288,8 @@ defmodule KeyfleetWeb.AgentRoomController do
       Enum.any?(errors, &match?(%RoomUnknownError{}, &1)) ->
         not_found(conn)
 
-      Enum.any?(errors, &match?(%KeyUnknownError{}, &1)) ->
-        Refusal.json(conn, 404, "key_unknown")
+      unknown = Enum.find(errors, &match?(%KeyUnknownError{}, &1)) ->
+        Refusal.key_unknown(conn, unknown.fleet_id, unknown.token_id)
 
       Enum.any?(errors, &match?(%NoAgentProfileError{}, &1)) ->
         Refusal.json(conn, 404, "profile_not_found")
