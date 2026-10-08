@@ -470,7 +470,9 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   describe "a Key's random draw" do
     test "asked again by anyone while refused; once accepted, and once drawn, the button says why it's off",
          %{url: url, lab: lab} do
-      coordinator = address!(url, lab.keys, "VRF_COORDINATOR()")
+      # randomness() is (coordinator, subscription id, gas lane); the coordinator is its first word.
+      "0x" <> randomness = view!(url, lab.keys, "randomness()", [])
+      coordinator = "0x" <> String.slice(randomness, 24, 40)
 
       # The lab sold Keys 1 and 2 while the coordinator refused every request.
       built = build!(:reveal, @third, token_id: 1)
