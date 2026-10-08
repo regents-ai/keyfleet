@@ -43,6 +43,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @poll_wait_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@session}/wait\z"
   @round_open_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@session}/rounds/open\z"
   @vote_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@session}/rounds/#{@token}/vote\z"
+  @empty_body_paths [@mutes_path, @mute_path, @code_password_path]
   @poll_post_paths [
     @poll_open_path,
     @poll_seat_path,
@@ -55,8 +56,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @graph_ops ~w(get changes create patch link unlink archive)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
 
-  # The fields each room, sync and proposal read body holds: the ones it must
-  # name, then the ones it may add.
+  # The fields each room, sync, proposal read and poll body holds: the ones it
+  # must name, then the ones it may add.
   @body_fields [
     {@sync_path, {~w(rooms graph proposals run), []}},
     {@proposal_read_path, {~w(number votes_after_seq), []}},
@@ -65,7 +66,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@read_path, {[], ~w(after_seq limit)}},
     {@key_read_path, {[], ~w(after_seq limit)}},
     {@send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
-    {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}}
+    {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
+    {@poll_open_path, {~w(name mode minutes), []}},
+    {@poll_wait_path, {~w(after_seq), []}},
+    {@round_open_path, {~w(decision_ref observation actions deadline_seconds), []}},
+    {@vote_path, {~w(action), ~w(confidence reason)}}
   ]
 
   @editable ~w(name declared_harness proficiencies interests service_ideas current_status)
@@ -409,9 +414,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_body(path, params) do
     cond do
-      Regex.match?(@mutes_path, path) -> admit(params == %{})
-      Regex.match?(@mute_path, path) -> admit(params == %{})
-      Regex.match?(@code_password_path, path) -> admit(params == %{})
+      Enum.any?(@empty_body_paths, &Regex.match?(&1, path)) -> admit(params == %{})
       Regex.match?(@sync_path, path) -> check_sync_body(params)
       Regex.match?(@proposal_read_path, path) -> check_proposal_read_body(params)
       op = chain_op(path) -> check_chain_body(op, params)
