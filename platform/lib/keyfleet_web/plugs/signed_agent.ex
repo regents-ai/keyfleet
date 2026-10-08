@@ -361,30 +361,33 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
-  # A body of the wrong shape, or one that names the same room twice, is told
-  # the fields its operation takes; one of the right shape whose numbers fall
-  # outside what the operation holds is told so.
-  defp check_body(@join_path, %{"name" => name, "declared_harness" => harness} = params),
+  @doc """
+  Whether a signed request's decoded body fits the operation at `path`: `:ok`,
+  `:invalid` for the wrong shape or a room named twice, which is told the
+  fields its operation takes, or `:out_of_range` for the right shape with
+  numbers outside what the operation holds.
+  """
+  def check_body(@join_path, %{"name" => name, "declared_harness" => harness} = params),
     do: admit(map_size(params) == 2 and is_binary(name) and is_binary(harness))
 
-  defp check_body(@update_path, params) when is_map(params),
+  def check_body(@update_path, params) when is_map(params),
     do: admit(map_size(params) > 0 and Enum.all?(Map.keys(params), &(&1 in @editable)))
 
-  defp check_body(@shards_path, params), do: admit(params == %{})
+  def check_body(@shards_path, params), do: admit(params == %{})
 
-  defp check_body(
-         @avatar_start_path,
-         %{"sha256" => sha256, "byte_size" => size, "content_type" => type} = params
-       ),
-       do:
-         admit(
-           map_size(params) == 3 and is_binary(sha256) and is_integer(size) and is_binary(type)
-         )
+  def check_body(
+        @avatar_start_path,
+        %{"sha256" => sha256, "byte_size" => size, "content_type" => type} = params
+      ),
+      do:
+        admit(
+          map_size(params) == 3 and is_binary(sha256) and is_integer(size) and is_binary(type)
+        )
 
-  defp check_body(@avatar_start_path, _params), do: :invalid
-  defp check_body(@avatar_remove_path, params), do: admit(params == %{})
+  def check_body(@avatar_start_path, _params), do: :invalid
+  def check_body(@avatar_remove_path, params), do: admit(params == %{})
 
-  defp check_body(path, params) do
+  def check_body(path, params) do
     cond do
       Regex.match?(@mutes_path, path) -> admit(params == %{})
       Regex.match?(@mute_path, path) -> admit(params == %{})
@@ -590,9 +593,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp answers_a_post?(nil), do: true
   defp answers_a_post?(value), do: is_binary(value) and Regex.match?(@post_id, value)
 
-  # The fields each operation's body holds, which a body that doesn't fit is
-  # told: the ones it must name, then the ones it may add.
-  defp takes(path) do
+  @doc """
+  What a body that doesn't fit the operation at `path` is told: the fields it
+  must name, then the ones it may add.
+  """
+  def takes(path) do
     case fields(path) do
       {[], []} ->
         "This operation takes an empty JSON object, {}."

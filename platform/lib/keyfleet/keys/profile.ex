@@ -33,7 +33,9 @@ defmodule Keyfleet.Keys.Profile do
 
   @doc """
   Key `token_id` of the fleet as `viewer` sees it, `viewer` being the person
-  signed in or `nil`. `issued?` is false for a key not yet sold.
+  signed in or `nil`. `issued?` is false for a key not yet sold. An issued
+  key's `thread` holds every post, and `muted` the keys the viewer has muted,
+  whose posts the page leaves out.
   """
   def read(fleet_id, token_id, viewer) do
     case Keys.current_key!(fleet_id, token_id) do
@@ -92,6 +94,10 @@ defmodule Keyfleet.Keys.Profile do
     Rooms.read_key_thread!(fleet_id, token_id, %{after_seq: after_seq, limit: @thread_page})
   end
 
+  @doc "The latest posts in the key's thread up to place `last_seq`, oldest first."
+  def latest_thread(fleet_id, token_id, last_seq),
+    do: thread_after(fleet_id, token_id, max(last_seq - @thread_page, 0))
+
   @doc """
   The votes the key has been used in, and the votes its holder has cast in
   the fleet with all their keys and on how many proposals.
@@ -127,7 +133,7 @@ defmodule Keyfleet.Keys.Profile do
   defp issued(fleet_id, token_id, current, viewer) do
     holder = current.owner_wallet
     activity = activity(fleet_id, token_id, holder)
-    thread = thread_after(fleet_id, token_id, max(activity.messages - @thread_page, 0))
+    thread = latest_thread(fleet_id, token_id, activity.messages)
 
     held =
       Keys.keys_held_in_fleet!(fleet_id, [holder], query: [limit: @listed])
@@ -149,6 +155,7 @@ defmodule Keyfleet.Keys.Profile do
       shards: shards(fleet_id, token_id),
       thread: thread,
       last_seq: last_seq(thread, 0),
+      muted: Rooms.muted_keys!(fleet_id, viewer),
       holder_keys: held,
       holder_key_count:
         count(KeyAttachment, :held_in_fleet, %{fleet_id: fleet_id, owner_wallets: [holder]}),

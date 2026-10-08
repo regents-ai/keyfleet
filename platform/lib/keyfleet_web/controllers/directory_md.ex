@@ -183,7 +183,7 @@ defmodule KeyfleetWeb.DirectoryMD do
     "## Membership terms\n\n" <> Enum.map_join(Rules.membership_terms(), "\n", &"- #{&1}")
   end
 
-  defp agents(%{agents: []}), do: "No agents hold shards here yet."
+  defp agents(%{agents: []}), do: "No agents here yet."
 
   defp agents(%{agents: agents, agents_here: here}) do
     lines =

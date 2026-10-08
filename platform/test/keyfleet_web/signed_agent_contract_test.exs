@@ -15,6 +15,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   alias Keyfleet.Keys
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Rooms
+  alias KeyfleetWeb.Plugs.SignedAgent
 
   @contract Path.expand("../../contracts/api-contract.openapiv3.yaml", __DIR__)
   # A field the signed-request check admits has to be spelled in its source.
@@ -207,16 +208,15 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     on_exit(fn -> Application.put_env(:keyfleet, :siwa_broker_url, old) end)
     budget = Application.fetch_env!(:keyfleet, :api_rate_limit)
     on_exit(fn -> Application.put_env(:keyfleet, :api_rate_limit, budget) end)
-    # The sweep below signs tens of thousands of requests, so the broker keeps
-    # the requests it has seen in a table rather than the library's default store.
-    seen = :ets.new(:seen_requests, [:public])
-    broker = server(:broker, &broker(&1, &2, secret, seen))
+    broker = server(:broker, &broker(&1, &2, secret))
     Application.put_env(:keyfleet, :siwa_broker_url, broker)
     app = server(:product, &KeyfleetWeb.Endpoint.call(&1, KeyfleetWeb.Endpoint.init(&2)))
     %{app: app, signer: signer, secret: secret}
   end
 
-  test "each signed route admits exactly the body fields its contract documents", c do
+  # The body check is asked directly: every route answers a body that doesn't
+  # fit with the same refusal, which the last test sends over HTTP.
+  test "each signed route admits exactly the body fields its contract documents" do
     contract = YamlElixir.read_from_file!(@contract)
     words = candidate_fields(contract)
 
@@ -229,43 +229,31 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       assert Enum.sort(Map.keys(sample)) == Enum.sort(documented), where
       minimal = Map.take(sample, required)
       fits? = map_size(minimal) >= Map.get(schema, "minProperties", 0)
-      assert admitted?(c, contract, method, template, at, minimal) == fits?, where
+      assert admitted?(contract, method, template, at, minimal) == fits?, where
 
       for field <- documented -- required do
-        assert admitted?(
-                 c,
-                 contract,
-                 method,
-                 template,
-                 at,
-                 Map.put(minimal, field, sample[field])
-               ),
+        assert admitted?(contract, method, template, at, Map.put(minimal, field, sample[field])),
                "#{where} refuses its documented #{field}"
       end
 
       for field <- required do
-        refute admitted?(c, contract, method, template, at, Map.delete(minimal, field)),
+        refute admitted?(contract, method, template, at, Map.delete(minimal, field)),
                "#{where} admits a body without its required #{field}"
       end
 
       admitted =
-        (words -- documented)
-        |> Enum.flat_map(fn word -> Enum.map([1, "x", %{"x" => 1}, ["x"]], &{word, &1}) end)
-        |> Task.async_stream(
-          fn {word, value} ->
-            {word, admitted?(c, contract, method, template, at, Map.put(minimal, word, value))}
-          end,
-          max_concurrency: 16,
-          timeout: 30_000
-        )
-        |> Enum.filter(&match?({:ok, {_word, true}}, &1))
-        |> Enum.map(fn {:ok, {word, true}} -> word end)
-        |> Enum.uniq()
+        for word <- words -- documented,
+            value <- [1, "x", %{"x" => 1}, ["x"]],
+            admitted?(contract, method, template, at, Map.put(minimal, word, value)),
+            uniq: true,
+            do: word
 
       assert admitted == [], "#{where} admits undocumented #{inspect(admitted)}"
 
       if at == [] do
-        assert told_fields(c, method, template, Map.put(minimal, "unlisted", 1)) ==
+        refute admitted?(contract, method, template, at, Map.put(minimal, "unlisted", 1))
+
+        assert told_fields(template) ==
                  Enum.sort(documented),
                "#{where} names other fields when it refuses a body"
       end
@@ -294,18 +282,18 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert joining -- Enum.map(ensure.accept, &to_string/1) == []
   end
 
-  test "a reply names its post only by its id as the API gives it", c do
+  test "a reply names its post only by its id as the API gives it" do
     contract = YamlElixir.read_from_file!(@contract)
     id = Ecto.UUID.generate()
     reply = &%{"body" => "Seen", "idempotency_key" => "r-1", "reply_to_id" => &1}
 
-    assert admitted?(c, contract, "POST", @send, [], reply.(id))
+    assert admitted?(contract, "POST", @send, [], reply.(id))
     assert ContractSchema.errors(reply.(id), "RoomSendRequest") == []
 
     # The same post in capitals, without its hyphens, in braces, and as any
     # sixteen bytes, which is how a post id is stored.
     for other <- [String.upcase(id), String.replace(id, "-", ""), "{#{id}}", "abcdefghijklmnop"] do
-      refute admitted?(c, contract, "POST", @send, [], reply.(other)), inspect(other)
+      refute admitted?(contract, "POST", @send, [], reply.(other)), inspect(other)
       assert ContractSchema.errors(reply.(other), "RoomSendRequest") != [], inspect(other)
     end
   end
@@ -594,7 +582,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     for {method, template} <- routes() do
       answer_raw(c, method, template, "{}", 401)
       answer_raw(c, method, template, String.duplicate(" ", body_cap(template) + 1), 413)
-      answer(c, c.signer, method, template, @address, %{"not_a_field" => 1}, 422)
+      misfit = answer(c, c.signer, method, template, @address, %{"not_a_field" => 1}, 422)
+      assert misfit.body["error"]["hint"] == SignedAgent.takes(fill(template, @address))
     end
 
     Application.put_env(:keyfleet, :siwa_broker_url, nil)
@@ -861,29 +850,20 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp empty_or_minimal(@carry_out), do: %{"number" => 1}
   defp empty_or_minimal(_template), do: %{}
 
-  # The signed-request check refuses a body it does not admit before anything
-  # else looks at it, with the one answer every refusal shares.
-  defp admitted?(c, contract, method, template, at, object) do
+  # A body the check finds the wrong shape is refused before anything else
+  # looks at it; one of the right shape goes on, even with numbers out of range.
+  defp admitted?(contract, method, template, at, object) do
     {_method, _template, _at, top} = Enum.find(@bodies, &match?({^method, ^template, [], _}, &1))
     top = Map.take(top, request_schema(contract, method, template, [])["required"] || [])
     path = for step <- at, not match?({:one_of, _}, step), do: access(step)
     body = if at == [], do: object, else: put_in(top, path, object)
-    response = send_signed(c, c.signer, method, fill(template, @address), Jason.encode!(body))
-
-    case {response.status, response.body} do
-      {422, %{"error" => %{"code" => "invalid_request"}}} -> false
-      {401, other} -> flunk("#{method} #{template} refused with #{inspect(other)}")
-      _admitted -> true
-    end
+    SignedAgent.check_body(fill(template, @address), body) != :invalid
   end
 
   # The fields a refused body is told its operation takes.
-  defp told_fields(c, method, template, body) do
-    response = send_signed(c, c.signer, method, fill(template, @address), Jason.encode!(body))
-    assert %{"error" => %{"code" => "invalid_request", "hint" => hint}} = response.body
-
+  defp told_fields(template) do
     ~r/: ([a-z0-9_, ]+)[;.]/
-    |> Regex.scan(hint, capture: :all_but_first)
+    |> Regex.scan(SignedAgent.takes(fill(template, @address)), capture: :all_but_first)
     |> Enum.flat_map(&String.split(hd(&1), ", "))
     |> Enum.sort()
   end
@@ -1013,15 +993,14 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     )
   end
 
-  defp broker(conn, _opts, secret, seen) do
+  defp broker(conn, _opts, secret) do
     {:ok, raw, conn} = read_body(conn)
     payload = Jason.decode!(raw)
 
     case Siwa.verify_authenticated_request(payload,
            secret: secret,
            audience: "keyfleet",
-           wallet_audiences: ["keyfleet"],
-           replay_store: &first_time(seen, &1, &2)
+           wallet_audiences: ["keyfleet"]
          ) do
       {:ok, %{claims: claims, covered_components: covered}} ->
         reply(conn, 200, %{
@@ -1055,10 +1034,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {:error, _reason} ->
         reply(conn, 401, %{error: %{code: "invalid_proof"}})
     end
-  end
-
-  defp first_time(seen, key, _expires) do
-    if :ets.insert_new(seen, {key}), do: :ok, else: {:error, :replayed_request}
   end
 
   defp server(id, plug) do

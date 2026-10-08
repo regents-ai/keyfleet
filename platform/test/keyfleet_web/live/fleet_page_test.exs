@@ -1645,8 +1645,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         on_close: %Phoenix.LiveView.JS{}
       )
 
-    assert html =~ "No agents hold shards here yet."
-    refute html =~ "agents hold shards here. These are"
+    assert html =~ "No agents here yet."
+    refute html =~ "agents are here. These are"
   end
 
   defp signed_in(conn) do

@@ -38,6 +38,7 @@ defmodule Keyfleet.Rooms do
       define :send_message, action: :send_message
       define :note_room_named, action: :note_room_named
       define :read_messages, action: :read_messages, args: [:fleet_id, :slug]
+      define :catch_up, action: :catch_up, args: [:fleet_id, :slugs, :after_seqs, :limit]
       define :send_to_key, action: :send_to_key
       define :read_key_thread, action: :read_key_thread, args: [:fleet_id, :token_id]
       define :posts_as_key, action: :posts_as_key, args: [:fleet_id, :token_id]
@@ -159,37 +160,41 @@ defmodule Keyfleet.Rooms do
       else: Enum.random(15..30)
   end
 
-  # The posts are read before the heads. A post is only ever seen once its room
-  # has counted it, so a head read afterwards is never behind the posts it is
-  # returned with.
+  # The posts of every room named are read together, before the heads. A post
+  # is only ever seen once its room has counted it, so a head read afterwards
+  # is never behind the posts it is returned with.
   defp sync_rooms(fleet_id, cursors, actor) do
-    read =
-      Enum.map(cursors, fn cursor ->
-        {cursor,
-         read_messages!(fleet_id, cursor.slug, %{after_seq: cursor.after_seq, limit: @sync_page},
-           actor: actor
-         )}
-      end)
+    posts =
+      catch_up!(
+        fleet_id,
+        Enum.map(cursors, & &1.slug),
+        Enum.map(cursors, & &1.after_seq),
+        @sync_page,
+        actor: actor
+      )
+      |> Enum.group_by(& &1.room_id)
 
     rooms = Map.new(list_rooms!(fleet_id, actor: actor), &{&1.slug, &1})
 
     case Enum.find(cursors, &(not Map.has_key?(rooms, &1.slug))) do
       nil ->
-        {:ok, Enum.map(read, fn {cursor, messages} -> synced(cursor, messages, rooms) end)}
+        {:ok, Enum.map(cursors, &synced(&1, Map.fetch!(rooms, &1.slug), posts))}
 
       %{slug: slug} ->
         {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)}
     end
   end
 
-  defp synced(%{slug: slug, after_seq: after_seq}, messages, rooms) do
+  defp synced(%{slug: slug, after_seq: after_seq}, room, posts) do
+    messages = Map.get(posts, room.id, [])
+
     cursor =
       case List.last(messages) do
         nil -> after_seq
         last -> last.seq
       end
 
-    %{kind: kind, head_seq: head_seq} = Map.fetch!(rooms, slug)
+    %{kind: kind, head_seq: head_seq} = room
 
     %{
       slug: slug,

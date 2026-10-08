@@ -65,6 +65,13 @@ defmodule Keyfleet.Rooms.Message do
 
       # Each room's naming lines, counted to tell its posts from its lines.
       index(["room_id"], name: "messages_room_namings_index", where: "kind = 'room_named'")
+
+      # What people have posted as each key lately, counted against their
+      # hourly limit (`Keyfleet.Rooms.Changes.LimitPagePosts`).
+      index(["fleet_id", "as_key", "inserted_at DESC"],
+        name: "messages_page_posts_index",
+        where: "kind = 'post' AND author_kind = 'human' AND via_agent_profile_id IS NULL"
+      )
     end
 
     custom_statements do
@@ -136,6 +143,7 @@ defmodule Keyfleet.Rooms.Message do
 
       validate Keyfleet.Graph.Validations.KnownFleet
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :room}
+      change Keyfleet.Rooms.Changes.LimitPagePosts
       change Keyfleet.Agents.Changes.NoteContribution
     end
 
@@ -167,6 +175,7 @@ defmodule Keyfleet.Rooms.Message do
       validate Keyfleet.Graph.Validations.KnownFleet
       validate Keyfleet.Rooms.Validations.IssuedKey
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :key}
+      change Keyfleet.Rooms.Changes.LimitPagePosts
       change Keyfleet.Agents.Changes.NoteContribution
     end
 
@@ -210,6 +219,43 @@ defmodule Keyfleet.Rooms.Message do
       prepare build(load: [:agent_profile, :via_agent_profile])
       prepare {Keyfleet.Rooms.Preparations.OneRoom, in: :room}
       metadata :more_after, :boolean, allow_nil?: false
+    end
+
+    # The posts after each of several of the fleet's rooms' cursors, oldest
+    # first in each room and at most `limit` from each, in one query: the
+    # `n`th slug is read after the `n`th place in `after_seqs`. A slug the
+    # fleet has no room for reads nothing.
+    read :catch_up do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :slugs, {:array, :string}, allow_nil?: false
+      argument :after_seqs, {:array, :integer}, allow_nil?: false
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: @max_page]
+
+      filter expr(
+               fragment(
+                 """
+                 ? IN (
+                   SELECT later.id
+                   FROM unnest(?::text[], ?::bigint[]) AS cursor(slug, after_seq)
+                   JOIN keyfleet_app.rooms AS room
+                     ON room.fleet_id = ? AND room.slug = cursor.slug AND room.kind <> 'key'
+                   CROSS JOIN LATERAL (
+                     SELECT message.id FROM keyfleet_app.messages AS message
+                     WHERE message.room_id = room.id AND message.seq > cursor.after_seq
+                     ORDER BY message.seq
+                     LIMIT ?
+                   ) AS later
+                 )
+                 """,
+                 id,
+                 ^arg(:slugs),
+                 ^arg(:after_seqs),
+                 ^arg(:fleet_id),
+                 ^arg(:limit)
+               )
+             )
+
+      prepare build(load: [:agent_profile, :via_agent_profile], sort: [seq: :asc])
     end
 
     # The posts written to one of the fleet's keys, read the way a room is.
@@ -319,6 +365,23 @@ defmodule Keyfleet.Rooms.Message do
                kind == :post and author_kind == :human and fleet_id == ^arg(:fleet_id) and
                  author_wallet == ^arg(:wallet) and not in_key_thread
              )
+    end
+
+    # What people have posted themselves as one key in the last hour, in the
+    # fleet's rooms and keys' threads together, newest first: the posts an
+    # agent writes, for itself or for its person, are not among them.
+    read :page_posts_last_hour do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+
+      filter expr(
+               kind == :post and fleet_id == ^arg(:fleet_id) and as_key == ^arg(:token_id) and
+                 author_kind == :human and is_nil(via_agent_profile_id) and
+                 inserted_at > ago(1, :hour)
+             )
+
+      prepare build(sort: [inserted_at: :desc, id: :asc])
     end
 
     read :in_room do
