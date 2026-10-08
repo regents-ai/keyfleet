@@ -1004,7 +1004,7 @@ contract CollectionHandler is Test {
         if (tokenId == 0) return;
         bytes4 expected;
         if (keys.revealSeed(tokenId) != bytes32(0)) expected = KeyfleetKeys.AlreadyRevealed.selector;
-        else if (block.timestamp < _retryAt(tokenId)) expected = KeyfleetKeys.RevealAlreadyRequested.selector;
+        else if (keys.revealRequestedAt(tokenId) != 0) expected = KeyfleetKeys.RevealAlreadyRequested.selector;
         else if (_records[id].deckHash == bytes32(0)) expected = KeyfleetKeys.DeckNotSet.selector;
         (, uint64 nonce) = vrf.consumerConfig(address(keys), vrfSubscription);
         vm.prank(_stranger(callerSeed, 0));
@@ -1478,12 +1478,6 @@ contract CollectionHandler is Test {
 
     function _creationOpen() internal view returns (bool) {
         return ghostPhase == keys.FINAL_PHASE() && block.timestamp >= ghostOpensAt[ghostPhase];
-    }
-
-    /// @dev The first second a key may be asked for again; zero if it never was.
-    function _retryAt(uint256 tokenId) internal view returns (uint256) {
-        uint256 requestedAt = keys.revealRequestedAt(tokenId);
-        return requestedAt == 0 ? 0 : requestedAt + keys.REVEAL_RETRY_AFTER();
     }
 
     function _calls(uint256 id, Kind kind, uint256 param) internal view returns (KeyfleetTreasury.Call[] memory calls) {

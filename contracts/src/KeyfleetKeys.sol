@@ -34,10 +34,9 @@ interface IKeyfleetKeyHook {
 /// kept here. The four founding fleets are registered with theirs. A fleet anyone creates is
 /// registered without one, and the keeper, a Regents wallet the Safe names, records its deck once.
 /// A key's Chainlink VRF request is sent only once its fleet has a deck, so no seed of a fleet
-/// exists before its deck is fixed, and nobody can choose a deck after seeing the seeds. A key with
-/// no answer a day after its request may be asked for again; a key's seed is written once, from the
-/// first answer to any of its accepted requests. The Safe may change the coordinator, subscription
-/// and gas lane, which only the next requests use.
+/// exists before its deck is fixed, and nobody can choose a deck after seeing the seeds. A key's
+/// seed is written once from the one answer to its one accepted request. The Safe may change the
+/// coordinator, subscription and gas lane, which only the next requests use.
 ///
 /// `tokenURI` is one fixed base followed by the token id, and reverts for an id that has not been
 /// minted. Resales carry an ERC-2981 royalty of 2.5% to the Regents Safe. There is no upgrade path,
@@ -109,8 +108,6 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     uint32 public constant REVEAL_CALLBACK_GAS_LIMIT = 100_000;
     /// @notice Random words asked for per key.
     uint32 public constant REVEAL_WORDS = 1;
-    /// @notice How long a key waits for an answer before its random word may be asked for again.
-    uint256 public constant REVEAL_RETRY_AFTER = 1 days;
     /// @notice The furthest ahead a phase step may name its opening: 30 days.
     uint256 public constant MAX_OPENING_LEAD = 30 days;
 
@@ -147,7 +144,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     mapping(uint256 fleetId => uint64 opensAt) public salesOpenAt;
     /// @notice A key's trait seed, zero until the coordinator answers. Written once.
     mapping(uint256 tokenId => bytes32 seed) public revealSeed;
-    /// @notice When the coordinator last accepted a request for a key, zero if it never has.
+    /// @notice When the coordinator accepted the request for a key, zero if it never has.
     mapping(uint256 tokenId => uint64 requestedAt) public revealRequestedAt;
 
     mapping(uint256 fleetId => Fleet fleet) private _fleets;
@@ -205,9 +202,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     error OnlyCoordinator(address caller);
     /// @notice The key already has its seed.
     error AlreadyRevealed(uint256 tokenId);
-    /// @notice The coordinator accepted a request for this key less than `REVEAL_RETRY_AFTER` ago.
-    /// @param retryAt The first second the key may be asked for again.
-    error RevealAlreadyRequested(uint256 tokenId, uint256 retryAt);
+    /// @notice The coordinator has already accepted a request for this key.
+    error RevealAlreadyRequested(uint256 tokenId);
 
     /// @notice A fleet was registered.
     event FleetRegistered(
@@ -379,9 +375,9 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     }
 
     /// @notice Sets the VRF coordinator, subscription and gas lane for every request from now on.
-    /// @dev A request already accepted is answered by the coordinator it went to, which must still
-    /// be the one set here when it answers; otherwise the key is asked for again after
-    /// `REVEAL_RETRY_AFTER`.
+    /// @dev Only the coordinator set here may answer, so a request already accepted by an earlier
+    /// coordinator is never answered and its key keeps no seed. Keys minted before their fleet's deck
+    /// and keys whose requests were refused are asked for through the new one.
     function setRandomness(Randomness calldata randomness_) external onlySafe {
         _setRandomness(randomness_);
     }
@@ -496,18 +492,14 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     // --- reveals -----------------------------------------------------------
 
     /// @notice Asks the coordinator for a key's random word.
-    /// @dev Open to anyone, for a minted key with no seed whose fleet has its deck, and which either
-    /// has no accepted request (it was minted before the deck was recorded, or every request was
-    /// refused) or has waited `REVEAL_RETRY_AFTER` since its last accepted request. Every accepted
-    /// request stays answerable, and the first answer to arrive writes the seed. A refused request
-    /// emits `RevealRequestFailed` and does not revert.
+    /// @dev Open to anyone, for a minted key whose fleet has its deck and whose request the
+    /// coordinator has never accepted: it was minted before the deck was recorded, or every request
+    /// for it was refused. Once a request is accepted the key waits for that answer. A refused
+    /// request emits `RevealRequestFailed` and does not revert.
     function requestReveal(uint256 tokenId) external nonReentrant {
         _requireOwned(tokenId);
         if (revealSeed[tokenId] != bytes32(0)) revert AlreadyRevealed(tokenId);
-        uint256 requestedAt = revealRequestedAt[tokenId];
-        if (requestedAt != 0 && block.timestamp < requestedAt + REVEAL_RETRY_AFTER) {
-            revert RevealAlreadyRequested(tokenId, requestedAt + REVEAL_RETRY_AFTER);
-        }
+        if (revealRequestedAt[tokenId] != 0) revert RevealAlreadyRequested(tokenId);
         uint256 fleetId = fleetOf(tokenId);
         if (_fleets[fleetId].deckHash == bytes32(0)) revert DeckNotSet(fleetId);
         _requestReveal(tokenId);
@@ -515,8 +507,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
 
     /// @notice The coordinator's answer to a request.
     /// @dev Only the current coordinator may call, and for it this never reverts. An unknown
-    /// request, an empty answer, or an answer for a key that already has its seed is ignored, so a
-    /// late answer to an older request never overwrites the first.
+    /// request, an empty answer, or an answer for a key that already has its seed is ignored.
     function rawFulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) external {
         if (msg.sender != address(randomness.coordinator)) revert OnlyCoordinator(msg.sender);
         uint256 tokenId = _requestToken[requestId];

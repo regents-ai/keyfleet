@@ -381,14 +381,11 @@ time in `revealRequestedAt(tokenId)`; a refused one emits
 
 `requestReveal(tokenId)` lets anyone ask for a minted key with no seed whose
 fleet has its deck, when the coordinator has accepted no request for it (it was
-minted before its fleet's deck was recorded, or every request was refused) or
-its last accepted request is at least `REVEAL_RETRY_AFTER` (1 day) old with no
-answer. It refuses a key already revealed (`AlreadyRevealed`), one asked for
-less than a day ago (`RevealAlreadyRequested(tokenId, retryAt)`, with the time
-it may be asked again) and one whose fleet has no deck (`DeckNotSet`). Every
-accepted request stays answerable, and the first answer to arrive writes the
-seed; any later answer, to an older or a newer request, is ignored. At most one
-request a day can be waiting for a key.
+minted before its fleet's deck was recorded, or every request was refused). It
+refuses a key already revealed (`AlreadyRevealed`), one whose request the
+coordinator has accepted (`RevealAlreadyRequested(tokenId)`), however long the
+answer takes, and one whose fleet has no deck (`DeckNotSet`). A key has at most
+one accepted request, so its seed can come from only one answer.
 
 The coordinator, the subscription id and the gas lane are one setting,
 `randomness()`, which the Safe may replace with `setRandomness(randomness)`
@@ -396,8 +393,9 @@ The coordinator, the subscription id and the gas lane are one setting,
 constructor and every change emit `RandomnessSet(coordinator, subscriptionId,
 keyHash)`. Every request from then on goes to the new setting. A request
 already accepted by an earlier coordinator can no longer be answered, since
-only the current coordinator may answer; its key is asked for again a day after
-that request.
+only the current coordinator may answer, and its key is never asked for again:
+it keeps no seed. Keys minted before their fleet's deck and keys whose requests
+were refused are asked for through the new setting.
 
 The answer arrives through `rawFulfillRandomWords`, which only the current
 coordinator may call (`OnlyCoordinator`). The key's seed is

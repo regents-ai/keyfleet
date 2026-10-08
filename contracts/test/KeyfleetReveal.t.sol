@@ -319,8 +319,8 @@ contract KeyfleetRevealTest is RevealFixture {
         assertEq(deckSize, type(uint32).max, "the largest deck fits");
     }
 
-    /// @dev Invariant: once the deck is recorded, anyone can ask for each earlier key, once a day at
-    /// most, and every later mint asks by itself.
+    /// @dev Invariant: once the deck is recorded, anyone can ask for each earlier key, each once,
+    /// and every later mint asks by itself.
     function test_afterTheDeckAnyoneRequestsEarlierKeysAndLaterMintsAskAutomatically() public {
         KeyfleetManager fleet = _open();
         uint256 fleetId = fleet.FLEET_ID();
@@ -563,22 +563,23 @@ contract KeyfleetRevealTest is RevealFixture {
         assertEq(keys.revealSeed(tokenId), seed, "a duplicate answer does not change the seed");
     }
 
-    /// @dev Invariant: while a key's accepted request is less than a day old nobody, the holder
-    /// included, can ask for it again, so no stack of waiting requests can build up behind it.
-    function test_anAcceptedRequestRefusesEveryRetryForADay() public {
+    /// @dev Invariant: a key has at most one accepted request, so there is only ever one answer
+    /// its seed can come from and nobody who orders the answers can choose between two. Once the
+    /// coordinator accepts a request nobody, the holder included, can ask for the key again, however
+    /// long the answer takes, and no stack of waiting requests can build up behind it.
+    function test_anAcceptedRequestIsTheOnlyOneAKeyEverGets() public {
         KeyfleetManager fleet = _classic();
         uint256 tokenId = _buyKey(fleet);
         uint256 requestId = _lastRequestId();
         uint64 nonceBefore = _nonce();
-        uint256 retryAt = block.timestamp + keys.REVEAL_RETRY_AFTER();
 
         address[3] memory askers = [buyer, keeper, address(0xBAD)];
-        uint256[3] memory at = [block.timestamp, block.timestamp + 1 hours, retryAt - 1];
-        for (uint256 i = 0; i < at.length; ++i) {
-            vm.warp(at[i]);
+        uint256[3] memory waits = [uint256(0), 1 hours, 365 days];
+        for (uint256 i = 0; i < waits.length; ++i) {
+            vm.warp(block.timestamp + waits[i]);
             for (uint256 j = 0; j < askers.length; ++j) {
                 vm.prank(askers[j]);
-                vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealAlreadyRequested.selector, tokenId, retryAt));
+                vm.expectRevert(_alreadyRequested(tokenId));
                 keys.requestReveal(tokenId);
             }
         }
@@ -588,43 +589,10 @@ contract KeyfleetRevealTest is RevealFixture {
         assertEq(keys.revealSeed(tokenId), _seed(tokenId, 7), "the one request's answer is the seed");
     }
 
-    /// @dev Invariant: a day after an accepted request with no answer, anyone may ask again, and
-    /// whichever of the two answers arrives first is the seed. The other answer, early or late, is
-    /// ignored without a word and never overwrites it.
-    function test_aDayWithoutAnAnswerAllowsARetryAndTheFirstAnswerWins() public {
-        for (uint256 lateFirst = 0; lateFirst < 2; ++lateFirst) {
-            uint256 fresh = vm.snapshotState();
-            KeyfleetManager fleet = _classic();
-            uint256 tokenId = _buyKey(fleet);
-            uint256 firstRequest = _lastRequestId();
-
-            vm.warp(block.timestamp + keys.REVEAL_RETRY_AFTER());
-            uint256 secondRequest = _nextRequestId();
-            vm.expectEmit(true, true, false, true, address(keys));
-            emit RevealRequested(tokenId, secondRequest);
-            vm.prank(address(0x5712A26E2));
-            keys.requestReveal(tokenId);
-            assertEq(keys.revealRequestedAt(tokenId), block.timestamp, "the retry restarts the day");
-            vm.expectRevert(_alreadyRequested(tokenId));
-            keys.requestReveal(tokenId);
-
-            (uint256 winner, uint256 loser) =
-                lateFirst == 0 ? (firstRequest, secondRequest) : (secondRequest, firstRequest);
-            vrf.fulfill(winner, _words(11));
-            assertEq(keys.revealSeed(tokenId), _seed(tokenId, 11), "the first answer is the seed");
-            _expectSilentAnswer(tokenId, loser, _words(12));
-
-            vm.warp(block.timestamp + keys.REVEAL_RETRY_AFTER());
-            vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.AlreadyRevealed.selector, tokenId));
-            keys.requestReveal(tokenId);
-            vm.revertToState(fresh);
-        }
-    }
-
     /// @dev Invariant: only the Safe sets the coordinator, subscription and gas lane, every change
     /// is announced, and a coordinator without code is refused. Later requests go to the new
-    /// coordinator, only it may answer, and a key whose request went to the old one is asked for
-    /// again after a day.
+    /// coordinator and only it may answer, so a key whose accepted request went to the old one is
+    /// never answered and is never asked for again.
     function test_theSafeMovesRevealsToANewCoordinator() public {
         KeyfleetManager fleet = _classic();
         uint256 stranded = _buyKey(fleet);
@@ -670,10 +638,10 @@ contract KeyfleetRevealTest is RevealFixture {
         next.fulfill(_lastRequestOn(next, moved), _words(4));
         assertEq(keys.revealSeed(later), _seed(later, 4), "the new coordinator answers later keys");
 
-        vm.warp(block.timestamp + keys.REVEAL_RETRY_AFTER());
+        vm.warp(block.timestamp + 365 days);
+        vm.expectRevert(_alreadyRequested(stranded));
         keys.requestReveal(stranded);
-        next.fulfill(_lastRequestOn(next, moved), _words(5));
-        assertEq(keys.revealSeed(stranded), _seed(stranded, 5), "and the stranded key, asked again");
+        assertEq(keys.revealSeed(stranded), bytes32(0), "the stranded key keeps no seed");
     }
 
     /// @dev The id of the collection's latest accepted request on `coordinator`.
@@ -725,8 +693,8 @@ contract KeyfleetRevealTest is RevealFixture {
     }
 
     /// @dev Invariant: a key whose request was refused can be retried at once, by anyone, as often as
-    /// the coordinator keeps refusing, and a refused retry says so without reverting. Once the
-    /// coordinator accepts one, the next retry waits a day.
+    /// the coordinator keeps refusing, and a refused retry says so without reverting. The first
+    /// retry the coordinator accepts is the last one.
     function test_aFailedRequestCanBeRetriedAtOnceByAnyone() public {
         KeyfleetManager fleet = _classic();
         vrf.setRevertAll(true);
@@ -869,13 +837,9 @@ contract KeyfleetRevealTest is RevealFixture {
         }
     }
 
-    /// @dev The refusal for a key asked for less than `REVEAL_RETRY_AFTER` ago.
-    function _alreadyRequested(uint256 tokenId) private view returns (bytes memory) {
-        return abi.encodeWithSelector(
-            KeyfleetKeys.RevealAlreadyRequested.selector,
-            tokenId,
-            keys.revealRequestedAt(tokenId) + keys.REVEAL_RETRY_AFTER()
-        );
+    /// @dev The refusal for a key whose request the coordinator has already accepted.
+    function _alreadyRequested(uint256 tokenId) private pure returns (bytes memory) {
+        return abi.encodeWithSelector(KeyfleetKeys.RevealAlreadyRequested.selector, tokenId);
     }
 
     /// @dev Delivers an answer as the coordinator and checks it changed nothing and said nothing.
