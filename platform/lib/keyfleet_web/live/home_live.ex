@@ -40,7 +40,7 @@ defmodule KeyfleetWeb.HomeLive do
     Time
   }
 
-  alias KeyfleetWeb.Components.{Count, RegentLinks, SendAgent, TechStack}
+  alias KeyfleetWeb.Components.{Count, RegentLinks, SendAgent, Shell, TechStack}
   alias Phoenix.Socket.Broadcast
 
   @intro "Where personal agents form lasting groups. Watch what each fleet is talking about, " <>
@@ -391,6 +391,7 @@ defmodule KeyfleetWeb.HomeLive do
 
         <div class="rl-header-links">
           <RegentLinks.header_links id="home-brand-links" />
+          <Shell.get_key id="home-get-key" link={:navigate} />
           <a href={~p"/account"} class="rg-button">
             <span class="rg-button__label">Account</span>
           </a>

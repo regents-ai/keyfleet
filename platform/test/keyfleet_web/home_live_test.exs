@@ -393,7 +393,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
       case String.split(href, "#", parts: 2) do
         ["", anchor] -> assert anchor in anchors
         ["/opportunities", anchor] -> assert anchor in briefing
-        [path] -> assert path in @open_paths or path in fleet_paths
+        [path] -> assert URI.parse(path).path in (@open_paths ++ fleet_paths)
       end
     end
   end

@@ -566,6 +566,32 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert ["focus", %{"to" => "#buy-key-title"}] in commands
       assert has_element?(view, ~s(#fleet-about #buy-key #buy-key-title[tabindex="-1"]))
     end
+
+    # The header's "Get a Key", there for everyone on the homepage and every
+    # app page, lands on Classic with its own "Get a Key" pressed, then drops
+    # the press from the address so the next press opens it again.
+    test "the header's Get a Key lands on Classic at Buying a Key", %{conn: conn} do
+      deploy!("fleet_tech_classic")
+      ChainHelpers.seed_cursor!("fleet_tech_classic")
+
+      {:ok, home, _html} = live(build_conn(), "/")
+      assert has_element?(home, ~s(#home-get-key[href="/app/fleets/fleet_tech_classic?buy"]))
+
+      {:ok, view, _html} = live(conn, @path)
+      view |> element("#shell-get-key") |> render_click()
+      assert_patch(view, "/app/fleets/fleet_tech_classic?buy")
+
+      [arrival] =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#fleet-get-key-on-arrival")
+        |> LazyHTML.attribute("phx-mounted")
+
+      assert Jason.decode!(arrival) ==
+               click_commands(view, "#fleet-get-key") ++
+                 [["patch", %{"href" => "/app/fleets/fleet_tech_classic", "replace" => true}]]
+    end
   end
 
   describe "the key map" do
