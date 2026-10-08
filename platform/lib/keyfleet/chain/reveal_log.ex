@@ -25,7 +25,9 @@ defmodule Keyfleet.Chain.RevealLog do
          {:ok, fleet} when fleet > 0 <- Abi.word(fleet_topic, {:uint, 63}),
          {:ok, request_id} <- Abi.word(request_topic, {:uint, 256}),
          {:ok, [key_number, seed]} <- Abi.decode(data, [{:uint, 63}, :bytes32]),
-         true <- key_number > 0 and Fleet.onchain_token_id(%{chain_fleet_id: fleet}, key_number) == token_id do
+         true <-
+           key_number > 0 and
+             Fleet.onchain_token_id(%{chain_fleet_id: fleet}, key_number) == token_id do
       {:ok, {:reveal, %{token_id: token_id, request_id: Decimal.new(request_id), seed: seed}}}
     else
       _malformed -> :error

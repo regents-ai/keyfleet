@@ -165,7 +165,8 @@ defmodule Keyfleet.Chain.Logs do
   # The log's record with its Keys named by their numbers in the fleet. A
   # log of a shared contract about another fleet's Key is `:other_fleet`.
   defp read(fleet, address, topic0, words, data) do
-    with {:ok, {owner, {type, fields}}} <- route(fleet, address, String.downcase(topic0), words, data) do
+    with {:ok, {owner, {type, fields}}} <-
+           route(fleet, address, String.downcase(topic0), words, data) do
       case local(fields, fleet) do
         {:ok, fields} -> {:ok, {type, fields}}
         :foreign when owner == :shared -> :other_fleet

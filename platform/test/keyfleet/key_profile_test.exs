@@ -185,7 +185,8 @@ defmodule Keyfleet.KeyProfileTest do
              fleet_id: @fleet,
              token_id: 2,
              issued?: false,
-             image: "https://media.regents.sh/ipfs/QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy",
+             image:
+               "https://media.regents.sh/ipfs/QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy",
              level: 1,
              issue_price: 10_000_000
            }

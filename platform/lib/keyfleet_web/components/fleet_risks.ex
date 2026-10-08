@@ -19,8 +19,12 @@ defmodule KeyfleetWeb.Components.FleetRisks do
         <li>
           Once a proposal opens it can gain voters, but none of the Keys counted for it can drop out.
         </li>
-        <li>A proposal passes with 60% of the Keys counted, rounded up, so one present Key can pass it alone.</li>
-        <li>After the first 7 days of sales, approved proposals can spend everything in the treasury.</li>
+        <li>
+          A proposal passes with 60% of the Keys counted, rounded up, so one present Key can pass it alone.
+        </li>
+        <li>
+          After the first 7 days of sales, approved proposals can spend everything in the treasury.
+        </li>
         <li>
           The daily split shares a set part of the treasury when someone runs it. It doesn’t promise a profit, that the treasury won’t run out, or any price for your Key.
         </li>

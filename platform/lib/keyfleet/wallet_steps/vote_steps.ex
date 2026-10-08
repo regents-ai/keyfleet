@@ -251,7 +251,8 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
     read =
       if address == Treasury.native(),
         do: Reads.balance(reads, fleet.treasury_address),
-        else: Reads.one(reads, address, "balanceOf(address)", [fleet.treasury_address], {:uint, 256})
+        else:
+          Reads.one(reads, address, "balanceOf(address)", [fleet.treasury_address], {:uint, 256})
 
     case read do
       {:ok, held} -> {:ok, held}
@@ -329,7 +330,9 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
       [e0, late, yes, no, abstain, _cancelled, _executed] = counts
 
       with {:ok, author_key} <- Fleet.key_number(fleet, author),
-           do: {:ok, %{author_key: author_key, e0: e0, late: late, yes: yes, no: no, abstain: abstain}}
+           do:
+             {:ok,
+              %{author_key: author_key, e0: e0, late: late, yes: yes, no: no, abstain: abstain}}
     end
   end
 

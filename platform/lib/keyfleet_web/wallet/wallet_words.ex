@@ -56,7 +56,8 @@ defmodule KeyfleetWeb.WalletWords do
     do: "Pays #{share_words(asset, share, amount)} to #{RegentFormat.short_address(to)}."
 
   defp action({:advance, _id, asset, operator, share, amount}),
-    do: "Advances #{share_words(asset, share, amount)} to #{RegentFormat.short_address(operator)}."
+    do:
+      "Advances #{share_words(asset, share, amount)} to #{RegentFormat.short_address(operator)}."
 
   defp action({:rate, bps}), do: "Sets the daily split to #{ProposalsPage.units(bps, 2)}%."
 

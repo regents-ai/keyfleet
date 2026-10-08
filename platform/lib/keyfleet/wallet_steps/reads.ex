@@ -108,7 +108,13 @@ defmodule Keyfleet.WalletSteps.Reads do
   the Key collection refuses to name.
   """
   def holder(reads, fleet, key) do
-    case one(reads, fleet.keys_address, "ownerOf(uint256)", [Fleet.onchain_token_id(fleet, key)], :address) do
+    case one(
+           reads,
+           fleet.keys_address,
+           "ownerOf(uint256)",
+           [Fleet.onchain_token_id(fleet, key)],
+           :address
+         ) do
       {:error, :reverted} -> {:ok, nil}
       answer -> answer
     end

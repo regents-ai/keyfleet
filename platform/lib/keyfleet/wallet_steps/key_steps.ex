@@ -156,7 +156,11 @@ defmodule Keyfleet.WalletSteps.KeySteps do
         end
 
       {:ok, steps,
-       %{keys: Enum.map(presence, &Map.delete(&1, :mature?)), maintenance?: maintenance?, blocked: blocked}}
+       %{
+         keys: Enum.map(presence, &Map.delete(&1, :mature?)),
+         maintenance?: maintenance?,
+         blocked: blocked
+       }}
     else
       _unread -> {:problem, :unread, figures}
     end
@@ -276,7 +280,13 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
     with {:ok, reads} <- Reads.at_head(),
          {:ok, open?} <-
-           Reads.one(reads, fleet.keys_address, "salesOpen(uint256)", [fleet.chain_fleet_id], :bool),
+           Reads.one(
+             reads,
+             fleet.keys_address,
+             "salesOpen(uint256)",
+             [fleet.chain_fleet_id],
+             :bool
+           ),
          {:ok, allowance} <-
            Reads.one(
              reads,
@@ -369,7 +379,8 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   defp presence(reads, fleet, key) do
     onchain = Fleet.onchain_token_id(fleet, key)
 
-    with {:ok, active?} <- Reads.one(reads, fleet.votes_address, "isActive(uint256)", [onchain], :bool),
+    with {:ok, active?} <-
+           Reads.one(reads, fleet.votes_address, "isActive(uint256)", [onchain], :bool),
          {:ok, from} <-
            Reads.one(reads, fleet.votes_address, "presentFrom(uint256)", [onchain], {:uint, 64}),
          {:ok, matures_at} <- matures_at(reads, fleet, onchain) do
@@ -398,7 +409,10 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # contract by simulating a Tidy up that clears none.
   defp maintenance?(reads, fleet) do
     with {:ok, [_moved, due?]} <-
-           Reads.many(reads, fleet.votes_address, "sweepExpired(uint256)", [0], [{:uint, 256}, :bool]),
+           Reads.many(reads, fleet.votes_address, "sweepExpired(uint256)", [0], [
+             {:uint, 256},
+             :bool
+           ]),
          do: {:ok, due?}
   end
 

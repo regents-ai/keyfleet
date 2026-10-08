@@ -142,8 +142,7 @@ defmodule Keyfleet.Chain.VotesLog do
          {:ok, [starts_at]} <- Abi.decode(data, [{:uint, 63}]),
          {:ok, starts_at} <- DateTime.from_unix(starts_at) do
       {:ok,
-       {:presence,
-        %{kind: :scheduled, token_id: token_id, at: starts_at, ownership_epoch: nil}}}
+       {:presence, %{kind: :scheduled, token_id: token_id, at: starts_at, ownership_epoch: nil}}}
     else
       _malformed -> :error
     end
@@ -155,7 +154,16 @@ defmodule Keyfleet.Chain.VotesLog do
   # them, where the calls begin.
   defp head(head) do
     with {:ok,
-          [proposal_hash, content_hash, closes_at, _executable_at, expiry, e0, open_revision, offset]} <-
+          [
+            proposal_hash,
+            content_hash,
+            closes_at,
+            _executable_at,
+            expiry,
+            e0,
+            open_revision,
+            offset
+          ]} <-
            words(head, [
              :bytes32,
              :bytes32,

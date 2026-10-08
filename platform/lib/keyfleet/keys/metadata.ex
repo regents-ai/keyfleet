@@ -75,7 +75,11 @@ defmodule Keyfleet.Keys.Metadata do
   defp picture(%{cid: cid}), do: KeyArt.link(cid)
 
   defp fleet_of(token_id),
-    do: Enum.find(Fleets.list_deployed_fleets!(), &match?({:ok, _number}, Fleet.key_number(&1, token_id)))
+    do:
+      Enum.find(
+        Fleets.list_deployed_fleets!(),
+        &match?({:ok, _number}, Fleet.key_number(&1, token_id))
+      )
 
   defp revealing(%{fleet: fleet, token_id: token_id} = key) do
     %{

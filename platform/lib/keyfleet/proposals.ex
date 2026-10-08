@@ -110,13 +110,26 @@ defmodule Keyfleet.Proposals do
   """
   def status(%Proposal{} = proposal, now \\ DateTime.utc_now()) do
     cond do
-      proposal.cancellation -> :cancelled
-      proposal.execution -> :executed
-      DateTime.before?(now, proposal.closes_at) -> :open
-      proposal.yes_keys < approvals_needed(proposal.opening_count + proposal.late_keys) -> :rejected
-      DateTime.before?(now, carry_out_from(proposal)) -> :waiting
-      DateTime.compare(now, proposal.execution_expiry) != :lt -> :execution_expired
-      true -> :approved
+      proposal.cancellation ->
+        :cancelled
+
+      proposal.execution ->
+        :executed
+
+      DateTime.before?(now, proposal.closes_at) ->
+        :open
+
+      proposal.yes_keys < approvals_needed(proposal.opening_count + proposal.late_keys) ->
+        :rejected
+
+      DateTime.before?(now, carry_out_from(proposal)) ->
+        :waiting
+
+      DateTime.compare(now, proposal.execution_expiry) != :lt ->
+        :execution_expired
+
+      true ->
+        :approved
     end
   end
 

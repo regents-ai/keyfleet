@@ -12,7 +12,6 @@ defmodule Keyfleet.Fleets.Validations.SameDeployment do
 
   require Ash.Query
 
-
   @impl true
   def validate(changeset, _opts, _context) do
     id = changeset.data.id
@@ -27,7 +26,10 @@ defmodule Keyfleet.Fleets.Validations.SameDeployment do
   defp compare(%{manager_address: nil}, _changeset), do: :ok
 
   defp compare(fleet, changeset) do
-    if Enum.all?(changeset.resource.deployment_fields(), &(Map.fetch!(fleet, &1) == Ash.Changeset.get_attribute(changeset, &1))) do
+    if Enum.all?(
+         changeset.resource.deployment_fields(),
+         &(Map.fetch!(fleet, &1) == Ash.Changeset.get_attribute(changeset, &1))
+       ) do
       :ok
     else
       {:error, field: :manager_address, message: "fleet is already bound to another deployment"}

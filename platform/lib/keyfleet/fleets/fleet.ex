@@ -84,7 +84,10 @@ defmodule Keyfleet.Fleets.Fleet do
         check: "chain_fleet_id > 0"
       )
 
-      check_constraint(:deck_hash, "fleets_deck_hash_shape", check: "deck_hash ~ '^0x[0-9a-f]{64}$'")
+      check_constraint(:deck_hash, "fleets_deck_hash_shape",
+        check: "deck_hash ~ '^0x[0-9a-f]{64}$'"
+      )
+
       check_constraint(:deck_size, "fleets_deck_size_positive", check: "deck_size > 0")
 
       check_constraint(:trait_table_hash, "fleets_trait_table_hash_shape",
