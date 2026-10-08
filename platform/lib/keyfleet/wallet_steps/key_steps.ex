@@ -272,7 +272,6 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # purchase names the price as its most, so a Key that has since cost more is
   # refused and no USDC is taken. Founding fleets ask nothing of buyers, so the
   # purchase carries no proof.
-
   defp buy(%{fleet: fleet, signer: signer}, progress) do
     price = progress.next_price
     figures = %{token_id: progress.next_token_id, price: price, max_supply: progress.max_supply}
