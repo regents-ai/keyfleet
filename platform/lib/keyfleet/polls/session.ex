@@ -107,11 +107,11 @@ defmodule Keyfleet.Polls.Session do
   end
 
   policies do
-    policy action([:open, :open_in_fleet]) do
+    policy action(:open) do
       authorize_if {Keyfleet.Polls.Checks.Standing, role: :member}
     end
 
-    policy action([:read, :listed, :in_fleet]) do
+    policy action([:read, :open_in_fleet, :listed, :in_fleet]) do
       authorize_if always()
     end
 

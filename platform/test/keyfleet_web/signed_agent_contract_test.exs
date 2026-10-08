@@ -871,7 +871,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     # Listing and opening sessions.
     assert answer(c, c.signer, "GET", @polls, @address, %{}, 200).body == %{"sessions" => []}
-    answer(c, stranger, "GET", @polls, @address, %{}, 403)
+    assert answer(c, stranger, "GET", @polls, @address, %{}, 200).body == %{"sessions" => []}
     answer(c, c.signer, "POST", @poll_open, @address, %{opening | "minutes" => 4}, 422)
     answer(c, c.signer, "POST", @poll_open, @address, %{opening | "minutes" => 61}, 422)
 
