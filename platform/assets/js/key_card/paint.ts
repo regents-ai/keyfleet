@@ -563,9 +563,24 @@ function cornerOrnament(g: Ctx, style: Ornament): void {
       break
   }
 }
-/** The bottom-left corner holds the Regents crown, so ornaments go in the other three. */
-function eachCorner(g: Ctx, draw: () => void): void {
-  for (const [x, y, sx, sy] of [[0, 0, 1, 1], [TW, 0, -1, 1], [TW, TH, -1, -1]]) {
+/**
+ * How a card is dressed beyond its traits. A Regents Club card has black enamel, gold lettering and
+ * "CLUB PASS" in its bottom-right corner; every other card is standard. Every top line starts with the
+ * card's type, so the type printed on the card decides its look.
+ */
+type Look = "standard" | "regentsClub"
+const lookOf = (topLine: string): Look => (topLine.startsWith("REGENTS CLUB") ? "regentsClub" : "standard")
+
+/**
+ * The bottom-left corner holds the Regents crown, so ornaments go in the other three; a Regents Club card
+ * keeps the bottom-right for its "CLUB PASS" mark.
+ */
+const ORNAMENT_CORNERS: Readonly<Record<Look, readonly (readonly [number, number, number, number])[]>> = {
+  standard: [[0, 0, 1, 1], [TW, 0, -1, 1], [TW, TH, -1, -1]],
+  regentsClub: [[0, 0, 1, 1], [TW, 0, -1, 1]],
+}
+function eachCorner(g: Ctx, look: Look, draw: () => void): void {
+  for (const [x, y, sx, sy] of ORNAMENT_CORNERS[look]) {
     g.setTransform(sx, 0, 0, sy, x, y)
     draw()
   }
@@ -1143,7 +1158,25 @@ function crownBox(): {x: number; y: number; w: number; h: number} {
   return {x: U(CROWN_IN), y: TH - U(CROWN_IN) - h, w, h}
 }
 
-function buildExterior(key: Key, masks: KeyMasks, seedN: number, topLine: string): CardLayers {
+/**
+ * A Regents Club card's mark: "CLUB" over "PASS", a block as tall as the crown across from it, its right
+ * edge as far in as the crown's left. Stacked, it stays clear of a title along the bottom.
+ */
+const PASS = ["CLUB", "PASS"]
+const PASS_PX = 22
+const PASS_TRACK = 4
+/** A Regents Club card's enamel, under its crest and around its face. */
+const CLUB_ENAMEL = "#101013"
+function passMarkBox(): {x: number; y: number; w: number; h: number} {
+  const g = g2d(canvas(1, 1))
+  g.font = `700 ${PASS_PX}px ${DISPLAY_FONT}`
+  const width = (word: string): number => [...word].reduce((sum, ch) => sum + g.measureText(ch).width, 0) + PASS_TRACK * (word.length - 1)
+  const w = Math.max(...PASS.map(width))
+  const cb = crownBox()
+  return {x: TW - cb.x - w, y: cb.y, w, h: cb.h}
+}
+
+function buildExterior(key: Key, masks: KeyMasks, seedN: number, topLine: string, look: Look): CardLayers {
   const ext = EXTERIORS[key.exterior]
   const sh = SHELLS[key.shell]
   const rnd = prng(seedN ^ 0xe7)
@@ -1215,7 +1248,11 @@ function buildExterior(key: Key, masks: KeyMasks, seedN: number, topLine: string
   const crownLine = mapF(crownPlate, (x, i) => x * (1 - crown[i]))
   const lineTone = hexRgb(lum(CROWNS[key.crown].c) > 0.3 ? "#16161a" : "#ece8e0")
   const crownZone = mask(g => g.fillRect(cb.x - 8, cb.y - 8, cb.w + 16, cb.h + 16))
-  const orn = mask(g => eachCorner(g, () => cornerOrnament(g, ext.orn)))
+  const passBox = passMarkBox()
+  const passZone = mask(g => {
+    if (look === "regentsClub") g.fillRect(passBox.x - 8, passBox.y - 8, passBox.w + 16, passBox.h + 16)
+  })
+  const orn = mask(g => eachCorner(g, look, () => cornerOrnament(g, ext.orn)))
   const titleY = Y(pl.title)
   const title = mask(g => {
     g.textAlign = "left"
@@ -1224,12 +1261,16 @@ function buildExterior(key: Key, masks: KeyMasks, seedN: number, topLine: string
     spaced(g, "KEYFLEET", TW / 2, titleY, 7)
     g.font = `600 17px ${LABEL_FONT}`
     spaced(g, topLine, TW / 2, titleY + (pl.title < 0 ? 36 : -36), 3)
+    if (look === "regentsClub") {
+      g.font = `700 ${PASS_PX}px ${DISPLAY_FONT}`
+      PASS.forEach((word, row) => spaced(g, word, passBox.x + passBox.w / 2, passBox.y + passBox.h * (row ? 0.78 : 0.22), PASS_TRACK))
+    }
   })
   // A soft dark edge around the lettering keeps the top line readable on pale cards and bright foil.
   const halo = mapF(blur(title, TW, TH, 3), (x, i) => sstep(0.02, 0.3, x) * (1 - title[i]))
   const titleZone = mask(g => g.fillRect(0, titleY - (pl.title < 0 ? 30 : 58), TW, 88))
   const lines = mask(g => motif(g, ext.motif, pl, rnd))
-  const open = mapF(face, (f, i) => f * (1 - lipZone[i]) * (1 - crestOuter[i]) * (1 - titleZone[i]) * (1 - crownZone[i]))
+  const open = mapF(face, (f, i) => f * (1 - lipZone[i]) * (1 - crestOuter[i]) * (1 - titleZone[i]) * (1 - crownZone[i]) * (1 - passZone[i]))
   const G = mapF(lines, (x, i) => x * open[i])
   const ornM = mapF(orn, (x, i) => x * (1 - lipZone[i]))
 
@@ -1288,7 +1329,7 @@ function buildExterior(key: Key, masks: KeyMasks, seedN: number, topLine: string
   const a = g2d(alb)
   a.fillStyle = "#f4f4f4"
   a.fillRect(0, 0, TW, TH)
-  const enamel = sh.dark ? mix(sh.b, "#000", 0.45) : mix(sh.b, "#2a2420", 0.5)
+  const enamel = look === "regentsClub" ? CLUB_ENAMEL : sh.dark ? mix(sh.b, "#000", 0.45) : mix(sh.b, "#2a2420", 0.5)
   a.fillStyle = enamel
   cardPath(a, RIM_IN, ext.corner)
   a.fill()
@@ -1339,7 +1380,7 @@ function buildExterior(key: Key, masks: KeyMasks, seedN: number, topLine: string
     albOut[i * 4 + 2] = b
     albOut[i * 4 + 3] = sil[i] * 255
   }
-  return {w: TW, h: TH, alb: albOut, aux: pack(N, H, M, Fm, G), mat: pack(N, crown, rim.gem ?? 0, rim.glow ?? 0, 0), pl}
+  return {w: TW, h: TH, alb: albOut, aux: pack(N, H, M, Fm, G), mat: pack(N, crown, rim.gem ?? 0, rim.glow ?? 0, look === "regentsClub" ? title : 0), pl}
 }
 
 /* ---------------- everything for one key ---------------- */
@@ -1394,6 +1435,6 @@ function traitUniforms(key: Key, pl: Placement): CardUniforms {
 export async function keyJob(key: Key, seedN: number, topLine: string): Promise<CardJob> {
   await fontsReady()
   const masks = await keyMasks(key)
-  const exterior = buildExterior(key, masks, seedN, topLine)
+  const exterior = buildExterior(key, masks, seedN, topLine, lookOf(topLine))
   return {paint: {exterior, key: buildKey(METALS[key.metal], masks, seedN)}, uniforms: traitUniforms(key, exterior.pl)}
 }
