@@ -131,17 +131,17 @@ defmodule Keyfleet.Rooms do
   records. Proposals answer with the ones changed after that point, as
   `Keyfleet.Proposals.changes/2` does.
 
-  Something new, or more waiting, is answered at once. Otherwise the caller
-  is answered as soon as the fleet announces a workspace change, a proposal
-  change or a post that brings it something new, or after `:agent_wait_ms`
-  with nothing, and asks again straight away. The announcements only say when
-  to read again: everything the caller gets is read as the caller. Nothing is
-  marked as read, and asking again is always safe.
+  Something new, or more waiting, is answered at once, and so is everything
+  when `wait?` is false. Otherwise the caller is answered as soon as the fleet
+  announces a workspace change, a proposal change or a post past the caller's
+  place in a room it follows, or after `:agent_wait_ms` with nothing, and asks
+  again straight away. The announcements only say when to read again:
+  everything the caller gets is read as the caller. Nothing is marked as read,
+  and asking again is always safe.
   """
-  def sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor) do
-    wait_for_news(fleet_id, fn ->
-      read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor)
-    end)
+  def sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor, wait?) do
+    read = fn -> read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor) end
+    if wait?, do: wait_for_news(fleet_id, read), else: read.()
   end
 
   defp read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor) do
@@ -195,9 +195,10 @@ defmodule Keyfleet.Rooms do
   end
 
   # A new run or watermark of the workspace is answered whatever it brings, as
-  # the caller tells a log that started over by its `run_id`. A room's
-  # announcement may be about a room the caller doesn't follow, so it is
-  # answered only once the caller's own read has something new.
+  # the caller tells a log that started over by its `run_id`. A post is read
+  # only when it is past the caller's place in a room it follows, and answered
+  # once that read has something new; the fleet's other room announcements
+  # bring the caller nothing.
   defp await_news(fleet_id, read, synced, until) do
     receive do
       {:graph_head, ^fleet_id, _run_id, _watermark} ->
@@ -206,16 +207,28 @@ defmodule Keyfleet.Rooms do
       {:proposals_changed, ^fleet_id} ->
         read.()
 
-      %Phoenix.Socket.Broadcast{} ->
-        case read.() do
-          {:ok, again} ->
-            if news?(again), do: {:ok, again}, else: await_news(fleet_id, read, again, until)
+      %Phoenix.Socket.Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}} ->
+        if Enum.any?(
+             synced.rooms,
+             &match?(%{room_id: ^room_id, cursor: cursor} when seq > cursor, &1)
+           ),
+           do: read_again(fleet_id, read, until),
+           else: await_news(fleet_id, read, synced, until)
 
-          error ->
-            error
-        end
+      %Phoenix.Socket.Broadcast{} ->
+        await_news(fleet_id, read, synced, until)
     after
       Kernel.max(until - System.monotonic_time(:millisecond), 0) -> {:ok, synced}
+    end
+  end
+
+  defp read_again(fleet_id, read, until) do
+    case read.() do
+      {:ok, again} ->
+        if news?(again), do: {:ok, again}, else: await_news(fleet_id, read, again, until)
+
+      error ->
+        error
     end
   end
 
@@ -293,9 +306,10 @@ defmodule Keyfleet.Rooms do
         last -> last.seq
       end
 
-    %{kind: kind, head_seq: head_seq} = Map.fetch!(rooms, slug)
+    %{id: room_id, kind: kind, head_seq: head_seq} = Map.fetch!(rooms, slug)
 
     %{
+      room_id: room_id,
       slug: slug,
       kind: kind,
       head_seq: head_seq,

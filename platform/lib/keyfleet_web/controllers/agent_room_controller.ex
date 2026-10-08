@@ -15,6 +15,8 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Errors.SendConflictError
+  alias KeyfleetWeb.AgentWaits
+  alias KeyfleetWeb.ClientAddress
   alias KeyfleetWeb.ProposalJSON
   alias KeyfleetWeb.Refusal
   alias KeyfleetWeb.RoomJSON
@@ -150,8 +152,13 @@ defmodule KeyfleetWeb.AgentRoomController do
     actor = conn.assigns.agent_actor
     cursors = Enum.map(rooms, &%{slug: &1["slug"], after_seq: &1["after_seq"]})
 
+    # Only a few syncs from one address are held open at once; past that a sync
+    # answers straight away with what it has.
     with {:ok, synced} <-
-           Rooms.sync(fleet_id, cursors, graph["after_seq"], proposals["after_seq"], actor),
+           AgentWaits.hold(
+             ClientAddress.key(conn),
+             &Rooms.sync(fleet_id, cursors, graph["after_seq"], proposals["after_seq"], actor, &1)
+           ),
          {:ok, check_in} <- Agents.check_in(actor, fleet_id, run),
          {:ok, yours} <- yours(fleet_id, actor) do
       muted = Rooms.muted_keys!(fleet_id, actor)
