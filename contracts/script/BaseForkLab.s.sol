@@ -33,9 +33,12 @@ contract BaseForkLab is KeyfleetManifest {
     uint256 public constant SUBSCRIPTION_FUNDS = 0.1 ether;
     /// @notice The gas cap the stand-in coordinator records for the manifest's gas lane.
     uint64 public constant PROVING_KEY_MAX_GAS = 2_500_000;
+    /// @notice How long after the deploy Classic #1's sales open; `script/base-fork-lab.sh` then
+    /// moves the lab chain's clock past it.
+    uint64 public constant LAB_OPENING = 10 minutes;
 
     /// @notice Deploys the system, creates Classic #1 and moves the collection to phase 1, so
-    /// Classic #1 sells. Broadcast from the account that is to be the Safe.
+    /// Classic #1 sells from `LAB_OPENING` later. Broadcast from the account that is to be the Safe.
     /// @param keeper The wallet that records open fleets' decks and asks for card refreshes.
     function deploy(address keeper) external returns (KeyfleetFactory factory) {
         _requireLabChain();
@@ -55,7 +58,7 @@ contract BaseForkLab is KeyfleetManifest {
         coordinator.addConsumer(subscriptionId, address(keys));
         FoundingFleet memory classic = manifest.founding[0];
         factory.createFoundingFleet(classic.preset, classic.deckHash, classic.deckSize, classic.profile);
-        keys.advancePhase();
+        keys.advancePhase(uint64(block.timestamp) + LAB_OPENING);
         vm.stopBroadcast();
     }
 
@@ -94,8 +97,8 @@ contract BaseForkLab is KeyfleetManifest {
     /// @notice The lab's deployed record of the system the broadcast created.
     function recordOf(Manifest memory base, BroadcastSummary memory summary) public returns (string memory) {
         KeyfleetKeys keys = summary.factory.KEYS();
-        Manifest memory manifest =
-            labManifest(base, keys.SAFE(), keys.keeper(), keys.VRF_COORDINATOR(), keys.VRF_SUBSCRIPTION_ID());
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = keys.randomness();
+        Manifest memory manifest = labManifest(base, keys.SAFE(), keys.keeper(), coordinator, subscriptionId);
         return new RecordKeyfleets().record(manifest, summary);
     }
 

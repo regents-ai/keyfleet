@@ -12,7 +12,8 @@ import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
 import {KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
 
 contract KeyfleetShardsTest is KeyfleetFixture {
-    uint64 private constant START = 1_000_000;
+    /// @dev When the keys were bought, once the founding fleets' sales opened.
+    uint64 private start;
 
     KeyfleetManager private fleet;
     /// @dev Keys 1 and 2 of the founding Classic fleet, held by Alice and Bob.
@@ -30,10 +31,11 @@ contract KeyfleetShardsTest is KeyfleetFixture {
     event AgentVotingSet(uint256 indexed tokenId, bool on, uint64 epoch);
 
     function setUp() public {
-        vm.warp(START);
+        vm.warp(1_000_000);
         vm.roll(1_000);
         _setUpFixture();
         fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        start = uint64(block.timestamp);
         k1 = _buy(fleet, alice);
         k2 = _buy(fleet, bob);
     }
@@ -83,7 +85,7 @@ contract KeyfleetShardsTest is KeyfleetFixture {
     /// @dev Invariant: a key's owner issues a shard to a wallet for a whole number of days, under
     /// the key's current ownership; the record says so and the key's delegation revision rises.
     function test_anOwnerIssuesAShard() public {
-        uint64 expiresAt = START + 30 days;
+        uint64 expiresAt = start + 30 days;
         vm.expectEmit(true, true, true, true, address(shards));
         emit ShardIssued(k1, carol, expiresAt, 1);
         vm.prank(alice);
@@ -119,18 +121,18 @@ contract KeyfleetShardsTest is KeyfleetFixture {
 
         (uint64 shortest,,) = shards.shardOf(k1, carol);
         (uint64 longest,,) = shards.shardOf(k1, dave);
-        assertEq(shortest, START + 1 days, "One day");
-        assertEq(longest, START + 365 days, "A year");
+        assertEq(shortest, start + 1 days, "One day");
+        assertEq(longest, start + 365 days, "A year");
     }
 
     function testFuzz_aShardExpiresExactlyItsDaysLater(uint16 days_, uint32 startOffset) public {
         days_ = uint16(bound(days_, 1, 365));
-        vm.warp(START + startOffset);
+        vm.warp(start + startOffset);
 
         _issue(k1, carol, days_);
 
         (uint64 expiresAt,,) = shards.shardOf(k1, carol);
-        assertEq(expiresAt, START + uint256(startOffset) + uint256(days_) * 1 days);
+        assertEq(expiresAt, start + uint256(startOffset) + uint256(days_) * 1 days);
         vm.warp(uint256(expiresAt) - 1);
         assertTrue(_active(k1, carol), "Active until its last second");
         vm.warp(expiresAt);
@@ -190,7 +192,7 @@ contract KeyfleetShardsTest is KeyfleetFixture {
         assertTrue(_active(k1, dave), "Key 1 has two");
         assertFalse(_active(k2, dave), "Dave holds nothing of key 2");
         (uint64 fromBob,,) = shards.shardOf(k2, carol);
-        assertEq(fromBob, START + 60 days, "Each shard keeps its own time");
+        assertEq(fromBob, start + 60 days, "Each shard keeps its own time");
         assertEq(shards.delegationRevision(k1), 2, "Two issues of key 1");
     }
 
@@ -226,7 +228,7 @@ contract KeyfleetShardsTest is KeyfleetFixture {
 
         (uint64 expiresAt, uint64 epoch, bool active) = shards.shardOf(k1, carol);
         assertFalse(active || _active(k3, carol), "Both ended");
-        assertEq(expiresAt, START + 30 days, "The record stays readable");
+        assertEq(expiresAt, start + 30 days, "The record stays readable");
         assertEq(epoch, 1);
         assertEq(shards.delegationRevision(k1), 2, "Ending raises the revision");
     }
@@ -279,7 +281,7 @@ contract KeyfleetShardsTest is KeyfleetFixture {
         shards.end(_ids(k1), carol);
 
         _issue(k1, dave, 1);
-        vm.warp(START + 1 days);
+        vm.warp(start + 1 days);
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetShards.ShardNotActive.selector, k1, dave));
         shards.end(_ids(k1), dave);
@@ -310,7 +312,7 @@ contract KeyfleetShardsTest is KeyfleetFixture {
         shards.end(_ids(k1), carol);
 
         vm.expectEmit(true, true, true, true, address(shards));
-        emit ShardIssued(k1, carol, START + 10 days, 2);
+        emit ShardIssued(k1, carol, start + 10 days, 2);
         vm.prank(bob);
         shards.issue(_ids(k1), carol, 10);
         (, uint64 epoch, bool active) = shards.shardOf(k1, carol);

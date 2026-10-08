@@ -19,6 +19,8 @@ defmodule Keyfleet.AnvilLab do
   @chain_id 31_337
   # The fields of the script's `Lab` struct, in order.
   @lab [:keys, :factory, :manager, :rewards, :shards, :votes, :treasury, :staking, :usdc, :regent]
+  # AnvilLab.OPENING: how long after the lab's first step Classic #1's sales open.
+  @opening 60
 
   @doc """
   Starts an anvil, waits until it answers, and points the fleet reader's node
@@ -108,22 +110,13 @@ defmodule Keyfleet.AnvilLab do
   Builds the lab on the anvil at `url` with `contracts/script/AnvilLab.s.sol`,
   sent from `sender`, an account anvil has unlocked, and returns where the
   script says its contracts are, by the names of its `Lab` struct, in lower
-  case.
+  case. Between the lab's two steps the anvil's clock moves past Classic #1's
+  sales opening.
   """
   def lab!(url, sender) do
-    {output, status} =
-      System.cmd(
-        "forge",
-        ["script", "script/AnvilLab.s.sol:AnvilLab", "--rpc-url", url, "--broadcast", "--slow"] ++
-          ["--unlocked", "--sender", sender, "--json"],
-        cd: Path.expand("../../../contracts", __DIR__),
-        stderr_to_stdout: true
-      )
-
-    if status != 0, do: flunk("AnvilLab failed:\n#{String.slice(output, -4_000, 4_000)}")
-
     "(" <> addresses =
-      output
+      url
+      |> forge!(sender, [])
       |> String.split("\n")
       |> Enum.find_value(fn line ->
         case Jason.decode(line) do
@@ -133,6 +126,25 @@ defmodule Keyfleet.AnvilLab do
       end)
 
     addresses = addresses |> String.trim_trailing(")") |> String.split(", ")
-    Map.new(Enum.zip(@lab, addresses), fn {name, address} -> {name, String.downcase(address)} end)
+    lab = Map.new(Enum.zip(@lab, addresses), fn {name, address} -> {name, String.downcase(address)} end)
+
+    rpc!(url, "evm_increaseTime", [@opening])
+    rpc!(url, "evm_mine")
+    forge!(url, sender, ["--sig", "sell(address)", lab.manager])
+    lab
+  end
+
+  defp forge!(url, sender, args) do
+    {output, status} =
+      System.cmd(
+        "forge",
+        ["script", "script/AnvilLab.s.sol:AnvilLab" | args] ++
+          ["--rpc-url", url, "--broadcast", "--slow", "--unlocked", "--sender", sender, "--json"],
+        cd: Path.expand("../../../contracts", __DIR__),
+        stderr_to_stdout: true
+      )
+
+    if status != 0, do: flunk("AnvilLab failed:\n#{String.slice(output, -4_000, 4_000)}")
+    output
   end
 end

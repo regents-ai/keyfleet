@@ -309,7 +309,8 @@ contract KeyfleetLitTest is KeyfleetFixture {
         _execute(fleet, _approveHash(treasury, keccak256("lit message")));
 
         usdc.mint(address(treasury), 1_000e6);
-        vm.warp(treasury.nextRunAt());
+        uint256 runAt = treasury.nextRunAt();
+        if (block.timestamp < runAt) vm.warp(runAt);
         treasury.runDailySplit();
         address[] memory assets = new address[](1);
         assets[0] = address(usdc);

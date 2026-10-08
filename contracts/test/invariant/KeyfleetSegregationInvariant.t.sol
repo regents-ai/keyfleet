@@ -15,15 +15,15 @@ import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {MockAutolaunchFactory, MockLaunchToken} from "../mocks/MockAutolaunchFactory.sol";
 import {MockToken} from "../mocks/MockToken.sol";
-import {KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
+import {FULL_PIECE, KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
 
 /// @dev Hands each fleet's treasury random batches of calls straight from its controller, so even
 /// the calls proposing refuses (raw token moves and approvals, calls with ETH) are tried, aimed at the fleet's manager, controller, treasury and ledger, at the shared collection,
 /// shard record, factory and REGENT buyer, at USDC and REGENT, at Autolaunch and at the fleet's own
 /// token once bound, between purchases that each mint to a wallet of their own and, partway through,
 /// a launch that sells and is bound. Around every batch it records whether anything protected went
-/// down: the manager's owed protocol share, its Cascade reserve outside a level completion, a
-/// wallet's credit in the ledger, or the unsettled accrual of a key the treasury does not hold, in
+/// down: the manager's owed protocol share, its Cascade reserve outside a level completion, its
+/// USDC booked for REGENT other than by a piece turning it into REGENT, a wallet's credit in the ledger, or the unsettled accrual of a key the treasury does not hold, in
 /// USDC, in REGENT and in the bound token.
 contract SegregationHandler is Test {
     address internal constant NATIVE = address(0);
@@ -113,6 +113,8 @@ contract SegregationHandler is Test {
 
         uint256 owed = fleet.protocolShareOwed();
         uint256 reserve = fleet.cascadeReserve();
+        uint256 pending = fleet.pendingConversion();
+        uint64 nextPieceAt = regentBuyer.nextPieceAt();
         (uint256[] memory credited, uint256[] memory accrued) = _ledger(fleet, minted);
 
         address treasury = address(fleet.TREASURY());
@@ -123,6 +125,9 @@ contract SegregationHandler is Test {
         if (fleet.protocolShareOwed() < owed) _breach("the owed protocol share went down");
         if (fleet.cascadeReserve() < reserve && fleet.totalMinted() == minted) {
             _breach("the Cascade reserve went down without a level completing");
+        }
+        if (fleet.pendingConversion() < pending && regentBuyer.nextPieceAt() == nextPieceAt) {
+            _breach("the USDC booked for REGENT went down without a piece");
         }
         (uint256[] memory creditedAfter, uint256[] memory accruedAfter) = _ledger(fleet, minted);
         for (uint256 i = 0; i < credited.length; ++i) {
@@ -293,8 +298,8 @@ contract SegregationHandler is Test {
     }
 
     /// @dev The manager's own entry points and the shared contracts: the collection's mint, deck,
-    /// phase and reveal, the manager's transfer hook, first sale and profile, the REGENT buyer's buy
-    /// and callback, and the factory's creations.
+    /// phase and reveal, the manager's transfer hook, first sale, piece and profile, the REGENT
+    /// buyer's queue, piece and callback, and the factory's creations.
     function _sharedCall(Draw memory d, uint256 pick) internal view returns (KeyfleetTreasury.Call memory) {
         if (pick == 26) return _c(address(keys), 0, abi.encodeCall(keys.mint, (d.someone, d.fleet.totalMinted() + 1)));
         if (pick == 27) {
@@ -302,7 +307,9 @@ contract SegregationHandler is Test {
         }
         if (pick == 28) return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.sellFirstKey, (d.someone)));
         if (pick == 29) {
-            return _c(address(regentBuyer), 0, abi.encodeCall(regentBuyer.buy, (d.amount, address(d.treasury))));
+            if (d.arg % 3 == 0) return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.takePiece, (d.arg)));
+            if (d.arg % 3 == 1) return _c(address(regentBuyer), 0, abi.encodeCall(regentBuyer.enqueue, ()));
+            return _c(address(regentBuyer), 0, abi.encodeCall(regentBuyer.convert, (d.arg)));
         }
         if (pick == 30) {
             return _c(

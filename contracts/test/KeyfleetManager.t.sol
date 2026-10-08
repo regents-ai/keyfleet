@@ -11,11 +11,12 @@ import {IERC4906} from "@openzeppelin/contracts/interfaces/IERC4906.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
+import {KeyfleetRegentBuyer} from "../src/KeyfleetRegentBuyer.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
-import {KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
+import {FULL_PIECE, KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
 import {MockToken} from "./mocks/MockToken.sol";
 
 /// @dev Buys a key and tries to buy another from inside `onERC721Received`. It holds allowance and
@@ -45,9 +46,8 @@ contract ReenteringReceiver is IERC721Receiver {
     }
 }
 
-/// @dev Tries the fleet's three money entry points from wherever it is called, and records whether
-/// each one was turned away by the fleet's reentrancy guard. Used both as a key receiver, from
-/// inside `onERC721Received`, and as the REGENT pool's hook, from inside the swap.
+/// @dev Tries the fleet's three money entry points from inside `onERC721Received`, and records
+/// whether each one was turned away by the fleet's reentrancy guard.
 contract ReentryProbe is IERC721Receiver {
     KeyfleetManager private immutable FLEET;
     bool public purchaseRefused;
@@ -198,9 +198,9 @@ contract KeyfleetManagerTest is KeyfleetFixture {
     uint256 private constant CLASSIC_START = KeyfleetPresets.CLASSIC_START_USDC;
     /// @dev The founding Accelerant fleet's step, and the one the fixture gives open Accelerant fleets.
     uint256 private constant STEP = KeyfleetPresets.MAX_ACCELERANT_STEP_PERCENT;
-    /// @dev The costliest first purchase measured, the founding Accelerant fleet's key 1 (784,684
+    /// @dev The costliest first purchase measured, the founding Accelerant fleet's key 1 (557,166
     /// gas), plus twenty percent, rounded up to the nearest thousand.
-    uint256 private constant PURCHASE_GAS_CEILING = 942_000;
+    uint256 private constant PURCHASE_GAS_CEILING = 669_000;
 
     StdStorage private fleetStore;
 
@@ -278,14 +278,14 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         return regent.balanceOf(address(fleet.TREASURY()));
     }
 
-    /// @dev The manager holds no capital: its USDC is exactly the Cascade reserve and the owed share,
-    /// and it holds no WETH or REGENT. The shared REGENT buyer holds nothing and has no allowance
-    /// left over, and the treasury holds no USDC from purchases.
+    /// @dev The manager holds no capital: its USDC is exactly the Cascade reserve, the owed share and
+    /// the USDC booked for conversion, and it holds no WETH or REGENT. The shared REGENT buyer holds
+    /// nothing and has no allowance left over, and the treasury holds no USDC from purchases.
     function _assertBalanceInvariant(KeyfleetManager fleet) private view {
         assertEq(
             usdc.balanceOf(address(fleet)),
-            fleet.cascadeReserve() + fleet.protocolShareOwed(),
-            "fleet USDC balance equals reserve plus the owed protocol share"
+            fleet.cascadeReserve() + fleet.protocolShareOwed() + fleet.pendingConversion(),
+            "fleet USDC balance equals reserve plus the owed protocol share plus the booked conversion"
         );
         assertEq(regent.balanceOf(address(fleet)), 0, "the manager holds no REGENT");
         assertEq(weth.balanceOf(address(fleet)), 0, "the manager holds no WETH");
@@ -472,7 +472,10 @@ contract KeyfleetManagerTest is KeyfleetFixture {
 
         assertEq(paid, 40_040_480_000, "the whole fleet cost 40,040.48 USDC");
         assertEq(fleet.protocolShareOwed(), paid / 10, "10% of every sale is owed to staking");
-        assertEq(_treasuryRegent(fleet), _regentFor(paid - paid / 10), "and the rest is REGENT in the treasury");
+        assertEq(fleet.pendingConversion(), paid - paid / 10, "and the rest is booked for the treasury");
+        _assertBalanceInvariant(fleet);
+        _convertAll();
+        assertEq(_treasuryRegent(fleet), _regentFor(paid - paid / 10), "and arrives as REGENT in the treasury");
         _assertBalanceInvariant(fleet);
 
         assertEq(fleet.remainingSupply(), 0);
@@ -545,20 +548,24 @@ contract KeyfleetManagerTest is KeyfleetFixture {
 
     // --- 3. Syndicate and Classic ledgers ---------------------------------
 
-    /// @dev Invariant: 10% is owed to REGENT staking in USDC and every remaining unit is swapped to
-    /// REGENT for the treasury in the same purchase; the fleet's USDC balance is exactly the owed share.
-    function test_syndicatePurchaseOwesStakingTenPercentAndBuysRegentWithTheRest() public {
+    /// @dev Invariant: 10% is owed to REGENT staking in USDC and every remaining unit is booked for
+    /// the treasury, which later receives it as REGENT; the purchase itself swaps nothing.
+    function test_syndicatePurchaseOwesStakingTenPercentAndBooksTheRestForRegent() public {
         KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
 
         uint256 price = _fundNext(fleet);
         vm.expectEmit(true, true, true, true, address(fleet));
         emit KeyfleetManager.Purchased(_key(fleet, 1), buyer, alice, Q, Q_PROTOCOL, Q - Q_PROTOCOL, 0, 0);
-        vm.expectEmit(true, true, true, true, address(fleet));
-        emit KeyfleetManager.RegentBought(Q - Q_PROTOCOL, _regentFor(Q - Q_PROTOCOL));
+        vm.expectEmit(true, true, true, true, address(regentBuyer));
+        emit KeyfleetRegentBuyer.Queued(address(fleet));
         vm.prank(buyer);
         fleet.purchase(alice, 2 * price, block.timestamp, _noProof());
 
         assertEq(fleet.protocolShareOwed(), Q_PROTOCOL, "10% owed to staking");
+        assertEq(fleet.pendingConversion(), Q - Q_PROTOCOL, "90% booked for the treasury");
+        assertEq(usdc.balanceOf(address(v3Pool)), 0, "nothing swapped in the purchase");
+        _assertBalanceInvariant(fleet);
+        _convertAll();
         assertEq(_treasuryRegent(fleet), _regentFor(Q - Q_PROTOCOL), "90% arrives as REGENT");
         assertEq(fleet.cascadeReserve(), 0, "Syndicate holds no reserve");
         assertEq(usdc.balanceOf(address(fleet.REWARDS())), 0, "no reward backing from a Syndicate purchase");
@@ -579,6 +586,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
                 _buy(fleet, _wallet(i));
                 _assertBalanceInvariant(fleet);
             }
+            _convertAll();
 
             uint256 swapped = usdc.balanceOf(address(v3Pool)) - swappedBefore;
             assertEq(_treasuryRegent(fleet), _regentFor(swapped), "every swapped unit is REGENT in the treasury");
@@ -638,6 +646,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         assertEq(fleet.currentPrice(), Q, "the first key costs the reference price");
 
         _buy(fleet, alice);
+        _convertAll();
 
         assertEq(_treasuryRegent(fleet), _regentFor(Q - Q_PROTOCOL), "90% arrives as REGENT");
         assertEq(usdc.balanceOf(address(fleet.REWARDS())), 0, "no rebate on the first mint");
@@ -686,6 +695,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         assertEq(rewards.credits(address(usdc), bob), rebate, "the current holder is rebated");
         assertEq(rewards.credits(address(usdc), alice), 0, "the original minter is not");
         assertEq(usdc.balanceOf(address(rewards)), rebate, "the rebate is backed in USDC in the ledger");
+        _convertAll();
         assertEq(_treasuryRegent(fleet), _regentFor((Q - Q_PROTOCOL) + capital), "the treasury's 20% is REGENT");
         _assertBalanceInvariant(fleet);
     }
@@ -752,13 +762,16 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         uint256 price = _fundNext(fleet);
         vm.expectEmit(true, true, true, true, address(fleet));
         emit KeyfleetManager.LevelCompleted(1, 0, 2 * (Q - Q_PROTOCOL));
-        vm.expectEmit(true, true, true, true, address(fleet));
-        emit KeyfleetManager.RegentBought(2 * (Q - Q_PROTOCOL), _regentFor(2 * (Q - Q_PROTOCOL)));
+        vm.expectEmit(true, true, true, true, address(regentBuyer));
+        emit KeyfleetRegentBuyer.Queued(address(fleet));
         vm.prank(buyer);
         fleet.purchase(bob, 2 * price, block.timestamp, _noProof());
 
         assertTrue(fleet.levelCompleted(1), "level 1 completed on its last key");
         assertEq(fleet.cascadeReserve(), 0, "the reserve is emptied");
+        assertEq(fleet.pendingConversion(), 2 * (Q - Q_PROTOCOL), "into the queue for REGENT");
+        _assertBalanceInvariant(fleet);
+        _convertAll();
         assertEq(_treasuryRegent(fleet), _regentFor(2 * (Q - Q_PROTOCOL)), "and swapped for the treasury");
         assertEq(fleet.levelGrossPaid(1), 2 * Q, "gross paid for level 1 is recorded");
         _assertBalanceInvariant(fleet);
@@ -772,6 +785,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
 
         _buy(fleet, alice);
         _buy(fleet, bob);
+        _convertAll();
         uint256 regentAfterLevelOne = _treasuryRegent(fleet);
 
         uint256 levelTwoPrice = fleet.nextPrice();
@@ -790,7 +804,10 @@ contract KeyfleetManagerTest is KeyfleetFixture {
 
         assertTrue(fleet.levelCompleted(2));
         assertEq(fleet.cascadeReserve(), 0, "the reserve is emptied again");
-        assertEq(_treasuryRegent(fleet), regentAfterLevelOne + _regentFor(surplus), "only the surplus is swapped");
+        assertEq(fleet.pendingConversion(), surplus, "only the surplus is booked");
+        _assertBalanceInvariant(fleet);
+        _convertAll();
+        assertEq(_treasuryRegent(fleet), regentAfterLevelOne + _regentFor(surplus), "and swapped");
         assertEq(usdc.balanceOf(address(rewards)), reimbursement, "the repayment is backed in USDC in the ledger");
         assertEq(rewards.accrued(address(usdc), _key(fleet, 1)), Q, "each level-1 key earns its own gross back");
         assertEq(rewards.accrued(address(usdc), _key(fleet, 2)), Q);
@@ -877,6 +894,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
 
         assertEq(fleet.totalMinted(), 46_365, "every key through level 20 was sold");
         assertEq(usdc.balanceOf(address(rewards)), repaid, "the ledger holds every repayment in full");
+        _convertAll();
         assertEq(
             _treasuryRegent(fleet),
             _regentFor(totalPaid - fleet.protocolShareOwed() - repaid),
@@ -1002,53 +1020,34 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         _assertBalanceInvariant(fleet);
     }
 
-    /// @dev Invariant: the REGENT pool's hook, third-party code that runs inside every swap, cannot
-    /// call back into the same fleet's purchase, surplus or protocol-share entry points: each is
-    /// refused by the fleet's guard and the whole purchase reverts with it.
-    function test_theRegentPoolHookCannotReenterTheSameFleet() public {
+    /// @dev Invariant: the REGENT pool's hook, third-party code, never runs inside a purchase, which
+    /// swaps nothing. It runs only inside a piece, once the fleet has handed the piece over, and from
+    /// there it can only do what anyone may: sorting a stray transfer and sending the owed share both
+    /// go through and leave the fleet's books exact. A purchase from inside a piece is in
+    /// KeyfleetRegentBuyer.t.sol.
+    function test_theRegentPoolHookRunsOnlyInsideAPieceAndLeavesTheBooksExact() public {
         KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        KeyfleetTreasury treasury = fleet.TREASURY();
+        // With nothing to sort the hook's call reverts, so a hook inside the purchase would stop it.
+        poolManager.setHook(address(fleet), abi.encodeCall(KeyfleetManager.recognizeSurplus, (address(usdc))));
         _buy(fleet, alice);
+        assertEq(fleet.totalMinted(), 1, "the purchase never reached the pool");
+
         usdc.mint(address(fleet), Q);
+        regentBuyer.convert(FULL_PIECE);
+        assertEq(usdc.balanceOf(address(treasury)), Q, "the hook sorted the stray to the treasury");
+        assertEq(_treasuryRegent(fleet), _regentFor(Q - Q_PROTOCOL), "and the piece still paid the treasury");
+        assertEq(usdc.balanceOf(address(fleet)), fleet.accountedBalance(address(usdc)), "every unit has a purpose");
 
-        bytes[3] memory reentries = [
-            abi.encodeCall(KeyfleetManager.purchase, (bob, type(uint256).max, block.timestamp, _noProof())),
-            abi.encodeCall(KeyfleetManager.recognizeSurplus, (address(usdc))),
-            abi.encodeCall(KeyfleetManager.sendProtocolShare, ())
-        ];
-        for (uint256 i = 0; i < reentries.length; ++i) {
-            poolManager.setHook(address(fleet), reentries[i]);
-            uint256 price = _fundNext(fleet);
-            vm.prank(buyer);
-            vm.expectRevert(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector);
-            fleet.purchase(carol, price, block.timestamp, _noProof());
-        }
-        assertEq(fleet.totalMinted(), 1, "no reentered purchase went through");
-        assertEq(fleet.surplus(address(usdc)), Q, "the stray USDC was not moved from inside the swap");
-
-        poolManager.setHook(address(0), "");
-        _buy(fleet, carol);
-        assertEq(fleet.totalMinted(), 2, "with the hook quiet the purchase goes through");
-    }
-
-    /// @dev Invariant: a hook that only probes is refused everywhere in the fleet, and the purchase
-    /// it ran inside completes with every unit booked.
-    function test_aProbingRegentPoolHookIsRefusedAndThePurchaseCompletes() public {
-        KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
-        ReentryProbe probe = new ReentryProbe(fleet);
-        usdc.mint(address(probe), 10 * Q);
-        probe.approveFleet(usdc);
-        poolManager.setHook(address(probe), abi.encodeCall(ReentryProbe.probe, ()));
-
-        _buy(fleet, alice);
-
-        assertTrue(probe.probed(), "the hook ran inside the swap");
-        assertTrue(probe.purchaseRefused());
-        assertTrue(probe.surplusRefused());
-        assertTrue(probe.sendRefused());
-        assertEq(fleet.totalMinted(), 1);
-        assertEq(usdc.balanceOf(address(probe)), 10 * Q, "the hook spent nothing");
-        assertEq(_treasuryRegent(fleet), _regentFor(Q - Q_PROTOCOL));
-        _assertBalanceInvariant(fleet);
+        poolManager.setHook(address(fleet), abi.encodeCall(KeyfleetManager.sendProtocolShare, ()));
+        _buy(fleet, bob);
+        uint256 owed = fleet.protocolShareOwed();
+        vm.warp(regentBuyer.nextPieceAt());
+        regentBuyer.convert(FULL_PIECE);
+        assertEq(staking.totalUsdcReceived(), owed, "the hook sent the owed share");
+        assertEq(fleet.protocolShareOwed(), 0);
+        assertEq(usdc.balanceOf(address(fleet)), fleet.accountedBalance(address(usdc)), "every unit has a purpose");
+        assertEq(fleet.pendingConversion(), 0, "and every booked unit became REGENT");
     }
 
     /// @dev Invariant: after every purchase on every preset, the shared REGENT buyer holds no USDC,
@@ -1152,12 +1151,12 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         assertEq(next.protocol + next.capital + next.reserve + next.rebate, price, "sums to gross");
         assertEq(next.rebate, price - price / 10 - price / 5, "70% rebate");
 
+        uint256 bookedBefore = fleet.pendingConversion();
         vm.expectEmit(true, true, true, true, address(fleet));
         emit KeyfleetManager.Purchased(_key(fleet, 2), buyer, bob, price, next.protocol, next.capital, 0, next.rebate);
-        vm.expectEmit(true, true, true, true, address(fleet));
-        emit KeyfleetManager.RegentBought(next.capital, _regentFor(next.capital));
         vm.prank(buyer);
         fleet.purchase(bob, 2 * price, block.timestamp, _noProof());
+        assertEq(fleet.pendingConversion() - bookedBefore, next.capital, "the quoted capital is booked");
     }
 
     /// @dev Invariant: level boundaries the fleet reports are the library's, so app, contract and
@@ -1198,7 +1197,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         assertEq(staking.totalUsdcReceived(), owed, "the whole share reached staking");
         assertEq(staking.lastSourceRef(), bytes32(uint256(uint160(address(fleet)))), "tagged with the manager");
         assertEq(fleet.protocolShareOwed(), 0);
-        assertEq(usdc.balanceOf(address(fleet)), reserve, "the reserve was not touched");
+        assertEq(usdc.balanceOf(address(fleet)), reserve + fleet.pendingConversion(), "the reserve was not touched");
         assertEq(usdc.balanceOf(address(treasury)), 0, "the treasury passed it straight on");
         assertEq(usdc.allowance(address(treasury), address(staking)), 0);
 
@@ -1342,7 +1341,11 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         _expectRefused(fleet, alice, alice, leafAsProof, alice);
         assertFalse(fleet.meetsRequirements(erin, proofs[0]));
         assertEq(fleet.totalMinted(), 1, "only the creator's key exists");
-        assertEq(usdc.balanceOf(address(fleet)), fleet.protocolShareOwed(), "no refused USDC arrived");
+        assertEq(
+            usdc.balanceOf(address(fleet)),
+            fleet.protocolShareOwed() + fleet.pendingConversion(),
+            "no refused USDC arrived"
+        );
     }
 
     /// @dev Invariant: holding at least one token of the named collection qualifies, read live at
@@ -1764,7 +1767,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
             }
 
             _assertBalanceInvariant(fleet);
-            assertEq(_treasuryRegent(fleet), _regentFor(usdc.balanceOf(address(v3Pool))), "every swap reached it");
+            assertEq(usdc.balanceOf(address(v3Pool)), 0, "no purchase swaps");
         }
 
         assertGt(fleet.totalMinted(), 0, "the sequence bought at least one key");

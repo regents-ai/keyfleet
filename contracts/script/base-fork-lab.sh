@@ -11,11 +11,14 @@
 # Then, from contracts/, with KEYFLEET_LAB naming that chain (the site's lab reads the same):
 #
 #   export KEYFLEET_LAB=http://127.0.0.1:8546
-#   script/base-fork-lab.sh deploy 0xBuyer [0xBuyer ...]  deploy, write deployments/base-fork-lab.json, fund each buyer
+#   script/base-fork-lab.sh deploy 0xBuyer [0xBuyer ...]  deploy, open Classic #1's sales, write
+#                                                         deployments/base-fork-lab.json, fund each buyer
 #   script/base-fork-lab.sh fund 0xBuyer [0xBuyer ...]    give each buyer 100 ETH and exactly 1,000 USDC
 #   script/base-fork-lab.sh fulfil                        answer every card draw still waiting
 #
-# The Safe is anvil's first default account and the keeper its second; anvil unlocks both.
+# The Safe is anvil's first default account and the keeper its second; anvil unlocks both. The deploy
+# names a sales opening 10 minutes ahead (BaseForkLab.LAB_OPENING), as the Safe must, and then moves
+# the lab chain's clock past it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -26,6 +29,7 @@ usdc=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
 # Base USDC keeps each balance in slot 9's mapping (balanceAndBlacklistStates).
 usdc_balance_slot=9
 eth_each=0x56BC75E2D63100000
+lab_opening=600
 usdc_each=1000000000
 
 usage() {
@@ -67,6 +71,8 @@ case "$step" in
     require_lab_chain
     forge script script/BaseForkLab.s.sol:BaseForkLab --sig "deploy(address)" "$keeper" \
       --rpc-url "$rpc" --broadcast --unlocked --sender "$safe"
+    cast rpc evm_increaseTime "$lab_opening" --rpc-url "$rpc" >/dev/null
+    cast rpc evm_mine --rpc-url "$rpc" >/dev/null
     forge script script/BaseForkLab.s.sol:BaseForkLab --sig "record()" --rpc-url "$rpc"
     fund "$@"
     echo "Wrote $(pwd)/deployments/base-fork-lab.json"

@@ -22,8 +22,9 @@ import {IRegentsAutolaunchFactoryV2} from "./interfaces/IRegentsAutolaunchFactor
 /// @dev One instance is permanently bound to one fleet, deployed by the factory with the fleet's
 /// three other contracts. Anyone paying the fleet pays this address, in USDC or any other token.
 /// The capital part of every purchase and a completed Cascade level's released reserve arrive here
-/// as REGENT, bought at the market price by the shared `KeyfleetRegentBuyer` in the same purchase;
-/// anything sent to the fleet's manager outside a purchase is sent here as it was paid.
+/// as REGENT, bought at the market price by the shared `KeyfleetRegentBuyer` one piece at a time
+/// after the purchase, while the USDC waits in the manager; anything sent to the fleet's manager
+/// outside a purchase is sent here as it was paid.
 ///
 /// The treasury holds native ETH as well as tokens. It spends only by making the exact calls of a
 /// proposal the keys approved, which the fleet's `KeyfleetVotes` hands it when the proposal is
@@ -45,12 +46,12 @@ import {IRegentsAutolaunchFactoryV2} from "./interfaces/IRegentsAutolaunchFactor
 ///
 /// The daily split shares a fixed part of the treasury's balance of each bound asset (ETH, REGENT,
 /// USDC, OUSD once a proposal admits it, and the fleet's launch token once bound) equally across
-/// every minted key, through the fleet's ledger. Anyone may run it once a day has passed since the
-/// last run, or since the first mint before any run; an approved proposal may also run it at any
-/// time. Its rate, 0.5% by default, is between 0.1% and 2% and changes only by an approved
-/// proposal. Carrying out calls, the deposit, returning an advance, binding the launch token and
-/// the public split run under one reentrancy lock; a voted split runs inside the calls it is
-/// carried out with.
+/// every mature key, one minted at least `KEY_MATURITY` (2 days) ago, through the fleet's ledger.
+/// Anyone may run it once a day has passed since the last run, or since the first mint before any
+/// run; an approved proposal may also run it at any time. Its rate, 0.5% by default, is between
+/// 0.1% and 2% and changes only by an approved proposal. Carrying out calls, the deposit, returning
+/// an advance, binding the launch token and the public split run under one reentrancy lock; a voted
+/// split runs inside the calls it is carried out with.
 ///
 /// The treasury signs nothing by itself. It answers ERC-1271 `isValidSignature` with yes only for
 /// a hash an approved proposal approved with `approveSignatureHash`, until one revokes it with
@@ -206,14 +207,16 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     /// @param from Whoever returned it; anyone may.
     /// @param outstanding What is still outstanding afterwards.
     event AdvanceReturned(uint256 indexed advanceId, address indexed from, uint256 amount, uint256 outstanding);
-    /// @notice The daily split ran for `keys` keys at `bps`, publicly or, when `voted`, by an
+    /// @notice The daily split ran for `keys` mature keys at `bps`, publicly or, when `voted`, by an
     /// approved proposal.
     event DailySplitRun(bool indexed voted, uint256 keys, uint256 bps);
     /// @notice One bound asset was split: `perKey` to each key from a balance of `balance`; the
-    /// treasury keeps the rest, rounding dust included.
+    /// treasury keeps the rest, rounding dust included. For a token, `perKey` is worked out from what
+    /// the ledger holds above what it owes, so it can be less than the rate gives.
     event SplitAllocated(address indexed asset, uint256 balance, uint256 perKey, uint256 keys);
     /// @notice One bound asset was not split this run: no keys, a balance under its threshold, or
-    /// too little to give every key a whole unit.
+    /// too little to give every key a whole unit, before sending or, for a token, in what arrived at
+    /// the ledger. Tokens that arrived and were not split stay in the ledger.
     event SplitSkipped(address indexed asset, uint256 balance);
     /// @notice One bound token refused to move to the ledger, so it was not split this run; the
     /// others were.
@@ -447,13 +450,13 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
         return Math.max(lastRunAt, firstMintAt) + SPLIT_INTERVAL;
     }
 
-    /// @dev Splits every bound asset at the current rate across the keys minted now, with the
+    /// @dev Splits every bound asset at the current rate across the keys mature now, with the
     /// ledger's funding flag set throughout so that only this routine can fund the ledger.
     function _split(bool voted) private {
         TransientSlot.BooleanSlot flag = SPLIT_IN_PROGRESS.asBoolean();
         flag.tstore(true);
         lastRunAt = uint64(block.timestamp);
-        uint256 keys = MANAGER.totalMinted();
+        uint256 keys = MANAGER.matureKeys();
         uint256 bps = dailySplitBps;
         emit DailySplitRun(voted, keys, bps);
         _splitAsset(NATIVE, address(this).balance, ETH_THRESHOLD, keys, bps);
@@ -473,8 +476,11 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     /// @dev `balance` is the treasury's whole balance of the asset, all of it free capital, read
     /// before anything is cut from it. A token that refuses the transfer is skipped and the run goes
     /// on; one that ran the transfer out of gas reverts the run instead, so a caller cannot starve
-    /// one asset on purpose. Once the tokens are in the ledger, its funding must succeed or the
-    /// whole run reverts, which is how a key minted during the transfer is kept from sharing it.
+    /// one asset on purpose. A token is split by what the ledger holds above what it already owes,
+    /// at most the rate's amount per key, so a token that arrives short, or a ledger left short by
+    /// an earlier payout, makes the keys' share smaller instead of making the run revert. Once the
+    /// tokens are in the ledger, its funding must succeed or the whole run reverts, so the ledger
+    /// only ever adds a split for exactly the keys mature now.
     function _splitAsset(address asset, uint256 balance, uint256 threshold, uint256 keys, uint256 bps) private {
         uint256 perKey = keys == 0 || balance < threshold ? 0 : Math.mulDiv(balance, bps, 10_000) / keys;
         if (perKey == 0) {
@@ -489,6 +495,13 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
             if (!IERC20(asset).trySafeTransfer(address(REWARDS), allocated)) {
                 if (gasleft() < gasBefore / 63) revert SplitOutOfGas();
                 emit SplitTransferFailed(asset, allocated);
+                return;
+            }
+            uint256 held = IERC20(asset).balanceOf(address(REWARDS));
+            uint256 owed = REWARDS.backed(asset);
+            perKey = held > owed ? Math.min(perKey, (held - owed) / keys) : 0;
+            if (perKey == 0) {
+                emit SplitSkipped(asset, balance);
                 return;
             }
             REWARDS.fundSplit(asset, perKey, keys);

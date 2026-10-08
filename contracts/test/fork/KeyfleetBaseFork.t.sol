@@ -96,9 +96,11 @@ abstract contract KeyfleetForkFixture is Test {
         }
     }
 
-    /// @dev Makes the Safe step's call moving the collection to its next phase, from the Safe.
+    /// @dev Makes the Safe step's call moving the collection to its next phase, opening a second
+    /// from now, from the Safe, and waits for that second.
     function _advancePhase() internal {
-        _asSafe(safeSteps.advancePhaseCalls(_manifest(), factory)[0]);
+        _asSafe(safeSteps.advancePhaseCalls(_manifest(), factory, uint64(block.timestamp + 1))[0]);
+        vm.warp(block.timestamp + 1);
     }
 
     function _asSafe(KeyfleetSafeSteps.SafeCall memory call) internal {
@@ -224,8 +226,9 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
         }
 
         assertEq(keys.SAFE(), script.BASE_REGENTS_SAFE(), "the Regents Safe runs the collection");
-        assertEq(address(keys.VRF_COORDINATOR()), address(coordinator), "the Base coordinator");
-        assertEq(keys.VRF_KEY_HASH(), script.BASE_VRF_KEY_HASH_2_GWEI(), "the 2 gwei lane");
+        (IVRFCoordinatorV2Plus vrfCoordinator,, bytes32 keyHash) = keys.randomness();
+        assertEq(address(vrfCoordinator), address(coordinator), "the Base coordinator");
+        assertEq(keyHash, script.BASE_VRF_KEY_HASH_2_GWEI(), "the 2 gwei lane");
         assertEq(address(factory.REGENT_STAKING()), address(staking), "REGENT staking");
         assertEq(address(factory.AUTOLAUNCH()), script.BASE_AUTOLAUNCH_FACTORY(), "the Autolaunch factory");
         KeyfleetRegentBuyer buyer = factory.REGENT_BUYER();
@@ -325,7 +328,11 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
         vm.expectRevert();
         classic.sendProtocolShare();
         assertEq(classic.protocolShareOwed(), owedWhilePaused, "the share stays owed in the manager");
-        assertEq(usdc.balanceOf(address(classic)), owedWhilePaused, "and held by it");
+        assertEq(
+            usdc.balanceOf(address(classic)),
+            owedWhilePaused + classic.pendingConversion(),
+            "and held by it, beside the USDC booked for REGENT"
+        );
     }
 
     /// @dev Staking's own revenue event names the fleet's treasury as the depositor, the fleet's

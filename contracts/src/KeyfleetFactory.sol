@@ -116,7 +116,7 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     error DeployerMismatch(address deployer);
     /// @notice Only the Safe may create a founding fleet.
     error OnlySafe(address caller);
-    /// @notice Anyone may create a fleet only once the collection has reached its last phase.
+    /// @notice Anyone may create a fleet only once the collection's last phase has opened.
     error CreationClosed(uint8 phase);
     /// @notice The creation deadline had already passed.
     error Expired(uint256 deadline);
@@ -162,7 +162,7 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
             new KeyfleetKeys(config.safe, config.keeper, config.collection, config.randomness, config.traitTableHash);
         KEYS = keys;
         SHARDS = new KeyfleetShards(keys);
-        REGENT_BUYER = new KeyfleetRegentBuyer(config.route);
+        REGENT_BUYER = new KeyfleetRegentBuyer(config.route, keys);
         USDC = IERC20(config.route.usdc);
         REGENT = IERC20(config.route.regent);
         REGENT_STAKING = config.staking;
@@ -219,14 +219,14 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     }
 
     /// @notice Creates a fleet on the creator's terms and sells its key 1 to the creator, once the
-    /// collection has reached its last phase.
+    /// collection's last phase has opened.
     /// @dev The creator must have approved this factory for the starting price, which it passes to
     /// the new manager for key 1. The fleet is registered without a deck; the keeper records it
-    /// later, and key 1 waits for its draw until then. Locked, so the REGENT pool's hook or the
-    /// creator's `onERC721Received` cannot create another fleet from inside this one.
+    /// later, and key 1 waits for its draw until then. Locked, so the creator's
+    /// `onERC721Received` cannot create another fleet from inside this one.
     function createFleet(FleetTerms calldata terms) external nonReentrant returns (uint256 fleetId, uint256 tokenId) {
         uint8 phase = KEYS.phase();
-        if (phase != KEYS.FINAL_PHASE()) revert CreationClosed(phase);
+        if (phase != KEYS.FINAL_PHASE() || block.timestamp < KEYS.phaseOpensAt()) revert CreationClosed(phase);
         if (block.timestamp > terms.deadline) revert Expired(terms.deadline);
         uint256 startPrice = terms.startPrice;
         if (
@@ -263,7 +263,9 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     ) private returns (uint256 fleetId, KeyfleetManager manager) {
         w.fleetId = fleetId = KEYS.fleetCount() + 1;
         (w.manager, w.votes, w.treasury, w.rewards) = predict(fleetId);
-        (, uint256 typeNumber) = KEYS.registerFleet(w.preset, w.manager, deckHash, deckSize);
+        (uint256 registered, uint256 typeNumber) = KEYS.registerFleet(w.preset, w.manager, deckHash, deckSize);
+        // The collection numbers fleets in order and only factories register them, inside `_create`.
+        assert(registered == fleetId);
 
         _storeWiring(w);
         MANAGER_DEPLOYER.deploy(fleetId);

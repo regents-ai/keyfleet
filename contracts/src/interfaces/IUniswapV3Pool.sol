@@ -7,6 +7,20 @@ interface IUniswapV3Pool {
     function token0() external view returns (address);
     function token1() external view returns (address);
 
+    /// @notice The pool's current state; the REGENT buyer reads only `sqrtPriceX96`.
+    function slot0()
+        external
+        view
+        returns (
+            uint160 sqrtPriceX96,
+            int24 tick,
+            uint16 observationIndex,
+            uint16 observationCardinality,
+            uint16 observationCardinalityNext,
+            uint8 feeProtocol,
+            bool unlocked
+        );
+
     /// @notice Swaps one token for the other. A positive `amountSpecified` is an exact input. The
     /// pool pays the output first, then calls `uniswapV3SwapCallback` on the caller for the input.
     /// @return amount0 The pool's change in token0: positive is paid in, negative paid out.

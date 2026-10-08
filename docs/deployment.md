@@ -25,10 +25,17 @@ The release runs in six steps, in this order:
 5. **Record.** `RecordKeyfleets` reads the system and every fleet back from the
    chain, checks them against the manifest, and writes the published record,
    `contracts/deployments/base.deployed.json`.
-6. **Phases.** Only when the founder says sales open, `KeyfleetSafeSteps` with
-   the step `advance-phase` writes the next phase step for the founder to sign:
-   phase 1 opens Classic #1, phase 2 opens the other three founding fleets,
-   phase 3 lets anyone create a fleet.
+6. **Phases.** Only when the founder says when sales open, `KeyfleetSafeSteps`
+   with the step `advance-phase` writes the next phase step for the founder to
+   sign, naming that moment: phase 1 opens Classic #1, phase 2 opens the other
+   three founding fleets, phase 3 lets anyone create a fleet.
+
+Before step 1, go through the deploy-day checklist in the
+[contracts README](../contracts/README.md#deploy-day-checklist): the keeper,
+the keeper's job list of public buttons (pieces, daily splits and the protocol
+share), the REGENT pool hook's fee that pieces rely on, the collection metadata
+address, the subscription id and the consumer, REGENT staking unpaused, and
+factories that can never be removed.
 
 Nothing in steps 1 to 5 puts any key on sale. The site lists the fleets only
 once the record is loaded into it by hand with `seed-deployment` (see
@@ -141,17 +148,47 @@ subscription pays for every fleet's requests in ETH. Before the deployment:
    from the creator, then `acceptSubscriptionOwnerTransfer(subId)` from the Safe.
 3. Write the subscription id into `vrf.subscriptionId` and the keeper wallet's
    address into `keeper` in `base.json`.
+4. Hand Sean the subscription's decimal id, so he can set
+   `KEYFLEET_VRF_SUBSCRIPTION_ID` in Sentinel's settings and its balance alert
+   starts watching.
 
 ### Keeping the subscription funded
 
 The subscription must never run dry. Each answer is paid in ETH at up to the
 2 gwei lane's price cap. Sixteen real answers on Base read on 7 October 2026
 cost about 0.4 to 1.4 US cents each, about half a cent for a key's
-100,000-gas answer. The balance to keep and the alert level must be set from
-that cost before the first sale. A request made while the subscription is empty
-waits unanswered, and pending requests block both removing a consumer and
-cancelling the subscription until they are answered, so an empty subscription
-cannot simply be closed and replaced.
+100,000-gas answer.
+
+Chainlink answers a request only while the balance covers its most it could
+cost: 200,000 gas for checking the proof plus the 100,000-gas callback, at the
+lane's 2 gwei cap, plus the 60% premium, which is 0.00096 ETH, plus an L1 fee
+that has been under 0.000001 ETH. Call it 0.001 ETH a key. A request the
+balance cannot cover waits up to 24 hours and then expires. Each key gets one
+accepted request and never another, so a key whose request expires never gets
+its card or traits, and nothing can give it one later.
+
+- **Fund it with 0.5 ETH before the first sale.** That covers 500 keys waiting
+  at once at the cap, and about 100,000 answers at today's prices.
+- **Never let it fall below 0.25 ETH**, enough for 250 keys waiting at once at
+  the cap.
+- **Sentinel watches it.** Sentinel reads the balance at Base's latest block,
+  warns below 0.3 ETH and raises a critical alert below 0.25 ETH. Top it up
+  back to 0.5 ETH on a warning. The alert starts once
+  `KEYFLEET_VRF_SUBSCRIPTION_ID` is set in Sentinel's settings (step 4 above).
+  To read the balance by hand, it is the second value `getSubscription`
+  returns:
+
+  ```sh
+  cast call 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634 \
+    "getSubscription(uint256)(uint96,uint96,uint64,address,address[])" <subId> \
+    --rpc-url "$BASE_RPC_URL"
+  ```
+
+  Anyone can top it up with `fundSubscriptionWithNative(subId)`.
+
+Pending requests block both removing a consumer and cancelling the
+subscription until they are answered, so an empty subscription cannot simply
+be closed and replaced.
 
 Anyone can ask again for a key whose request was refused, with
 `requestReveal(tokenId)` on the collection. The deck backend asks for the keys
@@ -311,8 +348,9 @@ deployed code is the code those constants came from. It carries:
   the tag its protocol share deposits carry, and the assets its daily split
   shares;
 - `disclosures`: public-read chat, no refunds, service rewards to keys only,
-  what the 10% fee and the 2.5% royalty are, that the treasury's part buys
-  REGENT at the market price with no minimum, and what the Regents Safe can and
+  what the 10% fee and the 2.5% royalty are, that the treasury's part is turned
+  into REGENT afterwards, a little at a time, at the market price with no
+  minimum, and what the Regents Safe can and
   cannot do.
 
 There is no configuration screen anywhere in the product, so this file is where
@@ -320,19 +358,26 @@ those values are published, and it is what the site is seeded from.
 
 ## Step 6: phases
 
-Run only when the founder says the next fleets' sales open:
+Run only when the founder says when the next fleets' sales open, with that
+moment as a Unix time in `KEYFLEET_OPENS_AT`:
 
 ```sh
-KEYFLEET_MANIFEST=base KEYFLEET_STEP=advance-phase \
+KEYFLEET_MANIFEST=base KEYFLEET_STEP=advance-phase KEYFLEET_OPENS_AT=<unix time> \
   forge script script/KeyfleetSafeSteps.s.sol:KeyfleetSafeSteps --rpc-url "$BASE_RPC_URL"
 ```
+
+The Safe's transaction must land before that moment, or the collection refuses
+it (`OpensAtInvalid`) and the step is written again with a later time; a phase
+also never opens before the previous one, nor more than 30 days after the
+transaction lands. The phase number changes when the
+transaction lands, and what it opens waits for the named moment.
 
 It checks the step against Base's current state as the Safe and writes one file,
 `deployments/safe/base.phase-1.json`, `base.phase-2.json` or
 `base.phase-3.json`, for the founder to sign. Phase 1 needs Classic #1 to exist
 and opens its sales. Phase 2 needs all four founding fleets and opens Syndicate
-#1, Accelerant #1 and Cascade #1 together. Phase 3 lets anyone create a fleet,
-which sells from the moment it is created. There is no step back, and nothing
+#1, Accelerant #1 and Cascade #1 together. Phase 3 lets anyone create a fleet
+from its opening, and each such fleet sells from the moment it is created. There is no step back, and nothing
 else moves a phase.
 
 ## Fleets anyone creates
@@ -393,8 +438,9 @@ of all the fleet's keys.
 
 ## Rehearsing
 
-Every purchase is paid in Base USDC and swapped through the real REGENT pools,
-so a rehearsal that buys keys runs on a fork of Base.
+Every purchase is paid in Base USDC, and the treasury's part becomes REGENT
+through the real REGENT pools a piece at a time, so a rehearsal that buys keys
+runs on a fork of Base.
 
 **The fork suites.** With `BASE_RPC_URL` set, the suites in
 `contracts/test/fork/` deploy the system from the committed Base manifest
@@ -477,7 +523,7 @@ Autolaunch factory, for the site's anvil tests.
 `contracts/script/base-fork-lab.sh`, is no part of a release either: it puts the
 system with Classic #1 selling on a local fork of Base run as chain 31337, for
 the site on `http://localhost:4097`, so a wallet can buy a key with Base's own
-USDC through Base's own swap route. Everything comes from `base.json` except
+USDC, and the treasury's part becomes REGENT through Base's own swap route. Everything comes from `base.json` except
 the chain id, the Safe and keeper (anvil's first two default accounts), the
 metadata addresses on the local site and a stand-in VRF coordinator. Every step
 refuses any chain but 31337.
@@ -492,9 +538,15 @@ script/base-fork-lab.sh fund <buyer address> [...]   # more buyers later
 script/base-fork-lab.sh fulfil                      # answer waiting card draws
 ```
 
-`deploy` writes `contracts/deployments/base-fork-lab.json` in the shape of the
-release's deployed record (`base.deployed.json`), and gives each buyer 100 ETH
-and exactly 1,000 USDC. No key is bought.
+`deploy` names a sales opening 10 minutes ahead, as the Safe must, then moves
+the lab chain's clock past it, so Classic #1 sells at once. It writes
+`contracts/deployments/base-fork-lab.json` in the shape of the release's
+deployed record (`base.deployed.json`), and gives each buyer 100 ETH and exactly
+1,000 USDC. No key is bought. On the lab chain, nobody presses the REGENT
+buyer's `convert(250000000)` unless you do, once a piece is due. A buyer must be
+a plain address with no code on Base: anvil's third default account
+(`0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC`) has code on Base that passes on
+any key it receives, so a purchase to it reverts.
 
 ## What the Safe does
 
@@ -541,9 +593,15 @@ In phase 3 anyone creates a fleet of any type at a starting price from 10 to
 balance as joining requirements. A fleet's name, description and image link
 change only by its keys' vote.
 
-**The treasury holds REGENT (7 October 2026).** Keys are paid in USDC; the
-treasury's part of every purchase is swapped to REGENT in the same purchase, at
-the market price with no minimum, through one fixed route.
+**The treasury holds REGENT (7 October 2026), a piece at a time (8 October
+2026).** Keys are paid in USDC. The treasury's part of every purchase is booked
+in the fleet's manager, and the shared REGENT buyer turns it into REGENT for the
+treasury in pieces of at most 250 USDC, no faster than 250 USDC every 15
+minutes across all fleets, at the market price with no minimum, through one
+fixed route. Anyone may trigger a piece and may ask for a smaller one, which
+waits in proportion, and a piece that would itself move the route's price more
+than 1% is refused. Front-running a piece is unprofitable only because the
+REGENT pool's hook charges at least 1% on every swap.
 
 **The fleet's own token (6 October 2026).** A fleet may launch its own token
 through Autolaunch Revstake v2 on Base, by a passed proposal's call from its

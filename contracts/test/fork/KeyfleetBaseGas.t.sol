@@ -10,6 +10,7 @@ import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {KeyfleetSafeSteps} from "../../script/KeyfleetSafeSteps.s.sol";
 import {KeyfleetForkFixture} from "./KeyfleetBaseFork.t.sol";
+import {FULL_PIECE} from "../helpers/KeyfleetFixture.sol";
 
 /// @dev The gas of the system's everyday calls against the real Base contracts on a fork of Base:
 /// native USDC (a proxy), REGENT and its v4 pool and hook, the USDC/WETH v3 pool, REGENT revenue
@@ -51,8 +52,8 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         _advancePhase();
         _log("advancePhase, to phase 1");
 
-        // Purchases on Classic #1: its first sale, then a later one, each buying REGENT through the
-        // real pools and making its real VRF request.
+        // Purchases on Classic #1: its first sale, then a later one, each booking the treasury's
+        // part and making its real VRF request.
         KeyfleetManager classic = _fleet(1);
         uint256 price = _fund(classic, ALICE);
         vm.prank(ALICE);
@@ -62,6 +63,10 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         vm.prank(BOB);
         uint256 second = classic.purchase(BOB, price, block.timestamp, new bytes32[](0));
         _log("purchase, a later key");
+
+        // One piece of the booked USDC through the real pools into REGENT for the treasury.
+        factory.REGENT_BUYER().convert(FULL_PIECE);
+        _log("convert, one piece through both pools");
 
         // A creator's own fleet, once the collection reaches its last phase.
         _advancePhase();

@@ -3,8 +3,10 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {KeyfleetFactory} from "../../src/KeyfleetFactory.sol";
+import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {KeyfleetKeys} from "../../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../../src/KeyfleetManager.sol";
 import {KeyfleetPresence} from "../../src/KeyfleetPresence.sol";
@@ -15,7 +17,7 @@ import {KeyfleetShards} from "../../src/KeyfleetShards.sol";
 import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {FleetWiring} from "../../src/KeyfleetWiring.sol";
-import {KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
+import {FULL_PIECE, KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
 import {MockRegent} from "../mocks/MockRegent.sol";
 import {MockRegentRevenueStaking} from "../mocks/MockRegentRevenueStaking.sol";
 import {MockToken} from "../mocks/MockToken.sol";
@@ -51,7 +53,7 @@ contract CollectionHandler is Test {
     uint256 internal constant MAX_FLEETS = 6;
     uint256 internal constant MAX_KEYS = 24;
     uint256 internal constant MAX_PROPOSALS = 3;
-    uint256 internal constant ATTACKS = 46;
+    uint256 internal constant ATTACKS = 49;
 
     /// @dev What a proposal carries out: nothing, a new profile, a voted split or a new daily rate
     /// for its own fleet, or a call on another fleet's manager or ledger that must be refused.
@@ -89,6 +91,7 @@ contract CollectionHandler is Test {
         uint256 treasuryRegent;
         uint256 poolUsdc;
         uint256 owed;
+        uint256 pending;
         address predecessor;
         uint256 predecessorCredit;
         uint64 vrfNonce;
@@ -98,7 +101,7 @@ contract CollectionHandler is Test {
     struct Split {
         uint256 protocol;
         uint256 toLedger;
-        uint256 swapped;
+        uint256 booked;
         uint256 rebate;
     }
 
@@ -142,6 +145,7 @@ contract CollectionHandler is Test {
     /// @notice Set, with the reason, the first time an action broke a rule.
     string public breach;
     uint256 public ghostMinted;
+    uint256 public ghostBooked;
     uint256 public ghostSwapped;
     uint256 public ghostShareSent;
     uint256 public ghostFleetCount;
@@ -149,6 +153,8 @@ contract CollectionHandler is Test {
     mapping(KeyfleetPresets.Preset preset => uint256 count) public ghostTypeCount;
     mapping(uint256 tokenId => uint64 epoch) public ghostEpoch;
     mapping(uint256 tokenId => bytes32 seed) public ghostSeed;
+    /// @dev When each phase the Safe stepped to opens.
+    mapping(uint8 phase => uint64 opensAt) public ghostOpensAt;
 
     mapping(uint256 fleetId => FleetRecord) internal _records;
     mapping(uint256 fleetId => uint256 reserve) internal _reserve;
@@ -193,6 +199,9 @@ contract CollectionHandler is Test {
         }
 
         ghostPhase = keys.phase();
+        ghostOpensAt[1] = keys.salesOpenAt(1);
+        ghostOpensAt[2] = keys.salesOpenAt(2);
+        if (ghostPhase == keys.FINAL_PHASE()) ghostOpensAt[ghostPhase] = keys.phaseOpensAt();
         ghostFleetCount = keys.fleetCount();
         for (uint256 id = 1; id <= ghostFleetCount; ++id) {
             _recordFounding(id);
@@ -332,7 +341,7 @@ contract CollectionHandler is Test {
         if (keyNumber > MAX_KEYS) return;
         address to = _accounts[actorSeed % ACTORS];
         uint256 price = manager.nextPrice();
-        bool open = _salesOpen(id, keys.phase());
+        bool open = salesOpenExpected(id);
         bool meets = _records[id].nftRequirement == address(0) || keys.balanceOf(to) > 0;
         Books memory before = _books(manager, keyNumber);
         usdc.mint(address(this), price);
@@ -374,16 +383,16 @@ contract CollectionHandler is Test {
         before.poolUsdc = usdc.balanceOf(v3Pool);
         before.managerUsdc = usdc.balanceOf(creator);
         (, before.vrfNonce) = vrf.consumerConfig(address(keys), vrfSubscription);
-        bool creationOpen = keys.phase() == keys.FINAL_PHASE();
+        bool creationOpen = _creationOpen();
 
         vm.prank(creator);
         try factory.createFleet(terms) returns (uint256 fleetId, uint256 tokenId) {
-            if (!creationOpen) _breach("an open fleet was created before phase 3");
+            if (!creationOpen) _breach("an open fleet was created before phase 3 opened");
             if (fleetId != id || tokenId != keys.tokenIdOf(id, 1)) _breach("a creation numbered its fleet wrongly");
             _checkCreation(id, terms, creator, before);
         } catch (bytes memory err) {
             if (creationOpen || bytes4(err) != KeyfleetFactory.CreationClosed.selector) {
-                _breach("a creation was refused other than before phase 3");
+                _breach("a creation was refused other than before phase 3 opened");
             }
             vm.prank(creator);
             usdc.approve(address(factory), 0);
@@ -409,8 +418,8 @@ contract CollectionHandler is Test {
 
     /// @dev Checks one sale's USDC split exactly (plan 7.3): the protocol share and any Cascade
     /// reserve stay as USDC in the manager, rebates and level reimbursements reach the ledger as
-    /// USDC, the rest reaches the treasury as REGENT at the stand-in market's price, and the key is
-    /// drawn for exactly when its fleet has a deck.
+    /// USDC, the rest is booked in the manager for REGENT and its fleet queued, nothing is swapped
+    /// and the treasury receives nothing, and the key is drawn for exactly when its fleet has a deck.
     function _checkSale(uint256 id, uint256 keyNumber, uint256 gross, Books memory before, address to) internal {
         KeyfleetManager manager = _manager(id);
         Split memory split = _expectedSplit(id, keyNumber, gross);
@@ -432,17 +441,20 @@ contract CollectionHandler is Test {
         if (afterwards.predecessorCredit != before.predecessorCredit + split.rebate) {
             _breach("a rebate was not credited to the holder of the key before");
         }
-        if (afterwards.managerUsdc + split.toLedger + split.swapped != before.managerUsdc + gross) {
-            _breach("the manager kept other than the protocol share and the reserve");
+        if (afterwards.managerUsdc + split.toLedger != before.managerUsdc + gross) {
+            _breach("the manager kept other than the protocol share, the reserve and the booked USDC");
         }
-        if (afterwards.treasuryUsdc != before.treasuryUsdc) _breach("a sale paid the treasury USDC");
-        if (afterwards.treasuryRegent != before.treasuryRegent + split.swapped * 1e12) {
-            _breach("the treasury's part of a sale did not arrive as REGENT at the market price");
+        if (afterwards.pending != before.pending + split.booked) {
+            _breach("the treasury's part of a sale was not booked for REGENT");
         }
-        if (afterwards.poolUsdc != before.poolUsdc + split.swapped) {
-            _breach("the market did not take the swapped USDC");
+        if (afterwards.pending != 0 && !regentBuyer.isQueued(address(manager))) {
+            _breach("a fleet with USDC booked is not queued for REGENT");
         }
-        ghostSwapped += split.swapped;
+        if (afterwards.treasuryUsdc != before.treasuryUsdc || afterwards.treasuryRegent != before.treasuryRegent) {
+            _breach("a sale paid the treasury");
+        }
+        if (afterwards.poolUsdc != before.poolUsdc) _breach("a sale swapped USDC");
+        ghostBooked += split.booked;
         ghostMinted += 1;
 
         uint256 tokenId = keys.tokenIdOf(id, keyNumber);
@@ -465,16 +477,16 @@ contract CollectionHandler is Test {
             uint256 reserve = _reserve[id] + gross - split.protocol;
             if (keyNumber == _levelEnd(level)) {
                 split.toLedger = level > 1 ? _levelGross[id][level - 1] : 0;
-                split.swapped = reserve - split.toLedger;
+                split.booked = reserve - split.toLedger;
                 reserve = 0;
             }
             _reserve[id] = reserve;
         } else if (preset == KeyfleetPresets.Preset.FleetTechAccelerant && keyNumber > 1) {
-            split.swapped = gross * 2000 / 10_000;
-            split.rebate = gross - split.protocol - split.swapped;
+            split.booked = gross * 2000 / 10_000;
+            split.rebate = gross - split.protocol - split.booked;
             split.toLedger = split.rebate;
         } else {
-            split.swapped = gross - split.protocol;
+            split.booked = gross - split.protocol;
         }
     }
 
@@ -486,6 +498,7 @@ contract CollectionHandler is Test {
         b.treasuryRegent = regent.balanceOf(address(manager.TREASURY()));
         b.poolUsdc = usdc.balanceOf(v3Pool);
         b.owed = manager.protocolShareOwed();
+        b.pending = manager.pendingConversion();
         if (manager.PRESET() == KeyfleetPresets.Preset.FleetTechAccelerant && keyNumber > 1) {
             b.predecessor = keys.ownerOf(keys.tokenIdOf(manager.FLEET_ID(), keyNumber - 1));
             b.predecessorCredit = manager.REWARDS().credits(address(usdc), b.predecessor);
@@ -507,7 +520,8 @@ contract CollectionHandler is Test {
             _breach("a key of a fleet with a deck was not drawn for");
             return;
         }
-        (uint256 requestId,) = vrf.computeRequestId(keys.VRF_KEY_HASH(), address(keys), vrfSubscription, nonce);
+        (,, bytes32 keyHash) = keys.randomness();
+        (uint256 requestId,) = vrf.computeRequestId(keyHash, address(keys), vrfSubscription, nonce);
         _pending.push(requestId);
         _requestToken[requestId] = tokenId;
     }
@@ -647,7 +661,8 @@ contract CollectionHandler is Test {
     }
 
     /// @dev `voterSeed` picks both the voter (an agent one time in three, else the owner) and the
-    /// choice.
+    /// choice. Ballots are taken while the proposal is open, and only No during a money proposal's
+    /// wait, which cancels it once it would no longer pass.
     function castBallot(uint256 pairSeed, uint256 keySeed, uint256 voterSeed, bool bySig)
         external
         step(_proposalFleet(pairSeed))
@@ -664,32 +679,60 @@ contract CollectionHandler is Test {
         address owner = keys.ownerOf(tokenId);
         address voter = voterSeed % 3 == 0 ? _agent(voterSeed / 3) : owner;
         KeyfleetVotes.Choice choice = KeyfleetVotes.Choice(1 + (voterSeed / 3) % 3);
-        bool allowed = voter == owner || shards.mayGovern(tokenId, voter);
-        bool mature = _isMature(tokenId);
-        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
-        bool open = !stored.cancelled && block.timestamp < stored.closesAt;
+        KeyfleetVotes.Status status = votes.status(proposalId);
+        bytes4 refusal =
+            _ballotRefusal(status, choice, voter == owner || shards.mayGovern(tokenId, voter), _isMature(tokenId));
         (bool ok, bytes memory err) = _ballot(votes, proposalId, tokenId, choice, voter, bySig);
-        if (ok != (open && allowed && mature)) _breach("a ballot was taken or refused wrongly");
+        if (ok != (refusal == bytes4(0))) _breach("a ballot was taken or refused wrongly");
         if (!ok) {
-            bytes4 expected = !open
-                ? KeyfleetVotes.BallotsClosed.selector
-                : allowed ? KeyfleetVotes.KeyTooNew.selector : KeyfleetVotes.NotAuthorizedForKey.selector;
-            if (bytes4(err) != expected) _breach("a ballot was refused for the wrong reason");
-        } else if (votes.ballotOf(proposalId, tokenId) != choice) {
+            if (bytes4(err) != refusal) _breach("a ballot was refused for the wrong reason");
+            return;
+        }
+        if (status == KeyfleetVotes.Status.Waiting) _checkNoWhileWaiting(votes, proposalId);
+        if (votes.ballotOf(proposalId, tokenId) != choice) {
             _breach("a ballot was not recorded");
+        }
+    }
+
+    /// @dev Why a ballot is refused, or nothing when it is taken: ballots are taken while the
+    /// proposal is open, and only No during a money proposal's wait, from a voter allowed to vote
+    /// the key once it is mature.
+    function _ballotRefusal(KeyfleetVotes.Status status, KeyfleetVotes.Choice choice, bool allowed, bool mature)
+        internal
+        pure
+        returns (bytes4)
+    {
+        bool waiting = status == KeyfleetVotes.Status.Waiting;
+        if (status != KeyfleetVotes.Status.Open && !waiting) return KeyfleetVotes.BallotsClosed.selector;
+        if (waiting && choice != KeyfleetVotes.Choice.No) return KeyfleetVotes.OnlyNoWhileWaiting.selector;
+        if (!allowed) return KeyfleetVotes.NotAuthorizedForKey.selector;
+        if (!mature) return KeyfleetVotes.KeyTooNew.selector;
+        return bytes4(0);
+    }
+
+    /// @dev After a No taken during the wait, the proposal is cancelled exactly when it no longer
+    /// passes.
+    function _checkNoWhileWaiting(KeyfleetVotes votes, uint256 proposalId) internal {
+        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
+        bool passes = stored.yes >= votes.approvalsNeeded(uint256(stored.e0) + stored.late);
+        KeyfleetVotes.Status expected = passes ? KeyfleetVotes.Status.Waiting : KeyfleetVotes.Status.Cancelled;
+        if (votes.status(proposalId) != expected) {
+            _breach("a No during the wait cancelled a proposal that still passes, or kept one that fails");
         }
     }
 
     /// @notice Every key's owner votes Yes on one proposal, as a fleet agreeing on it would; while
     /// ballots are open each mature key's ballot is taken and a key younger than its maturity is
-    /// refused, and afterwards each is refused as closed. Once every key counted voted Yes, with
+    /// refused, during a money proposal's wait each is refused as only No is taken, and afterwards
+    /// each is refused as closed. Once every key counted voted Yes, with
     /// `carryOut` the fleet waits for the ballots to close and carries the proposal out.
     function rally(uint256 pairSeed, bool carryOut) external step(_proposalFleet(pairSeed)) {
         (uint256 id, uint256 proposalId) = _pickProposal(pairSeed);
         if (id == 0) return;
         KeyfleetVotes votes = _manager(id).VOTES();
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
-        bool open = !stored.cancelled && block.timestamp < stored.closesAt;
+        KeyfleetVotes.Status status = votes.status(proposalId);
+        bool open = status == KeyfleetVotes.Status.Open;
         uint256 minted = _manager(id).totalMinted();
         bool everyCountedKeyVoted = true;
         for (uint256 k = 1; k <= minted; ++k) {
@@ -699,9 +742,13 @@ contract CollectionHandler is Test {
             try votes.castBallot(proposalId, _ids(tokenId), KeyfleetVotes.Choice.Yes) {
                 if (!open || !mature) _breach("a ballot was taken after ballots closed or from a new key");
             } catch (bytes memory err) {
-                bytes4 expected = open ? KeyfleetVotes.KeyTooNew.selector : KeyfleetVotes.BallotsClosed.selector;
+                bytes4 expected = open
+                    ? KeyfleetVotes.KeyTooNew.selector
+                    : status == KeyfleetVotes.Status.Waiting
+                        ? KeyfleetVotes.OnlyNoWhileWaiting.selector
+                        : KeyfleetVotes.BallotsClosed.selector;
                 if ((open && mature) || bytes4(err) != expected) {
-                    _breach("an owner's ballot was refused other than as closed or too new");
+                    _breach("an owner's Yes was refused other than as closed, waiting or too new");
                 }
                 if (open && votes.wasActiveAtOpening(proposalId, tokenId)) everyCountedKeyVoted = false;
             }
@@ -879,21 +926,50 @@ contract CollectionHandler is Test {
         }
     }
 
-    /// @notice An outsider buys REGENT through the shared buyer with its own USDC.
-    function buyRegentDirect(uint256 outsiderSeed, uint256 amount) external step(0) {
-        address outsider = _accounts[ACTORS + AGENTS + outsiderSeed % OUTSIDERS];
-        amount = bound(amount, 1, 10_000e6);
-        usdc.mint(outsider, amount);
-        uint256 before = regent.balanceOf(outsider);
-        vm.startPrank(outsider);
-        usdc.approve(address(regentBuyer), amount);
-        uint256 out = regentBuyer.buy(amount, outsider);
-        vm.stopPrank();
-        if (out != amount * 1e12 || regent.balanceOf(outsider) != before + out) {
-            _breach("a direct REGENT buy did not pay the market price");
+    /// @notice Anyone turns the next piece of booked USDC, of at most `maxUsdc` bounded to two full
+    /// pieces and sometimes zero, into REGENT for the first queued fleet's treasury, after waiting
+    /// out the gap since the last piece when `waitOut` says so.
+    function convert(uint256 callerSeed, uint256 maxUsdc, bool waitOut)
+        external
+        step(keys.fleetOfManager(regentBuyer.nextInQueue()))
+    {
+        maxUsdc = bound(maxUsdc, 0, 2 * FULL_PIECE);
+        uint256 opensAt = regentBuyer.nextPieceAt();
+        if (waitOut && block.timestamp < opensAt) {
+            vm.warp(opensAt);
+            vm.roll(block.number + 1);
         }
-        if (usdc.allowance(outsider, address(regentBuyer)) != 0) _breach("a direct buy left an allowance");
-        ghostSwapped += amount;
+        KeyfleetManager manager = KeyfleetManager(regentBuyer.nextInQueue());
+        bytes4 expected;
+        if (block.timestamp < opensAt) expected = KeyfleetRegentBuyer.PieceTooSoon.selector;
+        else if (address(manager) == address(0)) expected = KeyfleetRegentBuyer.NothingQueued.selector;
+        uint256 pending;
+        uint256 piece;
+        uint256 treasuryRegent;
+        if (address(manager) != address(0)) {
+            pending = manager.pendingConversion();
+            piece =
+                Math.min(pending, Math.max(Math.min(maxUsdc, regentBuyer.PIECE_USDC()), regentBuyer.MIN_PIECE_USDC()));
+            treasuryRegent = regent.balanceOf(address(manager.TREASURY()));
+        }
+        vm.prank(_stranger(callerSeed, 0));
+        try regentBuyer.convert(maxUsdc) returns (uint256 out) {
+            if (expected != bytes4(0)) _breach("a piece ran that should have been refused");
+            if (piece == 0) _breach("a queued fleet had no USDC booked");
+            if (out != piece * 1e12 || regent.balanceOf(address(manager.TREASURY())) != treasuryRegent + out) {
+                _breach("a piece did not pay its fleet's treasury REGENT at the market price");
+            }
+            if (manager.pendingConversion() != pending - piece) _breach("a piece took other than its size");
+            if (regentBuyer.nextPieceAt() != block.timestamp + Math.ceilDiv(15 minutes * piece, FULL_PIECE)) {
+                _breach("a piece's wait was out of proportion");
+            }
+            if (regentBuyer.isQueued(address(manager)) != (pending != piece)) {
+                _breach("a fleet left the queue with USDC booked, or stayed in it without");
+            }
+            ghostSwapped += piece;
+        } catch (bytes memory err) {
+            if (bytes4(err) != expected || expected == bytes4(0)) _breach("a piece was refused wrongly");
+        }
     }
 
     // --- the collection ---------------------------------------------------
@@ -949,25 +1025,42 @@ contract CollectionHandler is Test {
         uint256 tokenId = _requestToken[requestId];
         uint256[] memory words = new uint256[](1);
         words[0] = word;
+        // A retried key has two answerable requests; the first answer writes the seed.
+        bytes32 seed = ghostSeed[tokenId];
+        if (seed == bytes32(0)) {
+            seed = keccak256(abi.encode(keys.TRAIT_SEED_TAG(), block.chainid, address(keys), tokenId, word));
+        }
         vrf.fulfill(requestId, words);
-        bytes32 seed = keccak256(abi.encode(keys.TRAIT_SEED_TAG(), block.chainid, address(keys), tokenId, word));
-        if (keys.revealSeed(tokenId) != seed) _breach("a fulfilment did not set the seed from its word");
+        if (keys.revealSeed(tokenId) != seed) _breach("a fulfilment did not set the seed from the first answer");
         ghostSeed[tokenId] = seed;
     }
 
-    function advancePhase(uint256 callerSeed) external step(0) {
+    /// @notice The Safe, or a stranger, steps the phase with an opening up to 31 days away; an
+    /// opening now, more than 30 days ahead or before the current phase's is refused.
+    function advancePhase(uint256 callerSeed, uint256 opensSeed) external step(0) {
         address caller = callerSeed % 3 == 0 ? _stranger(callerSeed, 0) : safe;
         uint8 phase = keys.phase();
         uint256 needed = phase == 0 ? 1 : phase == 1 ? 4 : 0;
+        uint64 opensAt = uint64(block.timestamp + bound(opensSeed, 0, 31 days));
         bytes4 expected;
-        if (caller != safe) expected = KeyfleetKeys.OnlySafe.selector;
-        else if (phase >= keys.FINAL_PHASE()) expected = KeyfleetKeys.NoNextPhase.selector;
-        else if (keys.fleetCount() < needed) expected = KeyfleetKeys.FleetsMissing.selector;
+        if (caller != safe) {
+            expected = KeyfleetKeys.OnlySafe.selector;
+        } else if (phase >= keys.FINAL_PHASE()) {
+            expected = KeyfleetKeys.NoNextPhase.selector;
+        } else if (
+            opensAt <= block.timestamp || opensAt > block.timestamp + keys.MAX_OPENING_LEAD()
+                || opensAt < ghostOpensAt[phase]
+        ) {
+            expected = KeyfleetKeys.OpensAtInvalid.selector;
+        } else if (keys.fleetCount() < needed) {
+            expected = KeyfleetKeys.FleetsMissing.selector;
+        }
         vm.prank(caller);
-        try keys.advancePhase() {
+        try keys.advancePhase(opensAt) {
             if (expected != bytes4(0)) _breach("the phase moved when it should not have");
             _phaseStepped = true;
             ghostPhase = phase + 1;
+            ghostOpensAt[phase + 1] = opensAt;
         } catch (bytes memory err) {
             if (bytes4(err) != expected || expected == bytes4(0)) _breach("a phase step was refused wrongly");
         }
@@ -999,14 +1092,16 @@ contract CollectionHandler is Test {
         else if (a.pick < 20) _attackManagerAndFactory(a);
         else if (a.pick < 29) _attackVotes(a);
         else if (a.pick < 37) _attackTreasury(a);
-        else _attackLedgerAndShards(a);
+        else if (a.pick < 46) _attackLedgerAndShards(a);
+        else _attackRegentRoute(a);
     }
 
     function _attackCollection(Attempt memory a) internal {
         address k = address(keys);
         bool safeCalls = a.caller == safe;
         if (a.pick == 0 && !safeCalls) {
-            _attempt(a, k, abi.encodeCall(KeyfleetKeys.advancePhase, ()), KeyfleetKeys.OnlySafe.selector);
+            bytes memory data = abi.encodeCall(KeyfleetKeys.advancePhase, (uint64(block.timestamp + 1)));
+            _attempt(a, k, data, KeyfleetKeys.OnlySafe.selector);
         } else if (a.pick == 1 && !safeCalls) {
             _attempt(a, k, abi.encodeCall(KeyfleetKeys.setKeeper, (a.caller)), KeyfleetKeys.OnlySafe.selector);
         } else if (a.pick == 2 && !safeCalls) {
@@ -1037,7 +1132,7 @@ contract CollectionHandler is Test {
             bytes memory data =
                 abi.encodeWithSignature("transferFrom(address,address,uint256)", a.ownOwner, taker, a.ownKey);
             if (taker != a.ownOwner) _attempt(a, k, data, IERC721Errors.ERC721InsufficientApproval.selector);
-        } else if (a.pick == 11 && keys.phase() < keys.FINAL_PHASE()) {
+        } else if (a.pick == 11 && !_creationOpen()) {
             KeyfleetFactory.FleetTerms memory terms;
             terms.startPrice = 10e6;
             terms.profile = _renamed(0);
@@ -1236,6 +1331,25 @@ contract CollectionHandler is Test {
         }
     }
 
+    function _attackRegentRoute(Attempt memory a) internal {
+        if (a.pick == 46) {
+            _attempt(
+                a,
+                address(a.manager),
+                abi.encodeCall(KeyfleetManager.takePiece, (a.ownKey)),
+                KeyfleetManager.OnlyRegentBuyer.selector
+            );
+        } else if (a.pick == 47 && keys.fleetOfManager(a.caller) == 0) {
+            bytes memory data = abi.encodeCall(KeyfleetRegentBuyer.enqueue, ());
+            _attempt(a, address(regentBuyer), data, KeyfleetRegentBuyer.NotManager.selector);
+        } else if (a.pick == 48 && a.caller != safe) {
+            KeyfleetKeys.Randomness memory randomness =
+                KeyfleetKeys.Randomness(IVRFCoordinatorV2Plus(address(vrf)), 1, keccak256("lane"));
+            bytes memory data = abi.encodeCall(KeyfleetKeys.setRandomness, (randomness));
+            _attempt(a, address(keys), data, KeyfleetKeys.OnlySafe.selector);
+        }
+    }
+
     /// @dev Calls `target` as the attempt's caller and records a breach unless it reverts with
     /// `expected`.
     function _attempt(Attempt memory a, address target, bytes memory data, bytes4 expected) internal {
@@ -1354,10 +1468,16 @@ contract CollectionHandler is Test {
         if (actor == not) actor = _accounts[(seed % ACTORS + 1) % ACTORS];
     }
 
-    function _salesOpen(uint256 fleetId, uint8 phase) internal pure returns (bool) {
-        if (fleetId == 1) return phase >= 1;
-        if (fleetId <= 4) return phase >= 2;
+    /// @notice Whether a fleet's sales should be open now: fleet 1 from phase 1's opening, the other
+    /// founding fleets from phase 2's, and an open fleet from its creation.
+    function salesOpenExpected(uint256 fleetId) public view returns (bool) {
+        if (fleetId == 1) return ghostPhase >= 1 && block.timestamp >= ghostOpensAt[1];
+        if (fleetId <= 4) return ghostPhase >= 2 && block.timestamp >= ghostOpensAt[2];
         return true;
+    }
+
+    function _creationOpen() internal view returns (bool) {
+        return ghostPhase == keys.FINAL_PHASE() && block.timestamp >= ghostOpensAt[ghostPhase];
     }
 
     function _calls(uint256 id, Kind kind, uint256 param) internal view returns (KeyfleetTreasury.Call[] memory calls) {
@@ -1646,15 +1766,17 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
     }
 
     /// @dev 3. A fleet with closed sales has sold nothing, the phase is the one the Safe stepped
-    /// to, and no open fleet exists before phase 3.
+    /// to, sales open only at each phase's opening, and no open fleet exists before phase 3 opens.
     function invariant_phasesGateSalesAndCreation() public view {
         uint8 phase = keys.phase();
         assertEq(phase, handler.ghostPhase(), "the phase is the one the Safe stepped to");
         uint256 count = keys.fleetCount();
-        if (phase < keys.FINAL_PHASE()) assertLe(count, keys.FOUNDING_FLEETS(), "no open fleet before phase 3");
+        if (phase < keys.FINAL_PHASE() || block.timestamp < handler.ghostOpensAt(phase)) {
+            assertLe(count, keys.FOUNDING_FLEETS(), "no open fleet before phase 3 opens");
+        }
         for (uint256 id = 1; id <= count; ++id) {
-            bool open = id == 1 ? phase >= 1 : id <= 4 ? phase >= 2 : true;
-            assertEq(keys.salesOpen(id), open, "sales open by phase");
+            bool open = handler.salesOpenExpected(id);
+            assertEq(keys.salesOpen(id), open, "sales open by phase and opening");
             if (!open) assertEq(_manager(id).totalMinted(), 0, "a fleet with closed sales has sold nothing");
         }
     }
@@ -1707,7 +1829,7 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
         assertEq(weth.allowance(address(regentBuyer), address(poolManager)), 0, "the buyer leaves no WETH approval");
         for (uint256 id = 1; id <= keys.fleetCount(); ++id) {
             KeyfleetManager manager = _manager(id);
-            assertEq(usdc.allowance(address(manager), address(regentBuyer)), 0, "a sale leaves no approval");
+            assertEq(usdc.allowance(address(manager), address(regentBuyer)), 0, "a piece leaves no approval");
             assertEq(usdc.allowance(address(manager.TREASURY()), address(staking)), 0, "a deposit leaves no approval");
             if (id >= 5) {
                 assertEq(usdc.allowance(handler.creatorOf(id), address(factory)), 0, "a creation leaves no approval");
@@ -1793,10 +1915,11 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
         }
     }
 
-    /// @dev 11. Every token is where the books say: all USDC sits with known holders, the market
-    /// took exactly the USDC swapped and gave REGENT at its price, each manager holds exactly its
-    /// owed share and reserve, staking received exactly the shares sent, and each ledger holds
-    /// exactly what it backs.
+    /// @dev 11. Every token is where the books say: all USDC sits with known holders, every USDC
+    /// booked for REGENT is either still booked or taken by the market, the market took exactly the
+    /// USDC swapped and gave REGENT at its price, each manager holds exactly its owed share, reserve
+    /// and booked USDC, a fleet is queued exactly while it has USDC booked, staking received exactly
+    /// the shares sent, and each ledger holds exactly what it backs.
     function invariant_moneyIsWhereTheBooksSay() public view {
         uint256 known = usdc.balanceOf(address(handler)) + usdc.balanceOf(address(keys))
             + usdc.balanceOf(address(factory)) + usdc.balanceOf(address(regentBuyer)) + usdc.balanceOf(address(v3Pool))
@@ -1804,16 +1927,20 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
         for (uint256 i = 0; i < handler.accountCount(); ++i) {
             known += usdc.balanceOf(handler.accountAt(i));
         }
+        uint256 booked;
         for (uint256 id = 1; id <= keys.fleetCount(); ++id) {
             KeyfleetManager manager = _manager(id);
             KeyfleetRewards rewards = manager.REWARDS();
             known += usdc.balanceOf(address(manager)) + usdc.balanceOf(address(rewards))
             + usdc.balanceOf(address(manager.TREASURY())) + usdc.balanceOf(address(manager.VOTES()));
+            uint256 pending = manager.pendingConversion();
+            booked += pending;
             assertEq(
                 usdc.balanceOf(address(manager)),
-                manager.protocolShareOwed() + manager.cascadeReserve(),
-                "a manager holds exactly its owed share and reserve"
+                manager.protocolShareOwed() + manager.cascadeReserve() + pending,
+                "a manager holds exactly its owed share, reserve and booked USDC"
             );
+            assertEq(regentBuyer.isQueued(address(manager)), pending != 0, "a fleet is queued while it has USDC booked");
             assertEq(regent.balanceOf(address(manager)), 0, "a manager holds no REGENT");
             assertEq(usdc.balanceOf(address(rewards)), rewards.backed(address(usdc)), "a ledger holds what it backs");
             assertEq(
@@ -1821,6 +1948,7 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
             );
         }
         assertEq(known, usdc.totalSupply(), "all USDC sits with known holders");
+        assertEq(booked + handler.ghostSwapped(), handler.ghostBooked(), "booked USDC is still booked or swapped");
         assertEq(usdc.balanceOf(address(v3Pool)), handler.ghostSwapped(), "the market took exactly the USDC swapped");
         assertEq(
             1e45 - regent.balanceOf(address(poolManager)),
@@ -1940,7 +2068,7 @@ contract KeyfleetCollectionInvariantTest is KeyfleetCollectionInvariantBase {
         selectors[11] = CollectionHandler.runDailySplit.selector;
         selectors[12] = CollectionHandler.sendProtocolShare.selector;
         selectors[13] = CollectionHandler.sendStray.selector;
-        selectors[14] = CollectionHandler.buyRegentDirect.selector;
+        selectors[14] = CollectionHandler.convert.selector;
         selectors[15] = CollectionHandler.recordDeck.selector;
         selectors[16] = CollectionHandler.requestReveal.selector;
         selectors[17] = CollectionHandler.fulfil.selector;
@@ -2002,7 +2130,7 @@ contract KeyfleetCollectionPhasesInvariantTest is KeyfleetCollectionInvariantBas
         selectors[9] = CollectionHandler.sendProtocolShare.selector;
         selectors[10] = CollectionHandler.claim.selector;
         selectors[11] = CollectionHandler.wait.selector;
-        selectors[12] = CollectionHandler.attack.selector;
+        selectors[12] = CollectionHandler.convert.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }

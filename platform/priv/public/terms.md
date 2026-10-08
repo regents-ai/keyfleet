@@ -62,7 +62,7 @@ Browsing the Services and posting in rooms is free. Buying a Key costs the price
 **Where the money goes.** Each purchase is split by the fleet's contract as follows:
 
 - 10% stays USDC and is set aside for REGENT staking. Anyone can send it on at any time. This is the only fee on a Key sale.
-- The rest goes where the fleet's rules send it: to the fleet's treasury, turned into REGENT in the same purchase; to a reserve for the Key's level; or mostly to the holder of the previous Key.
+- The rest goes where the fleet's rules send it: to the fleet's treasury, which turns it into REGENT a piece at a time after the purchase, at most 250 USDC every 15 minutes across all fleets; to a reserve for the Key's level; or mostly to the holder of the previous Key.
 
 In a Cascade fleet, when a level sells out, its reserve first pays the holders of the level before it back what that level cost, and the rest goes to the fleet's treasury. The first level's reserve goes entirely to the treasury. Each fleet's page describes its rules.
 

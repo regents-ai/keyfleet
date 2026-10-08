@@ -97,9 +97,9 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         KeyfleetFactory deployed = _deployListed(manifest);
         _found(manifest, deployed);
-        _make(safeSteps.advancePhaseCalls(manifest, deployed), safe);
-        _make(safeSteps.advancePhaseCalls(manifest, deployed), safe);
-        _make(safeSteps.advancePhaseCalls(manifest, deployed), safe);
+        _openPhase(manifest, deployed);
+        _openPhase(manifest, deployed);
+        _openPhase(manifest, deployed);
         KeyfleetManager.Requirements memory requirements;
         requirements.token = address(regent);
         requirements.tokenMin = 5e18;
@@ -225,9 +225,9 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         KeyfleetFactory deployed = _deployListed(manifest);
         _found(manifest, deployed);
-        _make(safeSteps.advancePhaseCalls(manifest, deployed), safe);
-        _make(safeSteps.advancePhaseCalls(manifest, deployed), safe);
-        _make(safeSteps.advancePhaseCalls(manifest, deployed), safe);
+        _openPhase(manifest, deployed);
+        _openPhase(manifest, deployed);
+        _openPhase(manifest, deployed);
         KeyfleetKeys collection = deployed.KEYS();
         OtherFactory later = new OtherFactory();
         vm.prank(safe);

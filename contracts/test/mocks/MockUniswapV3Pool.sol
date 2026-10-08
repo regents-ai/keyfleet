@@ -7,7 +7,7 @@ import {IUniswapV3Pool, IUniswapV3SwapCallback} from "../../src/interfaces/IUnis
 /// @dev A Uniswap v3 pool stand-in at a fixed price, exact input only, with Uniswap's order: it
 /// pays the output first, then asks the caller's callback for the input and checks it arrived. A
 /// test can make it fill only part of an input, call its callback twice, or pass the callback a
-/// different amount than it swapped.
+/// different amount than it swapped, and can make every swap move its price.
 contract MockUniswapV3Pool is IUniswapV3Pool {
     address public immutable token0;
     address public immutable token1;
@@ -21,6 +21,11 @@ contract MockUniswapV3Pool is IUniswapV3Pool {
     uint256 public overcharge;
     /// @dev When set, the pool calls the callback a second time.
     bool public callbackTwice;
+    /// @dev The pool's square-root price, which moves only by `sqrtMoveBps` on every swap.
+    uint160 public sqrtPriceX96 = uint160(1 << 96);
+    /// @dev How far each swap moves the square-root price, in basis points, up or down; zero
+    /// normally.
+    int256 public sqrtMoveBps;
 
     constructor(address token0_, address token1_, uint256 zeroForOneRate, uint256 oneForZeroRate) {
         token0 = token0_;
@@ -41,12 +46,21 @@ contract MockUniswapV3Pool is IUniswapV3Pool {
         callbackTwice = twice;
     }
 
+    function setSqrtMoveBps(int256 bps) external {
+        sqrtMoveBps = bps;
+    }
+
+    function slot0() external view returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
+        return (sqrtPriceX96, 0, 0, 0, 0, 0, true);
+    }
+
     function swap(address recipient, bool zeroForOne, int256 amountSpecified, uint160, bytes calldata data)
         external
         returns (int256 amount0, int256 amount1)
     {
         require(amountSpecified > 0, "exact input only");
         uint256 amountIn = (uint256(amountSpecified) * fillBps) / 10_000;
+        sqrtPriceX96 = uint160((uint256(sqrtPriceX96) * uint256(10_000 + sqrtMoveBps)) / 10_000);
         uint256 amountOut = (amountIn * (zeroForOne ? ZERO_FOR_ONE_RATE : ONE_FOR_ZERO_RATE)) / 1e18;
         (address tokenIn, address tokenOut) = zeroForOne ? (token0, token1) : (token1, token0);
         IERC20(tokenOut).transfer(recipient, amountOut);

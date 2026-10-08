@@ -25,11 +25,13 @@ import {MockWeth} from "../test/mocks/MockWeth.sol";
 /// @dev Every outside contract is a local stand-in: USDC, WETH, REGENT, a USDC/WETH pool and a
 /// WETH/REGENT pool manager at a fixed price where 1 USDC buys 1 REGENT, REGENT staking, the
 /// Autolaunch factory, and a VRF coordinator whose subscription holds 0.1 ETH. The sender is the
-/// Safe and the keeper. It creates Classic #1 with a stand-in deck, moves the collection to phase 1
-/// so Classic #1 sells, and buys two keys while the coordinator refuses every request, so neither
-/// key's reveal was ever accepted; then the coordinator takes requests again. The manager owes the
-/// protocol share of both sales, the treasury holds the REGENT both bought, and the sender holds
-/// and has approved the USDC for a third key, for the test to buy.
+/// Safe and the keeper. It runs in two steps, because the Safe must name a sales opening in the
+/// future. `run` creates Classic #1 with a stand-in deck and moves the collection to phase 1, with
+/// Classic #1's sales opening `OPENING` later. Once the chain's clock is past that, `sell` buys two
+/// keys while the coordinator refuses every request, so neither key's reveal was ever accepted;
+/// then the coordinator takes requests again, and it turns the treasury's booked USDC into REGENT
+/// with one piece. The manager owes the protocol share of both sales, the treasury holds the REGENT
+/// both bought, and the sender holds and has approved the USDC for a third key, for the test to buy.
 contract AnvilLab is Script {
     /// @notice Where the lab's contracts are.
     struct Lab {
@@ -49,8 +51,11 @@ contract AnvilLab is Script {
     bytes32 private constant TRAIT_TABLE = keccak256("anvil lab trait table");
     bytes32 private constant DECK = keccak256("anvil lab deck");
     uint256 private constant DECK_SIZE = 1000;
+    /// @notice How long after `run` Classic #1's sales open.
+    uint64 public constant OPENING = 1 minutes;
 
-    /// @notice Builds the lab, broadcast from `--sender`, and returns where its contracts are.
+    /// @notice Builds the lab up to phase 1, broadcast from `--sender`, and returns where its
+    /// contracts are.
     function run() external returns (Lab memory lab) {
         vm.startBroadcast();
         (, address sender,) = vm.readCallers();
@@ -89,7 +94,7 @@ contract AnvilLab is Script {
             DECK_SIZE,
             KeyfleetManager.Profile({name: "Classic #1", description: "", imageLink: ""})
         );
-        keys.advancePhase();
+        keys.advancePhase(uint64(block.timestamp) + OPENING);
         KeyfleetManager classic = KeyfleetManager(keys.managerOf(1));
 
         uint256 start = classic.START_PRICE();
@@ -97,10 +102,6 @@ contract AnvilLab is Script {
             + KeyfleetPresets.classicPrice(3, start);
         usdc.mint(sender, prices);
         usdc.approve(address(classic), prices);
-        vrf.setRevertAll(true);
-        classic.purchase(sender, classic.nextPrice(), block.timestamp + 1 hours, new bytes32[](0));
-        classic.purchase(sender, classic.nextPrice(), block.timestamp + 1 hours, new bytes32[](0));
-        vrf.setRevertAll(false);
         vm.stopBroadcast();
 
         lab = Lab({
@@ -115,6 +116,23 @@ contract AnvilLab is Script {
             usdc: address(usdc),
             regent: address(regent)
         });
+    }
+
+    /// @notice Buys keys 1 and 2 of Classic #1 for the sender with no reveal accepted, then turns the
+    /// treasury's booked USDC into REGENT. Broadcast from the same `--sender` as `run`, once
+    /// Classic #1's sales are open.
+    function sell(KeyfleetManager classic) external {
+        (IVRFCoordinatorV2Plus coordinator,,) = classic.KEYS().randomness();
+        MockVRFCoordinatorV2Plus vrf = MockVRFCoordinatorV2Plus(address(coordinator));
+        vm.startBroadcast();
+        (, address sender,) = vm.readCallers();
+        vrf.setRevertAll(true);
+        classic.purchase(sender, classic.nextPrice(), block.timestamp + 1 hours, new bytes32[](0));
+        classic.purchase(sender, classic.nextPrice(), block.timestamp + 1 hours, new bytes32[](0));
+        vrf.setRevertAll(false);
+        KeyfleetRegentBuyer buyer = classic.REGENT_BUYER();
+        buyer.convert(buyer.PIECE_USDC());
+        vm.stopBroadcast();
     }
 
     /// @dev Stand-in pools at a fixed price, funded to pay out: one atomic USDC buys 4e8 wei of

@@ -47,6 +47,11 @@ import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.so
 /// hours later. It is never approved before closing, however many Yes ballots it has. Its status is
 /// worked out from these stored facts; nothing finalises it.
 ///
+/// During a money proposal's `MONEY_DELAY` the only ballot taken is No, from any key, under the same
+/// rules: it replaces the key's ballot or joins it late, so it counts against the same 60%. The
+/// moment Yes falls below `approvalsNeeded(D)` the proposal is cancelled; while it still passes, it
+/// stands. So in a quiet fleet the keys that were not there at closing can still stop a payment.
+///
 /// A key takes part only once `KEY_MATURITY` (2 days) has passed since it was minted, counted in
 /// block timestamps; a transfer does not start the wait again. Until then it cannot be renewed,
 /// vote, propose or cancel, so it is never among the keys present at an opening and never joins
@@ -115,7 +120,8 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     /// @param yes Keys whose ballot is Yes.
     /// @param no Keys whose ballot is No.
     /// @param abstain Keys whose ballot is Abstain.
-    /// @param cancelled Whether its author key cancelled it.
+    /// @param cancelled Whether its author key cancelled it, or a No during its wait left it short
+    /// of approval.
     /// @param executed Whether it has been carried out.
     struct Proposal {
         bytes32 contentHash;
@@ -180,8 +186,11 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     error TreasuryOpening(uint64 opensAt);
     /// @notice A ballot is Yes, No or Abstain.
     error InvalidChoice();
-    /// @notice The proposal takes no more ballots: it has closed or was cancelled.
+    /// @notice The proposal takes no more ballots: it has closed and is not waiting, or was
+    /// cancelled.
     error BallotsClosed(uint256 proposalId);
+    /// @notice During a money proposal's wait the only ballot taken is No.
+    error OnlyNoWhileWaiting(uint256 proposalId);
     /// @notice Only an open, waiting or approved proposal can be cancelled.
     error NotCancellable(Status status);
     /// @notice Only an approved proposal can be carried out.
@@ -218,7 +227,8 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     /// @notice Keys cast or replaced their ballots on a proposal, all with one choice.
     event BallotCast(uint256 indexed proposalId, address indexed voter, Choice choice, uint256[] tokenIds);
 
-    /// @notice A proposal was cancelled by whoever may act for its author key.
+    /// @notice A proposal was cancelled, by whoever may act for its author key or by the voter whose
+    /// No during its wait left it short of approval.
     event ProposalCancelled(uint256 indexed proposalId, address indexed by);
 
     /// @notice A proposal was carried out. It can never be carried out again.
@@ -338,8 +348,8 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     /// @notice Where a proposal stands now.
     /// @dev Cancelled or Executed once that happened; Open until closing; then Rejected unless
     /// `yes >= approvalsNeeded(e0 + late)`, else Waiting until `executableAt`, Approved until its
-    /// execution expiry and ExecutionExpired from then on. Tallies cannot change after closing, so
-    /// this is final.
+    /// execution expiry and ExecutionExpired from then on. After closing, tallies change only by a
+    /// No during the wait, which cancels the proposal the moment it no longer passes.
     function status(uint256 proposalId) external view returns (Status) {
         return _status(_require(proposalId));
     }
@@ -357,10 +367,10 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     }
 
     /// @notice The first second a proposal may carry calls that move money: `TREASURY_OPENING`
-    /// after the fleet's sales opened. Zero while they have not opened.
+    /// after the fleet's sales open. Zero until the phase that opens them is reached.
     function treasuryOpensAt() public view returns (uint64) {
-        uint64 salesOpenedAt = KEYS.salesOpenedAt(FLEET_ID);
-        return salesOpenedAt == 0 ? 0 : salesOpenedAt + TREASURY_OPENING;
+        uint64 salesOpenAt = KEYS.salesOpenAt(FLEET_ID);
+        return salesOpenAt == 0 ? 0 : salesOpenAt + TREASURY_OPENING;
     }
 
     /// @notice Whether a key is present now: less than 48 hours since its latest renewal under its
@@ -518,10 +528,10 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
 
     /// @notice Casts or replaces ballots for a set of keys, all with one choice, and renews each key.
     /// @dev The caller must own every key named, or hold an active shard of it while its agent
-    /// voting is on, every key must be mature (`KEY_MATURITY`), and the proposal must be open. A
-    /// key's first ballot adds it to the electorate
-    /// if it was not present at opening; a later one replaces its contribution. The whole call
-    /// reverts if any one key is refused.
+    /// voting is on, every key must be mature (`KEY_MATURITY`), and the proposal must be open, or
+    /// waiting with the choice No (see the wait above). A key's first ballot adds it to the
+    /// electorate if it was not present at opening; a later one replaces its contribution. The whole
+    /// call reverts if any one key is refused.
     /// @param proposalId The proposal.
     /// @param tokenIds The keys.
     /// @param choice Yes, No or Abstain.
@@ -616,7 +626,12 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         if (choice == Choice.None) revert InvalidChoice();
         if (tokenIds.length == 0) revert NoKeys();
         Proposal storage stored = _require(proposalId);
-        if (stored.cancelled || block.timestamp >= stored.closesAt) revert BallotsClosed(proposalId);
+        Status current = _status(stored);
+        if (current == Status.Waiting) {
+            if (choice != Choice.No) revert OnlyNoWhileWaiting(proposalId);
+        } else if (current != Status.Open) {
+            revert BallotsClosed(proposalId);
+        }
 
         uint256[4] memory tally = [0, uint256(stored.yes), uint256(stored.no), uint256(stored.abstain)];
         uint256 late = stored.late;
@@ -638,6 +653,10 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         stored.abstain = uint32(tally[3]);
         stored.late = uint32(late);
         emit BallotCast(proposalId, voter, choice, tokenIds);
+        if (current == Status.Waiting && tally[1] < approvalsNeeded(uint256(stored.e0) + late)) {
+            stored.cancelled = true;
+            emit ProposalCancelled(proposalId, voter);
+        }
     }
 
     /// @dev The hash binding a proposal: the chain, this controller, the treasury, the id, the

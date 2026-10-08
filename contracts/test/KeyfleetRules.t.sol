@@ -193,6 +193,113 @@ contract KeyfleetRulesTest is KeyfleetFixture {
         assertEq(usdc.balanceOf(OPERATOR), 990_000, "carried out in its last second");
     }
 
+    // --- No during the day's wait ----------------------------------------
+
+    /// @dev Invariant: during a money proposal's wait only No is taken, from any key that may vote,
+    /// and the ballots count against the same 60%.
+    function test_onlyNoIsTakenDuringTheWait() public {
+        _buyMany(classic, 2);
+        _pastOpening();
+        uint256 first = _key(classic, 1);
+        _present(_key(classic, 2));
+        uint256 proposalId = _propose(first, _pay(10_000));
+        _vote(proposalId, first, KeyfleetVotes.Choice.Yes);
+        _vote(proposalId, _key(classic, 2), KeyfleetVotes.Choice.Yes);
+        vm.warp(votes.proposal(proposalId).closesAt);
+        assertEq(uint8(votes.status(proposalId)), uint8(KeyfleetVotes.Status.Waiting));
+
+        KeyfleetVotes.Choice[2] memory refused = [KeyfleetVotes.Choice.Yes, KeyfleetVotes.Choice.Abstain];
+        for (uint256 i = 0; i < refused.length; ++i) {
+            vm.prank(keys.ownerOf(first));
+            vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.OnlyNoWhileWaiting.selector, proposalId));
+            votes.castBallot(proposalId, _ids(first), refused[i]);
+        }
+        assertEq(votes.proposal(proposalId).yes, 2, "nothing changed");
+    }
+
+    /// @dev Invariant: a No during the wait that leaves Yes below 60% cancels the payment, which can
+    /// then never be carried out; the voter, not the author, is named as cancelling it.
+    function test_aNoDuringTheWaitThatSinksThePaymentCancelsIt() public {
+        _buyMany(classic, 5);
+        _pastOpening();
+        for (uint256 k = 2; k <= 5; ++k) {
+            _present(_key(classic, k));
+        }
+        usdc.mint(address(treasury), 1e6);
+        uint256 proposalId = _propose(_key(classic, 1), _pay(990_000));
+        for (uint256 k = 1; k <= 3; ++k) {
+            _vote(proposalId, _key(classic, k), KeyfleetVotes.Choice.Yes);
+        }
+        vm.warp(votes.proposal(proposalId).closesAt);
+        assertEq(uint8(votes.status(proposalId)), uint8(KeyfleetVotes.Status.Waiting), "3/5, waiting a day");
+
+        uint256 dissenter = _key(classic, 3);
+        vm.expectEmit(true, true, true, true, address(votes));
+        emit KeyfleetVotes.ProposalCancelled(proposalId, keys.ownerOf(dissenter));
+        _vote(proposalId, dissenter, KeyfleetVotes.Choice.No);
+        assertEq(uint8(votes.status(proposalId)), uint8(KeyfleetVotes.Status.Cancelled), "2/5 no longer passes");
+
+        vm.warp(votes.executableAt(proposalId));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, KeyfleetVotes.Status.Cancelled));
+        votes.execute(proposalId, _pay(990_000));
+        uint256[] memory other = _ids(_key(classic, 4));
+        vm.prank(keys.ownerOf(other[0]));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.BallotsClosed.selector, proposalId));
+        votes.castBallot(proposalId, other, KeyfleetVotes.Choice.No);
+        assertEq(usdc.balanceOf(OPERATOR), 0, "nothing paid");
+    }
+
+    /// @dev Invariant: a No during the wait that leaves the payment passing is counted and changes
+    /// nothing else: the payment waits out its day and is carried out.
+    function test_aNoDuringTheWaitThatLeavesThePaymentPassingKeepsIt() public {
+        _buyMany(classic, 5);
+        _pastOpening();
+        for (uint256 k = 2; k <= 5; ++k) {
+            _present(_key(classic, k));
+        }
+        usdc.mint(address(treasury), 1e6);
+        uint256 proposalId = _propose(_key(classic, 1), _pay(990_000));
+        for (uint256 k = 1; k <= 4; ++k) {
+            _vote(proposalId, _key(classic, k), KeyfleetVotes.Choice.Yes);
+        }
+        vm.warp(votes.proposal(proposalId).closesAt);
+        _vote(proposalId, _key(classic, 4), KeyfleetVotes.Choice.No);
+        _vote(proposalId, _key(classic, 5), KeyfleetVotes.Choice.No);
+        assertEq(votes.proposal(proposalId).yes, 3, "3/5 still passes");
+        assertEq(votes.proposal(proposalId).no, 2);
+        assertEq(uint8(votes.status(proposalId)), uint8(KeyfleetVotes.Status.Waiting));
+
+        vm.warp(votes.executableAt(proposalId));
+        assertEq(uint8(votes.status(proposalId)), uint8(KeyfleetVotes.Status.Approved));
+        uint256[] memory other = _ids(_key(classic, 5));
+        vm.prank(keys.ownerOf(other[0]));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.BallotsClosed.selector, proposalId));
+        votes.castBallot(proposalId, other, KeyfleetVotes.Choice.No);
+        votes.execute(proposalId, _pay(990_000));
+        assertEq(usdc.balanceOf(OPERATOR), 990_000, "carried out");
+    }
+
+    /// @dev Invariant: the quiet-fleet case. One present key passes a payment to itself 1/1; a key
+    /// that was not present at the opening votes No during the wait, which counts it as a late
+    /// voter, so 1 Yes of 2 no longer passes and the payment is cancelled.
+    function test_aLateNoDuringTheWaitStopsAOneKeyPayment() public {
+        _buyMany(classic, 2);
+        _pastOpening();
+        uint256 first = _key(classic, 1);
+        uint256 late = _key(classic, 2);
+        _present(first);
+        usdc.mint(address(treasury), 1e6);
+        uint256 proposalId = _propose(first, _pay(990_000));
+        _vote(proposalId, first, KeyfleetVotes.Choice.Yes);
+        assertEq(votes.proposal(proposalId).e0, 1, "one present voter");
+        vm.warp(votes.proposal(proposalId).closesAt);
+        assertEq(uint8(votes.status(proposalId)), uint8(KeyfleetVotes.Status.Waiting), "1/1, waiting a day");
+
+        _vote(proposalId, late, KeyfleetVotes.Choice.No);
+        assertEq(votes.proposal(proposalId).late, 1, "the late No joins the count");
+        assertEq(uint8(votes.status(proposalId)), uint8(KeyfleetVotes.Status.Cancelled), "1/2 no longer passes");
+    }
+
     // --- 2. the 2-day wait from mint -------------------------------------
 
     function test_aKeyWaitsTwoDaysFromItsMint() public {
@@ -338,10 +445,10 @@ contract KeyfleetRulesTest is KeyfleetFixture {
     // --- 4. the 7-day opening --------------------------------------------
 
     function test_theOpeningCountsFromTheFoundingFleetsPhase() public view {
-        // The fixture opened phase 1 and phase 2 at this same moment.
-        assertEq(keys.salesOpenedAt(1), block.timestamp, "fleet 1 at phase 1");
-        assertEq(keys.salesOpenedAt(4), block.timestamp, "fleets 2 to 4 at phase 2");
-        assertEq(votes.treasuryOpensAt(), block.timestamp + 7 days, "seven days after its sales opened");
+        // The fixture opened phase 1 a second before phase 2, which opened now.
+        assertEq(keys.salesOpenAt(1), block.timestamp - 1, "fleet 1 at phase 1");
+        assertEq(keys.salesOpenAt(4), block.timestamp, "fleets 2 to 4 at phase 2");
+        assertEq(votes.treasuryOpensAt(), block.timestamp - 1 + 7 days, "seven days after its sales opened");
     }
 
     function test_aFoundingFleetHasNoOpeningBeforeItsPhase() public {
@@ -350,23 +457,21 @@ contract KeyfleetRulesTest is KeyfleetFixture {
         for (uint256 id = 1; id <= keys.FOUNDING_FLEETS(); ++id) {
             _createFounding(keys.foundingPreset(id));
         }
-        vm.prank(safe);
-        keys.advancePhase();
+        _advancePhase();
         uint256 phaseOne = block.timestamp;
         vm.warp(block.timestamp + 1 days);
-        assertEq(keys.salesOpenedAt(1), phaseOne, "fleet 1 opened at phase 1");
-        assertEq(keys.salesOpenedAt(2), 0, "fleet 2 not yet");
+        assertEq(keys.salesOpenAt(1), phaseOne, "fleet 1 opened at phase 1");
+        assertEq(keys.salesOpenAt(2), 0, "fleet 2 not yet");
         assertFalse(keys.salesOpen(2), "so it does not sell");
         assertEq(KeyfleetManager(keys.managerOf(2)).VOTES().treasuryOpensAt(), 0, "and has no opening yet");
-        vm.prank(safe);
-        keys.advancePhase();
-        assertEq(keys.salesOpenedAt(2), block.timestamp, "fleet 2 opens at phase 2");
-        assertEq(keys.salesOpenedAt(1), phaseOne, "fleet 1 keeps its time");
+        _advancePhase();
+        assertEq(keys.salesOpenAt(2), block.timestamp, "fleet 2 opens at phase 2");
+        assertEq(keys.salesOpenAt(1), phaseOne, "fleet 1 keeps its time");
     }
 
     function test_anOpenFleetsOpeningCountsFromItsCreation() public {
         KeyfleetManager open = _createOpen(KeyfleetPresets.Preset.FleetTechClassic, 10e6);
-        assertEq(keys.salesOpenedAt(open.FLEET_ID()), block.timestamp, "sells from its creation");
+        assertEq(keys.salesOpenAt(open.FLEET_ID()), block.timestamp, "sells from its creation");
         assertEq(open.VOTES().treasuryOpensAt(), block.timestamp + 7 days, "seven days after");
     }
 
@@ -433,7 +538,8 @@ contract KeyfleetRulesTest is KeyfleetFixture {
     function test_theDailySplitRunsDuringTheOpening() public {
         _buy(classic, ALICE);
         usdc.mint(address(treasury), 1_000e6);
-        vm.warp(treasury.nextRunAt());
+        _joinSplit(classic);
+        assertGe(block.timestamp, treasury.nextRunAt(), "the split is due");
         assertLt(block.timestamp, votes.treasuryOpensAt(), "still in the opening");
         treasury.runDailySplit();
         assertLt(usdc.balanceOf(address(treasury)), 1_000e6, "the split paid out");

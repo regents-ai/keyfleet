@@ -25,17 +25,18 @@ interface IKeyfleetKeyHook {
 /// manager, which settles the key's rewards and clears its presence. Every mint and every transfer
 /// bumps the key's ownership epoch, and a mint records when the key was minted.
 ///
-/// Sales open in phases the Regents Safe moves forward, one step at a time and never back: phase 1
-/// opens fleet 1, phase 2 fleets 2 to 4, and phase 3 lets anyone create a fleet, which sells from
-/// the moment it is created. `mint` is the only way a key comes to exist, and it refuses a fleet
-/// whose sales have not opened.
+/// Sales open in phases the Regents Safe moves forward, one step at a time and never back, each at
+/// a future second the Safe names when it moves: phase 1 opens fleet 1, phase 2 fleets 2 to 4, and
+/// phase 3 lets anyone create a fleet, which sells from the moment it is created. `mint` is the only
+/// way a key comes to exist, and it refuses a fleet whose sales have not opened.
 ///
 /// Every fleet's cards come from a pre-made deck, of which only the fingerprint and the size are
 /// kept here. The four founding fleets are registered with theirs. A fleet anyone creates is
 /// registered without one, and the keeper, a Regents wallet the Safe names, records its deck once.
 /// A key's Chainlink VRF request is sent only once its fleet has a deck, so no seed of a fleet
 /// exists before its deck is fixed, and nobody can choose a deck after seeing the seeds. A key's
-/// seed is written once from the one answer to its one accepted request.
+/// seed is written once from the one answer to its one accepted request. The Safe may change the
+/// coordinator, subscription and gas lane, which only the next requests use.
 ///
 /// `tokenURI` is one fixed base followed by the token id, and reverts for an id that has not been
 /// minted. Resales carry an ERC-2981 royalty of 2.5% to the Regents Safe. There is no upgrade path,
@@ -53,7 +54,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         string contractURI;
     }
 
-    /// @notice Where every key's traits come from, fixed for ever.
+    /// @notice Where every key's random word comes from. The Safe may change it.
     /// @param coordinator The Chainlink VRF v2.5 coordinator, the only address that can answer.
     /// @param subscriptionId The VRF subscription that pays for every request.
     /// @param keyHash The VRF gas lane.
@@ -107,24 +108,24 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     uint32 public constant REVEAL_CALLBACK_GAS_LIMIT = 100_000;
     /// @notice Random words asked for per key.
     uint32 public constant REVEAL_WORDS = 1;
+    /// @notice The furthest ahead a phase step may name its opening: 30 days.
+    uint256 public constant MAX_OPENING_LEAD = 30 days;
 
     /// @dev ERC-4906 interface id.
     bytes4 private constant ERC4906_INTERFACE_ID = 0x49064906;
 
-    /// @notice The Regents Safe: moves phases, names the keeper, adds factories, and receives the
-    /// resale royalty.
+    /// @notice The Regents Safe: moves phases, names the keeper, adds factories, sets the randomness,
+    /// and receives the resale royalty.
     address public immutable SAFE;
-    /// @notice The one Chainlink VRF v2.5 coordinator that answers.
-    IVRFCoordinatorV2Plus public immutable VRF_COORDINATOR;
-    /// @notice The VRF subscription every request is paid from, in ETH.
-    uint256 public immutable VRF_SUBSCRIPTION_ID;
-    /// @notice The VRF gas lane every request names.
-    bytes32 public immutable VRF_KEY_HASH;
     /// @notice `keccak256` of the published trait-table file every key's traits are drawn from.
     bytes32 public immutable TRAIT_TABLE_HASH;
 
     /// @notice The current phase, 0 to 3.
     uint8 public phase;
+    /// @notice When the current phase opens its sales, as the Safe named it; zero in phase 0.
+    uint64 public phaseOpensAt;
+    /// @notice The VRF coordinator, subscription and gas lane the next request uses.
+    Randomness public randomness;
     /// @notice The Regents wallet that records decks for fleets anyone creates and asks for card
     /// refreshes.
     address public keeper;
@@ -137,9 +138,10 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     mapping(address manager => uint256 fleetId) public fleetOfManager;
     /// @notice Fleets registered of each type.
     mapping(KeyfleetPresets.Preset preset => uint256 count) public typeCount;
-    /// @notice When a fleet's sales opened: fleet 1 at phase 1, fleets 2 to 4 at phase 2, any later
-    /// fleet at its registration. Zero until they open, and for a fleet that does not exist.
-    mapping(uint256 fleetId => uint64 openedAt) public salesOpenedAt;
+    /// @notice When a fleet's sales open: fleet 1 at the second phase 1 names, fleets 2 to 4 at the
+    /// second phase 2 names, any later fleet at its registration. Zero until the phase that opens
+    /// them is reached, and for a fleet that does not exist.
+    mapping(uint256 fleetId => uint64 opensAt) public salesOpenAt;
     /// @notice A key's trait seed, zero until the coordinator answers. Written once.
     mapping(uint256 tokenId => bytes32 seed) public revealSeed;
     /// @notice When the coordinator accepted the request for a key, zero if it never has.
@@ -169,6 +171,9 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     error NotOwnerOrKeeper(uint256 tokenId, address caller);
     /// @notice The phase is already the last.
     error NoNextPhase();
+    /// @notice A phase must open in the future, within `MAX_OPENING_LEAD`, and not before the phase
+    /// it follows.
+    error OpensAtInvalid(uint256 opensAt);
     /// @notice The fleets a phase opens do not all exist yet.
     error FleetsMissing(uint256 needed, uint256 registered);
     /// @notice Before phase 3 only the founding fleets may be registered, in order, each with its deck.
@@ -210,8 +215,10 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     );
     /// @notice A fleet's deck fingerprint was recorded. It never changes afterwards.
     event DeckSet(uint256 indexed fleetId, bytes32 deckHash, uint256 deckSize);
-    /// @notice The Safe moved the collection to a new phase.
-    event PhaseAdvanced(uint8 phase);
+    /// @notice The Safe moved the collection to a new phase, whose sales open at `opensAt`.
+    event PhaseAdvanced(uint8 phase, uint64 opensAt);
+    /// @notice The Safe set the VRF coordinator, subscription and gas lane for the next requests.
+    event RandomnessSet(address indexed coordinator, uint256 subscriptionId, bytes32 keyHash);
     /// @notice The Safe named a new keeper.
     event KeeperSet(address indexed keeper);
     /// @notice The Safe allowed another factory to register fleets.
@@ -238,25 +245,19 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     /// @param safe The Regents Safe.
     /// @param keeper_ The first keeper.
     /// @param collection The name, symbol, metadata base and collection metadata address.
-    /// @param randomness The VRF coordinator, subscription and gas lane.
+    /// @param randomness_ The first VRF coordinator, subscription and gas lane.
     /// @param traitTableHash `keccak256` of the published trait-table file. Not zero.
     constructor(
         address safe,
         address keeper_,
         Collection memory collection,
-        Randomness memory randomness,
+        Randomness memory randomness_,
         bytes32 traitTableHash
     ) ERC721(collection.name, collection.symbol) {
         if (safe == address(0) || keeper_ == address(0)) revert ZeroAddress();
-        // A coordinator without code would make a request revert past its `catch`.
-        if (address(randomness.coordinator).code.length == 0) {
-            revert CoordinatorMissing(address(randomness.coordinator));
-        }
         if (traitTableHash == bytes32(0)) revert TraitTableHashZero();
         SAFE = safe;
-        VRF_COORDINATOR = randomness.coordinator;
-        VRF_SUBSCRIPTION_ID = randomness.subscriptionId;
-        VRF_KEY_HASH = randomness.keyHash;
+        _setRandomness(randomness_);
         TRAIT_TABLE_HASH = traitTableHash;
         _baseTokenURI = collection.baseTokenURI;
         _contractURI = collection.contractURI;
@@ -320,9 +321,10 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         return (stored.deckHash, stored.deckSize);
     }
 
-    /// @notice Whether a fleet's keys may be minted now: once `salesOpenedAt` is set.
+    /// @notice Whether a fleet's keys may be minted now: once `salesOpenAt` is set and reached.
     function salesOpen(uint256 fleetId) public view returns (bool) {
-        return salesOpenedAt[fleetId] != 0;
+        uint256 opensAt = salesOpenAt[fleetId];
+        return opensAt != 0 && block.timestamp >= opensAt;
     }
 
     /// @notice The metadata base every `tokenURI` starts with.
@@ -348,21 +350,36 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
 
     // --- the Safe ----------------------------------------------------------
 
-    /// @notice Moves to the next phase. Phase 1 needs fleet 1 and phase 2 needs fleets 1 to 4.
-    function advancePhase() external onlySafe {
+    /// @notice Moves to the next phase, whose sales open at `opensAt`. Phase 1 needs fleet 1 and
+    /// phase 2 needs fleets 1 to 4.
+    /// @param opensAt When the phase opens: in the future, at most `MAX_OPENING_LEAD` from now, and
+    /// not before the phase it follows.
+    function advancePhase(uint64 opensAt) external onlySafe {
         uint8 current = phase;
         if (current >= FINAL_PHASE) revert NoNextPhase();
+        if (opensAt <= block.timestamp || opensAt > block.timestamp + MAX_OPENING_LEAD || opensAt < phaseOpensAt) {
+            revert OpensAtInvalid(opensAt);
+        }
         uint8 next = current + 1;
         uint256 needed = next == 1 ? 1 : next == 2 ? FOUNDING_FLEETS : 0;
         if (fleetCount < needed) revert FleetsMissing(needed, fleetCount);
         phase = next;
-        if (next == 1) salesOpenedAt[1] = uint64(block.timestamp);
+        phaseOpensAt = opensAt;
+        if (next == 1) salesOpenAt[1] = opensAt;
         if (next == 2) {
             for (uint256 fleetId = 2; fleetId <= FOUNDING_FLEETS; ++fleetId) {
-                salesOpenedAt[fleetId] = uint64(block.timestamp);
+                salesOpenAt[fleetId] = opensAt;
             }
         }
-        emit PhaseAdvanced(next);
+        emit PhaseAdvanced(next, opensAt);
+    }
+
+    /// @notice Sets the VRF coordinator, subscription and gas lane for every request from now on.
+    /// @dev Only the coordinator set here may answer, so a request already accepted by an earlier
+    /// coordinator is never answered and its key keeps no seed. Keys minted before their fleet's deck
+    /// and keys whose requests were refused are asked for through the new one.
+    function setRandomness(Randomness calldata randomness_) external onlySafe {
+        _setRandomness(randomness_);
     }
 
     /// @notice Names a new keeper.
@@ -382,8 +399,9 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     // --- factories ---------------------------------------------------------
 
     /// @notice Registers a new fleet whose manager will be at `manager`.
-    /// @dev Before phase 3 only the four founding fleets may be registered, in order, each with its
-    /// deck. In phase 3 a fleet is registered without a deck, which the keeper records later.
+    /// @dev Until phase 3 opens only the four founding fleets may be registered, in order, each with
+    /// its deck. Once it opens a fleet is registered without a deck, which the keeper records later,
+    /// and sells from that moment.
     /// @return fleetId The new fleet's id.
     /// @return typeNumber Its number among fleets of its type.
     function registerFleet(KeyfleetPresets.Preset preset, address manager, bytes32 deckHash, uint256 deckSize)
@@ -396,7 +414,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         fleetId = fleetCount + 1;
         if (fleetId > MAX_FLEETS) revert TooManyFleets();
         bool hasDeck = deckHash != bytes32(0) || deckSize != 0;
-        if (phase < FINAL_PHASE) {
+        bool open = phase == FINAL_PHASE && block.timestamp >= phaseOpensAt;
+        if (!open) {
             if (fleetId > FOUNDING_FLEETS || preset != foundingPreset(fleetId)) {
                 revert NotFoundingFleet(fleetId, preset);
             }
@@ -415,7 +434,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
             deckHash: deckHash
         });
         fleetOfManager[manager] = fleetId;
-        if (phase == FINAL_PHASE) salesOpenedAt[fleetId] = uint64(block.timestamp);
+        if (open) salesOpenAt[fleetId] = uint64(block.timestamp);
         emit FleetRegistered(fleetId, preset, typeNumber, manager, msg.sender);
         if (hasDeck) emit DeckSet(fleetId, deckHash, deckSize);
     }
@@ -487,10 +506,10 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     }
 
     /// @notice The coordinator's answer to a request.
-    /// @dev Only the coordinator may call, and for it this never reverts. An unknown request, an
-    /// empty answer, or an answer for a key that already has its seed is ignored.
+    /// @dev Only the current coordinator may call, and for it this never reverts. An unknown
+    /// request, an empty answer, or an answer for a key that already has its seed is ignored.
     function rawFulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) external {
-        if (msg.sender != address(VRF_COORDINATOR)) revert OnlyCoordinator(msg.sender);
+        if (msg.sender != address(randomness.coordinator)) revert OnlyCoordinator(msg.sender);
         uint256 tokenId = _requestToken[requestId];
         if (tokenId == 0 || randomWords.length == 0 || revealSeed[tokenId] != bytes32(0)) return;
 
@@ -504,16 +523,18 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
 
     /// @dev Requests one random word, paid in ETH from the subscription. Never reverts.
     function _requestReveal(uint256 tokenId) private {
-        try VRF_COORDINATOR.requestRandomWords(
-            VRFV2PlusClient.RandomWordsRequest({
-                keyHash: VRF_KEY_HASH,
-                subId: VRF_SUBSCRIPTION_ID,
-                requestConfirmations: REVEAL_CONFIRMATIONS,
-                callbackGasLimit: REVEAL_CALLBACK_GAS_LIMIT,
-                numWords: REVEAL_WORDS,
-                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: true}))
-            })
-        ) returns (
+        Randomness memory current = randomness;
+        try current.coordinator
+            .requestRandomWords(
+                VRFV2PlusClient.RandomWordsRequest({
+                    keyHash: current.keyHash,
+                    subId: current.subscriptionId,
+                    requestConfirmations: REVEAL_CONFIRMATIONS,
+                    callbackGasLimit: REVEAL_CALLBACK_GAS_LIMIT,
+                    numWords: REVEAL_WORDS,
+                    extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: true}))
+                })
+            ) returns (
             uint256 requestId
         ) {
             _requestToken[requestId] = tokenId;
@@ -541,6 +562,14 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         emit OwnershipEpoch(tokenId, epoch, from, to);
 
         return super._update(to, tokenId, address(0));
+    }
+
+    /// @dev A coordinator without code would make a request revert past its `catch`.
+    function _setRandomness(Randomness memory randomness_) private {
+        address coordinator = address(randomness_.coordinator);
+        if (coordinator.code.length == 0) revert CoordinatorMissing(coordinator);
+        randomness = randomness_;
+        emit RandomnessSet(coordinator, randomness_.subscriptionId, randomness_.keyHash);
     }
 
     function _baseURI() internal view override returns (string memory) {

@@ -13,7 +13,8 @@ import {
 /// flash accounting: `unlock` calls the caller back, `swap` records what the caller owes and is
 /// owed, `sync` and `settle` take payment, `take` pays out, and every debt must be zero when the
 /// callback returns. A test can make it fill only part of an input, and can give the pool a "hook"
-/// call it makes from inside every swap, as the REGENT pool's hook runs there.
+/// call it makes from inside every swap, as the REGENT pool's hook runs there, and can make every
+/// swap move its price.
 contract MockPoolManager is IUniswapV4PoolManager {
     /// @dev REGENT out per WETH in, and WETH out per REGENT in, scaled by 1e18.
     uint256 public immutable FORWARD_RATE;
@@ -32,6 +33,11 @@ contract MockPoolManager is IUniswapV4PoolManager {
     /// @dev When set, `swap` reports this delta instead of the real one.
     bool public reportOverride;
     int256 public reportedDelta;
+    /// @dev The pool's square-root price, which moves only by `sqrtMoveBps` on every swap.
+    uint160 public sqrtPriceX96 = uint160(1 << 96);
+    /// @dev How far each swap moves the square-root price, in basis points, up or down; zero
+    /// normally.
+    int256 public sqrtMoveBps;
 
     /// @param input The currency the forward rate prices: WETH.
     constructor(address input, uint256 forwardRate, uint256 reverseRate) {
@@ -54,6 +60,19 @@ contract MockPoolManager is IUniswapV4PoolManager {
         reportedDelta = reported;
     }
 
+    function clearReportedDelta() external {
+        reportOverride = false;
+    }
+
+    function setSqrtMoveBps(int256 bps) external {
+        sqrtMoveBps = bps;
+    }
+
+    /// @dev Every slot reads as the one pool's price, which is all the buyer reads.
+    function extsload(bytes32) external view returns (bytes32) {
+        return bytes32(uint256(sqrtPriceX96));
+    }
+
     function unlock(bytes calldata data) external returns (bytes memory result) {
         require(!_unlocked, "already unlocked");
         _unlocked = true;
@@ -74,6 +93,7 @@ contract MockPoolManager is IUniswapV4PoolManager {
         (address currencyIn, address currencyOut) =
             params.zeroForOne ? (key.currency0, key.currency1) : (key.currency1, key.currency0);
         uint256 amountIn = (uint256(-params.amountSpecified) * fillBps) / 10_000;
+        sqrtPriceX96 = uint160((uint256(sqrtPriceX96) * uint256(10_000 + sqrtMoveBps)) / 10_000);
         uint256 amountOut = (amountIn * (currencyIn == INPUT ? FORWARD_RATE : REVERSE_RATE)) / 1e18;
         _delta[currencyIn] -= int256(amountIn);
         _delta[currencyOut] += int256(amountOut);
