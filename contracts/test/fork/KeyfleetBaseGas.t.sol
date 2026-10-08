@@ -86,7 +86,7 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         assertGt(keys.revealRequestedAt(drawing), 0, "the coordinator accepted its request");
 
         // The Safe's first batch of Regents Club keys, each to the holder of its real Pass.
-        _asSafe(safeSteps.clubGiftCalls(_manifest(), factory)[0]);
+        _asSafe(safeSteps.clubGiftCalls(_manifest(), factory, new uint256[](0))[0]);
         _log("give, the Regents Club's first batch");
 
         // Presence: a key's first renewal, once the fleet's opening has passed, so both keys are

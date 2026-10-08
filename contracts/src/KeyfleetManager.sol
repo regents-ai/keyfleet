@@ -383,8 +383,10 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     /// @notice Gives the next keys of the Regents Club, in order, one to each of `receivers`.
     /// @dev Only the Regents Safe, only on the Regents Club fleet. Key N goes to `receivers` entry
     /// for N, which must hold Pass N right now or be the claims contract, so a batch built from an
-    /// older reading of the Pass reverts whole. No money moves and no card is drawn: key N holds
-    /// card N. Locked, so a receiver cannot give again from inside its mint hook.
+    /// older reading of the Pass reverts whole. A key for the claims contract is given without
+    /// asking the Pass, so a Pass burned or never minted cannot stop the keys after it. No money
+    /// moves and no card is drawn: key N holds card N. Locked, so a receiver cannot give again from
+    /// inside its mint hook.
     function give(address[] calldata receivers) external nonReentrant {
         if (msg.sender != KEYS.SAFE() || PRESET != KeyfleetPresets.Preset.RegentsClub) {
             revert OnlySafeGivesClubKeys(msg.sender);
@@ -509,7 +511,7 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         uint256 minted = totalMinted;
         uint256 keyNumber = minted + 1;
         if (keyNumber > KeyfleetPresets.CLUB_SUPPLY) revert SoldOut();
-        if (to != CLUB_PASS.ownerOf(keyNumber) && to != CLUB_CLAIMS) revert NotPassHolder(keyNumber, to);
+        if (to != CLUB_CLAIMS && to != CLUB_PASS.ownerOf(keyNumber)) revert NotPassHolder(keyNumber, to);
         totalMinted = keyNumber;
         if (minted == 0) firstMintAt = uint64(block.timestamp);
         uint256 tokenId = KEYS.tokenIdOf(FLEET_ID, keyNumber);

@@ -192,6 +192,23 @@ contract KeyfleetClubTest is KeyfleetFixture {
         assertEq(keys.ownerOf(keys.tokenIdOf(5, 2)), carol, "the Pass's holder now");
     }
 
+    /// @dev Invariant: a Pass burned or never minted holds up nothing: its key goes to the claims
+    /// contract without the Pass being asked, and the keys after it are given as usual.
+    function test_aMissingPassHoldsUpNoLaterKey() public {
+        clubPass.mint(alice, 1);
+        clubPass.burn(1);
+        clubPass.mint(carol, 3);
+        vm.prank(safe);
+        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, 1));
+        club.give(_receivers(alice, alice, carol));
+
+        vm.prank(safe);
+        club.give(_receivers(address(claims), address(claims), carol));
+        assertEq(keys.ownerOf(keys.tokenIdOf(5, 1)), address(claims), "the burned Pass's key is held");
+        assertEq(keys.ownerOf(keys.tokenIdOf(5, 2)), address(claims), "and the unminted Pass's");
+        assertEq(keys.ownerOf(keys.tokenIdOf(5, 3)), carol, "the next key reaches its Pass");
+    }
+
     /// @dev Invariant: gifts wait for phase 2, when the founding fleets after Classic open.
     function test_giftsWaitForPhaseTwo() public {
         _setUpFixture();

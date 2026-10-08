@@ -400,7 +400,8 @@ KEYFLEET_MANIFEST=base KEYFLEET_STEP=club-gifts \
 It sends nothing and needs no signer. It reads every Pass not given a key yet
 at Base's latest block: key N goes to the wallet holding Pass N, or to the
 claims contract (`CLUB_CLAIMS()` on the factory) when that holder is a contract
-that does not answer the NFT receiver check, so would refuse the key. It checks every call as the Safe against Base's
+that does not answer the NFT receiver check, so would refuse the key, or when
+Pass N has been burned. It checks every call as the Safe against Base's
 current state, then writes one file per 80 keys,
 `deployments/safe/base.club-gifts-1-80.json` to
 `base.club-gifts-1921-1998.json`, for the founder to sign in order. Each uses
@@ -411,7 +412,18 @@ the contract gives key N only to the current holder of Pass N or to the claims
 contract. Run the step again: it writes files only for the keys still not
 given, read afresh. Whoever holds Pass N can later take a key held for it with
 `claim(N)` on the claims contract, at any time, together with what it earned
-while it waited.
+while it waited. A key held for a burned Pass stays held, since nobody holds
+that Pass.
+
+A holder contract that answers the receiver check but still refuses the real
+gift makes its whole batch revert, and the step reads it the same way again.
+Name its key numbers in `KEYFLEET_CLUB_TO_CLAIMS`, comma-separated, and run the
+step again: those keys go to the claims contract whoever holds their Pass.
+
+```sh
+KEYFLEET_MANIFEST=base KEYFLEET_STEP=club-gifts KEYFLEET_CLUB_TO_CLAIMS=212,977 \
+  forge script script/KeyfleetSafeSteps.s.sol:KeyfleetSafeSteps --rpc-url "$BASE_RPC_URL"
+```
 
 ## Fleets anyone creates
 

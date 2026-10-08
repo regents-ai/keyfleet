@@ -26,9 +26,11 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// phase step is run only when the founder says when sales open.
 ///
 /// The Regents Club gifts are read from the Pass at the block the step runs on: key N goes to the
-/// holder of Pass N, or to the claims contract when that holder is a contract that refuses the key,
-/// `CLUB_GIFT_BATCH` keys per call. A Pass that moves before its call lands makes that call revert
-/// whole, and the step is run again.
+/// holder of Pass N, or to the claims contract when that holder is a contract that refuses the key
+/// or Pass N has no holder, `CLUB_GIFT_BATCH` keys per call. A Pass that moves before its call lands
+/// makes that call revert whole, and the step is run again. `KEYFLEET_CLUB_TO_CLAIMS`, a
+/// comma-separated list of key numbers, sends those keys to the claims contract whoever holds their
+/// Pass: for a holder contract that answers the check but refuses the real gift.
 contract KeyfleetSafeSteps is KeyfleetManifest {
     /// @notice One call for the Safe to make.
     /// @param name What the call does, which also names its file.
@@ -61,7 +63,7 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         } else if (_equal(step, "advance-phase")) {
             calls = advancePhaseCalls(manifest, factory, uint64(vm.envUint("KEYFLEET_OPENS_AT")));
         } else if (_equal(step, "club-gifts")) {
-            calls = clubGiftCalls(manifest, factory);
+            calls = clubGiftCalls(manifest, factory, vm.envOr("KEYFLEET_CLUB_TO_CLAIMS", ",", new uint256[](0)));
         } else {
             revert UnknownStep(step);
         }
@@ -121,8 +123,11 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
 
     /// @notice The Safe's calls giving every Regents Club key not given yet, `CLUB_GIFT_BATCH` per
     /// call, each key to the holder of its Pass now, or to the claims contract when that holder is a
-    /// contract that refuses it.
-    function clubGiftCalls(Manifest memory manifest, KeyfleetFactory factory) public returns (SafeCall[] memory calls) {
+    /// contract that refuses it, Pass N has no holder, or `toClaims` names the key.
+    function clubGiftCalls(Manifest memory manifest, KeyfleetFactory factory, uint256[] memory toClaims)
+        public
+        returns (SafeCall[] memory calls)
+    {
         _requireManifestFitsChain(manifest);
         KeyfleetKeys keys = factory.KEYS();
         KeyfleetManager club = KeyfleetManager(keys.managerOf(factory.CLUB_CLAIMS().CLUB_FLEET()));
@@ -135,7 +140,9 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
             if (to > KeyfleetPresets.CLUB_SUPPLY) to = KeyfleetPresets.CLUB_SUPPLY;
             address[] memory receivers = new address[](to + 1 - from);
             for (uint256 keyNumber = from; keyNumber <= to; ++keyNumber) {
-                receivers[keyNumber - from] = clubReceiver(factory, club, keyNumber);
+                receivers[keyNumber - from] = _named(toClaims, keyNumber)
+                    ? address(factory.CLUB_CLAIMS())
+                    : clubReceiver(factory, club, keyNumber);
             }
             calls[index] = SafeCall({
                 name: string.concat("club-gifts-", vm.toString(from), "-", vm.toString(to)),
@@ -146,10 +153,16 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
     }
 
     /// @notice Who receives Regents Club key `keyNumber` now: the holder of Pass `keyNumber`, or the
-    /// claims contract when the holder is a contract whose `onERC721Received`, asked as the
-    /// collection asks it at a mint, does not answer with exactly its selector.
+    /// claims contract when the Pass has no holder, burned or never minted, or the holder is a
+    /// contract whose `onERC721Received`, asked as the collection asks it at a mint, does not answer
+    /// with exactly its selector.
     function clubReceiver(KeyfleetFactory factory, KeyfleetManager club, uint256 keyNumber) public returns (address) {
-        address holder = factory.CLUB_PASS().ownerOf(keyNumber);
+        address holder;
+        try factory.CLUB_PASS().ownerOf(keyNumber) returns (address owner) {
+            holder = owner;
+        } catch {
+            return address(factory.CLUB_CLAIMS());
+        }
         if (holder.code.length == 0) return holder;
         KeyfleetKeys keys = factory.KEYS();
         uint256 tokenId = keys.tokenIdOf(club.FLEET_ID(), keyNumber);
@@ -196,5 +209,13 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
             vm.broadcast(safe);
             Address.functionCall(calls[index].to, calls[index].data);
         }
+    }
+
+    /// @dev Whether `keyNumbers` names `keyNumber`.
+    function _named(uint256[] memory keyNumbers, uint256 keyNumber) private pure returns (bool) {
+        for (uint256 i = 0; i < keyNumbers.length; ++i) {
+            if (keyNumbers[i] == keyNumber) return true;
+        }
+        return false;
     }
 }

@@ -139,9 +139,11 @@ and what the code on this branch does:
   (`0x2208aaDBdEcd47D3B4430b5b75a175f6d885D487`, Passes 1 to 1,998), never sold
   and with no price. The Regents Safe gives them in batches it signs: key N to
   whoever holds Pass N at that moment, read at the latest block. A Pass held by
-  a contract that cannot take a key has its key sent to `KeyfleetClubClaims`,
-  where whoever holds Pass N may claim key N at any time, with no deadline,
-  together with what it earned while it waited. Its treasury starts empty, and
+  a contract that cannot take a key, or a Pass burned, has its key sent to
+  `KeyfleetClubClaims`, which the contract accepts without asking the Pass, so
+  a missing Pass holds up no later key. Whoever holds Pass N may claim key N
+  there at any time, with no deadline, together with what it earned while it
+  waited. Its treasury starts empty, and
   its resales carry the same royalty to the Safe as every key.
 - Resales carry an ERC-2981 royalty of 2.5% to the Regents Safe. Marketplaces
   may choose not to honour it.
@@ -1528,7 +1530,9 @@ without six decimals, a zero keeper and a zero trait table hash.
   transaction lands) or `club-gifts` (one `give` per 80 Regents Club keys not
   given yet, `CLUB_GIFT_BATCH`, each key to the holder of its Pass read at the
   latest block, or to the claims contract when that holder is a contract that
-  does not answer the NFT receiver check with exactly its selector); any other
+  does not answer the NFT receiver check with exactly its selector, when the
+  Pass has no holder, or when `KEYFLEET_CLUB_TO_CLAIMS`, a comma-separated list
+  of key numbers, names the key); any other
   step reverts with `UnknownStep`. It finds the factory in the deployment step's latest
   broadcast on the chain. On Base it runs every call from the Safe's address
   against the chain's current state, stopping at the first call that would
