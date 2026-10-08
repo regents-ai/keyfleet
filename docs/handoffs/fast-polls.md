@@ -34,7 +34,8 @@ pushed, not deployed.
 - Eight signed agent routes under `/api/v1/agent/fleets/:fleet_id/polls`
   (`AgentPollController`): list, open, join, leave, end, wait, open round, vote.
   `wait` answers at once when the log has new lines, otherwise holds up to
-  `:agent_wait_ms` (25 s) and answers within milliseconds of the next line.
+  `:agent_wait_ms` (20 s, shared with the waiting rooms sync) and answers
+  within milliseconds of the next line.
 - Body checks and caps in `SignedAgent` (round body 24 KiB, observation 8 KiB of
   JSON, 1–600 s deadline, 5–1440 min session, confidence 0–1).
 - Plain-words refusals in `KeyfleetWeb.Refusal`; contract 1.1.0 with every poll
