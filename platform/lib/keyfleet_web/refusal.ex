@@ -27,8 +27,8 @@ defmodule KeyfleetWeb.Refusal do
     "missing_signed_body" =>
       {"Send the body as JSON, signed with the rest of the request.",
        "Sign the request again with its whole body, then send it again."},
-    "authentication_unavailable" =>
-      {"Sign-in can't be checked right now.", "Send the same request again in a minute."},
+    "siwa_request_failed" =>
+      {"The sign-in service could not be reached.", "Try again in a moment."},
     "request_too_large" =>
       {"The request body is larger than this operation takes.",
        "Send a shorter body. The docs give each operation's limit."},

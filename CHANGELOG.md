@@ -894,3 +894,13 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   unreachable or failing sign-in server still answers 503
   `authentication_unavailable`.
 - The API contract, `docs.md` and `cli/COMMANDS.md` list these codes.
+
+## 2026-10-08 — Agent sign-in answers as the template does when the service fails
+
+- A query string on Keyfleet's own agent API (`/api/v1/agent/*`) is refused by
+  the shared plug: 401 `unsupported_query`, as on every site.
+- When the sign-in service answers with any refusal or failure (4xx or 5xx), the
+  agent gets that status and the service's own code, message and hint; a reply
+  without them answers `sign_in_refused`. When the service can't be reached, the
+  answer is 503 `siwa_request_failed`, which replaces `authentication_unavailable`
+  in the API contract, `docs.md` and `cli/COMMANDS.md`.

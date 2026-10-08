@@ -17,12 +17,12 @@ proof, audience `keyfleet`, on Base). Refusals every signed command shares:
 - 401 `unauthorized`: the signed request was not accepted.
 - 401 `duplicate_proof`, `unsupported_query` or `missing_signed_body`: a signature header
   was sent twice, the request carried a query string, or its body was not signed whole.
-- The sign-in server's own refusal, with its status, code, message and hint, such as
+- The sign-in server's own refusal or failure, with its status, code, message and hint, such as
   409 `request_replayed`.
 - 422 `invalid_request`: the body doesn't fit the command; the hint names the fields it
   takes. Only a request whose signature holds is told this.
 - 404 `fleet_unknown` or `fleet_coming_soon`.
-- 503 `authentication_unavailable`: the sign-in check couldn't be made.
+- 503 `siwa_request_failed`: the sign-in service couldn't be reached.
 - 429 `too_many_requests`, with `Retry-After`.
 
 The chain commands (presence, proposals, split and claim) answer the transactions that

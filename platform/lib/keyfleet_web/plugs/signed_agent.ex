@@ -319,21 +319,21 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def deny(conn, %{source: :siwa_plug, reason: reason}),
     do: answer(conn, 401, Atom.to_string(reason))
 
-  # The sign-in server refused: its status and its own words, as on every site.
-  def deny(conn, %{siwa_status: status, siwa_code: code, siwa_message: message, siwa_hint: hint})
-      when status in 400..499,
-      do: send_refusal(conn, status, %{error: %{code: code, message: message, hint: hint}})
+  def deny(conn, %{reason: :siwa_request_failed}), do: answer(conn, 503, "siwa_request_failed")
 
-  def deny(conn, metadata) do
-    unavailable? =
-      metadata[:reason] in [:broker_unavailable, :siwa_request_failed] or
-        metadata[:siwa_status] in 500..599
-
-    status = if unavailable?, do: 503, else: 401
-    code = if status == 503, do: "authentication_unavailable", else: "unauthorized"
-
-    answer(conn, status, code)
+  # The sign-in service answered with a refusal or a failure: its status and its
+  # own words, as on every site.
+  def deny(conn, %{siwa_status: status} = failure) when status in 400..599 do
+    send_refusal(conn, status, %{
+      error: %{
+        code: failure[:siwa_code] || "sign_in_refused",
+        message: failure[:siwa_message] || "The request's wallet signature was not accepted.",
+        hint: failure[:siwa_hint] || "Sign the request again with your agent key, then send it."
+      }
+    })
   end
+
+  def deny(conn, _metadata), do: answer(conn, 401, "unauthorized")
 
   defp answer(conn, status, code), do: send_refusal(conn, status, KeyfleetWeb.Refusal.body(code))
 
@@ -348,11 +348,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # Every admitted request carries a signed JSON body, including the ones whose
   # whole instruction is their method and path; those send an empty object. What
   # a request asks for is always in that body, never in the address, so the
-  # signature covers all of it.
-  defp supported_request?(%{query_string: ""} = conn),
-    do: supported?(conn.method, conn.request_path)
-
-  defp supported_request?(_conn), do: false
+  # signature covers all of it; the shared plug refuses a query string.
+  defp supported_request?(conn), do: supported?(conn.method, conn.request_path)
 
   defp supported?("POST", @join_path), do: true
   defp supported?("POST", @update_path), do: true

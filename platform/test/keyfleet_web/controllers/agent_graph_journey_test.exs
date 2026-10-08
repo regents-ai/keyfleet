@@ -1303,7 +1303,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         })
 
       {:error, _reason} ->
-        answer(conn, 401, %{error: %{code: "invalid_proof"}})
+        answer(conn, 401, %{error: KeyfleetWeb.SignedAgentHelpers.refusal()})
     end
   end
 

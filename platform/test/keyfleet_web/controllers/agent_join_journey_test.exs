@@ -214,7 +214,15 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     Application.put_env(:keyfleet, :siwa_broker_url, failure)
     response = send_request(c, signed(c, @body))
     assert response.status == 503
-    assert response.body == refused("authentication_unavailable")
+
+    assert response.body == %{
+             "error" => %{
+               "code" => "sign_in_refused",
+               "message" => "The request's wallet signature was not accepted.",
+               "hint" => "Sign the request again with your agent key, then send it."
+             }
+           }
+
     assert_receive :unavailable_called
     refute_receive :unavailable_called
     stop_supervised!(:unavailable)
@@ -257,6 +265,18 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
                redirect: false
              ).status == 401
     end
+
+    queried =
+      Req.request!(
+        method: :post,
+        url: c.app <> @path <> "?name=x",
+        headers: signed.headers,
+        body: @body,
+        retry: false,
+        redirect: false
+      )
+
+    assert {queried.status, queried.body} == {401, refused("unsupported_query")}
 
     assert send_request(c, %{
              signed
@@ -480,7 +500,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       Application.put_env(:keyfleet, :siwa_broker_url, origin)
       response = send_request(c, signed(c, @body))
       assert response.status == 503
-      assert response.body == refused("authentication_unavailable")
+      assert response.body == refused("siwa_request_failed")
     end
   end
 

@@ -15,7 +15,7 @@ defmodule Keyfleet.SiwaBroker do
         )
 
       :error ->
-        {:error, %{reason: :broker_unavailable}}
+        {:error, %{reason: :siwa_request_failed}}
     end
   end
 
