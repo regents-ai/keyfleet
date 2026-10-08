@@ -24,11 +24,17 @@ defmodule Keyfleet.Chain.RpcClient do
     with {:ok, header} <- block("latest"), do: head_of(header)
   end
 
-  defp head_of(%{"number" => number, "hash" => hash, "timestamp" => timestamp}) do
+  defp head_of(%{
+         "number" => number,
+         "hash" => hash,
+         "timestamp" => timestamp,
+         "baseFeePerGas" => base_fee
+       }) do
     with {:ok, number} <- Abi.quantity(number),
          {:ok, seconds} <- Abi.quantity(timestamp),
-         {:ok, timestamp} <- DateTime.from_unix(seconds) do
-      {:ok, %{number: number, hash: hash, timestamp: timestamp}}
+         {:ok, timestamp} <- DateTime.from_unix(seconds),
+         {:ok, base_fee} <- Abi.quantity(base_fee) do
+      {:ok, %{number: number, hash: hash, timestamp: timestamp, base_fee: base_fee}}
     else
       _malformed -> {:error, :invalid_block_header}
     end
@@ -83,6 +89,17 @@ defmodule Keyfleet.Chain.RpcClient do
       case Abi.quantity(result) do
         {:ok, wei} -> {:ok, wei}
         :error -> {:error, :invalid_balance}
+      end
+    end
+  end
+
+  @impl true
+  def get_code(address, block_hash) do
+    with {:ok, result} <-
+           request("eth_getCode", [address, %{blockHash: block_hash, requireCanonical: true}]) do
+      case Abi.bytes(result) do
+        {:ok, code} -> {:ok, code}
+        :error -> {:error, :invalid_code}
       end
     end
   end

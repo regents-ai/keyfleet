@@ -241,16 +241,19 @@ defmodule Keyfleet.Accounts.SessionAuthority do
 
   @doc """
   The verified account the sign-in with this id still resolves to, with the
-  topic its sign-out is announced on (`{account, topic}`), or `nil` once it is
-  signed out, switched to another account or past its lifetime.
+  topic its sign-out is announced on and when it runs out unless the person
+  signs in again (`{account, topic, ends_at}`), or `nil` once it is signed
+  out, switched to another account or past its lifetime.
   """
-  @spec signed_in(String.t(), integer()) :: {Ash.Resource.record(), String.t()} | nil
+  @spec signed_in(String.t(), integer()) ::
+          {Ash.Resource.record(), String.t(), DateTime.t()} | nil
   def signed_in(id, account_id) do
     row = Ash.get!(__MODULE__, id, actor: @actor, not_found_error?: false)
 
     with true <- current?(row, account_id),
          %{} = account <- verified(account_id) do
-      {account, digest_topic(row.lineage_digest)}
+      {account, digest_topic(row.lineage_digest),
+       DateTime.add(row.updated_at, @sign_in_lifetime_seconds)}
     else
       _signed_out -> nil
     end

@@ -1234,7 +1234,8 @@ defmodule Keyfleet.ProposalsChainTest do
     do: %{
       number: number,
       hash: "0x" <> String.duplicate("f", 64),
-      timestamp: block_time(number)
+      timestamp: block_time(number),
+      base_fee: 0
     }
 
   # Runs `passes` passes over `logs` at once, each on a connection of its own.

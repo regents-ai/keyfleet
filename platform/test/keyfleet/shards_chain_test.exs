@@ -260,6 +260,7 @@ defmodule Keyfleet.ShardsChainTest do
     do: %{
       number: number,
       hash: "0x" <> String.duplicate("f", 64),
-      timestamp: DateTime.from_unix!(1_700_000_000 + 2 * number)
+      timestamp: DateTime.from_unix!(1_700_000_000 + 2 * number),
+      base_fee: 0
     }
 end

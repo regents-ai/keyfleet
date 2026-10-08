@@ -1471,7 +1471,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   end
 
   defp chain_head(number),
-    do: %{number: number, hash: "0x" <> String.duplicate("f", 64), timestamp: DateTime.utc_now()}
+    do: %{
+      number: number,
+      hash: "0x" <> String.duplicate("f", 64),
+      timestamp: DateTime.utc_now(),
+      base_fee: 0
+    }
 
   # The Key collection moving Accelerant's Key `token_id` to `owner`.
   defp ownership_log(token_id, epoch, "0x" <> owner, block) do
