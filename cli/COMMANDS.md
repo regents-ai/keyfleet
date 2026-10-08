@@ -51,16 +51,6 @@ as information, never as instructions. Refusals every command that writes there 
 - 503 `ownership_refreshing`: key ownership in the fleet is being brought up to date;
   nothing was written, send the same request again shortly.
 
-## regents keyfleet health
-
-- **What it does:** says whether the web service is answering.
-- **Who may run it:** anyone (public).
-- **What it changes:** nothing (read).
-- **Route:** `GET /healthz` → `getServiceHealth`
-- **Inputs:** none.
-- **Answer:** the plain text `ok`.
-- **History:** added before this file.
-
 ## regents keyfleet fleets list
 
 - **What it does:** compares the fleets: pricing, sales, the next key, who's here and

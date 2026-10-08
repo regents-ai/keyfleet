@@ -9,15 +9,6 @@
   ],
   "commands": [
     {
-      "command": "health",
-      "description": "Read whether the web service is answering.",
-      "operation_id": "getServiceHealth",
-      "method": "GET",
-      "path": "/healthz",
-      "authority": "public",
-      "effect": "read"
-    },
-    {
       "command": "fleets list",
       "description": "Compare the fleets.",
       "operation_id": "listFleets",
