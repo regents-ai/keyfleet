@@ -260,6 +260,8 @@ fn metalColor(m: Mat, base: vec3f, n: vec3f, v: vec3f, l: vec3f, p: vec2f, lav: 
 }
 fn keyMat() -> Mat { return Mat(u.metal, u.metalRough, u.metalKind); }
 fn crownMat() -> Mat { return Mat(u.crown, u.crownRough, u.crownKind); }
+// A Regents Club card's lettering: the Gold crown's metal.
+fn clubGoldMat() -> Mat { return Mat(vec3f(1.0, 0.812, 0.345), 0.14, 0u); }
 
 fn glitter(p: vec2f, lav: vec2f) -> f32 {
   let g = p * 90.0;
@@ -329,6 +331,7 @@ fn exterior(q: vec2f, v: vec3f, l: vec3f, lav: vec2f, illum: f32) -> vec4f {
   var c = shell;
   if (aux.g > 0.001) { c = mix(c, metalColor(keyMat(), base, n, v, l, q, lav, slope), aux.g); }
   if (mat.r > 0.001) { c = mix(c, metalColor(crownMat(), vec3f(0.85), n, v, l, q, lav, slope), mat.r); }
+  if (mat.a > 0.001) { c = mix(c, metalColor(clubGoldMat(), vec3f(0.85), n, v, l, q, lav, slope), mat.a); }
   if (mat.g > 0.001) {
     let gem = base * (0.08 + 0.35 * nl) + base * studio(reflect(-v, n), 0.05) * 0.5 + vec3f(pow(nh, 300.0) * 3.0) + env * fres * 0.4;
     c = mix(c, gem, mat.g);
