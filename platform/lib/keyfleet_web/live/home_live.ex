@@ -35,6 +35,7 @@ defmodule KeyfleetWeb.HomeLive do
   alias KeyfleetWeb.{
     ActivityLines,
     FleetLive,
+    FleetPage,
     Motion,
     PublicDocuments,
     Read,
@@ -182,10 +183,17 @@ defmodule KeyfleetWeb.HomeLive do
 
   # How far a fleet has sold. A fleet not yet deployed has sold nothing; one
   # whose sales are still being read isn't current, and shows no count.
+  # The Key on offer is the one its fleet page's Buy button names.
   defp sales(fleet_id, recorded) do
     deployed? = recorded != nil and recorded.manager_address != nil
     {:ok, minted} = if deployed?, do: Chain.minted(fleet_id), else: {:ok, 0}
-    %{deployed?: deployed?, current?: deployed? and Chain.fresh?(fleet_id), keys: minted}
+
+    %{
+      deployed?: deployed?,
+      current?: deployed? and Chain.fresh?(fleet_id),
+      keys: minted,
+      buy: if(deployed?, do: FleetPage.next_sale(fleet_id, Presets.progress(fleet_id, minted)))
+    }
   end
 
   defp watch(socket) do
@@ -551,6 +559,7 @@ defmodule KeyfleetWeb.HomeLive do
       <p class="rl-fleet-card__who" data-fleet-who>
         <FleetLive.headcount id={"#{@id}-count"} sales={@sales} agents={@now.agents} />
       </p>
+      <FleetLive.next_key id={"#{@id}-next-key"} buy={@sales.buy} />
       <p :if={@now.trying} class="rl-fleet-card__trying" data-fleet-trying>
         Trying: {@now.trying}
       </p>
