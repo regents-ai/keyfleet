@@ -39,6 +39,7 @@ defmodule Keyfleet.Rooms do
       define :send_message, action: :send_message
       define :note_room_named, action: :note_room_named
       define :read_messages, action: :read_messages, args: [:fleet_id, :slug]
+      define :catch_up, action: :catch_up, args: [:fleet_id, :slugs, :after_seqs, :limit]
       define :send_to_key, action: :send_to_key
       define :read_key_thread, action: :read_key_thread, args: [:fleet_id, :token_id]
       define :posts_as_key, action: :posts_as_key, args: [:fleet_id, :token_id]
@@ -258,11 +259,9 @@ defmodule Keyfleet.Rooms do
     with :ok <- known_rooms(fleet_id, cursors, rooms),
          {readable, refused} = Enum.split_with(cursors, &readable?(rooms[&1.slug], standing)),
          :ok <- some_readable(readable, refused),
-         {:ok, read} <- read_cursors(fleet_id, readable, actor, standing) do
+         {:ok, posts} <- catch_up_rooms(fleet_id, readable, actor, standing) do
       heads = Map.new(list_rooms!(fleet_id, actor: actor), &{&1.slug, &1})
-
-      synced =
-        Map.new(read, fn {cursor, messages} -> {cursor.slug, synced(cursor, messages, heads)} end)
+      synced = Map.new(readable, &{&1.slug, synced(&1, heads[&1.slug], posts)})
 
       refused = MapSet.new(refused, & &1.slug)
 
@@ -286,27 +285,28 @@ defmodule Keyfleet.Rooms do
   defp some_readable([], [_ | _]), do: {:error, Ash.Error.Forbidden.exception([])}
   defp some_readable(_readable, _refused), do: :ok
 
-  # The rooms are answered in the order the caller named them, so the posts
-  # read are kept in any order.
-  defp read_cursors(fleet_id, cursors, actor, standing) do
-    Enum.reduce_while(cursors, {:ok, []}, fn cursor, {:ok, read} ->
-      page = %{after_seq: cursor.after_seq, limit: @sync_page}
+  # The posts of every readable room named are read together, in one query,
+  # and grouped by room.
+  defp catch_up_rooms(_fleet_id, [], _actor, _standing), do: {:ok, %{}}
 
-      case read_messages(fleet_id, cursor.slug, page, actor: actor, context: standing) do
-        {:ok, messages} -> {:cont, {:ok, [{cursor, messages} | read]}}
-        {:error, error} -> {:halt, {:error, error}}
-      end
-    end)
+  defp catch_up_rooms(fleet_id, cursors, actor, standing) do
+    slugs = Enum.map(cursors, & &1.slug)
+    after_seqs = Enum.map(cursors, & &1.after_seq)
+
+    with {:ok, posts} <-
+           catch_up(fleet_id, slugs, after_seqs, @sync_page, actor: actor, context: standing),
+         do: {:ok, Enum.group_by(posts, & &1.room_id)}
   end
 
-  defp synced(%{slug: slug, after_seq: after_seq}, messages, rooms) do
+  defp synced(%{slug: slug, after_seq: after_seq}, room, posts) do
+    %{id: room_id, kind: kind, head_seq: head_seq} = room
+    messages = Map.get(posts, room_id, [])
+
     cursor =
       case List.last(messages) do
         nil -> after_seq
         last -> last.seq
       end
-
-    %{id: room_id, kind: kind, head_seq: head_seq} = Map.fetch!(rooms, slug)
 
     %{
       room_id: room_id,

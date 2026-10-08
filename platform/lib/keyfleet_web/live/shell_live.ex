@@ -287,9 +287,18 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_info(%Broadcast{event: "key_activity"} = notice, socket),
     do: KeyProfileLive.handle_info(notice, socket)
 
-  def handle_info(%Broadcast{event: event} = notice, socket)
-      when event in ["rooms_changed", "mutes_changed"],
-      do: RoomsLive.handle_info(notice, socket)
+  def handle_info(%Broadcast{event: "rooms_changed"} = notice, socket),
+    do: RoomsLive.handle_info(notice, socket)
+
+  # A mute added or taken away hides or shows that key's posts in the room on
+  # show and in the open key's thread.
+  def handle_info(
+        %Broadcast{event: "mutes_changed", payload: %{fleet_id: fleet_id}} = notice,
+        socket
+      ) do
+    {:noreply, socket} = RoomsLive.handle_info(notice, socket)
+    {:noreply, KeyProfileLive.show_unmuted(socket, fleet_id)}
+  end
 
   # Keys changed in the fleet on show: its sales figures, the key on offer and
   # the agents here are read again (an agent starting or stopping on a key

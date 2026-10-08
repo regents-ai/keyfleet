@@ -100,11 +100,8 @@ defmodule Keyfleet.Notebooks.Roster do
       |> Enum.map(&{Notebooks.subject(Human.for_account(&1)), Human.for_account(&1)})
 
     agents =
-      wallets
-      |> Enum.chunk_every(100)
-      |> Enum.flat_map(&Keyfleet.Agents.agents_by_wallets!(&1, actor: %System{}))
-      |> Enum.concat(Keyfleet.Agents.agents_with_shards_in!([fleet_id], actor: %System{}))
-      |> Enum.uniq_by(& &1.id)
+      [fleet_id]
+      |> Keyfleet.Agents.agents_here_in!(actor: %System{})
       |> Enum.map(fn profile ->
         {Notebooks.agent_subject(profile.id),
          %Agent{

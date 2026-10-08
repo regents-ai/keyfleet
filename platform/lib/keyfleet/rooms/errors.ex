@@ -37,6 +37,14 @@ defmodule Keyfleet.Rooms.Errors.RenameTooSoonError do
     do: "this room was renamed less than a minute ago; try again in #{retry_after} seconds"
 end
 
+defmodule Keyfleet.Rooms.Errors.PostLimitError do
+  @moduledoc "Raised when people have already posted as a key as often as an hour allows."
+  use Splode.Error, fields: [:limit, :retry_after], class: :invalid
+
+  def message(%{limit: limit, retry_after: retry_after}),
+    do: "this key has posted #{limit} times in the last hour; try again in #{retry_after} seconds"
+end
+
 defmodule Keyfleet.Rooms.Errors.NoKeyToWriteAsError do
   @moduledoc """
   Raised when a writer no longer holds or runs any key of the fleet by the time

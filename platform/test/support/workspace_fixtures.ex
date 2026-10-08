@@ -102,7 +102,7 @@ defmodule Keyfleet.WorkspaceFixtures do
   @doc "Changes fields of an object, as a member's patch does."
   def edit(fleet_id, id, set, opts \\ []) do
     append(fleet_id, fn seq ->
-      object = Graph.read_object!(fleet_id, id, actor: @system)
+      [object] = Graph.read_objects!(fleet_id, [id], actor: @system)
       data = Map.merge(object.data, set)
       project(fleet_id, seq, object, data, object.sys)
       {id, "patch.applied", principal(opts), patch_payload(seq, object, object.data, set)}
@@ -112,7 +112,7 @@ defmodule Keyfleet.WorkspaceFixtures do
   @doc "Archives an object, as a member's archive does."
   def archive(fleet_id, id, opts \\ []) do
     append(fleet_id, fn seq ->
-      object = Graph.read_object!(fleet_id, id, actor: @system)
+      [object] = Graph.read_objects!(fleet_id, [id], actor: @system)
       sys = Map.put(object.sys, "archived", true)
       project(fleet_id, seq, object, object.data, sys)
       payload = patch_payload(seq, object, %{"sys" => object.sys}, %{"sys" => sys})

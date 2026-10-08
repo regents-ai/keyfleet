@@ -19,7 +19,7 @@ defmodule Keyfleet.Agents do
       define :agents_by_wallets, action: :by_wallets, args: [:wallets]
       define :listings, action: :listings, args: [:ids]
       define :agents_of_people, action: :of_people, args: [:human_ids]
-      define :agents_with_shards_in, action: :here_in_fleets, args: [:fleet_ids]
+      define :agents_here_in, action: :here_in_fleets, args: [:fleet_ids]
     end
 
     resource Keyfleet.Agents.Pairing do
@@ -134,7 +134,8 @@ defmodule Keyfleet.Agents do
   end
 
   @doc """
-  How many agents hold an active shard of one of the fleet's keys, as `{:ok,
+  How many agents are here in the fleet: holding one of its keys or an active
+  shard of one, or paired with a World ID person who holds one. `{:ok,
   count}`, or `{:error, failure}` when the database doesn't answer (see
   `Keyfleet.Count`).
   """
@@ -145,9 +146,9 @@ defmodule Keyfleet.Agents do
   end
 
   @doc """
-  How many agents hold an active shard in any of `fleet_ids`, each counted
-  once however many of those fleets it holds shards in, as `{:ok, count}` or
-  `{:error, failure}`.
+  How many agents are here in any of `fleet_ids`, as `count_agents_here/1`
+  counts them, each once however many of those fleets it is in, as `{:ok,
+  count}` or `{:error, failure}`.
   """
   def count_agents_in_fleets(fleet_ids) do
     Keyfleet.Agents.AgentProfile

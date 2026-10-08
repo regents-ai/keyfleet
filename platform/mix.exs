@@ -170,7 +170,9 @@ defmodule Keyfleet.MixProject do
         # Rooms' Keys-only reads add two: the PublicRoom and InGeneral checks.
         # Direct messages add six: their domain's edge to the Conversation, Message
         # and Block records, and each record's KeyHolder check.
-        "xref graph --label compile-connected --fail-above 69",
+        # Workspace reads add four: the KeyReader check on the workspace and its
+        # three read tables.
+        "xref graph --label compile-connected --fail-above 73",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

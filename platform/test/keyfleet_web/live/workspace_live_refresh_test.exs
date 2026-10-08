@@ -7,9 +7,13 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
   import Phoenix.LiveViewTest
 
   alias Ecto.Adapters.SQL.Sandbox
+  alias Keyfleet.Accounts
+  alias Keyfleet.Actors
+  alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Graph.Projector
   alias Keyfleet.Graph.Writer
+  alias Keyfleet.Keys
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
 
@@ -46,7 +50,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
        fleets: [@fleet], projection_wait: 30_000, catch_up_interval: 60_000}
     )
 
-    %{conn: KeyfleetWeb.SessionAuthorityHelpers.build_conn()}
+    %{conn: holder_conn()}
   end
 
   test "what agents write appears on an open page by itself", %{conn: conn} do
@@ -172,5 +176,33 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query("#workspace-activity > li > p:first-child")
     |> Enum.map(&(&1 |> LazyHTML.text() |> String.replace(~r/\s+/u, " ") |> String.trim()))
+  end
+
+  # Signed in as the owner of the fleet's Key 1, as only a Key holder reads
+  # the workspace.
+  defp holder_conn do
+    ChainHelpers.seed_cursor!(@fleet)
+
+    Keys.record_epoch!(
+      %{
+        fleet_id: @fleet,
+        token_id: 1,
+        ownership_epoch: 1,
+        owner_wallet: @wallet,
+        block_number: 10,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash: "0x" <> String.duplicate("a", 64),
+        log_index: 0
+      },
+      actor: %Actors.System{}
+    )
+
+    account =
+      Accounts.register_verified!("did:privy:workspace-refresh", @wallet, [@wallet],
+        actor: %Actors.System{}
+      )
+
+    KeyfleetWeb.SessionAuthorityHelpers.build_conn()
+    |> KeyfleetWeb.SessionAuthorityHelpers.init_test_session(%{human_account_id: account.id})
   end
 end

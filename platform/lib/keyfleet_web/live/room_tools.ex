@@ -14,10 +14,12 @@ defmodule KeyfleetWeb.RoomTools do
 
   alias Keyfleet.Chain
   alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Errors.PostLimitError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Muter
   alias KeyfleetWeb.KeysLive
   alias KeyfleetWeb.RoomJSON
+  alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.ShellLive
 
   @room_tools ~w(list_rooms read_room post_to_room mute_key unmute_key)
@@ -121,7 +123,10 @@ defmodule KeyfleetWeb.RoomTools do
           thread: %{token_id: token_id, head_seq: if(thread, do: thread.head_seq, else: 0)},
           cursor: cursor(messages, input),
           has_more: Rooms.more_after?(messages),
-          messages: Enum.map(messages, &RoomJSON.message/1)
+          messages:
+            messages
+            |> Rooms.unmuted(Rooms.muted_keys!(fleet_id, actor))
+            |> Enum.map(&RoomJSON.message/1)
         }
 
       {:error, error} ->
@@ -183,15 +188,31 @@ defmodule KeyfleetWeb.RoomTools do
   end
 
   defp posted({:error, error}, _fleet_id, _actor) do
-    if room_unknown?(error),
-      do: room_unknown(),
-      else:
+    cond do
+      room_unknown?(error) ->
+        room_unknown()
+
+      too_many = post_limit(error) ->
+        refusal(
+          "post_limit_reached",
+          RoomsLive.post_limit(too_many) <> " Nothing was posted.",
+          "Call again after retry_after seconds."
+        )
+        |> put_in([:error, :retry_after], too_many.retry_after)
+
+      true ->
         refusal(
           "invalid_message",
           "A post is 1 to 4,000 characters. Nothing was posted.",
           "Correct it, then call again."
         )
+    end
   end
+
+  defp post_limit(%Ash.Error.Invalid{errors: errors}),
+    do: Enum.find(errors, &match?(%PostLimitError{}, &1))
+
+  defp post_limit(_error), do: nil
 
   defp read_refusal(%Ash.Error.Forbidden{}, _fleet_id, nil), do: sign_in_required()
 

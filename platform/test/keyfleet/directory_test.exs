@@ -1,6 +1,7 @@
 defmodule Keyfleet.DirectoryTest do
   use ExUnit.Case, async: false
 
+  alias Keyfleet.Accounts
   alias Keyfleet.Actors
   alias Keyfleet.Agents
   alias Keyfleet.ChainHelpers
@@ -28,25 +29,33 @@ defmodule Keyfleet.DirectoryTest do
     :ok
   end
 
-  test "only agents holding an active shard of one of the fleet's keys are here" do
-    # Bosun's shard is renewed, and counts once.
+  test "the agents here hold a key, an active shard of one, or are paired with a person who does" do
+    # Bosun's shard is renewed, and counts once. Keeper's own wallet holds
+    # key 2. Mate is backed by a World ID person, paired with them, whose
+    # account names the owner's wallet in capitals.
     attach!(agent("b", "Bosun"), 1)
     attach!(agent("b", "Bosun"), 1)
     attach!(agent("c", "Able"), 3)
+    epoch!(2, 2, wallet("7"))
+    agent("7", "Keeper")
+    pair!(agent("8", "Mate", backed: true), String.upcase(@owner))
 
-    # A wallet with no shard, a shard its owner ended, one that ran out, and
-    # one issued under the key's owner before the one who holds it now.
+    # A wallet with no shard, a shard its owner ended, one that ran out, one
+    # issued under the key's owner before the one who holds it now, and an
+    # agent paired with the owner but backed by nobody.
     agent("d", "Waiting")
     attach!(agent("e", "Removed"), 5)
     ChainHelpers.end_shard!(@fleet, 5, wallet("e"), @owner)
     agent("9", "Expired")
     ChainHelpers.issue_shard!(@fleet, 4, wallet("9"), -1)
     attach!(agent("f", "Former"), 6)
-    epoch!(6, 2, "0x" <> String.duplicate("9", 40))
+    epoch!(6, 2, wallet("6"))
+    pair!(agent("5", "Unbacked"), @owner)
 
     {:ok, fleet} = Directory.fleet(@fleet)
 
-    assert fleet.agents_here == 2
+    assert fleet.agents_here == 4
+    assert listed(@fleet).agents_here == 4
 
     never = %{
       status: :never_checked_in,
@@ -57,22 +66,23 @@ defmodule Keyfleet.DirectoryTest do
       last_contribution: nil
     }
 
-    assert fleet.agents == [
-             Map.merge(never, %{
-               name: "Able",
-               avatar_src: PublicIdentity.avatar_src(%{wallet_address: wallet("c")}),
-               declared_harness: "Hermes Agent",
-               wallet_address: wallet("c"),
-               key: 3
-             }),
-             Map.merge(never, %{
-               name: "Bosun",
-               avatar_src: PublicIdentity.avatar_src(%{wallet_address: wallet("b")}),
-               declared_harness: "Hermes Agent",
-               wallet_address: wallet("b"),
-               key: 1
-             })
-           ]
+    assert fleet.agents ==
+             for(
+               {character, name, key} <- [
+                 {"c", "Able", 3},
+                 {"b", "Bosun", 1},
+                 {"7", "Keeper", 2},
+                 {"8", "Mate", 1}
+               ],
+               do:
+                 Map.merge(never, %{
+                   name: name,
+                   avatar_src: PublicIdentity.avatar_src(%{wallet_address: wallet(character)}),
+                   declared_harness: "Hermes Agent",
+                   wallet_address: wallet(character),
+                   key: key
+                 })
+             )
   end
 
   test "the agents who checked in most recently come first, then the rest by name" do
@@ -111,20 +121,16 @@ defmodule Keyfleet.DirectoryTest do
     Workspace.create(@fleet, "goal", %{"title" => "Gave up", "status" => "dropped"})
     Workspace.archive(@fleet, Workspace.create(@fleet, "goal", %{"title" => "Archived"}))
 
-    untaken = Workspace.create(@fleet, "task", %{"title" => "Nobody's"})
+    Workspace.create(@fleet, "task", %{"title" => "Nobody's"})
     Workspace.create(@fleet, "task", %{"title" => "Claimed", "assignee_key" => 12})
 
-    doing =
-      Workspace.create(@fleet, "task", %{
-        "title" => "Underway",
-        "progress" => "doing",
-        "assignee_key" => 12,
-        "next_step" => "Draft the price"
-      })
+    Workspace.create(@fleet, "task", %{
+      "title" => "Underway",
+      "progress" => "doing",
+      "assignee_key" => 12
+    })
 
-    unclaimed =
-      Workspace.create(@fleet, "task", %{"title" => "Nobody on it", "progress" => "doing"})
-
+    Workspace.create(@fleet, "task", %{"title" => "Nobody on it", "progress" => "doing"})
     Workspace.create(@fleet, "task", %{"title" => "Finished", "progress" => "done"})
     Workspace.create(@fleet, "task", %{"title" => "Stuck", "progress" => "blocked"})
 
@@ -136,14 +142,15 @@ defmodule Keyfleet.DirectoryTest do
     {:ok, fleet} = Directory.fleet(@fleet)
 
     assert {fleet.open_goals, fleet.tasks_in_progress} == {1, 2}
-    assert Enum.map(fleet.work.open_goals, & &1.id) == [open]
-    assert Enum.map(fleet.work.tasks_untaken, & &1.id) == [untaken]
 
-    assert [
-             %{id: ^unclaimed, assignee_key: nil},
-             %{id: ^doing, title: "Underway", gist: "Draft the price", assignee_key: 12}
-           ] = fleet.work.tasks_in_progress
+    # The goals by title, and how much work there is; never the work itself.
+    assert %{
+             open_goals: [%{id: ^open, title: "Map the first paid service"} = goal],
+             tasks_taken: 1,
+             tasks_untaken: 1
+           } = fleet.work
 
+    assert goal |> Map.keys() |> Enum.sort() == [:changed_at, :id, :title]
     assert {:error, %Ash.Error.Invalid{}} = Graph.open_work(@fleet, :tasks_done)
   end
 
@@ -250,10 +257,33 @@ defmodule Keyfleet.DirectoryTest do
       audience: "keyfleet"
     }
 
-  defp agent(character, name) do
-    actor = actor(character)
+  defp agent(character, name, opts \\ []) do
+    actor =
+      if opts[:backed],
+        do: %{
+          actor(character)
+          | human_id: "0x" <> String.duplicate("1", 64),
+            same_person_agent_count: 1
+        },
+        else: actor(character)
+
     Agents.ensure_profile!(%{name: name, declared_harness: "Hermes Agent"}, actor: actor)
     actor
+  end
+
+  # Pairs the agent with a person whose account here names `person_wallet`.
+  defp pair!(actor, person_wallet) do
+    did = "did:privy:directory:#{System.unique_integer([:positive])}"
+    Accounts.register_verified!(did, person_wallet, [person_wallet], actor: @system)
+
+    Repo.query!(
+      """
+      INSERT INTO regent_agents.paired_agents
+        (privy_user_id, wallet, name, harness, paired_at, last_contact_at)
+      VALUES ($1, $2, 'Probe', 'Hermes Agent', now(), now())
+      """,
+      [did, actor.wallet_address]
+    )
   end
 
   defp attach!(actor, token_id),

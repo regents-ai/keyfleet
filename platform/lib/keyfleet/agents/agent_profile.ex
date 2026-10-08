@@ -79,18 +79,17 @@ defmodule Keyfleet.Agents.AgentProfile do
               )
     end
 
-    # The agents holding an active shard of one of the fleet's keys, with
-    # that key and their check-ins with the fleet: the most recent check-in
-    # first, then those that haven't checked in, by name.
+    # The agents here in the fleet (see `:here`), with the key each acts as
+    # and their check-ins with the fleet: the most recent check-in first, then
+    # those that haven't checked in, by name.
     read :here_in_fleet do
       argument :fleet_id, :string, allow_nil?: false
-
-      filter expr(exists(shards, fleet_id == ^arg(:fleet_id) and active?))
 
       prepare fn query, _context ->
         fleet_id = Ash.Query.get_argument(query, :fleet_id)
 
         query
+        |> Ash.Query.filter(here(fleet_ids: ^[fleet_id]))
         |> Ash.Query.select([:id, :name, :declared_harness, :wallet_address])
         |> Ash.Query.load(
           avatar_src: %{},
@@ -105,12 +104,11 @@ defmodule Keyfleet.Agents.AgentProfile do
       end
     end
 
-    # The agents holding an active shard in any of these fleets, by the same
-    # rule as `:here_in_fleet`, each once however many fleets it holds shards
-    # in.
+    # The agents here in any of these fleets, each once however many of them
+    # it is in.
     read :here_in_fleets do
       argument :fleet_ids, {:array, :string}, allow_nil?: false, constraints: [max_length: 100]
-      filter expr(exists(shards, fleet_id in ^arg(:fleet_ids) and active?))
+      filter expr(here(fleet_ids: ^arg(:fleet_ids)))
     end
 
     # The agents behind some wallets, by name, to say who made a change the
@@ -339,18 +337,97 @@ defmodule Keyfleet.Agents.AgentProfile do
       public? true
     end
 
-    # The key of the active shard this agent holds in the fleet, if any: a
-    # wallet holds one shard in a fleet at a time.
+    # Whether the agent is here in any of the fleets: its wallet holds one of
+    # their keys, or an active shard of one, or it is backed by a World ID
+    # person, paired with them, who holds one. These are the ways an agent
+    # acts as a key in a fleet (`Keyfleet.Keys.identity/2`).
+    calculate :here,
+              :boolean,
+              expr(
+                not is_nil(held_key(fleet_ids: ^arg(:fleet_ids))) or
+                  exists(shards, fleet_id in ^arg(:fleet_ids) and active?) or
+                  not is_nil(paired_key(fleet_ids: ^arg(:fleet_ids)))
+              ) do
+      argument :fleet_ids, {:array, :string}, allow_nil?: false
+    end
+
+    # The key the agent acts as in the fleet, by the same rule as `:here`:
+    # the lowest-numbered key its wallet holds, else the key of the active
+    # shard it holds (a wallet holds one shard in a fleet at a time), else the
+    # lowest-numbered key of the person it is paired with.
     calculate :key,
               :integer,
               expr(
-                min(shards,
-                  field: :token_id,
-                  query: [filter: expr(fleet_id == ^arg(:fleet_id) and active?)]
-                )
+                held_key(fleet_ids: [^arg(:fleet_id)]) ||
+                  min(shards,
+                    field: :token_id,
+                    query: [filter: expr(fleet_id == ^arg(:fleet_id) and active?)]
+                  ) || paired_key(fleet_ids: [^arg(:fleet_id)])
               ) do
       argument :fleet_id, :string, allow_nil?: false
       public? true
+    end
+
+    # The lowest-numbered of the fleets' keys the agent's own wallet holds
+    # now. Ownership records are read in SQL, as `KeyAttachment`'s own
+    # current epoch is, since that table has no scope-free read to aggregate.
+    calculate :held_key,
+              :integer,
+              expr(
+                fragment(
+                  """
+                  (SELECT min(held.token_id)
+                   FROM keyfleet_app.key_attachments AS held
+                   WHERE held.owner_wallet = ? AND held.fleet_id = ANY(?)
+                     AND held.ownership_epoch = (
+                       SELECT max(epoch.ownership_epoch)
+                       FROM keyfleet_app.key_attachments AS epoch
+                       WHERE epoch.fleet_id = held.fleet_id AND epoch.token_id = held.token_id
+                     ))
+                  """,
+                  wallet_address,
+                  ^arg(:fleet_ids)
+                )
+              ) do
+      argument :fleet_ids, {:array, :string}, allow_nil?: false
+    end
+
+    # The lowest-numbered of the fleets' keys held now by any wallet of the
+    # World ID person this agent is backed by and paired with
+    # (`Keyfleet.Agents.Pairing`). Read in SQL because the pairing and the
+    # person's wallets are for trusted code only (their policies admit the
+    # system actor alone); only the key's number leaves here.
+    calculate :paired_key,
+              :integer,
+              expr(
+                if is_nil(human_id) do
+                  nil
+                else
+                  fragment(
+                    """
+                    (SELECT min(held.token_id)
+                     FROM regent_agents.paired_agents AS pairing
+                     JOIN regent_names.platform_human_users AS account
+                       ON account.privy_user_id = pairing.privy_user_id
+                     JOIN keyfleet_app.key_attachments AS held
+                       ON held.owner_wallet IN (
+                         SELECT lower(linked.wallet)
+                         FROM unnest(account.wallet_address || account.wallet_addresses)
+                           AS linked(wallet)
+                       )
+                       AND held.ownership_epoch = (
+                         SELECT max(epoch.ownership_epoch)
+                         FROM keyfleet_app.key_attachments AS epoch
+                         WHERE epoch.fleet_id = held.fleet_id AND epoch.token_id = held.token_id
+                       )
+                     WHERE pairing.wallet = ? AND held.fleet_id = ANY(?))
+                    """,
+                    wallet_address,
+                    ^arg(:fleet_ids)
+                  )
+                end
+              ) do
+      argument :fleet_ids, {:array, :string}, allow_nil?: false
     end
   end
 

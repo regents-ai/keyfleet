@@ -162,9 +162,8 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert again.body["replayed"] == true
     assert again.body["result"] == %{"id" => goal["id"], "version" => 1}
 
-    # Anyone signed in may read the workspace; its changes name who did what.
-    reader = join(c, "Reader")
-    changes = graph(c, reader, "changes", %{after_seq: 0, limit: 500})
+    # The workspace's changes name who did what.
+    changes = graph(c, bea, "changes", %{after_seq: 0, limit: 500})
     assert changes.status == 200
     assert ContractSchema.errors(changes.body, "WorkspaceChanges") == []
     commands = for %{"type" => "keyfleet.command"} = event <- changes.body["events"], do: event
@@ -314,7 +313,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "a key changing hands while its agent's write waits in line refuses that write, and its earlier edits keep their author",
        c do
     start_graph(c)
-    [ann, _bea] = shard_agents(c)
+    [ann, bea] = shard_agents(c)
     goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
     writer = writer()
 
@@ -339,7 +338,8 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert refused.status == 403
     assert refused.body["error"]["code"] == "not_a_key_holder"
 
-    object = graph(c, ann, "get", %{id: goal["id"]}).body["object"]
+    # Ann's shard ended with the sale, so Bea, holding a shard of Key 2, reads.
+    object = graph(c, bea, "get", %{id: goal["id"]}).body["object"]
     assert object["version"] == 1
     assert object["data"]["status"] == "open"
 
@@ -440,7 +440,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     ChainHelpers.seed_cursor!(@levelled, observed_at: DateTime.add(DateTime.utc_now(), -3600))
     refused = graph(c, cal, "create", level_goal(3, "c-3", "level:2"), @levelled)
     assert {refused.status, refused.body["error"]["code"]} == {503, "ownership_refreshing"}
-    assert length(commands(c, ann, @levelled)) == 3
+    assert length(logged_commands(@levelled)) == 3
   end
 
   test "an object in a level a key may not write cannot be linked, changed, archived or unlinked by it",
@@ -695,11 +695,17 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       assert {refused.status, refused.body["error"]["code"]} == {403, "not_a_key_holder"}
     end
 
-    events = graph(c, stranger, "changes", %{}).body["events"]
-    refute Enum.any?(events, &(&1["type"] == "keyfleet.command"))
+    assert logged_commands() == []
+
+    # Nor may it read the workspace: that needs a Key or a shard of one.
+    for {op, input} <- [{"changes", %{}}, {"get", %{id: "goal#1"}}] do
+      read = graph(c, stranger, op, input)
+      assert {read.status, read.body["error"]["code"]} == {403, "workspace_members_only"}
+      assert ContractSchema.errors(read.body, "WorkspaceError") == []
+    end
   end
 
-  test "while key ownership is not fresh, writes wait and reads carry on", c do
+  test "while key ownership is not fresh, writes and reads wait", c do
     start_graph(c)
     [ann, _bea] = shard_agents(c)
     goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
@@ -716,6 +722,10 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     assert {refused.status, refused.body["error"]["code"]} == {503, "ownership_refreshing"}
 
+    read = graph(c, ann, "get", %{id: goal["id"]})
+    assert {read.status, read.body["error"]["code"]} == {503, "ownership_refreshing"}
+
+    ChainHelpers.seed_cursor!(@fleet)
     read = graph(c, ann, "get", %{id: goal["id"]})
     assert read.status == 200
     assert read.body["object"]["sys"]["archived"] == false
@@ -828,7 +838,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     refused = Task.await(waiting, 15_000)
     assert {refused.status, refused.body["error"]["code"]} == {503, "ownership_refreshing"}
-    assert commands(c, ann) == []
+    assert logged_commands() == []
   end
 
   test "a wallet that holds no key is refused without waiting for the workspace", c do
@@ -842,7 +852,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     :sys.resume(writer)
 
     assert {refused.status, refused.body["error"]["code"]} == {403, "not_a_key_holder"}
-    assert commands(c, stranger) == []
+    assert logged_commands() == []
   end
 
   test "after a key changes hands, the new owner's agent writes as that key under its new epoch",
@@ -1024,11 +1034,10 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     {:ok, profile} = Agents.get_my_profile(actor: agent_actor(ann))
     assert %{last_contribution_kind: :workspace} = Agents.get_check_in!(profile.id, @fleet)
 
-    # An agent with neither a key nor a shard here has nothing of its own in
-    # the fleet.
+    # An agent with neither a Key nor a shard here can't sync: a sync reads
+    # the workspace.
     visitor = sync(c, join(c, "Cy"), %{"general" => 0}, 0)
-    assert visitor.body["check_in"]["status"] == "connected_now"
-    assert visitor.body["yours"] == %{"as_key" => nil, "edits_restricted" => false, "tasks" => []}
+    assert {visitor.status, visitor.body["error"]["code"]} == {403, "workspace_members_only"}
   end
 
   defp start_graph(c, opts \\ []) do
@@ -1139,9 +1148,9 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   end
 
   # The command records as the log itself keeps them, authority stamp and all.
-  defp logged_commands do
+  defp logged_commands(fleet \\ @fleet) do
     {:ok, %{"result" => %{"events" => events}}} =
-      Writer.request(@fleet, "changes", %{after_seq: 0, limit: 500})
+      Writer.request(fleet, "changes", %{after_seq: 0, limit: 500})
 
     for %{"type" => "keyfleet.command"} = event <- events, do: event
   end

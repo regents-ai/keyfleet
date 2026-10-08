@@ -6,8 +6,10 @@ defmodule Keyfleet.Graph.Event do
   for and the command record each write leaves are copied; the runtime's own
   bookkeeping is not. Each keeps
   `byte_size`, the length of the event as a reader receives it, so a page of
-  events is cut to size by the database. Only the projector writes here;
-  anyone may read.
+  events is cut to size by the database. Only the projector writes here. Only
+  the fleet's members read its events (`Keyfleet.Graph.Checks.KeyReader`),
+  except the lines of its latest activity a fleet shows anyone, which carry no
+  text an event holds.
   """
   use Ash.Resource,
     domain: Keyfleet.Graph,
@@ -247,8 +249,13 @@ defmodule Keyfleet.Graph.Event do
   end
 
   policies do
-    policy action_type(:read) do
+    # The latest activity a fleet shows anyone.
+    policy action([:notable_before, :latest_mark]) do
       authorize_if always()
+    end
+
+    policy action([:page, :activity, :history]) do
+      authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
     policy action(:record) do

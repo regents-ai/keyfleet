@@ -8,6 +8,7 @@ defmodule KeyfleetWeb.ActivityLinesTest do
   #   one of them, so none can act as a link or formatting
   # - neither shows a character that can't be seen or reverses the text
   # - an item whose title has nothing to see still has words to link
+  # - an item read without its title is named by its type, never linked
   # - a key's number is written the one way every page writes it, and a
   #   proposal is a part of its own, so a page can link it
 
@@ -68,6 +69,30 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     }
 
     assert ActivityLines.text(dead_end) == "Key 7 recorded a dead end: “Scraping the forum”."
+  end
+
+  test "an item read without its title is named by its type, with a capital to open on" do
+    at = ~U[2026-09-25 12:00:00Z]
+    finding = %{id: "finding#2", type: "finding", title: nil}
+    evidence = %{id: "evidence#3", type: "evidence", title: nil}
+
+    created = %{
+      id: "created:3",
+      at: at,
+      kind: :created,
+      facts: %{by: %{token_id: 7, agent: nil}, item: finding}
+    }
+
+    produced = %{
+      id: "linked:1",
+      at: at,
+      kind: :linked,
+      facts: %{by: nil, relation: "produces", source: evidence, target: finding}
+    }
+
+    assert ActivityLines.text(created) == "Key 7 reported a finding."
+    assert ActivityLines.markdown(produced) == "Some evidence produced a finding."
+    refute Enum.any?(ActivityLines.parts(produced), &match?({:item, _, _}, &1))
   end
 
   test "key numbers are grouped, and a proposal is a part a page can link" do

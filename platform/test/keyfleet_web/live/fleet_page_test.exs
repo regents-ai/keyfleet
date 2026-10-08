@@ -1162,6 +1162,33 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#{line} .activity-line__text") =~ "Proposal 1 was carried out."
     end
 
+    test "a goal shows by its title to anyone, other items by their titles to Key holders only",
+         %{conn: holder} do
+      Workspace.open_log(@fleet)
+      goal = goal!("Survey the hull")
+      task = task!("Map every plate", %{})
+      Workspace.link(@fleet, task, goal, "supports")
+
+      # The workspace's changes are older than the keys the setup issued.
+      {:ok, view, _html} = live(build_conn(), @path)
+      view |> element("#fleet-now-earlier") |> render_click()
+      html = render(view)
+      lines = text(view, "#fleet-now-list")
+
+      assert lines =~ "set a goal: “Survey the hull”."
+      assert lines =~ "added a task."
+      assert lines =~ "backed “Survey the hull” with a task."
+      refute html =~ "Map every plate"
+      refute has_element?(view, ~s(#fleet-now-list a[data-item-link="#{task}"]))
+
+      {:ok, view, _html} = live(holder, @path)
+      view |> element("#fleet-now-earlier") |> render_click()
+      lines = text(view, "#fleet-now-list")
+
+      assert lines =~ "added a task: “Map every plate”."
+      assert lines =~ "backed “Survey the hull” with “Map every plate”."
+    end
+
     # The panels share one place beside the map: each button opens its own
     # panel, closes the other two, so none ever covers another, and takes the
     # reader to its heading.
@@ -1188,35 +1215,32 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
   end
 
+  # What a fleet shows anyone of what its agents are trying: read here by a
+  # visitor who is not signed in.
   describe "trying now" do
     setup do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       Workspace.open_log(@fleet)
-      :ok
+      %{conn: build_conn()}
     end
 
-    test "an open goal shows with its tasks, each task's key linked", %{conn: conn} do
+    test "an open goal shows by its title, with how much work is open and never the work",
+         %{conn: conn} do
       goal = goal!("Sell the first audit")
-      task = task!("Draft the price", %{"progress" => "doing", "assignee_key" => 12})
-      Workspace.link(@fleet, task, goal, "implements")
-      unclaimed = task!("Find a buyer", %{"progress" => "doing"})
+      task!("Draft the price", %{"progress" => "doing", "assignee_key" => 12})
+      task!("Find a buyer", %{"progress" => "doing"})
+      task!("Write the offer", %{})
 
-      {:ok, view, _html} = live(conn, @path)
+      {:ok, view, html} = live(conn, @path)
 
       row = ~s(#fleet-trying li[data-goal="#{goal}"])
       assert has_element?(view, ~s(#{row} a[data-item-link="#{goal}"][href="#{item_path(goal)}"]))
 
-      task_row = ~s(#{row} li[data-task="#{task}"])
+      assert text(view, "#fleet-trying-counts") ==
+               "1 open goal · 2 tasks in progress · 1 taken · 1 not taken yet"
 
-      assert has_element?(
-               view,
-               ~s(#{task_row} a[data-item-link="#{task}"][href="#{item_path(task)}"])
-             )
-
-      assert has_element?(view, ~s(#{task_row} a[data-key="12"]), "Key 12")
-      assert has_element?(view, ~s(#fleet-trying-taken li[data-task="#{task}"] a[data-key="12"]))
-      refute has_element?(view, ~s(#fleet-trying-taken li[data-task="#{unclaimed}"]))
+      refute html =~ "Draft the price"
       refute has_element?(view, "#fleet-trying-empty")
     end
 
@@ -1234,39 +1258,17 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, "#fleet-trying-empty")
     end
 
-    test "a problem raised with an item shows until it is unlinked", %{conn: conn} do
-      goal = goal!("Sell the first audit")
-      finding = finding!("No buyers")
-      link = Workspace.link(@fleet, finding, goal, "contradicts")
-
-      {:ok, view, _html} = live(conn, @path)
-
-      problem = ~s(#fleet-trying-problems li[data-problem="#{link}"])
-      assert has_element?(view, ~s(#{problem} a[data-item-link="#{goal}"]))
-      assert has_element?(view, ~s(#{problem} a[data-item-link="#{finding}"]))
-
-      Workspace.unlink(@fleet, link)
-      send(view.pid, {:refresh_activity, @fleet})
-
-      refute has_element?(view, ~s(#fleet-trying li[data-problem="#{link}"]))
-    end
-
     test "what members wrote shows as text, with nothing that can't be seen", %{conn: conn} do
       written = "<b>Hull</b> <script>alert(1)</script>\u0007\u202Esurvey\u2066 done"
 
       goal = goal!(written, %{"open_questions" => [written]})
-      task = task!(written, %{"progress" => "doing", "assignee_key" => 12})
-      Workspace.link(@fleet, task, goal, "implements")
-      Workspace.link(@fleet, finding!(written), goal, "contradicts")
 
       {:ok, view, _html} = live(conn, @path)
 
-      assert has_element?(view, ~s(#fleet-trying li[data-goal="#{goal}"]))
       assert has_element?(view, "#fleet-trying-question")
-      assert has_element?(view, "#fleet-trying-findings li")
       refute has_element?(view, "#fleet-trying b")
       refute has_element?(view, "#fleet-trying script")
-      assert text(view, ~s(#fleet-trying a[data-item-link="#{task}"])) =~ "<b>Hull</b>"
+      assert text(view, ~s(#fleet-trying a[data-item-link="#{goal}"])) =~ "<b>Hull</b>"
 
       html = view |> element("#fleet-trying") |> render()
       refute html =~ ~r/[\x{0}-\x{8}\x{B}-\x{1F}\x{7F}-\x{9F}\p{Cf}]/u
@@ -1286,9 +1288,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
   defp task!(title, data),
     do: Workspace.create(@fleet, "task", Map.put(data, "title", title))
-
-  defp finding!(title),
-    do: Workspace.create(@fleet, "finding", %{"title" => title, "statement" => "S"})
 
   defp item_path(id), do: WorkspacePage.item_path(@fleet, id)
 
@@ -1676,8 +1675,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         on_close: %Phoenix.LiveView.JS{}
       )
 
-    assert html =~ "No agents hold shards here yet."
-    refute html =~ "agents hold shards here. These are"
+    assert html =~ "No agents here yet."
+    refute html =~ "agents are here. These are"
   end
 
   defp signed_in(conn) do

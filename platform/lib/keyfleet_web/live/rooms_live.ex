@@ -28,6 +28,7 @@ defmodule KeyfleetWeb.RoomsLive do
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Checks.RoomPoster
+  alias Keyfleet.Rooms.Errors.PostLimitError
   alias Keyfleet.Rooms.Errors.RenameTooSoonError
   alias Keyfleet.Rooms.Message
   alias Keyfleet.Rooms.Muter
@@ -42,6 +43,7 @@ defmodule KeyfleetWeb.RoomsLive do
   @naming_failed "That room couldn’t be named. Try again."
   @naming_rule "Choose a name of up to 80 characters, on one line, using only visible characters."
   @mute_failed "That didn’t go through. Try again."
+  @post_failed "That post didn’t go through. Try again."
   @thread_page 100
   # A page left open keeps the latest two hundred posts.
   @thread_kept 200
@@ -808,5 +810,21 @@ defmodule KeyfleetWeb.RoomsLive do
       else: KeysLive.refreshing()
   end
 
-  def post_refusal(_refusal, _fleet_id), do: "That post didn’t go through. Try again."
+  def post_refusal(%Ash.Error.Invalid{errors: errors}, _fleet_id) do
+    case Enum.find(errors, &match?(%PostLimitError{}, &1)) do
+      nil -> @post_failed
+      too_many -> post_limit(too_many)
+    end
+  end
+
+  def post_refusal(_refusal, _fleet_id), do: @post_failed
+
+  @doc "What someone is told when their Key has posted as often as an hour allows."
+  def post_limit(%PostLimitError{limit: limit, retry_after: seconds}),
+    do:
+      "This Key has posted #{limit} times in the last hour. " <>
+        "Try again in #{minutes(seconds)}."
+
+  defp minutes(seconds) when seconds <= 60, do: "a minute"
+  defp minutes(seconds), do: "#{ceil(seconds / 60)} minutes"
 end

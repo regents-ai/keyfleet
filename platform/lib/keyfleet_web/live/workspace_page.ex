@@ -12,6 +12,10 @@ defmodule KeyfleetWeb.WorkspacePage do
   (`{:key, token_id}`) or an item (`{:item, id, title}`, with a `nil` title
   when the item is not in the workspace).
 
+  Only the fleet's members read its workspace
+  (`Keyfleet.Graph.Checks.KeyReader`): for anyone else either page answers
+  `members_only?: true` and nothing of the workspace.
+
   A page name that is not one the tables can answer, such as an unknown type
   or a damaged page position, is a page that doesn't exist.
   """
@@ -142,8 +146,8 @@ defmodule KeyfleetWeb.WorkspacePage do
     opts = [actor: actor]
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
+         {:ok, page} <- cards_page(fleet, filter, params, opts),
          {:ready, cursor} <- ready(fleet, opts) do
-      page = cards_page!(fleet_id, filter, params, opts)
       activity = Graph.latest_activity!(fleet_id, opts)
       titles = titles(fleet_id, Enum.flat_map(activity, &mentions/1), opts)
 
@@ -166,6 +170,9 @@ defmodule KeyfleetWeb.WorkspacePage do
     else
       {:missing, name} ->
         %{fleet_id: fleet_id, fleet_name: name, ready?: false, seen: nil, filter: filter}
+
+      {:members_only, name} ->
+        members_only(fleet_id, name)
     end
   end
 
@@ -176,10 +183,11 @@ defmodule KeyfleetWeb.WorkspacePage do
     history_through = history_position!(params)
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
+         {:ok, object} <- members_read(fleet, Graph.read_object(fleet_id, object_id, opts)),
          {:ready, cursor} <- ready(fleet, opts) do
       base = %{fleet_id: fleet_id, fleet_name: fleet.name, ready?: true, seen: seen(cursor)}
 
-      case Graph.read_object!(fleet_id, object_id, opts) do
+      case object do
         nil ->
           Map.put(base, :object, nil)
 
@@ -218,8 +226,19 @@ defmodule KeyfleetWeb.WorkspacePage do
       end
     else
       {:missing, name} -> %{fleet_id: fleet_id, fleet_name: name, ready?: false, seen: nil}
+      {:members_only, name} -> members_only(fleet_id, name)
     end
   end
+
+  defp members_only(fleet_id, name),
+    do: %{fleet_id: fleet_id, fleet_name: name, members_only?: true, seen: nil}
+
+  # The first read of the workspace a page makes is the one that finds out
+  # whether the reader is one of the fleet's members.
+  defp members_read(_fleet, {:ok, result}), do: {:ok, result}
+  defp members_read(fleet, {:error, %Ash.Error.Forbidden{}}), do: {:members_only, fleet.name}
+  defp members_read(_fleet, {:error, %Ash.Error.Invalid{}}), do: raise(NotFoundError)
+  defp members_read(_fleet, {:error, failure}), do: raise(failure)
 
   # An item page's links and history are paged apart: moving one keeps where
   # the other stands.
@@ -265,13 +284,15 @@ defmodule KeyfleetWeb.WorkspacePage do
     %{type: type, archived?: archived?}
   end
 
-  defp cards_page!(fleet_id, filter, params, opts) do
-    fleet_id
-    |> Graph.workspace_cards(
-      %{type: filter.type, include_archived?: filter.archived?},
-      Keyword.put(opts, :page, card_position(params) ++ [limit: 24])
-    )
-    |> page!()
+  defp cards_page(fleet, filter, params, opts) do
+    read =
+      Graph.workspace_cards(
+        fleet.id,
+        %{type: filter.type, include_archived?: filter.archived?},
+        Keyword.put(opts, :page, card_position(params) ++ [limit: 24])
+      )
+
+    members_read(fleet, read)
   end
 
   defp card_position(%{"after" => keyset}) when is_binary(keyset), do: [after: keyset]

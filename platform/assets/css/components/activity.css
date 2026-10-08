@@ -47,22 +47,12 @@
   font-size: 0.875rem;
 }
 
-/* Trying now: the fleet's open goals, each with its tasks set in under it,
-   then who's on what, the problems that still stand and the latest findings,
-   each a short list. A problem is marked like a problem raised above. */
+/* Trying now: the fleet's open goals as a short list, then how much work is
+   open and the question the newest goal most needs answered. */
 
-.trying-now,
-.trying-now section {
+.trying-now {
   display: grid;
   gap: 0.6rem;
-}
-
-.trying-now > section {
-  margin-block-start: 0.4rem;
-}
-
-.trying-now h4 {
-  margin: 0;
 }
 
 .trying-now p {
@@ -94,22 +84,6 @@
 
 .trying-goal__title {
   font-weight: 600;
-}
-
-.trying-goal > .trying-now__detail {
-  font-size: 0.875rem;
-}
-
-.trying-goal__tasks {
-  gap: 0.35rem;
-  margin-block-start: 0.35rem;
-  padding-inline-start: 0.75rem;
-  border-inline-start: 1px solid var(--color-border);
-}
-
-.trying-problem[data-tone="disagreement"] {
-  padding-inline-start: 0.75rem;
-  border-inline-start: 3px solid var(--ash-accent-warm);
 }
 
 .trying-now > a {

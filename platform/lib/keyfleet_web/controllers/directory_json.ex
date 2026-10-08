@@ -34,8 +34,7 @@ defmodule KeyfleetWeb.DirectoryJSON do
       note: @note,
       terms: fleet.terms,
       agents: Enum.map(fleet.agents, &agent/1),
-      work:
-        Map.new(fleet.work, fn {kind, items} -> {kind, Enum.map(items, &item(fleet, &1))} end),
+      work: %{fleet.work | open_goals: Enum.map(fleet.work.open_goals, &goal(fleet, &1))},
       rooms: Enum.map(fleet.rooms, &linked(fleet, &1)),
       created_rooms: Enum.map(fleet.created_rooms, &linked(fleet, &1)),
       recent_posts: Enum.map(fleet.recent_posts, &post(fleet, &1))
@@ -73,12 +72,12 @@ defmodule KeyfleetWeb.DirectoryJSON do
 
   defp sales(sales), do: sales
 
-  defp item(fleet, item) do
+  defp goal(fleet, goal) do
     Map.put(
-      item,
+      goal,
       :url,
       PublicDocuments.url(
-        "/app/fleets/#{fleet.id}/workspace/#{URI.encode(item.id, &URI.char_unreserved?/1)}"
+        "/app/fleets/#{fleet.id}/workspace/#{URI.encode(goal.id, &URI.char_unreserved?/1)}"
       )
     )
   end

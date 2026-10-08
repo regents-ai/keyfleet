@@ -3,6 +3,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Keyfleet.Actors
+  alias Keyfleet.ChainHelpers
   alias Keyfleet.CommittedCatalog
   alias Keyfleet.ContractSchema
   alias Keyfleet.Fleets
@@ -10,6 +11,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
   alias Keyfleet.Graph.Projection
   alias Keyfleet.Graph.Projector
   alias Keyfleet.Graph.Writer
+  alias Keyfleet.Keys
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
 
@@ -20,6 +22,8 @@ defmodule Keyfleet.Graph.ProjectionTest do
   @system %Actors.System{}
   @wallet "0x" <> String.duplicate("a1", 20)
   @contract "0x" <> String.duplicate("b2", 20)
+  # Owns key 1 of `@fleet`, so it may read the fleet's workspace.
+  @holder %Actors.Human{human_account_id: 1, wallet_addresses: [@wallet]}
   @tables [Graph.Cursor, Graph.Event, Graph.Object, Graph.Relation]
   @page_bytes 512 * 1024
 
@@ -37,6 +41,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
       on_exit(fn -> Sandbox.stop_owner(owner) end)
       Fleets.bootstrap_catalog!()
       Rooms.bootstrap_rooms!(Fleets.catalog_ids())
+      own_key!()
       start_writer(Path.join(tmp_dir, "graph"))
     end
 
@@ -175,7 +180,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
       command("create", note("Unannounced"), "quiet-1")
 
     assert await_head(log_id(), head) == head
-    assert Graph.read_object!(@fleet, id, actor: nil).data["title"] == "Unannounced"
+    assert Graph.read_object!(@fleet, id, actor: @holder).data["title"] == "Unannounced"
   end
 
   test "a link removed on a later page than the one that made it is gone, and a patch keeps the fields it does not name" do
@@ -188,7 +193,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
       command("link", %{source: task, target: goal, type: "implements"}, "l-1")
 
     assert Projector.await(@fleet, run_id, linked) == linked
-    assert [%{id: ^link}] = Graph.get_object!(@fleet, task, actor: nil).relations
+    assert [%{id: ^link}] = Graph.get_object!(@fleet, task, actor: @holder).relations
 
     removed = write!("unlink", %{relation_id: link}, "u-1")
     assert Projector.await(@fleet, run_id, removed) == removed
@@ -196,7 +201,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     patched = write!("patch", %{id: task, expected_version: 1, set: %{progress: "doing"}}, "p-1")
     assert Projector.await(@fleet, run_id, patched) == patched
 
-    read = Graph.get_object!(@fleet, task, actor: nil)
+    read = Graph.get_object!(@fleet, task, actor: @holder)
     assert read.relations == []
     assert read.object.version == 2
 
@@ -324,10 +329,12 @@ defmodule Keyfleet.Graph.ProjectionTest do
 
     assert List.last(pages).next_cursor == head
 
-    {:ok, synced} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, 0, nil, false)
+    {:ok, synced} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, 0, @holder, false)
     assert {length(synced.graph.events), synced.graph.has_more} == {100, true}
 
-    {:ok, caught_up} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], head, 0, nil, false)
+    {:ok, caught_up} =
+      Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], head, 0, @holder, false)
+
     assert {caught_up.graph.events, caught_up.graph.next_cursor} == {[], head}
   end
 
@@ -353,7 +360,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     {head, _id} = List.last(links)
     assert Projector.await(@fleet, log_id(), head) == head
 
-    {:ok, read} = Graph.get_object(@fleet, ids.task, actor: nil)
+    {:ok, read} = Graph.get_object(@fleet, ids.task, actor: @holder)
     assert {length(read.relations), read.relations_has_more} == {200, true}
     assert ContractSchema.errors(read, "WorkspaceObjectView") == []
     # The task's link to the goal came first, so the newest link is left out.
@@ -380,7 +387,15 @@ defmodule Keyfleet.Graph.ProjectionTest do
     # queue for it; they are made one after another.
     answers =
       for n <- 1..1_000,
-          do: Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], rem(n, head), 0, nil, false)
+          do:
+            Rooms.sync(
+              @fleet,
+              [%{slug: "general", after_seq: 0}],
+              rem(n, head),
+              0,
+              @holder,
+              false
+            )
 
     assert Enum.all?(answers, &match?({:ok, %{graph: %{watermark: ^head}}}, &1))
     assert Enum.all?(answers, fn {:ok, synced} -> length(synced.graph.events) <= 100 end)
@@ -388,7 +403,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     goal = ids.goal
 
     assert {:ok, %{object: %{id: ^goal}, watermark: ^head}} =
-             Graph.get_object(@fleet, goal, actor: nil)
+             Graph.get_object(@fleet, goal, actor: @holder)
 
     assert Process.info(writer, :message_queue_len) == {:message_queue_len, 0}
     :sys.resume(writer)
@@ -417,7 +432,11 @@ defmodule Keyfleet.Graph.ProjectionTest do
     reader =
       Task.async(fn ->
         :ok = Sandbox.checkout(Repo, sandbox: false)
-        hold_here(test, fn -> Graph.list_changes(@other_fleet, %{after_seq: 0}, actor: nil) end)
+        # A Key's ownership is never deleted, so none is committed here: this
+        # read is not authorized, as who may read is not what it tests.
+        hold_here(test, fn ->
+          Graph.list_changes(@other_fleet, %{after_seq: 0}, authorize?: false)
+        end)
       end)
 
     assert_receive {:held, pid}, 10_000
@@ -442,7 +461,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
       command("create", %{type: "task", scope: "fleet", data: %{title: "Draft"}}, "t-1")
 
     assert Projector.await(@fleet, run_id, head) == head
-    created = Graph.read_object!(@fleet, task, actor: nil)
+    created = Graph.read_object!(@fleet, task, actor: @holder)
     assert {created.changed_seq, created.changed_at} == last_change(task)
 
     {:ok, %{"result" => %{"relation_id" => link}}} =
@@ -450,11 +469,11 @@ defmodule Keyfleet.Graph.ProjectionTest do
 
     unlinked = write!("unlink", %{relation_id: link}, "u-1")
     assert Projector.await(@fleet, run_id, unlinked) == unlinked
-    assert Graph.read_object!(@fleet, task, actor: nil) == created
+    assert Graph.read_object!(@fleet, task, actor: @holder) == created
 
     patched = write!("patch", %{id: task, expected_version: 1, set: %{progress: "doing"}}, "p-1")
     assert Projector.await(@fleet, run_id, patched) == patched
-    read = Graph.read_object!(@fleet, task, actor: nil)
+    read = Graph.read_object!(@fleet, task, actor: @holder)
     assert {read.changed_seq, read.changed_at} == last_change(task)
     assert read.changed_seq > unlinked
   end
@@ -530,11 +549,11 @@ defmodule Keyfleet.Graph.ProjectionTest do
     assert tables()[Graph.Relation] == []
     assert [%{run_id: ^new_run, applied_seq: ^new_head}] = tables()[Graph.Cursor]
 
-    {:ok, changes} = Graph.list_changes(@fleet, %{after_seq: 0, limit: 500}, actor: nil)
+    {:ok, changes} = Graph.list_changes(@fleet, %{after_seq: 0, limit: 500}, actor: @holder)
     assert {changes.run_id, changes.watermark} == {new_run, new_head}
 
     {:ok, synced} =
-      Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], old_head, 0, nil, false)
+      Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], old_head, 0, @holder, false)
 
     assert {synced.graph.run_id, synced.graph.watermark} == {new_run, new_head}
 
@@ -620,7 +639,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
   end
 
   defp read_all(after_seq, pages) do
-    {:ok, page} = Graph.list_changes(@fleet, %{after_seq: after_seq, limit: 500}, actor: nil)
+    {:ok, page} = Graph.list_changes(@fleet, %{after_seq: after_seq, limit: 500}, actor: @holder)
     page = Map.put(page, :rows_read, rows_read(0))
     pages = [page | pages]
     if page.has_more, do: read_all(page.next_cursor, pages), else: Enum.reverse(pages)
@@ -653,6 +672,24 @@ defmodule Keyfleet.Graph.ProjectionTest do
 
   # A process running `hold_here/2` stops just after its first read of a
   # cursor, tells the test, and goes on when the test sends `:go`.
+  defp own_key! do
+    ChainHelpers.seed_cursor!(@fleet)
+
+    Keys.record_epoch!(
+      %{
+        fleet_id: @fleet,
+        token_id: 1,
+        ownership_epoch: 1,
+        owner_wallet: @wallet,
+        block_number: 10,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash: "0x" <> String.duplicate("a", 64),
+        log_index: 0
+      },
+      actor: @system
+    )
+  end
+
   defp hold_after_cursor_read do
     id = {__MODULE__, :hold, make_ref()}
     :telemetry.attach(id, [:keyfleet, :repo, :query], &__MODULE__.hold/4, nil)
