@@ -16,15 +16,19 @@ type Entry = {
   scope: string
 }
 
+// The site's refusal, as its API answers one: {"error": {"code", "message", "hint"}}.
+type Refusal = {code: string; message: string; hint: string}
+
 type Reply =
   | {ok: true; status: number; data: string}
-  | {ok: false; status: number; error: {message: string}}
+  | {ok: false; status: number; error: Refusal}
 
 type Request = (input: Record<string, string>, signal: AbortSignal | undefined) => Promise<Reply>
 
 // Each tool reads the site's own public document, in the Markdown an agent
 // gets when it asks for that page: the About page, the docs, or the open
-// fleet directory.
+// fleet directory. A refusal, such as 404 fleet_unknown, is passed on as the
+// site gives it.
 const requests: Record<string, Request> = {
   about: (_input, signal) => read("/about", signal),
   docs: (_input, signal) => read("/docs", signal),
@@ -40,9 +44,9 @@ async function read(path: string, signal: AbortSignal | undefined): Promise<Repl
     redirect: "error",
     signal,
   })
-  const body = await response.text()
-  if (response.ok) return {ok: true, status: response.status, data: body}
-  return {ok: false, status: response.status, error: {message: body}}
+  if (response.ok) return {ok: true, status: response.status, data: await response.text()}
+  const {error} = (await response.json()) as {error: Refusal}
+  return {ok: false, status: response.status, error}
 }
 
 // JSON imports widen every literal, so the manifest is read as the shape it is written in.
