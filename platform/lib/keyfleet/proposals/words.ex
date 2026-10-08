@@ -11,7 +11,8 @@ defmodule Keyfleet.Proposals.Words do
   proposal is shown with the words its fleet saved under its `content_hash`,
   and with none when nobody saved them.
 
-  The same words saved again keep the first save. Anyone may read them.
+  The same words saved again keep the first save. Anyone may read them. A
+  person may save them only so often (`Keyfleet.Proposals.Changes.LimitWords`).
   """
   use Ash.Resource,
     domain: Keyfleet.Proposals,
@@ -45,6 +46,7 @@ defmodule Keyfleet.Proposals.Words do
       upsert_condition expr(false)
       return_skipped_upsert? true
       change Keyfleet.Proposals.Changes.Fingerprint
+      change Keyfleet.Proposals.Changes.LimitWords
     end
   end
 
