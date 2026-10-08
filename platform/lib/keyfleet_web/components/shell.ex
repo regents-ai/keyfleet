@@ -170,6 +170,7 @@ defmodule KeyfleetWeb.Components.Shell do
     <div id="account-control" class="account-control">
       <Regent.Primitives.button
         :if={@account_control.kind == :sign_in}
+        variant="secondary"
         type="button"
         data-account-target="sign-in"
         disabled={!@enabled}
