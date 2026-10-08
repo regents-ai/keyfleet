@@ -24,7 +24,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   What reaches the hub carries a pass for that person or agent
   (`Keyfleet.Notebooks.Pass`) in place of any `Authorization`,
   `X-Keyfleet-Assertion`, forwarded-identity or SIWA header the client sent,
-  and without this site's cookie. Answers stream straight back. A WebSocket
+  and without this site's cookie. Answers stream straight back, with only the
+  headers a notebook page needs (`@kept_response`). A WebSocket
   is carried by `KeyfleetWeb.NotebookSocket`, which closes when the key's
   holder loses it.
   """
@@ -49,8 +50,19 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # Cookies and all caller identity headers are replaced by our signed pass.
   @kept_request ~w(accept accept-encoding accept-language content-type content-encoding
     if-none-match if-modified-since range user-agent sec-websocket-protocol)
-  @hop_by_hop ~w(connection keep-alive proxy-connection proxy-authenticate proxy-authorization te
-    trailer transfer-encoding upgrade)
+  # Only what a notebook page reads from the hub's answers comes back: the
+  # content and how it is encoded, what makes caching, ranges, downloads and
+  # redirects work, the two headers the notebook app reads on a snapshot, and
+  # the security headers the hub sets on its pages, which only restrict them.
+  # Cookies, credentials, cross-origin grants and caching rules never do; this
+  # site's own `no-store` stands.
+  @kept_response ~w(content-type content-encoding content-language content-disposition
+    content-range accept-ranges etag last-modified vary location retry-after
+    x-marimohub-version-id x-marimohub-captured-at
+    content-security-policy content-security-policy-report-only cross-origin-opener-policy
+    cross-origin-resource-policy cross-origin-embedder-policy origin-agent-cluster
+    referrer-policy strict-transport-security x-content-type-options x-frame-options
+    x-dns-prefetch-control x-download-options x-permitted-cross-domain-policies x-xss-protection)
   @handshake ~w(sec-websocket-key sec-websocket-version sec-websocket-extensions)
 
   # Notebook UI operations in marimohub f103eb2. Newly added routes stay closed
@@ -355,9 +367,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   defp stream_back({:ok, %Req.Response{} = response}, conn) do
     conn =
       Enum.reduce(response.headers, conn, fn {name, values}, conn ->
-        if name in ["content-length" | @hop_by_hop],
-          do: conn,
-          else: Enum.reduce(values, conn, &prepend_resp_headers(&2, [{name, &1}]))
+        if name in @kept_response,
+          do: Enum.reduce(values, conn, &prepend_resp_headers(&2, [{name, &1}])),
+          else: conn
       end)
 
     if conn.method == "HEAD" or response.status in [204, 304] do
