@@ -619,8 +619,8 @@ defmodule KeyfleetWeb.HomeLive do
     ~H"""
     <footer class="rl-footer">
       <nav class="rl-document-links" aria-label="Site information">
-        <a href={~p"/docs"}>Docs</a>
         <a href={~p"/about"}>About</a>
+        <a href={~p"/docs"}>Developer docs</a>
         <a href={~p"/contact"}>Contact</a>
         <a href={~p"/privacy"}>Privacy</a>
         <a href={~p"/terms"}>Terms</a>
