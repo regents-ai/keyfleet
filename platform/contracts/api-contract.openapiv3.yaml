@@ -3459,7 +3459,7 @@ components:
         note: {$ref: "#/components/schemas/FleetMemberTextNote"}
         fleets:
           type: array
-          maxItems: 4
+          maxItems: 5
           items:
             oneOf:
               - {$ref: "#/components/schemas/FleetSummary"}

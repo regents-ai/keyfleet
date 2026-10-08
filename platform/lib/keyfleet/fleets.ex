@@ -28,7 +28,8 @@ defmodule Keyfleet.Fleets do
       name: "Accelerant #1",
       card: "ACCELERANT",
       coming_soon?: true
-    }
+    },
+    %{id: "regents_club", name: "Regents Club #1", card: "REGENTS CLUB", coming_soon?: true}
   ]
 
   resources do
@@ -50,14 +51,19 @@ defmodule Keyfleet.Fleets do
   @doc """
   A Key's name, on its card and in its metadata: the fleet's type, the
   fleet's number within its type and the Key's number, each number at least
-  three digits, such as `CLASSIC—001—072` or `CLASSIC—001—1024`.
+  three digits, such as `CLASSIC—001—072` or `CLASSIC—001—1024`. A Regents
+  Club Key is named for its Pass, with four digits: `REGENTS CLUB 0001` to
+  `REGENTS CLUB 1998`.
   """
+  def key_name("regents_club", token_id), do: "REGENTS CLUB " <> padded(token_id, 4)
+
   def key_name(fleet_id, token_id) do
     %{card: card} = Enum.find(@catalog, &(&1.id == fleet_id))
-    Enum.join([card, padded(1), padded(token_id)], "—")
+    Enum.join([card, padded(1, 3), padded(token_id, 3)], "—")
   end
 
-  defp padded(number), do: number |> Integer.to_string() |> String.pad_leading(3, "0")
+  defp padded(number, digits),
+    do: number |> Integer.to_string() |> String.pad_leading(digits, "0")
 
   @doc "The machine ids of the fixed catalog, in catalog order."
   def catalog_ids, do: Enum.map(@catalog, & &1.id)
@@ -112,7 +118,8 @@ defmodule Keyfleet.Fleets do
     "syndicate" => "fibonacci_syndicate",
     "cascade" => "fibonacci_cascade",
     "classic" => "fleet_tech_classic",
-    "accelerant" => "fleet_tech_accelerant"
+    "accelerant" => "fleet_tech_accelerant",
+    "regentsClub" => "regents_club"
   }
 
   @doc "The type of the fleet `fleet_id`, such as `classic`."
@@ -134,7 +141,8 @@ defmodule Keyfleet.Fleets do
   Recording the same record again changes nothing; a record naming other
   contracts for a bound fleet is refused, and so is one whose chain,
   collection, shard record, USDC, REGENT, staking contract, Autolaunch
-  factory or trait table differs from a fleet already bound.
+  factory, Regents Club claims contract or trait table differs from a fleet
+  already bound.
   """
   def record_manifest!(%{
         "chainId" => chain_id,
@@ -145,6 +153,7 @@ defmodule Keyfleet.Fleets do
         "regent" => regent,
         "regentStaking" => regent_staking,
         "autolaunchFactory" => autolaunch_factory,
+        "clubClaims" => %{"address" => club_claims},
         "traitTableHash" => trait_table_hash,
         "fleets" => fleets
       })
@@ -159,6 +168,7 @@ defmodule Keyfleet.Fleets do
       regent_address: String.downcase(regent),
       regent_staking_address: String.downcase(regent_staking),
       autolaunch_factory_address: String.downcase(autolaunch_factory),
+      club_claims_address: String.downcase(club_claims),
       deployed_block: block,
       trait_table_hash: String.downcase(trait_table_hash)
     }

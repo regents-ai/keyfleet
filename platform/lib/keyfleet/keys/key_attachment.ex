@@ -146,6 +146,9 @@ defmodule Keyfleet.Keys.KeyAttachment do
               number: :ownership_seq}
 
       change Keyfleet.Notebooks.Changes.UpdateRoster
+
+      # A dealt Key has its card from its mint, its first ownership record.
+      change Keyfleet.Keys.Changes.QueuePicture, where: [attribute_equals(:ownership_epoch, 1)]
     end
 
     # The keys of the epochs recorded after the fleet's epoch number

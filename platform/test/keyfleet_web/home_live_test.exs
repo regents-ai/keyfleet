@@ -10,7 +10,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   # Invariants covered:
   # - smoke: 200 mount and the public-home landmark, outside the signed-in shell
-  # - the four fleets in catalog order, Classic first, each opening its own map
+  # - the five fleets in catalog order, Classic first, each opening its own map
   # - a fleet coming soon is a card with its name and that it is coming soon,
   #   and nothing it has sold or is doing
   # - a card shows its fleet's newest open goal and featured item once connected,
@@ -51,7 +51,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute has_element?(view, "#app-shell")
   end
 
-  test "the four fleets are cards, Classic first, each opening its map", %{conn: conn} do
+  test "the five fleets are cards, Classic first, each opening its map", %{conn: conn} do
     {:ok, view, html} = live(conn, "/")
 
     ids = Fleets.catalog_ids()
@@ -62,7 +62,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     end
 
     assert attribute(html, ".key-map-preview", "data-layout") ==
-             ~w(classic fibonacci fibonacci accelerant)
+             ~w(classic fibonacci fibonacci accelerant regents_club)
   end
 
   test "a fleet coming soon is a card with its name and that it is coming soon, and nothing more",
@@ -74,7 +74,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert attribute(html, "[data-coming-soon]", "id") ==
              ~w(home-fleet-fibonacci_syndicate home-fleet-fibonacci_cascade
-                home-fleet-fleet_tech_accelerant)
+                home-fleet-fleet_tech_accelerant home-fleet-regents_club)
 
     assert has_element?(view, "#home-fleet-#{@cascade} h3", "Cascade #1")
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-soon]") == "Coming soon"

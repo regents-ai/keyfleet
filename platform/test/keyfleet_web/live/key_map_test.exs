@@ -21,17 +21,22 @@ defmodule KeyfleetWeb.KeyMapTest do
     assert Base.decode64!(bitset) == :binary.copy(<<255>>, 5_795) <> <<0b00111111>>
   end
 
-  test "every key sold and the next one can be chosen, and nothing past a limited fleet's size" do
-    progress = %{total_minted: 150, max_supply: nil}
+  test "every key minted and the next one can be chosen, and nothing past a limited fleet's size" do
+    progress = %{total_minted: 150, next_token_id: 151}
     assert KeyMap.choosable?(progress, 1)
     assert KeyMap.choosable?(progress, 151)
     refute KeyMap.choosable?(progress, 0)
     refute KeyMap.choosable?(progress, 152)
     refute KeyMap.choosable?(progress, "7")
 
-    sold_out = %{total_minted: 1_024, max_supply: 1_024}
+    sold_out = %{total_minted: 1_024, next_token_id: nil}
     assert KeyMap.choosable?(sold_out, 1_024)
     refute KeyMap.choosable?(sold_out, 1_025)
+
+    # The Regents Club sells none: the key after the last given is not offered.
+    club = %{total_minted: 80, next_token_id: nil}
+    assert KeyMap.choosable?(club, 80)
+    refute KeyMap.choosable?(club, 81)
   end
 
   test "the map goes to each level with a key sold and the level on sale" do

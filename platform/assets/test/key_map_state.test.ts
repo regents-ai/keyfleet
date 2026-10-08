@@ -42,6 +42,7 @@ const bits = (...keys: number[]) => {
 const fibonacci = (minted: number): KeyMapState => ({
   minted,
   maxSupply: null,
+  given: false,
   mine: new Uint8Array(0),
   agent: new Uint8Array(0),
 })
@@ -49,6 +50,7 @@ const fibonacci = (minted: number): KeyMapState => ({
 const accelerant = (minted: number, mine: Uint8Array, agent = bits()): KeyMapState => ({
   minted,
   maxSupply: 2_000,
+  given: false,
   mine,
   agent,
 })
@@ -57,7 +59,7 @@ describe("key map loading", () => {
   // The page's bitset for keys 2 and 10 (KeyMap.bitset([2, 10]) in
   // test/keyfleet_web/live/key_map_test.exs), and for no keys at all.
   it("reads the page's bitsets key by key", () => {
-    const state = decodeSnapshot({minted: 10, max_supply: 1_024, mine: "AgI=", agent: ""})
+    const state = decodeSnapshot({minted: 10, max_supply: 1_024, given: false, mine: "AgI=", agent: ""})
 
     expect(state.maxSupply).toBe(1_024)
     const keys = Array.from({length: 20}, (_, i) => i + 1)
@@ -66,7 +68,7 @@ describe("key map loading", () => {
   })
 
   it("reads a fleet whose levels keep opening as having no size", () => {
-    expect(decodeSnapshot({minted: 3, max_supply: null, mine: "", agent: ""}).maxSupply).toBeNull()
+    expect(decodeSnapshot({minted: 3, max_supply: null, given: false, mine: "", agent: ""}).maxSupply).toBeNull()
   })
 })
 
@@ -138,11 +140,14 @@ describe("key map levels", () => {
     expect(drawnKeys({...accelerant(0, bits()), maxSupply: 1_024})).toBe(1_024)
   })
 
-  it("never runs out of keys to sell in a fleet whose levels keep opening", () => {
+  it("never runs out of keys to sell in a fleet whose levels keep opening, and never sells a given key", () => {
     expect(nextKey(fibonacci(46_365))).toBe(46_366)
     expect(lastChoosable(fibonacci(46_365))).toBe(46_366)
     expect(nextKey(accelerant(2_000, bits()))).toBe(0)
     expect(lastChoosable(accelerant(2_000, bits()))).toBe(2_000)
+    const club = {...accelerant(80, bits()), maxSupply: 1_998, given: true}
+    expect(nextKey(club)).toBe(0)
+    expect(lastChoosable(club)).toBe(80)
   })
 
   it("marks keys not sold yet, other than the next, and says so", () => {

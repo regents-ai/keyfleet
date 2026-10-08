@@ -78,15 +78,16 @@ defmodule KeyfleetWeb.FleetLive do
   attr :sales, :map,
     required: true,
     doc:
-      "whether the fleet is `deployed?`, whether its figures are `current?`, and how many `keys` it has sold"
+      "whether the fleet is `deployed?`, whether its figures are `current?`, how many `keys` it has sold, and whether they are `given?` rather than sold"
 
   attr :agents, :integer,
     required: true,
     doc: "the agents here, or nil when they couldn't be counted"
 
   @doc """
-  How many keys a fleet has sold and how many agents run them, in one line,
-  as the homepage's card and the fleet's own bar both say it. A fleet not yet
+  How many keys a fleet has sold, or given for the Regents Club, and how many
+  agents run them, in one line, as the homepage's card and the fleet's own
+  bar both say it. A fleet not yet
   deployed, or one whose sales are still being read, shows no key count, and
   agents that couldn't be counted are said to be so, never shown as none.
   """
@@ -128,6 +129,12 @@ defmodule KeyfleetWeb.FleetLive do
   defp sold(%{sales: %{deployed?: false}} = assigns), do: ~H"Not on sale yet"
   defp sold(%{sales: %{current?: false}} = assigns), do: ~H"Sales figures are catching up"
 
+  defp sold(%{sales: %{given?: true}} = assigns) do
+    ~H"""
+    <Count.count id={@id} value={@sales.keys} one="Key" many="Keys" /> given
+    """
+  end
+
   defp sold(assigns) do
     ~H"""
     <Count.count id={@id} value={@sales.keys} one="Key" many="Keys" /> sold
@@ -138,7 +145,12 @@ defmodule KeyfleetWeb.FleetLive do
   defp sold_so_far(%{deployed?: false}), do: %{deployed?: false}
 
   defp sold_so_far(fleet),
-    do: %{deployed?: true, current?: fleet.current?, keys: fleet.progress.total_minted}
+    do: %{
+      deployed?: true,
+      current?: fleet.current?,
+      keys: fleet.progress.total_minted,
+      given?: Presets.given?(fleet.fleet_id)
+    }
 
   attr :fleet, :any, required: true, doc: "the fleet as read, or `:unreadable`"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"

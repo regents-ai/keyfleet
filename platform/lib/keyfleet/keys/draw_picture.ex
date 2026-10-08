@@ -1,18 +1,20 @@
 defmodule Keyfleet.Keys.DrawPicture do
   @moduledoc """
-  Draws a reveal's card, keeps it on IPFS through Lighthouse, then records its
-  address against the reveal, so the key's metadata shows it. Queued in the
-  same transaction as the reveal (`Keyfleet.Keys.Changes.QueuePicture`), so a
-  reveal rolled back draws nothing.
+  Draws a Key's card, keeps it on IPFS through Lighthouse, then records its
+  address against the Key and the card's seed, so the Key's metadata shows it.
+  Queued in the same transaction as the record that gives the Key its card: a
+  dealt Key's first ownership record, or a later Key's reveal
+  (`Keyfleet.Keys.Changes.QueuePicture`), so a record rolled back draws nothing.
 
-  The same reveal always gives the same picture, and the same picture the same
-  address, so running twice is safe; a reveal that already has its picture is
-  left as it is, and one an operator has removed since is not drawn.
+  The same seed always gives the same picture, and the same picture the same
+  address, so running twice is safe; a card that already has its picture is
+  left as it is, and one that is no longer the Key's card, because an operator
+  has removed its reveal since, is not drawn.
   """
   use Oban.Worker,
     queue: :key_art,
     max_attempts: 20,
-    unique: [keys: [:reveal_id], period: :infinity, states: :incomplete]
+    unique: [keys: [:fleet_id, :token_id, :seed], period: :infinity, states: :incomplete]
 
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
@@ -20,21 +22,28 @@ defmodule Keyfleet.Keys.DrawPicture do
   alias Keyfleet.Lighthouse
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"reveal_id" => reveal_id}}) do
-    case Keys.get_reveal_by_id!(reveal_id) do
-      nil -> :ok
-      reveal -> if Keys.get_picture!(reveal_id), do: :ok, else: draw(reveal)
+  def perform(%Oban.Job{
+        args: %{"fleet_id" => fleet_id, "token_id" => token_id, "seed" => seed}
+      }) do
+    fleet = Fleets.get_fleet!(fleet_id)
+
+    cond do
+      Keys.card_seed(fleet, token_id) != seed -> :ok
+      Keys.get_picture!(fleet_id, token_id, seed) -> :ok
+      true -> draw(fleet, token_id, seed)
     end
   end
 
-  defp draw(%{id: id, fleet_id: fleet_id, token_id: token_id} = reveal) do
-    %{trait_table_hash: hash} = fleet = Fleets.get_fleet!(fleet_id)
+  defp draw(%{id: fleet_id, trait_table_hash: hash}, token_id, seed) do
     filename = "#{Fleets.slot(fleet_id)}-#{token_id}.png"
-    seed = Keys.card_seed(fleet, reveal)
 
     with {:ok, png} <- KeyArt.draw(seed, Fleets.key_name(fleet_id, token_id), hash),
          {:ok, cid} <- Lighthouse.add(png, filename, "image/png") do
-      Keys.record_picture!(%{reveal_id: id, cid: cid}, actor: %Keyfleet.Actors.System{})
+      Keys.record_picture!(
+        %{fleet_id: fleet_id, token_id: token_id, seed: seed, cid: cid},
+        actor: %Keyfleet.Actors.System{}
+      )
+
       :ok
     end
   end

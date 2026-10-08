@@ -46,12 +46,15 @@ contract AnvilLab is Script {
         address staking;
         address usdc;
         address regent;
+        address clubClaims;
     }
 
     bytes32 private constant KEY_HASH = keccak256("anvil lab key hash");
     bytes32 private constant TRAIT_TABLE = keccak256("anvil lab trait table");
-    bytes32 private constant DECK = keccak256("anvil lab deck");
-    uint256 private constant DECK_SIZE = 1000;
+    /// @dev The site's one-card test deck (platform/test/support/fixtures/decks): Key 1 of
+    /// Classic #1 is dealt its card by number, and every later key draws.
+    bytes32 private constant DECK = 0xf11579d3bd868d9a111bc512d814d04c0f10beb44fba7f3a92fa26eb67500356;
+    uint256 private constant DECK_SIZE = 1;
     /// @notice How long after `run` Classic #1's sales open.
     uint64 public constant OPENING = 1 minutes;
 
@@ -116,12 +119,13 @@ contract AnvilLab is Script {
             treasury: address(classic.TREASURY()),
             staking: address(staking),
             usdc: address(usdc),
-            regent: address(regent)
+            regent: address(regent),
+            clubClaims: address(factory.CLUB_CLAIMS())
         });
     }
 
-    /// @notice Buys keys 1 and 2 of Classic #1 for the sender with no reveal accepted, then turns the
-    /// treasury's booked USDC into REGENT. Broadcast from the same `--sender` as `run`, once
+    /// @notice Buys keys 1 and 2 of Classic #1 for the sender, key 2's draw refused (key 1 is
+    /// dealt and asks for none), then turns the treasury's booked USDC into REGENT. Broadcast from the same `--sender` as `run`, once
     /// Classic #1's sales are open.
     function sell(KeyfleetManager classic) external {
         (IVRFCoordinatorV2Plus coordinator,,) = classic.KEYS().randomness();

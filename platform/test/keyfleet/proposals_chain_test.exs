@@ -411,7 +411,7 @@ defmodule Keyfleet.ProposalsChainTest do
       inserted = inserts_during(fn -> assert Scanner.step(fleet, StubClient) == :ok end)
 
       assert inserted -- ["chain_cursors"] ==
-               ~w(key_presences proposals key_attachments proposal_votes proposal_executions)
+               ~w(key_presences proposals key_attachments oban_jobs proposal_votes proposal_executions)
     end
 
     # A single pass never asks for more than 10,000 blocks, and the next starts

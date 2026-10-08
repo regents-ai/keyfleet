@@ -388,10 +388,10 @@ key's metadata refresh. It cannot choose any key's card, change a recorded
 deck, mint, move a key or touch money. A fleet whose deck is never recorded
 keeps its keys unrevealed; they can still be traded.
 
-On a fleet anyone creates, the site deals each key a card from its fleet's
-remaining cards in on-chain reveal order, using the key's seed. Keys 1 to N of
-an N-card deck get deck cards; key N + 1 onward, on any fleet, uses the trait
-draw below.
+On a fleet anyone creates, each key is dealt a card from its fleet's
+remaining cards in on-chain reveal order, using the key's seed, by the rule in
+`platform/priv/decks/README.md`. Keys 1 to N of an N-card deck get deck cards;
+key N + 1 onward, on any fleet, uses the trait draw below.
 
 ### Key reveals
 

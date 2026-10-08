@@ -275,10 +275,10 @@ refuses anything but staging.
    with Fly's remote builder. A plain `fly deploy` from `platform/` cannot work. `--ha=false` keeps one machine: a
    second machine would get its own empty volume and the fleets' graphs would
    split without any error. The migration step runs before the site starts:
-   it brings the database up to date and then puts the four fleets on the
+   it brings the database up to date and then puts the five fleets on the
    site, opening Keyfleet Classic's rooms. Classic is open, and Syndicate,
-   Cascade and Accelerant are coming soon, shown by name with no price, no
-   keys, no rooms and no way to join. It records no contracts, and every
+   Cascade, Accelerant and the Regents Club are coming soon, shown by name
+   with no price, no keys, no rooms and no way to join. It records no contracts, and every
    later deploy runs it again without changing anything that is already there.
    **Not verified**: these flags are the ones `fly deploy --help` lists
    (flyctl 0.4.107), but no remote build has been run, so it is not known
@@ -317,7 +317,7 @@ order:
 4. **Deployed on Base** with the founder's go, following
    [deployment.md](deployment.md): the system is deployed, the Regents Safe on
    Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, adds the collection to
-   the randomness subscription it owns and creates the four founding fleets,
+   the randomness subscription it owns and creates the five founding fleets,
    and the record step writes `contracts/deployments/base.deployed.json`. Every
    fleet's treasury deposits the 10% protocol share into REGENT revenue
    staking, `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5`.

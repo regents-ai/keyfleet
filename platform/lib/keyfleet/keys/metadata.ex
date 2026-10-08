@@ -5,11 +5,12 @@ defmodule Keyfleet.Keys.Metadata do
   its fleet's number times 10,000,000,000 plus its Key number; and the
   collection's own, which its `contractURI` names.
 
-  A Key is known once its purchase is recorded. Until its reveal is recorded
-  it shows the Interim Keyfleet Access Pass, the same picture for every Key in
-  every fleet, and `Status: Revealing`. From then on it shows the traits of
-  its card (`Keyfleet.Keys.card_seed/2`) from the fleet's trait table, which change only if an
-  operator corrects the reveal by hand after a reorg. While its card is being
+  A Key is known once its mint is recorded. A Key within its fleet's deck has
+  its card from then on; a later Key shows the Interim Keyfleet Access Pass,
+  the same picture for every Key in every fleet, and `Status: Revealing` until
+  its reveal is recorded. A Key with its card (`Keyfleet.Keys.card_seed/2`)
+  shows the card's traits from the fleet's trait table, which change only if
+  an operator corrects a reveal by hand after a reorg. While its card is being
   drawn (`Keyfleet.Keys.DrawPicture`) it keeps the pass; once the card is kept
   on IPFS, it shows the card and names its IPFS address in `properties`.
   """
@@ -40,7 +41,7 @@ defmodule Keyfleet.Keys.Metadata do
 
   @doc """
   The metadata of the Key with token id `token_id`, as the URL gives it:
-  `{:revealing, metadata}`, `{:drawing, metadata}` (revealed, its card not
+  `{:revealing, metadata}`, `{:drawing, metadata}` (its card known, not
   drawn yet), `{:revealed, metadata}`, or `:not_found` for no recorded Key.
   """
   def for_key(token_id) do
@@ -51,9 +52,9 @@ defmodule Keyfleet.Keys.Metadata do
          %{} <- Keys.current_key!(fleet.id, number) do
       key = %{fleet: fleet, token_id: number}
 
-      case Keys.get_reveal!(fleet.id, number) do
+      case Keys.card_seed(fleet, number) do
         nil -> {:revealing, revealing(key)}
-        reveal -> revealed(key, reveal, Keys.get_picture!(reveal.id))
+        seed -> revealed(key, seed, Keys.get_picture!(fleet.id, number, seed))
       end
     else
       _unknown -> :not_found
@@ -61,15 +62,18 @@ defmodule Keyfleet.Keys.Metadata do
   end
 
   @doc """
-  The picture the metadata of Key `token_id` of the fleet names, and the one
-  it will name for a Key not sold yet: the pass until its card is kept on IPFS.
+  The picture the metadata of minted Key `token_id` of `fleet` names: the
+  pass until its card is kept on IPFS, then the card.
   """
-  def image(fleet_id, token_id) do
-    case Keys.get_reveal!(fleet_id, token_id) do
+  def image(fleet, token_id) do
+    case Keys.card_seed(fleet, token_id) do
       nil -> picture(nil)
-      reveal -> reveal.id |> Keys.get_picture!() |> picture()
+      seed -> picture(Keys.get_picture!(fleet.id, token_id, seed))
     end
   end
+
+  @doc "The picture a Key not minted yet shows: the pass."
+  def pass, do: picture(nil)
 
   defp picture(nil), do: KeyArt.link(@interim_pass_cid)
   defp picture(%{cid: cid}), do: KeyArt.link(cid)
@@ -91,19 +95,19 @@ defmodule Keyfleet.Keys.Metadata do
     }
   end
 
-  defp revealed(key, reveal, nil),
-    do: {:drawing, with_traits(key, reveal, picture(nil), %{})}
+  defp revealed(key, seed, nil),
+    do: {:drawing, with_traits(key, seed, picture(nil), %{})}
 
-  defp revealed(key, reveal, %{cid: cid} = kept),
-    do: {:revealed, with_traits(key, reveal, picture(kept), %{card: "ipfs://#{cid}"})}
+  defp revealed(key, seed, %{cid: cid} = kept),
+    do: {:revealed, with_traits(key, seed, picture(kept), %{card: "ipfs://#{cid}"})}
 
-  defp with_traits(%{fleet: fleet, token_id: token_id} = key, reveal, image, card) do
+  defp with_traits(%{fleet: fleet, token_id: token_id} = key, seed, image, card) do
     hash = fleet.trait_table_hash
 
     traits =
       hash
       |> Traits.table!()
-      |> Traits.draw(Keys.card_seed(fleet, reveal))
+      |> Traits.draw(seed)
       |> Enum.map(fn {trait, value} -> %{trait_type: trait, value: value} end)
 
     %{
@@ -111,7 +115,7 @@ defmodule Keyfleet.Keys.Metadata do
       description: "Key #{token_id} of #{fleet.name}.",
       image: image,
       attributes: level(key) ++ traits,
-      properties: Map.merge(%{seed: reveal.seed, trait_table_hash: hash}, card)
+      properties: Map.merge(%{seed: seed, trait_table_hash: hash}, card)
     }
   end
 

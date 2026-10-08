@@ -1,13 +1,14 @@
 defmodule Keyfleet.Keys.KeyPicture do
   @moduledoc """
-  A reveal's card picture, kept on IPFS at `cid` (`Keyfleet.Lighthouse`).
-  Only the picture job (`Keyfleet.Keys.DrawPicture`) records one, after
-  Lighthouse has the picture; until then the key's metadata shows the Interim
-  Keyfleet Access Pass.
+  A Key's card picture, kept on IPFS at `cid` (`Keyfleet.Lighthouse`), for
+  the card seed it was drawn from (`Keyfleet.Keys.card_seed/2`). Only the
+  picture job (`Keyfleet.Keys.DrawPicture`) records one, after Lighthouse has
+  the picture; until then the key's metadata shows the Interim Keyfleet
+  Access Pass.
 
-  A picture belongs to one reveal, since the card is drawn from its seed:
-  when an operator removes the reveal after a reorg, its picture record goes
-  with it, and the reveal read again is drawn again from its own seed.
+  A picture is the Key's name and seed drawn, so it never changes: a Key
+  whose seed an operator corrects after a reorg is shown by its new seed's
+  picture, drawn afresh, and the old one is no longer asked for.
   """
   use Ash.Resource,
     domain: Keyfleet.Keys,
@@ -18,21 +19,22 @@ defmodule Keyfleet.Keys.KeyPicture do
     table "key_pictures"
     repo(Keyfleet.Repo)
 
-    references do
-      reference(:reveal, on_delete: :delete)
+    check_constraints do
+      check_constraint(:token_id, "key_pictures_positive_token", check: "token_id > 0")
+      check_constraint(:seed, "key_pictures_seed_shape", check: "seed ~ '^0x[0-9a-f]{64}$'")
     end
   end
 
   actions do
     defaults [:read]
 
-    # Recording a picture again keeps the first record: a reveal's picture,
+    # Recording a picture again keeps the first record: a card's picture,
     # and so its address, never changes.
     create :record do
       public? false
-      accept [:reveal_id, :cid]
+      accept [:fleet_id, :token_id, :seed, :cid]
       upsert? true
-      upsert_identity :unique_reveal_picture
+      upsert_identity :unique_card_picture
       upsert_fields []
       upsert_condition expr(false)
       return_skipped_upsert? true
@@ -52,6 +54,18 @@ defmodule Keyfleet.Keys.KeyPicture do
   attributes do
     uuid_primary_key :id
 
+    attribute :token_id, :integer,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 1, max: 9_223_372_036_854_775_807]
+
+    attribute :seed, :string do
+      allow_nil? false
+      public? true
+      constraints match: ~r/\A0x[0-9a-f]{64}\z/, trim?: false
+      description "The seed the card's traits are drawn from."
+    end
+
     attribute :cid, :string do
       allow_nil? false
       public? true
@@ -62,13 +76,14 @@ defmodule Keyfleet.Keys.KeyPicture do
   end
 
   relationships do
-    belongs_to :reveal, Keyfleet.Keys.KeyReveal do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
+      attribute_type :string
       allow_nil? false
       public? true
     end
   end
 
   identities do
-    identity :unique_reveal_picture, [:reveal_id]
+    identity :unique_card_picture, [:fleet_id, :token_id, :seed]
   end
 end

@@ -193,7 +193,7 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   defp sidebar_model(nil), do: %SidebarModel{id: :public, targets: []}
 
-  # The four fleets' pages, then the account page.
+  # The five fleets' pages, then the account page.
   defp sidebar_model(:product) do
     fleets =
       for %{id: id, name: name} <- Fleets.catalog(),

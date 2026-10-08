@@ -23,7 +23,10 @@ defmodule Keyfleet.Fleets.Rules do
         "goes to the fleet’s treasury as REGENT.",
     "fleet_tech_accelerant" =>
       "Up to 2,000 Keys, each 5% dearer than the one before. After the first Key, 70% of each " <>
-        "sale goes to whoever holds the Key before it and 20% to the fleet’s treasury as REGENT."
+        "sale goes to whoever holds the Key before it and 20% to the fleet’s treasury as REGENT.",
+    "regents_club" =>
+      "1,998 Keys, one for each Regents Club Pass, never sold. Key 1 goes to whoever holds " <>
+        "Pass 1, Key 2 to Pass 2, and on."
   }
 
   @membership_terms [

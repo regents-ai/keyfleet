@@ -242,7 +242,9 @@ from there. A shard counts only under its key's current ownership record, so
 shards issued under a removed ownership record stop counting with it. The
 numbered records made again from `F` on get new numbers, higher than any
 removed, so every reader of the list sees them as new. A key whose reveal is
-removed shows as still being revealed until its reveal is read again. The
+removed shows as still being revealed until its reveal is read again; a
+picture drawn for the removed seed stays stored but is no longer shown, and a
+new seed gets a picture of its own. The
 balance reading is not part of the history; the next one, a minute later,
 replaces it.
 

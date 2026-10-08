@@ -1,18 +1,31 @@
 defmodule Keyfleet.Keys.Changes.QueuePicture do
   @moduledoc """
-  Queues the drawing of a revealed key's card (`Keyfleet.Keys.DrawPicture`)
-  in the reveal's own transaction. A reveal read again queues it again; the
-  job leaves a reveal that already has its picture as it is.
+  Queues the drawing of a Key's card (`Keyfleet.Keys.DrawPicture`) in the
+  transaction of the record that gives the Key its card: a dealt Key's first
+  ownership record, or a later Key's reveal. A record read again queues it
+  again; the job leaves a card that already has its picture as it is. A Key
+  with no card yet, one past the deck awaiting its reveal, queues nothing.
   """
   use Ash.Resource.Change
 
+  alias Keyfleet.Fleets
+  alias Keyfleet.Keys
   alias Keyfleet.Keys.DrawPicture
 
   @impl true
   def change(changeset, _opts, _context) do
-    Ash.Changeset.after_action(changeset, fn _changeset, reveal ->
-      Oban.insert!(DrawPicture.new(%{reveal_id: reveal.id}))
-      {:ok, reveal}
+    Ash.Changeset.after_action(changeset, fn _changeset, %{fleet_id: fleet_id} = record ->
+      case Keys.card_seed(Fleets.get_fleet!(fleet_id), record.token_id) do
+        nil ->
+          :ok
+
+        seed ->
+          Oban.insert!(
+            DrawPicture.new(%{fleet_id: fleet_id, token_id: record.token_id, seed: seed})
+          )
+      end
+
+      {:ok, record}
     end)
   end
 end

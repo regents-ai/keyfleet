@@ -154,11 +154,13 @@ Every fleet gets a number from the collection when it is created: `1, 2, 3, ...`
 
 **Sean, KF-DECK-PICK:** "The site picks; the deck fingerprint goes in the contract." **Sean, KF-SOL-21:** "the cards for new keyfleets come from the same process as the original four. except use the interim art when a Key is minted, and then we have a backend process to create the real metadata and image and publish it, after which a metadata update from the owner will reveal the permanent card."
 
+**Sean, 8 Oct 2026:** "1a - no chainlink". A founding fleet's Keys 1 to its deck's size are dealt by number, Key N card N, with no Chainlink draw; the Regents Club is the fifth founding fleet, 1,998 cards. What follows still holds for open fleets and for Keys past a deck.
+
 So every fleet, founding or open, has a pre-made deck. The site deals each key a card from its fleet's remaining cards, with no repeats, in on-chain reveal order (block number, then log index), using each key's seed. The chain holds only the deck's fingerprint and size. Keys `1..N` of an `N`-card deck get deck cards; key `N+1` onward uses the trait draw.
 
 **The one rule that keeps decks fair:** a deck's fingerprint is fixed before any of its fleet's seeds exists, so nobody can build or change a deck after seeing which random numbers came up. The collection enforces it by **not asking Chainlink for a key's random number until its fleet has a deck**:
 
-- **Founding fleets:** the Safe gives the deck in `createFoundingFleet`, so their keys ask for a draw at mint, as today.
+- **Founding fleets:** the Safe gives the deck in `createFoundingFleet`. Their keys within the deck are dealt by number and ask for nothing; keys past it ask for a draw at mint.
 - **Open fleets** are created in one transaction by anyone, before the backend can have built their deck. They start with no deck. Their keys, the creator's key 1 included, mint with interim art and wait for a draw.
   - The backend sees `FleetCreated`, builds the fleet's deck by the same process as the original four, and has the keeper call `setDeck(fleet, deckHash, deckSize)`.
   - `setDeck` takes the fingerprint once, only for a fleet that has none. That fleet's keys have no seed yet, so the deck cannot depend on them.
@@ -230,7 +232,7 @@ Base's gas price read on 7 Oct was 0.006 gwei with ETH at about 2,574 USD, so a 
 
 | Caller → callee | Allowed because | Checked by |
 |---|---|---|
-| Safe → factory `createFoundingFleet` | Only the Safe creates the four founding fleets, in fixed order | `msg.sender == SAFE`; fleet count < 4; type matches the slot |
+| Safe → factory `createFoundingFleet` | Only the Safe creates the five founding fleets, in fixed order | `msg.sender == SAFE`; fleet count < 5; type matches the slot |
 | Anyone → factory `createFleet` | Phase 3 lets anyone create, from its opening | `KEYS.phase() == 3` and `phaseOpensAt` reached; input bounds (section 8) |
 | Safe → collection `advancePhase(opensAt)` | Only the Safe moves phases, one way, naming when the new phase opens | `msg.sender == SAFE`; `opensAt` in the future, at most 30 days ahead, and not before the last phase's |
 | Safe → collection `setRandomness` | Only the Safe moves reveals to another coordinator, subscription or gas lane | `msg.sender == SAFE` |
@@ -443,7 +445,7 @@ How they work:
 
 | Party | Can | Cannot |
 |---|---|---|
-| Regents Safe | Create the four founding fleets in order; move phases forward; replace the keeper; add a newer factory | Mint a key, move or burn anyone's key, touch any fleet's money, votes, claims, rate, profile or treasury, change a fleet after creation, change a price, supply, split, route or royalty, close sales, step a phase back |
+| Regents Safe | Create the five founding fleets in order; move phases forward; replace the keeper; add a newer factory | Mint a key, move or burn anyone's key, touch any fleet's money, votes, claims, rate, profile or treasury, change a fleet after creation, change a price, supply, split, route or royalty, close sales, step a phase back |
 | Keeper (Regents backend wallet) | Record an open fleet's deck once, before any of its seeds exist; ask for a metadata refresh | Choose a card, change a recorded deck, mint, touch money |
 | Anyone (phase 3) | Create a fleet within the input limits, buying its key 1 | Create before phase 3; pass inputs out of bounds; affect any other fleet |
 | Factory | Register and deploy fleets; write a new fleet's profile and requirements once; hand the creator's USDC to the new manager | Anything after creation |
@@ -495,7 +497,7 @@ None. Every contract is final when deployed. The Safe may register a newer facto
 
 ### 10.8 Invariants to test (Foundry, handler-based)
 
-Run with the four founding fleets and two open fleets on one collection, against mock pools, plus a handler that tries every privileged and key-taking function with random callers and foreign keys:
+Run with the five founding fleets and two open fleets on one collection, against mock pools, plus a handler that tries every privileged and key-taking function with random callers and foreign keys:
 
 1. Every key belongs to exactly one fleet, for ever; its key number is at most its manager's `totalMinted`.
 2. The sum of every fleet's `totalMinted` equals the collection's mint count.
@@ -532,7 +534,7 @@ Plus: `check_bytecode.sh` finds no reachable `DELEGATECALL`, `CALLCODE` or `SELF
 | `DeployKeyfleets.s.sol` (one fleet per run) | Deploys the system once. |
 | (none) | New: `KeyfleetSafeSteps.s.sol`, with a founding-fleets step (one call per founding fleet still missing) and an advance-phase step (one call). On Base each step is simulated as the Safe and written as one Safe Transaction Builder file per call in `deployments/safe/`; on anvil the calls are sent directly. Adding the collection to the randomness subscription stays a Safe action done in the Chainlink app. |
 | `RecordKeyfleets.s.sol` | Writes one record, `deployments/<manifest>.deployed.json`: the system as the chain reports it, checked against the manifest, then every fleet the collection's registry lists, each checked to be the factory's own with its four contracts bound to each other. Reading the registry instead of `FleetCreated` events needs no log search and can be rerun at any time to add fleets created since. It refuses to write while the collection is not on the subscription, or on Base while the subscription is not the Safe's. |
-| `KeyfleetManifest.sol`, `deployments/*.json` | Shared bindings (including both swap pools and the v4 pool key, the keeper, the metadata base) plus the four founding fleets' type, deck and profile. |
+| `KeyfleetManifest.sol`, `deployments/*.json` | Shared bindings (including both swap pools and the v4 pool key, the keeper, the metadata base) plus the five founding fleets' type, deck and profile. |
 | `AnvilLab.s.sol` | Builds the factory, creates Classic #1 and moves to phase 1 locally; a second step buys two keys and runs one piece through a local swap route. |
 | `check_bytecode.sh` | Checks the new contract list. |
 | Tests | Fixture goes through the factory; every suite is ported; new suites in section 12. |

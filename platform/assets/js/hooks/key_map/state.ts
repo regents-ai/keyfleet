@@ -6,6 +6,8 @@ export type KeyMapSnapshot = {
   minted: number
   /** How many keys the fleet can ever have, or null for a fleet whose levels keep opening. */
   max_supply: number | null
+  /** Whether the fleet's keys are given, one per Regents Club Pass, so none is ever on sale. */
+  given: boolean
   /**
    * Base64 bitsets, as long as the highest key marked needs; bit `id − 1` sits
    * in byte `(id − 1) >> 3`, least significant bit first.
@@ -23,6 +25,7 @@ export type KeyMapPatch = {
 export type KeyMapState = {
   minted: number
   maxSupply: number | null
+  given: boolean
   mine: Uint8Array
   agent: Uint8Array
 }
@@ -34,6 +37,7 @@ const decodeBits = (base64: string) => Uint8Array.from(atob(base64), character =
 export const decodeSnapshot = (snapshot: KeyMapSnapshot): KeyMapState => ({
   minted: snapshot.minted,
   maxSupply: snapshot.max_supply,
+  given: snapshot.given,
   mine: decodeBits(snapshot.mine),
   agent: decodeBits(snapshot.agent),
 })
@@ -64,13 +68,12 @@ export function applyPatch(state: KeyMapState, patch: KeyMapPatch): KeyMapState 
   return {...state, minted: patch.minted, mine, agent}
 }
 
-/** The last key that can be chosen: the next key, or the last key once the fleet is sold out. */
-export const lastChoosable = (state: KeyMapState) =>
-  state.maxSupply === null ? state.minted + 1 : Math.min(state.minted + 1, state.maxSupply)
-
-/** The key on sale, or 0 once the fleet is sold out. */
+/** The key on sale, or 0 once the fleet is sold out and for a fleet whose keys are given. */
 export const nextKey = (state: KeyMapState) =>
-  state.maxSupply === null || state.minted < state.maxSupply ? state.minted + 1 : 0
+  !state.given && (state.maxSupply === null || state.minted < state.maxSupply) ? state.minted + 1 : 0
+
+/** The last key that can be chosen: the next key, or the last key minted when none is on sale. */
+export const lastChoosable = (state: KeyMapState) => Math.max(state.minted, nextKey(state))
 
 /**
  * How many keys the map draws, the one place that decides it. A fleet whose
@@ -118,8 +121,8 @@ export function nextHeldKey(state: KeyMapState, after: number) {
   return 0
 }
 
-/** A key drawn but not sold, other than the next key, which can't be chosen yet. */
-const unsold = (state: KeyMapState, key: number) => key > state.minted + 1
+/** A key drawn but not minted, other than the next key, which can't be chosen yet. */
+const unsold = (state: KeyMapState, key: number) => key > lastChoosable(state)
 
 /** A tile's marks, for `data-state`. */
 export function keyMarks(state: KeyMapState, key: number, selected: number, cursor: number) {

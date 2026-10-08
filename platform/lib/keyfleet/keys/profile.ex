@@ -17,6 +17,7 @@ defmodule Keyfleet.Keys.Profile do
   alias Keyfleet.Agents
   alias Keyfleet.Agents.CheckInStatus
   alias Keyfleet.Chain
+  alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
   alias Keyfleet.Keys.KeyAttachment
@@ -124,7 +125,7 @@ defmodule Keyfleet.Keys.Profile do
       fleet_id: fleet_id,
       token_id: token_id,
       issued?: false,
-      image: Metadata.image(fleet_id, token_id),
+      image: Metadata.pass(),
       level: level(fleet_id, token_id),
       issue_price: Presets.issue_price(fleet_id, token_id)
     }
@@ -132,6 +133,7 @@ defmodule Keyfleet.Keys.Profile do
 
   # `current` is the record of the holder receiving the key.
   defp issued(fleet_id, token_id, current, viewer) do
+    fleet = Fleets.get_fleet!(fleet_id)
     holder = current.owner_wallet
     activity = activity(fleet_id, token_id, holder)
     thread = latest_thread(fleet_id, token_id, activity.messages)
@@ -144,13 +146,14 @@ defmodule Keyfleet.Keys.Profile do
       fleet_id: fleet_id,
       token_id: token_id,
       issued?: true,
-      image: Metadata.image(fleet_id, token_id),
+      image: Metadata.image(fleet, token_id),
       level: level(fleet_id, token_id),
       issue_price: Presets.issue_price(fleet_id, token_id),
-      traits: traits(fleet_id, token_id),
+      traits: traits(fleet, token_id),
       held_since: current.observed_at,
       holder: holder,
       yours?: holder in wallets(viewer),
+      held_for_pass?: holder == fleet.club_claims_address,
       changed_hands:
         count(KeyAttachment, :history, %{fleet_id: fleet_id, token_id: token_id}) - 1,
       shards: shards(fleet_id, token_id),
@@ -174,19 +177,19 @@ defmodule Keyfleet.Keys.Profile do
   defp level(fleet_id, token_id),
     do: if(Presets.levelled?(fleet_id), do: Presets.fibonacci_level_of(token_id))
 
-  # Each trait the key drew, in its fleet's order, with the share of keys that
-  # draw it; `nil` while the key is still revealing.
-  defp traits(fleet_id, token_id) do
-    case Keys.get_reveal!(fleet_id, token_id, load: [:fleet]) do
+  # Each trait the key's card has, in its fleet's order, with the share of
+  # keys that draw it; `nil` while the key is still revealing.
+  defp traits(fleet, token_id) do
+    case Keys.card_seed(fleet, token_id) do
       nil ->
         nil
 
-      reveal ->
-        table = Traits.table!(reveal.fleet.trait_table_hash)
+      seed ->
+        table = Traits.table!(fleet.trait_table_hash)
         weights = Map.new(table, &{&1.name, {Map.new(&1.values), &1.total}})
 
         table
-        |> Traits.draw(Keys.card_seed(reveal.fleet, reveal))
+        |> Traits.draw(seed)
         |> Enum.map(fn {trait, value} ->
           {values, total} = weights[trait]
           %{trait: trait, value: value, share: values[value] / total}

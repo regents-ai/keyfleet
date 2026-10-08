@@ -10,6 +10,7 @@ defmodule KeyfleetWeb.KeyMap do
   """
 
   alias Keyfleet.Actors.Human
+  alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
 
   # A change naming more keys than this is sent as a signal to load again,
@@ -18,13 +19,14 @@ defmodule KeyfleetWeb.KeyMap do
 
   @doc """
   The map's first load: keys sold, the fleet's size (`nil` for a fleet whose
-  levels keep opening), and the viewer's held keys and the keys with active
-  shards as `bitset/1`s.
+  levels keep opening), whether its keys are given rather than sold, and the
+  viewer's held keys and the keys with active shards as `bitset/1`s.
   """
   def snapshot(fleet_id, %{total_minted: minted, max_supply: max_supply}, actor) do
     %{
       minted: minted,
       max_supply: max_supply,
+      given: Presets.given?(fleet_id),
       mine: bitset(held(fleet_id, actor, [])),
       agent: bitset(Enum.map(Keys.keys_with_shards!(fleet_id), & &1.token_id))
     }
@@ -55,11 +57,11 @@ defmodule KeyfleetWeb.KeyMap do
   end
 
   @doc """
-  Whether key `token_id` can be chosen on the map: every key sold, and the
+  Whether key `token_id` can be chosen on the map: every key minted, and the
   next one on sale.
   """
-  def choosable?(%{total_minted: minted, max_supply: max_supply}, token_id),
-    do: is_integer(token_id) and token_id in 1..min(minted + 1, max_supply || minted + 1)//1
+  def choosable?(%{total_minted: minted, next_token_id: next}, token_id),
+    do: is_integer(token_id) and token_id in 1..max(minted, next || 0)//1
 
   @doc """
   The levels the map can go to, which are the levels it draws: each level

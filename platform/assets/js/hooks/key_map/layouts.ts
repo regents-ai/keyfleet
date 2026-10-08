@@ -8,7 +8,7 @@ import {axialToOffset, mod, offsetToAxial, type Cell} from "./lattice"
  * moves when later keys sell; only the repeating map's extent grows.
  */
 
-export type LayoutKind = "fibonacci" | "classic" | "accelerant"
+export type LayoutKind = "fibonacci" | "classic" | "accelerant" | "regents_club"
 
 type Seats = {q: Int32Array; r: Int32Array; level: Uint16Array}
 
@@ -32,13 +32,18 @@ const narrowRow = 27
 const snakeWidth = 5
 const classicSupply = 1_024
 const accelerantSupply = 2_000
+const clubSupply = 1_998
 
 /** How many keys a fleet can ever have; the Fibonacci fleets' levels keep opening, so they have no limit. */
 export const maxSupply: Record<LayoutKind, number | null> = {
   fibonacci: null,
   classic: classicSupply,
   accelerant: accelerantSupply,
+  regents_club: clubSupply,
 }
+
+/** Whether a fleet's keys are given, one per Regents Club Pass, rather than sold. */
+export const given = (layout: LayoutKind) => layout === "regents_club"
 
 /** How many keys a Fibonacci level has: 2, 3, 5, 8 and on, without end. */
 export function fibonacciLevelSupply(level: number) {
@@ -110,10 +115,11 @@ const fibonacciSeats = (count: number) => {
   })
 }
 
-// Rows of five in a snake, so every key is a neighbour of the one before it.
-const accelerantSeats = () =>
-  seatTable(accelerantSupply, push => {
-    for (let index = 0; index < accelerantSupply; index++) {
+// Rows of five in a snake, so every key is a neighbour of the one before it:
+// Accelerant's 2,000 and the Regents Club's 1,998.
+const snakeSeats = (supply: number) => () =>
+  seatTable(supply, push => {
+    for (let index = 0; index < supply; index++) {
       const row = Math.floor(index / snakeWidth)
       const k = index % snakeWidth
       push(row % 2 === 0 ? k : snakeWidth - 1 - k, row, 0)
@@ -139,7 +145,8 @@ const classicShell = (key: number) => Math.ceil(Math.sqrt(key)) - 1
 const seatBuilders: Record<LayoutKind, (count: number) => Seats> = {
   fibonacci: fibonacciSeats,
   classic: classicSeats,
-  accelerant: accelerantSeats,
+  accelerant: snakeSeats(accelerantSupply),
+  regents_club: snakeSeats(clubSupply),
 }
 
 const seatCache = new Map<LayoutKind, Seats>()

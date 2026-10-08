@@ -17,8 +17,15 @@ defmodule KeyfleetWeb.FleetPage do
   alias KeyfleetWeb.KeyMap
   alias KeyfleetWeb.NotFoundError
 
-  @doc "The key on offer now, which moves on with every sale."
+  @doc """
+  The key on offer now, which moves on with every sale; `nil` for the Regents
+  Club, whose keys are given, never offered.
+  """
   def next_sale(fleet_id, progress) do
+    if not Presets.given?(fleet_id), do: offer(fleet_id, progress)
+  end
+
+  defp offer(fleet_id, progress) do
     level =
       if progress.next_token_id && Presets.levelled?(fleet_id),
         do: Presets.fibonacci_level_of(progress.next_token_id)

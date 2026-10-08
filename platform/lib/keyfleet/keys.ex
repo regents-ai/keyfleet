@@ -1,7 +1,7 @@
 defmodule Keyfleet.Keys do
   @moduledoc """
   Key ownership, reveals, shards, agent voting, presence and edit
-  restrictions projected from contract events, and which revealed Keys have
+  restrictions projected from contract events, and which Keys have
   their card picture.
   """
   use Ash.Domain
@@ -9,6 +9,7 @@ defmodule Keyfleet.Keys do
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Actors.Human
   alias Keyfleet.Decks
+  alias Keyfleet.Fleets.Fleet
 
   resources do
     resource Keyfleet.Keys.KeyAttachment do
@@ -40,14 +41,16 @@ defmodule Keyfleet.Keys do
     resource Keyfleet.Keys.KeyReveal do
       define :record_reveal, action: :record
       define :get_reveal, action: :read, get_by: [:fleet_id, :token_id], not_found_error?: false
-      define :get_reveal_by_id, action: :read, get_by: [:id], not_found_error?: false
       define :reveals_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
-      define :reveals_in_deck_order, action: :in_deck_order, args: [:fleet_id, :deck_size]
     end
 
     resource Keyfleet.Keys.KeyPicture do
       define :record_picture, action: :record
-      define :get_picture, action: :read, get_by: [:reveal_id], not_found_error?: false
+
+      define :get_picture,
+        action: :read,
+        get_by: [:fleet_id, :token_id, :seed],
+        not_found_error?: false
     end
 
     resource Keyfleet.Keys.ShardEvent do
@@ -109,20 +112,20 @@ defmodule Keyfleet.Keys do
   end
 
   @doc """
-  The seed a revealed Key's card shows, for `fleet` with its deck loaded as
-  the fleet's record names it. Keys 1 to the deck's size are dealt the deck's
-  cards (`Keyfleet.Decks.deal/2`) in the order the fleet's own reveals were
-  logged on chain, so only this fleet's reveals decide them; a Key past the
-  deck shows its own seed.
+  The seed Key `token_id` of `fleet` draws its card's traits from, or `nil`
+  while it has none. A Key within the deck is dealt the deck's card by number,
+  Key N card N − 1 (`Keyfleet.Fleets.Fleet.dealt?/2`); a Key past it shows its
+  recorded reveal's seed, once the reveal is read. Ask only for a Key that has
+  been minted: a dealt card is never shown before its Key exists.
   """
-  def card_seed(%{id: fleet_id, deck_hash: deck_hash, deck_size: size}, reveal) do
-    if reveal.token_id > size do
-      reveal.seed
+  def card_seed(%{id: fleet_id, deck_hash: deck_hash} = fleet, token_id) do
+    if Fleet.dealt?(fleet, token_id) do
+      elem(Decks.deck!(deck_hash).cards, token_id - 1)
     else
-      dealt = reveals_in_deck_order!(fleet_id, size)
-      cards = Decks.deal(size, Enum.map(dealt, & &1.seed))
-      place = Enum.find_index(dealt, &(&1.id == reveal.id))
-      elem(Decks.deck!(deck_hash).cards, Enum.at(cards, place))
+      case get_reveal!(fleet_id, token_id) do
+        nil -> nil
+        reveal -> reveal.seed
+      end
     end
   end
 
@@ -241,31 +244,4 @@ defmodule Keyfleet.Keys do
     do:
       held_identity_key!(fleet_id, [wallet], actor: actor) ||
         Enum.find(active_shards_held_by!(wallet, actor: actor), &(&1.fleet_id == fleet_id))
-
-  @doc """
-  Up to `limit` of the fleet's keys numbered 1 to `minted` that have no
-  recorded reveal, lowest first, leaving out the numbers in `except`:
-  `{:ok, token_ids}` or `{:error, error}`.
-  """
-  # The schema is the repository's own constant; every value is a parameter.
-  # sobelow_skip ["SQL.Query"]
-  def unrevealed(fleet_id, minted, except, limit) do
-    # Raw SQL, not an Ash read: the keys it lists have no row (key_reveals has only revealed ones).
-    case Keyfleet.Repo.query(
-           """
-           SELECT key.token_id FROM generate_series(1, $2::bigint) AS key(token_id)
-           WHERE key.token_id <> ALL($3::bigint[])
-             AND NOT EXISTS (
-               SELECT 1 FROM #{Keyfleet.Repo.default_prefix()}.key_reveals AS reveal
-               WHERE reveal.fleet_id = $1 AND reveal.token_id = key.token_id
-             )
-           ORDER BY key.token_id
-           LIMIT $4
-           """,
-           [fleet_id, minted, except, limit]
-         ) do
-      {:ok, %Postgrex.Result{rows: rows}} -> {:ok, List.flatten(rows)}
-      {:error, error} -> {:error, error}
-    end
-  end
 end

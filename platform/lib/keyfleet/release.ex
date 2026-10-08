@@ -77,7 +77,7 @@ defmodule Keyfleet.Release do
   end
 
   @doc """
-  Seeds the four fleets and opens the rooms of every fleet that is not coming
+  Seeds the five fleets and opens the rooms of every fleet that is not coming
   soon, without binding any fleet to a deployment, so the site shows every
   fleet while key sales stay off. A coming-soon fleet gets its rooms when it
   opens. `migrate/0` runs it after the migrations on every deploy. Running it

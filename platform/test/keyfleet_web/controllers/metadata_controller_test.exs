@@ -34,6 +34,8 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     :ok
   end
 
+  # Key 3 is past the one-card fixture deck, so it waits for its reveal; Key 1
+  # is dealt the deck's card when minted, and its drawing is queued then.
   test "a key waiting for its traits shows the interim access pass for 30 seconds", %{
     conn: conn
   } do
@@ -53,9 +55,15 @@ defmodule KeyfleetWeb.MetadataControllerTest do
 
     accelerant = get(conn, key_path("fleet_tech_accelerant", 1))
 
-    assert json_response(accelerant, 200)["attributes"] == [
-             %{"trait_type" => "Status", "value" => "Revealing"}
-           ]
+    assert %{"image" => @interim_pass, "properties" => %{"seed" => seed}} =
+             json_response(accelerant, 200)
+
+    assert seed == Traits.keccak256("golden-1")
+
+    assert_enqueued(
+      worker: DrawPicture,
+      args: %{fleet_id: "fleet_tech_accelerant", token_id: 1, seed: seed}
+    )
 
     for response <- [cascade, accelerant] do
       assert ContractSchema.response_errors(json_response(response, 200), "GET", @path, 200) == []
@@ -70,9 +78,8 @@ defmodule KeyfleetWeb.MetadataControllerTest do
   } do
     seed = Traits.keccak256("golden-1")
     reveal!("fibonacci_cascade", 3, seed)
-    reveal!("fleet_tech_accelerant", 1, seed)
 
-    args = %{reveal_id: Keys.get_reveal!("fibonacci_cascade", 3).id}
+    args = %{fleet_id: "fibonacci_cascade", token_id: 3, seed: seed}
     assert_enqueued(worker: DrawPicture, args: args)
 
     revealed = %{
@@ -152,20 +159,22 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     end
   end
 
-  # A revealed key's traits need its fleet's table; a key still waiting does
-  # not, so it is still served.
+  # A key's traits need its fleet's table; a key still waiting for its card
+  # does not, so it is still served.
   @tag :tmp_dir
-  test "a revealed key whose table is missing or not its hash is a server error", %{
+  test "a key with its card whose table is missing or not its hash is a server error", %{
     conn: conn,
     tmp_dir: tmp_dir
   } do
     configured = Application.fetch_env!(:keyfleet, Traits)
     Application.put_env(:keyfleet, Traits, directory: tmp_dir)
     on_exit(fn -> Application.put_env(:keyfleet, Traits, configured) end)
+    buy!("fibonacci_cascade", 2)
     reveal!("fibonacci_cascade", 3, Traits.keccak256("golden-1"))
 
     assert_error_sent 500, fn -> get(conn, key_path("fibonacci_cascade", 3)) end
-    assert json_response(get(conn, key_path("fleet_tech_accelerant", 1)), 200)
+    assert_error_sent 500, fn -> get(conn, key_path("fleet_tech_accelerant", 1)) end
+    assert json_response(get(conn, key_path("fibonacci_cascade", 2)), 200)
 
     File.write!(Path.join(tmp_dir, @table_hash <> ".json"), ~s({"traits": []}))
 

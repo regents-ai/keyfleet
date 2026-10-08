@@ -35,6 +35,8 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   @eth "0x0000000000000000000000000000000000000000"
   @money ["pay", "advance", "signature", "launch"]
   @propose "propose(uint256,bytes32,(address,uint256,bytes)[])"
+  # The site's one-card test deck, every lab fleet's.
+  @deck "0xf11579d3bd868d9a111bc512d814d04c0f10beb44fba7f3a92fa26eb67500356"
 
   setup_all do
     url = AnvilLab.start!()
@@ -72,27 +74,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
 
     @fleet_id
     |> Fleets.get_fleet!()
-    |> Fleets.record_deployment!(
-      %{
-        chain_id: @chain_id,
-        chain_fleet_id: 1,
-        keys_address: lab.keys,
-        manager_address: lab.manager,
-        rewards_address: lab.rewards,
-        votes_address: lab.votes,
-        treasury_address: lab.treasury,
-        shards_address: lab.shards,
-        regent_address: lab.regent,
-        regent_staking_address: lab.staking,
-        autolaunch_factory_address: lab.autolaunch,
-        usdc_address: lab.usdc,
-        deployed_block: 1,
-        trait_table_hash: Traits.keccak256("anvil lab trait table"),
-        deck_hash: Traits.keccak256("anvil lab deck"),
-        deck_size: 1_000
-      },
-      actor: %System{}
-    )
+    |> Fleets.record_deployment!(deployment(lab), actor: %System{})
 
     snapshot = AnvilLab.rpc!(url, "evm_snapshot")
     on_exit(fn -> AnvilLab.rpc!(url, "evm_revert", [snapshot]) end)
@@ -474,21 +456,22 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       "0x" <> randomness = view!(url, lab.keys, "randomness()", [])
       coordinator = "0x" <> String.slice(randomness, 24, 40)
 
-      # The lab sold Keys 1 and 2 while the coordinator refused every request.
-      built = build!(:reveal, @third, token_id: 1)
-      assert %{problem: nil, figures: %{token_id: 1, blocked: %{}}} = built
+      # The lab sold Keys 1 and 2 while the coordinator refused every request;
+      # Key 1 is dealt its card by number, so only Key 2 asked for a draw.
+      built = build!(:reveal, @third, token_id: 2)
+      assert %{problem: nil, figures: %{token_id: 2, blocked: %{}}} = built
 
       assert %{to: keys, data: data} = Review.find(built.review, "reveal")
       assert keys == lab.keys
-      assert data == Call.encode("requestReveal(uint256)", [id(1)])
+      assert data == Call.encode("requestReveal(uint256)", [id(2)])
 
       # Refused again: the press lands, and the Key is offered again.
       send!(url, @buyer, coordinator, Call.encode("setRevertAll(bool)", [true]))
       refused = press!(url, @third, built.review, "reveal")
       assert outcome(built.review, "reveal", refused) == {:ok, :confirmed}
       assert {:ok, {[key], []}} = reveal_log(url, refused, lab, "RevealRequestFailed(uint256)", 1)
-      assert key == id(1)
-      assert build!(:reveal, @third, token_id: 1).figures.blocked == %{}
+      assert key == id(2)
+      assert build!(:reveal, @third, token_id: 2).figures.blocked == %{}
 
       # Accepted: the draw is on its way, and a repeat press is refused.
       send!(url, @buyer, coordinator, Call.encode("setRevertAll(bool)", [false]))
@@ -498,7 +481,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert {:ok, {[^key, request_id], []}} =
                reveal_log(url, accepted, lab, "RevealRequested(uint256,uint256)", 2)
 
-      assert build!(:reveal, @third, token_id: 1).figures.blocked == %{
+      assert build!(:reveal, @third, token_id: 2).figures.blocked == %{
                "reveal" => :reveal_requested
              }
 
@@ -512,7 +495,42 @@ defmodule Keyfleet.WalletStepsAnvilTest do
         Call.encode("fulfill(uint256,uint256[])", [request_id, [42]])
       )
 
-      assert build!(:reveal, @third, token_id: 1).figures.blocked == %{"reveal" => :revealed}
+      assert build!(:reveal, @third, token_id: 2).figures.blocked == %{"reveal" => :revealed}
+    end
+  end
+
+  describe "a Regents Club Key held for its Pass" do
+    test "only its Pass's holder claims it; once claimed, or with no Pass, the button says why",
+         %{url: url, lab: lab} do
+      club = club!(url, lab)
+      pass = address!(url, lab.club_claims, "PASS()")
+      send!(url, @buyer, pass, Call.encode("mint(address,uint256)", [@second, 1]))
+
+      # Phase 2 opens the Club; the Safe gives its Keys 1 and 2 to the claims
+      # contract, and Pass 2 is never minted.
+      opens = timestamp!(url) + 60
+      send!(url, @buyer, lab.keys, Call.encode("advancePhase(uint64)", [opens]))
+      skip!(url, 61)
+      claims = [lab.club_claims, lab.club_claims]
+      send!(url, @buyer, club.manager_address, Call.encode("give(address[])", [claims]))
+
+      stranger = club_claim!(@third, 1)
+      assert stranger.figures.blocked == %{"club-claim" => :not_pass_holder}
+      assert pressed(url, stranger, "club-claim") == {:ok, :reverted}
+
+      built = club_claim!(@second, 1)
+      assert built.figures.blocked == %{}
+      assert %{to: to, data: data} = Review.find(built.review, "club-claim")
+      assert to == lab.club_claims
+      assert data == Call.encode("claim(uint256)", [1])
+      assert pressed(url, built, "club-claim") == {:ok, :confirmed}
+
+      key = Fleet.onchain_token_id(club, 1)
+      assert address!(url, lab.keys, "ownerOf(uint256)", [key]) == @second
+      assert club_claim!(@second, 1).figures.blocked == %{"club-claim" => :club_claimed}
+      assert pressed(url, built, "club-claim") == {:ok, :reverted}
+
+      assert club_claim!(@second, 2).figures.blocked == %{"club-claim" => :pass_burned}
     end
   end
 
@@ -527,6 +545,79 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   defp build!(flow, signer, arguments \\ []) do
     {:ok, built} = build(flow, signer, actor(signer), arguments)
     built
+  end
+
+  defp club_claim!(signer, token_id) do
+    {:ok, built} =
+      WalletSteps.build_steps("regents_club", :club_claim, signer, "lab", %{token_id: token_id},
+        actor: actor(signer)
+      )
+
+    built
+  end
+
+  # Classic #1's deployment as the lab made it.
+  defp deployment(lab) do
+    %{
+      chain_id: @chain_id,
+      chain_fleet_id: 1,
+      keys_address: lab.keys,
+      manager_address: lab.manager,
+      rewards_address: lab.rewards,
+      votes_address: lab.votes,
+      treasury_address: lab.treasury,
+      shards_address: lab.shards,
+      regent_address: lab.regent,
+      regent_staking_address: lab.staking,
+      autolaunch_factory_address: lab.autolaunch,
+      club_claims_address: lab.club_claims,
+      usdc_address: lab.usdc,
+      deployed_block: 1,
+      trait_table_hash: Traits.keccak256("anvil lab trait table"),
+      deck_hash: @deck,
+      deck_size: 1
+    }
+  end
+
+  # Syndicate, Accelerant, Cascade and the Regents Club created after Classic
+  # #1, each with the one-card test deck, and the Club's deployment recorded.
+  defp club!(url, lab) do
+    for {preset, name} <- [
+          {0, "Syndicate #1"},
+          {3, "Accelerant #1"},
+          {1, "Cascade #1"},
+          {4, "Regents Club #1"}
+        ] do
+      create =
+        Call.encode("createFoundingFleet(uint8,bytes32,uint256,(string,string,string))", [
+          preset,
+          @deck,
+          1,
+          {name, "", ""}
+        ])
+
+      # A fleet's contracts take more gas than a button's step; the lab's node
+      # estimates it.
+      hash =
+        AnvilLab.rpc!(url, "eth_sendTransaction", [%{from: @buyer, to: lab.factory, data: create}])
+
+      assert %{"status" => "0x1"} = AnvilLab.receipt!(url, hash)
+    end
+
+    manager = address!(url, lab.keys, "managerOf(uint256)", [5])
+
+    "regents_club"
+    |> Fleets.get_fleet!()
+    |> Fleets.record_deployment!(
+      Map.merge(deployment(lab), %{
+        chain_fleet_id: 5,
+        manager_address: manager,
+        rewards_address: address!(url, manager, "REWARDS()"),
+        votes_address: address!(url, manager, "VOTES()"),
+        treasury_address: address!(url, manager, "TREASURY()")
+      }),
+      actor: %System{}
+    )
   end
 
   # A proposal made with Key 1 by `signer`, and recorded by the chain reader.

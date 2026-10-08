@@ -350,7 +350,8 @@ defmodule Keyfleet.ChainTest do
                usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
                regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
                regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
-               autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e"
+               autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
+               club_claims_address: "0xa2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2"
              } = classic
 
       assert classic.trait_table_hash == "0x" <> String.duplicate("a1", 32)
@@ -395,6 +396,8 @@ defmodule Keyfleet.ChainTest do
             {"regentStaking", "0x" <> String.duplicate("0c", 20), "regent_staking_address"},
             {"autolaunchFactory", "0x" <> String.duplicate("0d", 20),
              "autolaunch_factory_address"},
+            {"clubClaims", %{"address" => "0x" <> String.duplicate("0e", 20)},
+             "club_claims_address"},
             {"traitTableHash", "0x" <> String.duplicate("b2", 32), "trait_table_hash"}
           ] do
         File.write!(path, Jason.encode!(manifest("cascade", "1", %{key => value})))
@@ -479,6 +482,7 @@ defmodule Keyfleet.ChainTest do
                fibonacci_syndicate: coming soon
                fibonacci_cascade: coming soon
                fleet_tech_accelerant: coming soon
+               regents_club: coming soon
                """
 
       assert Enum.all?(Fleets.list_fleets!(), &is_nil(&1.manager_address))
@@ -518,6 +522,7 @@ defmodule Keyfleet.ChainTest do
           "regent" => @regent,
           "regentStaking" => "0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5",
           "autolaunchFactory" => "0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E",
+          "clubClaims" => %{"address" => "0x" <> String.duplicate("A2", 20)},
           "traitTableHash" => "0x" <> String.duplicate("A1", 32)
         },
         shared

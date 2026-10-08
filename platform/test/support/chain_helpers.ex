@@ -23,9 +23,9 @@ defmodule Keyfleet.ChainHelpers do
   it, with `overrides` in place of any of its fields. Each fleet is numbered
   by its place in the catalog and gets contracts of its own; every fleet
   shares the one Key collection, shard record, USDC, REGENT, staking
-  contract, Autolaunch factory and trait table. Its deck is the one-card
-  fixture deck, so Key 1 is dealt that card and every later Key draws its
-  own.
+  contract, Autolaunch factory, Regents Club claims contract and trait
+  table. Its deck is the one-card fixture deck, so Key 1 is dealt that card
+  and every later Key draws its own.
   """
   def deployment(fleet_id, overrides \\ %{}) do
     digit = Integer.to_string(chain_fleet_id(fleet_id) - 1)
@@ -45,6 +45,7 @@ defmodule Keyfleet.ChainHelpers do
         regent_address: "0x6f89bca4ea5931edfcb09786267b251dee752b07",
         regent_staking_address: "0xb027dc261636e30cbc0fe25b2f8e1ed273354ab5",
         autolaunch_factory_address: "0xf4f591e63f4b6d8240a150081c1ca7edfaeb768e",
+        club_claims_address: "0x" <> String.duplicate("a2", 20),
         usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
         deployed_block: 1,
         trait_table_hash: "0x" <> String.duplicate("a", 64)

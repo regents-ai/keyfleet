@@ -6,9 +6,15 @@ defmodule Keyfleet.Fleets.Fleet do
   its own four contracts (its manager, which sells its Keys, its vote
   contract, treasury and reward ledger), the USDC its Keys are paid in, the
   REGENT token and staking contract Regents' share goes through, the
-  Autolaunch factory its launch token comes from, the hash of the trait table
-  its Keys' traits are drawn from, and the hash and size of its card deck
-  (`Keyfleet.Decks`).
+  Autolaunch factory its launch token comes from, the claims contract that
+  holds Regents Club Keys for Passes that cannot take one, the hash of the
+  trait table its Keys' traits are drawn from, and the hash and size of its
+  card deck (`Keyfleet.Decks`).
+
+  Every fleet here is a founding fleet, the first of its type, and a founding
+  fleet's Keys 1 to its deck's size are dealt by number: Key N holds the
+  deck's card N (`dealt?/2`), known from the deck as soon as the Key exists.
+  Only a Key past the deck waits for its random draw.
 
   The site numbers a fleet's Keys 1, 2, 3 and on (`token_id` everywhere in the
   site). On the chain a Key's token id is the fleet's number times
@@ -33,7 +39,8 @@ defmodule Keyfleet.Fleets.Fleet do
     :usdc_address,
     :regent_address,
     :regent_staking_address,
-    :autolaunch_factory_address
+    :autolaunch_factory_address,
+    :club_claims_address
   ]
 
   @deployment [:chain_id, :chain_fleet_id] ++
@@ -58,6 +65,13 @@ defmodule Keyfleet.Fleets.Fleet do
     end
   end
 
+  @doc """
+  Whether the fleet's Key `key_number` is dealt its card by number, the deck's
+  card N for Key N, rather than drawn: every Key within the deck. A fleet not
+  yet deployed has no deck, so none of its Keys is dealt.
+  """
+  def dealt?(%{deck_size: size}, key_number), do: is_integer(size) and key_number <= size
+
   postgres do
     table "fleets"
     repo(Keyfleet.Repo)
@@ -65,14 +79,14 @@ defmodule Keyfleet.Fleets.Fleet do
     check_constraints do
       check_constraint(:id, "fleets_fixed_catalog",
         check:
-          "id IN ('fibonacci_syndicate', 'fibonacci_cascade', 'fleet_tech_classic', 'fleet_tech_accelerant')",
-        message: "must identify one of the four fixed fleets"
+          "id IN ('fibonacci_syndicate', 'fibonacci_cascade', 'fleet_tech_classic', 'fleet_tech_accelerant', 'regents_club')",
+        message: "must identify one of the five fixed fleets"
       )
 
       # A deployment is recorded whole or not at all.
       check_constraint(:manager_address, "fleets_deployment_whole",
         check:
-          "num_nulls(chain_id, chain_fleet_id, keys_address, manager_address, rewards_address, votes_address, treasury_address, shards_address, usdc_address, regent_address, regent_staking_address, autolaunch_factory_address, deployed_block, trait_table_hash, deck_hash, deck_size) IN (0, 16)",
+          "num_nulls(chain_id, chain_fleet_id, keys_address, manager_address, rewards_address, votes_address, treasury_address, shards_address, usdc_address, regent_address, regent_staking_address, autolaunch_factory_address, club_claims_address, deployed_block, trait_table_hash, deck_hash, deck_size) IN (0, 17)",
         message: "must record the whole deployment"
       )
 
@@ -105,7 +119,7 @@ defmodule Keyfleet.Fleets.Fleet do
 
       validate one_of(
                  :id,
-                 ~w(fibonacci_syndicate fibonacci_cascade fleet_tech_classic fleet_tech_accelerant)
+                 ~w(fibonacci_syndicate fibonacci_cascade fleet_tech_classic fleet_tech_accelerant regents_club)
                )
 
       upsert? true
@@ -121,7 +135,8 @@ defmodule Keyfleet.Fleets.Fleet do
     # Binds the fleet to its deployment once. Recording the same deployment
     # again changes nothing; a different one is refused, and so is one whose
     # chain, collection, shard record, USDC, REGENT, staking contract,
-    # Autolaunch factory or trait table differs from another bound fleet's.
+    # Autolaunch factory, Regents Club claims contract or trait table differs
+    # from another bound fleet's.
     update :record_deployment do
       public? false
       require_atomic? false

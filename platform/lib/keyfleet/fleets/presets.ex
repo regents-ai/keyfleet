@@ -1,6 +1,6 @@
 defmodule Keyfleet.Fleets.Presets do
   @moduledoc """
-  The supply and price arithmetic of the four fleet presets, mirrored from
+  The supply and price arithmetic of the five fleet presets, mirrored from
   `contracts/src/KeyfleetPresets.sol`.
 
   Every step is the contract's own integer step, `ceilDiv(previous * n, 100)`
@@ -16,13 +16,18 @@ defmodule Keyfleet.Fleets.Presets do
   `Q_USDC`, 10 USDC, and follow their preset's ladder from there.
 
   The two Fibonacci fleets have no last level: new levels keep opening by the
-  same rule, so they never sell out. Only Classic (1,024 keys) and
-  Accelerant (2,000 keys) have a supply limit.
+  same rule, so they never sell out. Classic (1,024 keys) and Accelerant
+  (2,000 keys) have a supply limit.
+
+  The Regents Club is never sold: its 1,998 Keys are given, one for each
+  Regents Club Pass, so it has a supply and no price.
   """
 
   @q_usdc 10_000_000
 
   @accelerant_max_keys 2_000
+
+  @club_supply 1_998
 
   # Classic's price table: one whole number of US cents per key, key 1 first.
   @classic_prices_path Path.expand("classic_key_prices.txt", __DIR__)
@@ -38,19 +43,23 @@ defmodule Keyfleet.Fleets.Presets do
     "fibonacci_syndicate" => :fibonacci,
     "fibonacci_cascade" => :fibonacci,
     "fleet_tech_classic" => :classic,
-    "fleet_tech_accelerant" => :accelerant
+    "fleet_tech_accelerant" => :accelerant,
+    "regents_club" => :regents_club
   }
 
   @doc """
   Where a fleet stands after `total_minted` primary keys: how many it can ever
   issue (`nil` for the two Fibonacci fleets, which have no limit), how many
-  levels are complete (`nil` for the two presets without levels), and the
-  next key's id and price in atomic USDC, both `nil` once sold out.
+  levels are complete (`nil` for the presets without levels), and the next
+  key's id and price in atomic USDC, both `nil` once sold out and always for
+  the Regents Club, which sells none.
   """
   def progress(fleet_id, total_minted) when is_integer(total_minted) and total_minted >= 0 do
     preset = Map.fetch!(@presets, fleet_id)
     max_supply = max_supply(preset)
-    sold_out? = max_supply != nil and total_minted >= max_supply
+
+    sold_out? =
+      preset == :regents_club or (max_supply != nil and total_minted >= max_supply)
 
     %{
       total_minted: total_minted,
@@ -64,13 +73,20 @@ defmodule Keyfleet.Fleets.Presets do
   @doc """
   What the fleet's contract charged, or will charge, for key `token_id` when
   it is sold, in atomic USDC: the price `progress/2` offered once the key
-  before it had sold.
+  before it had sold. `nil` for a Regents Club Key, which is given.
   """
-  def issue_price(fleet_id, token_id) when is_integer(token_id) and token_id >= 1,
-    do: next_price(preset(fleet_id), token_id - 1)
+  def issue_price(fleet_id, token_id) when is_integer(token_id) and token_id >= 1 do
+    case preset(fleet_id) do
+      :regents_club -> nil
+      preset -> next_price(preset, token_id - 1)
+    end
+  end
 
-  @doc "A fleet's preset: `:fibonacci`, `:classic` or `:accelerant`."
+  @doc "A fleet's preset: `:fibonacci`, `:classic`, `:accelerant` or `:regents_club`."
   def preset(fleet_id), do: Map.fetch!(@presets, fleet_id)
+
+  @doc "Whether a fleet's Keys are given, one per Regents Club Pass, rather than sold."
+  def given?(fleet_id), do: preset(fleet_id) == :regents_club
 
   @doc "Whether a fleet's keys come in levels, as the two Fibonacci fleets' do."
   def levelled?(fleet_id), do: Map.fetch!(@presets, fleet_id) == :fibonacci
@@ -113,6 +129,7 @@ defmodule Keyfleet.Fleets.Presets do
   defp max_supply(:fibonacci), do: nil
   defp max_supply(:classic), do: @classic_supply
   defp max_supply(:accelerant), do: @accelerant_max_keys
+  defp max_supply(:regents_club), do: @club_supply
 
   # Token ids are contiguous, so every level before the next key's is complete.
   defp completed_levels(:fibonacci, minted), do: fibonacci_level_of(minted + 1) - 1

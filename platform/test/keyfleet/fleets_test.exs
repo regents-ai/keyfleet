@@ -8,14 +8,15 @@ defmodule Keyfleet.FleetsTest do
     "fibonacci_syndicate" => "Syndicate #1",
     "fibonacci_cascade" => "Cascade #1",
     "fleet_tech_classic" => "Classic #1",
-    "fleet_tech_accelerant" => "Accelerant #1"
+    "fleet_tech_accelerant" => "Accelerant #1",
+    "regents_club" => "Regents Club #1"
   }
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
   end
 
-  test "bootstrap converges a partial catalog and reruns preserve exactly four stable identities" do
+  test "bootstrap converges a partial catalog and reruns preserve exactly five stable identities" do
     Ash.create!(Fleet, %{id: "fibonacci_syndicate", name: "Stale name"},
       action: :bootstrap,
       actor: %Keyfleet.Actors.System{}

@@ -27,10 +27,16 @@ const fleets: [string, LayoutKind][] = [
   ["fibonacci_cascade", "fibonacci"],
   ["fleet_tech_classic", "classic"],
   ["fleet_tech_accelerant", "accelerant"],
+  ["regents_club", "regents_club"],
 ]
 const shownCounts = [1, 2, 7, 55, 150, 1_023, 1_024, 1_999, 2_000, 20_000, 46_364, 46_365]
 // The Fibonacci fleets have no size, so their map is tried through level 20.
-const tested: Record<LayoutKind, number> = {fibonacci: levelEnd(20), classic: 1_024, accelerant: 2_000}
+const tested: Record<LayoutKind, number> = {
+  fibonacci: levelEnd(20),
+  classic: 1_024,
+  accelerant: 2_000,
+  regents_club: 1_998,
+}
 
 // A small deterministic generator, so sampled cells repeat run to run.
 function random(seed: number) {
@@ -61,12 +67,12 @@ describe("key map layouts", () => {
     expect(grid.valueAt(...grid.home(46_365))).toBe(46_365)
   })
 
-  it("matches the four fleets' supplies", () => {
+  it("matches the five fleets' supplies", () => {
     expect([1, 2, 3, 4, 5, 6, 7, 8].map(fibonacciLevelSupply)).toEqual([2, 3, 5, 8, 13, 21, 34, 55])
     expect([1, 2, 3, 4, 8].map(levelStart)).toEqual([1, 3, 6, 11, 87])
     expect([1, 2, 7, 20, 21].map(levelEnd)).toEqual([2, 5, 86, 46_365, 75_022])
     expect([1, 2, 3, 5, 6, 87, 141, 142, 46_365, 46_366].map(fibonacciLevelOf)).toEqual([1, 1, 2, 2, 3, 8, 8, 9, 20, 21])
-    expect(maxSupply).toEqual({fibonacci: null, classic: 1_024, accelerant: 2_000})
+    expect(maxSupply).toEqual({fibonacci: null, classic: 1_024, accelerant: 2_000, regents_club: 1_998})
   })
 
   it("keeps opening Fibonacci levels past level 20, and never moves a key", async () => {

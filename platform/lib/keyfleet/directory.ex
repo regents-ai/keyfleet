@@ -133,11 +133,13 @@ defmodule Keyfleet.Directory do
     end
   end
 
-  # A fleet not yet deployed isn't on sale. One whose sales are still being
-  # read gives no figures, so a price that may have moved is never shown.
+  # A fleet not yet deployed isn't on sale, and the Regents Club never is: its
+  # keys are given. One whose sales are still being read gives no figures, so
+  # a price that may have moved is never shown.
   defp sales(id, recorded) do
     cond do
       recorded == nil or recorded.manager_address == nil -> %{on_sale: false}
+      Presets.given?(id) -> %{on_sale: false}
       not Chain.fresh?(id) -> %{on_sale: true, current: false}
       true -> figures(id, Chain.progress(id))
     end

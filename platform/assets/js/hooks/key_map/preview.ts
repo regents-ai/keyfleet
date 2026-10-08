@@ -1,5 +1,5 @@
 import {axialToPixel, SQRT3} from "./lattice"
-import {buildMap, maxSupply, type LayoutKind} from "./layouts"
+import {buildMap, given, maxSupply, type LayoutKind} from "./layouts"
 import {
   drawnKeys,
   levelSale,
@@ -41,7 +41,13 @@ export type Preview = {viewBox: string; tiles: PreviewTile[]}
  * layout, tones and marks.
  */
 export function preview(layout: LayoutKind, minted: number): Preview {
-  const state: KeyMapState = {minted, maxSupply: maxSupply[layout], mine: new Uint8Array(0), agent: new Uint8Array(0)}
+  const state: KeyMapState = {
+    minted,
+    maxSupply: maxSupply[layout],
+    given: given(layout),
+    mine: new Uint8Array(0),
+    agent: new Uint8Array(0),
+  }
   const grid = buildMap(layout, drawnKeys(state))
   const next = nextKey(state)
   const onSale = onSaleLevel(grid, state)

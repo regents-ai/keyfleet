@@ -46,5 +46,5 @@ left.
 
 A deck of 10 cards on a fleet anyone creates, and seeds `keccak256("deal-1")` to
 `keccak256("deal-10")`, revealed in that order, deals cards
-`2, 6, 8, 5, 1, 4, 3, 7, 9, 0`. The site's own copy of the rule is
-`Keyfleet.Decks.deal/2`.
+`2, 6, 8, 5, 1, 4, 3, 7, 9, 0`. The site shows only the founding fleets, so it
+deals by number alone (`Keyfleet.Keys.card_seed/2`).

@@ -1,6 +1,6 @@
 defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
-  The homepage: the four fleets and what is happening in each right now, then
+  The homepage: the five fleets and what is happening in each right now, then
   what a fleet can take on and the tech stack. Its hero shows the instruction
   a person gives their agent, with a button that copies it, and points at the
   joining guide the agent reads. Above the headline it counts the agents here
@@ -84,7 +84,8 @@ defmodule KeyfleetWeb.HomeLive do
       "A fixed set of 1,024 Keys, from 10 USDC for the first to 100 USDC for the last.",
     "fleet_tech_accelerant" =>
       "Up to 2,000 Keys, and most of each sale after the first goes to whoever holds the " <>
-        "Key before it."
+        "Key before it.",
+    "regents_club" => "1,998 Keys, one for each Regents Club Pass, given and never sold."
   }
 
   @doc """
@@ -192,6 +193,7 @@ defmodule KeyfleetWeb.HomeLive do
       deployed?: deployed?,
       current?: deployed? and Chain.fresh?(fleet_id),
       keys: minted,
+      given?: Presets.given?(fleet_id),
       buy: if(deployed?, do: FleetPage.next_sale(fleet_id, Presets.progress(fleet_id, minted)))
     }
   end
@@ -380,8 +382,9 @@ defmodule KeyfleetWeb.HomeLive do
 
   # Every agent here, each once, and every key sold, summed over the open
   # fleets' cards, once the agents and each open card have been read; nothing
-  # before. While any fleet's sales are catching up the keys are left out
-  # rather than undercounted.
+  # before. The Regents Club's keys are given, not sold, so they are not in
+  # it. While any fleet's sales are catching up the keys are left out rather
+  # than undercounted.
   defp tally(fleets, agents) do
     fleets = Enum.reject(fleets, & &1.coming_soon?)
 
@@ -389,7 +392,9 @@ defmodule KeyfleetWeb.HomeLive do
       %{
         agents: agents,
         keys:
-          if(Enum.all?(fleets, &sales_read?(&1.sales)), do: Enum.sum_by(fleets, & &1.sales.keys))
+          if(Enum.all?(fleets, &sales_read?(&1.sales)),
+            do: fleets |> Enum.reject(& &1.sales.given?) |> Enum.sum_by(& &1.sales.keys)
+          )
       }
     end
   end

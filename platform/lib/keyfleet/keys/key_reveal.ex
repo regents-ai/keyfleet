@@ -1,8 +1,9 @@
 defmodule Keyfleet.Keys.KeyReveal do
   @moduledoc """
   One key's reveal, from its fleet's `KeyRevealed` log: the seed its traits
-  are drawn from. A key is revealed once. Only the chain reader writes it, and
-  nothing ever changes it.
+  are drawn from. Only a Key past its founding fleet's deck has one; a Key
+  within the deck is dealt its card by number. A key is revealed once. Only
+  the chain reader writes it, and nothing ever changes it.
 
   A reveal is the key's seed, not its place on the chain. Read again, from the
   same block or another, the same seed is the same reveal: it keeps the place
@@ -105,16 +106,6 @@ defmodule Keyfleet.Keys.KeyReveal do
       argument :after_seq, :integer, allow_nil?: false
       filter expr(fleet_id == ^arg(:fleet_id) and record_seq > ^arg(:after_seq))
       prepare build(sort: [record_seq: :asc])
-    end
-
-    # The fleet's reveals of Keys 1 to `deck_size`, in the order they were
-    # logged on chain: the order its deck's cards are dealt in.
-    read :in_deck_order do
-      public? false
-      argument :fleet_id, :string, allow_nil?: false
-      argument :deck_size, :integer, allow_nil?: false
-      filter expr(fleet_id == ^arg(:fleet_id) and token_id <= ^arg(:deck_size))
-      prepare build(sort: [block_number: :asc, log_index: :asc])
     end
   end
 

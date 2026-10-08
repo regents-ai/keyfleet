@@ -218,7 +218,8 @@ defmodule Keyfleet.DirectoryTest do
              {"fleet_tech_classic", false},
              {@fleet, false},
              {"fibonacci_cascade", true},
-             {"fleet_tech_accelerant", true}
+             {"fleet_tech_accelerant", true},
+             {"regents_club", true}
            ]
 
     assert listed("fibonacci_cascade") == soon

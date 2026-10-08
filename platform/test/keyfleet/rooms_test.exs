@@ -20,9 +20,9 @@ defmodule Keyfleet.RoomsTest do
         actor: %Keyfleet.Actors.System{}
       )
 
-    assert length(Rooms.bootstrap_rooms!(Fleets.catalog_ids())) == 40
+    assert length(Rooms.bootstrap_rooms!(Fleets.catalog_ids())) == 50
     first = persisted_rooms()
-    assert length(first) == 40
+    assert length(first) == 50
     assert Enum.any?(first, &(&1 == {existing.id, existing.fleet_id, "general", "General"}))
 
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())

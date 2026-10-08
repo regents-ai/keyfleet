@@ -3,11 +3,12 @@ defmodule Keyfleet.Decks do
   A fleet's card deck: a fixed list of cards made before the fleet is created,
   whose hash the fleet's record on chain keeps for good. A card is a seed; a
   key dealt card `i` shows the traits `Keyfleet.Traits.draw/2` gives that seed
-  from the deck's trait table, under the key's own top line.
+  from the deck's trait table, under the key's own top line. A founding
+  fleet's Key N is dealt card N − 1 (`Keyfleet.Keys.card_seed/2`).
 
   Nothing about a card is drawn, stored or served before the key it is dealt
-  to is minted and revealed: its picture is drawn and kept on IPFS only after
-  that reveal, like every key's (`Keyfleet.Keys.DrawPicture`).
+  to is minted: its picture is drawn and kept on IPFS only after that, like
+  every key's (`Keyfleet.Keys.DrawPicture`).
 
   A deck is the JSON file named by its hash, lowercase, in the release's
   `priv/decks`; the tests keep theirs elsewhere with
@@ -52,35 +53,6 @@ defmodule Keyfleet.Decks do
     |> Path.wildcard()
     |> Enum.map(&Path.basename(&1, ".json"))
     |> Enum.sort()
-  end
-
-  @doc """
-  The cards a deck of `size` cards deals, in order, to keys revealing with
-  `seeds`: the seeds of the fleet's keys numbered 1 to `size`, in the order
-  their reveals were logged on chain (block number, then log index). Seeds
-  past `size` are left out; those keys draw their own card.
-
-  Every card starts in the remaining list, `0` to `size - 1` in order. For
-  each seed, read as a 256-bit unsigned number, the card dealt is the one at
-  `seed mod (cards remaining)` in that list; the list's last card then takes
-  its place and the list is one shorter. No card is dealt twice.
-  `priv/decks/README.md` states the same rule.
-  """
-  def deal(size, seeds) when size > 0 do
-    remaining = Map.new(0..(size - 1), &{&1, &1})
-
-    {cards, _remaining} =
-      seeds
-      |> Enum.take(size)
-      |> Enum.with_index()
-      |> Enum.map_reduce(remaining, fn {"0x" <> hex, dealt}, remaining ->
-        last = size - dealt - 1
-        at = rem(String.to_integer(hex, 16), last + 1)
-        card = Map.fetch!(remaining, at)
-        {card, remaining |> Map.put(at, Map.fetch!(remaining, last)) |> Map.delete(last)}
-      end)
-
-    cards
   end
 
   @doc """
