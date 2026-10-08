@@ -48,7 +48,7 @@ test("a fleet's Send your agent copies its instruction", async ({page}) => {
   await copies(
     page,
     "fleet-send-agent-copy",
-    "Visit keyfleet.ai and read its joining guide. Then look at the Keyfleet Classic fleet.",
+    "Visit keyfleet.ai and read its joining guide. Then look at the Classic #1 fleet.",
   )
   expect(errors).toEqual([])
 })

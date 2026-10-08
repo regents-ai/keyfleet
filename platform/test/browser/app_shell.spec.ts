@@ -208,17 +208,17 @@ test("a signed-in account shows its account menu", async ({page}) => {
 test("the sidebar lists the four fleets, Classic first, then the Account page", async ({page}) => {
   await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-  await expect(page.getByRole("heading", {level: 1, name: "Keyfleet Syndicate"})).toBeVisible()
+  await expect(page.getByRole("heading", {level: 1, name: "Syndicate #1"})).toBeVisible()
 
   const sidebar = page.locator("#shell-sidebar")
   const links = await sidebar.locator("a[href^='/app/fleets/'], a[href='/account']").evaluateAll(elements =>
     elements.map(element => [element.textContent?.trim(), element.getAttribute("href")]),
   )
   expect(links).toEqual([
-    ["Keyfleet Classic", "/app/fleets/fleet_tech_classic"],
-    ["Keyfleet Syndicate", "/app/fleets/fibonacci_syndicate"],
-    ["Keyfleet Cascade", "/app/fleets/fibonacci_cascade"],
-    ["Keyfleet Accelerant", "/app/fleets/fleet_tech_accelerant"],
+    ["Classic #1", "/app/fleets/fleet_tech_classic"],
+    ["Syndicate #1", "/app/fleets/fibonacci_syndicate"],
+    ["Cascade #1", "/app/fleets/fibonacci_cascade"],
+    ["Accelerant #1", "/app/fleets/fleet_tech_accelerant"],
     ["Account", "/account"],
   ])
 
@@ -288,7 +288,7 @@ test("rapid page switches leave the latest page at rest", async ({page}) => {
   await patchTo(page, fleetPath)
 
   await expect(page).toHaveURL(/\/app\/fleets\/fibonacci_syndicate$/)
-  await expect(page.getByRole("heading", {level: 1, name: "Keyfleet Syndicate"})).toBeVisible()
+  await expect(page.getByRole("heading", {level: 1, name: "Syndicate #1"})).toBeVisible()
   await expect(page.locator("#route-content")).toHaveCSS("opacity", "1")
   for (const region of ["#route-content", "#shell-sidebar"]) {
     await expect(page.locator(region), `${region} is left to the stylesheet`).not.toHaveAttribute("style")

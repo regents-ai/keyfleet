@@ -128,8 +128,8 @@ test("the walk from home through every page, back, forward and the sidebar keeps
   }
 
   // The sidebar's links: this fleet, another fleet, and the Account page.
-  await walk.follow(sidebar.getByRole("link", {name: "Keyfleet Syndicate"}), fleetPage)
-  await walk.follow(sidebar.getByRole("link", {name: "Keyfleet Classic"}), {
+  await walk.follow(sidebar.getByRole("link", {name: "Syndicate #1"}), fleetPage)
+  await walk.follow(sidebar.getByRole("link", {name: "Classic #1"}), {
     path: "/app/fleets/fleet_tech_classic",
     shows: "#fleet-view",
   })
@@ -142,7 +142,7 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
   await page.goto(fleetPath)
   const walk = await enterShell(page)
-  const toFleet = () => walk.follow(page.locator("#shell-sidebar").getByRole("link", {name: "Keyfleet Syndicate"}), fleetPage)
+  const toFleet = () => walk.follow(page.locator("#shell-sidebar").getByRole("link", {name: "Syndicate #1"}), fleetPage)
 
   // The fleet's rooms, workspace and proposals.
   await page.locator("#fleet-rooms-toggle").click()

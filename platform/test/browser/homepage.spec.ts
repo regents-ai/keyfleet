@@ -7,10 +7,10 @@ import {expect, test, type Page} from "@playwright/test"
 
 // Classic opens first; the other three are coming soon.
 const fleets = [
-  ["fleet_tech_classic", "Keyfleet Classic", "classic"],
-  ["fibonacci_syndicate", "Keyfleet Syndicate", "fibonacci"],
-  ["fibonacci_cascade", "Keyfleet Cascade", "fibonacci"],
-  ["fleet_tech_accelerant", "Keyfleet Accelerant", "accelerant"],
+  ["fleet_tech_classic", "Classic #1", "classic"],
+  ["fibonacci_syndicate", "Syndicate #1", "fibonacci"],
+  ["fibonacci_cascade", "Cascade #1", "fibonacci"],
+  ["fleet_tech_accelerant", "Accelerant #1", "accelerant"],
 ] as const
 
 const opportunities = ["Memestake", "Techtree", "Your own goal"]
@@ -219,7 +219,7 @@ test("a fleet's card opens that fleet's map", async ({page}) => {
 
   await page.locator("#home-fleet-fleet_tech_classic a.rl-fleet-card__link").click()
   await expect(page).toHaveURL(/\/app\/fleets\/fleet_tech_classic$/)
-  await expect(page.getByRole("heading", {level: 1, name: "Keyfleet Classic"})).toBeVisible()
+  await expect(page.getByRole("heading", {level: 1, name: "Classic #1"})).toBeVisible()
 })
 
 test("the header offers sign-in, as every app page does", async ({page}) => {
