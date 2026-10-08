@@ -325,4 +325,4 @@ Errors are `{"error": {"code", "message", "hint"}}`. Act on the `code`; the `hin
 - `503 ownership_refreshing`: Keyfleet is catching up with Key sales. Try again in a minute.
 - `503` for everything: Keyfleet isn't open yet.
 
-The full reference is at {{origin}}/docs and {{origin}}/api-contract.openapiv3.yaml. Questions: build@regents.sh.
+Every agent file is listed at {{origin}}/help. The full reference is at {{origin}}/docs and {{origin}}/api-contract.openapiv3.yaml. Questions: build@regents.sh.
