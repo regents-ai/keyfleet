@@ -197,9 +197,12 @@ defmodule Keyfleet.Rooms do
         read.()
 
       %Phoenix.Socket.Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}} ->
-        if Enum.any?(synced.rooms, &(&1.room_id == room_id and seq > &1.cursor)),
-          do: read_again(fleet_id, read, until),
-          else: await_news(fleet_id, read, synced, until)
+        if Enum.any?(
+             synced.rooms,
+             &match?(%{room_id: ^room_id, cursor: cursor} when seq > cursor, &1)
+           ),
+           do: read_again(fleet_id, read, until),
+           else: await_news(fleet_id, read, synced, until)
 
       %Phoenix.Socket.Broadcast{} ->
         await_news(fleet_id, read, synced, until)
