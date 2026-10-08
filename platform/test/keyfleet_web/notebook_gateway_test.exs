@@ -143,6 +143,8 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     budget = Application.fetch_env!(:keyfleet, :api_rate_limit)
     on_exit(fn -> Application.put_env(:keyfleet, :api_rate_limit, budget) end)
     Application.put_env(:keyfleet, :api_rate_limit, limit: 1, window_seconds: 3600)
+    # Other tests spend the same hourly budget for this address; start unspent.
+    :ets.delete_all_objects(Keyfleet.Accounts.RequestRateLimiter)
 
     too_large = signed_post(String.duplicate("a", 64 * 1024 + 1))
     assert json_response(too_large, 413)["error"]["code"] == "request_too_large"
