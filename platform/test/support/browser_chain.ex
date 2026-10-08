@@ -302,10 +302,11 @@ defmodule Keyfleet.BrowserChain do
   Gives a deployed fleet something on each of its pages to link to the
   others: a key sold to `owner` says something in the General room, the
   workspace holds a goal that discusses that message and a task assigned to
-  the key, and the fleet has proposal 1. Returns the key's number.
+  the Key the message speaks as, and the fleet has proposal 1. Returns that
+  Key's number: an owner who already holds a lower Key speaks as that one.
   """
   def furnish!(fleet_id, owner) do
-    {token_id, message} = speak!(fleet_id, owner, "The plan is in the workspace.")
+    {_sold, message} = speak!(fleet_id, owner, "The plan is in the workspace.")
 
     WorkspaceFixtures.open_log(fleet_id)
 
@@ -316,12 +317,12 @@ defmodule Keyfleet.BrowserChain do
 
     WorkspaceFixtures.create(fleet_id, "task", %{
       "title" => "Draft the brief",
-      "assignee_key" => token_id
+      "assignee_key" => message.as_key
     })
 
     ProposalHelpers.proposal!(fleet_id, 1)
 
-    token_id
+    message.as_key
   end
 
   @doc """

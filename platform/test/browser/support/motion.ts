@@ -111,8 +111,10 @@ export const leftovers = (page: Page) =>
 // Presses the control again and again with a pointer, each press landing while
 // the last one's motion is still playing. The mouse goes straight to the
 // control's middle, since waiting for it to hold still would wait out the
-// motion under test.
+// motion under test. A control below the fold is scrolled to first, as a
+// reader would.
 export async function pressRapidly(page: Page, selector: string, presses = 5, gap = 70) {
+  await page.locator(selector).scrollIntoViewIfNeeded()
   const box = (await page.locator(selector).boundingBox())!
   for (let press = 0; press < presses; press++) {
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)

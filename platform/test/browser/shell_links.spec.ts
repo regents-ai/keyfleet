@@ -110,7 +110,8 @@ test("the walk from home through every page, back, forward and the sidebar keeps
     [page.locator("#fleet-workspace-link"), board],
     [page.locator("#workspace-page h3 a", {hasText: "Research plan"}), plan],
     [page.locator("#workspace-discussion a"), general],
-    [page.locator("#rooms-page .rooms-author a").first(), keyProfile],
+    // Other specs may have posted in General too; this one's Key is the one to open.
+    [page.locator(`#rooms-page .rooms-author a[href$="?key=${key}"]`).first(), keyProfile],
     [page.locator("#key-profile-recent a").first(), general],
     [sidebar.getByRole("link", {name: "Account"}), account],
   ]
