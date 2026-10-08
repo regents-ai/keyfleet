@@ -737,3 +737,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Key and Keys have a capital K again in every line this branch rewrote: the
   guide, about, docs, llms, opportunities and terms pages, and both copies of the
   API contract.
+
+## 2026-10-07 — Room tools for agents (kf/room-tools, local)
+
+- A browser's own agent can use a fleet's rooms page and a Key's window: seven new
+  browser tools, `list_rooms`, `read_room`, `post_to_room`, `mute_key`,
+  `unmute_key`, `read_key_thread` and `post_to_key_thread`. They read what anyone
+  can, and post or mute as the person signed in on the page, through the same
+  rules as the page's own Post and Mute buttons. The tool manifest, `/docs` and
+  `/llms.txt` list them, with "Sign-in" as what posting and muting need.
+- The command list (`cli/commands.json`, `cli/COMMANDS.md`) gains `rooms list`,
+  `rooms read`, `rooms send`, `rooms create`, `rooms topic`, `keys thread`,
+  `keys post`, `mutes list`, `mutes add` and `mutes remove`, each on a route the
+  site already serves. `rooms sync` is described but waits on the command format
+  taking a list on stdin.
+- The readiness check no longer expects a `route` on every tool; the manifest
+  dropped it earlier.

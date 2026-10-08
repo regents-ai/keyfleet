@@ -17,27 +17,13 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias Keyfleet.Rooms.Errors.SendConflictError
   alias KeyfleetWeb.ProposalJSON
   alias KeyfleetWeb.Refusal
-
-  @room_fields [:slug, :name, :kind, :topic, :topic_set_by, :topic_set_at, :head_seq]
-
-  @message_fields [
-    :id,
-    :seq,
-    :kind,
-    :author_kind,
-    :author_wallet,
-    :as_key,
-    :agent_profile_id,
-    :body,
-    :reply_to_id,
-    :inserted_at
-  ]
+  alias KeyfleetWeb.RoomJSON
 
   def rooms(conn, %{"fleet_id" => fleet_id}) do
     actor = conn.assigns.agent_actor
 
     case Rooms.list_rooms(fleet_id, actor: actor) do
-      {:ok, rooms} -> json(conn, %{rooms: Enum.map(rooms, &room_json/1)})
+      {:ok, rooms} -> json(conn, %{rooms: Enum.map(rooms, &RoomJSON.room/1)})
       {:error, error} -> refuse(conn, error)
     end
   end
@@ -52,7 +38,7 @@ defmodule KeyfleetWeb.AgentRoomController do
 
     case Rooms.create_room(input, actor: actor) do
       {:ok, room} ->
-        conn |> put_status(201) |> json(%{room: room_json(room)})
+        conn |> put_status(201) |> json(%{room: RoomJSON.room(room)})
 
       {:error, %Ash.Error.Forbidden{} = error} ->
         if Keyfleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn)
@@ -67,7 +53,7 @@ defmodule KeyfleetWeb.AgentRoomController do
 
     case Rooms.name_open_room(fleet_id, slug, topic, actor: actor) do
       {:ok, room} ->
-        json(conn, %{room: room_json(room)})
+        json(conn, %{room: RoomJSON.room(room)})
 
       {:error, %Ash.Error.Forbidden{} = error} ->
         if Keyfleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn)
@@ -92,9 +78,9 @@ defmodule KeyfleetWeb.AgentRoomController do
       muted = Rooms.muted_keys!(fleet_id, actor)
 
       json(conn, %{
-        room: room_json(room),
+        room: RoomJSON.room(room),
         cursor: cursor(messages, Map.get(params, "after_seq", 0)),
-        messages: messages |> Rooms.unmuted(muted) |> Enum.map(&message_json/1)
+        messages: messages |> Rooms.unmuted(muted) |> Enum.map(&RoomJSON.message/1)
       })
     else
       nil -> not_found(conn)
@@ -126,7 +112,7 @@ defmodule KeyfleetWeb.AgentRoomController do
 
         json(conn, %{
           thread: %{token_id: String.to_integer(token_id), head_seq: head_seq(thread)},
-          messages: Enum.map(messages, &message_json/1)
+          messages: Enum.map(messages, &RoomJSON.message/1)
         })
 
       {:error, error} ->
@@ -166,7 +152,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   end
 
   defp sent(conn, _fleet_id, {:ok, message}),
-    do: conn |> put_status(sent_status(message)) |> json(%{message: message_json(message)})
+    do: conn |> put_status(sent_status(message)) |> json(%{message: RoomJSON.message(message)})
 
   # Standing cannot be read while the fleet's key ownership is not fresh.
   defp sent(conn, fleet_id, {:error, %Ash.Error.Forbidden{} = error}),
@@ -186,22 +172,6 @@ defmodule KeyfleetWeb.AgentRoomController do
     if Ash.Resource.get_metadata(message, :upsert_skipped), do: 200, else: 201
   end
 
-  defp room_json(room), do: Map.take(room, @room_fields)
-
-  defp message_json(message) do
-    message
-    |> Map.take(@message_fields)
-    |> Map.put(:author_human_backed, match?(%{human_backed: true}, message.agent_profile))
-    |> Map.put(:agent_profile, agent_profile_json(message.agent_profile))
-    |> Map.put(:via_agent, agent_profile_json(message.via_agent_profile))
-  end
-
-  defp agent_profile_json(%Ash.NotLoaded{}), do: nil
-  defp agent_profile_json(nil), do: nil
-
-  defp agent_profile_json(profile),
-    do: Map.take(profile, [:id, :name, :declared_harness, :current_status])
-
   defp sync_json(synced, check_in, yours, muted) do
     %{
       rooms:
@@ -211,7 +181,7 @@ defmodule KeyfleetWeb.AgentRoomController do
             kind: room.kind,
             head_seq: room.head_seq,
             cursor: room.cursor,
-            messages: room.messages |> Rooms.unmuted(muted) |> Enum.map(&message_json/1)
+            messages: room.messages |> Rooms.unmuted(muted) |> Enum.map(&RoomJSON.message/1)
           }
         end),
       graph: synced.graph,

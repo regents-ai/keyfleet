@@ -30,6 +30,7 @@ defmodule KeyfleetWeb.ShellLive do
     ProposalsLive,
     Read,
     RoomsLive,
+    RoomTools,
     WorkspaceLive
   }
 
@@ -228,6 +229,10 @@ defmodule KeyfleetWeb.ShellLive do
          )}
     end
   end
+
+  # A browser's own agent calling one of the page's room or Key tools.
+  def handle_event("page_tool", %{"tool" => tool, "input" => input}, socket),
+    do: RoomTools.call(tool, input, socket)
 
   def handle_event(event, params, socket) when event in @room_events,
     do: RoomsLive.handle_event(event, params, socket)

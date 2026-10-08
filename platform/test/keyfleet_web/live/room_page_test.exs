@@ -293,6 +293,27 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     assert html =~ "This fleet doesn’t exist."
   end
 
+  test "the room's browser tool posts only for a key holder, through the room's own rules",
+       %{conn: conn} do
+    post = %{"tool" => "post_to_room", "input" => %{"body" => "From the tool"}}
+
+    {:ok, view, _html} = live(conn, @path)
+    view |> element("#rooms-tools") |> render_hook("page_tool", post)
+    assert_reply(view, %{ok: false, error: %{code: "sign_in_required"}})
+
+    {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
+    view |> element("#rooms-tools") |> render_hook("page_tool", post)
+    assert_reply(view, %{ok: false, error: %{code: "not_a_member"}})
+
+    assert Rooms.read_messages!(@fleet, "general") == []
+
+    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
+    view |> element("#rooms-tools") |> render_hook("page_tool", post)
+    assert_reply(view, %{ok: true, message: %{body: "From the tool", as_key: 1}})
+
+    assert render(view) =~ "From the tool"
+  end
+
   describe "the fleet's rooms" do
     @open_one "/app/fleets/fleet_tech_classic/rooms/open-1"
     @namer "#rooms-namer"
