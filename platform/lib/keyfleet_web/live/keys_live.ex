@@ -31,12 +31,16 @@ defmodule KeyfleetWeb.KeysLive do
 
   attr :key, :map, required: true
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   def page(assigns) do
     ~H"""
     <article id="key-page" class="key-page">
       <header class="key-heading">
-        <p class="key-kicker">{@key.fleet_name || "Keyfleet"}</p>
+        <%!-- Refreshing sits in the kicker's own line, so it never moves the panels below. --%>
+        <p class="key-kicker">
+          {@key.fleet_name || "Keyfleet"}<span :if={@key.refreshing?} id="key-refreshing"> · Refreshing…</span>
+        </p>
         <h1 tabindex="-1">Key {Rules.grouped(@key.token_id)}</h1>
         <.link
           :if={@key.messages}
@@ -53,8 +57,6 @@ defmodule KeyfleetWeb.KeysLive do
       </section>
 
       <div :if={@key.owner_wallet} class="key-grid">
-        <p :if={@key.refreshing?} class="key-notice">Refreshing…</p>
-
         <p :if={@key.edits_restricted?} id="key-edits-restricted" class="key-notice">
           Edits restricted
           <Regent.Primitives.tip id="key-edits-tip" label="About restricted edits">
@@ -74,6 +76,7 @@ defmodule KeyfleetWeb.KeysLive do
           class="key-panel"
           fleet={@key.fleet}
           actor={@actor}
+          lease={@lease}
           token_id={@key.token_id}
         />
 
@@ -94,6 +97,7 @@ defmodule KeyfleetWeb.KeysLive do
             flow={:end_shard}
             fleet={@key.fleet}
             actor={@actor}
+            lease={@lease}
             token_id={@key.token_id}
             refresh={@key.shards}
           >
@@ -127,6 +131,7 @@ defmodule KeyfleetWeb.KeysLive do
             flow={:issue_shard}
             fleet={@key.fleet}
             actor={@actor}
+            lease={@lease}
             inputs={%{"keys" => "#{@key.token_id}", "wallet" => "", "days" => "30"}}
           >
             <:fields :let={panel}>
@@ -174,6 +179,7 @@ defmodule KeyfleetWeb.KeysLive do
             flow={:agent_voting}
             fleet={@key.fleet}
             actor={@actor}
+            lease={@lease}
             refresh={@key.shards}
             inputs={%{"keys" => "#{@key.token_id}"}}
           >

@@ -364,7 +364,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
           writable_scopes: ["fleet", "level:1"],
           sys: %{archived: true}
         ] do
-      assert graph(c, ann, "create", Map.put(create, field, value)).status == 401
+      assert misfit?(graph(c, ann, "create", Map.put(create, field, value)))
     end
 
     for data <- [
@@ -926,11 +926,12 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
            %{as_key: 1, command_id: "c-1", id: "goal#1", expected_version: 1, reason: nil}},
           {"link", %{as_key: 1, command_id: "c-1", source: "a", target: "b"}},
           {"unlink", %{as_key: 1, relation_id: "rel#1"}},
-          {"archive", %{as_key: 1, command_id: "c-1", id: "goal#1"}},
-          {"delete", %{id: "goal#1"}}
+          {"archive", %{as_key: 1, command_id: "c-1", id: "goal#1"}}
         ] do
-      assert graph(c, ann, op, body).status == 401
+      assert misfit?(graph(c, ann, op, body)), "#{op} #{inspect(body)}"
     end
+
+    assert graph(c, ann, "delete", %{id: "goal#1"}).status == 401
 
     for {op, body} <- [
           {"changes", %{limit: 501}},

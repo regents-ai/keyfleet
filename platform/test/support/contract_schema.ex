@@ -114,6 +114,9 @@ defmodule Keyfleet.ContractSchema do
   defp rule("format", "uuid", value, _schema, _schemas, at),
     do: bound(is_binary(value) and not Regex.match?(@uuid, value), at, "is not a uuid")
 
+  defp rule("format", "uri", value, _schema, _schemas, at),
+    do: bound(is_binary(value) and not absolute_uri?(value), at, "is not an absolute uri")
+
   defp rule("maxItems", max, value, _schema, _schemas, at),
     do: bound(is_list(value) and length(value) > max, at, "has more than #{max} items")
 
@@ -155,6 +158,13 @@ defmodule Keyfleet.ContractSchema do
   defp type?("integer", value), do: is_integer(value)
   defp type?("boolean", value), do: is_boolean(value)
   defp type?("null", value), do: is_nil(value)
+
+  defp absolute_uri?(value),
+    do:
+      match?(
+        {:ok, %URI{scheme: scheme, host: host}} when scheme != nil and host not in [nil, ""],
+        URI.new(value)
+      )
 
   defp bound(true, at, broken), do: ["#{at}: #{broken}"]
   defp bound(false, _at, _broken), do: []

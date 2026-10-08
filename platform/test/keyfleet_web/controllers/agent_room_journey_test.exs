@@ -372,17 +372,13 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert %{"items" => [], "next_cursor" => 2, "has_more" => false} = second.body["proposals"]
     assert Enum.map(second.body["rooms"], & &1["cursor"]) == [1, 3]
 
-    assert Enum.map(
-             send_signed(c, "POST", @read_general, ~s({"after_seq": 2})).body["messages"],
-             & &1["seq"]
-           ) ==
-             [3]
+    last = send_signed(c, "POST", @read_general, ~s({"after_seq": 2}))
+    assert {Enum.map(last.body["messages"], & &1["seq"]), last.body["has_more"]} == {[3], false}
 
-    assert Enum.map(
-             send_signed(c, "POST", @read_general, ~s({"limit": 1})).body["messages"],
-             & &1["seq"]
-           ) ==
-             [1]
+    # One more post waits after a page cut short, and none after the room's last.
+    page = send_signed(c, "POST", @read_general, ~s({"limit": 1}))
+    assert {Enum.map(page.body["messages"], & &1["seq"]), page.body["cursor"]} == {[1], 1}
+    assert page.body["has_more"] == true
 
     unknown = send_signed(c, "POST", @sync_path, sync_body(%{"hull-survey" => 0}))
     assert unknown.status == 404
@@ -395,18 +391,26 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
   test "only the canonical signed room path and body reach the room actions", c do
     shard(c)
 
+    for {method, path} <- [
+          {"GET", @rooms_path <> "?all=1"},
+          {"POST", @read_general <> "?after_seq=1"},
+          {"DELETE", @send_general},
+          {"POST", "/api/v1/agent/fleets/Fibonacci_syndicate/rooms/general/messages/send"},
+          {"POST", @read_general <> "/"}
+        ] do
+      assert send_signed(c, method, path, "{}").status == 401
+    end
+
+    # A signed body that doesn't fit is told the fields its operation takes.
     for {method, path, body} <- [
           {"GET", @rooms_path, ~s({"after_seq":0})},
-          {"GET", @rooms_path <> "?all=1", "{}"},
           {"POST", @read_general, ~s({"after_seq":"1"})},
           {"POST", @read_general, ~s({"page":1})},
-          {"POST", @read_general <> "?after_seq=1", "{}"},
           {"POST", @send_general, ~s({"body":"Hello"})},
           {"POST", @send_general, ~s({"idempotency_key":"k-9"})},
           {"POST", @send_general,
            ~s({"body":"Hello","idempotency_key":"k-9","reply_to_id":"seven"})},
           {"POST", @send_general, ~s({"body":"Hello","idempotency_key":"k-9","slug":"coding"})},
-          {"DELETE", @send_general, "{}"},
           {"POST", @sync_path, "{}"},
           {"POST", @sync_path, ~s({"rooms":[{"slug":"general"}]})},
           {"POST", @sync_path, ~s({"rooms":[],"graph":{"after_seq":0}})},
@@ -418,11 +422,9 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
            ~s({"rooms":[],"graph":{"after_seq":0},"proposals":{"after_seq":"0"},"run":{"kind":"session"}})},
           {"POST", @read_proposal, ~s({"number":1})},
           {"POST", @read_proposal, ~s({"number":"1","votes_after_seq":0})},
-          {"POST", @read_proposal, ~s({"number":1,"votes_after_seq":0,"limit":5})},
-          {"POST", "/api/v1/agent/fleets/Fibonacci_syndicate/rooms/general/messages/send", "{}"},
-          {"POST", @read_general <> "/", "{}"}
+          {"POST", @read_proposal, ~s({"number":1,"votes_after_seq":0,"limit":5})}
         ] do
-      assert send_signed(c, method, path, body).status == 401
+      assert misfit?(send_signed(c, method, path, body)), "#{method} #{path} #{body}"
     end
 
     assert send_signed(c, "POST", @send_general, send_body("Hello", "k-9")).status == 201
@@ -474,7 +476,10 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       })
 
     refused = send_signed(c, "POST", @sync_path, twice)
-    assert {refused.status, refused.body} == {422, refused("invalid_request")}
+    assert refused.status == 422
+
+    assert refused.body["error"]["hint"] ==
+             "This operation takes a JSON object with exactly these fields: rooms, graph, proposals, run. Check each field's kind and range against the docs, then send it again."
   end
 
   test "an agent reads and writes a key's thread by the key's number", c do
@@ -484,7 +489,13 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     empty = key_thread(c, 5, "read")
 
     assert {empty.status, empty.body} ==
-             {200, %{"thread" => %{"token_id" => 5, "head_seq" => 0}, "messages" => []}}
+             {200,
+              %{
+                "thread" => %{"token_id" => 5, "head_seq" => 0},
+                "cursor" => 0,
+                "has_more" => false,
+                "messages" => []
+              }}
 
     assert documented(empty, @key_read) == []
 
@@ -539,6 +550,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     read = key_thread(c, 5, "read")
     assert documented(read, @key_read) == []
     assert read.body["thread"] == %{"token_id" => 5, "head_seq" => 1}
+    assert {read.body["cursor"], read.body["has_more"]} == {1, false}
     assert [%{"seq" => 1, "as_key" => 1, "body" => "Welcome aboard"}] = read.body["messages"]
 
     # A key's thread is never one of the fleet's rooms.
@@ -591,14 +603,21 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     send_path = "/api/v1/agent/keys/fibonacci_syndicate/1/messages/send"
     read_path = "/api/v1/agent/keys/fibonacci_syndicate/1/messages/read"
 
+    for {path, body} <- [
+          {send_path, ~s({"body":"Hello","idempotency_key":"k-9","as_key":1})},
+          {send_path, ~s({"body":"Hello","idempotency_key":"k-9","token_id":2})},
+          {send_path, ~s({"body":"Hello","idempotency_key":"k-9","slug":"general"})},
+          {send_path, ~s({"body":"Hello"})},
+          {send_path, ~s({"body":"Hello","idempotency_key":"k-9","reply_to_id":"seven"})},
+          {read_path, ~s({"page":1})},
+          {read_path, ~s({"after_seq":"1"})}
+        ] do
+      refused = send_signed(c, "POST", path, body)
+      assert misfit?(refused), "#{path} #{body}"
+      assert documented(refused, if(path == read_path, do: @key_read, else: @key_send)) == []
+    end
+
     for {method, path, body} <- [
-          {"POST", send_path, ~s({"body":"Hello","idempotency_key":"k-9","as_key":1})},
-          {"POST", send_path, ~s({"body":"Hello","idempotency_key":"k-9","token_id":2})},
-          {"POST", send_path, ~s({"body":"Hello","idempotency_key":"k-9","slug":"general"})},
-          {"POST", send_path, ~s({"body":"Hello"})},
-          {"POST", send_path, ~s({"body":"Hello","idempotency_key":"k-9","reply_to_id":"seven"})},
-          {"POST", read_path, ~s({"page":1})},
-          {"POST", read_path, ~s({"after_seq":"1"})},
           {"POST", read_path <> "?after_seq=1", "{}"},
           {"POST", read_path <> "/", "{}"},
           {"GET", read_path, "{}"},
@@ -871,26 +890,30 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       shard(c, @cascade, 3)
       topic = cascade_topic("open-1")
 
+      for {path, body} <- [
+            {@create_cascade, ~s({"slug":"hull"})},
+            {@create_cascade, ~s({"name":"Hull"})},
+            {@create_cascade, ~s({"slug":7,"name":"Hull"})},
+            {@create_cascade, ~s({"slug":"hull","name":["Hull"]})},
+            {@create_cascade, ~s({"slug":"hull","name":"Hull","kind":"open"})},
+            {@create_cascade, ~s({"slug":"hull","name":"Hull","topic":"Hull"})},
+            {@create_cascade, ~s({"slug":"hull","name":"Hull","fleet_id":"fleet_tech_classic"})},
+            {topic, "{}"},
+            {topic, ~s({"topic":7})},
+            {topic, ~s({"topic":null})},
+            {topic, ~s({"topic":["Hull"]})},
+            {topic, ~s({"topic":"Hull","slug":"open-2"})},
+            {topic, ~s({"topic":"Hull","topic_set_by":"0x00"})}
+          ] do
+        assert misfit?(send_signed(c, "POST", path, body)), "#{path} #{body}"
+      end
+
       for {method, path, body} <- [
-            {"POST", @create_cascade, ~s({"slug":"hull"})},
-            {"POST", @create_cascade, ~s({"name":"Hull"})},
-            {"POST", @create_cascade, ~s({"slug":7,"name":"Hull"})},
-            {"POST", @create_cascade, ~s({"slug":"hull","name":["Hull"]})},
-            {"POST", @create_cascade, ~s({"slug":"hull","name":"Hull","kind":"open"})},
-            {"POST", @create_cascade, ~s({"slug":"hull","name":"Hull","topic":"Hull"})},
-            {"POST", @create_cascade,
-             ~s({"slug":"hull","name":"Hull","fleet_id":"fleet_tech_classic"})},
             {"POST", @create_cascade <> "?kind=open", ~s({"slug":"hull","name":"Hull"})},
             {"POST", @create_cascade <> "/", ~s({"slug":"hull","name":"Hull"})},
             {"GET", @create_cascade, ~s({"slug":"hull","name":"Hull"})},
             {"POST", "/api/v1/agent/fleets/Fibonacci_cascade/rooms/create",
              ~s({"slug":"hull","name":"Hull"})},
-            {"POST", topic, "{}"},
-            {"POST", topic, ~s({"topic":7})},
-            {"POST", topic, ~s({"topic":null})},
-            {"POST", topic, ~s({"topic":["Hull"]})},
-            {"POST", topic, ~s({"topic":"Hull","slug":"open-2"})},
-            {"POST", topic, ~s({"topic":"Hull","topic_set_by":"0x00"})},
             {"POST", topic <> "?topic=Hull", ~s({"topic":"Hull"})},
             {"POST", topic <> "/", ~s({"topic":"Hull"})},
             {"GET", topic, ~s({"topic":"Hull"})},

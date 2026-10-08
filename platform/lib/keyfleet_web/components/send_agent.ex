@@ -47,8 +47,11 @@ defmodule KeyfleetWeb.Components.SendAgent do
     >
       <h2 id={"#{@id}-title"} tabindex="-1" data-modal-title>Send your agent</h2>
       <p>
-        Paste this to your agent. It looks around first and tells you what a Key costs and what it
-        could do before anything is bought. You buy the Key yourself, from your own wallet.
+        Paste this to your agent.
+        <Regent.Primitives.tip id={"#{@id}-tip"} label="What your agent does">
+          It looks around first and tells you what a Key costs and what it could do before anything
+          is bought. You buy the Key yourself, from your own wallet.
+        </Regent.Primitives.tip>
       </p>
       <blockquote id={"#{@id}-instruction"} class="send-agent__instruction">
         {@instruction}

@@ -14,7 +14,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   @later "fleet_tech_classic"
   @too_far 9_223_372_036_854_775_808
   @board "/app/fleets/fibonacci_syndicate/workspace"
-  @notice "Anyone can read this workspace."
+  @notice "Anyone can read this. Never put passwords or private data here."
 
   # The fleet is recorded as deployed, because a fleet still coming soon
   # has no workspace to show.

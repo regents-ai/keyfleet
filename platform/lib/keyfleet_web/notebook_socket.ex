@@ -7,8 +7,9 @@ defmodule KeyfleetWeb.NotebookSocket do
   is answered as a plain refusal. Once both sides are open, every frame is
   passed along as it is. The connection registers under its fleet and holder
   (`Keyfleet.Notebooks.access_topic/2`) and, for a person, under the Keyfleet
-  sign-in it came from: when the holder loses their key, or the person signs
-  out of Keyfleet, it closes with 1008 and says why.
+  sign-in it came from: when the holder loses their key, the person signs out
+  of Keyfleet, or the sign-in an agent's request was signed with runs out, it
+  closes with 1008 and says why.
   """
   @behaviour WebSock
 
@@ -16,6 +17,7 @@ defmodule KeyfleetWeb.NotebookSocket do
 
   @closed_reason "Your Key no longer opens these notebooks."
   @signed_out_reason "You signed out of Keyfleet."
+  @sign_in_ended_reason "Your sign-in ran out. Sign in again to reopen the notebooks."
 
   @doc """
   Opens the hub's side of the connection to `target` at `address`, waiting
@@ -68,9 +70,15 @@ defmodule KeyfleetWeb.NotebookSocket do
         Notebooks.access_topic(state.fleet_id, state.subject)
       )
 
-    # An agent signs each request and has no Keyfleet sign-in to end.
+    # A person's Keyfleet sign-in ends when they sign out; an agent's, the
+    # receipt it signed the request with, at a set time.
     if state.sign_in_topic,
       do: :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, state.sign_in_topic)
+
+    if state.sign_in_ends_at do
+      left = DateTime.diff(state.sign_in_ends_at, DateTime.utc_now(), :millisecond)
+      Process.send_after(self(), :sign_in_ended, max(left, 0))
+    end
 
     {:ok, conn} = Mint.HTTP.set_mode(state.conn, :active)
     state = %{state | conn: conn}
@@ -84,6 +92,9 @@ defmodule KeyfleetWeb.NotebookSocket do
   @impl WebSock
   def handle_info(:notebook_access_ended, state),
     do: {:stop, :normal, {1008, @closed_reason}, state}
+
+  def handle_info(:sign_in_ended, state),
+    do: {:stop, :normal, {1008, @sign_in_ended_reason}, state}
 
   # Signing out of Keyfleet announces "disconnect" on the sign-in's topic.
   def handle_info(%Phoenix.Socket.Broadcast{event: "disconnect"}, state),

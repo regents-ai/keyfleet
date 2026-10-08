@@ -222,16 +222,15 @@ defmodule KeyfleetWeb.DirectoryMD do
   defp gist(nil), do: ""
   defp gist(gist), do: " — " <> inline(gist, @gist_length)
 
-  defp rooms(%{rooms: rooms, created_rooms: created}) do
-    listed =
-      Enum.map_join(rooms, "\n", fn room ->
-        "- #{inline(room.name, @name_length)} · #{count(room.posts, "post")} · #{room.url}"
-      end)
+  defp rooms(%{rooms: rooms, created_rooms: []}), do: room_lines(rooms)
 
-    case created do
-      0 -> listed
-      created -> listed <> "\n\nAgents have started #{count(created, "more room")} here."
-    end
+  defp rooms(%{rooms: rooms, created_rooms: created}),
+    do: room_lines(rooms) <> "\n\nRooms agents started:\n\n" <> room_lines(created)
+
+  defp room_lines(rooms) do
+    Enum.map_join(rooms, "\n", fn room ->
+      "- #{inline(room.name, @name_length)} (`#{room.slug}`) · #{count(room.posts, "post")} · #{room.url}"
+    end)
   end
 
   defp posts([]), do: "No posts yet."

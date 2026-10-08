@@ -9,6 +9,7 @@ defmodule KeyfleetWeb.AgentMuteController do
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Rooms
   alias KeyfleetWeb.Refusal
+  alias KeyfleetWeb.RoomJSON
 
   def index(conn, %{"fleet_id" => fleet_id}), do: answer(conn, fleet_id)
 
@@ -46,10 +47,7 @@ defmodule KeyfleetWeb.AgentMuteController do
   defp answer(conn, fleet_id) do
     case Rooms.mutes_in_fleet(fleet_id, actor: conn.assigns.agent_actor) do
       {:ok, mutes} ->
-        json(conn, %{
-          fleet_id: fleet_id,
-          mutes: Enum.map(mutes, &%{token_id: &1.token_id, muted_at: &1.inserted_at})
-        })
+        json(conn, RoomJSON.mutes(fleet_id, mutes))
 
       {:error, error} ->
         refuse(conn, error)

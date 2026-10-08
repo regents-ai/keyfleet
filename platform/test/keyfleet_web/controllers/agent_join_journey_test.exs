@@ -141,7 +141,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     missing = update(other, %{name: "Cannot target first wallet"})
     assert missing.status == 404
     assert missing.body == refused("profile_not_found")
-    assert update(other, %{id: initial["id"], name: "Denied"}).status == 401
+    assert misfit?(update(other, %{id: initial["id"], name: "Denied"}))
     own = send_request(other, signed(other, @body)).body["profile"]
     other_edit = update(other, %{name: "Second wallet"}).body["profile"]
     assert other_edit["id"] == own["id"]
@@ -149,22 +149,9 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     assert send_request(c, signed(c, @body)).body["profile"] == repeated
   end
 
-  test "update rejects empty or immutable input before verification and enforces the envelope budget",
+  test "update takes only editable fields, and refuses a request's shape before verification",
        c do
     request = signed(c, "{}", "keyfleet", 8453, @update_path)
-
-    for body <- [
-          "{}",
-          "[]",
-          "",
-          ~s({"id":"forged"}),
-          ~s({"wallet_address":"forged"}),
-          ~s({"last_activity_at":"forged"}),
-          ~s({"status_updated_at":"forged"}),
-          ~s({"unknown":"forged"})
-        ] do
-      assert send_request(c, %{request | body: body}).status == 401
-    end
 
     oversized = %{request | body: String.duplicate(" ", 24 * 1024 + 1)}
     assert send_request(c, oversized).status == 413
@@ -192,6 +179,26 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
            }).status == 401
 
     refute_receive {:broker_payload, _}
+
+    # Once its signature verifies, a body naming nothing editable is told the
+    # fields an update takes.
+    for body <- [
+          "{}",
+          "[]",
+          ~s({"id":"forged"}),
+          ~s({"wallet_address":"forged"}),
+          ~s({"last_activity_at":"forged"}),
+          ~s({"status_updated_at":"forged"}),
+          ~s({"unknown":"forged"})
+        ] do
+      refused = send_request(c, signed(c, body, "keyfleet", 8453, @update_path))
+      assert_receive {:broker_payload, %{"body" => ^body}}
+      assert misfit?(refused), body
+
+      assert refused.body["error"]["hint"] =~
+               "naming at least one of: name, declared_harness, proficiencies"
+    end
+
     assert send_request(c, signed(c, @body)).status == 200
     assert_receive {:broker_payload, _}
     # JSON escaping nearly doubles this real profile input inside the broker envelope.
@@ -272,17 +279,6 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
   test "the request boundary rejects ambiguity before it spends broker replay state", c do
     signed = signed(c, @body)
 
-    for body <- [
-          "",
-          "{}",
-          "[1]",
-          "not json",
-          ~s({"name":"a","declared_harness":"b","wallet":"x"}),
-          ~s({"name":1,"declared_harness":"b"})
-        ] do
-      assert send_request(c, %{signed | body: body}).status == 401
-    end
-
     assert send_request(c, %{signed | body: String.duplicate(" ", 4097)}).status == 413
 
     for header <- [
@@ -337,6 +333,26 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     assert send_request(c, signed).status == 200
   end
 
+  test "a body is judged only once its signature verifies", c do
+    # A body other than the one signed fails sign-in, whatever its shape.
+    tampered = %{signed(c, @body) | body: ~s({"name":"a","declared_harness":"b","wallet":"x"})}
+    assert send_request(c, tampered).status == 401
+
+    for body <- [
+          "{}",
+          "[1]",
+          "not json",
+          ~s({"name":"a","declared_harness":"b","wallet":"x"}),
+          ~s({"name":1,"declared_harness":"b"})
+        ] do
+      refused = send_request(c, signed(c, body))
+      assert misfit?(refused), body
+
+      assert refused.body["error"]["hint"] ==
+               "This operation takes a JSON object with exactly these fields: name, declared_harness. Check each field's kind and range against the docs, then send it again."
+    end
+  end
+
   test "malformed broker principals cannot become product actors", c do
     wallet = c.signer.address
 
@@ -368,6 +384,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     conn =
       Plug.Test.conn("POST", @path)
+      |> Plug.Conn.assign(:raw_body, @body)
       |> Plug.Conn.put_req_header("x-siwa-receipt", "receipt")
       |> Plug.Conn.put_req_header("x-key-id", wallet)
 

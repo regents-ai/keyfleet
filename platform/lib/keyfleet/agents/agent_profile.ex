@@ -146,7 +146,8 @@ defmodule Keyfleet.Agents.AgentProfile do
 
     # What the SIWA service last said about some agents: their registry page
     # and the World ID person behind each. Only trusted code reads the
-    # person's number back, to group the agents; it is never shown.
+    # person's number back, as the system actor, to group the agents; it is
+    # never shown.
     read :listings do
       argument :ids, {:array, :uuid}, allow_nil?: false, constraints: [max_length: 100]
       filter expr(id in ^arg(:ids))
@@ -196,15 +197,13 @@ defmodule Keyfleet.Agents.AgentProfile do
   end
 
   policies do
-    policy action([
-             :public_profile,
-             :here_in_fleet,
-             :here_in_fleets,
-             :by_wallets,
-             :listings,
-             :of_people
-           ]) do
+    policy action([:public_profile, :here_in_fleet, :here_in_fleets, :by_wallets]) do
       authorize_if always()
+    end
+
+    # They name the World ID person behind each agent, for trusted code only.
+    policy action([:listings, :of_people]) do
+      authorize_if actor_attribute_equals(:role, :system)
     end
 
     policy action([

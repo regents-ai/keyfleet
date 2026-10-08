@@ -1,15 +1,21 @@
 defmodule Keyfleet.Capabilities do
   @moduledoc """
   Every tool Keyfleet's pages offer a browser's own agent, read at compile
-  time from `priv/tool_manifest.json`: the reads every page offers, and on
-  the pages with wallet buttons, tools that press them. The browser code registers them from the
-  same file; `/capabilities`, the docs page and `/llms.txt` list them from here.
+  time from `priv/tool_manifest.json`: the reads every page offers; on the
+  pages with wallet buttons, tools that press them; and on a fleet's rooms
+  and a Key's window, tools that read and post there as the person signed in.
+  The browser code registers them from the same file; `/capabilities`, the
+  docs page and `/llms.txt` list them from here.
   """
 
   @manifest_path Application.app_dir(:keyfleet, "priv/tool_manifest.json")
   @external_resource @manifest_path
   @manifest @manifest_path |> File.read!() |> Jason.decode!()
-  @needs %{"none" => "Nothing", "wallet" => "Sign-in and a wallet on your account"}
+  @needs %{
+    "none" => "Nothing",
+    "session" => "Sign-in",
+    "wallet" => "Sign-in and a wallet on your account"
+  }
 
   @doc "The whole manifest."
   @spec manifest() :: map()
@@ -29,7 +35,7 @@ defmodule Keyfleet.Capabilities do
     """
   end
 
-  # Site tools are on every page; the rest only on the page whose buttons they press.
+  # Site tools are on every page; the rest only on the page they act on.
   defp offered_on(%{"scope" => "site"}), do: "Every page"
   defp offered_on(%{"scope" => page}), do: "`#{page}`"
 

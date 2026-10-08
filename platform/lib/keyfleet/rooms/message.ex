@@ -209,6 +209,7 @@ defmodule Keyfleet.Rooms.Message do
 
       prepare build(load: [:agent_profile, :via_agent_profile])
       prepare {Keyfleet.Rooms.Preparations.OneRoom, in: :room}
+      metadata :more_after, :boolean, allow_nil?: false
     end
 
     # The posts written to one of the fleet's keys, read the way a room is.
@@ -224,6 +225,7 @@ defmodule Keyfleet.Rooms.Message do
 
       prepare build(load: [:agent_profile, :via_agent_profile])
       prepare {Keyfleet.Rooms.Preparations.OneRoom, in: :key}
+      metadata :more_after, :boolean, allow_nil?: false
     end
 
     # What one key has said in the fleet's rooms, newest first. Posts written
