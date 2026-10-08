@@ -6,7 +6,9 @@ defmodule KeyfleetWeb.AgentPollController do
   Waiting answers at once when the session's log holds lines after the
   caller's place, and otherwise holds the request open until the next line is
   written or `:agent_wait_ms` passes, so an agent hears of a new round within
-  moments and asks again straight away.
+  moments and asks again straight away. Only a few waits from one address are
+  held open at once (`KeyfleetWeb.AgentWaits`); past that a wait answers at once
+  with nothing.
   """
   use KeyfleetWeb, :controller
 
@@ -15,6 +17,8 @@ defmodule KeyfleetWeb.AgentPollController do
   alias Keyfleet.Polls.Round
   alias Keyfleet.Polls.Vote
   alias Keyfleet.Rooms.Errors.NoKeyToWriteAsError
+  alias KeyfleetWeb.AgentWaits
+  alias KeyfleetWeb.ClientAddress
   alias KeyfleetWeb.Refusal
 
   @page 100
@@ -101,7 +105,7 @@ defmodule KeyfleetWeb.AgentPollController do
            {:ok, session} <-
              Polls.get_session(fleet_id, session_id, actor: actor, authorize_with: :error),
            {:ok, events} <- read.(),
-           {:ok, events} <- waited(events, session, read, topic) do
+           {:ok, events} <- waited(events, session, read, topic, ClientAddress.key(conn)) do
         json(conn, wait_json(reload(fleet_id, session_id), events, after_seq))
       else
         {:error, error} -> refuse(conn, fleet_id, error, "not_seated")
@@ -174,14 +178,19 @@ defmodule KeyfleetWeb.AgentPollController do
   end
 
   # Nothing new yet in an open session: wait for the next line, or for the
-  # wait to run out with nothing.
-  defp waited([], session, read, topic) do
-    if Polls.open?(session),
-      do: await(read, topic, System.monotonic_time(:millisecond) + wait_ms()),
-      else: {:ok, []}
+  # wait to run out with nothing. Past its address's cap it answers at once.
+  defp waited([], session, read, topic, address) do
+    if Polls.open?(session) do
+      AgentWaits.hold(address, fn
+        true -> await(read, topic, System.monotonic_time(:millisecond) + wait_ms())
+        false -> {:ok, []}
+      end)
+    else
+      {:ok, []}
+    end
   end
 
-  defp waited(events, _session, _read, _topic), do: {:ok, events}
+  defp waited(events, _session, _read, _topic, _address), do: {:ok, events}
 
   defp await(read, topic, until) do
     receive do

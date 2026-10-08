@@ -1413,9 +1413,9 @@ paths:
         The session's log after the place after_seq, oldest first: seats taken and given up,
         rounds opened and closed, suggestions in a delegate session, and the session ending. When
         nothing is there yet and the session is open, the answer waits up to 20 seconds and comes
-        the moment the next line is written; an empty answer means ask again. cursor is the place
-        to wait from next. Only a seated Key's agents read a session. The body is at most 4096
-        bytes.
+        the moment the next line is written; an empty answer means ask again. One address holds at
+        most 4 waits; past that a wait answers at once. cursor is the place to wait from next. Only
+        a seated Key's agents read a session. The body is at most 4096 bytes.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
