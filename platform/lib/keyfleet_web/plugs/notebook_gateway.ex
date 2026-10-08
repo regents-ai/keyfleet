@@ -412,7 +412,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
           Map.merge(upstream, %{
             fleet_id: fleet_id,
             subject: subject,
-            sign_in_topic: conn.assigns[:notebook_sign_in_topic]
+            sign_in_topic: conn.assigns[:notebook_sign_in_topic],
+            sign_in_ends_at: sign_in_ends_at(conn)
           }),
           timeout: :infinity,
           compress: false
@@ -422,6 +423,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         Refusal.json(conn, 502, "notebooks_unavailable")
     end
   end
+
+  # An agent's sign-in is the receipt its request was signed with.
+  defp sign_in_ends_at(%Plug.Conn{assigns: %{agent_actor: agent}}), do: agent.receipt_expires_at
+  defp sign_in_ends_at(_conn), do: nil
 
   defp put_protocol(conn, nil), do: conn
   defp put_protocol(conn, protocol), do: put_resp_header(conn, "sec-websocket-protocol", protocol)
