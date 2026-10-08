@@ -79,6 +79,7 @@ config :keyfleet, Oban, testing: :manual
 # An agent's waiting request answers quickly, and an address holds one at a time.
 config :keyfleet, :agent_wait_ms, 200
 config :keyfleet, :agent_waits_per_address, 1
+config :keyfleet, :agent_waits_total, 1
 
 # Notebook hosts answer under .localhost here. The tests name each fleet's hub
 # themselves. This signing key is for the test suite only and signs nothing

@@ -31,6 +31,10 @@ CLI, merging and releases.
   `wait?`. Past `:agent_waits_per_address` (4; 1 in tests) a sync answers at once
   with the same shape. Registering before counting can undershoot the cap under a
   race, never overshoot it. No table, sweep or GenServer.
+- **Waits per machine** (Sentinel LOW, KF-WAIT-TOTAL a by HQ 06:44Z): the same
+  hold also needs `Registry.count/1` within `:agent_waits_total` (600; 1 in
+  tests), since an IPv6 /56 still gives 256 addresses × 4. The poll wait holds
+  its waiting part through the same `AgentWaits.hold`.
 - A room announcement re-reads only when the announced room is one the caller
   named and its seq is past the caller's cursor (Sentinel INFO 2).
 - `next_poll_seconds` is gone from the answer, the contract (1.1.0), docs.md,

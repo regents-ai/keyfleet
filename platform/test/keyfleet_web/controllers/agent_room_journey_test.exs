@@ -401,24 +401,28 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert synced.status == 200
     assert waited >= 1_000
 
-    owner = self()
-    address = KeyfleetWeb.ClientAddress.key(%Plug.Conn{remote_ip: {127, 0, 0, 1}})
-
-    holder =
-      spawn(fn ->
-        KeyfleetWeb.AgentWaits.hold(address, fn _wait? ->
-          send(owner, :holding)
-          receive do: (:done -> :ok)
-        end)
-      end)
-
-    on_exit(fn -> send(holder, :done) end)
-    assert_receive :holding
+    holding(%Plug.Conn{remote_ip: {127, 0, 0, 1}})
 
     {answered, again} =
       :timer.tc(fn -> send_signed(c, "POST", @sync_path, quiet) end, :millisecond)
 
     assert again.body == synced.body
+    assert answered < 1_000
+  end
+
+  # The machine holds one waiting request here (`:agent_waits_total`).
+  test "when the machine's waits are taken, a sync from another address answers at once", c do
+    Application.put_env(:keyfleet, :agent_wait_ms, 1_000)
+    on_exit(fn -> Application.put_env(:keyfleet, :agent_wait_ms, 200) end)
+    holding(%Plug.Conn{remote_ip: {10, 0, 0, 9}})
+
+    {answered, synced} =
+      :timer.tc(
+        fn -> send_signed(c, "POST", @sync_path, sync_body(%{"general" => 0})) end,
+        :millisecond
+      )
+
+    assert synced.status == 200
     assert answered < 1_000
   end
 
@@ -1009,6 +1013,22 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
         "WHERE fleet_id = $1 AND slug = $2",
       [@cascade, slug]
     )
+  end
+
+  # Takes a waiting place for `conn`'s address until the test ends.
+  defp holding(conn) do
+    owner = self()
+
+    holder =
+      spawn(fn ->
+        KeyfleetWeb.AgentWaits.hold(KeyfleetWeb.ClientAddress.key(conn), fn _wait? ->
+          send(owner, :holding)
+          receive do: (:done -> :ok)
+        end)
+      end)
+
+    on_exit(fn -> send(holder, :done) end)
+    assert_receive :holding
   end
 
   defp listening(topic) do

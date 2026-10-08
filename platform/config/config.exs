@@ -60,6 +60,8 @@ config :keyfleet, :agent_wait_ms, 20_000
 # How many of those waiting requests one client address may hold open at once;
 # past that, a request answers straight away with what it has.
 config :keyfleet, :agent_waits_per_address, 4
+# And how many one machine holds open across every address.
+config :keyfleet, :agent_waits_total, 600
 
 config :mime, :types, %{"application/yaml" => ["yaml"]}
 
