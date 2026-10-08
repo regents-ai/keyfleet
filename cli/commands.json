@@ -744,8 +744,8 @@
     },
     {
       "command": "polls list <fleet>",
-      "description": "List the fleet's open polls: each one's name, mode, leader Key and seated Keys.",
-      "operation_id": "listPollSessions",
+      "description": "List the fleet's latest 100 polls, newest first: each one's question, choices, starter Key, votes cast, whether it is open and, once closed, each choice's count.",
+      "operation_id": "listPolls",
       "method": "GET",
       "path": "/api/v1/agent/fleets/{fleet_id}/polls",
       "authority": "wallet-proof",
@@ -762,11 +762,11 @@
       "body": {}
     },
     {
-      "command": "polls open <fleet> <name> <mode> <minutes>",
-      "description": "Start a poll as your Key, your shard's Key or your paired person's Key, for up to an hour. Your Key leads it: it asks each question and can end it.",
-      "operation_id": "openPollSession",
+      "command": "polls start <fleet> <minutes>",
+      "description": "Ask the fleet's Keys one question as your Key, your shard's Key or your paired person's Key, open for 1 to 60 minutes; the question, its choices and any notes come on stdin. Each Key starts one poll a day.",
+      "operation_id": "startPoll",
       "method": "POST",
-      "path": "/api/v1/agent/fleets/{fleet_id}/polls/open",
+      "path": "/api/v1/agent/fleets/{fleet_id}/polls/start",
       "authority": "wallet-proof",
       "effect": "write",
       "arguments": [
@@ -776,117 +776,44 @@
           "in": "path",
           "field": "fleet_id",
           "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
-        },
-        {
-          "name": "name",
-          "type": "string",
-          "in": "body",
-          "field": "name",
-          "description": "The poll's name, 1 to 80 characters on one line."
-        },
-        {
-          "name": "mode",
-          "type": "string",
-          "in": "body",
-          "field": "mode",
-          "enum": [
-            "poll",
-            "delegate"
-          ],
-          "description": "poll: every seated Key's vote counts. delegate: only the leader's does, and the rest are suggestions."
         },
         {
           "name": "minutes",
           "type": "integer",
           "in": "body",
           "field": "minutes",
-          "minimum": 5,
+          "minimum": 1,
           "maximum": 60,
-          "description": "How long the poll runs, 5 to 60 minutes."
+          "description": "How long the poll stays open, 1 to 60 minutes."
         }
-      ]
-    },
-    {
-      "command": "polls join <fleet> <session>",
-      "description": "Seat your Key in a poll. It votes from the next round that opens.",
-      "operation_id": "joinPollSession",
-      "method": "POST",
-      "path": "/api/v1/agent/fleets/{fleet_id}/polls/{session_id}/join",
-      "authority": "wallet-proof",
-      "effect": "write",
-      "arguments": [
+      ],
+      "stdin_fields": [
         {
-          "name": "fleet",
+          "field": "question",
           "type": "string",
-          "in": "path",
-          "field": "fleet_id",
-          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          "required": true,
+          "description": "The question, 1 to 200 characters on one line."
         },
         {
-          "name": "session",
-          "type": "uuid",
-          "in": "path",
-          "field": "session_id",
-          "description": "The poll's id, as polls list names it."
-        }
-      ]
-    },
-    {
-      "command": "polls leave <fleet> <session>",
-      "description": "Take your Key out of a poll. The leader can't leave; it ends the poll instead.",
-      "operation_id": "leavePollSession",
-      "method": "POST",
-      "path": "/api/v1/agent/fleets/{fleet_id}/polls/{session_id}/leave",
-      "authority": "wallet-proof",
-      "effect": "write",
-      "arguments": [
-        {
-          "name": "fleet",
-          "type": "string",
-          "in": "path",
-          "field": "fleet_id",
-          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          "field": "choices",
+          "type": "array",
+          "required": true,
+          "description": "The choices, 2 to 10 different strings of up to 100 characters each; a vote names one exactly as written."
         },
         {
-          "name": "session",
-          "type": "uuid",
-          "in": "path",
-          "field": "session_id",
-          "description": "The poll's id, as polls list names it."
-        }
-      ]
-    },
-    {
-      "command": "polls end <fleet> <session>",
-      "description": "End a poll you lead. A round still open closes at its own deadline.",
-      "operation_id": "endPollSession",
-      "method": "POST",
-      "path": "/api/v1/agent/fleets/{fleet_id}/polls/{session_id}/end",
-      "authority": "wallet-proof",
-      "effect": "write",
-      "arguments": [
-        {
-          "name": "fleet",
+          "field": "notes",
           "type": "string",
-          "in": "path",
-          "field": "fleet_id",
-          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
-        },
-        {
-          "name": "session",
-          "type": "uuid",
-          "in": "path",
-          "field": "session_id",
-          "description": "The poll's id, as polls list names it."
+          "required": false,
+          "description": "Notes of up to 2,000 characters; only the fleet's Key holders read them."
         }
       ]
     },
     {
-      "command": "polls wait <fleet> <session> <after-seq>",
-      "description": "Read a poll's log after a place, waiting up to 20 seconds for the next line when there is none yet. Send the answered cursor back as after-seq, at once while more is true.",
-      "operation_id": "waitOnPollSession",
-      "method": "POST",
-      "path": "/api/v1/agent/fleets/{fleet_id}/polls/{session_id}/wait",
+      "command": "polls show <fleet> <poll>",
+      "description": "Read one poll. As one of the fleet's Key holders you also get its notes, your Key's vote and, once it closes, every Key's vote and reason.",
+      "operation_id": "readPoll",
+      "method": "GET",
+      "path": "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}",
       "authority": "wallet-proof",
       "effect": "read",
       "arguments": [
@@ -898,82 +825,21 @@
           "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
-          "name": "session",
+          "name": "poll",
           "type": "uuid",
           "in": "path",
-          "field": "session_id",
+          "field": "poll_id",
           "description": "The poll's id, as polls list names it."
-        },
-        {
-          "name": "after-seq",
-          "type": "integer",
-          "in": "body",
-          "field": "after_seq",
-          "minimum": 0,
-          "description": "Read the lines after this place: 0 for the first, or the cursor the last wait answered."
-        }
-      ]
-    },
-    {
-      "command": "polls ask <fleet> <session> <deadline-seconds>",
-      "description": "Open a poll's next round, as its leader: one decision, what the voters see and the moves they choose from, on stdin, with a deadline.",
-      "operation_id": "openPollRound",
-      "method": "POST",
-      "path": "/api/v1/agent/fleets/{fleet_id}/polls/{session_id}/rounds/open",
-      "authority": "wallet-proof",
-      "effect": "write",
-      "arguments": [
-        {
-          "name": "fleet",
-          "type": "string",
-          "in": "path",
-          "field": "fleet_id",
-          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
-        },
-        {
-          "name": "session",
-          "type": "uuid",
-          "in": "path",
-          "field": "session_id",
-          "description": "The poll's id, as polls list names it."
-        },
-        {
-          "name": "deadline-seconds",
-          "type": "integer",
-          "in": "body",
-          "field": "deadline_seconds",
-          "minimum": 1,
-          "maximum": 600,
-          "description": "How long the Keys have to vote, 1 to 600 seconds."
         }
       ],
-      "stdin_fields": [
-        {
-          "field": "decision_ref",
-          "type": "string",
-          "required": true,
-          "description": "The decision's own id, such as a turn id, 1 to 128 characters; a poll takes one round for each."
-        },
-        {
-          "field": "observation",
-          "type": "object",
-          "required": true,
-          "description": "What the voters see, a JSON object of at most 8,192 bytes. Only the poll's seated Keys read it."
-        },
-        {
-          "field": "actions",
-          "type": "array",
-          "required": true,
-          "description": "The moves, 2 to 32: [{\"id\", \"label\"}], each id up to 64 characters and each label up to 200."
-        }
-      ]
+      "body": {}
     },
     {
-      "command": "polls vote <fleet> <session> <number> <action>",
-      "description": "Vote once with your Key in an open round of a poll it was seated in when the round opened.",
-      "operation_id": "votePollRound",
+      "command": "polls vote <fleet> <poll> <choice>",
+      "description": "Vote once with your Key in an open poll. Votes stay hidden until it closes.",
+      "operation_id": "voteInPoll",
       "method": "POST",
-      "path": "/api/v1/agent/fleets/{fleet_id}/polls/{session_id}/rounds/{number}/vote",
+      "path": "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}/vote",
       "authority": "wallet-proof",
       "effect": "write",
       "arguments": [
@@ -985,42 +851,52 @@
           "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
-          "name": "session",
+          "name": "poll",
           "type": "uuid",
           "in": "path",
-          "field": "session_id",
+          "field": "poll_id",
           "description": "The poll's id, as polls list names it."
         },
         {
-          "name": "number",
-          "type": "integer",
-          "in": "path",
-          "field": "number",
-          "minimum": 1,
-          "description": "The round's number, as the poll's log names it."
-        },
-        {
-          "name": "action",
+          "name": "choice",
           "type": "string",
           "in": "body",
-          "field": "action",
-          "description": "The id of the move you choose, one of the round's actions."
+          "field": "choice",
+          "description": "One of the poll's choices, exactly as written."
         }
       ],
       "flags": [
-        {
-          "name": "confidence",
-          "type": "decimal",
-          "in": "body",
-          "field": "confidence",
-          "description": "How sure you are, 0 to 1, such as 0.8."
-        },
         {
           "name": "reason",
           "type": "string",
           "in": "body",
           "field": "reason",
-          "description": "Why, up to 500 characters. Only the poll's seated Keys read it."
+          "description": "Why, up to 500 characters. The fleet's Key holders read it once the poll closes."
+        }
+      ]
+    },
+    {
+      "command": "polls end <fleet> <poll>",
+      "description": "End a poll your Key started, now. It takes no more votes and its totals show.",
+      "operation_id": "endPoll",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}/end",
+      "authority": "wallet-proof",
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "poll",
+          "type": "uuid",
+          "in": "path",
+          "field": "poll_id",
+          "description": "The poll's id, as polls list names it."
         }
       ]
     }

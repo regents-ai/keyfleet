@@ -21,7 +21,7 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "seq",
+      "source": "token_id",
       "type": "bigint"
     },
     {
@@ -33,7 +33,7 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "kind",
+      "source": "wallet",
       "type": "text"
     },
     {
@@ -45,8 +45,20 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "payload",
-      "type": "map"
+      "source": "choice",
+      "type": "text"
+    },
+    {
+      "allow_nil?": true,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "reason",
+      "type": "text"
     },
     {
       "allow_nil?": false,
@@ -81,16 +93,16 @@
           "global": null,
           "strategy": null
         },
-        "name": "poll_events_session_id_fkey",
+        "name": "poll_votes_poll_id_fkey",
         "on_delete": "restrict",
         "on_update": null,
         "primary_key?": true,
         "schema": "keyfleet_app",
-        "table": "poll_sessions"
+        "table": "polls"
       },
       "scale": null,
       "size": null,
-      "source": "session_id",
+      "source": "poll_id",
       "type": "uuid"
     }
   ],
@@ -98,11 +110,19 @@
   "check_constraints": [
     {
       "attribute": [
-        "seq"
+        "token_id"
       ],
       "base_filter": null,
-      "check": "seq > 0",
-      "name": "poll_events_positive_seq"
+      "check": "token_id > 0",
+      "name": "poll_votes_token_id"
+    },
+    {
+      "attribute": [
+        "wallet"
+      ],
+      "base_filter": null,
+      "check": "wallet ~ '^0x[0-9a-f]{40}$'",
+      "name": "poll_votes_wallet_shape"
     }
   ],
   "create_table_options": null,
@@ -111,38 +131,38 @@
     {
       "after_tables": [],
       "code?": false,
-      "down": "DROP FUNCTION keyfleet_app.protect_poll_event();",
+      "down": "DROP FUNCTION keyfleet_app.protect_poll_vote();",
       "global?": false,
-      "name": "poll_events_function",
-      "up": "CREATE FUNCTION keyfleet_app.protect_poll_event() RETURNS trigger LANGUAGE plpgsql AS $$\nBEGIN\n  RAISE EXCEPTION 'poll log lines cannot be changed or deleted' USING ERRCODE = '23514';\nEND;\n$$;\n"
+      "name": "poll_votes_function",
+      "up": "CREATE FUNCTION keyfleet_app.protect_poll_vote() RETURNS trigger LANGUAGE plpgsql AS $$\nBEGIN\n  RAISE EXCEPTION 'poll votes cannot be changed or deleted' USING ERRCODE = '23514';\nEND;\n$$;\n"
     },
     {
       "after_tables": [],
       "code?": false,
-      "down": "DROP TRIGGER protect_poll_events ON keyfleet_app.poll_events;",
+      "down": "DROP TRIGGER protect_poll_votes ON keyfleet_app.poll_votes;",
       "global?": false,
-      "name": "poll_events_trigger",
-      "up": "CREATE TRIGGER protect_poll_events BEFORE UPDATE OR DELETE ON keyfleet_app.poll_events\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.protect_poll_event();\n"
+      "name": "poll_votes_trigger",
+      "up": "CREATE TRIGGER protect_poll_votes BEFORE UPDATE OR DELETE ON keyfleet_app.poll_votes\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.protect_poll_vote();\n"
     }
   ],
   "has_create_action": true,
-  "hash": "89366C5813AA4A055523BD9604E4FFB58FE50753832B8D206F24CAC936542D92",
+  "hash": "FFD389E2B6C408D92227F7FC811841CC61F6FB71006D57E8AD7FAAC52F17FDAA",
   "identities": [
     {
       "all_tenants?": false,
       "base_filter": null,
-      "index_name": "poll_events_unique_place_index",
+      "index_name": "poll_votes_unique_vote_index",
       "keys": [
         {
           "type": "atom",
-          "value": "session_id"
+          "value": "poll_id"
         },
         {
           "type": "atom",
-          "value": "seq"
+          "value": "token_id"
         }
       ],
-      "name": "unique_place",
+      "name": "unique_vote",
       "nils_distinct?": true,
       "where": null
     }
@@ -154,5 +174,5 @@
   },
   "repo": "Elixir.Keyfleet.Repo",
   "schema": null,
-  "table": "poll_events"
+  "table": "poll_votes"
 }

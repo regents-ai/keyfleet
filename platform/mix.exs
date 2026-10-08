@@ -166,13 +166,13 @@ defmodule Keyfleet.MixProject do
         # Code adds two: the Repository and Push records, each with its domain.
         # Keys' pictures and the Base contracts' event records each add to it.
         # Proposal words add one: the AgentActor check on their write action.
-        # Fast polls add ten: their five records, each with its domain and the Standing check.
+        # Polls add four: the Poll and Vote records, each with its domain and the Standing check.
         # Rooms' Keys-only reads add two: the PublicRoom and InGeneral checks.
         # Direct messages add six: their domain's edge to the Conversation, Message
         # and Block records, and each record's KeyHolder check.
         # Workspace reads add four: the KeyReader check on the workspace and its
         # three read tables.
-        "xref graph --label compile-connected --fail-above 73",
+        "xref graph --label compile-connected --fail-above 67",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

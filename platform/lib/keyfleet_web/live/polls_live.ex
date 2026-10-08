@@ -1,19 +1,20 @@
 defmodule KeyfleetWeb.PollsLive do
   @moduledoc """
   A fleet's polls, for anyone to follow: the active ones newest first, then
-  the past ones, and each poll's own page with its seats and rounds.
+  the past ones, and each poll's own page with its choices and, once it
+  closes, each choice's count of votes.
 
-  The people holding the fleet's Keys, or a shard of one, start polls, join
-  them, vote and leave; a poll's leader opens its rounds and ends it. Each
-  press goes through the same `Keyfleet.Polls` action an agent's request does,
-  as the person signed in, and is turned down for the same reasons
-  (`KeyfleetWeb.PollRefusal`). Anyone sees a round's moves and, once it
-  closes, the winner and each move's count of votes; only the poll's seated
-  Keys see what each Key voted, how sure it was and why.
+  The people holding the fleet's Keys, or a shard of one, start polls (one a
+  day for each Key) and vote; a poll's starter can end it early. Each press
+  goes through the same `Keyfleet.Polls` action an agent's request does, as
+  the person signed in, and is turned down for the same reasons
+  (`KeyfleetWeb.PollRefusal`). Only the fleet's Key holders see a poll's
+  notes and, once it closes, what each Key voted and why.
 
-  The page hears of every change to the polls it shows (`Keyfleet.Polls`'s
-  topics) and reads them again; its clock moves each second while a round is
-  open, and otherwise when the next poll on show runs out of time.
+  The page hears of every poll started or ended and every vote on the polls
+  it shows (`Keyfleet.Polls`'s topics) and reads them again. Its clock moves
+  each second on an open poll's page, for the countdown; on the list it moves
+  when the next active poll closes, and at least every half minute.
   """
 
   use KeyfleetWeb, :html
@@ -24,7 +25,7 @@ defmodule KeyfleetWeb.PollsLive do
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Polls
-  alias Keyfleet.Polls.Session
+  alias Keyfleet.Polls.Poll
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
   alias KeyfleetWeb.PageRead
@@ -33,23 +34,8 @@ defmodule KeyfleetWeb.PollsLive do
   alias KeyfleetWeb.ShellLive
   alias Phoenix.Socket.Broadcast
 
-  @lengths [5, 10, 15, 30, 45, 60]
-  # The box on the page each of the actions' fields is typed in.
-  @boxes %{
-    name: :name,
-    minutes: :minutes,
-    decision_ref: :question,
-    actions: :choices,
-    deadline_seconds: :deadline_seconds
-  }
-  @deadlines [
-    {30, "30 seconds"},
-    {60, "1 minute"},
-    {120, "2 minutes"},
-    {300, "5 minutes"},
-    {600, "10 minutes"}
-  ]
-  # A list with no round open looks at the clock at least this often.
+  @lengths [1, 5, 10, 15, 30, 45, 60]
+  # A list with no poll closing sooner looks at the clock this often.
   @list_tick_ms 30_000
 
   attr :page, :any, required: true, doc: "the polls as read, or `:unreadable`"
@@ -60,7 +46,7 @@ defmodule KeyfleetWeb.PollsLive do
   def list(%{page: %{fleet_name: nil}} = assigns), do: ~H|<.missing_fleet id="polls-page" />|
 
   def list(assigns) do
-    {active, past} = Enum.split_with(assigns.page.sessions, &open?(&1, assigns.page.now))
+    {active, past} = Enum.split_with(assigns.page.polls, &Polls.open?(&1, assigns.page.now))
     assigns = assign(assigns, active: active, past: past)
 
     ~H"""
@@ -70,7 +56,7 @@ defmodule KeyfleetWeb.PollsLive do
           <.link patch={"/app/fleets/#{@page.fleet_id}"}>{@page.fleet_name}</.link>
         </p>
         <h1 tabindex="-1">Polls</h1>
-        <p class="polls-lede">Quick questions this fleet’s Keys answer together.</p>
+        <p class="polls-lede">Questions this fleet’s Keys answer together.</p>
       </header>
 
       <%!-- The tools a browser's own agent reads and starts polls with (page_tools.ts). --%>
@@ -88,10 +74,18 @@ defmodule KeyfleetWeb.PollsLive do
         <h2 id="polls-start-title">
           Start a poll
           <Regent.Primitives.tip id="polls-start-tip" label="About starting a poll">
-            You lead the poll as Key #{Rules.grouped(@page.voter.key)}: you ask each question, and you can end it early. A poll runs for up to an hour.
+            You ask as Key #{Rules.grouped(@page.voter.key)}. A poll asks one question and stays open from 1 minute to an hour; you can end it early. Each Key starts one poll a day.
           </Regent.Primitives.tip>
         </h2>
+
+        <p :if={@page.last_started} id="polls-start-limit" class="polls-detail">
+          Key #{Rules.grouped(@page.voter.key)} started a poll in the last day. It can start another after {RoomsLive.stamp(
+            DateTime.add(@page.last_started.inserted_at, 1, :day)
+          )}.
+        </p>
+
         <.form
+          :if={is_nil(@page.last_started)}
           for={@form}
           id="polls-start-form"
           class="polls-form"
@@ -99,16 +93,16 @@ defmodule KeyfleetWeb.PollsLive do
         >
           <Regent.Primitives.field
             :let={field}
-            id="polls-start-name"
+            id="polls-start-question"
             class="polls-field"
-            label="Name"
-            errors={errors(@form[:name], "Choose a name of up to 80 characters, on one line.")}
+            label="Question"
+            errors={errors(@form[:question], "Ask in up to 200 characters, on one line.")}
           >
             <input
               id={field.id}
-              name={@form[:name].name}
-              value={Map.get(@form.params, "name", "")}
-              maxlength="80"
+              name={@form[:question].name}
+              value={Map.get(@form.params, "question", "")}
+              maxlength="200"
               required
               autocomplete="off"
               aria-invalid={field.aria_invalid}
@@ -116,31 +110,48 @@ defmodule KeyfleetWeb.PollsLive do
             />
           </Regent.Primitives.field>
 
-          <fieldset class="polls-choices">
-            <legend>
-              Who decides
-              <Regent.Primitives.tip id="polls-mode-tip" label="About who decides">
-                Everyone votes: every seated Key’s vote counts, and the most votes win. Leader decides: only your vote counts, and the others’ votes are suggestions everyone in the poll sees.
-              </Regent.Primitives.tip>
-            </legend>
-            <label :for={
-              {value, label} <- [{"poll", "Everyone votes"}, {"delegate", "Leader decides"}]
-            }>
-              <input
-                type="radio"
-                name={@form[:mode].name}
-                value={value}
-                checked={Map.get(@form.params, "mode", "poll") == value}
-              />
-              {label}
-            </label>
-          </fieldset>
+          <Regent.Primitives.field
+            :let={field}
+            id="polls-start-choices"
+            class="polls-field"
+            label="Choices, one per line"
+            errors={
+              errors(@form[:choices], "Give 2 to 10 different choices, each up to 100 characters.")
+            }
+          >
+            <textarea
+              id={field.id}
+              name={@form[:choices].name}
+              rows="4"
+              required
+              aria-invalid={field.aria_invalid}
+              aria-describedby={field.described_by != "" && field.described_by}
+            >{Phoenix.HTML.Form.normalize_value("textarea", @form.params["choices"])}</textarea>
+          </Regent.Primitives.field>
+
+          <Regent.Primitives.field
+            :let={field}
+            id="polls-start-notes"
+            class="polls-field"
+            label="Notes (optional)"
+            errors={errors(@form[:notes], "Keep notes to 2,000 characters.")}
+          >
+            <:hint>Only this fleet’s Key holders see them.</:hint>
+            <textarea
+              id={field.id}
+              name={@form[:notes].name}
+              rows="3"
+              maxlength="2000"
+              aria-invalid={field.aria_invalid}
+              aria-describedby={field.described_by != "" && field.described_by}
+            >{Phoenix.HTML.Form.normalize_value("textarea", @form.params["notes"])}</textarea>
+          </Regent.Primitives.field>
 
           <Regent.Primitives.field
             :let={field}
             id="polls-start-minutes"
             class="polls-field"
-            label="Runs for"
+            label="Open for"
           >
             <select id={field.id} name={@form[:minutes].name}>
               <option
@@ -148,7 +159,7 @@ defmodule KeyfleetWeb.PollsLive do
                 value={minutes}
                 selected={Map.get(@form.params, "minutes", "30") == to_string(minutes)}
               >
-                {minutes} minutes
+                {length_label(minutes)}
               </option>
             </select>
           </Regent.Primitives.field>
@@ -163,7 +174,7 @@ defmodule KeyfleetWeb.PollsLive do
         <h2 id="polls-active-title">Active</h2>
         <p :if={@active == []} id="polls-active-empty">No active polls.</p>
         <ol :if={@active != []} class="polls-list">
-          <.list_item :for={session <- @active} session={session} page={@page} active />
+          <.list_item :for={poll <- @active} poll={poll} page={@page} active />
         </ol>
       </section>
 
@@ -171,47 +182,46 @@ defmodule KeyfleetWeb.PollsLive do
         <h2 id="polls-past-title">Past</h2>
         <p :if={@past == []} id="polls-past-empty">No past polls yet.</p>
         <ol :if={@past != []} class="polls-list">
-          <.list_item :for={session <- @past} session={session} page={@page} active={false} />
+          <.list_item :for={poll <- @past} poll={poll} page={@page} active={false} />
         </ol>
       </section>
     </article>
     """
   end
 
-  attr :session, :map, required: true
+  attr :poll, :map, required: true
   attr :page, :map, required: true
   attr :active, :boolean, required: true
 
   defp list_item(assigns) do
     ~H"""
-    <li id={"poll-#{@session.id}"} class="polls-card" data-poll={@session.id}>
+    <li id={"poll-#{@poll.id}"} class="polls-card" data-poll={@poll.id}>
       <h3>
-        <.link patch={poll_path(@page.fleet_id, @session.id)}>{@session.name}</.link>
+        <.link patch={poll_path(@page.fleet_id, @poll.id)}>{@poll.question}</.link>
       </h3>
       <p class="polls-detail">
-        {mode_word(@session.mode)} · Led by Key #{Rules.grouped(@session.delegate_key)} · {count(
-          length(@session.seat_keys),
-          "Key",
-          "Keys"
-        )} · {count(@session.rounds_held, "round", "rounds")}
+        Started by Key #{Rules.grouped(@poll.started_by_key)} · {count(
+          @poll.votes_cast,
+          "vote",
+          "votes"
+        )}
       </p>
       <p class="polls-detail">
         {if @active,
-          do: time_left(@session.expires_at, @page.now),
-          else: "Ended #{RoomsLive.stamp(ended_at(@session))}"}
+          do: time_left(@poll.closes_at, @page.now),
+          else: "#{result(@poll.totals)} · Closed #{RoomsLive.stamp(Polls.closed_at(@poll))}"}
       </p>
     </li>
     """
   end
 
   attr :page, :any, required: true, doc: "the poll as read, or `:unreadable`"
-  attr :form, Phoenix.HTML.Form, default: nil, doc: "the form opening a round"
   attr :notice, :map, default: nil
 
   def detail(%{page: :unreadable} = assigns), do: ~H|<.unreadable id="poll-page" />|
   def detail(%{page: %{fleet_name: nil}} = assigns), do: ~H|<.missing_fleet id="poll-page" />|
 
-  def detail(%{page: %{session: nil}} = assigns) do
+  def detail(%{page: %{poll: nil}} = assigns) do
     ~H"""
     <article id="poll-page" class="polls-page">
       <.detail_heading page={@page} title="Polls" />
@@ -224,84 +234,108 @@ defmodule KeyfleetWeb.PollsLive do
   end
 
   def detail(assigns) do
-    session = assigns.page.session
-    open? = open?(session, assigns.page.now)
-    open_round = Enum.find(assigns.page.rounds, &(&1.status == :open))
+    poll = assigns.page.poll
+    voter = assigns.page.voter
+    open? = Polls.open?(poll, assigns.page.now)
 
     assigns =
       assign(assigns,
-        session: session,
+        poll: poll,
         open?: open?,
-        open_round: open_round,
-        closed_rounds: Enum.reject(assigns.page.rounds, &(&1.status == :open))
+        can_vote?: open? and voter != nil and is_nil(assigns.page.my_vote),
+        starter?: voter != nil and voter.key == poll.started_by_key
       )
 
     ~H"""
     <article id="poll-page" class="polls-page">
-      <.detail_heading page={@page} title={@session.name} />
+      <.detail_heading page={@page} title={@poll.question} />
 
       <%!-- The tools a browser's own agent follows and takes part in this poll with (page_tools.ts). --%>
       <div
         id="poll-tools"
         phx-hook="LiveTools"
-        data-webmcp-tools="read_poll join_poll leave_poll end_poll open_round vote_in_round"
+        data-webmcp-tools="read_poll vote_in_poll end_poll"
         hidden
       >
       </div>
 
       <p id="poll-status" class="polls-status">
         <span class="polls-badge" data-open={to_string(@open?)}>
-          {if @open?, do: "Active", else: "Ended"}
+          {if @open?, do: "Active", else: "Closed"}
         </span>
-        {mode_word(@session.mode)} · {if @open?,
-          do: time_left(@session.expires_at, @page.now),
-          else: "Ended #{RoomsLive.stamp(ended_at(@session))}"}
+        Started by
+        <.link patch={KeyLinks.key_path(@page.fleet_id, @poll.started_by_key)}>
+          Key #{Rules.grouped(@poll.started_by_key)}
+        </.link>
+        · {if @open?,
+          do: seconds_left(@poll.closes_at, @page.now),
+          else: "Closed #{RoomsLive.stamp(Polls.closed_at(@poll))}"}
       </p>
 
       <.notice notice={@notice} />
 
       <div class="polls-grid">
-        <section id="poll-seats" class="polls-panel" aria-labelledby="poll-seats-title">
-          <h2 id="poll-seats-title">Taking part</h2>
-          <ul class="polls-seats">
-            <li :for={key <- @session.seat_keys} id={"poll-seat-#{key}"}>
-              <.link patch={KeyLinks.key_path(@page.fleet_id, key)}>
-                Key #{Rules.grouped(key)}
-              </.link>
-              <small :if={key == @session.delegate_key} class="polls-role">Leader</small>
-              <small :if={@page.voter && key == @page.voter.key} class="polls-role">You</small>
-            </li>
-          </ul>
+        <section id="poll-choices" class="polls-panel" aria-labelledby="poll-choices-title">
+          <h2 id="poll-choices-title">{if @open?, do: "Choices", else: "Results"}</h2>
 
-          <Regent.Primitives.button
-            :if={@open? and @page.voter != nil and not @page.seated?}
-            id="poll-join"
-            type="button"
-            phx-click="join_poll"
-          >
-            Join this poll
-          </Regent.Primitives.button>
-          <p :if={@open? and @page.voter != nil and not @page.seated?} class="polls-detail">
-            Your Key votes from the next round that opens.
+          <p :if={@page.my_vote} id="poll-my-vote" class="polls-detail">
+            Your Key voted for {@page.my_vote.choice}.
           </p>
 
-          <Regent.Primitives.button
-            :if={@open? and @page.seated? and not @page.leader?}
-            id="poll-leave"
-            type="button"
-            variant="quiet"
-            phx-click="leave_poll"
+          <.form
+            :if={@can_vote?}
+            for={%{}}
+            as={:vote}
+            id="poll-vote-form"
+            class="polls-form"
+            phx-submit="cast_vote"
           >
-            Leave
-          </Regent.Primitives.button>
+            <fieldset class="polls-choices">
+              <legend>Your vote</legend>
+              <label :for={choice <- @poll.choices}>
+                <input type="radio" name="vote[choice]" value={choice} required />
+                {choice}
+              </label>
+            </fieldset>
+            <Regent.Primitives.field
+              :let={field}
+              id="poll-vote-reason"
+              class="polls-field"
+              label="Why (optional)"
+            >
+              <input id={field.id} name="vote[reason]" maxlength="500" autocomplete="off" />
+            </Regent.Primitives.field>
+            <Regent.Primitives.button type="submit">Vote</Regent.Primitives.button>
+          </.form>
+
+          <ul :if={@open? and not @can_vote?} class="polls-options">
+            <li :for={choice <- @poll.choices}>{choice}</li>
+          </ul>
+
+          <p :if={@open?} id="poll-votes-so-far" class="polls-detail">
+            {count(@poll.votes_cast, "vote", "votes")} so far. The count for each choice shows when the poll closes.
+          </p>
+
+          <div :if={not @open?} id="poll-results">
+            <p class="polls-detail">{result(@poll.totals)}</p>
+            <ul class="polls-totals">
+              <li
+                :for={total <- @poll.totals}
+                data-winner={to_string(total.choice in leaders(@poll.totals))}
+              >
+                <span>{total.choice}</span>
+                <span>{count(total.votes, "vote", "votes")}</span>
+              </li>
+            </ul>
+          </div>
 
           <Regent.Primitives.button
-            :if={@open? and @page.leader?}
+            :if={@open? and @starter?}
             id="poll-end"
             type="button"
             variant="quiet"
             phx-click="end_poll"
-            data-confirm="End this poll for everyone?"
+            data-confirm="End this poll now? It takes no more votes."
           >
             End poll
           </Regent.Primitives.button>
@@ -309,217 +343,42 @@ defmodule KeyfleetWeb.PollsLive do
           <.who_takes_part :if={is_nil(@page.voter)} page={@page} />
         </section>
 
-        <div class="polls-rounds">
+        <div class="polls-side">
           <section
-            :if={@open? and @page.leader? and is_nil(@open_round)}
-            id="poll-ask"
+            :if={readable?(@poll.notes) and @poll.notes != nil}
+            id="poll-notes"
             class="polls-panel"
-            aria-labelledby="poll-ask-title"
+            aria-labelledby="poll-notes-title"
           >
-            <h2 id="poll-ask-title">Ask the next question</h2>
-            <.form
-              for={@form}
-              id="poll-ask-form"
-              class="polls-form"
-              phx-submit="open_round"
-            >
-              <Regent.Primitives.field
-                :let={field}
-                id="poll-ask-question"
-                class="polls-field"
-                label="Question"
-                errors={errors(@form[:question], "Ask in up to 128 characters.")}
-              >
-                <input
-                  id={field.id}
-                  name={@form[:question].name}
-                  value={Map.get(@form.params, "question", "")}
-                  maxlength="128"
-                  required
-                  autocomplete="off"
-                  aria-invalid={field.aria_invalid}
-                  aria-describedby={field.described_by != "" && field.described_by}
-                />
-              </Regent.Primitives.field>
-              <Regent.Primitives.field
-                :let={field}
-                id="poll-ask-choices"
-                class="polls-field"
-                label="Choices, one per line"
-                errors={errors(@form[:choices], "Give 2 to 32 choices, each up to 200 characters.")}
-              >
-                <textarea
-                  id={field.id}
-                  name={@form[:choices].name}
-                  rows="4"
-                  required
-                  aria-invalid={field.aria_invalid}
-                  aria-describedby={field.described_by != "" && field.described_by}
-                >{Phoenix.HTML.Form.normalize_value("textarea", @form.params["choices"])}</textarea>
-              </Regent.Primitives.field>
-              <Regent.Primitives.field
-                :let={field}
-                id="poll-ask-deadline"
-                class="polls-field"
-                label="Time to answer"
-              >
-                <select id={field.id} name={@form[:deadline_seconds].name}>
-                  <option
-                    :for={{seconds, label} <- deadlines()}
-                    value={seconds}
-                    selected={Map.get(@form.params, "deadline_seconds", "60") == to_string(seconds)}
-                  >
-                    {label}
-                  </option>
-                </select>
-              </Regent.Primitives.field>
-              <Regent.Primitives.button type="submit">Ask</Regent.Primitives.button>
-            </.form>
+            <h2 id="poll-notes-title">
+              Notes
+              <Regent.Primitives.tip id="poll-notes-tip" label="About these notes">
+                The poll’s starter wrote these for this fleet’s Key holders. Only they see them.
+              </Regent.Primitives.tip>
+            </h2>
+            <p class="polls-reason">{@poll.notes}</p>
           </section>
 
-          <.open_round :if={@open_round} round={@open_round} page={@page} session={@session} />
-
-          <section id="poll-history" class="polls-panel" aria-labelledby="poll-history-title">
-            <h2 id="poll-history-title">Results</h2>
-            <p :if={@closed_rounds == []} id="poll-history-empty">No rounds have closed yet.</p>
-            <ol :if={@closed_rounds != []} class="polls-list">
-              <.closed_round :for={round <- @closed_rounds} round={round} page={@page} />
-            </ol>
+          <section
+            :if={@page.votes != []}
+            id="poll-each-vote"
+            class="polls-panel"
+            aria-labelledby="poll-each-vote-title"
+          >
+            <h2 id="poll-each-vote-title">How each Key voted</h2>
+            <ul class="polls-votes">
+              <li :for={vote <- @page.votes}>
+                <.link patch={KeyLinks.key_path(@page.fleet_id, vote.token_id)}>
+                  Key #{Rules.grouped(vote.token_id)}
+                </.link>
+                chose {vote.choice}
+                <span :if={vote.reason} class="polls-reason">“{vote.reason}”</span>
+              </li>
+            </ul>
           </section>
         </div>
       </div>
     </article>
-    """
-  end
-
-  attr :round, :map, required: true
-  attr :page, :map, required: true
-  attr :session, :map, required: true
-
-  defp open_round(assigns) do
-    voter = assigns.page.voter
-
-    assigns =
-      assign(assigns,
-        can_vote?: assigns.page.seated? and voter.key in assigns.round.roster,
-        joined_late?: assigns.page.seated? and voter.key not in assigns.round.roster
-      )
-
-    ~H"""
-    <section
-      id={"poll-round-#{@round.number}"}
-      class="polls-panel polls-open-round"
-      aria-labelledby="poll-round-title"
-    >
-      <p class="polls-kicker">Round {@round.number} · open</p>
-      <h2 id="poll-round-title">{@round.decision_ref}</h2>
-      <p id="poll-round-clock" class="polls-status">
-        {seconds_left(@round.deadline_at, @page.now)} · {count(
-          length(@round.roster),
-          "Key votes",
-          "Keys vote"
-        )}
-      </p>
-      <p :if={@session.mode == :delegate} class="polls-detail">
-        Only the leader’s vote decides. Everyone else’s vote is a suggestion.
-      </p>
-
-      <.observation round={@round} />
-
-      <p :if={@page.my_vote} id="poll-my-vote" class="polls-detail">
-        Your Key voted for {label(@round, @page.my_vote.action)}.
-      </p>
-
-      <.form
-        :if={@can_vote? and is_nil(@page.my_vote)}
-        for={%{}}
-        as={:vote}
-        id="poll-vote-form"
-        class="polls-form"
-        phx-submit="cast_vote"
-      >
-        <input type="hidden" name="vote[number]" value={@round.number} />
-        <fieldset class="polls-choices">
-          <legend>Your vote</legend>
-          <label :for={action <- @round.actions}>
-            <input type="radio" name="vote[action]" value={action.id} required />
-            {action.label}
-          </label>
-        </fieldset>
-        <Regent.Primitives.field
-          :let={field}
-          id="poll-vote-reason"
-          class="polls-field"
-          label="Why (optional)"
-        >
-          <input id={field.id} name="vote[reason]" maxlength="500" autocomplete="off" />
-        </Regent.Primitives.field>
-        <Regent.Primitives.button type="submit">Vote</Regent.Primitives.button>
-      </.form>
-
-      <ul :if={not @can_vote? or @page.my_vote} class="polls-moves">
-        <li :for={action <- @round.actions}>{action.label}</li>
-      </ul>
-
-      <p :if={@joined_late?} class="polls-detail">
-        Your Key joined after this round opened, so it votes from the next one.
-      </p>
-    </section>
-    """
-  end
-
-  attr :round, :map, required: true
-  attr :page, :map, required: true
-
-  defp closed_round(assigns) do
-    ~H"""
-    <li id={"poll-round-#{@round.number}"} class="polls-card">
-      <p class="polls-kicker">Round {@round.number}</p>
-      <h3>{@round.decision_ref}</h3>
-      <p class="polls-detail">
-        {if @round.winner,
-          do: "Chosen: #{label(@round, @round.winner)}",
-          else: "No votes came in."}
-      </p>
-      <ul class="polls-totals">
-        <li
-          :for={total <- @round.totals}
-          data-winner={to_string(total.action == @round.winner)}
-        >
-          <span>{label(@round, total.action)}</span>
-          <span>{count(total.votes, "vote", "votes")}</span>
-        </li>
-      </ul>
-
-      <.observation round={@round} />
-
-      <details :if={readable?(@round.tally)} class="polls-votes">
-        <summary>How each Key voted</summary>
-        <ul>
-          <li :for={vote <- @round.tally["votes"]}>
-            <.link patch={KeyLinks.key_path(@page.fleet_id, vote["key"])}>
-              Key #{Rules.grouped(vote["key"])}
-            </.link>
-            chose {label(@round, vote["action"])}
-            <small :if={vote["confidence"]}>· {round(vote["confidence"] * 100)}% sure</small>
-            <small :if={not vote["counted"]}>· suggestion</small>
-            <span :if={vote["reason"]} class="polls-reason">“{vote["reason"]}”</span>
-          </li>
-        </ul>
-      </details>
-    </li>
-    """
-  end
-
-  attr :round, :map, required: true
-
-  # What the round showed its voters, for the poll's seated Keys alone.
-  defp observation(assigns) do
-    ~H"""
-    <details :if={readable?(@round.observation) and @round.observation != %{}} class="polls-votes">
-      <summary>What the voters were shown</summary>
-      <pre>{Jason.encode!(@round.observation, pretty: true)}</pre>
-    </details>
     """
   end
 
@@ -531,7 +390,7 @@ defmodule KeyfleetWeb.PollsLive do
       {if @page.refreshing?,
         do: KeysLive.refreshing(),
         else:
-          "Only the people and agents holding this fleet’s Keys, or a shard of one, take part in its polls. Anyone can follow along."}
+          "Only the people and agents holding this fleet’s Keys, or a shard of one, start and vote in its polls. Anyone can follow along."}
       <Regent.Primitives.tip id="polls-who-tip" label="About who takes part">
         An agent paired with a Key holder on regents.sh, with a person verified by World ID behind it, takes part as their Key.
       </Regent.Primitives.tip>
@@ -607,7 +466,7 @@ defmodule KeyfleetWeb.PollsLive do
   def list_path(fleet_id), do: "/app/fleets/#{fleet_id}/polls"
 
   @doc "The address of one poll."
-  def poll_path(fleet_id, session_id), do: "/app/fleets/#{fleet_id}/polls/#{session_id}"
+  def poll_path(fleet_id, poll_id), do: "/app/fleets/#{fleet_id}/polls/#{poll_id}"
 
   @doc """
   The polls page named in the address, read as the person signed in, with the
@@ -615,16 +474,14 @@ defmodule KeyfleetWeb.PollsLive do
   """
   def read_polls(socket, :polls, %{"fleet_id" => fleet_id}) do
     socket
-    |> assign(polls_notice: nil)
-    |> assign(:poll_form, start_form())
+    |> assign(polls_notice: nil, poll_form: start_form())
     |> show(fn -> read_list(socket, fleet_id) end)
   end
 
-  def read_polls(socket, :poll, %{"fleet_id" => fleet_id, "session_id" => session_id}) do
+  def read_polls(socket, :poll, %{"fleet_id" => fleet_id, "poll_id" => poll_id}) do
     socket
-    |> assign(polls_notice: nil)
-    |> assign(:poll_form, round_form())
-    |> show(fn -> read_detail(socket, fleet_id, session_id) end)
+    |> assign(polls_notice: nil, poll_form: nil)
+    |> show(fn -> read_detail(socket, fleet_id, poll_id) end)
   end
 
   def read_polls(socket, _route_id, _params) do
@@ -638,7 +495,7 @@ defmodule KeyfleetWeb.PollsLive do
   def refresh(%{assigns: %{polls: %{kind: :list, fleet_id: fleet_id}}} = socket),
     do: show(socket, fn -> read_list(socket, fleet_id) end)
 
-  def refresh(%{assigns: %{polls: %{kind: :poll, fleet_id: fleet_id, session_id: id}}} = socket),
+  def refresh(%{assigns: %{polls: %{kind: :poll, fleet_id: fleet_id, poll_id: id}}} = socket),
     do: show(socket, fn -> read_detail(socket, fleet_id, id) end)
 
   def refresh(socket), do: socket
@@ -652,28 +509,25 @@ defmodule KeyfleetWeb.PollsLive do
 
   defp read_list(socket, fleet_id) do
     with_fleet(socket, fleet_id, fn page, actor ->
-      Map.merge(page, %{kind: :list, sessions: Polls.list_sessions!(fleet_id, actor: actor)})
+      Map.merge(page, %{
+        kind: :list,
+        polls: Polls.list_polls!(fleet_id, actor: actor),
+        last_started: page.voter && Polls.last_started!(fleet_id, page.voter.key, actor: actor)
+      })
     end)
   end
 
-  defp read_detail(socket, fleet_id, session_id) do
+  defp read_detail(socket, fleet_id, poll_id) do
     with_fleet(socket, fleet_id, fn page, actor ->
-      session = Polls.get_session!(fleet_id, session_id, actor: actor)
-      rounds = if session, do: Polls.list_rounds!(fleet_id, session_id, actor: actor), else: []
-      key = page.voter && page.voter.key
-      seated? = session != nil and key in session.seat_keys
-      open_round = Enum.find(rounds, &(&1.status == :open))
+      poll = Polls.get_poll!(fleet_id, poll_id, actor: actor)
+      member? = poll != nil and page.voter != nil
 
       Map.merge(page, %{
         kind: :poll,
-        session_id: session_id,
-        session: session,
-        rounds: rounds,
-        seated?: seated?,
-        leader?: session != nil and key == session.delegate_key,
-        my_vote:
-          seated? && open_round &&
-            Polls.my_vote!(fleet_id, session_id, open_round.id, actor: actor)
+        poll_id: poll_id,
+        poll: poll,
+        my_vote: if(member?, do: Polls.my_vote!(fleet_id, poll_id, actor: actor)),
+        votes: if(member?, do: Polls.votes_in_poll!(fleet_id, poll_id, actor: actor), else: [])
       })
     end)
   end
@@ -702,15 +556,15 @@ defmodule KeyfleetWeb.PollsLive do
     end
   end
 
-  # The fleet's sessions as they open and end, and each active one's log; or
-  # the one poll's log.
-  defp topics(%{kind: :list, fleet_id: fleet_id, sessions: sessions, now: now}),
+  # The fleet's polls as they start and end, and each active one's votes; or
+  # the one poll's votes and its ending.
+  defp topics(%{kind: :list, fleet_id: fleet_id, polls: polls, now: now}),
     do: [
       Polls.fleet_topic(fleet_id)
-      | for(session <- sessions, open?(session, now), do: Polls.topic(session.id))
+      | for(poll <- polls, Polls.open?(poll, now), do: Polls.topic(poll.id))
     ]
 
-  defp topics(%{kind: :poll, session: %Session{id: id}}), do: [Polls.topic(id)]
+  defp topics(%{kind: :poll, poll: %Poll{id: id}}), do: [Polls.topic(id)]
   defp topics(_page), do: []
 
   defp listen(socket, topics) do
@@ -731,9 +585,6 @@ defmodule KeyfleetWeb.PollsLive do
     end
   end
 
-  # The clock moves each second while a round is open, for its countdown;
-  # otherwise when the next poll on show runs out of time, and at least every
-  # half minute on the list, for the minutes left.
   defp start_clock(socket) do
     socket = stop_clock(socket)
 
@@ -753,16 +604,11 @@ defmodule KeyfleetWeb.PollsLive do
 
   defp stop_clock(socket), do: socket
 
-  defp next_tick(%{kind: :poll, session: %Session{} = session, rounds: rounds, now: now}) do
-    cond do
-      Enum.any?(rounds, &(&1.status == :open)) -> 1_000
-      open?(session, now) -> until(session.expires_at, now)
-      true -> nil
-    end
-  end
+  defp next_tick(%{kind: :poll, poll: %Poll{} = poll, now: now}),
+    do: if(Polls.open?(poll, now), do: 1_000)
 
-  defp next_tick(%{kind: :list, sessions: sessions, now: now}) do
-    case for(session <- sessions, open?(session, now), do: until(session.expires_at, now)) do
+  defp next_tick(%{kind: :list, polls: polls, now: now}) do
+    case for(poll <- polls, Polls.open?(poll, now), do: until(poll.closes_at, now)) do
       [] -> nil
       waits -> Enum.min([@list_tick_ms | waits])
     end
@@ -774,95 +620,55 @@ defmodule KeyfleetWeb.PollsLive do
 
   @doc """
   Takes part in the poll page on show as `actor`, the way its boxes and
-  buttons do and its browser tools do: `:start` a poll from the list (name,
-  mode, minutes), and on a poll's page `:ask` the next question (question,
-  choices one per line, deadline_seconds), `:join`, `:leave`, `:end` it, or
-  `:vote` (number, action, reason). Answers what the poll's action answers.
+  buttons do and its browser tools do: `:start` a poll from the list
+  (question, choices one per line, notes, minutes), and on a poll's page
+  `:vote` (choice, reason) or `:end` it. Answers what the poll's action
+  answers.
   """
   def act(:start, %{kind: :list, fleet_id: fleet_id}, input, actor) do
     input
-    |> Map.take(["name", "mode", "minutes"])
-    |> Map.put("fleet_id", fleet_id)
-    |> Polls.open_session(actor: actor)
-  end
-
-  def act(:ask, %{kind: :poll, session: %Session{} = session}, input, actor),
-    do: session |> round_input(input) |> Polls.open_round(actor: actor)
-
-  def act(:join, %{kind: :poll, session: %Session{} = session}, _input, actor),
-    do: Polls.join(%{fleet_id: session.fleet_id, session_id: session.id}, actor: actor)
-
-  def act(:leave, %{kind: :poll, session: %Session{} = session}, _input, actor) do
-    with %{key: key} <- Polls.voter(actor, session.fleet_id),
-         %{} = seat <- Polls.get_seat!(session.id, key, actor: %Keyfleet.Actors.System{}) do
-      Polls.leave(seat, session.fleet_id, actor: actor)
-    else
-      nil -> {:error, Ash.Error.Forbidden.exception([])}
-    end
-  end
-
-  def act(:end, %{kind: :poll, session: %Session{} = session}, _input, actor),
-    do: Polls.end_session(session, session.fleet_id, actor: actor)
-
-  def act(:vote, %{kind: :poll, session: %Session{} = session}, input, actor) do
-    input
-    |> Map.take(["number", "action", "reason"])
+    |> Map.take(["question", "notes", "minutes"])
     |> Map.reject(fn {_field, value} -> value == "" end)
-    |> Map.merge(%{"fleet_id" => session.fleet_id, "session_id" => session.id})
+    |> Map.merge(%{"fleet_id" => fleet_id, "choices" => choices(input["choices"])})
+    |> Polls.start_poll(actor: actor)
+  end
+
+  def act(:vote, %{kind: :poll, poll: %Poll{} = poll}, input, actor) do
+    input
+    |> Map.take(["choice", "reason"])
+    |> Map.reject(fn {_field, value} -> value == "" end)
+    |> Map.merge(%{"fleet_id" => poll.fleet_id, "poll_id" => poll.id})
     |> Polls.cast_vote(actor: actor)
   end
 
+  def act(:end, %{kind: :poll, poll: %Poll{} = poll}, _input, actor),
+    do: Polls.end_poll(poll, poll.fleet_id, actor: actor)
+
   @doc "The refusal code each press answers with when its error says no more."
-  def default_code(action) when action in [:ask, :end], do: "not_delegate"
-  def default_code(:leave), do: "not_seated"
+  def default_code(:end), do: "not_starter"
   def default_code(_action), do: "poll_needs_key"
 
-  @doc "What the polls pages do with a poll started, joined, left or ended, a round asked and a vote."
+  @doc "What the polls pages do with a poll started or ended, and a vote."
   def handle_event(
         "start_poll",
         %{"poll" => params},
         %{assigns: %{polls: %{kind: :list} = page}} = socket
       ) do
     case act(:start, page, params, ShellLive.human_actor(socket)) do
-      {:ok, session} ->
-        {:noreply, push_patch(socket, to: poll_path(session.fleet_id, session.id))}
+      {:ok, poll} ->
+        {:noreply, push_patch(socket, to: poll_path(poll.fleet_id, poll.id))}
 
       {:error, error} ->
-        {:noreply, form_refused(socket, :start, params, error)}
+        {:noreply, form_refused(socket, params, error)}
     end
   end
 
-  def handle_event(
-        "open_round",
-        %{"round" => params},
-        %{assigns: %{polls: %{kind: :poll, session: %Session{}} = page}} = socket
-      ) do
-    case act(:ask, page, params, ShellLive.human_actor(socket)) do
-      {:ok, _round} ->
-        {:noreply, socket |> assign(polls_notice: nil, poll_form: round_form()) |> refresh()}
+  def handle_event(event, params, %{assigns: %{polls: %{kind: :poll, poll: %Poll{}}}} = socket)
+      when event in ["end_poll", "cast_vote"] do
+    action = if event == "end_poll", do: :end, else: :vote
+    input = Map.get(params, "vote", %{})
 
-      {:error, error} ->
-        {:noreply, form_refused(socket, :ask, params, error)}
-    end
-  end
-
-  def handle_event(
-        event,
-        params,
-        %{assigns: %{polls: %{kind: :poll, session: %Session{}}}} = socket
-      )
-      when event in ["join_poll", "leave_poll", "end_poll", "cast_vote"] do
-    action = press(event)
-
-    result =
-      act(
-        action,
-        socket.assigns.polls,
-        Map.get(params, "vote", %{}),
-        ShellLive.human_actor(socket)
-      )
-
-    case result do
+    case act(action, socket.assigns.polls, input, ShellLive.human_actor(socket)) do
       {:error, error} -> {:noreply, socket |> refused(error, default_code(action)) |> refresh()}
       _done -> {:noreply, socket |> assign(:polls_notice, nil) |> refresh()}
     end
@@ -871,27 +677,27 @@ defmodule KeyfleetWeb.PollsLive do
   # A press the page no longer shows the poll for.
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
-  defp press("join_poll"), do: :join
-  defp press("leave_poll"), do: :leave
-  defp press("end_poll"), do: :end
-  defp press("cast_vote"), do: :vote
-
   @doc "A change to the polls on show, and the page's clock."
-  def handle_info(%Broadcast{event: event}, socket) when event in ["poll_event", "polls_changed"],
-    do: {:noreply, refresh(socket)}
+  def handle_info(%Broadcast{event: event}, socket)
+      when event in ["poll_changed", "polls_changed"],
+      do: {:noreply, refresh(socket)}
 
-  def handle_info(:polls_tick, %{assigns: %{polls: %{now: _}}} = socket) do
-    {:noreply,
-     socket
-     |> assign(:polls_clock, nil)
-     |> update(:polls, &%{&1 | now: DateTime.utc_now()})
-     |> listen_and_tick()}
+  # A poll that has just closed is read again for its result; otherwise the
+  # countdowns move on.
+  def handle_info(:polls_tick, %{assigns: %{polls: %{now: then} = page}} = socket) do
+    now = DateTime.utc_now()
+    socket = assign(socket, :polls_clock, nil)
+
+    if Enum.any?(on_show(page), &(Polls.open?(&1, then) and not Polls.open?(&1, now))),
+      do: {:noreply, refresh(socket)},
+      else: {:noreply, socket |> assign(:polls, %{page | now: now}) |> start_clock()}
   end
 
   def handle_info(:polls_tick, socket), do: {:noreply, assign(socket, :polls_clock, nil)}
 
-  defp listen_and_tick(socket),
-    do: socket |> listen(topics(socket.assigns.polls)) |> start_clock()
+  defp on_show(%{kind: :list, polls: polls}), do: polls
+  defp on_show(%{kind: :poll, poll: %Poll{} = poll}), do: [poll]
+  defp on_show(_page), do: []
 
   # A refusal is said above the poll.
   defp refused(%{assigns: %{polls: %{fleet_id: fleet_id}}} = socket, error, code) do
@@ -899,16 +705,16 @@ defmodule KeyfleetWeb.PollsLive do
     assign(socket, :polls_notice, %{tone: :error, message: message})
   end
 
-  # A name or a question that breaks the rules is said under its box instead;
-  # what the person typed stays in the boxes either way.
-  defp form_refused(%{assigns: %{polls: %{fleet_id: fleet_id}}} = socket, action, params, error) do
-    case refusal(error, fleet_id, default_code(action)) do
+  # A question, choices or notes that break the rules are said under their
+  # box instead; what the person typed stays in the boxes either way.
+  defp form_refused(%{assigns: %{polls: %{fleet_id: fleet_id}}} = socket, params, error) do
+    case refusal(error, fleet_id, default_code(:start)) do
       {"invalid_poll", _message} ->
-        assign(socket, poll_form: form(action, params, field_errors(error)), polls_notice: nil)
+        assign(socket, poll_form: form(params, field_errors(error)), polls_notice: nil)
 
       {_code, message} ->
         assign(socket,
-          poll_form: form(action, params, []),
+          poll_form: form(params, []),
           polls_notice: %{tone: :error, message: message}
         )
     end
@@ -917,9 +723,9 @@ defmodule KeyfleetWeb.PollsLive do
   # The boxes whose rules an action's error names.
   defp field_errors(%Ash.Error.Invalid{errors: errors}) do
     for %{field: field} <- errors,
-        box = Map.get(@boxes, field),
+        field in [:question, :choices, :notes],
         uniq: true,
-        do: {box, {"breaks its rule", []}}
+        do: {field, {"breaks its rule", []}}
   end
 
   defp field_errors(_error), do: []
@@ -937,91 +743,69 @@ defmodule KeyfleetWeb.PollsLive do
 
   defp message("poll_needs_key"),
     do:
-      "Only the people and agents holding this fleet’s Keys, or a shard of one, take part in its polls."
+      "Only the people and agents holding this fleet’s Keys, or a shard of one, start and vote in its polls."
 
   defp message("poll_unknown"), do: "This fleet has no such poll."
-  defp message("poll_ended"), do: "This poll has ended."
-  defp message("not_seated"), do: "Your Key isn’t taking part in this poll."
-  defp message("not_delegate"), do: "Only the poll’s leader asks questions and ends it."
-  defp message("round_open"), do: "A round is still open. Ask again once it closes."
-  defp message("decision_seen"), do: "This poll has already asked that question."
-  defp message("round_unknown"), do: "This poll has no such round."
-  defp message("round_closed"), do: "This round has closed."
+  defp message("poll_closed"), do: "This poll has closed."
 
-  defp message("not_in_round"),
-    do: "Your Key joined after this round opened, so it votes from the next one."
+  defp message("poll_limit_reached"),
+    do: "Your Key started a poll in the last day. Each Key starts one poll a day."
 
-  defp message("action_unknown"), do: "Choose one of the round’s choices."
-  defp message("vote_conflict"), do: "Your Key has already voted in this round."
-  defp message("delegate_stays"), do: "The leader can’t leave. End the poll instead."
+  defp message("not_starter"), do: "Only the Key that started this poll can end it."
+  defp message("choice_unknown"), do: "Choose one of the poll’s choices."
+  defp message("vote_conflict"), do: "Your Key has already voted in this poll."
 
   defp message("invalid_poll"),
     do:
-      "A poll’s name is up to 80 characters on one line, and it runs 5 to 60 minutes. A question is up to 128 characters, with 2 to 32 choices of up to 200 characters, and 1 second to 10 minutes to answer. A reason is up to 500 characters."
+      "A question is up to 200 characters on one line, with 2 to 10 different choices of up to 100 characters, notes of up to 2,000, and 1 to 60 minutes open. A reason is up to 500 characters."
 
-  defp form(:start, params, errors), do: to_form(params, as: "poll", errors: errors)
-  defp form(:ask, params, errors), do: to_form(params, as: "round", errors: errors)
+  defp form(params, errors), do: to_form(params, as: "poll", errors: errors)
+  defp start_form, do: form(%{"minutes" => "30"}, [])
 
-  defp start_form, do: form(:start, %{"mode" => "poll", "minutes" => "30"}, [])
-  defp round_form, do: form(:ask, %{"deadline_seconds" => "60"}, [])
-
-  # A round asked on the page: the question names the decision, each line is a
-  # choice, numbered from 1, and the voters are shown nothing more.
-  defp round_input(session, input) do
-    %{
-      "fleet_id" => session.fleet_id,
-      "session_id" => session.id,
-      "decision_ref" => input["question"],
-      "actions" => choices(input["choices"]),
-      "observation" => %{},
-      "deadline_seconds" => input["deadline_seconds"]
-    }
-  end
-
+  # Each line typed is one choice.
   defp choices(text) when is_binary(text) do
     text
     |> String.split(["\r\n", "\n"])
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
-    |> Enum.with_index(1)
-    |> Enum.map(fn {label, number} -> %{"id" => to_string(number), "label" => label} end)
   end
 
   defp choices(_missing), do: []
 
-  # A box whose rule a submitted poll or question broke says the rule.
+  # A box whose rule a submitted poll broke says the rule.
   defp errors(field, rule), do: if(field.errors == [], do: [], else: [rule])
 
-  defp open?(session, now),
-    do: is_nil(session.ended_at) and DateTime.after?(session.expires_at, now)
-
-  # A session that ran out of time ended when its time was up.
-  defp ended_at(%{ended_at: nil, expires_at: expires_at}), do: expires_at
-  defp ended_at(%{ended_at: ended_at}), do: ended_at
-
   defp readable?(%Ash.ForbiddenField{}), do: false
-  defp readable?(nil), do: false
   defp readable?(_value), do: true
 
-  defp label(round, action_id) do
-    case Enum.find(round.actions, &(&1.id == action_id)) do
-      nil -> action_id
-      action -> action.label
+  @doc """
+  A closed poll's result in words: the choice with the most votes, the
+  choices tied for the most, or that nobody voted.
+  """
+  def result(totals) do
+    case leaders(totals) do
+      [] -> "No votes"
+      [choice] -> "Most votes: #{choice}"
+      tied -> "Tied: #{Enum.join(tied, ", ")}"
     end
   end
 
-  defp mode_word(:poll), do: "Everyone votes"
-  defp mode_word(:delegate), do: "Leader decides"
+  defp leaders(totals) do
+    case totals |> Enum.map(& &1.votes) |> Enum.max(fn -> 0 end) do
+      0 -> []
+      most -> for %{choice: choice, votes: ^most} <- totals, do: choice
+    end
+  end
 
-  defp time_left(expires_at, now) do
-    case DateTime.diff(expires_at, now, :second) do
+  defp time_left(closes_at, now) do
+    case DateTime.diff(closes_at, now, :second) do
       seconds when seconds < 60 -> "Less than a minute left"
       seconds -> "#{count(div(seconds, 60), "minute", "minutes")} left"
     end
   end
 
-  defp seconds_left(deadline_at, now) do
-    case DateTime.diff(deadline_at, now, :second) do
+  defp seconds_left(closes_at, now) do
+    case DateTime.diff(closes_at, now, :second) do
       seconds when seconds <= 0 -> "Closing…"
       seconds when seconds < 60 -> "#{count(seconds, "second", "seconds")} left"
       seconds -> "#{div(seconds, 60)}:#{seconds |> rem(60) |> pad()} left"
@@ -1033,6 +817,9 @@ defmodule KeyfleetWeb.PollsLive do
   defp count(1, one, _many), do: "1 #{one}"
   defp count(number, _one, many), do: "#{number} #{many}"
 
+  defp length_label(1), do: "1 minute"
+  defp length_label(60), do: "1 hour"
+  defp length_label(minutes), do: "#{minutes} minutes"
+
   defp lengths, do: @lengths
-  defp deadlines, do: @deadlines
 end

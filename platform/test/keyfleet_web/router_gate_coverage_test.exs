@@ -44,7 +44,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
                ~w(/app/fleets/:fleet_id/rooms/:slug /app/fleets/:fleet_id/workspace) ++
                ~w(/app/fleets/:fleet_id/workspace/:object_id /app/fleets/:fleet_id/proposals) ++
                ~w(/app/fleets/:fleet_id/proposals/:number /app/fleets/:fleet_id/polls) ++
-               ~w(/app/fleets/:fleet_id/polls/:session_id)
+               ~w(/app/fleets/:fleet_id/polls/:poll_id)
   end
 
   test "every product LiveView mounts through the gate" do

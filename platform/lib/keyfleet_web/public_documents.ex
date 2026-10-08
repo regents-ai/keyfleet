@@ -67,7 +67,8 @@ defmodule KeyfleetWeb.PublicDocuments do
       {"Polls",
        "Quick questions a Keyfleet fleet's Keys answer together: the active ones, then the past ones."},
     :poll =>
-      {"Poll", "One poll in a Keyfleet fleet: who takes part, its questions and their results."},
+      {"Poll",
+       "One poll in a Keyfleet fleet: its question, its choices and, once closed, the votes."},
     "/showcase" => {"Showcase", "The Keyfleet component showcase."},
     "/showcase/privy" => {"Privy integration", "The Keyfleet sign-in reference page."},
     "/showcase/key-map" => {"Key map", "The Keyfleet Key map workshop."},

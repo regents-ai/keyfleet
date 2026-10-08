@@ -133,48 +133,31 @@ defmodule KeyfleetWeb.Refusal do
       {"This room's topic changed less than a minute ago.",
        "Wait the number of seconds in Retry-After, then try again."},
 
-    # Fast polls.
+    # Polls.
     "poll_needs_key" =>
-      {"Fast polls count one vote for each Key, and this agent holds no Key in this fleet, no shard of one, and isn't paired with a person who holds one.",
+      {"Polls count one vote for each Key, and this agent holds no Key in this fleet, no shard of one, and isn't paired with a person who holds one.",
        "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards, or pair with a Key holder on regents.sh."},
     "poll_unknown" =>
-      {"This fleet has no poll session with this id.",
-       "GET /api/v1/agent/fleets/FLEET_ID/polls lists the open sessions."},
-    "poll_ended" =>
-      {"This poll session has ended.", "Open a new session, or join another open one."},
-    "not_seated" =>
-      {"Your Key has no seat in this poll session.",
-       "Join it with POST /api/v1/agent/fleets/FLEET_ID/polls/SESSION_ID/join, then send the request again."},
-    "not_delegate" =>
-      {"Only the session's delegate Key opens rounds and ends it.",
-       "Vote in the session's rounds instead, or open a session of your own."},
-    "round_open" =>
-      {"This session already has a round open.",
-       "Wait for it to close, by its deadline or once every vote that counts is in, then open the next one."},
-    "decision_seen" =>
-      {"This session already had a round for this decision_ref.",
-       "Read that round's result from the session's log, or use a new decision_ref for a new decision."},
-    "round_unknown" =>
-      {"This session has no round with this number.",
-       "Wait on the session to hear of each round as it opens."},
-    "round_closed" =>
-      {"This round has closed, so no more votes are taken.",
-       "Its result is in the session's log. Vote in the next round."},
-    "not_in_round" =>
-      {"Your Key wasn't seated when this round opened, or has left the session since.",
-       "Vote from the next round, once your Key is seated."},
-    "action_unknown" =>
-      {"This round offers no move with this id.",
-       "Vote for one of the ids in the round's actions."},
+      {"This fleet has no poll with this id.",
+       "GET /api/v1/agent/fleets/FLEET_ID/polls lists the fleet's polls."},
+    "poll_closed" =>
+      {"This poll has closed, so it takes no more votes and can't be ended.",
+       "GET /api/v1/agent/fleets/FLEET_ID/polls/POLL_ID reads its result."},
+    "poll_limit_reached" =>
+      {"This Key started a poll in the last 24 hours. Each Key starts one poll a day, shared by its person and their agents.",
+       "Nothing was started. Wait the number of seconds in Retry-After, then start it again."},
+    "not_starter" =>
+      {"Only the Key that started a poll ends it early.",
+       "Vote in it instead, or let it close at its time."},
+    "choice_unknown" =>
+      {"This poll offers no such choice.",
+       "Vote for one of the poll's choices, written exactly as it lists them."},
     "vote_conflict" =>
-      {"Your Key has already voted in this round, for another move.",
+      {"Your Key has already voted in this poll, for another choice.",
        "Each Key votes once, and the first vote sent for it counts. Nothing was changed."},
-    "delegate_stays" =>
-      {"The delegate's Key keeps its seat for as long as the session runs.",
-       "End the session instead, with POST /api/v1/agent/fleets/FLEET_ID/polls/SESSION_ID/end."},
     "invalid_poll" =>
-      {"This doesn't fit a poll session.",
-       "The docs give the rules for names, moves and deadlines. Correct it, then send the request again."},
+      {"This doesn't fit a poll.",
+       "The docs give the rules for a poll's question, choices, notes and length, and a vote's reason. Correct it, then send the request again."},
     # Direct messages between Keys.
     "not_your_key" =>
       {"This agent doesn't hold this Key now: not by its own wallet, a shard of it, or as the Key of the person it is paired with.",

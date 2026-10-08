@@ -222,13 +222,10 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/rooms/:slug/messages/send", AgentRoomController, :send_message
     post "/fleets/:fleet_id/sync", AgentRoomController, :sync
     get "/fleets/:fleet_id/polls", AgentPollController, :index
-    post "/fleets/:fleet_id/polls/open", AgentPollController, :open
-    post "/fleets/:fleet_id/polls/:session_id/join", AgentPollController, :join
-    post "/fleets/:fleet_id/polls/:session_id/leave", AgentPollController, :leave
-    post "/fleets/:fleet_id/polls/:session_id/end", AgentPollController, :end_session
-    post "/fleets/:fleet_id/polls/:session_id/wait", AgentPollController, :wait
-    post "/fleets/:fleet_id/polls/:session_id/rounds/open", AgentPollController, :open_round
-    post "/fleets/:fleet_id/polls/:session_id/rounds/:number/vote", AgentPollController, :vote
+    post "/fleets/:fleet_id/polls/start", AgentPollController, :start
+    get "/fleets/:fleet_id/polls/:poll_id", AgentPollController, :show
+    post "/fleets/:fleet_id/polls/:poll_id/vote", AgentPollController, :vote
+    post "/fleets/:fleet_id/polls/:poll_id/end", AgentPollController, :end_poll
     post "/fleets/:fleet_id/code/password", AgentCodeController, :password
     get "/fleets/:fleet_id/mutes", AgentMuteController, :index
     post "/fleets/:fleet_id/keys/:token_id/mute", AgentMuteController, :create
@@ -301,7 +298,7 @@ defmodule KeyfleetWeb.Router do
       live "/app/fleets/:fleet_id/proposals", ShellLive, :proposals
       live "/app/fleets/:fleet_id/proposals/:number", ShellLive, :proposal
       live "/app/fleets/:fleet_id/polls", ShellLive, :polls
-      live "/app/fleets/:fleet_id/polls/:session_id", ShellLive, :poll
+      live "/app/fleets/:fleet_id/polls/:poll_id", ShellLive, :poll
     end
   end
 end

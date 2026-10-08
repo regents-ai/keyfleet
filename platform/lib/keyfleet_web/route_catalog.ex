@@ -19,8 +19,8 @@ defmodule KeyfleetWeb.RouteCatalog do
   @object_id ~r/\A[a-z][a-z_]{0,31}#[1-9][0-9]{0,17}\z/
   # Eighteen digits at most, so every admitted proposal number is a database integer.
   @number ~r/\A[1-9][0-9]{0,17}\z/
-  # A poll session is named by its id, a UUID in lower case.
-  @session_id ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
+  # A poll is named by its id, a UUID in lower case.
+  @poll_id ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
 
   @entries [
     %Entry{
@@ -122,9 +122,9 @@ defmodule KeyfleetWeb.RouteCatalog do
       route_spec_id: :polls
     },
     %Entry{
-      path_pattern: "/app/fleets/:fleet_id/polls/:session_id",
+      path_pattern: "/app/fleets/:fleet_id/polls/:poll_id",
       live_action: :poll,
-      parameter_schema: %{fleet_id: :fleet_id, session_id: :session_id},
+      parameter_schema: %{fleet_id: :fleet_id, poll_id: :poll_id},
       reserved_values: %{},
       route_spec_id: :poll
     }
@@ -187,8 +187,8 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   defp valid_parameter?(:number, value), do: is_binary(value) and Regex.match?(@number, value)
 
-  defp valid_parameter?(:session_id, value),
-    do: is_binary(value) and Regex.match?(@session_id, value)
+  defp valid_parameter?(:poll_id, value),
+    do: is_binary(value) and Regex.match?(@poll_id, value)
 
   defp valid_parameter?(:object_id, value),
     do: is_binary(value) and Regex.match?(@object_id, value)

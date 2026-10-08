@@ -78,14 +78,14 @@
   align-items: start;
 }
 
-/* The rounds take the wider share beside the seats on a wide screen. */
+/* The choices take the narrower share beside the notes and votes on a wide screen. */
 @media (min-width: 60rem) {
   .polls-grid {
     grid-template-columns: minmax(16rem, 1fr) minmax(0, 2fr);
   }
 }
 
-.polls-rounds {
+.polls-side {
   display: grid;
   gap: 1.5rem;
   min-width: 0;
@@ -125,8 +125,7 @@
   align-items: center;
 }
 
-.polls-badge,
-.polls-role {
+.polls-badge {
   padding: 0.1rem 0.4rem;
   border: 1px solid var(--ash-line-strong);
   color: var(--color-fg);
@@ -141,10 +140,9 @@
 }
 
 .polls-list,
-.polls-seats,
-.polls-moves,
+.polls-options,
 .polls-totals,
-.polls-votes ul {
+.polls-votes {
   display: grid;
   gap: 0.75rem;
   width: 100%;
@@ -166,19 +164,12 @@
   line-height: 1.2;
 }
 
-.polls-seats li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.polls-moves,
+.polls-options,
 .polls-totals {
   gap: 0.4rem;
 }
 
-.polls-moves li,
+.polls-options li,
 .polls-totals li {
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--color-border);
@@ -231,32 +222,12 @@
 }
 
 .polls-votes {
-  width: 100%;
-}
-
-.polls-votes summary {
-  cursor: pointer;
-}
-
-.polls-votes ul {
   gap: 0.5rem;
-  margin-block-start: 0.75rem;
-}
-
-.polls-votes pre {
-  max-width: 100%;
-  margin: 0.75rem 0 0;
-  overflow-x: auto;
-  font-size: 0.85rem;
 }
 
 .polls-reason {
   display: block;
   color: var(--color-fg-muted);
   white-space: pre-line;
-}
-
-.polls-open-round {
-  border-color: var(--ash-accent-warm);
 }
 }

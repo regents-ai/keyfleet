@@ -20,63 +20,79 @@ defmodule Keyfleet.PollsTest do
     :ok
   end
 
-  # Polls are public to read, but a Key's own vote, how sure it was and why,
-  # and what the round showed its voters, stay with the session's seated Keys.
-  test "anyone reads a round's totals; only seated Keys read each vote" do
-    leader = human("a")
+  # Anyone reads a poll and, once it closes, each choice's count; only the
+  # fleet's Key holders read the starter's notes and each Key's vote.
+  test "anyone reads the totals once a poll closes; only Key holders read notes and votes" do
+    starter = human("a")
     voter = human("b")
 
-    session =
-      Polls.open_session!(%{fleet_id: @fleet, name: "Hull plan", mode: :poll, minutes: 60},
-        actor: leader
+    poll =
+      Polls.start_poll!(
+        %{
+          fleet_id: @fleet,
+          question: "Which door next?",
+          choices: ["Left door", "Right door"],
+          notes: "The left one creaks.",
+          minutes: 30
+        },
+        actor: starter
       )
 
-    assert %{delegate_key: 1, opened_by_wallet: opened_by} = session
-    assert opened_by == wallet("a")
-    Polls.join!(%{fleet_id: @fleet, session_id: session.id}, actor: voter)
+    assert %{started_by_key: 1, started_by_wallet: by} = poll
+    assert by == wallet("a")
 
-    Polls.open_round!(
-      %{
-        fleet_id: @fleet,
-        session_id: session.id,
-        decision_ref: "turn-1",
-        observation: %{"board" => "two doors"},
-        actions: [%{id: "left", label: "Go left"}, %{id: "right", label: "Go right"}],
-        deadline_seconds: 60
-      },
-      actor: leader
-    )
-
-    for {actor, move} <- [{leader, "left"}, {voter, "left"}] do
+    for {actor, choice} <- [{starter, "Left door"}, {voter, "Left door"}] do
       Polls.cast_vote!(
-        %{fleet_id: @fleet, session_id: session.id, number: 1, action: move, reason: "open"},
+        %{fleet_id: @fleet, poll_id: poll.id, choice: choice, reason: "open"},
         actor: actor
       )
     end
 
+    assert %{totals: nil, votes_cast: 2} = Polls.get_poll!(@fleet, poll.id, actor: nil)
+    assert [] = Polls.votes_in_poll!(@fleet, poll.id, actor: voter)
+
+    Polls.end_poll!(poll, @fleet, actor: starter)
+
     for outsider <- [nil, human("c")] do
-      [round] = Polls.list_rounds!(@fleet, session.id, actor: outsider)
-      assert %{status: :closed, winner: "left"} = round
-      assert round.totals == [%{action: "left", votes: 2}, %{action: "right", votes: 0}]
-      assert %Ash.ForbiddenField{} = round.tally
-      assert %Ash.ForbiddenField{} = round.observation
+      read = Polls.get_poll!(@fleet, poll.id, actor: outsider)
+      assert read.totals == [%{choice: "Left door", votes: 2}, %{choice: "Right door", votes: 0}]
+      assert %Ash.ForbiddenField{} = read.notes
+
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Polls.votes_in_poll(@fleet, poll.id, actor: outsider, authorize_with: :error)
     end
 
-    [round] = Polls.list_rounds!(@fleet, session.id, actor: voter)
-    assert %{"board" => "two doors"} = round.observation
-    assert [%{"key" => 1, "reason" => "open"}, %{"key" => 2}] = round.tally["votes"]
+    assert %{notes: "The left one creaks."} = Polls.get_poll!(@fleet, poll.id, actor: voter)
 
-    assert %{token_id: 2, wallet: by} =
-             Polls.my_vote!(@fleet, session.id, round.id, actor: voter)
+    assert [%{token_id: 1, reason: "open"}, %{token_id: 2}] =
+             @fleet |> Polls.votes_in_poll!(poll.id, actor: voter) |> Enum.sort_by(& &1.token_id)
 
-    assert by == wallet("b")
+    assert %{token_id: 2, wallet: voted_by} = Polls.my_vote!(@fleet, poll.id, actor: voter)
+    assert voted_by == wallet("b")
   end
 
-  test "a poll lasts at most an hour" do
-    assert {:error, %Ash.Error.Invalid{}} =
-             Polls.open_session(%{fleet_id: @fleet, name: "Long", mode: :poll, minutes: 61},
-               actor: human("a")
-             )
+  test "each Key starts one poll in any 24 hours" do
+    start = fn question ->
+      Polls.start_poll(
+        %{fleet_id: @fleet, question: question, choices: ["Yes", "No"], minutes: 1},
+        actor: human("a")
+      )
+    end
+
+    assert {:ok, _poll} = start.("First?")
+    assert {:error, %Ash.Error.Invalid{errors: errors}} = start.("Second?")
+    assert [%Keyfleet.Polls.Errors.PollLimitError{retry_after: wait}] = errors
+    assert wait in 86_399..86_400
+  end
+
+  test "a poll stays open from 1 minute to an hour" do
+    for minutes <- [0, 61] do
+      assert {:error, %Ash.Error.Invalid{}} =
+               Polls.start_poll(
+                 %{fleet_id: @fleet, question: "Long?", choices: ["Yes", "No"], minutes: minutes},
+                 actor: human("a")
+               )
+    end
   end
 
   defp wallet(character), do: "0x" <> String.duplicate(character, 40)

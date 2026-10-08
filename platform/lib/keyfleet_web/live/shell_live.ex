@@ -47,7 +47,7 @@ defmodule KeyfleetWeb.ShellLive do
   @room_events ~w(validate_post send_message validate_naming name_room mute_key unmute_key)
   @key_profile_events ~w(post_to_key close_key)
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
-  @poll_events ~w(start_poll open_round join_poll leave_poll end_poll cast_vote)
+  @poll_events ~w(start_poll end_poll cast_vote)
 
   @impl true
   def mount(params, _session, socket) do
@@ -315,7 +315,7 @@ defmodule KeyfleetWeb.ShellLive do
     do: RoomsLive.handle_info(notice, socket)
 
   def handle_info(%Broadcast{event: event} = notice, socket)
-      when event in ["poll_event", "polls_changed"],
+      when event in ["poll_changed", "polls_changed"],
       do: PollsLive.handle_info(notice, socket)
 
   def handle_info(:polls_tick = message, socket), do: PollsLive.handle_info(message, socket)
@@ -564,7 +564,6 @@ defmodule KeyfleetWeb.ShellLive do
         <PollsLive.detail
           :if={@route_spec.route_id == :poll}
           page={@polls}
-          form={@poll_form}
           notice={@polls_notice}
         />
       </:content>

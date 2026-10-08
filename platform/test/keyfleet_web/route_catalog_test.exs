@@ -19,7 +19,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     "/app/fleets/:fleet_id/proposals",
     "/app/fleets/:fleet_id/proposals/:number",
     "/app/fleets/:fleet_id/polls",
-    "/app/fleets/:fleet_id/polls/:session_id"
+    "/app/fleets/:fleet_id/polls/:poll_id"
   ]
 
   test "contains exactly the approved pages" do
@@ -266,7 +266,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
       {:slug, _type} -> {"slug", "general"}
       {:object_id, _type} -> {"object_id", "task#12"}
       {:number, _type} -> {"number", "3"}
-      {:session_id, _type} -> {"session_id", "3f1c6c2e-8a4b-4d2a-9b1e-0c5d7e9f1a2b"}
+      {:poll_id, _type} -> {"poll_id", "3f1c6c2e-8a4b-4d2a-9b1e-0c5d7e9f1a2b"}
     end)
   end
 end

@@ -1,19 +1,22 @@
 defmodule Keyfleet.Polls.Calculations.Totals do
   @moduledoc """
-  A closed round's result as anyone reads it: each move's count of counted
-  votes, in the order the moves were listed, without who voted or how sure
-  they were. Nil while the round is open.
+  A closed poll's result as anyone reads it: each choice's count of votes, in
+  the order the choices were listed, without who voted. Nil while the poll is
+  open, so no one sees which way it leans before it closes.
   """
   use Ash.Resource.Calculation
 
   @impl true
-  def load(_query, _opts, _context), do: [:tally]
+  def load(_query, _opts, _context), do: [:choices, :vote_choices, :closes_at, :ended_at]
 
   @impl true
-  def calculate(rounds, _opts, _context), do: Enum.map(rounds, &totals(&1.tally))
+  def calculate(polls, _opts, _context) do
+    now = DateTime.utc_now()
+    Enum.map(polls, &if(Keyfleet.Polls.open?(&1, now), do: nil, else: totals(&1)))
+  end
 
-  defp totals(%{"counts" => counts}),
-    do: Enum.map(counts, &%{action: &1["action"], votes: &1["votes"]})
-
-  defp totals(nil), do: nil
+  defp totals(poll) do
+    counts = Enum.frequencies(poll.vote_choices)
+    Enum.map(poll.choices, &%{choice: &1, votes: Map.get(counts, &1, 0)})
+  end
 end

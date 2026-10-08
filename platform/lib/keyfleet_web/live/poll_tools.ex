@@ -1,32 +1,28 @@
 defmodule KeyfleetWeb.PollTools do
   @moduledoc """
   What the browser tools on a fleet's polls pages do for a browser's own
-  agent: read the polls, and start, join, leave and end one, ask its next
-  question and vote, as the person signed in on the page. Each goes through
+  agent: read the polls, start one, read one, vote in it and end it, as the
+  person signed in on the page. Each press goes through
   `KeyfleetWeb.PollsLive.act/4`, as the page's own boxes and buttons do, and
   is turned down for the same reasons, in the same words. The page shows what
   changed the way it shows anyone else's.
 
   Every answer is `%{ok: true, ...}` with the fields the agent API answers, or
-  `%{ok: false, error: %{code, message, hint}}`. `priv/tool_manifest.json`
-  describes each tool; `assets/js/page_tools.ts` offers them.
+  `%{ok: false, error: %{code, message, hint}}`; a Key at its daily limit is
+  also told `retry_after`, the seconds until it may start another poll.
+  `priv/tool_manifest.json` describes each tool; `assets/js/page_tools.ts`
+  offers them.
   """
 
   alias Keyfleet.Polls
   alias KeyfleetWeb.PollJSON
+  alias KeyfleetWeb.PollRefusal
   alias KeyfleetWeb.PollsLive
   alias KeyfleetWeb.ShellLive
 
   @list_tools ~w(list_polls start_poll)
-  @poll_tools ~w(read_poll join_poll leave_poll end_poll open_round vote_in_round)
-  @presses %{
-    "start_poll" => :start,
-    "join_poll" => :join,
-    "leave_poll" => :leave,
-    "end_poll" => :end,
-    "open_round" => :ask,
-    "vote_in_round" => :vote
-  }
+  @poll_tools ~w(read_poll vote_in_poll end_poll)
+  @presses %{"start_poll" => :start, "vote_in_poll" => :vote, "end_poll" => :end}
 
   @doc "The tools the polls pages offer."
   def tools, do: @list_tools ++ @poll_tools
@@ -43,20 +39,21 @@ defmodule KeyfleetWeb.PollTools do
       else: refusal("invalid_input", "Send an object of named fields, each a string.")
   end
 
-  defp answer_on_page("list_polls", _input, %{kind: :list} = page, actor) do
-    sessions = Polls.list_sessions!(page.fleet_id, actor: actor)
-    %{ok: true, fleet_id: page.fleet_id, sessions: Enum.map(sessions, &PollJSON.session/1)}
-  end
+  defp answer_on_page("list_polls", _input, %{kind: :list} = page, _actor),
+    do: %{ok: true, fleet_id: page.fleet_id, polls: Enum.map(page.polls, &PollJSON.poll/1)}
 
-  defp answer_on_page("read_poll", _input, %{kind: :poll, session: %{} = session} = page, actor) do
-    %{
-      ok: true,
-      session: PollJSON.session(session),
-      rounds:
-        page.fleet_id
-        |> Polls.list_rounds!(session.id, actor: actor)
-        |> Enum.map(&PollJSON.round/1)
-    }
+  # The fleet's Key holders also read their own Key's vote and, once the poll
+  # closes, every vote.
+  defp answer_on_page("read_poll", _input, %{kind: :poll, poll: %{} = poll} = page, _actor) do
+    answer = %{ok: true, poll: PollJSON.poll(poll)}
+
+    if page.voter,
+      do:
+        Map.merge(answer, %{
+          my_vote: page.my_vote && PollJSON.vote(page.my_vote),
+          votes: Enum.map(page.votes, &PollJSON.vote/1)
+        }),
+      else: answer
   end
 
   defp answer_on_page(tool, _input, _page, nil) when is_map_key(@presses, tool),
@@ -67,7 +64,7 @@ defmodule KeyfleetWeb.PollTools do
         "Ask the person to sign in, then call again."
       )
 
-  defp answer_on_page(tool, _input, %{kind: :poll, session: nil}, _actor)
+  defp answer_on_page(tool, _input, %{kind: :poll, poll: nil}, _actor)
        when tool in @poll_tools,
        do: refusal("poll_unknown", "This fleet has no such poll.")
 
@@ -76,12 +73,8 @@ defmodule KeyfleetWeb.PollTools do
     press = Map.fetch!(@presses, tool)
 
     case PollsLive.act(press, page, input, actor) do
-      {:error, error} ->
-        {code, message} = PollsLive.refusal(error, page.fleet_id, PollsLive.default_code(press))
-        refusal(code, message)
-
-      done ->
-        done(press, done, page.fleet_id)
+      {:ok, done} -> done(press, done, page.fleet_id)
+      {:error, error} -> refused(error, page.fleet_id, press)
     end
   end
 
@@ -93,23 +86,27 @@ defmodule KeyfleetWeb.PollTools do
         "Check what the page shows, then call again."
       )
 
-  defp done(press, {:ok, session}, fleet_id) when press in [:start, :end],
-    do: %{ok: true, session: PollJSON.session(reload(fleet_id, session.id))}
+  defp done(:vote, vote, _fleet_id), do: %{ok: true, vote: PollJSON.vote(vote)}
 
-  defp done(:join, {:ok, seat}, _fleet_id), do: %{ok: true, seat: PollJSON.seat(seat)}
-  defp done(:leave, :ok, _fleet_id), do: %{ok: true}
+  defp done(_start_or_end, poll, fleet_id),
+    do: %{ok: true, poll: PollJSON.poll(reload(fleet_id, poll.id))}
 
-  defp done(:ask, {:ok, round}, _fleet_id),
-    do: %{ok: true, round: Keyfleet.Polls.Round.to_map(round)}
+  defp reload(fleet_id, poll_id),
+    do: Polls.get_poll!(fleet_id, poll_id, actor: %Keyfleet.Actors.System{})
 
-  defp done(:vote, {:ok, vote}, _fleet_id),
-    do: %{
-      ok: true,
-      vote: %{key: vote.token_id, action: vote.action, reason: vote.reason, counted: vote.counted}
-    }
+  defp refused(error, fleet_id, press) do
+    {code, message} = PollsLive.refusal(error, fleet_id, PollsLive.default_code(press))
 
-  defp reload(fleet_id, session_id),
-    do: Polls.get_session!(fleet_id, session_id, actor: %Keyfleet.Actors.System{})
+    case PollRefusal.retry_after(error) do
+      nil ->
+        refusal(code, message)
+
+      seconds ->
+        code
+        |> refusal(message, "Start another poll after retry_after seconds.")
+        |> Map.put(:retry_after, seconds)
+    end
+  end
 
   defp refusal(code, message, hint \\ "Check what the page shows, then call again."),
     do: %{ok: false, error: %{code: code, message: message, hint: hint}}

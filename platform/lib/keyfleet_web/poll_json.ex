@@ -1,51 +1,32 @@
 defmodule KeyfleetWeb.PollJSON do
-  @moduledoc """
-  Poll sessions, seats and rounds as the agent API and the polls page's
-  browser tools answer them.
-  """
+  @moduledoc "Polls and votes as the agent API and the polls pages' browser tools answer them."
 
   alias Keyfleet.Polls
-
-  @doc "A session, with its seated Keys and whether it still takes seats and rounds."
-  def session(session) do
-    %{
-      id: session.id,
-      name: session.name,
-      mode: session.mode,
-      delegate_key: session.delegate_key,
-      seats: session.seat_keys,
-      head_seq: session.head_seq,
-      open: Polls.open?(session),
-      expires_at: session.expires_at,
-      ended_at: session.ended_at
-    }
-  end
-
-  @doc "A Key's seat."
-  def seat(seat), do: %{key: seat.token_id, joined_at: seat.inserted_at}
+  alias Keyfleet.Polls.Vote
 
   @doc """
-  A round as its reader may read it (`Keyfleet.Polls.Round`): everyone gets
-  its moves and `totals`; only a seated Key's reader gets its `observation`
-  and the `tally` with each Key's vote.
+  A poll as its reader may read it (`Keyfleet.Polls.Poll`): everyone gets its
+  question, choices, how many votes it has drawn and, once closed, `totals`;
+  only the fleet's Key holders get its `notes`.
   """
-  def round(round) do
+  def poll(poll) do
     %{
-      number: round.number,
-      decision_ref: round.decision_ref,
-      actions: Enum.map(round.actions, &%{id: &1.id, label: &1.label}),
-      deadline_at: round.deadline_at,
-      roster: round.roster,
-      status: round.status,
-      outcome: round.outcome,
-      winner: round.winner,
-      votes_cast: round.votes_cast,
-      totals: round.totals,
-      closed_at: round.closed_at
+      id: poll.id,
+      question: poll.question,
+      choices: poll.choices,
+      started_by_key: poll.started_by_key,
+      started_at: poll.inserted_at,
+      closes_at: poll.closes_at,
+      ended_at: poll.ended_at,
+      open: Polls.open?(poll),
+      votes_cast: poll.votes_cast,
+      totals: poll.totals
     }
-    |> put_readable(:observation, round.observation)
-    |> put_readable(:tally, round.tally)
+    |> put_readable(:notes, poll.notes)
   end
+
+  @doc "A vote, as its Key's agents and the fleet's Key holders read it."
+  def vote(vote), do: Vote.to_map(vote)
 
   defp put_readable(map, _field, %Ash.ForbiddenField{}), do: map
   defp put_readable(map, field, value), do: Map.put(map, field, value)

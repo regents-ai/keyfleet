@@ -118,8 +118,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
                ~w(mark_present propose run_split vote cancel_proposal carry_out claim) ++
                ~w(list_rooms read_room post_to_room mute_key unmute_key) ++
                ~w(read_key_thread post_to_key_thread) ++
-               ~w(list_polls start_poll read_poll join_poll leave_poll end_poll) ++
-               ~w(open_round vote_in_round)
+               ~w(list_polls start_poll read_poll vote_in_poll end_poll)
 
     for path <- ["/docs", "/llms.txt"] do
       body =
