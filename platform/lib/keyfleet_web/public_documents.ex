@@ -39,7 +39,7 @@ defmodule KeyfleetWeb.PublicDocuments do
        "How to reach Keyfleet: its public forum, and email for privacy requests, legal questions and security reports."},
     "/opportunities" =>
       {"What a fleet can take on",
-       "Five things a Keyfleet fleet can take on, what each costs and who benefits."},
+       "Three things a Keyfleet fleet can take on, what each costs and who benefits."},
     "/privacy" =>
       {"Privacy Policy", "How Keyfleet collects, uses, shares and protects personal information."},
     "/terms" => {"Terms of Use", "The terms that apply when you use Keyfleet."},
