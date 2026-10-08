@@ -13,6 +13,12 @@ defmodule Keyfleet.Dms.Message do
   Messages are never edited. They are removed with their conversation, or by
   the hourly job when their conversation's auto-delete days have passed
   (`:remove_expired`).
+
+  Each message keeps both Keys' ownership epochs from when it was sent. When a
+  Key changes hands, its new holder sees only messages from then on: every
+  read shows a Key's holder only the messages it sent or received in its
+  current epoch (`shown_to`). Nothing older is deleted; the other side still
+  sees all of it, by the same rule for its own Key.
   """
   use Ash.Resource,
     otp_app: :keyfleet,
@@ -128,7 +134,8 @@ defmodule Keyfleet.Dms.Message do
       change Keyfleet.Dms.Changes.LimitSends
     end
 
-    # The conversation between two Keys, oldest first, after a place in it.
+    # The conversation between two Keys, oldest first, after a place in it, as
+    # Key `token_id`'s holder may see it.
     read :in_conversation do
       argument :fleet_id, :string, allow_nil?: false
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
@@ -144,14 +151,15 @@ defmodule Keyfleet.Dms.Message do
                     (from_token_id == ^arg(:other_token_id) and to_token_id == ^arg(:token_id)))
              )
 
-      filter expr(seq > ^arg(:after_seq))
+      filter expr(seq > ^arg(:after_seq) and shown_to(token_id: ^arg(:token_id)))
 
       prepare build(load: [:via_agent])
       prepare Keyfleet.Dms.Preparations.InOrder
       metadata :more_after, :boolean, allow_nil?: false
     end
 
-    # The newest messages between two Keys, newest first, for the page.
+    # The newest messages between two Keys, newest first, for the page, as Key
+    # `token_id`'s holder may see them.
     read :latest do
       argument :fleet_id, :string, allow_nil?: false
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
@@ -166,12 +174,15 @@ defmodule Keyfleet.Dms.Message do
                     (from_token_id == ^arg(:other_token_id) and to_token_id == ^arg(:token_id)))
              )
 
+      filter expr(shown_to(token_id: ^arg(:token_id)))
+
       prepare build(load: [:via_agent])
       prepare {Keyfleet.Preparations.NewestFirst, sort: [seq: :desc], before: []}
     end
 
-    # The messages to or from any of the Keys after a place, oldest first,
-    # without those sent to one of them by a Key it has blocked.
+    # The messages to or from any of the Keys after a place, oldest first, in
+    # each Key's current ownership epoch, without those sent to one of them by
+    # a Key it has blocked.
     read :changes do
       argument :fleet_id, :string, allow_nil?: false
 
@@ -186,8 +197,9 @@ defmodule Keyfleet.Dms.Message do
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and seq > ^arg(:after_seq) and
-                 (from_token_id in ^arg(:token_ids) or
-                    (to_token_id in ^arg(:token_ids) and not sender_blocked))
+                 ((from_token_id in ^arg(:token_ids) and sent_in_current_epoch) or
+                    (to_token_id in ^arg(:token_ids) and received_in_current_epoch and
+                       not sender_blocked))
              )
 
       prepare Keyfleet.Dms.Preparations.InOrder
@@ -331,9 +343,16 @@ defmodule Keyfleet.Dms.Message do
       public?: true,
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
-    # The Key's ownership epoch it was sent in. A send key names one message
-    # per Key and holder, so a Key's new holder starts afresh.
-    attribute :ownership_epoch, :integer,
+    # The sending Key's ownership epoch it was sent in. A send key names one
+    # message per Key and holder, so a Key's new holder starts afresh.
+    attribute :from_ownership_epoch, :integer,
+      allow_nil?: false,
+      writable?: false,
+      public?: false,
+      constraints: [min: 1, max: @bigint]
+
+    # The receiving Key's ownership epoch when it arrived.
+    attribute :to_ownership_epoch, :integer,
       allow_nil?: false,
       writable?: false,
       public?: false,
@@ -376,6 +395,42 @@ defmodule Keyfleet.Dms.Message do
   end
 
   calculations do
+    # Whether Key `token_id`'s holder now may see the message: it is one side
+    # of it, and the message was sent or received in that Key's current
+    # ownership epoch.
+    calculate :shown_to,
+              :boolean,
+              expr(
+                (from_token_id == ^arg(:token_id) and sent_in_current_epoch) or
+                  (to_token_id == ^arg(:token_id) and received_in_current_epoch)
+              ) do
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+    end
+
+    # Whether the sending Key still has the holder that sent it.
+    calculate :sent_in_current_epoch,
+              :boolean,
+              expr(
+                from_ownership_epoch ==
+                  fragment(
+                    "(SELECT max(epoch.ownership_epoch) FROM keyfleet_app.key_attachments AS epoch WHERE epoch.fleet_id = ? AND epoch.token_id = ?)",
+                    fleet_id,
+                    from_token_id
+                  )
+              )
+
+    # Whether the receiving Key still has the holder it had when this arrived.
+    calculate :received_in_current_epoch,
+              :boolean,
+              expr(
+                to_ownership_epoch ==
+                  fragment(
+                    "(SELECT max(epoch.ownership_epoch) FROM keyfleet_app.key_attachments AS epoch WHERE epoch.fleet_id = ? AND epoch.token_id = ?)",
+                    fleet_id,
+                    to_token_id
+                  )
+              )
+
     # Whether the Key the message went to has blocked the Key that sent it.
     calculate :sender_blocked,
               :boolean,
@@ -390,6 +445,11 @@ defmodule Keyfleet.Dms.Message do
   end
 
   identities do
-    identity :unique_send_key, [:fleet_id, :from_token_id, :ownership_epoch, :idempotency_key]
+    identity :unique_send_key, [
+      :fleet_id,
+      :from_token_id,
+      :from_ownership_epoch,
+      :idempotency_key
+    ]
   end
 end

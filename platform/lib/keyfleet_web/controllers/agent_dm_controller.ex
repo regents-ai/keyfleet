@@ -31,9 +31,6 @@ defmodule KeyfleetWeb.AgentDmController do
     :inserted_at
   ]
 
-  # What a conversation is answered with besides its own fields.
-  @last [:last_seq, :last_body, :last_from_token_id, :last_at]
-
   # A Key's conversations: the main inbox and, apart, those with Keys it has
   # blocked.
   def inbox(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
@@ -60,7 +57,7 @@ defmodule KeyfleetWeb.AgentDmController do
 
     with {:ok, messages} <- Dms.read_conversation(fleet_id, token_id, other, page, opts),
          {:ok, conversation} <-
-           Dms.get_conversation(fleet_id, token_id, other, [load: @last] ++ opts) do
+           Dms.get_conversation(fleet_id, token_id, other, opts) do
       json(conn, %{
         conversation: conversation && conversation_json(conversation, token_id),
         cursor: cursor(messages, Map.get(params, "after_seq", 0)),
@@ -107,7 +104,7 @@ defmodule KeyfleetWeb.AgentDmController do
     opts = [actor: conn.assigns.agent_actor]
 
     with {:ok, conversation} <- conversation(fleet_id, token_id, other, opts),
-         {:ok, conversation} <- Dms.set_auto_delete(conversation, days, [load: @last] ++ opts) do
+         {:ok, conversation} <- Dms.set_auto_delete(conversation, days, opts) do
       json(conn, %{conversation: conversation_json(conversation, token_id)})
     else
       error -> refuse(conn, fleet_id, error)
@@ -164,7 +161,7 @@ defmodule KeyfleetWeb.AgentDmController do
     do: {fleet_id, String.to_integer(token_id), String.to_integer(other)}
 
   defp conversation(fleet_id, token_id, other, opts) do
-    case Dms.get_conversation(fleet_id, token_id, other, [load: @last] ++ opts) do
+    case Dms.get_conversation(fleet_id, token_id, other, opts) do
       {:ok, nil} -> :conversation_unknown
       found -> found
     end
@@ -189,15 +186,13 @@ defmodule KeyfleetWeb.AgentDmController do
     }
   end
 
-  defp last_message_json(%{last_seq: seq} = conversation) when is_integer(seq),
+  defp last_message_json(conversation),
     do: %{
-      seq: seq,
+      seq: conversation.last_seq,
       body: conversation.last_body,
       from_token_id: conversation.last_from_token_id,
       inserted_at: conversation.last_at
     }
-
-  defp last_message_json(_conversation), do: nil
 
   defp message_json(message) do
     message

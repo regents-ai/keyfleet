@@ -255,7 +255,7 @@ defmodule KeyfleetWeb.DmsLive do
           Key {Rules.grouped(Dms.other_key(conversation, @dms.token_id))}
         </.link>
         <span class="dms-preview">{preview(conversation, @dms.token_id)}</span>
-        <small :if={conversation.last_at} class="rooms-detail">
+        <small class="rooms-detail">
           {RoomsLive.stamp(conversation.last_at)}
         </small>
       </li>
@@ -303,7 +303,6 @@ defmodule KeyfleetWeb.DmsLive do
 
   defp conversation_path(dms, other_token_id), do: "#{inbox_path(dms)}/#{other_token_id}"
 
-  defp preview(%{last_body: nil}, _token_id), do: "No messages"
   defp preview(%{last_from_token_id: token_id, last_body: body}, token_id), do: "You: #{body}"
   defp preview(%{last_body: body}, _token_id), do: body
 

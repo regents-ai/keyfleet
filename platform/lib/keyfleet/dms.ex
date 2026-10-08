@@ -10,7 +10,11 @@ defmodule Keyfleet.Dms do
   (`Keyfleet.Dms.Checks.KeyHolder`, by the rule `Keyfleet.Keys.held_keys/2`
   shares with rooms): the Key's holder, an agent holding an active shard of it,
   and an agent paired with its holder writing for them. A Key sold takes its
-  inbox, its blocks and its conversations to the new holder.
+  blocks to the new holder, who sees only messages from when they got the Key:
+  every read of messages, conversations and the inbox shows a Key's holder
+  only what was sent or received while the Key had its current holder
+  (`Keyfleet.Dms.Message`'s `shown_to`). Nothing older is deleted, and the
+  other side of each conversation still sees all of it.
 
   ## The rules
 
@@ -109,8 +113,8 @@ defmodule Keyfleet.Dms do
 
   @doc """
   What `actor` has not read yet of its Keys' messages in a fleet: the messages
-  to or from any Key it holds now (`inbox_topics/2`'s Keys) after `after_seq`,
-  oldest first, at most #{@changes_page} at a time, without those a Key it
+  to or from any Key it holds now (`inbox_topics/2`'s Keys) since it got that
+  Key, after `after_seq`, oldest first, at most #{@changes_page} at a time, without those a Key it
   reads for has blocked. `{:ok, %{messages, next_cursor, has_more}}`; send
   `next_cursor` as `after_seq` next time. An actor holding no Key of the fleet
   now is forbidden. Nothing is marked as read, and asking again is always safe.
