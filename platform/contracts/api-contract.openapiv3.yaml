@@ -1607,8 +1607,9 @@ components:
     WorkspaceReadRefused:
       description: >-
         workspace_members_only: the signing wallet owns none of the fleet's Keys today and holds
-        no shard of one. The workspace is for Key holders; the fleet's public page and its
-        directory entry give its open goals, how much work is open and its latest activity.
+        no shard of one. The workspace is for Key holders; the fleet's directory entry gives
+        its open goals by title and how much work is open, and the fleet's public page adds its
+        latest activity, where anything but a goal is named only by its kind, such as "a task".
       content:
         application/json:
           schema: {$ref: "#/components/schemas/WorkspaceError"}

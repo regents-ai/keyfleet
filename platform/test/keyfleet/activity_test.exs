@@ -192,7 +192,7 @@ defmodule Keyfleet.ActivityTest do
     end
   end
 
-  test "key threads and edits to an item's words stay out; claims, progress and links show" do
+  test "key threads and word edits stay out; claims, progress and links show; only goal titles are public" do
     owner = human("a")
 
     ada = %Actors.Agent{
@@ -225,7 +225,7 @@ defmodule Keyfleet.ActivityTest do
     Workspace.edit(@fleet, task, %{"progress" => "done"})
     Workspace.link(@fleet, finding, goal, "contradicts")
 
-    %{items: items} = Activity.page(@fleet, nil)
+    %{items: items} = Activity.page(@fleet, nil, actor: owner)
 
     assert [%{kind: :post, facts: %{excerpt: "For everyone", room: %{slug: "general"}}}] =
              Enum.filter(items, &(&1.kind in [:post, :posts]))
@@ -254,6 +254,29 @@ defmodule Keyfleet.ActivityTest do
                %{by: by, item: %{id: finding, type: "finding", title: "Rust", confidence: "low"}},
                %{by: by, item: %{id: task, type: "task", title: "Map every plate"}},
                %{by: by, item: %{id: note, type: "note", title: "Plates"}}
+             ]
+
+    # Anyone else reads the goal by its title and every other item by its type.
+    %{items: items} = Activity.page(@fleet, nil)
+
+    assert items |> Enum.filter(&String.starts_with?(&1.id, "graph:")) |> Enum.map(& &1.facts) ==
+             [
+               %{
+                 by: by,
+                 relation: "contradicts",
+                 source: %{id: finding, type: "finding", title: nil},
+                 target: %{id: goal, type: "goal", title: "Survey the hull"}
+               },
+               %{by: by, item: %{id: task, type: "task", title: nil}, progress: "done"},
+               %{
+                 by: by,
+                 item: %{id: task, type: "task", title: nil},
+                 to: %{token_id: 17, agent: nil}
+               },
+               %{by: by, item: %{id: goal, type: "goal", title: "Survey the hull"}},
+               %{by: by, item: %{id: finding, type: "finding", title: nil}},
+               %{by: by, item: %{id: task, type: "task", title: nil}},
+               %{by: by, item: %{id: note, type: "note", title: nil}}
              ]
   end
 

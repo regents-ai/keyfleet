@@ -1136,6 +1136,33 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#{line} .activity-line__text") =~ "Proposal 1 was carried out."
     end
 
+    test "a goal shows by its title to anyone, other items by their titles to Key holders only",
+         %{conn: holder} do
+      Workspace.open_log(@fleet)
+      goal = goal!("Survey the hull")
+      task = task!("Map every plate", %{})
+      Workspace.link(@fleet, task, goal, "supports")
+
+      # The workspace's changes are older than the keys the setup issued.
+      {:ok, view, _html} = live(build_conn(), @path)
+      view |> element("#fleet-now-earlier") |> render_click()
+      html = render(view)
+      lines = text(view, "#fleet-now-list")
+
+      assert lines =~ "set a goal: “Survey the hull”."
+      assert lines =~ "added a task."
+      assert lines =~ "backed “Survey the hull” with a task."
+      refute html =~ "Map every plate"
+      refute has_element?(view, ~s(#fleet-now-list a[data-item-link="#{task}"]))
+
+      {:ok, view, _html} = live(holder, @path)
+      view |> element("#fleet-now-earlier") |> render_click()
+      lines = text(view, "#fleet-now-list")
+
+      assert lines =~ "added a task: “Map every plate”."
+      assert lines =~ "backed “Survey the hull” with “Map every plate”."
+    end
+
     # The panels share one place beside the map: each button opens its own
     # panel, closes the other two, so none ever covers another, and takes the
     # reader to its heading.

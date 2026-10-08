@@ -11,7 +11,7 @@ defmodule Keyfleet.Graph.Object do
   Only the projector writes here. Only the fleet's members read its objects
   (`Keyfleet.Graph.Checks.KeyReader`), except through the two reads a fleet
   shows anyone: its open work, by title, and the titles of the items its
-  latest activity names.
+  latest activity names, where anyone else reads only the goals'.
   """
   use Ash.Resource,
     domain: Keyfleet.Graph,
@@ -120,7 +120,7 @@ defmodule Keyfleet.Graph.Object do
     end
 
     # The titles of a few of the fleet's objects, to name the objects a page
-    # mentions.
+    # mentions: every one for the fleet's members, the goals for anyone else.
     read :titled do
       argument :fleet_id, :string, allow_nil?: false
 
@@ -149,8 +149,15 @@ defmodule Keyfleet.Graph.Object do
 
   policies do
     # The summary a fleet shows anyone.
-    policy action([:open_work, :titled]) do
+    policy action(:open_work) do
       authorize_if always()
+    end
+
+    # Anyone may read a goal's title; only the fleet's members read the
+    # titles of its other items.
+    policy action(:titled) do
+      authorize_if expr(type == "goal")
+      authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
     policy action([:in_fleet, :cards, :assigned_to_keys]) do

@@ -163,6 +163,15 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
     page = conn |> get("/fleets/#{@fleet}.md") |> response(200)
 
+    # A task is for Key holders: no title of one is in any answer.
+    for body <- [
+          Jason.encode!(list),
+          Jason.encode!(fleet),
+          page,
+          conn |> get("/fleets.md") |> response(200)
+        ],
+        do: refute(body =~ "Underway" or body =~ "Nobody's")
+
     assert page =~
              "1 task in progress, 0 of them taken · 1 task nobody has taken yet. " <>
                "The workspace itself is for Key holders."

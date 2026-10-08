@@ -14,7 +14,9 @@ defmodule KeyfleetWeb.FleetLive do
   your agent", and no rooms, workspace or proposals.
 
   Everything here is public and read from what the fleet's contract has
-  recorded. Keys are listed a hundred at a time.
+  recorded, except that "What's happening" names an item other than a goal
+  by its title only to the fleet's members, and to anyone else by its type
+  (`Keyfleet.Activity`). Keys are listed a hundred at a time.
   """
 
   use KeyfleetWeb, :html
@@ -489,9 +491,8 @@ defmodule KeyfleetWeb.FleetLive do
       <p id="fleet-trying-counts" class="trying-now__detail">{@trying.counts}</p>
       <p :if={@trying.question} id="fleet-trying-question">
         <.activity_part
-          :for={{part, index} <- Enum.with_index(@trying.question)}
+          :for={part <- @trying.question}
           part={part}
-          first?={index == 0}
           fleet_id={@fleet_id}
           params={@params}
         />
@@ -504,15 +505,20 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  attr :part, :any, required: true, doc: "an `{:item, id, title}` part"
+  attr :part, :any,
+    required: true,
+    doc: "a goal as `KeyfleetWeb.ActivityLines.trying_now/1` gives it"
+
   attr :fleet_id, :string, required: true
 
-  # An item by its title, opening its own page.
+  # A goal by its title, opening its own page.
   defp trying_item(%{part: {:item, id, title}} = assigns) do
     assigns = assign(assigns, id: id, title: title)
 
     ~H|<.link patch={WorkspacePage.item_path(@fleet_id, @id)} data-item-link={@id}>{@title}</.link>|
   end
+
+  defp trying_item(assigns), do: ~H"{@part}"
 
   attr :id, :string, required: true
   attr :item, :map, required: true, doc: "an item of `Keyfleet.Activity`"
@@ -524,7 +530,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp activity_line(assigns) do
     assigns =
       assign(assigns,
-        parts: assigns.item |> ActivityLines.parts() |> Enum.with_index(),
+        parts: ActivityLines.parts(assigns.item),
         tone: tone(assigns.item)
       )
 
@@ -532,9 +538,8 @@ defmodule KeyfleetWeb.FleetLive do
     <li id={@id} class="activity-line" data-kind={@item.kind} data-tone={@tone}>
       <p class="activity-line__text">
         <.activity_part
-          :for={{part, index} <- @parts}
+          :for={part <- @parts}
           part={part}
-          first?={index == 0}
           fleet_id={@fleet.fleet_id}
           params={@params}
         />
@@ -550,7 +555,6 @@ defmodule KeyfleetWeb.FleetLive do
   defp tone(_item), do: nil
 
   attr :part, :any, required: true
-  attr :first?, :boolean, required: true
   attr :fleet_id, :string, required: true
   attr :params, :map, required: true
 
@@ -567,14 +571,11 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  defp activity_part(%{part: {:item, id, title}} = assigns) when is_binary(title) do
+  defp activity_part(%{part: {:item, id, title}} = assigns) do
     assigns = assign(assigns, id: id, title: title)
 
     ~H|“<.link patch={WorkspacePage.item_path(@fleet_id, @id)} data-item-link={@id}>{@title}</.link>”|
   end
-
-  defp activity_part(%{part: {:item, _id, nil}, first?: true} = assigns), do: ~H"An item"
-  defp activity_part(%{part: {:item, _id, nil}} = assigns), do: ~H"an item"
 
   defp activity_part(%{part: {:room, slug, name}} = assigns) do
     assigns = assign(assigns, slug: slug, name: name)
@@ -1040,7 +1041,8 @@ defmodule KeyfleetWeb.FleetLive do
         %{assigns: %{activity: %{cursor: cursor, pages: pages} = activity}} = socket
       )
       when cursor != nil and pages < @activity_pages do
-    %{items: items, cursor: next} = Activity.page(activity.fleet_id, cursor)
+    %{items: items, cursor: next} =
+      Activity.page(activity.fleet_id, cursor, actor: ShellLive.human_actor(socket))
 
     {:noreply,
      socket
@@ -1187,7 +1189,8 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   defp reread_activity(%{assigns: %{activity: %{fleet_id: fleet_id, pages: pages}}} = socket) do
-    {items, cursor, read} = FleetPage.activity_pages(fleet_id, pages)
+    {items, cursor, read} =
+      FleetPage.activity_pages(fleet_id, pages, ShellLive.human_actor(socket))
 
     socket
     |> assign(:activity, %{

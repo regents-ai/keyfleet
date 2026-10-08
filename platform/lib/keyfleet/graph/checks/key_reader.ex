@@ -8,7 +8,9 @@ defmodule Keyfleet.Graph.Checks.KeyReader do
   stale or being read again grants nothing.
 
   The summary a fleet shows anyone, its open goals, how much work is open and
-  its latest activity, is read by actions this check does not guard.
+  its latest activity, is read by actions this check does not guard, except
+  that the activity names an item other than a goal by its title only to
+  those this check lets in.
   """
   use Ash.Policy.SimpleCheck
 

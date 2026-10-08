@@ -5,7 +5,8 @@ defmodule Keyfleet.Activity do
   its proposals. Nothing is stored for it; every page is read fresh.
 
   `page/3` answers a page of items and the cursor to read the next one with;
-  `headline/2` answers the one item a fleet's card features.
+  `headline/2` answers the one item a fleet's card features, as anyone reads
+  it.
 
   ## Items
 
@@ -17,8 +18,11 @@ defmodule Keyfleet.Activity do
       did the thing, for posts and workspace changes. `nil` means a person,
       and always for a key a task was given to.
     * an item of the workspace: `%{id: "task#4", type: "task", title: title | nil}`,
-      `title` nil when the item is no longer there; a finding also carries
-      `confidence`.
+      `title` nil when the item is no longer there, or when it is not a goal
+      and the reader is not one of the fleet's members
+      (`Keyfleet.Graph.Checks.KeyReader`): anyone else reads goals by title
+      and every other item by its type alone. A finding with its title also
+      carries `confidence`.
     * a room: `%{slug: slug, name: name, topic: topic | nil}`.
 
   The kinds and their facts:
@@ -136,19 +140,21 @@ defmodule Keyfleet.Activity do
   A page of the fleet's activity, newest first: `%{items: items, cursor: cursor}`.
 
   `cursor` is nil for the newest page, or the cursor a page answered to read
-  the one after it. Option: `:limit`, the most items a page holds (1 to
-  #{@page}, #{@page} by default).
+  the one after it. Options: `:limit`, the most items a page holds (1 to
+  #{@page}, #{@page} by default); `:actor`, who reads the page, which decides
+  whether items other than goals are named by their titles (see Items).
   """
   @spec page(String.t(), cursor() | nil, keyword()) :: %{items: [item()], cursor: cursor() | nil}
   def page(fleet_id, cursor, opts \\ []) do
     limit = Keyword.get(opts, :limit, @page)
     true = limit in 1..@page
+    actor = Keyword.get(opts, :actor)
     # One database session for the whole page: the clock the first page
     # reads is the one that stamped the posts it reads.
-    Repo.checkout(fn -> read_page(fleet_id, cursor, limit) end)
+    Repo.checkout(fn -> read_page(fleet_id, cursor, limit, actor) end)
   end
 
-  defp read_page(fleet_id, cursor, limit) do
+  defp read_page(fleet_id, cursor, limit, actor) do
     positions = cursor || start()
 
     # A read that came back full leaves out its last entry, which may be the
@@ -162,7 +168,7 @@ defmodule Keyfleet.Activity do
     streams = Map.new(@sources, &{&1, fetch.(&1, positions[&1], 0)})
     {taken, streams} = merge(streams, limit, [], fetch)
 
-    %{items: name(taken, fleet_id), cursor: next_cursor(streams)}
+    %{items: name(taken, fleet_id, actor), cursor: next_cursor(streams)}
   end
 
   # Where a walk begins in each source. Posts are read up to now by the
@@ -207,7 +213,7 @@ defmodule Keyfleet.Activity do
         ]) ||
         open_question(fleet_id)
 
-    if featured, do: [featured] |> name(fleet_id) |> hd()
+    if featured, do: [featured] |> name(fleet_id, nil) |> hd()
   end
 
   defp mark(fleet_id, mark) do
@@ -596,12 +602,13 @@ defmodule Keyfleet.Activity do
 
   # Naming: the facts hold references (`{:actor, token_id, wallet}`,
   # `{:holder, wallet}` and `{:item, id}`), looked up
-  # together for the whole page, a batch per kind of reference.
-  defp name([], _fleet_id), do: []
+  # together for the whole page, a batch per kind of reference, items as
+  # `actor` may read their titles.
+  defp name([], _fleet_id, _actor), do: []
 
-  defp name(entries, fleet_id) do
+  defp name(entries, fleet_id, actor) do
     refs = entries |> Enum.flat_map(&refs(&1.facts)) |> Enum.group_by(&elem(&1, 0))
-    names = lookup(refs, fleet_id)
+    names = lookup(refs, fleet_id, actor)
 
     Enum.map(entries, fn entry ->
       %{id: entry.id, at: entry.at, kind: entry.kind, facts: resolve(entry.facts, names)}
@@ -620,11 +627,11 @@ defmodule Keyfleet.Activity do
 
   defp refs(_value), do: []
 
-  defp lookup(refs, fleet_id) do
+  defp lookup(refs, fleet_id, actor) do
     %{
       actor: agents_by_wallet(refs[:actor]),
       holder: holders(fleet_id, refs[:holder]),
-      item: items(fleet_id, refs[:item])
+      item: items(fleet_id, refs[:item], actor)
     }
   end
 
@@ -648,13 +655,14 @@ defmodule Keyfleet.Activity do
     |> Map.new(&{&1.owner_wallet, &1.token_id})
   end
 
-  defp items(_fleet_id, nil), do: %{}
+  defp items(_fleet_id, nil, _actor), do: %{}
 
-  defp items(fleet_id, refs) do
+  # An item `actor` may not read the title of is not among those read.
+  defp items(fleet_id, refs, actor) do
     ids = refs |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
 
     fleet_id
-    |> Graph.object_titles!(ids, load: [:card])
+    |> Graph.object_titles!(ids, load: [:card], actor: actor)
     |> Map.new(&{&1.id, &1})
   end
 

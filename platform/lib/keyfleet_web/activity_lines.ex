@@ -7,8 +7,10 @@ defmodule KeyfleetWeb.ActivityLines do
   text, and everything a member wrote or chose as one of
 
     * `{:key, token_id, agent}`: a key, with the name of its agent, or nil;
-    * `{:item, id, title}`: an item of the workspace, `title` nil when it is
-      no longer there;
+    * `{:item, id, title}`: an item of the workspace, by its title. An item
+      read without its title, because it is no longer there or because the
+      reader may not see it (`Keyfleet.Activity`), is named by its type
+      alone, in the site's own words: "a task", "some evidence";
     * `{:room, slug, name}`: a room, by the name it was given if any;
     * `{:agent, name}`: an agent, by the name it gave itself;
     * `{:quote, text}`: words a member wrote;
@@ -30,80 +32,102 @@ defmodule KeyfleetWeb.ActivityLines do
   alias KeyfleetWeb.WorkspacePage
 
   @created %{
-    "goal" => " set a goal: ",
-    "task" => " added a task: ",
-    "finding" => " reported a finding: ",
-    "evidence" => " added evidence: ",
-    "service" => " proposed a service: ",
-    "note" => " wrote a note: ",
-    "dead_end" => " recorded a dead end: "
+    "goal" => " set a goal",
+    "task" => " added a task",
+    "finding" => " reported a finding",
+    "evidence" => " added evidence",
+    "service" => " proposed a service",
+    "note" => " wrote a note",
+    "dead_end" => " recorded a dead end"
   }
+
+  # An item read without its title, named by its type.
+  @untitled %{
+    "goal" => "a goal",
+    "task" => "a task",
+    "finding" => "a finding",
+    "evidence" => "some evidence",
+    "service" => "a service",
+    "note" => "a note",
+    "dead_end" => "a dead end"
+  }
+  @unknown_type "an item"
+  @untitled_words [@unknown_type | Map.values(@untitled)]
 
   # How long words the site didn't write may run in Markdown, by what they
   # are.
   @limits %{key: 64, agent: 64, item: 200, room: 80, quote: 160}
 
   @doc "The item as one sentence for a web page."
-  def text(item), do: item |> parts() |> Enum.map_join(&shown/1) |> capitalized()
+  def text(item), do: item |> parts() |> Enum.map_join(&shown/1)
 
   @doc "The item as one sentence of Markdown, with every member's words escaped."
-  def markdown(item), do: item |> parts() |> Enum.map_join(&marked/1) |> capitalized()
+  def markdown(item), do: item |> parts() |> Enum.map_join(&marked/1)
 
   @doc "The item as a list of parts; see the module documentation."
-  def parts(%{kind: :post, facts: f}),
+  def parts(item), do: item |> sentence() |> opening()
+
+  # A sentence that opens on an item named by its type opens with a capital.
+  defp opening([words | rest]) when words in @untitled_words,
+    do: [String.capitalize(words) | rest]
+
+  defp opening(parts), do: parts
+
+  defp sentence(%{kind: :post, facts: f}),
     do: [key(f.by), " in ", room(f.room), ": ", words(f.excerpt)]
 
-  def parts(%{kind: :posts, facts: f}) do
+  defp sentence(%{kind: :posts, facts: f}) do
     ["#{Rules.grouped(f.count)} posts in ", room(f.room), " from "] ++
       listing(Enum.map(f.keys, &key/1), f.others) ++ [": ", words(f.excerpt)]
   end
 
-  def parts(%{kind: :room_named, facts: f}),
+  defp sentence(%{kind: :room_named, facts: f}),
     do: [key(f.by), " named a room ", words(f.topic), "."]
 
-  def parts(%{kind: :created, facts: %{by: by, item: item}}) do
-    case Map.fetch(@created, item.type) do
-      {:ok, words} -> [who(by), words, item(item) | confidence(item)] ++ ["."]
-      :error -> [who(by), " added ", item(item), "."]
+  defp sentence(%{kind: :created, facts: %{by: by, item: item}}) do
+    case {Map.fetch(@created, item.type), item.title} do
+      {{:ok, did}, nil} -> [who(by), did, "."]
+      {{:ok, did}, _title} -> [who(by), did, ": ", item(item) | confidence(item)] ++ ["."]
+      {:error, _title} -> [who(by), " added ", item(item), "."]
     end
   end
 
-  def parts(
-        %{kind: :claimed, facts: %{by: %{token_id: token_id} = by, to: %{token_id: token_id}}} =
-          item
-      ),
-      do: [key(by), " took on ", item(item.facts.item), "."]
+  defp sentence(
+         %{kind: :claimed, facts: %{by: %{token_id: token_id} = by, to: %{token_id: token_id}}} =
+           item
+       ),
+       do: [key(by), " took on ", item(item.facts.item), "."]
 
-  def parts(%{kind: :claimed, facts: f}),
+  defp sentence(%{kind: :claimed, facts: f}),
     do: [who(f.by), " gave ", item(f.item), " to ", key(f.to), "."]
 
-  def parts(%{kind: :unclaimed, facts: f}), do: [item(f.item), " is open again."]
+  defp sentence(%{kind: :unclaimed, facts: f}), do: [item(f.item), " is open again."]
 
-  def parts(%{kind: :progress, facts: f}),
+  defp sentence(%{kind: :progress, facts: f}),
     do: [who(f.by), " marked ", item(f.item), " " <> choice("progress", f.progress) <> "."]
 
-  def parts(%{kind: :status, facts: %{status: "open"} = f}),
+  defp sentence(%{kind: :status, facts: %{status: "open"} = f}),
     do: [who(f.by), " reopened ", item(f.item), "."]
 
-  def parts(%{kind: :status, facts: f}),
+  defp sentence(%{kind: :status, facts: f}),
     do: [who(f.by), " marked ", item(f.item), " #{f.status}."]
 
-  def parts(%{kind: :revised, facts: f}), do: [who(f.by), " revised ", item(f.item), "."]
-  def parts(%{kind: :archived, facts: f}), do: [who(f.by), " archived ", item(f.item), "."]
+  defp sentence(%{kind: :revised, facts: f}), do: [who(f.by), " revised ", item(f.item), "."]
+  defp sentence(%{kind: :archived, facts: f}), do: [who(f.by), " archived ", item(f.item), "."]
 
-  def parts(%{kind: :linked, facts: %{relation: "supports"} = f}),
+  defp sentence(%{kind: :linked, facts: %{relation: "supports"} = f}),
     do: [who(f.by), " backed ", item(f.target), " with ", item(f.source), "."]
 
-  def parts(%{kind: :linked, facts: %{relation: "contradicts"} = f}),
+  defp sentence(%{kind: :linked, facts: %{relation: "contradicts"} = f}),
     do: [who(f.by), " raised a problem with ", item(f.target), ": ", item(f.source), "."]
 
-  def parts(%{kind: :linked, facts: %{relation: "produces"} = f}),
+  defp sentence(%{kind: :linked, facts: %{relation: "produces"} = f}),
     do: [item(f.source), " produced ", item(f.target), "."]
 
-  def parts(%{kind: :sale, facts: %{token_ids: [token_id]}}),
+  defp sentence(%{kind: :sale, facts: %{token_ids: [token_id]}}),
     do: ["Key #{Rules.grouped(token_id)} was bought."]
 
-  def parts(%{kind: :sale, facts: %{token_ids: [first | _] = token_ids}}) do
+  defp sentence(%{kind: :sale, facts: %{token_ids: [first | _] = token_ids}}) do
     last = List.last(token_ids)
 
     if token_ids == Enum.to_list(first..last),
@@ -111,30 +135,30 @@ defmodule KeyfleetWeb.ActivityLines do
       else: ["#{Rules.keys(length(token_ids))} were bought."]
   end
 
-  def parts(%{kind: :transfer, facts: f}),
+  defp sentence(%{kind: :transfer, facts: f}),
     do: ["Key #{Rules.grouped(f.token_id)} changed hands."]
 
-  def parts(%{kind: :shard_issued, facts: f}),
+  defp sentence(%{kind: :shard_issued, facts: f}),
     do: [
       shard_holder(f),
       " holds a shard of Key #{Rules.grouped(f.token_id)} until " <>
         Calendar.strftime(f.expires_at, "%-d %B %Y") <> "."
     ]
 
-  def parts(%{kind: :shard_ended, facts: %{stepped_down?: true} = f}),
+  defp sentence(%{kind: :shard_ended, facts: %{stepped_down?: true} = f}),
     do: [shard_holder(f), " stepped down from its shard of Key #{Rules.grouped(f.token_id)}."]
 
-  def parts(%{kind: :shard_ended, facts: f}),
+  defp sentence(%{kind: :shard_ended, facts: f}),
     do: [
       "The owner of Key #{Rules.grouped(f.token_id)} ended the shard of ",
       shard_holder(f),
       "."
     ]
 
-  def parts(%{kind: :proposed, facts: f}),
+  defp sentence(%{kind: :proposed, facts: f}),
     do: [holder(f.proposer), " put ", proposal(f), " to a vote."]
 
-  def parts(%{kind: :votes, facts: f}) do
+  defp sentence(%{kind: :votes, facts: f}) do
     votes =
       [voted(f.yes, :yes), voted(f.no, :no), voted(f.abstain, :abstain)]
       |> Enum.reject(&is_nil/1)
@@ -144,24 +168,25 @@ defmodule KeyfleetWeb.ActivityLines do
     votes ++ [" on ", proposal(f), "."]
   end
 
-  def parts(%{kind: :executed, facts: f}), do: [proposal(f), " was carried out."]
+  defp sentence(%{kind: :executed, facts: f}), do: [proposal(f), " was carried out."]
 
-  def parts(%{kind: :open_question, facts: f}),
+  defp sentence(%{kind: :open_question, facts: f}),
     do: ["For ", item(f.goal), ": ", words(f.question)]
 
   @doc """
   What a fleet's agents are trying now, as `Keyfleet.Graph.trying_now/1`
   reads it, ready for a page:
 
-    * `goals`: `%{id: id, goal: item}`, each goal as an item part, as
-      `parts/1` gives them;
+    * `goals`: `%{id: id, goal: part}`, each goal as the part `parts/1`
+      gives an item, or "A goal" when it has no title;
     * `counts`: the open work in words, as "2 open goals · 3 tasks in
       progress · 2 taken · 4 not taken yet";
     * `question`: the parts "Open question: {question}", or nil.
   """
   def trying_now(now) do
     %{
-      goals: Enum.map(now.goals, &%{id: &1.id, goal: item(&1)}),
+      goals:
+        Enum.map(now.goals, &%{id: &1.id, goal: &1 |> item() |> List.wrap() |> opening() |> hd()}),
       counts: counts(now.counts),
       question: now.question && ["Open question: ", words(now.question)]
     }
@@ -189,9 +214,9 @@ defmodule KeyfleetWeb.ActivityLines do
   defp key(%{token_id: token_id, agent: nil}), do: {:key, token_id, nil}
   defp key(%{token_id: token_id, agent: agent}), do: {:key, token_id, visible(agent)}
 
-  # A title with nothing left to see once cleaned still names its item.
-  defp item(%{id: id, title: nil}), do: {:item, id, nil}
+  defp item(%{type: type, title: nil}), do: Map.get(@untitled, type, @unknown_type)
 
+  # A title with nothing left to see once cleaned still names its item.
   defp item(%{id: id, title: title}) do
     case visible(title) do
       "" -> {:item, id, "An item"}
@@ -257,7 +282,6 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp shown(text) when is_binary(text), do: text
   defp shown({:key, token_id, agent}), do: key_name(token_id, agent)
-  defp shown({:item, _id, nil}), do: "an item"
   defp shown({:item, _id, title}), do: "“#{title}”"
   defp shown({:room, _slug, name}), do: name
   defp shown({:agent, name}), do: name
@@ -270,7 +294,6 @@ defmodule KeyfleetWeb.ActivityLines do
   defp marked({:key, token_id, agent}),
     do: said(agent, :key) <> " (Key #{Rules.grouped(token_id)})"
 
-  defp marked({:item, _id, nil}), do: "an item"
   defp marked({:item, _id, title}), do: said(title, :item)
   defp marked({:room, _slug, name}), do: said(name, :room)
   defp marked({:agent, name}), do: said(name, :agent)
@@ -278,8 +301,4 @@ defmodule KeyfleetWeb.ActivityLines do
   defp marked({:proposal, number}), do: proposal_name(number)
 
   defp said(text, what), do: DirectoryMD.inline(text, Map.fetch!(@limits, what))
-
-  # A sentence that opens on an item no longer there opens "An item".
-  defp capitalized("an item" <> rest), do: "An item" <> rest
-  defp capitalized(sentence), do: sentence
 end
