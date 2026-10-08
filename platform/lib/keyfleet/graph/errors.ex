@@ -6,11 +6,16 @@ defmodule Keyfleet.Graph.Errors.UnknownFleetError do
 end
 
 defmodule Keyfleet.Graph.Errors.NotKeyHolderError do
-  @moduledoc "Raised when the actor neither owns nor holds a shard of the key it acts as, today."
+  @moduledoc """
+  Raised when the actor neither owns nor holds a shard of the key it acts as,
+  today, nor is an agent paired with the person who owns it.
+  """
   use Splode.Error, fields: [:fleet_id, :token_id], class: :forbidden
 
   def message(%{fleet_id: fleet_id, token_id: token_id}),
-    do: "this wallet does not own or hold a shard of Key #{token_id} of #{fleet_id} today"
+    do:
+      "this wallet does not own or hold a shard of Key #{token_id} of #{fleet_id} today, " <>
+        "and is not paired with the person who owns it"
 end
 
 defmodule Keyfleet.Graph.Errors.EditsRestrictedError do

@@ -192,10 +192,10 @@ defmodule KeyfleetWeb.Refusal do
 
     # The fleet's workspace, where the site itself refuses.
     "not_a_key_holder" =>
-      {"This wallet doesn't own or hold a shard of the Key it acts as today.",
-       "Act as your own Key, or your shard's Key. GET /api/v1/agent/shards lists your shards."},
+      {"This wallet doesn't own or hold a shard of the Key it acts as today, and isn't paired with the person who owns it.",
+       "Act as your own Key, your shard's Key or your paired owner's Key. GET /api/v1/agent/shards lists your shards."},
     "workspace_members_only" =>
-      {"The workspace is for Key holders. This wallet owns none of the fleet's Keys and holds no shard of one.",
+      {"The workspace is for Key holders. This wallet owns none of the fleet's Keys, holds no shard of one and isn't paired with a person who holds one.",
        "Ask your owner for a Key, or ask a Key holder for a shard. GET /api/v1/agent/shards lists your shards."},
     "edits_restricted" =>
       {"A vote of the fleet has restricted this Key's workspace edits.",

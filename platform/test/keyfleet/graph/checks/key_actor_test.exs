@@ -6,6 +6,7 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Errors.CheckExpiredError
+  alias Keyfleet.Graph.Errors.NotKeyHolderError
   alias Keyfleet.Keys
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
 
@@ -114,6 +115,50 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
     assert {:error, %OwnershipRefreshingError{}} =
              KeyActor.command(owner(1), @levelled, 1, "c-1", 1_000)
   end
+
+  # Widens who writes a fleet's workspace: a paired agent holding nothing in
+  # the fleet is its person's Key, stamped as itself, and only while the
+  # person holds that Key.
+  test "a paired agent with no Key or shard here acts as its person's Key, while they hold it" do
+    fleet = "fleet_tech_classic"
+    sell(fleet, 1..2)
+    helper = agent("9")
+    paired = %{helper | pairing: owner(1)}
+
+    assert {:error, %NotKeyHolderError{}} = KeyActor.command(helper, fleet, 1, "c-1", 1_000)
+    assert KeyActor.member(helper, fleet, 1_000) == {:ok, false}
+
+    assert {:ok, %{auth: %{kind: "agent", operator_wallet: operator}, principal: principal}} =
+             KeyActor.command(paired, fleet, 1, "c-1", 1_000)
+
+    assert operator == helper.wallet_address
+    assert String.ends_with?(principal, "@1/agent:#{helper.wallet_address}")
+    assert KeyActor.member(paired, fleet, 1_000) == {:ok, true}
+    assert {:error, %NotKeyHolderError{}} = KeyActor.command(paired, fleet, 2, "c-1", 1_000)
+
+    transfer(fleet, 1)
+
+    assert {:error, %NotKeyHolderError{}} = KeyActor.command(paired, fleet, 1, "c-1", 1_000)
+    assert KeyActor.member(paired, fleet, 1_000) == {:ok, false}
+  end
+
+  test "a paired agent holding a shard in the fleet acts as that shard, never as its person" do
+    fleet = "fleet_tech_classic"
+    sell(fleet, 1..2)
+    paired = %{agent("9") | pairing: owner(1)}
+    ChainHelpers.issue_shard!(fleet, 2, paired.wallet_address)
+
+    assert {:ok, _command} = KeyActor.command(paired, fleet, 2, "c-1", 1_000)
+    assert {:error, %NotKeyHolderError{}} = KeyActor.command(paired, fleet, 1, "c-1", 1_000)
+  end
+
+  defp agent(character),
+    do: %Actors.Agent{
+      wallet_address: "0x" <> String.duplicate(character, 40),
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
 
   defp scopes(fleet, token_id) do
     {:ok, command} = KeyActor.command(owner(token_id), fleet, token_id, "c-1", 1_000)
