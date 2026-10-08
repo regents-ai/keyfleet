@@ -265,7 +265,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert Enum.map(send_signed(c, "POST", @read_general).body["messages"], & &1["seq"]) == [1]
   end
 
-  test "a mute hides a key's posts from the muting agent's reads and syncs, and from nobody else",
+  test "a mute hides a key's posts from the muting agent's reads, Key threads and syncs, and from nobody else",
        c do
     sell!("fibonacci_syndicate", [2])
     shard(c, "fibonacci_syndicate", 2)
@@ -284,6 +284,11 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     assert send_signed(c, "POST", @send_general, send_body("From key 2", "k-1")).status == 201
 
+    Rooms.send_to_key!(
+      %{fleet_id: "fibonacci_syndicate", token_id: 2, body: "To key 2", idempotency_key: "h-2"},
+      actor: person
+    )
+
     muted = send_signed(c, "POST", mute_path <> "mute")
     assert muted.status == 200
     assert [%{"token_id" => 1}] = muted.body["mutes"]
@@ -295,6 +300,9 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     synced = send_signed(c, "POST", @sync_path, sync_body(%{"general" => 0}))
     assert [%{"cursor" => 2, "messages" => [%{"as_key" => 2}]}] = synced.body["rooms"]
     assert Keyfleet.ContractSchema.errors(synced.body, "FleetSync") == []
+
+    thread = send_signed(c, "POST", "/api/v1/agent/keys/fibonacci_syndicate/2/messages/read")
+    assert %{"messages" => [], "cursor" => 1} = thread.body
 
     assert {:ok, [_key_one, _key_two]} =
              Rooms.read_messages("fibonacci_syndicate", "general", %{}, actor: person)

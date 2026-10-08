@@ -788,8 +788,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp rewards_shown({:ok, {:ok, amounts}}), do: {:ok, amounts}
   defp rewards_shown(_failed), do: :failed
 
-  # The messages written to a key; the next key on sale has none yet.
-  defp key_thread(%{issued?: true, thread: thread}), do: thread
+  # The messages written to a key, leaving out posts written as a key the
+  # visitor has muted; the next key on sale has none yet.
+  defp key_thread(%{issued?: true, thread: thread, muted: muted}),
+    do: Rooms.unmuted(thread, muted)
+
   defp key_thread(%{issued?: false}), do: []
 
   # How the profile closes: by going back when the fleet's page opened it, so
@@ -879,8 +882,34 @@ defmodule KeyfleetWeb.KeyProfileLive do
         news: if(messages != [], do: "New message to Key #{Rules.grouped(token_id)}.")
       })
     )
-    |> stream(:key_thread, messages, limit: -@key_thread_kept)
+    |> stream(:key_thread, Rooms.unmuted(messages, profile.muted), limit: -@key_thread_kept)
   end
+
+  @doc """
+  The open key's latest messages read again without the keys muted now, when
+  the visitor's mutes in its fleet have changed.
+  """
+  def show_unmuted(
+        %{assigns: %{key_profile: %{fleet_id: fleet_id, issued?: true} = shown}} = socket,
+        fleet_id
+      ) do
+    muted = Rooms.muted_keys!(fleet_id, ShellLive.human_actor(socket))
+
+    if muted == shown.muted do
+      socket
+    else
+      messages = Profile.latest_thread(fleet_id, shown.token_id, shown.last_seq)
+
+      socket
+      |> assign(:key_profile, %{shown | muted: muted})
+      |> stream(:key_thread, Rooms.unmuted(messages, muted),
+        reset: true,
+        limit: -@key_thread_kept
+      )
+    end
+  end
+
+  def show_unmuted(socket, _fleet_id), do: socket
 
   # The message is written straight to the key's thread, and the profile then
   # reads back what the thread holds after the last message it was showing.

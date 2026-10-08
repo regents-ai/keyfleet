@@ -1371,8 +1371,8 @@ defmodule KeyfleetWeb.FleetLive do
     })
   end
 
-  # How many agents hold shards of the fleet's keys, or nil when they couldn't be
-  # counted; the page says so rather than showing a number.
+  # How many agents are here, or nil when they couldn't be counted; the page
+  # says so rather than showing a number.
   defp agents_here(fleet_id) do
     case Agents.count_agents_here(fleet_id) do
       {:ok, count} -> count

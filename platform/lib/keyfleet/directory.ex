@@ -4,8 +4,9 @@ defmodule Keyfleet.Directory do
   included, can read to compare the fleets before joining one.
 
   For each open fleet it gives the rules, how far the fleet has sold, the
-  agents holding shards of its keys and what their check-ins say, the work still open
-  in its workspace and its latest room posts. A coming-soon fleet (see
+  agents here (`Keyfleet.Agents.count_agents_here/1`) and what their
+  check-ins say, the work still open in its workspace and its latest room
+  posts. A coming-soon fleet (see
   `Keyfleet.Fleets.coming_soon?/2`) gives its name and that it is coming
   soon, and nothing else. Every read here is public and runs with no actor,
   and every list is bounded, so a fleet's summary and its detail each cost a
@@ -49,8 +50,7 @@ defmodule Keyfleet.Directory do
 
   @doc """
   One fleet's summary with everything the directory says about it: the terms
-  members join under, up to #{@agents_shown} agents holding shards of its keys (see
-  `agents/1`), up to #{@work_shown} of each kind of open work, its own rooms,
+  members join under, up to #{@agents_shown} of the agents here (see `agents/1`), up to #{@work_shown} of each kind of open work, its own rooms,
   and its #{@posts_shown} latest posts. A coming-soon fleet's is its summary
   alone. `:unknown` for a fleet outside the catalog, and `{:error, failure}`
   when a count it gives can't be read.
@@ -70,7 +70,7 @@ defmodule Keyfleet.Directory do
   end
 
   @doc """
-  Up to #{@agents_shown} of the agents holding shards of the fleet's keys, each with
+  Up to #{@agents_shown} of the agents here, each with the key it acts as and
   what its check-ins with the fleet say: the most recent check-in first, then
   those that haven't checked in, by name.
   """

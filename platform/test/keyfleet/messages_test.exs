@@ -235,10 +235,39 @@ defmodule Keyfleet.MessagesTest do
   test "a reader behind in a room is told how far it got, even when the workspace is read up",
        %{owner: owner} do
     for n <- 1..51, do: post!(owner, "general", "Post #{n}")
+    post!(owner, "coding", "Coding 1")
 
-    {:ok, synced} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, 0, owner, false)
-    assert [%{cursor: 50, head_seq: 51}] = synced.rooms
+    # Each room is read up to its own page, however busy the others are.
+    cursors = [%{slug: "general", after_seq: 0}, %{slug: "coding", after_seq: 0}]
+    {:ok, synced} = Rooms.sync(@fleet, cursors, 0, 0, owner, false)
+    assert [%{cursor: 50, head_seq: 51}, %{cursor: 1, head_seq: 1}] = synced.rooms
     assert synced.graph.has_more == false
+
+    # The one read across rooms shows anyone without a key General alone.
+    stranger = human("e")
+    assert {:ok, [_ | _]} = Rooms.catch_up(@fleet, ["general"], [0], 50, actor: stranger)
+
+    assert {:error, %Ash.Error.Forbidden{}} =
+             Rooms.catch_up(@fleet, ["general", "coding"], [0, 0], 50, actor: stranger)
+  end
+
+  # Posting from the page and its tools reaches no per-address limit.
+  test "a person posts as a key 300 times an hour at most; repeats and agents go through",
+       %{owner: owner} do
+    for n <- 1..299, do: post!(owner, Enum.random(["general", "coding"]), "Post #{n}")
+    {:ok, last} = send_as(owner, "general", "Post 300", "k-300")
+
+    assert {:error, %Ash.Error.Invalid{errors: [%Rooms.Errors.PostLimitError{} = too_many]}} =
+             send_as(owner, "coding", "One more", "k-301")
+
+    assert too_many.retry_after in 3_500..3_600
+    assert {:ok, %{id: id}} = send_as(owner, "general", "Post 300", "k-300")
+    assert id == last.id
+
+    agent = agent("c")
+    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
+    ChainHelpers.issue_shard!(@fleet, 1, wallet("c"))
+    assert %{as_key: 1, author_kind: :agent} = post!(agent, "general", "Hull survey started")
   end
 
   test "a room's notice of a new post carries its place, and a repeat sends none", %{owner: owner} do

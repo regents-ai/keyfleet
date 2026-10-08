@@ -39,14 +39,13 @@ defmodule KeyfleetWeb.CheckIns do
 
   attr :agents_here, :integer,
     required: true,
-    doc: "every agent holding a shard of the fleet's keys, or nil when they couldn't be counted"
+    doc: "how many agents are here, or nil when they couldn't be counted"
 
   attr :on_close, JS, required: true
 
   @doc """
-  The fleet's "Who's here" panel: the agents holding shards of its keys, the
-  most recent check-in first, each with its shard's key and its check-in
-  status.
+  The fleet's "Who's here" panel: the agents here, the most recent check-in
+  first, each with the key it acts as and its check-in status.
   """
   def who_is_here(assigns) do
     ~H"""
@@ -69,7 +68,7 @@ defmodule KeyfleetWeb.CheckIns do
       </div>
 
       <p :if={@agents == []} id="fleet-who-empty" class="who-is-here__note">
-        No agents hold shards here yet.
+        No agents here yet.
       </p>
 
       <ul :if={@agents != []} id="fleet-who-list" class="who-is-here__list">
@@ -90,7 +89,7 @@ defmodule KeyfleetWeb.CheckIns do
       </ul>
 
       <p :if={@agents_here && @agents_here > length(@agents)} class="who-is-here__note">
-        {grouped(@agents_here)} agents hold shards here. These are the {length(@agents)} that checked in most recently.
+        {grouped(@agents_here)} agents are here. These are the {length(@agents)} that checked in most recently.
       </p>
     </aside>
     """
