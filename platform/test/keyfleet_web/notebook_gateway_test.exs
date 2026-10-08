@@ -76,6 +76,19 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refute_received {:hub, _method, "/api/v1/projects", "u_" <> _, _body}
   end
 
+  # Costly failure: a notebook connection opened just before the notebook
+  # sign-in ends stays open long after it, until the Keyfleet sign-in ends.
+  test "what a person opens ends when their notebook sign-in does", c do
+    entered = DateTime.to_unix(DateTime.utc_now())
+    cookie = enter!(c.holder)
+    pass_ends = entered + Notebooks.config()[:session_max_age]
+
+    opened = get_notebook(@host, "/", cookie)
+    assert opened.status == 200
+    ends_at = DateTime.to_unix(opened.assigns.notebook_sign_in.ends_at)
+    assert ends_at in pass_ends..(pass_ends + 1)
+  end
+
   # Costly failure: someone who signed out of Keyfleet, on a shared computer,
   # leaves the fleet's notebooks open to the next person at that browser, in a
   # new request or a notebook connection already open.
@@ -89,7 +102,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     {:ok, %{"session_authority_id" => sign_in}} =
       Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, "notebook session", cookie)
 
-    {:ok, _person, topic} = Notebooks.person(sign_in, c.holder.human_account_id)
+    {:ok, _person, topic, _ends_at} = Notebooks.person(sign_in, c.holder.human_account_id)
 
     :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
 
@@ -130,6 +143,8 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     budget = Application.fetch_env!(:keyfleet, :api_rate_limit)
     on_exit(fn -> Application.put_env(:keyfleet, :api_rate_limit, budget) end)
     Application.put_env(:keyfleet, :api_rate_limit, limit: 1, window_seconds: 3600)
+    # Other tests spend the same hourly budget for this address; start unspent.
+    :ets.delete_all_objects(Keyfleet.Accounts.RequestRateLimiter)
 
     too_large = signed_post(String.duplicate("a", 64 * 1024 + 1))
     assert json_response(too_large, 413)["error"]["code"] == "request_too_large"

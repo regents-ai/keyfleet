@@ -117,7 +117,12 @@ defmodule Keyfleet.BrowserChain do
     pass!(fleet_id, [])
 
     StubClient.share_chain(
-      %{number: 1, hash: "0x" <> String.duplicate("f", 64), timestamp: DateTime.utc_now()},
+      %{
+        number: 1,
+        hash: "0x" <> String.duplicate("f", 64),
+        timestamp: DateTime.utc_now(),
+        base_fee: 0
+      },
       calls: &answer/3
     )
 
@@ -399,7 +404,8 @@ defmodule Keyfleet.BrowserChain do
       %{
         number: block + 40,
         hash: "0x" <> String.duplicate("f", 64),
-        timestamp: DateTime.utc_now()
+        timestamp: DateTime.utc_now(),
+        base_fee: 0
       },
       logs_at.(fleet, block)
     )
