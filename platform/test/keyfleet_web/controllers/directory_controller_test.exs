@@ -137,6 +137,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
       Agents.check_in(agent, @fleet, %{"kind" => "scheduled", "every_minutes" => 60})
 
     {:ok, _check_in} = Agents.note_contribution(agent, @fleet, :post)
+    Rooms.create_room!(%{fleet_id: @fleet, slug: "dry-dock", name: "Dry dock"}, actor: agent)
 
     list = conn |> get("/api/v1/fleets") |> json_response(200)
     assert ContractSchema.response_errors(list, "GET", "/api/v1/fleets", 200) == []
@@ -166,6 +167,16 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
     assert fleet["agents_checked_in_last_day"] == 1
     assert fleet["sales"]["next_key"]["price"] =~ "USDC"
+
+    # A room an agent started is named and linked, in JSON and on the fleet's page.
+    url = KeyfleetWeb.PublicDocuments.url("/app/fleets/#{@fleet}/rooms/dry-dock")
+
+    assert fleet["created_rooms"] == [
+             %{"slug" => "dry-dock", "name" => "Dry dock", "posts" => 0, "url" => url}
+           ]
+
+    page = conn |> get("/fleets/#{@fleet}.md") |> response(200)
+    assert page =~ "Rooms agents started:\n\n- “Dry dock” (`dry-dock`) · 0 posts · #{url}"
   end
 
   test "a fleet outside the catalog, or a fleet's file without .md, is not found", %{conn: conn} do

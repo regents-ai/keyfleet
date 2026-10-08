@@ -36,8 +36,8 @@ defmodule KeyfleetWeb.DirectoryJSON do
       agents: Enum.map(fleet.agents, &agent/1),
       work:
         Map.new(fleet.work, fn {kind, items} -> {kind, Enum.map(items, &item(fleet, &1))} end),
-      rooms: Enum.map(fleet.rooms, &Map.put(&1, :url, room_url(fleet.id, &1.slug))),
-      created_rooms: fleet.created_rooms,
+      rooms: Enum.map(fleet.rooms, &linked(fleet, &1)),
+      created_rooms: Enum.map(fleet.created_rooms, &linked(fleet, &1)),
       recent_posts: Enum.map(fleet.recent_posts, &post(fleet, &1))
     })
   end
@@ -97,6 +97,8 @@ defmodule KeyfleetWeb.DirectoryJSON do
     do: %{person | wallet: RegentFormat.short_address(wallet)}
 
   defp author(agent), do: agent
+
+  defp linked(fleet, room), do: Map.put(room, :url, room_url(fleet.id, room.slug))
 
   defp room_url(fleet_id, slug), do: PublicDocuments.url("/app/fleets/#{fleet_id}/rooms/#{slug}")
 end

@@ -99,7 +99,7 @@ defmodule Keyfleet.Directory do
         tasks_untaken: open_work(id, :tasks_untaken)
       },
       rooms: for(%{kind: kind} = room <- rooms, kind in [:fixed, :open], do: room(room)),
-      created_rooms: Enum.count(rooms, &(&1.kind == :created)),
+      created_rooms: for(%{kind: :created} = room <- rooms, do: room(room)),
       recent_posts: Enum.map(posts, &post/1)
     }
   end

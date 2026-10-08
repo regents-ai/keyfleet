@@ -25,6 +25,7 @@ import {FleetPreview} from "./hooks/fleet_preview"
 import {HolographicCard} from "./hooks/holographic_card"
 import {HomePrism} from "./hooks/home_prism"
 import {KeyMap} from "./hooks/key_map"
+import {LiveTools} from "./hooks/live_tools"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
 import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
@@ -299,6 +300,7 @@ const hooks = {
   HolographicCard,
   HomePrism,
   KeyMap,
+  LiveTools,
   ModalDialog,
   MotionCascade,
   MotionCount,

@@ -219,7 +219,7 @@ for (const tool of tools) {
     Boolean(tool.title) && Boolean(tool.description) && schema.type === "object" &&
     schema.additionalProperties === false && Array.isArray(schema.required) &&
     Object.keys(tool.annotations || {}).every((hint) => hints.includes(hint)) &&
-    ["requires", "route", "scope"].every((key) => typeof tool[key] === "string"));
+    ["requires", "scope"].every((key) => typeof tool[key] === "string"));
 }
 // The page's script registers every manifest entry whose scope is "site", from
 // the copy of the manifest bundled into it: that copy must name the same tools.

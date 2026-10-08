@@ -98,6 +98,14 @@ defmodule KeyfleetWeb.RoomsLive do
       </section>
 
       <div :if={@room.rooms != []} class="rooms-grid">
+        <%!-- The tools a browser's own agent reads and writes the rooms with (page_tools.ts). --%>
+        <div
+          id="rooms-tools"
+          phx-hook="LiveTools"
+          data-webmcp-tools="list_rooms read_room post_to_room mute_key unmute_key"
+          hidden
+        >
+        </div>
         <div class="rooms-side">
           <nav class="rooms-panel rooms-list" aria-label="Rooms">
             <h2>Rooms</h2>
