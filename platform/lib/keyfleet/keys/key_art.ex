@@ -36,8 +36,9 @@ defmodule Keyfleet.Keys.KeyArt do
         decode_body: false,
         retry: false,
         redirect: false,
-        # The service's machine may be asleep and wake for this request.
-        connect_options: [timeout: 15_000],
+        # The service's machine may be asleep and wake for this request. Its
+        # private Flycast address has only an IPv6 record.
+        connect_options: [timeout: 15_000, transport_opts: [inet6: true]],
         receive_timeout: 150_000
       ] ++ config[:req_options]
     )
