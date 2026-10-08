@@ -177,18 +177,6 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "club_claims_address",
-      "type": "text"
-    },
-    {
-      "allow_nil?": true,
-      "default": "nil",
-      "generated?": false,
-      "precision": null,
-      "primary_key?": false,
-      "references": null,
-      "scale": null,
-      "size": null,
       "source": "deployed_block",
       "type": "bigint"
     },
@@ -244,7 +232,7 @@
         "manager_address"
       ],
       "base_filter": null,
-      "check": "num_nulls(chain_id, chain_fleet_id, keys_address, manager_address, rewards_address, votes_address, treasury_address, shards_address, usdc_address, regent_address, regent_staking_address, autolaunch_factory_address, club_claims_address, deployed_block, trait_table_hash, deck_hash, deck_size) IN (0, 17)",
+      "check": "num_nulls(chain_id, chain_fleet_id, keys_address, manager_address, rewards_address, votes_address, treasury_address, shards_address, usdc_address, regent_address, regent_staking_address, autolaunch_factory_address, deployed_block, trait_table_hash, deck_hash, deck_size) IN (0, 16)",
       "name": "fleets_deployment_whole"
     },
     {
@@ -329,14 +317,6 @@
     },
     {
       "attribute": [
-        "club_claims_address"
-      ],
-      "base_filter": null,
-      "check": "club_claims_address ~ '^0x[0-9a-f]{40}$'",
-      "name": "fleets_club_claims_address_shape"
-    },
-    {
-      "attribute": [
         "chain_fleet_id"
       ],
       "base_filter": null,
@@ -372,7 +352,7 @@
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true,
-  "hash": "60A5883CC587B1F8814D5A336B003E2FE0EAAFFE13828DDA31AC6C1888F80860",
+  "hash": "8C2FE824FA19805314804AFEAE539426C8E775041D6282A235F22ED08F64E64E",
   "identities": [],
   "multitenancy": {
     "attribute": null,

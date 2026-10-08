@@ -27,9 +27,10 @@ The release runs in seven steps, in this order:
    `contracts/deployments/base.deployed.json`.
 6. **Phases.** Only when the founder says when sales open, `KeyfleetSafeSteps`
    with the step `advance-phase` writes the next phase step for the founder to
-   sign, naming that moment: phase 1 opens Classic #1, phase 2 opens the other
-   four founding fleets, phase 3 lets anyone create a fleet.
-7. **Regents Club gifts.** Once phase 2 has opened, `KeyfleetSafeSteps` with
+   sign, naming that moment: phase 1 opens Classic #1 and the Regents Club,
+   phase 2 opens Syndicate #1, Accelerant #1 and Cascade #1, phase 3 lets
+   anyone create a fleet.
+7. **Regents Club gifts.** Once phase 1 has opened, `KeyfleetSafeSteps` with
    the step `club-gifts` writes the Safe transactions that give the 1,998
    Regents Club keys, 80 per transaction, each to the holder of its Pass, for
    the founder to sign.
@@ -381,16 +382,16 @@ transaction lands, and what it opens waits for the named moment.
 
 It checks the step against Base's current state as the Safe and writes one file,
 `deployments/safe/base.phase-1.json`, `base.phase-2.json` or
-`base.phase-3.json`, for the founder to sign. Phase 1 needs Classic #1 to exist
-and opens its sales. Phase 2 needs all five founding fleets and opens Syndicate
-#1, Accelerant #1 and Cascade #1's sales and the Regents Club's gifts together.
+`base.phase-3.json`, for the founder to sign. Phase 1 needs all five founding
+fleets and opens Classic #1's sales and the Regents Club's gifts together.
+Phase 2 opens Syndicate #1, Accelerant #1 and Cascade #1's sales together.
 Phase 3 lets anyone create a fleet
 from its opening, and each such fleet sells from the moment it is created. There is no step back, and nothing
 else moves a phase.
 
 ## Step 7: Regents Club gifts
 
-Run once phase 2 has opened:
+Run once phase 1 has opened:
 
 ```sh
 KEYFLEET_MANIFEST=base KEYFLEET_STEP=club-gifts \

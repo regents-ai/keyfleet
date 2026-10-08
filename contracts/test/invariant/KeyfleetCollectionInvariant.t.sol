@@ -1111,7 +1111,7 @@ contract CollectionHandler is Test {
     function advancePhase(uint256 callerSeed, uint256 opensSeed) external step(0) {
         address caller = callerSeed % 3 == 0 ? _stranger(callerSeed, 0) : safe;
         uint8 phase = keys.phase();
-        uint256 needed = phase == 0 ? 1 : phase == 1 ? keys.FOUNDING_FLEETS() : 0;
+        uint256 needed = phase < 2 ? keys.FOUNDING_FLEETS() : 0;
         uint64 opensAt = uint64(block.timestamp + bound(opensSeed, 0, 31 days));
         bytes4 expected;
         if (caller != safe) {
@@ -1539,10 +1539,12 @@ contract CollectionHandler is Test {
         if (actor == not) actor = _accounts[(seed % ACTORS + 1) % ACTORS];
     }
 
-    /// @notice Whether a fleet's sales should be open now: fleet 1 from phase 1's opening, the other
-    /// founding fleets from phase 2's, and an open fleet from its creation.
+    /// @notice Whether a fleet's sales should be open now: Classic #1 and the Regents Club from phase
+    /// 1's opening, fleets 2 to 4 from phase 2's, and an open fleet from its creation.
     function salesOpenExpected(uint256 fleetId) public view returns (bool) {
-        if (fleetId == 1) return ghostPhase >= 1 && block.timestamp >= ghostOpensAt[1];
+        if (fleetId == 1 || fleetId == CLUB_FLEET) {
+            return ghostPhase >= 1 && block.timestamp >= ghostOpensAt[1];
+        }
         if (fleetId < FIRST_OPEN_FLEET) return ghostPhase >= 2 && block.timestamp >= ghostOpensAt[2];
         return true;
     }

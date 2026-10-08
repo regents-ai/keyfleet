@@ -209,19 +209,21 @@ contract KeyfleetClubTest is KeyfleetFixture {
         assertEq(keys.ownerOf(keys.tokenIdOf(5, 3)), carol, "the next key reaches its Pass");
     }
 
-    /// @dev Invariant: gifts wait for phase 2, when the founding fleets after Classic open.
-    function test_giftsWaitForPhaseTwo() public {
+    /// @dev Invariant: gifts open with Classic #1, at the second phase 1 names, and not before.
+    function test_giftsOpenWithClassicOne() public {
         _setUpFixture();
         for (uint256 id = 1; id <= keys.FOUNDING_FLEETS(); ++id) {
             _createFounding(keys.foundingPreset(id));
         }
-        _advancePhase();
         club = KeyfleetManager(keys.managerOf(5));
         clubPass.mint(alice, 1);
+        vm.prank(safe);
+        keys.advancePhase(uint64(block.timestamp + 1));
         vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.SalesClosed.selector, 5));
         _give(alice);
 
-        _advancePhase();
+        vm.warp(block.timestamp + 1);
+        assertEq(keys.salesOpenAt(5), keys.salesOpenAt(1), "the Club opens with Classic #1");
         _give(alice);
         assertEq(keys.ownerOf(keys.tokenIdOf(5, 1)), alice);
     }

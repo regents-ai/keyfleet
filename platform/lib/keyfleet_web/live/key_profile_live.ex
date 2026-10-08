@@ -8,8 +8,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   Closing it takes the key out of the address: by going back when the page
   opened it, so Back and Close agree, and by replacing the address when the
   visitor arrived with the key already in it. The next key on sale shows its
-  number, level and price, with Approve and Buy. A Regents Club Key waiting
-  for whoever holds the Pass of its number shows Claim.
+  number, level and price, with Approve and Buy.
   """
 
   use KeyfleetWeb, :html
@@ -98,13 +97,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <.facts profile={@profile} />
           <.reveal
             :if={is_nil(@profile.traits)}
-            profile={@profile}
-            fleet={@fleet}
-            actor={@actor}
-            lease={@lease}
-          />
-          <.club_claim
-            :if={@profile.held_for_pass?}
             profile={@profile}
             fleet={@fleet}
             actor={@actor}
@@ -432,46 +424,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
     """
   end
 
-  attr :profile, :map, required: true
-  attr :fleet, :map, required: true
-  attr :actor, :any, required: true
-  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
-
-  # A Regents Club Key waiting for whoever holds the Pass of its number, who
-  # takes it with everything it has earned. The chain says whether the signer
-  # holds that Pass, and the button says so while they don't.
-  defp club_claim(assigns) do
-    ~H"""
-    <section
-      id="key-profile-club-claim"
-      class="key-profile__section"
-      aria-labelledby="key-profile-club-claim-title"
-    >
-      <h3 id="key-profile-club-claim-title">
-        Waiting for Pass {Rules.grouped(@profile.token_id)}
-        <Regent.Primitives.tip id="key-profile-club-claim-tip" label="About claiming this Key">
-          Whoever holds Regents Club Pass {Rules.grouped(@profile.token_id)} can claim this Key at any time, with everything it has earned while it waited. If that Pass is burned, the Key stays here for good.
-        </Regent.Primitives.tip>
-      </h3>
-      <.live_component
-        module={WalletPanel}
-        id="key-profile-club-claim-action"
-        flow={:club_claim}
-        fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
-        actor={@actor}
-        lease={@lease}
-        token_id={@profile.token_id}
-      >
-        <:buttons :let={panel}>
-          <WalletPanel.step_button panel={panel} step="club-claim" id="key-profile-club-claim-button">
-            Claim
-          </WalletPanel.step_button>
-        </:buttons>
-      </.live_component>
-    </section>
-    """
-  end
-
   defp waiting(panel), do: panel |> WalletPanel.figures() |> Map.get(:waiting, [])
 
   defp shard_yours?(%{shards: shards}, %{wallet_addresses: wallets}),
@@ -675,9 +627,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
   end
 
   defp held_by(%{yours?: true}), do: "You"
-
-  defp held_by(%{held_for_pass?: true, token_id: token_id}),
-    do: "Regents Club, for Pass #{Rules.grouped(token_id)}"
 
   defp held_by(%{holder: wallet}), do: RegentFormat.short_address(wallet)
 

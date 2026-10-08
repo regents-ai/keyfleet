@@ -41,8 +41,8 @@ and what the code on this branch does:
   each fleet's type and its number within that type.
 - Sales open in phases the Regents Safe
   (`0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`) moves forward, one step at a
-  time and never back: phase 1 opens Classic #1, phase 2 opens Syndicate #1,
-  Accelerant #1, Cascade #1 and the Regents Club, and phase 3 lets anyone
+  time and never back: phase 1 opens Classic #1 and the Regents Club, phase 2
+  opens Syndicate #1, Accelerant #1 and Cascade #1, and phase 3 lets anyone
   create a fleet. Each
   phase step is a Safe transaction the founder signs, naming the moment the
   phase opens, which must be in the future.
@@ -296,13 +296,13 @@ for `opensAt`, to the second, with nobody acting again.
 | Phase | What it opens at `opensAt` | Refused unless |
 | --- | --- | --- |
 | 0 | Nothing sells. The Safe creates the founding fleets, one per transaction | — |
-| 1 | Classic #1's sales | fleet 1 exists (`FleetsMissing(1, registered)`) |
-| 2 | Syndicate #1, Accelerant #1 and Cascade #1's sales and the Regents Club's gifts, together | fleets 1 to 5 exist (`FleetsMissing(5, registered)`) |
+| 1 | Classic #1's sales and the Regents Club's gifts, together | fleets 1 to 5 exist (`FleetsMissing(5, registered)`) |
+| 2 | Syndicate #1, Accelerant #1 and Cascade #1's sales, together | fleets 1 to 5 exist (`FleetsMissing(5, registered)`) |
 | 3 | Anyone may create a fleet; each sells from the moment it is created | — |
 
 Past phase 3, `advancePhase` reverts with `NoNextPhase`. `salesOpenAt(fleetId)`
-is the time a fleet's sales open: fleet 1's is the `opensAt` of the step to
-phase 1, fleets 2 to 5's the `opensAt` of the step to phase 2, and any later
+is the time a fleet's sales open: fleets 1 and 5's is the `opensAt` of the step
+to phase 1, fleets 2 to 4's the `opensAt` of the step to phase 2, and any later
 fleet's its registration; it is zero before then and for a fleet that does not
 exist. `salesOpen(fleetId)` is true once `salesOpenAt(fleetId)` is set and has
 been reached. Until phase 3 has both been stepped to and opened, the collection
@@ -625,7 +625,7 @@ revert with `NotForSale`, and `maxSupply()` is 1,998. `levelOf` reports the libr
 
 `give(receivers)` mints the Regents Club's next keys, in order, one to each
 address in the list. Only the Regents Safe may call it, and only on the Regents
-Club (`OnlySafeGivesClubKeys(caller)`), once phase 2 has opened
+Club (`OnlySafeGivesClubKeys(caller)`), once phase 1 has opened
 (`SalesClosed`). Key N may go only to the wallet that holds Pass N at that
 moment or to `KeyfleetClubClaims` (`NotPassHolder(keyNumber, receiver)`), so a
 batch built from an older reading of the Pass reverts whole, and nothing past
@@ -1560,12 +1560,13 @@ without six decimals, a zero keeper and a zero trait table hash.
   in the collection's registry, so it can be rerun at any time to add fleets
   created since.
 - `script/AnvilLab.s.sol` is no part of a release. It puts the system with
-  Classic #1 on a plain local anvil for the anvil tests in `platform/`
+  its five founding fleets on a plain local anvil for the anvil tests in `platform/`
   (`mix test.external`), with stand-in USDC, WETH, REGENT, a USDC/WETH pool and
   a WETH/REGENT pool manager at a fixed price where 1 USDC buys 1 REGENT, REGENT
   staking, the Autolaunch factory and a VRF coordinator. The sender is the Safe
   and the keeper. It runs in two steps, since a phase must open in the future:
-  `run` creates Classic #1 with a stand-in deck and moves to phase 1, opening a
+  `run` creates the five founding fleets with a stand-in deck and moves to
+  phase 1, opening a
   minute later (`OPENING`); once the chain's clock is past that, `sell` buys two
   keys while the coordinator refuses every request, turns the treasury's booked
   USDC into REGENT with one piece, and leaves the sender holding and having
@@ -1576,7 +1577,8 @@ without six decimals, a zero keeper and a zero trait table hash.
   against Base's own USDC, swap route, REGENT staking and Autolaunch factory
   from `deployments/base.json`, with a stand-in VRF coordinator. The Safe is
   anvil's first default account and the keeper its second. `deploy` deploys,
-  creates Classic #1 with its real deck and moves to phase 1, opening 10 minutes
+  creates the five founding fleets with their real decks and moves to phase 1,
+  opening 10 minutes
   later (`LAB_OPENING`), and the shell script then moves the lab chain's clock
   past that; `record` writes
   `deployments/base-fork-lab.json` through `RecordKeyfleets`, in the shape of

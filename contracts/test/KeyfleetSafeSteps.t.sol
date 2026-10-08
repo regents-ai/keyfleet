@@ -95,7 +95,7 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         assertEq(calls[0].name, "phase-1", "Named for the phase it reaches");
         assertEq(calls[0].to, address(collection), "To the collection");
         assertEq(calls[0].data, abi.encodeCall(KeyfleetKeys.advancePhase, (opensAt)), "Opening when it says");
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 1, 0));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 5, 0));
         this.make(calls, safe);
 
         _found(manifest, deployed);

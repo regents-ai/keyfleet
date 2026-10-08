@@ -20,7 +20,6 @@ defmodule Keyfleet.WalletSteps.Steps do
     :buy,
     :reveal,
     :claim,
-    :club_claim,
     :present,
     :issue_shard,
     :end_shard,
@@ -57,10 +56,7 @@ defmodule Keyfleet.WalletSteps.Steps do
       argument :advance_id, :integer, constraints: [min: 1]
 
       validate present(:proposal), where: argument_in(:flow, [:ballot, :cancel, :carry_out])
-
-      validate present(:token_id),
-        where: argument_in(:flow, [:claim, :club_claim, :reveal, :end_shard])
-
+      validate present(:token_id), where: argument_in(:flow, [:claim, :reveal, :end_shard])
       validate present(:advance_id), where: argument_in(:flow, [:return_advance])
 
       run Keyfleet.WalletSteps.Build

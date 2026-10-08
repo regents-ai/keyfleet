@@ -172,8 +172,8 @@ contract KeyfleetKeysTest is KeyfleetFixture {
 
     // --- 3. phases --------------------------------------------------------------
 
-    /// @dev Invariant: only the Safe moves the phase, one step at a time and only forwards: phase 1
-    /// needs fleet 1, phase 2 needs all four founding fleets, and there is nothing after phase 3.
+    /// @dev Invariant: only the Safe moves the phase, one step at a time and only forwards: phases 1
+    /// and 2 need all five founding fleets, and there is nothing after phase 3.
     function test_phasesMoveOneStepAtATimeOnlyForwardAndOnlyByTheSafe() public {
         assertEq(keys.phase(), 0);
         address[4] memory strangers = [alice, keeper, address(factory), creator];
@@ -184,26 +184,26 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         }
 
         vm.prank(safe);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 1, 0));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 5, 0));
         keys.advancePhase(_soon());
 
         _createFounding(KeyfleetPresets.Preset.FleetTechClassic);
+        _createFounding(KeyfleetPresets.Preset.FibonacciSyndicate);
+        _createFounding(KeyfleetPresets.Preset.FleetTechAccelerant);
+        _createFounding(KeyfleetPresets.Preset.FibonacciCascade);
+        vm.prank(safe);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 5, 4));
+        keys.advancePhase(_soon());
+        assertEq(keys.phase(), 0, "a refused step changes nothing");
+
+        _createFounding(KeyfleetPresets.Preset.RegentsClub);
         vm.expectEmit(true, true, true, true, address(keys));
         emit KeyfleetKeys.PhaseAdvanced(1, _soon());
         _advance();
-        assertEq(keys.phase(), 1);
+        assertEq(keys.phase(), 1, "one step, never two");
 
-        _createFounding(KeyfleetPresets.Preset.FibonacciSyndicate);
-        _createFounding(KeyfleetPresets.Preset.FleetTechAccelerant);
-        vm.prank(safe);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 5, 3));
-        keys.advancePhase(_soon());
-        assertEq(keys.phase(), 1, "a refused step changes nothing");
-
-        _createFounding(KeyfleetPresets.Preset.FibonacciCascade);
-        _createFounding(KeyfleetPresets.Preset.RegentsClub);
         _advance();
-        assertEq(keys.phase(), 2, "one step, never two");
+        assertEq(keys.phase(), 2);
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.OnlySafe.selector, alice));
         keys.advancePhase(_soon());
@@ -216,9 +216,9 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         assertEq(keys.phase(), 3, "and it never goes back");
     }
 
-    /// @dev Invariant: sales open per fleet with the phase: fleet 1 from phase 1, fleets 2 to 4 from
-    /// phase 2, and an open fleet as soon as it exists. A purchase before its fleet's phase is
-    /// refused, with no USDC taken; a fleet that does not exist is never open.
+    /// @dev Invariant: sales open per fleet with the phase: Classic #1 and the Regents Club from
+    /// phase 1, fleets 2 to 4 from phase 2, and an open fleet as soon as it exists. A purchase before
+    /// its fleet's phase is refused, with no USDC taken; a fleet that does not exist is never open.
     function test_salesOpenPerFleetWithThePhase() public {
         KeyfleetManager classic = _createFounding(KeyfleetPresets.Preset.FleetTechClassic);
         assertFalse(keys.salesOpen(0), "there is no fleet 0");
@@ -226,16 +226,16 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         assertFalse(keys.salesOpen(2), "an unregistered fleet is never open");
         _expectSalesClosed(classic);
 
-        _advance();
-        assertTrue(keys.salesOpen(1), "fleet 1 opens in phase 1");
-        _buy(classic, alice);
-
         KeyfleetManager syndicate = _createFounding(KeyfleetPresets.Preset.FibonacciSyndicate);
         KeyfleetManager accelerant = _createFounding(KeyfleetPresets.Preset.FleetTechAccelerant);
         KeyfleetManager cascade = _createFounding(KeyfleetPresets.Preset.FibonacciCascade);
         _createFounding(KeyfleetPresets.Preset.RegentsClub);
-        for (uint256 id = 2; id <= 5; ++id) {
-            assertFalse(keys.salesOpen(id), "fleets 2 to 5 wait for phase 2");
+        _advance();
+        assertTrue(keys.salesOpen(1), "Classic #1 opens in phase 1");
+        assertTrue(keys.salesOpen(5), "and the Regents Club with it");
+        _buy(classic, alice);
+        for (uint256 id = 2; id <= 4; ++id) {
+            assertFalse(keys.salesOpen(id), "fleets 2 to 4 wait for phase 2");
         }
         _expectSalesClosed(syndicate);
         _expectSalesClosed(accelerant);
@@ -263,6 +263,10 @@ contract KeyfleetKeysTest is KeyfleetFixture {
     /// and open at it without anyone acting.
     function test_aPhaseOpensAtItsChosenTimeAndNotBefore() public {
         KeyfleetManager classic = _createFounding(KeyfleetPresets.Preset.FleetTechClassic);
+        _createFounding(KeyfleetPresets.Preset.FibonacciSyndicate);
+        _createFounding(KeyfleetPresets.Preset.FleetTechAccelerant);
+        _createFounding(KeyfleetPresets.Preset.FibonacciCascade);
+        _createFounding(KeyfleetPresets.Preset.RegentsClub);
         uint64[2] memory notFuture = [uint64(block.timestamp), uint64(block.timestamp - 1)];
         for (uint256 i = 0; i < notFuture.length; ++i) {
             vm.prank(safe);
@@ -288,20 +292,19 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         keys.advancePhase(opensAt);
         assertEq(keys.phase(), 1, "the phase moves at once");
         assertEq(keys.phaseOpensAt(), opensAt, "and records when it opens");
-        assertEq(keys.salesOpenAt(1), opensAt, "fleet 1 opens then");
+        assertEq(keys.salesOpenAt(1), opensAt, "Classic #1 opens then");
+        assertEq(keys.salesOpenAt(5), opensAt, "and the Regents Club at the same second");
         assertFalse(keys.salesOpen(1), "but not before");
         _expectSalesClosed(classic);
         vm.warp(opensAt - 1);
         assertFalse(keys.salesOpen(1), "not even a second before");
+        assertFalse(keys.salesOpen(5));
         _expectSalesClosed(classic);
         vm.warp(opensAt);
         assertTrue(keys.salesOpen(1), "and at that second, by itself");
+        assertTrue(keys.salesOpen(5));
         _buy(classic, alice);
 
-        _createFounding(KeyfleetPresets.Preset.FibonacciSyndicate);
-        _createFounding(KeyfleetPresets.Preset.FleetTechAccelerant);
-        _createFounding(KeyfleetPresets.Preset.FibonacciCascade);
-        _createFounding(KeyfleetPresets.Preset.RegentsClub);
         uint64 later = uint64(block.timestamp + 10 days);
         vm.prank(safe);
         keys.advancePhase(later);
@@ -310,10 +313,11 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.OpensAtInvalid.selector, earlier));
         keys.advancePhase(earlier);
         assertEq(keys.phase(), 2, "a refused step changes nothing");
-        for (uint256 id = 2; id <= 5; ++id) {
-            assertEq(keys.salesOpenAt(id), later, "fleets 2 to 5 open together");
+        for (uint256 id = 2; id <= 4; ++id) {
+            assertEq(keys.salesOpenAt(id), later, "fleets 2 to 4 open together");
             assertFalse(keys.salesOpen(id));
         }
+        assertEq(keys.salesOpenAt(5), opensAt, "the Regents Club keeps its phase 1 opening");
         vm.prank(safe);
         keys.advancePhase(later);
         assertEq(keys.phase(), 3, "the next phase may open at the same moment");

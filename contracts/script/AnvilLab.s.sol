@@ -20,15 +20,15 @@ import {MockUniswapV3Pool} from "../test/mocks/MockUniswapV3Pool.sol";
 import {MockVRFCoordinatorV2Plus} from "../test/mocks/MockVRFCoordinatorV2Plus.sol";
 import {MockWeth} from "../test/mocks/MockWeth.sol";
 
-/// @notice Puts the Keyfleet system with Classic #1 on a plain local anvil for the anvil tests in
+/// @notice Puts the Keyfleet system with its five founding fleets on a plain local anvil for the anvil tests in
 /// `platform/`: the wallet buttons' steps and the rewards a key has waiting. Nothing here is for a
 /// real network: the sender is an account anvil has unlocked, and no private key is read.
 /// @dev Every outside contract is a local stand-in: USDC, WETH, REGENT, a USDC/WETH pool and a
 /// WETH/REGENT pool manager at a fixed price where 1 USDC buys 1 REGENT, REGENT staking, the
 /// Autolaunch factory, and a VRF coordinator whose subscription holds 0.1 ETH. The sender is the
 /// Safe and the keeper. It runs in two steps, because the Safe must name a sales opening in the
-/// future. `run` creates Classic #1 with a stand-in deck and moves the collection to phase 1, with
-/// Classic #1's sales opening `OPENING` later. Once the chain's clock is past that, `sell` buys two
+/// future. `run` creates the five founding fleets with a stand-in deck, since phase 1 needs them
+/// all, and moves the collection to phase 1, with Classic #1's sales opening `OPENING` later. Once the chain's clock is past that, `sell` buys two
 /// keys while the coordinator refuses every request, so neither key's reveal was ever accepted;
 /// then the coordinator takes requests again, and it turns the treasury's booked USDC into REGENT
 /// with one piece. The manager owes the protocol share of both sales, the treasury holds the REGENT
@@ -46,13 +46,12 @@ contract AnvilLab is Script {
         address staking;
         address usdc;
         address regent;
-        address clubClaims;
     }
 
     bytes32 private constant KEY_HASH = keccak256("anvil lab key hash");
     bytes32 private constant TRAIT_TABLE = keccak256("anvil lab trait table");
-    /// @dev The site's one-card test deck (platform/test/support/fixtures/decks): Key 1 of
-    /// Classic #1 is dealt its card by number, and every later key draws.
+    /// @dev The site's one-card test deck (platform/test/support/fixtures/decks), for every founding
+    /// fleet: Key 1 of Classic #1 is dealt its card by number, and every later key draws.
     bytes32 private constant DECK = 0xf11579d3bd868d9a111bc512d814d04c0f10beb44fba7f3a92fa26eb67500356;
     uint256 private constant DECK_SIZE = 1;
     /// @notice How long after `run` Classic #1's sales open.
@@ -93,12 +92,14 @@ contract AnvilLab is Script {
         KeyfleetKeys keys = factory.KEYS();
         vrf.addConsumer(subscriptionId, address(keys));
 
-        factory.createFoundingFleet(
-            KeyfleetPresets.Preset.FleetTechClassic,
-            DECK,
-            DECK_SIZE,
-            KeyfleetManager.Profile({name: "Classic #1", description: "", imageLink: ""})
-        );
+        for (uint256 fleetId = 1; fleetId <= keys.FOUNDING_FLEETS(); ++fleetId) {
+            factory.createFoundingFleet(
+                keys.foundingPreset(fleetId),
+                DECK,
+                DECK_SIZE,
+                KeyfleetManager.Profile({name: "Founding fleet", description: "", imageLink: ""})
+            );
+        }
         keys.advancePhase(uint64(block.timestamp) + OPENING);
         KeyfleetManager classic = KeyfleetManager(keys.managerOf(1));
 
@@ -119,8 +120,7 @@ contract AnvilLab is Script {
             treasury: address(classic.TREASURY()),
             staking: address(staking),
             usdc: address(usdc),
-            regent: address(regent),
-            clubClaims: address(factory.CLUB_CLAIMS())
+            regent: address(regent)
         });
     }
 

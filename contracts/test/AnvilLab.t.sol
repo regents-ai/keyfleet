@@ -10,11 +10,12 @@ import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {AnvilLab} from "../script/AnvilLab.s.sol";
 
 /// @dev The anvil lab the site's anvil tests start from, run as they run it, in its two steps with
-/// the clock moved past the opening between them: the system with Classic #1 selling in phase 1,
+/// the clock moved past the opening between them: the system with its five founding fleets and
+/// Classic #1 selling in phase 1,
 /// two keys sold to the sender with their protocol share owed and their REGENT in the treasury, no
 /// reveal accepted, and USDC approved for a third key.
 contract AnvilLabTest is Test {
-    function test_theLabBuildsClassicOneWithTwoKeysSold() public {
+    function test_theLabBuildsTheFoundingFleetsWithTwoClassicKeysSold() public {
         address sender = tx.origin;
         vm.deal(sender, 1 ether);
 
@@ -37,8 +38,10 @@ contract AnvilLabTest is Test {
         assertEq(address(classic.TREASURY().REGENT_STAKING()), lab.staking, "Stand-in staking");
         assertEq(address(classic.USDC()), lab.usdc, "Stand-in USDC");
         assertEq(address(classic.TREASURY().REGENT()), lab.regent, "Stand-in REGENT");
+        assertEq(keys.fleetCount(), keys.FOUNDING_FLEETS(), "Every founding fleet");
         assertEq(keys.phase(), 1, "Phase 1");
         assertTrue(keys.salesOpen(1), "Classic #1 sells");
+        assertTrue(keys.salesOpen(5), "and the Regents Club opens with it");
         assertEq(keys.SAFE(), sender, "The sender is the Safe");
         assertEq(keys.keeper(), sender, "and the keeper");
 

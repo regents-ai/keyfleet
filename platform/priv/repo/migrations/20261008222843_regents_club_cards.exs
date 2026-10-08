@@ -46,55 +46,23 @@ defmodule Keyfleet.Repo.Migrations.RegentsClubCards do
              """
            )
 
-    alter table(:fleets) do
-      add(:club_claims_address, :text)
-    end
-
     drop_if_exists(constraint(:fleets, :fleets_fixed_catalog))
-
-    drop_if_exists(constraint(:fleets, :fleets_deployment_whole))
 
     create constraint(:fleets, :fleets_fixed_catalog,
              check: """
                id IN ('fibonacci_syndicate', 'fibonacci_cascade', 'fleet_tech_classic', 'fleet_tech_accelerant', 'regents_club')
              """
            )
-
-    create constraint(:fleets, :fleets_deployment_whole,
-             check: """
-               num_nulls(chain_id, chain_fleet_id, keys_address, manager_address, rewards_address, votes_address, treasury_address, shards_address, usdc_address, regent_address, regent_staking_address, autolaunch_factory_address, club_claims_address, deployed_block, trait_table_hash, deck_hash, deck_size) IN (0, 17)
-             """
-           )
-
-    create constraint(:fleets, :fleets_club_claims_address_shape,
-             check: """
-               club_claims_address ~ '^0x[0-9a-f]{40}$'
-             """
-           )
   end
 
   def down do
-    drop_if_exists(constraint(:fleets, :fleets_club_claims_address_shape))
-
-    drop_if_exists(constraint(:fleets, :fleets_deployment_whole))
-
     drop_if_exists(constraint(:fleets, :fleets_fixed_catalog))
-
-    create constraint(:fleets, :fleets_deployment_whole,
-             check: """
-               num_nulls(chain_id, chain_fleet_id, keys_address, manager_address, rewards_address, votes_address, treasury_address, shards_address, usdc_address, regent_address, regent_staking_address, autolaunch_factory_address, deployed_block, trait_table_hash, deck_hash, deck_size) IN (0, 16)
-             """
-           )
 
     create constraint(:fleets, :fleets_fixed_catalog,
              check: """
                id IN ('fibonacci_syndicate', 'fibonacci_cascade', 'fleet_tech_classic', 'fleet_tech_accelerant')
              """
            )
-
-    alter table(:fleets) do
-      remove(:club_claims_address)
-    end
 
     drop_if_exists(constraint(:key_pictures, :key_pictures_seed_shape))
 

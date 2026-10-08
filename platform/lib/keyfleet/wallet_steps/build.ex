@@ -39,7 +39,6 @@ defmodule Keyfleet.WalletSteps.Build do
     buy: KeySteps,
     reveal: KeySteps,
     claim: KeySteps,
-    club_claim: KeySteps,
     present: KeySteps,
     issue_shard: KeySteps,
     end_shard: KeySteps,

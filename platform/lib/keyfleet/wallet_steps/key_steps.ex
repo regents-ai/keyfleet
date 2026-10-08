@@ -1,8 +1,7 @@
 defmodule Keyfleet.WalletSteps.KeySteps do
   @moduledoc """
   The steps of a key's own buttons: buying the next key, asking again for a
-  key's random draw, claiming what a key has earned, claiming a Regents Club
-  key waiting for its Pass's holder, marking keys present,
+  key's random draw, claiming what a key has earned, marking keys present,
   issuing, renewing and ending shards, and turning agent voting on or off.
   `Keyfleet.WalletSteps.Build` describes what every builder answers.
 
@@ -111,34 +110,6 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
       {:ok, steps,
        %{token_id: token_id, holder: holder, waiting: named(fleet, waiting), blocked: blocked}}
-    else
-      _unread -> {:problem, :unread, figures}
-    end
-  end
-
-  # Taking Regents Club Key N from the claims contract, where it waits for
-  # whoever holds Regents Club Pass N, with everything it earned while it
-  # waited, in every asset at once. Certain to fail once the Key has left the
-  # contract, while the signer doesn't hold that Pass, and for good once the
-  # Pass is burned, which the Pass collection then refuses to name a holder of.
-  def steps(:club_claim, %{fleet: fleet, signer: signer, token_id: token_id}) do
-    figures = %{token_id: token_id}
-    claims = fleet.club_claims_address
-
-    with {:ok, reads} <- Reads.at_head(),
-         {:ok, holder} <- Reads.holder(reads, fleet, token_id),
-         {:ok, pass} <- Reads.one(reads, claims, "PASS()", [], :address),
-         {:ok, pass_holder} <- pass_holder(reads, pass, token_id) do
-      blocked =
-        cond do
-          holder != claims -> %{"club-claim" => :club_claimed}
-          pass_holder == nil -> %{"club-claim" => :pass_burned}
-          pass_holder != signer -> %{"club-claim" => :not_pass_holder}
-          true -> %{}
-        end
-
-      step = Review.step("club-claim", claims, Call.encode("claim(uint256)", [token_id]))
-      {:ok, [step], Map.put(figures, :blocked, blocked)}
     else
       _unread -> {:problem, :unread, figures}
     end
@@ -484,12 +455,4 @@ defmodule Keyfleet.WalletSteps.KeySteps do
     do: Call.encode("setAgentVoting(uint256[],bool)", [onchain(fleet, keys), on])
 
   defp onchain(fleet, keys), do: Enum.map(keys, &Fleet.onchain_token_id(fleet, &1))
-
-  # Who holds Regents Club Pass `pass_id`, or nil once it is burned.
-  defp pass_holder(reads, pass, pass_id) do
-    case Reads.one(reads, pass, "ownerOf(uint256)", [pass_id], :address) do
-      {:error, :reverted} -> {:ok, nil}
-      answer -> answer
-    end
-  end
 end

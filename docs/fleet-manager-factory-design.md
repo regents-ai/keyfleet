@@ -308,12 +308,12 @@ The collection holds `phase`, 0 to 3, which only the Safe changes, only upward a
 | Phase | Reached by | What it opens | Refused unless |
 |---|---|---|---|
 | 0 | deploy | Nothing sells. The Safe creates the founding fleets, one per transaction | — |
-| 1 | Safe `advancePhase(opensAt)` | Classic #1's sales, at `opensAt` | fleet 1 exists |
-| 2 | Safe `advancePhase(opensAt)` | Syndicate #1, Accelerant #1 and Cascade #1's sales, together, at `opensAt` | fleets 2–4 exist |
+| 1 | Safe `advancePhase(opensAt)` | Classic #1's sales and the Regents Club's gifts, together, at `opensAt` | fleets 1–5 exist |
+| 2 | Safe `advancePhase(opensAt)` | Syndicate #1, Accelerant #1 and Cascade #1's sales, together, at `opensAt` | fleets 1–5 exist |
 | 3 | Safe `advancePhase(opensAt)` | `createFleet` for anyone from `opensAt`; each open fleet sells from the moment it is created, starting with its creator's key 1 | — |
 
-- **When sales open:** `salesOpenAt(fleet)` is the time each fleet's sales open: fleet 1's is the `opensAt` of the step to phase 1, fleets 2–4's the `opensAt` of the step to phase 2, an open fleet's its creation. `salesOpen(fleet)` is true once that time is set and reached. Each fleet's 7-day opening counts from it (5.1).
-- **Where sales are gated:** `KeyfleetKeys.mint` reverts `SalesClosed(fleet)` unless that fleet is open: fleet 1 from phase 1's opening, fleets 2–4 from phase 2's, an open fleet from its creation. Every purchase in every fleet ends in this one function. There is no other mint path.
+- **When sales open:** `salesOpenAt(fleet)` is the time each fleet's sales open: fleets 1 and 5's is the `opensAt` of the step to phase 1, fleets 2–4's the `opensAt` of the step to phase 2, an open fleet's its creation. `salesOpen(fleet)` is true once that time is set and reached. Each fleet's 7-day opening counts from it (5.1).
+- **Where sales are gated:** `KeyfleetKeys.mint` reverts `SalesClosed(fleet)` unless that fleet is open: fleets 1 and 5 from phase 1's opening, fleets 2–4 from phase 2's, an open fleet from its creation. Every purchase in every fleet ends in this one function. There is no other mint path.
 - **Nothing else moves a phase**, and there is no step back.
 - **The site:** the fleet page reads `salesOpen(fleet)` and, while it is closed, shows the buy button disabled with a few words saying sales have not opened (rule 11's exception). The create-a-fleet page does the same from `phase()`. The site's own purchase gate stays as it is.
 - **Scripts:** the deploy and create-founding-fleet steps never call `advancePhase`; the Safe's `advance-phase` step takes the opening as `KEYFLEET_OPENS_AT`. Only the anvil lab does, on a local chain, acting as the Safe there.
@@ -535,7 +535,7 @@ Plus: `check_bytecode.sh` finds no reachable `DELEGATECALL`, `CALLCODE` or `SELF
 | (none) | New: `KeyfleetSafeSteps.s.sol`, with a founding-fleets step (one call per founding fleet still missing) and an advance-phase step (one call). On Base each step is simulated as the Safe and written as one Safe Transaction Builder file per call in `deployments/safe/`; on anvil the calls are sent directly. Adding the collection to the randomness subscription stays a Safe action done in the Chainlink app. |
 | `RecordKeyfleets.s.sol` | Writes one record, `deployments/<manifest>.deployed.json`: the system as the chain reports it, checked against the manifest, then every fleet the collection's registry lists, each checked to be the factory's own with its four contracts bound to each other. Reading the registry instead of `FleetCreated` events needs no log search and can be rerun at any time to add fleets created since. It refuses to write while the collection is not on the subscription, or on Base while the subscription is not the Safe's. |
 | `KeyfleetManifest.sol`, `deployments/*.json` | Shared bindings (including both swap pools and the v4 pool key, the keeper, the metadata base) plus the five founding fleets' type, deck and profile. |
-| `AnvilLab.s.sol` | Builds the factory, creates Classic #1 and moves to phase 1 locally; a second step buys two keys and runs one piece through a local swap route. |
+| `AnvilLab.s.sol` | Builds the factory, creates the five founding fleets and moves to phase 1 locally; a second step buys two keys and runs one piece through a local swap route. |
 | `check_bytecode.sh` | Checks the new contract list. |
 | Tests | Fixture goes through the factory; every suite is ported; new suites in section 12. |
 
