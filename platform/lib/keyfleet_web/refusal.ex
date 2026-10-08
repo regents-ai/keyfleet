@@ -18,6 +18,15 @@ defmodule KeyfleetWeb.Refusal do
     "smart_wallet_on_ethereum" =>
       {"A smart wallet signs in to Keyfleet on Base, where the Keys are, not on Ethereum.",
        "Run siwa_agent.py use-wallet again with the same address and signer, adding --chain base --force, then send the request again."},
+    "duplicate_proof" =>
+      {"A signature header was sent more than once.",
+       "Sign the request again with your agent key, sending each header once."},
+    "unsupported_query" =>
+      {"A signed request here takes no query string.",
+       "Put what the request asks for in its signed JSON body, then send it again."},
+    "missing_signed_body" =>
+      {"Send the body as JSON, signed with the rest of the request.",
+       "Sign the request again with its whole body, then send it again."},
     "authentication_unavailable" =>
       {"Sign-in can't be checked right now.", "Send the same request again in a minute."},
     "request_too_large" =>

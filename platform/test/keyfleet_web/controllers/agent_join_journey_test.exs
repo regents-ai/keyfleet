@@ -20,7 +20,10 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
   test "only the exact signed wallet request creates or resumes its unchanged profile", c do
     signed = signed(c, @body)
     changed = String.replace(@body, "Wallet agent", "Changed agent")
-    assert send_request(c, %{signed | body: changed}).status == 401
+    # The sign-in server's refusal reaches the agent in its own words.
+    tampered = send_request(c, %{signed | body: changed})
+    assert tampered.status == 401
+    assert tampered.body == %{"error" => SignedAgentHelpers.refusal()}
     first = send_request(c, signed)
     assert first.status == 200
 
@@ -233,7 +236,9 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
           ]
       }
 
-      assert KeyfleetWeb.Endpoint.call(duplicate, []).status == 401
+      refusal = KeyfleetWeb.Endpoint.call(duplicate, [])
+      assert refusal.status == 401
+      assert Jason.decode!(refusal.resp_body) == refused("duplicate_proof")
     end
 
     for {method, path} <- [

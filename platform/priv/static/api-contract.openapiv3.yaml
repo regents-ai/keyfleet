@@ -2057,7 +2057,11 @@ components:
     AgentUnauthorized:
       description: >-
         unauthorized: the signed request was missing or invalid; nothing about the request was
-        trusted. smart_wallet_on_ethereum: a smart wallet signed in on Ethereum; it signs in on Base
+        trusted. duplicate_proof: a signature header was sent more than once. unsupported_query:
+        the request carried a query string, which a signed request here never takes.
+        missing_signed_body: the body was not JSON signed with the rest of the request. When the
+        sign-in server refuses the request, the answer is its status and its own code, message
+        and hint, such as 409 request_replayed. smart_wallet_on_ethereum: a smart wallet signed in on Ethereum; it signs in on Base
         instead.
       content:
         application/json:
@@ -2422,7 +2426,12 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [unauthorized, smart_wallet_on_ethereum, authentication_unavailable, request_too_large, out_of_range, invalid_request]}
+            code:
+              type: string
+              description: >-
+                Keyfleet's own code, or the sign-in server's own refusal code (from
+                http_headers_missing to request_replayed), passed on with its status.
+              enum: [unauthorized, duplicate_proof, unsupported_query, missing_signed_body, smart_wallet_on_ethereum, authentication_unavailable, request_too_large, out_of_range, invalid_request, http_headers_missing, http_signature_invalid, http_signature_input_invalid, http_required_components_missing, http_body_binding_missing, http_body_binding_invalid, receipt_invalid, receipt_binding_mismatch, signature_invalid, wallet_audience_disabled, request_replayed]
             message: {type: string}
             hint: {type: string}
     WorkspaceError:

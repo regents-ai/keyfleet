@@ -315,6 +315,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     send_refusal(conn, 422, body)
   end
 
+  # The shared plug's own refusals keep its reason as the code, as on every site.
+  def deny(conn, %{source: :siwa_plug, reason: reason}),
+    do: answer(conn, 401, Atom.to_string(reason))
+
+  # The sign-in server refused: its status and its own words, as on every site.
+  def deny(conn, %{siwa_status: status, siwa_code: code, siwa_message: message, siwa_hint: hint})
+      when status in 400..499,
+      do: send_refusal(conn, status, %{error: %{code: code, message: message, hint: hint}})
+
   def deny(conn, metadata) do
     unavailable? =
       metadata[:reason] in [:broker_unavailable, :siwa_request_failed] or

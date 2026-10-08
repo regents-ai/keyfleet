@@ -881,3 +881,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   changes nothing.
 - `/api/agents/v1` bodies are read by the shared reader, up to 4096 bytes, as
   Regents reads them.
+
+## 2026-10-08 — Agent sign-in refusals keep their own codes
+
+- Pins Regents `81d6200e` (`a6ce561a` with the shared agent pages answering the
+  shared plug's refusals by their own code).
+- A signed request the shared plug refuses answers 401 with its reason as the
+  code: `duplicate_proof`, `unsupported_query` or `missing_signed_body`.
+- A request the sign-in server refuses answers with the server's status, code,
+  message and hint, such as 409 `request_replayed` or 401
+  `http_signature_invalid`, as ash-template, Regents and Patchbay answer it. An
+  unreachable or failing sign-in server still answers 503
+  `authentication_unavailable`.
+- The API contract, `docs.md` and `cli/COMMANDS.md` list these codes.

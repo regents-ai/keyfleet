@@ -115,8 +115,17 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
         })
 
       {:error, _} ->
-        answer(conn, 401, %{error: %{code: "invalid_proof"}})
+        answer(conn, 401, %{error: refusal()})
     end
+  end
+
+  # The sign-in server's refusal of a request whose signature does not hold.
+  def refusal do
+    %{
+      "code" => "http_signature_invalid",
+      "message" => "The request signature did not verify.",
+      "hint" => "Sign the request again with your agent key, then send it."
+    }
   end
 
   defp answer(conn, status, body),
