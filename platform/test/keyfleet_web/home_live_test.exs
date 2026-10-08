@@ -365,7 +365,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   test "the tech stack shows its four lines on the page and in the Markdown homepage",
        %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
-    assert has_element?(view, "#home-tech-stack h2", "Tech stack")
+    assert has_element?(view, "details#home-tech-stack:not([open]) summary", "Tech stack")
 
     for {line, index} <- Enum.with_index(@stack, 1) do
       assert has_element?(view, "#home-tech-stack li:nth-child(#{index})", line)
