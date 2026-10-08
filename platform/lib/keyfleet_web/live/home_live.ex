@@ -325,6 +325,13 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp fleet_path(fleet_id), do: "/app/fleets/#{fleet_id}"
 
+  # A card whose fleet has a Key on offer opens its page with "Get a Key"
+  # pressed, as the header's "Get a Key" does; any other opens its page.
+  defp card_path(%{id: id, sales: %{buy: %{price: price}}}) when price != nil,
+    do: fleet_path(id) <> "?buy"
+
+  defp card_path(%{id: id}), do: fleet_path(id)
+
   defp opportunity_path(%{id: id}), do: "/opportunities##{id}"
 
   # What the featured item is, in a word or two.
@@ -518,7 +525,7 @@ defmodule KeyfleetWeb.HomeLive do
           data-coming-soon={fleet.coming_soon?}
           phx-mounted={JS.ignore_attributes(["style"])}
         >
-          <a href={fleet_path(fleet.id)} class="rl-fleet-card__link">
+          <a href={card_path(fleet)} class="rl-fleet-card__link">
             <div
               id={"home-fleet-preview-#{fleet.id}"}
               class="key-map-preview"

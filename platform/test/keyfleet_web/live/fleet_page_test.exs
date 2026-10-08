@@ -583,6 +583,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert render_async(home) =~
                ~r/id="home-fleet-fleet_tech_classic-next-key"[^>]*>\s*<span>Key 1 · 10 USDC/
+
+      # The card opens the fleet's page with "Get a Key" pressed, as the header does.
+      assert has_element?(
+               home,
+               ~s(#home-fleet-fleet_tech_classic a[href="/app/fleets/fleet_tech_classic?buy"])
+             )
     end
 
     # The header's "Get a Key", there for everyone on the homepage and every
