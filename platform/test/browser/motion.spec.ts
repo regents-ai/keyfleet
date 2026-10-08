@@ -66,9 +66,9 @@ test("the homepage's fleet cards settle in once, when first scrolled to, and end
 })
 
 test("a page's headline rises in and is left exactly as the server drew it", async ({page, request}) => {
-  const served = await (await request.get("/about")).text()
+  const served = await (await request.get("/docs")).text()
   await watchMotion(page)
-  await page.goto("/about")
+  await page.goto("/docs")
 
   await expect.poll(() => rolled(page, "headline")).toBe(true)
   await expect
@@ -86,9 +86,9 @@ test("a page's headline rises in and is left exactly as the server drew it", asy
 test("a headline's words rise each in a box clipped by class, so a policy refusing style attributes refuses nothing", async ({
   page,
 }) => {
-  const refusals = await refuseStyleAttributes(page, "**/about")
+  const refusals = await refuseStyleAttributes(page, "**/docs")
   await watchMotion(page)
-  await page.goto("/about")
+  await page.goto("/docs")
 
   await expect.poll(() => rolled(page, "headline")).toBe(true)
   expect(await clippedByClass(page, "headline")).toBe(true)
@@ -158,7 +158,7 @@ test("a reader who asked for less motion sees presses, menus, refusals and cards
   await page.waitForTimeout(600)
   expect(await anythingMoved(page), "the homepage").toBe(false)
 
-  await page.goto("/about")
+  await page.goto("/docs")
   await page.waitForTimeout(600)
   expect(await anythingMoved(page), "a page's headline").toBe(false)
   await context.close()

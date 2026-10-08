@@ -7,6 +7,8 @@ defmodule KeyfleetWeb.RouteCatalogTest do
   @paths [
     "/",
     "/account",
+    "/about",
+    "/opportunities",
     "/app/fleets/:fleet_id",
     "/app/keys/:fleet_id/:token_id",
     "/app/keys/:fleet_id/:token_id/dms",
@@ -209,11 +211,13 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 11
+    assert length(decoded["routes"]) == 13
 
     assert Enum.map(decoded["routes"], & &1["route_id"]) == [
              "home",
              "account",
+             "about",
+             "opportunities",
              "fleet",
              "keys",
              "dms",

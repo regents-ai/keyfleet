@@ -155,9 +155,7 @@ defmodule KeyfleetWeb.Router do
   scope "/", KeyfleetWeb do
     pipe_through :public_documents
     get "/docs", PublicPagesController, :show
-    get "/about", PublicPagesController, :show
     get "/contact", PublicPagesController, :show
-    get "/opportunities", PublicPagesController, :show
     get "/privacy", PublicPagesController, :show
     get "/terms", PublicPagesController, :show
   end
@@ -283,6 +281,8 @@ defmodule KeyfleetWeb.Router do
       session: {KeyfleetWeb.Live.Session, :render_context, []},
       on_mount: [KeyfleetWeb.Live.LaunchGateHook, {KeyfleetWeb.Live.Session, :load_human}] do
       live "/account", ShellLive, :account
+      live "/about", ShellLive, :about
+      live "/opportunities", ShellLive, :opportunities
       live "/app/fleets/:fleet_id", ShellLive, :fleet
       live "/app/keys/:fleet_id/:token_id", ShellLive, :keys
       live "/app/keys/:fleet_id/:token_id/dms", ShellLive, :dms
