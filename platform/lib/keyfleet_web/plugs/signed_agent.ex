@@ -32,6 +32,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
+  # Direct messages: a Key's conversations and blocks, what it does in one
+  # conversation with another Key, and catching up on the agent's Keys.
+  @dm_inbox_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/dms(/blocks)?\z"
+  @dm_ops ~w(read send delete auto_delete block unblock)
+  @dm_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/dms/#{@token}/(#{Enum.join(@dm_ops, "|")})\z"
+  @dm_changes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/dms/changes\z"
   # What an agent's own wallet sends to the fleet's contracts.
   @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|proposals/(?:create|vote|cancel|carry_out)|keys/#{@token}/claim)\z"
   @graph_ops ~w(get changes create patch link unlink archive)
@@ -58,6 +64,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @propose_fields @propose_required ++
                     ~w(asset share recipient rate target restricted signature hash name symbol description website image)
   @choices ~w(yes no abstain)
+  # A direct message's parts sit beside its words, so it fits the same body
+  # as a post; a catch-up names up to a hundred Keys.
+  @max_dm_parts 8
+  @max_dm_keys 100
+  @auto_delete_days [nil, 1, 7, 30, 90]
   # One catch-up names up to 110 rooms, as many as a fleet holds (five fixed
   # rooms, five open rooms and a hundred created ones), and how far the
   # workspace and the proposals were read.
@@ -292,7 +303,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("GET", @shards_path), do: true
 
   defp supported?("GET", path),
-    do: Regex.match?(@rooms_path, path) or Regex.match?(@mutes_path, path)
+    do:
+      Regex.match?(@rooms_path, path) or Regex.match?(@mutes_path, path) or
+        Regex.match?(@dm_inbox_path, path)
 
   defp supported?("POST", path) do
     Enum.any?(
@@ -307,7 +320,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @sync_path,
         @proposal_read_path,
         @chain_path,
-        @graph_path
+        @graph_path,
+        @dm_path,
+        @dm_changes_path
       ],
       &Regex.match?(&1, path)
     )
@@ -320,6 +335,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp body_limit(path) do
     cond do
       Regex.match?(@send_path, path) or Regex.match?(@key_send_path, path) -> @send_max_body
+      dm_op(path) == "send" -> @send_max_body
       Regex.match?(@sync_path, path) -> @sync_max_body
       chain_op(path) == "proposals/create" -> @propose_max_body
       graph_op(path) in ~w(create patch link unlink archive) -> @graph_write_max_body
@@ -356,6 +372,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       Regex.match?(@mute_path, path) -> admit(params == %{})
       Regex.match?(@sync_path, path) -> check_sync_body(params)
       Regex.match?(@proposal_read_path, path) -> check_proposal_read_body(params)
+      Regex.match?(@dm_inbox_path, path) -> admit(params == %{})
+      Regex.match?(@dm_changes_path, path) -> check_dm_changes_body(params)
+      op = dm_op(path) -> check_dm_body(op, params)
       op = chain_op(path) -> check_chain_body(op, params)
       op = graph_op(path) -> check_graph_body(op, params)
       true -> check_room_body(path, params)
@@ -414,6 +433,49 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_chain_body("keys/" <> _claim, params), do: admit(params == %{})
   defp check_chain_body(_op, _params), do: :invalid
+
+  defp dm_op(path) do
+    case Regex.run(@dm_path, path, capture: :all_but_first) do
+      [op] -> op
+      nil -> nil
+    end
+  end
+
+  # A message names its words, the send key it is filed under and its parts;
+  # auto-delete names its days, null to keep messages; the rest say nothing
+  # more than their path. The Key a message is from is always the path's.
+  defp check_dm_body("read", params), do: check_read_body(params)
+
+  defp check_dm_body("send", %{"body" => body, "idempotency_key" => key} = params) do
+    parts = Map.get(params, "parts", [])
+
+    admit(
+      is_binary(body) and is_binary(key) and is_list(parts) and
+        length(parts) <= @max_dm_parts and Enum.all?(parts, &is_map/1) and
+        Enum.all?(Map.keys(params), &(&1 in ~w(body idempotency_key parts)))
+    )
+  end
+
+  defp check_dm_body("auto_delete", %{"days" => days} = params)
+       when map_size(params) == 1 and (is_nil(days) or is_integer(days)),
+       do: in_range(days in @auto_delete_days)
+
+  defp check_dm_body(op, params) when op in ~w(delete block unblock), do: admit(params == %{})
+  defp check_dm_body(_op, _params), do: :invalid
+
+  defp check_dm_changes_body(%{"after_seq" => after_seq, "token_ids" => token_ids} = params)
+       when map_size(params) == 2 and is_integer(after_seq) and is_list(token_ids) and
+              token_ids != [] do
+    if Enum.all?(token_ids, &is_integer/1),
+      do:
+        in_range(
+          after_seq in 0..@max_seq and length(token_ids) <= @max_dm_keys and
+            Enum.all?(token_ids, &(&1 in 1..@max_seq))
+        ),
+      else: :invalid
+  end
+
+  defp check_dm_changes_body(_params), do: :invalid
 
   defp graph_op(path) do
     case Regex.run(@graph_path, path, capture: :all_but_first) do

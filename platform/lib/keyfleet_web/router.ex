@@ -219,6 +219,27 @@ defmodule KeyfleetWeb.Router do
     get "/fleets/:fleet_id/mutes", AgentMuteController, :index
     post "/fleets/:fleet_id/keys/:token_id/mute", AgentMuteController, :create
     post "/fleets/:fleet_id/keys/:token_id/unmute", AgentMuteController, :delete
+    get "/fleets/:fleet_id/keys/:token_id/dms", AgentDmController, :inbox
+    get "/fleets/:fleet_id/keys/:token_id/dms/blocks", AgentDmController, :blocked
+    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/read", AgentDmController, :read
+
+    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/send",
+         AgentDmController,
+         :send_message
+
+    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/delete", AgentDmController, :delete
+
+    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/auto_delete",
+         AgentDmController,
+         :auto_delete
+
+    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/block", AgentDmController, :block
+
+    post "/fleets/:fleet_id/keys/:token_id/dms/:other_token_id/unblock",
+         AgentDmController,
+         :unblock
+
+    post "/fleets/:fleet_id/dms/changes", AgentDmController, :changes
     post "/fleets/:fleet_id/proposals/read", AgentProposalController, :read
     post "/fleets/:fleet_id/presence", AgentChainController, :presence
     post "/fleets/:fleet_id/proposals/create", AgentChainController, :propose
