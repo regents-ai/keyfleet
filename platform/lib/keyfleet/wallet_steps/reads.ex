@@ -48,6 +48,26 @@ defmodule Keyfleet.WalletSteps.Reads do
     do: client.get_balance(account, head.hash)
 
   @doc """
+  Whether `wallet` pays its own network fee and holds less ETH than any
+  transaction costs at the head block, 21,000 gas at the block's base fee, so
+  that whatever it sends is certain to fail. A wallet with code, a smart
+  wallet or one delegating to one, may have its fee paid for it and is never
+  short.
+  """
+  def short_of_gas?(%__MODULE__{client: client, head: head} = reads, wallet) do
+    case client.get_code(wallet, head.hash) do
+      {:ok, ""} ->
+        with {:ok, wei} <- balance(reads, wallet), do: {:ok, wei < 21_000 * head.base_fee}
+
+      {:ok, _code} ->
+        {:ok, false}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
   `read` applied to each entry in turn, stopping at the first that fails:
   `{:ok, values}` in order, or that failure.
   """

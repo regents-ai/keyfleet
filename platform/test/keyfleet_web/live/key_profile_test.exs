@@ -644,7 +644,12 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   # ledger pays out USDC alone.
   defp rewards_answer(calls) do
     StubClient.put_chain(
-      %{number: 1_000, hash: "0x" <> String.duplicate("c", 64), timestamp: DateTime.utc_now()},
+      %{
+        number: 1_000,
+        hash: "0x" <> String.duplicate("c", 64),
+        timestamp: DateTime.utc_now(),
+        base_fee: 0
+      },
       [],
       calls: fn
         @rewards, @reward_assets, _hash ->

@@ -925,10 +925,14 @@ defmodule KeyfleetWeb.FleetLive do
       refresh={{@buy.token_id, @buy.price}}
     >
       <:buttons :let={panel}>
+        <%!-- Only the network fee ever holds Approve back, and it holds Buy
+        back with it, so the one note beside Buy says why for both. --%>
         <Regent.Primitives.button
           id={"#{@id}-approve"}
           data-onchain-step="approve"
           hidden={not approve_shown?(panel)}
+          disabled={WalletPanel.blocked(panel, "approve") != nil}
+          aria-describedby={WalletPanel.blocked(panel, "approve") && "#{@id}-button-why"}
         >
           <span data-press-label>Approve {@buy.price && usdc(@buy.price)}</span>
         </Regent.Primitives.button>

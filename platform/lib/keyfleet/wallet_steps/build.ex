@@ -13,7 +13,10 @@ defmodule Keyfleet.WalletSteps.Build do
   `figures.blocked` names each step the chain's own state, read at the latest
   block, makes certain to fail, with why: `%{"claim-0x…" => :nothing_to_claim}`.
   Its button stays in view, can't be pressed, says why in a few words, and
-  comes back when a later build no longer names it. Nothing else holds a press
+  comes back when a later build no longer names it. Every flow's transactions
+  are also named `:no_eth_for_gas` here, in one place, when the signer pays
+  its own network fee and holds less ETH than any transaction costs
+  (`Keyfleet.WalletSteps.Reads.short_of_gas?/2`). Nothing else holds a press
   back: a pending transaction, a repeat press, or one that only might be
   refused always reaches the wallet, and the contract decides.
 
@@ -29,7 +32,7 @@ defmodule Keyfleet.WalletSteps.Build do
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.WalletSteps
-  alias Keyfleet.WalletSteps.{KeySteps, LaunchSteps, MoneySteps, VoteSteps}
+  alias Keyfleet.WalletSteps.{KeySteps, LaunchSteps, MoneySteps, Reads, VoteSteps}
   alias RegentChain.Review
 
   @builders %{
@@ -92,8 +95,35 @@ defmodule Keyfleet.WalletSteps.Build do
           {:problem, problem, figures} -> {[], figures, problem}
         end
 
-      {:ok, request,
-       %{steps: steps, figures: Map.put_new(figures, :blocked, %{}), problem: problem}}
+      case no_eth_for_gas(steps, signer, Map.put_new(figures, :blocked, %{})) do
+        {:ok, figures} -> {:ok, request, %{steps: steps, figures: figures, problem: problem}}
+        :unread -> {:ok, request, %{steps: [], figures: figures, problem: :unread}}
+      end
+    end
+  end
+
+  # A signer that pays its own fee with less ETH than any transaction costs
+  # can send none of the group's transactions. A signature costs nothing.
+  defp no_eth_for_gas(_steps, nil, figures), do: {:ok, figures}
+
+  defp no_eth_for_gas(steps, signer, figures) do
+    case for(%{kind: "transaction", step: name} <- steps, do: name) do
+      [] ->
+        {:ok, figures}
+
+      sent ->
+        block_if_short(sent, signer, figures)
+    end
+  end
+
+  defp block_if_short(sent, signer, figures) do
+    with {:ok, reads} <- Reads.at_head(),
+         {:ok, true} <- Reads.short_of_gas?(reads, signer) do
+      blocked = Map.merge(figures.blocked, Map.new(sent, &{&1, :no_eth_for_gas}))
+      {:ok, %{figures | blocked: blocked}}
+    else
+      {:ok, false} -> {:ok, figures}
+      {:error, _reason} -> :unread
     end
   end
 

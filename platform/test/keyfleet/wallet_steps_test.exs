@@ -150,6 +150,26 @@ defmodule Keyfleet.WalletStepsTest do
       assert build!(:buy).figures.blocked == %{"buy" => :sales_not_open}
     end
 
+    # Costly failure: a plain wallet with too little ETH for any network fee
+    # is offered presses that are certain to fail, or a wallet with code,
+    # whose fee may be paid for it, is held back.
+    test "a plain wallet short of ETH for the fee can't press; a wallet with code can",
+         %{fleet: fleet} do
+      head = %{ChainViews.head() | base_fee: 1_000_000}
+      least = 21_000 * 1_000_000
+
+      ChainViews.put!(sale(fleet, 0), head: head)
+      assert names(built = build!(:buy)) == ["approve", "buy"]
+      assert built.figures.blocked == %{"approve" => :no_eth_for_gas, "buy" => :no_eth_for_gas}
+
+      ChainViews.put!(sale(fleet, 0), head: head, balances: %{@signer => least})
+      assert build!(:buy).figures.blocked == %{"buy" => :approve_usdc_first}
+
+      delegated = <<0xEF, 0x01, 0x00>> <> :binary.copy(<<0x11>>, 20)
+      ChainViews.put!(sale(fleet, 0), head: head, codes: %{@signer => delegated})
+      assert build!(:buy).figures.blocked == %{"buy" => :approve_usdc_first}
+    end
+
     test "a chain that can't be read builds nothing and says so" do
       Keyfleet.Chain.StubClient.put_chain(ChainViews.head(), [],
         calls: fn _to, _data, _hash -> {:error, :chain_unavailable} end
