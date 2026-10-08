@@ -139,6 +139,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert Keyfleet.ContractSchema.errors(listed.body, "RoomList") == []
 
     assert send_signed(c, "POST", @read_general).body["messages"] == []
+    assert key_thread(c, 1, "read").status == 200
 
     locked = send_signed(c, "POST", room_path("coding", "read"))
     assert {locked.status, locked.body} == {403, refused("not_a_member")}
