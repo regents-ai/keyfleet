@@ -16,6 +16,7 @@ import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaun
 import {V4PoolKey} from "../../src/interfaces/IUniswapV4PoolManager.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockAutolaunchFactory} from "../mocks/MockAutolaunchFactory.sol";
+import {MockClubPass} from "../mocks/MockClubPass.sol";
 import {MockPoolManager} from "../mocks/MockPoolManager.sol";
 import {MockRegent} from "../mocks/MockRegent.sol";
 import {MockRegentRevenueStaking} from "../mocks/MockRegentRevenueStaking.sol";
@@ -55,6 +56,7 @@ abstract contract KeyfleetFixture is Test {
     uint256 internal vrfSubscription;
     MockRegentRevenueStaking internal staking;
     MockAutolaunchFactory internal autolaunch;
+    MockClubPass internal clubPass;
 
     KeyfleetFactory internal factory;
     KeyfleetKeys internal keys;
@@ -78,6 +80,9 @@ abstract contract KeyfleetFixture is Test {
         vrfSubscription = vrf.createSubscription();
         staking = new MockRegentRevenueStaking(usdc);
         autolaunch = new MockAutolaunchFactory();
+        // Placed, not created, so every address the fixture creates is the same as without it.
+        clubPass = MockClubPass(makeAddr("regents club pass"));
+        deployCodeTo("MockClubPass.sol:MockClubPass", address(clubPass));
 
         factory = KeyfleetSystem.deploy(_bindings());
         keys = factory.KEYS();
@@ -92,6 +97,7 @@ abstract contract KeyfleetFixture is Test {
             keeper: keeper,
             staking: staking,
             autolaunch: autolaunch,
+            clubPass: clubPass,
             collection: KeyfleetKeys.Collection({
                 name: "Keyfleet",
                 symbol: "KEYFLEET",
@@ -123,7 +129,7 @@ abstract contract KeyfleetFixture is Test {
 
     // --- fleets ------------------------------------------------------------
 
-    /// @dev The founding fleet of `preset`, with its sales open: creates the four founding fleets in
+    /// @dev The founding fleet of `preset`, with its sales open: creates the five founding fleets in
     /// order the first time, as the Safe, and moves the collection to phase 2.
     function _deploy(KeyfleetPresets.Preset preset) internal returns (KeyfleetManager fleet) {
         if (keys.fleetCount() == 0) {
@@ -148,11 +154,13 @@ abstract contract KeyfleetFixture is Test {
         vm.warp(block.timestamp + 1);
     }
 
-    /// @dev Creates the next founding fleet as the Safe, with a stand-in deck.
+    /// @dev Creates the next founding fleet as the Safe, with a stand-in deck: one card per key on
+    /// the Regents Club, `DECK_SIZE` cards on the others.
     function _createFounding(KeyfleetPresets.Preset preset) internal returns (KeyfleetManager fleet) {
         uint256 id = keys.fleetCount() + 1;
+        uint256 deckSize = preset == KeyfleetPresets.Preset.RegentsClub ? KeyfleetPresets.CLUB_SUPPLY : DECK_SIZE;
         vm.prank(safe);
-        factory.createFoundingFleet(preset, _deckHash(id), DECK_SIZE, _profile("Founding fleet"));
+        factory.createFoundingFleet(preset, _deckHash(id), deckSize, _profile("Founding fleet"));
         fleet = KeyfleetManager(keys.managerOf(id));
     }
 

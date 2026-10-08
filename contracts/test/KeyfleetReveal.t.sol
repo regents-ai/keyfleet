@@ -53,10 +53,10 @@ abstract contract RevealFixture is KeyfleetFixture {
         usdc.approve(address(fleet), type(uint256).max);
     }
 
-    /// @dev The founding Classic fleet, with `buyer` able to spend on it.
-    function _classic() internal returns (KeyfleetManager fleet) {
-        fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        _fund(fleet);
+    /// @dev A Classic fleet whose next keys draw their cards: a new open fleet whose deck the keeper
+    /// has recorded, with `buyer` able to spend on it. Its key 1 went to its creator before the deck.
+    function _drawing() internal returns (KeyfleetManager fleet) {
+        return _openWithDeck();
     }
 
     /// @dev A new open Classic fleet without a deck, with `buyer` able to spend on it.
@@ -98,6 +98,15 @@ abstract contract RevealFixture is KeyfleetFixture {
     /// @dev The id the collection's next accepted request will get.
     function _nextRequestId() internal view returns (uint256 requestId) {
         (requestId,) = vrf.computeRequestId(KEY_HASH, address(keys), vrfSubscription, _nonce() + 1);
+    }
+
+    /// @dev Checks that the collection neither made nor failed a request in `logs`.
+    function _assertNoRequest(Vm.Log[] memory logs) internal view {
+        for (uint256 i = 0; i < logs.length; ++i) {
+            if (logs[i].emitter != address(keys)) continue;
+            assertTrue(logs[i].topics[0] != KeyfleetKeys.RevealRequested.selector, "no request");
+            assertTrue(logs[i].topics[0] != KeyfleetKeys.RevealRequestFailed.selector, "no failed request either");
+        }
     }
 
     function _words(uint256 word) internal pure returns (uint256[] memory words) {
@@ -180,27 +189,58 @@ contract KeyfleetRevealTest is RevealFixture {
 
     // --- 2. decks --------------------------------------------------------
 
-    /// @dev Invariant: each founding fleet is registered with its deck, so every key it mints asks
-    /// for its word in the same purchase.
-    function test_foundingFleetsHaveTheirDeckAndEveryMintAsksForAWord() public {
+    /// @dev Invariant: each founding fleet is registered with its deck, and its keys up to the deck's
+    /// size are dealt by number: card N goes to key N, so no mint asks the coordinator for a word
+    /// and no key can be drawn.
+    function test_foundingFleetsAreDealtByNumberAndAskForNothing() public {
         _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         for (uint256 fleetId = 1; fleetId <= keys.FOUNDING_FLEETS(); ++fleetId) {
             (bytes32 deckHash, uint256 deckSize) = keys.deckOf(fleetId);
-            assertEq(deckHash, _deckHash(fleetId), "the deck fingerprint");
-            assertEq(deckSize, DECK_SIZE, "the deck size");
-
             KeyfleetManager fleet = KeyfleetManager(keys.managerOf(fleetId));
+            bool club = fleet.PRESET() == KeyfleetPresets.Preset.RegentsClub;
+            assertEq(deckHash, _deckHash(fleetId), "the deck fingerprint");
+            assertEq(deckSize, club ? KeyfleetPresets.CLUB_SUPPLY : DECK_SIZE, "the deck size");
+            assertTrue(keys.dealtByNumber(keys.tokenIdOf(fleetId, deckSize)), "the last card is dealt");
+            assertFalse(keys.dealtByNumber(keys.tokenIdOf(fleetId, deckSize + 1)), "past the deck draws");
+            if (club) continue;
+
             _fund(fleet);
             for (uint256 n = 1; n <= 3; ++n) {
                 uint256 nonceBefore = _nonce();
-                vm.expectEmit(true, true, false, true, address(keys));
-                emit RevealRequested(keys.tokenIdOf(fleetId, n), _nextRequestId());
+                vm.recordLogs();
                 uint256 tokenId = _purchase(fleet, _wallet(fleetId * 100 + n));
+                _assertNoRequest(vm.getRecordedLogs());
                 assertEq(tokenId, keys.tokenIdOf(fleetId, n), "the key number");
-                assertEq(_nonce(), nonceBefore + 1, "one request per mint");
-                assertEq(keys.revealRequestedAt(tokenId), block.timestamp, "asked at mint");
+                assertEq(_nonce(), nonceBefore, "the coordinator was never asked");
+                assertEq(keys.revealRequestedAt(tokenId), 0, "never asked");
+                vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.DealtByNumber.selector, tokenId));
+                keys.requestReveal(tokenId);
             }
         }
+    }
+
+    /// @dev Invariant: a founding fleet's keys past the end of its deck draw their cards like any
+    /// other fleet's: the first of them asks for a word in its purchase.
+    function test_foundingKeysPastTheDeckDraw() public {
+        for (uint256 id = 1; id <= keys.FOUNDING_FLEETS(); ++id) {
+            KeyfleetPresets.Preset preset = keys.foundingPreset(id);
+            uint256 deckSize = preset == KeyfleetPresets.Preset.RegentsClub ? KeyfleetPresets.CLUB_SUPPLY : 2;
+            vm.prank(safe);
+            factory.createFoundingFleet(preset, _deckHash(id), deckSize, _profile("Founding fleet"));
+        }
+        _advancePhase();
+        KeyfleetManager fleet = KeyfleetManager(keys.managerOf(1));
+        _fund(fleet);
+
+        vm.recordLogs();
+        _buyKey(fleet);
+        _buyKey(fleet);
+        _assertNoRequest(vm.getRecordedLogs());
+        vm.expectEmit(true, true, false, true, address(keys));
+        emit RevealRequested(_key(fleet, 3), _nextRequestId());
+        uint256 tokenId = _buyKey(fleet);
+        assertEq(tokenId, _key(fleet, 3), "the first key past the deck");
+        assertEq(keys.revealRequestedAt(tokenId), block.timestamp, "asked at mint");
     }
 
     /// @dev Invariant: a fleet anyone creates has no deck, and until it has one none of its mints,
@@ -213,12 +253,7 @@ contract KeyfleetRevealTest is RevealFixture {
         _buyKey(fleet);
         _buyKey(fleet);
 
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        for (uint256 i = 0; i < logs.length; ++i) {
-            if (logs[i].emitter != address(keys)) continue;
-            assertTrue(logs[i].topics[0] != RevealRequested.selector, "no request");
-            assertTrue(logs[i].topics[0] != RevealRequestFailed.selector, "no failed request either");
-        }
+        _assertNoRequest(vm.getRecordedLogs());
         assertEq(_nonce(), nonceBefore, "the coordinator was never asked");
         (bytes32 deckHash, uint256 deckSize) = keys.deckOf(fleetId);
         assertEq(deckHash, bytes32(0), "no deck fingerprint");
@@ -364,8 +399,8 @@ contract KeyfleetRevealTest is RevealFixture {
     /// @dev Invariant: every purchase asks for exactly one word, three blocks deep, with 100,000
     /// callback gas, paid in ETH from the collection's subscription on its gas lane.
     function test_purchaseRequestsOneWordOnTheExactTerms() public {
-        KeyfleetManager fleet = _classic();
-        uint256 k1 = _key(fleet, 1);
+        KeyfleetManager fleet = _drawing();
+        uint256 k2 = _key(fleet, 2);
         (uint256 requestId, uint256 preSeed) = vrf.computeRequestId(KEY_HASH, address(keys), vrfSubscription, 1);
         bytes memory extraArgs = abi.encodeWithSelector(VRFV2PlusClient.EXTRA_ARGS_V1_TAG, true);
         assertEq(
@@ -377,12 +412,12 @@ contract KeyfleetRevealTest is RevealFixture {
             KEY_HASH, requestId, preSeed, vrfSubscription, 3, 100_000, 1, extraArgs, address(keys)
         );
         vm.expectEmit(true, true, false, false, address(keys));
-        emit RevealRequested(k1, requestId);
+        emit RevealRequested(k2, requestId);
         uint256 tokenId = _buyKey(fleet);
 
-        assertEq(tokenId, k1);
-        assertEq(keys.revealRequestedAt(k1), block.timestamp, "request time recorded");
-        assertEq(keys.revealSeed(k1), bytes32(0), "no seed before the answer");
+        assertEq(tokenId, k2);
+        assertEq(keys.revealRequestedAt(k2), block.timestamp, "request time recorded");
+        assertEq(keys.revealSeed(k2), bytes32(0), "no seed before the answer");
         (address sender, uint32 callbackGasLimit) = vrf.pending(requestId);
         assertEq(sender, address(keys), "the collection is the requester");
         assertEq(callbackGasLimit, 100_000, "the callback gas the coordinator will give");
@@ -390,11 +425,11 @@ contract KeyfleetRevealTest is RevealFixture {
 
     /// @dev Invariant: a coordinator that refuses a request never stops a purchase.
     function test_purchaseSucceedsWhenTheCoordinatorRefuses() public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         vrf.setRevertAll(true);
 
         vm.expectEmit(true, false, false, false, address(keys));
-        emit RevealRequestFailed(_key(fleet, 1));
+        emit RevealRequestFailed(_key(fleet, 2));
         uint256 tokenId = _buyKey(fleet);
 
         assertEq(keys.ownerOf(tokenId), buyer, "the key is sold");
@@ -408,26 +443,26 @@ contract KeyfleetRevealTest is RevealFixture {
         keys = factory.KEYS();
         shards = factory.SHARDS();
         regentBuyer = factory.REGENT_BUYER();
-        KeyfleetManager fleet = _classic();
-        uint256 k1 = _key(fleet, 1);
+        KeyfleetManager fleet = _drawing();
+        uint256 k2 = _key(fleet, 2);
 
         vm.expectEmit(true, false, false, false, address(keys));
-        emit RevealRequestFailed(k1);
+        emit RevealRequestFailed(k2);
         _buyKey(fleet);
 
-        assertEq(keys.ownerOf(k1), buyer, "the key is sold");
+        assertEq(keys.ownerOf(k2), buyer, "the key is sold");
         vrf.addConsumer(vrfSubscription, address(keys));
         vm.expectEmit(true, true, false, true, address(keys));
-        emit RevealRequested(k1, _nextRequestId());
-        keys.requestReveal(k1);
+        emit RevealRequested(k2, _nextRequestId());
+        keys.requestReveal(k2);
     }
 
     /// @dev Invariant: a buyer who sends too little gas for the request still gets the key, and
     /// the key only waits for a retry. The coordinator is made to spend a million gas on the
     /// request so the gas left after it runs out is enough to finish the purchase.
     function test_aBuyerWhoStarvesTheRequestStillGetsTheKeyAndItCanBeRetried() public {
-        KeyfleetManager fleet = _classic();
-        uint256 k1 = _key(fleet, 1);
+        KeyfleetManager fleet = _drawing();
+        uint256 k2 = _key(fleet, 2);
         _fund(fleet);
         vrf.setRequestGasBurn(1_000_000);
 
@@ -443,13 +478,13 @@ contract KeyfleetRevealTest is RevealFixture {
         }
 
         assertGt(used, 0, "some gas limit completes the purchase while the request fails");
-        assertEq(keys.ownerOf(k1), buyer, "the key is sold");
-        assertEq(keys.revealRequestedAt(k1), 0, "no accepted request");
+        assertEq(keys.ownerOf(k2), buyer, "the key is sold");
+        assertEq(keys.revealRequestedAt(k2), 0, "no accepted request");
 
         vrf.setRequestGasBurn(0);
         vm.expectEmit(true, true, false, true, address(keys));
-        emit RevealRequested(k1, _nextRequestId());
-        keys.requestReveal(k1);
+        emit RevealRequested(k2, _nextRequestId());
+        keys.requestReveal(k2);
     }
 
     /// @dev Invariant: against a coordinator that costs what the real one costs, no gas limit
@@ -458,7 +493,7 @@ contract KeyfleetRevealTest is RevealFixture {
     /// the four thousand gas above it is tried, which is where a starved request would show. A finer
     /// step would not fit the whole walk in one test's gas.
     function test_everyCompletedPurchaseEitherRequestedOrSaidItFailed() public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         _fund(fleet);
         uint256 low = 100_000;
         uint256 high = 3_000_000;
@@ -486,7 +521,7 @@ contract KeyfleetRevealTest is RevealFixture {
     /// @dev Invariant: the seed is the tagged hash of the chain, the collection, the key and the
     /// word; writing it names the key's fleet and key number and tells marketplaces to refresh it.
     function test_answerWritesTheSeedAndAnnouncesIt() public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         uint256 tokenId = _buyKey(fleet);
         uint256 requestId = _lastRequestId();
         bytes32 expected = keccak256(
@@ -494,7 +529,7 @@ contract KeyfleetRevealTest is RevealFixture {
         );
 
         vm.expectEmit(true, true, true, true, address(keys));
-        emit KeyRevealed(tokenId, fleet.FLEET_ID(), 1, requestId, expected);
+        emit KeyRevealed(tokenId, fleet.FLEET_ID(), 2, requestId, expected);
         vm.expectEmit(false, false, false, true, address(keys));
         emit MetadataUpdate(tokenId);
         vrf.fulfill(requestId, _words(424242));
@@ -506,8 +541,8 @@ contract KeyfleetRevealTest is RevealFixture {
     /// @dev The same word gives two keys of one fleet, and the same key number in two fleets of the
     /// same type, different seeds; each answer names its own fleet and key number.
     function test_seedsOfTheSameKeyNumberInTwoFleetsDiffer() public {
-        KeyfleetManager first = _classic();
-        _buyKey(first);
+        KeyfleetManager first = _drawing();
+        keys.requestReveal(_key(first, 1));
         uint256 firstRequest = _lastRequestId();
         _buyKey(first);
         uint256 secondKeyRequest = _lastRequestId();
@@ -529,7 +564,7 @@ contract KeyfleetRevealTest is RevealFixture {
 
     /// @dev Invariant: only the pinned coordinator can deliver an answer.
     function test_onlyTheCoordinatorMayAnswer() public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         uint256 tokenId = _buyKey(fleet);
         uint256 requestId = _lastRequestId();
 
@@ -547,7 +582,7 @@ contract KeyfleetRevealTest is RevealFixture {
     /// is final and charged: unknown ids, empty answers and a second answer for a revealed key are
     /// ignored without a word.
     function test_unknownEmptyAndDuplicateAnswersAreIgnoredWithoutReverting() public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         uint256 tokenId = _buyKey(fleet);
         uint256 requestId = _lastRequestId();
 
@@ -568,7 +603,7 @@ contract KeyfleetRevealTest is RevealFixture {
     /// coordinator accepts a request nobody, the holder included, can ask for the key again, however
     /// long the answer takes, and no stack of waiting requests can build up behind it.
     function test_anAcceptedRequestIsTheOnlyOneAKeyEverGets() public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         uint256 tokenId = _buyKey(fleet);
         uint256 requestId = _lastRequestId();
         uint64 nonceBefore = _nonce();
@@ -594,7 +629,7 @@ contract KeyfleetRevealTest is RevealFixture {
     /// coordinator and only it may answer, so a key whose accepted request went to the old one is
     /// never answered and is never asked for again.
     function test_theSafeMovesRevealsToANewCoordinator() public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         uint256 stranded = _buyKey(fleet);
         uint256 oldRequest = _lastRequestId();
 
@@ -657,7 +692,7 @@ contract KeyfleetRevealTest is RevealFixture {
     /// @dev Invariant: an answer is cheap enough for the 100,000 callback gas with room to spare,
     /// with every slot it touches cold, as it is in the coordinator's own transaction.
     function test_callbackUsesUnderSixtyThousandGasWithColdStorage() public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         _buyKey(fleet);
         uint256 requestId = _lastRequestId();
 
@@ -672,10 +707,10 @@ contract KeyfleetRevealTest is RevealFixture {
     // --- 5. retries ------------------------------------------------------
 
     function test_requestRevealRefusesAKeyThatDoesNotExist() public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         _buyKey(fleet);
 
-        uint256[3] memory missing = [uint256(0), _key(fleet, 2), keys.tokenIdOf(99, 1)];
+        uint256[3] memory missing = [uint256(0), _key(fleet, 3), keys.tokenIdOf(99, 1)];
         for (uint256 i = 0; i < missing.length; ++i) {
             vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, missing[i]));
             keys.requestReveal(missing[i]);
@@ -683,7 +718,7 @@ contract KeyfleetRevealTest is RevealFixture {
     }
 
     function test_requestRevealRefusesARevealedKey() public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         uint256 tokenId = _buyKey(fleet);
         vrf.fulfill(_lastRequestId(), _words(5));
         vm.warp(block.timestamp + 1 hours);
@@ -696,7 +731,7 @@ contract KeyfleetRevealTest is RevealFixture {
     /// the coordinator keeps refusing, and a refused retry says so without reverting. The first
     /// retry the coordinator accepts is the last one.
     function test_aFailedRequestCanBeRetriedAtOnceByAnyone() public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         vrf.setRevertAll(true);
         uint256 tokenId = _buyKey(fleet);
 
@@ -717,7 +752,7 @@ contract KeyfleetRevealTest is RevealFixture {
 
     /// @dev Invariant: a receiver cannot add a second request to the mint that sends it its key.
     function test_aReceiverCannotRetryFromInsideItsOwnPurchase() public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         _fund(fleet);
         RetryingReceiver receiver = new RetryingReceiver(keys);
 
@@ -731,12 +766,12 @@ contract KeyfleetRevealTest is RevealFixture {
     /// @dev Invariant: `tokenURI` answers only for a minted key, so nobody can read a key's metadata
     /// address ahead of its mint, in its own fleet or any other.
     function test_tokenURIRevertsForAnUnmintedKey() public {
-        KeyfleetManager fleet = _classic();
-        uint256 k1 = _buyKey(fleet);
-        assertEq(keys.tokenURI(k1), string.concat("https://keyfleet.ai/keys/", vm.toString(k1)), "a minted key");
+        KeyfleetManager fleet = _drawing();
+        uint256 k2 = _buyKey(fleet);
+        assertEq(keys.tokenURI(k2), string.concat("https://keyfleet.ai/keys/", vm.toString(k2)), "a minted key");
 
         uint256[4] memory unminted =
-            [_key(fleet, 2), keys.tokenIdOf(2, 1), keys.tokenIdOf(fleet.FLEET_ID() + 99, 1), uint256(0)];
+            [_key(fleet, 3), keys.tokenIdOf(2, 1), keys.tokenIdOf(fleet.FLEET_ID() + 99, 1), uint256(0)];
         for (uint256 i = 0; i < unminted.length; ++i) {
             vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, unminted[i]));
             keys.tokenURI(unminted[i]);
@@ -754,7 +789,7 @@ contract KeyfleetRevealTest is RevealFixture {
         bool known,
         bool revealFirst
     ) public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         _buyKey(fleet);
         if (known) requestId = _lastRequestId();
         if (revealFirst) vrf.fulfill(_lastRequestId(), _words(word ^ 1));
@@ -773,7 +808,7 @@ contract KeyfleetRevealTest is RevealFixture {
     /// @dev Invariant: a seed is written once. However many answers arrive for a key, the seed is
     /// the first one's and never changes.
     function testFuzz_aSeedIsWrittenOnce(uint256 firstWord, uint256 secondWord) public {
-        KeyfleetManager fleet = _classic();
+        KeyfleetManager fleet = _drawing();
         uint256 tokenId = _buyKey(fleet);
         uint256 requestId = _lastRequestId();
 
@@ -791,7 +826,7 @@ contract KeyfleetRevealTest is RevealFixture {
     function testFuzz_noKeyOfAFleetWithoutADeckHasASeedOrAPendingDraw(uint8 extraKeys, uint256 requestId, uint256 word)
         public
     {
-        KeyfleetManager founding = _classic();
+        KeyfleetManager founding = _drawing();
         KeyfleetManager open = _open();
         uint256 count = 1 + bound(extraKeys, 0, 12);
         for (uint256 i = 1; i < count; ++i) {
@@ -965,7 +1000,7 @@ contract KeyfleetRevealInvariantTest is RevealFixture {
     function setUp() public {
         _setUpReveal();
         KeyfleetManager[] memory fleets = new KeyfleetManager[](3);
-        fleets[0] = _classic();
+        fleets[0] = _drawing();
         fleets[1] = _deploy(KeyfleetPresets.Preset.FleetTechAccelerant);
         _fund(fleets[1]);
         fleets[2] = _open();

@@ -1,16 +1,17 @@
 # Card decks
 
-Classic #1, Syndicate #1, Cascade #1 and Accelerant #1 each have a deck of 1,000
-cards, made before the fleet was created. Keys 1 to 1,000 of those fleets each
-show one card from their fleet's deck; Keys 1,001 onward, and every other
-fleet, draw their own card from their own seed. With this rule, the fleet's
-reveals on chain and the deck file give every Key's card.
+The five founding fleets each have a deck made before the fleet was created:
+Classic #1, Syndicate #1, Accelerant #1 and Cascade #1 have 1,000 cards each,
+and Regents Club #1 has 1,998, one for each Regents Club Pass. A fleet anyone
+creates gets its deck later, recorded on chain by the keeper. Keys past their
+fleet's deck draw their own card from their own seed. With these rules, the
+fleet's record on chain, its reveals and the deck file give every Key's card.
 
 ## A deck file
 
 `<deck hash>.json`, where the deck hash is `keccak256` of the file's bytes
 exactly as they are. The fleet's record on chain holds that hash and the
-number of cards, fixed when the fleet was created.
+number of cards, fixed when the deck was recorded.
 
 ```json
 {"fleet": "CLASSIC #1", "table": "0x…", "cards": ["0x…", "0x…", …]}
@@ -22,6 +23,13 @@ that seed, by the same draw every Key uses.
 
 ## Which card a Key gets
 
+On a founding fleet, Key N gets card N − 1, the Nth card listed, for Keys 1 to
+the deck's size. Nothing is drawn for them: the card is known from the deck file
+as soon as the Key exists.
+
+On a fleet anyone creates, Keys 1 to the deck's size are dealt in the order
+they were revealed:
+
 1. Take the fleet's reveals of Keys numbered 1 to the deck's size, in the order
    they were logged on chain: by block number, then by log index within the
    block. Each Key is revealed once, with its seed.
@@ -31,10 +39,12 @@ that seed, by the same draw every Key uses.
    `seed mod n` in the remaining list, counting from 0. The last card in the
    list then moves into that position, and the list is one shorter.
 
-No card is dealt twice, and the 1,000th Key gets the last card left.
+No card is dealt twice, and the last Key within the deck gets the last card
+left.
 
 ## Example
 
-A deck of 10 cards and seeds `keccak256("deal-1")` to `keccak256("deal-10")`,
-revealed in that order, deals cards `2, 6, 8, 5, 1, 4, 3, 7, 9, 0`.
-The site's own copy of the rule is `Keyfleet.Decks.deal/2`.
+A deck of 10 cards on a fleet anyone creates, and seeds `keccak256("deal-1")` to
+`keccak256("deal-10")`, revealed in that order, deals cards
+`2, 6, 8, 5, 1, 4, 3, 7, 9, 0`. The site's own copy of the rule is
+`Keyfleet.Decks.deal/2`.

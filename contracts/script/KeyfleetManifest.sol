@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {Script} from "forge-std/Script.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {KeyfleetFactory} from "../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
@@ -23,7 +24,7 @@ interface IVRFProvingKeys {
 /// that hold before anything is deployed, sent or recorded, and the reader of the deployment's
 /// broadcast.
 /// @dev A manifest file holds what the whole system is deployed with, once per chain, and the
-/// deck and profile of each of the four founding fleets. `parseManifest` and `parseBroadcast` take
+/// deck and profile of each of the five founding fleets. `parseManifest` and `parseBroadcast` take
 /// JSON text and `readManifest` and `readBroadcast` are the only parts that open a file, so the
 /// suite parses manifests and broadcasts without writing any.
 abstract contract KeyfleetManifest is Script {
@@ -49,6 +50,9 @@ abstract contract KeyfleetManifest is Script {
     /// @notice Autolaunch Revstake v2's factory on Base (`RegentsAutolaunchFactoryV2`, deployed 6
     /// October 2026), the only launch factory a treasury may bind.
     address public constant BASE_AUTOLAUNCH_FACTORY = 0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E;
+    /// @notice The Regents Club Pass collection on Base (on-chain name "Animata Access Card - Regent",
+    /// 1,998 Passes): Pass N names who receives Regents Club key N.
+    address public constant BASE_REGENTS_CLUB_PASS = 0x2208aaDBdEcd47D3B4430b5b75a175f6d885D487;
     /// @notice The Chainlink VRF v2.5 coordinator on Base. Source: Chainlink's VRF v2.5
     /// supported-networks page, Base Mainnet.
     address public constant BASE_VRF_COORDINATOR = 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634;
@@ -91,11 +95,11 @@ abstract contract KeyfleetManifest is Script {
     /// @notice What the system on one chain is deployed and founded with.
     /// @param chainId The chain this manifest is for. Every step refuses any other.
     /// @param bindings What the factory is deployed with.
-    /// @param founding The four founding fleets in creation order: fleet 1 to fleet 4.
+    /// @param founding The five founding fleets in creation order: fleet 1 to fleet 5.
     struct Manifest {
         uint256 chainId;
         KeyfleetSystem.Bindings bindings;
-        FoundingFleet[4] founding;
+        FoundingFleet[5] founding;
     }
 
     /// @notice What the deployment step's broadcast establishes.
@@ -145,6 +149,7 @@ abstract contract KeyfleetManifest is Script {
             keeper: vm.parseJsonAddress(json, ".keeper"),
             staking: IRegentRevenueStaking(vm.parseJsonAddress(json, ".regentStaking")),
             autolaunch: IRegentsAutolaunchFactoryV2(vm.parseJsonAddress(json, ".autolaunchFactory")),
+            clubPass: IERC721(vm.parseJsonAddress(json, ".regentsClubPass")),
             collection: KeyfleetKeys.Collection({
                 name: vm.parseJsonString(json, ".collection.name"),
                 symbol: vm.parseJsonString(json, ".collection.symbol"),
@@ -159,9 +164,9 @@ abstract contract KeyfleetManifest is Script {
             traitTableHash: vm.parseJsonBytes32(json, ".traitTableHash"),
             route: _parseRoute(json)
         });
-        string[4] memory keys = foundingKeys();
-        KeyfleetPresets.Preset[4] memory presets = foundingPresets();
-        for (uint256 index = 0; index < 4; ++index) {
+        string[5] memory keys = foundingKeys();
+        KeyfleetPresets.Preset[5] memory presets = foundingPresets();
+        for (uint256 index = 0; index < 5; ++index) {
             string memory key = string.concat(".foundingFleets.", keys[index]);
             manifest.founding[index] = FoundingFleet({
                 preset: presets[index],
@@ -203,23 +208,25 @@ abstract contract KeyfleetManifest is Script {
     }
 
     /// @notice The founding fleets' keys in the manifest file, in founding order.
-    function foundingKeys() public pure returns (string[4] memory) {
-        return ["classic", "syndicate", "accelerant", "cascade"];
+    function foundingKeys() public pure returns (string[5] memory) {
+        return ["classic", "syndicate", "accelerant", "cascade", "regentsClub"];
     }
 
     /// @notice The founding fleets' types, in founding order, as `KeyfleetKeys.foundingPreset`
     /// gives them.
-    function foundingPresets() public pure returns (KeyfleetPresets.Preset[4] memory) {
+    function foundingPresets() public pure returns (KeyfleetPresets.Preset[5] memory) {
         return [
             KeyfleetPresets.Preset.FleetTechClassic,
             KeyfleetPresets.Preset.FibonacciSyndicate,
             KeyfleetPresets.Preset.FleetTechAccelerant,
-            KeyfleetPresets.Preset.FibonacciCascade
+            KeyfleetPresets.Preset.FibonacciCascade,
+            KeyfleetPresets.Preset.RegentsClub
         ];
     }
 
     /// @dev The manifest must fit this chain. Its chain must be this chain, and on Base everything
-    /// it names must be Base's own: the Safe, the route, staking, Autolaunch, the coordinator and
+    /// it names must be Base's own: the Safe, the route, staking, Autolaunch, the Regents Club Pass,
+    /// the coordinator and
     /// gas lane, and the collection's name, symbol and metadata base. On every chain the coordinator
     /// must know the gas lane and the subscription; a subscription it does not know reverts with the
     /// coordinator's own `InvalidSubscription`. Everything else, such as code at every address and a
@@ -238,6 +245,7 @@ abstract contract KeyfleetManifest is Script {
         _pin(bindings.safe == BASE_REGENTS_SAFE, "safe");
         _pin(address(bindings.staking) == BASE_REGENT_REVENUE_STAKING, "regentStaking");
         _pin(address(bindings.autolaunch) == BASE_AUTOLAUNCH_FACTORY, "autolaunchFactory");
+        _pin(address(bindings.clubPass) == BASE_REGENTS_CLUB_PASS, "regentsClubPass");
         _pin(address(bindings.randomness.coordinator) == BASE_VRF_COORDINATOR, "vrf.coordinator");
         bytes32 keyHash = bindings.randomness.keyHash;
         _pin(keyHash == BASE_VRF_KEY_HASH_2_GWEI || keyHash == BASE_VRF_KEY_HASH_30_GWEI, "vrf.keyHash");

@@ -18,6 +18,7 @@ import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {FleetWiring} from "../../src/KeyfleetWiring.sol";
 import {FULL_PIECE, KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
+import {MockClubPass} from "../mocks/MockClubPass.sol";
 import {MockRegent} from "../mocks/MockRegent.sol";
 import {MockRegentRevenueStaking} from "../mocks/MockRegentRevenueStaking.sol";
 import {MockToken} from "../mocks/MockToken.sol";
@@ -49,8 +50,10 @@ contract CollectionHandler is Test {
     uint256 internal constant ACTORS = 10;
     uint256 internal constant AGENTS = 3;
     uint256 internal constant OUTSIDERS = 2;
-    uint256 internal constant FIRST_OPEN_FLEET = 5;
-    uint256 internal constant MAX_FLEETS = 6;
+    /// @dev The Regents Club: the fifth founding fleet, given and never sold.
+    uint256 internal constant CLUB_FLEET = 5;
+    uint256 internal constant FIRST_OPEN_FLEET = 6;
+    uint256 internal constant MAX_FLEETS = 7;
     uint256 internal constant MAX_KEYS = 24;
     uint256 internal constant MAX_PROPOSALS = 3;
     uint256 internal constant ATTACKS = 49;
@@ -164,6 +167,8 @@ contract CollectionHandler is Test {
     uint256[2][] internal _proposals;
     uint256[] internal _pending;
     mapping(uint256 requestId => uint256 tokenId) internal _requestToken;
+    /// @dev Which Regents Club Passes the handler has minted.
+    mapping(uint256 passId => bool) internal _passMinted;
     bool internal _phaseStepped;
     uint256 internal _acting;
     uint8 internal _phaseBefore;
@@ -337,9 +342,19 @@ contract CollectionHandler is Test {
         uint256 id = _fleetFrom(fleetSeed);
         if (id == 0) return;
         KeyfleetManager manager = _manager(id);
+        address to = _accounts[actorSeed % ACTORS];
+        if (id == CLUB_FLEET) {
+            try manager.purchase(to, type(uint256).max, block.timestamp, new bytes32[](0)) {
+                _breach("a Regents Club key was sold");
+            } catch (bytes memory err) {
+                if (bytes4(err) != KeyfleetManager.NotForSale.selector) {
+                    _breach("a Regents Club purchase was refused other than as not for sale");
+                }
+            }
+            return;
+        }
         uint256 keyNumber = manager.totalMinted() + 1;
         if (keyNumber > MAX_KEYS) return;
-        address to = _accounts[actorSeed % ACTORS];
         uint256 price = manager.nextPrice();
         bool open = salesOpenExpected(id);
         bool meets = _records[id].nftRequirement == address(0) || keys.balanceOf(to) > 0;
@@ -357,6 +372,54 @@ contract CollectionHandler is Test {
             }
             usdc.approve(address(manager), 0);
         }
+    }
+
+    /// @notice The Safe, or a stranger, gives the Regents Club's next key to whoever holds the Pass
+    /// of its number, the handler first minting that Pass to an actor when nobody holds it. A gift
+    /// moves no money and draws nothing: the Club's cards are dealt by number.
+    function give(uint256 actorSeed, uint256 callerSeed) external step(CLUB_FLEET) {
+        KeyfleetManager club = _manager(CLUB_FLEET);
+        uint256 keyNumber = club.totalMinted() + 1;
+        if (keyNumber > MAX_KEYS) return;
+        MockClubPass pass = MockClubPass(address(factory.CLUB_PASS()));
+        if (!_passMinted[keyNumber]) {
+            pass.mint(_accounts[actorSeed % ACTORS], keyNumber);
+            _passMinted[keyNumber] = true;
+        }
+        address to = pass.ownerOf(keyNumber);
+        address caller = callerSeed % 3 == 0 ? _stranger(callerSeed, 0) : safe;
+        bytes4 expected;
+        if (caller != safe) expected = KeyfleetManager.OnlySafeGivesClubKeys.selector;
+        else if (!salesOpenExpected(CLUB_FLEET)) expected = KeyfleetKeys.SalesClosed.selector;
+        address[] memory receivers = new address[](1);
+        receivers[0] = to;
+        Books memory before = _books(club, keyNumber);
+        vm.prank(caller);
+        try club.give(receivers) {
+            if (expected != bytes4(0)) _breach("a Regents Club key was given that should have been refused");
+            _checkGift(keyNumber, before, to);
+        } catch (bytes memory err) {
+            if (bytes4(err) != expected || expected == bytes4(0)) _breach("a Regents Club gift was refused wrongly");
+        }
+    }
+
+    /// @dev Checks one gift: key `keyNumber` of the Club went to `to` as a new key, and no money
+    /// moved and nothing was drawn.
+    function _checkGift(uint256 keyNumber, Books memory before, address to) internal {
+        KeyfleetManager club = _manager(CLUB_FLEET);
+        Books memory afterwards = _books(club, keyNumber);
+        if (keccak256(abi.encode(afterwards)) != keccak256(abi.encode(before))) _breach("a gift moved money");
+        ghostMinted += 1;
+
+        uint256 tokenId = keys.tokenIdOf(CLUB_FLEET, keyNumber);
+        if (keys.ownerOf(tokenId) != to) _breach("a gift went to other than the Pass holder");
+        if (keys.ownershipEpoch(tokenId) != 1) _breach("a new key's epoch is not 1");
+        if (keys.mintedAt(tokenId) != block.timestamp) _breach("a new key's mint time is not its gift");
+        KeyfleetVotes votes = club.VOTES();
+        if (votes.presentFrom(tokenId) != block.timestamp + votes.KEY_MATURITY()) {
+            _breach("a new key's automatic presence does not start at its maturity");
+        }
+        _checkDraw(tokenId, before.vrfNonce, false);
     }
 
     /// @notice Creates the next open fleet as its creator, who buys key 1 at the starting price: 10
@@ -419,7 +482,8 @@ contract CollectionHandler is Test {
     /// @dev Checks one sale's USDC split exactly (plan 7.3): the protocol share and any Cascade
     /// reserve stay as USDC in the manager, rebates and level reimbursements reach the ledger as
     /// USDC, the rest is booked in the manager for REGENT and its fleet queued, nothing is swapped
-    /// and the treasury receives nothing, and the key is drawn for exactly when its fleet has a deck.
+    /// and the treasury receives nothing, and the key is drawn for exactly when its fleet has a deck
+    /// and the key is not dealt by number.
     function _checkSale(uint256 id, uint256 keyNumber, uint256 gross, Books memory before, address to) internal {
         KeyfleetManager manager = _manager(id);
         Split memory split = _expectedSplit(id, keyNumber, gross);
@@ -465,7 +529,7 @@ contract CollectionHandler is Test {
         if (votes.presentFrom(tokenId) != block.timestamp + votes.KEY_MATURITY()) {
             _breach("a new key's automatic presence does not start at its maturity");
         }
-        _checkDraw(tokenId, before.vrfNonce, _records[id].deckHash != bytes32(0));
+        _checkDraw(tokenId, before.vrfNonce, _records[id].deckHash != bytes32(0) && !_dealtByNumber(id, keyNumber));
     }
 
     function _expectedSplit(uint256 id, uint256 keyNumber, uint256 gross) internal returns (Split memory split) {
@@ -512,7 +576,7 @@ contract CollectionHandler is Test {
         (, uint64 nonce) = vrf.consumerConfig(address(keys), vrfSubscription);
         if (!drawn) {
             if (nonce != nonceBefore || keys.revealRequestedAt(tokenId) != 0) {
-                _breach("a key of a fleet without a deck was drawn for");
+                _breach("a key of a fleet without a deck, or dealt by number, was drawn for");
             }
             return;
         }
@@ -524,6 +588,12 @@ contract CollectionHandler is Test {
         (uint256 requestId,) = vrf.computeRequestId(keyHash, address(keys), vrfSubscription, nonce);
         _pending.push(requestId);
         _requestToken[requestId] = tokenId;
+    }
+
+    /// @dev Whether key `keyNumber` of fleet `id` takes its card by number: a founding fleet's
+    /// keys up to its deck's size.
+    function _dealtByNumber(uint256 id, uint256 keyNumber) internal view returns (bool) {
+        return id < FIRST_OPEN_FLEET && keyNumber <= _records[id].deckSize;
     }
 
     // --- keys and shards ------------------------------------------------
@@ -1005,6 +1075,7 @@ contract CollectionHandler is Test {
         bytes4 expected;
         if (keys.revealSeed(tokenId) != bytes32(0)) expected = KeyfleetKeys.AlreadyRevealed.selector;
         else if (keys.revealRequestedAt(tokenId) != 0) expected = KeyfleetKeys.RevealAlreadyRequested.selector;
+        else if (_dealtByNumber(id, keys.keyNumberOf(tokenId))) expected = KeyfleetKeys.DealtByNumber.selector;
         else if (_records[id].deckHash == bytes32(0)) expected = KeyfleetKeys.DeckNotSet.selector;
         (, uint64 nonce) = vrf.consumerConfig(address(keys), vrfSubscription);
         vm.prank(_stranger(callerSeed, 0));
@@ -1040,7 +1111,7 @@ contract CollectionHandler is Test {
     function advancePhase(uint256 callerSeed, uint256 opensSeed) external step(0) {
         address caller = callerSeed % 3 == 0 ? _stranger(callerSeed, 0) : safe;
         uint8 phase = keys.phase();
-        uint256 needed = phase == 0 ? 1 : phase == 1 ? 4 : 0;
+        uint256 needed = phase == 0 ? 1 : phase == 1 ? keys.FOUNDING_FLEETS() : 0;
         uint64 opensAt = uint64(block.timestamp + bound(opensSeed, 0, 31 days));
         bytes4 expected;
         if (caller != safe) {
@@ -1472,7 +1543,7 @@ contract CollectionHandler is Test {
     /// founding fleets from phase 2's, and an open fleet from its creation.
     function salesOpenExpected(uint256 fleetId) public view returns (bool) {
         if (fleetId == 1) return ghostPhase >= 1 && block.timestamp >= ghostOpensAt[1];
-        if (fleetId <= 4) return ghostPhase >= 2 && block.timestamp >= ghostOpensAt[2];
+        if (fleetId < FIRST_OPEN_FLEET) return ghostPhase >= 2 && block.timestamp >= ghostOpensAt[2];
         return true;
     }
 
@@ -1657,7 +1728,7 @@ contract CollectionHandler is Test {
             typeNumber: uint32(typeNumber),
             deckSize: stored.deckSize,
             deckHash: stored.deckHash,
-            startPrice: 10e6,
+            startPrice: stored.preset == KeyfleetPresets.Preset.RegentsClub ? 0 : 10e6,
             accelerantStepPercent: stored.preset == KeyfleetPresets.Preset.FleetTechAccelerant ? 5 : 0,
             creator: address(0),
             firstPricePaid: 0,
@@ -1958,15 +2029,18 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
         assertEq(staking.totalUsdcReceived(), handler.ghostShareSent(), "staking received exactly the shares sent");
     }
 
-    /// @dev 12. Each fleet keeps its starting price; an open fleet's key 1 went to its creator at
-    /// that price; and the next price follows the type's curve scaled to it.
+    /// @dev 12. Each fleet keeps its starting price, none for the Regents Club; an open fleet's key 1
+    /// went to its creator at that price; and every sold fleet's next price follows its type's
+    /// curve scaled to it.
     function invariant_pricesFollowEachFleetsCurve() public view {
         for (uint256 id = 1; id <= keys.fleetCount(); ++id) {
             KeyfleetManager manager = _manager(id);
             CollectionHandler.FleetRecord memory record = handler.recordOf(id);
             assertEq(manager.START_PRICE(), record.startPrice, "a fleet keeps its starting price");
             assertEq(manager.ACCELERANT_STEP_PERCENT(), record.accelerantStepPercent, "a fleet keeps its step");
-            if (id >= 5) {
+            // The Regents Club is never sold, so it has no curve; the handler checks it refuses.
+            if (record.preset == KeyfleetPresets.Preset.RegentsClub) continue;
+            if (id >= 6) {
                 uint256 first = keys.tokenIdOf(id, 1);
                 assertEq(record.firstPricePaid, record.startPrice, "the creator paid the starting price for key 1");
                 if (keys.ownershipEpoch(first) == 1) {
@@ -2026,8 +2100,8 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
     }
 }
 
-/// @dev Design §10.8 run with the four founding fleets and two open fleets on one collection in
-/// phase 3: open fleet 5 is a Classic fleet at 12.50 USDC open to anyone; open fleet 6 is a Cascade
+/// @dev Design §10.8 run with the five founding fleets and two open fleets on one collection in
+/// phase 3: open fleet 6 is a Classic fleet at 12.50 USDC open to anyone; open fleet 7 is a Cascade
 /// fleet at 25 USDC open only to holders of any Keyfleet key.
 /// The everyday run is short; `FOUNDRY_PROFILE=deep` runs it at the design's 256 runs × depth 100.
 /// forge-config: default.invariant.runs = 24
@@ -2043,17 +2117,21 @@ contract KeyfleetCollectionInvariantTest is KeyfleetCollectionInvariantBase {
         _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         _openCreation();
         _startHandler();
-        // Three keys in each fleet to start from, the key-holders-only fleet last. The founding
-        // fleets are past their opening by the time the open fleets are created, so proposals that
-        // move money are both refused and carried out as the sequence goes on.
+        // Three keys in each fleet to start from, the Regents Club's given, the key-holders-only
+        // fleet last. The founding fleets are past their opening by the time the open fleets are
+        // created, so proposals that move money are both refused and carried out as the sequence
+        // goes on.
         _buyRounds(1, 4);
+        for (uint256 round = 0; round < 3; ++round) {
+            handler.give(round, 1);
+        }
         vm.warp(block.timestamp + KeyfleetManager(keys.managerOf(1)).VOTES().TREASURY_OPENING());
         handler.createOpenFleet(uint256(KeyfleetPresets.Preset.FleetTechClassic), 1250, false);
         handler.createOpenFleet(uint256(KeyfleetPresets.Preset.FibonacciCascade), 2500, true);
-        require(keys.fleetCount() == 6, "six fleets");
-        _buyRounds(5, 6);
+        require(keys.fleetCount() == 7, "seven fleets");
+        _buyRounds(6, 7);
 
-        bytes4[] memory selectors = new bytes4[](31);
+        bytes4[] memory selectors = new bytes4[](32);
         selectors[0] = CollectionHandler.buy.selector;
         selectors[1] = CollectionHandler.buy.selector;
         selectors[2] = CollectionHandler.transfer.selector;
@@ -2085,6 +2163,7 @@ contract KeyfleetCollectionInvariantTest is KeyfleetCollectionInvariantBase {
         selectors[28] = CollectionHandler.rally.selector;
         selectors[29] = CollectionHandler.attack.selector;
         selectors[30] = CollectionHandler.attack.selector;
+        selectors[31] = CollectionHandler.give.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
@@ -2098,7 +2177,7 @@ contract KeyfleetCollectionInvariantTest is KeyfleetCollectionInvariantBase {
     }
 }
 
-/// @dev Design §10.8 run from phase 0 with only the four founding fleets: the Safe steps the
+/// @dev Design §10.8 run from phase 0 with only the five founding fleets: the Safe steps the
 /// phases while purchases, decks, reveals, new open fleets and attempts on every privileged
 /// function run alongside, so items 3 and 4 also see the closed phases and the first creations.
 /// The everyday run is short; `FOUNDRY_PROFILE=deep` runs it at the design's 256 runs × depth 100.
@@ -2117,7 +2196,7 @@ contract KeyfleetCollectionPhasesInvariantTest is KeyfleetCollectionInvariantBas
         }
         _startHandler();
 
-        bytes4[] memory selectors = new bytes4[](13);
+        bytes4[] memory selectors = new bytes4[](14);
         selectors[0] = CollectionHandler.buy.selector;
         selectors[1] = CollectionHandler.buy.selector;
         selectors[2] = CollectionHandler.advancePhase.selector;
@@ -2131,6 +2210,7 @@ contract KeyfleetCollectionPhasesInvariantTest is KeyfleetCollectionInvariantBas
         selectors[10] = CollectionHandler.claim.selector;
         selectors[11] = CollectionHandler.wait.selector;
         selectors[12] = CollectionHandler.convert.selector;
+        selectors[13] = CollectionHandler.give.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }

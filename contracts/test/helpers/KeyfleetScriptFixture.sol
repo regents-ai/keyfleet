@@ -4,12 +4,14 @@ pragma solidity 0.8.26;
 import {KeyfleetFactory} from "../../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../../src/KeyfleetManager.sol";
+import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {V4PoolKey} from "../../src/interfaces/IUniswapV4PoolManager.sol";
 import {DeployKeyfleets} from "../../script/DeployKeyfleets.s.sol";
 import {KeyfleetManifest} from "../../script/KeyfleetManifest.sol";
 import {KeyfleetSafeSteps} from "../../script/KeyfleetSafeSteps.s.sol";
 import {KeyfleetFixture} from "./KeyfleetFixture.sol";
 import {MockAutolaunchFactory} from "../mocks/MockAutolaunchFactory.sol";
+import {MockClubPass} from "../mocks/MockClubPass.sol";
 import {MockPoolManager} from "../mocks/MockPoolManager.sol";
 import {MockRegent} from "../mocks/MockRegent.sol";
 import {MockRegentRevenueStaking} from "../mocks/MockRegentRevenueStaking.sol";
@@ -44,16 +46,16 @@ abstract contract KeyfleetScriptFixture is KeyfleetFixture {
         checks = new ManifestChecks();
     }
 
-    /// @dev A manifest for this chain naming the fixture's stand-ins, with four founding fleets.
+    /// @dev A manifest for this chain naming the fixture's stand-ins, with five founding fleets.
     function _manifest() internal view returns (KeyfleetManifest.Manifest memory manifest) {
         manifest.chainId = block.chainid;
         manifest.bindings = _bindings();
-        string[4] memory names = ["Classic #1", "Syndicate #1", "Accelerant #1", "Cascade #1"];
-        for (uint256 index = 0; index < 4; ++index) {
+        string[5] memory names = ["Classic #1", "Syndicate #1", "Accelerant #1", "Cascade #1", "Regents Club #1"];
+        for (uint256 index = 0; index < 5; ++index) {
             manifest.founding[index] = KeyfleetManifest.FoundingFleet({
                 preset: deployScript.foundingPresets()[index],
                 deckHash: _deckHash(index + 1),
-                deckSize: DECK_SIZE,
+                deckSize: index == 4 ? KeyfleetPresets.CLUB_SUPPLY : DECK_SIZE,
                 profile: _profile(names[index])
             });
         }
@@ -101,7 +103,8 @@ abstract contract KeyfleetScriptFixture is KeyfleetFixture {
     // --- a stand-in Base ---------------------------------------------------
 
     /// @dev Moves to Base and puts stand-in code at every address a Base manifest pins: the route's
-    /// tokens and pools at the stand-in market price, REGENT staking, the Autolaunch factory, and a
+    /// tokens and pools at the stand-in market price, REGENT staking, the Autolaunch factory, the
+    /// Regents Club Pass, and a
     /// coordinator that knows Base's 2 gwei lane and a subscription the Regents Safe owns. Returns
     /// that subscription.
     function _standInBase() internal returns (uint256 subscriptionId) {
@@ -125,6 +128,7 @@ abstract contract KeyfleetScriptFixture is KeyfleetFixture {
 
         vm.etch(pins.BASE_REGENT_REVENUE_STAKING(), address(new MockRegentRevenueStaking(MockToken(baseUsdc))).code);
         vm.etch(pins.BASE_AUTOLAUNCH_FACTORY(), address(new MockAutolaunchFactory()).code);
+        vm.etch(pins.BASE_REGENTS_CLUB_PASS(), address(new MockClubPass()).code);
 
         MockVRFCoordinatorV2Plus coordinator = MockVRFCoordinatorV2Plus(pins.BASE_VRF_COORDINATOR());
         vm.etch(address(coordinator), address(new MockVRFCoordinatorV2Plus()).code);

@@ -2,9 +2,11 @@
 pragma solidity 0.8.26;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {KeyfleetClubClaims} from "./KeyfleetClubClaims.sol";
 import {KeyfleetDeployer} from "./KeyfleetDeployers.sol";
 import {KeyfleetKeys} from "./KeyfleetKeys.sol";
 import {KeyfleetManager} from "./KeyfleetManager.sol";
@@ -18,16 +20,18 @@ import {IRegentsAutolaunchFactoryV2} from "./interfaces/IRegentsAutolaunchFactor
 /// @notice Creates Keyfleet fleets: each one a `KeyfleetManager`, `KeyfleetVotes`,
 /// `KeyfleetTreasury` and `KeyfleetRewards`, bound to each other and to the one shared
 /// `KeyfleetKeys` collection for ever.
-/// @dev The factory's constructor deploys the collection, the shared `KeyfleetShards` and the
-/// shared `KeyfleetRegentBuyer`, so their links are fixed at birth. The four per-fleet contracts are
+/// @dev The factory's constructor deploys the collection, the shared `KeyfleetShards`, the shared
+/// `KeyfleetRegentBuyer` and the Regents Club's `KeyfleetClubClaims`, so their links are fixed at
+/// birth. The four per-fleet contracts are
 /// full deploys, not clones, made through four deployers with CREATE2 and salt = the fleet number,
 /// so the factory knows all four addresses before deploying any. While it deploys them it holds the
 /// fleet's wiring in transient storage; each constructor reads the wiring back, keeps it as
 /// immutables and refuses to deploy anywhere but its own predicted address. The wiring is cleared
 /// before any other code runs, so it is all zero at every other moment.
 ///
-/// The Regents Safe creates the four founding fleets, in order, each with its card deck and its
-/// type's standard starting price, with sales closed until the Safe opens them phase by phase. Once
+/// The Regents Safe creates the five founding fleets, in order, each with its card deck and its
+/// type's standard starting price, with sales closed until the Safe opens them phase by phase. The
+/// fifth, the Regents Club, has no price: the Safe gives its keys, one per Regents Club Pass. Once
 /// the collection reaches its last phase anyone may create a fleet: they choose its type, starting
 /// price, profile and joining requirements, and buy its key 1 in the same transaction. The factory
 /// holds no money and has no administrator, no upgrade path and no pause.
@@ -39,6 +43,7 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     /// @param keeper The collection's first keeper.
     /// @param staking REGENT revenue staking, where every fleet's protocol share is deposited.
     /// @param autolaunch The Autolaunch Revstake v2 factory whose launches a treasury may bind.
+    /// @param clubPass The Regents Club Pass collection, whose Pass N names who receives Regents Club key N.
     /// @param collection The collection's name, symbol, metadata base and collection metadata address.
     /// @param randomness The collection's VRF coordinator, subscription and gas lane.
     /// @param traitTableHash `keccak256` of the published trait-table file.
@@ -52,6 +57,7 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
         address keeper;
         IRegentRevenueStaking staking;
         IRegentsAutolaunchFactoryV2 autolaunch;
+        IERC721 clubPass;
         KeyfleetKeys.Collection collection;
         KeyfleetKeys.Randomness randomness;
         bytes32 traitTableHash;
@@ -95,6 +101,10 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     IRegentRevenueStaking public immutable REGENT_STAKING;
     /// @notice The Autolaunch Revstake v2 factory.
     IRegentsAutolaunchFactoryV2 public immutable AUTOLAUNCH;
+    /// @notice The Regents Club Pass collection.
+    IERC721 public immutable CLUB_PASS;
+    /// @notice Holds each Regents Club key given there until the holder of its Pass claims it.
+    KeyfleetClubClaims public immutable CLUB_CLAIMS;
     /// @notice Deploys each fleet's manager.
     KeyfleetDeployer public immutable MANAGER_DEPLOYER;
     /// @notice Deploys each fleet's voting controller.
@@ -124,13 +134,15 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     error StartPriceInvalid(uint256 startPrice);
     /// @notice An Accelerant step outside 1 to 5 percent, or a step given for another type.
     error AccelerantStepInvalid(KeyfleetPresets.Preset preset, uint256 accelerantStepPercent);
+    /// @notice The Regents Club type belongs to the fifth founding fleet only.
+    error RegentsClubIsFounding();
 
     /// @notice A fleet was created.
     /// @param fleetId Its number in the collection.
     /// @param preset Its type.
     /// @param typeNumber Its number among fleets of its type.
     /// @param creator The Safe for a founding fleet; otherwise the creator, who bought key 1.
-    /// @param startPrice The USDC price of key 1.
+    /// @param startPrice The USDC price of key 1; zero for the Regents Club, which is never sold.
     /// @param accelerantStepPercent Its Accelerant step in whole percent; zero on other types.
     event FleetCreated(
         uint256 indexed fleetId,
@@ -150,6 +162,7 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
     constructor(Config memory config) {
         if (address(config.staking).code.length == 0) revert BindingMissing(address(config.staking));
         if (address(config.autolaunch).code.length == 0) revert BindingMissing(address(config.autolaunch));
+        if (address(config.clubPass).code.length == 0) revert BindingMissing(address(config.clubPass));
         uint8 usdcDecimals = IERC20Metadata(config.route.usdc).decimals();
         if (usdcDecimals != KeyfleetPresets.USDC_DECIMALS) revert UsdcDecimalsWrong(usdcDecimals);
         _requireDeployer(config.managerDeployer);
@@ -167,6 +180,8 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
         REGENT = IERC20(config.route.regent);
         REGENT_STAKING = config.staking;
         AUTOLAUNCH = config.autolaunch;
+        CLUB_PASS = config.clubPass;
+        CLUB_CLAIMS = new KeyfleetClubClaims(keys, config.clubPass);
         MANAGER_DEPLOYER = config.managerDeployer;
         VOTES_DEPLOYER = config.votesDeployer;
         TREASURY_DEPLOYER = config.treasuryDeployer;
@@ -199,8 +214,9 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
 
     /// @notice Creates the next founding fleet: fleet 1 Classic, 2 Syndicate, 3 Accelerant,
     /// 4 Cascade, each with its deck, a starting price of 10 USDC, a 5% step for the Accelerant
-    /// fleet and no joining requirements. Its sales stay closed until the Safe opens them.
-    /// @dev Only the Safe. The collection refuses a fifth, one out of order and one without a deck.
+    /// fleet and no joining requirements, then 5 Regents Club with its deck and no price. Its
+    /// sales stay closed until the Safe opens them.
+    /// @dev Only the Safe. The collection refuses a sixth, one out of order and one without a deck.
     function createFoundingFleet(
         KeyfleetPresets.Preset preset,
         bytes32 deckHash,
@@ -211,7 +227,7 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
         KeyfleetManager.Requirements memory anyone;
         FleetWiring memory w;
         w.preset = preset;
-        w.startPrice = KeyfleetPresets.Q_USDC;
+        if (preset != KeyfleetPresets.Preset.RegentsClub) w.startPrice = KeyfleetPresets.Q_USDC;
         if (preset == KeyfleetPresets.Preset.FleetTechAccelerant) {
             w.accelerantStepPercent = KeyfleetPresets.MAX_ACCELERANT_STEP_PERCENT;
         }
@@ -228,6 +244,7 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
         uint8 phase = KEYS.phase();
         if (phase != KEYS.FINAL_PHASE() || block.timestamp < KEYS.phaseOpensAt()) revert CreationClosed(phase);
         if (block.timestamp > terms.deadline) revert Expired(terms.deadline);
+        if (terms.preset == KeyfleetPresets.Preset.RegentsClub) revert RegentsClubIsFounding();
         uint256 startPrice = terms.startPrice;
         if (
             startPrice < KeyfleetPresets.MIN_START_USDC || startPrice > KeyfleetPresets.MAX_START_USDC

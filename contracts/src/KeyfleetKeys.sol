@@ -26,13 +26,15 @@ interface IKeyfleetKeyHook {
 /// bumps the key's ownership epoch, and a mint records when the key was minted.
 ///
 /// Sales open in phases the Regents Safe moves forward, one step at a time and never back, each at
-/// a future second the Safe names when it moves: phase 1 opens fleet 1, phase 2 fleets 2 to 4, and
+/// a future second the Safe names when it moves: phase 1 opens fleet 1, phase 2 fleets 2 to 5, and
 /// phase 3 lets anyone create a fleet, which sells from the moment it is created. `mint` is the only
 /// way a key comes to exist, and it refuses a fleet whose sales have not opened.
 ///
 /// Every fleet's cards come from a pre-made deck, of which only the fingerprint and the size are
-/// kept here. The four founding fleets are registered with theirs. A fleet anyone creates is
-/// registered without one, and the keeper, a Regents wallet the Safe names, records its deck once.
+/// kept here. The five founding fleets are registered with theirs, and their keys 1 to the deck's
+/// size are dealt by number: key N holds card N of the deck, with no draw. Every other key draws:
+/// a founding key past its deck, and every key of a fleet anyone creates. A fleet anyone creates is
+/// registered without a deck, and the keeper, a Regents wallet the Safe names, records it once.
 /// A key's Chainlink VRF request is sent only once its fleet has a deck, so no seed of a fleet
 /// exists before its deck is fixed, and nobody can choose a deck after seeing the seeds. A key's
 /// seed is written once from the one answer to its one accepted request. The Safe may change the
@@ -94,7 +96,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     /// in 64 bits.
     uint256 public constant MAX_FLEETS = 999_999_999;
     /// @notice The founding fleets, created by the Safe before phase 3.
-    uint256 public constant FOUNDING_FLEETS = 4;
+    uint256 public constant FOUNDING_FLEETS = 5;
     /// @notice The last phase: anyone may create a fleet.
     uint8 public constant FINAL_PHASE = 3;
     /// @notice The resale royalty, in basis points: 2.5%.
@@ -138,7 +140,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     mapping(address manager => uint256 fleetId) public fleetOfManager;
     /// @notice Fleets registered of each type.
     mapping(KeyfleetPresets.Preset preset => uint256 count) public typeCount;
-    /// @notice When a fleet's sales open: fleet 1 at the second phase 1 names, fleets 2 to 4 at the
+    /// @notice When a fleet's sales open: fleet 1 at the second phase 1 names, fleets 2 to 5 at the
     /// second phase 2 names, any later fleet at its registration. Zero until the phase that opens
     /// them is reached, and for a fleet that does not exist.
     mapping(uint256 fleetId => uint64 opensAt) public salesOpenAt;
@@ -204,6 +206,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     error AlreadyRevealed(uint256 tokenId);
     /// @notice The coordinator has already accepted a request for this key.
     error RevealAlreadyRequested(uint256 tokenId);
+    /// @notice The key holds its deck's card of the same number and draws nothing.
+    error DealtByNumber(uint256 tokenId);
 
     /// @notice A fleet was registered.
     event FleetRegistered(
@@ -295,13 +299,22 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         return tokenId % TOKEN_ID_STRIDE;
     }
 
-    /// @notice The type each founding fleet must be: 1 Classic, 2 Syndicate, 3 Accelerant, 4 Cascade.
+    /// @notice The type each founding fleet must be: 1 Classic, 2 Syndicate, 3 Accelerant, 4 Cascade,
+    /// 5 Regents Club.
     function foundingPreset(uint256 fleetId) public pure returns (KeyfleetPresets.Preset) {
         if (fleetId == 1) return KeyfleetPresets.Preset.FleetTechClassic;
         if (fleetId == 2) return KeyfleetPresets.Preset.FibonacciSyndicate;
         if (fleetId == 3) return KeyfleetPresets.Preset.FleetTechAccelerant;
         if (fleetId == 4) return KeyfleetPresets.Preset.FibonacciCascade;
+        if (fleetId == 5) return KeyfleetPresets.Preset.RegentsClub;
         revert UnknownFleet(fleetId);
+    }
+
+    /// @notice Whether a key holds its deck's card of the same number instead of drawing one: keys
+    /// 1 to the deck's size of a founding fleet.
+    function dealtByNumber(uint256 tokenId) public view returns (bool) {
+        uint256 fleetId = fleetOf(tokenId);
+        return fleetId <= FOUNDING_FLEETS && keyNumberOf(tokenId) <= fleet(fleetId).deckSize;
     }
 
     /// @notice A registered fleet's record.
@@ -351,7 +364,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     // --- the Safe ----------------------------------------------------------
 
     /// @notice Moves to the next phase, whose sales open at `opensAt`. Phase 1 needs fleet 1 and
-    /// phase 2 needs fleets 1 to 4.
+    /// phase 2 needs fleets 1 to 5.
     /// @param opensAt When the phase opens: in the future, at most `MAX_OPENING_LEAD` from now, and
     /// not before the phase it follows.
     function advancePhase(uint64 opensAt) external onlySafe {
@@ -399,7 +412,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     // --- factories ---------------------------------------------------------
 
     /// @notice Registers a new fleet whose manager will be at `manager`.
-    /// @dev Until phase 3 opens only the four founding fleets may be registered, in order, each with
+    /// @dev Until phase 3 opens only the five founding fleets may be registered, in order, each with
     /// its deck. Once it opens a fleet is registered without a deck, which the keeper records later,
     /// and sells from that moment.
     /// @return fleetId The new fleet's id.
@@ -467,7 +480,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     // --- managers ----------------------------------------------------------
 
     /// @notice Mints key `keyNumber` of the caller's fleet to `to`, then asks for its random word if
-    /// the fleet has its deck.
+    /// the fleet has its deck and the key is not dealt by number.
     /// @dev Only a registered manager, only into its own fleet, only once its sales are open.
     /// Locked together with `requestReveal`, so a receiver cannot mint again or add a request from
     /// inside `onERC721Received`.
@@ -478,7 +491,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         if (keyNumber == 0 || keyNumber > MAX_KEY_NUMBER) revert KeyNumberOutOfRange(keyNumber);
         tokenId = tokenIdOf(fleetId, keyNumber);
         _safeMint(to, tokenId);
-        if (_fleets[fleetId].deckHash != bytes32(0)) _requestReveal(tokenId);
+        if (_fleets[fleetId].deckHash != bytes32(0) && !dealtByNumber(tokenId)) _requestReveal(tokenId);
     }
 
     /// @notice Tells marketplaces to fetch the metadata of every key of the caller's fleet again,
@@ -492,14 +505,15 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     // --- reveals -----------------------------------------------------------
 
     /// @notice Asks the coordinator for a key's random word.
-    /// @dev Open to anyone, for a minted key whose fleet has its deck and whose request the
-    /// coordinator has never accepted: it was minted before the deck was recorded, or every request
-    /// for it was refused. Once a request is accepted the key waits for that answer. A refused
+    /// @dev Open to anyone, for a minted key that draws, whose fleet has its deck and whose request
+    /// the coordinator has never accepted: it was minted before the deck was recorded, or every
+    /// request for it was refused. Once a request is accepted the key waits for that answer. A refused
     /// request emits `RevealRequestFailed` and does not revert.
     function requestReveal(uint256 tokenId) external nonReentrant {
         _requireOwned(tokenId);
         if (revealSeed[tokenId] != bytes32(0)) revert AlreadyRevealed(tokenId);
         if (revealRequestedAt[tokenId] != 0) revert RevealAlreadyRequested(tokenId);
+        if (dealtByNumber(tokenId)) revert DealtByNumber(tokenId);
         uint256 fleetId = fleetOf(tokenId);
         if (_fleets[fleetId].deckHash == bytes32(0)) revert DeckNotSet(fleetId);
         _requestReveal(tokenId);

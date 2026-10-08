@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {KeyfleetFactory} from "../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
+import {KeyfleetManager} from "../src/KeyfleetManager.sol";
+import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 
-/// @notice The Regents Safe's steps after the system is deployed: creating the four founding
-/// fleets, and moving the collection to its next phase.
+/// @notice The Regents Safe's steps after the system is deployed: creating the five founding
+/// fleets, moving the collection to its next phase, and giving the Regents Club keys.
 /// @dev Each step is one call from the Safe, and each founding fleet is its own transaction, since
 /// one creation uses about 10.4 million gas. Before anything leaves this script, every call is run
 /// from the Safe's address against the chain's current state, in order, so a call that would revert
@@ -18,9 +21,14 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// load, check and sign. Nothing is signed or sent from here. On a local anvil chain the Safe is an
 /// account anvil has unlocked and the calls are sent directly, from the Safe's address.
 ///
-/// Moving to phase 1 opens Classic #1's sales, and phase 2 opens the other three, at the second
+/// Moving to phase 1 opens Classic #1's sales, and phase 2 opens the other four, at the second
 /// `KEYFLEET_OPENS_AT` names (Unix time, in the future when the Safe's transaction lands), so the
 /// phase step is run only when the founder says when sales open.
+///
+/// The Regents Club gifts are read from the Pass at the block the step runs on: key N goes to the
+/// holder of Pass N, or to the claims contract when that holder is a contract that refuses the key,
+/// `CLUB_GIFT_BATCH` keys per call. A Pass that moves before its call lands makes that call revert
+/// whole, and the step is run again.
 contract KeyfleetSafeSteps is KeyfleetManifest {
     /// @notice One call for the Safe to make.
     /// @param name What the call does, which also names its file.
@@ -32,7 +40,11 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         bytes data;
     }
 
-    /// @notice The step named by `KEYFLEET_STEP` is neither `founding-fleets` nor `advance-phase`.
+    /// @notice Regents Club keys given in one Safe call: about 13.2 million gas on Base.
+    uint256 public constant CLUB_GIFT_BATCH = 80;
+
+    /// @notice The step named by `KEYFLEET_STEP` is not `founding-fleets`, `advance-phase` or
+    /// `club-gifts`.
     error UnknownStep(string step);
 
     /// @notice Runs the step named by `KEYFLEET_STEP` for the manifest named by `KEYFLEET_MANIFEST`,
@@ -48,6 +60,8 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
             calls = foundingFleetCalls(manifest, factory);
         } else if (_equal(step, "advance-phase")) {
             calls = advancePhaseCalls(manifest, factory, uint64(vm.envUint("KEYFLEET_OPENS_AT")));
+        } else if (_equal(step, "club-gifts")) {
+            calls = clubGiftCalls(manifest, factory);
         } else {
             revert UnknownStep(step);
         }
@@ -103,6 +117,48 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
             to: address(keys),
             data: abi.encodeCall(KeyfleetKeys.advancePhase, (opensAt))
         });
+    }
+
+    /// @notice The Safe's calls giving every Regents Club key not given yet, `CLUB_GIFT_BATCH` per
+    /// call, each key to the holder of its Pass now, or to the claims contract when that holder is a
+    /// contract that refuses it.
+    function clubGiftCalls(Manifest memory manifest, KeyfleetFactory factory) public returns (SafeCall[] memory calls) {
+        _requireManifestFitsChain(manifest);
+        KeyfleetKeys keys = factory.KEYS();
+        KeyfleetManager club = KeyfleetManager(keys.managerOf(factory.CLUB_CLAIMS().CLUB_FLEET()));
+        uint256 first = club.totalMinted() + 1;
+        uint256 left = KeyfleetPresets.CLUB_SUPPLY + 1 - first;
+        calls = new SafeCall[]((left + CLUB_GIFT_BATCH - 1) / CLUB_GIFT_BATCH);
+        for (uint256 index = 0; index < calls.length; ++index) {
+            uint256 from = first + index * CLUB_GIFT_BATCH;
+            uint256 to = from + CLUB_GIFT_BATCH - 1;
+            if (to > KeyfleetPresets.CLUB_SUPPLY) to = KeyfleetPresets.CLUB_SUPPLY;
+            address[] memory receivers = new address[](to + 1 - from);
+            for (uint256 keyNumber = from; keyNumber <= to; ++keyNumber) {
+                receivers[keyNumber - from] = clubReceiver(factory, club, keyNumber);
+            }
+            calls[index] = SafeCall({
+                name: string.concat("club-gifts-", vm.toString(from), "-", vm.toString(to)),
+                to: address(club),
+                data: abi.encodeCall(KeyfleetManager.give, (receivers))
+            });
+        }
+    }
+
+    /// @notice Who receives Regents Club key `keyNumber` now: the holder of Pass `keyNumber`, or the
+    /// claims contract when the holder is a contract whose `onERC721Received`, asked as the
+    /// collection asks it at a mint, does not answer with exactly its selector.
+    function clubReceiver(KeyfleetFactory factory, KeyfleetManager club, uint256 keyNumber) public returns (address) {
+        address holder = factory.CLUB_PASS().ownerOf(keyNumber);
+        if (holder.code.length == 0) return holder;
+        KeyfleetKeys keys = factory.KEYS();
+        uint256 tokenId = keys.tokenIdOf(club.FLEET_ID(), keyNumber);
+        bytes4 selector = IERC721Receiver.onERC721Received.selector;
+        vm.prank(address(keys));
+        (bool ok, bytes memory answer) =
+            holder.call(abi.encodeWithSelector(selector, address(club), address(0), tokenId, ""));
+        if (ok && answer.length >= 32 && abi.decode(answer, (bytes32)) == bytes32(selector)) return holder;
+        return address(factory.CLUB_CLAIMS());
     }
 
     /// @notice One call as a Safe Transaction Builder batch file of one transaction, for the Safe

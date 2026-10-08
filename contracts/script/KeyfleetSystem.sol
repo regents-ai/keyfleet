@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {Vm, VmSafe} from "forge-std/Vm.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {
     KeyfleetDeployer,
     KeyfleetManagerDeployer,
@@ -17,7 +18,7 @@ import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol
 import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 
 /// @notice Deploys the Keyfleet system: the four deployers, then the factory, whose constructor
-/// deploys the collection, the shard record and the REGENT buyer.
+/// deploys the collection, the shard record, the REGENT buyer and the Regents Club claims.
 /// @dev Each deployer is given the factory's address before the factory exists: the deploying
 /// account's fifth contract address from now. The factory refuses a deployer that names any other
 /// address, so a wrong prediction reverts the deployment. The deploying account is the broadcasting
@@ -32,6 +33,7 @@ library KeyfleetSystem {
         address keeper;
         IRegentRevenueStaking staking;
         IRegentsAutolaunchFactoryV2 autolaunch;
+        IERC721 clubPass;
         KeyfleetKeys.Collection collection;
         KeyfleetKeys.Randomness randomness;
         bytes32 traitTableHash;
@@ -52,6 +54,7 @@ library KeyfleetSystem {
                 keeper: bindings.keeper,
                 staking: bindings.staking,
                 autolaunch: bindings.autolaunch,
+                clubPass: bindings.clubPass,
                 collection: bindings.collection,
                 randomness: bindings.randomness,
                 traitTableHash: bindings.traitTableHash,

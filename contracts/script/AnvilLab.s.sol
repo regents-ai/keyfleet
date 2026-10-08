@@ -11,6 +11,7 @@ import {V4PoolKey} from "../src/interfaces/IUniswapV4PoolManager.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {KeyfleetSystem} from "./KeyfleetSystem.sol";
 import {MockAutolaunchFactory} from "../test/mocks/MockAutolaunchFactory.sol";
+import {MockClubPass} from "../test/mocks/MockClubPass.sol";
 import {MockPoolManager} from "../test/mocks/MockPoolManager.sol";
 import {MockRegent} from "../test/mocks/MockRegent.sol";
 import {MockRegentRevenueStaking} from "../test/mocks/MockRegentRevenueStaking.sol";
@@ -72,6 +73,7 @@ contract AnvilLab is Script {
                 keeper: sender,
                 staking: staking,
                 autolaunch: new MockAutolaunchFactory(),
+                clubPass: new MockClubPass(),
                 collection: KeyfleetKeys.Collection({
                     name: "Keyfleet",
                     symbol: "KEYFLEET",

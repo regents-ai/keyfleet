@@ -6,6 +6,7 @@ import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
@@ -71,6 +72,11 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
         assertEq(vm.parseJsonAddress(json, ".regent"), address(regent), "REGENT");
         assertEq(vm.parseJsonAddress(json, ".regentStaking"), address(staking), "Staking");
         assertEq(vm.parseJsonAddress(json, ".autolaunchFactory"), address(autolaunch), "Autolaunch");
+        assertEq(vm.parseJsonAddress(json, ".regentsClubPass"), address(clubPass), "Regents Club Pass");
+        address claims = address(deployed.CLUB_CLAIMS());
+        assertEq(vm.parseJsonAddress(json, ".clubClaims.address"), claims, "Club claims");
+        assertEq(vm.parseJsonBytes32(json, ".clubClaims.codeHash"), claims.codehash, "Club claims code");
+        assertEq(vm.parseJsonUint(json, ".bounds.clubSupply"), 1998, "One key per Pass");
         assertEq(vm.parseJsonString(json, ".vrf.subscriptionId"), vm.toString(vrfSubscription), "Subscription");
         assertEq(vm.parseJsonBytes32(json, ".vrf.keyHash"), KEY_HASH, "Lane");
         assertEq(vm.parseJsonUint(json, ".vrf.callbackGasLimit"), 100_000, "Callback gas");
@@ -81,14 +87,18 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
         assertEq(vm.parseJsonUint(json, ".fees.protocolBps"), 1000, "Protocol share");
         assertTrue(vm.keyExistsJson(json, ".disclosures.regentPurchase"), "REGENT purchase disclosed");
 
-        string[4] memory types = ["classic", "syndicate", "accelerant", "cascade"];
-        for (uint256 fleetId = 1; fleetId <= 4; ++fleetId) {
+        string[5] memory types = ["classic", "syndicate", "accelerant", "cascade", "regentsClub"];
+        for (uint256 fleetId = 1; fleetId <= 5; ++fleetId) {
             _assertFleet(json, fleetId, types[fleetId - 1], _managerOf(deployed, fleetId));
             string memory fleet = string.concat(".fleets.", vm.toString(fleetId));
             assertEq(vm.parseJsonBytes32(json, string.concat(fleet, ".deckHash")), _deckHash(fleetId), "Deck");
-            assertEq(vm.parseJsonUint(json, string.concat(fleet, ".deckSize")), DECK_SIZE, "Deck size");
+            assertEq(
+                vm.parseJsonUint(json, string.concat(fleet, ".deckSize")),
+                fleetId == 5 ? KeyfleetPresets.CLUB_SUPPLY : DECK_SIZE,
+                "Deck size"
+            );
         }
-        assertFalse(vm.keyExistsJson(json, ".fleets.5"), "Four fleets");
+        assertFalse(vm.keyExistsJson(json, ".fleets.6"), "Five fleets");
     }
 
     /// @dev Run again later, the record also lists every fleet created since, with its creator's
@@ -111,12 +121,12 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
 
         string memory json = recorder.record(manifest, _summary(deployed));
 
-        _assertFleet(json, 5, "cascade", _managerOf(deployed, 5));
-        assertEq(vm.parseJsonUint(json, ".fleets.5.typeNumber"), 2, "Cascade #2");
-        assertEq(vm.parseJsonUint(json, ".fleets.5.startPrice"), 25e6, "Creator's start price");
-        assertEq(vm.parseJsonBytes32(json, ".fleets.5.deckHash"), bytes32(0), "No deck yet");
-        assertEq(vm.parseJsonAddress(json, ".fleets.5.requirements.token"), address(regent), "Requirement");
-        assertEq(vm.parseJsonUint(json, ".fleets.5.requirements.tokenMin"), 5e18, "Requirement amount");
+        _assertFleet(json, 6, "cascade", _managerOf(deployed, 6));
+        assertEq(vm.parseJsonUint(json, ".fleets.6.typeNumber"), 2, "Cascade #2");
+        assertEq(vm.parseJsonUint(json, ".fleets.6.startPrice"), 25e6, "Creator's start price");
+        assertEq(vm.parseJsonBytes32(json, ".fleets.6.deckHash"), bytes32(0), "No deck yet");
+        assertEq(vm.parseJsonAddress(json, ".fleets.6.requirements.token"), address(regent), "Requirement");
+        assertEq(vm.parseJsonUint(json, ".fleets.6.requirements.tokenMin"), 5e18, "Requirement amount");
     }
 
     /// @dev Invariant: the record lists keys only once the subscription pays for their reveals.
@@ -190,6 +200,9 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
         manifest.bindings.autolaunch = IRegentsAutolaunchFactoryV2(other);
         _expectMismatch(manifest, deployed, "autolaunchFactory");
         manifest = _manifest();
+        manifest.bindings.clubPass = IERC721(other);
+        _expectMismatch(manifest, deployed, "regentsClubPass");
+        manifest = _manifest();
         manifest.bindings.route.usdc = other;
         _expectMismatch(manifest, deployed, "route.usdc");
         manifest = _manifest();
@@ -234,7 +247,7 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
         collection.addFactory(address(later));
         later.register(collection);
 
-        vm.expectRevert(abi.encodeWithSelector(RecordKeyfleets.FleetNotBound.selector, 5, "manager"));
+        vm.expectRevert(abi.encodeWithSelector(RecordKeyfleets.FleetNotBound.selector, 6, "manager"));
         recorder.record(manifest, _summary(deployed));
     }
 
@@ -253,7 +266,7 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
 
     /// @dev The committed Base manifest, deployed, founded through the Safe step and recorded over
     /// a stand-in Base once the subscription and keeper are written in: the record publishes the
-    /// collection on chain 8453 with the four founding fleets and their decks.
+    /// collection on chain 8453 with the five founding fleets and their decks.
     function test_theBaseManifestDeploysFoundsAndRecords() public {
         uint256 subscriptionId = _standInBase();
         KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
@@ -267,8 +280,8 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
         assertEq(vm.parseJsonAddress(json, ".usdc"), deployScript.BASE_USDC(), "Base USDC");
         assertEq(vm.parseJsonAddress(json, ".regentBuyer.poolManager"), deployScript.BASE_POOL_MANAGER(), "v4");
         assertEq(vm.parseJsonAddress(json, ".regentBuyer.v4Pool.hooks"), deployScript.BASE_REGENT_POOL_HOOKS(), "Hook");
-        string[4] memory types = ["classic", "syndicate", "accelerant", "cascade"];
-        for (uint256 fleetId = 1; fleetId <= 4; ++fleetId) {
+        string[5] memory types = ["classic", "syndicate", "accelerant", "cascade", "regentsClub"];
+        for (uint256 fleetId = 1; fleetId <= 5; ++fleetId) {
             _assertFleet(json, fleetId, types[fleetId - 1], _managerOf(deployed, fleetId));
             assertEq(
                 vm.parseJsonBytes32(json, string.concat(".fleets.", vm.toString(fleetId), ".deckHash")),

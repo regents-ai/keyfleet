@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {KeyfleetDeployer} from "../src/KeyfleetDeployers.sol";
+import {KeyfleetClubClaims} from "../src/KeyfleetClubClaims.sol";
 import {KeyfleetFactory} from "../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
@@ -69,6 +70,8 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeAddress(root, "regent", address(factory.REGENT()));
         vm.serializeAddress(root, "regentStaking", address(factory.REGENT_STAKING()));
         vm.serializeAddress(root, "autolaunchFactory", address(factory.AUTOLAUNCH()));
+        vm.serializeAddress(root, "regentsClubPass", address(factory.CLUB_PASS()));
+        vm.serializeString(root, "clubClaims", _contractJson("clubClaims", address(factory.CLUB_CLAIMS())));
         vm.serializeString(root, "vrf", _vrfJson(keys));
         vm.serializeBytes32(root, "traitTableHash", keys.TRAIT_TABLE_HASH());
         vm.serializeString(root, "startPrice", _startPriceJson());
@@ -97,6 +100,9 @@ contract RecordKeyfleets is KeyfleetManifest {
         _match(factory.SHARDS().KEYS() == keys, "shards.keys");
         _match(factory.REGENT_STAKING() == manifest.bindings.staking, "regentStaking");
         _match(factory.AUTOLAUNCH() == manifest.bindings.autolaunch, "autolaunchFactory");
+        _match(factory.CLUB_PASS() == manifest.bindings.clubPass, "regentsClubPass");
+        KeyfleetClubClaims claims = factory.CLUB_CLAIMS();
+        _match(claims.KEYS() == keys && claims.PASS() == manifest.bindings.clubPass, "clubClaims");
 
         KeyfleetRegentBuyer buyer = factory.REGENT_BUYER();
         _match(address(buyer.USDC()) == manifest.bindings.route.usdc, "route.usdc");
@@ -302,11 +308,12 @@ contract RecordKeyfleets is KeyfleetManifest {
         return vm.serializeUint(object, "max", KeyfleetPresets.MAX_ACCELERANT_STEP_PERCENT);
     }
 
-    /// @dev The published supply limits. Only the two Fleet.Tech types have one; the Fibonacci
-    /// types have no last level.
+    /// @dev The published supply limits. Only the two Fleet.Tech types and the Regents Club have
+    /// one; the Fibonacci types have no last level.
     function _boundsJson() private returns (string memory) {
         string memory object = "bounds";
         vm.serializeUint(object, "classicSupply", KeyfleetPresets.CLASSIC_SUPPLY);
+        vm.serializeUint(object, "clubSupply", KeyfleetPresets.CLUB_SUPPLY);
         return vm.serializeUint(object, "accelerantMaxKeys", KeyfleetPresets.MAX_ACCELERANT_KEYS);
     }
 
@@ -346,6 +353,6 @@ contract RecordKeyfleets is KeyfleetManifest {
 
     /// @dev A type's key in the manifest and the record, listed in the order of `KeyfleetPresets.Preset`.
     function _typeKey(KeyfleetPresets.Preset preset) private pure returns (string memory) {
-        return ["syndicate", "cascade", "classic", "accelerant"][uint8(preset)];
+        return ["syndicate", "cascade", "classic", "accelerant", "regentsClub"][uint8(preset)];
     }
 }

@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
@@ -31,6 +32,11 @@ import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.so
 /// stays here until its piece runs, so the treasury's daily split and payments never see it. The
 /// Accelerant rebate and the Cascade repayment stay USDC, paid into the fleet's `KeyfleetRewards`
 /// ledger.
+///
+/// The Regents Club fleet is never sold and has no price. The Regents Safe gives its keys in order:
+/// key N to whoever holds Regents Club Pass N at that moment, or to `KeyfleetClubClaims`, where the
+/// holder of Pass N claims it later. Nothing is booked for its treasury, which starts empty and grows
+/// only from what is sent to it; everything else works as in any fleet.
 ///
 /// A fleet anyone creates may set joining requirements at creation, which never change: a buyer
 /// qualifies by meeting any one of them, checked against the wallet receiving the key when it is
@@ -98,10 +104,14 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     KeyfleetTreasury public immutable TREASURY;
     /// @notice This fleet's reward ledger.
     KeyfleetRewards public immutable REWARDS;
+    /// @notice Regents Club only: the Pass collection that names who receives each key.
+    IERC721 public immutable CLUB_PASS;
+    /// @notice Regents Club only: where a key waits for its Pass holder to claim it.
+    address public immutable CLUB_CLAIMS;
 
     /// @notice Primary keys minted so far. Key numbers are `1..totalMinted`.
     uint256 public totalMinted;
-    /// @notice When the first key was sold; zero until then.
+    /// @notice When the first key was minted; zero until then.
     uint64 public firstMintAt;
     /// @notice Accelerant only: the USDC price of the next primary mint.
     uint256 public currentPrice;
@@ -135,7 +145,7 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     error Expired(uint256 deadline);
     /// @notice The next price exceeded the maximum the buyer authorized.
     error PriceAboveMax(uint256 price, uint256 maxPrice);
-    /// @notice Every key this fleet can sell has been sold.
+    /// @notice Every key this fleet can mint has been minted.
     error SoldOut();
     /// @notice Levels exist only on the two Fibonacci presets.
     error NotFibonacciPreset();
@@ -154,6 +164,12 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     error ForeignKey(uint256 tokenId);
     /// @notice Key 1 has already been sold.
     error FirstKeySold();
+    /// @notice The Regents Club fleet is never sold.
+    error NotForSale();
+    /// @notice Only the Regents Safe gives keys, and only of the Regents Club fleet.
+    error OnlySafeGivesClubKeys(address caller);
+    /// @notice Key `keyNumber` may go only to the holder of Pass `keyNumber` or to the claims contract.
+    error NotPassHolder(uint256 keyNumber, address receiver);
 
     /// @notice A primary key was bought. The four split parts always sum to `gross`.
     /// @param tokenId The key that was minted.
@@ -174,6 +190,8 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         uint256 reserve,
         uint256 rebate
     );
+    /// @notice The Regents Safe gave Regents Club key `tokenId` to `receiver`.
+    event Given(uint256 indexed tokenId, address indexed receiver);
     /// @notice A Cascade level was fully minted and its reserve was released.
     /// @param surplus USDC released and booked in `pendingConversion`, to become REGENT for this
     /// fleet's treasury.
@@ -202,6 +220,8 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         VOTES = KeyfleetVotes(wiring.votes);
         TREASURY = KeyfleetTreasury(payable(wiring.treasury));
         REWARDS = KeyfleetRewards(wiring.rewards);
+        CLUB_PASS = factory.CLUB_PASS();
+        CLUB_CLAIMS = address(factory.CLUB_CLAIMS());
         if (wiring.preset == KeyfleetPresets.Preset.FleetTechAccelerant) currentPrice = wiring.startPrice;
     }
 
@@ -244,21 +264,24 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         return !any;
     }
 
-    /// @notice Primary keys this Fleet.Tech fleet will ever mint: 1,024 on Classic, 2,000 on
-    /// Accelerant. Reverts on the two Fibonacci presets, which have no last level.
+    /// @notice Primary keys this fleet will ever mint: 1,024 on Classic, 2,000 on Accelerant, 1,998
+    /// on the Regents Club. Reverts on the two Fibonacci presets, which have no last level.
     function maxSupply() public view returns (uint256) {
         if (PRESET == KeyfleetPresets.Preset.FleetTechClassic) return KeyfleetPresets.CLASSIC_SUPPLY;
         if (PRESET == KeyfleetPresets.Preset.FleetTechAccelerant) return KeyfleetPresets.MAX_ACCELERANT_KEYS;
+        if (PRESET == KeyfleetPresets.Preset.RegentsClub) return KeyfleetPresets.CLUB_SUPPLY;
         revert NotFleetTechPreset();
     }
 
-    /// @notice Primary keys this Fleet.Tech fleet still has to sell.
+    /// @notice Primary keys this fleet still has to mint.
     function remainingSupply() external view returns (uint256) {
         return maxSupply() - totalMinted;
     }
 
-    /// @notice USDC price of the next primary key. Reverts once a Fleet.Tech fleet is sold out.
+    /// @notice USDC price of the next primary key. Reverts once a Fleet.Tech fleet is sold out, and
+    /// always on the Regents Club, which is never sold.
     function nextPrice() public view returns (uint256) {
+        if (PRESET == KeyfleetPresets.Preset.RegentsClub) revert NotForSale();
         uint256 minted = totalMinted;
         if (_isFibonacci()) {
             return KeyfleetPresets.fibonacciLevelPrice(KeyfleetPresets.fibonacciLevelOf(minted + 1), START_PRICE);
@@ -353,6 +376,22 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         if (!meetsRequirements(to, proof)) revert RequirementNotMet(to);
         USDC.safeTransferFrom(msg.sender, address(this), gross);
         tokenId = _sell(msg.sender, to, gross);
+    }
+
+    // --- the Regents Club -------------------------------------------------
+
+    /// @notice Gives the next keys of the Regents Club, in order, one to each of `receivers`.
+    /// @dev Only the Regents Safe, only on the Regents Club fleet. Key N goes to `receivers` entry
+    /// for N, which must hold Pass N right now or be the claims contract, so a batch built from an
+    /// older reading of the Pass reverts whole. No money moves and no card is drawn: key N holds
+    /// card N. Locked, so a receiver cannot give again from inside its mint hook.
+    function give(address[] calldata receivers) external nonReentrant {
+        if (msg.sender != KEYS.SAFE() || PRESET != KeyfleetPresets.Preset.RegentsClub) {
+            revert OnlySafeGivesClubKeys(msg.sender);
+        }
+        for (uint256 i = 0; i < receivers.length; ++i) {
+            _give(receivers[i]);
+        }
     }
 
     // --- the collection --------------------------------------------------
@@ -462,6 +501,21 @@ contract KeyfleetManager is ReentrancyGuardTransient {
             pendingConversion += booked;
             REGENT_BUYER.enqueue();
         }
+        KEYS.mint(to, keyNumber);
+    }
+
+    /// @dev Gives the next Regents Club key to `to`, enrolled like any key, then mints it.
+    function _give(address to) private {
+        uint256 minted = totalMinted;
+        uint256 keyNumber = minted + 1;
+        if (keyNumber > KeyfleetPresets.CLUB_SUPPLY) revert SoldOut();
+        if (to != CLUB_PASS.ownerOf(keyNumber) && to != CLUB_CLAIMS) revert NotPassHolder(keyNumber, to);
+        totalMinted = keyNumber;
+        if (minted == 0) firstMintAt = uint64(block.timestamp);
+        uint256 tokenId = KEYS.tokenIdOf(FLEET_ID, keyNumber);
+        REWARDS.enrollKey(tokenId, 0);
+        VOTES.enrollKey(tokenId);
+        emit Given(tokenId, to);
         KEYS.mint(to, keyNumber);
     }
 

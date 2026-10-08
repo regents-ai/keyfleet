@@ -15,7 +15,7 @@ import {FULL_PIECE} from "../helpers/KeyfleetFixture.sol";
 /// @dev The gas of the system's everyday calls against the real Base contracts on a fork of Base:
 /// native USDC (a proxy), REGENT and its v4 pool and hook, the USDC/WETH v3 pool, REGENT revenue
 /// staking and the Chainlink VRF coordinator, with the collection a consumer of a funded
-/// subscription so each founding-fleet purchase makes its real request. Each figure is the whole
+/// subscription so a key that draws makes its real request. Each figure is the whole
 /// transaction's gas, the 21,000 base and the calldata included, so it runs only when
 /// `BASE_RPC_URL` is set and Forge runs each call as a transaction of its own (`--isolate`), and
 /// skips itself otherwise; the URL is never printed:
@@ -43,7 +43,7 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
             return;
         }
 
-        // The Safe's calls: the four founding fleets, each its own transaction, and phase 1.
+        // The Safe's calls: the five founding fleets, each its own transaction, and phase 1.
         KeyfleetSafeSteps.SafeCall[] memory founding = safeSteps.foundingFleetCalls(_manifest(), factory);
         for (uint256 i = 0; i < founding.length; ++i) {
             _asSafe(founding[i]);
@@ -53,7 +53,7 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         _log("advancePhase, to phase 1");
 
         // Purchases on Classic #1: its first sale, then a later one, each booking the treasury's
-        // part and making its real VRF request.
+        // part. Both keys hold their deck's card of the same number and ask for no random word.
         KeyfleetManager classic = _fleet(1);
         uint256 price = _fund(classic, ALICE);
         vm.prank(ALICE);
@@ -72,7 +72,22 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         _advancePhase();
         _advancePhase();
         _log("advancePhase, to phase 3");
-        _createFleet();
+        KeyfleetManager created = _createFleet();
+
+        // A key that draws: the keeper records the new fleet's deck, then its key 2 is bought and
+        // makes its real VRF request.
+        uint256 createdId = created.FLEET_ID();
+        vm.prank(KEEPER);
+        keys.setDeck(createdId, keccak256("a creator's deck"), 1000);
+        price = _fund(created, CAROL);
+        vm.prank(CAROL);
+        uint256 drawing = created.purchase(CAROL, price, block.timestamp, new bytes32[](0));
+        _log("purchase, a key that draws, with its request");
+        assertGt(keys.revealRequestedAt(drawing), 0, "the coordinator accepted its request");
+
+        // The Safe's first batch of Regents Club keys, each to the holder of its real Pass.
+        _asSafe(safeSteps.clubGiftCalls(_manifest(), factory)[0]);
+        _log("give, the Regents Club's first batch");
 
         // Presence: a key's first renewal, once the fleet's opening has passed, so both keys are
         // mature and their automatic presence has ended.
@@ -138,7 +153,7 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
     }
 
     /// @dev A creator makes a Classic fleet at the lowest start price and buys its key 1.
-    function _createFleet() private {
+    function _createFleet() private returns (KeyfleetManager created) {
         uint256 startPrice = KeyfleetPresets.MIN_START_USDC;
         KeyfleetFactory.FleetTerms memory terms = KeyfleetFactory.FleetTerms({
             preset: KeyfleetPresets.Preset.FleetTechClassic,
@@ -155,7 +170,8 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         (uint256 fleetId, uint256 tokenId) = factory.createFleet(terms);
         _log("createFleet, a Classic fleet at 10 USDC with its key 1");
         assertEq(keys.ownerOf(tokenId), CREATOR, "the creator holds key 1");
-        assertEq(_fleet(fleetId).totalMinted(), 1, "of the new fleet");
+        created = _fleet(fleetId);
+        assertEq(created.totalMinted(), 1, "of the new fleet");
     }
 
     /// @dev The gas of the call just made.

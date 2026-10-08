@@ -16,8 +16,9 @@ profile, a `KeyfleetVotes` controller, a `KeyfleetTreasury` and a
 | `KeyfleetFactory` | one | The bindings every fleet is given; nothing of value |
 | `KeyfleetShards` | one | Agent shards and agent-voting switches, per key |
 | `KeyfleetRegentBuyer` | one | Nothing between calls; the fixed USDC to REGENT route |
+| `KeyfleetClubClaims` | one | Regents Club keys whose Pass holder could not take one yet, until they claim it, with what each earned while it waited |
 | four deployers | one each | Nothing; each holds one fleet contract's creation code |
-| `KeyfleetManager` | one per fleet | Type, starting price, Accelerant step, keys sold, the Cascade reserve, the owed protocol share, name, description, image link, joining requirements |
+| `KeyfleetManager` | one per fleet | Type, starting price, Accelerant step, keys minted, the Cascade reserve, the owed protocol share, name, description, image link, joining requirements |
 | `KeyfleetVotes` | one per fleet | Presence, proposals and ballots |
 | `KeyfleetTreasury` | one per fleet | The fleet's free capital; makes approved proposals' exact calls; runs the daily split |
 | `KeyfleetRewards` | one per fleet | What each key and each wallet is owed |
@@ -31,8 +32,8 @@ any price, supply, split, rate bound, route or royalty.
 
 ## Status
 
-Decided by the founder on 27, 28 and 29 September and 6 and 7 October 2026, and
-what the code on this branch does:
+Decided by the founder on 27, 28 and 29 September and 6, 7 and 8 October 2026,
+and what the code on this branch does:
 
 - One collection holds every key. A key's token id is its fleet's number times
   10^10 plus its key number, so fleet 1's key 72 is `10000000072`. Fleets are
@@ -41,10 +42,11 @@ what the code on this branch does:
 - Sales open in phases the Regents Safe
   (`0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`) moves forward, one step at a
   time and never back: phase 1 opens Classic #1, phase 2 opens Syndicate #1,
-  Accelerant #1 and Cascade #1, and phase 3 lets anyone create a fleet. Each
+  Accelerant #1, Cascade #1 and the Regents Club, and phase 3 lets anyone
+  create a fleet. Each
   phase step is a Safe transaction the founder signs, naming the moment the
   phase opens, which must be in the future.
-- In phase 3 anyone may create a fleet of any of the four types: they choose
+- In phase 3 anyone may create a fleet of any of the four sold types: they choose
   its name (1 to 100 bytes), an optional description (up to 2,000 bytes) and
   image link (up to 512 bytes), a starting price from 10 to 1,000,000 USDC in
   whole cents, for an Accelerant fleet its step of 1% to 5% per key, and
@@ -126,10 +128,21 @@ what the code on this branch does:
   or has its shards or agent voting changed.
 - Every fleet's cards come from a pre-made deck, of which only the fingerprint
   and the size are on chain. Decks stay private; only the rarities are public.
-  A key asks Chainlink VRF for its random number once its fleet has a deck, and
-  can ask again after a refused request or a day after an accepted one with no
-  answer; the first answer to arrive is the key's. Keys beyond a fleet's deck
-  use the trait draw.
+  Decided 8 October 2026: on the five founding fleets key N holds card N of its
+  fleet's deck, with no random draw. Every other key draws: a founding key past
+  its deck, and every key of a fleet anyone creates. A key that draws asks
+  Chainlink VRF for its random number once its fleet has a deck; the one answer
+  to its one accepted request is the key's. Keys beyond a fleet's deck use the
+  trait draw.
+- The Regents Club, decided 8 October 2026, is the fifth founding fleet: 1,998
+  keys, one for each Regents Club Pass on Base
+  (`0x2208aaDBdEcd47D3B4430b5b75a175f6d885D487`, Passes 1 to 1,998), never sold
+  and with no price. The Regents Safe gives them in batches it signs: key N to
+  whoever holds Pass N at that moment, read at the latest block. A Pass held by
+  a contract that cannot take a key has its key sent to `KeyfleetClubClaims`,
+  where whoever holds Pass N may claim key N at any time, with no deadline,
+  together with what it earned while it waited. Its treasury starts empty, and
+  its resales carry the same royalty to the Safe as every key.
 - Resales carry an ERC-2981 royalty of 2.5% to the Regents Safe. Marketplaces
   may choose not to honour it.
 - The treasury owns the fleet's Lit account. It signs nothing by itself: it
@@ -147,7 +160,7 @@ On hold or not yet done:
 - `deployments/base.json` carries the trait table's hash
   (`0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, eight
   traits of sixteen values each, every trait's weights adding up to 1,000), the
-  four founding fleets' deck fingerprints, a zero keeper and a VRF subscription
+  five founding fleets' deck fingerprints, a zero keeper and a VRF subscription
   of 0. A Base deployment is refused until the keeper's address and the Regents
   subscription id are written in.
 - On Base every deployment refuses any staking contract but REGENT revenue
@@ -161,21 +174,24 @@ On hold or not yet done:
 - The protocol share waits in the fleet's manager, still owed, for as long as
   REGENT staking is paused; the staking contract's owner, the Regents Safe, is
   trusted to unpause it.
-- Each key's Chainlink VRF request is paid in ETH from the Regents subscription
+- Each drawing key's Chainlink VRF request is paid in ETH from the Regents subscription
   on Base's 2 gwei lane (the 30 gwei lane is also allowed). Sixteen real answers
   on Base read on 7 October 2026 cost about 0.4 to 1.4 US cents each, about half
   a cent for a key's 100,000-gas answer.
 
 ## Presets
 
-`KeyfleetPresets` covers four presets: `FibonacciSyndicate`, `FibonacciCascade`,
-`FleetTechClassic` and `FleetTechAccelerant`. It has no storage, holds no tokens
+`KeyfleetPresets` covers five presets: `FibonacciSyndicate`, `FibonacciCascade`,
+`FleetTechClassic`, `FleetTechAccelerant` and `RegentsClub`. `RegentsClub` is the
+fifth founding fleet's alone: it has a supply, `CLUB_SUPPLY` (1,998), and no price
+or split, since its keys are given, never sold. Everything below on prices and
+splits is about the other four. It has no storage, holds no tokens
 and makes no external calls. Every function is `internal pure` with checked
 arithmetic.
 
 Keys are paid in USDC, and every price is in atomic USDC (six decimals). Every
 price is scaled from the fleet's starting price, the price of its key 1. The
-founding fleets start at `Q_USDC`, 10,000,000 (ten USDC), and Classic #1 at
+sold founding fleets start at `Q_USDC`, 10,000,000 (ten USDC), and Classic #1 at
 `CLASSIC_START_USDC`, 10,000,000 (ten USDC), too. A fleet anyone creates starts
 anywhere from `MIN_START_USDC` (10 USDC) to `MAX_START_USDC` (1,000,000 USDC) in
 whole cents (`CENT_USDC`, 10,000). Every ladder is computed iteratively from the
@@ -246,9 +262,9 @@ stays below 10^19 and fits in 64 bits. Key numbers run from 1 to
 `registerFleet(preset, manager, deckHash, deckSize)` may be called only by a
 factory (`OnlyFactory`). It refuses a zero manager (`ZeroAddress`), an account
 that already manages a fleet (`ManagerTaken`) and a fleet past `MAX_FLEETS`
-(`TooManyFleets`). Before phase 3 it accepts only the four founding fleets, in
+(`TooManyFleets`). Before phase 3 it accepts only the five founding fleets, in
 order, each with its deck: fleet 1 Classic, 2 Syndicate, 3 Accelerant, 4
-Cascade (`foundingPreset(fleetId)`; `NotFoundingFleet` otherwise, `DeckInvalid`
+Cascade, 5 Regents Club (`foundingPreset(fleetId)`; `NotFoundingFleet` otherwise, `DeckInvalid`
 for a missing deck). In phase 3 a fleet is registered without a deck
 (`DeckGivenAtCreation` otherwise). It records the manager, the type, the type
 number (`typeCount` per type plus one) and the deck, and emits
@@ -279,12 +295,12 @@ for `opensAt`, to the second, with nobody acting again.
 | --- | --- | --- |
 | 0 | Nothing sells. The Safe creates the founding fleets, one per transaction | — |
 | 1 | Classic #1's sales | fleet 1 exists (`FleetsMissing(1, registered)`) |
-| 2 | Syndicate #1, Accelerant #1 and Cascade #1's sales, together | fleets 1 to 4 exist (`FleetsMissing(4, registered)`) |
+| 2 | Syndicate #1, Accelerant #1 and Cascade #1's sales and the Regents Club's gifts, together | fleets 1 to 5 exist (`FleetsMissing(5, registered)`) |
 | 3 | Anyone may create a fleet; each sells from the moment it is created | — |
 
 Past phase 3, `advancePhase` reverts with `NoNextPhase`. `salesOpenAt(fleetId)`
 is the time a fleet's sales open: fleet 1's is the `opensAt` of the step to
-phase 1, fleets 2 to 4's the `opensAt` of the step to phase 2, and any later
+phase 1, fleets 2 to 5's the `opensAt` of the step to phase 2, and any later
 fleet's its registration; it is zero before then and for a fleet that does not
 exist. `salesOpen(fleetId)` is true once `salesOpenAt(fleetId)` is set and has
 been reached. Until phase 3 has both been stepped to and opened, the collection
@@ -297,7 +313,8 @@ manager may call it (`OnlyManager`), and only into its own fleet: the fleet is
 looked up from the caller, never taken from an argument. It refuses a fleet
 whose sales have not opened (`SalesClosed(fleetId)`) and a key number outside 1
 to `MAX_KEY_NUMBER` (`KeyNumberOutOfRange`), mints with `_safeMint`, and asks
-for the key's random number if its fleet has a deck. It shares one reentrancy
+for the key's random number if its fleet has a deck and the key is not dealt by
+number. It shares one reentrancy
 lock with `requestReveal`, so a receiver cannot mint again or add a request from
 inside `onERC721Received`. The Safe can neither mint nor move any key.
 
@@ -343,13 +360,18 @@ without the other, or a size above `MAX_KEY_NUMBER`, is refused (`DeckInvalid`).
 Decks stay private; nothing on chain carries a card, a trait or a deck's
 content.
 
-A deck's fingerprint is fixed before any seed of its fleet exists, so nobody can
-build or change a deck after seeing which random numbers came up. The
-collection enforces it by asking Chainlink for a key's random number only once
-its fleet has a deck:
+The five founding fleets are registered with their decks, and their keys 1 to
+the deck's size are dealt by number: key N holds card N of its fleet's deck and
+draws nothing (`dealtByNumber(tokenId)`). Their order is fixed by the deck file,
+whose fingerprint is on chain before any key exists.
 
-- The founding fleets are registered with their decks, so their keys ask at
-  mint.
+Every other key draws: a founding key past its deck, and every key of a fleet
+anyone creates. A deck's fingerprint is fixed before any seed of its fleet
+exists, so nobody can build or change a deck after seeing which random numbers
+came up. The collection enforces it by asking Chainlink for a drawing key's
+random number only once its fleet has a deck:
+
+- A founding key past its deck asks at mint.
 - A fleet anyone creates is registered without one. Its keys, the creator's key
   1 included, mint and wait. The keeper records its deck once with
   `setDeck(fleetId, deckHash, deckSize)` (`OnlyKeeper`, `UnknownFleet`,
@@ -364,14 +386,15 @@ key's metadata refresh. It cannot choose any key's card, change a recorded
 deck, mint, move a key or touch money. A fleet whose deck is never recorded
 keeps its keys unrevealed; they can still be traded.
 
-The site deals each key a card from its fleet's remaining cards in on-chain
-reveal order, using the key's seed. Keys 1 to N of an N-card deck get deck
-cards; key N + 1 onward uses the trait draw below.
+On a fleet anyone creates, the site deals each key a card from its fleet's
+remaining cards in on-chain reveal order, using the key's seed. Keys 1 to N of
+an N-card deck get deck cards; key N + 1 onward, on any fleet, uses the trait
+draw below.
 
 ### Key reveals
 
-Every key's card or traits come from one Chainlink VRF v2.5 random word. A
-key's request asks the collection's coordinator for one word, three blocks deep
+Every drawing key's card or traits come from one Chainlink VRF v2.5 random
+word. A key's request asks the collection's coordinator for one word, three blocks deep
 (`REVEAL_CONFIRMATIONS`), with 100,000 gas for the answer
 (`REVEAL_CALLBACK_GAS_LIMIT`), paid in ETH from the collection's subscription.
 A purchase never waits for the answer and never fails because of the request.
@@ -379,12 +402,13 @@ An accepted request emits `RevealRequested(tokenId, requestId)` and records the
 time in `revealRequestedAt(tokenId)`; a refused one emits
 `RevealRequestFailed(tokenId)` and the key is still sold.
 
-`requestReveal(tokenId)` lets anyone ask for a minted key with no seed whose
-fleet has its deck, when the coordinator has accepted no request for it (it was
+`requestReveal(tokenId)` lets anyone ask for a minted key that draws, has no
+seed and whose fleet has its deck, when the coordinator has accepted no request for it (it was
 minted before its fleet's deck was recorded, or every request was refused). It
 refuses a key already revealed (`AlreadyRevealed`), one whose request the
 coordinator has accepted (`RevealAlreadyRequested(tokenId)`), however long the
-answer takes, and one whose fleet has no deck (`DeckNotSet`). A key has at most
+answer takes, one dealt by number (`DealtByNumber(tokenId)`) and one whose fleet
+has no deck (`DeckNotSet`). A key has at most
 one accepted request, so its seed can come from only one answer.
 
 The coordinator, the subscription id and the gas lane are one setting,
@@ -450,8 +474,8 @@ Errors: `ZeroAddress`, `CoordinatorMissing`, `TraitTableHashZero`, `OnlySafe`,
 `OpensAtInvalid`, `FleetsMissing`, `NotFoundingFleet`, `DeckGivenAtCreation`, `TooManyFleets`,
 `ManagerTaken`, `UnknownFleet`, `SalesClosed`, `KeyNumberOutOfRange`,
 `DeckAlreadySet`, `DeckInvalid`, `DeckNotSet`, `FactoryMissing`,
-`OnlyCoordinator`, `AlreadyRevealed`, `RevealAlreadyRequested`, and the
-OpenZeppelin ERC-721 errors.
+`OnlyCoordinator`, `AlreadyRevealed`, `RevealAlreadyRequested`,
+`DealtByNumber`, and the OpenZeppelin ERC-721 errors.
 
 Events: `FleetRegistered`, `DeckSet`, `PhaseAdvanced`, `RandomnessSet`, `KeeperSet`,
 `FactoryAdded`, `OwnershipEpoch`, `RevealRequested`, `RevealRequestFailed`,
@@ -461,14 +485,15 @@ Events: `FleetRegistered`, `DeckSet`, `PhaseAdvanced`, `RandomnessSet`, `KeeperS
 ## The factory
 
 `KeyfleetFactory` creates fleets. Its constructor takes a `Config`: the Safe,
-the first keeper, REGENT revenue staking, the Autolaunch factory, the
-collection's identity, the randomness terms, the trait table hash, the REGENT
-buyer's route and the four deployers. It refuses a staking or Autolaunch address
-with no code (`BindingMissing`), a USDC that does not report six decimals
+the first keeper, REGENT revenue staking, the Autolaunch factory, the Regents
+Club Pass, the collection's identity, the randomness terms, the trait table hash, the REGENT
+buyer's route and the four deployers. It refuses a staking, Autolaunch or Pass
+address with no code (`BindingMissing`), a USDC that does not report six decimals
 (`UsdcDecimalsWrong`) and a deployer that serves another factory
 (`DeployerMismatch`). It then deploys the collection, the shared
-`KeyfleetShards` bound to the collection, and the shared `KeyfleetRegentBuyer`,
-so their links are fixed at birth. USDC and REGENT are the route's. The factory
+`KeyfleetShards` bound to the collection, the shared `KeyfleetRegentBuyer` and
+the Regents Club's `KeyfleetClubClaims` (`CLUB_CLAIMS`), bound to the collection
+and the Pass (`CLUB_PASS`), so their links are fixed at birth. USDC and REGENT are the route's. The factory
 holds no money and has no administrator, no upgrade path and no pause.
 
 ### Two ways to create a fleet
@@ -476,8 +501,9 @@ holds no money and has no administrator, no upgrade path and no pause.
 `createFoundingFleet(preset, deckHash, deckSize, profile)` is for the Safe only
 (`OnlySafe`). It creates the next founding fleet: fleet 1 Classic, 2 Syndicate,
 3 Accelerant, 4 Cascade, each with its deck, a starting price of 10 USDC, a 5%
-step for the Accelerant, and no joining requirements. The collection
-refuses a fifth, one out of order and one without a deck. Its sales stay closed
+step for the Accelerant, and no joining requirements, then 5 Regents Club with
+its deck and a starting price of zero. The collection refuses a sixth, one out
+of order and one without a deck. Its sales stay closed
 until the Safe's phase step opens them. The Safe buys no key.
 
 `createFleet(terms)` is for anyone once phase 3 has been stepped to and its
@@ -486,7 +512,8 @@ price, the Accelerant step, the profile, the joining requirements and a
 deadline (`Expired` once passed). The starting price must be 10 to 1,000,000
 USDC in whole cents (`StartPriceInvalid`). The Accelerant step must be 1 to 5
 whole percent on an Accelerant fleet and 0 on any other
-(`AccelerantStepInvalid(preset, step)`). The creator must have approved the factory for the
+(`AccelerantStepInvalid(preset, step)`). The Regents Club type is refused
+(`RegentsClubIsFounding`). The creator must have approved the factory for the
 starting price; the factory sends that USDC to the new manager, which sells key
 1 to the creator through the normal purchase steps. It returns the fleet number
 and key 1's token id. The fleet is registered without a deck, so key 1 waits for
@@ -528,11 +555,12 @@ per contract. Measured with `forge build --sizes`:
 
 | Contract | Runtime (bytes) | Deployment (bytes) |
 | --- | --- | --- |
-| `KeyfleetFactory` | 6,199 | 35,920 |
-| `KeyfleetKeys` | 12,075 | 13,633 |
-| `KeyfleetManager` | 14,610 | 16,266 |
-| `KeyfleetManagerDeployer` | 16,756 | 16,887 |
-| `KeyfleetRegentBuyer` | 7,725 | 9,452 |
+| `KeyfleetClubClaims` | 3,568 | 3,791 |
+| `KeyfleetFactory` | 6,387 | 40,228 |
+| `KeyfleetKeys` | 12,177 | 13,735 |
+| `KeyfleetManager` | 16,245 | 18,231 |
+| `KeyfleetManagerDeployer` | 18,721 | 18,852 |
+| `KeyfleetRegentBuyer` | 7,741 | 9,468 |
 | `KeyfleetRewards` | 9,069 | 10,319 |
 | `KeyfleetRewardsDeployer` | 10,809 | 10,940 |
 | `KeyfleetShards` | 3,604 | 3,810 |
@@ -545,8 +573,8 @@ per contract. Measured with `forge build --sizes`:
 
 `KeyfleetManager` is one fleet's sale, money and profile. Its immutables are
 `FACTORY`, `FLEET_ID`, `PRESET`, `START_PRICE`, `KEYS`, `USDC`, `REGENT_BUYER`,
-`VOTES`, `TREASURY` and `REWARDS`. It is the only account that mints its fleet's
-keys.
+`VOTES`, `TREASURY`, `REWARDS`, `CLUB_PASS` and `CLUB_CLAIMS`. It is the only
+account that mints its fleet's keys.
 
 ### Purchases
 
@@ -588,7 +616,21 @@ owner.
 and Accelerant both revert once the fleet is sold out, and `maxSupply()` and
 `remainingSupply()` give the limit and count down to zero. Syndicate and Cascade
 never sell out, so on them `maxSupply()` and `remainingSupply()` revert with
-`NotFleetTechPreset`. `levelOf` reports the library's answer and reverts with `NotFibonacciPreset` on Classic and Accelerant.
+`NotFleetTechPreset`. On the Regents Club `purchase`, `nextPrice()` and `quote()`
+revert with `NotForSale`, and `maxSupply()` is 1,998. `levelOf` reports the library's answer and reverts with `NotFibonacciPreset` on Classic and Accelerant.
+
+### Regents Club gifts
+
+`give(receivers)` mints the Regents Club's next keys, in order, one to each
+address in the list. Only the Regents Safe may call it, and only on the Regents
+Club (`OnlySafeGivesClubKeys(caller)`), once phase 2 has opened
+(`SalesClosed`). Key N may go only to the wallet that holds Pass N at that
+moment or to `KeyfleetClubClaims` (`NotPassHolder(keyNumber, receiver)`), so a
+batch built from an older reading of the Pass reverts whole, and nothing past
+key 1,998 is given (`SoldOut`). No money moves and nothing is booked: each key is
+enrolled in the fleet's votes and rewards like a bought key, `Given(tokenId,
+receiver)` is emitted, and the key is minted holding card N. `give` is locked, so
+a receiver cannot give again from inside its mint hook.
 
 ### The treasury's part becomes REGENT
 
@@ -733,10 +775,29 @@ call it at any time; with nothing to forward it returns zero and says nothing.
 Errors: `OnlyFactory`, `OnlyKeys`, `OnlyTreasury`, `OnlyRegentBuyer`, `AlreadyInitialized`,
 `Expired`, `PriceAboveMax`, `SoldOut`, `NotFibonacciPreset`,
 `NotFleetTechPreset`, `ZeroAmount`, `RequirementNotMet`, `ProfileInvalid`,
-`RequirementsInvalid`, `ForeignKey`, `FirstKeySold`.
+`RequirementsInvalid`, `ForeignKey`, `FirstKeySold`, `NotForSale`,
+`OnlySafeGivesClubKeys`, `NotPassHolder`.
 
-Events: `Purchased`, `LevelCompleted`, `ProtocolShareSent`,
+Events: `Purchased`, `Given`, `LevelCompleted`, `ProtocolShareSent`,
 `ForwardedToTreasury`, `ProfileChanged`, `RequirementsSet`.
+
+## Regents Club claims
+
+`KeyfleetClubClaims` holds each Regents Club key the Safe gave it, for a Pass
+whose holder could not take one when its batch was built, such as a Pass held
+by a contract that refuses NFTs. The factory deploys it, bound for ever to the
+collection (`KEYS`) and the Pass (`PASS`). It has no administrator, no upgrade
+path and no other way out.
+
+`claim(passId)` gives key `passId` to the caller when the caller holds Pass
+`passId` (`NotPassHolder(passId, caller)`), with no deadline. It first collects
+the key's rewards from the Regents Club ledger into the claims contract, then
+moves the key to the caller with `safeTransferFrom`, then sends the caller
+exactly what was collected, and emits `KeyClaimed(passId, tokenId, holder,
+assets, paid)`. A key already claimed is no longer the contract's, so a second
+claim reverts. It accepts only Regents Club keys as they are minted to it
+(`OnlyClubMints`), and ETH only from the Regents Club's rewards ledger during a
+claim (`OnlyRewards(sender)`). Nobody votes or presents a key while it waits.
 
 ## The REGENT buyer
 
@@ -1417,11 +1478,11 @@ agent voting.
 ## Deployment scripts
 
 The system is deployed once per chain. Fleets are then created through the
-factory: the four founding fleets by the Safe, and later fleets by anyone in
+factory: the five founding fleets by the Safe, and later fleets by anyone in
 phase 3. All scripts read one manifest, named by `KEYFLEET_MANIFEST` (`base` or
 `anvil`), from `deployments/<name>.json`, through `script/KeyfleetManifest.sol`.
 A manifest holds the Safe, the keeper, REGENT revenue staking, the Autolaunch
-factory, the collection's name, symbol, metadata base and collection metadata
+factory, the Regents Club Pass, the collection's name, symbol, metadata base and collection metadata
 address, the VRF coordinator, subscription and gas lane, the trait table hash,
 the REGENT buyer's route, and the deck and profile of each founding fleet.
 [../docs/deployment.md](../docs/deployment.md) is how to run each step and what
@@ -1438,6 +1499,7 @@ reverts with `NotBasePin(field)`:
 | `safe` | `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e` |
 | `regentStaking` | `0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5` |
 | `autolaunchFactory` | `0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E` |
+| `regentsClubPass` | `0x2208aaDBdEcd47D3B4430b5b75a175f6d885D487` |
 | `vrf.coordinator` | `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634` |
 | `vrf.keyHash` | the 2 gwei lane `0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab` or the 30 gwei lane `0xdc2f87677b01473c763cb0aee938ed3341512f6057324a584e5944e786144d70` |
 | `collection.name`, `collection.symbol` | `Keyfleet`, `KEYFLEET` |
@@ -1454,20 +1516,26 @@ without six decimals, a zero keeper and a zero trait table hash.
   five transactions from one account through `script/KeyfleetSystem.sol`: the
   four deployers, each told the factory's address before it exists (the
   account's fifth contract address from now), then the factory, whose
-  constructor deploys the collection, the shard record and the REGENT buyer. No
+  constructor deploys the collection, the shard record, the REGENT buyer and the
+  Regents Club claims contract. No
   fleet exists afterwards. It moves no token and does not touch the VRF
   subscription.
 - `script/KeyfleetSafeSteps.s.sol` makes the Safe's calls, named by
   `KEYFLEET_STEP`: `founding-fleets` (one `createFoundingFleet` per founding
   fleet the collection does not have yet, in order, with the manifest's deck
-  and profile) or `advance-phase` (one `advancePhase`, opening at the Unix time
+  and profile), `advance-phase` (one `advancePhase`, opening at the Unix time
   in `KEYFLEET_OPENS_AT`, which must still be in the future when the Safe's
-  transaction lands); any other step reverts with `UnknownStep`. It finds the factory in the deployment step's latest
+  transaction lands) or `club-gifts` (one `give` per 80 Regents Club keys not
+  given yet, `CLUB_GIFT_BATCH`, each key to the holder of its Pass read at the
+  latest block, or to the claims contract when that holder is a contract that
+  does not answer the NFT receiver check with exactly its selector); any other
+  step reverts with `UnknownStep`. It finds the factory in the deployment step's latest
   broadcast on the chain. On Base it runs every call from the Safe's address
   against the chain's current state, stopping at the first call that would
   revert, then writes each call as its own Safe Transaction Builder file,
   `deployments/safe/<manifest>.<step>.json` (`founding-fleet-1` to
-  `founding-fleet-4`, `phase-1` to `phase-3`), for the Safe's signers to load,
+  `founding-fleet-5`, `phase-1` to `phase-3`, `club-gifts-1-80` to
+  `club-gifts-1921-1998`), for the Safe's signers to load,
   check and sign. Nothing is signed or sent from it on Base. On a local anvil
   chain (31337) it sends the calls directly from the Safe's address, which anvil
   has unlocked.
@@ -1478,8 +1546,8 @@ without six decimals, a zero keeper and a zero trait table hash.
   `FactoryNotInBroadcast`), a factory with no code (`FactoryMissing`), any
   system value that differs from the manifest (`RecordedMismatch(field)`: the
   Safe, keeper, factory, name, symbol, metadata base, collection metadata
-  address, randomness, trait table hash, shard record, staking, Autolaunch and
-  the whole route), a fleet whose four contracts are not where the factory
+  address, randomness, trait table hash, shard record, staking, Autolaunch, the
+  Regents Club Pass and the whole route), a fleet whose four contracts are not where the factory
   places them, hold no code or do not point at each other, or a founding fleet
   of another type or deck than the manifest's (`FleetNotBound(fleetId, part)`),
   a collection the subscription does not list as a consumer
@@ -1508,7 +1576,8 @@ without six decimals, a zero keeper and a zero trait table hash.
   later (`LAB_OPENING`), and the shell script then moves the lab chain's clock
   past that; `record` writes
   `deployments/base-fork-lab.json` through `RecordKeyfleets`, in the shape of
-  the release's deployed record; `fulfil` answers every draw still waiting.
+  the release's deployed record; `fulfil` answers every draw still waiting
+  (Classic #1's keys 1 to 1,000 hold their cards by number and draw nothing).
   The shell script also gives each buyer named 100 ETH and exactly 1,000 USDC.
   Every step refuses any chain but 31337 (`WrongChain`).
 
@@ -1623,33 +1692,37 @@ completed purchase either made its random-number request or said it failed.
 ### On a fork of Base
 
 Measured on 8 October 2026 on a fork of Base at its latest block, against the
-real USDC (a proxy), the real REGENT pools and hook, REGENT revenue staking and
-the Chainlink VRF coordinator, with the collection a consumer of a funded
-subscription so each founding-fleet purchase makes its real request. Each
-figure is the whole transaction, the 21,000 base and the call data included,
-every call run as a transaction of its own (`test/fork/KeyfleetBaseGas.t.sol`):
+real USDC (a proxy), the real REGENT pools and hook, REGENT revenue staking, the
+Chainlink VRF coordinator and the real Regents Club Pass, with the collection a
+consumer of a funded subscription so a key that draws makes its real request.
+Each figure is the whole transaction, the 21,000 base and the call data
+included, every call run as a transaction of its own
+(`test/fork/KeyfleetBaseGas.t.sol`):
 
 | Call | Gas |
 | --- | --- |
-| `createFoundingFleet`, fleet 1 | 11,473,149 |
-| `createFoundingFleet`, fleet 2 | 11,456,083 |
-| `createFoundingFleet`, fleet 3 | 11,478,261 |
-| `createFoundingFleet`, fleet 4 | 11,456,118 |
+| `createFoundingFleet`, fleet 1 | 11,804,071 |
+| `createFoundingFleet`, fleet 2 | 11,787,005 |
+| `createFoundingFleet`, fleet 3 | 11,809,183 |
+| `createFoundingFleet`, fleet 4 | 11,787,040 |
+| `createFoundingFleet`, fleet 5, the Regents Club | 11,787,108 |
 | `advancePhase`, to phase 1 | 70,130 |
 | `advancePhase`, to phase 3 | 30,908 |
-| `purchase`, Classic #1's first key, with its request | 593,417 |
-| `purchase`, a later key | 390,436 |
-| `convert(250000000)`, one piece through both pools | 722,447 |
-| `createFleet`, a Classic fleet at 10 USDC with its key 1 | 11,873,253 |
+| `purchase`, Classic #1's first key, dealt by number | 500,971 |
+| `purchase`, a later key | 297,990 |
+| `purchase`, a key that draws, with its request | 390,684 |
+| `give`, the Regents Club's first 80 keys to the real Pass holders | 13,227,593 |
+| `convert(250000000)`, one piece through both pools | 717,111 |
+| `createFleet`, a Classic fleet at 10 USDC with its key 1 | 12,204,507 |
 | `present`, one key | 110,991 |
-| `propose`, one payment | 243,194 |
+| `propose`, one payment | 243,206 |
 | `castBallot`, one key | 118,977 |
 | `sendProtocolShare`, two sales owed | 142,972 |
-| `runDailySplit`, ETH, REGENT and USDC | 537,074 |
+| `runDailySplit`, ETH, REGENT and USDC | 537,096 |
 | `claim`, one key in three assets | 274,456 |
-| `transferFrom`, a key with three assets waiting | 303,548 |
-| `execute`, a one-payment proposal | 93,881 |
-| `executeBatch`, one payment | 56,234 |
+| `transferFrom`, a key with three assets waiting | 286,448 |
+| `execute`, a one-payment proposal | 93,893 |
+| `executeBatch`, one payment | 56,246 |
 
 `executeBatch` is only ever called by the voting controller inside `execute`;
 its line is the treasury's own part. The five transactions that deploy the
@@ -1671,7 +1744,8 @@ Run `make check-contracts` from the repository root. It runs, in `contracts/`,
 
 The suites in `test/`, all against local stand-ins, cover the presets, the
 collection (registry, phases, sales, decks, the keeper, metadata and royalty),
-reveals and the trait draw, the factory and its deployers, the manager, the
+reveals, cards dealt by number and the trait draw, the factory and its
+deployers, the manager, the Regents Club's gifts and claims, the
 purchase money and the REGENT buyer, the protocol share and money sent to a
 fleet, the treasury's payments and advances, the daily split, the launch token,
 the rewards ledger, votes and proposal topics, carrying out proposals, presence,
@@ -1681,7 +1755,7 @@ the anvil lab. `test/fork/BaseForkLab.t.sol` runs the Base-fork lab on a fork. S
 
 `test/invariant/` holds the handler-based invariant suites, which `forge test`
 runs with the rest: the collection (founding and open fleets on one collection,
-and the phases), the money of the founding Cascade and Accelerant fleets, the electorate, presence, and segregation
+the Regents Club's gifts, and the phases), the money of the founding Cascade and Accelerant fleets, the electorate, presence, and segregation
 (random approved batches never lower protected money). The presence suite runs
 256 runs, and the fleet, electorate and segregation suites 256 runs × depth 100.
 The two collection suites run short every day, 24 runs × depth 80 and
@@ -1692,8 +1766,8 @@ cd contracts && FOUNDRY_PROFILE=deep forge test --match-path test/invariant/Keyf
 ```
 
 `script/check_bytecode.sh` disassembles the deployed code of the collection, the
-factory, its four deployers, the REGENT buyer, the shard record and a fleet's
-four contracts with `cast disassemble` and walks it from its entry point,
+factory, its four deployers, the REGENT buyer, the shard record, the Regents Club
+claims contract and a fleet's four contracts with `cast disassemble` and walks it from its entry point,
 following every jump target the code pushes, and fails if any of them can reach
 `DELEGATECALL`, `CALLCODE` or `SELFDESTRUCT`. Bytes nothing jumps to, such as
 the Classic price table stored at the end of the manager's code, are data and

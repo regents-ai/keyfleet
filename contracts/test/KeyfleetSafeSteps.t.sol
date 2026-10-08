@@ -4,9 +4,20 @@ pragma solidity 0.8.26;
 import {KeyfleetFactory} from "../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
+import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {KeyfleetSafeSteps} from "../script/KeyfleetSafeSteps.s.sol";
 import {KeyfleetScriptFixture} from "./helpers/KeyfleetScriptFixture.sol";
+import {MockClubPass} from "./mocks/MockClubPass.sol";
+import {MockContractWallet} from "./mocks/MockContractWallet.sol";
+
+/// @dev A contract that cannot take an NFT sent with a safe transfer.
+contract NoReceiver {}
+
+/// @dev A contract that answers every call with nothing, which a safe transfer also refuses.
+contract Silent {
+    fallback() external {}
+}
 
 contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
     KeyfleetFactory private deployed;
@@ -23,16 +34,16 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
     function test_foundingStepCreatesEveryFoundingFleetWithTheManifestsDeckAndProfile() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         KeyfleetSafeSteps.SafeCall[] memory calls = safeSteps.foundingFleetCalls(manifest, deployed);
-        assertEq(calls.length, 4, "One call per founding fleet");
-        for (uint256 index = 0; index < 4; ++index) {
+        assertEq(calls.length, 5, "One call per founding fleet");
+        for (uint256 index = 0; index < 5; ++index) {
             assertEq(calls[index].name, string.concat("founding-fleet-", vm.toString(index + 1)), "Named");
             assertEq(calls[index].to, address(deployed), "To the factory");
         }
 
         _make(calls, safe);
 
-        assertEq(collection.fleetCount(), 4, "Four fleets");
-        for (uint256 fleetId = 1; fleetId <= 4; ++fleetId) {
+        assertEq(collection.fleetCount(), 5, "Five fleets");
+        for (uint256 fleetId = 1; fleetId <= 5; ++fleetId) {
             KeyfleetManifest.FoundingFleet memory expected = manifest.founding[fleetId - 1];
             KeyfleetKeys.Fleet memory fleet = collection.fleet(fleetId);
             assertTrue(fleet.preset == expected.preset, "Type");
@@ -48,7 +59,7 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
     }
 
     /// @dev Run again partway, the step names only the founding fleets still missing, and once all
-    /// four exist it names none.
+    /// five exist it names none.
     function test_foundingStepNamesOnlyTheFleetsStillMissing() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         KeyfleetSafeSteps.SafeCall[] memory calls = safeSteps.foundingFleetCalls(manifest, deployed);
@@ -57,9 +68,10 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         _make(firstTwo, safe);
 
         calls = safeSteps.foundingFleetCalls(manifest, deployed);
-        assertEq(calls.length, 2, "Two left");
+        assertEq(calls.length, 3, "Three left");
         assertEq(calls[0].name, "founding-fleet-3", "Accelerant next");
-        assertEq(calls[1].name, "founding-fleet-4", "Cascade last");
+        assertEq(calls[1].name, "founding-fleet-4", "Cascade then");
+        assertEq(calls[2].name, "founding-fleet-5", "the Regents Club last");
         _make(calls, safe);
 
         assertEq(safeSteps.foundingFleetCalls(manifest, deployed).length, 0, "Nothing left");
@@ -94,7 +106,7 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
             assertEq(collection.phase(), phase, "Moved");
             vm.warp(block.timestamp + 1);
         }
-        assertTrue(collection.salesOpen(1) && collection.salesOpen(4), "Every founding fleet sells");
+        assertTrue(collection.salesOpen(1) && collection.salesOpen(5), "Every founding fleet sells");
 
         calls = safeSteps.advancePhaseCalls(manifest, deployed, uint64(block.timestamp + 1));
         vm.expectRevert(KeyfleetKeys.NoNextPhase.selector);
@@ -137,6 +149,52 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         assertEq(vm.parseJsonAddress(file, ".transactions[0].to"), call.to, "To");
         assertEq(vm.parseJsonString(file, ".transactions[0].value"), "0", "No value");
         assertEq(vm.parseJsonBytes(file, ".transactions[0].data"), call.data, "The call");
+    }
+
+    /// @dev The gift step gives every Regents Club key, `CLUB_GIFT_BATCH` to a call: key N to the
+    /// holder of Pass N when the step runs, or to the claims contract when that holder is a contract
+    /// that a safe transfer would refuse. Run again partway, it names only the keys still to give,
+    /// and once all are given it names none.
+    function test_clubGiftStepGivesEveryKeyToItsPassOrTheClaimsContract() public {
+        KeyfleetManifest.Manifest memory manifest = _manifest();
+        _found(manifest, deployed);
+        _openPhase(manifest, deployed);
+        _openPhase(manifest, deployed);
+        MockClubPass pass = MockClubPass(address(manifest.bindings.clubPass));
+        address claims = address(deployed.CLUB_CLAIMS());
+        address wallet = address(new MockContractWallet(keeper));
+        address[4] memory contracts = [address(new NoReceiver()), address(new Silent()), wallet, wallet];
+        for (uint256 n = 1; n <= KeyfleetPresets.CLUB_SUPPLY; ++n) {
+            pass.mint(n >= 2 && n <= 5 ? contracts[n - 2] : _wallet(n), n);
+        }
+
+        KeyfleetSafeSteps.SafeCall[] memory calls = safeSteps.clubGiftCalls(manifest, deployed);
+        assertEq(safeSteps.CLUB_GIFT_BATCH(), 80);
+        assertEq(calls.length, 25, "1,998 keys, 80 a call");
+        KeyfleetManager club = _managerOf(deployed, 5);
+        address[] memory first = new address[](80);
+        for (uint256 n = 1; n <= 80; ++n) {
+            first[n - 1] = n == 2 || n == 3 ? claims : pass.ownerOf(n);
+        }
+        assertEq(calls[0].name, "club-gifts-1-80");
+        assertEq(calls[0].to, address(club), "To the Club");
+        assertEq(calls[0].data, abi.encodeCall(KeyfleetManager.give, (first)), "Each key to its Pass, or held");
+        assertEq(calls[24].name, "club-gifts-1921-1998", "The last call stops at the last key");
+
+        KeyfleetSafeSteps.SafeCall[] memory firstTwo = new KeyfleetSafeSteps.SafeCall[](2);
+        (firstTwo[0], firstTwo[1]) = (calls[0], calls[1]);
+        _make(firstTwo, safe);
+        calls = safeSteps.clubGiftCalls(manifest, deployed);
+        assertEq(calls.length, 23, "Only the keys still to give");
+        assertEq(calls[0].name, "club-gifts-161-240");
+        _make(calls, safe);
+
+        assertEq(club.totalMinted(), KeyfleetPresets.CLUB_SUPPLY, "Every key given");
+        assertEq(collection.ownerOf(collection.tokenIdOf(5, 2)), claims, "Held for a contract without a receiver");
+        assertEq(collection.ownerOf(collection.tokenIdOf(5, 3)), claims, "Held for a contract that answers nothing");
+        assertEq(collection.ownerOf(collection.tokenIdOf(5, 4)), wallet, "A contract wallet takes its own");
+        assertEq(collection.ownerOf(collection.tokenIdOf(5, 1998)), _wallet(1998));
+        assertEq(safeSteps.clubGiftCalls(manifest, deployed).length, 0, "Nothing left");
     }
 
     /// @dev Makes `calls` from `from` in a call of its own, so a test can expect its revert.

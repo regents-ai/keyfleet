@@ -220,13 +220,13 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
         vm.stopPrank();
     }
 
-    function test_AFifthFoundingFleetIsRefused() public {
+    function test_ASixthFoundingFleetIsRefused() public {
         _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         vm.prank(safe);
         vm.expectRevert(
-            abi.encodeWithSelector(KeyfleetKeys.NotFoundingFleet.selector, 5, KeyfleetPresets.Preset.FleetTechClassic)
+            abi.encodeWithSelector(KeyfleetKeys.NotFoundingFleet.selector, 6, KeyfleetPresets.Preset.FleetTechClassic)
         );
-        factory.createFoundingFleet(KeyfleetPresets.Preset.FleetTechClassic, _deckHash(5), DECK_SIZE, _profile("F"));
+        factory.createFoundingFleet(KeyfleetPresets.Preset.FleetTechClassic, _deckHash(6), DECK_SIZE, _profile("F"));
     }
 
     function test_FoundingFleetsCannotBeCreatedInPhaseThree() public {
@@ -354,7 +354,7 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
         vm.prank(creator);
         vm.expectRevert();
         factory.createFleet(_terms(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6, anyone));
-        assertEq(keys.fleetCount(), 4);
+        assertEq(keys.fleetCount(), 5);
     }
 
     function test_OpenFleetStoresItsRequirements() public {
@@ -404,10 +404,10 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
         _createOpen(KeyfleetPresets.Preset.FibonacciCascade, 10e6);
         _createOpen(KeyfleetPresets.Preset.FibonacciCascade, 10e6);
         _createOpen(KeyfleetPresets.Preset.FleetTechClassic, 10e6);
-        assertEq(keys.fleetCount(), 7);
-        assertEq(keys.fleet(5).typeNumber, 2);
-        assertEq(keys.fleet(6).typeNumber, 3);
-        assertEq(keys.fleet(7).typeNumber, 2);
+        assertEq(keys.fleetCount(), 8);
+        assertEq(keys.fleet(6).typeNumber, 2);
+        assertEq(keys.fleet(7).typeNumber, 3);
+        assertEq(keys.fleet(8).typeNumber, 2);
     }
 
     function test_CreatorCannotCreateAnotherFleetFromInsideTheirOwn() public {
@@ -523,6 +523,7 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
             keeper: b.keeper,
             staking: b.staking,
             autolaunch: b.autolaunch,
+            clubPass: b.clubPass,
             collection: b.collection,
             randomness: b.randomness,
             traitTableHash: b.traitTableHash,

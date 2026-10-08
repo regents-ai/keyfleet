@@ -3,7 +3,7 @@ pragma solidity 0.8.26;
 
 import {KeyfleetClassicPrices} from "./KeyfleetClassicPrices.sol";
 
-/// @notice Supply, price and purchase-split arithmetic for the four fleet presets.
+/// @notice Supply, price and purchase-split arithmetic for the fleet presets.
 /// @dev Pure arithmetic only: no storage, no tokens, no external calls. Every constant here is part of
 ///      the published product contract and is reproduced in the deployment manifest. All arithmetic is
 ///      checked. The two Fibonacci presets have no last level: supply and price carry on by the same rule
@@ -14,17 +14,19 @@ import {KeyfleetClassicPrices} from "./KeyfleetClassicPrices.sol";
 ///      Every price here is in atomic USDC, millionths of one USDC, and is what a fleet charges. Every
 ///      price is scaled from the fleet's starting price, the price of its first key: the Fibonacci and
 ///      Accelerant ladders start from it, and the Classic table is multiplied by it over
-///      `CLASSIC_START_USDC`. The four founding fleets start at `Q_USDC`, which gives exactly the
+///      `CLASSIC_START_USDC`. The four sold founding fleets start at `Q_USDC`, which gives exactly the
 ///      prices the fleets were designed with. An Accelerant fleet also has its own step, the whole
 ///      percent each primary mint costs more than the one before, from 1% to 5%; the founding
-///      Accelerant fleet's is 5%.
+///      Accelerant fleet's is 5%. The Regents Club fleet is never sold: its keys are given, one per
+///      Regents Club Pass, so it has a supply and no price.
 library KeyfleetPresets {
-    /// @notice The four fleet presets.
+    /// @notice The fleet presets. `RegentsClub` is the fifth founding fleet's alone.
     enum Preset {
         FibonacciSyndicate,
         FibonacciCascade,
         FleetTechClassic,
-        FleetTechAccelerant
+        FleetTechAccelerant,
+        RegentsClub
     }
 
     /// @notice How a single gross purchase amount is divided. The four parts always sum to gross.
@@ -69,6 +71,8 @@ library KeyfleetPresets {
 
     /// @notice Fleet.Tech Classic key supply.
     uint256 internal constant CLASSIC_SUPPLY = 1024;
+    /// @notice Regents Club key supply: one key for each of the 1,998 Regents Club Passes.
+    uint256 internal constant CLUB_SUPPLY = 1998;
     /// @notice One US cent in atomic USDC. Every Classic price is a whole number of cents.
     uint256 internal constant CENT_USDC = 10_000;
 

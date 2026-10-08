@@ -203,23 +203,25 @@ contract DeployKeyfleetsTest is KeyfleetScriptFixture {
         );
     }
 
-    /// @dev Both committed manifests carry the four founding fleets in founding order with the
-    /// NFTs lane's deck fingerprints, 1,000 cards each, and profiles the managers accept.
+    /// @dev Both committed manifests carry the five founding fleets in founding order with the
+    /// NFTs lane's deck fingerprints, 1,000 cards each and 1,998 for the Regents Club, and
+    /// profiles the managers accept.
     function test_committedManifestsCarryTheFoundingDecks() public view {
-        bytes32[4] memory decks = [
+        bytes32[5] memory decks = [
             bytes32(0xe9b1900adb56811096d08f67852af8a64ec509ed2982e94f14f172f687b577e7),
             0x1298cf785709867c5397762ba4dfa3d4a1c1394db0cd26444285c48cc6e57706,
             0xbac8510a15a85770ff5cb64b4f0fef57244235ee79327ce3e3e375ce629b6d4d,
-            0x2942590c4d3873db390aef50e4648137fdb93729a370105a1aa9a62e43222b66
+            0x2942590c4d3873db390aef50e4648137fdb93729a370105a1aa9a62e43222b66,
+            0xae0f753ba8230305e046ff8811b49f86c6024bbbbaa5e40d659d5e5d2698a67b
         ];
         string[2] memory names = ["base", "anvil"];
         for (uint256 file = 0; file < 2; ++file) {
             KeyfleetManifest.Manifest memory manifest = deployScript.readManifest(names[file]);
-            for (uint256 index = 0; index < 4; ++index) {
+            for (uint256 index = 0; index < 5; ++index) {
                 KeyfleetManifest.FoundingFleet memory fleet = manifest.founding[index];
                 assertTrue(fleet.preset == keys.foundingPreset(index + 1), "Founding order");
                 assertEq(fleet.deckHash, decks[index], "Deck fingerprint");
-                assertEq(fleet.deckSize, 1000, "Deck size");
+                assertEq(fleet.deckSize, index == 4 ? 1998 : 1000, "Deck size");
                 assertGt(bytes(fleet.profile.name).length, 0, "Named");
             }
         }
@@ -230,6 +232,8 @@ contract DeployKeyfleetsTest is KeyfleetScriptFixture {
     function test_manifestIsReadFieldByFieldWhateverItsKeyOrder() public view {
         string memory founding = string.concat(
             "{\"foundingFleets\":{",
+            _founding("regentsClub", 5),
+            ",",
             _founding("cascade", 4),
             ",",
             _founding("accelerant", 3),
@@ -269,7 +273,9 @@ contract DeployKeyfleetsTest is KeyfleetScriptFixture {
             "\"coordinator\":\"",
             vm.toString(address(0x17)),
             "\"},\"collection\":{\"contractURI\":\"c\",\"baseTokenURI\":\"b\",\"symbol\":\"S\",\"name\":\"N\"},",
-            "\"autolaunchFactory\":\"",
+            "\"regentsClubPass\":\"",
+            vm.toString(address(0x12)),
+            "\",\"autolaunchFactory\":\"",
             vm.toString(address(0x16)),
             "\",\"regentStaking\":\"",
             vm.toString(address(0x15)),
@@ -287,6 +293,7 @@ contract DeployKeyfleetsTest is KeyfleetScriptFixture {
         assertEq(manifest.bindings.keeper, address(0x14), "Keeper");
         assertEq(address(manifest.bindings.staking), address(0x15), "Staking");
         assertEq(address(manifest.bindings.autolaunch), address(0x16), "Autolaunch");
+        assertEq(address(manifest.bindings.clubPass), address(0x12), "Regents Club Pass");
         assertEq(manifest.bindings.collection.name, "N", "Name");
         assertEq(manifest.bindings.collection.symbol, "S", "Symbol");
         assertEq(manifest.bindings.collection.baseTokenURI, "b", "Base");
@@ -306,7 +313,7 @@ contract DeployKeyfleetsTest is KeyfleetScriptFixture {
         assertEq(route.v4Pool.fee, 3000, "Fee");
         assertEq(route.v4Pool.tickSpacing, -60, "Tick spacing");
         assertEq(route.v4Pool.hooks, address(0x55), "Hooks");
-        for (uint256 index = 0; index < 4; ++index) {
+        for (uint256 index = 0; index < 5; ++index) {
             KeyfleetManifest.FoundingFleet memory fleet = manifest.founding[index];
             assertTrue(fleet.preset == keys.foundingPreset(index + 1), "Read in founding order");
             assertEq(fleet.deckHash, bytes32(index + 1), "Its own deck");
@@ -319,8 +326,8 @@ contract DeployKeyfleetsTest is KeyfleetScriptFixture {
 
     /// @dev The manifest's founding order is the collection's.
     function test_manifestFoundingOrderIsTheCollections() public view {
-        KeyfleetPresets.Preset[4] memory presets = deployScript.foundingPresets();
-        for (uint256 index = 0; index < 4; ++index) {
+        KeyfleetPresets.Preset[5] memory presets = deployScript.foundingPresets();
+        for (uint256 index = 0; index < 5; ++index) {
             assertTrue(presets[index] == keys.foundingPreset(index + 1), "Same order");
         }
     }

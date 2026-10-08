@@ -9,6 +9,7 @@ import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {KeyfleetFactory} from "../../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../../src/KeyfleetManager.sol";
+import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
 import {KeyfleetRegentBuyer} from "../../src/KeyfleetRegentBuyer.sol";
 import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
@@ -212,14 +213,15 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
         assertEq(usdc.decimals(), 6, "USDC has 6 decimals");
         assertEq(regent.decimals(), 18, "REGENT has 18 decimals");
         assertEq(IERC20Metadata(script.BASE_WETH()).decimals(), 18, "WETH has 18 decimals");
-        address[7] memory pinned = [
+        address[8] memory pinned = [
             script.BASE_REGENT_REVENUE_STAKING(),
             script.BASE_REGENTS_SAFE(),
             script.BASE_AUTOLAUNCH_FACTORY(),
             script.BASE_VRF_COORDINATOR(),
             script.BASE_USDC_WETH_POOL(),
             script.BASE_POOL_MANAGER(),
-            script.BASE_REGENT_POOL_HOOKS()
+            script.BASE_REGENT_POOL_HOOKS(),
+            script.BASE_REGENTS_CLUB_PASS()
         ];
         for (uint256 i = 0; i < pinned.length; ++i) {
             assertGt(pinned[i].code.length, 0, "every pinned contract is deployed");
@@ -231,6 +233,7 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
         assertEq(keyHash, script.BASE_VRF_KEY_HASH_2_GWEI(), "the 2 gwei lane");
         assertEq(address(factory.REGENT_STAKING()), address(staking), "REGENT staking");
         assertEq(address(factory.AUTOLAUNCH()), script.BASE_AUTOLAUNCH_FACTORY(), "the Autolaunch factory");
+        assertEq(address(factory.CLUB_PASS()), script.BASE_REGENTS_CLUB_PASS(), "the Regents Club Pass");
         KeyfleetRegentBuyer buyer = factory.REGENT_BUYER();
         assertEq(address(buyer.V3_POOL()), script.BASE_USDC_WETH_POOL(), "the v3 pool");
         assertEq(address(buyer.POOL_MANAGER()), script.BASE_POOL_MANAGER(), "the PoolManager");
@@ -239,15 +242,18 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
         assertTrue(keys.salesOpen(1), "Classic #1 sells");
     }
 
-    /// @dev Key 1 is sold before the collection is a consumer, then the collection is added, the
-    /// request is retried, and answered; key 2 sold by a consumer is accepted straight away.
+    /// @dev A key that draws, key 2 of a fleet created in phase 3, is sold once the keeper has
+    /// recorded the fleet's deck and before the collection is a consumer. Then the collection is
+    /// added, the request is retried, and answered; key 3 sold by a consumer is accepted straight away.
     function test_theRealCoordinatorAcceptsTheRequestAndTheAnswerFits() public {
-        uint256 first = _key(classic, 1);
-        uint256 price = _fund(classic, BUYER);
+        KeyfleetManager drawing = _drawingFleet();
+        uint256 fleetId = drawing.FLEET_ID();
+        uint256 first = _key(drawing, 2);
+        uint256 price = _fund(drawing, BUYER);
         vm.expectEmit(true, false, false, false, address(keys));
         emit KeyfleetKeys.RevealRequestFailed(first);
         vm.prank(BUYER);
-        classic.purchase(BUYER, price, block.timestamp, new bytes32[](0));
+        drawing.purchase(BUYER, price, block.timestamp, new bytes32[](0));
         assertEq(keys.ownerOf(first), BUYER, "a collection not yet on the subscription still sells");
         assertEq(keys.revealRequestedAt(first), 0, "and its key waits for a request");
 
@@ -265,10 +271,10 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
         );
         assertEq(keys.revealRequestedAt(first), block.timestamp, "and the collection records it");
 
-        price = _fund(classic, BUYER);
+        price = _fund(drawing, BUYER);
         vm.recordLogs();
         vm.prank(BUYER);
-        uint256 second = classic.purchase(BUYER, price, block.timestamp, new bytes32[](0));
+        uint256 second = drawing.purchase(BUYER, price, block.timestamp, new bytes32[](0));
         assertTrue(
             IVRFRequestCommitments(address(coordinator)).s_requestCommitments(_requestedId(second)) != bytes32(0),
             "a purchase by a consumer is accepted too"
@@ -281,11 +287,36 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
         vm.cool(address(keys));
         vm.prank(address(coordinator));
         vm.expectEmit(true, true, true, true, address(keys));
-        emit KeyfleetKeys.KeyRevealed(first, 1, 1, requestId, seed);
+        emit KeyfleetKeys.KeyRevealed(first, fleetId, 2, requestId, seed);
         uint256 before = gasleft();
         keys.rawFulfillRandomWords{gas: callbackGas}(requestId, words);
         console2.log("reveal callback gas on the fork, cold:", before - gasleft());
         assertEq(keys.revealSeed(first), seed, "the seed");
+    }
+
+    /// @dev Founds the other founding fleets, opens phases 2 and 3, and creates a Classic fleet at
+    /// 10 USDC, whose key 1 the creator buys before it has a deck; then the keeper records its deck.
+    function _drawingFleet() private returns (KeyfleetManager fleet) {
+        _found(keys.FOUNDING_FLEETS() - 1);
+        _advancePhase();
+        _advancePhase();
+        uint256 startPrice = KeyfleetPresets.MIN_START_USDC;
+        KeyfleetFactory.FleetTerms memory terms = KeyfleetFactory.FleetTerms({
+            preset: KeyfleetPresets.Preset.FleetTechClassic,
+            startPrice: startPrice,
+            accelerantStepPercent: 0,
+            profile: KeyfleetManager.Profile("A creator's fleet", "", ""),
+            requirements: KeyfleetManager.Requirements(bytes32(0), address(0), address(0), 0),
+            deadline: block.timestamp
+        });
+        deal(address(usdc), BUYER, startPrice);
+        vm.prank(BUYER);
+        usdc.approve(address(factory), startPrice);
+        vm.prank(BUYER);
+        (uint256 fleetId,) = factory.createFleet(terms);
+        vm.prank(KEEPER);
+        keys.setDeck(fleetId, keccak256("a creator's deck"), 1000);
+        fleet = _fleet(fleetId);
     }
 
     /// @dev The real staking contract takes the deposit through `depositUSDC`, tagged and naming the

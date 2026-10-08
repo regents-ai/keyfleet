@@ -9,13 +9,11 @@ import {KeyfleetKeys} from "../../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../../src/KeyfleetManager.sol";
 import {BaseForkLab} from "../../script/BaseForkLab.s.sol";
 import {KeyfleetManifest} from "../../script/KeyfleetManifest.sol";
-import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
-import {MockVRFCoordinatorV2Plus} from "../mocks/MockVRFCoordinatorV2Plus.sol";
 import {FULL_PIECE} from "../helpers/KeyfleetFixture.sol";
 
 /// @dev The Base-fork lab as the site uses it: on a fork of Base run as chain 31337, Classic #1
-/// sells for 10 USDC through Base's own route, its record has the release's shape, and a key's draw
-/// is answered by the stand-in coordinator. The fork test runs only when `BASE_RPC_URL` is set and
+/// sells for 10 USDC through Base's own route, its record has the release's shape, and a key within
+/// its deck holds its card by number with no draw. The fork test runs only when `BASE_RPC_URL` is set and
 /// skips itself otherwise; everything runs in the local EVM only.
 contract BaseForkLabTest is Test {
     address private constant KEEPER = address(0x4EE9E4);
@@ -29,8 +27,8 @@ contract BaseForkLabTest is Test {
     }
 
     /// @dev Invariant: on a fork of Base, the lab leaves Classic #1 selling in phase 1 against Base's
-    /// own USDC and route, records it in the release's shape, and a bought key's draw can be
-    /// answered.
+    /// own USDC and route, records it in the release's shape, and a bought key within the deck asks
+    /// the coordinator for nothing.
     function test_theLabSellsClassicOneOnAForkOfBase() public {
         string memory rpc = vm.envOr("BASE_RPC_URL", string(""));
         if (bytes(rpc).length == 0) {
@@ -70,26 +68,20 @@ contract BaseForkLabTest is Test {
         vm.stopPrank();
         uint256 tokenId = keys.tokenIdOf(1, 1);
         assertEq(keys.ownerOf(tokenId), buyer, "Key 1 is the buyer's");
-        uint256 requestId = _requestId(keys);
+        assertTrue(keys.dealtByNumber(tokenId), "Key 1 holds card 1");
+        _assertNoRequest(keys);
         assertEq(classic.pendingConversion(), 9e6, "Its treasury part is booked");
         classic.REGENT_BUYER().convert(FULL_PIECE);
         assertGt(IERC20(lab.BASE_REGENT()).balanceOf(address(classic.TREASURY())), 0, "REGENT in the treasury");
-
-        uint256[] memory words = new uint256[](1);
-        words[0] = 7;
-        (IVRFCoordinatorV2Plus coordinator,,) = keys.randomness();
-        MockVRFCoordinatorV2Plus(address(coordinator)).fulfill(requestId, words);
-        assertTrue(keys.revealSeed(tokenId) != bytes32(0), "Key 1 is revealed");
     }
 
-    function _requestId(KeyfleetKeys keys) private returns (uint256) {
+    function _assertNoRequest(KeyfleetKeys keys) private {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         for (uint256 index = 0; index < logs.length; ++index) {
             Vm.Log memory log = logs[index];
-            if (log.emitter == address(keys) && log.topics[0] == KeyfleetKeys.RevealRequested.selector) {
-                return uint256(log.topics[2]);
-            }
+            if (log.emitter != address(keys)) continue;
+            assertTrue(log.topics[0] != KeyfleetKeys.RevealRequested.selector, "no draw requested");
+            assertTrue(log.topics[0] != KeyfleetKeys.RevealRequestFailed.selector, "no draw attempted");
         }
-        revert("no RevealRequested from the collection");
     }
 }

@@ -2,6 +2,8 @@
 pragma solidity 0.8.26;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {KeyfleetClubClaims} from "./KeyfleetClubClaims.sol";
 import {KeyfleetKeys} from "./KeyfleetKeys.sol";
 import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 import {KeyfleetRegentBuyer} from "./KeyfleetRegentBuyer.sol";
@@ -44,6 +46,8 @@ interface IKeyfleetFactory {
     function REGENT() external view returns (IERC20);
     function REGENT_STAKING() external view returns (IRegentRevenueStaking);
     function AUTOLAUNCH() external view returns (IRegentsAutolaunchFactoryV2);
+    function CLUB_PASS() external view returns (IERC721);
+    function CLUB_CLAIMS() external view returns (KeyfleetClubClaims);
 }
 
 /// @notice A deployer of one of a fleet's four contracts, which names the factory it serves.

@@ -4,6 +4,7 @@
   "keeper": "0x0000000000000000000000000000000000000000",
   "regentStaking": "0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5",
   "autolaunchFactory": "0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E",
+  "regentsClubPass": "0x2208aaDBdEcd47D3B4430b5b75a175f6d885D487",
   "collection": {
     "name": "Keyfleet",
     "symbol": "KEYFLEET",
@@ -63,6 +64,15 @@
       "deckSize": 1000,
       "profile": {
         "name": "Cascade #1",
+        "description": "",
+        "imageLink": ""
+      }
+    },
+    "regentsClub": {
+      "deckHash": "0xae0f753ba8230305e046ff8811b49f86c6024bbbbaa5e40d659d5e5d2698a67b",
+      "deckSize": 1998,
+      "profile": {
+        "name": "Regents Club #1",
         "description": "",
         "imageLink": ""
       }
