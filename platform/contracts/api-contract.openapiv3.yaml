@@ -1258,6 +1258,7 @@ paths:
         "403": {$ref: "#/components/responses/PollNeedsKey"}
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/polls/open:
@@ -1290,7 +1291,7 @@ paths:
         "422":
           description: >-
             out_of_range: minutes is outside 5 to 1440. invalid_poll: the name is empty, longer
-            than 80 characters or holds a character a name may not hold.
+            than 80 characters or holds a character a name may not hold. invalid_request: the body doesn't fit the operation; the hint names the fields it takes.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/PollInvalidError"}
@@ -1324,6 +1325,7 @@ paths:
         "404": {$ref: "#/components/responses/PollNotFound"}
         "409": {$ref: "#/components/responses/PollEnded"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/polls/{session_id}/leave:
@@ -1353,6 +1355,7 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/PollConflictError"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/polls/{session_id}/end:
@@ -1377,6 +1380,7 @@ paths:
         "404": {$ref: "#/components/responses/PollNotFound"}
         "409": {$ref: "#/components/responses/PollEnded"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/polls/{session_id}/wait:
@@ -1408,7 +1412,7 @@ paths:
         "403": {$ref: "#/components/responses/PollNotSeated"}
         "404": {$ref: "#/components/responses/PollNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentOutOfRange"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/polls/{session_id}/rounds/open:
@@ -1452,7 +1456,7 @@ paths:
             out_of_range: deadline_seconds is outside 1 to 600. invalid_poll: decision_ref is empty
             or longer than 128 characters, the observation is more than 8192 bytes of JSON, there
             are fewer than 2 or more than 32 moves, two moves share an id, or a move's id or label
-            is empty or too long.
+            is empty or too long. invalid_request: the body doesn't fit the operation; the hint names the fields it takes.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/PollInvalidError"}
@@ -1514,7 +1518,7 @@ paths:
         "422":
           description: >-
             out_of_range: confidence is outside 0 to 1. action_unknown: the round offers no move
-            with this id. invalid_poll: the reason is empty or longer than 500 characters.
+            with this id. invalid_poll: the reason is empty or longer than 500 characters. invalid_request: the body doesn't fit the operation; the hint names the fields it takes.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/PollInvalidError"}
@@ -4169,6 +4173,6 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [out_of_range, invalid_poll, action_unknown]}
+            code: {type: string, enum: [out_of_range, invalid_poll, action_unknown, invalid_request]}
             message: {type: string}
             hint: {type: string}
