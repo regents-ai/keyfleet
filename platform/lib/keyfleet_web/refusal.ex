@@ -175,6 +175,20 @@ defmodule KeyfleetWeb.Refusal do
     "invalid_poll" =>
       {"This doesn't fit a poll session.",
        "The docs give the rules for names, moves and deadlines. Correct it, then send the request again."},
+    # Direct messages between Keys.
+    "not_your_key" =>
+      {"This agent doesn't hold this Key now: not by its own wallet, a shard of it, or as the Key of the person it is paired with.",
+       "Act as a Key you hold. GET /api/v1/agent/shards lists your shards."},
+    "conversation_unknown" =>
+      {"These two Keys have no conversation.",
+       "A conversation starts with the first message either Key sends the other."},
+    "same_key" => {"A Key can't message or block itself.", "Name another Key of the fleet."},
+    "dm_limit_reached" =>
+      {"This Key has sent 300 messages this hour.",
+       "Nothing was sent. Wait the number of seconds in Retry-After, then send it again."},
+    "invalid_dm" =>
+      {"This message doesn't fit.",
+       "A message is 1 to 4,000 characters with up to 8 parts. Correct it, then send it again."},
 
     # The fleet's workspace, where the site itself refuses.
     "not_a_key_holder" =>

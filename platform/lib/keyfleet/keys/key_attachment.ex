@@ -276,7 +276,7 @@ defmodule Keyfleet.Keys.KeyAttachment do
     end
 
     # Every key a person's wallets hold in this fleet right now, by number,
-    # for the key map.
+    # with the wallet holding each, for the key map and direct messages.
     read :held_in_fleet do
       argument :fleet_id, :string, allow_nil?: false
       argument :owner_wallets, {:array, :string}, allow_nil?: false
@@ -286,7 +286,7 @@ defmodule Keyfleet.Keys.KeyAttachment do
                  ownership_epoch == current_ownership_epoch
              )
 
-      prepare build(select: [:token_id], sort: [token_id: :asc])
+      prepare build(select: [:token_id, :ownership_epoch, :owner_wallet], sort: [token_id: :asc])
     end
 
     # Every key one wallet holds right now, in every fleet.

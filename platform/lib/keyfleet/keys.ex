@@ -183,6 +183,60 @@ defmodule Keyfleet.Keys do
 
   defp for_person(_missing, _fleet_id), do: nil
 
+  @doc """
+  Every key `actor` may act as in a fleet today, lowest first, each as
+  `%{token_id: token_id, ownership_epoch: epoch, wallet: wallet, for_person: boolean}`,
+  the epoch being the key's current one, by the same rule
+  as `identity/2`: a person is every key their wallets hold, with the wallet
+  holding it; an agent is every key its wallet holds and every key it holds an
+  active shard of, with its own wallet; an agent with neither, paired with a
+  person here and backed by World ID, is that person's keys, `for_person: true`.
+  Nobody else is any key. Direct messages read and send as these keys
+  (`Keyfleet.Dms`), so a key changing hands moves its inbox with it.
+  """
+  def held_keys(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
+    for key <- keys_held_in_fleet!(fleet_id, wallets, actor: actor),
+        do: %{
+          token_id: key.token_id,
+          ownership_epoch: key.ownership_epoch,
+          wallet: key.owner_wallet,
+          for_person: false
+        }
+  end
+
+  def held_keys(%Agent{wallet_address: wallet} = actor, fleet_id) do
+    if Agent.valid?(actor) do
+      held = keys_held_in_fleet!(fleet_id, [wallet], actor: actor)
+
+      sharded =
+        for shard <- active_shards_held_by!(wallet, actor: actor),
+            shard.fleet_id == fleet_id,
+            do: shard
+
+      case Enum.uniq_by(Enum.sort_by(held ++ sharded, & &1.token_id), & &1.token_id) do
+        [] -> person_keys(actor.pairing, fleet_id)
+        keys -> Enum.map(keys, &agent_key(&1, wallet))
+      end
+    else
+      []
+    end
+  end
+
+  def held_keys(_actor, _fleet_id), do: []
+
+  defp agent_key(key, wallet),
+    do: %{
+      token_id: key.token_id,
+      ownership_epoch: key.ownership_epoch,
+      wallet: wallet,
+      for_person: false
+    }
+
+  defp person_keys(%Human{} = person, fleet_id),
+    do: Enum.map(held_keys(person, fleet_id), &%{&1 | for_person: true})
+
+  defp person_keys(_missing, _fleet_id), do: []
+
   defp held_or_shard(fleet_id, wallet, actor),
     do:
       held_identity_key!(fleet_id, [wallet], actor: actor) ||
