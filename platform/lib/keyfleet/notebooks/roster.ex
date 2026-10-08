@@ -6,8 +6,9 @@ defmodule Keyfleet.Notebooks.Roster do
   provisioner the hub's first user, then it makes the project the fleet's key
   holders work in and records it (`Keyfleet.Notebooks.Hub`).
 
-  Then everyone who holds one of the fleet's keys, or an agent with an active
-  shard of one, is an editor of that project; anyone else this site added
+  Then everyone who holds one of the fleet's keys, an agent with an active
+  shard of one, or an agent paired with a person who holds one, is an editor
+  of that project; anyone else this site added
   loses their place, their open notebook connections close, and they are
   suspended in that hub, so nothing they hold there still lets them in. Someone
   who holds a key again is let back in.
@@ -83,7 +84,10 @@ defmodule Keyfleet.Notebooks.Roster do
     end
   end
 
-  # The subjects who hold one of the fleet's keys, or an active shard of one, now.
+  # The subjects who hold one of the fleet's keys, or an active shard of one,
+  # now, and the agents paired with a person who holds one. An agent's pairing
+  # is read as each request reads it, from the person the profile last named;
+  # the gateway's own check on every request is still what lets it in.
   defp holders(fleet_id) do
     wallets =
       Keyfleet.Keys.KeyAttachment
@@ -104,12 +108,13 @@ defmodule Keyfleet.Notebooks.Roster do
       |> Keyfleet.Agents.agents_here_in!(actor: %System{})
       |> Enum.map(fn profile ->
         {Notebooks.agent_subject(profile.id),
-         %Agent{
+         Keyfleet.Agents.with_pairing(%Agent{
            wallet_address: profile.wallet_address,
            chain_id: 8453,
            verification_method: :eoa_recovery,
-           audience: "keyfleet"
-         }}
+           audience: "keyfleet",
+           human_id: profile.human_id
+         })}
       end)
 
     Enum.reduce_while(people ++ agents, {:ok, MapSet.new()}, fn {subject, actor},

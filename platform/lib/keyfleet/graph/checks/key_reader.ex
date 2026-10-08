@@ -1,8 +1,9 @@
 defmodule Keyfleet.Graph.Checks.KeyReader do
   @moduledoc """
   Who may read a fleet's workspace: the person or agent whose wallet owns one
-  of the fleet's keys today, or an agent holding an active shard of one, while
-  the fleet's key ownership is fresh. A read names no key; standing is read
+  of the fleet's keys today, an agent holding an active shard of one, or an
+  agent holding neither paired with a person who owns one, while the fleet's
+  key ownership is fresh. A read names no key; standing is read
   every time, as `Keyfleet.Graph.Checks.KeyActor.member/3` reads it, so a key
   changing hands moves the right to read with it, and an ownership that is
   stale or being read again grants nothing.
@@ -19,8 +20,8 @@ defmodule Keyfleet.Graph.Checks.KeyReader do
   @impl true
   def describe(_opts),
     do:
-      "actor owns one of the fleet's keys today or holds a shard of one, " <>
-        "while the fleet's ownership is fresh"
+      "actor owns one of the fleet's keys today, holds a shard of one or is an agent " <>
+        "paired with a person who owns one, while the fleet's ownership is fresh"
 
   @impl true
   def match?(actor, %{subject: subject}, _opts) do
