@@ -12,7 +12,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{ChainHelpers, Fleets, Keys, Notebooks}
   alias Keyfleet.Notebooks.Roster
-  alias KeyfleetWeb.{NotebookSocket, SessionAuthorityHelpers}
+  alias KeyfleetWeb.{NotebookSocket, SessionAuthorityHelpers, SignedAgentHelpers}
 
   @endpoint KeyfleetWeb.Endpoint
   @fleet "fibonacci_syndicate"
@@ -334,6 +334,74 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert DateTime.compare(DateTime.truncate(booked, :second), ends_at) == :eq
   end
 
+  # Costly failure: a header the signature does not cover changes who an agent
+  # is in a fleet's notebooks, or reaches the hub.
+  test "an unsigned header such as x-agent-role: admin is accepted and grants nothing" do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_broker!(self(), secret)
+    epoch!(2, 1, String.downcase(signer.address))
+
+    [plain, extra] =
+      for extra <- [%{}, %{"x-agent-role" => "admin"}] do
+        request = SignedAgentHelpers.sign(signer, secret, "GET", "/", "")
+
+        %{build_conn() | host: @host, remote_ip: {198, 51, 100, 130}}
+        |> then(
+          &Enum.reduce(Map.merge(request.headers, extra), &1, fn {name, value}, conn ->
+            put_req_header(conn, name, value)
+          end)
+        )
+        |> dispatch(@endpoint, :get, "/", "")
+      end
+
+    assert {extra.status, extra.resp_body} == {plain.status, plain.resp_body}
+
+    for _sent <- 1..2 do
+      assert_receive {:broker_payload, %{"headers" => forwarded}}
+      assert Enum.sort(Map.keys(forwarded)) == Enum.sort(Siwa.Contract.forwarded_headers())
+    end
+  end
+
+  # Costly failure: a Key-holding agent's signed request is checked against
+  # the agent API's own bodies and refused, so agents can't use notebooks.
+  test "a Key-holding agent's signed requests reach the hub as that agent, body as sent" do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_broker!(self(), secret)
+    wallet = String.downcase(signer.address)
+    epoch!(2, 1, wallet)
+
+    profile =
+      Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+        actor: %Keyfleet.Actors.Agent{
+          wallet_address: wallet,
+          chain_id: 8453,
+          verification_method: :eoa_recovery,
+          audience: "keyfleet"
+        }
+      )
+
+    subject = Notebooks.agent_subject(profile.id)
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    created = ~s({"name":"orbit.py"})
+
+    for {method, path, body, status} <- [{"GET", "/", "", 200}, {"POST", notebooks, created, 201}] do
+      request = SignedAgentHelpers.sign(signer, secret, method, path, body)
+
+      conn =
+        Enum.reduce(
+          request.headers,
+          %{build_conn() | host: @host, remote_ip: {198, 51, 100, 131}},
+          fn {name, value}, conn -> put_req_header(conn, name, value) end
+        )
+        |> dispatch(@endpoint, method, path, body)
+
+      assert conn.status == status
+      assert_receive {:hub, ^method, ^path, ^subject, ^body}
+    end
+  end
+
   ## The fleet and its people
 
   defp account!(privy_did, wallet) do
@@ -388,7 +456,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   # spent first in the same window.
   defp signed_post(body) do
     %{build_conn() | host: @host, remote_ip: {198, 51, 100, 129}}
-    |> put_req_header("signature-input", "sig1=()")
+    |> put_req_header(Siwa.Contract.signature_input_header(), "sig1=()")
     |> put_req_header("content-type", "application/json")
     |> dispatch(@endpoint, :post, "/api/v1/projects/proj-fleet/notebooks", body)
   end

@@ -143,7 +143,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     "erc1271" => :erc1271,
     "erc6492" => :erc6492
   }
-  @proof_headers ~w(signature signature-input content-digest x-siwa-receipt x-key-id x-timestamp x-agent-wallet-address x-agent-chain-id)
 
   @impl Plug
   def init(opts), do: opts
@@ -161,109 +160,111 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
          [type] <- get_req_header(conn, "content-type"),
          {:ok, "application", "json", _} <- Plug.Conn.Utils.media_type(type),
          %Plug.Conn.Unfetched{} <- conn.body_params do
-      cap = body_limit(conn.request_path)
-
-      case read_body(conn, length: cap, read_length: cap + 1) do
-        {:ok, raw, conn} when byte_size(raw) <= cap -> verify(assign(conn, :raw_body, raw))
+      case read_signed(conn) do
+        {:ok, _raw, conn} -> verify(conn)
         {:error, _reason} -> deny(conn, %{reason: :invalid_request})
-        {_read, _raw, conn} -> answer(conn, 413, "request_too_large")
+        {:more, _raw, conn} -> answer(conn, 413, "request_too_large")
+        :too_large -> answer(conn, 413, "request_too_large")
       end
     else
       _ -> deny(conn, %{reason: :invalid_request})
     end
   end
 
+  # The shared reader keeps the exact bytes the signature covers, and no more
+  # than the operation takes.
+  defp read_signed(conn) do
+    Siwa.AgentAuthPlug.read_body(conn, [], body_limit(conn.request_path))
+  rescue
+    Plug.Parsers.RequestTooLargeError -> :too_large
+  end
+
   # The raw body is signed, through its content digest, and checked against
-  # it before anything is read from it; `accept/3` then reads it.
+  # it before anything is read from it; `accept/3` then reads it. The shared
+  # plug forwards only the signed headers, so any other header changes nothing.
   defp verify(conn) do
     Siwa.AgentAuthPlug.call(conn,
       client: Keyfleet.SiwaBroker,
       hooks: __MODULE__,
       audience: "keyfleet",
-      signed_path: :path_only,
       body: :always
     )
   end
 
   @impl Siwa.AgentAuthPlug.Hooks
   def before_verify(conn, _headers) do
-    if supported_request?(conn) and proof_carried?(conn),
+    if supported_request?(conn),
       do: {:ok, nil},
       else: {:error, %{reason: :invalid_request}}
   end
 
-  @doc """
-  Whether a request carries its raw body and each proof header exactly once,
-  and no other `x-agent-` or `x-siwa-` header.
-  """
-  def proof_carried?(conn) do
-    names = Enum.map(conn.req_headers, fn {name, _} -> String.downcase(name) end)
+  @impl Siwa.AgentAuthPlug.Hooks
+  def accept(conn, data, _context) do
+    with {:ok, actor} <- actor(conn, data),
+         {:ok, conn} <- take_body(conn),
+         do: admit(conn, actor)
+  end
 
-    is_binary(conn.assigns[:raw_body]) and
-      Enum.all?(@proof_headers, &(Enum.count(names, fn name -> name == &1 end) == 1)) and
-      not Enum.any?(names, fn name ->
-        (String.starts_with?(name, "x-agent-") or String.starts_with?(name, "x-siwa-")) and
-          name not in @proof_headers
-      end)
+  @doc """
+  Admits the agent a verified answer names without reading the request's
+  body. The notebook gateway carries that body to the fleet's hub as it
+  came, and the hub checks it.
+  """
+  def accept_agent(conn, data) do
+    with {:ok, actor} <- actor(conn, data), do: admit(conn, actor)
   end
 
   # The fields Keyfleet acts on; anything else the sign-in server says is
   # its own. The agent's page in the agent registry and the World ID person
   # behind it, each null when there is none, ride on the actor, and the
   # agent's profile saves them.
-  @impl Siwa.AgentAuthPlug.Hooks
-  def accept(
-        conn,
-        %{
-          "verified" => true,
-          "walletAddress" => wallet,
-          "chainId" => chain_id,
-          "verificationMethod" => method,
-          "keyId" => wallet,
-          "receiptExpiresAt" => expires,
-          "requiredHeaders" => required_headers,
-          "requiredCoveredComponents" => required_components,
-          "coveredComponents" => covered_components,
-          "agentRegistration" => registration,
-          "agentBook" => book,
-          "principal" => %{
-            "kind" => "wallet",
-            "wallet_address" => wallet,
-            "chain_id" => chain_id,
-            "audience" => "keyfleet"
-          }
-        },
-        _context
-      )
-      when is_binary(expires) and is_map_key(@verification_methods, method) and
-             is_list(required_headers) and is_list(required_components) and
-             is_list(covered_components) do
-    with {:ok, conn} <- take_body(conn),
-         {:ok, registry_url} <- registry_url(registration),
+  defp actor(
+         conn,
+         %{
+           "verified" => true,
+           "walletAddress" => wallet,
+           "chainId" => chain_id,
+           "verificationMethod" => method,
+           "keyId" => wallet,
+           "receiptExpiresAt" => expires,
+           "requiredHeaders" => required_headers,
+           "requiredCoveredComponents" => required_components,
+           "coveredComponents" => covered_components,
+           "agentRegistration" => registration,
+           "agentBook" => book,
+           "principal" => %{
+             "kind" => "wallet",
+             "wallet_address" => wallet,
+             "chain_id" => chain_id,
+             "audience" => "keyfleet"
+           }
+         }
+       )
+       when is_binary(expires) and is_map_key(@verification_methods, method) and
+              is_list(required_headers) and is_list(required_components) and
+              is_list(covered_components) do
+    with {:ok, registry_url} <- registry_url(registration),
          {:ok, backing} <- HumanBacking.read(book),
          {:ok, receipt_expires_at, _offset} <- DateTime.from_iso8601(expires) do
-      actor =
-        struct!(
-          Agent,
-          Map.merge(backing, %{
-            wallet_address: wallet,
-            chain_id: chain_id,
-            verification_method: Map.fetch!(@verification_methods, method),
-            audience: "keyfleet",
-            credential_ref: credential_ref(conn),
-            receipt_expires_at: receipt_expires_at,
-            registry_url: registry_url
-          })
-        )
-
-      admit(conn, actor)
+      {:ok,
+       struct!(
+         Agent,
+         Map.merge(backing, %{
+           wallet_address: wallet,
+           chain_id: chain_id,
+           verification_method: Map.fetch!(@verification_methods, method),
+           audience: "keyfleet",
+           credential_ref: credential_ref(conn),
+           receipt_expires_at: receipt_expires_at,
+           registry_url: registry_url
+         })
+       )}
     else
-      {:error, %{reason: _reason}} = refused -> refused
       _unreadable -> invalid_principal()
     end
   end
 
-  def accept(_conn, _data, _context), do: invalid_principal()
+  defp actor(_conn, _data), do: invalid_principal()
 
   # Only a request whose signature verified is told what is wrong with its
   # body, and nothing it asks for is acted on until the body fits.
@@ -305,10 +306,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp smart_wallet_on_ethereum?(_actor), do: false
 
-  # The receipt and key id each appear exactly once; `before_verify` saw to it.
+  # The receipt and key id each appear exactly once: the shared plug refuses a
+  # repeat and the sign-in server a request missing either.
   defp credential_ref(conn) do
-    [receipt] = get_req_header(conn, "x-siwa-receipt")
-    [key_id] = get_req_header(conn, "x-key-id")
+    [receipt] = get_req_header(conn, Siwa.Contract.header_for("receipt"))
+    [key_id] = get_req_header(conn, Siwa.Contract.header_for("key_id"))
     "sha256:" <> Base.encode16(:crypto.hash(:sha256, [receipt, "\n", key_id]), case: :lower)
   end
 
@@ -323,16 +325,25 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     send_refusal(conn, 422, body)
   end
 
-  def deny(conn, metadata) do
-    unavailable? =
-      metadata[:reason] in [:broker_unavailable, :siwa_request_failed] or
-        metadata[:siwa_status] in 500..599
+  # The shared plug's own refusals keep its reason as the code, as on every site.
+  def deny(conn, %{source: :siwa_plug, reason: reason}),
+    do: answer(conn, 401, Atom.to_string(reason))
 
-    status = if unavailable?, do: 503, else: 401
-    code = if status == 503, do: "authentication_unavailable", else: "unauthorized"
+  def deny(conn, %{reason: :siwa_request_failed}), do: answer(conn, 503, "siwa_request_failed")
 
-    answer(conn, status, code)
+  # The sign-in service answered with a refusal or a failure: its status and its
+  # own words, as on every site.
+  def deny(conn, %{siwa_status: status} = failure) when status in 400..599 do
+    send_refusal(conn, status, %{
+      error: %{
+        code: failure[:siwa_code] || "sign_in_refused",
+        message: failure[:siwa_message] || "The request's wallet signature was not accepted.",
+        hint: failure[:siwa_hint] || "Sign the request again with your agent key, then send it."
+      }
+    })
   end
+
+  def deny(conn, _metadata), do: answer(conn, 401, "unauthorized")
 
   defp answer(conn, status, code), do: send_refusal(conn, status, KeyfleetWeb.Refusal.body(code))
 
@@ -344,16 +355,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     |> halt()
   end
 
-  def proof_headers, do: @proof_headers
-
   # Every admitted request carries a signed JSON body, including the ones whose
   # whole instruction is their method and path; those send an empty object. What
   # a request asks for is always in that body, never in the address, so the
-  # signature covers all of it.
-  defp supported_request?(%{query_string: ""} = conn),
-    do: supported?(conn.method, conn.request_path)
-
-  defp supported_request?(_conn), do: false
+  # signature covers all of it; the shared plug refuses a query string.
+  defp supported_request?(conn), do: supported?(conn.method, conn.request_path)
 
   defp supported?("POST", @join_path), do: true
   defp supported?("POST", @update_path), do: true

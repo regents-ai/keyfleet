@@ -195,13 +195,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   ## Who sent it
 
   defp identify(conn, fleet_id) do
-    if signed?(conn), do: identify_agent(conn), else: identify_person(conn, fleet_id)
+    if Siwa.AgentAuthPlug.signed_request?(conn),
+      do: identify_agent(conn),
+      else: identify_person(conn, fleet_id)
   end
-
-  defp signed?(conn),
-    do:
-      get_req_header(conn, "signature-input") != [] or
-        get_req_header(conn, "x-siwa-receipt") != []
 
   # A signed request spends the sender's address's API budget before anything
   # of it is read, and only as much body is read as a signature can cover.
@@ -211,14 +208,14 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   defp read_signed(conn) do
-    case read_body(conn, length: @signed_max_body, read_length: @signed_max_body) do
-      {:ok, raw, conn} ->
+    case read_body_signed(conn) do
+      {:ok, _raw, conn} ->
         conn =
-          Siwa.AgentAuthPlug.call(assign(conn, :raw_body, raw),
+          Siwa.AgentAuthPlug.call(conn,
             client: Keyfleet.SiwaBroker,
             hooks: __MODULE__,
             audience: "keyfleet",
-            signed_path: :path_and_query,
+            query: :signed,
             body: :always
           )
 
@@ -227,9 +224,18 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       {:more, _partial, conn} ->
         {:refused, Refusal.json(conn, 413, "request_too_large")}
 
+      :too_large ->
+        {:refused, Refusal.json(conn, 413, "request_too_large")}
+
       {:error, _reason} ->
         {:refused, Refusal.json(conn, 400, "invalid_request")}
     end
+  end
+
+  defp read_body_signed(conn) do
+    Siwa.AgentAuthPlug.read_body(conn, [], @signed_max_body)
+  rescue
+    Plug.Parsers.RequestTooLargeError -> :too_large
   end
 
   defp agent_subject(%Plug.Conn{halted: true} = conn), do: {:refused, conn}
@@ -272,15 +278,14 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
+  # The shared plug has already refused a repeated signed header and a body it
+  # did not capture whole; nothing else is checked before the sign-in server.
   @impl Siwa.AgentAuthPlug.Hooks
-  def before_verify(conn, _headers) do
-    if SignedAgent.proof_carried?(conn),
-      do: {:ok, nil},
-      else: {:error, %{reason: :invalid_request}}
-  end
+  def before_verify(_conn, _headers), do: {:ok, nil}
 
+  # The body goes to the hub as it came; only who sent it is checked here.
   @impl Siwa.AgentAuthPlug.Hooks
-  defdelegate accept(conn, data, context), to: SignedAgent
+  def accept(conn, data, _context), do: SignedAgent.accept_agent(conn, data)
 
   @impl Siwa.AgentAuthPlug.Hooks
   defdelegate deny(conn, metadata), to: SignedAgent

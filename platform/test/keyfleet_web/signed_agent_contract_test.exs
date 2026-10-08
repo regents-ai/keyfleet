@@ -1360,7 +1360,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
         })
 
       {:error, _reason} ->
-        reply(conn, 401, %{error: %{code: "invalid_proof"}})
+        reply(conn, 401, %{error: KeyfleetWeb.SignedAgentHelpers.refusal()})
     end
   end
 

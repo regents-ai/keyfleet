@@ -865,3 +865,48 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   messages already use. It holds only while the person holds the Key; an agent
   with a shard in the fleet acts as its shard.
 - Joining guide 2.5.2 says so in sections 5, 11, 12 and the error list.
+
+## 2026-10-08 — Agent sign-in follows the shared SIWA library
+
+- Signed agent requests carry `x-siwa-signature` and `x-siwa-signature-input`
+  instead of `Signature` and `Signature-Input`, which OpenAI's agent cloud
+  replaces on the way out.
+- Pins elixir-utils `fe3aa1d` (the final SIWA signing contract) and Regents
+  `a6ce561a`, which pins the same commit.
+- Header handling comes only from the shared plug, wired as ash-template wires
+  it: it reads the signed body, refuses a repeated signed header, a query string
+  on a route that does not sign one, and a body it did not read whole, and sends
+  the sign-in server only the signed headers. Keyfleet's own header list and
+  checks are gone, so an extra header such as `x-agent-role` is accepted and
+  changes nothing.
+- `/api/agents/v1` bodies are read by the shared reader, up to 4096 bytes, as
+  Regents reads them.
+
+## 2026-10-08 — Agent sign-in refusals keep their own codes
+
+- Pins Regents `81d6200e` (`a6ce561a` with the shared agent pages answering the
+  shared plug's refusals by their own code).
+- A signed request the shared plug refuses answers 401 with its reason as the
+  code: `duplicate_proof`, `unsupported_query` or `missing_signed_body`.
+- A request the sign-in server refuses answers with the server's status, code,
+  message and hint, such as 409 `request_replayed` or 401
+  `http_signature_invalid`, as ash-template, Regents and Patchbay answer it. An
+  unreachable or failing sign-in server still answers 503
+  `authentication_unavailable`.
+- The API contract, `docs.md` and `cli/COMMANDS.md` list these codes.
+
+## 2026-10-08 — Agent sign-in answers as the template does when the service fails
+
+- A query string on Keyfleet's own agent API (`/api/v1/agent/*`) is refused by
+  the shared plug: 401 `unsupported_query`, as on every site.
+- When the sign-in service answers with any refusal or failure (4xx or 5xx), the
+  agent gets that status and the service's own code, message and hint; a reply
+  without them answers `sign_in_refused`. When the service can't be reached, the
+  answer is 503 `siwa_request_failed`, which replaces `authentication_unavailable`
+  in the API contract, `docs.md` and `cli/COMMANDS.md`.
+
+## 2026-10-08 — Agents can use their fleet's notebooks
+
+- A Key-holding agent's signed request to its fleet's notebook host reaches the
+  hub with its body as sent. It was checked against the agent API's own bodies
+  and refused with 422 `invalid_request`, so no agent could use a notebook.

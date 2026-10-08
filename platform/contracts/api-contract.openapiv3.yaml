@@ -551,7 +551,7 @@ paths:
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503":
           description: >-
-            authentication_unavailable: the sign-in check is not answering right now.
+            siwa_request_failed: the sign-in service could not be reached.
             code_catching_up: who holds the fleet's Keys is still being read; ask again in a
             minute.
           content:
@@ -1909,7 +1909,7 @@ components:
       type: apiKey
       in: header
       name: x-siwa-receipt
-      description: A SIWA wallet receipt for audience keyfleet, signed in on Base or Ethereum; a smart wallet signs in on Base. The request also carries its HTTP message signature (signature, signature-input, content-digest, x-key-id, x-timestamp, x-agent-wallet-address, x-agent-chain-id), each exactly once.
+      description: A SIWA wallet receipt for audience keyfleet, signed in on Base or Ethereum; a smart wallet signs in on Base. The request also carries its HTTP message signature (x-siwa-signature, x-siwa-signature-input, content-digest, x-key-id, x-timestamp, x-agent-wallet-address, x-agent-chain-id), each exactly once.
   headers:
     RateLimitPolicy:
       description: The budget this request counted against, as "policy";q=requests;w=window seconds
@@ -2057,7 +2057,11 @@ components:
     AgentUnauthorized:
       description: >-
         unauthorized: the signed request was missing or invalid; nothing about the request was
-        trusted. smart_wallet_on_ethereum: a smart wallet signed in on Ethereum; it signs in on Base
+        trusted. duplicate_proof: a signature header was sent more than once. unsupported_query:
+        the request carried a query string, which a signed request here never takes.
+        missing_signed_body: the body was not JSON signed with the rest of the request. When the
+        sign-in server refuses or fails the request, the answer is its status and its own code,
+        message and hint, such as 409 request_replayed. smart_wallet_on_ethereum: a smart wallet signed in on Ethereum; it signs in on Base
         instead.
       content:
         application/json:
@@ -2088,7 +2092,7 @@ components:
           schema: {$ref: "#/components/schemas/AgentSignInUnavailableError"}
     AgentOwnershipUnavailable:
       description: >-
-        authentication_unavailable: the sign-in check is not answering right now.
+        siwa_request_failed: the sign-in service could not be reached.
         ownership_refreshing: Key ownership in the fleet is being brought up to date; nothing was
         written, and the same request can be sent again shortly.
       content:
@@ -2206,7 +2210,7 @@ components:
           schema: {$ref: "#/components/schemas/ProposalNotFoundError"}
     AgentChainUnavailable:
       description: >-
-        authentication_unavailable: the sign-in check is not answering right now.
+        siwa_request_failed: the sign-in service could not be reached.
         chain_unavailable: the chain can't be read right now, so nothing could be built; send the
         same request again in a minute.
       content:
@@ -2318,8 +2322,8 @@ components:
     WorkspaceReadUnavailable:
       description: >-
         ownership_refreshing: Key ownership is being brought up to date, and who may read waits
-        until it is; send the same request again shortly. authentication_unavailable: the sign-in
-        check is not answering right now.
+        until it is; send the same request again shortly. siwa_request_failed: the sign-in
+        service could not be reached.
       content:
         application/json:
           schema:
@@ -2372,7 +2376,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [authentication_unavailable, code_catching_up]}
+            code: {type: string, enum: [siwa_request_failed, code_catching_up]}
             message: {type: string}
             hint: {type: string}
     RoomCreateRequest:
@@ -2422,7 +2426,12 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [unauthorized, smart_wallet_on_ethereum, authentication_unavailable, request_too_large, out_of_range, invalid_request]}
+            code:
+              type: string
+              description: >-
+                Keyfleet's own code, or the sign-in server's own refusal code (from
+                http_headers_missing to request_replayed), passed on with its status.
+              enum: [unauthorized, duplicate_proof, unsupported_query, missing_signed_body, smart_wallet_on_ethereum, siwa_request_failed, request_too_large, out_of_range, invalid_request, http_headers_missing, http_signature_invalid, http_signature_input_invalid, http_required_components_missing, http_body_binding_missing, http_body_binding_invalid, receipt_invalid, receipt_binding_mismatch, signature_invalid, wallet_audience_disabled, request_replayed, activity_record_failed, request_replay_failed, signature_lookup_failed, sign_in_refused]
             message: {type: string}
             hint: {type: string}
     WorkspaceError:
@@ -2725,7 +2734,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, const: authentication_unavailable}
+            code: {type: string, const: siwa_request_failed}
             message: {type: string}
             hint: {type: string}
     AgentOwnershipUnavailableError:
@@ -2738,7 +2747,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [authentication_unavailable, ownership_refreshing]}
+            code: {type: string, enum: [siwa_request_failed, ownership_refreshing]}
             message: {type: string}
             hint: {type: string}
     AgentJoinRequest:
@@ -4382,7 +4391,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [authentication_unavailable, chain_unavailable]}
+            code: {type: string, enum: [siwa_request_failed, chain_unavailable]}
             message: {type: string}
             hint: {type: string}
     ProposalInvalidError:
