@@ -74,6 +74,8 @@ defmodule Keyfleet.RenameRaceTest do
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
       assert Rooms.get_room!(@fleet, @slug).topic == topic
 
+      # Read as the system would, past the policy: the test checks what the
+      # open room holds after the race, not who may read it.
       assert Enum.map(Rooms.read_messages!(@fleet, @slug, authorize?: false), & &1.body) == [
                topic
              ]

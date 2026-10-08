@@ -58,8 +58,10 @@ defmodule Keyfleet.Rooms.Room do
   @plain_text ~r/\A[^\p{Cc}\p{Cf}\p{Zl}\p{Zp}]*\z/u
   @plain_text_message "must not hold control characters, invisible characters or line breaks"
 
+  @public_slug "general"
+
   @doc "The address of the one room of a fleet that anyone can read."
-  def public_slug, do: "general"
+  def public_slug, do: @public_slug
 
   @doc "The address of a key's thread."
   def key_slug(token_id), do: "key-#{token_id}"
@@ -351,7 +353,7 @@ defmodule Keyfleet.Rooms.Room do
     # Whether anyone can read the room: General and the keys' threads. Every
     # other room is read only by the people and agents holding the fleet's
     # keys or a shard of one.
-    calculate :public, :boolean, expr(kind == :key or slug == "general"), public?: true
+    calculate :public, :boolean, expr(kind == :key or slug == ^@public_slug), public?: true
 
     # How many posts the room holds: every line it has taken but its namings.
     calculate :post_count, :integer, expr(head_seq - namings), public?: true

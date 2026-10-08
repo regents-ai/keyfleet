@@ -164,7 +164,13 @@ defmodule KeyfleetWeb.AgentRoomController do
            Rooms.sync(fleet_id, cursors, graph["after_seq"], proposals["after_seq"], actor),
          {:ok, check_in} <- Agents.check_in(actor, fleet_id, run),
          {:ok, yours} <- yours(fleet_id, actor) do
-      json(conn, sync_json(synced, check_in, yours, Rooms.muted_keys!(fleet_id, actor)))
+      muted = Rooms.muted_keys!(fleet_id, actor)
+
+      refused =
+        if Enum.any?(synced.rooms, &match?(%{refused: true}, &1)),
+          do: refused_code(conn, fleet_id)
+
+      json(conn, sync_json(synced, check_in, yours, muted, refused))
     else
       {:error, %Ash.Error.Forbidden{} = error} -> refuse_forbidden(conn, fleet_id, error)
       {:error, error} -> refuse(conn, error)
@@ -208,18 +214,9 @@ defmodule KeyfleetWeb.AgentRoomController do
   defp agent_profile_json(profile),
     do: Map.take(profile, [:id, :name, :declared_harness, :current_status])
 
-  defp sync_json(synced, check_in, yours, muted) do
+  defp sync_json(synced, check_in, yours, muted, refused_code) do
     %{
-      rooms:
-        Enum.map(synced.rooms, fn room ->
-          %{
-            slug: room.slug,
-            kind: room.kind,
-            head_seq: room.head_seq,
-            cursor: room.cursor,
-            messages: room.messages |> Rooms.unmuted(muted) |> Enum.map(&message_json/1)
-          }
-        end),
+      rooms: Enum.map(synced.rooms, &synced_room_json(&1, muted, refused_code)),
       graph: synced.graph,
       proposals: %{
         synced.proposals
@@ -230,6 +227,20 @@ defmodule KeyfleetWeb.AgentRoomController do
       yours: %{yours | tasks: Enum.map(yours.tasks, &task_json/1)}
     }
   end
+
+  # A room the agent may not read repeats only the slug it sent, with what
+  # keeps it out, as a refusal of that room alone would say.
+  defp synced_room_json(%{refused: true, slug: slug}, _muted, refused_code),
+    do: %{slug: slug, refused: refused_code}
+
+  defp synced_room_json(room, muted, _refused_code),
+    do: %{
+      slug: room.slug,
+      kind: room.kind,
+      head_seq: room.head_seq,
+      cursor: room.cursor,
+      messages: room.messages |> Rooms.unmuted(muted) |> Enum.map(&message_json/1)
+    }
 
   # The key the agent writes as here (its own lowest key, or its shard's),
   # whether a vote of the fleet has stopped that key changing the workspace,
@@ -275,6 +286,15 @@ defmodule KeyfleetWeb.AgentRoomController do
   # keys, which cannot be told while the fleet's key ownership is not fresh.
   defp refuse_forbidden(conn, fleet_id, error),
     do: if(Keyfleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn))
+
+  # The code a room refused inside a sync answer carries: the one a refusal of
+  # that room alone would answer with.
+  defp refused_code(conn, fleet_id),
+    do:
+      if(Keyfleet.Chain.fresh?(fleet_id),
+        do: not_member(conn.assigns.agent_actor),
+        else: "ownership_refreshing"
+      )
 
   defp refuse(conn, %Ash.Error.Forbidden{}), do: forbidden(conn)
 

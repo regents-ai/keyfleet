@@ -141,12 +141,6 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert send_signed(c, "POST", @read_general).body["messages"] == []
     assert key_thread(c, 1, "read").status == 200
 
-    locked = send_signed(c, "POST", room_path("coding", "read"))
-    assert {locked.status, locked.body} == {403, refused("not_a_member")}
-
-    synced = send_signed(c, "POST", @sync_path, sync_body(%{"coding" => 0}))
-    assert {synced.status, synced.body} == {403, refused("not_a_member")}
-
     refused = send_signed(c, "POST", @send_general, send_body("Standing by", "k-1"))
     assert refused.status == 403
     assert refused.body == refused("not_a_member")

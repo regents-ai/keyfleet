@@ -87,6 +87,8 @@ defmodule Keyfleet.FleetRoomsTest do
 
       assert DateTime.compare(named.topic_set_at, before) == :gt
 
+      # Read as the system would, past the policy: the test checks what the
+      # open room holds, not who may read it.
       assert [line] = Rooms.read_messages!(@fleet, "open-2", authorize?: false)
 
       assert {line.kind, line.body, line.author_wallet, line.seq, line.inserted_at} ==
@@ -121,6 +123,8 @@ defmodule Keyfleet.FleetRoomsTest do
       assert {:ok, again} = Rooms.name_open_room(@fleet, "open-1", "Dry dock", actor: owner(1))
       assert {again.topic_set_by, again.topic_set_at} == {wallet("c"), renamed.topic_set_at}
 
+      # Read as the system would, past the policy: the test checks what the
+      # open room holds, not who may read it.
       assert Enum.map(
                Rooms.read_messages!(@fleet, "open-1", authorize?: false),
                &{&1.kind, &1.body}
@@ -167,6 +171,8 @@ defmodule Keyfleet.FleetRoomsTest do
 
       assert set_by == wallet(1)
 
+      # Read as the system would, past the policy: the test checks what the
+      # open room holds, not who may read it.
       assert Enum.map(Rooms.read_messages!(@fleet, "open-1", authorize?: false), & &1.body) == [
                "Hull survey",
                "Ship ops"

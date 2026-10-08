@@ -321,17 +321,6 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
         refute has_element?(view, @namer)
       end
 
-      # Everyone sees every room's name; only the keys read beyond General.
-      for conn <- [signed_out, stranger] do
-        {:ok, view, _html} = live(conn, @path)
-        refute has_element?(view, ~s(a[href="#{@path}"] .rooms-access))
-        assert has_element?(view, ~s(a[href="#{@open_one}"] .rooms-access), "Keys only")
-      end
-
-      {:ok, view, _html} = live(member, @path)
-      assert has_element?(view, ~s(a[href="#{@path}"] .rooms-access), "Public")
-      refute has_element?(view, ~s(a[href="#{@open_one}"] .rooms-access))
-
       # Only a member is asked to name an open room.
       for conn <- [signed_out, stranger] do
         {:ok, view, html} = live(conn, @open_one)
@@ -466,6 +455,26 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
                "Key ownership is being refreshed"
 
       assert %{topic: nil} = Rooms.get_room!(@fleet, "open-1")
+    end
+
+    # The page used to stay locked until it was loaded again.
+    test "a room for keys only opens, without a reload, once the reader's Key arrives",
+         %{conn: conn} do
+      Rooms.send_message!(
+        %{fleet_id: @fleet, slug: "open-1", body: "Hull survey", idempotency_key: "k-1"},
+        actor: owner_actor()
+      )
+
+      {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@open_one)
+      assert has_element?(view, "#rooms-locked")
+      refute html =~ "Hull survey"
+
+      transfer!(1, @stranger)
+      Phoenix.PubSub.broadcast(Keyfleet.PubSub, Keys.topic(@fleet), {:keys_changed, @fleet, [1]})
+
+      refute has_element?(view, "#rooms-locked")
+      assert has_element?(view, ".rooms-body", "Hull survey")
+      assert has_element?(view, @composer)
     end
 
     test "a fixed room keeps its name", %{conn: conn} do

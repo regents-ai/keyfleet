@@ -386,7 +386,12 @@ defmodule KeyfleetWeb.ShellLiveTest do
     Fleets.bootstrap_catalog!()
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic/rooms/general")
-    assert topics(view) == [Rooms.fleet_topic("fleet_tech_classic")]
+
+    assert topics(view) ==
+             Enum.sort([
+               Keys.topic("fleet_tech_classic"),
+               Rooms.fleet_topic("fleet_tech_classic")
+             ])
 
     render_patch(view, "/app/fleets/fibonacci_cascade")
 

@@ -480,6 +480,27 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       403
     )
 
+    # Naming General too, it reads General and is told which room it was kept
+    # out of, by the slug it sent alone.
+    outsider =
+      answer(
+        c,
+        stranger,
+        "POST",
+        @sync,
+        @address,
+        %{
+          "rooms" => [general, %{general | "slug" => "coding"}],
+          "graph" => %{"after_seq" => 0},
+          "proposals" => %{"after_seq" => 0},
+          "run" => %{"kind" => "session"}
+        },
+        200
+      ).body["rooms"]
+
+    assert [%{"slug" => "general", "messages" => [_, _, _]}, refused] = outsider
+    assert refused == %{"slug" => "coding", "refused" => "not_a_member"}
+
     sync.(@address, [general, %{general | "slug" => "coding"}], 200)
     sync.(@address, [%{general | "slug" => "hull-survey"}], 404)
     sync.(@address, [%{general | "after_seq" => -1}], 422)
