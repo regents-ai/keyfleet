@@ -9,6 +9,7 @@
 !platform/mix.lock
 !platform/package.json
 !platform/package-lock.json
+!cli/commands.json
 # The graph host enters as its project files, lockfile, source and upstream
 # licence files. Its tests and any local environment stay out.
 !platform/graph_host/pyproject.toml

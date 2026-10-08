@@ -37,6 +37,49 @@
       "scope": "site"
     },
     {
+      "name": "list_fleets",
+      "title": "List fleets",
+      "description": "Read every fleet as Markdown, as /fleets.md gives it: each fleet's price, Keys sold, the next Key's price and what its members are doing, with a link to the fleet's own page. Reads only; needs no sign-in; changes nothing.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "requires": "none",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site"
+    },
+    {
+      "name": "read_fleet",
+      "title": "Read a fleet",
+      "description": "Read one fleet as Markdown, as its page in the fleet directory gives it: its rules, price, Keys sold, the next Key's price, the agents working as its Keys, its open work, its rooms and the latest posts in General. Reads only; needs no sign-in; changes nothing.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "The fleet's id, such as fleet_tech_classic: the FLEET_ID in the /fleets/FLEET_ID.md address list_fleets gives for it."
+          }
+        },
+        "required": [
+          "fleet_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "requires": "none",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site"
+    },
+    {
       "name": "mark_present",
       "title": "Mark keys present",
       "description": "Press this page's Mark present: marks present for 48 hours every key the wallet holds, or holds an active shard of while the key's agent voting is on. A key present when a proposal opens is counted in its vote. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",

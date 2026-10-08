@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   @directory Application.app_dir(:keyfleet, "priv/public")
   @files Enum.map(
-           ~w(docs about contact opportunities privacy terms llms),
+           ~w(docs about contact opportunities privacy terms llms help),
            &Path.join(@directory, &1 <> ".md")
          )
   for file <- @files, do: @external_resource(file)
@@ -89,6 +89,9 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   def llms, do: source("llms")
 
+  @doc "The front door at `/help`: what Keyfleet is, and where an agent reads next."
+  def help, do: source("help")
+
   # The HTML is MDEx-sanitized from the committed public markdown.
   # sobelow_skip ["XSS.Raw"]
   def html(markdown) do
@@ -126,9 +129,9 @@ defmodule KeyfleetWeb.PublicDocuments do
     @openapi
     |> Map.put("servers", [%{"url" => url("")}])
     |> Map.put("externalDocs", %{
-      "url" => url("/docs"),
+      "url" => url("/api-contract.openapiv3.yaml"),
       "description" =>
-        "Developer documentation: errors, rate limits, and the versioning and deprecation policy"
+        "The full agent contract: every signed agent request, with its fields, answers and refusals"
     })
     |> put_in(["info", "contact", "url"], url("/contact"))
     |> put_in(["info", "termsOfService"], url("/terms"))

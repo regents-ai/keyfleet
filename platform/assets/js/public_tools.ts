@@ -20,13 +20,16 @@ type Reply =
   | {ok: true; status: number; data: string}
   | {ok: false; status: number; error: {message: string}}
 
-type Request = (signal: AbortSignal | undefined) => Promise<Reply>
+type Request = (input: Record<string, string>, signal: AbortSignal | undefined) => Promise<Reply>
 
 // Each tool reads the site's own public document, in the Markdown an agent
-// gets when it asks for that page.
+// gets when it asks for that page: the About page, the docs, or the open
+// fleet directory.
 const requests: Record<string, Request> = {
-  about: signal => read("/about", signal),
-  docs: signal => read("/docs", signal),
+  about: (_input, signal) => read("/about", signal),
+  docs: (_input, signal) => read("/docs", signal),
+  list_fleets: (_input, signal) => read("/fleets.md", signal),
+  read_fleet: (input, signal) => read(`/fleets/${encodeURIComponent(input.fleet_id)}.md`, signal),
 }
 
 async function read(path: string, signal: AbortSignal | undefined): Promise<Reply> {
@@ -55,7 +58,7 @@ const tools: ModelContextTool[] = entries.filter(entry => entry.scope === "site"
     const problem = inputProblem(input, entry.input_schema)
     if (problem) return {ok: false, error: {code: "invalid_input", message: problem}}
     try {
-      return await requests[entry.name](signal)
+      return await requests[entry.name](input as Record<string, string>, signal)
     } catch (_error) {
       return signal?.aborted
         ? {ok: false, error: {code: "cancelled", message: "The read was cancelled; nothing changed."}}
