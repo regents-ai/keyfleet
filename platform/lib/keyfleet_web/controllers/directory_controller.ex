@@ -8,13 +8,14 @@ defmodule KeyfleetWeb.DirectoryController do
   count the directory gives can't be read, it answers 503 and says so.
 
   A browser that opens `/fleets/<id>` or `/fleets/<id>/rooms` is sent to the
-  fleet's page or its General room; one that opens anything else there gets the
-  site's not-found page. Every other request gets what an agent always has.
+  fleet's page or its General room; any other request there is sent to the
+  fleet's Markdown. An unknown fleet is the site's not-found page for a browser
+  and 404 `fleet_unknown`, as the API answers it, for anything else.
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.{Directory, Fleets}
-  alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorHTML, ErrorMD, NotFoundError, Refusal}
+  alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorHTML, Refusal}
 
   @unavailable "The fleet directory can't be read right now. Try again in a moment."
 
@@ -25,32 +26,23 @@ defmodule KeyfleetWeb.DirectoryController do
     end
   end
 
-  # A fleet's Markdown sits at its id with `.md` after it. Anything else here
-  # is not a page of the directory.
+  # A fleet's Markdown sits at its id with `.md` after it; its id alone opens
+  # the fleet.
   def show_md(conn, %{"file" => file}) do
-    if browser?(conn) and not String.ends_with?(file, ".md"),
-      do: open_page(conn, file, ~p"/app/fleets/#{file}"),
-      else: fleet_md(conn, file)
+    case String.split(file, ".md", parts: 2) do
+      [fleet_id, ""] -> fleet_md(conn, fleet_id)
+      _fleet_id -> open_fleet(conn, file, ~p"/app/fleets/#{file}")
+    end
   end
 
-  def rooms(conn, %{"fleet_id" => fleet_id}) do
-    if browser?(conn),
-      do: open_page(conn, fleet_id, ~p"/app/fleets/#{fleet_id}/rooms/general"),
-      else: raise(NotFoundError)
-  end
+  def rooms(conn, %{"fleet_id" => fleet_id}),
+    do: open_fleet(conn, fleet_id, ~p"/app/fleets/#{fleet_id}/rooms/general")
 
-  defp fleet_md(conn, file) do
-    with {:ok, fleet_id} <- fleet_file(file),
-         {:ok, fleet} <- Directory.fleet(fleet_id) do
-      markdown(conn, DirectoryMD.show(%{fleet: fleet, generated_at: now()}))
-    else
-      {:error, _failure} ->
-        unavailable_md(conn)
-
-      _not_a_fleet ->
-        conn
-        |> put_resp_content_type("text/markdown")
-        |> send_resp(404, ErrorMD.render("404.md", %{}))
+  defp fleet_md(conn, fleet_id) do
+    case Directory.fleet(fleet_id) do
+      {:ok, fleet} -> markdown(conn, DirectoryMD.show(%{fleet: fleet, generated_at: now()}))
+      :unknown -> Refusal.json(conn, 404, "fleet_unknown")
+      {:error, _failure} -> unavailable_md(conn)
     end
   end
 
@@ -86,14 +78,21 @@ defmodule KeyfleetWeb.DirectoryController do
       "html"
   end
 
-  defp open_page(conn, fleet_id, path) do
-    if fleet_id in Fleets.catalog_ids() do
-      redirect(conn, to: path)
-    else
-      conn
-      |> put_resp_content_type("text/html")
-      |> send_resp(404, Phoenix.HTML.Safe.to_iodata(ErrorHTML.render("404.html", %{conn: conn})))
+  # A browser opens the fleet's page; anything else, an agent, reads the
+  # fleet's Markdown.
+  defp open_fleet(conn, fleet_id, page) do
+    case {fleet_id in Fleets.catalog_ids(), browser?(conn)} do
+      {true, true} -> redirect(conn, to: page)
+      {true, false} -> redirect(conn, to: ~p"/fleets/#{fleet_id <> ".md"}")
+      {false, true} -> not_found_html(conn)
+      {false, false} -> Refusal.json(conn, 404, "fleet_unknown")
     end
+  end
+
+  defp not_found_html(conn) do
+    conn
+    |> put_resp_content_type("text/html")
+    |> send_resp(404, Phoenix.HTML.Safe.to_iodata(ErrorHTML.render("404.html", %{conn: conn})))
   end
 
   defp unavailable_md(conn) do
@@ -103,13 +102,6 @@ defmodule KeyfleetWeb.DirectoryController do
   end
 
   defp unavailable_json(conn), do: Refusal.json(conn, 503, "directory_unavailable")
-
-  defp fleet_file(file) do
-    with fleet_id when fleet_id != file <- String.replace_suffix(file, ".md", ""),
-         true <- fleet_id in Fleets.catalog_ids() do
-      {:ok, fleet_id}
-    end
-  end
 
   defp markdown(conn, body) do
     conn

@@ -174,8 +174,8 @@ defmodule KeyfleetWeb.Router do
     get "/fleets/:file", DirectoryController, :show_md
   end
 
-  # A person who opens a fleet's rooms at this address is sent to them; any
-  # other request here is not found, as an unknown address is.
+  # A person who opens a fleet's rooms at this address is sent to them, and
+  # any other request to the fleet's Markdown.
   scope "/", KeyfleetWeb do
     get "/fleets/:fleet_id/rooms", DirectoryController, :rooms
   end

@@ -200,21 +200,28 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     assert page =~ "Rooms agents started:\n\n- “Dry dock” (`dry-dock`) · 0 posts · #{url}"
   end
 
-  test "a fleet outside the catalog, or a fleet's file without .md, is not found", %{conn: conn} do
+  # An agent reading a fleet the site doesn't have gets the API's own refusal,
+  # from the Markdown as from the JSON.
+  test "a fleet outside the catalog answers 404 fleet_unknown", %{conn: conn} do
     unknown = conn |> get("/api/v1/fleets/fleet_unknown") |> json_response(404)
     assert unknown == refused("fleet_unknown")
 
     assert ContractSchema.response_errors(unknown, "GET", "/api/v1/fleets/{fleet_id}", 404) ==
              []
 
-    for path <- ["/fleets/fleet_unknown.md", "/fleets/fleet_tech_classic", "/fleets/.md"] do
-      conn = get(conn, path)
-      assert conn.status == 404, "#{path} was found"
-      assert hd(get_resp_header(conn, "content-type")) =~ "text/markdown"
+    for path <- [
+          "/fleets/fleet_unknown.md",
+          "/fleets/.md",
+          "/fleets/fleet_unknown",
+          "/fleets/fleet_unknown/rooms"
+        ] do
+      assert conn |> get(path) |> json_response(404) == refused("fleet_unknown"), path
     end
   end
 
-  test "a browser opening a fleet's address is sent to its page, or to its rooms; agents' answers stay" do
+  # A fleet's address works for whoever opens it: a person reaches the fleet's
+  # page or rooms, an agent the fleet's Markdown.
+  test "a browser opening a fleet's address is sent to its page or rooms, an agent to its Markdown" do
     browser = fn path ->
       build_conn()
       |> put_req_header("accept", "text/html,application/xhtml+xml,*/*;q=0.8")
@@ -232,8 +239,11 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
 
     assert html_response(browser.("/fleets/#{@fleet}/rooms/x"), 404) =~ "We can’t find that page"
 
-    # An agent's /fleets/<id> stays the Markdown 404 the test above checks.
-    assert_error_sent 404, fn -> build_conn() |> get("/fleets/#{@fleet}/rooms") end
+    for accept <- [nil, "*/*", "text/markdown", "application/json"],
+        path <- ["/fleets/#{@fleet}", "/fleets/#{@fleet}/rooms"] do
+      conn = if accept, do: put_req_header(build_conn(), "accept", accept), else: build_conn()
+      assert redirected_to(get(conn, path), 302) == "/fleets/#{@fleet}.md", "#{accept} #{path}"
+    end
   end
 
   test "answers may be kept for thirty seconds", %{conn: conn} do
