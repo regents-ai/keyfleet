@@ -143,7 +143,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     "erc1271" => :erc1271,
     "erc6492" => :erc6492
   }
-  @proof_headers ~w(signature signature-input content-digest x-siwa-receipt x-key-id x-timestamp x-agent-wallet-address x-agent-chain-id)
+  @proof_headers ~w(x-siwa-signature x-siwa-signature-input content-digest x-siwa-receipt x-key-id x-timestamp x-agent-wallet-address x-agent-chain-id)
 
   @impl Plug
   def init(opts), do: opts
