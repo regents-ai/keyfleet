@@ -16,7 +16,7 @@ import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
 import {KeyfleetTreasury} from "../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../src/KeyfleetVotes.sol";
-import {KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
+import {FULL_PIECE, KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
 import {MockToken} from "./mocks/MockToken.sol";
 
 /// @dev Buys a key and tries to buy another from inside `onERC721Received`. It holds allowance and
@@ -1034,7 +1034,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         assertEq(fleet.totalMinted(), 1, "the purchase never reached the pool");
 
         usdc.mint(address(fleet), Q);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
         assertEq(usdc.balanceOf(address(treasury)), Q, "the hook sorted the stray to the treasury");
         assertEq(_treasuryRegent(fleet), _regentFor(Q - Q_PROTOCOL), "and the piece still paid the treasury");
         assertEq(usdc.balanceOf(address(fleet)), fleet.accountedBalance(address(usdc)), "every unit has a purpose");
@@ -1043,7 +1043,7 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         _buy(fleet, bob);
         uint256 owed = fleet.protocolShareOwed();
         vm.warp(regentBuyer.nextPieceAt());
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
         assertEq(staking.totalUsdcReceived(), owed, "the hook sent the owed share");
         assertEq(fleet.protocolShareOwed(), 0);
         assertEq(usdc.balanceOf(address(fleet)), fleet.accountedBalance(address(usdc)), "every unit has a purpose");

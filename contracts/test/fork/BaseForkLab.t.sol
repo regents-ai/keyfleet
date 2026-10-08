@@ -11,6 +11,7 @@ import {BaseForkLab} from "../../script/BaseForkLab.s.sol";
 import {KeyfleetManifest} from "../../script/KeyfleetManifest.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "../mocks/MockVRFCoordinatorV2Plus.sol";
+import {FULL_PIECE} from "../helpers/KeyfleetFixture.sol";
 
 /// @dev The Base-fork lab as the site uses it: on a fork of Base run as chain 31337, Classic #1
 /// sells for 10 USDC through Base's own route, its record has the release's shape, and a key's draw
@@ -71,7 +72,7 @@ contract BaseForkLabTest is Test {
         assertEq(keys.ownerOf(tokenId), buyer, "Key 1 is the buyer's");
         uint256 requestId = _requestId(keys);
         assertEq(classic.pendingConversion(), 9e6, "Its treasury part is booked");
-        classic.REGENT_BUYER().convert();
+        classic.REGENT_BUYER().convert(FULL_PIECE);
         assertGt(IERC20(lab.BASE_REGENT()).balanceOf(address(classic.TREASURY())), 0, "REGENT in the treasury");
 
         uint256[] memory words = new uint256[](1);

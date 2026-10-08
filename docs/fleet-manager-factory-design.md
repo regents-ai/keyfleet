@@ -64,6 +64,7 @@ What each answer decides (round 2 numbering → id):
 | 34 | KF-VOTE-TARGETS b | No allowlist of call targets; the refused list of token-moving and approving functions stays as built. Sean: "we can't stop everything so we should not have an allowlist. if 60% do not do scrutiny on a proposal, that is on them" (5.1) |
 | 35 | KF-VOTE-MONEYSET a | Every proposal outside the no-money set (profile, split rate, edit restriction, no calls) waits the day, launches, OUSD, Lit and signature hashes included (5.1) |
 | 36 | KF-VOTE-COMPOUND b | No daily cap on what leaves the treasury; several proposals each taking up to 99% of what is left are allowed, and the day's wait and cancelling are the protection (5.1) |
+| 37 | KF-VOTE-CANCEL b | During a money proposal's day of waiting, any key may vote No; No ballots count against the same 60%, and the proposal is cancelled only once it would no longer pass (answered by HQ for Sean, 8 Oct) (5.1) |
 
 **Sean's vote rules (7 Oct, verbatim, relayed):** "1. votes last 24 hours only, not a choice between 1 to 48 hours. 1a. The vote amount should always be denoted in X% of the current treasury, in one of the tokens. A 100% is not allowed, max is 99%. Minimum is 0.0001%", then on the two open points "1. a  2. a" (KF-VOTE-DELAY a, KF-VOTE-AMOUNT a). Then, on the four that followed (rows 33–36): "1. b - but make it clear in the agent onboarding and the /skill.md route that in the onchain smart contract ecosystem, there is always workarounds to things, and anything outside of the standard practice deserves extra scrutiny 2. ^ related to #1 , we can't stop everything so we should not have an allowlist.  if 60% do not do scrutiny on a proposal, that is on them. 3. a 4. b"
 
@@ -231,7 +232,7 @@ Base's gas price read on 7 Oct was 0.006 gwei with ETH at about 2,574 USD, so a 
 |---|---|---|
 | Safe → factory `createFoundingFleet` | Only the Safe creates the four founding fleets, in fixed order | `msg.sender == SAFE`; fleet count < 4; type matches the slot |
 | Anyone → factory `createFleet` | Phase 3 lets anyone create, from its opening | `KEYS.phase() == 3` and `phaseOpensAt` reached; input bounds (section 8) |
-| Safe → collection `advancePhase(opensAt)` | Only the Safe moves phases, one way, naming when the new phase opens | `msg.sender == SAFE`; `opensAt` in the future and not before the last phase's |
+| Safe → collection `advancePhase(opensAt)` | Only the Safe moves phases, one way, naming when the new phase opens | `msg.sender == SAFE`; `opensAt` in the future, at most 30 days ahead, and not before the last phase's |
 | Safe → collection `setRandomness` | Only the Safe moves reveals to another coordinator, subscription or gas lane | `msg.sender == SAFE` |
 | Safe → collection `setKeeper` | Only the Safe names the keeper | `msg.sender == SAFE` |
 | Keeper → collection `setDeck` | Records an open fleet's deck once, before any of its seeds exist | `msg.sender == keeper`; fleet has no deck |
@@ -241,8 +242,8 @@ Base's gas price read on 7 Oct was 0.006 gwei with ETH at about 2,574 USD, so a 
 | Factory → manager `initialize profile and requirements`, `sellFirstKey` | Once, during the fleet's own creation | `msg.sender == FACTORY` and a write-once flag |
 | Manager → collection `mint(to, keyNumber)` | Only a fleet's registered manager mints, and only into **its own** fleet: the collection takes the fleet from `fleetOfManager[msg.sender]`, never from an argument | registry lookup; sales switch; ERC-721 refuses an existing id |
 | Manager → REGENT buyer `enqueue` | Puts its own fleet in the queue once it has USDC booked | `KEYS.fleetOfManager(msg.sender) != 0` |
-| Anyone → REGENT buyer `convert()` | Turns the front fleet's next piece into REGENT for that fleet's treasury | no caller check; 15 minutes since the last piece; the 1% price rule |
-| REGENT buyer → manager `takePiece` | Pays the buyer the fleet's next piece of booked USDC | `msg.sender == REGENT_BUYER` |
+| Anyone → REGENT buyer `convert(maxUsdc)` | Turns the front fleet's next piece, of at most `maxUsdc`, into REGENT for that fleet's treasury | no caller check; `nextPieceAt` reached; the 1% price rule |
+| REGENT buyer → manager `takePiece(limit)` | Pays the buyer the fleet's next piece of booked USDC, at most `limit` | `msg.sender == REGENT_BUYER` |
 | Uniswap v3 pool / v4 PoolManager → REGENT buyer callbacks | Only during a swap the buyer started | `msg.sender` is the fixed pool or PoolManager, and the buyer's transient "swap in progress" flag is set |
 | Collection → manager `onKeyMoved` | The transfer hook | `msg.sender == KEYS` |
 | Treasury → manager `setProfile` | An approved proposal of that fleet's Keys (8.3) | `msg.sender == TREASURY` |
@@ -282,7 +283,7 @@ Every fleet, founding or open, runs these in its own `KeyfleetVotes`. They repla
   There is no minimum: one voter may pass anything 1/1, treasury payments included. A lone key that is not present presses Present (a "roll call") and can then propose and pass alone.
 - **Every vote lasts exactly 24 hours (KF-VOTE-24H).** `propose(authorKey, contentHash, calls)` closes the vote at `VOTING_PERIOD`, 24 hours, after it opens. The proposer picks nothing.
 - **The outcome is decided at closing.** Every ballot may change until the closing time; the proposal is approved exactly when Yes reaches the number above at closing, never earlier.
-- **When it can be carried out (KF-VOTE-DELAY a).** A proposal that moves no money (no calls, or only `setProfile`, `setDailySplitBps` and `setEditsRestricted`, the same set the opening week allows) may be carried out by anyone from closing until 48 hours later (`EXECUTION_WINDOW`). Every other proposal moves money: once it passes it shows as `Waiting` for 1 day (`MONEY_DELAY`), then may be carried out for 48 hours, so from close + 1 day to close + 3 days. `executableAt(proposalId)` gives the first moment it may be carried out; `executionExpiry` the moment it can't any more. Its author key may cancel it while it is open, waiting or approved.
+- **When it can be carried out (KF-VOTE-DELAY a).** A proposal that moves no money (no calls, or only `setProfile`, `setDailySplitBps` and `setEditsRestricted`, the same set the opening week allows) may be carried out by anyone from closing until 48 hours later (`EXECUTION_WINDOW`). Every other proposal moves money: once it passes it shows as `Waiting` for 1 day (`MONEY_DELAY`), then may be carried out for 48 hours, so from close + 1 day to close + 3 days. `executableAt(proposalId)` gives the first moment it may be carried out; `executionExpiry` the moment it can't any more. Its author key may cancel it while it is open, waiting or approved. During the day's wait any key may still vote No, and only No (`OnlyNoWhileWaiting`); No ballots count against the same 60%, a key not present at the opening joins the count with its No, and the proposal is cancelled the moment Yes falls below 60% (KF-VOTE-CANCEL b).
 - **Payments are a share of the treasury (KF-VOTE-SHARE, KF-VOTE-AMOUNT a).** `pay(asset, to, sharePpm)` and `advance(advanceId, operator, asset, sharePpm, purposeHash)` name one asset (a token, or ETH as the zero address) and a share in parts per million, from 1 (0.0001%) to 990,000 (99%). A share outside that range is refused when proposed (`ShareOutOfRange`). The amount is the treasury's balance of that asset when the proposal is carried out × share / 1,000,000, rounded down; a share that rounds to nothing is refused then (`ShareRoundsToZero`). A proposal holds at most one payment or advance (`OneMoneyMovePerProposal`), so it can never pay more than 99% of one asset. Nothing is reserved while a proposal waits: each proposal carried out takes its share of what is left then.
 - **Raw money moves are refused.** No call may carry ETH (`CallCarriesValue`), and no call may use a token-moving or approving function on any address (`TokenMoveRefused`): ERC-20 `transfer`, `transferFrom`, `approve`, `increaseAllowance` and `permit`; ERC-721 and ERC-1155 `safeTransferFrom`, `safeBatchTransferFrom` and `setApprovalForAll`; ERC-1363 `transferAndCall`, `transferFromAndCall` and `approveAndCall`; ERC-777 `send`, `operatorSend` and `authorizeOperator`; and Permit2's `approve`. Treasury money leaves only by `pay`, `advance` or the daily split.
 - **Proposals that are not a share.** A voted daily split (`runVotedSplit`) still moves the split's own daily rate of every split asset, and waits a day like any money proposal. Admitting OUSD, binding a launch token, an Autolaunch launch and approving or revoking a signature hash move no treasury money directly, but are outside the no-money set, so they also wait a day.
@@ -300,7 +301,7 @@ Every fleet, founding or open, runs these in its own `KeyfleetVotes`. They repla
 
 Sean: "I do not want the contracts or the frontend site to enable purchases of keys until I explicitly say so." Each phase step is a Safe transaction Sean signs, so each is his explicit go (KF-SOL-14 a).
 
-The collection holds `phase`, 0 to 3, which only the Safe changes, only upward and one step at a time, with `advancePhase(opensAt)`. `opensAt` is the moment the new phase opens: later than the step's own block, and no earlier than the previous phase's opening (`OpensAtInvalid`). The phase number changes at once; what it opens waits for `opensAt`, kept in `phaseOpensAt`.
+The collection holds `phase`, 0 to 3, which only the Safe changes, only upward and one step at a time, with `advancePhase(opensAt)`. `opensAt` is the moment the new phase opens: later than the step's own block, at most 30 days after it (`MAX_OPENING_LEAD`), and no earlier than the previous phase's opening (`OpensAtInvalid`). There is no per-wallet limit when a phase opens. The phase number changes at once; what it opens waits for `opensAt`, kept in `phaseOpensAt`.
 
 | Phase | Reached by | What it opens | Refused unless |
 |---|---|---|---|
@@ -358,22 +359,24 @@ No purchase swaps. The manager adds up the USDC bound for the treasury in that p
 
 Each piece's swap takes the pool's price at that moment, with no minimum and no oracle: Sean chose "a normal swap with no restrictions". `purchase(receiver, maxPrice, deadline, proof)` keeps today's protection for the buyer (`maxPrice`, `deadline`). The REGENT amount is bounded only by the 1% rule of 7.6.
 
-**Risk, in two lines:** anyone who can place transactions right before and after a piece can move the REGENT price against it and keep the difference, within the 1% the rule allows. Since a piece is at most 250 USDC and a key's purchase no longer swaps, a large key cannot be squeezed in one go (KF-SOL-12-B).
+**Risk, in two lines:** the 1% rule measures only the piece's own move inside `convert`, so anyone can push the REGENT price before a piece and sell back after it; what makes that unprofitable is the REGENT pool hook's fee of at least 1% on every swap (Sentinel: it would pay only below about 0.4%), a dependency on third-party code. Since a piece is at most 250 USDC and a key's purchase no longer swaps, a large key cannot be squeezed in one go (KF-SOL-12-B).
 
 ### 7.5 Reentrancy around the swap
 
 - No purchase calls the pools, so the REGENT pool's hook never runs inside a purchase.
-- The buyer has its own lock and a transient flag naming the swap it started; each callback checks `msg.sender` is the fixed pool or PoolManager and the flag is set. `convert` records the piece's time before it swaps.
+- The buyer has its own lock and a transient flag naming the swap it started; each callback checks `msg.sender` is the fixed pool or PoolManager and the flag is set. `convert` sets `nextPieceAt` before it swaps.
 - A hook could call a fleet's `purchase` during a piece, but only with its own money; that only books more USDC.
 - The buyer measures what arrived (the treasury's balance change), never what a pool or hook reports.
 
 ### 7.6 Pieces, not a swap per purchase (KF-SOL-12-B)
 
 - **Booked, not swapped.** A purchase books the treasury's part as the manager's `pendingConversion` and calls the buyer's `enqueue`, which puts the fleet at the back of one first-in, first-out queue unless it is already in it.
-- **Pieces.** A piece is the smaller of the fleet's booking and 250 USDC (`PIECE_USDC`). The buyer's `convert()` takes no arguments and anyone may call it. It runs at most one piece every 15 minutes across all fleets (`PIECE_INTERVAL`), so never two in one block, takes the fleet at the front, and puts it back at the back if any booking is left. Every waiting fleet gets one piece before any gets a second.
+- **Pieces.** A piece is the smallest of the fleet's booking, 250 USDC (`PIECE_USDC`) and what the caller asks for. Anyone may call the buyer's `convert(maxUsdc)`; the keeper asks for 250 USDC, and anyone may ask for less (`PieceEmpty` for zero). It takes the fleet at the front and puts it back at the back if any booking is left. Every waiting fleet gets one piece before any gets a second.
+- **The rate.** After each piece the next waits `ceil(PIECE_INTERVAL × usdcIn / PIECE_USDC)` seconds (`nextPieceAt`): 15 minutes after a full piece, less after a smaller one, and at least a second, so never two pieces in one block and never more than 250 USDC per 15 minutes across all fleets. Dust cannot take a whole 15-minute turn.
 - **The 1% rule.** A piece reverts with `PriceMoved` if its own swap moves the route's price, both pools together, more than 1% (`MAX_PRICE_MOVE_BPS = 100`). The REGENT goes straight to the fleet's treasury; the 10% protocol share is not touched.
 - **Depth, measured 8 Oct 2026 on a Base fork at block 52,322,445.** About 313 USDC of WETH moves the REGENT pool 1% down and 304 USDC of REGENT 1% up; the USDC/WETH pool takes about 344,000 USDC for 1%. A 250 USDC piece moved the route's price 0.81% (the contracts README has the table).
-- **Accepted:** many fleets each take a 15-minute turn; a piece that keeps failing the rule holds the queue until the pools move back; the hook's own fee is not capped by the rule.
+- **A thin pool converts slowly.** A piece that fails the rule keeps its fleet at the front; a smaller piece moves the price less and goes through, so the line never stalls.
+- **Accepted:** many fleets each take a turn; anyone may take a tiny piece just before the keeper's full one, which rotates the queue and delays the full piece by a few seconds, at the cost of a transaction; the hook's own fee is not capped by the rule, and front-running protection depends on it staying at least 1%.
 
 ---
 
@@ -430,7 +433,7 @@ How they work:
 - **Checked once, when buying from the fleet**, against the wallet receiving the key. Selling afterwards is fine (Sean). Resales are never checked (KF-SOL-17 a). The creator's own key 1 is not checked.
 - **Fixed at creation** (KF-SOL-18 a).
 - **Read-only calls.** The NFT and token checks use `staticcall`, so a hostile token cannot change state during a purchase. A token that reverts or lies only affects the fleet whose creator chose it. At creation the factory checks only that each named address has code.
-- **Known and accepted (KF-SOL-19 a):** a balance borrowed and returned in the same transaction passes; fake, rebasing or fee-taking tokens are only as meaningful as the creator's choice; ERC-1155 is not covered.
+- **Known and accepted (KF-SOL-19 a):** a balance borrowed and returned in the same transaction passes; in the same way a mature key borrowed and handed back around a daily split run collects that run's share; fake, rebasing or fee-taking tokens are only as meaningful as the creator's choice; ERC-1155 is not covered.
 
 ---
 

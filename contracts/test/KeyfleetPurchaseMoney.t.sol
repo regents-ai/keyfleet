@@ -4,7 +4,7 @@ pragma solidity 0.8.26;
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRewards} from "../src/KeyfleetRewards.sol";
-import {KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
+import {FULL_PIECE, KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
 
 /// @dev Where every USDC of a purchase goes, now that the treasury's part is booked in the manager
 /// and turned into REGENT later, piece by piece. The test keeps its own record of each purchase,
@@ -225,14 +225,13 @@ contract KeyfleetPurchaseMoneyTest is KeyfleetFixture {
             uint256 pending = fleet.pendingConversion();
             uint256 inPool = usdc.balanceOf(address(v3Pool));
             uint256 regentHeld = regent.balanceOf(address(fleet.TREASURY()));
-            uint256 lastPieceAt = regentBuyer.lastPieceAt();
             uint256 opensAt = regentBuyer.nextPieceAt();
             if (block.timestamp < opensAt) vm.warp(opensAt);
             vm.expectRevert();
-            regentBuyer.convert();
+            regentBuyer.convert(FULL_PIECE);
             assertEq(fleet.pendingConversion(), pending, "the piece booked nothing off");
             assertEq(regentBuyer.nextInQueue(), address(fleet), "and the fleet keeps its place");
-            assertEq(regentBuyer.lastPieceAt(), lastPieceAt, "and no piece is counted");
+            assertEq(regentBuyer.nextPieceAt(), opensAt, "and no piece is counted");
             assertEq(usdc.balanceOf(address(v3Pool)), inPool, "the pool kept no USDC");
             assertEq(regent.balanceOf(address(fleet.TREASURY())), regentHeld, "the treasury got no REGENT");
             _assertBooks(fleet);

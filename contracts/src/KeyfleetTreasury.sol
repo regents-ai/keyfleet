@@ -211,10 +211,12 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     /// approved proposal.
     event DailySplitRun(bool indexed voted, uint256 keys, uint256 bps);
     /// @notice One bound asset was split: `perKey` to each key from a balance of `balance`; the
-    /// treasury keeps the rest, rounding dust included.
+    /// treasury keeps the rest, rounding dust included. For a token, `perKey` is worked out from what
+    /// the ledger holds above what it owes, so it can be less than the rate gives.
     event SplitAllocated(address indexed asset, uint256 balance, uint256 perKey, uint256 keys);
     /// @notice One bound asset was not split this run: no keys, a balance under its threshold, or
-    /// too little to give every key a whole unit.
+    /// too little to give every key a whole unit, before sending or, for a token, in what arrived at
+    /// the ledger. Tokens that arrived and were not split stay in the ledger.
     event SplitSkipped(address indexed asset, uint256 balance);
     /// @notice One bound token refused to move to the ledger, so it was not split this run; the
     /// others were.
@@ -474,8 +476,11 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     /// @dev `balance` is the treasury's whole balance of the asset, all of it free capital, read
     /// before anything is cut from it. A token that refuses the transfer is skipped and the run goes
     /// on; one that ran the transfer out of gas reverts the run instead, so a caller cannot starve
-    /// one asset on purpose. Once the tokens are in the ledger, its funding must succeed or the
-    /// whole run reverts, so the ledger only ever adds a split for exactly the keys mature now.
+    /// one asset on purpose. A token is split by what the ledger holds above what it already owes,
+    /// at most the rate's amount per key, so a token that arrives short, or a ledger left short by
+    /// an earlier payout, makes the keys' share smaller instead of making the run revert. Once the
+    /// tokens are in the ledger, its funding must succeed or the whole run reverts, so the ledger
+    /// only ever adds a split for exactly the keys mature now.
     function _splitAsset(address asset, uint256 balance, uint256 threshold, uint256 keys, uint256 bps) private {
         uint256 perKey = keys == 0 || balance < threshold ? 0 : Math.mulDiv(balance, bps, 10_000) / keys;
         if (perKey == 0) {
@@ -490,6 +495,13 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
             if (!IERC20(asset).trySafeTransfer(address(REWARDS), allocated)) {
                 if (gasleft() < gasBefore / 63) revert SplitOutOfGas();
                 emit SplitTransferFailed(asset, allocated);
+                return;
+            }
+            uint256 held = IERC20(asset).balanceOf(address(REWARDS));
+            uint256 owed = REWARDS.backed(asset);
+            perKey = held > owed ? Math.min(perKey, (held - owed) / keys) : 0;
+            if (perKey == 0) {
+                emit SplitSkipped(asset, balance);
                 return;
             }
             REWARDS.fundSplit(asset, perKey, keys);

@@ -62,8 +62,9 @@ what the code on this branch does:
   takes nothing from money a fleet receives afterwards.
 - Keys are paid in USDC. A purchase swaps nothing: the part that goes to the
   fleet's treasury is booked in the fleet's manager and turned into REGENT
-  afterwards, in pieces of at most 250 USDC, at most one piece every 15 minutes
-  across all fleets, by anyone who calls for the next piece. Each piece is a
+  afterwards, in pieces of at most 250 USDC, no faster than 250 USDC every 15
+  minutes across all fleets, by anyone who calls for the next piece and may ask
+  for a smaller one. Each piece is a
   plain market swap with no minimum through one fixed route: USDC to WETH on a
   Uniswap v3 pool, then WETH to REGENT on a Uniswap v4 pool, and it is refused
   if it moves the route's price by more than 1%. The REGENT goes to the
@@ -95,7 +96,9 @@ what the code on this branch does:
   abstaining and staying silent count against it. Anyone may carry it out for
   48 hours: from closing if it moves no money, or from a day after closing if
   it does. Whoever may vote the key it was made with may cancel it until then.
-  One present key alone may pass anything.
+  During a money proposal's day of waiting any key may still vote No, and the
+  proposal is cancelled the moment it would no longer pass. One present key
+  alone may pass anything at closing.
 - A payment names one asset the treasury holds and a share of the treasury's
   balance of it, from 0.0001% to 99%, worked out when the proposal is carried
   out. A proposal makes at most one payment, and no proposal may move tokens or
@@ -266,8 +269,9 @@ change.
 `phase()` runs from 0 to `FINAL_PHASE`, 3. Only the Safe moves it
 (`OnlySafe`), one step at a time and never back, with `advancePhase(opensAt)`,
 which emits `PhaseAdvanced(phase, opensAt)`. `opensAt` is the moment the new
-phase opens: it must be later than the step's own block and no earlier than
-the previous phase's opening (`OpensAtInvalid(opensAt)`), and it is kept in
+phase opens: it must be later than the step's own block, at most
+`MAX_OPENING_LEAD` (30 days) after it, and no earlier than the previous phase's
+opening (`OpensAtInvalid(opensAt)`), and it is kept in
 `phaseOpensAt()`. The phase number changes at once; what the phase opens waits
 for `opensAt`, to the second, with nobody acting again.
 
@@ -526,18 +530,18 @@ per contract. Measured with `forge build --sizes`:
 
 | Contract | Runtime (bytes) | Deployment (bytes) |
 | --- | --- | --- |
-| `KeyfleetFactory` | 6,199 | 35,732 |
-| `KeyfleetKeys` | 12,023 | 13,581 |
-| `KeyfleetManager` | 14,725 | 16,388 |
-| `KeyfleetManagerDeployer` | 16,878 | 17,009 |
-| `KeyfleetRegentBuyer` | 7,589 | 9,316 |
+| `KeyfleetFactory` | 6,199 | 35,920 |
+| `KeyfleetKeys` | 12,075 | 13,633 |
+| `KeyfleetManager` | 14,610 | 16,266 |
+| `KeyfleetManagerDeployer` | 16,756 | 16,887 |
+| `KeyfleetRegentBuyer` | 7,725 | 9,452 |
 | `KeyfleetRewards` | 9,069 | 10,319 |
 | `KeyfleetRewardsDeployer` | 10,809 | 10,940 |
 | `KeyfleetShards` | 3,604 | 3,810 |
-| `KeyfleetTreasury` | 11,186 | 13,097 |
-| `KeyfleetTreasuryDeployer` | 13,587 | 13,718 |
-| `KeyfleetVotes` | 19,303 | 20,917 |
-| `KeyfleetVotesDeployer` | 21,407 | 21,538 |
+| `KeyfleetTreasury` | 11,614 | 13,539 |
+| `KeyfleetTreasuryDeployer` | 14,029 | 14,160 |
+| `KeyfleetVotes` | 19,518 | 21,132 |
+| `KeyfleetVotesDeployer` | 21,622 | 21,753 |
 
 ## The fleet manager
 
@@ -597,9 +601,10 @@ REGENT buyer to queue the fleet (`enqueue`), which does nothing if the fleet is
 already queued. A purchase that sends nothing to the treasury books nothing.
 The booked USDC stays in the manager, counted in `accountedBalance`, so it is
 never surplus, never forwarded and never seen by the treasury's split or
-payments. The buyer later takes it in pieces through `takePiece()`, which only
-the buyer may call (`OnlyRegentBuyer`): it hands over at most 250 USDC, approved
-to the buyer exactly, with the fleet's treasury as the REGENT's recipient. The
+payments. The buyer later takes it in pieces through `takePiece(limit)`, which
+only the buyer may call (`OnlyRegentBuyer`): it hands over the smaller of what is
+booked and `limit`, which the buyer keeps to at most 250 USDC, approved to the
+buyer exactly, with the fleet's treasury as the REGENT's recipient. The
 protocol share, the Cascade reserve and repayment and the Accelerant rebate stay
 USDC.
 
@@ -659,7 +664,10 @@ creator's own key 1 (`sellFirstKey`, factory only, `FirstKeySold` once sold) is
 not checked. A balance is read only at the moment of purchase, so one held for
 a single transaction, such as a flash loan of the token or a borrowed NFT
 returned before the transaction ends, meets the requirement: a requirement shows
-that the buyer could command the balance then, not that it holds it. Fake,
+that the buyer could command the balance then, not that it holds it. In the same
+way, a mature key borrowed and handed back around a daily split run collects
+that run's share: the share accrues to the key, and handing it back settles it
+to the borrower. Fake,
 rebasing or fee-taking tokens are only as meaningful as the creator's choice;
 ERC-1155 is not covered.
 
@@ -758,7 +766,7 @@ does not name exactly WETH and REGENT (`RouteInvalid`). It records
 | Constant | Value |
 | --- | --- |
 | `PIECE_USDC` | 250 USDC (250,000,000), the most one piece turns into REGENT |
-| `PIECE_INTERVAL` | 15 minutes between pieces, across every fleet |
+| `PIECE_INTERVAL` | 15 minutes, the wait after a full piece, across every fleet; a smaller piece waits in proportion |
 | `MAX_PRICE_MOVE_BPS` | 100, so a piece may move the route's price by at most 1% |
 
 `enqueue()` puts the calling manager at the back of the queue unless it is
@@ -767,14 +775,22 @@ already in it; only a manager the collection registered may call
 most once (`isQueued`). `queueLength()`, `nextInQueue()`, `queueHead()` and
 `queueTail()` read it.
 
-`convert()` takes no arguments, and anyone may call it; nothing checks who the
-caller is. It refuses before `nextPieceAt()` (`PieceTooSoon(opensAt)`), which is
-`lastPieceAt` plus 15 minutes, and with an empty queue (`NothingQueued`). It
-takes the fleet at the front of the queue, records the piece's time, asks that
-manager for its next piece (`takePiece`), swaps it and returns the REGENT the
-treasury received. A fleet that still has USDC booked afterwards goes to the
-back of the queue. Since a piece needs 15 minutes after the last, two pieces
-can never run in one block.
+`convert(maxUsdc)` may be called by anyone; nothing checks who the caller is.
+It refuses `maxUsdc` of zero (`PieceEmpty`), any time before `nextPieceAt()`
+(`PieceTooSoon(opensAt)`) and an empty queue (`NothingQueued`). It takes the
+fleet at the front of the queue, asks that manager for a piece of at most
+`maxUsdc` and at most `PIECE_USDC` (`takePiece`), swaps it and returns the
+REGENT the treasury received. A fleet that still has USDC booked afterwards goes
+to the back of the queue. The keeper asks for `250000000`; anyone may ask for
+less, for example when a full piece would fail the 1% rule.
+
+Each piece sets `nextPieceAt` to its own time plus 15 minutes times its USDC
+over 250 USDC, rounded up to the second:
+`nextPieceAt = now + ceil(PIECE_INTERVAL × usdcIn / PIECE_USDC)`. A full piece
+waits 15 minutes, a 50 USDC piece 3 minutes and a 1 USDC piece 4 seconds, so
+USDC never turns into REGENT faster than 250 USDC every 15 minutes, however the
+pieces are cut. Any piece waits at least a second, so two pieces can never run
+in one block. `nextPieceAt` is zero until the first piece.
 
 How the next fleet is chosen: the queue is first in, first out, one piece per
 turn. A fleet joins at the back when it first books USDC and, after its piece,
@@ -782,10 +798,14 @@ goes back to the back if any is left, so every waiting fleet gets one piece
 before any fleet gets a second, and a fleet with a large booking cannot hold up
 a small one for longer than one piece per fleet ahead of it. `convert` only
 reads and writes the front entry and appends at most one entry, so its gas is
-the same however long the queue is. Two consequences, accepted: anyone who
-creates many fleets puts each of them in the queue, and each takes a
-15-minute turn; and a piece that keeps failing the 1% rule keeps its fleet at
-the front, so no piece runs until the pools move back within reach.
+the same however long the queue is. A piece that fails the 1% rule keeps its
+fleet at the front, and a smaller piece, which moves the price less, can then
+be taken, so a thin pool converts slowly instead of stopping the line.
+Consequences, accepted: anyone who creates many fleets puts each of them in the
+queue, and each takes a turn; and anyone may take a tiny piece just before the
+keeper's full one, which sends the front fleet to the back and makes the full
+piece wait a few seconds. It cannot take a whole 15-minute turn, because a tiny
+piece waits only in proportion, and each try costs its caller a transaction.
 
 Each piece swaps exactly its USDC on the v3 pool, paid straight from the
 manager into the pool in `uniswapV3SwapCallback`; swaps the WETH that came out
@@ -805,13 +825,19 @@ the two multiplied together, so a rise counts as much as a fall:
 reverts with `PriceMoved(move)`.
 
 The swap takes the pools' price at that moment, with no minimum and no oracle:
-the founder chose a plain swap. Anyone who can place transactions right before
-and after a piece can move the REGENT price against it and keep the difference,
-within the 1% the rule allows. The REGENT pool's hook is third-party code that
-runs inside every swap and may take a fee; the 1% rule measures the pools'
-prices, not the hook's fee, so it does not cap what the hook takes. If the pool
-stops filling, pieces revert and the USDC stays booked, but purchases go on in
-every fleet; the route can never change.
+the founder chose a plain swap. The 1% rule measures only the piece's own move,
+from just before its swap to just after it, inside `convert`. It does not see a
+price that someone moved earlier in the same block: anyone can push the REGENT
+price up, let a piece buy at that price, and sell back afterwards. What makes
+that unprofitable is the REGENT pool's hook
+(`0xd60D6B218116cFd801E28F78d011a203D2b068Cc`), which charges a fee of at least
+1% on every swap, so the push and the sale back each pay it, and that costs
+more than a piece of at most 250 USDC can give up. Sentinel's estimate is that
+the push and sale back would pay only if the hook's fee fell below about 0.4%.
+The protection depends on that hook: it is third-party code, the 1% rule does
+not cap what it takes, and if it ever charged less, pieces could be front-run.
+If the pool stops filling, pieces revert and the USDC stays booked, but
+purchases go on in every fleet; the route can never change.
 
 ### Depth on Base
 
@@ -953,7 +979,11 @@ advance, which disclosure covers.
 Carrying out calls, the protocol share deposit, returning an advance, binding
 the launch token and the public split share one reentrancy lock, so a payee
 called back by a payment cannot return an advance, send the protocol share or
-carry out another proposal from inside it. The Cascade reserve, the owed
+carry out another proposal from inside it. It follows that a proposal whose
+calls include the manager's `sendProtocolShare` or the treasury's own
+`returnAdvance` or `bindLaunchToken` always reverts when carried out, since the
+batch already holds the lock: these are public buttons, pressed directly instead. The Cascade
+reserve, the owed
 protocol share and the ledger's backing are never in the treasury and are out of
 any vote's reach. Tokens that take a fee when they move, or rebase, are not
 supported.
@@ -979,7 +1009,14 @@ mature keys (`MANAGER.matureKeys()`) and the rate in basis points:
 - the cut is `B × rate / 10,000`, rounded down;
 - each key's share is the cut divided by `N`, rounded down, in whole units;
 - the treasury sends the ledger exactly the share times `N`, and the rounding
-  dust stays in the treasury.
+  dust stays in the treasury;
+- for a token, the ledger is then funded by what it holds above what it already
+  owes, divided by `N`, if that is less than the share. A token that arrives a
+  unit short, as OUSD's rounding can make it, gives each key a unit less, and a
+  ledger left short by an earlier payout is made whole from the next transfer
+  before the keys get the rest. If nothing is left over, the asset is skipped
+  for that run and the tokens stay in the ledger towards what it owes. So a
+  short arrival never makes a run revert.
 
 An asset is skipped, with `SplitSkipped(asset, balance)`, when no key is mature
 yet, when `B` is below its threshold, or when the share comes to zero because
@@ -989,7 +1026,7 @@ decimals once (REGENT and USDC at deployment, OUSD when admitted, the launch
 token when bound); a balance equal to the threshold qualifies. `B` is only the
 treasury's own balance, so what the ledger already holds for the keys is never
 counted again. Each asset split emits `SplitAllocated(asset, balance, perKey,
-keys)`.
+keys)`, with `perKey` the amount each key was given.
 
 The rate starts at 50 basis points (half a percent) and is always between 10 and
 200. Only a passed proposal can change it, with `setDailySplitBps(bps)`
@@ -1170,7 +1207,11 @@ each key. The key's owner, or an agent holding an active shard of the key while
 the key's agent voting is on (see Shards), may cast it, and whoever acted last
 decides it. A batch is cast whole or not at all, and anybody refused for a key
 gets `NotAuthorizedForKey(tokenId, account)`. A marketplace approval
-(`approve`, `setApprovalForAll`) gives nothing here. Ballots stop at closing and
+(`approve`, `setApprovalForAll`) gives nothing here. Any choice is taken until
+closing. During a money proposal's day of waiting only `No` is taken
+(`OnlyNoWhileWaiting(proposalId)` for Yes or Abstain), from any key that may vote,
+present at the opening or not; a key that was not joins the electorate with its
+No as it would before closing. Ballots stop for good once the wait is over, and
 on cancelling (`BallotsClosed`). `ballotOf(proposalId, tokenId)` reads a ballot
 and `BallotCast(proposalId, voter, choice, tokenIds)` records each call.
 
@@ -1200,10 +1241,18 @@ A proposal is never approved before closing, and abstaining or staying silent
 counts against it. There is no minimum: one present key voting Yes on a
 proposal nobody else joins passes it at closing.
 
+During the wait, No ballots still count against the same 60%. If one leaves Yes
+below `approvalsNeeded(D)`, with `D` grown by any late voter, the proposal is
+cancelled at once and `ProposalCancelled(proposalId, by)` names the voter; a No
+that leaves it passing is counted and changes nothing else. So when one key
+alone passes a payment in a quiet fleet, any other key that votes No during the
+day stops it: 1 Yes of 2 no longer passes.
+
 `cancel(proposalId)` may be called by whoever may vote the author key now, its
 current owner or an agent, while the proposal is open, waiting or approved
 (`NotCancellable` otherwise). It renews the author key and emits
-`ProposalCancelled(proposalId, by)`.
+`ProposalCancelled(proposalId, by)`. The same event marks a cancelling No during
+the wait.
 
 `execute(proposalId, calls)` is permissionless and renews no key. The proposal
 must be approved (`NotApproved(status)`) and the calls must be exactly its batch
@@ -1471,31 +1520,42 @@ Nothing below can be fixed after the fact unless it says so.
 1. **Keeper.** Write the keeper wallet's address into the manifest. It records
    the deck of every fleet created in phase 3 and asks for card refreshes; the
    Safe can replace it later with `setKeeper`.
-2. **Someone to press the public buttons.** Nothing runs by itself. Run a bot
-   that calls the REGENT buyer's `convert()` whenever `nextPieceAt()` has passed
-   and `queueLength()` is above zero, each fleet's `runDailySplit()` once
-   `nextRunAt()` has passed, and each manager's `sendProtocolShare()` when
-   `protocolShareOwed` is above zero. Anyone may press each of them, so the bot
-   needs no rights, only ETH for gas; `convert` costs about 721,000 gas on Base.
-3. **`collection.contractURI`.** Check the collection page's metadata address in
+2. **The keeper's job list.** Nothing runs by itself. The keeper runs a bot
+   that presses, as each comes due:
+   - the REGENT buyer's `convert(250000000)` whenever `nextPieceAt()` has passed
+     and `queueLength()` is above zero, and on `PriceMoved` the same with a
+     smaller amount, such as half, until a piece goes through;
+   - each fleet's `runDailySplit()` once `nextRunAt()` has passed;
+   - each manager's `sendProtocolShare()` whenever `protocolShareOwed()` is
+     above zero, at least once a day, since the 10% share waits in the manager
+     until someone sends it.
+   Anyone may press each of them, so the bot needs no rights, only ETH for gas;
+   `convert` costs about 722,000 gas on Base.
+3. **The REGENT pool's hook still charges its fee.** Check that the hook at
+   `0xd60D6B218116cFd801E28F78d011a203D2b068Cc` still takes at least 1% on every
+   swap of the WETH/REGENT pool. The 1% rule measures only each piece's own move
+   inside `convert`; what keeps a piece from being front-run is that fee.
+   Nothing in Keyfleet can change the route afterwards, so keep watching it.
+4. **`collection.contractURI`.** Check the collection page's metadata address in
    the manifest and that it already serves the right file. It is fixed at
    deployment and nothing can change it.
-4. **VRF subscription id.** Create the subscription, fund it in ETH, move it to
+5. **VRF subscription id.** Create the subscription, fund it in ETH, move it to
    the Regents Safe and write its id into `vrf.subscriptionId`. The placeholder
    `"0"` is refused. The Safe can move the collection to another coordinator,
    subscription or gas lane later with `setRandomness`.
-5. **Add the collection as a VRF consumer.** Straight after the deployment the
+6. **Add the collection as a VRF consumer.** Straight after the deployment the
    Safe adds the collection to the subscription; the record step refuses until
    it has. A key minted before that has its draw refused and asks again later.
-6. **REGENT staking is unpaused.** The 10% protocol share goes to REGENT revenue
+7. **REGENT staking is unpaused.** The 10% protocol share goes to REGENT revenue
    staking only while staking accepts deposits. While the Safe has it paused,
    every fleet's share waits in its manager, still owed, and sales go on.
-7. **Factories cannot be removed.** The Safe can allow a newer factory with
+8. **Factories cannot be removed.** The Safe can allow a newer factory with
    `addFactory`, and every factory it ever allows can register fleets for good.
    Allow only an audited factory.
-8. **Sales open at a chosen time.** Each phase step names its opening in
+9. **Sales open at a chosen time.** Each phase step names its opening in
    `KEYFLEET_OPENS_AT`; leave enough time for the Safe's signers, since a step
-   that lands after that time is refused and must be written again.
+   that lands after that time is refused and must be written again. An opening
+   more than 30 days after the step lands is refused too.
 
 ## Gas
 
@@ -1507,32 +1567,32 @@ transaction of its own. The suite asserts each ceiling.
 
 | Call | Gas | Ceiling |
 | --- | --- | --- |
-| Purchase, Cascade level 1 | 504,797 | 669,000 |
-| Purchase, Cascade level 30 | 497,616 | 669,000 |
-| Purchase, Cascade level 40 | 509,639 | 669,000 |
-| Purchase, a Cascade level's last key | 430,923 | 669,000 |
-| Purchase, Syndicate level 1 | 554,583 | 669,000 |
-| Purchase, Syndicate level 40 | 551,072 | 669,000 |
-| Purchase, Accelerant | 557,166 | 669,000 |
-| Purchase, Classic | 555,878 | 669,000 |
-| `sendProtocolShare` | 165,360 | 199,000 |
-| A key's first renewal | 73,050 | 111,000 |
-| A later renewal | 78,050 | 85,000 |
+| Purchase, Cascade level 1 | 504,864 | 669,000 |
+| Purchase, Cascade level 30 | 497,683 | 669,000 |
+| Purchase, Cascade level 40 | 509,706 | 669,000 |
+| Purchase, a Cascade level's last key | 431,012 | 669,000 |
+| Purchase, Syndicate level 1 | 554,672 | 669,000 |
+| Purchase, Syndicate level 40 | 551,161 | 669,000 |
+| Purchase, Accelerant | 557,255 | 669,000 |
+| Purchase, Classic | 555,967 | 669,000 |
+| `sendProtocolShare` | 165,250 | 199,000 |
+| A key's first renewal | 73,094 | 111,000 |
+| A later renewal | 78,094 | 85,000 |
 | Sweeping, per ended presence | 5,025 | 6,000 |
 | Sweeping, per key whose automatic start came | 26,130 | 32,000 |
-| Transfer of a key present from a renewal | 124,873 | 144,000 |
-| Transfer of a key present from its automatic start | 84,718 | 144,000 |
-| An agent casting first ballots for ten Classic keys | 835,582 | 1,250,000 |
-| Each further key (Classic / Fibonacci) | 83,038 / 83,027 | 125,000 |
+| Transfer of a key present from a renewal | 124,785 | 144,000 |
+| Transfer of a key present from its automatic start | 84,630 | 144,000 |
+| An agent casting first ballots for ten Classic keys | 837,704 | 1,250,000 |
+| Each further key (Classic / Fibonacci) | 83,214 / 83,203 | 125,000 |
 | Worst-case settlement of one key | 272,533 | 288,000 |
-| Transfer of a key with five split assets waiting | 385,407 | 435,000 |
-| One wallet claiming ten keys in five assets | 1,725,528 | 1,904,000 |
-| The next day's claim of the same ten keys | 582,475 | 694,000 |
-| Founding Classic creation | 11,435,899 | 16,777,216 |
-| Open creation with key 1: Classic | 11,957,581 | 16,777,216 |
-| Open creation with key 1: Syndicate | 11,908,660 | 16,777,216 |
-| Open creation with key 1: Accelerant | 11,931,448 | 16,777,216 |
-| Open creation with key 1: Cascade | 11,883,407 | 16,777,216 |
+| Transfer of a key with five split assets waiting | 385,319 | 435,000 |
+| One wallet claiming ten keys in five assets | 1,725,308 | 1,904,000 |
+| The next day's claim of the same ten keys | 582,255 | 694,000 |
+| Founding Classic creation | 11,542,138 | 16,777,216 |
+| Open creation with key 1: Classic | 12,063,709 | 16,777,216 |
+| Open creation with key 1: Syndicate | 12,014,788 | 16,777,216 |
+| Open creation with key 1: Accelerant | 12,037,576 | 16,777,216 |
+| Open creation with key 1: Cascade | 11,989,513 | 16,777,216 |
 | The coordinator's answer to a key, cold | 31,554 | 100,000 given |
 
 The purchase ceiling is the Accelerant figure plus a fifth. Every purchase
@@ -1547,7 +1607,7 @@ zero, so nearly all of it is first writes.
 Open creation was measured with a 2,000-byte description, a 512-byte image link
 and a 10 USDC starting price, against the 16,777,216-gas cap one transaction may
 use on Ethereum since Fusaka (EIP-7825), which the build keeps every creation
-under. The least gas that completes a purchase is 536,340; the reveal suite
+under. The least gas that completes a purchase is 536,429; the reveal suite
 tries every limit in the few thousand gas above it and finds that every
 completed purchase either made its random-number request or said it failed.
 
@@ -1562,25 +1622,25 @@ every call run as a transaction of its own (`test/fork/KeyfleetBaseGas.t.sol`):
 
 | Call | Gas |
 | --- | --- |
-| `createFoundingFleet`, fleet 1 | 11,366,955 |
-| `createFoundingFleet`, fleet 2 | 11,349,889 |
-| `createFoundingFleet`, fleet 3 | 11,372,067 |
-| `createFoundingFleet`, fleet 4 | 11,349,924 |
-| `advancePhase`, to phase 1 | 70,013 |
-| `advancePhase`, to phase 3 | 30,791 |
-| `purchase`, Classic #1's first key, with its request | 593,328 |
-| `purchase`, a later key | 390,347 |
-| `convert`, one piece through both pools | 721,262 |
-| `createFleet`, a Classic fleet at 10 USDC with its key 1 | 11,767,125 |
-| `present`, one key | 110,947 |
-| `propose`, one payment | 243,118 |
-| `castBallot`, one key | 118,571 |
-| `sendProtocolShare`, two sales owed | 143,060 |
-| `runDailySplit`, ETH, REGENT and USDC | 531,464 |
-| `claim`, one key in three assets | 274,478 |
-| `transferFrom`, a key with three assets waiting | 303,636 |
-| `execute`, a one-payment proposal | 93,893 |
-| `executeBatch`, one payment | 56,246 |
+| `createFoundingFleet`, fleet 1 | 11,473,149 |
+| `createFoundingFleet`, fleet 2 | 11,456,083 |
+| `createFoundingFleet`, fleet 3 | 11,478,261 |
+| `createFoundingFleet`, fleet 4 | 11,456,118 |
+| `advancePhase`, to phase 1 | 70,130 |
+| `advancePhase`, to phase 3 | 30,908 |
+| `purchase`, Classic #1's first key, with its request | 593,417 |
+| `purchase`, a later key | 390,436 |
+| `convert(250000000)`, one piece through both pools | 722,447 |
+| `createFleet`, a Classic fleet at 10 USDC with its key 1 | 11,873,253 |
+| `present`, one key | 110,991 |
+| `propose`, one payment | 243,194 |
+| `castBallot`, one key | 118,977 |
+| `sendProtocolShare`, two sales owed | 142,972 |
+| `runDailySplit`, ETH, REGENT and USDC | 537,074 |
+| `claim`, one key in three assets | 274,456 |
+| `transferFrom`, a key with three assets waiting | 303,548 |
+| `execute`, a one-payment proposal | 93,881 |
+| `executeBatch`, one payment | 56,234 |
 
 `executeBatch` is only ever called by the voting controller inside `execute`;
 its line is the treasury's own part. The five transactions that deploy the

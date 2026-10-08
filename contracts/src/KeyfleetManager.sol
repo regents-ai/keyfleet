@@ -401,12 +401,14 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         TREASURY.depositProtocolShare(amount);
     }
 
-    /// @notice Hands the shared REGENT buyer the next piece of the booked USDC: at most
-    /// `PIECE_USDC`, approved to the buyer exactly, with the treasury as the REGENT's recipient.
-    /// @dev Only the buyer calls this, from `convert`, which then pulls exactly `amount`.
-    function takePiece() external nonReentrant returns (uint256 amount, address recipient) {
+    /// @notice Hands the shared REGENT buyer the next piece of the booked USDC: at most `limit`,
+    /// approved to the buyer exactly, with the treasury as the REGENT's recipient.
+    /// @dev Only the buyer calls this, from `convert`, with a limit of at most `PIECE_USDC`, and
+    /// then pulls exactly `amount`.
+    /// @param limit The most USDC the piece may be.
+    function takePiece(uint256 limit) external nonReentrant returns (uint256 amount, address recipient) {
         if (msg.sender != address(REGENT_BUYER)) revert OnlyRegentBuyer();
-        amount = Math.min(pendingConversion, REGENT_BUYER.PIECE_USDC());
+        amount = Math.min(pendingConversion, limit);
         pendingConversion -= amount;
         USDC.forceApprove(address(REGENT_BUYER), amount);
         recipient = address(TREASURY);

@@ -186,8 +186,8 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     /// this suite's addresses. The fleet contracts are deployed with CREATE2, so a change to their
     /// code moves these addresses, and then both vectors must be worked out and signed again.
     function test_aSignatureFromAnIndependentEncoderIsAccepted() public {
-        assertEq(address(votes), 0x7711EcCa7C4B640edF01886700a0b1d061754af8, "the address the vector was signed for");
-        assertEq(address(fleet), 0x99a750E0B8BCc76620B32349416D58655f019721, "the manager the vector names");
+        assertEq(address(votes), 0xc0C3346c24e7e4F15Aa2f79d14CCDf8478F1fd96, "the address the vector was signed for");
+        assertEq(address(fleet), 0x5605ac683212337286B8348cED2b008279Dd15b5, "the manager the vector names");
         assertEq(block.chainid, 31337);
         assertEq(k1, 10_000_000_001);
         assertEq(k2, 10_000_000_002);
@@ -198,7 +198,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
             _pair(k1, k2),
             alice,
             2_000_000,
-            hex"5017cf3d2822350dc8863fdd1d01bdc76be06ff59b7dd491756dbf856ad2b9f30e46dcd80e20747c7467b27a3f83ab1bd1b1dcfa142824592fe54486a6cbd0701b"
+            hex"29bf1d89a805ba00c9247215f49654f12c6e25727ab6926401f662b3623ecb6d1c426fc3d87272e890efcadfbbae26ac0743f928c8810794c5c0efb2b84761571c"
         );
         assertTrue(votes.isActive(k1) && votes.isActive(k2));
     }
@@ -211,7 +211,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     /// treasury address; Alice signs Yes for keys 1 and 2 at epochs 1 and 1 and delegation
     /// revisions 0 and 0, nonce 0 and deadline 2,000,000.
     function test_aBallotFromAnIndependentEncoderIsAccepted() public {
-        assertEq(address(fleet.TREASURY()), 0xc410a18600979b78b2aa51b697D3AB852Bd112a4, "the treasury the encoder used");
+        assertEq(address(fleet.TREASURY()), 0x4Cd9895847607479f43aB28bA12504849A4f2B16, "the treasury the encoder used");
         uint256 proposalId = _propose();
         assertEq(
             votes.proposal(proposalId).actionsHash,
@@ -220,7 +220,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
         );
         assertEq(
             votes.proposal(proposalId).proposalHash,
-            0x4911278992610d883998a5ac245c471d9f1cc31d9b4676c871b4d17f20744fd0,
+            0x11de60db3e8e6ebf8071fd1196e02916cb2bb8a29cebbea9ed43fed1dd203698,
             "the proposal hash the encoder worked out"
         );
 
@@ -230,7 +230,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
             YES,
             alice,
             2_000_000,
-            hex"2e1c2192a96e31d2d783e49ffa26367d7e56c8b2091865d7b13da34bfe31031765d515f93686e226bb56138610bf9e87b8ad0eb42d4bc8b6018e1bc76f7a30aa1c"
+            hex"7dfb19769c02a1911b0f225fe721e229681f841cbb38ae4eb29b8c9a9202ae2268ea48c31121614b03a0a1fda7c7d207aab0efb11a7c42ea01ae8a27c53068001c"
         );
         assertEq(votes.proposal(proposalId).yes, 2);
     }

@@ -24,6 +24,9 @@ import {MockUniswapV3Pool} from "../mocks/MockUniswapV3Pool.sol";
 import {MockVRFCoordinatorV2Plus} from "../mocks/MockVRFCoordinatorV2Plus.sol";
 import {MockWeth} from "../mocks/MockWeth.sol";
 
+/// @dev A full piece for the REGENT buyer, its `PIECE_USDC`, which `KeyfleetRegentBuyerTest` checks.
+uint256 constant FULL_PIECE = 250e6;
+
 /// @dev The whole Keyfleet system on stand-in USDC, WETH, REGENT, Uniswap pools, VRF, staking and
 /// Autolaunch, with the steps the tests repeat: creating fleets, buying keys, passing and carrying
 /// out a proposal's calls, and launching a fleet's token.
@@ -266,13 +269,13 @@ abstract contract KeyfleetFixture is Test {
         return address(uint160(0x100000 + index));
     }
 
-    /// @dev Runs pieces, `PIECE_INTERVAL` apart, until no fleet has USDC booked for its treasury,
-    /// so every treasury holds the REGENT of every purchase so far.
+    /// @dev Runs full pieces, each as soon as it may, until no fleet has USDC booked for its
+    /// treasury, so every treasury holds the REGENT of every purchase so far.
     function _convertAll() internal {
         while (regentBuyer.queueLength() != 0) {
             uint256 opensAt = regentBuyer.nextPieceAt();
             if (block.timestamp < opensAt) vm.warp(opensAt);
-            regentBuyer.convert();
+            regentBuyer.convert(FULL_PIECE);
         }
     }
 

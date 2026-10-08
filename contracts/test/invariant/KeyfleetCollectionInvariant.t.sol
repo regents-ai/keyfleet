@@ -3,6 +3,7 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {KeyfleetFactory} from "../../src/KeyfleetFactory.sol";
 import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
@@ -16,7 +17,7 @@ import {KeyfleetShards} from "../../src/KeyfleetShards.sol";
 import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {FleetWiring} from "../../src/KeyfleetWiring.sol";
-import {KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
+import {FULL_PIECE, KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
 import {MockRegent} from "../mocks/MockRegent.sol";
 import {MockRegentRevenueStaking} from "../mocks/MockRegentRevenueStaking.sol";
 import {MockToken} from "../mocks/MockToken.sol";
@@ -660,7 +661,8 @@ contract CollectionHandler is Test {
     }
 
     /// @dev `voterSeed` picks both the voter (an agent one time in three, else the owner) and the
-    /// choice.
+    /// choice. Ballots are taken while the proposal is open, and only No during a money proposal's
+    /// wait, which cancels it once it would no longer pass.
     function castBallot(uint256 pairSeed, uint256 keySeed, uint256 voterSeed, bool bySig)
         external
         step(_proposalFleet(pairSeed))
@@ -677,32 +679,60 @@ contract CollectionHandler is Test {
         address owner = keys.ownerOf(tokenId);
         address voter = voterSeed % 3 == 0 ? _agent(voterSeed / 3) : owner;
         KeyfleetVotes.Choice choice = KeyfleetVotes.Choice(1 + (voterSeed / 3) % 3);
-        bool allowed = voter == owner || shards.mayGovern(tokenId, voter);
-        bool mature = _isMature(tokenId);
-        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
-        bool open = !stored.cancelled && block.timestamp < stored.closesAt;
+        KeyfleetVotes.Status status = votes.status(proposalId);
+        bytes4 refusal =
+            _ballotRefusal(status, choice, voter == owner || shards.mayGovern(tokenId, voter), _isMature(tokenId));
         (bool ok, bytes memory err) = _ballot(votes, proposalId, tokenId, choice, voter, bySig);
-        if (ok != (open && allowed && mature)) _breach("a ballot was taken or refused wrongly");
+        if (ok != (refusal == bytes4(0))) _breach("a ballot was taken or refused wrongly");
         if (!ok) {
-            bytes4 expected = !open
-                ? KeyfleetVotes.BallotsClosed.selector
-                : allowed ? KeyfleetVotes.KeyTooNew.selector : KeyfleetVotes.NotAuthorizedForKey.selector;
-            if (bytes4(err) != expected) _breach("a ballot was refused for the wrong reason");
-        } else if (votes.ballotOf(proposalId, tokenId) != choice) {
+            if (bytes4(err) != refusal) _breach("a ballot was refused for the wrong reason");
+            return;
+        }
+        if (status == KeyfleetVotes.Status.Waiting) _checkNoWhileWaiting(votes, proposalId);
+        if (votes.ballotOf(proposalId, tokenId) != choice) {
             _breach("a ballot was not recorded");
+        }
+    }
+
+    /// @dev Why a ballot is refused, or nothing when it is taken: ballots are taken while the
+    /// proposal is open, and only No during a money proposal's wait, from a voter allowed to vote
+    /// the key once it is mature.
+    function _ballotRefusal(KeyfleetVotes.Status status, KeyfleetVotes.Choice choice, bool allowed, bool mature)
+        internal
+        pure
+        returns (bytes4)
+    {
+        bool waiting = status == KeyfleetVotes.Status.Waiting;
+        if (status != KeyfleetVotes.Status.Open && !waiting) return KeyfleetVotes.BallotsClosed.selector;
+        if (waiting && choice != KeyfleetVotes.Choice.No) return KeyfleetVotes.OnlyNoWhileWaiting.selector;
+        if (!allowed) return KeyfleetVotes.NotAuthorizedForKey.selector;
+        if (!mature) return KeyfleetVotes.KeyTooNew.selector;
+        return bytes4(0);
+    }
+
+    /// @dev After a No taken during the wait, the proposal is cancelled exactly when it no longer
+    /// passes.
+    function _checkNoWhileWaiting(KeyfleetVotes votes, uint256 proposalId) internal {
+        KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
+        bool passes = stored.yes >= votes.approvalsNeeded(uint256(stored.e0) + stored.late);
+        KeyfleetVotes.Status expected = passes ? KeyfleetVotes.Status.Waiting : KeyfleetVotes.Status.Cancelled;
+        if (votes.status(proposalId) != expected) {
+            _breach("a No during the wait cancelled a proposal that still passes, or kept one that fails");
         }
     }
 
     /// @notice Every key's owner votes Yes on one proposal, as a fleet agreeing on it would; while
     /// ballots are open each mature key's ballot is taken and a key younger than its maturity is
-    /// refused, and afterwards each is refused as closed. Once every key counted voted Yes, with
+    /// refused, during a money proposal's wait each is refused as only No is taken, and afterwards
+    /// each is refused as closed. Once every key counted voted Yes, with
     /// `carryOut` the fleet waits for the ballots to close and carries the proposal out.
     function rally(uint256 pairSeed, bool carryOut) external step(_proposalFleet(pairSeed)) {
         (uint256 id, uint256 proposalId) = _pickProposal(pairSeed);
         if (id == 0) return;
         KeyfleetVotes votes = _manager(id).VOTES();
         KeyfleetVotes.Proposal memory stored = votes.proposal(proposalId);
-        bool open = !stored.cancelled && block.timestamp < stored.closesAt;
+        KeyfleetVotes.Status status = votes.status(proposalId);
+        bool open = status == KeyfleetVotes.Status.Open;
         uint256 minted = _manager(id).totalMinted();
         bool everyCountedKeyVoted = true;
         for (uint256 k = 1; k <= minted; ++k) {
@@ -712,9 +742,13 @@ contract CollectionHandler is Test {
             try votes.castBallot(proposalId, _ids(tokenId), KeyfleetVotes.Choice.Yes) {
                 if (!open || !mature) _breach("a ballot was taken after ballots closed or from a new key");
             } catch (bytes memory err) {
-                bytes4 expected = open ? KeyfleetVotes.KeyTooNew.selector : KeyfleetVotes.BallotsClosed.selector;
+                bytes4 expected = open
+                    ? KeyfleetVotes.KeyTooNew.selector
+                    : status == KeyfleetVotes.Status.Waiting
+                        ? KeyfleetVotes.OnlyNoWhileWaiting.selector
+                        : KeyfleetVotes.BallotsClosed.selector;
                 if ((open && mature) || bytes4(err) != expected) {
-                    _breach("an owner's ballot was refused other than as closed or too new");
+                    _breach("an owner's Yes was refused other than as closed, waiting or too new");
                 }
                 if (open && votes.wasActiveAtOpening(proposalId, tokenId)) everyCountedKeyVoted = false;
             }
@@ -892,9 +926,14 @@ contract CollectionHandler is Test {
         }
     }
 
-    /// @notice Anyone turns the next piece of booked USDC into REGENT for the first queued fleet's
-    /// treasury, after waiting out the gap since the last piece when `waitOut` says so.
-    function convert(uint256 callerSeed, bool waitOut) external step(keys.fleetOfManager(regentBuyer.nextInQueue())) {
+    /// @notice Anyone turns the next piece of booked USDC, of at most `maxUsdc` bounded to two full
+    /// pieces and sometimes zero, into REGENT for the first queued fleet's treasury, after waiting
+    /// out the gap since the last piece when `waitOut` says so.
+    function convert(uint256 callerSeed, uint256 maxUsdc, bool waitOut)
+        external
+        step(keys.fleetOfManager(regentBuyer.nextInQueue()))
+    {
+        maxUsdc = bound(maxUsdc, 0, 2 * FULL_PIECE);
         uint256 opensAt = regentBuyer.nextPieceAt();
         if (waitOut && block.timestamp < opensAt) {
             vm.warp(opensAt);
@@ -902,25 +941,28 @@ contract CollectionHandler is Test {
         }
         KeyfleetManager manager = KeyfleetManager(regentBuyer.nextInQueue());
         bytes4 expected;
-        if (block.timestamp < opensAt) expected = KeyfleetRegentBuyer.PieceTooSoon.selector;
+        if (maxUsdc == 0) expected = KeyfleetRegentBuyer.PieceEmpty.selector;
+        else if (block.timestamp < opensAt) expected = KeyfleetRegentBuyer.PieceTooSoon.selector;
         else if (address(manager) == address(0)) expected = KeyfleetRegentBuyer.NothingQueued.selector;
         uint256 pending;
         uint256 piece;
         uint256 treasuryRegent;
         if (address(manager) != address(0)) {
             pending = manager.pendingConversion();
-            piece = pending < regentBuyer.PIECE_USDC() ? pending : regentBuyer.PIECE_USDC();
+            piece = Math.min(pending, Math.min(maxUsdc, regentBuyer.PIECE_USDC()));
             treasuryRegent = regent.balanceOf(address(manager.TREASURY()));
         }
         vm.prank(_stranger(callerSeed, 0));
-        try regentBuyer.convert() returns (uint256 out) {
+        try regentBuyer.convert(maxUsdc) returns (uint256 out) {
             if (expected != bytes4(0)) _breach("a piece ran that should have been refused");
             if (piece == 0) _breach("a queued fleet had no USDC booked");
             if (out != piece * 1e12 || regent.balanceOf(address(manager.TREASURY())) != treasuryRegent + out) {
                 _breach("a piece did not pay its fleet's treasury REGENT at the market price");
             }
             if (manager.pendingConversion() != pending - piece) _breach("a piece took other than its size");
-            if (regentBuyer.lastPieceAt() != block.timestamp) _breach("a piece was not timed");
+            if (regentBuyer.nextPieceAt() != block.timestamp + Math.ceilDiv(15 minutes * piece, FULL_PIECE)) {
+                _breach("a piece's wait was out of proportion");
+            }
             if (regentBuyer.isQueued(address(manager)) != (pending != piece)) {
                 _breach("a fleet left the queue with USDC booked, or stayed in it without");
             }
@@ -993,19 +1035,22 @@ contract CollectionHandler is Test {
         ghostSeed[tokenId] = seed;
     }
 
-    /// @notice The Safe, or a stranger, steps the phase with an opening up to two days away; an
-    /// opening now or before the current phase's is refused.
+    /// @notice The Safe, or a stranger, steps the phase with an opening up to 31 days away; an
+    /// opening now, more than 30 days ahead or before the current phase's is refused.
     function advancePhase(uint256 callerSeed, uint256 opensSeed) external step(0) {
         address caller = callerSeed % 3 == 0 ? _stranger(callerSeed, 0) : safe;
         uint8 phase = keys.phase();
         uint256 needed = phase == 0 ? 1 : phase == 1 ? 4 : 0;
-        uint64 opensAt = uint64(block.timestamp + bound(opensSeed, 0, 2 days));
+        uint64 opensAt = uint64(block.timestamp + bound(opensSeed, 0, 31 days));
         bytes4 expected;
         if (caller != safe) {
             expected = KeyfleetKeys.OnlySafe.selector;
         } else if (phase >= keys.FINAL_PHASE()) {
             expected = KeyfleetKeys.NoNextPhase.selector;
-        } else if (opensAt <= block.timestamp || opensAt < ghostOpensAt[phase]) {
+        } else if (
+            opensAt <= block.timestamp || opensAt > block.timestamp + keys.MAX_OPENING_LEAD()
+                || opensAt < ghostOpensAt[phase]
+        ) {
             expected = KeyfleetKeys.OpensAtInvalid.selector;
         } else if (keys.fleetCount() < needed) {
             expected = KeyfleetKeys.FleetsMissing.selector;
@@ -1291,7 +1336,7 @@ contract CollectionHandler is Test {
             _attempt(
                 a,
                 address(a.manager),
-                abi.encodeCall(KeyfleetManager.takePiece, ()),
+                abi.encodeCall(KeyfleetManager.takePiece, (a.ownKey)),
                 KeyfleetManager.OnlyRegentBuyer.selector
             );
         } else if (a.pick == 47 && keys.fleetOfManager(a.caller) == 0) {

@@ -111,6 +111,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     uint32 public constant REVEAL_WORDS = 1;
     /// @notice How long a key waits for an answer before its random word may be asked for again.
     uint256 public constant REVEAL_RETRY_AFTER = 1 days;
+    /// @notice The furthest ahead a phase step may name its opening: 30 days.
+    uint256 public constant MAX_OPENING_LEAD = 30 days;
 
     /// @dev ERC-4906 interface id.
     bytes4 private constant ERC4906_INTERFACE_ID = 0x49064906;
@@ -172,7 +174,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     error NotOwnerOrKeeper(uint256 tokenId, address caller);
     /// @notice The phase is already the last.
     error NoNextPhase();
-    /// @notice A phase must open in the future, and not before the phase it follows.
+    /// @notice A phase must open in the future, within `MAX_OPENING_LEAD`, and not before the phase
+    /// it follows.
     error OpensAtInvalid(uint256 opensAt);
     /// @notice The fleets a phase opens do not all exist yet.
     error FleetsMissing(uint256 needed, uint256 registered);
@@ -353,11 +356,14 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
 
     /// @notice Moves to the next phase, whose sales open at `opensAt`. Phase 1 needs fleet 1 and
     /// phase 2 needs fleets 1 to 4.
-    /// @param opensAt When the phase opens: in the future, and not before the phase it follows.
+    /// @param opensAt When the phase opens: in the future, at most `MAX_OPENING_LEAD` from now, and
+    /// not before the phase it follows.
     function advancePhase(uint64 opensAt) external onlySafe {
         uint8 current = phase;
         if (current >= FINAL_PHASE) revert NoNextPhase();
-        if (opensAt <= block.timestamp || opensAt < phaseOpensAt) revert OpensAtInvalid(opensAt);
+        if (opensAt <= block.timestamp || opensAt > block.timestamp + MAX_OPENING_LEAD || opensAt < phaseOpensAt) {
+            revert OpensAtInvalid(opensAt);
+        }
         uint8 next = current + 1;
         uint256 needed = next == 1 ? 1 : next == 2 ? FOUNDING_FLEETS : 0;
         if (fleetCount < needed) revert FleetsMissing(needed, fleetCount);

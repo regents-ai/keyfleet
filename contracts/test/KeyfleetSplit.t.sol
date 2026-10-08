@@ -54,6 +54,26 @@ contract MisbehavingToken is DecimalsToken {
     }
 }
 
+/// @dev A token that delivers one unit short to one recipient and burns that unit, as OUSD's
+/// rounding can.
+contract ShortToken is DecimalsToken {
+    address public shortTo;
+
+    constructor() DecimalsToken(18) {}
+
+    function setShortTo(address recipient) external {
+        shortTo = recipient;
+    }
+
+    function _update(address from, address to, uint256 value) internal override {
+        if (to == shortTo && from != address(0) && value != 0) {
+            super._update(from, address(0), 1);
+            value -= 1;
+        }
+        super._update(from, to, value);
+    }
+}
+
 /// @dev A token that buys a key from inside its own transfer to the ledger, so the key is minted
 /// after the treasury counted the keys and before the ledger is funded.
 contract MintingToken is DecimalsToken {
@@ -382,6 +402,67 @@ contract KeyfleetSplitTest is KeyfleetFixture {
         assertEq(rewards.backed(NATIVE), 3 * perKey, "and reserves all of it");
         assertEq(address(treasury).balance, 1 ether - 3 * perKey, "the dust stayed in the treasury");
         assertEq(1 ether - 3 * perKey - (1 ether - 5e15), 2, "two wei of dust");
+    }
+
+    /// @dev Invariant: an admitted token that reaches the ledger one unit short is split by what
+    /// arrived, a unit less per key, and every later run and claim still works.
+    function test_aTokenArrivingShortIsSplitByWhatArrived() public {
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
+        _mature();
+        _openTreasury(fleet);
+        KeyfleetRewards rewards = fleet.REWARDS();
+        ShortToken ousd = new ShortToken();
+        _admit(fleet, ousd);
+        ousd.mint(address(treasury), 1_000e18);
+        ousd.setShortTo(address(rewards));
+
+        // The first public run has been due since a day after the first mint.
+        uint256 perKey = _perKey(1_000e18, 50, 2);
+        vm.expectEmit(true, false, false, true, address(treasury));
+        emit SplitAllocated(address(ousd), 1_000e18, perKey - 1, 2);
+        _run(treasury);
+        assertEq(rewards.splitIndex(address(ousd)), perKey - 1, "a unit less per key");
+        assertEq(ousd.balanceOf(address(rewards)), 2 * perKey - 1, "the ledger holds what arrived");
+        assertEq(rewards.backed(address(ousd)), 2 * perKey - 2, "and owes no more than it holds");
+
+        vm.warp(treasury.nextRunAt());
+        _run(treasury);
+        assertGt(rewards.splitIndex(address(ousd)), perKey, "the next day splits too");
+        assertLe(rewards.backed(address(ousd)), ousd.balanceOf(address(rewards)), "still backed");
+
+        ousd.setShortTo(address(0));
+        address[] memory assets = new address[](1);
+        assets[0] = address(ousd);
+        uint256[] memory first = _ids(_key(fleet, 1));
+        uint256 owed = rewards.accrued(address(ousd), first[0]);
+        address holder = keys.ownerOf(first[0]);
+        vm.prank(holder);
+        rewards.claim(first, assets);
+        assertEq(ousd.balanceOf(holder), owed, "and the holder claims in full");
+    }
+
+    /// @dev Invariant: a ledger left a unit short of what it owes, as OUSD's rounding can leave it,
+    /// does not make later runs revert: the next run's transfer covers the gap and the keys get the
+    /// rest.
+    function test_aLedgerLeftShortDoesNotStopLaterRuns() public {
+        (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(2);
+        _mature();
+        _openTreasury(fleet);
+        KeyfleetRewards rewards = fleet.REWARDS();
+        DecimalsToken ousd = new DecimalsToken(18);
+        _admit(fleet, ousd);
+        ousd.mint(address(treasury), 1_000e18);
+        _run(treasury);
+        uint256 first = rewards.splitIndex(address(ousd));
+        deal(address(ousd), address(rewards), ousd.balanceOf(address(rewards)) - 1);
+
+        vm.warp(treasury.nextRunAt());
+        uint256 perKey = _perKey(ousd.balanceOf(address(treasury)), 50, 2);
+        vm.expectEmit(true, false, false, true, address(treasury));
+        emit SplitAllocated(address(ousd), ousd.balanceOf(address(treasury)), perKey - 1, 2);
+        _run(treasury);
+        assertEq(rewards.splitIndex(address(ousd)), first + perKey - 1, "the gap came out of the keys' share");
+        assertEq(rewards.backed(address(ousd)), ousd.balanceOf(address(rewards)) - 1, "and the ledger is backed again");
     }
 
     /// @dev Invariant: when the cut is smaller than the number of keys, no key would get a whole

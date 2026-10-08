@@ -8,7 +8,7 @@ import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRegentBuyer} from "../src/KeyfleetRegentBuyer.sol";
 import {V4PoolKey} from "../src/interfaces/IUniswapV4PoolManager.sol";
-import {KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
+import {FULL_PIECE, KeyfleetFixture} from "./helpers/KeyfleetFixture.sol";
 import {MockPoolManager} from "./mocks/MockPoolManager.sol";
 import {MockUniswapV3Pool} from "./mocks/MockUniswapV3Pool.sol";
 
@@ -43,18 +43,18 @@ contract PieceManager {
         BUYER.enqueue();
     }
 
-    function takePiece() external returns (uint256 amount, address recipient) {
+    function takePiece(uint256 limit) external returns (uint256 amount, address recipient) {
         require(msg.sender == address(BUYER), "only the buyer");
-        amount = Math.min(pendingConversion, BUYER.PIECE_USDC());
+        amount = Math.min(pendingConversion, limit);
         pendingConversion -= amount;
         USDC.approve(address(BUYER), amount);
         recipient = TREASURY;
     }
 }
 
-/// @dev The shared REGENT buyer: purchases only book the treasury's USDC; pieces of at most 250 USDC
-/// run at most once every 15 minutes across every fleet, fleets take turns, and a piece that moves
-/// the route's price by more than 1% reverts.
+/// @dev The shared REGENT buyer: purchases only book the treasury's USDC; pieces of at most 250 USDC,
+/// smaller on request, run no faster than 250 USDC per 15 minutes across every fleet, fleets take
+/// turns, and a piece that moves the route's price by more than 1% reverts.
 contract KeyfleetRegentBuyerTest is KeyfleetFixture {
     address private stranger = makeAddr("stranger");
 
@@ -154,7 +154,7 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         assertEq(fleet.cascadeReserve(), 0);
         assertEq(regentBuyer.nextInQueue(), address(fleet));
 
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
         assertEq(regent.balanceOf(address(fleet.TREASURY())), _regentFor(reserve + price - price / 10));
         assertEq(fleet.pendingConversion(), 0);
     }
@@ -187,7 +187,7 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         _buy(fleet, stranger);
         vm.prank(stranger);
         vm.expectRevert(KeyfleetManager.OnlyRegentBuyer.selector);
-        fleet.takePiece();
+        fleet.takePiece(FULL_PIECE);
     }
 
     // --- pieces ----------------------------------------------------------------
@@ -202,7 +202,7 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
             address(fleet), address(fleet.TREASURY()), booked, booked * 4e8, _regentFor(booked)
         );
         vm.prank(stranger);
-        uint256 out = regentBuyer.convert();
+        uint256 out = regentBuyer.convert(FULL_PIECE);
 
         assertEq(out, _regentFor(booked));
         assertEq(regent.balanceOf(address(fleet.TREASURY())), out, "REGENT goes to the treasury");
@@ -210,7 +210,7 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         assertEq(usdc.balanceOf(address(fleet)), fleet.protocolShareOwed(), "the 10% share is untouched");
         assertEq(usdc.allowance(address(fleet), address(regentBuyer)), 0, "no allowance is left");
         assertEq(regentBuyer.queueLength(), 0, "and the fleet leaves the queue");
-        assertEq(regentBuyer.lastPieceAt(), block.timestamp);
+        assertEq(regentBuyer.nextPieceAt(), block.timestamp + _waitFor(booked), "the wait matches the piece");
         _assertBuyerEmpty();
         assertEq(poolManager.delta(address(weth)), 0);
         assertEq(poolManager.delta(address(regent)), 0);
@@ -220,7 +220,7 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
     /// line.
     function test_APieceIsAtMost250Usdc() public {
         KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 1000e6);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
         assertEq(usdc.balanceOf(address(v3Pool)), 250e6, "one piece of 250 USDC");
         assertEq(fleet.pendingConversion(), 650e6, "the rest stays booked");
         assertEq(regentBuyer.nextInQueue(), address(fleet), "and waits its turn again");
@@ -231,40 +231,40 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         assertEq(regentBuyer.queueLength(), 0);
     }
 
-    /// @dev Invariant: one piece every 15 minutes across every fleet, so never two in one block.
-    function test_OnePieceEveryFifteenMinutesAcrossEveryFleet() public {
-        KeyfleetManager classic = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+    /// @dev Invariant: a full piece makes every fleet wait 15 minutes, so never two in one block.
+    function test_AFullPieceMakesEveryFleetWaitFifteenMinutes() public {
+        _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 1000e6);
         KeyfleetManager syndicate = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
-        _buy(classic, stranger);
         _buy(syndicate, stranger);
         assertEq(regentBuyer.nextPieceAt(), 0, "the first piece may run at once");
 
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
         uint256 next = block.timestamp + 15 minutes;
         assertEq(regentBuyer.nextPieceAt(), next);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.PieceTooSoon.selector, next));
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
 
         vm.warp(next - 1);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.PieceTooSoon.selector, next));
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
         assertEq(syndicate.pendingConversion(), Q_SYNDICATE_BOOKED, "the other fleet waits too");
 
         vm.warp(next);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
         assertEq(syndicate.pendingConversion(), 0, "its piece runs once the wait is over");
     }
 
-    /// @dev Invariant: whatever the time between them, two pieces never run in the same block.
-    function testFuzz_NeverTwoPiecesInOneBlock(uint256 gap) public {
+    /// @dev Invariant: whatever the time between them and however small the piece, two pieces never
+    /// run in the same block.
+    function testFuzz_NeverTwoPiecesInOneBlock(uint256 gap, uint256 maxUsdc) public {
         KeyfleetManager classic = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetManager syndicate = _deploy(KeyfleetPresets.Preset.FibonacciSyndicate);
         _buy(classic, stranger);
         _buy(syndicate, stranger);
         vm.warp(block.timestamp + bound(gap, 0, 365 days));
-        regentBuyer.convert();
+        regentBuyer.convert(bound(maxUsdc, 1, type(uint256).max));
         vm.expectPartialRevert(KeyfleetRegentBuyer.PieceTooSoon.selector);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
     }
 
     /// @dev Invariant: fleets take turns, one piece each, whatever their bookings.
@@ -283,7 +283,95 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
 
     function test_ConvertWithNothingQueuedReverts() public {
         vm.expectRevert(KeyfleetRegentBuyer.NothingQueued.selector);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
+    }
+
+    // --- smaller pieces --------------------------------------------------------
+
+    /// @dev Invariant: anyone may take a smaller piece; it converts only that much, the fleet keeps
+    /// the rest and its turn comes round again, and the wait shrinks in proportion.
+    function test_ASmallerPieceConvertsLessAndWaitsInProportion() public {
+        KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 1000e6);
+        vm.prank(stranger);
+        uint256 out = regentBuyer.convert(50e6);
+        assertEq(out, _regentFor(50e6), "a 50 USDC piece");
+        assertEq(regent.balanceOf(address(fleet.TREASURY())), out, "for the treasury");
+        assertEq(fleet.pendingConversion(), 850e6, "the rest stays booked");
+        assertEq(regentBuyer.nextInQueue(), address(fleet), "and waits its turn again");
+        uint256 next = block.timestamp + 3 minutes;
+        assertEq(regentBuyer.nextPieceAt(), next, "a fifth of a piece waits a fifth of 15 minutes");
+
+        vm.warp(next - 1);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.PieceTooSoon.selector, next));
+        regentBuyer.convert(1);
+        vm.warp(next);
+        regentBuyer.convert(FULL_PIECE);
+        assertEq(fleet.pendingConversion(), 600e6, "then a full piece");
+    }
+
+    /// @dev Invariant: asking for more than a piece takes a piece.
+    function test_AskingForMoreThanAPieceTakesOnePiece() public {
+        KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 1000e6);
+        regentBuyer.convert(type(uint256).max);
+        assertEq(fleet.pendingConversion(), 650e6, "250 USDC and no more");
+        assertEq(regentBuyer.nextPieceAt(), block.timestamp + 15 minutes);
+    }
+
+    /// @dev Invariant: dust waits in proportion too, rounded up to at least a second, so it cannot
+    /// take a whole 15-minute slot nor run twice in a block.
+    function test_DustWaitsASecondRoundedUp() public {
+        KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 1000e6);
+        regentBuyer.convert(1);
+        assertEq(fleet.pendingConversion(), 900e6 - 1, "one atomic unit");
+        assertEq(regentBuyer.nextPieceAt(), block.timestamp + 1, "waits one second");
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.PieceTooSoon.selector, block.timestamp + 1));
+        regentBuyer.convert(1);
+
+        vm.warp(block.timestamp + 1);
+        // 1 USDC is 3.6 seconds of the rate, rounded up to 4.
+        regentBuyer.convert(1e6);
+        assertEq(regentBuyer.nextPieceAt(), block.timestamp + 4);
+    }
+
+    function test_ConvertOfNothingReverts() public {
+        _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 1000e6);
+        vm.expectRevert(KeyfleetRegentBuyer.PieceEmpty.selector);
+        regentBuyer.convert(0);
+    }
+
+    /// @dev Invariant: a fleet whose full piece moves the price too far is not stuck at the front;
+    /// a smaller piece, which moves it less, converts.
+    function test_APieceRefusedAsTooLargeConvertsSmaller() public {
+        KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 1000e6);
+        // The stand-in pool moves a set amount per swap: a full piece moves 1.02%.
+        poolManager.setSqrtMoveBps(51);
+        vm.expectPartialRevert(KeyfleetRegentBuyer.PriceMoved.selector);
+        regentBuyer.convert(FULL_PIECE);
+        // A fifth of the piece moves a fifth as far.
+        poolManager.setSqrtMoveBps(10);
+        regentBuyer.convert(50e6);
+        assertEq(fleet.pendingConversion(), 850e6, "the smaller piece converted");
+    }
+
+    /// @dev Invariant: whatever pieces anyone asks for and whenever, USDC converts no faster than
+    /// 250 per 15 minutes: everything before the latest piece fits inside the time it has taken.
+    function testFuzz_NeverFasterThan250UsdcPer15Minutes(uint256[8] memory asks, uint256[8] memory gaps) public {
+        (KeyfleetRegentBuyer buyer_, PieceManager manager) = _standalone(_bindings().route);
+        manager.book(100_000e6);
+        uint256 first;
+        uint256 converted;
+        uint256 lastPiece;
+        for (uint256 i = 0; i < asks.length; ++i) {
+            vm.warp(Math.max(block.timestamp + bound(gaps[i], 0, 30 minutes), buyer_.nextPieceAt()));
+            uint256 before = manager.pendingConversion();
+            buyer_.convert(bound(asks[i], 1, 1000e6));
+            lastPiece = before - manager.pendingConversion();
+            if (i == 0) first = block.timestamp;
+            converted += lastPiece;
+            assertLe(lastPiece, 250e6, "never more than a piece");
+            assertEq(buyer_.nextPieceAt(), block.timestamp + _waitFor(lastPiece), "the wait matches the piece");
+        }
+        assertLe((converted - lastPiece) * 15 minutes, (block.timestamp - first) * 250e6, "within the rate");
     }
 
     // --- the 1% limit ----------------------------------------------------------
@@ -298,21 +386,21 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         // 0.51% on the square-root price is a 1.0226% move of the price.
         poolManager.setSqrtMoveBps(51);
         vm.expectPartialRevert(KeyfleetRegentBuyer.PriceMoved.selector);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
         assertEq(fleet.pendingConversion(), booked, "the booking stays");
         assertEq(regentBuyer.nextInQueue(), address(fleet), "and so does its place");
-        assertEq(regentBuyer.lastPieceAt(), 0, "and the clock");
+        assertEq(regentBuyer.nextPieceAt(), 0, "and the clock");
 
         // The two legs' moves multiply: 0.25% and 0.25% on the square roots is 1.0038% in all.
         poolManager.setSqrtMoveBps(25);
         v3Pool.setSqrtMoveBps(25);
         vm.expectPartialRevert(KeyfleetRegentBuyer.PriceMoved.selector);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
 
         // 0.49% on the square-root price is 0.9824%, which is allowed.
         v3Pool.setSqrtMoveBps(0);
         poolManager.setSqrtMoveBps(49);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
         assertEq(fleet.pendingConversion(), 0);
         assertEq(regent.balanceOf(address(fleet.TREASURY())), _regentFor(booked));
     }
@@ -324,16 +412,16 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         // A 0.51% fall of the square-root price is a 1.03% move of the price, measured larger over smaller.
         poolManager.setSqrtMoveBps(-51);
         vm.expectPartialRevert(KeyfleetRegentBuyer.PriceMoved.selector);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
         // A rise on one leg and a fall on the other still add up.
         poolManager.setSqrtMoveBps(-25);
         v3Pool.setSqrtMoveBps(25);
         vm.expectPartialRevert(KeyfleetRegentBuyer.PriceMoved.selector);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
         // A 0.49% fall is under the limit.
         v3Pool.setSqrtMoveBps(0);
         poolManager.setSqrtMoveBps(-49);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
         assertEq(fleet.pendingConversion(), 0);
     }
 
@@ -343,7 +431,7 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         uint256 booked = _bookClassic();
         v3Pool.setFillBps(9000);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.SwapIncomplete.selector, booked, booked * 9 / 10));
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
     }
 
     function test_ConvertRefusesAPartialFillOnTheWethLeg() public {
@@ -351,21 +439,21 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         poolManager.setFillBps(9000);
         uint256 wethIn = booked * 4e8;
         vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.SwapIncomplete.selector, wethIn, wethIn * 9 / 10));
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
     }
 
     function test_ConvertRefusesAV3PoolAskingForMoreThanTheSwap() public {
         uint256 booked = _bookClassic();
         v3Pool.setOvercharge(1);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.SwapIncomplete.selector, booked, booked + 1));
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
     }
 
     function test_ConvertPaysTheV3PoolOnlyOnce() public {
         uint256 booked = _bookClassic();
         v3Pool.setCallbackTwice(true);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.SwapIncomplete.selector, 0, booked));
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
     }
 
     function test_ConvertRefusesASwapThatPaysNoRegent() public {
@@ -373,7 +461,7 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         // The PoolManager reports the WETH spent and nothing out.
         poolManager.setReportedDelta(-int256(booked * 4e8) << 128);
         vm.expectRevert(KeyfleetRegentBuyer.NothingBought.selector);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
     }
 
     function test_ConvertRefusesAV3SwapThatPaysNoWeth() public {
@@ -383,7 +471,7 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         (KeyfleetRegentBuyer buyer_, PieceManager manager) = _standalone(route);
         manager.book(10e6);
         vm.expectRevert(KeyfleetRegentBuyer.NothingBought.selector);
-        buyer_.convert();
+        buyer_.convert(FULL_PIECE);
     }
 
     function test_ConvertWorksWithTheTokensInTheOtherOrder() public {
@@ -401,7 +489,7 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         assertFalse(flipped.WETH_IS_V4_CURRENCY0());
 
         manager.book(7e6);
-        uint256 out = flipped.convert();
+        uint256 out = flipped.convert(FULL_PIECE);
         assertEq(out, _regentFor(7e6));
         assertEq(regent.balanceOf(stranger), out);
         assertEq(weth.balanceOf(address(flipped)), 0);
@@ -442,10 +530,12 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         CallbackCaller hook = new CallbackCaller();
         poolManager.setHook(
             address(hook),
-            abi.encodeCall(CallbackCaller.call, (address(regentBuyer), abi.encodeCall(KeyfleetRegentBuyer.convert, ())))
+            abi.encodeCall(
+                CallbackCaller.call, (address(regentBuyer), abi.encodeCall(KeyfleetRegentBuyer.convert, (FULL_PIECE)))
+            )
         );
         vm.expectRevert(bytes4(keccak256("ReentrancyGuardReentrantCall()")));
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
     }
 
     function test_TheHookCannotCallTheBuyersCallbacks() public {
@@ -459,7 +549,7 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
             )
         );
         vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.UnexpectedCallback.selector, address(hook)));
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
     }
 
     /// @dev Invariant: a hook that buys a key of the fleet being served, inside its piece, leaves every
@@ -482,7 +572,7 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
                 )
             )
         );
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
 
         assertEq(fleet.totalMinted(), 2, "the hook's purchase went through");
         assertEq(fleet.pendingConversion(), price - price / 10, "and is booked");
@@ -491,8 +581,9 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         assertEq(usdc.balanceOf(address(fleet)), fleet.accountedBalance(address(usdc)), "every unit has a purpose");
     }
 
-    function testFuzz_EveryPieceIsAtTheMarketAndKeepsNothing(uint256 amount) public {
+    function testFuzz_EveryPieceIsAtTheMarketAndKeepsNothing(uint256 amount, uint256 maxUsdc) public {
         amount = bound(amount, 1, 20 * 250e6);
+        maxUsdc = bound(maxUsdc, 25e6, type(uint256).max);
         (KeyfleetRegentBuyer buyer_, PieceManager manager) = _standalone(_bindings().route);
         manager.book(amount);
         uint256 converted;
@@ -500,9 +591,9 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
             uint256 opensAt = buyer_.nextPieceAt();
             if (block.timestamp < opensAt) vm.warp(opensAt);
             uint256 before = manager.pendingConversion();
-            uint256 out = buyer_.convert();
+            uint256 out = buyer_.convert(maxUsdc);
             uint256 piece = before - manager.pendingConversion();
-            assertLe(piece, 250e6, "never more than a piece");
+            assertLe(piece, Math.min(maxUsdc, 250e6), "never more than asked, nor than a piece");
             assertEq(out, _regentFor(piece), "at the market");
             converted += piece;
         }
@@ -517,6 +608,11 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
     /// @dev What one Syndicate #1 key books: 90% of its first price.
     uint256 private constant Q_SYNDICATE_BOOKED = 9e6;
 
+    /// @dev The wait after a piece of `usdcIn`: 15 minutes for a full piece, in proportion, rounded up.
+    function _waitFor(uint256 usdcIn) private pure returns (uint256) {
+        return Math.ceilDiv(15 minutes * usdcIn, 250e6);
+    }
+
     /// @dev Books one Classic #1 key's treasury part and returns it.
     function _bookClassic() private returns (uint256 booked) {
         KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
@@ -528,7 +624,7 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
     function _convertOne() private {
         uint256 opensAt = regentBuyer.nextPieceAt();
         if (block.timestamp < opensAt) vm.warp(opensAt);
-        regentBuyer.convert();
+        regentBuyer.convert(FULL_PIECE);
     }
 
     /// @dev A buyer on `route` with one registered manager, holding USDC to book, whose REGENT goes

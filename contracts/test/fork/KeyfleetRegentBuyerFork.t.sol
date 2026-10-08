@@ -9,6 +9,7 @@ import {KeyfleetRegentBuyer} from "../../src/KeyfleetRegentBuyer.sol";
 import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {V4PoolKey} from "../../src/interfaces/IUniswapV4PoolManager.sol";
 import {KeyfleetForkFixture} from "./KeyfleetBaseFork.t.sol";
+import {FULL_PIECE} from "../helpers/KeyfleetFixture.sol";
 
 /// @notice v4-core's `IExtsload`, through which the PoolManager exposes its storage.
 interface IExtsload {
@@ -117,7 +118,7 @@ contract KeyfleetRegentBuyerForkTest is KeyfleetForkFixture {
         assertEq(regent.balanceOf(address(treasury)), 0, "no REGENT yet");
 
         vm.recordLogs();
-        uint256 delivered = buyer.convert();
+        uint256 delivered = buyer.convert(FULL_PIECE);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         assertGt(delivered, 0, "the piece bought REGENT");
         assertEq(regent.balanceOf(address(treasury)), delivered, "for the treasury");
@@ -141,7 +142,7 @@ contract KeyfleetRegentBuyerForkTest is KeyfleetForkFixture {
         _book(classic, buyer.PIECE_USDC());
         uint256 v3Before = _v3SqrtPrice();
         uint256 v4Before = _sqrtPrice(buyer.V4_POOL_ID());
-        uint256 regentOut = buyer.convert();
+        uint256 regentOut = buyer.convert(FULL_PIECE);
         assertGt(regentOut, 0, "REGENT bought");
         assertGt(_v3SqrtPrice(), v3Before, "USDC in raises the v3 price, as WETH is token0");
         assertLt(_sqrtPrice(buyer.V4_POOL_ID()), v4Before, "WETH in lowers the v4 price, as WETH is currency0");
@@ -149,7 +150,25 @@ contract KeyfleetRegentBuyerForkTest is KeyfleetForkFixture {
 
         _book(classic, 1e6);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.PieceTooSoon.selector, block.timestamp + 15 minutes));
-        buyer.convert();
+        buyer.convert(FULL_PIECE);
+    }
+
+    /// @dev A smaller piece moves the real route's prices less than a full one, so a fleet whose
+    /// full piece would break the 1% limit still converts, and the next piece waits in proportion.
+    function test_aSmallerPieceMovesTheRealRouteLessAndWaitsLess() public {
+        _book(classic, 300e6);
+        uint256 v4Before = _sqrtPrice(buyer.V4_POOL_ID());
+        buyer.convert(50e6);
+        uint256 smallMove = v4Before - _sqrtPrice(buyer.V4_POOL_ID());
+        assertEq(classic.pendingConversion(), 250e6, "a 50 USDC piece");
+        assertEq(buyer.nextPieceAt(), block.timestamp + 3 minutes, "waits a fifth of 15 minutes");
+
+        vm.warp(buyer.nextPieceAt());
+        v4Before = _sqrtPrice(buyer.V4_POOL_ID());
+        buyer.convert(FULL_PIECE);
+        uint256 fullMove = v4Before - _sqrtPrice(buyer.V4_POOL_ID());
+        assertEq(classic.pendingConversion(), 0, "then a full piece");
+        assertLt(smallMove * 4, fullMove, "the smaller piece moved the REGENT pool far less");
     }
 
     /// @dev The purchase charges exactly the quote, and refuses a price above the buyer's highest or

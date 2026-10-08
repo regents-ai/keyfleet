@@ -256,8 +256,8 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         assertFalse(keys.salesOpen(6));
     }
 
-    /// @dev Invariant: the Safe names when each phase opens, always in the future and never before
-    /// the phase before it opened. A fleet's sales stay closed until that moment, to the second,
+    /// @dev Invariant: the Safe names when each phase opens, always in the future, at most 30 days
+    /// ahead, and never before the phase before it opened. A fleet's sales stay closed until that moment, to the second,
     /// and open at it without anyone acting.
     function test_aPhaseOpensAtItsChosenTimeAndNotBefore() public {
         KeyfleetManager classic = _createFounding(KeyfleetPresets.Preset.FleetTechClassic);
@@ -267,6 +267,17 @@ contract KeyfleetKeysTest is KeyfleetFixture {
             vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.OpensAtInvalid.selector, notFuture[i]));
             keys.advancePhase(notFuture[i]);
         }
+
+        assertEq(keys.MAX_OPENING_LEAD(), 30 days);
+        uint64 tooFar = uint64(block.timestamp + 30 days + 1);
+        vm.prank(safe);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.OpensAtInvalid.selector, tooFar));
+        keys.advancePhase(tooFar);
+        uint256 fresh = vm.snapshotState();
+        vm.prank(safe);
+        keys.advancePhase(tooFar - 1);
+        assertEq(keys.phaseOpensAt(), tooFar - 1, "exactly 30 days ahead is allowed");
+        vm.revertToState(fresh);
 
         uint64 opensAt = uint64(block.timestamp + 3 days);
         vm.expectEmit(true, true, true, true, address(keys));

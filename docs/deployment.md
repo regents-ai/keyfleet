@@ -31,10 +31,11 @@ The release runs in six steps, in this order:
    three founding fleets, phase 3 lets anyone create a fleet.
 
 Before step 1, go through the deploy-day checklist in the
-[contracts README](../contracts/README.md#deploy-day-checklist): the keeper, a
-bot for the public buttons, the collection metadata address, the subscription
-id and the consumer, REGENT staking unpaused, and factories that can never be
-removed.
+[contracts README](../contracts/README.md#deploy-day-checklist): the keeper,
+the keeper's job list of public buttons (pieces, daily splits and the protocol
+share), the REGENT pool hook's fee that pieces rely on, the collection metadata
+address, the subscription id and the consumer, REGENT staking unpaused, and
+factories that can never be removed.
 
 Nothing in steps 1 to 5 puts any key on sale. The site lists the fleets only
 once the record is loaded into it by hand with `seed-deployment` (see
@@ -337,7 +338,8 @@ KEYFLEET_MANIFEST=base KEYFLEET_STEP=advance-phase KEYFLEET_OPENS_AT=<unix time>
 
 The Safe's transaction must land before that moment, or the collection refuses
 it (`OpensAtInvalid`) and the step is written again with a later time; a phase
-also never opens before the previous one. The phase number changes when the
+also never opens before the previous one, nor more than 30 days after the
+transaction lands. The phase number changes when the
 transaction lands, and what it opens waits for the named moment.
 
 It checks the step against Base's current state as the Safe and writes one file,
@@ -511,7 +513,10 @@ the lab chain's clock past it, so Classic #1 sells at once. It writes
 `contracts/deployments/base-fork-lab.json` in the shape of the release's
 deployed record (`base.deployed.json`), and gives each buyer 100 ETH and exactly
 1,000 USDC. No key is bought. On the lab chain, nobody presses the REGENT
-buyer's `convert()` unless you do, once a piece is due.
+buyer's `convert(250000000)` unless you do, once a piece is due. A buyer must be
+a plain address with no code on Base: anvil's third default account
+(`0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC`) has code on Base that passes on
+any key it receives, so a purchase to it reverts.
 
 ## What the Safe does
 
@@ -561,10 +566,12 @@ change only by its keys' vote.
 **The treasury holds REGENT (7 October 2026), a piece at a time (8 October
 2026).** Keys are paid in USDC. The treasury's part of every purchase is booked
 in the fleet's manager, and the shared REGENT buyer turns it into REGENT for the
-treasury in pieces of at most 250 USDC, one piece every 15 minutes across all
-fleets, at the market price with no minimum, through one fixed route. Anyone may
-trigger a piece, and a piece that would move the route's price more than 1% is
-refused.
+treasury in pieces of at most 250 USDC, no faster than 250 USDC every 15
+minutes across all fleets, at the market price with no minimum, through one
+fixed route. Anyone may trigger a piece and may ask for a smaller one, which
+waits in proportion, and a piece that would itself move the route's price more
+than 1% is refused. Front-running a piece is unprofitable only because the
+REGENT pool's hook charges at least 1% on every swap.
 
 **The fleet's own token (6 October 2026).** A fleet may launch its own token
 through Autolaunch Revstake v2 on Base, by a passed proposal's call from its

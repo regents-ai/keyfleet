@@ -10,6 +10,7 @@ import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
 import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {KeyfleetSafeSteps} from "../../script/KeyfleetSafeSteps.s.sol";
 import {KeyfleetForkFixture} from "./KeyfleetBaseFork.t.sol";
+import {FULL_PIECE} from "../helpers/KeyfleetFixture.sol";
 
 /// @dev The gas of the system's everyday calls against the real Base contracts on a fork of Base:
 /// native USDC (a proxy), REGENT and its v4 pool and hook, the USDC/WETH v3 pool, REGENT revenue
@@ -64,7 +65,7 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         _log("purchase, a later key");
 
         // One piece of the booked USDC through the real pools into REGENT for the treasury.
-        factory.REGENT_BUYER().convert();
+        factory.REGENT_BUYER().convert(FULL_PIECE);
         _log("convert, one piece through both pools");
 
         // A creator's own fleet, once the collection reaches its last phase.

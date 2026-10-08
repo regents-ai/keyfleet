@@ -15,7 +15,7 @@ import {KeyfleetVotes} from "../../src/KeyfleetVotes.sol";
 import {IRegentsAutolaunchFactoryV2} from "../../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {MockAutolaunchFactory, MockLaunchToken} from "../mocks/MockAutolaunchFactory.sol";
 import {MockToken} from "../mocks/MockToken.sol";
-import {KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
+import {FULL_PIECE, KeyfleetFixture} from "../helpers/KeyfleetFixture.sol";
 
 /// @dev Hands each fleet's treasury random batches of calls straight from its controller, so even
 /// the calls proposing refuses (raw token moves and approvals, calls with ETH) are tried, aimed at the fleet's manager, controller, treasury and ledger, at the shared collection,
@@ -114,7 +114,7 @@ contract SegregationHandler is Test {
         uint256 owed = fleet.protocolShareOwed();
         uint256 reserve = fleet.cascadeReserve();
         uint256 pending = fleet.pendingConversion();
-        uint64 lastPieceAt = regentBuyer.lastPieceAt();
+        uint64 nextPieceAt = regentBuyer.nextPieceAt();
         (uint256[] memory credited, uint256[] memory accrued) = _ledger(fleet, minted);
 
         address treasury = address(fleet.TREASURY());
@@ -126,7 +126,7 @@ contract SegregationHandler is Test {
         if (fleet.cascadeReserve() < reserve && fleet.totalMinted() == minted) {
             _breach("the Cascade reserve went down without a level completing");
         }
-        if (fleet.pendingConversion() < pending && regentBuyer.lastPieceAt() == lastPieceAt) {
+        if (fleet.pendingConversion() < pending && regentBuyer.nextPieceAt() == nextPieceAt) {
             _breach("the USDC booked for REGENT went down without a piece");
         }
         (uint256[] memory creditedAfter, uint256[] memory accruedAfter) = _ledger(fleet, minted);
@@ -307,9 +307,9 @@ contract SegregationHandler is Test {
         }
         if (pick == 28) return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.sellFirstKey, (d.someone)));
         if (pick == 29) {
-            if (d.arg % 3 == 0) return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.takePiece, ()));
+            if (d.arg % 3 == 0) return _c(address(d.fleet), 0, abi.encodeCall(d.fleet.takePiece, (d.arg)));
             if (d.arg % 3 == 1) return _c(address(regentBuyer), 0, abi.encodeCall(regentBuyer.enqueue, ()));
-            return _c(address(regentBuyer), 0, abi.encodeCall(regentBuyer.convert, ()));
+            return _c(address(regentBuyer), 0, abi.encodeCall(regentBuyer.convert, (d.arg)));
         }
         if (pick == 30) {
             return _c(

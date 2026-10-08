@@ -130,7 +130,8 @@ contract AnvilLab is Script {
         classic.purchase(sender, classic.nextPrice(), block.timestamp + 1 hours, new bytes32[](0));
         classic.purchase(sender, classic.nextPrice(), block.timestamp + 1 hours, new bytes32[](0));
         vrf.setRevertAll(false);
-        classic.REGENT_BUYER().convert();
+        KeyfleetRegentBuyer buyer = classic.REGENT_BUYER();
+        buyer.convert(buyer.PIECE_USDC());
         vm.stopBroadcast();
     }
 

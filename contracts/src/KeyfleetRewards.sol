@@ -206,7 +206,8 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
     }
 
     /// @notice Adds `perKey` of a token to every one of the `keys` mature keys. The treasury has
-    /// already sent `perKey * keys` here.
+    /// already sent the tokens here and worked `perKey` out from what this ledger holds above what
+    /// it owes.
     function fundSplit(address asset, uint256 perKey, uint256 keys) external onlySplit {
         if (asset == NATIVE) revert UnknownAsset();
         _fundSplit(asset, perKey, keys, IERC20(asset).balanceOf(address(this)));

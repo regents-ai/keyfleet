@@ -16,16 +16,21 @@ import {IUniswapV4PoolManager, IUnlockCallback, V4PoolKey, V4SwapParams} from ".
 /// on a Uniswap v4 pool.
 /// @dev Shared by every fleet. A purchase never swaps: each fleet's manager books the treasury's
 /// part as `pendingConversion` and joins this contract's queue of fleets waiting for REGENT. Anyone
-/// may call `convert`, which takes no arguments and turns one piece of the first queued fleet's
-/// booked USDC into REGENT: at most `PIECE_USDC` (250 USDC), at most one piece every
-/// `PIECE_INTERVAL` (15 minutes) across every fleet, so never two in one block. A fleet with USDC
-/// still booked goes to the back of the queue, so fleets take turns, one piece each. The queue holds
+/// may call `convert(maxUsdc)`, which turns one piece of the first queued fleet's booked USDC into
+/// REGENT: at most `PIECE_USDC` (250 USDC), and less when the caller names less. A piece holds the
+/// next one back for its share of `PIECE_INTERVAL`, 15 minutes for a full piece and in proportion
+/// for a smaller one, rounded up to the second, so across every fleet at most 250 USDC turns into
+/// REGENT every 15 minutes and never two pieces in one block. A fleet with USDC still booked goes to
+/// the back of the queue, so fleets take turns, one piece each. The queue holds
 /// each fleet at most once and only fleets the collection registered, and `convert` touches only
 /// its first entry, so every call costs the same whatever the queue's length.
 ///
 /// A piece that moves the route's price by more than `MAX_PRICE_MOVE_BPS` (1%) reverts, and the
-/// fleet keeps its place at the front. The price is each pool's own, read before and after the
-/// swap; the route's price moves by the two pools' moves multiplied together.
+/// fleet keeps its place at the front until someone converts a smaller piece. The price is each
+/// pool's own, read before and after the swap, so the rule bounds only the piece's own move, never
+/// a move made before it in the same block; what makes pushing the price first and unwinding after
+/// unprofitable is the REGENT pool hook's fee on both trades. The route's price moves by the two
+/// pools' moves multiplied together.
 ///
 /// A piece pulls exactly the USDC the fleet's manager approved, through the v3 pool's callback
 /// straight into the pool, swaps the WETH that comes out inside one PoolManager `unlock`, and has
@@ -64,9 +69,11 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
     error NotManager(address caller);
     /// @notice No fleet has USDC waiting to be turned into REGENT.
     error NothingQueued();
-    /// @notice The last piece was less than `PIECE_INTERVAL` ago.
+    /// @notice The last piece's share of `PIECE_INTERVAL` has not passed yet.
     /// @param nextPieceAt The first second the next piece may run.
     error PieceTooSoon(uint256 nextPieceAt);
+    /// @notice The caller named a piece of no USDC.
+    error PieceEmpty();
     /// @notice The piece moved the route's price by more than `MAX_PRICE_MOVE_BPS`.
     /// @param move The move, scaled by 1e18: 1e16 is 1%.
     error PriceMoved(uint256 move);
@@ -92,7 +99,8 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
 
     /// @notice The most USDC one piece turns into REGENT: 250 USDC.
     uint256 public constant PIECE_USDC = 250e6;
-    /// @notice The least time between two pieces, across every fleet: 15 minutes.
+    /// @notice How long a full piece holds the next one back, across every fleet: 15 minutes. A
+    /// smaller piece holds it back in proportion.
     uint256 public constant PIECE_INTERVAL = 15 minutes;
     /// @notice The most one piece may move the route's price, in basis points: 1%.
     uint256 public constant MAX_PRICE_MOVE_BPS = 100;
@@ -135,8 +143,8 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
     int24 private immutable _tickSpacing;
     address private immutable _hooks;
 
-    /// @notice When the last piece ran; zero before the first.
-    uint64 public lastPieceAt;
+    /// @notice The first second the next piece may run; zero before the first piece.
+    uint64 public nextPieceAt;
     /// @notice The queue's first position; positions `queueHead` up to `queueTail` are filled.
     uint64 public queueHead;
     /// @notice The position the next fleet to join takes.
@@ -197,13 +205,6 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
         return queueTail - queueHead;
     }
 
-    /// @notice The first second the next piece may run: `PIECE_INTERVAL` after the last; zero before
-    /// the first.
-    function nextPieceAt() public view returns (uint256) {
-        uint256 last = lastPieceAt;
-        return last == 0 ? 0 : last + PIECE_INTERVAL;
-    }
-
     /// @notice Puts the calling fleet's manager at the back of the queue, unless it is already in it.
     /// A manager calls this whenever it books USDC for its treasury.
     function enqueue() external {
@@ -212,14 +213,19 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
     }
 
     /// @notice Turns one piece of the first queued fleet's booked USDC into REGENT for its treasury,
-    /// at the market price. Anyone may call it.
-    /// @dev Only once `PIECE_INTERVAL` has passed since the last piece, which also keeps two pieces
-    /// out of one block. The fleet's manager hands over at most `PIECE_USDC` and approves exactly
-    /// that; the fleet goes to the back of the queue if it still has USDC booked. Locked, so the
-    /// REGENT pool's hook cannot start a second piece inside the first.
+    /// at the market price. Anyone may call it, and may name a smaller piece, for instance when a
+    /// full one would move the price more than 1%.
+    /// @dev Only from `nextPieceAt`. The fleet's manager hands over the least of its booking,
+    /// `PIECE_USDC` and `maxUsdc`, and approves exactly that; the piece then holds the next one back
+    /// for `PIECE_INTERVAL` times its share of `PIECE_USDC`, rounded up to the second, which also
+    /// keeps two pieces out of one block. The fleet goes to the back of the queue if it still has
+    /// USDC booked. Locked, so the REGENT pool's hook cannot start a second piece inside the first.
+    /// @param maxUsdc The most USDC the caller wants this piece to be; above `PIECE_USDC` counts as
+    /// `PIECE_USDC`.
     /// @return regentOut The REGENT the fleet's treasury received.
-    function convert() external nonReentrant returns (uint256 regentOut) {
-        uint256 opensAt = nextPieceAt();
+    function convert(uint256 maxUsdc) external nonReentrant returns (uint256 regentOut) {
+        if (maxUsdc == 0) revert PieceEmpty();
+        uint256 opensAt = nextPieceAt;
         if (block.timestamp < opensAt) revert PieceTooSoon(opensAt);
         uint64 head = queueHead;
         if (head == queueTail) revert NothingQueued();
@@ -227,9 +233,9 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
         delete _queue[head];
         queueHead = head + 1;
         isQueued[address(manager)] = false;
-        lastPieceAt = uint64(block.timestamp);
 
-        (uint256 usdcIn, address recipient) = manager.takePiece();
+        (uint256 usdcIn, address recipient) = manager.takePiece(Math.min(maxUsdc, PIECE_USDC));
+        nextPieceAt = uint64(block.timestamp + Math.ceilDiv(PIECE_INTERVAL * usdcIn, PIECE_USDC));
         regentOut = _swap(address(manager), usdcIn, recipient);
         if (manager.pendingConversion() != 0 && !isQueued[address(manager)]) _push(address(manager));
     }
