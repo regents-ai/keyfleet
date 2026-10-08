@@ -17,7 +17,9 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     "/app/fleets/:fleet_id/workspace",
     "/app/fleets/:fleet_id/workspace/:object_id",
     "/app/fleets/:fleet_id/proposals",
-    "/app/fleets/:fleet_id/proposals/:number"
+    "/app/fleets/:fleet_id/proposals/:number",
+    "/app/fleets/:fleet_id/polls",
+    "/app/fleets/:fleet_id/polls/:session_id"
   ]
 
   test "contains exactly the approved pages" do
@@ -211,7 +213,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 13
+    assert length(decoded["routes"]) == 15
 
     assert Enum.map(decoded["routes"], & &1["route_id"]) == [
              "home",
@@ -226,7 +228,9 @@ defmodule KeyfleetWeb.RouteCatalogTest do
              "workspace",
              "workspace_item",
              "proposals",
-             "proposal"
+             "proposal",
+             "polls",
+             "poll"
            ]
 
     assert decoded["schema_version"] == 1
@@ -262,6 +266,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
       {:slug, _type} -> {"slug", "general"}
       {:object_id, _type} -> {"object_id", "task#12"}
       {:number, _type} -> {"number", "3"}
+      {:session_id, _type} -> {"session_id", "3f1c6c2e-8a4b-4d2a-9b1e-0c5d7e9f1a2b"}
     end)
   end
 end

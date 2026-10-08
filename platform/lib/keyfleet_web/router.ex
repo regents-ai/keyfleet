@@ -300,6 +300,8 @@ defmodule KeyfleetWeb.Router do
       live "/app/fleets/:fleet_id/workspace/:object_id", ShellLive, :workspace_item
       live "/app/fleets/:fleet_id/proposals", ShellLive, :proposals
       live "/app/fleets/:fleet_id/proposals/:number", ShellLive, :proposal
+      live "/app/fleets/:fleet_id/polls", ShellLive, :polls
+      live "/app/fleets/:fleet_id/polls/:session_id", ShellLive, :poll
     end
   end
 end

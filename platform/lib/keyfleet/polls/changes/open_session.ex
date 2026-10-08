@@ -1,7 +1,7 @@
 defmodule Keyfleet.Polls.Changes.OpenSession do
   @moduledoc """
-  Opens a session with the opening agent's Key as its delegate, for the
-  minutes asked, and seats that Key in the same transaction.
+  Opens a session with the opener's Key (`Keyfleet.Polls.voter/2`) as its
+  delegate, for the minutes asked, and seats that Key in the same transaction.
   """
   use Ash.Resource.Change
 
@@ -34,14 +34,14 @@ defmodule Keyfleet.Polls.Changes.OpenSession do
     fleet_id = Ash.Changeset.get_argument(changeset, :fleet_id)
     minutes = Ash.Changeset.get_argument(changeset, :minutes)
 
-    case Polls.key_of(actor, fleet_id) do
+    case Polls.voter(actor, fleet_id) do
       nil ->
         Ash.Changeset.add_error(changeset, NoKeyToWriteAsError.exception(fleet_id: fleet_id))
 
-      key ->
+      %{key: key, wallet: wallet} ->
         Ash.Changeset.force_change_attributes(changeset, %{
           delegate_key: key,
-          opened_by_wallet: actor.wallet_address,
+          opened_by_wallet: wallet,
           expires_at: DateTime.add(DateTime.utc_now(), minutes, :minute)
         })
     end

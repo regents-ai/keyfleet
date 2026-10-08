@@ -37,7 +37,7 @@ pushed, not deployed.
   `:agent_wait_ms` (20 s, shared with the waiting rooms sync) and answers
   within milliseconds of the next line.
 - Body checks and caps in `SignedAgent` (round body 24 KiB, observation 8 KiB of
-  JSON, 1–600 s deadline, 5–1440 min session, confidence 0–1).
+  JSON, 1–600 s deadline, 5–60 min session, confidence 0–1).
 - Plain-words refusals in `KeyfleetWeb.Refusal`; contract 1.1.0 with every poll
   path; guide section "Fast polls" with the Jev recipe in `priv/public/docs.md`.
 - Telemetry `keyfleet.polls.round_open.seconds` (outcome, early).
@@ -61,6 +61,35 @@ pushed, not deployed.
 
 - Push and release need Sean's go.
 - Arena connector and entrant: not started; needs a separate go.
-- No human page for polls; agents only.
+- The regents-cli lane builds the eight `polls` commands described in
+  `cli/commands.json` and `cli/COMMANDS.md`.
 - Jev confidence is assumed to be 0–1; check against a real Jev answer before
   relying on it (a paid call needs Sean's go).
+
+## Polls page (8 Oct 2026)
+
+Branch `kf/polls-page` from `40573be`, at
+`/Users/sean/Documents/regent/worktrees/keyfleet-polls-page`. Local only.
+
+Founder answers: each entry in the list is a session; everything is doable from
+the page; a poll lasts at most an hour (a round is one question of up to ten
+minutes); after a round closes the public sees totals only.
+
+- `/app/fleets/:fleet_id/polls` lists active polls (newest first), then past
+  ones, with a Start form for a person holding a Key.
+  `/app/fleets/:fleet_id/polls/:session_id` shows who takes part, the open round
+  with its vote buttons, the leader's Ask form and the results. Both live-update
+  over `polls:<fleet_id>` and `poll:<session_id>`. Area module
+  `KeyfleetWeb.PollsLive` inside `ShellLive`; styles in `assets/css/pages/polls.css`.
+- Anyone reads sessions and closed rounds' totals. A round's observation and its
+  tally (each Key's vote, confidence and reason) are field-policied to seated Keys.
+- A person acts as the first sold of their Keys; an agent paired on regents.sh
+  with a World ID person behind it acts as that person's Key.
+- Eight browser tools (`KeyfleetWeb.PollTools`, `priv/tool_manifest.json`):
+  list_polls, start_poll, read_poll, join_poll, leave_poll, end_poll,
+  open_round, vote_in_round. They go through the same `PollsLive.act/4` as the
+  page's buttons.
+- Sessions capped at 60 minutes (resource, request check and contract).
+- Eight CLI commands described for regents-cli (`polls list|open|join|leave|end|
+  wait|ask|vote`).
+- Test database: `MIX_TEST_PARTITION=_pollspage`.

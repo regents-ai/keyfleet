@@ -2,7 +2,8 @@ defmodule Keyfleet.Polls.Changes.TakeSeat do
   @moduledoc """
   Seats a Key in a session and writes `seat_joined` to the session's log.
 
-  With `as: :actor`, the Key is the one the agent votes as, read under the
+  With `as: :actor`, the Key is the one the actor takes part as
+  (`Keyfleet.Polls.voter/2`), read under the
   session's lock, and the session must still be open. A Key already seated
   keeps its seat and nothing is written. With `as: :delegate`, the seat is the
   delegate's, taken in the transaction that opens the session.
@@ -37,19 +38,19 @@ defmodule Keyfleet.Polls.Changes.TakeSeat do
     Log.lock!(session_id)
 
     case {Polls.get_session!(fleet_id, session_id, actor: %System{}),
-          Polls.key_of(actor, fleet_id)} do
+          Polls.voter(actor, fleet_id)} do
       {nil, _key} ->
         Ash.Changeset.add_error(changeset, SessionUnknownError.exception(session_id: session_id))
 
       {_session, nil} ->
         Ash.Changeset.add_error(changeset, NoKeyToWriteAsError.exception(fleet_id: fleet_id))
 
-      {session, key} ->
+      {session, %{key: key, wallet: wallet}} ->
         if Polls.open?(session) do
           Ash.Changeset.force_change_attributes(changeset, %{
             session_id: session_id,
             token_id: key,
-            joined_by_wallet: actor.wallet_address
+            joined_by_wallet: wallet
           })
         else
           Ash.Changeset.add_error(changeset, SessionEndedError.exception([]))

@@ -8,6 +8,11 @@ defmodule Keyfleet.Polls.Round do
   match and its turn, and a session answers each one once. A session has at
   most one round open at a time. A round closes once (`Keyfleet.Polls.Tally`
   gives its result), and a closed round never changes.
+
+  Anyone reads a session's rounds: the moves, the deadline, the roster and,
+  once closed, the winner and each move's count of votes (`totals`). The
+  observation and the tally, which reveals each Key's vote, are read only by
+  the session's seated Keys.
   """
   use Ash.Resource,
     otp_app: :keyfleet,
@@ -108,6 +113,16 @@ defmodule Keyfleet.Polls.Round do
       filter expr(id == ^arg(:id))
     end
 
+    # A session's latest fifty rounds, newest first. `fleet_id` is the fleet
+    # the session belongs to, whose Keys say whether the reader is seated.
+    read :of_session do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :session_id, :uuid, allow_nil?: false
+
+      filter expr(session_id == ^arg(:session_id))
+      prepare build(sort: [number: :desc], limit: 50, load: [:totals])
+    end
+
     read :in_session do
       public? false
       argument :session_id, :uuid, allow_nil?: false
@@ -125,6 +140,20 @@ defmodule Keyfleet.Polls.Round do
     policy action([:close, :read, :by_id, :in_session]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
+
+    policy action(:of_session) do
+      authorize_if always()
+    end
+  end
+
+  field_policies do
+    field_policy [:observation, :tally], action(:of_session) do
+      authorize_if {Keyfleet.Polls.Checks.Standing, role: :seated}
+    end
+
+    field_policy :* do
+      authorize_if always()
+    end
   end
 
   attributes do
@@ -141,7 +170,6 @@ defmodule Keyfleet.Polls.Round do
       public?: true,
       constraints: [min_length: 1, max_length: 128, trim?: false]
 
-    # Shared only with the session's seated Keys.
     attribute :observation, :map, allow_nil?: false, public?: true
 
     attribute :actions, {:array, Keyfleet.Polls.Action},
@@ -182,6 +210,12 @@ defmodule Keyfleet.Polls.Round do
     belongs_to :session, Keyfleet.Polls.Session do
       attribute_writable? false
       allow_nil? false
+      public? true
+    end
+  end
+
+  calculations do
+    calculate :totals, {:array, :map}, Keyfleet.Polls.Calculations.Totals do
       public? true
     end
   end

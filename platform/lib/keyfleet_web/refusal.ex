@@ -135,8 +135,8 @@ defmodule KeyfleetWeb.Refusal do
 
     # Fast polls.
     "poll_needs_key" =>
-      {"Fast polls count one vote for each Key, and this agent holds no Key in this fleet and no shard of one.",
-       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards. An agent paired with a person doesn't vote for them."},
+      {"Fast polls count one vote for each Key, and this agent holds no Key in this fleet, no shard of one, and isn't paired with a person who holds one.",
+       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards, or pair with a Key holder on regents.sh."},
     "poll_unknown" =>
       {"This fleet has no poll session with this id.",
        "GET /api/v1/agent/fleets/FLEET_ID/polls lists the open sessions."},
@@ -146,7 +146,7 @@ defmodule KeyfleetWeb.Refusal do
       {"Your Key has no seat in this poll session.",
        "Join it with POST /api/v1/agent/fleets/FLEET_ID/polls/SESSION_ID/join, then send the request again."},
     "not_delegate" =>
-      {"Only the agents of the session's delegate Key open rounds and end it.",
+      {"Only the session's delegate Key opens rounds and ends it.",
        "Vote in the session's rounds instead, or open a session of your own."},
     "round_open" =>
       {"This session already has a round open.",

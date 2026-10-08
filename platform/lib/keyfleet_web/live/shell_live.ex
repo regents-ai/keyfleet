@@ -29,6 +29,8 @@ defmodule KeyfleetWeb.ShellLive do
     KeyMap,
     KeyProfileLive,
     KeysLive,
+    PollsLive,
+    PollTools,
     ProposalsLive,
     Read,
     RoomsLive,
@@ -45,6 +47,7 @@ defmodule KeyfleetWeb.ShellLive do
   @room_events ~w(validate_post send_message validate_naming name_room mute_key unmute_key)
   @key_profile_events ~w(post_to_key close_key)
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
+  @poll_events ~w(start_poll open_round join_poll leave_poll end_poll cast_vote)
 
   @impl true
   def mount(params, _session, socket) do
@@ -98,6 +101,11 @@ defmodule KeyfleetWeb.ShellLive do
        proposals_params: nil,
        proposals_topic: nil,
        proposals_refresh?: false,
+       polls: nil,
+       polls_topics: [],
+       polls_clock: nil,
+       poll_form: nil,
+       polls_notice: nil,
        check_ins_timer: nil,
        send_agent_open: false
      )}
@@ -124,14 +132,23 @@ defmodule KeyfleetWeb.ShellLive do
        |> load_dms(route_spec, params)
        |> load_room(route_spec, params)
        |> load_workspace(route_spec, params)
-       |> load_proposals(route_spec, params)}
+       |> load_proposals(route_spec, params)
+       |> PollsLive.read_polls(route_spec.route_id, params)}
     end
   end
 
-  # A coming-soon fleet has only its own page: its rooms, workspace and
-  # proposals open with the fleet.
+  # A coming-soon fleet has only its own page: its rooms, workspace,
+  # proposals and polls open with the fleet.
   defp coming_soon_inside?(%{route_id: route_id}, %{"fleet_id" => fleet_id})
-       when route_id in [:rooms, :workspace, :workspace_item, :proposals, :proposal],
+       when route_id in [
+              :rooms,
+              :workspace,
+              :workspace_item,
+              :proposals,
+              :proposal,
+              :polls,
+              :poll
+            ],
        do: Fleets.coming_soon?(fleet_id, Fleets.get_fleet!(fleet_id))
 
   defp coming_soon_inside?(_route_spec, _params), do: false
@@ -242,9 +259,12 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  # A browser's own agent calling one of the page's room or Key tools.
-  def handle_event("page_tool", %{"tool" => tool, "input" => input}, socket),
-    do: RoomTools.call(tool, input, socket)
+  # A browser's own agent calling one of the page's poll, room or Key tools.
+  def handle_event("page_tool", %{"tool" => tool, "input" => input}, socket) do
+    if tool in PollTools.tools(),
+      do: PollTools.call(tool, input, socket),
+      else: RoomTools.call(tool, input, socket)
+  end
 
   def handle_event(event, params, socket) when event in @room_events,
     do: RoomsLive.handle_event(event, params, socket)
@@ -257,6 +277,9 @@ defmodule KeyfleetWeb.ShellLive do
 
   def handle_event(event, params, socket) when event in @dm_events,
     do: DmsLive.handle_event(event, params, socket)
+
+  def handle_event(event, params, socket) when event in @poll_events,
+    do: PollsLive.handle_event(event, params, socket)
 
   # A notice that the open room has taken a post it is not showing yet is only a
   # nudge to look again. The new posts are read back from the room itself, and
@@ -290,6 +313,12 @@ defmodule KeyfleetWeb.ShellLive do
 
   def handle_info(%Broadcast{event: "rooms_changed"} = notice, socket),
     do: RoomsLive.handle_info(notice, socket)
+
+  def handle_info(%Broadcast{event: event} = notice, socket)
+      when event in ["poll_event", "polls_changed"],
+      do: PollsLive.handle_info(notice, socket)
+
+  def handle_info(:polls_tick = message, socket), do: PollsLive.handle_info(message, socket)
 
   # A mute added or taken away hides or shows that key's posts in the room on
   # show and in the open key's thread.
@@ -326,6 +355,14 @@ defmodule KeyfleetWeb.ShellLive do
       {:patch, patch} -> {:noreply, push_event(socket, "keymap:patch", patch)}
     end
   end
+
+  # Keys changed in the fleet whose polls are on show: who takes part as which
+  # Key is read afresh.
+  def handle_info(
+        {:keys_changed, fleet_id, _token_ids},
+        %{assigns: %{polls: %{fleet_id: fleet_id}}} = socket
+      ),
+      do: {:noreply, PollsLive.refresh(socket)}
 
   # Keys changed in the fleet whose room is on show: who may read and post
   # there is read afresh.
@@ -518,6 +555,18 @@ defmodule KeyfleetWeb.ShellLive do
           actor={actor(@access_context)}
           lease={@session_lease}
         />
+        <PollsLive.list
+          :if={@route_spec.route_id == :polls}
+          page={@polls}
+          form={@poll_form}
+          notice={@polls_notice}
+        />
+        <PollsLive.detail
+          :if={@route_spec.route_id == :poll}
+          page={@polls}
+          form={@poll_form}
+          notice={@polls_notice}
+        />
       </:content>
     </.shell>
     """
@@ -549,9 +598,9 @@ defmodule KeyfleetWeb.ShellLive do
       |> stream(:activity, [], reset: true)
 
   # The fleet whose keys the page on show follows: the fleet's own page, one
-  # of its keys' pages, or one of its rooms.
+  # of its keys' pages, one of its rooms, or its polls.
   defp keys_fleet(%{route_id: route_id}, %{"fleet_id" => fleet_id})
-       when route_id in [:fleet, :keys, :rooms],
+       when route_id in [:fleet, :keys, :rooms, :polls, :poll],
        do: fleet_id
 
   defp keys_fleet(_route_spec, _params), do: nil

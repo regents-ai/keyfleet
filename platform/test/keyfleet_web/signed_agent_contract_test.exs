@@ -873,6 +873,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert answer(c, c.signer, "GET", @polls, @address, %{}, 200).body == %{"sessions" => []}
     answer(c, stranger, "GET", @polls, @address, %{}, 403)
     answer(c, c.signer, "POST", @poll_open, @address, %{opening | "minutes" => 4}, 422)
+    answer(c, c.signer, "POST", @poll_open, @address, %{opening | "minutes" => 61}, 422)
 
     assert answer(c, c.signer, "POST", @poll_open, @address, %{opening | "name" => ""}, 422).body ==
              refused("invalid_poll")

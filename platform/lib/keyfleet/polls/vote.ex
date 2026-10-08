@@ -86,6 +86,17 @@ defmodule Keyfleet.Polls.Vote do
       prepare build(sort: [inserted_at: :asc, id: :asc])
     end
 
+    # The actor's own Key's vote in a round of a session they sit in.
+    read :mine do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :session_id, :uuid, allow_nil?: false
+      argument :round_id, :uuid, allow_nil?: false
+      get? true
+
+      filter expr(round_id == ^arg(:round_id) and round.session_id == ^arg(:session_id))
+      prepare Keyfleet.Polls.Preparations.OwnVote
+    end
+
     read :of_key do
       public? false
       argument :round_id, :uuid, allow_nil?: false
@@ -98,6 +109,10 @@ defmodule Keyfleet.Polls.Vote do
   policies do
     policy action(:cast) do
       authorize_if {Keyfleet.Polls.Checks.Standing, role: :member}
+    end
+
+    policy action(:mine) do
+      authorize_if {Keyfleet.Polls.Checks.Standing, role: :seated}
     end
 
     policy action([:in_round, :of_key]) do

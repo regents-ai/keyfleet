@@ -38,8 +38,8 @@ defmodule Keyfleet.Polls.Changes.CastVote do
 
     with {:ok, session} <- session(fleet_id, session_id),
          {:ok, round} <- round(session_id, number),
-         {:ok, key} <- key(actor, fleet_id),
-         {:ok, attributes} <- vote(changeset, session, round, key, actor) do
+         {:ok, voter} <- voter(actor, fleet_id),
+         {:ok, attributes} <- vote(changeset, session, round, voter) do
       changeset
       |> Ash.Changeset.put_context(:poll, %{session: session, round: round})
       |> Ash.Changeset.force_change_attributes(attributes)
@@ -62,19 +62,19 @@ defmodule Keyfleet.Polls.Changes.CastVote do
     end
   end
 
-  defp key(actor, fleet_id) do
-    case Polls.key_of(actor, fleet_id) do
+  defp voter(actor, fleet_id) do
+    case Polls.voter(actor, fleet_id) do
       nil -> {:error, NoKeyToWriteAsError.exception(fleet_id: fleet_id)}
-      key -> {:ok, key}
+      voter -> {:ok, voter}
     end
   end
 
   # A Key that already voted is answered with its vote, whatever has happened
   # to the round since, so a voter that never heard the answer can ask again.
-  defp vote(changeset, session, round, key, actor) do
+  defp vote(changeset, session, round, %{key: key} = voter) do
     case Polls.get_vote!(round.id, key, actor: %System{}) do
       nil ->
-        first_vote(changeset, session, round, key, actor)
+        first_vote(changeset, session, round, voter)
 
       earlier ->
         {:ok,
@@ -82,7 +82,7 @@ defmodule Keyfleet.Polls.Changes.CastVote do
     end
   end
 
-  defp first_vote(changeset, session, round, key, actor) do
+  defp first_vote(changeset, session, round, %{key: key, wallet: wallet}) do
     action = Ash.Changeset.get_attribute(changeset, :action)
 
     cond do
@@ -100,7 +100,7 @@ defmodule Keyfleet.Polls.Changes.CastVote do
          %{
            round_id: round.id,
            token_id: key,
-           wallet: actor.wallet_address,
+           wallet: wallet,
            counted: session.mode == :poll or key == session.delegate_key
          }}
     end

@@ -1,15 +1,16 @@
 defmodule Keyfleet.Polls.Checks.Standing do
   @moduledoc """
-  Who may do what in a fleet's poll sessions, by the Key the agent votes as
-  (`Keyfleet.Polls.key_of/2`):
+  Who may do what in a fleet's poll sessions, by the Key the actor takes part
+  as (`Keyfleet.Polls.voter/2`): a person signed in on the site, an agent, or
+  an agent paired with a person.
 
-    * `role: :member`: any agent holding one of the fleet's Keys, or an active
+    * `role: :member`: anyone holding one of the fleet's Keys, or an active
       shard of one, lists the open sessions, opens one, joins one and votes.
-    * `role: :seated`: an agent whose Key has a seat in the session reads it
-      and waits on it.
-    * `role: :own_seat`: only an agent of the seat's own Key gives it up.
-    * `role: :delegate`: only an agent of the delegate's Key opens rounds and
-      ends the session.
+    * `role: :seated`: anyone whose Key has a seat in the session reads its
+      log, its rounds' observations and each Key's vote, and waits on it.
+    * `role: :own_seat`: only the seat's own Key gives it up.
+    * `role: :delegate`: only the delegate's Key opens rounds and ends the
+      session.
 
   Standing is read from the Keys and their shards every time, so a Key
   changing hands or a shard ending moves it at once. While the fleet's Key
@@ -28,7 +29,7 @@ defmodule Keyfleet.Polls.Checks.Standing do
     fleet_id = value(subject, :fleet_id)
 
     with true <- Keyfleet.Chain.fresh?(fleet_id),
-         key when is_integer(key) <- Polls.key_of(actor, fleet_id) do
+         %{key: key} <- Polls.voter(actor, fleet_id) do
       standing?(Keyword.fetch!(opts, :role), key, fleet_id, subject)
     else
       _no_standing -> false

@@ -257,6 +257,13 @@ defmodule KeyfleetWeb.FleetLive do
             >
               Proposals
             </.link>
+            <.link
+              id="fleet-polls-link"
+              class="rg-button rg-button--secondary"
+              patch={"/app/fleets/#{@fleet.fleet_id}/polls"}
+            >
+              Polls
+            </.link>
             <Regent.Primitives.button
               id="fleet-now-toggle"
               variant="secondary"

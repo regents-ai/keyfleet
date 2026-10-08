@@ -674,7 +674,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_poll_open_body(%{"name" => name, "mode" => mode, "minutes" => minutes} = params)
        when map_size(params) == 3 and is_binary(name) and mode in @poll_modes and
               is_integer(minutes),
-       do: in_range(minutes in 5..1440)
+       do: in_range(minutes in 5..60)
 
   defp check_poll_open_body(_params), do: :invalid
 
