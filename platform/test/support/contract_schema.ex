@@ -117,6 +117,9 @@ defmodule Keyfleet.ContractSchema do
   defp rule("format", "uri", value, _schema, _schemas, at),
     do: bound(is_binary(value) and not absolute_uri?(value), at, "is not an absolute uri")
 
+  defp rule("minItems", min, value, _schema, _schemas, at),
+    do: bound(is_list(value) and length(value) < min, at, "has fewer than #{min} items")
+
   defp rule("maxItems", max, value, _schema, _schemas, at),
     do: bound(is_list(value) and length(value) > max, at, "has more than #{max} items")
 
@@ -156,6 +159,7 @@ defmodule Keyfleet.ContractSchema do
   defp type?("array", value), do: is_list(value)
   defp type?("string", value), do: is_binary(value)
   defp type?("integer", value), do: is_integer(value)
+  defp type?("number", value), do: is_number(value)
   defp type?("boolean", value), do: is_boolean(value)
   defp type?("null", value), do: is_nil(value)
 

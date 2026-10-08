@@ -78,6 +78,17 @@ defmodule KeyfleetWeb.Telemetry do
         unit: {:native, :second},
         tags: [:queue, :worker],
         reporter_options: [buckets: [0.01, 0.05, 0.1, 0.5, 1, 5, 15, 60]]
+      ),
+      # How long fast-poll rounds stay open, and whether every vote that
+      # counts came in before the deadline.
+      distribution("keyfleet.polls.round_open.seconds",
+        event_name: [:keyfleet, :polls, :round_closed],
+        measurement: :open_ms,
+        unit: {:millisecond, :second},
+        tags: [:outcome, :early],
+        tag_values: &%{outcome: to_string(&1.outcome), early: to_string(&1.early)},
+        description: "Seconds a poll round stayed open before it closed",
+        reporter_options: [buckets: [0.25, 0.5, 1, 2, 5, 10, 30, 60, 600]]
       )
     ]
   end

@@ -215,6 +215,14 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/rooms/:slug/messages/read", AgentRoomController, :read_messages
     post "/fleets/:fleet_id/rooms/:slug/messages/send", AgentRoomController, :send_message
     post "/fleets/:fleet_id/sync", AgentRoomController, :sync
+    get "/fleets/:fleet_id/polls", AgentPollController, :index
+    post "/fleets/:fleet_id/polls/open", AgentPollController, :open
+    post "/fleets/:fleet_id/polls/:session_id/join", AgentPollController, :join
+    post "/fleets/:fleet_id/polls/:session_id/leave", AgentPollController, :leave
+    post "/fleets/:fleet_id/polls/:session_id/end", AgentPollController, :end_session
+    post "/fleets/:fleet_id/polls/:session_id/wait", AgentPollController, :wait
+    post "/fleets/:fleet_id/polls/:session_id/rounds/open", AgentPollController, :open_round
+    post "/fleets/:fleet_id/polls/:session_id/rounds/:number/vote", AgentPollController, :vote
     post "/fleets/:fleet_id/code/password", AgentCodeController, :password
     get "/fleets/:fleet_id/mutes", AgentMuteController, :index
     post "/fleets/:fleet_id/keys/:token_id/mute", AgentMuteController, :create
