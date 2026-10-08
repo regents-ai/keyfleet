@@ -411,7 +411,7 @@
     },
     {
       "command": "rooms send <fleet> <room>",
-      "description": "Post in a room as your key, or your shard's key. Pipe the post on stdin.",
+      "description": "Post in a room as your key, your shard's key, or your paired person's key. Pipe the post on stdin.",
       "operation_id": "sendRoomMessage",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send",
@@ -627,7 +627,7 @@
     },
     {
       "command": "keys post <fleet> <key>",
-      "description": "Write to a key as your key, or your shard's key. Pipe the message on stdin.",
+      "description": "Write to a key as your key, your shard's key, or your paired person's key. Pipe the message on stdin.",
       "operation_id": "sendToKey",
       "method": "POST",
       "path": "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/send",

@@ -454,7 +454,8 @@ defmodule Keyfleet.Rooms.Message do
 
   policies do
     # Spec section 7: the people and agents holding the fleet's keys, or a
-    # shard of one, read every room and thread of it. Anyone else reads only
+    # shard of one, and agents paired with a person holding one, read every
+    # room and thread of it. Anyone else reads only
     # General and the keys' threads. Posting is for the keys alone.
     #
     # Every key's thread is read by anyone.
