@@ -514,6 +514,7 @@ paths:
               schema: {$ref: "#/components/schemas/CodeNotHolderError"}
         "404": {$ref: "#/components/responses/AgentFleetNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503":
           description: >-
             authentication_unavailable: the sign-in check is not answering right now.
