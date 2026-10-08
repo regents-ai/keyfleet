@@ -567,6 +567,22 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, ~s(#fleet-about #buy-key #buy-key-title[tabindex="-1"]))
     end
 
+    # A buyer sees what the next Key costs before pressing anything, as the
+    # Buy button will name it: under the count of Keys sold on the fleet's
+    # bar, and on its homepage card.
+    test "the next Key and its price show before any press" do
+      deploy!("fleet_tech_classic")
+      ChainHelpers.seed_cursor!("fleet_tech_classic")
+
+      {:ok, view, _html} = live(build_conn(), "/app/fleets/fleet_tech_classic")
+      assert has_element?(view, "#fleet-next-key", "Key 1 · 10 USDC")
+
+      {:ok, home, _html} = live(build_conn(), "/")
+
+      assert render_async(home) =~
+               ~r/id="home-fleet-fleet_tech_classic-next-key"[^>]*>\s*<span>Key 1 · 10 USDC/
+    end
+
     # The header's "Get a Key", there for everyone on the homepage and every
     # app page, lands on Classic with its own "Get a Key" pressed, then drops
     # the press from the address so the next press opens it again.
@@ -575,7 +591,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       ChainHelpers.seed_cursor!("fleet_tech_classic")
 
       {:ok, home, _html} = live(build_conn(), "/")
-      assert has_element?(home, ~s(#home-get-key[href="/app/fleets/fleet_tech_classic?buy"]))
+      assert has_element?(home, ~s(#shell-get-key[href="/app/fleets/fleet_tech_classic?buy"]))
 
       {:ok, view, _html} = live(conn, @path)
       view |> element("#shell-get-key") |> render_click()

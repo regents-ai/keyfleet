@@ -36,6 +36,7 @@ defmodule KeyfleetWeb.ShellLive do
     WorkspaceLive
   }
 
+  alias KeyfleetWeb.Components.Reading
   alias KeyfleetWeb.{PublicDocuments, RouteCatalog}
   alias Phoenix.Socket.Broadcast
 
@@ -441,6 +442,11 @@ defmodule KeyfleetWeb.ShellLive do
       shell_instance={@shell_instance}
     >
       <:content>
+        <Reading.page
+          :if={@route_spec.route_id in [:about, :opportunities]}
+          path={@route_spec.destination}
+        />
+
         <AccountLive.page
           :if={@route_spec.route_id == :account}
           account={current_account(@access_context)}

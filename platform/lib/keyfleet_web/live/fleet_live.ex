@@ -104,6 +104,25 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
+  attr :id, :string, required: true
+
+  attr :buy, :map,
+    required: true,
+    doc: "the Key on offer as `KeyfleetWeb.FleetPage.next_sale/2` reads it, or nil"
+
+  @doc """
+  The Key on offer and its price, as the Buy button names them, under the
+  count of Keys sold on the fleet's bar and its homepage card. The line keeps
+  its height when nothing is on offer, so what is below it never moves.
+  """
+  def next_key(assigns) do
+    ~H"""
+    <p id={@id} class="fleet-next-key">
+      <span :if={@buy && @buy.price}>Key {grouped(@buy.token_id)} · {usdc(@buy.price)}</span>
+    </p>
+    """
+  end
+
   defp sold(%{sales: %{deployed?: false}} = assigns), do: ~H"Not on sale yet"
   defp sold(%{sales: %{current?: false}} = assigns), do: ~H"Sales figures are catching up"
 
@@ -176,6 +195,7 @@ defmodule KeyfleetWeb.FleetLive do
             <p id="fleet-sales" class="fleet-bar__sales">
               <.headcount id="fleet-sales" sales={sold_so_far(@fleet)} agents={@fleet.agents_here} />
             </p>
+            <.next_key id="fleet-next-key" buy={@fleet.buy} />
           </div>
 
           <div class="fleet-bar__actions">

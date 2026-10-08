@@ -73,6 +73,13 @@
   color: var(--color-fg-muted);
 }
 
+/* The Key on offer keeps its line when there is none, so nothing below moves. */
+.fleet-next-key {
+  min-block-size: 1lh;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .fleet-bar__actions {
   display: flex;
   flex-wrap: wrap;

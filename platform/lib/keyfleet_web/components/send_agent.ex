@@ -30,6 +30,7 @@ defmodule KeyfleetWeb.Components.SendAgent do
     <Regent.Primitives.button
       id={@id}
       type="button"
+      variant="secondary"
       phx-click="open_send_agent"
       aria-haspopup="dialog"
     >

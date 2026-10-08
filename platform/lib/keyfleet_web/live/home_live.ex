@@ -35,6 +35,7 @@ defmodule KeyfleetWeb.HomeLive do
   alias KeyfleetWeb.{
     ActivityLines,
     FleetLive,
+    FleetPage,
     Motion,
     PublicDocuments,
     Read,
@@ -182,10 +183,17 @@ defmodule KeyfleetWeb.HomeLive do
 
   # How far a fleet has sold. A fleet not yet deployed has sold nothing; one
   # whose sales are still being read isn't current, and shows no count.
+  # The Key on offer is the one its fleet page's Buy button names.
   defp sales(fleet_id, recorded) do
     deployed? = recorded != nil and recorded.manager_address != nil
     {:ok, minted} = if deployed?, do: Chain.minted(fleet_id), else: {:ok, 0}
-    %{deployed?: deployed?, current?: deployed? and Chain.fresh?(fleet_id), keys: minted}
+
+    %{
+      deployed?: deployed?,
+      current?: deployed? and Chain.fresh?(fleet_id),
+      keys: minted,
+      buy: if(deployed?, do: FleetPage.next_sale(fleet_id, Presets.progress(fleet_id, minted)))
+    }
   end
 
   defp watch(socket) do
@@ -336,7 +344,12 @@ defmodule KeyfleetWeb.HomeLive do
   def render(assigns) do
     ~H"""
     <Regent.Structure.frame id="public-home" class="rl-root">
-      <Regent.Structure.row rail={false}><.landing_header /></Regent.Structure.row>
+      <Shell.header
+        account_control={@account_control}
+        get_key_link={:navigate}
+        menu={false}
+        theme={false}
+      />
 
       <main>
         <Regent.Structure.row rail={false}>
@@ -376,32 +389,6 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp sales_read?(%{deployed?: false}), do: true
   defp sales_read?(%{current?: current?}), do: current?
-
-  # The homepage is always dark, so its mark is the dark one.
-  def landing_header(assigns) do
-    ~H"""
-    <header class="rl-header" data-home-header>
-      <div class="rl-header-bar">
-        <.link navigate={~p"/"} class="rl-brand" aria-label="Keyfleet home">
-          <img
-            src={~p"/images/brand/mark-flat-dark.svg"}
-            width="252"
-            height="186"
-            alt=""
-          />
-        </.link>
-
-        <div class="rl-header-links">
-          <RegentLinks.header_links id="home-brand-links" />
-          <Shell.get_key id="home-get-key" link={:navigate} />
-          <a href={~p"/account"} class="rg-button">
-            <span class="rg-button__label">Account</span>
-          </a>
-        </div>
-      </div>
-    </header>
-    """
-  end
 
   attr :tally, :map, required: true, doc: "the agents and keys across every fleet, or nil"
 
@@ -572,6 +559,7 @@ defmodule KeyfleetWeb.HomeLive do
       <p class="rl-fleet-card__who" data-fleet-who>
         <FleetLive.headcount id={"#{@id}-count"} sales={@sales} agents={@now.agents} />
       </p>
+      <FleetLive.next_key id={"#{@id}-next-key"} buy={@sales.buy} />
       <p :if={@now.trying} class="rl-fleet-card__trying" data-fleet-trying>
         Trying: {@now.trying}
       </p>
@@ -613,11 +601,9 @@ defmodule KeyfleetWeb.HomeLive do
         >
           <a href={opportunity_path(opportunity)} class="rl-opportunity">
             <h3>{opportunity.name}</h3>
-            <p>{opportunity.line}</p>
           </a>
         </li>
       </ul>
-      <a href={~p"/opportunities"} class="rl-opportunities__more">Read the full briefing</a>
     </section>
     """
   end

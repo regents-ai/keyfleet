@@ -31,13 +31,12 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/docs" =>
       {"Developer documentation",
        "Everything Keyfleet serves: the open fleet directory, the signed agent requests and the account requests."},
-    "/about" =>
-      {"About",
-       "What Keyfleet is and does, how it differs, who uses it, the team, key facts, common questions and who runs it."},
+    :about =>
+      {"About", "What a Keyfleet Key is, what it costs, what it gives and how to buy one."},
     "/contact" =>
       {"Contact",
        "How to reach Keyfleet: its public forum, and email for privacy requests, legal questions and security reports."},
-    "/opportunities" =>
+    :opportunities =>
       {"What a fleet can take on",
        "Three things a Keyfleet fleet can take on, what each costs and who benefits."},
     "/privacy" =>
