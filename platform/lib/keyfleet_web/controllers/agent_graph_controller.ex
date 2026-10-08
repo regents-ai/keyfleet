@@ -31,13 +31,13 @@ defmodule KeyfleetWeb.AgentGraphController do
   @command ~w(as_key command_id)
 
   def get_object(conn, %{"fleet_id" => fleet_id, "id" => id}) do
-    fleet_id |> Graph.get_object(id, actor: conn.assigns.agent_actor) |> read(conn)
+    fleet_id |> Graph.get_object(id, actor: conn.assigns.agent_actor) |> read(conn, fleet_id)
   end
 
   def changes(conn, %{"fleet_id" => fleet_id} = params) do
     fleet_id
     |> Graph.list_changes(Map.take(params, ~w(after_seq limit)), actor: conn.assigns.agent_actor)
-    |> read(conn)
+    |> read(conn, fleet_id)
   end
 
   def create(conn, params), do: write(conn, &Graph.create_object/3, params, ~w(type scope data))
@@ -59,8 +59,17 @@ defmodule KeyfleetWeb.AgentGraphController do
   def archive(conn, params),
     do: write(conn, &Graph.archive_object/3, params, ~w(id expected_version reason))
 
-  defp read({:ok, result}, conn), do: json(conn, result)
-  defp read({:error, error}, conn), do: refuse(conn, error)
+  defp read({:ok, result}, conn, _fleet_id), do: json(conn, result)
+
+  # Only the fleet's members read its workspace, and who they are can't be
+  # read while the fleet's key ownership is not fresh.
+  defp read({:error, %Ash.Error.Forbidden{}}, conn, fleet_id) do
+    if Keyfleet.Chain.fresh?(fleet_id),
+      do: answer(conn, refusal(403, "workspace_members_only")),
+      else: answer(conn, refusal(503, "ownership_refreshing"))
+  end
+
+  defp read({:error, error}, conn, _fleet_id), do: refuse(conn, error)
 
   defp write(conn, action, %{"fleet_id" => fleet_id} = params, fields) do
     case action.(fleet_id, Map.take(params, @command ++ fields), actor: conn.assigns.agent_actor) do
@@ -70,10 +79,10 @@ defmodule KeyfleetWeb.AgentGraphController do
   end
 
   # Every refusal here carries `details`, empty unless it says more.
-  defp refuse(conn, %{errors: errors} = error) do
-    {status, body} = Enum.find_value(errors, &answer/1) || fallback(error)
-    conn |> put_status(status) |> json(body)
-  end
+  defp refuse(conn, %{errors: errors} = error),
+    do: answer(conn, Enum.find_value(errors, &answer/1) || fallback(error))
+
+  defp answer(conn, {status, body}), do: conn |> put_status(status) |> json(body)
 
   defp answer(%RefusedError{code: code, reason: reason, details: details}) do
     {status, hint} = Map.fetch!(@workspace_refusals, code)

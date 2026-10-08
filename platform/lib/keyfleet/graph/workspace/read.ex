@@ -25,7 +25,7 @@ defmodule Keyfleet.Graph.Workspace.Read do
   @impl true
   def run(input, opts, context) do
     kind = Keyword.fetch!(opts, :read)
-    Graph.in_snapshot(fn -> read(kind, input.arguments, actor: context.actor) end)
+    Graph.in_snapshot(fn -> read(kind, input.arguments, Ash.Context.to_opts(context)) end)
   end
 
   defp read(:get, %{fleet_id: fleet_id, id: id}, opts) do

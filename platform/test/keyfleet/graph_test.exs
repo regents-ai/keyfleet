@@ -20,6 +20,7 @@ defmodule Keyfleet.GraphTest do
     verification_method: :eoa_recovery,
     audience: "keyfleet"
   }
+  @holder %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
   @note %{type: "note", scope: "fleet", data: %{title: "Plan", body: "Ship the first service."}}
 
   setup %{tmp_dir: tmp_dir} do
@@ -74,7 +75,7 @@ defmodule Keyfleet.GraphTest do
                actor: owner
              )
 
-    assert {:ok, %{events: events}} = Graph.list_changes(@fleet, %{}, actor: nil)
+    assert {:ok, %{events: events}} = Graph.list_changes(@fleet, %{}, actor: @holder)
     [command] = for %{type: "keyfleet.command"} = event <- events, do: event
     assert command.payload["principal"] == "member:8453:#{@contract}:1@1/human:#{@owner}"
 
@@ -97,8 +98,36 @@ defmodule Keyfleet.GraphTest do
                actor: stranger
              )
 
-    assert {:ok, %{events: events}} = Graph.list_changes(@fleet, %{}, actor: nil)
+    assert {:ok, %{events: events}} = Graph.list_changes(@fleet, %{}, actor: @holder)
     refute Enum.any?(events, &(&1.type == "keyfleet.command"))
+  end
+
+  test "only a wallet that owns one of the fleet's Keys, or holds a shard of one, reads the workspace" do
+    {:ok, _written} = write(@holder, 1, "w-1")
+
+    stranger = %Actors.Human{
+      human_account_id: 2,
+      wallet_addresses: ["0x" <> String.duplicate("b", 40)]
+    }
+
+    reads = fn actor ->
+      {Graph.get_object(@fleet, "note#1", actor: actor),
+       Graph.list_changes(@fleet, %{}, actor: actor)}
+    end
+
+    for actor <- [nil, stranger, @agent] do
+      assert {{:error, %Ash.Error.Forbidden{}}, {:error, %Ash.Error.Forbidden{}}} = reads.(actor)
+    end
+
+    ChainHelpers.issue_shard!(@fleet, 1, @agent.wallet_address)
+
+    for actor <- [@holder, @agent] do
+      assert {{:ok, %{object: %{id: "note#1"}}}, {:ok, %{events: [_ | _]}}} = reads.(actor)
+    end
+
+    # Ownership being read again grants nothing, a Key's owner included.
+    ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
+    assert {{:error, %Ash.Error.Forbidden{}}, {:error, %Ash.Error.Forbidden{}}} = reads.(@holder)
   end
 
   test "an agent with a shard writes as the key, and only as that key" do
@@ -137,7 +166,7 @@ defmodule Keyfleet.GraphTest do
                write(actor, 1, id)
     end
 
-    assert {:ok, %{events: events}} = Graph.list_changes(@fleet, %{}, actor: nil)
+    assert {:ok, %{events: events}} = Graph.list_changes(@fleet, %{}, actor: @holder)
     refute Enum.any?(events, &(&1.type == "keyfleet.command"))
 
     restrict!(1, false, 2)

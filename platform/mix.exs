@@ -166,7 +166,9 @@ defmodule Keyfleet.MixProject do
         # Code adds two: the Repository and Push records, each with its domain.
         # Keys' pictures and the Base contracts' event records each add to it.
         # Proposal words add one: the AgentActor check on their write action.
-        "xref graph --label compile-connected --fail-above 51",
+        # Workspace reads add four: the KeyReader check on the workspace and its
+        # three read tables.
+        "xref graph --label compile-connected --fail-above 55",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

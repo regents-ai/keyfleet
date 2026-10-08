@@ -153,7 +153,19 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     assert [%{"author" => %{"kind" => "human", "wallet" => "0xaaaa..aaaa"}}] =
              fleet["recent_posts"]
 
-    assert Enum.map(fleet["work"]["tasks_untaken"], & &1["title"]) == ["Nobody's"]
+    assert %{
+             "open_goals" => [%{"title" => "Map the first paid service", "url" => url}],
+             "tasks_taken" => 0,
+             "tasks_untaken" => 1
+           } = fleet["work"]
+
+    assert url =~ "/app/fleets/#{@fleet}/workspace/"
+
+    page = conn |> get("/fleets/#{@fleet}.md") |> response(200)
+
+    assert page =~
+             "1 task in progress, 0 of them taken · 1 task nobody has taken yet. " <>
+               "The workspace itself is for Key holders."
 
     assert [
              %{

@@ -111,20 +111,16 @@ defmodule Keyfleet.DirectoryTest do
     Workspace.create(@fleet, "goal", %{"title" => "Gave up", "status" => "dropped"})
     Workspace.archive(@fleet, Workspace.create(@fleet, "goal", %{"title" => "Archived"}))
 
-    untaken = Workspace.create(@fleet, "task", %{"title" => "Nobody's"})
+    Workspace.create(@fleet, "task", %{"title" => "Nobody's"})
     Workspace.create(@fleet, "task", %{"title" => "Claimed", "assignee_key" => 12})
 
-    doing =
-      Workspace.create(@fleet, "task", %{
-        "title" => "Underway",
-        "progress" => "doing",
-        "assignee_key" => 12,
-        "next_step" => "Draft the price"
-      })
+    Workspace.create(@fleet, "task", %{
+      "title" => "Underway",
+      "progress" => "doing",
+      "assignee_key" => 12
+    })
 
-    unclaimed =
-      Workspace.create(@fleet, "task", %{"title" => "Nobody on it", "progress" => "doing"})
-
+    Workspace.create(@fleet, "task", %{"title" => "Nobody on it", "progress" => "doing"})
     Workspace.create(@fleet, "task", %{"title" => "Finished", "progress" => "done"})
     Workspace.create(@fleet, "task", %{"title" => "Stuck", "progress" => "blocked"})
 
@@ -136,14 +132,15 @@ defmodule Keyfleet.DirectoryTest do
     {:ok, fleet} = Directory.fleet(@fleet)
 
     assert {fleet.open_goals, fleet.tasks_in_progress} == {1, 2}
-    assert Enum.map(fleet.work.open_goals, & &1.id) == [open]
-    assert Enum.map(fleet.work.tasks_untaken, & &1.id) == [untaken]
 
-    assert [
-             %{id: ^unclaimed, assignee_key: nil},
-             %{id: ^doing, title: "Underway", gist: "Draft the price", assignee_key: 12}
-           ] = fleet.work.tasks_in_progress
+    # The goals by title, and how much work there is; never the work itself.
+    assert %{
+             open_goals: [%{id: ^open, title: "Map the first paid service"} = goal],
+             tasks_taken: 1,
+             tasks_untaken: 1
+           } = fleet.work
 
+    assert goal |> Map.keys() |> Enum.sort() == [:changed_at, :id, :title]
     assert {:error, %Ash.Error.Invalid{}} = Graph.open_work(@fleet, :tasks_done)
   end
 

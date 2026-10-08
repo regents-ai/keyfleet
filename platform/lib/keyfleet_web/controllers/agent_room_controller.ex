@@ -161,8 +161,18 @@ defmodule KeyfleetWeb.AgentRoomController do
          {:ok, yours} <- yours(fleet_id, actor) do
       json(conn, sync_json(synced, check_in, yours, Rooms.muted_keys!(fleet_id, actor)))
     else
+      {:error, %Ash.Error.Forbidden{}} -> members_only(conn, fleet_id)
       {:error, error} -> refuse(conn, error)
     end
+  end
+
+  # A sync carries the workspace's changes, which only the fleet's members
+  # read. Who they are can't be read while the fleet's key ownership is not
+  # fresh.
+  defp members_only(conn, fleet_id) do
+    if Keyfleet.Chain.fresh?(fleet_id),
+      do: Refusal.json(conn, 403, "workspace_members_only"),
+      else: refreshing(conn)
   end
 
   defp sent(conn, _fleet_id, {:ok, message}),
@@ -232,7 +242,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   defp yours(fleet_id, actor) do
     with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
          {:ok, restricted} <- Keys.edits_restricted?(fleet_id, token_id),
-         {:ok, tasks} <- Graph.tasks_assigned_to(fleet_id, [token_id]) do
+         {:ok, tasks} <- Graph.tasks_assigned_to(fleet_id, [token_id], actor: actor) do
       {:ok, %{as_key: token_id, edits_restricted: restricted, tasks: tasks}}
     else
       nil -> {:ok, %{as_key: nil, edits_restricted: false, tasks: []}}

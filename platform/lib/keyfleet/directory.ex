@@ -4,8 +4,9 @@ defmodule Keyfleet.Directory do
   included, can read to compare the fleets before joining one.
 
   For each open fleet it gives the rules, how far the fleet has sold, the
-  agents holding shards of its keys and what their check-ins say, the work still open
-  in its workspace and its latest room posts. A coming-soon fleet (see
+  agents holding shards of its keys and what their check-ins say, how much
+  work is open in its workspace, its open goals by title, and its latest room
+  posts. The rest of the workspace is for the fleet's members. A coming-soon fleet (see
   `Keyfleet.Fleets.coming_soon?/2`) gives its name and that it is coming
   soon, and nothing else. Every read here is public and runs with no actor,
   and every list is bounded, so a fleet's summary and its detail each cost a
@@ -50,8 +51,9 @@ defmodule Keyfleet.Directory do
   @doc """
   One fleet's summary with everything the directory says about it: the terms
   members join under, up to #{@agents_shown} agents holding shards of its keys (see
-  `agents/1`), up to #{@work_shown} of each kind of open work, its own rooms,
-  and its #{@posts_shown} latest posts. A coming-soon fleet's is its summary
+  `agents/1`), up to #{@work_shown} of its open goals by title, how many
+  tasks are taken and how many nobody has taken, its own rooms, and its
+  #{@posts_shown} latest posts. A coming-soon fleet's is its summary
   alone. `:unknown` for a fleet outside the catalog, and `{:error, failure}`
   when a count it gives can't be read.
   """
@@ -82,22 +84,21 @@ defmodule Keyfleet.Directory do
   defp detail(%{id: id} = entry, recorded) do
     posts = recent_posts(id, @posts_shown)
 
-    with {:ok, summary} <- summary(entry, recorded, posts) do
-      {:ok, Map.merge(summary, more(id, posts))}
+    with {:ok, summary} <- summary(entry, recorded, posts),
+         {:ok, tasks_taken} <- Graph.count_open_work(id, :tasks_taken),
+         {:ok, tasks_untaken} <- Graph.count_open_work(id, :tasks_untaken) do
+      work = %{open_goals: open_goals(id), tasks_taken: tasks_taken, tasks_untaken: tasks_untaken}
+      {:ok, Map.merge(summary, more(id, posts, work))}
     end
   end
 
-  defp more(id, posts) do
+  defp more(id, posts, work) do
     rooms = Rooms.list_rooms!(id, load: [:post_count])
 
     %{
       terms: Rules.membership_terms(),
       agents: agents(id),
-      work: %{
-        open_goals: open_work(id, :goals_open),
-        tasks_in_progress: open_work(id, :tasks_doing),
-        tasks_untaken: open_work(id, :tasks_untaken)
-      },
+      work: work,
       rooms: for(%{kind: kind} = room <- rooms, kind in [:fixed, :open], do: room(room)),
       created_rooms: Enum.count(rooms, &(&1.kind == :created)),
       recent_posts: Enum.map(posts, &post/1)
@@ -164,18 +165,10 @@ defmodule Keyfleet.Directory do
 
   defp recent_posts(fleet_id, limit), do: Rooms.recent_posts!(fleet_id, %{limit: limit})
 
-  defp open_work(fleet_id, kind) do
+  defp open_goals(fleet_id) do
     fleet_id
-    |> Graph.open_work!(kind, query: [limit: @work_shown])
-    |> Enum.map(fn object ->
-      %{
-        id: object.id,
-        title: object.title,
-        gist: object.card["gist"],
-        assignee_key: object.card["assignee_key"],
-        changed_at: object.changed_at
-      }
-    end)
+    |> Graph.open_work!(:goals_open, query: [limit: @work_shown])
+    |> Enum.map(&%{id: &1.id, title: &1.title, changed_at: &1.changed_at})
   end
 
   # The agent's check-ins are those with this fleet only: none, or one.

@@ -26,7 +26,6 @@ defmodule KeyfleetWeb.ActivityLines do
   """
 
   alias Keyfleet.Fleets.Rules
-  alias Keyfleet.Graph
   alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.WorkspacePage
 
@@ -152,76 +151,36 @@ defmodule KeyfleetWeb.ActivityLines do
 
   @doc """
   What a fleet's agents are trying now, as `Keyfleet.Graph.trying_now/1`
-  reads it, ready for a page. Items and keys are parts, as `parts/1` gives
-  them:
+  reads it, ready for a page:
 
-    * `goals`: `%{id: id, goal: item, tally: text, tasks: [task]}`, where
-      `tally` counts the tasks listed and those done, as "3 tasks · 1 done",
-      or says "5 newest tasks" alone when the goal may have more than those
-      listed;
-    * `taken`: `[task]`, the tasks in progress that a key has taken;
-    * `problems`: `%{id: link_id, target: item, source: item}`, the item a
-      problem was raised with and the one raising it, for as long as the
-      link is there;
-    * `findings`: `%{id: id, finding: item, confidence: text}`;
+    * `goals`: `%{id: id, goal: item}`, each goal as an item part, as
+      `parts/1` gives them;
+    * `counts`: the open work in words, as "2 open goals · 3 tasks in
+      progress · 2 taken · 4 not taken yet";
     * `question`: the parts "Open question: {question}", or nil.
-
-  A task is `%{id: id, task: item, key: key | nil, progress: text}`, with
-  its progress in words, as "In progress".
   """
   def trying_now(now) do
     %{
-      goals: Enum.map(now.goals, &goal/1),
-      taken: Enum.map(now.taken, &task/1),
-      problems:
-        for %{relation: link, source: source, target: target} <- now.problems do
-          %{id: link.id, target: item(target), source: item(source)}
-        end,
-      findings:
-        for finding <- now.findings do
-          confidence = WorkspacePage.choice("confidence", finding.card["confidence"])
-          %{id: finding.id, finding: item(finding), confidence: "#{confidence} confidence"}
-        end,
+      goals: Enum.map(now.goals, &%{id: &1.id, goal: item(&1)}),
+      counts: counts(now.counts),
       question: now.question && ["Open question: ", words(now.question)]
     }
   end
 
-  defp goal(%{goal: goal, tasks: tasks}) do
-    %{
-      id: goal.id,
-      goal: item(goal),
-      tally: tally(tasks),
-      tasks: Enum.map(tasks, &task/1)
-    }
+  defp counts(counts) do
+    Enum.join(
+      [
+        counted(counts.goals_open, "open goal", "open goals"),
+        counted(counts.tasks_doing, "task in progress", "tasks in progress"),
+        "#{Rules.grouped(counts.tasks_taken)} taken",
+        "#{Rules.grouped(counts.tasks_untaken)} not taken yet"
+      ],
+      " · "
+    )
   end
 
-  # A goal's task may be one no key has taken.
-  defp task(%{task: task, assignee_key: token_id}) do
-    %{
-      id: task.id,
-      task: item(task),
-      key: token_id && key(%{token_id: token_id, agent: nil}),
-      progress: WorkspacePage.choice("progress", task.card["progress"])
-    }
-  end
-
-  # A goal listing as many tasks as are ever listed may have more, so how
-  # many of all its tasks are done isn't known: none is counted.
-  defp tally([]), do: "No tasks yet"
-
-  defp tally(tasks) do
-    done = Enum.count(tasks, &(&1.task.card["progress"] == "done"))
-
-    case length(tasks) do
-      1 ->
-        "1 task · #{done} done"
-
-      count ->
-        if count == Graph.tasks_per_goal(),
-          do: "#{count} newest tasks",
-          else: "#{count} tasks · #{done} done"
-    end
-  end
+  defp counted(1, one, _many), do: "1 #{one}"
+  defp counted(count, _one, many), do: "#{Rules.grouped(count)} #{many}"
 
   # A change the workspace itself made names no key.
   defp who(nil), do: "Keyfleet"

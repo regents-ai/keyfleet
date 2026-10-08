@@ -1,12 +1,14 @@
 import {expect, test, type Locator, type Page} from "@playwright/test"
+import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {furnishFleet, prepareFleet} from "./support/fleet_chain"
 
 // Every in-app page is one live view, so a link from one of its pages to
 // another patches the page already open: the frame, the live connection and
 // the window all stay. A deployed fleet with a room message, a workspace goal
-// and a proposal shows every such link, and each is clicked here.
+// and a proposal shows every such link, and each is clicked here, signed in
+// as the owner of its Key, as only a Key holder reads the workspace.
 const fleet = "fibonacci_syndicate"
-const owner = "0x4444444444444444444444444444444444444444"
+const me = "0x1111111111111111111111111111111111111111"
 const fleetPath = `/app/fleets/${fleet}`
 const planPath = new RegExp(`${escape(fleetPath)}/workspace/goal%23\\d+$`)
 
@@ -17,7 +19,7 @@ let key: number
 
 test.beforeAll(() => {
   prepareFleet(fleet)
-  key = furnishFleet(fleet, owner)
+  key = furnishFleet(fleet, me)
 })
 
 function escape(text: string) {
@@ -93,6 +95,7 @@ test("the walk from home through every page, back, forward and the sidebar keeps
   // Home is its own page; its fleet card is the one full load into the shell.
   // Home's reads land first: leaving mid-read stops the read, which ends the
   // server's one held transaction and every spec after this one.
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
   await page.goto("/")
   await expect(page.locator("#home-tally-agents")).toBeVisible()
   await page.locator(`#home-fleet-${fleet} a.rl-fleet-card__link`).click()
@@ -136,6 +139,7 @@ test("the walk from home through every page, back, forward and the sidebar keeps
 })
 
 test("the links between a fleet's pages each patch the open page", async ({page}) => {
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
   await page.goto(fleetPath)
   const walk = await enterShell(page)
   const toFleet = () => walk.follow(page.locator("#shell-sidebar").getByRole("link", {name: "Keyfleet Syndicate"}), fleetPage)
