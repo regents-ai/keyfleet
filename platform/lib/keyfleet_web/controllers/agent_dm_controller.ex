@@ -139,17 +139,18 @@ defmodule KeyfleetWeb.AgentDmController do
 
   def changes(conn, %{"fleet_id" => fleet_id, "after_seq" => after_seq}) do
     case Dms.changes(fleet_id, after_seq, conn.assigns.agent_actor) do
-      {:ok, page} ->
-        json(conn, %{
-          messages: Enum.map(page.messages, &message_json/1),
-          next_cursor: page.next_cursor,
-          has_more: page.has_more
-        })
-
-      error ->
-        refuse(conn, fleet_id, error)
+      {:ok, page} -> json(conn, changes_json(page))
+      error -> refuse(conn, fleet_id, error)
     end
   end
+
+  @doc "A page of `Keyfleet.Dms.changes/3`, as this and a sync answer it."
+  def changes_json(page),
+    do: %{
+      messages: Enum.map(page.messages, &message_json/1),
+      next_cursor: page.next_cursor,
+      has_more: page.has_more
+    }
 
   defp blocks(conn, fleet_id, token_id, opts) do
     case Dms.blocks_of_key(fleet_id, token_id, opts) do

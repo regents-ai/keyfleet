@@ -66,7 +66,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # The fields each room, sync, proposal read and poll body holds: the ones it
   # must name, then the ones it may add.
   @body_fields [
-    {@sync_path, {~w(rooms graph proposals run), []}},
+    {@sync_path, {~w(rooms graph proposals run), ~w(dms)}},
     {@proposal_read_path, {~w(number votes_after_seq), []}},
     {@create_room_path, {~w(slug name), []}},
     {@topic_path, {~w(topic), []}},
@@ -621,16 +621,21 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp valid_topic_body?(_params), do: false
 
+  # Direct messages are followed only when `dms` names a place in them.
   defp check_sync_body(
          %{"rooms" => rooms, "graph" => graph, "proposals" => proposals, "run" => run} = params
        )
-       when map_size(params) == 4 and is_list(rooms) do
+       when is_list(rooms) do
+    logs = [graph, proposals | params |> Map.take(["dms"]) |> Map.values()]
+
     cond do
-      not (Enum.all?(rooms, &cursor?/1) and Enum.all?([graph, proposals], &log_cursor?/1) and
-               run?(run)) ->
+      map_size(Map.delete(params, "dms")) != 4 ->
         :invalid
 
-      not (sync_in_range?(rooms, [graph, proposals | rooms]) and run_in_range?(run)) ->
+      not (Enum.all?(rooms, &cursor?/1) and Enum.all?(logs, &log_cursor?/1) and run?(run)) ->
+        :invalid
+
+      not (sync_in_range?(rooms, logs ++ rooms) and run_in_range?(run)) ->
         :out_of_range
 
       length(Enum.uniq_by(rooms, & &1["slug"])) != length(rooms) ->

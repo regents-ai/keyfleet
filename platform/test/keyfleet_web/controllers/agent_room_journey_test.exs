@@ -436,6 +436,45 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert answered < 1_000
   end
 
+  # With dms, a Key's agent hears a direct message to its Key within moments.
+  test "a sync with dms answers a direct message to the agent's Key at once", c do
+    Application.put_env(:keyfleet, :agent_wait_ms, 1_000)
+    on_exit(fn -> Application.put_env(:keyfleet, :agent_wait_ms, 200) end)
+
+    body =
+      [{"general", 0}]
+      |> sync_body()
+      |> Jason.decode!()
+      |> Map.put("dms", %{"after_seq" => 0})
+      |> Jason.encode!()
+
+    sell!("fibonacci_syndicate", [2])
+    shard(c, "fibonacci_syndicate", 2)
+    started = System.monotonic_time(:millisecond)
+    sync = Task.async(fn -> send_signed(c, "POST", @sync_path, body) end)
+    listening(Keyfleet.Dms.inbox_topic("fibonacci_syndicate", 2))
+
+    Keyfleet.Dms.send_dm!(
+      %{
+        fleet_id: "fibonacci_syndicate",
+        from_token_id: 1,
+        to_token_id: 2,
+        body: "Are you there?",
+        idempotency_key: "d-1"
+      },
+      actor: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    )
+
+    synced = Task.await(sync)
+    assert System.monotonic_time(:millisecond) - started < 1_000
+    assert %{"messages" => [message], "has_more" => false} = synced.body["dms"]
+
+    assert {message["body"], synced.body["dms"]["next_cursor"]} ==
+             {"Are you there?", message["seq"]}
+
+    assert Keyfleet.ContractSchema.errors(synced.body, "FleetSync") == []
+  end
+
   test "only the canonical signed room path and body reach the room actions", c do
     shard(c)
 
@@ -527,7 +566,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert refused.status == 422
 
     assert refused.body["error"]["hint"] ==
-             "This operation takes a JSON object with exactly these fields: rooms, graph, proposals, run. Check each field's kind and range against the docs, then send it again."
+             "This operation takes a JSON object with these fields: rooms, graph, proposals, run; and only these besides, each optional: dms. Check each field's kind and range against the docs, then send it again."
   end
 
   test "an agent reads and writes a key's thread by the key's number", c do
@@ -934,7 +973,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
       member = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
       cursors = Enum.map(one_more, fn {slug, seq} -> %{slug: slug, after_seq: seq} end)
-      assert Rooms.sync(@cascade, cursors, 0, 0, member, false) == {:error, :invalid_request}
+      assert Rooms.sync(@cascade, cursors, 0, 0, nil, member, false) == {:error, :invalid_request}
     end
 
     test "only a slug and a name reach creating a room, and only a topic reaches naming one", c do
@@ -1005,6 +1044,14 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     on_exit(fn -> send(holder, :done) end)
     assert_receive :holding
+  end
+
+  # Returns once a waiting sync has subscribed to `topic`.
+  defp listening(topic) do
+    if Registry.count_match(Keyfleet.PubSub, topic, :_) == 0 do
+      Process.sleep(5)
+      listening(topic)
+    end
   end
 
   defp create_room(c, body), do: send_signed(c, "POST", @create_cascade, Jason.encode!(body))

@@ -120,6 +120,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "rooms" => [%{"slug" => "general", "after_seq" => 0}],
        "graph" => %{"after_seq" => 0},
        "proposals" => %{"after_seq" => 0},
+       "dms" => %{"after_seq" => 0},
        "run" => %{"kind" => "session"}
      }},
     {"POST", @sync, ["rooms", 0], %{"slug" => "general", "after_seq" => 0}},
@@ -127,6 +128,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @sync, ["run", {:one_of, 1}], %{"kind" => "scheduled", "every_minutes" => 60}},
     {"POST", @sync, ["graph"], %{"after_seq" => 0}},
     {"POST", @sync, ["proposals"], %{"after_seq" => 0}},
+    {"POST", @sync, ["dms"], %{"after_seq" => 0}},
     {"POST", @proposal, [], %{"number" => 1, "votes_after_seq" => 0}},
     {"POST", @presence, [], %{}},
     {"POST", @propose, [],

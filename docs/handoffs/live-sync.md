@@ -6,7 +6,7 @@ within moments instead of polling every 15–30 s (Sean, 8 Oct 2026, via HQ:
 decided by HQ for Sean, LIVE-SYNC-SHAPE a (long-poll), 8 Oct: every sync waits;
 no poll-or-long-poll choice. LIVE-SYNC-HOLD (HQ for Sean, 8 Oct): the hold is
 20 s so the command line's 30 s default covers it and the site never waits on a
-regents-cli release. DMs join the same sync once `kf/dms` is in `kf/release`.
+regents-cli release. Direct messages join the same sync on `kf/live-sync-dms`.
 
 **Branch and worktree.** `kf/live-sync` on `kf/release` 637c81a (room tools
 c966393 merged), at `/Users/sean/Documents/regent/worktrees/keyfleet-live-sync`.
@@ -43,6 +43,18 @@ CLI, merging and releases.
 - Planning addendum (KEYFLEET_ACTIVEGRAPH_ADDENDUM.md §13.7) now states the
   waiting sync instead of 15–30 s polling.
 - `:agent_wait_ms` has the same lines as on `kf/fast-polls`, so they merge cleanly.
+- **Direct messages** (`kf/live-sync-dms` on `kf/release-next` 3e660fb, chief
+  8 Oct): the sync body takes an optional `"dms":{"after_seq":N}`. With it, the
+  answer carries `dms` as `/dms/changes` renders it, over every Key the caller
+  holds (shards count), and the wait also listens on `Dms.inbox_topics/2`; a
+  `dm_head` past the caller's cursor re-reads. Without it the answer has no
+  `dms` and the wait ignores inbox topics, as agents choose rooms by naming
+  them. Since AG-READ a only Key holders sync at all, so `dms` has no refusal of
+  its own: a refusal of the messages refuses the whole sync, as the workspace's
+  does. Optional is the canonical shape (docs.md: optional inputs can
+  appear at any time), so the current regents-cli keeps working. Contract (both
+  copies), docs.md, skill.md (served 23,983 of 24,000), cli/commands.json and
+  cli/COMMANDS.md say so.
 
 ## What production needs
 
@@ -89,10 +101,11 @@ CLI, merging and releases.
 - Test database: `MIX_TEST_PARTITION=_livesync`. `graph_host/.venv` set up with
   `uv sync --frozen` (worktrees lack it; without it 62 workspace tests fail).
 
+- Direct messages: a journey test shows a Key's agent answered by a DM to its
+  Key within the wait (it fails with the inbox topics left out of the wait). Test database
+  `MIX_TEST_PARTITION=_livesyncdms`.
+
 ## Remaining
 
-- DM cursor on sync: required `"dms":{"after_seq":N}`, every Key the caller
-  holds, inbox topics in the wait, on `Dms.changes/3` and `Dms.inbox_topics/2`
-  from `kf/dms` 83d5cf9, rendered as `/dms/changes` renders. Starts once
-  `kf/dms` is in `kf/release`.
+- regents-cli adds `dms` to its rooms sync when it is ready; nothing waits on it.
 - Push and release go through the chief under Sean's go; Sentinel reviews first.

@@ -132,20 +132,31 @@ defmodule Keyfleet.Rooms do
   records. Proposals answer with the ones changed after that point, as
   `Keyfleet.Proposals.changes/2` does.
 
+  `dms_after_seq`, when it is not nil, says how far the caller has read its
+  Keys' direct messages, which then answer as `Keyfleet.Dms.changes/3` does:
+  the messages to or from every Key the caller holds now. With nil, `dms` is
+  nil and direct messages are not followed.
+
   Something new, or more waiting, is answered at once, and so is everything
   when `wait?` is false. Otherwise the caller is answered as soon as the fleet
-  announces a workspace change, a proposal change or a post past the caller's
-  place in a room it follows, or after `:agent_wait_ms` with nothing, and asks
-  again straight away. The announcements only say when to read again:
-  everything the caller gets is read as the caller. Nothing is marked as read,
-  and asking again is always safe.
+  announces a workspace change, a proposal change, a post past the caller's
+  place in a room it follows or a direct message past its place, or after
+  `:agent_wait_ms` with nothing, and asks again straight away. The
+  announcements only say when to read again: everything the caller gets is
+  read as the caller. Nothing is marked as read, and asking again is always
+  safe.
   """
-  def sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor, wait?) do
-    read = fn -> read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor) end
-    if wait?, do: wait_for_news(fleet_id, read), else: read.()
+  def sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, dms_after_seq, actor, wait?) do
+    read = fn ->
+      read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, dms_after_seq, actor)
+    end
+
+    if wait?,
+      do: wait_for_news(fleet_id, inbox_topics(fleet_id, dms_after_seq, actor), read),
+      else: read.()
   end
 
-  defp read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor) do
+  defp read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, dms_after_seq, actor) do
     # The workspace is read first, since it answers for a fleet outside the catalog.
     with :ok <- validate_cursors(cursors),
          :ok <- in_log(graph_after_seq),
@@ -156,28 +167,40 @@ defmodule Keyfleet.Rooms do
              %{after_seq: graph_after_seq, limit: @graph_sync_page},
              actor: actor
            ),
-         {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor) do
+         {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor),
+         {:ok, dms} <- sync_dms(fleet_id, dms_after_seq, actor) do
       proposals = Keyfleet.Proposals.changes(fleet_id, proposals_after_seq)
-      {:ok, %{rooms: rooms, graph: graph, proposals: proposals}}
+      {:ok, %{rooms: rooms, graph: graph, proposals: proposals, dms: dms}}
     end
   end
 
-  defp news?(%{rooms: rooms, graph: graph, proposals: proposals}),
+  # Direct messages are followed only when asked for.
+  defp sync_dms(_fleet_id, nil, _actor), do: {:ok, nil}
+  defp sync_dms(fleet_id, after_seq, actor), do: Keyfleet.Dms.changes(fleet_id, after_seq, actor)
+
+  defp inbox_topics(_fleet_id, nil, _actor), do: []
+  defp inbox_topics(fleet_id, _after_seq, actor), do: Keyfleet.Dms.inbox_topics(fleet_id, actor)
+
+  defp news?(%{rooms: rooms, graph: graph, proposals: proposals, dms: dms}),
     do:
       graph.events != [] or graph.has_more or proposals.items != [] or proposals.has_more or
-        Enum.any?(rooms, &room_news?/1)
+        Enum.any?(rooms, &room_news?/1) or dm_news?(dms)
 
   # A refused room answers with its slug alone, so it never brings news.
   defp room_news?(%{refused: true}), do: false
   defp room_news?(room), do: room.messages != [] or room.cursor < room.head_seq
 
+  # Direct messages not asked for never bring news.
+  defp dm_news?(nil), do: false
+  defp dm_news?(dms), do: dms.messages != [] or dms.has_more
+
   # Subscribed before the first read, so nothing announced between that read
   # and the wait is missed.
-  defp wait_for_news(fleet_id, read) do
+  defp wait_for_news(fleet_id, inbox_topics, read) do
     topics = [
       fleet_topic(fleet_id),
       Keyfleet.Graph.head_topic(fleet_id),
-      Keyfleet.Proposals.topic(fleet_id)
+      Keyfleet.Proposals.topic(fleet_id) | inbox_topics
     ]
 
     Enum.each(topics, &Phoenix.PubSub.subscribe(Keyfleet.PubSub, &1))
@@ -197,9 +220,10 @@ defmodule Keyfleet.Rooms do
 
   # A new run or watermark of the workspace is answered whatever it brings, as
   # the caller tells a log that started over by its `run_id`. A post is read
-  # only when it is past the caller's place in a room it follows, and answered
-  # once that read has something new; the fleet's other room announcements
-  # bring the caller nothing.
+  # only when it is past the caller's place in a room it follows, and a direct
+  # message only when it is past the caller's place in them; either is answered
+  # once that read has something new. The fleet's other announcements bring the
+  # caller nothing.
   defp await_news(fleet_id, read, synced, until) do
     receive do
       {:graph_head, ^fleet_id, _run_id, _watermark} ->
@@ -215,6 +239,11 @@ defmodule Keyfleet.Rooms do
            ),
            do: read_again(fleet_id, read, until),
            else: await_news(fleet_id, read, synced, until)
+
+      %Phoenix.Socket.Broadcast{event: "dm_head", payload: %{seq: seq}} ->
+        if match?(%{next_cursor: cursor} when seq > cursor, synced.dms),
+          do: read_again(fleet_id, read, until),
+          else: await_news(fleet_id, read, synced, until)
 
       %Phoenix.Socket.Broadcast{} ->
         await_news(fleet_id, read, synced, until)

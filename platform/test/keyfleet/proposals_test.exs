@@ -165,14 +165,14 @@ defmodule Keyfleet.ProposalsTest do
       owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
       owner_of_key!(1)
 
-      {:ok, first} = Rooms.sync(@fleet, [], 0, 0, owner, false)
+      {:ok, first} = Rooms.sync(@fleet, [], 0, 0, nil, owner, false)
       assert Enum.map(first.proposals.items, & &1.proposal.number) == Enum.to_list(1..50)
       assert {first.proposals.next_cursor, first.proposals.has_more} == {50, true}
 
-      {:ok, again} = Rooms.sync(@fleet, [], 0, 0, owner, false)
+      {:ok, again} = Rooms.sync(@fleet, [], 0, 0, nil, owner, false)
       assert again.proposals == first.proposals
 
-      {:ok, rest} = Rooms.sync(@fleet, [], 0, 50, owner, false)
+      {:ok, rest} = Rooms.sync(@fleet, [], 0, 50, nil, owner, false)
       assert Enum.map(rest.proposals.items, & &1.proposal.number) == Enum.to_list(51..55)
       assert {rest.proposals.next_cursor, rest.proposals.has_more} == {55, false}
     end

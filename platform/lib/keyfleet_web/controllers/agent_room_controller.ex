@@ -15,6 +15,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Errors.SendConflictError
+  alias KeyfleetWeb.AgentDmController
   alias KeyfleetWeb.AgentWaits
   alias KeyfleetWeb.ClientAddress
   alias KeyfleetWeb.ProposalJSON
@@ -147,22 +148,34 @@ defmodule KeyfleetWeb.AgentRoomController do
     sent(conn, fleet_id, Rooms.send_to_key(input, actor: actor))
   end
 
-  def sync(conn, %{
-        "fleet_id" => fleet_id,
-        "rooms" => rooms,
-        "graph" => graph,
-        "proposals" => proposals,
-        "run" => run
-      }) do
+  def sync(
+        conn,
+        %{
+          "fleet_id" => fleet_id,
+          "rooms" => rooms,
+          "graph" => graph,
+          "proposals" => proposals,
+          "run" => run
+        } = params
+      ) do
     actor = conn.assigns.agent_actor
     cursors = Enum.map(rooms, &%{slug: &1["slug"], after_seq: &1["after_seq"]})
+    dms_after_seq = get_in(params, ["dms", "after_seq"])
 
     # Only a few syncs from one address are held open at once; past that a sync
     # answers straight away with what it has.
     with {:ok, synced} <-
            AgentWaits.hold(
              ClientAddress.key(conn),
-             &Rooms.sync(fleet_id, cursors, graph["after_seq"], proposals["after_seq"], actor, &1)
+             &Rooms.sync(
+               fleet_id,
+               cursors,
+               graph["after_seq"],
+               proposals["after_seq"],
+               dms_after_seq,
+               actor,
+               &1
+             )
            ),
          {:ok, check_in} <- Agents.check_in(actor, fleet_id, run),
          {:ok, yours} <- yours(fleet_id, actor) do
@@ -172,7 +185,12 @@ defmodule KeyfleetWeb.AgentRoomController do
         if Enum.any?(synced.rooms, &match?(%{refused: true}, &1)),
           do: refused_code(conn, fleet_id)
 
-      json(conn, sync_json(synced, check_in, yours, muted, refused))
+      answer =
+        synced
+        |> sync_json(check_in, yours, muted, refused)
+        |> put_dms(synced.dms)
+
+      json(conn, answer)
     else
       {:error, %Ash.Error.Forbidden{}} -> members_only(conn, fleet_id)
       {:error, error} -> refuse(conn, error)
@@ -221,6 +239,10 @@ defmodule KeyfleetWeb.AgentRoomController do
       yours: %{yours | tasks: Enum.map(yours.tasks, &task_json/1)}
     }
   end
+
+  # Direct messages answer only when asked for.
+  defp put_dms(answer, nil), do: answer
+  defp put_dms(answer, page), do: Map.put(answer, :dms, AgentDmController.changes_json(page))
 
   # A room the agent may not read repeats only the slug it sent, with what
   # keeps it out, as a refusal of that room alone would say.
