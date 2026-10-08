@@ -401,15 +401,26 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_body(path, params) do
     cond do
-      Regex.match?(@mutes_path, path) -> admit(params == %{})
-      Regex.match?(@mute_path, path) -> admit(params == %{})
-      Regex.match?(@code_password_path, path) -> admit(params == %{})
-      Regex.match?(@sync_path, path) -> check_sync_body(params)
-      Regex.match?(@proposal_read_path, path) -> check_proposal_read_body(params)
-      op = dm_op(path) -> check_dm_body(op, params)
-      op = chain_op(path) -> check_chain_body(op, params)
-      op = graph_op(path) -> check_graph_body(op, params)
-      true -> check_room_body(path, params)
+      Enum.any?([@mutes_path, @mute_path, @code_password_path], &Regex.match?(&1, path)) ->
+        admit(params == %{})
+
+      Regex.match?(@sync_path, path) ->
+        check_sync_body(params)
+
+      Regex.match?(@proposal_read_path, path) ->
+        check_proposal_read_body(params)
+
+      op = dm_op(path) ->
+        check_dm_body(op, params)
+
+      op = chain_op(path) ->
+        check_chain_body(op, params)
+
+      op = graph_op(path) ->
+        check_graph_body(op, params)
+
+      true ->
+        check_room_body(path, params)
     end
   end
 
@@ -686,6 +697,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       op = graph_op(path) ->
         graph_fields(op)
 
+      op = dm_op(path) ->
+        dm_fields(op)
+
       true ->
         Enum.find_value(@body_fields, {[], []}, fn {route, takes} ->
           Regex.match?(route, path) and takes
@@ -702,6 +716,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: {~w(number), []}
 
   defp chain_fields(_op), do: {[], []}
+
+  defp dm_fields("read"), do: {[], ~w(after_seq limit)}
+  defp dm_fields("send"), do: {~w(body idempotency_key), ~w(parts)}
+  defp dm_fields("auto_delete"), do: {~w(days), []}
+  defp dm_fields("changes"), do: {~w(after_seq), []}
+  defp dm_fields(_op), do: {[], []}
 
   defp graph_fields(op) do
     {required, optional} = Map.fetch!(@graph_bodies, op)

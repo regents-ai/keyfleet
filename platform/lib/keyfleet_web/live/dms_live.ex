@@ -14,12 +14,14 @@ defmodule KeyfleetWeb.DmsLive do
 
   import Phoenix.LiveView, only: [stream: 4, push_patch: 2]
 
+  alias Keyfleet.Actors.Human
   alias Keyfleet.Chain
   alias Keyfleet.Dms
   alias Keyfleet.Dms.Errors.SendLimitError
   alias Keyfleet.Dms.Message
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Rules
+  alias Keyfleet.Keys
   alias Keyfleet.Rooms.Errors.KeyUnknownError
   alias KeyfleetWeb.KeysLive
   alias KeyfleetWeb.PageRead
@@ -317,6 +319,26 @@ defmodule KeyfleetWeb.DmsLive do
   defp auto_delete_value(_conversation), do: ""
 
   @doc """
+  The way to a Key's messages for the signed-in person, or nil: the Key's
+  holder opens its inbox; the holder of another Key of the fleet writes to it
+  as the lowest-numbered Key they hold.
+  """
+  def message_link(%Human{} = actor, owner, fleet_id, token_id) when is_binary(owner) do
+    cond do
+      owner in actor.wallet_addresses ->
+        %{label: "Messages", path: "/app/keys/#{fleet_id}/#{token_id}/dms"}
+
+      held = List.first(Keys.held_keys(actor, fleet_id)) ->
+        %{label: "Message", path: "/app/keys/#{fleet_id}/#{held.token_id}/dms/#{token_id}"}
+
+      true ->
+        nil
+    end
+  end
+
+  def message_link(_actor, _owner, _fleet_id, _token_id), do: nil
+
+  @doc """
   What the page shows for the address: one Key's inbox (`:dms`), or its
   conversation with another Key (`:dm`). Someone who doesn't hold the Key now
   is told so, and nothing of its messages is read.
@@ -451,8 +473,14 @@ defmodule KeyfleetWeb.DmsLive do
         {:noreply, socket |> assign(:dm_notice, nil) |> new_form() |> show_new_messages()}
 
       {:error, form} ->
-        {:noreply,
-         assign(socket, dm_form: form, dm_notice: send_refusal(form, socket.assigns.dms))}
+        case Ash.Error.to_error_class(form.source.source.errors) do
+          %Ash.Error.Forbidden{} ->
+            {:noreply, refused(socket)}
+
+          refusal ->
+            {:noreply,
+             assign(socket, dm_form: form, dm_notice: send_refusal(refusal, socket.assigns.dms))}
+        end
     end
   end
 
@@ -468,8 +496,8 @@ defmodule KeyfleetWeb.DmsLive do
       {:ok, conversation} ->
         {:noreply, assign(socket, dms: %{dms | conversation: conversation}, dm_notice: nil)}
 
-      {:error, _refused} ->
-        {:noreply, assign(socket, :dm_notice, @failed)}
+      {:error, error} ->
+        {:noreply, failed(socket, error)}
     end
   end
 
@@ -479,8 +507,8 @@ defmodule KeyfleetWeb.DmsLive do
       {:ok, _block} ->
         {:noreply, assign(socket, dms: %{dms | blocked?: event == "dm_block"}, dm_notice: nil)}
 
-      {:error, _refused} ->
-        {:noreply, assign(socket, :dm_notice, @failed)}
+      {:error, error} ->
+        {:noreply, failed(socket, error)}
     end
   end
 
@@ -495,12 +523,36 @@ defmodule KeyfleetWeb.DmsLive do
       :ok ->
         {:noreply, push_patch(socket, to: inbox_path(dms))}
 
-      {:error, _refused} ->
-        {:noreply, assign(socket, dm_notice: @failed, dm_confirm_delete: false)}
+      {:error, error} ->
+        {:noreply, socket |> assign(:dm_confirm_delete, false) |> failed(error)}
     end
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
+
+  # Every action asks again who holds the Key. One refused because the person
+  # no longer holds it closes the page; anything else is said under the box.
+  defp failed(socket, %Ash.Error.Forbidden{}), do: refused(socket)
+  defp failed(socket, _error), do: assign(socket, :dm_notice, @failed)
+
+  # While Key ownership is being brought up to date nobody holds anything yet,
+  # so the page stays and says so; otherwise the Key has changed hands.
+  defp refused(%{assigns: %{dms: dms}} = socket) do
+    if Chain.fresh?(dms.fleet_id) do
+      socket
+      |> assign(dm_notice: nil, dm_confirm_delete: false)
+      |> close(%{
+        fleet_id: dms.fleet_id,
+        token_id: dms.token_id,
+        other_token_id: dms.other_token_id,
+        fleet_name: dms.fleet_name,
+        refreshing?: false,
+        holder?: false
+      })
+    else
+      assign(socket, :dm_notice, KeysLive.refreshing())
+    end
+  end
 
   defp change_block("dm_block", dms, actor),
     do: Dms.block_key(dms.fleet_id, dms.token_id, dms.other_token_id, actor: actor)
@@ -566,31 +618,30 @@ defmodule KeyfleetWeb.DmsLive do
     actor = ShellLive.human_actor(socket)
     %{fleet_id: fleet_id, token_id: token_id, other_token_id: other} = dms
 
-    messages =
-      Dms.read_conversation!(fleet_id, token_id, other, %{after_seq: dms.last_seq}, actor: actor)
-
-    conversation = Dms.get_conversation!(fleet_id, token_id, other, actor: actor)
-
-    socket
-    |> assign(:dms, %{
-      dms
-      | conversation: conversation,
-        last_seq: last_seq(messages, dms.last_seq)
-    })
-    |> stream(:dm_thread, messages, limit: -@thread_kept)
+    with {:ok, messages} <-
+           Dms.read_conversation(fleet_id, token_id, other, %{after_seq: dms.last_seq},
+             actor: actor
+           ),
+         {:ok, conversation} <- Dms.get_conversation(fleet_id, token_id, other, actor: actor) do
+      socket
+      |> assign(:dms, %{
+        dms
+        | conversation: conversation,
+          last_seq: last_seq(messages, dms.last_seq)
+      })
+      |> stream(:dm_thread, messages, limit: -@thread_kept)
+    else
+      {:error, %Ash.Error.Forbidden{}} -> refused(socket)
+      {:error, failure} -> raise failure
+    end
   end
 
   defp last_seq([], shown), do: shown
   defp last_seq(messages, _shown), do: List.last(messages).seq
 
   # Why a message didn't go through, in the line kept for it under the box.
-  defp send_refusal(form, dms) do
-    case Ash.Error.to_error_class(form.source.source.errors) do
-      %Ash.Error.Forbidden{} ->
-        if Chain.fresh?(dms.fleet_id),
-          do: "Only this Key’s holder can send from it.",
-          else: KeysLive.refreshing()
-
+  defp send_refusal(refusal, dms) do
+    case refusal do
       %Ash.Error.Invalid{errors: errors} ->
         cond do
           Enum.any?(errors, &match?(%SendLimitError{}, &1)) ->

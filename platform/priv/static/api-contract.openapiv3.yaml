@@ -585,8 +585,8 @@ paths:
     get:
       operationId: listDmConversations
       description: >-
-        The Key's direct-message conversations, the newest message first: its main inbox, and
-        apart from it the conversations with Keys it has blocked. The signing agent must hold the
+        The Key's direct-message conversations, the newest message first, at most 100 of each: its
+        main inbox, and apart from it the conversations with Keys it has blocked. The signing agent must hold the
         Key now: as its own, by an active shard of it, or as the Key of the person it is paired
         with. A Key sold takes its conversations to its new holder.
       security: [{siwaReceipt: []}]
@@ -604,6 +604,7 @@ paths:
         "403": {$ref: "#/components/responses/DmNotHolder"}
         "404": {$ref: "#/components/responses/DmNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks:
@@ -623,6 +624,7 @@ paths:
         "403": {$ref: "#/components/responses/DmNotHolder"}
         "404": {$ref: "#/components/responses/DmNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/read:
@@ -652,7 +654,7 @@ paths:
         "403": {$ref: "#/components/responses/DmNotHolder"}
         "404": {$ref: "#/components/responses/DmNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentOutOfRange"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/send:
@@ -693,7 +695,8 @@ paths:
           description: >-
             invalid_dm: the words, a part or the idempotency key is empty, too long or of the wrong
             kind. same_key: a Key cannot message itself. idempotency_conflict: the idempotency key
-            already sent a different message.
+            already sent a different message. invalid_request: the body doesn't fit the operation;
+            the hint names the fields it takes.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/DmInvalidError"}
@@ -721,6 +724,7 @@ paths:
         "403": {$ref: "#/components/responses/DmNotHolder"}
         "404": {$ref: "#/components/responses/DmNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/auto_delete:
@@ -750,7 +754,7 @@ paths:
         "403": {$ref: "#/components/responses/DmNotHolder"}
         "404": {$ref: "#/components/responses/DmNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentOutOfRange"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/block:
@@ -773,7 +777,9 @@ paths:
         "404": {$ref: "#/components/responses/DmNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422":
-          description: "same_key: a Key cannot block itself"
+          description: >-
+            same_key: a Key cannot block itself. invalid_request: the body doesn't fit the
+            operation; the hint names the fields it takes.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/DmInvalidError"}
@@ -797,6 +803,7 @@ paths:
         "403": {$ref: "#/components/responses/DmNotHolder"}
         "404": {$ref: "#/components/responses/DmNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/dms/changes:
@@ -826,7 +833,7 @@ paths:
         "403": {$ref: "#/components/responses/DmNotHolder"}
         "404": {$ref: "#/components/responses/DmNotFound"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentOutOfRange"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/agent/fleets/{fleet_id}/proposals/read:
@@ -2782,10 +2789,12 @@ components:
         conversations:
           type: array
           description: The main inbox, the newest message first
+          maxItems: 100
           items: {$ref: "#/components/schemas/DmConversation"}
         blocked_conversations:
           type: array
           description: The conversations with Keys this Key has blocked, the newest message first
+          maxItems: 100
           items: {$ref: "#/components/schemas/DmConversation"}
     DmConversationEnvelope:
       type: object
@@ -2866,7 +2875,7 @@ components:
     DmMessages:
       type: object
       additionalProperties: false
-      required: [conversation, cursor, messages]
+      required: [conversation, cursor, has_more, messages]
       properties:
         conversation:
           oneOf:
@@ -2876,6 +2885,7 @@ components:
         cursor:
           $ref: "#/components/schemas/DmSeq"
           description: The place the messages read reach; send it as after_seq next time
+        has_more: {type: boolean, description: True when more messages wait after cursor}
         messages:
           type: array
           maxItems: 200
@@ -2974,7 +2984,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [invalid_dm, same_key, idempotency_conflict]}
+            code: {type: string, enum: [invalid_dm, same_key, idempotency_conflict, invalid_request, out_of_range]}
             message: {type: string}
             hint: {type: string}
     DmLimitError:

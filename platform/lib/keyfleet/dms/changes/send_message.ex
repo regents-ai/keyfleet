@@ -17,7 +17,9 @@ defmodule Keyfleet.Dms.Changes.SendMessage do
 
   The same send key with the same words hands back the first message; with
   anything different it is a mistake and is refused, so a sender that never
-  heard the answer can simply ask again.
+  heard the answer can simply ask again. A send key names one message per Key
+  and ownership epoch: a Key's new holder never gets its old holder's message
+  back.
   """
   use Ash.Resource.Change
 
@@ -58,6 +60,7 @@ defmodule Keyfleet.Dms.Changes.SendMessage do
         body: Ash.Changeset.get_argument(changeset, :body),
         parts: Ash.Changeset.get_argument(changeset, :parts),
         author_wallet: sender.wallet,
+        ownership_epoch: sender.ownership_epoch,
         via_agent_id: via_agent_id,
         idempotency_key: Ash.Changeset.get_argument(changeset, :idempotency_key)
       })

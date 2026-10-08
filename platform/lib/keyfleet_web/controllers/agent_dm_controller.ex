@@ -64,6 +64,7 @@ defmodule KeyfleetWeb.AgentDmController do
       json(conn, %{
         conversation: conversation && conversation_json(conversation, token_id),
         cursor: cursor(messages, Map.get(params, "after_seq", 0)),
+        has_more: Dms.more_after?(messages),
         messages: Enum.map(messages, &message_json/1)
       })
     else

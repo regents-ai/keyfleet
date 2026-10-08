@@ -24,6 +24,7 @@ defmodule KeyfleetWeb.KeysLive do
   alias Keyfleet.Keys.Profile
   alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.PresenceCard
+  alias KeyfleetWeb.DmsLive
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WalletPanel
 
@@ -331,27 +332,9 @@ defmodule KeyfleetWeb.KeysLive do
       edits_restricted?:
         match?([%{restricted: true}], Keys.latest_edits_restrictions!(fleet_id, [token_id])),
       shards: if(key, do: Profile.shards(fleet_id, token_id), else: []),
-      messages: messages(actor, key, fleet_id, token_id)
+      messages: DmsLive.message_link(actor, key && key.owner_wallet, fleet_id, token_id)
     }
   end
-
-  # The Key's holder opens its inbox; the holder of another Key of the fleet
-  # writes to it as the lowest-numbered Key they hold.
-  defp messages(%Human{} = actor, %{owner_wallet: owner}, fleet_id, token_id)
-       when is_binary(owner) do
-    cond do
-      owner in actor.wallet_addresses ->
-        %{label: "Messages", path: "/app/keys/#{fleet_id}/#{token_id}/dms"}
-
-      held = List.first(Keys.held_keys(actor, fleet_id)) ->
-        %{label: "Message", path: "/app/keys/#{fleet_id}/#{held.token_id}/dms/#{token_id}"}
-
-      true ->
-        nil
-    end
-  end
-
-  defp messages(_actor, _key, _fleet_id, _token_id), do: nil
 
   @doc "The key on show read again when it is among the fleet's changed keys."
   def refresh_key(

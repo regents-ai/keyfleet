@@ -41,8 +41,8 @@ defmodule Keyfleet.Dms do
      mutes are unchanged and do not touch DMs; there is no DM mute.
 
   Also: a Key sends at most 300 messages an hour, and opening a new
-  conversation has no daily cap (`Keyfleet.Dms.Changes.LimitSends`, on the
-  site's `Keyfleet.Accounts.RequestRateLimiter`).
+  conversation has no daily cap (`Keyfleet.Dms.Changes.LimitSends`, counted
+  from the messages it stored).
   """
   use Ash.Domain
 
@@ -116,28 +116,30 @@ defmodule Keyfleet.Dms do
   now is forbidden. Nothing is marked as read, and asking again is always safe.
   """
   def changes(fleet_id, after_seq, actor) do
-    case read_changes(
-           fleet_id,
-           KeyHolder.held(actor, fleet_id),
-           %{after_seq: after_seq, limit: @changes_page + 1},
-           actor: actor,
-           load: [:via_agent]
-         ) do
-      {:ok, messages} ->
-        {page, rest} = Enum.split(messages, @changes_page)
+    with {:ok, messages} <-
+           read_changes(
+             fleet_id,
+             KeyHolder.held(actor, fleet_id),
+             %{after_seq: after_seq, limit: @changes_page},
+             actor: actor,
+             load: [:via_agent]
+           ) do
+      next_cursor =
+        case List.last(messages) do
+          nil -> after_seq
+          last -> last.seq
+        end
 
-        next_cursor =
-          case List.last(page) do
-            nil -> after_seq
-            last -> last.seq
-          end
-
-        {:ok, %{messages: page, next_cursor: next_cursor, has_more: rest != []}}
-
-      {:error, error} ->
-        {:error, error}
+      {:ok, %{messages: messages, next_cursor: next_cursor, has_more: more_after?(messages)}}
     end
   end
+
+  @doc """
+  Whether messages wait after the last of `messages`, a page read with
+  `read_conversation` or `changes/3`. Nothing read means nothing waits.
+  """
+  def more_after?([]), do: false
+  def more_after?(messages), do: messages |> List.last() |> Ash.Resource.get_metadata(:more_after)
 
   @doc """
   Takes away Key `token_id`'s block of `other_token_id`, if it has one:

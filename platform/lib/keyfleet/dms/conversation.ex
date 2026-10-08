@@ -19,6 +19,8 @@ defmodule Keyfleet.Dms.Conversation do
 
   @bigint 9_223_372_036_854_775_807
   @auto_delete_days [1, 7, 30, 90]
+  # An inbox lists its most recent conversations, as many as a page shows.
+  @inbox_page 100
 
   postgres do
     table "dm_conversations"
@@ -62,7 +64,8 @@ defmodule Keyfleet.Dms.Conversation do
 
       prepare build(
                 load: [:last_seq, :last_body, :last_from_token_id, :last_at],
-                sort: [last_seq: :desc_nils_last, id: :asc]
+                sort: [last_seq: :desc_nils_last, id: :asc],
+                limit: @inbox_page
               )
     end
 

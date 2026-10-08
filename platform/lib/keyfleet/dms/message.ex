@@ -62,6 +62,9 @@ defmodule Keyfleet.Dms.Message do
 
       # What one Key sent and received, in order, for catching up.
       index([:fleet_id, :from_token_id, :seq])
+
+      # What one Key sent in the last hour, for its hourly limit.
+      index([:fleet_id, :from_token_id, :inserted_at])
       index([:fleet_id, :to_token_id, :seq])
     end
   end
@@ -121,8 +124,8 @@ defmodule Keyfleet.Dms.Message do
       validate {Keyfleet.Dms.Validations.TwoKeys, from: :from_token_id, to: :to_token_id},
         where: present([:from_token_id, :to_token_id])
 
-      change Keyfleet.Dms.Changes.LimitSends
       change Keyfleet.Dms.Changes.SendMessage
+      change Keyfleet.Dms.Changes.LimitSends
     end
 
     # The conversation between two Keys, oldest first, after a place in it.
@@ -145,6 +148,7 @@ defmodule Keyfleet.Dms.Message do
 
       prepare build(load: [:via_agent])
       prepare Keyfleet.Dms.Preparations.InOrder
+      metadata :more_after, :boolean, allow_nil?: false
     end
 
     # The newest messages between two Keys, newest first, for the page.
@@ -187,6 +191,22 @@ defmodule Keyfleet.Dms.Message do
              )
 
       prepare Keyfleet.Dms.Preparations.InOrder
+      metadata :more_after, :boolean, allow_nil?: false
+    end
+
+    # What one Key sent in the last hour, newest first, by the database's
+    # clock, for its hourly limit (`Keyfleet.Dms.Changes.LimitSends`).
+    read :sent_last_hour do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and from_token_id == ^arg(:token_id) and
+                 inserted_at > fragment("(now() AT TIME ZONE 'utc') - interval '1 hour'")
+             )
+
+      prepare build(select: [:id, :inserted_at], sort: [inserted_at: :desc])
     end
 
     # The messages whose conversation's auto-delete days have passed.
@@ -259,7 +279,7 @@ defmodule Keyfleet.Dms.Message do
       authorize_if {Keyfleet.Dms.Checks.KeyHolder, keys: [:token_ids]}
     end
 
-    policy action([:read, :expired, :expire]) do
+    policy action([:read, :sent_last_hour, :expired, :expire]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
 
@@ -310,6 +330,14 @@ defmodule Keyfleet.Dms.Message do
       writable?: false,
       public?: true,
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
+
+    # The Key's ownership epoch it was sent in. A send key names one message
+    # per Key and holder, so a Key's new holder starts afresh.
+    attribute :ownership_epoch, :integer,
+      allow_nil?: false,
+      writable?: false,
+      public?: false,
+      constraints: [min: 1, max: @bigint]
 
     attribute :idempotency_key, :string,
       allow_nil?: false,
@@ -362,6 +390,6 @@ defmodule Keyfleet.Dms.Message do
   end
 
   identities do
-    identity :unique_send_key, [:fleet_id, :from_token_id, :idempotency_key]
+    identity :unique_send_key, [:fleet_id, :from_token_id, :ownership_epoch, :idempotency_key]
   end
 end

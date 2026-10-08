@@ -93,6 +93,13 @@
   margin: 0;
 }
 
+.key-profile__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .key-profile__section {
   display: grid;
   gap: 0.85rem;

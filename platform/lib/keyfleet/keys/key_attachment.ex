@@ -286,7 +286,7 @@ defmodule Keyfleet.Keys.KeyAttachment do
                  ownership_epoch == current_ownership_epoch
              )
 
-      prepare build(select: [:token_id, :owner_wallet], sort: [token_id: :asc])
+      prepare build(select: [:token_id, :ownership_epoch, :owner_wallet], sort: [token_id: :asc])
     end
 
     # Every key one wallet holds right now, in every fleet.
