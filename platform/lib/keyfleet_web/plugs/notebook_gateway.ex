@@ -41,6 +41,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   @cookie "__Host-kf_notebooks"
   @salt "notebook session"
   @enter "/_keyfleet/enter"
+  # The sign-in server checks a signed request's body inside an envelope it
+  # refuses past 64 KiB, so no larger body can ever be verified.
+  @signed_max_body 64 * 1024
 
   # Only browser notebook content and the WebSocket handshake reach the hub.
   # Cookies and all caller identity headers are replaced by our signed pass.
@@ -187,10 +190,15 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       get_req_header(conn, "signature-input") != [] or
         get_req_header(conn, "x-siwa-receipt") != []
 
+  # A signed request spends the sender's address's API budget before anything
+  # of it is read, and only as much body is read as a signature can cover.
   defp identify_agent(conn) do
-    cap = Notebooks.config()[:max_request_bytes]
+    conn = RegentAgentAccess.RateLimit.call(conn, KeyfleetWeb.Endpoint.api_rate_limit())
+    if conn.halted, do: {:refused, conn}, else: read_signed(conn)
+  end
 
-    case read_body(conn, length: cap, read_length: min(cap, 1_000_000)) do
+  defp read_signed(conn) do
+    case read_body(conn, length: @signed_max_body, read_length: @signed_max_body) do
       {:ok, raw, conn} ->
         conn =
           Siwa.AgentAuthPlug.call(assign(conn, :raw_body, raw),
