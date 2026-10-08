@@ -95,35 +95,29 @@ defmodule Keyfleet.WalletSteps.Build do
           {:problem, problem, figures} -> {[], figures, problem}
         end
 
-      case no_eth_for_gas(steps, signer, Map.put_new(figures, :blocked, %{})) do
-        {:ok, figures} -> {:ok, request, %{steps: steps, figures: figures, problem: problem}}
-        :unread -> {:ok, request, %{steps: [], figures: figures, problem: :unread}}
-      end
+      figures = no_eth_for_gas(steps, signer, Map.put_new(figures, :blocked, %{}))
+      {:ok, request, %{steps: steps, figures: figures, problem: problem}}
     end
   end
 
   # A signer that pays its own fee with less ETH than any transaction costs
-  # can send none of the group's transactions. A signature costs nothing.
-  defp no_eth_for_gas(_steps, nil, figures), do: {:ok, figures}
+  # can send none of the group's transactions. A signature costs nothing, and
+  # a code or balance the chain didn't answer holds nothing back.
+  defp no_eth_for_gas(_steps, nil, figures), do: figures
 
   defp no_eth_for_gas(steps, signer, figures) do
     case for(%{kind: "transaction", step: name} <- steps, do: name) do
-      [] ->
-        {:ok, figures}
-
-      sent ->
-        block_if_short(sent, signer, figures)
+      [] -> figures
+      sent -> block_if_short(sent, signer, figures)
     end
   end
 
   defp block_if_short(sent, signer, figures) do
     with {:ok, reads} <- Reads.at_head(),
          {:ok, true} <- Reads.short_of_gas?(reads, signer) do
-      blocked = Map.merge(figures.blocked, Map.new(sent, &{&1, :no_eth_for_gas}))
-      {:ok, %{figures | blocked: blocked}}
+      %{figures | blocked: Map.merge(figures.blocked, Map.new(sent, &{&1, :no_eth_for_gas}))}
     else
-      {:ok, false} -> {:ok, figures}
-      {:error, _reason} -> :unread
+      _not_known_short -> figures
     end
   end
 

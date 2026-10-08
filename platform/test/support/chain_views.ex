@@ -24,9 +24,9 @@ defmodule Keyfleet.ChainViews do
   Puts the chain answering `views`, each `{to, signature, arguments,
   answer}`: `answer` is `{types, values}`, like `{"uint256", [5]}`, or
   `:revert`. `opts` may name `:head`, `:balances`, the ETH each address
-  holds, and `:codes`, the code at each address. A later `put!/2` in the same
-  test changes the answers every process reads from then on, including a page
-  that has read the chain already.
+  holds, and `:codes`, the chain's answer for the code at each address. A
+  later `put!/2` in the same test changes the answers every process reads
+  from then on, including a page that has read the chain already.
   """
   def put!(views, opts \\ []) do
     answers =

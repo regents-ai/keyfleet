@@ -29,8 +29,9 @@ defmodule Keyfleet.Chain.StubClient do
   `observations/0` returns, and `:calls`, a function answering each contract
   read `call(to, data, block_hash)`, which by default answers none, and
   `:balances`, the ETH each address holds, by lowercase address (none by
-  default), and `:codes`, the code at each address, by lowercase address
-  (none by default: every address is a plain wallet).
+  default), and `:codes`, the chain's answer for the code at each address,
+  by lowercase address, `{:ok, code}` or `{:error, reason}` (`{:ok, ""}` by
+  default: every address is a plain wallet).
   """
   def put_chain(head, logs, opts \\ []), do: Process.put(__MODULE__, new_chain(head, logs, opts))
 
@@ -124,7 +125,7 @@ defmodule Keyfleet.Chain.StubClient do
   def get_balance(address, _block_hash), do: {:ok, Map.get(chain().balances, address, 0)}
 
   @impl true
-  def get_code(address, _block_hash), do: {:ok, Map.get(chain().codes, address, "")}
+  def get_code(address, _block_hash), do: Map.get(chain().codes, address, {:ok, ""})
 
   defp chain do
     Enum.find_value([self() | Process.get(:"$callers", [])], &put_by/1) ||
