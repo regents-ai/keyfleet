@@ -59,8 +59,9 @@
   margin-inline-end: 1.7rem;
 }
 
-#shell-header a,
-#shell-sidebar a {
+/* A link drawn as a button keeps the button's own colours. */
+#shell-header a:not(.rg-button),
+#shell-sidebar a:not(.rg-button) {
   color: inherit;
   text-decoration: none;
 }
