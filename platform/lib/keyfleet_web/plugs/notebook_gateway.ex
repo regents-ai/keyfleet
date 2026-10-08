@@ -184,7 +184,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp signed?(conn),
     do:
-      get_req_header(conn, "signature-input") != [] or
+      get_req_header(conn, "x-siwa-signature-input") != [] or
         get_req_header(conn, "x-siwa-receipt") != []
 
   defp identify_agent(conn) do
