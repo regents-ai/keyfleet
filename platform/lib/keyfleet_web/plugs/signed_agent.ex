@@ -143,7 +143,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     "erc1271" => :erc1271,
     "erc6492" => :erc6492
   }
-  @proof_headers ~w(x-siwa-signature x-siwa-signature-input content-digest x-siwa-receipt x-key-id x-timestamp x-agent-wallet-address x-agent-chain-id)
 
   @impl Plug
   def init(opts), do: opts
@@ -161,50 +160,42 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
          [type] <- get_req_header(conn, "content-type"),
          {:ok, "application", "json", _} <- Plug.Conn.Utils.media_type(type),
          %Plug.Conn.Unfetched{} <- conn.body_params do
-      cap = body_limit(conn.request_path)
-
-      case read_body(conn, length: cap, read_length: cap + 1) do
-        {:ok, raw, conn} when byte_size(raw) <= cap -> verify(assign(conn, :raw_body, raw))
+      case read_signed(conn) do
+        {:ok, _raw, conn} -> verify(conn)
         {:error, _reason} -> deny(conn, %{reason: :invalid_request})
-        {_read, _raw, conn} -> answer(conn, 413, "request_too_large")
+        {:more, _raw, conn} -> answer(conn, 413, "request_too_large")
+        :too_large -> answer(conn, 413, "request_too_large")
       end
     else
       _ -> deny(conn, %{reason: :invalid_request})
     end
   end
 
+  # The shared reader keeps the exact bytes the signature covers, and no more
+  # than the operation takes.
+  defp read_signed(conn) do
+    Siwa.AgentAuthPlug.read_body(conn, [], body_limit(conn.request_path))
+  rescue
+    Plug.Parsers.RequestTooLargeError -> :too_large
+  end
+
   # The raw body is signed, through its content digest, and checked against
-  # it before anything is read from it; `accept/3` then reads it.
+  # it before anything is read from it; `accept/3` then reads it. The shared
+  # plug forwards only the signed headers, so any other header changes nothing.
   defp verify(conn) do
     Siwa.AgentAuthPlug.call(conn,
       client: Keyfleet.SiwaBroker,
       hooks: __MODULE__,
       audience: "keyfleet",
-      signed_path: :path_only,
       body: :always
     )
   end
 
   @impl Siwa.AgentAuthPlug.Hooks
   def before_verify(conn, _headers) do
-    if supported_request?(conn) and proof_carried?(conn),
+    if supported_request?(conn),
       do: {:ok, nil},
       else: {:error, %{reason: :invalid_request}}
-  end
-
-  @doc """
-  Whether a request carries its raw body and each proof header exactly once,
-  and no other `x-agent-` or `x-siwa-` header.
-  """
-  def proof_carried?(conn) do
-    names = Enum.map(conn.req_headers, fn {name, _} -> String.downcase(name) end)
-
-    is_binary(conn.assigns[:raw_body]) and
-      Enum.all?(@proof_headers, &(Enum.count(names, fn name -> name == &1 end) == 1)) and
-      not Enum.any?(names, fn name ->
-        (String.starts_with?(name, "x-agent-") or String.starts_with?(name, "x-siwa-")) and
-          name not in @proof_headers
-      end)
   end
 
   # The fields Keyfleet acts on; anything else the sign-in server says is
@@ -305,10 +296,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp smart_wallet_on_ethereum?(_actor), do: false
 
-  # The receipt and key id each appear exactly once; `before_verify` saw to it.
+  # The receipt and key id each appear exactly once: the shared plug refuses a
+  # repeat and the sign-in server a request missing either.
   defp credential_ref(conn) do
-    [receipt] = get_req_header(conn, "x-siwa-receipt")
-    [key_id] = get_req_header(conn, "x-key-id")
+    [receipt] = get_req_header(conn, Siwa.Contract.header_for("receipt"))
+    [key_id] = get_req_header(conn, Siwa.Contract.header_for("key_id"))
     "sha256:" <> Base.encode16(:crypto.hash(:sha256, [receipt, "\n", key_id]), case: :lower)
   end
 
@@ -343,8 +335,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     |> send_resp(status, Jason.encode!(body))
     |> halt()
   end
-
-  def proof_headers, do: @proof_headers
 
   # Every admitted request carries a signed JSON body, including the ones whose
   # whole instruction is their method and path; those send an empty object. What

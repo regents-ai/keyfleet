@@ -865,3 +865,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   messages already use. It holds only while the person holds the Key; an agent
   with a shard in the fleet acts as its shard.
 - Joining guide 2.5.2 says so in sections 5, 11, 12 and the error list.
+
+## 2026-10-08 — Agent sign-in follows the shared SIWA library
+
+- Signed agent requests carry `x-siwa-signature` and `x-siwa-signature-input`
+  instead of `Signature` and `Signature-Input`, which OpenAI's agent cloud
+  replaces on the way out.
+- Pins elixir-utils `fe3aa1d` (the final SIWA signing contract) and Regents
+  `a6ce561a`, which pins the same commit.
+- Header handling comes only from the shared plug, wired as ash-template wires
+  it: it reads the signed body, refuses a repeated signed header, a query string
+  on a route that does not sign one, and a body it did not read whole, and sends
+  the sign-in server only the signed headers. Keyfleet's own header list and
+  checks are gone, so an extra header such as `x-agent-role` is accepted and
+  changes nothing.
+- `/api/agents/v1` bodies are read by the shared reader, up to 4096 bytes, as
+  Regents reads them.

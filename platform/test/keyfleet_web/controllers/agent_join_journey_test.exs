@@ -2,6 +2,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
   use ExUnit.Case, async: false
   import KeyfleetWeb.RefusalHelpers
   import Plug.Conn
+  alias KeyfleetWeb.SignedAgentHelpers
   @path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
   @body ~s({ "name": "Wallet agent", "declared_harness": "local" })
@@ -11,59 +12,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     {:ok, signer} = Siwa.LocalSigner.new()
     secret = :crypto.strong_rand_bytes(32)
-    test = self()
-    old = Application.get_env(:keyfleet, :siwa_broker_url)
-    on_exit(fn -> Application.put_env(:keyfleet, :siwa_broker_url, old) end)
-
-    broker =
-      server(:broker, fn conn, _ ->
-        assert conn.request_path == "/api/shared/siwa/http-verify"
-        assert get_req_header(conn, "x-siwa-audience") == ["keyfleet"]
-        {:ok, raw, conn} = read_body(conn)
-        assert byte_size(raw) <= 65_536
-        payload = Jason.decode!(raw)
-        send(test, {:broker_payload, payload})
-
-        case Siwa.verify_authenticated_request(payload,
-               secret: secret,
-               audience: "keyfleet",
-               wallet_audiences: ["keyfleet"]
-             ) do
-          {:ok, %{claims: claims, covered_components: covered}} ->
-            answer(conn, 200, %{
-              code: "http_envelope_valid",
-              data: %{
-                verified: true,
-                walletAddress: claims["sub"],
-                chainId: claims["chain_id"],
-                verificationMethod: "eoa_recovery",
-                keyId: claims["key_id"],
-                receiptExpiresAt:
-                  DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
-                requiredHeaders: Siwa.required_authenticated_request_headers(payload["body"]),
-                requiredCoveredComponents:
-                  Siwa.required_authenticated_request_components(
-                    payload["headers"],
-                    payload["body"]
-                  ),
-                coveredComponents: covered,
-                agentRegistration: nil,
-                agentBook: nil,
-                principal: %{
-                  kind: "wallet",
-                  wallet_address: claims["sub"],
-                  chain_id: claims["chain_id"],
-                  audience: claims["aud"]
-                }
-              }
-            })
-
-          {:error, _} ->
-            answer(conn, 401, %{error: %{code: "invalid_proof"}})
-        end
-      end)
-
-    Application.put_env(:keyfleet, :siwa_broker_url, broker)
+    SignedAgentHelpers.start_broker!(self(), secret)
     app = server(:product, &KeyfleetWeb.Endpoint.call(&1, KeyfleetWeb.Endpoint.init(&2)))
     %{app: app, signer: signer, secret: secret}
   end
@@ -173,11 +122,6 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
              ).status == 401
     end
 
-    assert send_request(c, %{
-             valid
-             | headers: Map.put(valid.headers, "x-agent-token-id", "forged")
-           }).status == 401
-
     refute_receive {:broker_payload, _}
 
     # Once its signature verifies, a body naming nothing editable is told the
@@ -236,8 +180,6 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     assert oversized.status == 413
     refute_receive {:broker_payload, _}
-    conn = Plug.Test.conn("POST", @path, @body)
-    assert {:error, _} = KeyfleetWeb.Plugs.SignedAgent.before_verify(conn, %{})
   end
 
   test "verification transport never retries or follows redirects", c do
@@ -281,20 +223,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     assert send_request(c, %{signed | body: String.duplicate(" ", 4097)}).status == 413
 
-    for header <- [
-          "x-agent-registry-address",
-          "x-agent-token-id",
-          "x-agent-id",
-          "x-siwa-audience"
-        ] do
-      assert send_request(c, %{signed | headers: Map.put(signed.headers, header, "untrusted")}).status ==
-               401
-    end
-
-    for header <- KeyfleetWeb.Plugs.SignedAgent.proof_headers() do
-      assert send_request(c, %{signed | headers: Map.delete(signed.headers, header)}).status ==
-               401
-
+    for header <- Siwa.Contract.forwarded_headers() do
       duplicate = Plug.Test.conn("POST", @path, @body)
 
       duplicate = %{
@@ -331,6 +260,34 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     refute_receive {:broker_payload, _}
     assert send_request(c, signed).status == 200
+  end
+
+  # Costly failure: a header the signature does not cover changes who the
+  # agent is or what it may do.
+  test "an unsigned header such as x-agent-role: admin is accepted and grants nothing", c do
+    assert send_request(c, signed(c, @body)).status == 200
+    plain = send_request(c, signed(c, @body))
+    assert plain.status == 200
+
+    for {header, value} <- [
+          {"x-agent-role", "admin"},
+          {"x-agent-token-id", "1"},
+          {"x-agent-id", "untrusted"},
+          {"x-agent-registry-address", "untrusted"},
+          {"x-siwa-audience", "untrusted"}
+        ] do
+      request = signed(c, @body)
+      extra = send_request(c, %{request | headers: Map.put(request.headers, header, value)})
+      assert {extra.status, extra.body} == {plain.status, plain.body}, header
+    end
+
+    # The sign-in server hears the signed headers and nothing else.
+    for _sent <- 1..7 do
+      assert_receive {:broker_payload, %{"headers" => forwarded}}
+      assert Enum.sort(Map.keys(forwarded)) == Enum.sort(Siwa.Contract.forwarded_headers())
+    end
+
+    refute_receive {:broker_payload, _}
   end
 
   test "a body is judged only once its signature verifies", c do
@@ -522,43 +479,8 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     end
   end
 
-  defp signed(c, body, audience \\ "keyfleet", chain \\ 8453, path \\ @path) do
-    {:ok, %{token: receipt}} =
-      Siwa.Receipt.create(
-        %{
-          "typ" => "siwa_wallet_receipt",
-          "sub" => c.signer.address,
-          "chain_id" => chain,
-          "aud" => audience,
-          "key_id" => c.signer.address,
-          "verified" => "wallet_signature",
-          "nonce" => Ecto.UUID.generate(),
-          "jti" => Ecto.UUID.generate()
-        },
-        secret: c.secret
-      )
-
-    {:ok, request} =
-      Siwa.RequestAuth.sign_authenticated_request(
-        %{
-          method: "POST",
-          path: path,
-          body: body,
-          headers: %{
-            "content-type" => "application/json",
-            "cookie" => "untrusted=1",
-            "authorization" => "Bearer untrusted"
-          }
-        },
-        receipt,
-        c.signer,
-        secret: c.secret,
-        audience: audience,
-        wallet_audiences: [audience]
-      )
-
-    request
-  end
+  defp signed(c, body, audience \\ "keyfleet", chain \\ 8453, path \\ @path),
+    do: SignedAgentHelpers.sign(c.signer, c.secret, "POST", path, body, audience, chain)
 
   defp send_request(c, request),
     do:
@@ -569,15 +491,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
         redirect: false
       )
 
-  defp server(id, plug) do
-    pid =
-      start_supervised!(
-        Supervisor.child_spec({Bandit, plug: plug, ip: {127, 0, 0, 1}, port: 0}, id: id)
-      )
-
-    {:ok, {_, port}} = ThousandIsland.listener_info(pid)
-    "http://127.0.0.1:#{port}"
-  end
+  defp server(id, plug), do: SignedAgentHelpers.serve!(id, plug)
 
   defp update(c, params),
     do: send_request(c, signed(c, Jason.encode!(params), "keyfleet", 8453, @update_path))
@@ -587,8 +501,4 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     {:ok, old, _} = DateTime.from_iso8601(old)
     DateTime.compare(new, old) == :gt
   end
-
-  defp answer(conn, status, body),
-    do:
-      conn |> put_resp_content_type("application/json") |> send_resp(status, Jason.encode!(body))
 end

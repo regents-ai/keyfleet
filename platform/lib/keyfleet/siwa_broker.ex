@@ -6,13 +6,6 @@ defmodule Keyfleet.SiwaBroker do
   def verify_http_request(payload, audience: "keyfleet") do
     case origin(Application.get_env(:keyfleet, :siwa_broker_url)) do
       {:ok, url} ->
-        payload =
-          Map.update!(
-            payload,
-            "headers",
-            &Map.take(&1, KeyfleetWeb.Plugs.SignedAgent.proof_headers())
-          )
-
         Siwa.AgentAuthPlug.BrokerClient.verify_http_request(payload,
           http: __MODULE__,
           base_url: url,
