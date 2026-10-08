@@ -13,7 +13,7 @@ defmodule Keyfleet.Keys.Profile do
 
   require Ash.Query
 
-  alias Keyfleet.Actors.Human
+  alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.Agents
   alias Keyfleet.Agents.CheckInStatus
   alias Keyfleet.Chain
@@ -207,13 +207,13 @@ defmodule Keyfleet.Keys.Profile do
 
     listings =
       for(%{agent_profile: %{id: id}} <- shards, do: id)
-      |> Agents.listings!()
+      |> Agents.listings!(actor: %System{})
       |> Map.new(&{&1.id, &1})
 
     people =
       for(%{human_id: "0x" <> _number = human_id} <- Map.values(listings), do: human_id)
       |> Enum.uniq()
-      |> Agents.agents_of_people!()
+      |> Agents.agents_of_people!(actor: %System{})
       |> Enum.group_by(& &1.human_id)
 
     now = DateTime.utc_now()
