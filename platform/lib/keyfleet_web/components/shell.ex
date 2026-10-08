@@ -49,7 +49,11 @@ defmodule KeyfleetWeb.Components.Shell do
         </Regent.Primitives.button>
         <ul>
           <li :for={target <- @route_spec.sidebar_model.targets}>
-            <.sidebar_target target={target} route_spec={@route_spec} />
+            <.sidebar_target
+              target={target}
+              route_spec={@route_spec}
+              account_control={@account_control}
+            />
           </li>
         </ul>
       </nav>
@@ -170,6 +174,7 @@ defmodule KeyfleetWeb.Components.Shell do
     <div id="account-control" class="account-control">
       <Regent.Primitives.button
         :if={@account_control.kind == :sign_in}
+        variant="secondary"
         type="button"
         data-account-target="sign-in"
         disabled={!@enabled}
@@ -248,19 +253,26 @@ defmodule KeyfleetWeb.Components.Shell do
 
   attr(:target, :map, required: true)
   attr(:route_spec, :map, required: true)
+  attr(:account_control, Keyfleet.AccessContext.AccountControl, required: true)
 
   defp sidebar_target(%{target: %RouteTarget{} = target} = assigns) do
-    assigns = assign(assigns, :target, target)
+    assigns = assign(assigns, :label, sidebar_label(target, assigns.account_control))
 
     ~H"""
     <.link
       patch={@target.path}
       aria-current={if @route_spec.destination == @target.path, do: "page"}
     >
-      {@target.label}
+      {@label}
     </.link>
     """
   end
+
+  # Signed out, the account page is named as the header's button names it.
+  defp sidebar_label(%RouteTarget{route_id: :account}, %{kind: :sign_in, label: label}),
+    do: label
+
+  defp sidebar_label(%RouteTarget{label: label}, _account_control), do: label
 
   attr(:name, :atom, required: true)
 

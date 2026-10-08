@@ -1,8 +1,8 @@
 @layer regents-product {
 /* The fleet page is its map: a slim bar with the fleet's name, who is here,
    Get a key, Send your agent and links, the map filling the rest of the
-   screen, "How this fleet works" opening beside it, and the list of keys
-   below. The key page's grammar carries over: one ground, hairline panels,
+   screen, "Get a Key" (or "How this fleet works") opening beside it, and the
+   list of keys below. The key page's grammar carries over: one ground, hairline panels,
    the display face for headings. */
 
 .fleet-page {
@@ -135,7 +135,8 @@
   color: var(--color-fg-muted);
 }
 
-/* Buying a key, in "How this fleet works" */
+/* The Key on offer, at the top of the panel: its number and price in one
+   line, with Approve and Buy straight under it. */
 
 #buy-key-order {
   display: grid;
@@ -145,33 +146,41 @@
   min-width: 0;
 }
 
-.fleet-buy-offer {
+.fleet-buy-title {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem 1.25rem;
+  gap: 0.5rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.fleet-buy-facts {
-  display: flex;
-  gap: 1.25rem;
-  margin: 0;
-}
-
-.fleet-buy-facts div {
-  display: grid;
-}
-
-.fleet-buy-facts dt {
-  color: var(--color-fg-muted);
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.fleet-buy-facts dd {
-  margin: 0;
+.fleet-buy-offer {
   white-space: nowrap;
+}
+
+/* The panel is named for the button that opened it. */
+.fleet-about[data-for="buy"] .fleet-about__for-about,
+.fleet-about[data-for="about"] .fleet-about__for-buy {
+  display: none;
+}
+
+/* While "Get a Key" is open, the Key on offer is marked on the map as a
+   chosen Key is, and the note under the map names it in the same line. */
+.key-map-selected__offer {
+  display: none;
+}
+
+.fleet-stage:has(#fleet-about[data-for="buy"]:not([hidden])) .km-tile[data-state~="next"] {
+  --km-face: var(--palette-tangerine-tango);
+  color: var(--palette-charcoal);
+}
+
+.fleet-stage:has(#fleet-about[data-for="buy"]:not([hidden])) .key-map-selected__offer {
+  display: inline;
+}
+
+.fleet-stage:has(#fleet-about[data-for="buy"]:not([hidden])) .key-map-selected__chosen {
+  display: none;
 }
 
 /* The map, filling the rest of the view */
@@ -493,6 +502,16 @@
   .fleet-bar__nav {
     gap: 0.375rem;
     font-size: 0.875rem;
+  }
+
+  /* On a phone the panel opens over the whole page under the site's header,
+     so the Key on offer and its Buy button are at the top of the screen. */
+  .fleet-about {
+    position: fixed;
+    inset: calc(3.5rem + 1px) 0 0;
+    z-index: 3;
+    width: auto;
+    border-inline-start: 0;
   }
 
   /* The directions stay for screen readers; on a phone the map is the page. */

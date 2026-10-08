@@ -205,6 +205,7 @@ test("a signed-in account shows its account menu", async ({page}) => {
   await auth.expectCounts({documents: 2, sessionChecks: 2, syncs: 2})
 })
 
+// Signed out, the account page is named as the header's button names it.
 test("the sidebar lists the four fleets, Classic first, then the Account page", async ({page}) => {
   await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
@@ -219,13 +220,13 @@ test("the sidebar lists the four fleets, Classic first, then the Account page", 
     ["Syndicate #1", "/app/fleets/fibonacci_syndicate"],
     ["Cascade #1", "/app/fleets/fibonacci_cascade"],
     ["Accelerant #1", "/app/fleets/fleet_tech_accelerant"],
-    ["Account", "/account"],
+    ["Sign In", "/account"],
   ])
 
-  await sidebar.getByRole("link", {name: "Account"}).click()
+  await sidebar.getByRole("link", {name: "Sign In"}).click()
   await expect(page).toHaveURL(/\/account$/)
   await expect(page.locator("#account-page").getByRole("heading", {level: 1, name: "Account"})).toBeVisible()
-  await expect(page.getByRole("heading", {level: 2, name: "Sign in to see your account"})).toBeVisible()
+  await expect(page.getByRole("heading", {level: 2, name: "Sign In to see your account"})).toBeVisible()
 })
 
 test("navigation keeps brand, document, shell identity, and starts at the top", async ({page}) => {

@@ -7,8 +7,10 @@ defmodule KeyfleetWeb.FleetLive do
   fleet's latest activity, open to start on a wide screen; "How this fleet
   works", with its pricing, sales figures, the next key to buy and its
   contract; and "Who's here", with the agents holding its keys' shards. Every key it
-  has issued is listed below the map. Opened with `?buy`, the page starts with
-  "Get a key" pressed.
+  has issued is listed below the map. "Get a Key" opens "How this fleet
+  works" under the name "Get a Key"; either way the Key on offer and its Buy
+  button are at its top. Opened with `?buy`, the page is drawn with "Get a
+  Key" already pressed.
 
   A coming-soon fleet's page shows its name, its map faded and that it is
   coming soon, and nothing else: no price, no keys, no "Get a key", no "Send
@@ -182,7 +184,7 @@ defmodule KeyfleetWeb.FleetLive do
         phx-hook="MotionPanels"
       >
         <span
-          :if={Map.has_key?(@params, "buy")}
+          :if={buying?(@params)}
           id="fleet-get-key-on-arrival"
           hidden
           phx-mounted={
@@ -258,7 +260,7 @@ defmodule KeyfleetWeb.FleetLive do
             <Regent.Primitives.button
               id="fleet-now-toggle"
               variant="secondary"
-              aria-expanded="true"
+              aria-expanded={to_string(not buying?(@params))}
               aria-controls="fleet-now"
               phx-click={toggle_panel("#fleet-now")}
             >
@@ -267,7 +269,7 @@ defmodule KeyfleetWeb.FleetLive do
             <Regent.Primitives.button
               id="fleet-about-toggle"
               variant="secondary"
-              aria-expanded="false"
+              aria-expanded={to_string(buying?(@params))}
               aria-controls="fleet-about"
               phx-click={toggle_panel("#fleet-about")}
             >
@@ -289,8 +291,14 @@ defmodule KeyfleetWeb.FleetLive do
         <div class="fleet-stage">
           <.key_map :if={@fleet.deployed?} fleet={@fleet} />
           <.not_on_sale :if={not @fleet.deployed?} fleet={@fleet} />
-          <.now_panel fleet={@fleet} params={@params} activity={@activity} now={@now} />
-          <.about fleet={@fleet} actor={@actor} lease={@lease} />
+          <.now_panel
+            fleet={@fleet}
+            params={@params}
+            activity={@activity}
+            now={@now}
+            buying={buying?(@params)}
+          />
+          <.about fleet={@fleet} actor={@actor} lease={@lease} buying={buying?(@params)} />
           <CheckIns.who_is_here
             agents={@fleet.agents}
             agents_here={@fleet.agents_here}
@@ -394,19 +402,22 @@ defmodule KeyfleetWeb.FleetLive do
   # The panels beside the map open one at a time, in the same place: opening
   # one closes the others and takes the reader to its heading. Closed again
   # from its button, the heading can't take focus, so it stays on the button.
+  # "How this fleet works" opens its panel under that name.
   defp toggle_panel(panel) do
     @panels
     |> Enum.reduce(%JS{}, fn
       {^panel, button}, js -> toggle(js, panel, button)
       {other, button}, js -> close_quietly(js, other, button)
     end)
+    |> JS.set_attribute({"data-for", "about"}, to: "#fleet-about")
     |> JS.focus(to: panel <> "-title")
   end
 
-  # "Get a key" opens "How this fleet works", closing the others, and takes the
-  # reader to buying a key. An address ending in `?buy`, where the header's
-  # "Get a Key" leads, does the same on arrival, then drops `?buy` from the
-  # address so the next press of the header's button opens it again.
+  # "Get a Key" opens the same panel as "How this fleet works", named "Get a
+  # Key", closing the others, and takes the reader to the Key on offer. An
+  # address ending in `?buy`, where the header's "Get a Key" leads, is drawn
+  # that way; on arrival it then drops `?buy` from the address so the next
+  # press of the header's button opens it again.
   defp get_key do
     @panels
     |> Enum.reduce(%JS{}, fn
@@ -418,8 +429,12 @@ defmodule KeyfleetWeb.FleetLive do
       {other, button}, js ->
         close_quietly(js, other, button)
     end)
+    |> JS.set_attribute({"data-for", "buy"}, to: "#fleet-about")
     |> JS.focus(to: "#buy-key-title")
   end
+
+  # Whether the address asks for the page with "Get a Key" pressed.
+  defp buying?(params), do: Map.has_key?(params, "buy")
 
   defp close(panel, button),
     do: %JS{} |> close_quietly(panel, button) |> JS.focus(to: button)
@@ -434,17 +449,19 @@ defmodule KeyfleetWeb.FleetLive do
   attr :params, :map, required: true
   attr :activity, :any, required: true
   attr :now, :map, required: true
+  attr :buying, :boolean, required: true, doc: "whether the page opens with \"Get a Key\" pressed"
 
   # Opens beside the map: what has been happening in the fleet, newest first,
   # kept current while the page is open. It starts open on a wide screen and
   # closed on a narrow one, where its styles keep it out of sight until the
-  # page's script has closed it.
+  # page's script has closed it; and closed when the page opens to buy.
   defp now_panel(assigns) do
     ~H"""
     <aside
       id="fleet-now"
       class="fleet-now"
       aria-labelledby="fleet-now-title"
+      hidden={@buying}
       phx-hook="OpenWhenWide"
       data-toggle="fleet-now-toggle"
       data-wide-only
@@ -637,19 +654,26 @@ defmodule KeyfleetWeb.FleetLive do
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
+  attr :buying, :boolean, required: true, doc: "whether the page opens with \"Get a Key\" pressed"
 
-  # Opens beside the map: the fleet's pricing, the next key to buy, its sales
-  # so far, and where its contract lives.
+  # Opens beside the map: the next Key to buy with its Buy button, then the
+  # fleet's pricing, its sales so far, and where its contract lives. Opened
+  # by "Get a Key" it is named "Get a Key", and by its own button "How this
+  # fleet works" (`data-for`).
   defp about(assigns) do
     ~H"""
     <aside
       id="fleet-about"
       class="fleet-about"
       aria-labelledby="fleet-about-title"
-      hidden
+      data-for={if @buying, do: "buy", else: "about"}
+      hidden={not @buying}
     >
       <div class="fleet-about__heading">
-        <h2 id="fleet-about-title" tabindex="-1">How this fleet works</h2>
+        <h2 id="fleet-about-title" tabindex="-1">
+          <span class="fleet-about__for-buy">Get a Key</span>
+          <span class="fleet-about__for-about">How this fleet works</span>
+        </h2>
         <Regent.Primitives.button
           id="fleet-about-close"
           class="fleet-about__close"
@@ -660,9 +684,9 @@ defmodule KeyfleetWeb.FleetLive do
         </Regent.Primitives.button>
       </div>
 
-      <p>{Rules.pricing(@fleet.fleet_id)}</p>
-
       <.buy_key :if={@fleet.buy} fleet={@fleet} buy={@fleet.buy} actor={@actor} lease={@lease} />
+
+      <p>{Rules.pricing(@fleet.fleet_id)}</p>
 
       <section :if={@fleet.deployed?} aria-labelledby="fleet-progress-title">
         <h3 id="fleet-progress-title">Progress</h3>
@@ -738,7 +762,8 @@ defmodule KeyfleetWeb.FleetLive do
 
   # The controls only move the map, so they never wait on the page. The map
   # draws itself once its script loads; until then it says so, and the list
-  # of keys below still has every key.
+  # of keys below still has every key. While "Get a Key" is open, the Key on
+  # offer stands out on the map and the note under it names that Key.
   defp key_map(assigns) do
     assigns = assign(assigns, :map, "#key-map-#{assigns.fleet.fleet_id}")
 
@@ -799,9 +824,14 @@ defmodule KeyfleetWeb.FleetLive do
           also in the list of Keys.
         </Regent.Primitives.tip>
         <p id="key-map-selected" role="status">
-          {if @fleet.chosen_key,
-            do: "Key #{grouped(@fleet.chosen_key)} chosen.",
-            else: "No Key chosen yet."}
+          <span :if={@fleet.buy && @fleet.buy.price} class="key-map-selected__offer">
+            Key {grouped(@fleet.buy.token_id)} · {usdc(@fleet.buy.price)}
+          </span>
+          <span class="key-map-selected__chosen">
+            {if @fleet.chosen_key,
+              do: "Key #{grouped(@fleet.chosen_key)} chosen.",
+              else: "No Key chosen yet."}
+          </span>
         </p>
       </div>
     </section>
@@ -813,39 +843,31 @@ defmodule KeyfleetWeb.FleetLive do
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
-  # "Buying a key", in "How this fleet works": the key on offer with its price,
-  # then Approve and Buy, and what a buyer should know.
+  # The top of the panel: the Key on offer and its price, as the bar names
+  # them, with Approve and Buy straight under it, then what a buyer should know.
   defp buy_key(assigns) do
     ~H"""
     <section id="buy-key" aria-labelledby="buy-key-title">
-      <h3 id="buy-key-title" tabindex="-1">
-        Buying a Key
+      <h3 id="buy-key-title" class="fleet-buy-title" tabindex="-1">
+        <span id="buy-key-offer" class="fleet-buy-offer" hidden={is_nil(@buy.price)}>
+          Key
+          <span id="buy-key-number" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
+            <span data-count>{@buy.token_id && grouped(@buy.token_id)}</span>
+          </span>
+          ·
+          <span id="buy-key-price" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
+            <span data-count>{@buy.price && usdc(@buy.price)}</span>
+          </span>
+          <span :if={@buy.level} id="buy-key-level"> · Level {@buy.level}</span>
+        </span>
+        <span :if={is_nil(@buy.price)}>Buying a Key</span>
         <Regent.Primitives.tip :if={@buy.price} id="buy-key-tip" label="About paying">
           Paid in USDC on Base from your wallet. If your wallet hasn’t already allowed this
           much USDC, press Approve first: it approves exactly {usdc(@buy.price)}.
         </Regent.Primitives.tip>
       </h3>
 
-      <div id="buy-key-offer" class="fleet-buy-offer" hidden={is_nil(@buy.price)}>
-        <dl class="fleet-buy-facts">
-          <div>
-            <dt>Key</dt>
-            <dd id="buy-key-number" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
-              <span data-count>{@buy.token_id && grouped(@buy.token_id)}</span>
-            </dd>
-          </div>
-          <div>
-            <dt>Price</dt>
-            <dd id="buy-key-price" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
-              <span data-count>{@buy.price && usdc(@buy.price)}</span>
-            </dd>
-          </div>
-          <div :if={@buy.level}>
-            <dt>Level</dt>
-            <dd id="buy-key-level">{@buy.level}</dd>
-          </div>
-        </dl>
-      </div>
+      <.buy_order id="buy-key" fleet={@fleet} buy={@buy} actor={@actor} lease={@lease} />
 
       <p
         id="buy-key-price-may-move"
@@ -858,8 +880,6 @@ defmodule KeyfleetWeb.FleetLive do
       </p>
 
       <FleetRisks.disclosure :if={@buy.price} id="buy-key-risks" />
-
-      <.buy_order id="buy-key" fleet={@fleet} buy={@buy} actor={@actor} lease={@lease} />
 
       <p :if={is_nil(@buy.price)} id="buy-key-elsewhere" class="fleet-detail">
         You can still get a Key from someone who holds one: it moves like any other token on
