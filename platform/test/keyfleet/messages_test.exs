@@ -231,14 +231,13 @@ defmodule Keyfleet.MessagesTest do
     end
   end
 
-  test "a reader behind in a room is asked back at once, even when the workspace is read up",
+  test "a reader behind in a room is told how far it got, even when the workspace is read up",
        %{owner: owner} do
     for n <- 1..51, do: post!(owner, "general", "Post #{n}")
 
     {:ok, synced} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, 0, owner)
     assert [%{cursor: 50, head_seq: 51}] = synced.rooms
     assert synced.graph.has_more == false
-    assert synced.next_poll_seconds == 0
   end
 
   test "a room's notice of a new post carries its place, and a repeat sends none", %{owner: owner} do

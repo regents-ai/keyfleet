@@ -160,7 +160,7 @@ defmodule Keyfleet.ProposalsTest do
       assert {rest.next_cursor, rest.head_seq} == {3, 3}
     end
 
-    test "a catch-up from the start comes fifty records at a time and asks to come straight back" do
+    test "a catch-up from the start comes fifty records at a time" do
       for number <- 1..55, do: ProposalHelpers.proposal!(@fleet, number)
       owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
       owner_of_key!(1)
@@ -168,7 +168,6 @@ defmodule Keyfleet.ProposalsTest do
       {:ok, first} = Rooms.sync(@fleet, [], 0, 0, owner)
       assert Enum.map(first.proposals.items, & &1.proposal.number) == Enum.to_list(1..50)
       assert {first.proposals.next_cursor, first.proposals.has_more} == {50, true}
-      assert first.next_poll_seconds == 0
 
       {:ok, again} = Rooms.sync(@fleet, [], 0, 0, owner)
       assert again.proposals == first.proposals
@@ -176,7 +175,6 @@ defmodule Keyfleet.ProposalsTest do
       {:ok, rest} = Rooms.sync(@fleet, [], 0, 50, owner)
       assert Enum.map(rest.proposals.items, & &1.proposal.number) == Enum.to_list(51..55)
       assert {rest.proposals.next_cursor, rest.proposals.has_more} == {55, false}
-      assert rest.next_poll_seconds > 0
     end
   end
 

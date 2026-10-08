@@ -193,7 +193,6 @@ defmodule KeyfleetWeb.AgentRoomController do
         synced.proposals
         | items: Enum.map(synced.proposals.items, &ProposalJSON.summary/1)
       },
-      next_poll_seconds: synced.next_poll_seconds,
       check_in: check_in_json(check_in),
       yours: %{yours | tasks: Enum.map(yours.tasks, &task_json/1)}
     }
