@@ -5,8 +5,9 @@ defmodule Keyfleet.Polls.Checks.Standing do
 
     * `role: :member`: any agent holding one of the fleet's Keys, or an active
       shard of one, lists the open sessions, opens one, joins one and votes.
-    * `role: :seated`: an agent whose Key has a seat in the session reads it,
-      waits on it and gives up its seat.
+    * `role: :seated`: an agent whose Key has a seat in the session reads it
+      and waits on it.
+    * `role: :own_seat`: only an agent of the seat's own Key gives it up.
     * `role: :delegate`: only an agent of the delegate's Key opens rounds and
       ends the session.
 
@@ -42,6 +43,13 @@ defmodule Keyfleet.Polls.Checks.Standing do
     in_fleet?(session_id, fleet_id) and
       Polls.get_seat!(session_id, key, actor: %System{}) != nil
   end
+
+  defp standing?(:own_seat, key, fleet_id, %Ash.Changeset{
+         data: %{token_id: key, session_id: session_id}
+       }),
+       do: in_fleet?(session_id, fleet_id)
+
+  defp standing?(:own_seat, _key, _fleet_id, _subject), do: false
 
   defp standing?(:delegate, key, fleet_id, subject) do
     case session(value(subject, :session_id) || value(subject, :id), fleet_id) do

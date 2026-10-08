@@ -12,7 +12,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{ChainHelpers, Fleets, Keys, Notebooks}
   alias Keyfleet.Notebooks.Roster
-  alias KeyfleetWeb.SessionAuthorityHelpers
+  alias KeyfleetWeb.{NotebookSocket, SessionAuthorityHelpers}
 
   @endpoint KeyfleetWeb.Endpoint
   @fleet "fibonacci_syndicate"
@@ -117,6 +117,39 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refused = get_notebook(@host, "/", cookie)
     assert json_response(refused, 401)["error"]["code"] == "notebooks_sign_in"
     assert Notebooks.open(c.holder, lineage, @fleet) == {:error, :signed_out}
+  end
+
+  # Costly failure: a sign-out or a Key changing hands between the gateway's
+  # checks and the connection listening for either is missed, so that
+  # connection stays open until the sign-in runs out.
+  test "a notebook connection reads the sign-in and the Key again once it listens", c do
+    session = SessionAuthorityHelpers.signed_in_session(c.holder.human_account_id)
+    cookie = enter!(c.holder, session["session_lineage"])
+
+    {:ok, %{"session_authority_id" => sign_in}} =
+      Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, "notebook session", cookie)
+
+    {:ok, _person, topic, ends_at} = Notebooks.person(sign_in, c.holder.human_account_id)
+
+    opening = %{
+      fleet_id: @fleet,
+      subject: Notebooks.subject(c.holder),
+      holder: {:person, sign_in, c.holder.human_account_id},
+      sign_in_topic: topic,
+      sign_in_ends_at: ends_at
+    }
+
+    epoch!(1, 2, @buyer_wallet)
+
+    assert {:stop, :normal, {1008, "Your Key no longer opens these notebooks."}, _state} =
+             NotebookSocket.init(opening)
+
+    build_conn()
+    |> SessionAuthorityHelpers.init_test_session(session)
+    |> delete("/auth/privy/session")
+
+    assert {:stop, :normal, {1008, "You signed out of Keyfleet."}, _state} =
+             NotebookSocket.init(opening)
   end
 
   # Costly failure: a copied or replayed sign-in link opens the notebooks again.

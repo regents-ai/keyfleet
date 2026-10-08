@@ -257,7 +257,15 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
          {:ok, actor, topic, sign_in_ends_at} <-
            Notebooks.person(session_authority_id, account_id) do
       ends_at = Enum.min([DateTime.from_unix!(pass_ends_at), sign_in_ends_at], DateTime)
-      conn = assign(conn, :notebook_sign_in, %{topic: topic, ends_at: ends_at})
+
+      conn =
+        assign(conn, :notebook_sign_in, %{
+          topic: topic,
+          ends_at: ends_at,
+          session_authority_id: session_authority_id,
+          account_id: account_id
+        })
+
       {:ok, conn, Notebooks.subject(actor), actor}
     else
       _ -> {:refused, Refusal.json(conn, 401, "notebooks_sign_in")}
@@ -417,6 +425,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
           Map.merge(upstream, %{
             fleet_id: fleet_id,
             subject: subject,
+            holder: holder(conn),
             sign_in_topic: sign_in_topic(conn),
             sign_in_ends_at: sign_in_ends_at(conn)
           }),
@@ -428,6 +437,14 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         Refusal.json(conn, 502, "notebooks_unavailable")
     end
   end
+
+  # Who the connection is for, as the connection reads them again once it is
+  # listening (`KeyfleetWeb.NotebookSocket`): a person by the Keyfleet sign-in
+  # their cookie came from, an agent as its signed request named it.
+  defp holder(%Plug.Conn{assigns: %{notebook_sign_in: sign_in}}),
+    do: {:person, sign_in.session_authority_id, sign_in.account_id}
+
+  defp holder(%Plug.Conn{assigns: %{agent_actor: agent}}), do: {:agent, agent}
 
   # A person's sign-in is their notebook cookie, which ends at its own end or
   # the Keyfleet sign-in it came from, whichever is sooner, and also when they

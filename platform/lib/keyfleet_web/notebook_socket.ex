@@ -11,7 +11,9 @@ defmodule KeyfleetWeb.NotebookSocket do
   of Keyfleet, or the sign-in it was opened with runs out (the person's
   notebook cookie or the Keyfleet sign-in it came from, whichever ends first,
   or the receipt an agent's request was signed with), it closes with 1008 and
-  says why. It also closes after `@longest_ms`, a day, so no connection
+  says why. What the gateway checked may change before the connection is
+  listening for it, so once it is, it reads the sign-in and the Key once more
+  and closes the same way if either has gone. It also closes after `@longest_ms`, a day, so no connection
   outlives every check: a notebook page connects again on its own, through
   the gateway's checks, and carries on where it was.
   """
@@ -80,6 +82,34 @@ defmodule KeyfleetWeb.NotebookSocket do
     if state.sign_in_topic,
       do: :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, state.sign_in_topic)
 
+    case still_holds(state) do
+      :ok -> listen(state)
+      {:closed, reason} -> {:stop, :normal, {1008, reason}, state}
+      :unreadable -> {:stop, :normal, 1011, state}
+    end
+  end
+
+  defp still_holds(state) do
+    with {:ok, actor} <- signed_in(state.holder),
+         {:ok, true} <- Notebooks.member?(actor, state.fleet_id) do
+      :ok
+    else
+      :signed_out -> {:closed, @signed_out_reason}
+      {:ok, false} -> {:closed, @closed_reason}
+      {:error, _error} -> :unreadable
+    end
+  end
+
+  defp signed_in({:agent, agent}), do: {:ok, agent}
+
+  defp signed_in({:person, session_authority_id, account_id}) do
+    case Notebooks.person(session_authority_id, account_id) do
+      {:ok, actor, _topic, _ends_at} -> {:ok, actor}
+      :signed_out -> :signed_out
+    end
+  end
+
+  defp listen(state) do
     left = DateTime.diff(state.sign_in_ends_at, DateTime.utc_now(), :millisecond)
 
     if left < @longest_ms,

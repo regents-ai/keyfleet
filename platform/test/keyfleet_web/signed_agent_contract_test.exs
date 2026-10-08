@@ -991,6 +991,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert answer(c, c.signer, "POST", @poll_leave, at, %{}, 409).body ==
              refused("delegate_stays")
 
+    # A seat is given up only by its own Key's agents, never by another seated Key.
+    assert {:error, %Ash.Error.Forbidden{}} =
+             id
+             |> Keyfleet.Polls.get_seat!(3, actor: %Actors.System{})
+             |> Keyfleet.Polls.leave(@fleet, actor: agent_of(third))
+
     answer(c, second, "POST", @poll_leave, at, %{}, 200)
     answer(c, second, "POST", @poll_leave, at, %{}, 403)
     answer(c, second, "POST", @poll_leave, elsewhere, %{}, 404)
@@ -1258,6 +1264,14 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       actor: %Actors.System{}
     )
   end
+
+  defp agent_of(signer),
+    do: %Actors.Agent{
+      wallet_address: String.downcase(signer.address),
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet"
+    }
 
   defp new_signer do
     {:ok, signer} = Siwa.LocalSigner.new()

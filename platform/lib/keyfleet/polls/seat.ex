@@ -101,7 +101,7 @@ defmodule Keyfleet.Polls.Seat do
     end
 
     policy action(:leave) do
-      authorize_if {Keyfleet.Polls.Checks.Standing, role: :seated}
+      authorize_if {Keyfleet.Polls.Checks.Standing, role: :own_seat}
     end
 
     policy action([:seat_delegate, :read, :of_key, :in_session]) do

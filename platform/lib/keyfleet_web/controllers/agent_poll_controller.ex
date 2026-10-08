@@ -193,14 +193,20 @@ defmodule KeyfleetWeb.AgentPollController do
   defp waited(events, _session, _read, _topic, _address), do: {:ok, events}
 
   defp await(read, topic, until) do
-    receive do
-      %Phoenix.Socket.Broadcast{topic: ^topic, event: "poll_event"} ->
-        case read.() do
-          {:ok, []} -> await(read, topic, until)
-          result -> result
+    case until - System.monotonic_time(:millisecond) do
+      left when left <= 0 ->
+        {:ok, []}
+
+      left ->
+        receive do
+          %Phoenix.Socket.Broadcast{topic: ^topic, event: "poll_event"} ->
+            case read.() do
+              {:ok, []} -> await(read, topic, until)
+              result -> result
+            end
+        after
+          left -> {:ok, []}
         end
-    after
-      max(until - System.monotonic_time(:millisecond), 0) -> {:ok, []}
     end
   end
 

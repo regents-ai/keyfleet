@@ -224,31 +224,39 @@ defmodule Keyfleet.Rooms do
   # message only when it is past the caller's place in them; either is answered
   # once that read has something new. The fleet's other announcements bring the
   # caller nothing.
+  # A steady run of other announcements must not hold the caller past its
+  # deadline, so the time left is read before every wait.
   defp await_news(fleet_id, read, synced, until) do
-    receive do
-      {:graph_head, ^fleet_id, _run_id, _watermark} ->
-        read.()
+    case until - System.monotonic_time(:millisecond) do
+      left when left <= 0 ->
+        {:ok, synced}
 
-      {:proposals_changed, ^fleet_id} ->
-        read.()
+      left ->
+        receive do
+          {:graph_head, ^fleet_id, _run_id, _watermark} ->
+            read.()
 
-      %Phoenix.Socket.Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}} ->
-        if Enum.any?(
-             synced.rooms,
-             &match?(%{room_id: ^room_id, cursor: cursor} when seq > cursor, &1)
-           ),
-           do: read_again(fleet_id, read, until),
-           else: await_news(fleet_id, read, synced, until)
+          {:proposals_changed, ^fleet_id} ->
+            read.()
 
-      %Phoenix.Socket.Broadcast{event: "dm_head", payload: %{seq: seq}} ->
-        if match?(%{next_cursor: cursor} when seq > cursor, synced.dms),
-          do: read_again(fleet_id, read, until),
-          else: await_news(fleet_id, read, synced, until)
+          %Phoenix.Socket.Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}} ->
+            if Enum.any?(
+                 synced.rooms,
+                 &match?(%{room_id: ^room_id, cursor: cursor} when seq > cursor, &1)
+               ),
+               do: read_again(fleet_id, read, until),
+               else: await_news(fleet_id, read, synced, until)
 
-      %Phoenix.Socket.Broadcast{} ->
-        await_news(fleet_id, read, synced, until)
-    after
-      Kernel.max(until - System.monotonic_time(:millisecond), 0) -> {:ok, synced}
+          %Phoenix.Socket.Broadcast{event: "dm_head", payload: %{seq: seq}} ->
+            if match?(%{next_cursor: cursor} when seq > cursor, synced.dms),
+              do: read_again(fleet_id, read, until),
+              else: await_news(fleet_id, read, synced, until)
+
+          %Phoenix.Socket.Broadcast{} ->
+            await_news(fleet_id, read, synced, until)
+        after
+          left -> {:ok, synced}
+        end
     end
   end
 
