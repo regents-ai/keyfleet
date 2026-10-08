@@ -184,9 +184,6 @@
   .rl-opportunity:hover { border-color: var(--ash-line-strong); }
   .rl-opportunity:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
   .rl-opportunity h3 { font-family: var(--font-family-title); font-size: 1.25rem; font-weight: 400; line-height: 1.15; }
-  .rl-opportunity p { font-size: .9375rem; line-height: 1.45; }
-  .rl-opportunities__more { justify-self: start; display: inline-flex; align-items: center; min-height: 44px; font-family: var(--font-family-ui); }
-  .rl-opportunities__more:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 
   .rl-tech-stack { margin: var(--rg-panel-padding); }
   .rl-tech-stack ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }

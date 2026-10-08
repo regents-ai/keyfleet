@@ -490,7 +490,6 @@ test("every control keeps a visible keyboard focus ring", async ({page}) => {
     "See the fleets",
     ...fleets.map(([, name]) => name),
     ...opportunities,
-    "Read the full briefing",
   ])
 })
 

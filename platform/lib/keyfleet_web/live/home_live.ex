@@ -601,11 +601,9 @@ defmodule KeyfleetWeb.HomeLive do
         >
           <a href={opportunity_path(opportunity)} class="rl-opportunity">
             <h3>{opportunity.name}</h3>
-            <p>{opportunity.line}</p>
           </a>
         </li>
       </ul>
-      <a href={~p"/opportunities"} class="rl-opportunities__more">Read the full briefing</a>
     </section>
     """
   end
