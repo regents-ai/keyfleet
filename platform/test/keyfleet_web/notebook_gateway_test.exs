@@ -76,6 +76,19 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refute_received {:hub, _method, "/api/v1/projects", "u_" <> _, _body}
   end
 
+  # Costly failure: a notebook connection opened just before the notebook
+  # sign-in ends stays open long after it, until the Keyfleet sign-in ends.
+  test "what a person opens ends when their notebook sign-in does", c do
+    entered = DateTime.to_unix(DateTime.utc_now())
+    cookie = enter!(c.holder)
+    pass_ends = entered + Notebooks.config()[:session_max_age]
+
+    opened = get_notebook(@host, "/", cookie)
+    assert opened.status == 200
+    ends_at = DateTime.to_unix(opened.assigns.notebook_sign_in.ends_at)
+    assert ends_at in pass_ends..(pass_ends + 1)
+  end
+
   # Costly failure: someone who signed out of Keyfleet, on a shared computer,
   # leaves the fleet's notebooks open to the next person at that browser, in a
   # new request or a notebook connection already open.

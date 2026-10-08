@@ -9,10 +9,11 @@ defmodule KeyfleetWeb.NotebookSocket do
   (`Keyfleet.Notebooks.access_topic/2`) and, for a person, under the Keyfleet
   sign-in it came from: when the holder loses their key, the person signs out
   of Keyfleet, or the sign-in it was opened with runs out (the person's
-  Keyfleet sign-in, or the receipt an agent's request was signed with), it
-  closes with 1008 and says why. It also closes after `@longest_ms`, a day, so
-  no connection outlives every check: a notebook page connects again on its
-  own, through the gateway's checks, and carries on where it was.
+  notebook cookie or the Keyfleet sign-in it came from, whichever ends first,
+  or the receipt an agent's request was signed with), it closes with 1008 and
+  says why. It also closes after `@longest_ms`, a day, so no connection
+  outlives every check: a notebook page connects again on its own, through
+  the gateway's checks, and carries on where it was.
   """
   @behaviour WebSock
 

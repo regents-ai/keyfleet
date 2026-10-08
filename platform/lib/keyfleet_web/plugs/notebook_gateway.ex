@@ -7,10 +7,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
     * `/_keyfleet/enter?code=…` spends the one-time link "Open notebooks"
       made and sets this host's own sign-in cookie, then sends the browser to
-      `/`. The cookie names the fleet, the person's account and the Keyfleet
-      sign-in it came from; on another fleet's host it signs no one in, and
-      once that Keyfleet sign-in ends (signed out, another account, run out)
-      it signs no one in either, checked on every request.
+      `/`. The cookie names the fleet, the person's account, the Keyfleet
+      sign-in it came from and when it ends; on another fleet's host it signs
+      no one in, and once that Keyfleet sign-in ends (signed out, another
+      account, run out) it signs no one in either, checked on every request.
     * A request signed by an agent (SIWA, as on `/api/v1/agent`) is that
       agent's, whatever cookie it carries.
     * Anything else is the cookie's person's, or is refused.
@@ -157,13 +157,14 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
     case Notebooks.redeem(fleet_id, conn.query_params["code"]) do
       {:ok, {account_id, session_authority_id}} ->
+        max_age = Notebooks.config()[:session_max_age]
+
         session = %{
           "fleet_id" => fleet_id,
           "account_id" => account_id,
-          "session_authority_id" => session_authority_id
+          "session_authority_id" => session_authority_id,
+          "ends_at" => System.os_time(:second) + max_age
         }
-
-        max_age = Notebooks.config()[:session_max_age]
 
         conn
         |> put_resp_cookie(
@@ -250,9 +251,12 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
           %{
             "fleet_id" => ^fleet_id,
             "account_id" => account_id,
-            "session_authority_id" => session_authority_id
+            "session_authority_id" => session_authority_id,
+            "ends_at" => pass_ends_at
           }} <- Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, @salt, token, max_age: max_age),
-         {:ok, actor, topic, ends_at} <- Notebooks.person(session_authority_id, account_id) do
+         {:ok, actor, topic, sign_in_ends_at} <-
+           Notebooks.person(session_authority_id, account_id) do
+      ends_at = Enum.min([DateTime.from_unix!(pass_ends_at), sign_in_ends_at], DateTime)
       conn = assign(conn, :notebook_sign_in, %{topic: topic, ends_at: ends_at})
       {:ok, conn, Notebooks.subject(actor), actor}
     else
@@ -425,9 +429,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  # A person's sign-in is the Keyfleet one their notebook cookie came from,
-  # which also ends when they sign out there; an agent's is the receipt its
-  # request was signed with.
+  # A person's sign-in is their notebook cookie, which ends at its own end or
+  # the Keyfleet sign-in it came from, whichever is sooner, and also when they
+  # sign out there; an agent's is the receipt its request was signed with.
   defp sign_in_topic(%Plug.Conn{assigns: %{notebook_sign_in: sign_in}}), do: sign_in.topic
   defp sign_in_topic(_conn), do: nil
 
