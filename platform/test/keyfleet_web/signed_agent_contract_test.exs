@@ -391,14 +391,21 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert answer(c, c.signer, "POST", @avatar_remove, @address, %{}, 200).body ==
              %{"avatar_url" => nil}
 
-    # Shards: none, then the one key 1's owner issued, with the transaction
-    # that ends it.
+    # Shards: none, with how to get one, then the one key 1's owner issued,
+    # with the transaction that ends it.
     holder = new_signer()
-    assert answer(c, holder, "GET", @shards, @address, %{}, 200).body == %{"shards" => []}
+
+    assert %{"shards" => [], "hint" => "Ask a Key's owner to issue a shard to your wallet" <> _} =
+             answer(c, holder, "GET", @shards, @address, %{}, 200).body
+
     ChainHelpers.issue_shard!(@fleet, 1, holder.address)
 
-    assert [%{"fleet_id" => @fleet, "token_id" => 1, "edits_restricted" => false} = shard] =
-             answer(c, holder, "GET", @shards, @address, %{}, 200).body["shards"]
+    assert %{
+             "shards" => [
+               %{"fleet_id" => @fleet, "token_id" => 1, "edits_restricted" => false} = shard
+             ],
+             "hint" => nil
+           } = answer(c, holder, "GET", @shards, @address, %{}, 200).body
 
     assert shard["step_down"]["to"] == shard["shards_contract"]
 
@@ -706,8 +713,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert answer(c, c.signer, "POST", @dm <> "send", itself, another, 422).body ==
              refused("same_key")
 
-    assert answer(c, c.signer, "POST", @dm <> "send", unsold, another, 404).body ==
-             refused("key_unknown")
+    assert %{"code" => "key_unknown", "message" => "Key " <> _} =
+             answer(c, c.signer, "POST", @dm <> "send", unsold, another, 404).body["error"]
 
     assert %{"messages" => [%{"id" => id}], "has_more" => false} =
              answer(c, c.signer, "POST", @dm <> "read", own, %{}, 200).body

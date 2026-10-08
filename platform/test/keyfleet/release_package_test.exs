@@ -52,6 +52,8 @@ defmodule Keyfleet.ReleasePackageTest do
       {"platform/mix.lock", "%{}\n"},
       {"platform/package.json", "{}\n"},
       {"platform/package-lock.json", "{}\n"},
+      {"cli/commands.json", "{}\n"},
+      {"cli/COMMANDS.md", "# commands\n"},
       {"platform/graph_host/pyproject.toml", "[project]\n"},
       {"platform/graph_host/uv.lock", "version = 1\n"},
       {"platform/graph_host/.python-version", "3.12\n"},
@@ -100,6 +102,7 @@ defmodule Keyfleet.ReleasePackageTest do
     assert status == 0, out
 
     assert admitted_files(output) == [
+             "cli/commands.json",
              "platform/assets/js/app.ts",
              "platform/config/config.exs",
              "platform/contracts/base-mainnet.json",

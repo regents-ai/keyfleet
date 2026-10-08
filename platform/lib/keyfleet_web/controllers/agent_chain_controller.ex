@@ -70,6 +70,7 @@ defmodule KeyfleetWeb.AgentChainController do
       end
     else
       {:refuse, status, code} -> Refusal.json(conn, status, code)
+      {:key_unknown, token_id} -> Refusal.key_unknown(conn, fleet_id, token_id)
     end
   end
 
@@ -89,7 +90,7 @@ defmodule KeyfleetWeb.AgentChainController do
   end
 
   defp known(fleet_id, %{token_id: token_id}) do
-    if Keys.current_key!(fleet_id, token_id), do: :ok, else: {:refuse, 404, "key_unknown"}
+    if Keys.current_key!(fleet_id, token_id), do: :ok, else: {:key_unknown, token_id}
   end
 
   defp known(_fleet_id, _params), do: :ok

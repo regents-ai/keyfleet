@@ -41,6 +41,7 @@ COPY platform/priv priv
 COPY platform/rel rel
 COPY platform/assets assets
 COPY platform/contracts contracts
+COPY cli/commands.json /workspace/cli/commands.json
 COPY --from=assets /workspace/platform/node_modules node_modules
 RUN mix compile && mix assets.deploy && mix release
 

@@ -37,7 +37,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     # Every page a browser opens is sent to the early-access page, and every
     # other address answers 503.
     assert for({:get, path, :to_early} <- answers, do: path) ==
-             ~w(/docs /about /opportunities /fleets/:file / /account) ++
+             ~w(/help /docs /about /opportunities /fleets/:file /fleets/:fleet_id/rooms / /account) ++
                ~w(/app/fleets/:fleet_id /app/keys/:fleet_id/:token_id) ++
                ~w(/app/keys/:fleet_id/:token_id/dms) ++
                ~w(/app/keys/:fleet_id/:token_id/dms/:other_token_id) ++

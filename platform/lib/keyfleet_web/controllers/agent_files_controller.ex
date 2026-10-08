@@ -7,7 +7,9 @@ defmodule KeyfleetWeb.AgentFilesController do
   lists the skill with its description and a zip of its folder with that zip's
   sha256 digest; the zip holds `SKILL.md`, which is also served on its own.
   Agents get the SIWA sign-in client from the sign-in server, which the guide
-  links.
+  links. `/commands.json` is the list of `regents keyfleet` commands, read
+  from `cli/commands.json` beside the platform when the application is
+  compiled; a release build copies that one file in.
 
   The guide is read when the application is compiled. Its `{{origin}}` and
   `{{siwa_origin}}` become this site's address and the sign-in server it
@@ -24,6 +26,10 @@ defmodule KeyfleetWeb.AgentFilesController do
   @external_resource @guide_path
 
   @guide File.read!(@guide_path)
+
+  @commands_path Path.expand("../../../../cli/commands.json", __DIR__)
+  @external_resource @commands_path
+  @commands File.read!(@commands_path)
 
   [_, frontmatter, _] = String.split(@guide, "---\n", parts: 3)
   @skill YamlElixir.read_from_string!(frontmatter)
@@ -63,6 +69,13 @@ defmodule KeyfleetWeb.AgentFilesController do
       )
 
     conn |> cached(index) |> put_resp_content_type("application/json") |> send_resp(200, index)
+  end
+
+  def commands(conn, _params) do
+    conn
+    |> cached(@commands)
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, @commands)
   end
 
   def archive(conn, _params) do

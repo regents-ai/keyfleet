@@ -214,6 +214,28 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     end
   end
 
+  test "a browser opening a fleet's address is sent to its page, or to its rooms; agents' answers stay" do
+    browser = fn path ->
+      build_conn()
+      |> put_req_header("accept", "text/html,application/xhtml+xml,*/*;q=0.8")
+      |> get(path)
+    end
+
+    assert redirected_to(browser.("/fleets/#{@fleet}"), 302) == "/app/fleets/#{@fleet}"
+
+    assert redirected_to(browser.("/fleets/#{@fleet}/rooms"), 302) ==
+             "/app/fleets/#{@fleet}/rooms/general"
+
+    for path <- ["/fleets/fleet_unknown", "/fleets/fleet_unknown/rooms"] do
+      assert html_response(browser.(path), 404) =~ "We can’t find that page"
+    end
+
+    assert html_response(browser.("/fleets/#{@fleet}/rooms/x"), 404) =~ "We can’t find that page"
+
+    # An agent's /fleets/<id> stays the Markdown 404 the test above checks.
+    assert_error_sent 404, fn -> build_conn() |> get("/fleets/#{@fleet}/rooms") end
+  end
+
   test "answers may be kept for thirty seconds", %{conn: conn} do
     for path <- [
           "/fleets.md",

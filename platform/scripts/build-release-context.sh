@@ -4,6 +4,7 @@
 #
 #   <context>/
 #     platform/                    this platform at its checked-out commit
+#     cli/commands.json            the command list, served at /commands.json
 #     uv-cache/                    the graph host's locked packages, as a uv cache
 #     python-cache/                the standalone CPython archive uv installs from
 #     BUILD-INPUTS.txt             the commits and supply the context was made from
@@ -140,6 +141,11 @@ export_tree() {
 }
 
 export_tree "$repo_root" "$platform_revision" "$staging/platform" .
+
+# The command list lives beside the platform, in cli/, and is built into the
+# release, which serves it at /commands.json.
+mkdir -p "$staging/cli"
+git -C "$repo_root" show "$platform_revision:../cli/commands.json" >"$staging/cli/commands.json"
 
 # These archives carry the uv-cache/ and python-cache/ prefixes.
 tar -xf "$graph_host_supply/UV-CACHE.tar" -C "$staging"

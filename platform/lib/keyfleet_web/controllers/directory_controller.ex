@@ -6,11 +6,15 @@ defmodule KeyfleetWeb.DirectoryController do
 
   Answers may be kept for 30 seconds; nothing is kept on the server. When a
   count the directory gives can't be read, it answers 503 and says so.
+
+  A browser that opens `/fleets/<id>` or `/fleets/<id>/rooms` is sent to the
+  fleet's page or its General room; one that opens anything else there gets the
+  site's not-found page. Every other request gets what an agent always has.
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.{Directory, Fleets}
-  alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorMD, Refusal}
+  alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorHTML, ErrorMD, NotFoundError, Refusal}
 
   @unavailable "The fleet directory can't be read right now. Try again in a moment."
 
@@ -24,6 +28,18 @@ defmodule KeyfleetWeb.DirectoryController do
   # A fleet's Markdown sits at its id with `.md` after it. Anything else here
   # is not a page of the directory.
   def show_md(conn, %{"file" => file}) do
+    if browser?(conn) and not String.ends_with?(file, ".md"),
+      do: open_page(conn, file, ~p"/app/fleets/#{file}"),
+      else: fleet_md(conn, file)
+  end
+
+  def rooms(conn, %{"fleet_id" => fleet_id}) do
+    if browser?(conn),
+      do: open_page(conn, fleet_id, ~p"/app/fleets/#{fleet_id}/rooms/general"),
+      else: raise(NotFoundError)
+  end
+
+  defp fleet_md(conn, file) do
     with {:ok, fleet_id} <- fleet_file(file),
          {:ok, fleet} <- Directory.fleet(fleet_id) do
       markdown(conn, DirectoryMD.show(%{fleet: fleet, generated_at: now()}))
@@ -58,6 +74,25 @@ defmodule KeyfleetWeb.DirectoryController do
 
       {:error, _failure} ->
         unavailable_json(conn)
+    end
+  end
+
+  # A request that prefers HTML to Markdown; one asking for anything, as most
+  # programs do, prefers Markdown here.
+  defp browser?(conn) do
+    conn
+    |> get_req_header("accept")
+    |> RegentAgentAccess.negotiate([{"md", "text", "markdown"}, {"html", "text", "html"}]) ==
+      "html"
+  end
+
+  defp open_page(conn, fleet_id, path) do
+    if fleet_id in Fleets.catalog_ids() do
+      redirect(conn, to: path)
+    else
+      conn
+      |> put_resp_content_type("text/html")
+      |> send_resp(404, Phoenix.HTML.Safe.to_iodata(ErrorHTML.render("404.html", %{conn: conn})))
     end
   end
 

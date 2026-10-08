@@ -60,4 +60,33 @@ defmodule KeyfleetWeb.AgentFilesTest do
     assert {:ok, [{~c"SKILL.md", ^guide}]} =
              :zip.extract(response(zip, 200), [:memory])
   end
+
+  test "the command list is served as JSON, the same bytes as cli/commands.json", %{conn: conn} do
+    commands = conn |> get("/commands.json")
+
+    assert response(commands, 200) ==
+             File.read!(Path.expand("../../../../cli/commands.json", __DIR__))
+
+    assert response_content_type(commands, :json) =~ "application/json"
+  end
+
+  test "/help says what Keyfleet is and links each agent file, every link answering",
+       %{conn: conn} do
+    help = conn |> get("/help")
+    body = response(help, 200)
+    assert response_content_type(help, :md) =~ "text/markdown"
+
+    paths = for [_, url] <- Regex.scan(~r/\]\(([^)]+)\)/, body), do: URI.parse(url).path
+
+    assert paths ==
+             ~w(/skill.md /docs /fleets.md /api-contract.openapiv3.yaml /commands.json)
+
+    for path <- paths do
+      assert build_conn()
+             |> put_req_header("accept", "text/markdown")
+             |> get(path)
+             |> response(200),
+             path
+    end
+  end
 end

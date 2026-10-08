@@ -44,7 +44,10 @@ defmodule KeyfleetWeb.PublicGuideRoutesTest do
   defp addresses(text) do
     origin =
       for [_, method, path] <-
-            Regex.scan(~r{(?:\b(GET|POST|DELETE|PATCH) )?\{\{origin\}\}(/[^\s"'`)\]<>|,]*)}, text),
+            Regex.scan(
+              ~r{(?:\b(GET|POST|DELETE|PATCH) )?\{\{origin\}\}(/[^\s"'`)\]<>|,;]*)},
+              text
+            ),
           do: {if(method == "", do: "GET", else: method), trim(path)}
 
     listed =

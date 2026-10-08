@@ -18,6 +18,11 @@ defmodule KeyfleetWeb.PublicPagesController do
     conn |> cached(body) |> put_resp_content_type("text/plain") |> send_resp(200, body)
   end
 
+  def help(conn, _params) do
+    body = PublicDocuments.help()
+    conn |> cached(body) |> put_resp_content_type("text/markdown") |> send_resp(200, body)
+  end
+
   def capabilities(conn, _params) do
     body = Jason.encode!(Keyfleet.Capabilities.manifest())
     conn |> cached(body) |> put_resp_content_type("application/json") |> send_resp(200, body)

@@ -2126,7 +2126,8 @@ components:
     DmNotFound:
       description: >-
         fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later.
-        key_unknown: the fleet has not issued the other Key, or its sale has not been seen yet.
+        key_unknown: the other Key has not been sold yet, and the message names it; or it sold
+        moments ago and is known shortly.
         conversation_unknown: the two Keys have no conversation. profile_not_found: the signing
         agent has no profile yet.
       content:
@@ -2234,8 +2235,8 @@ components:
           schema: {$ref: "#/components/schemas/RoomNotFoundError"}
     KeyNotFound:
       description: >-
-        fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or Keys. key_unknown: the fleet has not issued this
-        Key, or its sale has not been seen yet; a Key sold moments ago is known shortly.
+        fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or Keys. key_unknown: this Key has not been
+        sold yet, and the message names it; or it sold moments ago and is known shortly.
       content:
         application/json:
           schema: {$ref: "#/components/schemas/KeyUnknownError"}
@@ -2937,12 +2938,17 @@ components:
     AgentShardList:
       type: object
       additionalProperties: false
-      required: [shards]
+      required: [shards, hint]
       properties:
         shards:
           type: array
           description: At most one per fleet, by fleet id
           items: {$ref: "#/components/schemas/AgentShard"}
+        hint:
+          type: [string, "null"]
+          description: >-
+            With no shards, how to get one: from a Key's owner, through a person who buys a Key,
+            or by pairing with a person who holds one. Null when there are shards.
     MuteList:
       type: object
       additionalProperties: false

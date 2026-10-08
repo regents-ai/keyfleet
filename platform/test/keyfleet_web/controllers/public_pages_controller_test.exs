@@ -114,7 +114,8 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     manifest = build_conn() |> get("/capabilities") |> json_response(200)
 
     assert Enum.map(manifest["tools"], & &1["name"]) ==
-             ~w(about docs mark_present propose run_split vote cancel_proposal carry_out claim) ++
+             ~w(about docs list_fleets read_fleet) ++
+               ~w(mark_present propose run_split vote cancel_proposal carry_out claim) ++
                ~w(list_rooms read_room post_to_room mute_key unmute_key) ++
                ~w(read_key_thread post_to_key_thread)
 
@@ -123,6 +124,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
         build_conn() |> put_req_header("accept", "text/markdown") |> get(path) |> response(200)
 
       assert body =~ "| `about` | Every page | Nothing |"
+      assert body =~ "| `read_fleet` | Every page | Nothing |"
 
       assert body =~
                "| `vote` | `/app/fleets/FLEET_ID/proposals/NUMBER` | Sign-in and a wallet on your account |"

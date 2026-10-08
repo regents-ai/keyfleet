@@ -140,11 +140,13 @@ defmodule KeyfleetWeb.Router do
     get "/sitemap.xml", PublicPagesController, :sitemap
     get "/robots.txt", PublicPagesController, :robots
     get "/llms.txt", PublicPagesController, :llms
+    get "/help", PublicPagesController, :help
     get "/capabilities", PublicPagesController, :capabilities
     get "/.well-known/security.txt", PublicPagesController, :security
     get "/.well-known/api-catalog", PublicPagesController, :api_catalog
     get "/.well-known/hub-jwks.json", HubJwksController, :show
     get "/skill.md", AgentFilesController, :skill
+    get "/commands.json", AgentFilesController, :commands
     get "/.well-known/agent-skills/index.json", AgentFilesController, :index
     get "/.well-known/agent-skills/keyfleet.zip", AgentFilesController, :archive
     get "/.well-known/agent-skills/keyfleet/SKILL.md", AgentFilesController, :skill
@@ -172,6 +174,12 @@ defmodule KeyfleetWeb.Router do
     pipe_through :directory
     get "/fleets.md", DirectoryController, :index_md
     get "/fleets/:file", DirectoryController, :show_md
+  end
+
+  # A person who opens a fleet's rooms at this address is sent to them; any
+  # other request here is not found, as an unknown address is.
+  scope "/", KeyfleetWeb do
+    get "/fleets/:fleet_id/rooms", DirectoryController, :rooms
   end
 
   scope "/api/v1", KeyfleetWeb do
