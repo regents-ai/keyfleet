@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {KeyfleetKeys} from "./KeyfleetKeys.sol";
 import {KeyfleetPresets} from "./KeyfleetPresets.sol";
 import {KeyfleetRegentBuyer} from "./KeyfleetRegentBuyer.sol";
@@ -22,11 +23,14 @@ import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.so
 ///
 /// Every price comes from `KeyfleetPresets`, scaled from the fleet's starting price, and is paid in
 /// USDC. Of every purchase, 10% is set aside here as the protocol share for REGENT revenue staking.
-/// The treasury's part is turned into REGENT at the market price by the shared
-/// `KeyfleetRegentBuyer` in the same purchase, paid straight to the fleet's treasury: the whole
-/// remaining 90% on Classic, Syndicate and an Accelerant first key, 20% on later Accelerant keys,
-/// and a Cascade level's leftover reserve when the level completes. The Accelerant rebate and the
-/// Cascade repayment stay USDC, paid into the fleet's `KeyfleetRewards` ledger.
+/// The treasury's part is never swapped in the purchase: it is booked here as `pendingConversion`
+/// and the fleet joins the shared `KeyfleetRegentBuyer`'s queue, which later turns it into REGENT
+/// at the market price in pieces of at most 250 USDC, paid straight to the fleet's treasury. That
+/// part is the whole remaining 90% on Classic, Syndicate and an Accelerant first key, 20% on later
+/// Accelerant keys, and a Cascade level's leftover reserve when the level completes. Booked USDC
+/// stays here until its piece runs, so the treasury's daily split and payments never see it. The
+/// Accelerant rebate and the Cascade repayment stay USDC, paid into the fleet's `KeyfleetRewards`
+/// ledger.
 ///
 /// A fleet anyone creates may set joining requirements at creation, which never change: a buyer
 /// qualifies by meeting any one of them, checked against the wallet receiving the key when it is
@@ -86,7 +90,7 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     KeyfleetKeys public immutable KEYS;
     /// @notice The USDC every key is paid in.
     IERC20 public immutable USDC;
-    /// @notice The shared buyer that turns the treasury's part of each purchase into REGENT.
+    /// @notice The shared buyer that turns the treasury's booked USDC into REGENT, piece by piece.
     KeyfleetRegentBuyer public immutable REGENT_BUYER;
     /// @notice This fleet's voting controller.
     KeyfleetVotes public immutable VOTES;
@@ -105,6 +109,8 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     uint256 public cascadeReserve;
     /// @notice USDC set aside as the protocol share and not yet deposited into staking.
     uint256 public protocolShareOwed;
+    /// @notice USDC booked for the treasury and not yet turned into REGENT by the shared buyer.
+    uint256 public pendingConversion;
     /// @notice Whether the factory has written the profile and the requirements.
     bool public initialized;
     /// @notice Cascade only: gross USDC paid for all primary keys of a level.
@@ -121,6 +127,8 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     error OnlyKeys();
     /// @notice Only this fleet's treasury, carrying out a proposal, may do this.
     error OnlyTreasury();
+    /// @notice Only the shared REGENT buyer may take a piece.
+    error OnlyRegentBuyer();
     /// @notice The factory already wrote the profile and the requirements.
     error AlreadyInitialized();
     /// @notice The purchase deadline had already passed.
@@ -153,7 +161,7 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     /// @param receiver The address the key was minted to.
     /// @param gross The USDC price paid.
     /// @param protocol USDC set aside for REGENT staking in `protocolShareOwed`.
-    /// @param capital USDC turned into REGENT for this fleet's treasury.
+    /// @param capital USDC booked in `pendingConversion`, to become REGENT for this fleet's treasury.
     /// @param reserve USDC added to the Cascade completion reserve.
     /// @param rebate USDC credited to the holder of the preceding key in the ledger.
     event Purchased(
@@ -167,10 +175,9 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         uint256 rebate
     );
     /// @notice A Cascade level was fully minted and its reserve was released.
-    /// @param surplus USDC released and turned into REGENT for this fleet's treasury.
+    /// @param surplus USDC released and booked in `pendingConversion`, to become REGENT for this
+    /// fleet's treasury.
     event LevelCompleted(uint256 indexed level, uint256 reimbursement, uint256 surplus);
-    /// @notice USDC was turned into REGENT for this fleet's treasury.
-    event RegentBought(uint256 usdcIn, uint256 regentOut);
     /// @notice The whole owed protocol share was deposited into REGENT revenue staking.
     event ProtocolShareSent(address indexed caller, uint256 amount);
     /// @notice A token's unaccounted balance was sent to this fleet's treasury.
@@ -272,10 +279,26 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         return KeyfleetPresets.fibonacciLevelOf(keyNumber);
     }
 
+    /// @notice Keys of this fleet that have waited out `KEY_MATURITY` since their mint, which are
+    /// exactly keys 1 to the number returned, since keys are minted in order. Only these share in a
+    /// daily split.
+    /// @dev A binary search over the keys' mint times, at most 32 reads of the collection.
+    function matureKeys() external view returns (uint256 mature) {
+        uint256 high = totalMinted;
+        uint256 maturity = VOTES.KEY_MATURITY();
+        while (mature < high) {
+            uint256 middle = (mature + high + 1) / 2;
+            uint256 mintedAt = KEYS.mintedAt(KEYS.tokenIdOf(FLEET_ID, middle));
+            if (mintedAt != 0 && mintedAt + maturity <= block.timestamp) mature = middle;
+            else high = middle - 1;
+        }
+    }
+
     /// @notice Balance of an asset this manager has already recorded a purpose for: for USDC the
-    /// Cascade reserve plus the owed protocol share, and nothing for any other token.
+    /// Cascade reserve, the owed protocol share and the USDC booked for conversion, and nothing for
+    /// any other token.
     function accountedBalance(address asset) public view returns (uint256) {
-        if (asset == address(USDC)) return cascadeReserve + protocolShareOwed;
+        if (asset == address(USDC)) return cascadeReserve + protocolShareOwed + pendingConversion;
         return 0;
     }
 
@@ -311,8 +334,8 @@ contract KeyfleetManager is ReentrancyGuardTransient {
 
     /// @notice Buys the next primary key with USDC.
     /// @dev The caller must have approved this contract for the gross price. The receiving wallet
-    /// must meet one of the fleet's joining requirements, if it has any. Locked, so neither a
-    /// receiver contract nor the REGENT pool's hook can buy again from inside the purchase.
+    /// must meet one of the fleet's joining requirements, if it has any. Locked, so a receiver
+    /// contract cannot buy again from inside the purchase. No swap runs in a purchase.
     /// @param receiver Address to mint to; zero mints to the caller.
     /// @param maxPrice Highest gross USDC price the caller authorizes.
     /// @param deadline Last block timestamp at which this purchase may execute.
@@ -378,12 +401,23 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         TREASURY.depositProtocolShare(amount);
     }
 
+    /// @notice Hands the shared REGENT buyer the next piece of the booked USDC: at most
+    /// `PIECE_USDC`, approved to the buyer exactly, with the treasury as the REGENT's recipient.
+    /// @dev Only the buyer calls this, from `convert`, which then pulls exactly `amount`.
+    function takePiece() external nonReentrant returns (uint256 amount, address recipient) {
+        if (msg.sender != address(REGENT_BUYER)) revert OnlyRegentBuyer();
+        amount = Math.min(pendingConversion, REGENT_BUYER.PIECE_USDC());
+        pendingConversion -= amount;
+        USDC.forceApprove(address(REGENT_BUYER), amount);
+        recipient = address(TREASURY);
+    }
+
     // --- internals -------------------------------------------------------
 
     /// @dev Sells the next key for `gross` USDC, already held here. Everything is booked first: the
-    /// price step, the split, the rebate, a Cascade level completion and the key's enrolment. Then
-    /// the treasury's part is turned into REGENT, which runs the REGENT pool's hook, and last the key
-    /// is minted, which runs the receiver's `onERC721Received` and asks for the key's random word.
+    /// price step, the split, the rebate, a Cascade level completion, the treasury's part in
+    /// `pendingConversion` and the key's enrolment. Last the key is minted, which runs the
+    /// receiver's `onERC721Received` and asks for the key's random word.
     function _sell(address buyer, address to, uint256 gross) private returns (uint256 tokenId) {
         uint256 minted = totalMinted;
         uint256 keyNumber = minted + 1;
@@ -395,7 +429,7 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         bool hasPredecessor = _hasPredecessor(minted);
         KeyfleetPresets.PurchaseSplit memory split = KeyfleetPresets.splitPurchase(PRESET, gross, hasPredecessor);
         protocolShareOwed += split.protocol;
-        uint256 toTreasury = split.capital;
+        uint256 booked = split.capital;
 
         uint256 level;
         if (_isFibonacci()) {
@@ -419,18 +453,21 @@ contract KeyfleetManager is ReentrancyGuardTransient {
 
         if (PRESET == KeyfleetPresets.Preset.FibonacciCascade && keyNumber == KeyfleetPresets.fibonacciLevelEnd(level))
         {
-            toTreasury = _completeLevel(level);
+            booked += _completeLevel(level);
         }
 
-        if (toTreasury != 0) _buyRegent(toTreasury);
+        if (booked != 0) {
+            pendingConversion += booked;
+            REGENT_BUYER.enqueue();
+        }
         KEYS.mint(to, keyNumber);
     }
 
     /// @dev Releases a completed Cascade level's reserve: it first repays the preceding level's whole
     /// original gross cost to whoever holds those keys, in USDC through the ledger, and returns the
-    /// rest for the treasury. Level 1 has no predecessor. The reserve always covers the repayment: a
-    /// level has at least 1.5 times the keys of the one before at no less than 1.2 times the price,
-    /// and 90% of every purchase is reserved.
+    /// rest to be booked for the treasury. Level 1 has no predecessor. The reserve always covers the
+    /// repayment: a level has at least 1.5 times the keys of the one before at no less than 1.2 times
+    /// the price, and 90% of every purchase is reserved.
     function _completeLevel(uint256 level) private returns (uint256 released) {
         levelCompleted[level] = true;
         uint256 reserve = cascadeReserve;
@@ -444,13 +481,6 @@ contract KeyfleetManager is ReentrancyGuardTransient {
         }
         released = reserve - reimbursement;
         emit LevelCompleted(level, reimbursement, released);
-    }
-
-    /// @dev Turns `amount` USDC into REGENT for the treasury. The buyer pulls exactly `amount`.
-    function _buyRegent(uint256 amount) private {
-        USDC.forceApprove(address(REGENT_BUYER), amount);
-        uint256 regentOut = REGENT_BUYER.buy(amount, address(TREASURY));
-        emit RegentBought(amount, regentOut);
     }
 
     function _setProfile(Profile calldata profile_) private {

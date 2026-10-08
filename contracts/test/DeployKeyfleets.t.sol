@@ -33,9 +33,10 @@ contract DeployKeyfleetsTest is KeyfleetScriptFixture {
         assertEq(collection.symbol(), "KEYFLEET", "Symbol");
         assertEq(collection.baseTokenURI(), manifest.bindings.collection.baseTokenURI, "Metadata base");
         assertEq(collection.contractURI(), manifest.bindings.collection.contractURI, "Collection metadata");
-        assertEq(address(collection.VRF_COORDINATOR()), address(vrf), "Coordinator");
-        assertEq(collection.VRF_SUBSCRIPTION_ID(), vrfSubscription, "Subscription");
-        assertEq(collection.VRF_KEY_HASH(), KEY_HASH, "Gas lane");
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId, bytes32 keyHash) = collection.randomness();
+        assertEq(address(coordinator), address(vrf), "Coordinator");
+        assertEq(subscriptionId, vrfSubscription, "Subscription");
+        assertEq(keyHash, KEY_HASH, "Gas lane");
         assertEq(collection.TRAIT_TABLE_HASH(), manifest.bindings.traitTableHash, "Trait table");
         assertEq(address(deployed.REGENT_STAKING()), address(staking), "Staking");
         assertEq(address(deployed.AUTOLAUNCH()), address(autolaunch), "Autolaunch");

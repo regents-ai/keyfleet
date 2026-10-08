@@ -357,10 +357,10 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     }
 
     /// @notice The first second a proposal may carry calls that move money: `TREASURY_OPENING`
-    /// after the fleet's sales opened. Zero while they have not opened.
+    /// after the fleet's sales open. Zero until the phase that opens them is reached.
     function treasuryOpensAt() public view returns (uint64) {
-        uint64 salesOpenedAt = KEYS.salesOpenedAt(FLEET_ID);
-        return salesOpenedAt == 0 ? 0 : salesOpenedAt + TREASURY_OPENING;
+        uint64 salesOpenAt = KEYS.salesOpenAt(FLEET_ID);
+        return salesOpenAt == 0 ? 0 : salesOpenAt + TREASURY_OPENING;
     }
 
     /// @notice Whether a key is present now: less than 48 hours since its latest renewal under its

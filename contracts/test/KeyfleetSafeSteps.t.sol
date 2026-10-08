@@ -77,23 +77,26 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
     /// until the fleets that phase opens exist and once the last phase is reached.
     function test_phaseStepMovesOnePhaseAtATime() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
-        KeyfleetSafeSteps.SafeCall[] memory calls = safeSteps.advancePhaseCalls(manifest, deployed);
+        uint64 opensAt = uint64(block.timestamp + 1 days);
+        KeyfleetSafeSteps.SafeCall[] memory calls = safeSteps.advancePhaseCalls(manifest, deployed, opensAt);
         assertEq(calls.length, 1, "One call");
         assertEq(calls[0].name, "phase-1", "Named for the phase it reaches");
         assertEq(calls[0].to, address(collection), "To the collection");
+        assertEq(calls[0].data, abi.encodeCall(KeyfleetKeys.advancePhase, (opensAt)), "Opening when it says");
         vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 1, 0));
         this.make(calls, safe);
 
         _found(manifest, deployed);
         for (uint8 phase = 1; phase <= 3; ++phase) {
-            calls = safeSteps.advancePhaseCalls(manifest, deployed);
+            calls = safeSteps.advancePhaseCalls(manifest, deployed, uint64(block.timestamp + 1));
             assertEq(calls[0].name, string.concat("phase-", vm.toString(phase)), "Next phase");
             _make(calls, safe);
             assertEq(collection.phase(), phase, "Moved");
+            vm.warp(block.timestamp + 1);
         }
         assertTrue(collection.salesOpen(1) && collection.salesOpen(4), "Every founding fleet sells");
 
-        calls = safeSteps.advancePhaseCalls(manifest, deployed);
+        calls = safeSteps.advancePhaseCalls(manifest, deployed, uint64(block.timestamp + 1));
         vm.expectRevert(KeyfleetKeys.NoNextPhase.selector);
         this.make(calls, safe);
     }
@@ -101,7 +104,8 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
     function test_phaseCallsFromAnyoneButTheSafeAreRefused() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         _found(manifest, deployed);
-        KeyfleetSafeSteps.SafeCall[] memory calls = safeSteps.advancePhaseCalls(manifest, deployed);
+        KeyfleetSafeSteps.SafeCall[] memory calls =
+            safeSteps.advancePhaseCalls(manifest, deployed, uint64(block.timestamp + 1));
         vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.OnlySafe.selector, keeper));
         this.make(calls, keeper);
     }
@@ -113,7 +117,7 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.WrongChain.selector, 1, block.chainid));
         safeSteps.foundingFleetCalls(manifest, deployed);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetManifest.WrongChain.selector, 1, block.chainid));
-        safeSteps.advancePhaseCalls(manifest, deployed);
+        safeSteps.advancePhaseCalls(manifest, deployed, uint64(block.timestamp + 1));
     }
 
     /// @dev Each call becomes a Safe Transaction Builder file of one transaction for the Safe on

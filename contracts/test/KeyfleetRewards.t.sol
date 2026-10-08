@@ -190,8 +190,10 @@ contract KeyfleetRewardsTest is KeyfleetFixture {
         assertEq(target.splitInProgress(), on, "the treasury reports the flag the test set");
     }
 
-    /// @dev Funds a split of `perKey` per minted key, as the treasury's split routine does.
+    /// @dev Waits until every minted key is mature, then funds a split of `perKey` per key, as the
+    /// treasury's split routine does.
     function _split(address asset, uint256 perKey) private {
+        _joinSplit(fleet);
         uint256 count = fleet.totalMinted();
         uint256 amount = perKey * count;
         _setSplitting(treasury, true);
@@ -204,6 +206,15 @@ contract KeyfleetRewardsTest is KeyfleetFixture {
             vm.prank(address(treasury));
             rewards.fundSplit(asset, perKey, count);
         }
+        _setSplitting(treasury, false);
+    }
+
+    /// @dev Funds a split of `perKey` for exactly `count` keys, as the treasury's split routine does.
+    function _fundSplitFor(address asset, uint256 perKey, uint256 count) private {
+        _setSplitting(treasury, true);
+        MockToken(asset).mint(address(rewards), perKey * count);
+        vm.prank(address(treasury));
+        rewards.fundSplit(asset, perKey, count);
         _setSplitting(treasury, false);
     }
 
@@ -422,9 +433,10 @@ contract KeyfleetRewardsTest is KeyfleetFixture {
 
     /// @dev On Syndicate a key's cohort is its level, so keys 1 to 6 sit in cohorts 1, 1, 2, 2, 2
     /// and 3, and the split still gives each the same amount.
-    function test_aSplitGivesEveryMintedKeyTheSameWholeAmount() public {
+    function test_aSplitGivesEveryMatureKeyTheSameWholeAmount() public {
         _use(_deploy(KeyfleetPresets.Preset.FibonacciSyndicate));
         _buyMany(fleet, 6);
+        _joinSplit(fleet);
         assertEq(rewards.keyCohort(_key(fleet, 1)), 1);
         assertEq(rewards.keyCohort(_key(fleet, 3)), 2);
         assertEq(rewards.keyCohort(_key(fleet, 6)), 3, "the keys span three cohorts");
@@ -458,9 +470,10 @@ contract KeyfleetRewardsTest is KeyfleetFixture {
         assertEq(rewards.splitIndex(address(regent)), 6e18, "the index is cumulative");
     }
 
-    function test_aSplitMustCoverExactlyTheMintedKeysAndBeBacked() public {
+    function test_aSplitMustCoverExactlyTheMatureKeysAndBeBacked() public {
         _buy(fleet, alice);
         _buy(fleet, bob);
+        _joinSplit(fleet);
         _setSplitting(treasury, true);
         regent.mint(address(rewards), 4e18);
         vm.deal(address(treasury), 10 ether);
@@ -495,7 +508,7 @@ contract KeyfleetRewardsTest is KeyfleetFixture {
         uint256 k2 = _buy(fleet, bob);
         assertEq(rewards.accrued(address(regent), k2), 0, "the newcomer inherits nothing");
         assertEq(rewards.accrued(NATIVE, k2), 0);
-        assertEq(rewards.keySplitIndex(k2, address(regent)), 9e18, "it starts from the current index");
+        assertEq(rewards.splitJoinIndex(address(regent), k2), 9e18, "it starts from the current index");
 
         _split(address(regent), 1e18);
         _split(address(usdc), 3e6); // first split of USDC, after both keys
@@ -503,6 +516,43 @@ contract KeyfleetRewardsTest is KeyfleetFixture {
         assertEq(rewards.accrued(address(regent), k2), 1e18);
         assertEq(rewards.accrued(address(usdc), k1), 3e6, "an asset first split later is shared by every key");
         assertEq(rewards.accrued(address(usdc), k2), 3e6);
+    }
+
+    /// @dev A key joins the split only once it has waited out `KEY_MATURITY` since its mint: a
+    /// split before then covers the keys already mature, a funding for every minted key is
+    /// refused, and the key earns from the first split that covers it, never from one before.
+    function test_aKeyJoinsTheSplitOnlyOnceMature() public {
+        uint256 k1 = _buy(fleet, alice);
+        _joinSplit(fleet);
+        uint256 k2 = _buy(fleet, bob);
+        assertEq(fleet.matureKeys(), 1, "the new key is not mature yet");
+
+        regent.mint(address(rewards), 2e18);
+        _setSplitting(treasury, true);
+        vm.prank(address(treasury));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetRewards.KeyCountChanged.selector, 2, 1));
+        rewards.fundSplit(address(regent), 1e18, 2);
+        _setSplitting(treasury, false);
+        _fundSplitFor(address(regent), 5e18, 1);
+        assertEq(rewards.accrued(address(regent), k1), 5e18, "the mature key takes the whole split");
+        assertEq(rewards.accrued(address(regent), k2), 0, "the new key takes none of it");
+
+        vm.warp(keys.mintedAt(k2) + fleet.VOTES().KEY_MATURITY() - 1);
+        assertEq(fleet.matureKeys(), 1, "one second short of maturity");
+        vm.warp(block.timestamp + 1);
+        assertEq(fleet.matureKeys(), 2, "mature exactly at its maturity");
+        assertEq(rewards.accrued(address(regent), k2), 0, "maturing alone earns nothing");
+        _split(address(regent), 1e18);
+        assertEq(rewards.accrued(address(regent), k1), 6e18);
+        assertEq(rewards.accrued(address(regent), k2), 1e18, "it earns from the first split that covers it");
+        assertEq(rewards.splitJoinIndex(address(regent), k2), 5e18, "it joined at the index before that split");
+
+        // Moving the key settles it and does not change when it joined.
+        vm.prank(bob);
+        keys.transferFrom(bob, carol, k2);
+        assertEq(rewards.credits(address(regent), bob), 1e18, "the outgoing owner keeps what it earned");
+        _split(address(regent), 1e18);
+        assertEq(rewards.accrued(address(regent), k2), 1e18, "the new owner earns from the next split");
     }
 
     function test_settlementMovesEveryAssetToTheOutgoingOwner() public {

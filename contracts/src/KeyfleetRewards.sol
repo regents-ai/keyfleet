@@ -21,10 +21,14 @@ import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.so
 /// through a per-cohort cumulative index scaled by `PRECISION`. Cohort membership is the manager's
 /// decision: cohort 0 on Classic and Accelerant, and the key's level on the two Fibonacci presets.
 ///
-/// The treasury funds the daily split: the same whole amount per key for every minted key, in
+/// The treasury funds the daily split: the same whole amount per key for every mature key, in
 /// native ETH or a token, added to that asset's split index, which counts whole atomic units per
 /// key. It may only do so from inside its own split routine, never through an approved proposal's
-/// call, and only for exactly as many keys as have been minted.
+/// call, and only for exactly as many keys as are mature. A key is mature `KEY_MATURITY` after its
+/// mint, and keys mature in mint order, so the keys of a split are always keys 1 to `keys`, and
+/// that number never shrinks. Each asset keeps a checkpoint whenever its split reaches more keys:
+/// the key count and the index before that funding. A key earns from the index of the first
+/// checkpoint that covers its number, so it shares no split from before it was mature.
 ///
 /// Neither lane ever iterates over recipients. Accrued rewards belong permanently to the address
 /// that held the key while they accrued: the fleet settles a key to its outgoing owner, for every
@@ -47,8 +51,8 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
     error NoEligibleKeys();
     error ZeroAmount();
     error InsufficientBacking();
-    /// @notice The split was worked out for a different number of keys than have been minted.
-    error KeyCountChanged(uint256 keys, uint256 minted);
+    /// @notice The split was worked out for a different number of keys than are mature.
+    error KeyCountChanged(uint256 keys, uint256 mature);
     /// @notice The ETH sent with a split funding is not exactly the amount per key times the keys.
     error WrongValue(uint256 value);
     /// @notice The caller neither holds the key nor holds an active shard of it.
@@ -83,12 +87,24 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
     mapping(address asset => mapping(uint256 cohortId => uint256 index)) public cohortIndex;
     /// @notice Cumulative split per key for an asset, in whole atomic units.
     mapping(address asset => uint256 perKey) public splitIndex;
-    /// @notice The split index a key has been settled up to, per asset.
+    /// @notice The split index a key has been settled up to, per asset; zero until its first
+    /// settlement after it joined, when `splitJoinIndex` is where it starts.
     mapping(uint256 tokenId => mapping(address asset => uint256 perKey)) public keySplitIndex;
+
+    /// @notice A point at which an asset's split first reached `keys` keys.
+    /// @param keys How many keys that funding and every later one covers, at least.
+    /// @param indexBefore The asset's split index just before that funding.
+    struct SplitJoin {
+        uint256 keys;
+        uint256 indexBefore;
+    }
 
     /// @dev Every asset the split has funded, in the order first funded. Only the treasury's split
     /// routine appends to it, and only with the treasury's bound assets.
     address[] private _splitAssets;
+    /// @dev Per asset, one checkpoint for every funding that covered more keys than the last, in
+    /// order, so both fields only grow.
+    mapping(address asset => SplitJoin[] joins) private _splitJoins;
     /// @dev Cohort id of an enrolled key, stored offset by one so that zero means "not enrolled".
     mapping(uint256 tokenId => uint256 cohortIdPlusOne) private _keyCohortPlusOne;
     /// @dev Per-key watermark into `cohortIndex`. Settlement advances it by the whole units paid
@@ -99,7 +115,7 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
     event KeyEnrolled(uint256 indexed tokenId, uint256 indexed cohortId);
     event Allocated(address indexed asset, uint256 indexed cohortId, uint256 amount, uint256 newIndex);
     event Credited(address indexed asset, address indexed account, uint256 amount);
-    /// @notice The treasury's split added `perKey` of `asset` to every one of `keys` minted keys.
+    /// @notice The treasury's split added `perKey` of `asset` to every one of `keys` mature keys.
     event SplitFunded(address indexed asset, uint256 perKey, uint256 keys, uint256 newIndex);
     event Settled(uint256 indexed tokenId, address indexed asset, address indexed owner, uint256 amount);
     /// @notice `account` was paid its credit; `by` pressed claim, as the account itself or as the
@@ -148,18 +164,14 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
         return _cohortOf(tokenId);
     }
 
-    /// @notice Enrolls a key into a cohort at that cohort's current index and at every split
-    /// index, so it earns nothing from earlier allocations. Enrollment is permanent and happens at
-    /// most once per key. An asset first split later starts from zero, which every key shares.
+    /// @notice Enrolls a key into a cohort at that cohort's current index, so it earns nothing
+    /// from earlier allocations. Enrollment is permanent and happens at most once per key. The key
+    /// joins the daily split later, once it is mature, by `splitJoinIndex`.
     function enrollKey(uint256 tokenId, uint256 cohortId) external onlyManager {
         if (_keyCohortPlusOne[tokenId] != 0) revert KeyAlreadyEnrolled();
         _keyCohortPlusOne[tokenId] = cohortId + 1;
         cohortSize[cohortId] += 1;
         _keyIndex[tokenId][USDC] = cohortIndex[USDC][cohortId];
-        address[] memory split = _splitAssets;
-        for (uint256 i = 0; i < split.length; ++i) {
-            keySplitIndex[tokenId][split[i]] = splitIndex[split[i]];
-        }
         emit KeyEnrolled(tokenId, cohortId);
     }
 
@@ -193,14 +205,14 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
         emit Credited(asset, account, amount);
     }
 
-    /// @notice Adds `perKey` of a token to every one of the `keys` minted keys. The treasury has
+    /// @notice Adds `perKey` of a token to every one of the `keys` mature keys. The treasury has
     /// already sent `perKey * keys` here.
     function fundSplit(address asset, uint256 perKey, uint256 keys) external onlySplit {
         if (asset == NATIVE) revert UnknownAsset();
         _fundSplit(asset, perKey, keys, IERC20(asset).balanceOf(address(this)));
     }
 
-    /// @notice Adds `perKey` of ETH to every one of the `keys` minted keys, sent with the call.
+    /// @notice Adds `perKey` of ETH to every one of the `keys` mature keys, sent with the call.
     function fundSplitNative(uint256 perKey, uint256 keys) external payable onlySplit {
         if (msg.value != perKey * keys) revert WrongValue(msg.value);
         _fundSplit(NATIVE, perKey, keys, address(this).balance);
@@ -218,7 +230,23 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
     function accrued(address asset, uint256 tokenId) external view returns (uint256) {
         uint256 cohortId = _cohortOf(tokenId);
         return (cohortIndex[asset][cohortId] - _keyIndex[tokenId][asset]) / PRECISION + splitIndex[asset]
-            - keySplitIndex[tokenId][asset];
+            - _splitBase(tokenId, asset);
+    }
+
+    /// @notice The split index of `asset` a key started earning from: the index just before the
+    /// first funding that covered the key, or the current index while none has.
+    /// @dev A binary search over the asset's checkpoints.
+    function splitJoinIndex(address asset, uint256 tokenId) public view returns (uint256) {
+        uint256 keyNumber = KEYS.keyNumberOf(tokenId);
+        SplitJoin[] storage joins = _splitJoins[asset];
+        uint256 low;
+        uint256 high = joins.length;
+        while (low < high) {
+            uint256 middle = (low + high) / 2;
+            if (joins[middle].keys >= keyNumber) high = middle;
+            else low = middle + 1;
+        }
+        return low == joins.length ? splitIndex[asset] : joins[low].indexBefore;
     }
 
     /// @notice Settles `tokenIds` to their holders and pays out, for each of `assets`, the caller's
@@ -268,16 +296,28 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
 
     function _fundSplit(address asset, uint256 perKey, uint256 keys, uint256 balance) private {
         if (perKey == 0) revert ZeroAmount();
-        uint256 minted = MANAGER.totalMinted();
-        if (keys != minted) revert KeyCountChanged(keys, minted);
+        uint256 mature = MANAGER.matureKeys();
+        if (keys != mature) revert KeyCountChanged(keys, mature);
         uint256 reserved = backed[asset] + perKey * keys;
         if (balance < reserved) revert InsufficientBacking();
         uint256 index = splitIndex[asset];
         if (index == 0) _splitAssets.push(asset);
+        SplitJoin[] storage joins = _splitJoins[asset];
+        if (joins.length == 0 || keys > joins[joins.length - 1].keys) {
+            joins.push(SplitJoin({keys: keys, indexBefore: index}));
+        }
         index += perKey;
         splitIndex[asset] = index;
         backed[asset] = reserved;
         emit SplitFunded(asset, perKey, keys, index);
+    }
+
+    /// @dev Where a key's unsettled split accrual of `asset` starts: its last settlement, or where it
+    /// joined before its first. A settlement is only recorded when it pays something, so a recorded
+    /// one is never zero and never before the key joined.
+    function _splitBase(uint256 tokenId, address asset) private view returns (uint256) {
+        uint256 settled = keySplitIndex[tokenId][asset];
+        return settled != 0 ? settled : splitJoinIndex(asset, tokenId);
     }
 
     function _cohortOf(uint256 tokenId) private view returns (uint256) {
@@ -293,7 +333,7 @@ contract KeyfleetRewards is ReentrancyGuardTransient {
         for (uint256 i = 0; i < split.length; ++i) {
             address asset = split[i];
             uint256 index = splitIndex[asset];
-            uint256 amount = index - keySplitIndex[tokenId][asset];
+            uint256 amount = index - _splitBase(tokenId, asset);
             if (amount == 0) continue;
             keySplitIndex[tokenId][asset] = index;
             credits[asset][owner] += amount;

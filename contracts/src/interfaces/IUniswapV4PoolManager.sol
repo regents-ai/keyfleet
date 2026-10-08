@@ -29,6 +29,8 @@ interface IUniswapV4PoolManager {
     function sync(address currency) external;
     function settle() external payable returns (uint256 paid);
     function take(address currency, address to, uint256 amount) external;
+    /// @notice One word of the PoolManager's storage, as v4-core's `IExtsload` exposes it.
+    function extsload(bytes32 slot) external view returns (bytes32 value);
 }
 
 /// @notice The callback the PoolManager makes on whoever called `unlock`.

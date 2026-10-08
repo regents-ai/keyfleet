@@ -18,8 +18,9 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// load, check and sign. Nothing is signed or sent from here. On a local anvil chain the Safe is an
 /// account anvil has unlocked and the calls are sent directly, from the Safe's address.
 ///
-/// Moving to phase 1 opens Classic #1's sales, and phase 2 opens the other three, so the
-/// phase step is run only when the founder says sales open.
+/// Moving to phase 1 opens Classic #1's sales, and phase 2 opens the other three, at the second
+/// `KEYFLEET_OPENS_AT` names (Unix time, in the future when the Safe's transaction lands), so the
+/// phase step is run only when the founder says when sales open.
 contract KeyfleetSafeSteps is KeyfleetManifest {
     /// @notice One call for the Safe to make.
     /// @param name What the call does, which also names its file.
@@ -43,9 +44,13 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         KeyfleetFactory factory = readBroadcast().factory;
 
         SafeCall[] memory calls;
-        if (_equal(step, "founding-fleets")) calls = foundingFleetCalls(manifest, factory);
-        else if (_equal(step, "advance-phase")) calls = advancePhaseCalls(manifest, factory);
-        else revert UnknownStep(step);
+        if (_equal(step, "founding-fleets")) {
+            calls = foundingFleetCalls(manifest, factory);
+        } else if (_equal(step, "advance-phase")) {
+            calls = advancePhaseCalls(manifest, factory, uint64(vm.envUint("KEYFLEET_OPENS_AT")));
+        } else {
+            revert UnknownStep(step);
+        }
 
         if (block.chainid == ANVIL_CHAIN_ID) {
             _send(manifest.bindings.safe, calls);
@@ -84,8 +89,8 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         }
     }
 
-    /// @notice The Safe's call moving the collection to its next phase.
-    function advancePhaseCalls(Manifest memory manifest, KeyfleetFactory factory)
+    /// @notice The Safe's call moving the collection to its next phase, which opens at `opensAt`.
+    function advancePhaseCalls(Manifest memory manifest, KeyfleetFactory factory, uint64 opensAt)
         public
         view
         returns (SafeCall[] memory calls)
@@ -96,7 +101,7 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         calls[0] = SafeCall({
             name: string.concat("phase-", vm.toString(keys.phase() + 1)),
             to: address(keys),
-            data: abi.encodeCall(KeyfleetKeys.advancePhase, ())
+            data: abi.encodeCall(KeyfleetKeys.advancePhase, (opensAt))
         });
     }
 

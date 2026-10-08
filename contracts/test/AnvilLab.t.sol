@@ -9,18 +9,23 @@ import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {AnvilLab} from "../script/AnvilLab.s.sol";
 
-/// @dev The anvil lab the site's anvil tests start from, run as they run it: the system with
-/// Classic #1 selling in phase 1, two keys sold to the sender with their protocol share owed and
-/// their REGENT in the treasury, no reveal accepted, and USDC approved for a third key.
+/// @dev The anvil lab the site's anvil tests start from, run as they run it, in its two steps with
+/// the clock moved past the opening between them: the system with Classic #1 selling in phase 1,
+/// two keys sold to the sender with their protocol share owed and their REGENT in the treasury, no
+/// reveal accepted, and USDC approved for a third key.
 contract AnvilLabTest is Test {
     function test_theLabBuildsClassicOneWithTwoKeysSold() public {
         address sender = tx.origin;
         vm.deal(sender, 1 ether);
 
-        AnvilLab.Lab memory lab = new AnvilLab().run();
-
+        AnvilLab script = new AnvilLab();
+        AnvilLab.Lab memory lab = script.run();
         KeyfleetKeys keys = KeyfleetKeys(lab.keys);
         KeyfleetManager classic = KeyfleetManager(lab.manager);
+        assertFalse(keys.salesOpen(1), "Classic #1 opens later");
+        vm.warp(block.timestamp + script.OPENING());
+        script.sell(classic);
+
         KeyfleetFactory factory = KeyfleetFactory(lab.factory);
         assertEq(address(factory.KEYS()), lab.keys, "The factory's collection");
         assertEq(keys.managerOf(1), lab.manager, "Fleet 1");
@@ -46,6 +51,7 @@ contract AnvilLabTest is Test {
         assertEq(keys.revealRequestedAt(keys.tokenIdOf(1, 1)), 0, "No reveal accepted");
         assertEq(keys.revealRequestedAt(keys.tokenIdOf(1, 2)), 0, "for either key");
         assertEq(classic.protocolShareOwed(), first / 10 + second / 10, "Both sales' share owed");
+        assertEq(classic.pendingConversion(), 0, "One piece converted both sales' booked USDC");
         assertEq(
             IERC20(lab.regent).balanceOf(lab.treasury), (first + second - first / 10 - second / 10) * 1e12, "REGENT"
         );

@@ -251,6 +251,27 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
         factory.createFleet(_terms(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6, anyone));
     }
 
+    /// @dev Invariant: in phase 3, open creation waits for the moment the Safe chose, to the second.
+    function test_OpenCreationWaitsForPhaseThreeToOpen() public {
+        _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        uint64 opensAt = uint64(block.timestamp + 2 days);
+        vm.prank(safe);
+        keys.advancePhase(opensAt);
+        assertEq(keys.phase(), keys.FINAL_PHASE());
+
+        KeyfleetManager.Requirements memory anyone;
+        usdc.mint(creator, 10e6);
+        vm.startPrank(creator);
+        usdc.approve(address(factory), 10e6);
+        vm.warp(opensAt - 1);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetFactory.CreationClosed.selector, uint8(3)));
+        factory.createFleet(_terms(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6, anyone));
+        vm.warp(opensAt);
+        (uint256 fleetId,) = factory.createFleet(_terms(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6, anyone));
+        vm.stopPrank();
+        assertTrue(keys.salesOpen(fleetId), "and the new fleet sells at once");
+    }
+
     function test_CreatorBuysKeyOneOfTheirFleet() public {
         _openCreation();
         uint256 price = 25e6;
@@ -275,8 +296,10 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
         assertEq(fleet.START_PRICE(), price);
         assertEq(fleet.totalMinted(), 1);
         assertEq(fleet.protocolShareOwed(), price / 10);
-        assertEq(usdc.balanceOf(manager), price / 10);
-        assertEq(regent.balanceOf(treasury), _regentFor(price - price / 10));
+        assertEq(fleet.pendingConversion(), price - price / 10, "the treasury's part is booked");
+        assertEq(usdc.balanceOf(manager), price, "and both parts stay in the manager");
+        assertEq(regent.balanceOf(treasury), 0, "nothing is swapped in the creation");
+        assertEq(regentBuyer.nextInQueue(), manager, "the fleet is queued");
         assertEq(usdc.balanceOf(creator), 0);
         assertEq(usdc.balanceOf(address(factory)), 0);
         assertEq(usdc.allowance(creator, address(factory)), 0);
@@ -399,33 +422,6 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
         wallet.create(terms);
     }
 
-    function test_TheRegentHookCannotCreateAFleetFromInsideACreation() public {
-        _openCreation();
-        KeyfleetManager.Requirements memory anyone;
-        KeyfleetFactory.FleetTerms memory terms = _terms(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6, anyone);
-        poolManager.setHook(address(factory), abi.encodeCall(KeyfleetFactory.createFleet, (terms)));
-        usdc.mint(creator, 10e6);
-        vm.startPrank(creator);
-        usdc.approve(address(factory), 10e6);
-        vm.expectRevert(bytes4(keccak256("ReentrancyGuardReentrantCall()")));
-        factory.createFleet(terms);
-        vm.stopPrank();
-    }
-
-    function test_TheRegentHookSeesNoWiringDuringACreation() public {
-        _openCreation();
-        KeyfleetManager.Requirements memory anyone;
-        // The hook reads the wiring; a nonzero fleet number would show it leaking into the swap.
-        WiringProbe probe = new WiringProbe(factory);
-        poolManager.setHook(address(probe), abi.encodeCall(WiringProbe.probe, ()));
-        usdc.mint(creator, 10e6);
-        vm.startPrank(creator);
-        usdc.approve(address(factory), 10e6);
-        factory.createFleet(_terms(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6, anyone));
-        vm.stopPrank();
-        assertTrue(probe.probed());
-    }
-
     // --- gas -------------------------------------------------------------------
 
     function test_GasOfCreatingEachTypeOfOpenFleetFitsOneTransaction() public {
@@ -536,21 +532,5 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
             treasuryDeployer: treasury,
             rewardsDeployer: rewards
         });
-    }
-}
-
-/// @dev Reads the factory's wiring from inside a swap and fails if any of it is set.
-contract WiringProbe {
-    KeyfleetFactory private immutable _factory;
-    bool public probed;
-
-    constructor(KeyfleetFactory factory) {
-        _factory = factory;
-    }
-
-    function probe() external {
-        FleetWiring memory w = _factory.wiring();
-        require(w.fleetId == 0 && w.manager == address(0) && w.startPrice == 0, "wiring leaked");
-        probed = true;
     }
 }

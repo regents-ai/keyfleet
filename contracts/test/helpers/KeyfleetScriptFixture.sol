@@ -91,6 +91,13 @@ abstract contract KeyfleetScriptFixture is KeyfleetFixture {
         _make(safeSteps.foundingFleetCalls(manifest, deployed), manifest.bindings.safe);
     }
 
+    /// @dev Moves the collection one phase on through the Safe's phase step, opening a second from
+    /// now, and waits for that second.
+    function _openPhase(KeyfleetManifest.Manifest memory manifest, KeyfleetFactory deployed) internal {
+        _make(safeSteps.advancePhaseCalls(manifest, deployed, uint64(block.timestamp + 1)), manifest.bindings.safe);
+        vm.warp(block.timestamp + 1);
+    }
+
     // --- a stand-in Base ---------------------------------------------------
 
     /// @dev Moves to Base and puts stand-in code at every address a Base manifest pins: the route's

@@ -41,7 +41,8 @@ contract ReenteringToken is MockToken {
 /// Everything sent to the manager, USDC and REGENT included, is forwarded whole and unswapped to
 /// the fleet's treasury. The owed protocol share, the Cascade reserve and reward backing are never
 /// surplus, and the owed share is deposited into REGENT staking through the treasury, as USDC. The
-/// treasury's part of each purchase arrives there as REGENT, never as USDC.
+/// treasury's part of each purchase waits in the manager, booked for REGENT, and arrives in the
+/// treasury as REGENT, piece by piece, never as USDC.
 contract KeyfleetIncomeTest is KeyfleetFixture {
     MockToken private other;
     address private alice = address(0xA11CE);
@@ -176,6 +177,7 @@ contract KeyfleetIncomeTest is KeyfleetFixture {
         _buy(fleet, alice);
         _buy(fleet, bob);
         _buy(fleet, _wallet(3));
+        _convertAll();
         assertEq(_capital(fleet, regent), _regentFor(18_000_000), "level 1 released its reserve as REGENT");
         assertEq(_capital(fleet, usdc), 0, "and no USDC");
         assertEq(fleet.cascadeReserve(), 10_800_000, "key 3 opened the level 2 reserve");
@@ -188,6 +190,7 @@ contract KeyfleetIncomeTest is KeyfleetFixture {
 
         _buy(fleet, _wallet(4));
         _buy(fleet, _wallet(5));
+        _convertAll();
         assertTrue(fleet.levelCompleted(2), "level 2 completed");
         assertEq(fleet.cascadeReserve(), 0);
         assertEq(
@@ -241,42 +244,6 @@ contract KeyfleetIncomeTest is KeyfleetFixture {
             fleet.sendProtocolShare();
             assertEq(fleet.protocolShareOwed(), owed, "and the share is still owed");
             assertEq(usdc.balanceOf(address(staking)), 0, "and nothing reached staking");
-        }
-    }
-
-    /// @dev Invariant: the REGENT pool's hook runs inside every purchase's swap, after the purchase
-    /// is booked and before the key is minted, so it must meet the manager's lock whichever money
-    /// entry point it tries: it can neither send the owed share, sort the manager's balance, nor
-    /// buy a key in the middle of the purchase. The whole purchase unwinds.
-    function test_theRegentHookCannotReenterTheManager() public {
-        KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
-        _buy(fleet, alice);
-        usdc.mint(address(fleet), 10_000);
-        uint256 owed = fleet.protocolShareOwed();
-        uint256 regentCapital = _capital(fleet, regent);
-
-        bytes[3] memory calls = [
-            abi.encodeCall(KeyfleetManager.sendProtocolShare, ()),
-            abi.encodeCall(KeyfleetManager.recognizeSurplus, (address(usdc))),
-            abi.encodeCall(KeyfleetManager.purchase, (bob, type(uint256).max, block.timestamp, new bytes32[](0)))
-        ];
-        for (uint256 i = 0; i < calls.length; ++i) {
-            poolManager.setHook(address(fleet), calls[i]);
-            uint256 price = fleet.nextPrice();
-            usdc.mint(buyer, price);
-            uint256 held = usdc.balanceOf(buyer);
-            vm.startPrank(buyer);
-            usdc.approve(address(fleet), price);
-            vm.expectRevert(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector);
-            fleet.purchase(bob, price, block.timestamp, new bytes32[](0));
-            vm.stopPrank();
-
-            assertEq(fleet.totalMinted(), 1, "no key was sold");
-            assertEq(fleet.protocolShareOwed(), owed, "the owed share is where it was");
-            assertEq(fleet.surplus(address(usdc)), 10_000, "the stray transfer is still unsorted");
-            assertEq(_capital(fleet, regent), regentCapital, "and the treasury got no REGENT");
-            assertEq(usdc.balanceOf(buyer), held, "the buyer kept the price");
-            assertEq(keys.balanceOf(bob), 0, "and bob got no key");
         }
     }
 
@@ -361,7 +328,11 @@ contract KeyfleetIncomeTest is KeyfleetFixture {
             assertEq(usdc.allowance(address(fleetTreasury), address(staking)), 0, "the approval is used up");
             assertEq(usdc.allowance(address(fleet), address(regentBuyer)), 0, "and the manager left none standing");
             assertEq(fleet.protocolShareOwed(), 0, "nothing is owed any more");
-            assertEq(usdc.balanceOf(address(fleet)), fleet.cascadeReserve(), "the manager holds only its reserve");
+            assertEq(
+                usdc.balanceOf(address(fleet)),
+                fleet.cascadeReserve() + fleet.pendingConversion(),
+                "the manager holds only its reserve and the USDC booked for REGENT"
+            );
 
             vm.prank(stranger);
             vm.expectRevert(KeyfleetManager.ZeroAmount.selector);
@@ -382,14 +353,18 @@ contract KeyfleetIncomeTest is KeyfleetFixture {
         vm.expectRevert(bytes("PAUSED"));
         fleet.sendProtocolShare();
         assertEq(fleet.protocolShareOwed(), owed, "the whole share is still owed");
-        assertEq(usdc.balanceOf(address(fleet)), owed, "and still held by the manager");
+        assertEq(usdc.balanceOf(address(fleet)), owed + fleet.pendingConversion(), "and still held by the manager");
         assertEq(_capital(fleet, usdc), capital, "not by the treasury");
 
         uint256 secondShare = fleet.nextPrice() / 10;
         _buy(fleet, bob);
         assertEq(fleet.totalMinted(), 2, "a purchase goes through while staking is paused");
         assertEq(fleet.protocolShareOwed(), owed + secondShare, "and adds its share on top");
-        assertEq(usdc.balanceOf(address(fleet)), fleet.protocolShareOwed(), "the manager holds only the owed share");
+        assertEq(
+            usdc.balanceOf(address(fleet)),
+            fleet.protocolShareOwed() + fleet.pendingConversion(),
+            "the manager holds only the owed share and the USDC booked for REGENT"
+        );
 
         staking.setPaused(false);
         assertEq(fleet.sendProtocolShare(), owed + secondShare, "one send delivers everything that built up");
@@ -447,7 +422,11 @@ contract KeyfleetIncomeTest is KeyfleetFixture {
         uint256 owed = fleet.protocolShareOwed();
         uint256 capital = _capital(fleet, usdc);
 
-        assertEq(fleet.accountedBalance(address(usdc)), owed, "the owed share is accounted for");
+        assertEq(
+            fleet.accountedBalance(address(usdc)),
+            owed + fleet.pendingConversion(),
+            "the owed share and the USDC booked for REGENT are accounted for"
+        );
         assertEq(fleet.surplus(address(usdc)), 0, "so purchases leave no surplus");
         assertEq(fleet.recognizeSurplus(address(usdc)), 0);
 
@@ -473,7 +452,7 @@ contract KeyfleetIncomeTest is KeyfleetFixture {
         assertEq(staking.totalUsdcReceived(), owed, "staking received exactly the owed share");
         assertEq(fleet.surplus(address(usdc)), 10_000, "the stray transfer is still surplus");
         assertEq(_capital(fleet, usdc), capital, "and the treasury is unchanged");
-        assertEq(usdc.balanceOf(address(fleet)), 10_000);
+        assertEq(usdc.balanceOf(address(fleet)), 10_000 + fleet.pendingConversion());
     }
 
     /// @dev No USDC `Approval` in the recorded logs has the manager as its owner.

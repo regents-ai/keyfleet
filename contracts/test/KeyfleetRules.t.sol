@@ -338,10 +338,10 @@ contract KeyfleetRulesTest is KeyfleetFixture {
     // --- 4. the 7-day opening --------------------------------------------
 
     function test_theOpeningCountsFromTheFoundingFleetsPhase() public view {
-        // The fixture opened phase 1 and phase 2 at this same moment.
-        assertEq(keys.salesOpenedAt(1), block.timestamp, "fleet 1 at phase 1");
-        assertEq(keys.salesOpenedAt(4), block.timestamp, "fleets 2 to 4 at phase 2");
-        assertEq(votes.treasuryOpensAt(), block.timestamp + 7 days, "seven days after its sales opened");
+        // The fixture opened phase 1 a second before phase 2, which opened now.
+        assertEq(keys.salesOpenAt(1), block.timestamp - 1, "fleet 1 at phase 1");
+        assertEq(keys.salesOpenAt(4), block.timestamp, "fleets 2 to 4 at phase 2");
+        assertEq(votes.treasuryOpensAt(), block.timestamp - 1 + 7 days, "seven days after its sales opened");
     }
 
     function test_aFoundingFleetHasNoOpeningBeforeItsPhase() public {
@@ -350,23 +350,21 @@ contract KeyfleetRulesTest is KeyfleetFixture {
         for (uint256 id = 1; id <= keys.FOUNDING_FLEETS(); ++id) {
             _createFounding(keys.foundingPreset(id));
         }
-        vm.prank(safe);
-        keys.advancePhase();
+        _advancePhase();
         uint256 phaseOne = block.timestamp;
         vm.warp(block.timestamp + 1 days);
-        assertEq(keys.salesOpenedAt(1), phaseOne, "fleet 1 opened at phase 1");
-        assertEq(keys.salesOpenedAt(2), 0, "fleet 2 not yet");
+        assertEq(keys.salesOpenAt(1), phaseOne, "fleet 1 opened at phase 1");
+        assertEq(keys.salesOpenAt(2), 0, "fleet 2 not yet");
         assertFalse(keys.salesOpen(2), "so it does not sell");
         assertEq(KeyfleetManager(keys.managerOf(2)).VOTES().treasuryOpensAt(), 0, "and has no opening yet");
-        vm.prank(safe);
-        keys.advancePhase();
-        assertEq(keys.salesOpenedAt(2), block.timestamp, "fleet 2 opens at phase 2");
-        assertEq(keys.salesOpenedAt(1), phaseOne, "fleet 1 keeps its time");
+        _advancePhase();
+        assertEq(keys.salesOpenAt(2), block.timestamp, "fleet 2 opens at phase 2");
+        assertEq(keys.salesOpenAt(1), phaseOne, "fleet 1 keeps its time");
     }
 
     function test_anOpenFleetsOpeningCountsFromItsCreation() public {
         KeyfleetManager open = _createOpen(KeyfleetPresets.Preset.FleetTechClassic, 10e6);
-        assertEq(keys.salesOpenedAt(open.FLEET_ID()), block.timestamp, "sells from its creation");
+        assertEq(keys.salesOpenAt(open.FLEET_ID()), block.timestamp, "sells from its creation");
         assertEq(open.VOTES().treasuryOpensAt(), block.timestamp + 7 days, "seven days after");
     }
 
@@ -433,7 +431,8 @@ contract KeyfleetRulesTest is KeyfleetFixture {
     function test_theDailySplitRunsDuringTheOpening() public {
         _buy(classic, ALICE);
         usdc.mint(address(treasury), 1_000e6);
-        vm.warp(treasury.nextRunAt());
+        _joinSplit(classic);
+        assertGe(block.timestamp, treasury.nextRunAt(), "the split is due");
         assertLt(block.timestamp, votes.treasuryOpensAt(), "still in the opening");
         treasury.runDailySplit();
         assertLt(usdc.balanceOf(address(treasury)), 1_000e6, "the split paid out");

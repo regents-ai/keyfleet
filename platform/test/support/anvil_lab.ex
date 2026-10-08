@@ -19,6 +19,8 @@ defmodule Keyfleet.AnvilLab do
   @base_fee "10000000"
   # Anvil's own chain id.
   @chain_id 31_337
+  # AnvilLab.OPENING: how long after the lab's first step Classic #1's sales open.
+  @opening 60
 
   @doc """
   Starts an anvil, waits until it answers, and points the fleet reader's node
@@ -106,28 +108,39 @@ defmodule Keyfleet.AnvilLab do
 
   @doc """
   Builds the lab on the anvil at `url`, sent from `sender`, and returns the
-  addresses `AnvilLab` returned, by name, in lower case.
+  addresses `AnvilLab` returned, by name, in lower case. Between the lab's
+  two steps the anvil's clock moves past Classic #1's sales opening.
   """
   def lab!(url, sender) do
+    lab =
+      url
+      |> forge!(sender, [])
+      |> String.split("\n")
+      |> Enum.find_value(fn line ->
+        case Jason.decode(line) do
+          {:ok, %{"returns" => returns}} -> returns
+          _other -> nil
+        end
+      end)
+      |> Map.new(fn {name, %{"value" => address}} -> {name, String.downcase(address)} end)
+
+    rpc!(url, "evm_increaseTime", [@opening])
+    rpc!(url, "evm_mine")
+    forge!(url, sender, ["--sig", "sell(address)", lab["manager"]])
+    lab
+  end
+
+  defp forge!(url, sender, args) do
     {output, status} =
       System.cmd(
         "forge",
-        ["script", @script, "--rpc-url", url, "--broadcast", "--slow", "--unlocked"] ++
-          ["--sender", sender, "--json"],
+        ["script", @script | args] ++
+          ["--rpc-url", url, "--broadcast", "--slow", "--unlocked", "--sender", sender, "--json"],
         cd: @contracts,
         stderr_to_stdout: true
       )
 
     assert status == 0, "AnvilLab failed:\n#{String.slice(output, -4_000, 4_000)}"
-
     output
-    |> String.split("\n")
-    |> Enum.find_value(fn line ->
-      case Jason.decode(line) do
-        {:ok, %{"returns" => returns}} -> returns
-        _other -> nil
-      end
-    end)
-    |> Map.new(fn {name, %{"value" => address}} -> {name, String.downcase(address)} end)
   end
 end

@@ -7,6 +7,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {KeyfleetKeys} from "../../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
+import {KeyfleetRegentBuyer} from "../../src/KeyfleetRegentBuyer.sol";
 import {KeyfleetRewards} from "../../src/KeyfleetRewards.sol";
 import {KeyfleetShards} from "../../src/KeyfleetShards.sol";
 import {KeyfleetTreasury} from "../../src/KeyfleetTreasury.sol";
@@ -86,11 +87,9 @@ contract FleetHandler is Test {
 
     // --- keys ------------------------------------------------------------
 
-    /// @dev Buys one to three keys, each to an actor. Of each price, whatever the
-    /// manager does not keep as USDC (the protocol share and the Cascade reserve) and the ledger
-    /// does not take as USDC (the Accelerant rebate and the Cascade repayment) reaches the
-    /// treasury as REGENT at the stand-in market's one REGENT per USDC, and the treasury's USDC does
-    /// not move.
+    /// @dev Buys one to three keys, each to an actor. Every USDC of each price stays in the manager
+    /// (the protocol share, the Cascade reserve and the treasury's booked part) or reaches the ledger
+    /// (the Accelerant rebate and the Cascade repayment); the treasury's USDC and REGENT do not move.
     function buy(uint256 fleetSeed, uint256 actorSeed, uint256 count) external {
         KeyfleetManager f = fleets[fleetSeed % 2];
         count = bound(count, 1, 3);
@@ -111,17 +110,33 @@ contract FleetHandler is Test {
             usdc.approve(address(f), price);
             f.purchase(to, price, block.timestamp, new bytes32[](0));
             vm.stopPrank();
-            // Whatever of the price, and of a released Cascade reserve, the manager and the ledger
-            // do not keep as USDC reaches the treasury as REGENT at the stand-in market's price.
-            uint256 toTreasury = regent.balanceOf(treasury) - before[3];
             if (usdc.balanceOf(treasury) != before[2]) _breach("a purchase paid the treasury USDC");
-            if (
-                toTreasury % 1e12 != 0
-                    || usdc.balanceOf(address(f)) + usdc.balanceOf(address(f.REWARDS())) + toTreasury / 1e12
-                        != before[0] + before[1] + price
-            ) {
-                _breach("the treasury's part of a purchase did not arrive as REGENT at the market price");
+            if (regent.balanceOf(treasury) != before[3]) _breach("a purchase swapped for the treasury");
+            if (usdc.balanceOf(address(f)) + usdc.balanceOf(address(f.REWARDS())) != before[0] + before[1] + price) {
+                _breach("a purchase's USDC left the manager and the ledger");
             }
+        }
+    }
+
+    /// @dev Runs the next piece once it is due. The fleet at the head of the queue hands over
+    /// exactly its piece, and its treasury gets exactly the REGENT that buys at the stand-in
+    /// market's one REGENT per USDC, and no USDC.
+    function convert() external {
+        KeyfleetRegentBuyer regentBuyer = fleets[0].REGENT_BUYER();
+        if (regentBuyer.queueLength() == 0) return;
+        uint256 opensAt = regentBuyer.nextPieceAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+        KeyfleetManager f = KeyfleetManager(regentBuyer.nextInQueue());
+        address treasury = address(f.TREASURY());
+        uint256 pending = f.pendingConversion();
+        uint256[3] memory before = [usdc.balanceOf(address(f)), usdc.balanceOf(treasury), regent.balanceOf(treasury)];
+        regentBuyer.convert();
+        uint256 piece = pending - f.pendingConversion();
+        if (piece == 0 || piece > regentBuyer.PIECE_USDC()) _breach("a piece was empty or over its size");
+        if (before[0] - usdc.balanceOf(address(f)) != piece) _breach("the manager paid other than its piece");
+        if (usdc.balanceOf(treasury) != before[1]) _breach("a piece paid the treasury USDC");
+        if (regent.balanceOf(treasury) - before[2] != piece * 1e12) {
+            _breach("a piece's REGENT did not reach the treasury at the market price");
         }
     }
 
@@ -195,7 +210,8 @@ contract FleetHandler is Test {
     // --- the daily split ----------------------------------------------------
 
     /// @dev Anyone's run: it goes through exactly when a day has passed since the last run, or since
-    /// the first mint, and splits exactly the formula on the treasury's own balances.
+    /// the first mint, and splits exactly the formula on the treasury's own balances among the
+    /// mature keys.
     function runDailySplit(uint256 fleetSeed) external {
         uint256 index = fleetSeed % 2;
         KeyfleetTreasury treasury = fleets[index].TREASURY();
@@ -368,7 +384,7 @@ contract FleetHandler is Test {
     function _snapshot(KeyfleetManager f) internal view returns (Snapshot memory s) {
         KeyfleetTreasury treasury = f.TREASURY();
         KeyfleetRewards rewards = f.REWARDS();
-        s.keys = f.totalMinted();
+        s.keys = f.matureKeys();
         s.bps = treasury.dailySplitBps();
         s.assets = treasury.splitAssets();
         s.thresholds = new uint256[](s.assets.length);
@@ -518,8 +534,9 @@ contract FleetHandler is Test {
 /// between 10 and 200 bps; the funding flag is down outside a run; an unadmitted OUSD or a launched
 /// token other than the fleet's bound one is never split; a bound launch is the fleet's own sold
 /// launch; and agents are never paid. The handler's own checks, which must never have been
-/// breached, cover run timing, the split formula on the treasury's own balance, exact claims, which
-/// launches bind, and every purchase's treasury part arriving as REGENT.
+/// breached, cover run timing, the split formula over the mature keys on the treasury's own
+/// balance, exact claims, which launches bind, every purchase's USDC staying with the manager and
+/// the ledger, and every piece's REGENT reaching the treasury.
 /// forge-config: default.invariant.runs = 256
 /// forge-config: default.invariant.depth = 100
 /// forge-config: default.invariant.fail-on-revert = true

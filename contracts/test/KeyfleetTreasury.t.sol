@@ -33,8 +33,9 @@ contract KeyfleetTreasuryTest is KeyfleetFixture {
         KeyfleetRewards rewards = fleet.REWARDS();
         assertEq(
             usdc.balanceOf(address(fleet)),
-            fleet.cascadeReserve() + fleet.protocolShareOwed() + fleet.surplus(address(usdc)),
-            "the manager holds its reserve, its owed share and anything not yet sorted"
+            fleet.cascadeReserve() + fleet.protocolShareOwed() + fleet.pendingConversion()
+                + fleet.surplus(address(usdc)),
+            "the manager holds its reserve, its owed share, its booked USDC and anything not yet sorted"
         );
         assertEq(usdc.balanceOf(address(rewards)), rewards.backed(address(usdc)), "the ledger holds its backing");
         assertEq(regent.balanceOf(address(fleet)), 0, "the manager keeps no REGENT");
@@ -122,9 +123,9 @@ contract KeyfleetTreasuryTest is KeyfleetFixture {
 
     /// @dev Invariant: on every preset, across sales, Cascade completions, Accelerant rebates and
     /// USDC and another token sent to the manager, every USDC unit paid or received lands in exactly
-    /// one of the treasury, the Cascade reserve, the owed share, the ledger's backing, or the REGENT
-    /// market in exchange for REGENT that went whole to the treasury; none of it is free capital in
-    /// the manager, the ledger or the buyer.
+    /// one of the treasury, the Cascade reserve, the owed share, the ledger's backing, the USDC
+    /// booked for REGENT, or, once its piece runs, the REGENT market in exchange for REGENT that went
+    /// whole to the treasury; none of it is free capital in the manager, the ledger or the buyer.
     function testFuzz_everyUnitLandsInTheTreasuryTheReserveTheOwedShareOrBacking(
         uint8 presetIndex,
         uint8 count,
@@ -142,6 +143,8 @@ contract KeyfleetTreasuryTest is KeyfleetFixture {
             paid += _buyGross(fleet, _wallet(i + 1));
             _assertNoFreeCapitalOutsideTheTreasury(fleet);
         }
+        _convertAll();
+        _assertNoFreeCapitalOutsideTheTreasury(fleet);
         uint256 swapped = usdc.balanceOf(address(v3Pool));
         assertEq(regent.balanceOf(treasury), _regentFor(swapped), "every swapped unit came back as REGENT");
         assertEq(usdc.balanceOf(treasury), 0, "purchases send the treasury no USDC");
@@ -157,21 +160,21 @@ contract KeyfleetTreasuryTest is KeyfleetFixture {
         _assertNoFreeCapitalOutsideTheTreasury(fleet);
         assertEq(
             usdc.balanceOf(treasury) + fleet.cascadeReserve() + fleet.protocolShareOwed()
-                + rewards.backed(address(usdc)) + fleet.surplus(address(usdc)) + swapped,
+                + rewards.backed(address(usdc)) + fleet.pendingConversion() + fleet.surplus(address(usdc)) + swapped,
             paid + received,
-            "every USDC unit is in the treasury, the reserve, the owed share, the backing or swapped"
+            "every USDC unit is in the treasury, the reserve, the owed share, the backing, booked or swapped"
         );
         assertEq(regent.balanceOf(treasury), _regentFor(swapped), "the forwarding swapped nothing");
         assertEq(other.balanceOf(treasury), stray, "every other token is in the treasury");
         assertEq(other.balanceOf(address(fleet)), 0, "and none of it stays in the manager");
     }
 
-    /// @dev Invariant: the treasury's part of each purchase reaches the treasury as REGENT in the
-    /// purchase itself, on every preset: the capital part on Classic, Syndicate and Accelerant, and
-    /// on Cascade nothing per key but, in the purchase that completes a level, the released reserve
-    /// after repaying the previous level in USDC through the ledger. The treasury never receives
-    /// USDC from a purchase.
-    function test_eachPurchaseSendsItsTreasuryPartToTheTreasuryAsRegent() public {
+    /// @dev Invariant: the treasury's part of each purchase is booked in the manager in the
+    /// purchase itself and reaches the treasury as REGENT once its pieces run, on every preset: the
+    /// capital part on Classic, Syndicate and Accelerant, and on Cascade nothing per key but, in the
+    /// purchase that completes a level, the released reserve after repaying the previous level in
+    /// USDC through the ledger. The treasury never receives USDC from a purchase.
+    function test_eachPurchaseBooksItsTreasuryPartAndItsPiecesBringItAsRegent() public {
         for (uint256 p = 0; p < 4; ++p) {
             KeyfleetPresets.Preset preset = KeyfleetPresets.Preset(p);
             KeyfleetManager fleet = _deploy(preset);
@@ -186,19 +189,11 @@ contract KeyfleetTreasuryTest is KeyfleetFixture {
                 uint256 repaid =
                     completes && fleet.levelOf(keyNumber) > 1 ? fleet.levelGrossPaid(fleet.levelOf(keyNumber) - 1) : 0;
                 _buy(fleet, _wallet(i + 1));
-                if (completes) {
-                    assertEq(
-                        regent.balanceOf(treasury) - before,
-                        _regentFor(reserveBefore + split.reserve - repaid),
-                        "a completed level sends its released reserve, as REGENT"
-                    );
-                } else {
-                    assertEq(
-                        regent.balanceOf(treasury) - before,
-                        _regentFor(split.capital),
-                        "the capital part, as REGENT, in the purchase"
-                    );
-                }
+                uint256 booked = completes ? reserveBefore + split.reserve - repaid : split.capital;
+                assertEq(fleet.pendingConversion(), booked, "the purchase books the treasury's part");
+                assertEq(regent.balanceOf(treasury), before, "and swaps none of it");
+                _convertAll();
+                assertEq(regent.balanceOf(treasury) - before, _regentFor(booked), "its pieces bring it as REGENT");
                 assertEq(usdc.balanceOf(treasury), 0, "never USDC");
             }
             if (cascade) assertTrue(fleet.levelCompleted(2), "two Cascade levels completed, one with a repayment");

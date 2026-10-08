@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
+import {StdStorage, stdStorage} from "forge-std/StdStorage.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {KeyfleetManager} from "../../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../../src/KeyfleetPresets.sol";
@@ -26,12 +27,14 @@ interface IUniswapV3PoolState {
 /// URL is never printed.
 ///
 /// It proves that the pinned v4 pool key names a pool that exists on the PoolManager, that a key
-/// purchase delivers REGENT to the fleet's treasury through both pools, and that the protections
-/// that exist hold: the buyer's own (it spends exactly the USDC it is given or nothing, it refuses a
-/// buy of nothing, and its callbacks answer only its own swap) and the purchase's (the quote is
-/// what is charged, and the buyer's highest price and deadline are kept). The buyer itself takes no
-/// minimum and reads no oracle: the founder chose a plain swap at the pool's price.
+/// purchase only books the treasury's part and a piece delivers it as REGENT through both pools,
+/// that a full 250 USDC piece stays under the 1% limit on the real pools, and that the protections
+/// that exist hold: the buyer's callbacks answer only its own swap, and the purchase charges the
+/// quote and keeps the buyer's highest price and deadline. The buyer takes no minimum and reads no
+/// oracle; its only limit is the pools' own price move.
 contract KeyfleetRegentBuyerForkTest is KeyfleetForkFixture {
+    using stdStorage for StdStorage;
+
     address private constant BUYER = address(0xB0B0B0);
     address private constant PAYER = address(0x9A7E2);
     address private constant RECIPIENT = address(0x8EC1);
@@ -94,48 +97,59 @@ contract KeyfleetRegentBuyerForkTest is KeyfleetForkFixture {
         assertGt(IUniswapV3PoolState(address(buyer.V3_POOL())).liquidity(), 0, "with liquidity in range");
     }
 
-    // --- a purchase ----------------------------------------------------------
+    // --- a purchase and a piece ------------------------------------------------
 
-    /// @dev A purchase sends the quote's capital through both pools and the treasury receives exactly
-    /// what a direct buy of that USDC would have given it at that moment. Nothing stays in the buyer,
-    /// no approval outlives the purchase, and the protocol share stays in the manager.
-    function test_aPurchaseDeliversRegentToTheTreasury() public {
+    /// @dev A purchase swaps nothing and books the quote's capital; the next piece sends it through
+    /// both pools and the treasury receives the REGENT. Nothing stays in the buyer, no approval
+    /// outlives the piece, and the protocol share stays in the manager.
+    function test_aPurchaseBooksTheCapitalAndAPieceDeliversRegentToTheTreasury() public {
         KeyfleetPresets.PurchaseSplit memory split = classic.quote();
         assertGt(split.capital, 0, "a Classic sale sends capital to the treasury");
 
-        uint256 snapshot = vm.snapshotState();
-        deal(address(usdc), address(classic), split.capital);
-        vm.prank(address(classic));
-        usdc.approve(address(buyer), split.capital);
-        vm.prank(address(classic));
-        uint256 direct = buyer.buy(split.capital, address(treasury));
-        vm.revertToState(snapshot);
-        assertGt(direct, 0, "a direct buy of the capital returns REGENT");
-
-        uint256 treasuryRegent = regent.balanceOf(address(treasury));
         uint256 poolUsdc = usdc.balanceOf(address(buyer.V3_POOL()));
         uint256[3] memory held = _buyerHoldings();
         uint256 price = _fund(classic, BUYER);
-        vm.recordLogs();
         vm.prank(BUYER);
         uint256 tokenId = classic.purchase(BUYER, price, block.timestamp, new bytes32[](0));
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-
         assertEq(keys.ownerOf(tokenId), BUYER, "the key is sold");
-        uint256 delivered = regent.balanceOf(address(treasury)) - treasuryRegent;
-        assertEq(delivered, direct, "the treasury receives the market's REGENT for the capital");
+        assertEq(classic.pendingConversion(), split.capital, "the capital is booked");
+        assertEq(usdc.balanceOf(address(buyer.V3_POOL())), poolUsdc, "and nothing swapped");
+        assertEq(regent.balanceOf(address(treasury)), 0, "no REGENT yet");
+
+        vm.recordLogs();
+        uint256 delivered = buyer.convert();
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        assertGt(delivered, 0, "the piece bought REGENT");
+        assertEq(regent.balanceOf(address(treasury)), delivered, "for the treasury");
         assertEq(usdc.balanceOf(address(buyer.V3_POOL())) - poolUsdc, split.capital, "the capital went into v3");
         _assertBuyerEvent(logs, split.capital, delivered);
-        _assertManagerEvent(logs, split.capital, delivered);
 
         uint256[3] memory after_ = _buyerHoldings();
         for (uint256 i = 0; i < 3; ++i) {
             assertEq(after_[i], held[i], "the buyer keeps nothing");
         }
-        assertEq(usdc.allowance(address(classic), address(buyer)), 0, "no approval outlives the purchase");
+        assertEq(classic.pendingConversion(), 0, "the booking is spent");
+        assertEq(usdc.allowance(address(classic), address(buyer)), 0, "no approval outlives the piece");
         assertEq(usdc.balanceOf(address(classic)), classic.protocolShareOwed(), "the manager holds only the share");
         assertEq(classic.protocolShareOwed(), split.protocol, "which is the quote's");
         assertEq(usdc.balanceOf(address(treasury)), 0, "no USDC reaches the treasury unswapped");
+    }
+
+    /// @dev A full piece of 250 USDC goes through the real route under the 1% limit, measured on the
+    /// pools' own prices, and the next piece waits 15 minutes.
+    function test_aFullPieceStaysUnderTheLimitOnTheRealRoute() public {
+        _book(classic, buyer.PIECE_USDC());
+        uint256 v3Before = _v3SqrtPrice();
+        uint256 v4Before = _sqrtPrice(buyer.V4_POOL_ID());
+        uint256 regentOut = buyer.convert();
+        assertGt(regentOut, 0, "REGENT bought");
+        assertGt(_v3SqrtPrice(), v3Before, "USDC in raises the v3 price, as WETH is token0");
+        assertLt(_sqrtPrice(buyer.V4_POOL_ID()), v4Before, "WETH in lowers the v4 price, as WETH is currency0");
+        assertEq(classic.pendingConversion(), 0);
+
+        _book(classic, 1e6);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.PieceTooSoon.selector, block.timestamp + 15 minutes));
+        buyer.convert();
     }
 
     /// @dev The purchase charges exactly the quote, and refuses a price above the buyer's highest or
@@ -168,53 +182,9 @@ contract KeyfleetRegentBuyerForkTest is KeyfleetForkFixture {
 
     // --- the buyer on its own --------------------------------------------------
 
-    /// @dev A direct buy spends exactly the USDC given, pays the REGENT to the recipient, and
-    /// reports it. A buy of nothing, or of more than was approved, is refused.
-    function test_aDirectBuySpendsExactlyWhatItIsGiven() public {
-        uint256 amount = 100e6;
-        deal(address(usdc), PAYER, amount);
-
-        vm.prank(PAYER);
-        usdc.approve(address(buyer), amount - 1);
-        vm.prank(PAYER);
-        vm.expectRevert();
-        buyer.buy(amount, RECIPIENT);
-
-        vm.prank(PAYER);
-        vm.expectRevert(KeyfleetRegentBuyer.ZeroAmount.selector);
-        buyer.buy(0, RECIPIENT);
-
-        vm.prank(PAYER);
-        usdc.approve(address(buyer), amount);
-        uint256 before = regent.balanceOf(RECIPIENT);
-        vm.recordLogs();
-        vm.prank(PAYER);
-        uint256 regentOut = buyer.buy(amount, RECIPIENT);
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-
-        assertGt(regentOut, 0, "REGENT bought");
-        assertEq(regent.balanceOf(RECIPIENT) - before, regentOut, "paid to the recipient, as reported");
-        assertEq(usdc.balanceOf(PAYER), 0, "exactly the amount spent");
-        assertEq(usdc.allowance(PAYER, address(buyer)), 0, "and the whole approval used");
-        bool found;
-        for (uint256 i = 0; i < logs.length; ++i) {
-            if (logs[i].emitter != address(buyer) || logs[i].topics[0] != KeyfleetRegentBuyer.RegentBought.selector) {
-                continue;
-            }
-            assertEq(address(uint160(uint256(logs[i].topics[1]))), PAYER, "payer");
-            assertEq(address(uint160(uint256(logs[i].topics[2]))), RECIPIENT, "recipient");
-            (uint256 usdcIn, uint256 wethMid, uint256 out) = abi.decode(logs[i].data, (uint256, uint256, uint256));
-            assertEq(usdcIn, amount, "USDC in");
-            assertGt(wethMid, 0, "WETH between the legs");
-            assertEq(out, regentOut, "REGENT out");
-            found = true;
-        }
-        assertTrue(found, "the buyer reported the buy");
-    }
-
     /// @dev The real v3 pool and the real PoolManager reach the buyer's callbacks only during its own
-    /// buy: outside one, each is refused.
-    function test_theCallbacksRefuseTheRealPoolsOutsideABuy() public {
+    /// piece: outside one, each is refused.
+    function test_theCallbacksRefuseTheRealPoolsOutsideAPiece() public {
         address v3Pool = address(buyer.V3_POOL());
         address poolManager = address(buyer.POOL_MANAGER());
 
@@ -252,17 +222,17 @@ contract KeyfleetRegentBuyerForkTest is KeyfleetForkFixture {
         revert("no RegentBought from the buyer");
     }
 
-    /// @dev The manager reported the same buy.
-    function _assertManagerEvent(Vm.Log[] memory logs, uint256 usdcIn, uint256 regentOut) private view {
-        for (uint256 i = 0; i < logs.length; ++i) {
-            Vm.Log memory log = logs[i];
-            if (log.emitter != address(classic) || log.topics[0] != KeyfleetManager.RegentBought.selector) continue;
-            (uint256 paid, uint256 out) = abi.decode(log.data, (uint256, uint256));
-            assertEq(paid, usdcIn, "the manager reports the capital");
-            assertEq(out, regentOut, "and the REGENT delivered");
-            return;
-        }
-        revert("no RegentBought from the manager");
+    /// @dev Books `amount` USDC in `fleet` as a purchase would, held by the manager, and queues it.
+    function _book(KeyfleetManager fleet, uint256 amount) private {
+        deal(address(usdc), address(fleet), usdc.balanceOf(address(fleet)) + amount);
+        stdstore.target(address(fleet)).sig("pendingConversion()").checked_write(fleet.pendingConversion() + amount);
+        vm.prank(address(fleet));
+        buyer.enqueue();
+    }
+
+    /// @dev The v3 pool's square-root price.
+    function _v3SqrtPrice() private view returns (uint256 sqrtPriceX96) {
+        (sqrtPriceX96,,,,,,) = buyer.V3_POOL().slot0();
     }
 
     /// @dev A pool's price, read from the PoolManager's storage as v4-core's

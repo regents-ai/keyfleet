@@ -25,10 +25,16 @@ The release runs in six steps, in this order:
 5. **Record.** `RecordKeyfleets` reads the system and every fleet back from the
    chain, checks them against the manifest, and writes the published record,
    `contracts/deployments/base.deployed.json`.
-6. **Phases.** Only when the founder says sales open, `KeyfleetSafeSteps` with
-   the step `advance-phase` writes the next phase step for the founder to sign:
-   phase 1 opens Classic #1, phase 2 opens the other three founding fleets,
-   phase 3 lets anyone create a fleet.
+6. **Phases.** Only when the founder says when sales open, `KeyfleetSafeSteps`
+   with the step `advance-phase` writes the next phase step for the founder to
+   sign, naming that moment: phase 1 opens Classic #1, phase 2 opens the other
+   three founding fleets, phase 3 lets anyone create a fleet.
+
+Before step 1, go through the deploy-day checklist in the
+[contracts README](../contracts/README.md#deploy-day-checklist): the keeper, a
+bot for the public buttons, the collection metadata address, the subscription
+id and the consumer, REGENT staking unpaused, and factories that can never be
+removed.
 
 Nothing in steps 1 to 5 puts any key on sale. The site lists the fleets only
 once the record is loaded into it by hand with `seed-deployment` (see
@@ -311,8 +317,9 @@ deployed code is the code those constants came from. It carries:
   the tag its protocol share deposits carry, and the assets its daily split
   shares;
 - `disclosures`: public-read chat, no refunds, service rewards to keys only,
-  what the 10% fee and the 2.5% royalty are, that the treasury's part buys
-  REGENT at the market price with no minimum, and what the Regents Safe can and
+  what the 10% fee and the 2.5% royalty are, that the treasury's part is turned
+  into REGENT afterwards, a little at a time, at the market price with no
+  minimum, and what the Regents Safe can and
   cannot do.
 
 There is no configuration screen anywhere in the product, so this file is where
@@ -320,19 +327,25 @@ those values are published, and it is what the site is seeded from.
 
 ## Step 6: phases
 
-Run only when the founder says the next fleets' sales open:
+Run only when the founder says when the next fleets' sales open, with that
+moment as a Unix time in `KEYFLEET_OPENS_AT`:
 
 ```sh
-KEYFLEET_MANIFEST=base KEYFLEET_STEP=advance-phase \
+KEYFLEET_MANIFEST=base KEYFLEET_STEP=advance-phase KEYFLEET_OPENS_AT=<unix time> \
   forge script script/KeyfleetSafeSteps.s.sol:KeyfleetSafeSteps --rpc-url "$BASE_RPC_URL"
 ```
+
+The Safe's transaction must land before that moment, or the collection refuses
+it (`OpensAtInvalid`) and the step is written again with a later time; a phase
+also never opens before the previous one. The phase number changes when the
+transaction lands, and what it opens waits for the named moment.
 
 It checks the step against Base's current state as the Safe and writes one file,
 `deployments/safe/base.phase-1.json`, `base.phase-2.json` or
 `base.phase-3.json`, for the founder to sign. Phase 1 needs Classic #1 to exist
 and opens its sales. Phase 2 needs all four founding fleets and opens Syndicate
-#1, Accelerant #1 and Cascade #1 together. Phase 3 lets anyone create a fleet,
-which sells from the moment it is created. There is no step back, and nothing
+#1, Accelerant #1 and Cascade #1 together. Phase 3 lets anyone create a fleet
+from its opening, and each such fleet sells from the moment it is created. There is no step back, and nothing
 else moves a phase.
 
 ## Fleets anyone creates
@@ -393,8 +406,9 @@ of all the fleet's keys.
 
 ## Rehearsing
 
-Every purchase is paid in Base USDC and swapped through the real REGENT pools,
-so a rehearsal that buys keys runs on a fork of Base.
+Every purchase is paid in Base USDC, and the treasury's part becomes REGENT
+through the real REGENT pools a piece at a time, so a rehearsal that buys keys
+runs on a fork of Base.
 
 **The fork suites.** With `BASE_RPC_URL` set, the suites in
 `contracts/test/fork/` deploy the system from the committed Base manifest
@@ -477,7 +491,7 @@ Autolaunch factory, for the site's anvil tests.
 `contracts/script/base-fork-lab.sh`, is no part of a release either: it puts the
 system with Classic #1 selling on a local fork of Base run as chain 31337, for
 the site on `http://localhost:4097`, so a wallet can buy a key with Base's own
-USDC through Base's own swap route. Everything comes from `base.json` except
+USDC, and the treasury's part becomes REGENT through Base's own swap route. Everything comes from `base.json` except
 the chain id, the Safe and keeper (anvil's first two default accounts), the
 metadata addresses on the local site and a stand-in VRF coordinator. Every step
 refuses any chain but 31337.
@@ -492,9 +506,12 @@ script/base-fork-lab.sh fund <buyer address> [...]   # more buyers later
 script/base-fork-lab.sh fulfil                      # answer waiting card draws
 ```
 
-`deploy` writes `contracts/deployments/base-fork-lab.json` in the shape of the
-release's deployed record (`base.deployed.json`), and gives each buyer 100 ETH
-and exactly 1,000 USDC. No key is bought.
+`deploy` names a sales opening 10 minutes ahead, as the Safe must, then moves
+the lab chain's clock past it, so Classic #1 sells at once. It writes
+`contracts/deployments/base-fork-lab.json` in the shape of the release's
+deployed record (`base.deployed.json`), and gives each buyer 100 ETH and exactly
+1,000 USDC. No key is bought. On the lab chain, nobody presses the REGENT
+buyer's `convert()` unless you do, once a piece is due.
 
 ## What the Safe does
 
@@ -541,9 +558,13 @@ In phase 3 anyone creates a fleet of any type at a starting price from 10 to
 balance as joining requirements. A fleet's name, description and image link
 change only by its keys' vote.
 
-**The treasury holds REGENT (7 October 2026).** Keys are paid in USDC; the
-treasury's part of every purchase is swapped to REGENT in the same purchase, at
-the market price with no minimum, through one fixed route.
+**The treasury holds REGENT (7 October 2026), a piece at a time (8 October
+2026).** Keys are paid in USDC. The treasury's part of every purchase is booked
+in the fleet's manager, and the shared REGENT buyer turns it into REGENT for the
+treasury in pieces of at most 250 USDC, one piece every 15 minutes across all
+fleets, at the market price with no minimum, through one fixed route. Anyone may
+trigger a piece, and a piece that would move the route's price more than 1% is
+refused.
 
 **The fleet's own token (6 October 2026).** A fleet may launch its own token
 through Autolaunch Revstake v2 on Base, by a passed proposal's call from its

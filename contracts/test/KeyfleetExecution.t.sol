@@ -90,12 +90,14 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         vm.warp(1_000_000);
     }
 
-    /// @dev The founding Classic fleet with `count` keys sold, old enough to take part, after its
-    /// treasury opening, by when only a renewed key is present.
+    /// @dev The founding Classic fleet with `count` keys sold and their treasury part turned into
+    /// REGENT, old enough to take part, after its treasury opening, by when only a renewed key is
+    /// present.
     function _classic(uint256 count) private returns (KeyfleetManager fleet, KeyfleetTreasury treasury) {
         fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         treasury = fleet.TREASURY();
         _buyMany(fleet, count);
+        _convertAll();
         _mature();
         _openTreasury(fleet);
     }
@@ -632,7 +634,12 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         bytes memory onlyManagerKeys = abi.encodeWithSelector(KeyfleetKeys.OnlyManager.selector, treasury);
         uint256 nextId = keys.fleetCount() + 1;
         a = new Attempt[](12);
-        a[0] = _attempt("advancePhase", address(keys), abi.encodeCall(KeyfleetKeys.advancePhase, ()), onlySafe);
+        a[0] = _attempt(
+            "advancePhase",
+            address(keys),
+            abi.encodeCall(KeyfleetKeys.advancePhase, (uint64(block.timestamp + 1))),
+            onlySafe
+        );
         a[1] = _attempt("setKeeper", address(keys), abi.encodeCall(KeyfleetKeys.setKeeper, (treasury)), onlySafe);
         a[2] = _attempt("addFactory", address(keys), abi.encodeCall(KeyfleetKeys.addFactory, (treasury)), onlySafe);
         a[3] = _attempt(

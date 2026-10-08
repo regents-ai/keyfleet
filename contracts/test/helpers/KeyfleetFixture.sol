@@ -129,13 +129,20 @@ abstract contract KeyfleetFixture is Test {
             }
         }
         while (keys.phase() < 2) {
-            vm.prank(safe);
-            keys.advancePhase();
+            _advancePhase();
         }
         for (uint256 id = 1; id <= keys.FOUNDING_FLEETS(); ++id) {
             if (keys.foundingPreset(id) == preset) return KeyfleetManager(keys.managerOf(id));
         }
         revert("no founding fleet");
+    }
+
+    /// @dev Moves the collection to its next phase as the Safe, opening a second from now, and waits
+    /// for that second.
+    function _advancePhase() internal {
+        vm.prank(safe);
+        keys.advancePhase(uint64(block.timestamp + 1));
+        vm.warp(block.timestamp + 1);
     }
 
     /// @dev Creates the next founding fleet as the Safe, with a stand-in deck.
@@ -150,8 +157,7 @@ abstract contract KeyfleetFixture is Test {
     function _openCreation() internal {
         if (keys.fleetCount() == 0) _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         while (keys.phase() < keys.FINAL_PHASE()) {
-            vm.prank(safe);
-            keys.advancePhase();
+            _advancePhase();
         }
     }
 
@@ -234,6 +240,15 @@ abstract contract KeyfleetFixture is Test {
         vm.warp(block.timestamp + KeyfleetManager(keys.managerOf(1)).VOTES().KEY_MATURITY());
     }
 
+    /// @dev Waits until every key `fleet` has sold is mature, so the next daily split covers them
+    /// all. A time already past it is left as it is.
+    function _joinSplit(KeyfleetManager fleet) internal {
+        uint256 minted = fleet.totalMinted();
+        if (minted == 0) return;
+        uint256 joinsAt = keys.mintedAt(keys.tokenIdOf(fleet.FLEET_ID(), minted)) + fleet.VOTES().KEY_MATURITY();
+        if (block.timestamp < joinsAt) vm.warp(joinsAt);
+    }
+
     /// @dev Waits out the automatic presence every key sold so far began at its maturity, so from
     /// here on a key is present only once it is renewed. Tests call it right after `_mature`.
     function _lapse() internal {
@@ -249,6 +264,16 @@ abstract contract KeyfleetFixture is Test {
 
     function _wallet(uint256 index) internal pure returns (address) {
         return address(uint160(0x100000 + index));
+    }
+
+    /// @dev Runs pieces, `PIECE_INTERVAL` apart, until no fleet has USDC booked for its treasury,
+    /// so every treasury holds the REGENT of every purchase so far.
+    function _convertAll() internal {
+        while (regentBuyer.queueLength() != 0) {
+            uint256 opensAt = regentBuyer.nextPieceAt();
+            if (block.timestamp < opensAt) vm.warp(opensAt);
+            regentBuyer.convert();
+        }
     }
 
     /// @dev The REGENT the stand-in market gives for `usdcAmount`.

@@ -9,6 +9,7 @@ import {KeyfleetKeys} from "../../src/KeyfleetKeys.sol";
 import {KeyfleetManager} from "../../src/KeyfleetManager.sol";
 import {BaseForkLab} from "../../script/BaseForkLab.s.sol";
 import {KeyfleetManifest} from "../../script/KeyfleetManifest.sol";
+import {IVRFCoordinatorV2Plus} from "../../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {MockVRFCoordinatorV2Plus} from "../mocks/MockVRFCoordinatorV2Plus.sol";
 
 /// @dev The Base-fork lab as the site uses it: on a fork of Base run as chain 31337, Classic #1
@@ -53,6 +54,8 @@ contract BaseForkLabTest is Test {
         assertEq(vm.parseJsonAddress(json, ".collection.keeper"), KEEPER, "The keeper");
         assertEq(vm.parseJsonString(json, ".fleets.1.name"), "Classic #1", "Fleet 1");
         assertEq(keys.phase(), 1, "Phase 1");
+        assertFalse(keys.salesOpen(1), "Classic #1 opens later");
+        vm.warp(block.timestamp + lab.LAB_OPENING());
         assertTrue(keys.salesOpen(1), "Classic #1 sells");
 
         KeyfleetManager classic = KeyfleetManager(vm.parseJsonAddress(json, ".fleets.1.manager"));
@@ -66,11 +69,15 @@ contract BaseForkLabTest is Test {
         vm.stopPrank();
         uint256 tokenId = keys.tokenIdOf(1, 1);
         assertEq(keys.ownerOf(tokenId), buyer, "Key 1 is the buyer's");
+        uint256 requestId = _requestId(keys);
+        assertEq(classic.pendingConversion(), 9e6, "Its treasury part is booked");
+        classic.REGENT_BUYER().convert();
         assertGt(IERC20(lab.BASE_REGENT()).balanceOf(address(classic.TREASURY())), 0, "REGENT in the treasury");
 
         uint256[] memory words = new uint256[](1);
         words[0] = 7;
-        MockVRFCoordinatorV2Plus(address(keys.VRF_COORDINATOR())).fulfill(_requestId(keys), words);
+        (IVRFCoordinatorV2Plus coordinator,,) = keys.randomness();
+        MockVRFCoordinatorV2Plus(address(coordinator)).fulfill(requestId, words);
         assertTrue(keys.revealSeed(tokenId) != bytes32(0), "Key 1 is revealed");
     }
 

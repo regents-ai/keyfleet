@@ -8,6 +8,7 @@ import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
 import {KeyfleetRegentBuyer} from "../src/KeyfleetRegentBuyer.sol";
 import {V4PoolKey} from "../src/interfaces/IUniswapV4PoolManager.sol";
+import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
 import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 
 /// @notice The last step: reads the system and every fleet back from the chain, checks them
@@ -88,9 +89,10 @@ contract RecordKeyfleets is KeyfleetManifest {
         _match(_equal(keys.symbol(), manifest.bindings.collection.symbol), "collection.symbol");
         _match(_equal(keys.baseTokenURI(), manifest.bindings.collection.baseTokenURI), "collection.baseTokenURI");
         _match(_equal(keys.contractURI(), manifest.bindings.collection.contractURI), "collection.contractURI");
-        _match(keys.VRF_COORDINATOR() == manifest.bindings.randomness.coordinator, "vrf.coordinator");
-        _match(keys.VRF_SUBSCRIPTION_ID() == manifest.bindings.randomness.subscriptionId, "vrf.subscriptionId");
-        _match(keys.VRF_KEY_HASH() == manifest.bindings.randomness.keyHash, "vrf.keyHash");
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId, bytes32 keyHash) = keys.randomness();
+        _match(coordinator == manifest.bindings.randomness.coordinator, "vrf.coordinator");
+        _match(subscriptionId == manifest.bindings.randomness.subscriptionId, "vrf.subscriptionId");
+        _match(keyHash == manifest.bindings.randomness.keyHash, "vrf.keyHash");
         _match(keys.TRAIT_TABLE_HASH() == manifest.bindings.traitTableHash, "traitTableHash");
         _match(factory.SHARDS().KEYS() == keys, "shards.keys");
         _match(factory.REGENT_STAKING() == manifest.bindings.staking, "regentStaking");
@@ -110,8 +112,8 @@ contract RecordKeyfleets is KeyfleetManifest {
 
     /// @dev The subscription lists the collection, and on Base the Regents Safe owns it.
     function _requireVrfConsumer(KeyfleetKeys keys) private view {
-        (,,, address owner, address[] memory consumers) =
-            keys.VRF_COORDINATOR().getSubscription(keys.VRF_SUBSCRIPTION_ID());
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = keys.randomness();
+        (,,, address owner, address[] memory consumers) = coordinator.getSubscription(subscriptionId);
         if (block.chainid == BASE_CHAIN_ID && owner != BASE_REGENTS_SAFE) {
             revert VrfSubscriptionNotOwnedByRegentsSafe(owner);
         }
@@ -274,12 +276,12 @@ contract RecordKeyfleets is KeyfleetManifest {
     /// id is written as a decimal string, because Chainlink subscription ids are 77-digit numbers
     /// that many JSON readers cannot hold exactly.
     function _vrfJson(KeyfleetKeys keys) private returns (string memory) {
-        address coordinator = address(keys.VRF_COORDINATOR());
+        (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId, bytes32 keyHash) = keys.randomness();
         string memory object = "vrf";
-        vm.serializeAddress(object, "coordinator", coordinator);
-        vm.serializeBytes32(object, "coordinatorCodeHash", coordinator.codehash);
-        vm.serializeString(object, "subscriptionId", vm.toString(keys.VRF_SUBSCRIPTION_ID()));
-        vm.serializeBytes32(object, "keyHash", keys.VRF_KEY_HASH());
+        vm.serializeAddress(object, "coordinator", address(coordinator));
+        vm.serializeBytes32(object, "coordinatorCodeHash", address(coordinator).codehash);
+        vm.serializeString(object, "subscriptionId", vm.toString(subscriptionId));
+        vm.serializeBytes32(object, "keyHash", keyHash);
         vm.serializeUint(object, "requestConfirmations", keys.REVEAL_CONFIRMATIONS());
         vm.serializeUint(object, "callbackGasLimit", keys.REVEAL_CALLBACK_GAS_LIMIT());
         return vm.serializeBool(object, "nativePayment", true);
@@ -331,7 +333,7 @@ contract RecordKeyfleets is KeyfleetManifest {
         vm.serializeString(
             object,
             "regentPurchase",
-            "The fleet treasury's part of each key purchase buys REGENT at the market price, with no minimum."
+            "The fleet treasury's part of each key purchase is turned into REGENT afterwards, a little at a time, at the market price, with no minimum."
         );
         return vm.serializeString(
             object,
