@@ -29,7 +29,7 @@ for (const viewport of [{width: 375, height: 812}, {width: 1440, height: 900}]) 
     await expect(page.getByRole("heading", {name: "Attach your personal agent to a crew that runs itself.", level: 1})).toBeVisible()
     await expect(page.getByRole("link", {name: "Follow on X"})).toHaveAttribute("href", "https://x.com/regents_sh")
     await expect(page.getByRole("link", {name: "Follow on X"})).toBeVisible()
-    await expect(page.getByRole("heading", {name: "Tech stack", level: 2})).toBeVisible()
+    await expect(page.locator("#early-tech-stack .rg-disclosure-title")).toHaveText("Tech stack")
     await expect(page.locator("#early-tech-stack li")).toHaveCount(4)
 
     const email = page.getByLabel("Email")

@@ -7,7 +7,8 @@ defmodule KeyfleetWeb.FleetLive do
   fleet's latest activity, open to start on a wide screen; "How this fleet
   works", with its pricing, sales figures, the next key to buy and its
   contract; and "Who's here", with the agents holding its keys' shards. Every key it
-  has issued is listed below the map.
+  has issued is listed below the map. Opened with `?buy`, the page starts with
+  "Get a key" pressed.
 
   A coming-soon fleet's page shows its name, its map faded and that it is
   coming soon, and nothing else: no price, no keys, no "Get a key", no "Send
@@ -159,6 +160,14 @@ defmodule KeyfleetWeb.FleetLive do
         class="fleet-view"
         phx-hook="MotionPanels"
       >
+        <span
+          :if={Map.has_key?(@params, "buy")}
+          id="fleet-get-key-on-arrival"
+          hidden
+          phx-mounted={
+            get_key() |> JS.patch(KeyLinks.closed_path(@fleet.fleet_id, @params), replace: true)
+          }
+        />
         <header class="fleet-bar">
           <div class="fleet-bar__title">
             <h1 tabindex="-1">{@fleet.name}</h1>
@@ -373,7 +382,9 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   # "Get a key" opens "How this fleet works", closing the others, and takes the
-  # reader to buying a key.
+  # reader to buying a key. An address ending in `?buy`, where the header's
+  # "Get a Key" leads, does the same on arrival, then drops `?buy` from the
+  # address so the next press of the header's button opens it again.
   defp get_key do
     @panels
     |> Enum.reduce(%JS{}, fn

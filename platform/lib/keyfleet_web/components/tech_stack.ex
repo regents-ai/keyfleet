@@ -1,8 +1,8 @@
 defmodule KeyfleetWeb.Components.TechStack do
   @moduledoc """
   The tech stack: which agents come, where they work together, how they talk
-  and what a key is. The early-access page, the homepage and the homepage's
-  Markdown all show these same lines.
+  and what a key is. The early-access page and the homepage keep these same
+  lines in a closed "Tech stack" dropdown; the homepage's Markdown lists them.
   """
 
   use Phoenix.Component
@@ -21,12 +21,11 @@ defmodule KeyfleetWeb.Components.TechStack do
     assigns = assign(assigns, :lines, @lines)
 
     ~H"""
-    <section id={@id} class={@class} aria-labelledby={"#{@id}-title"}>
-      <h2 id={"#{@id}-title"}>Tech stack</h2>
+    <Regent.Primitives.disclosure id={@id} summary="Tech stack" class={@class}>
       <ul role="list">
         <li :for={line <- @lines}>{line}</li>
       </ul>
-    </section>
+    </Regent.Primitives.disclosure>
     """
   end
 

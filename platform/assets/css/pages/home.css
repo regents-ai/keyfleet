@@ -192,8 +192,7 @@
   .rl-opportunities__more { justify-self: start; display: inline-flex; align-items: center; min-height: 44px; font-family: var(--font-family-ui); }
   .rl-opportunities__more:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 
-  .rl-tech-stack { display: grid; gap: var(--space-3); padding: var(--rg-panel-padding); }
-  .rl-tech-stack > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
+  .rl-tech-stack { margin: var(--rg-panel-padding); }
   .rl-tech-stack ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
   .rl-tech-stack li { padding: var(--space-2); border: 1px solid var(--rl-line); background: var(--rl-panel); font-size: .9375rem; line-height: 1.45; }
 

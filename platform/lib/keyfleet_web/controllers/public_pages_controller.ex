@@ -92,9 +92,42 @@ defmodule KeyfleetWeb.PublicPagesHTML do
         </nav>
       </header>
       <main class="legal-page">
-        {KeyfleetWeb.PublicDocuments.html(@document.markdown)}
+        <.document path={@conn.request_path} markdown={@document.markdown} />
       </main>
     </div>
     """
+  end
+
+  # The briefing shows each opportunity in one line, with the rest under
+  # Details; its Markdown, for agents, is the whole text.
+  defp document(%{path: "/opportunities"} = assigns) do
+    [intro | sections] = String.split(assigns.markdown, "\n## ")
+    assigns = assign(assigns, intro: intro, opportunities: Enum.map(sections, &opportunity/1))
+
+    ~H"""
+    {KeyfleetWeb.PublicDocuments.html(@intro)}
+    <section :for={opportunity <- @opportunities} aria-labelledby={opportunity.id}>
+      <h2 id={opportunity.id}>{opportunity.name}</h2>
+      <p>{opportunity.line}</p>
+      <Regent.Primitives.disclosure id={"#{opportunity.id}-details"} summary="Details">
+        {KeyfleetWeb.PublicDocuments.html(opportunity.details)}
+      </Regent.Primitives.disclosure>
+    </section>
+    """
+  end
+
+  defp document(assigns), do: ~H"{KeyfleetWeb.PublicDocuments.html(@markdown)}"
+
+  # A section of the briefing: its name, its one line, then the rest.
+  defp opportunity(section) do
+    [name, body] = String.split(section, "\n", parts: 2)
+    [line, details] = body |> String.trim() |> String.split("\n\n", parts: 2)
+
+    %{
+      id: name |> String.downcase() |> String.replace(" ", "-"),
+      name: name,
+      line: line,
+      details: details
+    }
   end
 end

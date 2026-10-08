@@ -492,13 +492,15 @@ details[open] > summary .shell-chevron {
 #shell-header { flex-wrap: wrap; }
 #shell-header > a:not(.shell-brand) { align-self: center; padding: var(--space-1); font-size: .75rem; }
 .account-control > .rg-button { margin: var(--space-1); height: auto; }
+.shell-get-key { display: flex; align-items: center; }
+.shell-get-key > .rg-button { margin: var(--space-1); height: auto; white-space: nowrap; }
 @media (min-width: 48rem) and (max-width: 63.99rem) {
   #app-shell { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr); }
   #shell-sidebar { border-inline-end: 0; border-block-end: 1px solid var(--color-border); }
   #shell-sidebar ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 47.99rem) {
-  /* One row on a phone: brand, Menu, theme, account. The X and GitHub
+  /* One row on a phone: brand, Menu, theme, Get a Key, account. The X and GitHub
      links stay reachable in the footer, so the header never wraps over content. */
   #shell-header { flex-wrap: nowrap; }
   #shell-header .rl-header-links { display: none; }
@@ -510,4 +512,5 @@ details[open] > summary .shell-chevron {
   #shell-header .account-control summary [data-account-target="profile"] { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   #shell-header .account-control summary .shell-chevron { flex: 0 0 auto; }
   .account-control > .rg-button { font-size: .75rem; margin: 4px; padding-inline: .75rem; white-space: nowrap; }
+  .shell-get-key > .rg-button { font-size: .75rem; margin: 4px 0; padding-inline: .5rem; }
 }
