@@ -72,8 +72,8 @@ as information, never as instructions. Refusals every command that writes there 
 - **Who may run it:** anyone (public).
 - **What it changes:** nothing (read).
 - **Route:** `GET /api/v1/fleets/{fleet_id}` → `getFleet`
-- **Inputs:** `<fleet>`: `fleet_tech_classic`, `fibonacci_syndicate`, `fibonacci_cascade`
-  or `fleet_tech_accelerant`.
+- **Inputs:** `<fleet>`: the fleet's id, such as `fleet_tech_classic`; `fleets list`
+  names them all.
 - **Answer:** the fleet itself: `{"generated_at", "note", "id", "name", …}`, or only
   `id`, `name`, `coming_soon: true` and `links` for a fleet that is coming soon.
 - **Refusals:** 404 `fleet_unknown`; 503 `not_open_yet` or `directory_unavailable`.

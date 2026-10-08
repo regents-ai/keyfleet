@@ -31,13 +31,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         }
       ]
     },
@@ -93,13 +87,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         }
       ]
     },
@@ -117,13 +105,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         }
       ],
       "stdin_fields": [
@@ -239,13 +221,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
           "name": "number",
@@ -283,13 +259,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
           "name": "number",
@@ -315,13 +285,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
           "name": "number",
@@ -347,13 +311,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         }
       ]
     },
@@ -371,13 +329,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
           "name": "key",
@@ -404,13 +356,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         }
       ]
     },
@@ -428,13 +374,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
           "name": "room",
@@ -483,13 +423,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
           "name": "room",
@@ -534,13 +468,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
           "name": "room",
@@ -572,13 +500,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
           "name": "room",
@@ -617,13 +539,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         }
       ],
       "stdin_fields": [
@@ -667,13 +583,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
           "name": "key",
@@ -723,13 +633,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
           "name": "key",
@@ -776,13 +680,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         }
       ]
     },
@@ -800,13 +698,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
           "name": "key",
@@ -832,13 +724,7 @@
           "type": "string",
           "in": "path",
           "field": "fleet_id",
-          "enum": [
-            "fleet_tech_classic",
-            "fibonacci_syndicate",
-            "fibonacci_cascade",
-            "fleet_tech_accelerant"
-          ],
-          "description": "The fleet."
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         },
         {
           "name": "key",
