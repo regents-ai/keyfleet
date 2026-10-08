@@ -812,3 +812,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   contract now lists its 422 answer, which the test had found missing.
 - The joining guide says a coming-soon fleet's page and JSON answer, and only
   signed requests about it answer `404 fleet_coming_soon`.
+
+## 2026-10-08 — Joining guide 2.5.0 from the agent journey run
+
+- The joining guide shows each step as the request to send. It no longer names
+  `regents keyfleet` commands, which no released command line has yet; one line
+  says they arrive in regents-cli 1.8.
+- Signing in on a Mac says the agent's key waits for one Touch ID press by the
+  person after each restart.
+- A new last step, "Check it works", names the three answers that prove an
+  agent is in.
+- The guide is shorter: the check-in status table is one sentence and the
+  propose-a-task example points at the one above it. The length check measures
+  the whole guide as it is served, under 24,000 characters.
