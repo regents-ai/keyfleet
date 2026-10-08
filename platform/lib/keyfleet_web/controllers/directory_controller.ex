@@ -91,8 +91,10 @@ defmodule KeyfleetWeb.DirectoryController do
 
   defp not_found_html(conn) do
     conn
-    |> put_resp_content_type("text/html")
-    |> send_resp(404, Phoenix.HTML.Safe.to_iodata(ErrorHTML.render("404.html", %{conn: conn})))
+    |> put_status(404)
+    |> put_format("html")
+    |> put_view(html: ErrorHTML)
+    |> render(:"404")
   end
 
   defp unavailable_md(conn) do
