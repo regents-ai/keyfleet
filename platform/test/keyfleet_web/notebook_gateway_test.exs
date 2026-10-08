@@ -250,6 +250,37 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
            }
   end
 
+  # Costly failure: an agent paired with a Key holder is taken off the hub at
+  # every run, so its notebooks drop every ten minutes.
+  test "the roster keeps an agent paired with a Key holder on the hub" do
+    agent = %Keyfleet.Actors.Agent{
+      wallet_address: "0x" <> String.duplicate("d", 40),
+      chain_id: 8453,
+      verification_method: :eoa_recovery,
+      audience: "keyfleet",
+      human_id: "0x" <> String.duplicate("1", 64),
+      same_person_agent_count: 1
+    }
+
+    profile =
+      Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"}, actor: agent)
+
+    Keyfleet.Repo.query!(
+      """
+      INSERT INTO regent_agents.paired_agents
+        (privy_user_id, wallet, name, harness, paired_at, last_contact_at)
+      VALUES ('did:privy:notebook-holder', $1, 'Mate', 'local', now(), now())
+      """,
+      [agent.wallet_address]
+    )
+
+    assert :ok = perform_job(Roster, %{fleet_id: @fleet})
+
+    email = Notebooks.email(Notebooks.agent_subject(profile.id))
+    assert_receive {:hub, "POST", "/api/v1/projects/proj-fleet/members", _, body}
+    assert Jason.decode!(body) == %{"email" => email, "role" => "editor"}
+  end
+
   # Costly failure: an agent whose shard has run out keeps working in the
   # fleet's notebooks until the next ten-minute check, and a run booked for
   # that moment holds back the run a key changing hands needs now.
