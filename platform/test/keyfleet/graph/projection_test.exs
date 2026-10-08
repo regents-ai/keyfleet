@@ -326,11 +326,9 @@ defmodule Keyfleet.Graph.ProjectionTest do
 
     {:ok, synced} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, 0, nil)
     assert {length(synced.graph.events), synced.graph.has_more} == {100, true}
-    assert synced.next_poll_seconds == 0
 
     {:ok, caught_up} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], head, 0, nil)
     assert {caught_up.graph.events, caught_up.graph.next_cursor} == {[], head}
-    assert caught_up.next_poll_seconds in 15..30
   end
 
   test "an object read answers its first 200 links, oldest first, and says more exist" do

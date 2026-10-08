@@ -1,0 +1,75 @@
+# Live sync for agents — handoff
+
+**Objective.** Agents hear room posts, workspace changes and proposal changes
+within moments instead of polling every 15–30 s (Sean, 8 Oct 2026, via HQ:
+"we need to get live versions working on prod asap for everything"). Shape
+decided by HQ for Sean, LIVE-SYNC-SHAPE a (long-poll), 8 Oct: every sync waits;
+no poll-or-long-poll choice. LIVE-SYNC-HOLD (HQ for Sean, 8 Oct): the hold is
+20 s so the command line's 30 s default covers it and the site never waits on a
+regents-cli release. DMs join the same sync once `kf/dms` is in `kf/release`.
+
+**Branch and worktree.** `kf/live-sync` on `kf/release` 637c81a (room tools
+c966393 merged), at `/Users/sean/Documents/regent/worktrees/keyfleet-live-sync`.
+Local only. The Keyfleet chief (local_db702945) owns DMs, WebMCP room tools, the
+CLI, merging and releases.
+
+## What changed
+
+- `Keyfleet.Rooms.sync/5` waits. It subscribes to `Rooms.fleet_topic/1`,
+  `Graph.head_topic/1` and `Proposals.topic/1` before its first read. Something
+  new, or more waiting (`has_more`, a room behind its head), is answered at
+  once. Otherwise it answers on a workspace or proposal announcement, on a room
+  announcement once the caller's own read has something new, or after
+  `:agent_wait_ms` (20 s; 200 ms in tests). Announcements carry nothing to the
+  caller; every answer is read as the caller. Unsubscribes and flushes after.
+- `next_poll_seconds` is gone from the answer, the contract (1.1.0), docs.md,
+  skill.md (23,978 of 24,000 chars), cli/COMMANDS.md and the tests: the agent
+  syncs again straight away.
+- Planning addendum (KEYFLEET_ACTIVEGRAPH_ADDENDUM.md §13.7) now states the
+  waiting sync instead of 15–30 s polling.
+- `:agent_wait_ms` has the same lines as on `kf/fast-polls`, so they merge cleanly.
+
+## What production needs
+
+- **Fly concurrency** (in `fly.toml` and `fly.staging.toml` on this branch):
+  `[http_service.concurrency] type = "requests", soft_limit = 900,
+  hard_limit = 1000`. Without it Fly's default caps a machine at 25 open
+  connections, and 25 waiting agents would queue everyone else. One waiting
+  agent is one open request; a Bandit process each, no database connection
+  while waiting.
+- **Command line timeout:** the 30 s default covers the 20 s hold, so
+  `cli/commands.json` carries no `timeout_ms`. With regents-cli main carrying
+  `timeout_ms` (regents-cli 1279aa1, waits on CLI-MAIN-PUSH), the hold may go
+  back to 25 s with `"timeout_ms": 35000` on the rooms sync entry. docs.md asks
+  any agent's own client for a timeout of 30 seconds or more.
+- **SIWA signature window:** unaffected. The signature is checked when the
+  request arrives (`SignedAgent` runs before the controller); the wait comes
+  after, so the window only covers sending.
+- **Database:** a post wakes every agent waiting on the fleet, and each
+  re-reads its sync (pool 40 in production). Fine at today's numbers; if a fleet
+  has hundreds of agents waiting, spread the wake-ups.
+
+## Checks run
+
+- Throwaway scenarios (deleted): a post answered the wait ~20 ms after it was
+  written; a post in an unfollowed room left the wait to run out (2,093 ms of
+  2,000); workspace and proposal announcements answered in ~6 ms; something
+  already new answered in 9 ms and more waiting in 5 ms; a refused sync at
+  once; mailbox empty afterwards.
+- Full suite on `kf/release` 637c81a plus this change: 911 tests, 1 failure.
+  The failure is `kf/release`'s own: `POST .../code/password` answers 422 but
+  its contract documents none (it fails the same way on 637c81a alone). With
+  that 422 added locally, the signed agent contract test succeeds whole.
+  Compile with warnings as errors, credo strict, format.
+- skill.md is 24,192 characters as a file (24,199 on `kf/release` before this
+  change); the served page is under the 24,000 the guide test checks.
+- Test database: `MIX_TEST_PARTITION=_livesync`. `graph_host/.venv` set up with
+  `uv sync --frozen` (worktrees lack it; without it 62 workspace tests fail).
+
+## Remaining
+
+- DM cursor on sync: required `"dms":{"after_seq":N}`, every Key the caller
+  holds, inbox topics in the wait, on `Dms.changes/3` and `Dms.inbox_topics/2`
+  from `kf/dms` 83d5cf9, rendered as `/dms/changes` renders. Starts once
+  `kf/dms` is in `kf/release`.
+- Push and release go through the chief under Sean's go; Sentinel reviews first.

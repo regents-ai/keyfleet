@@ -124,12 +124,20 @@ defmodule Keyfleet.Rooms do
   records. Proposals answer with the ones changed after that point, as
   `Keyfleet.Proposals.changes/2` does.
 
-  `next_poll_seconds` is when to ask again: at once while anything has more
-  waiting, otherwise between 15 and 30 seconds, spread so callers do not all
-  come back together. Nothing is marked as read, and asking again is always
-  safe.
+  Something new, or more waiting, is answered at once. Otherwise the caller
+  is answered as soon as the fleet announces a workspace change, a proposal
+  change or a post that brings it something new, or after `:agent_wait_ms`
+  with nothing, and asks again straight away. The announcements only say when
+  to read again: everything the caller gets is read as the caller. Nothing is
+  marked as read, and asking again is always safe.
   """
   def sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor) do
+    wait_for_news(fleet_id, fn ->
+      read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor)
+    end)
+  end
+
+  defp read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, actor) do
     # The workspace is read first, since it answers for a fleet outside the catalog.
     with :ok <- validate_cursors(cursors),
          :ok <- in_log(graph_after_seq),
@@ -142,22 +150,77 @@ defmodule Keyfleet.Rooms do
            ),
          {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor) do
       proposals = Keyfleet.Proposals.changes(fleet_id, proposals_after_seq)
-
-      {:ok,
-       %{
-         rooms: rooms,
-         graph: graph,
-         proposals: proposals,
-         next_poll_seconds: next_poll_seconds(rooms, graph, proposals)
-       }}
+      {:ok, %{rooms: rooms, graph: graph, proposals: proposals}}
     end
   end
 
-  defp next_poll_seconds(rooms, graph, proposals) do
-    if graph.has_more or proposals.has_more or Enum.any?(rooms, &(&1.cursor < &1.head_seq)),
-      do: 0,
-      else: Enum.random(15..30)
+  defp news?(%{rooms: rooms, graph: graph, proposals: proposals}),
+    do:
+      graph.events != [] or graph.has_more or proposals.items != [] or proposals.has_more or
+        Enum.any?(rooms, &(&1.messages != [] or &1.cursor < &1.head_seq))
+
+  # Subscribed before the first read, so nothing announced between that read
+  # and the wait is missed.
+  defp wait_for_news(fleet_id, read) do
+    topics = [
+      fleet_topic(fleet_id),
+      Keyfleet.Graph.head_topic(fleet_id),
+      Keyfleet.Proposals.topic(fleet_id)
+    ]
+
+    Enum.each(topics, &Phoenix.PubSub.subscribe(Keyfleet.PubSub, &1))
+
+    try do
+      with {:ok, synced} <- read.() do
+        if news?(synced),
+          do: {:ok, synced},
+          else:
+            await_news(fleet_id, read, synced, System.monotonic_time(:millisecond) + wait_ms())
+      end
+    after
+      Enum.each(topics, &Phoenix.PubSub.unsubscribe(Keyfleet.PubSub, &1))
+      flush_news(fleet_id)
+    end
   end
+
+  # A new run or watermark of the workspace is answered whatever it brings, as
+  # the caller tells a log that started over by its `run_id`. A room's
+  # announcement may be about a room the caller doesn't follow, so it is
+  # answered only once the caller's own read has something new.
+  defp await_news(fleet_id, read, synced, until) do
+    receive do
+      {:graph_head, ^fleet_id, _run_id, _watermark} ->
+        read.()
+
+      {:proposals_changed, ^fleet_id} ->
+        read.()
+
+      %Phoenix.Socket.Broadcast{} ->
+        case read.() do
+          {:ok, again} ->
+            if news?(again), do: {:ok, again}, else: await_news(fleet_id, read, again, until)
+
+          error ->
+            error
+        end
+    after
+      Kernel.max(until - System.monotonic_time(:millisecond), 0) -> {:ok, synced}
+    end
+  end
+
+  # A connection kept open for the next request must not carry this wait's
+  # announcements into it.
+  defp flush_news(fleet_id) do
+    receive do
+      {:graph_head, ^fleet_id, _run_id, _watermark} -> flush_news(fleet_id)
+      {:proposals_changed, ^fleet_id} -> flush_news(fleet_id)
+      %Phoenix.Socket.Broadcast{} -> flush_news(fleet_id)
+    after
+      0 -> :ok
+    end
+  end
+
+  defp wait_ms, do: Application.fetch_env!(:keyfleet, :agent_wait_ms)
 
   # The posts are read before the heads. A post is only ever seen once its room
   # has counted it, so a head read afterwards is never behind the posts it is

@@ -76,6 +76,9 @@ config :keyfleet, :database_startup_enabled, true
 # Jobs run only when a test runs them (`Oban.Testing`).
 config :keyfleet, Oban, testing: :manual
 
+# An agent's waiting request answers quickly.
+config :keyfleet, :agent_wait_ms, 200
+
 # Notebook hosts answer under .localhost here. The tests name each fleet's hub
 # themselves. This signing key is for the test suite only and signs nothing
 # anywhere else.

@@ -232,7 +232,6 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       sync(c, ann, %{"general" => general["cursor"], "voting" => voting["cursor"]}, graph_cursor)
 
     assert back.status == 200
-    assert back.body["next_poll_seconds"] in 15..30
     assert [%{"messages" => []}, %{"messages" => [missed]}] = back.body["rooms"]
     assert missed["body"] == "The goal is done."
 

@@ -52,6 +52,11 @@ config :keyfleet, :wallet_chains, %{8453 => %{name: "Base", rpc_url: "https://ma
 # such as a private node or a lab fork, and this address never reaches a page.
 config :keyfleet, :chain_nodes, %{8453 => "https://mainnet.base.org"}
 
+# How long an agent's waiting request is held open with nothing new, before
+# it answers and the agent asks again: well inside the 60 seconds the proxy
+# keeps an idle request open.
+config :keyfleet, :agent_wait_ms, 20_000
+
 config :mime, :types, %{"application/yaml" => ["yaml"]}
 
 config :keyfleet,

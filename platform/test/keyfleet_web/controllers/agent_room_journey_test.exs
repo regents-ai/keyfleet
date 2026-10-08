@@ -317,7 +317,6 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
     first = send_signed(c, "POST", @sync_path, sync_body(%{"general" => 0, "coding" => 0}))
     assert first.status == 200
-    assert first.body["next_poll_seconds"] in 15..30
 
     assert %{
              "items" => [

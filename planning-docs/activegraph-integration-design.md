@@ -424,7 +424,7 @@ Each slice lands with ExUnit and pytest (via `uv`) gates green and no stubs left
 - #6 depends on the chain projection for *fresh* ownership: the logic is testable now, and fail-closed freshness arrives with P3.
 
 **S3: Postgres projection and `graph` in fleet sync.**
-- Delivers `graph_events/objects/relations/cursors` (AshPostgres, public read); the projector, the single path that copies the log into them; `Rooms.sync` extended with `graph: {run_id, events, next_cursor, has_more}` plus `watermark` and `next_poll_seconds`; and PubSub heads for LiveView.
+- Delivers `graph_events/objects/relations/cursors` (AshPostgres, public read); the projector, the single path that copies the log into them; `Rooms.sync` extended with `graph: {run_id, events, next_cursor, has_more}` plus `watermark`; and PubSub heads for LiveView.
 - Done when:
   - an agent disconnects, others edit, and one sync call returns both the graph and the chat backlog;
   - deleting projection rows and restarting rebuilds them identically;
