@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   One key's profile, open over its fleet's page while the address names the
   key: its card, what is known about it and the wallet holding it, the
   messages written to it with a box to write one, and what it has said in the
-  fleet's rooms.
+  fleet's General room, which anyone can read.
 
   Closing it takes the key out of the address: by going back when the page
   opened it, so Back and Close agree, and by replacing the address when the
@@ -216,11 +216,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </dd>
         </div>
         <div>
-          <dt>Posts</dt>
+          <dt>Posts in General</dt>
           <dd id="key-profile-posts">{Rules.grouped(@profile.posts)}</dd>
         </div>
         <div>
-          <dt>Messages</dt>
+          <dt>Wall posts</dt>
           <dd id="key-profile-messages">{Rules.grouped(@profile.messages)}</dd>
         </div>
         <div>
@@ -453,7 +453,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </dd>
         </div>
         <div>
-          <dt>Posts in this fleet</dt>
+          <dt>Posts in General</dt>
           <dd id="key-profile-holder-posts">{Rules.grouped(@profile.holder_posts)}</dd>
         </div>
       </dl>
@@ -484,7 +484,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp thread(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-thread-title">
-      <h3 id="key-profile-thread-title">Messages to Key {Rules.grouped(@profile.token_id)}</h3>
+      <h3 id="key-profile-thread-title">Key {Rules.grouped(@profile.token_id)}’s post wall</h3>
       <%!-- The tools a browser's own agent reads and writes the Key's messages with (page_tools.ts). --%>
       <div
         id="key-profile-tools"
@@ -494,7 +494,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       >
       </div>
       <p :if={@profile.messages == 0} class="key-profile-muted">
-        Nobody has written to this Key yet.
+        Nobody has posted on this wall yet.
       </p>
       <ol
         id="key-profile-thread"
@@ -534,7 +534,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         phx-submit="post_to_key"
       >
         <label for="key-profile-composer-body">
-          Write to Key {Rules.grouped(@profile.token_id)}
+          Post on Key {Rules.grouped(@profile.token_id)}’s wall
         </label>
         <textarea
           id="key-profile-composer-body"
@@ -547,14 +547,14 @@ defmodule KeyfleetWeb.KeyProfileLive do
       </.form>
 
       <div :if={@profile.composer == :sign_in} class="key-profile__signed-out">
-        <p>Everyone can read. Sign in to write to Key {Rules.grouped(@profile.token_id)}.</p>
+        <p>Everyone can read. Sign in to post on Key {Rules.grouped(@profile.token_id)}’s wall.</p>
         <Regent.Primitives.button type="button" variant="secondary" data-account-target="sign-in">
           Sign in
         </Regent.Primitives.button>
       </div>
 
       <p :if={@profile.composer == :no_key} class="key-profile-muted">
-        Only people who hold a Key in {@fleet.name} can write here. Everyone can read.
+        Only people who hold a Key in {@fleet.name} can post here. Everyone can read.
       </p>
 
       <p :if={@profile.composer == :refreshing} class="key-profile-muted">
@@ -571,10 +571,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-posts-title">
       <h3 id="key-profile-posts-title">
-        Recent posts by Key {Rules.grouped(@profile.token_id)}
+        Recent posts in General by Key {Rules.grouped(@profile.token_id)}
       </h3>
       <p :if={@profile.recent_posts == []} class="key-profile-muted">
-        This Key hasn’t posted in the fleet’s rooms yet.
+        This Key hasn’t posted in General yet.
       </p>
       <ol :if={@profile.recent_posts != []} id="key-profile-recent" class="rooms-thread-list">
         <li :for={post <- @profile.recent_posts} id={"key-profile-recent-#{post.id}"}>

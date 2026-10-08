@@ -415,7 +415,9 @@ defmodule Keyfleet.MessagesTest do
     )
   end
 
-  defp read(slug, params \\ %{}), do: Rooms.read_messages!(@fleet, slug, params)
+  # What a room holds, whoever may read it.
+  defp read(slug, params \\ %{}),
+    do: Rooms.read_messages!(@fleet, slug, params, authorize?: false)
 
   defp heads do
     @fleet

@@ -73,8 +73,9 @@ defmodule Keyfleet.Keys.Profile do
 
   @doc """
   What changes when the key, or a key its holder holds, has written or been
-  written to: its thread's length, its posts in the fleet's rooms, and its
-  holder's.
+  written to: its thread's length, its posts in General, and its holder's.
+  Read as nobody, so the fleet's other rooms, which only its keys read, never
+  show here.
   """
   def activity(fleet_id, token_id, holder) do
     thread = Rooms.get_key_thread!(fleet_id, token_id)

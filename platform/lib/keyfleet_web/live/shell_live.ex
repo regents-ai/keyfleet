@@ -244,7 +244,9 @@ defmodule KeyfleetWeb.ShellLive do
     do: FleetLive.handle_event(event, params, socket)
 
   # A notice that the open room has taken a post it is not showing yet is only a
-  # nudge to look again. The new posts are read back from the room itself.
+  # nudge to look again. The new posts are read back from the room itself, and
+  # a room shown as for keys only looks again at whether the reader may read
+  # it; the place the notice names is never shown.
   @impl true
   def handle_info(
         %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}},
@@ -296,6 +298,14 @@ defmodule KeyfleetWeb.ShellLive do
       {:patch, patch} -> {:noreply, push_event(socket, "keymap:patch", patch)}
     end
   end
+
+  # Keys changed in the fleet whose room is on show: who may read and post
+  # there is read afresh.
+  def handle_info(
+        {:keys_changed, fleet_id, _token_ids},
+        %{assigns: %{room: %{fleet_id: fleet_id}}} = socket
+      ),
+      do: {:noreply, RoomsLive.recheck_standing(socket)}
 
   # A notice for the key page on show, or for a fleet the page has since
   # left, or one not yet on sale.
@@ -494,10 +504,10 @@ defmodule KeyfleetWeb.ShellLive do
       |> stream(:fleet_keys, [], reset: true)
       |> stream(:activity, [], reset: true)
 
-  # The fleet whose keys the page on show follows: the fleet's own page, or
-  # one of its keys' pages.
+  # The fleet whose keys the page on show follows: the fleet's own page, one
+  # of its keys' pages, or one of its rooms.
   defp keys_fleet(%{route_id: route_id}, %{"fleet_id" => fleet_id})
-       when route_id in [:fleet, :keys],
+       when route_id in [:fleet, :keys, :rooms],
        do: fleet_id
 
   defp keys_fleet(_route_spec, _params), do: nil

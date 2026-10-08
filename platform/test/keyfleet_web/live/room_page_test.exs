@@ -70,7 +70,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@path)
 
     assert html =~ "Hull survey started"
-    assert html =~ "Everyone can read."
+    assert html =~ "Anyone can read this room."
     refute has_element?(view, @composer)
 
     assert render_submit(view, "send_message", %{"post" => %{"body" => "Hello"}}) =~
@@ -263,7 +263,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
     {:ok, _view, html} = live(conn, @path)
 
-    assert html =~ "Everyone can read."
+    assert html =~ "Anyone can read this room."
     refute html =~ "being refreshed"
   end
 
@@ -314,6 +314,19 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     assert render(view) =~ "From the tool"
   end
 
+  test "the room's read tool tells someone without a Key that a Keys-only room is for Key holders",
+       %{conn: conn} do
+    read = %{"tool" => "read_room", "input" => %{"slug" => "business"}}
+
+    {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
+    view |> element("#rooms-tools") |> render_hook("page_tool", read)
+    assert_reply(view, %{ok: false, error: %{code: "not_a_member"}})
+
+    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
+    view |> element("#rooms-tools") |> render_hook("page_tool", read)
+    assert_reply(view, %{ok: true, room: %{slug: "business"}})
+  end
+
   describe "the fleet's rooms" do
     @open_one "/app/fleets/fleet_tech_classic/rooms/open-1"
     @namer "#rooms-namer"
@@ -331,7 +344,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
           view
           |> element(".rooms-list")
           |> render()
-          |> then(&Regex.scan(~r/<a[^>]*>\s*([^<]+?)\s*<\/a>/u, &1, capture: :all_but_first))
+          |> then(&Regex.scan(~r/<a[^>]*>\s*([^<]+?)\s*</u, &1, capture: :all_but_first))
           |> List.flatten()
 
         assert labels ==
@@ -345,7 +358,8 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       # Only a member is asked to name an open room.
       for conn <- [signed_out, stranger] do
         {:ok, view, html} = live(conn, @open_one)
-        assert has_element?(view, "#rooms-thread-title", "Open room 1")
+        assert has_element?(view, "#rooms-locked #rooms-thread-title", "Open room 1")
+        assert has_element?(view, "#rooms-locked", "Anyone can read General.")
         refute has_element?(view, @namer)
         refute html =~ "Name this room"
       end
@@ -377,9 +391,9 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       assert has_element?(view, "#rooms-namer-topic[value='']")
       assert has_element?(view, "label[for=rooms-namer-topic]", "Rename this room")
 
-      assert has_element?(watcher, "#rooms-thread-title", "Hull survey")
-      assert has_element?(watcher, ".rooms-naming", "named this room “Hull survey”")
-      assert render(watcher) =~ "Named by 0xdddd..dddd on"
+      # Someone with no key sees the room's new name, never what is said in it.
+      assert has_element?(watcher, "#rooms-locked #rooms-thread-title", "Hull survey")
+      refute has_element?(watcher, ".rooms-naming")
       assert has_element?(elsewhere, ~s(a[href="#{@open_one}"]), "Hull survey")
 
       # A room is renamed at most once a minute.
@@ -392,7 +406,10 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       view |> form(@namer, room: %{topic: "Dry dock"}) |> render_submit()
       assert has_element?(watcher, "#rooms-thread-title", "Dry dock")
 
-      assert Enum.map(Rooms.read_messages!(@fleet, "open-1"), &{&1.kind, &1.body}) == [
+      assert Enum.map(
+               Rooms.read_messages!(@fleet, "open-1", actor: owner_actor()),
+               &{&1.kind, &1.body}
+             ) == [
                {:room_named, "Hull survey"},
                {:room_named, "Dry dock"}
              ]
@@ -472,6 +489,26 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
                "Key ownership is being refreshed"
 
       assert %{topic: nil} = Rooms.get_room!(@fleet, "open-1")
+    end
+
+    # The page used to stay locked until it was loaded again.
+    test "a room for keys only opens, without a reload, once the reader's Key arrives",
+         %{conn: conn} do
+      Rooms.send_message!(
+        %{fleet_id: @fleet, slug: "open-1", body: "Hull survey", idempotency_key: "k-1"},
+        actor: owner_actor()
+      )
+
+      {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@open_one)
+      assert has_element?(view, "#rooms-locked")
+      refute html =~ "Hull survey"
+
+      transfer!(1, @stranger)
+      Phoenix.PubSub.broadcast(Keyfleet.PubSub, Keys.topic(@fleet), {:keys_changed, @fleet, [1]})
+
+      refute has_element?(view, "#rooms-locked")
+      assert has_element?(view, ".rooms-body", "Hull survey")
+      assert has_element?(view, @composer)
     end
 
     test "a fixed room keeps its name", %{conn: conn} do

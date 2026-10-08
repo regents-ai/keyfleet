@@ -7,6 +7,7 @@ defmodule Keyfleet.Rooms do
 
   require Ash.Query
 
+  alias Keyfleet.Rooms.Checks.RoomPoster
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Muter
   alias Keyfleet.Rooms.Room
@@ -47,7 +48,10 @@ defmodule Keyfleet.Rooms do
         action: :fleet_lines_before,
         args: [:fleet_id, :before_at, :before_id, :limit]
 
-      define :get_post_in_room, action: :in_room, args: [:id, :room_id], not_found_error?: false
+      define :get_post_in_room,
+        action: :in_room,
+        args: [:fleet_id, :id, :room_id],
+        not_found_error?: false
 
       define :get_post_under_send_key,
         action: :under_send_key,
@@ -110,9 +114,12 @@ defmodule Keyfleet.Rooms do
   fleet's workspace.
 
   Each entry of `cursors` is a `%{slug: slug, after_seq: seq}` saying how far the
-  caller has read that room. Every room answers with the posts after that point,
-  the cursor those posts reach, and the room's own head, so a caller that is
-  behind knows to come back for the rest.
+  caller has read that room. Every room the caller may read answers with the
+  posts after that point, the cursor those posts reach, and the room's own
+  head, so a caller that is behind knows to come back for the rest. A room
+  only the fleet's keys read, named by a caller without one, answers with its
+  slug alone and `refused: true`, and the rest of the answer stands. A caller
+  that names rooms and may read none of them is refused (`Ash.Error.Forbidden`).
 
   `graph_after_seq` says how far the caller has read the workspace's log. The
   workspace answers with at most 100 of its changes after that point, as
@@ -157,7 +164,11 @@ defmodule Keyfleet.Rooms do
   defp news?(%{rooms: rooms, graph: graph, proposals: proposals}),
     do:
       graph.events != [] or graph.has_more or proposals.items != [] or proposals.has_more or
-        Enum.any?(rooms, &(&1.messages != [] or &1.cursor < &1.head_seq))
+        Enum.any?(rooms, &room_news?/1)
+
+  # A refused room answers with its slug alone, so it never brings news.
+  defp room_news?(%{refused: true}), do: false
+  defp room_news?(room), do: room.messages != [] or room.cursor < room.head_seq
 
   # Subscribed before the first read, so nothing announced between that read
   # and the wait is missed.
@@ -222,27 +233,57 @@ defmodule Keyfleet.Rooms do
 
   defp wait_ms, do: Application.fetch_env!(:keyfleet, :agent_wait_ms)
 
-  # The posts are read before the heads. A post is only ever seen once its room
-  # has counted it, so a head read afterwards is never behind the posts it is
-  # returned with.
+  # Every room named must be one the fleet has, whoever asks, since every
+  # room's name is public. Which of them the caller may read is decided once,
+  # from its standing read once. The posts are then read before the heads. A
+  # post is only ever seen once its room has counted it, so a head read
+  # afterwards is never behind the posts it is returned with.
   defp sync_rooms(fleet_id, cursors, actor) do
-    read =
-      Enum.map(cursors, fn cursor ->
-        {cursor,
-         read_messages!(fleet_id, cursor.slug, %{after_seq: cursor.after_seq, limit: @sync_page},
-           actor: actor
-         )}
-      end)
-
+    standing = RoomPoster.standing(actor, fleet_id)
     rooms = Map.new(list_rooms!(fleet_id, actor: actor), &{&1.slug, &1})
 
-    case Enum.find(cursors, &(not Map.has_key?(rooms, &1.slug))) do
-      nil ->
-        {:ok, Enum.map(read, fn {cursor, messages} -> synced(cursor, messages, rooms) end)}
+    with :ok <- known_rooms(fleet_id, cursors, rooms),
+         {readable, refused} = Enum.split_with(cursors, &readable?(rooms[&1.slug], standing)),
+         :ok <- some_readable(readable, refused),
+         {:ok, read} <- read_cursors(fleet_id, readable, actor, standing) do
+      heads = Map.new(list_rooms!(fleet_id, actor: actor), &{&1.slug, &1})
 
-      %{slug: slug} ->
-        {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)}
+      synced =
+        Map.new(read, fn {cursor, messages} -> {cursor.slug, synced(cursor, messages, heads)} end)
+
+      refused = MapSet.new(refused, & &1.slug)
+
+      {:ok,
+       Enum.map(cursors, fn %{slug: slug} ->
+         if MapSet.member?(refused, slug), do: %{slug: slug, refused: true}, else: synced[slug]
+       end)}
     end
+  end
+
+  defp known_rooms(fleet_id, cursors, rooms) do
+    case Enum.find(cursors, &(not Map.has_key?(rooms, &1.slug))) do
+      nil -> :ok
+      %{slug: slug} -> {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)}
+    end
+  end
+
+  # Anyone reads a public room; the fleet's keys read every room.
+  defp readable?(room, standing), do: room.public or RoomPoster.standing?(standing)
+
+  defp some_readable([], [_ | _]), do: {:error, Ash.Error.Forbidden.exception([])}
+  defp some_readable(_readable, _refused), do: :ok
+
+  # The rooms are answered in the order the caller named them, so the posts
+  # read are kept in any order.
+  defp read_cursors(fleet_id, cursors, actor, standing) do
+    Enum.reduce_while(cursors, {:ok, []}, fn cursor, {:ok, read} ->
+      page = %{after_seq: cursor.after_seq, limit: @sync_page}
+
+      case read_messages(fleet_id, cursor.slug, page, actor: actor, context: standing) do
+        {:ok, messages} -> {:cont, {:ok, [{cursor, messages} | read]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
   end
 
   defp synced(%{slug: slug, after_seq: after_seq}, messages, rooms) do

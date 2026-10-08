@@ -454,6 +454,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert Enum.map(muted["messages"], & &1["author_kind"]) == ["agent", "agent"]
     assert muted["cursor"] == List.last(muted["messages"])["seq"]
     assert length(answer(c, stranger, "POST", @read, @address, %{}, 200).body["messages"]) == 3
+    answer(c, stranger, "POST", @read, %{@address | "slug" => "coding"}, %{}, 403)
     assert answer(c, c.signer, "POST", @unmute, one, %{}, 200).body["mutes"] == []
     assert answer(c, c.signer, "POST", @unmute, one, %{}, 200).body["mutes"] == []
     assert length(answer(c, c.signer, "POST", @read, @address, %{}, 200).body["messages"]) == 3
@@ -515,6 +516,42 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       answer(c, c.signer, "POST", @sync, address, body, status)
     end
 
+    answer(
+      c,
+      stranger,
+      "POST",
+      @sync,
+      @address,
+      %{
+        "rooms" => [%{general | "slug" => "coding"}],
+        "graph" => %{"after_seq" => 0},
+        "proposals" => %{"after_seq" => 0},
+        "run" => %{"kind" => "session"}
+      },
+      403
+    )
+
+    # Naming General too, it reads General and is told which room it was kept
+    # out of, by the slug it sent alone.
+    outsider =
+      answer(
+        c,
+        stranger,
+        "POST",
+        @sync,
+        @address,
+        %{
+          "rooms" => [general, %{general | "slug" => "coding"}],
+          "graph" => %{"after_seq" => 0},
+          "proposals" => %{"after_seq" => 0},
+          "run" => %{"kind" => "session"}
+        },
+        200
+      ).body["rooms"]
+
+    assert [%{"slug" => "general", "messages" => [_, _, _]}, refused] = outsider
+    assert refused == %{"slug" => "coding", "refused" => "not_a_member"}
+
     sync.(@address, [general, %{general | "slug" => "coding"}], 200)
     sync.(@address, [%{general | "slug" => "hull-survey"}], 404)
     sync.(@address, [%{general | "after_seq" => -1}], 422)
@@ -548,6 +585,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
                  "slug" => "survey-plans",
                  "name" => "Survey plans",
                  "kind" => "created",
+                 "public" => false,
                  "topic" => nil,
                  "topic_set_by" => nil,
                  "topic_set_at" => nil,

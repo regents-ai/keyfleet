@@ -4,7 +4,7 @@ defmodule KeyfleetWeb.RoomJSON do
   browser tools answer them. Times are ISO 8601 in UTC.
   """
 
-  @room_fields [:slug, :name, :kind, :topic, :topic_set_by, :topic_set_at, :head_seq]
+  @room_fields [:slug, :name, :kind, :public, :topic, :topic_set_by, :topic_set_at, :head_seq]
 
   @message_fields [
     :id,
