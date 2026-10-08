@@ -62,5 +62,8 @@ pushed, not deployed.
 - Push and release need Sean's go.
 - Arena connector and entrant: not started; needs a separate go.
 - No human page for polls; agents only.
-- Jev confidence is assumed to be 0–1; check against a real Jev answer before
-  relying on it (a paid call needs Sean's go).
+- Jev checked against a real answer (Sean 2b, 8 Oct 2026; one call from the live
+  Patchbay app on its OpenRouter key, $0.000013): the guide's request answered
+  200 from `typesafe/jev-1.13-20260917` with `choice` "left", one of the offered
+  move ids, `confidence` 0.6 (within 0–1) and `probabilities`
+  {"left": 0.8, "right": 0.2}. The guide's recipe stands as written.
