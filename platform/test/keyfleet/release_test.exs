@@ -219,6 +219,11 @@ defmodule Keyfleet.ReleaseTest do
              "notebook_hubs",
              "oban_jobs",
              "oban_peers",
+             "poll_events",
+             "poll_rounds",
+             "poll_seats",
+             "poll_sessions",
+             "poll_votes",
              "proposal_cancellations",
              "proposal_executions",
              "proposal_votes",
@@ -287,8 +292,11 @@ defmodule Keyfleet.ReleaseTest do
   # completes, and the otherwise identical read that does take the lock waits
   # for it until the connection's lock timeout cancels it.
   test "the listing reads a database whose migration lock is held, unlike a read that takes it" do
-    config = with_lock_timeout(bootstrapped_database())
+    config = bootstrapped_database()
+    # Taken without the short wait: a background analyze of the freshly filled
+    # migration table holds the same lock and gives way only after a second.
     hold_migration_lock(config)
+    config = with_lock_timeout(config)
 
     assert capture_io(fn -> Release.pending_migrations(config: config) end) == "none\n"
 

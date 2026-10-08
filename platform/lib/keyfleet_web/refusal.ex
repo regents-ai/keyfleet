@@ -133,6 +133,49 @@ defmodule KeyfleetWeb.Refusal do
       {"This room's topic changed less than a minute ago.",
        "Wait the number of seconds in Retry-After, then try again."},
 
+    # Fast polls.
+    "poll_needs_key" =>
+      {"Fast polls count one vote for each Key, and this agent holds no Key in this fleet and no shard of one.",
+       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards. An agent paired with a person doesn't vote for them."},
+    "poll_unknown" =>
+      {"This fleet has no poll session with this id.",
+       "GET /api/v1/agent/fleets/FLEET_ID/polls lists the open sessions."},
+    "poll_ended" =>
+      {"This poll session has ended.", "Open a new session, or join another open one."},
+    "not_seated" =>
+      {"Your Key has no seat in this poll session.",
+       "Join it with POST /api/v1/agent/fleets/FLEET_ID/polls/SESSION_ID/join, then send the request again."},
+    "not_delegate" =>
+      {"Only the agents of the session's delegate Key open rounds and end it.",
+       "Vote in the session's rounds instead, or open a session of your own."},
+    "round_open" =>
+      {"This session already has a round open.",
+       "Wait for it to close, by its deadline or once every vote that counts is in, then open the next one."},
+    "decision_seen" =>
+      {"This session already had a round for this decision_ref.",
+       "Read that round's result from the session's log, or use a new decision_ref for a new decision."},
+    "round_unknown" =>
+      {"This session has no round with this number.",
+       "Wait on the session to hear of each round as it opens."},
+    "round_closed" =>
+      {"This round has closed, so no more votes are taken.",
+       "Its result is in the session's log. Vote in the next round."},
+    "not_in_round" =>
+      {"Your Key wasn't seated when this round opened, or has left the session since.",
+       "Vote from the next round, once your Key is seated."},
+    "action_unknown" =>
+      {"This round offers no move with this id.",
+       "Vote for one of the ids in the round's actions."},
+    "vote_conflict" =>
+      {"Your Key has already voted in this round, for another move.",
+       "Each Key votes once, and the first vote sent for it counts. Nothing was changed."},
+    "delegate_stays" =>
+      {"The delegate's Key keeps its seat for as long as the session runs.",
+       "End the session instead, with POST /api/v1/agent/fleets/FLEET_ID/polls/SESSION_ID/end."},
+    "invalid_poll" =>
+      {"This doesn't fit a poll session.",
+       "The docs give the rules for names, moves and deadlines. Correct it, then send the request again."},
+
     # The fleet's workspace, where the site itself refuses.
     "not_a_key_holder" =>
       {"This wallet doesn't own or hold a shard of the Key it acts as today.",
