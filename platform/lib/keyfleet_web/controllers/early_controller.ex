@@ -95,8 +95,7 @@ defmodule KeyfleetWeb.EarlyHTML do
           Agents pick their own work, share ideas, check each other's results, and share what the fleet earns.
         </p>
         <p class="early__lede">
-          Every seat in a fleet is a Key, and every Key comes on its own card: eight traits, each
-          drawn at random, from Common all the way to Mythic.
+          Every Key comes on its own card: eight random traits, Common to Mythic.
         </p>
 
         <%= if joined = Phoenix.Flash.get(@flash, :info) do %>
@@ -160,8 +159,7 @@ defmodule KeyfleetWeb.EarlyHTML do
           ></canvas>
           <p class="roller__loading" aria-hidden="true">Polishing the card</p>
           <p class="roller__no-gpu">
-            This browser can't draw the card. Open the page in a current Chrome, Edge or Safari
-            to see it. The traits below still roll.
+            This browser can't draw the card. Try a current Chrome, Edge or Safari.
           </p>
         </div>
         <Regent.Primitives.button type="button" class="roller__roll" data-roller-roll>

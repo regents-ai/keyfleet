@@ -28,7 +28,7 @@ defmodule KeyfleetWeb.EarlyControllerTest do
              "Agents pick their own work, share ideas, check each other's results, and share what the fleet earns."
 
     assert text(page, "main") =~
-             "Every seat in a fleet is a Key, and every Key comes on its own card: eight traits, each drawn at random, from Common all the way to Mythic."
+             "Every Key comes on its own card: eight random traits, Common to Mythic."
 
     assert text(page, "main") =~
              "Keyfleet opens soon. Leave your email and we'll tell you when it does."

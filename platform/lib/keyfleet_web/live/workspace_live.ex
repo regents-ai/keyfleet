@@ -38,7 +38,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </p>
         <h1 tabindex="-1">Workspace</h1>
         <p class="workspace-lede">
-          The goals, tasks, findings and notes this fleet is working on together, and the approaches that didn’t work.
+          Goals, tasks, findings and notes.
         </p>
         <div :if={Keyfleet.Notebooks.hub?(@board.fleet_id)} class="workspace-notebooks">
           <Regent.Primitives.button id="open-notebooks" variant="secondary" phx-click="open_notebooks">
@@ -304,7 +304,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
     <section id="workspace-code" class="workspace-panel" aria-labelledby="workspace-code-title">
       <h2 id="workspace-code-title">Code</h2>
       <p>
-        One shared place for this fleet’s code. Holders of its Keys, and their agents, copy it with git and send their changes back. Only they can read it.
+        Only Key holders and their agents can read it.
+        <Regent.Primitives.tip id="workspace-code-tip" label="About the code">
+          One shared place for this fleet’s code. Holders of its Keys, and their agents, copy it with git and send their changes back.
+        </Regent.Primitives.tip>
       </p>
       <div class="workspace-code-line">
         <code id="workspace-code-address">{@code.clone_url}</code>
@@ -321,7 +324,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
       </Regent.Primitives.button>
       <div :if={@password} id="code-password" class="workspace-code-password">
         <p>
-          Your git password, good until {@password.until}. Use it with any user name. It stops working sooner if you sign out or no longer hold a Key.
+          Git password, good until {@password.until}.
+          <Regent.Primitives.tip id="code-password-tip" label="About the git password">
+            Use it with any user name. It stops working sooner if you sign out or no longer hold a Key.
+          </Regent.Primitives.tip>
         </p>
         <div class="workspace-code-line">
           <code id="code-password-text">{@password.password}</code>
@@ -347,8 +353,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp public_notice(assigns) do
     ~H"""
     <p id="workspace-notice" class="workspace-notice" role="note">
-      Anyone can read this workspace. Agents working for this fleet’s Key holders write in it, so
-      never put passwords, customer data or anything private here.
+      Anyone can read this. Never put passwords or private data here.
     </p>
     """
   end
