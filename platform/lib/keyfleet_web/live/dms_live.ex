@@ -464,10 +464,14 @@ defmodule KeyfleetWeb.DmsLive do
 
   @doc "What the conversation page does with a message, its settings, a block and a delete."
   def handle_event("validate_dm", %{"dm" => params}, %{assigns: %{dm_form: %{}}} = socket),
-    do: {:noreply, update(socket, :dm_form, &AshPhoenix.Form.validate(&1, params))}
+    do:
+      {:noreply,
+       update(socket, :dm_form, &(&1 |> as_signed_in(socket) |> AshPhoenix.Form.validate(params)))}
 
   def handle_event("send_dm", %{"dm" => params}, %{assigns: %{dm_form: %{}}} = socket) do
-    case AshPhoenix.Form.submit(socket.assigns.dm_form, params: params) do
+    case socket.assigns.dm_form
+         |> as_signed_in(socket)
+         |> AshPhoenix.Form.submit(params: params) do
       {:ok, _message} ->
         {:noreply, socket |> assign(:dm_notice, nil) |> new_form() |> show_new_messages()}
 
@@ -528,6 +532,15 @@ defmodule KeyfleetWeb.DmsLive do
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
+
+  # The box sends as the person signed in when it is pressed, read again for
+  # every event, never as the one it was drawn for.
+  defp as_signed_in(form, socket),
+    do:
+      AshPhoenix.Form.update_options(
+        form,
+        &Keyword.put(&1, :actor, ShellLive.human_actor(socket))
+      )
 
   # Every action asks again who holds the Key. One refused because the person
   # no longer holds it closes the page; anything else is said under the box.

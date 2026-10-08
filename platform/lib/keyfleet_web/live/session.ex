@@ -98,6 +98,14 @@ defmodule KeyfleetWeb.Live.Session do
         {_cont_or_halt, socket} = recheck(socket, lease, & &1)
         {:halt, socket}
 
+      # Direct messages are private, so the page reads a new or deleted one
+      # only as the sign-in read again now: a wallet unlinked since reads no
+      # more of its Key's messages, and a sign-in that has ended leaves the
+      # page, as it does on the next address.
+      %Phoenix.Socket.Broadcast{event: event}, socket
+      when event in ["dm_head", "dm_deleted"] ->
+        recheck(socket, lease, &redirect(&1, to: @public_root))
+
       _message, socket ->
         {:cont, socket}
     end)
