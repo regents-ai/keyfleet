@@ -8,8 +8,11 @@ defmodule KeyfleetWeb.NotebookSocket do
   passed along as it is. The connection registers under its fleet and holder
   (`Keyfleet.Notebooks.access_topic/2`) and, for a person, under the Keyfleet
   sign-in it came from: when the holder loses their key, the person signs out
-  of Keyfleet, or the sign-in an agent's request was signed with runs out, it
-  closes with 1008 and says why.
+  of Keyfleet, or the sign-in it was opened with runs out (the person's
+  Keyfleet sign-in, or the receipt an agent's request was signed with), it
+  closes with 1008 and says why. It also closes after `@longest_ms`, a day, so
+  no connection outlives every check: a notebook page connects again on its
+  own, through the gateway's checks, and carries on where it was.
   """
   @behaviour WebSock
 
@@ -18,6 +21,8 @@ defmodule KeyfleetWeb.NotebookSocket do
   @closed_reason "Your Key no longer opens these notebooks."
   @signed_out_reason "You signed out of Keyfleet."
   @sign_in_ended_reason "Your sign-in ran out. Sign in again to reopen the notebooks."
+  @longest_reason "This connection was open for a day. Connect again to carry on."
+  @longest_ms 24 * 60 * 60 * 1000
 
   @doc """
   Opens the hub's side of the connection to `target` at `address`, waiting
@@ -70,15 +75,15 @@ defmodule KeyfleetWeb.NotebookSocket do
         Notebooks.access_topic(state.fleet_id, state.subject)
       )
 
-    # A person's Keyfleet sign-in ends when they sign out; an agent's, the
-    # receipt it signed the request with, at a set time.
+    # A person's Keyfleet sign-in also ends when they sign out there.
     if state.sign_in_topic,
       do: :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, state.sign_in_topic)
 
-    if state.sign_in_ends_at do
-      left = DateTime.diff(state.sign_in_ends_at, DateTime.utc_now(), :millisecond)
-      Process.send_after(self(), :sign_in_ended, max(left, 0))
-    end
+    left = DateTime.diff(state.sign_in_ends_at, DateTime.utc_now(), :millisecond)
+
+    if left < @longest_ms,
+      do: Process.send_after(self(), :sign_in_ended, max(left, 0)),
+      else: Process.send_after(self(), :open_longest, @longest_ms)
 
     {:ok, conn} = Mint.HTTP.set_mode(state.conn, :active)
     state = %{state | conn: conn}
@@ -95,6 +100,9 @@ defmodule KeyfleetWeb.NotebookSocket do
 
   def handle_info(:sign_in_ended, state),
     do: {:stop, :normal, {1008, @sign_in_ended_reason}, state}
+
+  def handle_info(:open_longest, state),
+    do: {:stop, :normal, {1008, @longest_reason}, state}
 
   # Signing out of Keyfleet announces "disconnect" on the sign-in's topic.
   def handle_info(%Phoenix.Socket.Broadcast{event: "disconnect"}, state),

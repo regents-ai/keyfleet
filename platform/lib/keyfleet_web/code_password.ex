@@ -91,7 +91,7 @@ defmodule KeyfleetWeb.CodePassword do
 
   defp actor(%{"account_id" => account_id, "session_authority_id" => session_id}) do
     case Notebooks.person(session_id, account_id) do
-      {:ok, actor, _topic} -> {:ok, Notebooks.subject(actor), actor}
+      {:ok, actor, _topic, _ends_at} -> {:ok, Notebooks.subject(actor), actor}
       :signed_out -> :error
     end
   end

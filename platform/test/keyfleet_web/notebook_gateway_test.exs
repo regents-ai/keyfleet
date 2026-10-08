@@ -89,7 +89,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     {:ok, %{"session_authority_id" => sign_in}} =
       Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, "notebook session", cookie)
 
-    {:ok, _person, topic} = Notebooks.person(sign_in, c.holder.human_account_id)
+    {:ok, _person, topic, _ends_at} = Notebooks.person(sign_in, c.holder.human_account_id)
 
     :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
 

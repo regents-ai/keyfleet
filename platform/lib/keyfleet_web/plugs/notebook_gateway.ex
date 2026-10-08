@@ -252,8 +252,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
             "account_id" => account_id,
             "session_authority_id" => session_authority_id
           }} <- Phoenix.Token.decrypt(KeyfleetWeb.Endpoint, @salt, token, max_age: max_age),
-         {:ok, actor, sign_in_topic} <- Notebooks.person(session_authority_id, account_id) do
-      {:ok, assign(conn, :notebook_sign_in_topic, sign_in_topic), Notebooks.subject(actor), actor}
+         {:ok, actor, topic, ends_at} <- Notebooks.person(session_authority_id, account_id) do
+      conn = assign(conn, :notebook_sign_in, %{topic: topic, ends_at: ends_at})
+      {:ok, conn, Notebooks.subject(actor), actor}
     else
       _ -> {:refused, Refusal.json(conn, 401, "notebooks_sign_in")}
     end
@@ -412,7 +413,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
           Map.merge(upstream, %{
             fleet_id: fleet_id,
             subject: subject,
-            sign_in_topic: conn.assigns[:notebook_sign_in_topic],
+            sign_in_topic: sign_in_topic(conn),
             sign_in_ends_at: sign_in_ends_at(conn)
           }),
           timeout: :infinity,
@@ -424,9 +425,14 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  # An agent's sign-in is the receipt its request was signed with.
+  # A person's sign-in is the Keyfleet one their notebook cookie came from,
+  # which also ends when they sign out there; an agent's is the receipt its
+  # request was signed with.
+  defp sign_in_topic(%Plug.Conn{assigns: %{notebook_sign_in: sign_in}}), do: sign_in.topic
+  defp sign_in_topic(_conn), do: nil
+
+  defp sign_in_ends_at(%Plug.Conn{assigns: %{notebook_sign_in: sign_in}}), do: sign_in.ends_at
   defp sign_in_ends_at(%Plug.Conn{assigns: %{agent_actor: agent}}), do: agent.receipt_expires_at
-  defp sign_in_ends_at(_conn), do: nil
 
   defp put_protocol(conn, nil), do: conn
   defp put_protocol(conn, protocol), do: put_resp_header(conn, "sec-websocket-protocol", protocol)
