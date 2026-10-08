@@ -413,6 +413,7 @@ defmodule KeyfleetWeb.ShellLive do
           :if={@route_spec.route_id == :fleet}
           fleet={@fleet}
           actor={actor(@access_context)}
+          lease={@session_lease}
           params={@fleet_params}
           keys={@streams.fleet_keys}
           profile={@key_profile}
@@ -426,6 +427,7 @@ defmodule KeyfleetWeb.ShellLive do
           :if={@route_spec.route_id == :keys}
           key={@key}
           actor={actor(@access_context)}
+          lease={@session_lease}
         />
 
         <RoomsLive.page
@@ -449,11 +451,13 @@ defmodule KeyfleetWeb.ShellLive do
           :if={@route_spec.route_id == :proposals}
           page={@proposals}
           actor={actor(@access_context)}
+          lease={@session_lease}
         />
         <ProposalsLive.detail
           :if={@route_spec.route_id == :proposal}
           page={@proposals}
           actor={actor(@access_context)}
+          lease={@session_lease}
         />
       </:content>
     </.shell>

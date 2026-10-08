@@ -2,6 +2,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   use KeyfleetWeb.ConnCase, async: false
 
   alias Keyfleet.Accounts
+  alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors
   alias Keyfleet.Agents
   alias Keyfleet.Chain.{OwnershipLog, Scanner, StubClient}
@@ -382,6 +383,38 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert text(view, "#buy-key-order-press-note") ==
                "Switch to a wallet on your account in your wallet app, then press again. Nothing was sent."
+    end
+
+    # Costly failure: a press on the wallet panel is acted on for a sign-in
+    # that has already ended elsewhere.
+    test "a press after the sign-in ended elsewhere does nothing and the page moves to sign-in",
+         %{conn: conn} do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
+
+      {:ok, view, _html} = live(conn, @path)
+      active!(view, @owner)
+
+      assert_push_event(view, "onchain-steps:review", %{
+        review: %{steps: [approve, _buy]} = review
+      })
+
+      assert conn |> get_session() |> SessionAuthority.claim() |> SessionAuthority.revoke()
+
+      hash = "0x" <> String.duplicate("1", 64)
+      TestChainNode.land!(hash, review, approve, "0x1")
+
+      view
+      |> with_target("#buy-key-order")
+      |> render_hook("step_sent", %{
+        "review_id" => review.id,
+        "step" => "approve",
+        "transaction_hash" => hash
+      })
+
+      refute has_element?(view, "#buy-key-order-sent li")
+      assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign In")
     end
 
     test "signed out, nothing is built and a press says to sign in", %{conn: _conn} do

@@ -60,6 +60,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   attr :page, :any, required: true, doc: "the proposals as read, or `:unreadable`"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   def list(%{page: :unreadable} = assigns), do: ~H|<.unreadable id="proposals-page" />|
 
@@ -84,6 +85,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         class="proposals-panel"
         fleet={fleet(@page)}
         actor={@actor}
+        lease={@lease}
         tool="mark_present"
       />
 
@@ -137,14 +139,21 @@ defmodule KeyfleetWeb.ProposalsLive do
         </nav>
       </section>
 
-      <.propose :if={@page.deployed?} page={@page} actor={@actor} />
-      <.treasury :if={@page.treasury} treasury={@page.treasury} page={@page} actor={@actor} />
+      <.propose :if={@page.deployed?} page={@page} actor={@actor} lease={@lease} />
+      <.treasury
+        :if={@page.treasury}
+        treasury={@page.treasury}
+        page={@page}
+        actor={@actor}
+        lease={@lease}
+      />
     </article>
     """
   end
 
   attr :page, :any, required: true, doc: "the proposal as read, or `:unreadable`"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   def detail(%{page: :unreadable} = assigns), do: ~H|<.unreadable id="proposal-page" />|
 
@@ -192,6 +201,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             tool="vote"
             fleet={fleet(@page)}
             actor={@actor}
+            lease={@lease}
             proposal={@page.proposal.number}
           >
             <:buttons :let={panel}>
@@ -238,6 +248,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             tool="carry_out"
             fleet={fleet(@page)}
             actor={@actor}
+            lease={@lease}
             proposal={@page.proposal.number}
           >
             <:buttons :let={panel}>
@@ -254,6 +265,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             tool="cancel_proposal"
             fleet={fleet(@page)}
             actor={@actor}
+            lease={@lease}
             proposal={@page.proposal.number}
           >
             <:buttons :let={panel}>
@@ -426,6 +438,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   attr :page, :map, required: true
   attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # One form for every kind of proposal: its kind, the Key it is made with,
   # its text, and the fields its kind needs. Every
@@ -450,6 +463,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         tool="propose"
         fleet={fleet(@page)}
         actor={@actor}
+        lease={@lease}
         inputs={
           %{
             "kind" => "decision",
@@ -608,6 +622,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :treasury, :map, required: true
   attr :page, :map, required: true
   attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # The shared money: each asset's balance and what is set aside for claims,
   # the daily split's rate and when it next opens with its preview, the
@@ -659,7 +674,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         </dl>
       </div>
 
-      <.split_preview page={@page} actor={@actor} />
+      <.split_preview page={@page} actor={@actor} lease={@lease} />
 
       <h3 id="proposals-advances-title">Advances out</h3>
       <p :if={@treasury.advances == []} id="proposals-no-advances" class="proposals-detail">
@@ -678,6 +693,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             flow={:return_advance}
             fleet={fleet(@page)}
             actor={@actor}
+            lease={@lease}
             advance_id={advance.id}
             refresh={advance.outstanding}
             inputs={%{"amount" => advance.typed}}
@@ -726,6 +742,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         flow={:send_share}
         fleet={fleet(@page)}
         actor={@actor}
+        lease={@lease}
       >
         <:buttons :let={panel}>
           <WalletPanel.step_button panel={panel} step="send_share" id="proposals-send-share">
@@ -754,6 +771,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   attr :page, :map, required: true
   attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # What the daily split would share now, per asset, as the treasury works it
   # out at the latest block, and the button that runs it once it is due.
@@ -767,6 +785,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       tool="run_split"
       fleet={fleet(@page)}
       actor={@actor}
+      lease={@lease}
     >
       <:notes :let={panel}>
         <h3 id="proposals-split-title">

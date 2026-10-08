@@ -118,6 +118,7 @@ defmodule KeyfleetWeb.FleetLive do
 
   attr :fleet, :any, required: true, doc: "the fleet as read, or `:unreadable`"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
   attr :params, :map, required: true, doc: "the page's address"
   attr :keys, :any, required: true, doc: "the fleet's issued keys, lowest number first"
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
@@ -258,7 +259,7 @@ defmodule KeyfleetWeb.FleetLive do
           <.key_map :if={@fleet.deployed?} fleet={@fleet} />
           <.not_on_sale :if={not @fleet.deployed?} fleet={@fleet} />
           <.now_panel fleet={@fleet} params={@params} activity={@activity} now={@now} />
-          <.about fleet={@fleet} actor={@actor} />
+          <.about fleet={@fleet} actor={@actor} lease={@lease} />
           <CheckIns.who_is_here
             agents={@fleet.agents}
             agents_here={@fleet.agents_here}
@@ -318,6 +319,7 @@ defmodule KeyfleetWeb.FleetLive do
         profile={@profile}
         fleet={@fleet}
         actor={@actor}
+        lease={@lease}
         params={@params}
         thread={@thread}
       />
@@ -660,6 +662,7 @@ defmodule KeyfleetWeb.FleetLive do
 
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # Opens beside the map: the fleet's pricing, the next key to buy, its sales
   # so far, and where its contract lives.
@@ -685,7 +688,7 @@ defmodule KeyfleetWeb.FleetLive do
 
       <p>{Rules.pricing(@fleet.fleet_id)}</p>
 
-      <.buy_key :if={@fleet.buy} fleet={@fleet} buy={@fleet.buy} actor={@actor} />
+      <.buy_key :if={@fleet.buy} fleet={@fleet} buy={@fleet.buy} actor={@actor} lease={@lease} />
 
       <section :if={@fleet.deployed?} aria-labelledby="fleet-progress-title">
         <h3 id="fleet-progress-title">Progress</h3>
@@ -717,7 +720,7 @@ defmodule KeyfleetWeb.FleetLive do
         </p>
       </section>
 
-      <.launch_upkeep :if={@fleet.deployed?} fleet={@fleet} actor={@actor} />
+      <.launch_upkeep :if={@fleet.deployed?} fleet={@fleet} actor={@actor} lease={@lease} />
 
       <section aria-labelledby="fleet-contract-title">
         <h3 id="fleet-contract-title">On Base</h3>
@@ -834,6 +837,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :fleet, :map, required: true
   attr :buy, :map, required: true
   attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # "Buying a key", in "How this fleet works": the key on offer with its price,
   # then Approve and Buy, and what a buyer should know.
@@ -875,7 +879,7 @@ defmodule KeyfleetWeb.FleetLive do
 
       <FleetRisks.disclosure :if={@buy.price} id="buy-key-risks" />
 
-      <.buy_order id="buy-key" fleet={@fleet} buy={@buy} actor={@actor} />
+      <.buy_order id="buy-key" fleet={@fleet} buy={@buy} actor={@actor} lease={@lease} />
 
       <p :if={is_nil(@buy.price)} id="buy-key-elsewhere" class="fleet-detail">
         You can still get a Key from someone who holds one: it moves like any other token on
@@ -894,6 +898,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :fleet, :map, required: true
   attr :buy, :map, required: true, doc: "the Key on sale, `FleetPage.next_sale/2`"
   attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   @doc """
   Approve and Buy for the Key on sale, with the steps built on the server, in
@@ -916,6 +921,7 @@ defmodule KeyfleetWeb.FleetLive do
       flow={:buy}
       fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
       actor={@actor}
+      lease={@lease}
       refresh={{@buy.token_id, @buy.price}}
     >
       <:buttons :let={panel}>
@@ -957,6 +963,7 @@ defmodule KeyfleetWeb.FleetLive do
 
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # The fleet's token launch, once an approved proposal has made one: four
   # buttons anyone may press to settle its sale, add its token to the daily
@@ -977,6 +984,7 @@ defmodule KeyfleetWeb.FleetLive do
         flow={:launch_upkeep}
         fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
         actor={@actor}
+        lease={@lease}
       >
         <:notes :let={panel}>
           <dl :if={is_nil(@actor) and launched?(panel)} id="fleet-launch-facts" class="fleet-facts">
