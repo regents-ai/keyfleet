@@ -154,11 +154,36 @@ subscription pays for every fleet's requests in ETH. Before the deployment:
 The subscription must never run dry. Each answer is paid in ETH at up to the
 2 gwei lane's price cap. Sixteen real answers on Base read on 7 October 2026
 cost about 0.4 to 1.4 US cents each, about half a cent for a key's
-100,000-gas answer. The balance to keep and the alert level must be set from
-that cost before the first sale. A request made while the subscription is empty
-waits unanswered, and pending requests block both removing a consumer and
-cancelling the subscription until they are answered, so an empty subscription
-cannot simply be closed and replaced.
+100,000-gas answer.
+
+Chainlink answers a request only while the balance covers its most it could
+cost: 200,000 gas for checking the proof plus the 100,000-gas callback, at the
+lane's 2 gwei cap, plus the 60% premium, which is 0.00096 ETH, plus an L1 fee
+that has been under 0.000001 ETH. Call it 0.001 ETH a key. A request the
+balance cannot cover waits up to 24 hours and then expires. Each key gets one
+accepted request and never another, so a key whose request expires never gets
+its card or traits, and nothing can give it one later.
+
+- **Fund it with 0.5 ETH before the first sale.** That covers 500 keys waiting
+  at once at the cap, and about 100,000 answers at today's prices.
+- **Never let it fall below 0.25 ETH**, enough for 250 keys waiting at once at
+  the cap.
+- **Alert at 0.3 ETH.** Before the first sale, set up an alert that reads the
+  balance at least hourly and warns when it falls below 0.3 ETH, so it is
+  topped up back to 0.5 ETH before it reaches 0.25 ETH. The balance is the
+  second value `getSubscription` returns:
+
+  ```sh
+  cast call 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634 \
+    "getSubscription(uint256)(uint96,uint96,uint64,address,address[])" <subId> \
+    --rpc-url "$BASE_RPC_URL"
+  ```
+
+  Anyone can top it up with `fundSubscriptionWithNative(subId)`.
+
+Pending requests block both removing a consumer and cancelling the
+subscription until they are answered, so an empty subscription cannot simply
+be closed and replaced.
 
 Anyone can ask again for a key whose request was refused, with
 `requestReveal(tokenId)` on the collection. The deck backend asks for the keys

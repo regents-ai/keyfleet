@@ -1542,10 +1542,15 @@ Nothing below can be fixed after the fact unless it says so.
 4. **`collection.contractURI`.** Check the collection page's metadata address in
    the manifest and that it already serves the right file. It is fixed at
    deployment and nothing can change it.
-5. **VRF subscription id.** Create the subscription, fund it in ETH, move it to
-   the Regents Safe and write its id into `vrf.subscriptionId`. The placeholder
-   `"0"` is refused. The Safe can move the collection to another coordinator,
-   subscription or gas lane later with `setRandomness`.
+5. **VRF subscription id.** Create the subscription, fund it with 0.5 ETH, move
+   it to the Regents Safe and write its id into `vrf.subscriptionId`. The
+   placeholder `"0"` is refused. Before the first sale, an alert warns when the
+   balance falls below 0.3 ETH; it is never left below 0.25 ETH. One answer can
+   cost up to about 0.001 ETH at the lane's cap, and a key whose one request
+   waits unanswered for 24 hours never gets a seed (see "Keeping the
+   subscription funded" in [../docs/deployment.md](../docs/deployment.md)). The
+   Safe can move the collection to another coordinator, subscription or gas
+   lane later with `setRandomness`.
 6. **Add the collection as a VRF consumer.** Straight after the deployment the
    Safe adds the collection to the subscription; the record step refuses until
    it has. A key minted before that has its draw refused and asks again later.
