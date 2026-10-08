@@ -126,7 +126,11 @@ defmodule Keyfleet.AnvilLab do
       end)
 
     addresses = addresses |> String.trim_trailing(")") |> String.split(", ")
-    lab = Map.new(Enum.zip(@lab, addresses), fn {name, address} -> {name, String.downcase(address)} end)
+
+    lab =
+      Map.new(Enum.zip(@lab, addresses), fn {name, address} ->
+        {name, String.downcase(address)}
+      end)
 
     rpc!(url, "evm_increaseTime", [@opening])
     rpc!(url, "evm_mine")
