@@ -296,7 +296,8 @@ details[open] > summary .shell-chevron {
 }
 
 /* The left nav reads as the marketing page's bordered cells: one line under each
-   destination, the label tracked and set in the Sans UI voice. */
+   destination, the label tracked and set in the Sans UI voice, in the same
+   words and case as the header. */
 #shell-sidebar li > a,
 #shell-sidebar li > button,
 #shell-sidebar [data-tree] > a {
@@ -311,10 +312,9 @@ details[open] > summary .shell-chevron {
   background: transparent;
   color: var(--color-fg-muted);
   font-family: var(--font-family-ui);
-  font-size: 0.72rem;
-  letter-spacing: 0.07em;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
   text-align: left;
-  text-transform: uppercase;
 }
 
 @media (hover: hover) {

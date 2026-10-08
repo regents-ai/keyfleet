@@ -21,7 +21,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert html =~ ~s(id="app-shell")
     assert has_element?(view, "#route-content h1", "Account")
-    assert has_element?(view, "#account-page button[data-account-target=sign-in]", "Sign in")
+    assert has_element?(view, "#account-page button[data-account-target=sign-in]", "Sign In")
     refute has_element?(view, "#account-identity")
     refute has_element?(view, "#route-content .verified-connections")
   end
@@ -165,7 +165,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert html =~ ~s(id="account-page")
     assert html =~ ">Account<"
-    assert html =~ "Sign in to see your account"
+    assert html =~ "Sign In to see your account"
     refute html =~ "Verified connections"
   end
 
@@ -193,7 +193,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     {view, html} = open_account(conn, account)
 
-    refute html =~ "Sign in to see your account"
+    refute html =~ "Sign In to see your account"
     assert has_element?(view, "#account-identity h2", "0x6666..6666")
     assert has_element?(view, "#account-identity canvas[data-holo-canvas]")
     assert has_element?(view, ".account-details code", wallet)
@@ -367,13 +367,14 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
   end
 
+  # Signed out, the sidebar names the account page as the header's button does.
   test "in-shell navigation keeps the LiveView and shell identity", %{conn: conn} do
     {:ok, view, html} = live(conn, "/app/fleets/fibonacci_syndicate")
     pid = view.pid
     [instance] = Regex.run(~r/data-shell-instance="(\d+)"/, html, capture: :all_but_first)
 
     view
-    |> element("#shell-sidebar a", "Account")
+    |> element("#shell-sidebar a", "Sign In")
     |> render_click()
 
     assert_patch(view, "/account")

@@ -43,10 +43,10 @@ defmodule KeyfleetWeb.AccountLive do
       </header>
 
       <section :if={is_nil(@account)} class="account-panel account-signed-out">
-        <h2>Sign in to see your account</h2>
+        <h2>Sign In to see your account</h2>
         <p>Your wallet and connections appear here once you are signed in.</p>
         <Regent.Primitives.button type="button" data-account-target="sign-in">
-          Sign in
+          Sign In
         </Regent.Primitives.button>
       </section>
 

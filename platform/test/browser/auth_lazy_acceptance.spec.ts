@@ -792,6 +792,7 @@ test("the second document proves anonymous server truth before importing Privy",
   await establishLocalSession(page)
   await page.goto("/account")
   await expect.poll(() => bridgeLoads).toBe(1)
+  await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await page.locator("#account-menu summary").click()
   await page.getByRole("button", {name: "Disconnect"}).click()
 
