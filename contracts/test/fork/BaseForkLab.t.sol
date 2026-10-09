@@ -26,7 +26,7 @@ contract BaseForkLabTest is Test {
         lab.deploy(KEEPER);
     }
 
-    /// @dev Invariant: on a fork of Base, the lab leaves Classic #1 selling in phase 1 against Base's
+    /// @dev Invariant: on a fork of Base, the lab leaves Classic #1 selling in phase 2 against Base's
     /// own USDC and route, records it in the release's shape, and a bought key within the deck asks
     /// the coordinator for nothing.
     function test_theLabSellsClassicOneOnAForkOfBase() public {
@@ -52,7 +52,7 @@ contract BaseForkLabTest is Test {
         assertEq(vm.parseJsonAddress(json, ".collection.safe"), tx.origin, "The sender is the Safe");
         assertEq(vm.parseJsonAddress(json, ".collection.keeper"), KEEPER, "The keeper");
         assertEq(vm.parseJsonString(json, ".fleets.1.name"), "Classic #1", "Fleet 1");
-        assertEq(keys.phase(), 1, "Phase 1");
+        assertEq(keys.phase(), 2, "Phase 2");
         assertFalse(keys.salesOpen(1), "Classic #1 opens later");
         vm.warp(block.timestamp + lab.LAB_OPENING());
         assertTrue(keys.salesOpen(1), "Classic #1 sells");

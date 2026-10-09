@@ -99,7 +99,7 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         this.make(calls, safe);
 
         _found(manifest, deployed);
-        for (uint8 phase = 1; phase <= 3; ++phase) {
+        for (uint8 phase = 1; phase <= collection.FINAL_PHASE(); ++phase) {
             calls = safeSteps.advancePhaseCalls(manifest, deployed, uint64(block.timestamp + 1));
             assertEq(calls[0].name, string.concat("phase-", vm.toString(phase)), "Next phase");
             _make(calls, safe);

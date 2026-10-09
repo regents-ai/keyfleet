@@ -43,7 +43,8 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     );
 
     function setUp() public {
-        vm.warp(1_000_000);
+        // Three phase steps leave purchases at the independent vectors' fixed time, 1,000,002.
+        vm.warp(999_999);
         vm.roll(1_000);
         _setUpFixture();
         fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);

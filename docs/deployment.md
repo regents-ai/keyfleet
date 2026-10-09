@@ -4,7 +4,7 @@ Keyfleet lives on Base (chain 8453). The whole system is deployed once: one
 factory, which creates the one key collection, the shared shard record, the
 shared REGENT buyer and the Regents Club claims contract. Fleets are then
 created through the factory: the five founding fleets by the Regents Safe, and later fleets by anyone once the Safe
-has moved the collection to phase 3.
+has moved the collection to phase 4.
 
 Nothing may be deployed yet. Before any deploy every Keyfleet contract must pass
 the internal audit the founder chose on 9 Oct in place of an outside one, with
@@ -28,9 +28,9 @@ The release runs in seven steps, in this order:
    `contracts/deployments/base.deployed.json`.
 6. **Phases.** Only when the founder says when sales open, `KeyfleetSafeSteps`
    with the step `advance-phase` writes the next phase step for the founder to
-   sign, naming that moment: phase 1 opens Classic #1 and the Regents Club,
-   phase 2 opens Syndicate #1, Accelerant #1 and Cascade #1, phase 3 lets
-   anyone create a fleet.
+   sign, naming that moment: phase 1 opens only Regents Club gifts,
+   phase 2 opens Classic #1 sales, phase 3 opens Syndicate #1, Accelerant #1
+   and Cascade #1 sales, and phase 4 lets anyone create a fleet.
 7. **Regents Club gifts.** Once phase 1 has opened, `KeyfleetSafeSteps` with
    the step `club-gifts` writes the Safe transactions that give the 1,998
    Regents Club keys, 80 per transaction, each to the holder of its Pass, for
@@ -388,11 +388,11 @@ transaction lands. The phase number changes when the
 transaction lands, and what it opens waits for the named moment.
 
 It checks the step against Base's current state as the Safe and writes one file,
-`deployments/safe/base.phase-1.json`, `base.phase-2.json` or
-`base.phase-3.json`, for the founder to sign. Phase 1 needs all five founding
-fleets and opens Classic #1's sales and the Regents Club's gifts together.
-Phase 2 opens Syndicate #1, Accelerant #1 and Cascade #1's sales together.
-Phase 3 lets anyone create a fleet
+`deployments/safe/base.phase-1.json`, `base.phase-2.json`,
+`base.phase-3.json` or `base.phase-4.json`, for the founder to sign. Phases 1
+to 3 need all five founding fleets. Phase 1 opens only Regents Club gifts.
+Phase 2 opens Classic #1 sales. Phase 3 opens Syndicate #1, Accelerant #1
+and Cascade #1 sales together. Phase 4 lets anyone create a fleet
 from its opening, and each such fleet sells from the moment it is created. There is no step back, and nothing
 else moves a phase.
 
@@ -435,7 +435,7 @@ KEYFLEET_MANIFEST=base KEYFLEET_STEP=club-gifts KEYFLEET_CLUB_TO_CLAIMS=212,977 
 
 ## Fleets anyone creates
 
-From phase 3 anyone may call `createFleet` on the factory, buying the new
+From phase 4 anyone may call `createFleet` on the factory, buying the new
 fleet's key 1 in the same transaction. Such a fleet starts with no card deck, so
 its keys wait for their random numbers. The deck backend sees `FleetCreated`,
 builds the fleet's deck by the same process as the founding fleets, records it
@@ -640,6 +640,10 @@ which deposits the whole owed amount into REGENT revenue staking on Base for
 REGENT stakers. Every other amount a fleet's treasury receives is its capital,
 spent only by a passed proposal's exact calls, apart from the daily split that
 shares a small part of its ETH, REGENT and USDC among the keys.
+
+**Club opening separated (9 October 2026).** Club gifts open in phase 1,
+Classic sales in phase 2, the other sold founding fleets in phase 3, and
+public creation in phase 4. Each step is a separate Safe transaction.
 
 **One collection, phases, and fleets anyone can create (7 October 2026).** One
 collection named "Keyfleet" with the symbol KEYFLEET holds every key, with a

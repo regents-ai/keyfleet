@@ -59,7 +59,8 @@ contract KeyfleetLitForkTest is KeyfleetForkFixture {
 
     function setUp() public {
         if (!_setUpFork(0)) return;
-        _found(1);
+        _found(keys.FOUNDING_FLEETS());
+        _advancePhase();
         _advancePhase();
         classic = _fleet(1);
         treasury = classic.TREASURY();

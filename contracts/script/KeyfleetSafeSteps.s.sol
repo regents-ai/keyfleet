@@ -21,8 +21,8 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// load, check and sign. Nothing is signed or sent from here. On a local anvil chain the Safe is an
 /// account anvil has unlocked and the calls are sent directly, from the Safe's address.
 ///
-/// Moving to phase 1 opens Classic #1's sales and the Regents Club's gifts together, once all five
-/// founding fleets exist, and phase 2 opens Syndicate, Accelerant and Cascade, at the second
+/// Moving to phase 1 opens only the Regents Club's gifts once all five founding fleets exist.
+/// Phase 2 opens Classic #1's sales, and phase 3 opens Syndicate, Accelerant and Cascade, at the second
 /// `KEYFLEET_OPENS_AT` names (Unix time, in the future when the Safe's transaction lands), so the
 /// phase step is run only when the founder says when sales open.
 ///

@@ -194,7 +194,8 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
     function setUp() public {
         if (!_setUpFork(0)) return;
         staking = IRegentRevenueStakingViews(script.BASE_REGENT_REVENUE_STAKING());
-        _found(1);
+        _found(keys.FOUNDING_FLEETS());
+        _advancePhase();
         _advancePhase();
         classic = _fleet(1);
     }
@@ -237,12 +238,12 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
         KeyfleetRegentBuyer buyer = factory.REGENT_BUYER();
         assertEq(address(buyer.V3_POOL()), script.BASE_USDC_WETH_POOL(), "the v3 pool");
         assertEq(address(buyer.POOL_MANAGER()), script.BASE_POOL_MANAGER(), "the PoolManager");
-        assertEq(keys.fleetCount(), 1, "Classic #1 founded by the Safe's call");
-        assertEq(keys.phase(), 1, "and opened by its phase call");
+        assertEq(keys.fleetCount(), keys.FOUNDING_FLEETS(), "all five founded by the Safe's calls");
+        assertEq(keys.phase(), 2, "and opened by its phase call");
         assertTrue(keys.salesOpen(1), "Classic #1 sells");
     }
 
-    /// @dev A key that draws, key 2 of a fleet created in phase 3, is sold once the keeper has
+    /// @dev A key that draws, key 2 of a fleet created in phase 4, is sold once the keeper has
     /// recorded the fleet's deck and before the collection is a consumer. Then the collection is
     /// added, the request is retried, and answered; key 3 sold by a consumer is accepted straight away.
     function test_theRealCoordinatorAcceptsTheRequestAndTheAnswerFits() public {
@@ -294,10 +295,9 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
         assertEq(keys.revealSeed(first), seed, "the seed");
     }
 
-    /// @dev Founds the other founding fleets, opens phases 2 and 3, and creates a Classic fleet at
+    /// @dev Opens phases 3 and 4, and creates a Classic fleet at
     /// 10 USDC, whose key 1 the creator buys before it has a deck; then the keeper records its deck.
     function _drawingFleet() private returns (KeyfleetManager fleet) {
-        _found(keys.FOUNDING_FLEETS() - 1);
         _advancePhase();
         _advancePhase();
         uint256 startPrice = KeyfleetPresets.MIN_START_USDC;

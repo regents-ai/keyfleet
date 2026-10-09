@@ -70,7 +70,7 @@ What each answer decides (round 2 numbering → id):
 
 **Binding sources:** [contracts-build-now-spec-v0.3.md](contracts-build-now-spec-v0.3.md), Sean's answers recorded in [contracts-v0.3-plan.md](contracts-v0.3-plan.md) section 9, [product-spec.md](product-spec.md), as changed by everything above. Supplies, splits, daily split and claim rules are unchanged; the vote, presence, holding and price rules Sean changed on 7 Oct are in 5.1 and 8.4. Those docs are brought up to date in step B7.
 
-Words used below: a **fleet** is what Sean calls a "set" or "keyfleet". A **key** is one ERC-721 token. The **collection** is the one shared ERC-721 contract. A fleet's **manager set** is the per-fleet contracts the factory creates. The **Safe** is the Regents Safe on Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`. The four **founding fleets** are Classic #1, Syndicate #1, Accelerant #1 and Cascade #1. An **open fleet** is one anyone creates in phase 3. The **keeper** is the Regents backend wallet that records open fleets' decks and asks for card refreshes (3.5).
+Words used below: a **fleet** is what Sean calls a "set" or "keyfleet". A **key** is one ERC-721 token. The **collection** is the one shared ERC-721 contract. A fleet's **manager set** is the per-fleet contracts the factory creates. The **Safe** is the Regents Safe on Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`. The four **founding fleets** are Classic #1, Syndicate #1, Accelerant #1 and Cascade #1. An **open fleet** is one anyone creates in phase 4. The **keeper** is the Regents backend wallet that records open fleets' decks and asks for card refreshes (3.5).
 
 ---
 
@@ -89,7 +89,7 @@ Each fleet is five contracts with no shared state. `Keyfleet` (14.6 KB runtime) 
    KeyfleetRegentBuyer  one shared queue that turns booked USDC into REGENT, a piece at a time (section 7)
 
    createFoundingFleet(preset, deck, profile)  Safe only, fleets 1-4, sales closed
-   createFleet(terms)                          anyone, phase 3 only, creator buys key 1
+   createFleet(terms)                          anyone, phase 4 only, creator buys key 1
         -> one manager set per fleet, in one transaction:
         KeyfleetManager   sale, price, profile, joining requirements, transfer hook
         KeyfleetVotes     presence + proposals + ballots          (as today)
@@ -198,7 +198,7 @@ The reveal order is final only once the reveals' blocks are final, so the site d
 - The Safe sets the name, description and image in the same call; after that they are the fleet's own to change by vote (8.3).
 - They are created with sales closed; the phase steps open them (section 6). The Safe buys no key.
 
-**Open fleets, `createFleet(terms)`, anyone, only in phase 3:** section 8.
+**Open fleets, `createFleet(terms)`, anyone, only in phase 4:** section 8.
 
 Both run the same steps in one transaction:
 
@@ -233,7 +233,7 @@ Base's gas price read on 7 Oct was 0.006 gwei with ETH at about 2,574 USD, so a 
 | Caller → callee | Allowed because | Checked by |
 |---|---|---|
 | Safe → factory `createFoundingFleet` | Only the Safe creates the five founding fleets, in fixed order | `msg.sender == SAFE`; fleet count < 5; type matches the slot |
-| Anyone → factory `createFleet` | Phase 3 lets anyone create, from its opening | `KEYS.phase() == 3` and `phaseOpensAt` reached; input bounds (section 8) |
+| Anyone → factory `createFleet` | Phase 4 lets anyone create, from its opening | `KEYS.phase() == 4` and `phaseOpensAt` reached; input bounds (section 8) |
 | Safe → collection `advancePhase(opensAt)` | Only the Safe moves phases, one way, naming when the new phase opens | `msg.sender == SAFE`; `opensAt` in the future, at most 30 days ahead, and not before the last phase's |
 | Safe → collection `setRandomness` | Only the Safe moves reveals to another coordinator, subscription or gas lane; never to another coordinator while a key waits for its answer | `msg.sender == SAFE`, `revealsWaiting == 0` for a new coordinator |
 | Anyone → collection `expireReveal` | Permanently expires an unanswered accepted request after 24 hours; no seed and no retry | Accepted, unseeded, not expired, `block.timestamp >= revealRequestedAt + 24 hours` |
@@ -304,17 +304,18 @@ Every fleet, founding or open, runs these in its own `KeyfleetVotes`. They repla
 
 Sean: "I do not want the contracts or the frontend site to enable purchases of keys until I explicitly say so." Each phase step is a Safe transaction Sean signs, so each is his explicit go (KF-SOL-14 a).
 
-The collection holds `phase`, 0 to 3, which only the Safe changes, only upward and one step at a time, with `advancePhase(opensAt)`. `opensAt` is the moment the new phase opens: later than the step's own block, at most 30 days after it (`MAX_OPENING_LEAD`), and no earlier than the previous phase's opening (`OpensAtInvalid`). There is no per-wallet limit when a phase opens. The phase number changes at once; what it opens waits for `opensAt`, kept in `phaseOpensAt`.
+The collection holds `phase`, 0 to 4, which only the Safe changes, only upward and one step at a time, with `advancePhase(opensAt)`. `opensAt` is the moment the new phase opens: later than the step's own block, at most 30 days after it (`MAX_OPENING_LEAD`), and no earlier than the previous phase's opening (`OpensAtInvalid`). There is no per-wallet limit when a phase opens. The phase number changes at once; what it opens waits for `opensAt`, kept in `phaseOpensAt`.
 
 | Phase | Reached by | What it opens | Refused unless |
 |---|---|---|---|
 | 0 | deploy | Nothing sells. The Safe creates the founding fleets, one per transaction | — |
-| 1 | Safe `advancePhase(opensAt)` | Classic #1's sales and the Regents Club's gifts, together, at `opensAt` | fleets 1–5 exist |
-| 2 | Safe `advancePhase(opensAt)` | Syndicate #1, Accelerant #1 and Cascade #1's sales, together, at `opensAt` | fleets 1–5 exist |
-| 3 | Safe `advancePhase(opensAt)` | `createFleet` for anyone from `opensAt`; each open fleet sells from the moment it is created, starting with its creator's key 1 | — |
+| 1 | Safe `advancePhase(opensAt)` | Only the Regents Club's gifts at `opensAt` | fleets 1–5 exist |
+| 2 | Safe `advancePhase(opensAt)` | Classic #1's sales at `opensAt` | fleets 1–5 exist |
+| 3 | Safe `advancePhase(opensAt)` | Syndicate #1, Accelerant #1 and Cascade #1's sales, together, at `opensAt` | fleets 1–5 exist |
+| 4 | Safe `advancePhase(opensAt)` | `createFleet` for anyone from `opensAt`; each open fleet sells from the moment it is created, starting with its creator's key 1 | — |
 
-- **When sales open:** `salesOpenAt(fleet)` is the time each fleet's sales open: fleets 1 and 5's is the `opensAt` of the step to phase 1, fleets 2–4's the `opensAt` of the step to phase 2, an open fleet's its creation. `salesOpen(fleet)` is true once that time is set and reached. Each fleet's 7-day opening counts from it (5.1).
-- **Where sales are gated:** `KeyfleetKeys.mint` reverts `SalesClosed(fleet)` unless that fleet is open: fleets 1 and 5 from phase 1's opening, fleets 2–4 from phase 2's, an open fleet from its creation. Every purchase in every fleet ends in this one function. There is no other mint path.
+- **When sales open:** `salesOpenAt(fleet)` is the time each fleet's sales open: fleet 5's is the `opensAt` of the step to phase 1, fleet 1's the step to phase 2, fleets 2–4's the step to phase 3, an open fleet's its creation. `salesOpen(fleet)` is true once that time is set and reached. Each fleet's 7-day opening counts from it (5.1).
+- **Where sales are gated:** `KeyfleetKeys.mint` reverts `SalesClosed(fleet)` unless that fleet is open: fleet 5 from phase 1's opening, fleet 1 from phase 2's, fleets 2–4 from phase 3's, an open fleet from its creation. Every purchase in every fleet ends in this one function. There is no other mint path.
 - **Nothing else moves a phase**, and there is no step back.
 - **The site:** the fleet page reads `salesOpen(fleet)` and, while it is closed, shows the buy button disabled with a few words saying sales have not opened (rule 11's exception). The create-a-fleet page does the same from `phase()`. The site's own purchase gate stays as it is.
 - **Scripts:** the deploy and create-founding-fleet steps never call `advancePhase`; the Safe's `advance-phase` step takes the opening as `KEYFLEET_OPENS_AT`. Only the anvil lab does, on a local chain, acting as the Safe there.
@@ -383,7 +384,7 @@ Each piece's swap takes the pool's price at that moment, with no minimum and no 
 
 ---
 
-## 8. Fleets anyone can create (phase 3)
+## 8. Fleets anyone can create (phase 4)
 
 ### 8.1 What the creator gives
 
@@ -448,7 +449,7 @@ How they work:
 |---|---|---|
 | Regents Safe | Create the five founding fleets in order; move phases forward; replace the keeper; add a newer factory | Mint a key, move or burn anyone's key, touch any fleet's money, votes, claims, rate, profile or treasury, change a fleet after creation, change a price, supply, split, route or royalty, close sales, step a phase back |
 | Keeper (Regents backend wallet) | Record an open fleet's deck once, before any of its seeds exist; ask for a metadata refresh | Choose a card, change a recorded deck, mint, touch money |
-| Anyone (phase 3) | Create a fleet within the input limits, buying its key 1 | Create before phase 3; pass inputs out of bounds; affect any other fleet |
+| Anyone (phase 4) | Create a fleet within the input limits, buying its key 1 | Create before phase 4; pass inputs out of bounds; affect any other fleet |
 | Factory | Register and deploy fleets; write a new fleet's profile and requirements once; hand the creator's USDC to the new manager | Anything after creation |
 | REGENT buyer | Queue fleets with USDC booked; take one piece from the front fleet's manager every 15 minutes, swap it and pay the REGENT to that fleet's treasury | Hold value between calls; take more than a piece; be paid by anyone but the pools it started a swap with |
 | Uniswap pools and the REGENT pool's hook (third-party code) | Run during each piece's swap; take fees; refuse a swap; give a worse price, within the 1% rule (7.4) | Run inside a purchase; reach any fleet's books outside the swap |
@@ -502,7 +503,7 @@ Run with the five founding fleets and two open fleets on one collection, against
 
 1. Every key belongs to exactly one fleet, for ever; its key number is at most its manager's `totalMinted`.
 2. The sum of every fleet's `totalMinted` equals the collection's mint count.
-3. A fleet whose sales are closed has `totalMinted == 0`; the phase only ever rose, one step at a time, by the Safe; no open fleet exists before phase 3.
+3. A fleet whose sales are closed has `totalMinted == 0`; the phase only ever rose, one step at a time, by the Safe; no open fleet exists before phase 4.
 4. Registry entries never change; fleet numbers only grow.
 5. No action in fleet B changes fleet A's presence queue, tallies, electorates, ledger backing, credits, treasury balances or profile.
 6. Ownership epochs only increase; a shard ends when its key moves.
@@ -536,7 +537,7 @@ Plus: `check_bytecode.sh` finds no reachable `DELEGATECALL`, `CALLCODE` or `SELF
 | (none) | New: `KeyfleetSafeSteps.s.sol`, with a founding-fleets step (one call per founding fleet still missing) and an advance-phase step (one call). On Base each step is simulated as the Safe and written as one Safe Transaction Builder file per call in `deployments/safe/`; on anvil the calls are sent directly. Adding the collection to the randomness subscription stays a Safe action done in the Chainlink app. |
 | `RecordKeyfleets.s.sol` | Writes one record, `deployments/<manifest>.deployed.json`: the system as the chain reports it, checked against the manifest, then every fleet the collection's registry lists, each checked to be the factory's own with its four contracts bound to each other. Reading the registry instead of `FleetCreated` events needs no log search and can be rerun at any time to add fleets created since. It refuses to write while the collection is not on the subscription, or on Base while the subscription is not the Safe's. |
 | `KeyfleetManifest.sol`, `deployments/*.json` | Shared bindings (including both swap pools and the v4 pool key, the keeper, the metadata base) plus the five founding fleets' type, deck and profile. |
-| `AnvilLab.s.sol` | Builds the factory, creates the five founding fleets and moves to phase 1 locally; a second step buys two keys and runs one piece through a local swap route. |
+| `AnvilLab.s.sol` | Builds the factory, creates the five founding fleets and moves to phase 2 locally; a second step buys two keys and runs one piece through a local swap route. |
 | `check_bytecode.sh` | Checks the new contract list. |
 | Tests | Fixture goes through the factory; every suite is ported; new suites in section 12. |
 
@@ -547,7 +548,7 @@ Nothing is deployed anywhere today, so nothing needs migrating.
 - Metadata at the fixed base, decoding fleet and key number. Key name `CLASSIC—001—072`; traits `Fleet type`, `Fleet number`, the fleet's name, key number, `Card`. Interim art until the permanent card is published; nothing for unminted ids; no guessable links (10.5).
 - The deck backend: on `FleetCreated` for an open fleet, build its deck, `setDeck` from the keeper wallet, then `requestReveal` the waiting keys; after publishing each permanent card, `refreshMetadata`.
 - Purchase targets the fleet's manager (with the Merkle proof when the fleet has a list); transfers and approvals the collection. The buy button shows "sales have not opened" from `salesOpen`, and may show a requirement reason when the receiving wallet certainly fails all of them at the latest block.
-- A create-a-fleet page for phase 3; a proposal builder for profile changes; `seed-deployment` takes the one record file, with the system and every fleet in it.
+- A create-a-fleet page for phase 4; a proposal builder for profile changes; `seed-deployment` takes the one record file, with the system and every fleet in it.
 
 ---
 

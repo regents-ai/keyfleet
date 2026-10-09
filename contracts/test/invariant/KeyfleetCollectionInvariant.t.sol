@@ -204,8 +204,9 @@ contract CollectionHandler is Test {
         }
 
         ghostPhase = keys.phase();
-        ghostOpensAt[1] = keys.salesOpenAt(1);
-        ghostOpensAt[2] = keys.salesOpenAt(2);
+        ghostOpensAt[1] = keys.salesOpenAt(CLUB_FLEET);
+        ghostOpensAt[2] = keys.salesOpenAt(1);
+        ghostOpensAt[3] = keys.salesOpenAt(2);
         if (ghostPhase == keys.FINAL_PHASE()) ghostOpensAt[ghostPhase] = keys.phaseOpensAt();
         ghostFleetCount = keys.fleetCount();
         for (uint256 id = 1; id <= ghostFleetCount; ++id) {
@@ -450,12 +451,12 @@ contract CollectionHandler is Test {
 
         vm.prank(creator);
         try factory.createFleet(terms) returns (uint256 fleetId, uint256 tokenId) {
-            if (!creationOpen) _breach("an open fleet was created before phase 3 opened");
+            if (!creationOpen) _breach("an open fleet was created before phase 4 opened");
             if (fleetId != id || tokenId != keys.tokenIdOf(id, 1)) _breach("a creation numbered its fleet wrongly");
             _checkCreation(id, terms, creator, before);
         } catch (bytes memory err) {
             if (creationOpen || bytes4(err) != KeyfleetFactory.CreationClosed.selector) {
-                _breach("a creation was refused other than before phase 3 opened");
+                _breach("a creation was refused other than before phase 4 opened");
             }
             vm.prank(creator);
             usdc.approve(address(factory), 0);
@@ -1131,7 +1132,7 @@ contract CollectionHandler is Test {
     function advancePhase(uint256 callerSeed, uint256 opensSeed) external step(0) {
         address caller = callerSeed % 3 == 0 ? _stranger(callerSeed, 0) : safe;
         uint8 phase = keys.phase();
-        uint256 needed = phase < 2 ? keys.FOUNDING_FLEETS() : 0;
+        uint256 needed = phase + 1 < keys.FINAL_PHASE() ? keys.FOUNDING_FLEETS() : 0;
         uint64 opensAt = uint64(block.timestamp + bound(opensSeed, 0, 31 days));
         bytes4 expected;
         if (caller != safe) {
@@ -1559,13 +1560,12 @@ contract CollectionHandler is Test {
         if (actor == not) actor = _accounts[(seed % ACTORS + 1) % ACTORS];
     }
 
-    /// @notice Whether a fleet's sales should be open now: Classic #1 and the Regents Club from phase
-    /// 1's opening, fleets 2 to 4 from phase 2's, and an open fleet from its creation.
+    /// @notice Whether a fleet's sales should be open now: the Regents Club from phase 1,
+    /// Classic #1 from phase 2, fleets 2 to 4 from phase 3, and an open fleet from its creation.
     function salesOpenExpected(uint256 fleetId) public view returns (bool) {
-        if (fleetId == 1 || fleetId == CLUB_FLEET) {
-            return ghostPhase >= 1 && block.timestamp >= ghostOpensAt[1];
-        }
-        if (fleetId < FIRST_OPEN_FLEET) return ghostPhase >= 2 && block.timestamp >= ghostOpensAt[2];
+        if (fleetId == CLUB_FLEET) return ghostPhase >= 1 && block.timestamp >= ghostOpensAt[1];
+        if (fleetId == 1) return ghostPhase >= 2 && block.timestamp >= ghostOpensAt[2];
+        if (fleetId < FIRST_OPEN_FLEET) return ghostPhase >= 3 && block.timestamp >= ghostOpensAt[3];
         return true;
     }
 
@@ -1859,13 +1859,13 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
     }
 
     /// @dev 3. A fleet with closed sales has sold nothing, the phase is the one the Safe stepped
-    /// to, sales open only at each phase's opening, and no open fleet exists before phase 3 opens.
+    /// to, sales open only at each phase's opening, and no open fleet exists before phase 4 opens.
     function invariant_phasesGateSalesAndCreation() public view {
         uint8 phase = keys.phase();
         assertEq(phase, handler.ghostPhase(), "the phase is the one the Safe stepped to");
         uint256 count = keys.fleetCount();
         if (phase < keys.FINAL_PHASE() || block.timestamp < handler.ghostOpensAt(phase)) {
-            assertLe(count, keys.FOUNDING_FLEETS(), "no open fleet before phase 3 opens");
+            assertLe(count, keys.FOUNDING_FLEETS(), "no open fleet before phase 4 opens");
         }
         for (uint256 id = 1; id <= count; ++id) {
             bool open = handler.salesOpenExpected(id);
@@ -2133,7 +2133,7 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
 }
 
 /// @dev Design §10.8 run with the five founding fleets and two open fleets on one collection in
-/// phase 3: open fleet 6 is a Classic fleet at 12.50 USDC open to anyone; open fleet 7 is a Cascade
+/// phase 4: open fleet 6 is a Classic fleet at 12.50 USDC open to anyone; open fleet 7 is a Cascade
 /// fleet at 25 USDC open only to holders of any Keyfleet key.
 /// The everyday run is short; `FOUNDRY_PROFILE=deep` runs it at the design's 256 runs × depth 100.
 /// forge-config: default.invariant.runs = 24

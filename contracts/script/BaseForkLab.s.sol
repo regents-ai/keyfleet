@@ -38,7 +38,7 @@ contract BaseForkLab is KeyfleetManifest {
     uint64 public constant LAB_OPENING = 10 minutes;
 
     /// @notice Deploys the system, creates the five founding fleets and moves the collection to
-    /// phase 1, so Classic #1 sells and the Regents Club opens from `LAB_OPENING` later. Broadcast from the account that is to be the Safe.
+    /// phase 2, so Classic #1 sells and the Regents Club opens from `LAB_OPENING` later. Broadcast from the account that is to be the Safe.
     /// @param keeper The wallet that records open fleets' decks and asks for card refreshes.
     function deploy(address keeper) external returns (KeyfleetFactory factory) {
         _requireLabChain();
@@ -60,6 +60,7 @@ contract BaseForkLab is KeyfleetManifest {
             FoundingFleet memory founding = manifest.founding[index];
             factory.createFoundingFleet(founding.preset, founding.deckHash, founding.deckSize, founding.profile);
         }
+        keys.advancePhase(uint64(block.timestamp) + LAB_OPENING);
         keys.advancePhase(uint64(block.timestamp) + LAB_OPENING);
         vm.stopBroadcast();
     }

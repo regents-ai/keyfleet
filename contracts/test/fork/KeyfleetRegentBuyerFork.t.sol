@@ -50,7 +50,8 @@ contract KeyfleetRegentBuyerForkTest is KeyfleetForkFixture {
 
     function setUp() public {
         if (!_setUpFork(0)) return;
-        _found(1);
+        _found(keys.FOUNDING_FLEETS());
+        _advancePhase();
         _advancePhase();
         buyer = factory.REGENT_BUYER();
         classic = _fleet(1);

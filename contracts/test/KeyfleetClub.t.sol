@@ -223,8 +223,8 @@ contract KeyfleetClubTest is KeyfleetFixture {
         assertEq(keys.ownerOf(keys.tokenIdOf(5, 3)), carol, "the next key reaches its Pass");
     }
 
-    /// @dev Invariant: gifts open with Classic #1, at the second phase 1 names, and not before.
-    function test_giftsOpenWithClassicOne() public {
+    /// @dev Invariant: gifts open before Classic #1, at the second phase 1 names, and not before.
+    function test_giftsOpenBeforeClassicOne() public {
         _setUpFixture();
         for (uint256 id = 1; id <= keys.FOUNDING_FLEETS(); ++id) {
             _createFounding(keys.foundingPreset(id));
@@ -237,9 +237,19 @@ contract KeyfleetClubTest is KeyfleetFixture {
         _give(alice);
 
         vm.warp(block.timestamp + 1);
-        assertEq(keys.salesOpenAt(5), keys.salesOpenAt(1), "the Club opens with Classic #1");
+        assertTrue(keys.salesOpen(5), "the Club opens alone");
+        assertFalse(keys.salesOpen(1), "Classic #1 stays closed");
+        assertEq(keys.salesOpenAt(1), 0, "Classic #1 has no opening yet");
         _give(alice);
         assertEq(keys.ownerOf(keys.tokenIdOf(5, 1)), alice);
+        assertEq(KeyfleetManager(keys.managerOf(1)).totalMinted(), 0);
+        uint64 classicOpensAt = uint64(block.timestamp + 1 days);
+        vm.prank(safe);
+        keys.advancePhase(classicOpensAt);
+        assertTrue(keys.salesOpen(5), "scheduling Classic preserves the Club opening");
+        assertEq(keys.salesOpenAt(1), classicOpensAt);
+        assertEq(club.VOTES().treasuryOpensAt(), block.timestamp + 7 days);
+        assertEq(KeyfleetManager(keys.managerOf(1)).VOTES().treasuryOpensAt(), classicOpensAt + 7 days);
     }
 
     /// @dev Invariant: the Club stops at its 1,998th key.

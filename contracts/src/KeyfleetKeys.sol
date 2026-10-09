@@ -26,8 +26,8 @@ interface IKeyfleetKeyHook {
 /// bumps the key's ownership epoch, and a mint records when the key was minted.
 ///
 /// Sales open in phases the Regents Safe moves forward, one step at a time and never back, each at
-/// a future second the Safe names when it moves: phase 1 opens fleet 1 and the Regents Club, fleet
-/// 5, together; phase 2 opens fleets 2 to 4; and phase 3 lets anyone create a fleet, which sells
+/// a future second the Safe names when it moves: phase 1 opens the Regents Club, fleet 5;
+/// phase 2 opens fleet 1; phase 3 opens fleets 2 to 4; and phase 4 lets anyone create a fleet, which sells
 /// from the moment it is created. `mint` is the only way a key comes to exist, and it refuses a
 /// fleet whose sales have not opened.
 ///
@@ -98,10 +98,10 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     /// @notice The most fleets the collection numbers, so every token id stays below 10^19 and fits
     /// in 64 bits.
     uint256 public constant MAX_FLEETS = 999_999_999;
-    /// @notice The founding fleets, created by the Safe before phase 3.
+    /// @notice The founding fleets, created by the Safe before phase 4.
     uint256 public constant FOUNDING_FLEETS = 5;
     /// @notice The last phase: anyone may create a fleet.
-    uint8 public constant FINAL_PHASE = 3;
+    uint8 public constant FINAL_PHASE = 4;
     /// @notice The resale royalty, in basis points: 2.5%.
     uint256 public constant ROYALTY_BPS = 250;
 
@@ -127,7 +127,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     /// @notice `keccak256` of the published trait-table file every key's traits are drawn from.
     bytes32 public immutable TRAIT_TABLE_HASH;
 
-    /// @notice The current phase, 0 to 3.
+    /// @notice The current phase, 0 to 4.
     uint8 public phase;
     /// @notice When the current phase opens its sales, as the Safe named it; zero in phase 0.
     uint64 public phaseOpensAt;
@@ -145,8 +145,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     mapping(address manager => uint256 fleetId) public fleetOfManager;
     /// @notice Fleets registered of each type.
     mapping(KeyfleetPresets.Preset preset => uint256 count) public typeCount;
-    /// @notice When a fleet's sales open: fleets 1 and 5 at the second phase 1 names, fleets 2 to 4
-    /// at the second phase 2 names, any later fleet at its registration. Zero until the phase that
+    /// @notice When a fleet's sales open: fleet 5 at the second phase 1 names, fleet 1 at phase 2,
+    /// fleets 2 to 4 at phase 3, any later fleet at its registration. Zero until the phase that
     /// opens them is reached, and for a fleet that does not exist.
     mapping(uint256 fleetId => uint64 opensAt) public salesOpenAt;
     /// @notice A key's trait seed, zero until the coordinator answers. Written once.
@@ -190,9 +190,9 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     error OpensAtInvalid(uint256 opensAt);
     /// @notice The fleets a phase opens do not all exist yet.
     error FleetsMissing(uint256 needed, uint256 registered);
-    /// @notice Before phase 3 only the founding fleets may be registered, in order, each with its deck.
+    /// @notice Before phase 4 only the founding fleets may be registered, in order, each with its deck.
     error NotFoundingFleet(uint256 fleetId, KeyfleetPresets.Preset preset);
-    /// @notice A fleet registered in phase 3 gets its deck from the keeper, not at registration.
+    /// @notice A fleet registered in phase 4 gets its deck from the keeper, not at registration.
     error DeckGivenAtCreation();
     /// @notice The collection numbers no more fleets.
     error TooManyFleets();
@@ -381,8 +381,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
 
     // --- the Safe ----------------------------------------------------------
 
-    /// @notice Moves to the next phase, whose sales open at `opensAt`. Phases 1 and 2 need all five
-    /// founding fleets, since the Regents Club, registered last, opens with Classic #1 in phase 1.
+    /// @notice Moves to the next phase, whose sales open at `opensAt`. Phases 1 to 3 need all five
+    /// founding fleets. Phase 1 opens only the Regents Club; Classic #1 waits for phase 2.
     /// @param opensAt When the phase opens: in the future, at most `MAX_OPENING_LEAD` from now, and
     /// not before the phase it follows.
     function advancePhase(uint64 opensAt) external onlySafe {
@@ -396,10 +396,12 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         phase = next;
         phaseOpensAt = opensAt;
         if (next == 1) {
-            salesOpenAt[1] = opensAt;
             salesOpenAt[FOUNDING_FLEETS] = opensAt;
         }
         if (next == 2) {
+            salesOpenAt[1] = opensAt;
+        }
+        if (next == 3) {
             for (uint256 fleetId = 2; fleetId < FOUNDING_FLEETS; ++fleetId) {
                 salesOpenAt[fleetId] = opensAt;
             }
@@ -436,7 +438,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     // --- factories ---------------------------------------------------------
 
     /// @notice Registers a new fleet whose manager will be at `manager`.
-    /// @dev Until phase 3 opens only the five founding fleets may be registered, in order, each with
+    /// @dev Until phase 4 opens only the five founding fleets may be registered, in order, each with
     /// its deck. Once it opens a fleet is registered without a deck, which the keeper records later,
     /// and sells from that moment.
     /// @return fleetId The new fleet's id.

@@ -173,7 +173,7 @@ contract KeyfleetKeysTest is KeyfleetFixture {
     // --- 3. phases --------------------------------------------------------------
 
     /// @dev Invariant: only the Safe moves the phase, one step at a time and only forwards: phases 1
-    /// and 2 need all five founding fleets, and there is nothing after phase 3.
+    /// to 3 need all five founding fleets, and there is nothing after phase 4.
     function test_phasesMoveOneStepAtATimeOnlyForwardAndOnlyByTheSafe() public {
         assertEq(keys.phase(), 0);
         address[4] memory strangers = [alice, keeper, address(factory), creator];
@@ -209,15 +209,17 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         keys.advancePhase(_soon());
 
         _advance();
+        assertEq(keys.phase(), 3);
+        _advance();
         assertEq(keys.phase(), keys.FINAL_PHASE());
         vm.prank(safe);
         vm.expectRevert(KeyfleetKeys.NoNextPhase.selector);
         keys.advancePhase(_soon());
-        assertEq(keys.phase(), 3, "and it never goes back");
+        assertEq(keys.phase(), 4, "and it never goes back");
     }
 
-    /// @dev Invariant: sales open per fleet with the phase: Classic #1 and the Regents Club from
-    /// phase 1, fleets 2 to 4 from phase 2, and an open fleet as soon as it exists. A purchase before
+    /// @dev Invariant: sales open per fleet with the phase: the Regents Club from phase 1,
+    /// Classic #1 from phase 2, fleets 2 to 4 from phase 3, and an open fleet as soon as it exists. A purchase before
     /// its fleet's phase is refused, with no USDC taken; a fleet that does not exist is never open.
     function test_salesOpenPerFleetWithThePhase() public {
         KeyfleetManager classic = _createFounding(KeyfleetPresets.Preset.FleetTechClassic);
@@ -231,11 +233,17 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         KeyfleetManager cascade = _createFounding(KeyfleetPresets.Preset.FibonacciCascade);
         _createFounding(KeyfleetPresets.Preset.RegentsClub);
         _advance();
-        assertTrue(keys.salesOpen(1), "Classic #1 opens in phase 1");
-        assertTrue(keys.salesOpen(5), "and the Regents Club with it");
+        assertTrue(keys.salesOpen(5), "only the Regents Club opens in phase 1");
+        assertFalse(keys.salesOpen(1), "Classic #1 waits for phase 2");
+        _expectSalesClosed(classic);
+        assertEq(usdc.balanceOf(address(classic)), 0, "a refused purchase took nothing");
+
+        _advance();
+        assertTrue(keys.salesOpen(1), "Classic #1 opens in phase 2");
+        assertTrue(keys.salesOpen(5), "the Club stays open");
         _buy(classic, alice);
         for (uint256 id = 2; id <= 4; ++id) {
-            assertFalse(keys.salesOpen(id), "fleets 2 to 4 wait for phase 2");
+            assertFalse(keys.salesOpen(id), "fleets 2 to 4 wait for phase 3");
         }
         _expectSalesClosed(syndicate);
         _expectSalesClosed(accelerant);
@@ -244,7 +252,7 @@ contract KeyfleetKeysTest is KeyfleetFixture {
 
         _advance();
         for (uint256 id = 1; id <= 5; ++id) {
-            assertTrue(keys.salesOpen(id), "every founding fleet sells in phase 2");
+            assertTrue(keys.salesOpen(id), "every founding fleet sells in phase 3");
         }
         _buy(syndicate, alice);
         _buy(accelerant, alice);
@@ -292,8 +300,8 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         keys.advancePhase(opensAt);
         assertEq(keys.phase(), 1, "the phase moves at once");
         assertEq(keys.phaseOpensAt(), opensAt, "and records when it opens");
-        assertEq(keys.salesOpenAt(1), opensAt, "Classic #1 opens then");
-        assertEq(keys.salesOpenAt(5), opensAt, "and the Regents Club at the same second");
+        assertEq(keys.salesOpenAt(1), 0, "Classic #1 has no opening yet");
+        assertEq(keys.salesOpenAt(5), opensAt, "only the Regents Club opens then");
         assertFalse(keys.salesOpen(1), "but not before");
         _expectSalesClosed(classic);
         vm.warp(opensAt - 1);
@@ -301,9 +309,9 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         assertFalse(keys.salesOpen(5));
         _expectSalesClosed(classic);
         vm.warp(opensAt);
-        assertTrue(keys.salesOpen(1), "and at that second, by itself");
-        assertTrue(keys.salesOpen(5));
-        _buy(classic, alice);
+        assertTrue(keys.salesOpen(5), "Club gifts open at that second, by itself");
+        assertFalse(keys.salesOpen(1), "Club gifts do not open Classic sales");
+        _expectSalesClosed(classic);
 
         uint64 later = uint64(block.timestamp + 10 days);
         vm.prank(safe);
@@ -313,18 +321,28 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.OpensAtInvalid.selector, earlier));
         keys.advancePhase(earlier);
         assertEq(keys.phase(), 2, "a refused step changes nothing");
+        assertEq(keys.salesOpenAt(1), later, "Classic has its own opening");
         for (uint256 id = 2; id <= 4; ++id) {
-            assertEq(keys.salesOpenAt(id), later, "fleets 2 to 4 open together");
+            assertEq(keys.salesOpenAt(id), 0, "other paid fleets still have no opening");
             assertFalse(keys.salesOpen(id));
         }
         assertEq(keys.salesOpenAt(5), opensAt, "the Regents Club keeps its phase 1 opening");
         vm.prank(safe);
         keys.advancePhase(later);
         assertEq(keys.phase(), 3, "the next phase may open at the same moment");
+        for (uint256 id = 2; id <= 4; ++id) {
+            assertEq(keys.salesOpenAt(id), later, "fleets 2 to 4 open together");
+        }
+        vm.warp(later - 1);
+        assertTrue(keys.salesOpen(5), "the Club stays open before paid sales");
+        _expectSalesClosed(classic);
         vm.warp(later);
         for (uint256 id = 1; id <= 5; ++id) {
-            assertTrue(keys.salesOpen(id), "every founding fleet sells once phase 2 opens");
+            assertTrue(keys.salesOpen(id), "every founding fleet sells once phase 3 opens");
         }
+        _buy(classic, alice);
+        _advance();
+        assertEq(keys.phase(), keys.FINAL_PHASE());
     }
 
     // --- 4. the Safe's settings ------------------------------------------------

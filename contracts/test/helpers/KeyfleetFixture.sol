@@ -130,14 +130,14 @@ abstract contract KeyfleetFixture is Test {
     // --- fleets ------------------------------------------------------------
 
     /// @dev The founding fleet of `preset`, with its sales open: creates the five founding fleets in
-    /// order the first time, as the Safe, and moves the collection to phase 2.
+    /// order the first time, as the Safe, and moves the collection to phase 3.
     function _deploy(KeyfleetPresets.Preset preset) internal returns (KeyfleetManager fleet) {
         if (keys.fleetCount() == 0) {
             for (uint256 id = 1; id <= keys.FOUNDING_FLEETS(); ++id) {
                 _createFounding(keys.foundingPreset(id));
             }
         }
-        while (keys.phase() < 2) {
+        while (keys.phase() < 3) {
             _advancePhase();
         }
         for (uint256 id = 1; id <= keys.FOUNDING_FLEETS(); ++id) {
@@ -164,7 +164,7 @@ abstract contract KeyfleetFixture is Test {
         fleet = KeyfleetManager(keys.managerOf(id));
     }
 
-    /// @dev Moves the collection to phase 3, creating the founding fleets first if needed.
+    /// @dev Moves the collection to phase 4, creating the founding fleets first if needed.
     function _openCreation() internal {
         if (keys.fleetCount() == 0) _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         while (keys.phase() < keys.FINAL_PHASE()) {

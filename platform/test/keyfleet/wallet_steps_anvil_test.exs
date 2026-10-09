@@ -518,7 +518,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       pass = address!(url, lab.club_claims, "PASS()")
       send!(url, @buyer, pass, Call.encode("mint(address,uint256)", [@second, 1]))
 
-      # Phase 1 opened the Club with Classic #1; the Safe gives its Keys 1 and
+      # Phase 2 opened Classic #1 after the Club; the Safe gives its Keys 1 and
       # 2 to the claims contract, and Pass 2 is never minted.
       claims = [lab.club_claims, lab.club_claims]
       send!(url, @buyer, club.manager_address, Call.encode("give(address[])", [claims]))

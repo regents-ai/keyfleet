@@ -41,12 +41,12 @@ and what the code on this branch does:
   each fleet's type and its number within that type.
 - Sales open in phases the Regents Safe
   (`0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`) moves forward, one step at a
-  time and never back: phase 1 opens Classic #1 and the Regents Club, phase 2
-  opens Syndicate #1, Accelerant #1 and Cascade #1, and phase 3 lets anyone
+  time and never back: phase 1 opens only the Regents Club, phase 2 opens
+  Classic #1, phase 3 opens Syndicate #1, Accelerant #1 and Cascade #1, and phase 4 lets anyone
   create a fleet. Each
   phase step is a Safe transaction the founder signs, naming the moment the
   phase opens, which must be in the future.
-- In phase 3 anyone may create a fleet of any of the four sold types: they choose
+- In phase 4 anyone may create a fleet of any of the four sold types: they choose
   its name (1 to 100 bytes), an optional description (up to 2,000 bytes) and
   image link (up to 512 bytes), a starting price from 10 to 1,000,000 USDC in
   whole cents, for an Accelerant fleet its step of 1% to 5% per key, and
@@ -266,10 +266,10 @@ stays below 10^19 and fits in 64 bits. Key numbers run from 1 to
 `registerFleet(preset, manager, deckHash, deckSize)` may be called only by a
 factory (`OnlyFactory`). It refuses a zero manager (`ZeroAddress`), an account
 that already manages a fleet (`ManagerTaken`) and a fleet past `MAX_FLEETS`
-(`TooManyFleets`). Before phase 3 it accepts only the five founding fleets, in
+(`TooManyFleets`). Before phase 4 it accepts only the five founding fleets, in
 order, each with its deck: fleet 1 Classic, 2 Syndicate, 3 Accelerant, 4
 Cascade, 5 Regents Club (`foundingPreset(fleetId)`; `NotFoundingFleet` otherwise, `DeckInvalid`
-for a missing deck). In phase 3 a fleet is registered without a deck
+for a missing deck). In phase 4 a fleet is registered without a deck
 (`DeckGivenAtCreation` otherwise). It records the manager, the type, the type
 number (`typeCount` per type plus one) and the deck, and emits
 `FleetRegistered(fleetId, preset, typeNumber, manager, factory)`, plus
@@ -286,7 +286,7 @@ change.
 
 ### Phases and sales
 
-`phase()` runs from 0 to `FINAL_PHASE`, 3. Only the Safe moves it
+`phase()` runs from 0 to `FINAL_PHASE`, 4. Only the Safe moves it
 (`OnlySafe`), one step at a time and never back, with `advancePhase(opensAt)`,
 which emits `PhaseAdvanced(phase, opensAt)`. `opensAt` is the moment the new
 phase opens: it must be later than the step's own block, at most
@@ -298,16 +298,17 @@ for `opensAt`, to the second, with nobody acting again.
 | Phase | What it opens at `opensAt` | Refused unless |
 | --- | --- | --- |
 | 0 | Nothing sells. The Safe creates the founding fleets, one per transaction | — |
-| 1 | Classic #1's sales and the Regents Club's gifts, together | fleets 1 to 5 exist (`FleetsMissing(5, registered)`) |
-| 2 | Syndicate #1, Accelerant #1 and Cascade #1's sales, together | fleets 1 to 5 exist (`FleetsMissing(5, registered)`) |
-| 3 | Anyone may create a fleet; each sells from the moment it is created | — |
+| 1 | Only the Regents Club's gifts | fleets 1 to 5 exist (`FleetsMissing(5, registered)`) |
+| 2 | Classic #1's sales | fleets 1 to 5 exist (`FleetsMissing(5, registered)`) |
+| 3 | Syndicate #1, Accelerant #1 and Cascade #1's sales, together | fleets 1 to 5 exist (`FleetsMissing(5, registered)`) |
+| 4 | Anyone may create a fleet; each sells from the moment it is created | — |
 
-Past phase 3, `advancePhase` reverts with `NoNextPhase`. `salesOpenAt(fleetId)`
-is the time a fleet's sales open: fleets 1 and 5's is the `opensAt` of the step
-to phase 1, fleets 2 to 4's the `opensAt` of the step to phase 2, and any later
+Past phase 4, `advancePhase` reverts with `NoNextPhase`. `salesOpenAt(fleetId)`
+is the time a fleet's sales open: fleet 5's is the `opensAt` of the step
+to phase 1, fleet 1's the step to phase 2, fleets 2 to 4's the step to phase 3, and any later
 fleet's its registration; it is zero before then and for a fleet that does not
 exist. `salesOpen(fleetId)` is true once `salesOpenAt(fleetId)` is set and has
-been reached. Until phase 3 has both been stepped to and opened, the collection
+been reached. Until phase 4 has both been stepped to and opened, the collection
 registers only the founding fleets and the factory refuses `createFleet`
 (`CreationClosed(phase)`). Each fleet's 7-day opening (see Votes) counts from
 `salesOpenAt`.
@@ -520,7 +521,7 @@ its deck and a starting price of zero. The collection refuses a sixth, one out
 of order and one without a deck. Its sales stay closed
 until the Safe's phase step opens them. The Safe buys no key.
 
-`createFleet(terms)` is for anyone once phase 3 has been stepped to and its
+`createFleet(terms)` is for anyone once phase 4 has been stepped to and its
 `opensAt` reached (`CreationClosed(phase)` before). `FleetTerms` names the type, the starting
 price, the Accelerant step, the profile, the joining requirements and a
 deadline (`Expired` once passed). The starting price must be 10 to 1,000,000
@@ -1532,7 +1533,7 @@ agent voting.
 
 The system is deployed once per chain. Fleets are then created through the
 factory: the five founding fleets by the Safe, and later fleets by anyone in
-phase 3. All scripts read one manifest, named by `KEYFLEET_MANIFEST` (`base` or
+phase 4. All scripts read one manifest, named by `KEYFLEET_MANIFEST` (`base` or
 `anvil`), from `deployments/<name>.json`, through `script/KeyfleetManifest.sol`.
 A manifest holds the Safe, the keeper, REGENT revenue staking, the Autolaunch
 factory, the Regents Club Pass, the collection's name, symbol, metadata base and collection metadata
@@ -1589,7 +1590,7 @@ without six decimals, a zero keeper and a zero trait table hash.
   against the chain's current state, stopping at the first call that would
   revert, then writes each call as its own Safe Transaction Builder file,
   `deployments/safe/<manifest>.<step>.json` (`founding-fleet-1` to
-  `founding-fleet-5`, `phase-1` to `phase-3`, `club-gifts-1-80` to
+  `founding-fleet-5`, `phase-1` to `phase-4`, `club-gifts-1-80` to
   `club-gifts-1921-1998`), for the Safe's signers to load,
   check and sign. Nothing is signed or sent from it on Base. On a local anvil
   chain (31337) it sends the calls directly from the Safe's address, which anvil
@@ -1617,7 +1618,7 @@ without six decimals, a zero keeper and a zero trait table hash.
   staking, the Autolaunch factory and a VRF coordinator. The sender is the Safe
   and the keeper. It runs in two steps, since a phase must open in the future:
   `run` creates the five founding fleets with a stand-in deck and moves to
-  phase 1, opening a
+  phase 2, opening Club gifts and Classic sales a
   minute later (`OPENING`); once the chain's clock is past that, `sell` buys two
   keys while the coordinator refuses every request, turns the treasury's booked
   USDC into REGENT with one piece, and leaves the sender holding and having
@@ -1628,8 +1629,8 @@ without six decimals, a zero keeper and a zero trait table hash.
   against Base's own USDC, swap route, REGENT staking and Autolaunch factory
   from `deployments/base.json`, with a stand-in VRF coordinator. The Safe is
   anvil's first default account and the keeper its second. `deploy` deploys,
-  creates the five founding fleets with their real decks and moves to phase 1,
-  opening 10 minutes
+  creates the five founding fleets with their real decks and moves to phase 2,
+  opening Club gifts and Classic sales 10 minutes
   later (`LAB_OPENING`), and the shell script then moves the lab chain's clock
   past that; `record` writes
   `deployments/base-fork-lab.json` through `RecordKeyfleets`, in the shape of
@@ -1647,7 +1648,7 @@ without touching a file.
 Nothing below can be fixed after the fact unless it says so.
 
 1. **Keeper.** Write the keeper wallet's address into the manifest. It records
-   the deck of every fleet created in phase 3 and asks for card refreshes; the
+   the deck of every fleet created in phase 4 and asks for card refreshes; the
    Safe can replace it later with `setKeeper`.
 2. **The keeper's job list.** Nothing runs by itself. The keeper runs a bot
    that presses, as each comes due:
@@ -1748,6 +1749,9 @@ tries every limit in the few thousand gas above it and finds that every
 completed purchase either made its random-number request or said it failed.
 
 ### On a fork of Base
+
+Historical figures from the three-phase contracts before Club minting was separated
+on 9 October; phase-step gas must be measured again before deployment.
 
 Measured on 8 October 2026 on a fork of Base at its latest block, against the
 real USDC (a proxy), the real REGENT pools and hook, REGENT revenue staking, the

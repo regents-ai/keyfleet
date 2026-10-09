@@ -445,28 +445,35 @@ contract KeyfleetRulesTest is KeyfleetFixture {
     // --- 4. the 7-day opening --------------------------------------------
 
     function test_theOpeningCountsFromTheFoundingFleetsPhase() public view {
-        // The fixture opened phase 1 a second before phase 2, which opened now.
-        assertEq(keys.salesOpenAt(1), block.timestamp - 1, "fleet 1 at phase 1");
-        assertEq(keys.salesOpenAt(4), block.timestamp, "fleets 2 to 4 at phase 2");
+        // The fixture opened phase 2 a second before phase 3, which opened now.
+        assertEq(keys.salesOpenAt(1), block.timestamp - 1, "fleet 1 at phase 2");
+        assertEq(keys.salesOpenAt(4), block.timestamp, "fleets 2 to 4 at phase 3");
         assertEq(votes.treasuryOpensAt(), block.timestamp - 1 + 7 days, "seven days after its sales opened");
     }
 
     function test_aFoundingFleetHasNoOpeningBeforeItsPhase() public {
-        // A new collection: the founding fleets exist, but phase 2 has not opened fleets 2 to 4.
+        // A new collection: the founding fleets exist, but phase 3 has not opened fleets 2 to 4.
         _setUpFixture();
         for (uint256 id = 1; id <= keys.FOUNDING_FLEETS(); ++id) {
             _createFounding(keys.foundingPreset(id));
         }
         _advancePhase();
-        uint256 phaseOne = block.timestamp;
+        uint256 clubOpening = block.timestamp;
+        assertEq(keys.salesOpenAt(5), clubOpening, "Club opened at phase 1");
+        assertEq(keys.salesOpenAt(1), 0, "Classic not yet");
+        assertEq(KeyfleetManager(keys.managerOf(1)).VOTES().treasuryOpensAt(), 0);
         vm.warp(block.timestamp + 1 days);
-        assertEq(keys.salesOpenAt(1), phaseOne, "fleet 1 opened at phase 1");
+        _advancePhase();
+        uint256 classicOpening = block.timestamp;
+        assertEq(keys.salesOpenAt(1), classicOpening, "Classic opened at phase 2");
+        assertEq(keys.salesOpenAt(5), clubOpening, "Club keeps its time");
         assertEq(keys.salesOpenAt(2), 0, "fleet 2 not yet");
         assertFalse(keys.salesOpen(2), "so it does not sell");
         assertEq(KeyfleetManager(keys.managerOf(2)).VOTES().treasuryOpensAt(), 0, "and has no opening yet");
         _advancePhase();
-        assertEq(keys.salesOpenAt(2), block.timestamp, "fleet 2 opens at phase 2");
-        assertEq(keys.salesOpenAt(1), phaseOne, "fleet 1 keeps its time");
+        assertEq(keys.salesOpenAt(2), block.timestamp, "fleet 2 opens at phase 3");
+        assertEq(keys.salesOpenAt(1), classicOpening, "Classic keeps its time");
+        assertEq(keys.salesOpenAt(5), clubOpening, "Club keeps its time");
     }
 
     function test_anOpenFleetsOpeningCountsFromItsCreation() public {

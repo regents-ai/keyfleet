@@ -229,6 +229,7 @@ contract KeyfleetRevealTest is RevealFixture {
             factory.createFoundingFleet(preset, _deckHash(id), deckSize, _profile("Founding fleet"));
         }
         _advancePhase();
+        _advancePhase();
         KeyfleetManager fleet = KeyfleetManager(keys.managerOf(1));
         _fund(fleet);
 

@@ -3,6 +3,8 @@
 **Date:** 6 October 2026, brought up to date 7 October 2026
 **Branches:** built on `kf/contracts-v03`, then reshaped on `kf/fleet-manager-factory`
 **Binding source:** [contracts-build-now-spec-v0.3.md](contracts-build-now-spec-v0.3.md) (Sean, 6 October 2026), plus the HQ-recorded founder rule 41 a: every protocol USDC revenue path reaches REGENT staking on Base. The contract shape is the one Sean chose on 7 October 2026: one key collection, one factory and four contracts per fleet, set out in [fleet-manager-factory-design.md](fleet-manager-factory-design.md).
+**Phase update (9 October 2026):** Club gifts now open alone in phase 1, Classic sales in phase 2, the other sold founding fleets in phase 3, and public creation in phase 4. The original numbering below is historical; use the contracts README and deployment guide for current steps.
+
 **Status:** built and tested locally. Nothing is deployed, broadcast, signed or pushed. The [contracts README](../contracts/README.md) is the reference for what the code does.
 
 This plan is for the engineer who built v0.3 and for the reviewer who checks it. Section 1 records the starting point and the economic rules. Section 2 maps the spec onto the contracts. Section 3 lists the Base addresses pinned. Section 4 designs each piece. Section 5 lists what the site must change. Section 6 is the build order. Sections 7 to 9 hold the decisions.

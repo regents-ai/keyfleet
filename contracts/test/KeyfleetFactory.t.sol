@@ -229,7 +229,7 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
         factory.createFoundingFleet(KeyfleetPresets.Preset.FleetTechClassic, _deckHash(6), DECK_SIZE, _profile("F"));
     }
 
-    function test_FoundingFleetsCannotBeCreatedInPhaseThree() public {
+    function test_FoundingFleetsCannotBeCreatedInPhaseFour() public {
         _openCreation();
         vm.prank(safe);
         vm.expectRevert(KeyfleetKeys.DeckGivenAtCreation.selector);
@@ -244,15 +244,15 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
 
     // --- open fleets -----------------------------------------------------------
 
-    function test_OpenCreationIsClosedBeforePhaseThree() public {
+    function test_OpenCreationIsClosedBeforePhaseFour() public {
         _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetManager.Requirements memory anyone;
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetFactory.CreationClosed.selector, uint8(2)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetFactory.CreationClosed.selector, uint8(3)));
         factory.createFleet(_terms(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6, anyone));
     }
 
-    /// @dev Invariant: in phase 3, open creation waits for the moment the Safe chose, to the second.
-    function test_OpenCreationWaitsForPhaseThreeToOpen() public {
+    /// @dev Invariant: in phase 4, open creation waits for the moment the Safe chose, to the second.
+    function test_OpenCreationWaitsForPhaseFourToOpen() public {
         _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         uint64 opensAt = uint64(block.timestamp + 2 days);
         vm.prank(safe);
@@ -264,7 +264,7 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
         vm.startPrank(creator);
         usdc.approve(address(factory), 10e6);
         vm.warp(opensAt - 1);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetFactory.CreationClosed.selector, uint8(3)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetFactory.CreationClosed.selector, uint8(4)));
         factory.createFleet(_terms(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6, anyone));
         vm.warp(opensAt);
         (uint256 fleetId,) = factory.createFleet(_terms(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6, anyone));
