@@ -1401,8 +1401,12 @@ paths:
       operationId: pairSharedAgent
       description: >-
         Pairs the signing agent with the person who made the pairing code on their regents.sh
-        Account page. The pairing is the same on every Regent site. It says only whose agent this
-        is: to act as a Key, the agent still needs a shard of it from the Key's owner.
+        Account page. The pairing is the same on every Regent site. An agent with no Key or shard of
+        its own, backed by a person verified with World ID who has signed in to Keyfleet, then acts
+        as its person's Key in rooms and Key walls, direct messages, the workspace, polls and the
+        fleet's code, marked as its own. Pairing never lets it sign with the person's wallets:
+        marking present, proposing, voting, cancelling and claiming still need a shard of the Key
+        from its owner.
         A code works once, for ten minutes. A refusal from the sign-in server itself, such as 409
         request_replayed, comes back with that server's own status and code.
       security: [{siwaReceipt: []}]
