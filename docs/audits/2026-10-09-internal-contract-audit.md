@@ -491,3 +491,20 @@ Final amendment checks: `make check-contracts` passed 581 tests with six fork
 tests skipped; formatting, build and bytecode checks passed. The deep collection
 run passed all 24 checks, with invariant cases at 256 runs and depth 100. The
 collection and factory remain within Base's runtime and deployment size limits.
+
+### Founder conversion decision and keeper — 9 October 2026
+
+Sean said: **"conversion price: this is unavoidable, don't fix"**. KF-A-03 is
+recorded as an accepted risk, with no conversion-price mitigation requested.
+Conversion behavior is unchanged; no economic attack test is claimed complete.
+
+Sean acknowledged that KF-A-04 can occur, particularly for contract-held Passes.
+No batch-handling contract change was requested. The current script probes NFT
+receipt and routes a holder that fails the probe to `KeyfleetClubClaims`; a Pass
+move or a holder that changes its receipt behavior after preparation can still
+revert its entire batch. The full sequential 1,998-Key distribution is retained.
+
+Sean selected the Base Regents Safe
+`0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e` as keeper. The Base deployment
+manifest now records that address. The randomness subscription id is still
+`"0"`, awaiting creation/funding and Safe ownership. Nothing was deployed or signed.

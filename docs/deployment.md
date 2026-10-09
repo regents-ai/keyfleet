@@ -8,7 +8,8 @@ has moved the collection to phase 4.
 
 Nothing may be deployed yet. Before any deploy every Keyfleet contract must pass
 the internal audit the founder chose on 9 Oct in place of an outside one, with
-its findings fixed, and the founder must give the go; the
+its remaining findings resolved subject to Sean's accepted risks, and the founder
+must give the go; the
 [contracts README](../contracts/README.md#status) lists what is decided and what
 is on hold. Key sales stay off until the founder says so: every fleet's sales
 open only through a phase step, which is a Safe transaction the founder signs.
@@ -148,8 +149,18 @@ the Autolaunch factory from Autolaunch Revstake v2's deployment manifest
 
 ## Step 1: the randomness subscription
 
-Every key's card or traits come from one Chainlink VRF random number, and one
-subscription pays for every fleet's requests in ETH. Before the deployment:
+The Base keeper is already set to the Regents Safe by Sean's 9 October decision.
+Create the subscription on **Base Mainnet** at
+[Chainlink's subscription creation page](https://vrf.chain.link/base/new),
+then fund its native ETH balance. If a personal wallet creates it, transfer
+ownership to the Regents Safe and have the Safe accept the transfer. Supply the
+resulting subscription id for `base.json`; the collection is added as a consumer
+after its deployment. Club cards use the fixed founding deck and make no VRF
+request, but the shared system's deployment still requires a valid subscription.
+
+Keys that draw cards or traits use one Chainlink VRF random number; founding
+Keys within their decks are dealt by number without a request. One subscription
+pays for every fleet's randomness requests in ETH. Before the deployment:
 
 1. Create the subscription on the Base coordinator (`createSubscription()`, or
    Chainlink's VRF app) and fund it in ETH with
@@ -158,8 +169,8 @@ subscription pays for every fleet's requests in ETH. Before the deployment:
    `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`:
    `requestSubscriptionOwnerTransfer(subId, 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e)`
    from the creator, then `acceptSubscriptionOwnerTransfer(subId)` from the Safe.
-3. Write the subscription id into `vrf.subscriptionId` and the keeper wallet's
-   address into `keeper` in `base.json`.
+3. Write the subscription id into `vrf.subscriptionId` in `base.json`. The
+   `keeper` is already set to the Regents Safe.
 
 ### Keeping the subscription funded
 

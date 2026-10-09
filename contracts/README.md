@@ -32,6 +32,11 @@ any price, supply, split, rate bound, route or royalty.
 
 ## Status
 
+**9 October founder update:** KF-A-03's conversion-price risk is accepted; Sean
+requested no fix. Batch receiver/ownership changes (KF-A-04) were acknowledged,
+with the existing probe and claims fallback retained. The Base keeper is the
+Regents Safe. The randomness subscription is still unset; no deployment occurred.
+
 Decided by the founder on 27, 28 and 29 September and 6, 7 and 8 October 2026,
 and what the code on this branch does:
 
@@ -158,15 +163,15 @@ On hold or not yet done:
 
 - Nothing is deployed. Before any deploy: the internal audit of every Keyfleet
   contract the founder chose on 9 Oct in place of an outside one, its findings
-  fixed, and the founder's go.
+  resolved subject to the founder's accepted risks above, and the founder's go.
 - Key sales stay off until the founder explicitly says so. On chain no key of
   any fleet can be minted before the Safe's phase step that opens it.
 - `deployments/base.json` carries the trait table's hash
   (`0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, eight
   traits of sixteen values each, every trait's weights adding up to 1,000), the
-  five founding fleets' deck fingerprints, a zero keeper and a VRF subscription
-  of 0. A Base deployment is refused until the keeper's address and the Regents
-  subscription id are written in.
+  five founding fleets' deck fingerprints, the Regents Safe as keeper and a VRF
+  subscription of 0. A Base deployment is refused until a valid subscription
+  id is written in.
 - On Base every deployment refuses any staking contract but REGENT revenue
   staking and any swap route but the pinned one, and the record step refuses a
   randomness subscription not owned by the Regents Safe.
@@ -1647,10 +1652,11 @@ without touching a file.
 
 Nothing below can be fixed after the fact unless it says so.
 
-1. **Keeper.** Write the keeper wallet's address into the manifest. It records
-   the deck of every fleet created in phase 4 and asks for card refreshes; the
-   Safe can replace it later with `setKeeper`.
-2. **The keeper's job list.** Nothing runs by itself. The keeper runs a bot
+1. **Keeper.** Sean selected the Base Regents Safe on 9 October 2026;
+   `base.json` now uses the Safe as keeper. It records the deck of every fleet
+   created in phase 4 and asks for card refreshes through Safe transactions.
+   The Safe can replace it later with `setKeeper`.
+2. **Routine public jobs.** Nothing runs by itself. An operator can run a bot
    that presses, as each comes due:
    - the REGENT buyer's `convert(250000000)` whenever `nextPieceAt()` has passed
      and `queueLength()` is above zero, and on `PriceMoved` the same with a

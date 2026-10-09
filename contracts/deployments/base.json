@@ -1,7 +1,7 @@
 {
   "chainId": 8453,
   "safe": "0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e",
-  "keeper": "0x0000000000000000000000000000000000000000",
+  "keeper": "0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e",
   "regentStaking": "0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5",
   "autolaunchFactory": "0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E",
   "regentsClubPass": "0x2208aaDBdEcd47D3B4430b5b75a175f6d885D487",
