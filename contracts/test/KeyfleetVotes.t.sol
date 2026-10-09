@@ -1160,6 +1160,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         _lapse();
         vm.prank(_wallet(1));
         shards.issue(_range(_k(1), 40), bob, 30);
+        _startNonce(votes, bob, _k(1));
         uint256 flatTen = _measureBallot(votes, bob, _k(2), 10);
         uint256 flatPerKey = (_measureBallot(votes, bob, _k(12), 29) - flatTen) / 19;
 
@@ -1174,6 +1175,7 @@ contract KeyfleetVotesTest is KeyfleetFixture {
             vm.prank(_wallet(n));
             shards.issue(_ids(tokenId), bob, 30);
         }
+        _startNonce(levelled.VOTES(), bob, _key(levelled, 1));
         uint256 levelledTwo = _measureBallot(levelled.VOTES(), bob, _key(levelled, 2), 2);
         uint256 levelledPerKey = (_measureBallot(levelled.VOTES(), bob, _key(levelled, 4), 6) - levelledTwo) / 4;
 
@@ -1184,6 +1186,15 @@ contract KeyfleetVotesTest is KeyfleetFixture {
         assertLt(flatTen, TEN_KEY_BALLOT_CEILING, "a ten-key ballot stays under the published ceiling");
         assertLt(flatPerKey, PER_KEY_BALLOT_CEILING, "each extra key costs a fixed amount");
         assertApproxEqAbs(levelledPerKey, flatPerKey, 500, "a Fibonacci key costs what a Classic key costs");
+    }
+
+    /// @dev A caster's first ballot on a controller also starts their nonce there, a one-off write;
+    /// it is cast here, with key 1, which the measured ranges leave out, so every measured ballot
+    /// pays the same.
+    function _startNonce(KeyfleetVotes v, address caster, uint256 tokenId) private {
+        uint256 proposalId = _propose(v);
+        vm.prank(caster);
+        v.castBallot(proposalId, _ids(tokenId), YES);
     }
 
     /// @dev Casts `count` consecutive ids from `firstTokenId` in one call on a new proposal and

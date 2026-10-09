@@ -136,7 +136,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "target" => "1",
        "restricted" => "true",
        "signature" => "approve",
-       "hash" => String.duplicate("a", 64),
+       "issued_at" => "1790000000",
        "name" => "Probe",
        "symbol" => "PRB",
        "description" => "A probe",

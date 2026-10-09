@@ -72,8 +72,8 @@ import {FleetWiring, IKeyfleetFactory, KeyfleetWiring} from "./KeyfleetWiring.so
 /// Renewals and ballots may also be signed and submitted by anyone (`presentBySig`,
 /// `castBallotBySig`): a signed message names its keys in ascending order and binds each key's
 /// ownership epoch and delegation revision and the signer's nonce, and a ballot also binds the
-/// proposal hash, so a change of hands, any change to the key's shards or agent voting, or a
-/// second submission voids it. Signatures are checked with OpenZeppelin `SignatureChecker`, which
+/// proposal hash, so a change of hands, any change to the key's shards or agent voting, a
+/// second submission or a ballot the signer then casts directly voids it. Signatures are checked with OpenZeppelin `SignatureChecker`, which
 /// accepts ordinary wallets and contract wallets (ERC-1271).
 ///
 /// Carrying out a proposal checks the calls against its hash, marks it executed and has the
@@ -531,11 +531,13 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
     /// voting is on, every key must be mature (`KEY_MATURITY`), and the proposal must be open, or
     /// waiting with the choice No (see the wait above). A key's first ballot adds it to the
     /// electorate if it was not present at opening; a later one replaces its contribution. The whole
-    /// call reverts if any one key is refused.
+    /// call reverts if any one key is refused. It uses up the caller's nonce, so a message the
+    /// caller signed earlier can no longer be submitted over this ballot.
     /// @param proposalId The proposal.
     /// @param tokenIds The keys.
     /// @param choice Yes, No or Abstain.
     function castBallot(uint256 proposalId, uint256[] calldata tokenIds, Choice choice) external {
+        _useNonce(msg.sender);
         _castBallot(msg.sender, proposalId, tokenIds, choice);
     }
 
@@ -717,10 +719,10 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
         );
     }
 
-    /// @dev Refuses a batch that moves money other than as one share of one asset: a call with ETH,
-    /// a second `pay` or `advance`, a share outside `MIN_SHARE_PPM` to `MAX_SHARE_PPM`, or a call
-    /// to any other contract using a standard function that moves or approves tokens
-    /// (`_movesTokens`).
+    /// @dev Refuses a batch that moves money more than once: a call with ETH, a second `pay`,
+    /// `advance` or `runVotedSplit` (each one money move), a share outside `MIN_SHARE_PPM` to
+    /// `MAX_SHARE_PPM`, or a call to any other contract using a standard function that moves or
+    /// approves tokens (`_movesTokens`).
     function _requireShares(KeyfleetTreasury.Call[] calldata calls) private view {
         bool moved;
         for (uint256 i = 0; i < calls.length; ++i) {
@@ -729,21 +731,25 @@ contract KeyfleetVotes is EIP712, Nonces, ReentrancyGuardTransient {
             if (call.data.length < 4) continue;
             bytes4 selector = bytes4(call.data[:4]);
             if (call.target == address(TREASURY)) {
-                uint32 sharePpm;
                 if (selector == KeyfleetTreasury.pay.selector) {
-                    (,, sharePpm) = abi.decode(call.data[4:], (address, address, uint32));
+                    (,, uint32 sharePpm) = abi.decode(call.data[4:], (address, address, uint32));
+                    _requireShare(sharePpm);
                 } else if (selector == KeyfleetTreasury.advance.selector) {
-                    (,,, sharePpm,) = abi.decode(call.data[4:], (uint256, address, address, uint32, bytes32));
-                } else {
+                    (,,, uint32 sharePpm,) = abi.decode(call.data[4:], (uint256, address, address, uint32, bytes32));
+                    _requireShare(sharePpm);
+                } else if (selector != KeyfleetTreasury.runVotedSplit.selector) {
                     continue;
                 }
                 if (moved) revert OneMoneyMovePerProposal();
                 moved = true;
-                if (sharePpm < MIN_SHARE_PPM || sharePpm > MAX_SHARE_PPM) revert ShareOutOfRange(sharePpm);
             } else if (_movesTokens(selector)) {
                 revert TokenMoveRefused(i, selector);
             }
         }
+    }
+
+    function _requireShare(uint32 sharePpm) private pure {
+        if (sharePpm < MIN_SHARE_PPM || sharePpm > MAX_SHARE_PPM) revert ShareOutOfRange(sharePpm);
     }
 
     /// @dev The standard functions that move a holder's tokens or let another account move them:

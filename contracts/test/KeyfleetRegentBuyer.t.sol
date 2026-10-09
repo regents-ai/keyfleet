@@ -281,6 +281,66 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         assertEq(regentBuyer.queueLength(), 1);
     }
 
+    /// @dev Invariant: a fleet whose USDC will not move, for instance because USDC's issuer froze its
+    /// manager, is skipped with its booking whole and waits at the back; the clock does not move, so
+    /// the next fleet converts straight away.
+    function test_AFleetWhoseUsdcWillNotMoveIsSkippedAndTheNextConverts() public {
+        KeyfleetManager frozen = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        KeyfleetManager next = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        uint256 frozenBooked = frozen.pendingConversion();
+        uint256 nextBooked = next.pendingConversion();
+        usdc.freeze(address(frozen));
+        uint256 opensAt = regentBuyer.nextPieceAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+
+        vm.expectEmit(address(regentBuyer));
+        emit KeyfleetRegentBuyer.PieceSkipped(address(frozen));
+        assertEq(regentBuyer.convert(FULL_PIECE), 0, "nothing is bought for it");
+        assertEq(frozen.pendingConversion(), frozenBooked, "it keeps its whole booking");
+        assertEq(usdc.allowance(address(frozen), address(regentBuyer)), 0, "and approves nothing");
+        assertEq(regentBuyer.nextPieceAt(), opensAt, "the clock does not move");
+        assertEq(regentBuyer.nextInQueue(), address(next), "the next fleet is at the front");
+        assertEq(regentBuyer.queueLength(), 2, "and the skipped one waits at the back");
+        _assertBuyerEmpty();
+
+        assertEq(regentBuyer.convert(FULL_PIECE), _regentFor(nextBooked), "the next fleet converts at once");
+        assertEq(next.pendingConversion(), 0);
+        assertEq(regentBuyer.nextInQueue(), address(frozen));
+        assertEq(frozen.pendingConversion(), frozenBooked);
+    }
+
+    /// @dev Invariant: a caller cannot make a working fleet be skipped by sending too little gas;
+    /// the call either converts its piece or reverts with the fleet's booking and place untouched.
+    function testFuzz_NoGasLimitMakesAWorkingFleetBeSkipped(uint256 gasLimit) public {
+        gasLimit = bound(gasLimit, 100_000, 3_000_000);
+        KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        uint256 booked = fleet.pendingConversion();
+        uint256 opensAt = regentBuyer.nextPieceAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+
+        vm.recordLogs();
+        (bool ok,) = address(regentBuyer).call{gas: gasLimit}(abi.encodeCall(KeyfleetRegentBuyer.convert, (FULL_PIECE)));
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i = 0; i < logs.length; ++i) {
+            assertTrue(logs[i].topics[0] != KeyfleetRegentBuyer.PieceSkipped.selector, "never skipped");
+        }
+        if (ok) {
+            assertEq(fleet.pendingConversion(), 0, "converted");
+        } else {
+            assertEq(fleet.pendingConversion(), booked, "or untouched");
+            assertEq(regentBuyer.nextInQueue(), address(fleet), "in its place");
+        }
+    }
+
+    function test_ConvertWithTooLittleGasForTheHandOverReverts() public {
+        KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        uint256 opensAt = regentBuyer.nextPieceAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+        vm.expectRevert(KeyfleetRegentBuyer.NotEnoughGas.selector);
+        regentBuyer.convert{gas: 300_000}(FULL_PIECE);
+        assertEq(regentBuyer.nextInQueue(), address(fleet));
+    }
+
     function test_ConvertWithNothingQueuedReverts() public {
         vm.expectRevert(KeyfleetRegentBuyer.NothingQueued.selector);
         regentBuyer.convert(FULL_PIECE);
@@ -460,9 +520,10 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
     }
 
     function test_ConvertPaysTheV3PoolOnlyOnce() public {
-        uint256 booked = _bookClassic();
+        _bookClassic();
         v3Pool.setCallbackTwice(true);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.SwapIncomplete.selector, 0, booked));
+        // The first callback pays and clears what is owed; a second one is refused outright.
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.UnexpectedCallback.selector, address(v3Pool)));
         regentBuyer.convert(FULL_PIECE);
     }
 

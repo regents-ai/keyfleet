@@ -213,8 +213,8 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   defp action("signature", _fleet, inputs, _reads, _text, figures) do
     way = if Build.field(inputs, "signature") == "revoke", do: :revoke, else: :approve
 
-    with {:ok, hash} <- Build.typed(inputs, "hash", &Typed.hash/1, figures),
-         do: {:ok, {:signature, way, hash}, {:signature, way, hash}}
+    with {:ok, issued_at} <- Build.typed(inputs, "issued_at", &Typed.issued_at/1, figures),
+         do: {:ok, {:signature, way, issued_at}, {:signature, way, issued_at}}
   end
 
   defp action("launch", _fleet, inputs, _reads, _text, figures) do

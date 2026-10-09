@@ -27,8 +27,11 @@ contract KeyfleetLitTest is KeyfleetFixture {
 
     address private mallory = address(0x4A11);
 
-    event LitRequestApproved(bytes32 indexed structHash);
-    event LitRequestRevoked(bytes32 indexed structHash);
+    /// @dev The `issuedAt` of the `CreateWallet` request these tests approve.
+    uint256 private constant ISSUED_AT = 1_790_000_000;
+
+    event LitCreateWalletApproved(bytes32 indexed digest);
+    event LitCreateWalletRevoked(bytes32 indexed digest);
 
     function setUp() public {
         _setUpFixture();
@@ -45,33 +48,27 @@ contract KeyfleetLitTest is KeyfleetFixture {
         _openTreasury(fleet);
     }
 
-    function _approveRequest(KeyfleetTreasury treasury, bytes32 structHash)
+    /// @dev A proposal's call approving Lit's `CreateWallet` request for the treasury at `issuedAt`.
+    function _approveRequest(KeyfleetTreasury treasury, uint256 issuedAt)
         private
         pure
         returns (KeyfleetTreasury.Call[] memory)
     {
-        return _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.approveLitRequest, (structHash)));
+        return _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.approveLitCreateWallet, (issuedAt)));
     }
 
-    function _revokeRequest(KeyfleetTreasury treasury, bytes32 structHash)
+    function _revokeRequest(KeyfleetTreasury treasury, uint256 issuedAt)
         private
         pure
         returns (KeyfleetTreasury.Call[] memory)
     {
-        return _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.revokeLitRequest, (structHash)));
+        return _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.revokeLitCreateWallet, (issuedAt)));
     }
 
-    /// @dev The digest Lit checks for a request: its struct hash under Lit's domain on this chain.
-    function _litDigest(bytes32 structHash) private view returns (bytes32) {
-        bytes32 domain = keccak256(
-            abi.encode(
-                keccak256("EIP712Domain(string name,string version,uint256 chainId)"),
-                keccak256("Lit ChainSecured"),
-                keccak256("1"),
-                block.chainid
-            )
-        );
-        return MessageHashUtils.toTypedDataHash(domain, structHash);
+    /// @dev The digest Lit checks for the treasury's `CreateWallet` request at `issuedAt`, worked
+    /// out apart from the treasury.
+    function _litDigest(KeyfleetTreasury treasury, uint256 issuedAt) private view returns (bytes32) {
+        return LitAdminCalls.createWalletDigest(address(treasury), issuedAt, block.chainid);
     }
 
     /// @dev The four calls that set up the fleet's Lit account: create it, register the inbox
@@ -100,19 +97,18 @@ contract KeyfleetLitTest is KeyfleetFixture {
 
     function test_anApprovedRequestIsYesWhateverTheSignatureBytes() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
-        bytes32 request = keccak256("lit message");
-        bytes32 hash = _litDigest(request);
+        bytes32 hash = _litDigest(treasury, ISSUED_AT);
 
-        KeyfleetTreasury.Call[] memory calls = _approveRequest(treasury, request);
+        KeyfleetTreasury.Call[] memory calls = _approveRequest(treasury, ISSUED_AT);
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _approve(fleet, calls);
         vm.warp(votes.executableAt(proposalId));
         vm.expectEmit(true, true, true, true, address(treasury));
-        emit LitRequestApproved(request);
+        emit LitCreateWalletApproved(hash);
         votes.execute(proposalId, calls);
 
         assertTrue(treasury.approvedHash(hash));
-        assertEq(treasury.isValidSignature(request, ""), NO, "the bare struct hash is no");
+        assertEq(treasury.litCreateWalletDigest(ISSUED_AT), hash, "the treasury builds Lit's digest");
         assertEq(treasury.isValidSignature(hash, ""), IERC1271.isValidSignature.selector);
         assertEq(treasury.isValidSignature(hash, hex"1234"), IERC1271.isValidSignature.selector);
         assertTrue(SignatureChecker.isValidERC1271SignatureNow(address(treasury), hash, ""));
@@ -121,16 +117,15 @@ contract KeyfleetLitTest is KeyfleetFixture {
 
     function test_aRevokedRequestIsRefused() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
-        bytes32 request = keccak256("lit message");
-        bytes32 hash = _litDigest(request);
-        _execute(fleet, _approveRequest(treasury, request));
+        bytes32 hash = _litDigest(treasury, ISSUED_AT);
+        _execute(fleet, _approveRequest(treasury, ISSUED_AT));
 
-        KeyfleetTreasury.Call[] memory calls = _revokeRequest(treasury, request);
+        KeyfleetTreasury.Call[] memory calls = _revokeRequest(treasury, ISSUED_AT);
         KeyfleetVotes votes = fleet.VOTES();
         uint256 proposalId = _approve(fleet, calls);
         vm.warp(votes.executableAt(proposalId));
         vm.expectEmit(true, true, true, true, address(treasury));
-        emit LitRequestRevoked(request);
+        emit LitCreateWalletRevoked(hash);
         votes.execute(proposalId, calls);
 
         assertFalse(treasury.approvedHash(hash));
@@ -142,19 +137,18 @@ contract KeyfleetLitTest is KeyfleetFixture {
     /// reaches either, the voting controller and the manager included.
     function test_onlyAnApprovedCallApprovesOrRevokes() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
-        bytes32 request = keccak256("lit message");
 
         address[3] memory callers = [mallory, address(fleet.VOTES()), address(fleet)];
         for (uint256 i = 0; i < callers.length; ++i) {
             vm.startPrank(callers[i]);
             vm.expectRevert(KeyfleetTreasury.OnlySelf.selector);
-            treasury.approveLitRequest(request);
+            treasury.approveLitCreateWallet(ISSUED_AT);
             vm.expectRevert(KeyfleetTreasury.OnlySelf.selector);
-            treasury.revokeLitRequest(request);
+            treasury.revokeLitCreateWallet(ISSUED_AT);
             vm.stopPrank();
         }
 
-        KeyfleetTreasury.Call[] memory calls = _approveRequest(treasury, request);
+        KeyfleetTreasury.Call[] memory calls = _approveRequest(treasury, ISSUED_AT);
         address[2] memory outsiders = [mallory, address(fleet)];
         for (uint256 i = 0; i < outsiders.length; ++i) {
             vm.prank(outsiders[i]);
@@ -169,18 +163,17 @@ contract KeyfleetLitTest is KeyfleetFixture {
 
         vm.warp(votes.executableAt(proposalId));
         vm.expectRevert(KeyfleetVotes.ActionsMismatch.selector);
-        votes.execute(proposalId, _approveRequest(treasury, keccak256("another message")));
+        votes.execute(proposalId, _approveRequest(treasury, ISSUED_AT + 1));
 
-        assertFalse(treasury.approvedHash(_litDigest(request)), "nothing reached it");
+        assertFalse(treasury.approvedHash(_litDigest(treasury, ISSUED_AT)), "nothing reached it");
         votes.execute(proposalId, calls);
-        assertTrue(treasury.approvedHash(_litDigest(request)));
+        assertTrue(treasury.approvedHash(_litDigest(treasury, ISSUED_AT)));
     }
 
     function test_aRejectedProposalApprovesNothing() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
-        bytes32 request = keccak256("lit message");
         KeyfleetVotes votes = fleet.VOTES();
-        KeyfleetTreasury.Call[] memory calls = _approveRequest(treasury, request);
+        KeyfleetTreasury.Call[] memory calls = _approveRequest(treasury, ISSUED_AT);
 
         uint256 first = _key(fleet, 1);
         vm.startPrank(keys.ownerOf(first));
@@ -191,12 +184,12 @@ contract KeyfleetLitTest is KeyfleetFixture {
 
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.NotApproved.selector, KeyfleetVotes.Status.Rejected));
         votes.execute(proposalId, calls);
-        assertEq(treasury.isValidSignature(_litDigest(request), ""), NO);
+        assertEq(treasury.isValidSignature(_litDigest(treasury, ISSUED_AT), ""), NO);
     }
 
-    /// @dev Invariant (audit KF-A-02): an approval is only ever a Lit request. Approving a USDC
-    /// `TransferWithAuthorization` struct hash from the treasury gives no signature USDC accepts,
-    /// because the treasury puts it under Lit's domain, never USDC's.
+    /// @dev Invariant (audit KF-A-02): an approval is only ever Lit's `CreateWallet` request, built by
+    /// the treasury from its two fields, so no proposal can make the treasury sign a USDC
+    /// `TransferWithAuthorization`, a permit or any other message.
     function test_anApprovalIsNeverASignatureForAnotherVerifier() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         bytes32 transfer = keccak256(
@@ -221,22 +214,23 @@ contract KeyfleetLitTest is KeyfleetFixture {
                 address(usdc)
             )
         );
-        _execute(fleet, _approveRequest(treasury, transfer));
+        _execute(fleet, _approveRequest(treasury, ISSUED_AT));
 
         assertEq(treasury.isValidSignature(MessageHashUtils.toTypedDataHash(usdcDomain, transfer), ""), NO);
         assertEq(treasury.isValidSignature(transfer, ""), NO);
-        assertEq(treasury.isValidSignature(_litDigest(transfer), ""), IERC1271.isValidSignature.selector);
+        assertEq(treasury.isValidSignature(_litDigest(treasury, ISSUED_AT), ""), IERC1271.isValidSignature.selector);
     }
 
-    /// @dev An approved `CreateWallet` request is yes for exactly the digest Lit checks.
+    /// @dev An approved `CreateWallet` request is yes for exactly the digest Lit checks for the
+    /// treasury as owner, and for no other owner or time.
     function test_anApprovedCreateWalletIsYesForLitsDigest() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
-        bytes32 request = keccak256(
-            abi.encode(keccak256("CreateWallet(address address,uint256 issuedAt)"), address(treasury), 1_790_000_000)
-        );
-        _execute(fleet, _approveRequest(treasury, request));
-        bytes32 litChecks = LitAdminCalls.createWalletDigest(address(treasury), 1_790_000_000, block.chainid);
+        _execute(fleet, _approveRequest(treasury, ISSUED_AT));
+        bytes32 litChecks = LitAdminCalls.createWalletDigest(address(treasury), ISSUED_AT, block.chainid);
         assertEq(treasury.isValidSignature(litChecks, ""), IERC1271.isValidSignature.selector);
+        assertEq(treasury.isValidSignature(_litDigest(treasury, ISSUED_AT + 1), ""), NO, "another time");
+        bytes32 otherOwner = LitAdminCalls.createWalletDigest(mallory, ISSUED_AT, block.chainid);
+        assertEq(treasury.isValidSignature(otherOwner, ""), NO, "another owner");
     }
 
     /// @dev The `CreateWallet` digest matches one computed independently by `eth_account` from
@@ -369,7 +363,7 @@ contract KeyfleetLitTest is KeyfleetFixture {
         KeyfleetVotes votes = fleet.VOTES();
         vm.prank(holder);
         votes.present(_ids(first));
-        _execute(fleet, _approveRequest(treasury, keccak256("lit message")));
+        _execute(fleet, _approveRequest(treasury, ISSUED_AT));
 
         usdc.mint(address(treasury), 1_000e6);
         uint256 runAt = treasury.nextRunAt();

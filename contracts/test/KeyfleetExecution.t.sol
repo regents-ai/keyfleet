@@ -225,8 +225,8 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         assertEq(usdc.balanceOf(operator), 1, "one part in a million of 1,000,000 units");
     }
 
-    /// @dev Invariant: a proposal moves money in at most one `pay` or `advance` call, so it names
-    /// one asset and one share; a second is refused when proposed.
+    /// @dev Invariant: a proposal moves money in at most one `pay`, `advance` or `runVotedSplit` call,
+    /// so it names one asset and one share or runs the split once; a second is refused when proposed.
     function test_aProposalMovesMoneyInOneCallOnly() public {
         (KeyfleetManager fleet, KeyfleetTreasury treasury) = _classic(1);
         KeyfleetTreasury.Call[] memory calls = new KeyfleetTreasury.Call[](3);
@@ -236,6 +236,12 @@ contract KeyfleetExecutionTest is KeyfleetFixture {
         bytes memory reason = abi.encodeWithSelector(KeyfleetVotes.OneMoneyMovePerProposal.selector);
         _refused(fleet, calls, reason);
         calls[2] = _advance(treasury, 1, address(usdc), 10)[0];
+        _refused(fleet, calls, reason);
+        KeyfleetTreasury.Call memory split =
+            _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.runVotedSplit, ()))[0];
+        calls[2] = split;
+        _refused(fleet, calls, reason);
+        calls[0] = split;
         _refused(fleet, calls, reason);
         calls[2] = calls[1];
         _approve(fleet, calls);

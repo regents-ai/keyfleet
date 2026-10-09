@@ -58,8 +58,8 @@ defmodule Keyfleet.ProposalsChainTest do
   @daily_split_rate_set "0x5b373159cf1aa560402780ad3be14b33d21f72e79ae0dae5688d4c232b953d81"
   @ousd_admitted "0xebcf2752fcd8a14f6710aaeea4dff961f9fe5e076a8a719afc5b286405520d78"
   @launch_token_bound "0x8d7b7447fbb1198714566de25638e562cbbad2f5d24d09970b1793414994acf4"
-  @signature_approved "0xc712963b0ead96ec164811f3a9a9c00f62ab2baa2199c7213d26b6d391e2db8d"
-  @signature_revoked "0xa65357a6f222686e1bbced327674cb6435e5a419bcfe4eb6341ad9eef78094c3"
+  @signature_approved "0x55466410721fef34fe9a5642b5f6ad4a536d32b4dd13f85ffc1629fc8839046e"
+  @signature_revoked "0x3777c7cd3a982e67c2f22eb607a5ac633d7463082b7819be343158ac9859bfe1"
   @settled "0xbfed4c9aef0cc82058a0d9ecf93fff780a20d63bb650b7fcde95bf639097b402"
   @claimed "0x913c992353dc81b7a8ba31496c484e9b6306bd2f6c509a649a38fdf5e1c953b2"
 

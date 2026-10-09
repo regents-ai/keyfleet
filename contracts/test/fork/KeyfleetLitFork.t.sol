@@ -127,13 +127,7 @@ contract KeyfleetLitForkTest is KeyfleetForkFixture {
         _execute(
             classic,
             _one(
-                KeyfleetTreasury.Call(
-                    address(treasury),
-                    0,
-                    abi.encodeCall(
-                        treasury.approveLitRequest, (LitAdminCalls.createWalletStructHash(address(treasury), issuedAt))
-                    )
-                )
+                KeyfleetTreasury.Call(address(treasury), 0, abi.encodeCall(treasury.approveLitCreateWallet, (issuedAt)))
             )
         );
         assertEq(treasury.isValidSignature(digest, ""), IERC1271.isValidSignature.selector);

@@ -937,3 +937,21 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   transfer or a permit. The calls are `approveLitRequest` and
   `revokeLitRequest`, and the logs `LitRequestApproved` and
   `LitRequestRevoked`; the site reads the new names.
+
+## 2026-10-09 — More contract fixes from the internal audit
+
+- One fleet can no longer hold up REGENT buying for every fleet (audit
+  KF-A-06). When a fleet's USDC can't be handed over, for instance because
+  USDC's issuer froze it, that fleet is skipped with its booking whole and
+  waits at the back of the line, and the next fleet is served straight away.
+  Nobody can make a working fleet be skipped by sending too little gas.
+- A proposal can now only sign the treasury's own Lit wallet request, named by
+  its time, never a request built elsewhere (audit KF-A-02, replacing the fix
+  above). The proposal form asks for the request time instead of a message
+  code; the HTTP contract's `hash` field is now `issued_at`. The calls are
+  `approveLitCreateWallet` and `revokeLitCreateWallet`, and the logs
+  `LitCreateWalletApproved` and `LitCreateWalletRevoked`.
+- Voting directly now uses up any ballot the voter signed earlier, so an old
+  signature can't be sent later to change the vote (audit KF-A-09).
+- A proposal may run the voted daily split at most once, and not together with
+  a payment or an advance (audit KF-A-11).

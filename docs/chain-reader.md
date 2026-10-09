@@ -26,8 +26,8 @@ records what happened in them, in the order the chain made it:
   what it did with each asset (`SplitAllocated`, `SplitSkipped`,
   `SplitTransferFailed`), a new split rate (`DailySplitRateSet`), OUSD
   admitted (`OusdAdmitted`), the fleet's launch token bound
-  (`LaunchTokenBound`) and each Lit request the treasury signs approved or
-  revoked (`LitRequestApproved`, `LitRequestRevoked`).
+  (`LaunchTokenBound`) and the treasury's own Lit wallet request approved or
+  revoked (`LitCreateWalletApproved`, `LitCreateWalletRevoked`).
 - **The reward ledger** (`KeyfleetRewards`): a key's rewards settled to its
   holder (`Settled`) and credit paid out (`Claimed`).
 

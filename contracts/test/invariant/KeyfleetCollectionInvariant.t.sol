@@ -1342,7 +1342,7 @@ contract CollectionHandler is Test {
         } else if (a.pick == 36) {
             bytes memory data = a.caller == address(this)
                 ? abi.encodeCall(KeyfleetTreasury.admitOusd, (weth))
-                : abi.encodeCall(KeyfleetTreasury.approveLitRequest, (keccak256("order")));
+                : abi.encodeCall(KeyfleetTreasury.approveLitCreateWallet, (1));
             _attempt(a, t, data, onlySelf);
         }
     }

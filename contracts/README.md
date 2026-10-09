@@ -560,18 +560,18 @@ per contract. Measured with `forge build --sizes`:
 | Contract | Runtime (bytes) | Deployment (bytes) |
 | --- | --- | --- |
 | `KeyfleetClubClaims` | 3,687 | 3,910 |
-| `KeyfleetFactory` | 6,387 | 40,228 |
-| `KeyfleetKeys` | 12,177 | 13,735 |
-| `KeyfleetManager` | 16,245 | 18,231 |
-| `KeyfleetManagerDeployer` | 18,721 | 18,852 |
-| `KeyfleetRegentBuyer` | 7,741 | 9,468 |
+| `KeyfleetFactory` | 6,387 | 40,725 |
+| `KeyfleetKeys` | 12,191 | 13,749 |
+| `KeyfleetManager` | 16,399 | 18,392 |
+| `KeyfleetManagerDeployer` | 18,882 | 19,013 |
+| `KeyfleetRegentBuyer` | 8,098 | 9,832 |
 | `KeyfleetRewards` | 9,069 | 10,319 |
 | `KeyfleetRewardsDeployer` | 10,809 | 10,940 |
 | `KeyfleetShards` | 3,604 | 3,810 |
-| `KeyfleetTreasury` | 11,614 | 13,539 |
-| `KeyfleetTreasuryDeployer` | 14,029 | 14,160 |
-| `KeyfleetVotes` | 19,518 | 21,132 |
-| `KeyfleetVotesDeployer` | 21,622 | 21,753 |
+| `KeyfleetTreasury` | 12,009 | 14,108 |
+| `KeyfleetTreasuryDeployer` | 14,598 | 14,729 |
+| `KeyfleetVotes` | 19,574 | 21,188 |
+| `KeyfleetVotesDeployer` | 21,678 | 21,809 |
 
 ## The fleet manager
 
@@ -849,7 +849,7 @@ It refuses any time before `nextPieceAt()` (`PieceTooSoon(opensAt)`) and an
 empty queue (`NothingQueued`). It takes the fleet at the front of the queue,
 asks that manager for a piece of `maxUsdc` held between `MIN_PIECE_USDC`
 (1 USDC) and `PIECE_USDC` (`takePiece`), which the manager cuts to what it has
-left, swaps it and returns the
+left, takes it into the buyer, swaps it and returns the
 REGENT the treasury received. A piece that would leave the fleet less than
 1 USDC booked takes the rest too, so a piece can be up to 250.999999 USDC and
 the booking is always nothing or at least 1 USDC. Every sale and every
@@ -858,6 +858,18 @@ WETH (one that would round to nothing in the pool) never reaches the front of
 the queue and stops it. A fleet that still has USDC booked afterwards goes
 to the back of the queue. The keeper asks for `250000000`; anyone may ask for
 less, for example when a full piece would fail the 1% rule.
+
+A fleet whose piece cannot be handed over, because its manager refuses or USDC
+will not move its USDC (an issuer freeze, for instance), is skipped: `convert`
+emits `PieceSkipped(manager)` and returns 0, the fleet keeps its whole booking
+and goes to the back of the queue, and `nextPieceAt` does not move, so the next
+call serves the next fleet straight away and one fleet can never hold up the
+rest (audit KF-A-06, 9 Oct). The hand-over runs as a separate call of the buyer
+to itself (`collectPiece`, which refuses any other caller), with a fixed
+`COLLECT_GAS` of 300,000; `convert` refuses with `NotEnoughGas` when too little
+gas is left to give it all of that, so no caller can make a working fleet be
+skipped by sending too little gas. Everything after the hand-over concerns the
+shared route, and a failure there reverts the whole call as before.
 
 Each piece sets `nextPieceAt` to its own time plus 15 minutes times its USDC
 over 250 USDC, rounded up to the second:
@@ -885,8 +897,8 @@ USDC at about nine tenths of the full rate, because no piece is smaller than
 and each try costs its caller a transaction. A pool so thin that 1 USDC moves
 its price by 1% stops converting until it deepens.
 
-Each piece swaps exactly its USDC on the v3 pool, paid straight from the
-manager into the pool in `uniswapV3SwapCallback`; swaps the WETH that came out
+Each piece swaps exactly its USDC on the v3 pool, paid from the buyer into the
+pool in `uniswapV3SwapCallback`, which pays once and refuses a second callback; swaps the WETH that came out
 inside one PoolManager `unlock`, in `unlockCallback`; and has the PoolManager
 pay the REGENT straight to the treasury. Each leg must spend exactly what it
 was given (`SwapIncomplete`) and the REGENT leg must pay something
@@ -1177,15 +1189,20 @@ The treasury answers ERC-1271's `isValidSignature(hash, signature)` with the
 magic value `0x1626ba7e` exactly when `approvedHash(hash)` is true, and with
 `0xffffffff` otherwise. The signature bytes are ignored: the treasury has no key,
 and nothing is signed for it unless a proposal said so.
-`approveLitRequest(structHash)` and `revokeLitRequest(structHash)` accept only
-the treasury itself as caller (`OnlySelf`), so only a passed proposal's call sets
-or clears one. Each takes a Lit request's EIP-712 struct hash and sets or clears
-its digest under Lit's own domain, `LIT_DOMAIN_SEPARATOR` (name
-`Lit ChainSecured`, version `1`, this chain's id, no verifying contract), and
-they emit `LitRequestApproved(structHash)` and `LitRequestRevoked(structHash)`.
-So an approval is only ever a Lit request: no proposal can make the treasury
-sign a token transfer, a permit or a message for any other verifier, whatever
-hash it names (audit KF-A-02, 9 Oct).
+`approveLitCreateWallet(issuedAt)` and `revokeLitCreateWallet(issuedAt)` accept
+only the treasury itself as caller (`OnlySelf`), so only a passed proposal's call
+sets or clears one. Each builds Lit's `CreateWallet(address address,uint256
+issuedAt)` request itself, with the treasury, the account's owner, as `address`
+and the time the proposal names as `issuedAt` (`LIT_CREATE_WALLET_TYPEHASH`),
+and sets or clears its digest under Lit's own domain, `LIT_DOMAIN_SEPARATOR`
+(name `Lit ChainSecured`, version `1`, this chain's id, no verifying contract);
+`litCreateWalletDigest(issuedAt)` returns that digest. They emit
+`LitCreateWalletApproved(digest)` and `LitCreateWalletRevoked(digest)`. So an
+approval is only ever the treasury's own `CreateWallet` request: no proposal can
+make the treasury sign a token transfer, a permit, a message for any other
+verifier, another owner's request or any other kind of Lit request (audit
+KF-A-02, 9 Oct). `CreateWallet` is the one request Lit documents asking an owner
+to sign; every other step is an on-chain call a proposal makes.
 
 This is how the fleet owns its Lit account. Lit's account contract on Base,
 `0xaaaaa9120fe271f653cfdb6bf400db93d2dea7aa` (named by Lit's node
@@ -1242,8 +1259,10 @@ it is made:
 
 - No call may carry ETH (`CallCarriesValue(index)`).
 - A call to the treasury's `pay` or `advance` names a share from `MIN_SHARE_PPM`
-  (1, 0.0001%) to `MAX_SHARE_PPM` (990,000, 99%) (`ShareOutOfRange(sharePpm)`),
-  and a proposal holds at most one of them (`OneMoneyMovePerProposal`).
+  (1, 0.0001%) to `MAX_SHARE_PPM` (990,000, 99%) (`ShareOutOfRange(sharePpm)`).
+  A proposal holds at most one money move: one `pay`, one `advance` or one
+  `runVotedSplit` (`OneMoneyMovePerProposal`), so a voted split cannot be run
+  again and again in one batch.
 - No call to any address may use a function that moves or approves tokens
   (`TokenMoveRefused(index, selector)`): ERC-20 `transfer` (`0xa9059cbb`),
   `transferFrom` (`0x23b872dd`), `approve` (`0x095ea7b3`), `increaseAllowance`
@@ -1389,7 +1408,8 @@ record, which the controller reads back when the message is submitted. So a
 signature stops working the moment one of its keys changes hands, or has a shard
 issued, renewed or ended, or its agent voting switched. Each signer has one
 nonce (`nonces(signer)`), used by every message they sign, so a message works
-once. A message past its deadline is refused (`SignatureExpired`), as is a
+once. A ballot the signer casts directly with `castBallot` uses the nonce too, so
+a message they signed earlier can never be submitted over a later direct vote. A message past its deadline is refused (`SignatureExpired`), as is a
 signature that is not the signer's (`InvalidSignature`). Signatures are checked
 with OpenZeppelin `SignatureChecker`, which accepts ordinary wallets and
 contract wallets such as a Safe (ERC-1271). `PRESENT_TYPEHASH`,
@@ -1668,36 +1688,37 @@ transaction of its own. The suite asserts each ceiling.
 
 | Call | Gas | Ceiling |
 | --- | --- | --- |
-| Purchase, Cascade level 1 | 504,864 | 669,000 |
-| Purchase, Cascade level 30 | 497,683 | 669,000 |
-| Purchase, Cascade level 40 | 509,706 | 669,000 |
-| Purchase, a Cascade level's last key | 431,012 | 669,000 |
-| Purchase, Syndicate level 1 | 554,672 | 669,000 |
-| Purchase, Syndicate level 40 | 551,161 | 669,000 |
-| Purchase, Accelerant | 557,255 | 669,000 |
-| Purchase, Classic | 555,967 | 669,000 |
-| `sendProtocolShare` | 165,250 | 199,000 |
+| Purchase, Cascade level 1 | 419,071 | 669,000 |
+| Purchase, Cascade level 30 | 507,490 | 669,000 |
+| Purchase, Cascade level 40 | 519,513 | 669,000 |
+| Purchase, a Cascade level's last key | 352,960 | 669,000 |
+| Purchase, Syndicate level 1 | 468,881 | 669,000 |
+| Purchase, Syndicate level 40 | 560,969 | 669,000 |
+| Purchase, Accelerant | 471,465 | 669,000 |
+| Purchase, Classic | 470,176 | 669,000 |
+| `sendProtocolShare` | 172,190 | 199,000 |
 | A key's first renewal | 73,094 | 111,000 |
 | A later renewal | 78,094 | 85,000 |
 | Sweeping, per ended presence | 5,025 | 6,000 |
 | Sweeping, per key whose automatic start came | 26,130 | 32,000 |
 | Transfer of a key present from a renewal | 124,785 | 144,000 |
 | Transfer of a key present from its automatic start | 84,630 | 144,000 |
-| An agent casting first ballots for ten Classic keys | 837,704 | 1,250,000 |
+| An agent casting first ballots for ten Classic keys | 837,987 | 1,250,000 |
 | Each further key (Classic / Fibonacci) | 83,214 / 83,203 | 125,000 |
 | Worst-case settlement of one key | 272,533 | 288,000 |
 | Transfer of a key with five split assets waiting | 385,319 | 435,000 |
-| One wallet claiming ten keys in five assets | 1,725,308 | 1,904,000 |
-| The next day's claim of the same ten keys | 582,255 | 694,000 |
-| Founding Classic creation | 11,542,138 | 16,777,216 |
-| Open creation with key 1: Classic | 12,063,709 | 16,777,216 |
-| Open creation with key 1: Syndicate | 12,014,788 | 16,777,216 |
-| Open creation with key 1: Accelerant | 12,037,576 | 16,777,216 |
-| Open creation with key 1: Cascade | 11,989,513 | 16,777,216 |
+| One wallet claiming ten keys in five assets | 1,727,767 | 1,904,000 |
+| The next day's claim of the same ten keys | 582,714 | 694,000 |
+| Founding Classic creation | 11,983,584 | 16,777,216 |
+| Open creation with key 1: Classic | 12,507,906 | 16,777,216 |
+| Open creation with key 1: Syndicate | 12,458,984 | 16,777,216 |
+| Open creation with key 1: Accelerant | 12,481,773 | 16,777,216 |
+| Open creation with key 1: Cascade | 12,433,710 | 16,777,216 |
 | The coordinator's answer to a key, cold | 31,554 | 100,000 given |
 
-The purchase ceiling is the Accelerant figure plus a fifth. Every purchase
-enrols its key's automatic presence in the fleet's votes, and no purchase swaps:
+The purchase ceiling stays above every first purchase, the dearest of which is
+Syndicate level 40. Every purchase enrols its key's automatic presence in the
+fleet's votes, and no purchase swaps:
 Syndicate, Accelerant and Classic book the treasury's part and put the fleet in
 the REGENT buyer's queue, and a Cascade level's last key books its leftover
 reserve the same way. The level-1, Accelerant and Classic figures are each
@@ -1708,7 +1729,7 @@ zero, so nearly all of it is first writes.
 Open creation was measured with a 2,000-byte description, a 512-byte image link
 and a 10 USDC starting price, against the 16,777,216-gas cap one transaction may
 use on Ethereum since Fusaka (EIP-7825), which the build keeps every creation
-under. The least gas that completes a purchase is 536,429; the reveal suite
+under. The least gas that completes a purchase is 289,258; the reveal suite
 tries every limit in the few thousand gas above it and finds that every
 completed purchase either made its random-number request or said it failed.
 

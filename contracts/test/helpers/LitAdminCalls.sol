@@ -152,8 +152,7 @@ library LitAdminCalls {
         return keccak256(abi.encodePacked("\x19\x01", domain, createWalletStructHash(owner, issuedAt)));
     }
 
-    /// @notice The struct hash of Lit's `CreateWallet` message, which a proposal approves with
-    /// `approveLitRequest`.
+    /// @notice The struct hash of Lit's `CreateWallet` message.
     function createWalletStructHash(address owner, uint256 issuedAt) internal pure returns (bytes32) {
         return keccak256(abi.encode(CREATE_WALLET_TYPEHASH, owner, issuedAt));
     }

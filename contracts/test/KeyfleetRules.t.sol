@@ -482,7 +482,7 @@ contract KeyfleetRulesTest is KeyfleetFixture {
         KeyfleetTreasury.Call[][6] memory held = [
             _pay(10_000),
             _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.runVotedSplit, ())),
-            _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.approveLitRequest, (bytes32(uint256(1))))),
+            _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.approveLitCreateWallet, (1))),
             _one(address(treasury), 0, abi.encodeCall(KeyfleetTreasury.admitOusd, (usdc))),
             _launchCall(address(treasury)),
             _one(address(classic), 0, hex"")

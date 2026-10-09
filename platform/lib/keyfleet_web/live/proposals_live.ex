@@ -476,7 +476,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             "target" => "",
             "restricted" => "true",
             "signature" => "approve",
-            "hash" => "",
+            "issued_at" => "",
             "name" => "",
             "symbol" => "",
             "description" => "",
@@ -572,10 +572,10 @@ defmodule KeyfleetWeb.ProposalsLive do
                 options={[{"approve", "Sign"}, {"revoke", "Withdraw"}]}
               />
               <.text_field
-                id="propose-hash"
-                name="hash"
-                label="Message code"
-                value={panel.inputs["hash"]}
+                id="propose-issued-at"
+                name="issued_at"
+                label="Request time"
+                value={panel.inputs["issued_at"]}
               />
             </div>
 

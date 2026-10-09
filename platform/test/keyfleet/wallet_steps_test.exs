@@ -642,11 +642,13 @@ defmodule Keyfleet.WalletStepsTest do
                "propose"
              ].data == proposed(fleet, {:edits, 7, true})
 
-      hash = "0x" <> String.duplicate("ab", 32)
-
-      assert steps(propose(%{"kind" => "signature", "signature" => "revoke", "hash" => hash}))[
-               "propose"
-             ].data == proposed(fleet, {:signature, :revoke, hash})
+      assert steps(
+               propose(%{
+                 "kind" => "signature",
+                 "signature" => "revoke",
+                 "issued_at" => " 1790000000 "
+               })
+             )["propose"].data == proposed(fleet, {:signature, :revoke, 1_790_000_000})
     end
 
     test "a launch through Autolaunch names the fleet's treasury", %{fleet: fleet} do
@@ -681,7 +683,10 @@ defmodule Keyfleet.WalletStepsTest do
       assert %{problem: :rate_unreadable} = propose(%{"kind" => "rate", "rate" => "2.5"})
       assert %{problem: :rate_unreadable} = propose(%{"kind" => "rate", "rate" => "0.05"})
       assert %{problem: {:missing, :text}} = propose(%{"kind" => "decision", "text" => " "})
-      assert %{problem: :hash_unreadable} = propose(%{"kind" => "signature", "hash" => "0x12"})
+
+      assert %{problem: :issued_at_unreadable} =
+               propose(%{"kind" => "signature", "issued_at" => "21 September"})
+
       assert %{problem: :no_key} = propose(%{"kind" => "decision", "key" => ""})
 
       assert %{problem: :asset_unreadable} =
@@ -916,7 +921,7 @@ defmodule Keyfleet.WalletStepsTest do
             {:pay, @usdc, @third, 5},
             {:advance, 3, @third, @native, 9, hash},
             {:rate, 75},
-            {:signature, :approve, hash},
+            {:signature, :approve, 1_790_000_000},
             {:edits, 4, false}
           ] do
         [{target, value, data}] = Actions.encode(action, fleet)
@@ -934,15 +939,15 @@ defmodule Keyfleet.WalletStepsTest do
   end
 
   describe "what's typed" do
-    test "rates, shares, hashes and text" do
+    test "rates, shares, request times and text" do
       assert Typed.rate("0.1") == {:ok, 10}
       assert Typed.rate("2") == {:ok, 200}
       assert Typed.rate("0.5") == {:ok, 50}
       assert Typed.rate("2.01") == {:error, :rate_unreadable}
       assert Typed.share(" 1.5 ") == {:ok, 15_000}
       assert Typed.share("99.0001") == {:error, :share_unreadable}
-      hex = String.duplicate("AB", 32)
-      assert Typed.hash(hex) == {:ok, "0x" <> String.downcase(hex)}
+      assert Typed.issued_at(" 1790000000 ") == {:ok, 1_790_000_000}
+      assert Typed.issued_at("1.5") == {:error, :issued_at_unreadable}
       assert Typed.text("  hi ", :name, 2) == {:ok, "hi"}
       assert Typed.text("hey", :name, 2) == {:error, {:too_long, :name, 2}}
       assert Typed.keys("9 3,3") == {:ok, [3, 9]}

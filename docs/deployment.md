@@ -616,10 +616,10 @@ from the treasury to Lit's account contract,
 configuration). The calls create the account, register the inbox action, make
 one group with it, and mint one usage key for the operator that may run that
 action and nothing else; later proposals replace or remove the key. When Lit
-asks the account's owner to sign a request, a proposal approves that exact
-request with `approveLitRequest` (its EIP-712 struct hash, which the treasury
-puts under Lit's own signing domain), and the treasury answers Lit's check for
-it. Lit takes a signed request only within five minutes of the time it
+asks the account's owner to sign its `CreateWallet` request, a proposal
+approves that request with `approveLitCreateWallet` (the time the request
+names; the treasury builds the request as its own, under Lit's own signing
+domain), and the treasury answers Lit's check for it. Lit takes a signed request only within five minutes of the time it
 names, and only once, so the proposal names the time it will be carried out and
 the operator sends the request to Lit straight after. Voting and claims never
 depend on Lit.

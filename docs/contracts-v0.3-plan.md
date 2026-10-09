@@ -109,7 +109,7 @@ The factory and its four deployers hold nothing of value. The REGENT buyer holds
 
 - One proposal shape: author key, content hash, ordered `Call[]` (stored as a hash, with the full bytes emitted), `closesAt` (exactly 24 h after creation, Sean 7 Oct), and `executionExpiry` (`closesAt` + 48 h, plus 1 day for a proposal that moves money, KF-VOTE-DELAY a). The lifecycle is Open → Waiting (money proposals only), Approved, Rejected or Cancelled, then Executed or ExecutionExpired.
 - Cancellation by whoever may vote the author key. Resubmission gets a new id.
-- Typed effects are treasury functions only the treasury itself can call (`onlySelf`), each reached through an exact CALL: `pay`, `advance`, `setDailySplitBps`, `runVotedSplit`, `admitOusd`, `approveLitRequest` and `revokeLitRequest`. Restricting edits is a CALL to `Votes.setEditsRestricted`, and changing the fleet's name, description or image a CALL to the manager's `setProfile`, both callable only by the treasury. A Decision is a proposal with an empty call list.
+- Typed effects are treasury functions only the treasury itself can call (`onlySelf`), each reached through an exact CALL: `pay`, `advance`, `setDailySplitBps`, `runVotedSplit`, `admitOusd`, `approveLitCreateWallet` and `revokeLitCreateWallet`. Restricting edits is a CALL to `Votes.setEditsRestricted`, and changing the fleet's name, description or image a CALL to the manager's `setProfile`, both callable only by the treasury. A Decision is a proposal with an empty call list.
 
 ### §8 Daily fair split
 
@@ -449,7 +449,7 @@ Tallies cannot change after `closesAt`, so this view is final. The `proposal_fin
 | `runVotedSplit()` | Runs the daily split now, whenever the last run was (section 4.6). |
 | `setDailySplitBps(bps)` | Section 4.6. |
 | `admitOusd(token)` | Fills the OUSD slot once, split from the next run. |
-| `approveLitRequest(s)` / `revokeLitRequest(s)` | Section 4.9. |
+| `approveLitCreateWallet(issuedAt)` / `revokeLitCreateWallet(issuedAt)` | Section 4.9. |
 
 Two functions elsewhere accept only the fleet's treasury, so they too are reached only by an approved CALL: `KeyfleetVotes.setEditsRestricted(tokenId, bool)` and `KeyfleetManager.setProfile(profile)`, which changes the fleet's name, description and image link and refreshes the fleet's metadata.
 
@@ -559,8 +559,8 @@ What Lit's documentation says, from [S4](https://developer.litprotocol.com/manag
 
 Design:
 
-- **The treasury implements ERC-1271.** `isValidSignature(h, sig)` returns the magic value exactly when `approvedHash[h]` is true. A proposal that calls `approveLitRequest(s)` sets the digest of Lit request `s` under Lit's own domain, and a later one can revoke it; no approval can be a signature for any other verifier. No raw bytes are ever signed by default, and no backend signer exists.
-- **Flow:** every write to `AccountConfig` is a CALL in an approved proposal, and every signed Lit request is approved first with `approveLitRequest`. The steps are: create the account, create one inbox group with its action, mint one execute-only usage key for the operator, then replace or revoke that key.
+- **The treasury implements ERC-1271.** `isValidSignature(h, sig)` returns the magic value exactly when `approvedHash[h]` is true. A proposal that calls `approveLitCreateWallet(issuedAt)` sets the digest of the treasury's own Lit `CreateWallet` request at that time under Lit's own domain, and a later one can revoke it; no approval can be a signature for any other verifier, owner or kind of request. No raw bytes are ever signed by default, and no backend signer exists.
+- **Flow:** every write to `AccountConfig` is a CALL in an approved proposal, and the one signed Lit request, `CreateWallet`, is approved first with `approveLitCreateWallet`. The steps are: create the account, create one inbox group with its action, mint one execute-only usage key for the operator, then replace or revoke that key.
 - **Base governance and claims never depend on Lit.**
 - **Signed requests have a five-minute window.** Lit's server (`lit-api-server/src/core/eip712.rs`) takes a signed request such as `CreateWallet` only within 300 seconds either side of its `issuedAt`, and each digest only once. Its domain is name "Lit ChainSecured", version "1" and the chain id, with no verifying contract, and the message is `(address, issuedAt)`. So a proposal that approves a Lit digest sets `issuedAt` to when it will be carried out, at or after it closes, and the operator posts the request to Lit within five minutes of that.
 
@@ -731,7 +731,7 @@ The scanner reads the collection, the factory, the shard record, and each fleet'
 - **Shards:** `ShardIssued`, `ShardEnded` and `AgentVotingSet`.
 - **Manager:** `Purchased`, `LevelCompleted`, `RegentBought`, `ProtocolShareSent`, `ForwardedToTreasury`, `ProfileChanged` and `RequirementsSet`.
 - **Votes:** `ProposalCreated` (with calls), `BallotCast(choice)`, `ProposalCancelled`, `ProposalExecuted`, `EditsRestrictionSet`, `Present`, `PresenceCleared` and `Swept`.
-- **Treasury:** `Paid`, `Advanced`, `AdvanceReturned`, `DailySplitRun`, `SplitAllocated`, `SplitSkipped`, `SplitTransferFailed`, `DailySplitRateSet`, `OusdAdmitted`, `LaunchTokenBound`, `LitRequestApproved` and `LitRequestRevoked`.
+- **Treasury:** `Paid`, `Advanced`, `AdvanceReturned`, `DailySplitRun`, `SplitAllocated`, `SplitSkipped`, `SplitTransferFailed`, `DailySplitRateSet`, `OusdAdmitted`, `LaunchTokenBound`, `LitCreateWalletApproved` and `LitCreateWalletRevoked`.
 - **Rewards:** `KeyEnrolled`, `Allocated`, `Credited`, `SplitFunded`, `Settled` and `Claimed`.
 - Every decoder for an event these contracts do not emit is deleted.
 

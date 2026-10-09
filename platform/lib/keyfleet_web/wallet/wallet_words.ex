@@ -63,8 +63,8 @@ defmodule KeyfleetWeb.WalletWords do
 
   defp action({:edits, target, true}), do: "Restricts Key #{Rules.grouped(target)}’s edits."
   defp action({:edits, target, false}), do: "Allows Key #{Rules.grouped(target)}’s edits."
-  defp action({:signature, :approve, _hash}), do: "Signs the message for the fleet."
-  defp action({:signature, :revoke, _hash}), do: "Withdraws the fleet’s signature."
+  defp action({:signature, :approve, _issued_at}), do: "Signs the fleet’s Lit wallet request."
+  defp action({:signature, :revoke, _issued_at}), do: "Withdraws the fleet’s signature."
   defp action({:launch, %{symbol: symbol}}), do: "Launches #{symbol} through Autolaunch."
 
   defp share_words(asset, share, amount),
@@ -100,7 +100,7 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:days_unreadable), do: "From 1 to 365 days."
   defp problem(:share_unreadable), do: "From 0.0001% to 99%."
   defp problem(:rate_unreadable), do: "From 0.1% to 2%."
-  defp problem(:hash_unreadable), do: "The message code is 0x and 64 letters and numbers."
+  defp problem(:issued_at_unreadable), do: "The request time is a whole number, like 1790000000."
   defp problem(:kind_unknown), do: "Choose what to propose."
   defp problem({:missing, name}), do: "#{field_name(name)} is empty."
 

@@ -55,10 +55,11 @@ import {IRegentsAutolaunchFactoryV2} from "./interfaces/IRegentsAutolaunchFactor
 /// split runs inside the calls it is carried out with.
 ///
 /// The treasury signs nothing by itself. It answers ERC-1271 `isValidSignature` with yes only for
-/// a Lit request an approved proposal approved with `approveLitRequest`, until one revokes it with
-/// `revokeLitRequest`. A proposal names the request's EIP-712 struct hash and the treasury puts it
-/// under Lit's own domain, so no approval can ever be a signature for a token, a permit or any
-/// other verifier. That is how the fleet owns a Lit ChainSecured account on Base: every
+/// a Lit `CreateWallet` request an approved proposal approved with `approveLitCreateWallet`, until
+/// one revokes it with `revokeLitCreateWallet`. A proposal names only the time the request is
+/// issued at; the treasury builds the request itself, as its own, the account owner's, under Lit's
+/// own domain, so an approval is only ever that request: never a signature for a token, a permit,
+/// any other verifier, any other owner or any other kind of Lit request. That is how the fleet owns a Lit ChainSecured account on Base: every
 /// administrative write to Lit's `AccountConfig` is an exact call of an approved proposal, and
 /// every message Lit asks the owner to sign is a request an approved proposal approved first.
 /// There is no administrator, no upgrade path and no pause.
@@ -152,6 +153,10 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     /// @notice Every advance an approved proposal has made, by the id the proposal gave it.
     mapping(uint256 advanceId => Advance advance) public advances;
 
+    /// @notice The EIP-712 type of Lit's `CreateWallet` request, the one Lit request the treasury
+    /// may sign.
+    bytes32 public constant LIT_CREATE_WALLET_TYPEHASH = keccak256("CreateWallet(address address,uint256 issuedAt)");
+
     /// @notice The EIP-712 domain of Lit's ChainSecured requests on this chain: name
     /// "Lit ChainSecured", version "1", this chain's id and no verifying contract.
     bytes32 public immutable LIT_DOMAIN_SEPARATOR;
@@ -234,11 +239,11 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
     event OusdAdmitted(address indexed token, uint256 threshold);
     /// @notice The fleet's launched token is now a bound asset of the daily split.
     event LaunchTokenBound(uint256 indexed launchId, address indexed token, uint256 threshold);
-    /// @notice An approved proposal approved a Lit request: the treasury now answers ERC-1271 for
-    /// its digest under Lit's domain.
-    event LitRequestApproved(bytes32 indexed structHash);
-    /// @notice An approved proposal revoked a Lit request: the treasury no longer answers for it.
-    event LitRequestRevoked(bytes32 indexed structHash);
+    /// @notice An approved proposal approved a Lit `CreateWallet` request: the treasury now answers
+    /// ERC-1271 for its digest. The request's fields are the proposal's call.
+    event LitCreateWalletApproved(bytes32 indexed digest);
+    /// @notice An approved proposal revoked that request: the treasury no longer answers for it.
+    event LitCreateWalletRevoked(bytes32 indexed digest);
 
     modifier onlySelf() {
         if (msg.sender != address(this)) revert OnlySelf();
@@ -422,23 +427,34 @@ contract KeyfleetTreasury is ReentrancyGuardTransient, IERC1271 {
         emit LaunchTokenBound(id, address(token), threshold);
     }
 
-    /// @notice Approves a Lit request as the treasury's signature, so `isValidSignature` answers
-    /// yes for its digest under Lit's domain. Only an approved proposal's call reaches it.
-    /// @param structHash The request's EIP-712 struct hash, for instance a `CreateWallet` message's.
-    function approveLitRequest(bytes32 structHash) external onlySelf {
-        approvedHash[MessageHashUtils.toTypedDataHash(LIT_DOMAIN_SEPARATOR, structHash)] = true;
-        emit LitRequestApproved(structHash);
+    /// @notice Approves the treasury's own Lit `CreateWallet` request as its signature, so
+    /// `isValidSignature` answers yes for its digest under Lit's domain. Only an approved
+    /// proposal's call reaches it.
+    /// @param issuedAt The request's `issuedAt`, in seconds; Lit takes it within 300 seconds of it.
+    function approveLitCreateWallet(uint256 issuedAt) external onlySelf {
+        bytes32 digest = litCreateWalletDigest(issuedAt);
+        approvedHash[digest] = true;
+        emit LitCreateWalletApproved(digest);
     }
 
-    /// @notice Revokes a Lit request, so `isValidSignature` answers no for its digest again. Only
+    /// @notice Revokes that request, so `isValidSignature` answers no for its digest again. Only
     /// an approved proposal's call reaches it.
-    function revokeLitRequest(bytes32 structHash) external onlySelf {
-        approvedHash[MessageHashUtils.toTypedDataHash(LIT_DOMAIN_SEPARATOR, structHash)] = false;
-        emit LitRequestRevoked(structHash);
+    function revokeLitCreateWallet(uint256 issuedAt) external onlySelf {
+        bytes32 digest = litCreateWalletDigest(issuedAt);
+        approvedHash[digest] = false;
+        emit LitCreateWalletRevoked(digest);
+    }
+
+    /// @notice The digest Lit asks the treasury to sign for `CreateWallet(treasury, issuedAt)`, the
+    /// request that names the treasury as the account's owner.
+    function litCreateWalletDigest(uint256 issuedAt) public view returns (bytes32) {
+        return MessageHashUtils.toTypedDataHash(
+            LIT_DOMAIN_SEPARATOR, keccak256(abi.encode(LIT_CREATE_WALLET_TYPEHASH, address(this), issuedAt))
+        );
     }
 
     /// @notice ERC-1271: the magic value `0x1626ba7e` exactly when an approved proposal approved
-    /// the Lit request whose digest is `hash` and none has revoked it since, and `0xffffffff`
+    /// the Lit `CreateWallet` request whose digest is `hash` and none has revoked it since, and `0xffffffff`
     /// otherwise. The signature bytes are not read: the approval is the signature.
     function isValidSignature(bytes32 hash, bytes calldata) external view returns (bytes4) {
         return approvedHash[hash] ? IERC1271.isValidSignature.selector : bytes4(0xffffffff);

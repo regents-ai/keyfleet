@@ -197,7 +197,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp balances(reading), do: Map.new(reading.assets, &{&1.asset, &1.held})
 
   # One call carrying the proposal out makes. In plain words: `text`, then
-  # the wallet or hash it names in full, if any, and for a payment or an
+  # the wallet it names in full, if any, and for a payment or an
   # advance what its share comes to at the treasury's latest balance. Then
   # exactly what the vote contract sends: the contract, by name and address,
   # the function, if it is one this site knows, and the call's data, so a
@@ -231,11 +231,12 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp said({:rate, bps}, _assets, _balances),
     do: plain("Set the daily split to #{units(bps, 2)}%")
 
-  defp said({:signature, :approve, hash}, _assets, _balances),
-    do: plain("Sign a message for the fleet:", hash)
+  defp said({:signature, :approve, issued_at}, _assets, _balances),
+    do: plain("Sign the fleet’s Lit wallet request #{request_time(issued_at)}")
 
-  defp said({:signature, :revoke, hash}, _assets, _balances),
-    do: plain("Withdraw the fleet’s signature on", hash)
+  defp said({:signature, :revoke, issued_at}, _assets, _balances),
+    do:
+      plain("Withdraw the fleet’s signature on its Lit wallet request #{request_time(issued_at)}")
 
   defp said({:edits, token_id, true}, _assets, _balances),
     do: plain("Stop Key #{Rules.grouped(token_id)} changing the workspace")
@@ -255,6 +256,15 @@ defmodule KeyfleetWeb.ProposalsPage do
     do: plain("A call Keyfleet doesn’t recognize. Check it before you vote.")
 
   defp plain(text, address \\ nil), do: %{text: text, address: address, today: nil}
+
+  # The time a Lit request names, as its number of seconds and, when it is a
+  # date at all, that date.
+  defp request_time(issued_at) do
+    case DateTime.from_unix(issued_at) do
+      {:ok, at} -> "timed #{issued_at} (#{Calendar.strftime(at, "%-d %B %Y at %H:%M:%S UTC")})"
+      {:error, _not_a_date} -> "timed #{issued_at}"
+    end
+  end
 
   # What a share of the treasury's balance of `asset` comes to now, or nil
   # before the treasury has been read.

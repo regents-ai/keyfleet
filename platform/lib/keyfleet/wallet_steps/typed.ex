@@ -141,16 +141,15 @@ defmodule Keyfleet.WalletSteps.Typed do
   end
 
   @doc """
-  A 32-byte hash: 64 characters, 0 to 9 and a to f, with or without `0x`,
-  lowercased.
+  The time a Lit request names, in whole seconds since 1970, as the request
+  gives it.
   """
-  def hash(text) do
-    entry = text |> String.trim() |> String.downcase()
+  def issued_at(text) do
+    entry = String.trim(text)
 
-    case Regex.run(~r/\A(?:0x)?([0-9a-f]{64})\z/, entry) do
-      [_whole, hex] -> {:ok, "0x" <> hex}
-      nil -> {:error, :hash_unreadable}
-    end
+    if Regex.match?(~r/\A\d{1,20}\z/, entry),
+      do: {:ok, String.to_integer(entry)},
+      else: {:error, :issued_at_unreadable}
   end
 
   @doc """

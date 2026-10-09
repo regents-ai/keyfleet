@@ -240,11 +240,22 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       approved!(url, %{"kind" => "edits", "target" => "2", "restricted" => "true"})
       assert uint!(url, lab.votes, "editsRestricted(uint256)", [id(2)]) == 1
 
-      request = "0x" <> String.duplicate("ab", 32)
-      signed = lit_digest!(url, lab.treasury, request)
-      approved!(url, %{"kind" => "signature", "signature" => "approve", "hash" => request})
+      signed = lit_digest!(lab.treasury, 1_790_000_000)
+
+      approved!(url, %{
+        "kind" => "signature",
+        "signature" => "approve",
+        "issued_at" => "1790000000"
+      })
+
       assert uint!(url, lab.treasury, "approvedHash(bytes32)", [signed]) == 1
-      approved!(url, %{"kind" => "signature", "signature" => "revoke", "hash" => request})
+
+      approved!(url, %{
+        "kind" => "signature",
+        "signature" => "revoke",
+        "issued_at" => "1790000000"
+      })
+
       assert uint!(url, lab.treasury, "approvedHash(bytes32)", [signed]) == 0
     end
 
@@ -741,17 +752,27 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     String.to_integer(hex, 16)
   end
 
-  # The digest the treasury signs for a Lit request: its struct hash under Lit's domain.
-  defp lit_digest!(url, treasury, "0x" <> request) do
-    "0x" <> domain = view!(url, treasury, "LIT_DOMAIN_SEPARATOR()", [])
+  # The digest Lit checks for the treasury's CreateWallet request at
+  # `issued_at`, worked out here from Lit's typed data: domain "Lit
+  # ChainSecured", version 1 and the chain id, no verifying contract.
+  defp lit_digest!(treasury, issued_at) do
+    hash = &ExKeccak.hash_256/1
 
-    digest =
-      ExKeccak.hash_256(
-        <<0x19, 0x01>> <>
-          Base.decode16!(domain, case: :mixed) <> Base.decode16!(request, case: :mixed)
+    domain =
+      hash.(
+        hash.("EIP712Domain(string name,string version,uint256 chainId)") <>
+          hash.("Lit ChainSecured") <> hash.("1") <> <<@chain_id::256>>
       )
 
-    "0x" <> Base.encode16(digest, case: :lower)
+    {:ok, owner} = RegentChain.Address.decode(treasury)
+
+    message =
+      hash.(
+        hash.("CreateWallet(address address,uint256 issuedAt)") <>
+          <<0::96>> <> owner <> <<issued_at::256>>
+      )
+
+    "0x" <> Base.encode16(hash.(<<0x19, 0x01>> <> domain <> message), case: :lower)
   end
 
   defp address!(url, to, signature, arguments \\ []) do
