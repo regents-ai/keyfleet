@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.Plugs.LaunchGate do
   @moduledoc """
   While Keyfleet is closed (`KEYFLEET_APP_SURFACES=off`) the site is its
-  early-access page and nothing else. This plug runs in the endpoint before
+  early-access page and public NFT metadata. This plug runs in the endpoint before
   anything is served, and it is the one place that says what stays reachable:
 
     * `/early` and its form, the Contact page (`/contact`), the Privacy Policy
@@ -9,12 +9,14 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
     * `/healthz`, `/robots.txt`, `/sitemap.xml` (which then lists only those
       four pages), `/.well-known/security.txt` and `/.well-known/hub-jwks.json`,
       the keys the fleets' notebook hubs check this site's passes with;
+    * the collection and Key metadata at `/metadata/collection.json` and
+      `/metadata/keys/:token_id`, for GET and HEAD requests;
     * the site's static files: its stylesheets, scripts, fonts, images and
       icons. The HTTP contract closes with the API it describes.
 
   Every other page a browser opens, `/` included, is sent to `/early` with a
   302. Every other address answers 503 with `Retry-After`: the `not_open_yet`
-  JSON refusal for the API, sign-in, key metadata and the other JSON documents,
+  JSON refusal for the API, sign-in and the other JSON documents,
   and one line of Markdown for the rest, among them the agent guides, the fleet
   directory and the contract. Signing out closes with the rest of sign-in.
 
@@ -71,6 +73,14 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
 
   defp open?(%Plug.Conn{request_path: path}) when path in @open_pages or path in @open_files,
     do: true
+
+  defp open?(%Plug.Conn{method: method, path_info: ["metadata", "collection.json"]})
+       when method in ["GET", "HEAD"],
+       do: true
+
+  defp open?(%Plug.Conn{method: method, path_info: ["metadata", "keys", _token_id]})
+       when method in ["GET", "HEAD"],
+       do: true
 
   defp open?(%Plug.Conn{path_info: [folder | _rest]}) when folder in @static_folders, do: true
 

@@ -31,6 +31,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
     owner = Sandbox.start_owner!(Repo, shared: true, isolation: "REPEATABLE READ")
     on_exit(fn -> Sandbox.stop_owner(owner) end)
     Fleets.bootstrap_catalog!()
+    ChainHelpers.deploy!(@fleet)
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
     start_supervised!(

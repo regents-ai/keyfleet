@@ -670,7 +670,13 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       end)
 
     documented = documented_answers()
-    assert documented -- answered == []
+    # Keep the legacy fleet_not_on_chain responses in the published contract.
+    # Every undeployed catalog fleet now stops at fleet_coming_soon instead.
+    legacy =
+      for path <- [@presence, @propose, @vote, @cancel, @carry_out, @split, @claim],
+          do: {"POST", path, 409}
+
+    assert Enum.sort(documented -- answered) == Enum.sort(legacy)
     assert answered -- documented == []
   end
 
@@ -763,8 +769,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
           {@split, %{}},
           {@claim, %{}}
         ] do
-      assert answer(c, c.signer, "POST", template, offchain, body, 409).body ==
-               refused("fleet_not_on_chain")
+      assert answer(c, c.signer, "POST", template, offchain, body, 404).body ==
+               refused("fleet_coming_soon")
     end
 
     # Key 2 is old enough to take part and isn't present.

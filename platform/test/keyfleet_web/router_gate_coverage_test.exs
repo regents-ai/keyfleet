@@ -15,7 +15,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     :ok
   end
 
-  test "only the early-access page, the contact and legal pages and the operational files stay open" do
+  test "only the early-access page, the contact and legal pages and the operational files and NFT metadata stay open" do
     answers =
       for route <- routes(), conn = request(route), do: {route.verb, route.path, answer(conn)}
 
@@ -27,6 +27,8 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
              {:get, "/robots.txt"},
              {:get, "/.well-known/security.txt"},
              {:get, "/.well-known/hub-jwks.json"},
+             {:get, "/metadata/collection.json"},
+             {:get, "/metadata/keys/:token_id"},
              {:get, "/contact"},
              {:get, "/privacy"},
              {:get, "/terms"},

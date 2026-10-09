@@ -201,12 +201,12 @@ defmodule Keyfleet.DirectoryTest do
     assert {:ok, %{sales: %{on_sale: true, current: false} = stale}} = Directory.fleet(@fleet)
     assert map_size(stale) == 2
 
-    assert {:ok, %{sales: %{on_sale: false}}} = Directory.fleet("fleet_tech_classic")
+    assert {:ok, %{coming_soon: true}} = Directory.fleet("fleet_tech_classic")
     assert Directory.fleet("fleet_unknown") == :unknown
   end
 
-  # Classic is open from the start; the others open once their deployment is
-  # recorded, as this fleet's was in the setup.
+  # Every fleet opens once its deployment is recorded, as this fleet's was
+  # in the setup.
   test "a fleet coming soon gives its name and nothing else, until its deployment is recorded" do
     soon = %{id: "fibonacci_cascade", name: "Cascade #1", coming_soon: true}
 
@@ -215,7 +215,7 @@ defmodule Keyfleet.DirectoryTest do
     assert {:ok, fleets} = Directory.list()
 
     assert Enum.map(fleets, &{&1.id, &1.coming_soon}) == [
-             {"fleet_tech_classic", false},
+             {"fleet_tech_classic", true},
              {@fleet, false},
              {"fibonacci_cascade", true},
              {"fleet_tech_accelerant", true},

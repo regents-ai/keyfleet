@@ -21,6 +21,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
   setup do
     Fleets.bootstrap_catalog!()
+    ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet)
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 

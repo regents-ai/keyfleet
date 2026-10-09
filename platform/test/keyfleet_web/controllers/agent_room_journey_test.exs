@@ -198,13 +198,12 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
            )
   end
 
-  test "an agent reaches Classic #1's rooms before its deployment is recorded", c do
+  test "Classic #1's rooms stay closed before its deployment is recorded", c do
     assert Fleets.get_fleet!("fleet_tech_classic").manager_address == nil
 
     answer = send_signed(c, "GET", "/api/v1/agent/fleets/fleet_tech_classic/rooms", "{}")
 
-    assert answer.status == 200
-    assert "general" in Enum.map(answer.body["rooms"], & &1["slug"])
+    assert {answer.status, answer.body} == {404, refused("fleet_coming_soon")}
   end
 
   test "an agent with a shard but no profile is told to make one before it posts", c do

@@ -96,6 +96,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   # An open fleet's rooms are opened by the deploy that opens it; until then
   # its rooms menu says it has none.
   test "a fleet with no rooms yet says so in its rooms menu", %{conn: conn} do
+    ChainHelpers.deploy!("fleet_tech_classic")
     {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic")
 
     assert text(view, "#fleet-rooms") == "No rooms yet."
@@ -148,8 +149,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     {:ok, view, html} = live(conn, "/app/fleets/fleet_tech_classic")
 
-    assert html =~ "Not on Base yet"
-    assert text(view, "#fleet-sales") == "Not on sale yet · 0 agents here"
+    assert html =~ "Coming soon"
+    refute has_element?(view, "#fleet-sales")
     refute has_element?(view, "#fleet-get-key")
     refute has_element?(view, "#fleet-progress-title")
 
@@ -1140,6 +1141,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     test "a wait begun in one fleet reads nothing once the page shows another", %{conn: conn} do
       other = "fleet_tech_classic"
+      ChainHelpers.deploy!(other)
       ChainHelpers.open_cursor!(other)
       {:ok, view, _html} = live(conn, @path)
 

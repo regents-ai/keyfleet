@@ -38,8 +38,14 @@ defmodule KeyfleetWeb.HomeLiveTest do
   @cascade "fibonacci_cascade"
   @owner "0x" <> String.duplicate("a", 40)
 
-  setup do
+  setup context do
     Fleets.bootstrap_catalog!()
+
+    unless context[:classic_undeployed] do
+      ChainHelpers.deploy!(@classic)
+      ChainHelpers.seed_cursor!(@classic)
+    end
+
     Enum.each(Fleets.catalog_ids(), &Workspace.open_log/1)
     :ok
   end
@@ -51,6 +57,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute has_element?(view, "#app-shell")
   end
 
+  @tag :classic_undeployed
   test "the five fleets are cards, Classic first, each opening its map", %{conn: conn} do
     {:ok, view, html} = live(conn, "/")
 
@@ -65,6 +72,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
              ~w(classic fibonacci fibonacci accelerant regents_club)
   end
 
+  @tag :classic_undeployed
   test "a fleet coming soon is a card with its name and that it is coming soon, and nothing more",
        %{conn: conn} do
     Workspace.create(@cascade, "goal", %{"title" => "Map the cascade", "outcome" => "O"})
@@ -73,15 +81,15 @@ defmodule KeyfleetWeb.HomeLiveTest do
     render_async(view, 3_000)
 
     assert attribute(html, "[data-coming-soon]", "id") ==
-             ~w(home-fleet-fibonacci_syndicate home-fleet-fibonacci_cascade
+             ~w(home-fleet-fleet_tech_classic home-fleet-fibonacci_syndicate home-fleet-fibonacci_cascade
                 home-fleet-fleet_tech_accelerant home-fleet-regents_club)
 
     assert has_element?(view, "#home-fleet-#{@cascade} h3", "Cascade #1")
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-soon]") == "Coming soon"
     assert attribute(html, "#home-fleet-preview-#{@cascade}", "data-minted") == ["0"]
     refute has_element?(view, "#home-fleet-#{@cascade} .rl-fleet-card__now")
-    refute has_element?(view, "#home-fleet-#{@classic} [data-fleet-soon]")
-    assert has_element?(view, "#home-fleet-#{@classic} [data-fleet-who]")
+    assert has_element?(view, "#home-fleet-#{@classic} [data-fleet-soon]")
+    refute has_element?(view, "#home-fleet-#{@classic} [data-fleet-who]")
   end
 
   test "a card shows its fleet's newest open goal and what it features, once connected",
@@ -138,6 +146,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-trying]") == "No goal set yet"
   end
 
+  @tag :classic_undeployed
   test "a card counts sold keys only once its fleet is on sale and read up to now",
        %{conn: conn} do
     classic = "fleet_tech_classic"
@@ -162,8 +171,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-who]") ==
              "Sales figures are catching up · 0 agents here"
 
-    assert text(view, "#home-fleet-#{classic} [data-fleet-who]") ==
-             "Not on sale yet · 0 agents here"
+    assert text(view, "#home-fleet-#{classic} [data-fleet-soon]") == "Coming soon"
+    refute has_element?(view, "#home-fleet-#{classic} [data-fleet-who]")
   end
 
   test "the hero counts every fleet's agents and keys once the cards have read them",

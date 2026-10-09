@@ -493,13 +493,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     # Until a fleet is on chain it has no treasury, and its page has no
     # buttons and says nothing about one.
     test "a fleet not yet on chain shows no treasury and no buttons", %{conn: conn} do
-      {:ok, view, html} = live(conn, "/app/fleets/fleet_tech_classic/proposals")
-      assert has_element?(view, "#proposals-page")
-      refute has_element?(view, "#proposals-budget")
-      refute has_element?(view, "#proposals-present")
-      refute has_element?(view, "#propose")
-      refute has_element?(view, "[data-onchain-step]")
-      refute html =~ "Treasury"
+      assert {:error, {:live_redirect, %{to: "/app/fleets/fleet_tech_classic"}}} =
+               live(conn, "/app/fleets/fleet_tech_classic/proposals")
     end
 
     test "the fleet's page leads to its proposals", %{conn: conn} do

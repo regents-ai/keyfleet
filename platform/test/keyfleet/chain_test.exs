@@ -478,7 +478,7 @@ defmodule Keyfleet.ChainTest do
          %{tmp_dir: dir} do
       assert capture_io(fn -> Release.migrate!() end) ==
                """
-               fleet_tech_classic: open
+               fleet_tech_classic: coming soon
                fibonacci_syndicate: coming soon
                fibonacci_cascade: coming soon
                fleet_tech_accelerant: coming soon
@@ -487,7 +487,7 @@ defmodule Keyfleet.ChainTest do
 
       assert Enum.all?(Fleets.list_fleets!(), &is_nil(&1.manager_address))
       assert Fleets.list_deployed_fleets!() == []
-      assert length(slugs("fleet_tech_classic")) >= 10
+      assert slugs("fleet_tech_classic") == []
       assert slugs("fibonacci_syndicate") == []
 
       path = Path.join(dir, "deployed.json")

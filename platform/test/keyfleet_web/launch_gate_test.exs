@@ -143,9 +143,15 @@ defmodule KeyfleetWeb.LaunchGateTest do
 
     for path <-
           ~w(/early /contact /privacy /terms /healthz /robots.txt /.well-known/security.txt) ++
-            ~w(/sitemap.xml /favicon.ico /favicon-32.png /mark.png /images/brand/mark-flat-dark.svg) do
+            ~w(/sitemap.xml /favicon.ico /favicon-32.png /mark.png /images/brand/mark-flat-dark.svg /metadata/collection.json) do
       assert get(build_conn(), path).status == 200, "#{path} closed"
     end
+
+    assert json_response(get(build_conn(), "/metadata/keys/50000000001"), 404) ==
+             refused("key_not_found")
+
+    assert json_response(post(build_conn(), "/metadata/collection.json", %{}), 503) ==
+             refused("not_open_yet")
 
     for path <- ~w(/privacy /terms) do
       conn = build_conn() |> put_req_header("accept", "text/markdown") |> get(path)

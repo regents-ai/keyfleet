@@ -4,7 +4,7 @@ defmodule Keyfleet.Fleets do
 
   alias Keyfleet.Fleets.Fleet
 
-  # The fleets in the order the site shows them. Classic opens first; the
+  # The fleets in the order the site shows them. Club launches first; the
   # others show as coming soon until the founder opens them, one at a time,
   # by marking them `coming_soon?: false` here or by recording their
   # deployment. `card` is the fleet's type as its Keys' names print it; each
@@ -14,7 +14,7 @@ defmodule Keyfleet.Fleets do
       id: "fleet_tech_classic",
       name: "Classic #1",
       card: "CLASSIC",
-      coming_soon?: false
+      coming_soon?: true
     },
     %{
       id: "fibonacci_syndicate",

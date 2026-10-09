@@ -385,6 +385,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
   test "a patch to another fleet's page stops hearing the fleet it left", %{conn: conn} do
     Fleets.bootstrap_catalog!()
+    ChainHelpers.deploy!("fleet_tech_classic")
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic/rooms/general")
 
