@@ -416,3 +416,22 @@ Run from `/private/tmp/claude-501/-Users-sean-Documents-regent/8c3e0232-2b4d-44a
 - The first-round test names quoted in the findings above were renamed when the
   proofs were turned to check the fixes; the scratch paths are the auditor's
   working copies and are not kept.
+
+## Re-check of KF-R-01 at 02b3ad2 and 2397d52
+
+Date: 9 October 2026.
+
+- **KF-R-01: FIXED in 02b3ad2.** `takePiece` no longer takes the manager's lock. Nothing else in the contracts changed (`git diff e05deae 02b3ad2 -- contracts/src` touches only that function and its comment).
+- **Why removing the lock is safe:**
+  - Only the buyer can call `takePiece`, from `convert`, and `convert` holds the buyer's own lock.
+  - Every manager path writes its bookings before it calls out. `_sell` books `pendingConversion`, then mints; `sendProtocolShare` zeroes the share before sending; `recognizeSurplus` reads only the swept token, never `pendingConversion`, for any token but USDC, and USDC has no transfer hook.
+  - `recognizeSurplus`, `purchase`, `give` and `sendProtocolShare` keep their lock. So a conversion run inside them can take the booked piece, but it cannot sweep or re-enter a sale.
+- **Proof that the tests catch the problem:** in a copy with the old lock put back, the two audit tests and the chief's two new tests (`test_AConversionFromInside*`) all fail. On the fix they succeed.
+- **Results on 2397d52** (the fix plus these proof files in the repo), fresh copy:
+  - `forge fmt --check` and `forge build` succeeded.
+  - Offline suite: 577 succeeded, 0 failed, 6 skipped (the project's fork tests, which skip without an RPC).
+  - `script/check_bytecode.sh` succeeded.
+  - Audit fork file without `BASE_RPC_URL`: setUp fails with the intended message.
+  - Audit fork file on https://mainnet.base.org: 4 of 4 succeeded. Cold hand-over gas 66,032; 62 gas limits converted, 61 reverted untouched, 0 skipped.
+- **Slither:** run the same way on e05deae and 02b3ad2 (`slither . --exclude-dependencies`), both give 199 results. They differ only in the order of the listed calls in one existing KeyfleetKeys entry, so the fix adds no Slither result. The earlier count of 192 came from a different invocation; this like-for-like comparison replaces it.
+- **Still open, unchanged:** KF-A-03 (waits on economic fork testing), KF-A-04, and KF-A-05 (Sean's decision on blocking coordinator changes while reveals are pending).
