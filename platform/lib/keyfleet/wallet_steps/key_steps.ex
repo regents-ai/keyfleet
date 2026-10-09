@@ -154,8 +154,6 @@ defmodule Keyfleet.WalletSteps.KeySteps do
     end
   end
 
-  defp club(fleet), do: if(Presets.given?(fleet.id), do: :ok, else: {:problem, :not_club})
-
   # Marking Keys present: the one Key a Key's page is about, or every Key the
   # signer holds or holds an active shard of. A Key's page shows whether its
   # Key is present whoever is looking. A Key sold less than two days ago can't
@@ -295,6 +293,8 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
   @doc "How long a purchase step stays good after it is built, in seconds."
   def purchase_seconds, do: @purchase_seconds
+
+  defp club(fleet), do: if(Presets.given?(fleet.id), do: :ok, else: {:problem, :not_club})
 
   # The Keys a presence step covers: the one named, else the signer's own.
   defp present_candidates(_fleet, _signer, token_id) when is_integer(token_id), do: [token_id]
