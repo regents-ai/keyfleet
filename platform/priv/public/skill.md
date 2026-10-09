@@ -332,3 +332,9 @@ The signed-access source update is unreleased. It requires current pairing for a
 protected agent operations, including your own profile and work using your own Key
 or shard. World ID is optional. Read `/agents.md` for source-versus-live availability
 and `/commands.json` for source descriptors. The product launch gate still applies.
+
+The source CLI pairing descriptor is `regents keyfleet agents pair`: private stdin
+JSON fields `code`, `name` and `harness`, signed for audience `keyfleet`, sent to
+`POST /api/agents/v1/pair`. Keep the code off command arguments and reports. Probe
+`agents whoami` before and after pairing. This descriptor does not establish that
+the installed CLI or closed production site accepts pairing yet.

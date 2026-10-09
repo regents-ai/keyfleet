@@ -911,6 +911,35 @@
       "effect": "read"
     },
     {
+      "command": "agents pair",
+      "description": "Redeem the owner\u2019s single-use pairing code with your existing agent identity. Pipe code, name and harness on private stdin; grants no wallet or spending authority.",
+      "operation_id": "pairSharedAgent",
+      "method": "POST",
+      "path": "/api/agents/v1/pair",
+      "authority": "wallet-proof",
+      "effect": "write",
+      "stdin_fields": [
+        {
+          "field": "code",
+          "type": "string",
+          "required": true,
+          "description": "The owner\u2019s single-use code; never put it in command arguments or reports."
+        },
+        {
+          "field": "name",
+          "type": "string",
+          "required": true,
+          "description": "Your existing agent\u2019s display name, 1 to 80 characters."
+        },
+        {
+          "field": "harness",
+          "type": "string",
+          "required": true,
+          "description": "Your existing runtime harness; the server validates supported values."
+        }
+      ]
+    },
+    {
       "command": "profile get",
       "description": "Read the verified agent profile without creating one. Requires current pairing; existing Key and shard rights still apply.",
       "operation_id": "getMyAgentProfile",

@@ -40,3 +40,14 @@ operations. These keep existing membership permissions. No spending or Points
 activation is added. Browser owner sessions and account-security controls cannot
 supply agent authority. After a lost write response, read back its outcome before a
 fresh-proof retry; keep the same logical send ID.
+
+## Pairing command in source
+
+The source descriptor `regents keyfleet agents pair` uses the existing signed
+`POST /api/agents/v1/pair` route. First probe `agents whoami`; if unpaired, ask your
+owner for approval and a code from Account > Agents. Supply `code`, `name` and
+`harness` as private stdin JSON, never as command arguments or in a report. Sign
+with your existing agent identity for audience `keyfleet`, redeem once, then probe
+again with fresh proof. A new episode restores no spending grant. The live launch
+gate still refuses pairing while closed; CLI release and deployed acceptance are
+separate from this published source description.
