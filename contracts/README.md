@@ -35,7 +35,8 @@ any price, supply, split, rate bound, route or royalty.
 **9 October founder update:** KF-A-03's conversion-price risk is accepted; Sean
 requested no fix. Batch receiver/ownership changes (KF-A-04) were acknowledged,
 with the existing probe and claims fallback retained. The Base keeper is the
-Regents Safe. The randomness subscription is still unset; no deployment occurred.
+Regents Safe. Sean supplied the randomness subscription; its consumer setup and
+transfer to the Safe follow deployment and precede recording. No deployment occurred.
 
 Decided by the founder on 27, 28 and 29 September and 6, 7 and 8 October 2026,
 and what the code on this branch does:
@@ -169,9 +170,9 @@ On hold or not yet done:
 - `deployments/base.json` carries the trait table's hash
   (`0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, eight
   traits of sixteen values each, every trait's weights adding up to 1,000), the
-  five founding fleets' deck fingerprints, the Regents Safe as keeper and a VRF
-  subscription of 0. A Base deployment is refused until a valid subscription
-  id is written in.
+  five founding fleets' deck fingerprints, the Regents Safe as keeper and Sean's
+  verified Base VRF subscription. Before recording, the subscription must list
+  the collection as consumer and be owned by the Regents Safe.
 - On Base every deployment refuses any staking contract but REGENT revenue
   staking and any swap route but the pinned one, and the record step refuses a
   randomness subscription not owned by the Regents Safe.
@@ -1675,8 +1676,9 @@ Nothing below can be fixed after the fact unless it says so.
 4. **`collection.contractURI`.** Check the collection page's metadata address in
    the manifest and that it already serves the right file. It is fixed at
    deployment and nothing can change it.
-5. **VRF subscription id.** Create the subscription, fund it with 0.5 ETH, move
-   it to the Regents Safe and write its id into `vrf.subscriptionId`. The
+5. **VRF subscription id.** Sean's subscription id is set in `vrf.subscriptionId`.
+   Fund it with 0.5 ETH; after deployment, add the collection as consumer and move
+   ownership to the Regents Safe before recording. The
    placeholder `"0"` is refused. The balance is checked by hand: top it up
    back to 0.5 ETH when it is below 0.3 ETH, and never leave it below
    0.25 ETH. One answer can cost up to about 0.001 ETH at the

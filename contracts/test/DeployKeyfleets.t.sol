@@ -173,20 +173,19 @@ contract DeployKeyfleetsTest is KeyfleetScriptFixture {
         checks.requireManifestFitsChain(manifest);
     }
 
-    /// @dev The committed Base manifest deploys over a stand-in Base once the operator writes in the
-    /// subscription the Safe owns and the keeper: with the zero subscription and zero keeper it
-    /// carries today, nothing can be deployed on Base.
-    function test_committedBaseManifestDeploysOnceSubscriptionAndKeeperAreWrittenIn() public {
-        uint256 subscriptionId = _standInBase();
+    /// @dev The committed Base manifest refuses an unknown subscription, then deploys over a
+    /// stand-in Base once its subscription exists, preserving the configured keeper.
+    function test_committedBaseManifestDeploysOnceItsSubscriptionExists() public {
+        _standInBase();
         KeyfleetManifest.Manifest memory committed = deployScript.readManifest("base");
-        assertEq(committed.bindings.keeper, address(0), "Keeper not chosen yet");
-        assertEq(committed.bindings.randomness.subscriptionId, 0, "Subscription not written in yet");
         vm.expectRevert(MockVRFCoordinatorV2Plus.InvalidSubscription.selector);
         deployScript.deploy(committed);
 
-        KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
-        KeyfleetFactory deployed = deployScript.deploy(manifest);
+        MockVRFCoordinatorV2Plus(address(committed.bindings.randomness.coordinator))
+            .openSubscription(committed.bindings.randomness.subscriptionId, committed.bindings.safe);
+        KeyfleetFactory deployed = deployScript.deploy(committed);
         KeyfleetKeys collection = deployed.KEYS();
+        assertEq(collection.keeper(), committed.bindings.keeper, "Configured keeper");
         assertEq(collection.name(), "Keyfleet", "Name");
         assertEq(collection.symbol(), "KEYFLEET", "Symbol");
         assertEq(collection.baseTokenURI(), "https://keyfleet.ai/metadata/keys/", "Metadata base");

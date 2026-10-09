@@ -119,9 +119,9 @@ steps 5% per key. The Regents Club is never sold: its 1,998 keys are given.
 `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, the five
 founding decks below, profiles named "Classic #1", "Syndicate #1",
 "Accelerant #1", "Cascade #1" and "Regents Club #1" with an empty description
-and image link, a
-zero `keeper` and `"subscriptionId": "0"`. So a Base deployment is refused until
-the keeper's address and the Regents subscription id are written in.
+and image link, the Regents Safe as `keeper`, and Sean's verified Base
+subscription id as a decimal string. The subscription must list the deployed
+collection as consumer and belong to the Safe before the recording step.
 
 | Founding fleet | `deckHash` | `deckSize` |
 | --- | --- | --- |
@@ -150,27 +150,31 @@ the Autolaunch factory from Autolaunch Revstake v2's deployment manifest
 ## Step 1: the randomness subscription
 
 The Base keeper is already set to the Regents Safe by Sean's 9 October decision.
-Create the subscription on **Base Mainnet** at
-[Chainlink's subscription creation page](https://vrf.chain.link/base/new),
-then fund its native ETH balance. If a personal wallet creates it, transfer
-ownership to the Regents Safe and have the Safe accept the transfer. Supply the
-resulting subscription id for `base.json`; the collection is added as a consumer
-after its deployment. Club cards use the fixed founding deck and make no VRF
-request, but the shared system's deployment still requires a valid subscription.
+Sean supplied subscription
+`58953026474889286452657611148401201221788353993662160123850640810329610213433`,
+now written as a decimal string in `base.json`. A read-only Base check confirmed
+it exists and belongs to his wallet. Sean will add the collection as consumer
+and transfer subscription ownership to the Safe after deployment; the Safe must
+accept that transfer before the recording step. Its native ETH balance must be
+funded before randomness requests begin. Club cards use the fixed founding deck
+and make no VRF request, but the shared system's deployment still requires a
+valid subscription.
 
 Keys that draw cards or traits use one Chainlink VRF random number; founding
 Keys within their decks are dealt by number without a request. One subscription
-pays for every fleet's randomness requests in ETH. Before the deployment:
+pays for every fleet's randomness requests in ETH. Setup order:
 
 1. Create the subscription on the Base coordinator (`createSubscription()`, or
-   Chainlink's VRF app) and fund it in ETH with
+   [Chainlink's Base app](https://vrf.chain.link/base/new)) and fund it in ETH with
    `fundSubscriptionWithNative(subId)`.
-2. Move its ownership to the Regents Safe on Base,
+2. Write the subscription id into `vrf.subscriptionId` in `base.json`, then
+   deploy the collection. Add it as a subscription consumer.
+3. Move its ownership to the Regents Safe on Base,
    `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`:
    `requestSubscriptionOwnerTransfer(subId, 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e)`
    from the creator, then `acceptSubscriptionOwnerTransfer(subId)` from the Safe.
-3. Write the subscription id into `vrf.subscriptionId` in `base.json`. The
-   `keeper` is already set to the Regents Safe.
+   Complete the transfer before recording the deployment. The `keeper` is
+   already set to the Regents Safe.
 
 ### Keeping the subscription funded
 
@@ -430,7 +434,7 @@ A Pass that changes hands after the step ran makes its batch revert whole, since
 the contract gives key N only to the current holder of Pass N or to the claims
 contract. Run the step again: it writes files only for the keys still not
 given, read afresh. Whoever holds Pass N can later take a key held for it with
-`claim(N)` on the claims contract, at any time, together with what it earned
+`claim(N, payee)` on the claims contract, at any time, together with what it earned
 while it waited. A key held for a burned Pass stays held, since nobody holds
 that Pass.
 
@@ -438,6 +442,17 @@ A holder contract that answers the receiver check but still refuses the real
 gift makes its whole batch revert, and the step reads it the same way again.
 Name its key numbers in `KEYFLEET_CLUB_TO_CLAIMS`, comma-separated, and run the
 step again: those keys go to the claims contract whoever holds their Pass.
+
+An ownership mismatch returns `NotPassHolder(keyNumber, receiver)`. A receiver
+rejection may return only its own error or its address; inspect the simulation
+or execution trace to find the failing mint's Key number. A batch stops at its
+first failure and retains no mint events when it reverts. Rebuild with that Key
+routed to claims, then simulate again to find any further failures before
+signing. Keep all Key numbers in order: replace a failed receiver with the
+claims contract rather than delete an entry, which would shift later Keys.
+The Key is claimed by, and sent to, the current Pass holder; `payee` selects
+only the rewards destination. A wallet that cannot receive NFTs must first
+move its Pass to one that can before claiming.
 
 ```sh
 KEYFLEET_MANIFEST=base KEYFLEET_STEP=club-gifts KEYFLEET_CLUB_TO_CLAIMS=212,977 \
