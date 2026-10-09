@@ -367,14 +367,13 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
   end
 
-  # Signed out, the sidebar names the account page as the header's button does.
   test "in-shell navigation keeps the LiveView and shell identity", %{conn: conn} do
     {:ok, view, html} = live(conn, "/app/fleets/fibonacci_syndicate")
     pid = view.pid
     [instance] = Regex.run(~r/data-shell-instance="(\d+)"/, html, capture: :all_but_first)
 
     view
-    |> element("#shell-sidebar a", "Sign In")
+    |> element("#shell-sidebar a", "Account")
     |> render_click()
 
     assert_patch(view, "/account")

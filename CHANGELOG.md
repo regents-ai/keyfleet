@@ -924,3 +924,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   deployment again (new column on fleets; no fleet is recorded yet).
 - Before any deploy, the contracts now go through the internal audit Sean chose
   on 9 Oct in place of an outside one.
+
+## 2026-10-09 — A shorter sidebar
+
+- The app's sidebar lists Classic #1, the Regents Club and Account, and nothing
+  else (Sean, 9 Oct). Syndicate #1, Cascade #1 and Accelerant #1 stay on the
+  home page as coming soon.
+- The sidebar's last entry reads Account whether or not you are signed in; it
+  read Sign In while signed out. The account page still asks you to sign in.

@@ -7,7 +7,7 @@ import {furnishFleet, prepareFleet} from "./support/fleet_chain"
 // the window all stay. A deployed fleet with a room message, a workspace goal
 // and a proposal shows every such link, and each is clicked here, signed in
 // as the owner of its Key, as only a Key holder reads the workspace.
-const fleet = "fibonacci_syndicate"
+const fleet = "fleet_tech_classic"
 const me = "0x1111111111111111111111111111111111111111"
 const fleetPath = `/app/fleets/${fleet}`
 const planPath = new RegExp(`${escape(fleetPath)}/workspace/goal%23\\d+$`)
@@ -128,12 +128,12 @@ test("the walk from home through every page, back, forward and the sidebar keeps
     await walk.arrive(visited[visited.length - 1 - back])
   }
 
-  // The sidebar's links: this fleet, another fleet, and the Account page.
-  await walk.follow(sidebar.getByRole("link", {name: "Syndicate #1"}), fleetPage)
-  await walk.follow(sidebar.getByRole("link", {name: "Classic #1"}), {
-    path: "/app/fleets/fleet_tech_classic",
-    shows: "#fleet-view",
+  // The sidebar's links: the Regents Club, this fleet, and the Account page.
+  await walk.follow(sidebar.getByRole("link", {name: "Regents Club"}), {
+    path: "/app/fleets/regents_club",
+    shows: "#fleet-soon",
   })
+  await walk.follow(sidebar.getByRole("link", {name: "Classic #1"}), fleetPage)
   await walk.follow(sidebar.getByRole("link", {name: "Account"}), account)
 
   await walk.settled()
@@ -143,7 +143,7 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
   await page.goto(fleetPath)
   const walk = await enterShell(page)
-  const toFleet = () => walk.follow(page.locator("#shell-sidebar").getByRole("link", {name: "Syndicate #1"}), fleetPage)
+  const toFleet = () => walk.follow(page.locator("#shell-sidebar").getByRole("link", {name: "Classic #1"}), fleetPage)
 
   // The fleet's rooms, workspace and proposals.
   await page.locator("#fleet-rooms-toggle").click()
