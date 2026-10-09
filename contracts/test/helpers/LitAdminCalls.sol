@@ -149,8 +149,12 @@ library LitAdminCalls {
     /// Lit's server accepts it only within 300 seconds either side of `issuedAt`.
     function createWalletDigest(address owner, uint256 issuedAt, uint256 chainId) internal pure returns (bytes32) {
         bytes32 domain = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256("Lit ChainSecured"), keccak256("1"), chainId));
-        bytes32 message = keccak256(abi.encode(CREATE_WALLET_TYPEHASH, owner, issuedAt));
-        return keccak256(abi.encodePacked("\x19\x01", domain, message));
+        return keccak256(abi.encodePacked("\x19\x01", domain, createWalletStructHash(owner, issuedAt)));
+    }
+
+    /// @notice The struct hash of Lit's `CreateWallet` message.
+    function createWalletStructHash(address owner, uint256 issuedAt) internal pure returns (bytes32) {
+        return keccak256(abi.encode(CREATE_WALLET_TYPEHASH, owner, issuedAt));
     }
 
     function _call(ILitAccountConfig config, bytes memory data) private pure returns (KeyfleetTreasury.Call memory) {

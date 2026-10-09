@@ -212,20 +212,20 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(KeyfleetRewards.Settled.selector, 0xbfed4c9aef0cc82058a0d9ecf93fff780a20d63bb650b7fcde95bf639097b402);
     }
 
-    /// @dev The fleet's launch token bound to its treasury, and the signature hashes a proposal
-    /// approves or revokes.
+    /// @dev The fleet's launch token bound to its treasury, and the Lit `CreateWallet` requests a
+    /// proposal approves or revokes.
     function test_launchAndSignatureTopics() public pure {
         assertEq(
             KeyfleetTreasury.LaunchTokenBound.selector,
             0x8d7b7447fbb1198714566de25638e562cbbad2f5d24d09970b1793414994acf4
         );
         assertEq(
-            KeyfleetTreasury.SignatureHashApproved.selector,
-            0x78cba52b865a35eb982d79c8f8c7226f18a37db81001cc4edeb11a495ea17b81
+            KeyfleetTreasury.LitCreateWalletApproved.selector,
+            0x55466410721fef34fe9a5642b5f6ad4a536d32b4dd13f85ffc1629fc8839046e
         );
         assertEq(
-            KeyfleetTreasury.SignatureHashRevoked.selector,
-            0x7e49e1e3d94a832d547af8b63cf8178a42412db0ec293cde6d88e34df5ce80f8
+            KeyfleetTreasury.LitCreateWalletRevoked.selector,
+            0x3777c7cd3a982e67c2f22eb607a5ac633d7463082b7819be343158ac9859bfe1
         );
     }
 }

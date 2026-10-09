@@ -18,7 +18,8 @@ import {IUniswapV4PoolManager, IUnlockCallback, V4PoolKey, V4SwapParams} from ".
 /// part as `pendingConversion` and joins this contract's queue of fleets waiting for REGENT. Anyone
 /// may call `convert(maxUsdc)`, which turns one piece of the first queued fleet's booked USDC into
 /// REGENT: at most `PIECE_USDC` (250 USDC), and less when the caller names less, but never under
-/// `MIN_PIECE_USDC` (1 USDC) unless that is all the fleet has left. A piece holds the
+/// `MIN_PIECE_USDC` (1 USDC), and never leaving the fleet less than that booked: a piece that would
+/// takes the rest with it, so it can reach `PIECE_USDC + MIN_PIECE_USDC - 1`. A piece holds the
 /// next one back for its share of `PIECE_INTERVAL`, 15 minutes for a full piece and in proportion
 /// for a smaller one, rounded up to the second, so across every fleet at most 250 USDC turns into
 /// REGENT every 15 minutes and never two pieces in one block. A fleet with USDC still booked goes to
@@ -26,15 +27,22 @@ import {IUniswapV4PoolManager, IUnlockCallback, V4PoolKey, V4SwapParams} from ".
 /// each fleet at most once and only fleets the collection registered, and `convert` touches only
 /// its first entry, so every call costs the same whatever the queue's length.
 ///
-/// A piece that moves the route's price by more than `MAX_PRICE_MOVE_BPS` (1%) reverts, and the
-/// fleet keeps its place at the front until someone converts a smaller piece. The price is each
+/// A fleet whose piece cannot be handed over, because its manager refuses or USDC will not move its
+/// USDC, is skipped: it keeps its whole booking and goes to the back of the queue, and the clock does
+/// not move, so the next call serves the next fleet straight away and no one fleet can hold up the
+/// others. Handing over runs with a fixed
+/// `COLLECT_GAS`, and a call with too little gas left for it is refused instead, so a caller cannot
+/// make a fleet be skipped. Everything after the hand-over concerns the shared route, not the fleet,
+/// and a failure there reverts the whole call: a piece that moves the route's price by more than
+/// `MAX_PRICE_MOVE_BPS` (1%) reverts, and the fleet keeps its place at the front until someone
+/// converts a smaller piece. The price is each
 /// pool's own, read before and after the swap, so the rule bounds only the piece's own move, never
 /// a move made before it in the same block; what makes pushing the price first and unwinding after
 /// unprofitable is the REGENT pool hook's fee on both trades. The route's price moves by the two
 /// pools' moves multiplied together.
 ///
-/// A piece pulls exactly the USDC the fleet's manager approved, through the v3 pool's callback
-/// straight into the pool, swaps the WETH that comes out inside one PoolManager `unlock`, and has
+/// A piece pulls exactly the USDC the fleet's manager approved into this contract, pays it to the
+/// v3 pool through the pool's callback, swaps the WETH that comes out inside one PoolManager `unlock`, and has
 /// the PoolManager pay the REGENT straight to the fleet's treasury. Each leg must spend exactly what
 /// it was given, or the whole call reverts, so a partial fill can never leave USDC or WETH behind
 /// here; between calls this contract holds no token and no approval, and its route is fixed at
@@ -83,9 +91,14 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
     error SwapIncomplete(uint256 expected, uint256 actual);
     /// @notice The REGENT leg paid nothing out.
     error NothingBought();
+    /// @notice Too little gas was left to hand over a piece with `COLLECT_GAS`.
+    error NotEnoughGas();
 
     /// @notice A fleet joined the back of the queue.
     event Queued(address indexed manager);
+    /// @notice A fleet's piece could not be handed over: it keeps its booking and went to the back
+    /// of the queue.
+    event PieceSkipped(address indexed manager);
     /// @notice One piece was turned into REGENT.
     /// @param payer The fleet's manager, which the USDC came from.
     /// @param recipient The fleet's treasury, which the REGENT went to.
@@ -107,15 +120,17 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
     uint256 public constant PIECE_INTERVAL = 15 minutes;
     /// @notice The most one piece may move the route's price, in basis points: 1%.
     uint256 public constant MAX_PRICE_MOVE_BPS = 100;
+    /// @notice The gas handing over a piece runs with: the manager's `takePiece` and the USDC
+    /// transfer, a few times what both use.
+    uint256 public constant COLLECT_GAS = 300_000;
 
     /// @dev The lowest and highest prices a Uniswap pool accepts as a limit, plus and minus one, so a
     /// swap is limited only by its amount.
     uint160 private constant MIN_SQRT_PRICE_LIMIT = 4_295_128_740;
     uint160 private constant MAX_SQRT_PRICE_LIMIT = 1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_341;
 
-    /// @dev Transient: who pays the v3 leg, and the exact USDC it is owed. Both are zero except
-    /// inside a piece's swap, which is what lets the v3 callback tell its own swap from any other call.
-    bytes32 private constant PAYER_SLOT = keccak256("keyfleet.regent_buyer.payer");
+    /// @dev Transient: the exact USDC the v3 leg is owed. It is zero except inside a piece's swap,
+    /// which is what lets the v3 callback tell its own swap from any other call.
     bytes32 private constant OWED_SLOT = keccak256("keyfleet.regent_buyer.usdc_owed");
     /// @dev Transient: whether this contract is inside its own `unlock`.
     bytes32 private constant UNLOCKED_SLOT = keccak256("keyfleet.regent_buyer.unlocked");
@@ -219,13 +234,16 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
     /// at the market price. Anyone may call it, and may name a smaller piece, for instance when a
     /// full one would move the price more than 1%.
     /// @dev Only from `nextPieceAt`. The fleet's manager hands over the least of its booking and
-    /// `maxUsdc` held between `MIN_PIECE_USDC` and `PIECE_USDC`, and approves exactly that; the
-    /// piece then holds the next one back for `PIECE_INTERVAL` times its share of `PIECE_USDC`,
-    /// rounded up to the second, which also keeps two pieces out of one block. The fleet goes to the back of the queue if it still has
-    /// USDC booked. Locked, so the REGENT pool's hook cannot start a second piece inside the first.
+    /// `maxUsdc` held between `MIN_PIECE_USDC` and `PIECE_USDC`, or its whole booking when that
+    /// would leave less than `MIN_PIECE_USDC`; the piece then holds the next one back for
+    /// `PIECE_INTERVAL` times its share of `PIECE_USDC`, rounded up to the second, which also keeps
+    /// two pieces out of one block. The fleet goes to the back of the queue if it still has USDC
+    /// booked. A fleet whose piece cannot be handed over is skipped (`PieceSkipped`) with its
+    /// booking whole, the clock untouched and nothing bought. Locked, so the REGENT pool's hook
+    /// cannot start a second piece inside the first.
+    /// @return regentOut The REGENT the fleet's treasury received, zero for a skipped fleet.
     /// @param maxUsdc The most USDC the caller wants this piece to be; above `PIECE_USDC` counts as
     /// `PIECE_USDC` and below `MIN_PIECE_USDC` as `MIN_PIECE_USDC`.
-    /// @return regentOut The REGENT the fleet's treasury received.
     function convert(uint256 maxUsdc) external nonReentrant returns (uint256 regentOut) {
         uint256 opensAt = nextPieceAt;
         if (block.timestamp < opensAt) revert PieceTooSoon(opensAt);
@@ -236,22 +254,36 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
         queueHead = head + 1;
         isQueued[address(manager)] = false;
 
-        (uint256 usdcIn, address recipient) = manager.takePiece(Math.max(Math.min(maxUsdc, PIECE_USDC), MIN_PIECE_USDC));
-        nextPieceAt = uint64(block.timestamp + Math.ceilDiv(PIECE_INTERVAL * usdcIn, PIECE_USDC));
-        regentOut = _swap(address(manager), usdcIn, recipient);
+        uint256 limit = Math.max(Math.min(maxUsdc, PIECE_USDC), MIN_PIECE_USDC);
+        if (gasleft() < (COLLECT_GAS * 64) / 63 + 10_000) revert NotEnoughGas();
+        try this.collectPiece{gas: COLLECT_GAS}(manager, limit) returns (uint256 usdcIn, address recipient) {
+            nextPieceAt = uint64(block.timestamp + Math.ceilDiv(PIECE_INTERVAL * usdcIn, PIECE_USDC));
+            regentOut = _swap(address(manager), usdcIn, recipient);
+        } catch {
+            emit PieceSkipped(address(manager));
+        }
         if (manager.pendingConversion() != 0 && !isQueued[address(manager)]) _push(address(manager));
     }
 
-    /// @notice Pays the v3 pool the USDC its swap is owed, straight from the payer.
+    /// @notice Takes one piece of `manager`'s booking into this contract. Only `convert` calls it,
+    /// as its own separate call, so a piece that cannot be handed over undoes only itself.
+    /// @return usdcIn The USDC handed over.
+    /// @return recipient The fleet's treasury, which the REGENT goes to.
+    function collectPiece(KeyfleetManager manager, uint256 limit) external returns (uint256 usdcIn, address recipient) {
+        if (msg.sender != address(this)) revert UnexpectedCallback(msg.sender);
+        (usdcIn, recipient) = manager.takePiece(limit);
+        USDC.safeTransferFrom(address(manager), address(this), usdcIn);
+    }
+
+    /// @notice Pays the v3 pool the USDC its swap is owed, from the piece this contract holds.
     /// @dev Only the fixed pool, only inside a piece's swap, and only for exactly the USDC it asked to swap.
     function uniswapV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes calldata) external {
-        address payer = PAYER_SLOT.asAddress().tload();
-        if (msg.sender != address(V3_POOL) || payer == address(0)) revert UnexpectedCallback(msg.sender);
         uint256 owed = OWED_SLOT.asUint256().tload();
+        if (msg.sender != address(V3_POOL) || owed == 0) revert UnexpectedCallback(msg.sender);
         int256 usdcDelta = USDC_IS_V3_TOKEN0 ? amount0Delta : amount1Delta;
         if (usdcDelta != int256(owed)) revert SwapIncomplete(owed, _abs(usdcDelta));
         OWED_SLOT.asUint256().tstore(0);
-        USDC.safeTransferFrom(payer, address(V3_POOL), owed);
+        USDC.safeTransfer(address(V3_POOL), owed);
     }
 
     /// @notice Swaps the WETH for REGENT inside the PoolManager, pays the WETH and has the REGENT sent
@@ -288,12 +320,11 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
         return "";
     }
 
-    /// @dev Spends `usdcIn` of `payer`'s approved USDC on REGENT for `recipient`, refusing a swap
+    /// @dev Spends the `usdcIn` this contract took from `payer` on REGENT for `recipient`, refusing a swap
     /// that moves the route's price by more than `MAX_PRICE_MOVE_BPS`.
     function _swap(address payer, uint256 usdcIn, address recipient) private returns (uint256 regentOut) {
         uint256 v3Before = _v3Price();
         uint256 v4Before = _v4Price();
-        PAYER_SLOT.asAddress().tstore(payer);
         OWED_SLOT.asUint256().tstore(usdcIn);
 
         bool zeroForOne = USDC_IS_V3_TOKEN0;
@@ -303,7 +334,6 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
         (int256 usdcDelta, int256 wethDelta) = zeroForOne ? (amount0, amount1) : (amount1, amount0);
         if (usdcDelta != int256(usdcIn)) revert SwapIncomplete(usdcIn, _abs(usdcDelta));
         // Cleared before the second leg, so the v3 callback refuses anything from here on.
-        PAYER_SLOT.asAddress().tstore(address(0));
         OWED_SLOT.asUint256().tstore(0);
         if (wethDelta >= 0) revert NothingBought();
         uint256 wethMid = uint256(-wethDelta);

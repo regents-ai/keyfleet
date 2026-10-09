@@ -3,6 +3,7 @@ pragma solidity 0.8.26;
 
 import {Vm} from "forge-std/Vm.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
@@ -49,6 +50,41 @@ contract PieceManager {
         pendingConversion -= amount;
         USDC.approve(address(BUYER), amount);
         recipient = TREASURY;
+    }
+}
+
+/// @dev A worthless token that reports a balance for anyone and, when a fleet sends it on, runs a
+/// conversion from inside that fleet's call.
+contract ConvertingToken {
+    KeyfleetRegentBuyer private immutable BUYER;
+    uint256 public regentOut;
+
+    constructor(KeyfleetRegentBuyer buyer) {
+        BUYER = buyer;
+    }
+
+    function balanceOf(address) external pure returns (uint256) {
+        return 1;
+    }
+
+    function transfer(address, uint256) external returns (bool) {
+        regentOut = BUYER.convert(FULL_PIECE);
+        return true;
+    }
+}
+
+/// @dev Runs a conversion from inside the purchase that mints it a key.
+contract ConvertingReceiver is IERC721Receiver {
+    KeyfleetRegentBuyer private immutable BUYER;
+    uint256 public regentOut;
+
+    constructor(KeyfleetRegentBuyer buyer) {
+        BUYER = buyer;
+    }
+
+    function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
+        regentOut = BUYER.convert(FULL_PIECE);
+        return IERC721Receiver.onERC721Received.selector;
     }
 }
 
@@ -281,6 +317,115 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         assertEq(regentBuyer.queueLength(), 1);
     }
 
+    /// @dev Invariant: a fleet whose USDC will not move, for instance because USDC's issuer froze its
+    /// manager, is skipped with its booking whole and waits at the back; the clock does not move, so
+    /// the next fleet converts straight away.
+    function test_AFleetWhoseUsdcWillNotMoveIsSkippedAndTheNextConverts() public {
+        KeyfleetManager frozen = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        KeyfleetManager next = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        uint256 frozenBooked = frozen.pendingConversion();
+        uint256 nextBooked = next.pendingConversion();
+        usdc.freeze(address(frozen));
+        uint256 opensAt = regentBuyer.nextPieceAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+
+        vm.expectEmit(address(regentBuyer));
+        emit KeyfleetRegentBuyer.PieceSkipped(address(frozen));
+        assertEq(regentBuyer.convert(FULL_PIECE), 0, "nothing is bought for it");
+        assertEq(frozen.pendingConversion(), frozenBooked, "it keeps its whole booking");
+        assertEq(usdc.allowance(address(frozen), address(regentBuyer)), 0, "and approves nothing");
+        assertEq(regentBuyer.nextPieceAt(), opensAt, "the clock does not move");
+        assertEq(regentBuyer.nextInQueue(), address(next), "the next fleet is at the front");
+        assertEq(regentBuyer.queueLength(), 2, "and the skipped one waits at the back");
+        _assertBuyerEmpty();
+
+        assertEq(regentBuyer.convert(FULL_PIECE), _regentFor(nextBooked), "the next fleet converts at once");
+        assertEq(next.pendingConversion(), 0);
+        assertEq(regentBuyer.nextInQueue(), address(frozen));
+        assertEq(frozen.pendingConversion(), frozenBooked);
+    }
+
+    /// @dev Invariant: a conversion run from inside another call to the fleet at the front, here a
+    /// worthless token's transfer during `recognizeSurplus`, converts that fleet's piece; it is not
+    /// skipped and keeps its place in turn.
+    function test_AConversionFromInsideAFleetsOwnCallConvertsItsPiece() public {
+        KeyfleetManager target = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        KeyfleetManager other = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        uint256 booked = target.pendingConversion();
+        uint256 opensAt = regentBuyer.nextPieceAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+        assertEq(regentBuyer.nextInQueue(), address(target));
+
+        ConvertingToken token = new ConvertingToken(regentBuyer);
+        vm.recordLogs();
+        target.recognizeSurplus(address(token));
+
+        _assertNoSkip();
+        assertEq(token.regentOut(), _regentFor(booked), "the fleet's piece converts");
+        assertEq(target.pendingConversion(), 0, "and leaves nothing booked");
+        assertEq(regentBuyer.nextInQueue(), address(other), "the next fleet takes its turn");
+        assertGt(regentBuyer.nextPieceAt(), opensAt, "and the clock moves");
+        _assertBuyerEmpty();
+    }
+
+    /// @dev Invariant: a conversion run from a receiver's mint hook inside a purchase converts the
+    /// purchasing fleet's whole booking, the new purchase's share included; it is not skipped.
+    function test_AConversionFromInsideAPurchaseConvertsThatFleetsPiece() public {
+        KeyfleetManager target = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        KeyfleetManager other = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        uint256 opensAt = regentBuyer.nextPieceAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+        assertEq(regentBuyer.nextInQueue(), address(target));
+
+        ConvertingReceiver receiver = new ConvertingReceiver(regentBuyer);
+        uint256 treasuryBefore = regent.balanceOf(address(target.TREASURY()));
+        vm.recordLogs();
+        _buy(target, address(receiver));
+
+        _assertNoSkip();
+        assertGt(receiver.regentOut(), 0, "the fleet's piece converts");
+        assertEq(target.pendingConversion(), 0, "with the new purchase's share in it");
+        assertEq(
+            regent.balanceOf(address(target.TREASURY())) - treasuryBefore,
+            receiver.regentOut(),
+            "and the REGENT reaches the fleet's treasury"
+        );
+        assertEq(regentBuyer.nextInQueue(), address(other), "the next fleet takes its turn");
+        _assertBuyerEmpty();
+    }
+
+    /// @dev Invariant: a caller cannot make a working fleet be skipped by sending too little gas;
+    /// the call either converts its piece or reverts with the fleet's booking and place untouched.
+    function testFuzz_NoGasLimitMakesAWorkingFleetBeSkipped(uint256 gasLimit) public {
+        gasLimit = bound(gasLimit, 100_000, 3_000_000);
+        KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        uint256 booked = fleet.pendingConversion();
+        uint256 opensAt = regentBuyer.nextPieceAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+
+        vm.recordLogs();
+        (bool ok,) = address(regentBuyer).call{gas: gasLimit}(abi.encodeCall(KeyfleetRegentBuyer.convert, (FULL_PIECE)));
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i = 0; i < logs.length; ++i) {
+            assertTrue(logs[i].topics[0] != KeyfleetRegentBuyer.PieceSkipped.selector, "never skipped");
+        }
+        if (ok) {
+            assertEq(fleet.pendingConversion(), 0, "converted");
+        } else {
+            assertEq(fleet.pendingConversion(), booked, "or untouched");
+            assertEq(regentBuyer.nextInQueue(), address(fleet), "in its place");
+        }
+    }
+
+    function test_ConvertWithTooLittleGasForTheHandOverReverts() public {
+        KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        uint256 opensAt = regentBuyer.nextPieceAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+        vm.expectRevert(KeyfleetRegentBuyer.NotEnoughGas.selector);
+        regentBuyer.convert{gas: 300_000}(FULL_PIECE);
+        assertEq(regentBuyer.nextInQueue(), address(fleet));
+    }
+
     function test_ConvertWithNothingQueuedReverts() public {
         vm.expectRevert(KeyfleetRegentBuyer.NothingQueued.selector);
         regentBuyer.convert(FULL_PIECE);
@@ -332,21 +477,20 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         assertEq(fleet.pendingConversion(), 898e6, "zero asks for the minimum too");
     }
 
-    /// @dev Invariant: a fleet with less than the minimum left converts all of it, waiting in
-    /// proportion rounded up to at least a second, so two pieces never run in one block.
-    function test_ARemainderUnderTheMinimumConvertsWhole() public {
+    /// @dev Invariant: a piece that would leave the fleet less than the minimum booked takes the
+    /// rest with it, so no booking is ever left too small to buy anything (audit KF-A-01).
+    function test_APieceThatWouldLeaveUnderTheMinimumTakesTheRest() public {
         KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 1000e6);
-        regentBuyer.convert(900e6 - 5e5 - 3 * FULL_PIECE);
         for (uint256 i; i < 3; ++i) {
-            vm.warp(regentBuyer.nextPieceAt());
+            if (i != 0) vm.warp(regentBuyer.nextPieceAt());
             regentBuyer.convert(FULL_PIECE);
         }
-        assertEq(fleet.pendingConversion(), 5e5, "half a USDC left");
+        assertEq(fleet.pendingConversion(), 150e6);
 
         vm.warp(regentBuyer.nextPieceAt());
-        regentBuyer.convert(1);
-        assertEq(fleet.pendingConversion(), 0, "the whole remainder");
-        assertEq(regentBuyer.nextPieceAt(), block.timestamp + 2, "1.8 seconds, rounded up");
+        regentBuyer.convert(150e6 - 1);
+        assertEq(fleet.pendingConversion(), 0, "not one atomic unit left behind");
+        assertEq(regentBuyer.nextPieceAt(), block.timestamp + 540, "150 USDC waits 9 minutes");
         assertEq(regentBuyer.queueLength(), 0, "and the fleet leaves the queue");
     }
 
@@ -461,9 +605,10 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
     }
 
     function test_ConvertPaysTheV3PoolOnlyOnce() public {
-        uint256 booked = _bookClassic();
+        _bookClassic();
         v3Pool.setCallbackTwice(true);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.SwapIncomplete.selector, 0, booked));
+        // The first callback pays and clears what is owed; a second one is refused outright.
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetRegentBuyer.UnexpectedCallback.selector, address(v3Pool)));
         regentBuyer.convert(FULL_PIECE);
     }
 
@@ -660,6 +805,17 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
                 logs[i].emitter == address(regentBuyer) && logs[i].topics[0] == KeyfleetRegentBuyer.Queued.selector
                     && logs[i].topics[1] == bytes32(uint256(uint160(manager)))
             ) ++count;
+        }
+    }
+
+    function _assertNoSkip() private {
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i = 0; i < logs.length; ++i) {
+            assertFalse(
+                logs[i].emitter == address(regentBuyer)
+                    && logs[i].topics[0] == KeyfleetRegentBuyer.PieceSkipped.selector,
+                "no fleet is skipped"
+            );
         }
     }
 

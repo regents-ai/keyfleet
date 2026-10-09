@@ -21,6 +21,8 @@ signed-in Overview. The [README](README.md) describes the product.
   `make check-platform`, `check-required-fixes`, `check-cli` and
   `check-contracts` run one gate. Set `MIX_TEST_PARTITION` (an empty value uses
   `keyfleet_test`).
+- `make check-audit-fork` runs the contract audit's proofs on a Base fork pinned
+  to one block. It is not part of `make check` and fails without `BASE_RPC_URL`.
 - `make readiness` starts the local development server on a free port with the
   error debugger off and checks what the agent-readiness scorer looks for
   (`scripts/readiness.sh`). It needs the local development database.

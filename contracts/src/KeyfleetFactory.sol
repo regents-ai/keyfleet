@@ -29,7 +29,7 @@ import {IRegentsAutolaunchFactoryV2} from "./interfaces/IRegentsAutolaunchFactor
 /// immutables and refuses to deploy anywhere but its own predicted address. The wiring is cleared
 /// before any other code runs, so it is all zero at every other moment.
 ///
-/// The Regents Safe creates the five founding fleets, in order, each with its card deck and its
+/// The Regents Safe creates each founding fleet in its reserved slot, each with its card deck and its
 /// type's standard starting price, with sales closed until the Safe opens them phase by phase. The
 /// fifth, the Regents Club, has no price: the Safe gives its keys, one per Regents Club Pass. Once
 /// the collection reaches its last phase anyone may create a fleet: they choose its type, starting
@@ -212,11 +212,11 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
         rewards = REWARDS_DEPLOYER.predict(fleetId);
     }
 
-    /// @notice Creates the next founding fleet: fleet 1 Classic, 2 Syndicate, 3 Accelerant,
+    /// @notice Creates a reserved founding fleet: fleet 1 Classic, 2 Syndicate, 3 Accelerant,
     /// 4 Cascade, each with its deck, a starting price of 10 USDC, a 5% step for the Accelerant
     /// fleet and no joining requirements, then 5 Regents Club with its deck and no price. Its
     /// sales stay closed until the Safe opens them.
-    /// @dev Only the Safe. The collection refuses a sixth, one out of order and one without a deck.
+    /// @dev Only the Safe. The collection refuses a duplicate slot and a fleet without a deck.
     function createFoundingFleet(
         KeyfleetPresets.Preset preset,
         bytes32 deckHash,
@@ -278,10 +278,10 @@ contract KeyfleetFactory is IKeyfleetFactory, ReentrancyGuardTransient {
         KeyfleetManager.Requirements memory requirements,
         address creator
     ) private returns (uint256 fleetId, KeyfleetManager manager) {
-        w.fleetId = fleetId = KEYS.fleetCount() + 1;
+        w.fleetId = fleetId = KEYS.nextFleetId(w.preset);
         (w.manager, w.votes, w.treasury, w.rewards) = predict(fleetId);
         (uint256 registered, uint256 typeNumber) = KEYS.registerFleet(w.preset, w.manager, deckHash, deckSize);
-        // The collection numbers fleets in order and only factories register them, inside `_create`.
+        // The collection and factory use the same reserved/public id rule.
         assert(registered == fleetId);
 
         _storeWiring(w);

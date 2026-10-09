@@ -201,14 +201,25 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
         );
     }
 
-    function test_FoundingFleetsRefuseTheWrongOrder() public {
+    function test_ClubCanBeCreatedFirstAndClassicLaterWithoutReplacingItsSlot() public {
+        KeyfleetManager club = _createFounding(KeyfleetPresets.Preset.RegentsClub);
+        assertEq(club.FLEET_ID(), 5);
+        assertEq(keys.fleetCount(), 5);
+        assertFalse(keys.fleetExists(1));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.UnknownFleet.selector, 1));
+        keys.managerOf(1);
+        _advancePhase();
         vm.prank(safe);
-        vm.expectRevert(
-            abi.encodeWithSelector(KeyfleetKeys.NotFoundingFleet.selector, 1, KeyfleetPresets.Preset.FibonacciSyndicate)
-        );
-        factory.createFoundingFleet(
-            KeyfleetPresets.Preset.FibonacciSyndicate, _deckHash(1), DECK_SIZE, _profile("Founding fleet")
-        );
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 2, 1));
+        keys.advancePhase(uint64(block.timestamp + 1));
+        KeyfleetManager classic = _createFounding(KeyfleetPresets.Preset.FleetTechClassic);
+        assertEq(classic.FLEET_ID(), 1);
+        assertEq(keys.fleetCount(), 5);
+        assertEq(keys.managerOf(5), address(club));
+        _advancePhase();
+        vm.prank(safe);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 5, 2));
+        keys.advancePhase(uint64(block.timestamp + 1));
     }
 
     function test_FoundingFleetsNeedADeck() public {
@@ -222,14 +233,13 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
 
     function test_ASixthFoundingFleetIsRefused() public {
         _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        address manager = keys.managerOf(1);
         vm.prank(safe);
-        vm.expectRevert(
-            abi.encodeWithSelector(KeyfleetKeys.NotFoundingFleet.selector, 6, KeyfleetPresets.Preset.FleetTechClassic)
-        );
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.ManagerTaken.selector, manager));
         factory.createFoundingFleet(KeyfleetPresets.Preset.FleetTechClassic, _deckHash(6), DECK_SIZE, _profile("F"));
     }
 
-    function test_FoundingFleetsCannotBeCreatedInPhaseThree() public {
+    function test_FoundingFleetsCannotBeCreatedInPhaseFour() public {
         _openCreation();
         vm.prank(safe);
         vm.expectRevert(KeyfleetKeys.DeckGivenAtCreation.selector);
@@ -244,15 +254,15 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
 
     // --- open fleets -----------------------------------------------------------
 
-    function test_OpenCreationIsClosedBeforePhaseThree() public {
+    function test_OpenCreationIsClosedBeforePhaseFour() public {
         _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         KeyfleetManager.Requirements memory anyone;
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetFactory.CreationClosed.selector, uint8(2)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetFactory.CreationClosed.selector, uint8(3)));
         factory.createFleet(_terms(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6, anyone));
     }
 
-    /// @dev Invariant: in phase 3, open creation waits for the moment the Safe chose, to the second.
-    function test_OpenCreationWaitsForPhaseThreeToOpen() public {
+    /// @dev Invariant: in phase 4, open creation waits for the moment the Safe chose, to the second.
+    function test_OpenCreationWaitsForPhaseFourToOpen() public {
         _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         uint64 opensAt = uint64(block.timestamp + 2 days);
         vm.prank(safe);
@@ -264,7 +274,7 @@ contract KeyfleetFactoryTest is KeyfleetFixture {
         vm.startPrank(creator);
         usdc.approve(address(factory), 10e6);
         vm.warp(opensAt - 1);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetFactory.CreationClosed.selector, uint8(3)));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetFactory.CreationClosed.selector, uint8(4)));
         factory.createFleet(_terms(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6, anyone));
         vm.warp(opensAt);
         (uint256 fleetId,) = factory.createFleet(_terms(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6, anyone));

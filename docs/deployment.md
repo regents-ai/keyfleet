@@ -4,43 +4,43 @@ Keyfleet lives on Base (chain 8453). The whole system is deployed once: one
 factory, which creates the one key collection, the shared shard record, the
 shared REGENT buyer and the Regents Club claims contract. Fleets are then
 created through the factory: the five founding fleets by the Regents Safe, and later fleets by anyone once the Safe
-has moved the collection to phase 3.
+has moved the collection to phase 4.
 
 Nothing may be deployed yet. Before any deploy every Keyfleet contract must pass
 the internal audit the founder chose on 9 Oct in place of an outside one, with
-its findings fixed, and the founder must give the go; the
+its remaining findings resolved subject to Sean's accepted risks, and the founder
+must give the go; the
 [contracts README](../contracts/README.md#status) lists what is decided and what
 is on hold. Key sales stay off until the founder says so: every fleet's sales
 open only through a phase step, which is a Safe transaction the founder signs.
 
 The release runs in seven steps, in this order:
 
-1. **Subscription.** Create the Chainlink VRF subscription, fund it and move it
-   to the Regents Safe. Write its id and the keeper's address into the manifest.
-2. **Deploy.** `DeployKeyfleets` deploys the system in five transactions from
-   one account. It writes no file of its own and creates no fleet.
-3. **Consumer.** The Safe adds the collection to the subscription.
-4. **Founding fleets.** `KeyfleetSafeSteps` with the step `founding-fleets`
-   writes one Safe transaction per founding fleet. The founder signs each, in
-   order: Classic #1, Syndicate #1, Accelerant #1, Cascade #1, Regents Club #1.
-5. **Record.** `RecordKeyfleets` reads the system and every fleet back from the
-   chain, checks them against the manifest, and writes the published record,
-   `contracts/deployments/base.deployed.json`.
-6. **Phases.** Only when the founder says when sales open, `KeyfleetSafeSteps`
-   with the step `advance-phase` writes the next phase step for the founder to
-   sign, naming that moment: phase 1 opens Classic #1 and the Regents Club,
-   phase 2 opens Syndicate #1, Accelerant #1 and Cascade #1, phase 3 lets
-   anyone create a fleet.
-7. **Regents Club gifts.** Once phase 1 has opened, `KeyfleetSafeSteps` with
-   the step `club-gifts` writes the Safe transactions that give the 1,998
-   Regents Club keys, 80 per transaction, each to the holder of its Pass, for
-   the founder to sign.
+1. **Configuration.** The keeper Safe and existing subscription id are set.
+   The deployment wallet is `0x9b2C414614aEE294202c1219520955EF3B596031`.
+2. **Deploy.** `DeployKeyfleets` deploys the shared system in five transactions
+   from that wallet. It creates no fleet.
+3. **Randomness setup, deferred.** Consumer setup, funding and Safe ownership
+   can wait while every minted Key is within its fixed founding deck. Complete
+   setup before any Key needs a random draw.
+4. **Club fleet.** In phase 0, `founding-fleets` prepares only Club fleet 5.
+   After Club testing, the same step in phase 1 prepares Classic fleet 1.
+   In phase 2 it prepares missing Syndicate, Accelerant and Cascade fleets.
+5. **Record.** Verify and record only fleets that exist, then load the record
+   into the site. Absent founding slots are retained for later creation.
+6. **Phases.** Phase 1 requires Club and opens only its gifts. Phase 2 requires
+   Club and Classic and opens Classic sales. Phase 3 requires all five and
+   opens the other three; phase 4 permits public fleet creation.
+7. **Club gifts.** Simulate and sign 25 separate sequential Safe transactions:
+   24 batches of 80 and one of 78. Route failed receivers to claims and verify
+   every final destination. Do not create the other four fleets at this launch.
 
 Before step 1, go through the deploy-day checklist in the
 [contracts README](../contracts/README.md#deploy-day-checklist): the keeper,
 the keeper's job list of public buttons (pieces, daily splits and the protocol
 share), the REGENT pool hook's fee that pieces rely on, the collection metadata
-address, the subscription id and the consumer, REGENT staking unpaused, and
+address, the subscription id (consumer setup is deferred for fixed-deck Keys),
+REGENT staking unpaused, and
 factories that can never be removed.
 
 Nothing in steps 1 to 5 puts any key on sale. The site lists the fleets only
@@ -77,9 +77,9 @@ creation code itself.
 
 The factory holds no money and has no administrator. The deploying account
 receives no authority anywhere in the system, so it matters only for paying gas.
-The gas these five transactions use on Base is still to measure on a Base fork;
-the [contracts README](../contracts/README.md#gas) has the figures measured so
-far.
+The five transactions used 22,595,625 gas on a local Base fork at block
+52,392,518 from the selected deployment wallet. Live fees must be rechecked
+before signing; the wallet must send no intervening transaction.
 
 ## What a manifest says
 
@@ -118,9 +118,9 @@ steps 5% per key. The Regents Club is never sold: its 1,998 keys are given.
 `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, the five
 founding decks below, profiles named "Classic #1", "Syndicate #1",
 "Accelerant #1", "Cascade #1" and "Regents Club #1" with an empty description
-and image link, a
-zero `keeper` and `"subscriptionId": "0"`. So a Base deployment is refused until
-the keeper's address and the Regents subscription id are written in.
+and image link, the Regents Safe as `keeper`, and Sean's verified Base
+subscription id as a decimal string. The subscription's consumer setup and
+Safe ownership may be deferred while minted Keys use fixed founding decks.
 
 | Founding fleet | `deckHash` | `deckSize` |
 | --- | --- | --- |
@@ -148,18 +148,33 @@ the Autolaunch factory from Autolaunch Revstake v2's deployment manifest
 
 ## Step 1: the randomness subscription
 
-Every key's card or traits come from one Chainlink VRF random number, and one
-subscription pays for every fleet's requests in ETH. Before the deployment:
+The Base keeper is already set to the Regents Safe by Sean's 9 October decision.
+Sean supplied subscription
+`58953026474889286452657611148401201221788353993662160123850640810329610213433`,
+now written as a decimal string in `base.json`. A read-only Base check confirmed
+it exists and belongs to his wallet. Sean will add the consumer and transfer
+ownership later, before the first Key beyond its founding deck or any public
+fleet Key. The Safe must accept that transfer. Recording checks ownership and
+consumer setup once a recorded Key needs randomness. Its native ETH balance must be
+funded before randomness requests begin. Club cards use the fixed founding deck
+and make no VRF request, but the shared system's deployment still requires a
+valid subscription.
+
+Keys that draw cards or traits use one Chainlink VRF random number; founding
+Keys within their decks are dealt by number without a request. One subscription
+pays for every fleet's randomness requests in ETH. Setup order:
 
 1. Create the subscription on the Base coordinator (`createSubscription()`, or
-   Chainlink's VRF app) and fund it in ETH with
+   [Chainlink's Base app](https://vrf.chain.link/base/new)) and fund it in ETH with
    `fundSubscriptionWithNative(subId)`.
-2. Move its ownership to the Regents Safe on Base,
+2. Write the subscription id into `vrf.subscriptionId` in `base.json`, then
+   deploy the collection. Consumer setup may wait during fixed-deck minting.
+3. Move its ownership to the Regents Safe on Base,
    `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`:
    `requestSubscriptionOwnerTransfer(subId, 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e)`
    from the creator, then `acceptSubscriptionOwnerTransfer(subId)` from the Safe.
-3. Write the subscription id into `vrf.subscriptionId` and the keeper wallet's
-   address into `keeper` in `base.json`.
+   Complete setup before the first random draw; recording drawn Keys requires it. The `keeper` is
+   already set to the Regents Safe.
 
 ### Keeping the subscription funded
 
@@ -175,6 +190,12 @@ that has been under 0.000001 ETH. Call it 0.001 ETH a key. A request the
 balance cannot cover waits up to 24 hours and then expires. Each key gets one
 accepted request and never another, so a key whose request expires never gets
 its card or traits, and nothing can give it one later.
+
+After an accepted request has waited 24 hours, anyone may call
+`expireReveal(tokenId)` on the collection. That permanently leaves the Key
+without a seed, refuses late answers and releases that request's lock on replacing
+the coordinator. It never permits a second request. Expiry requires this call;
+time passing alone does not release the lock.
 
 - **Fund it with 0.5 ETH before the first sale.** That covers 500 keys waiting
   at once at the cap, and about 100,000 answers at today's prices.
@@ -257,7 +278,7 @@ The Safe adds the collection to the subscription with
 transaction. The collection's address is `KEYS()` on the factory. A key sold
 before this is still sold; its request is refused, and anyone can ask again
 with `requestReveal(tokenId)` once the collection is added. The record step
-refuses the deployment until the collection is listed.
+requires this setup only once a recorded Key needs randomness.
 
 ## Step 4: the founding fleets
 
@@ -267,7 +288,7 @@ KEYFLEET_MANIFEST=base KEYFLEET_STEP=founding-fleets \
 ```
 
 This sends nothing and needs no signer. It runs one `createFoundingFleet` per
-founding fleet the collection does not have yet, in order, from the Safe's
+missing founding fleet needed for the current phase, from the Safe's
 address against Base's current state, and stops at the first call that would
 revert with the collection's or factory's own error. It then writes each call as
 its own Safe Transaction Builder file:
@@ -279,7 +300,8 @@ its own Safe Transaction Builder file:
 - `deployments/safe/base.founding-fleet-5.json` (Regents Club #1)
 
 The Safe's signers load each file in the Safe's Transaction Builder, check it
-and sign it, one after another in that order: each creation uses about 11.8
+and sign it. Initially only `base.founding-fleet-5.json` is prepared. Classic's
+file follows in phase 1; the other three follow in phase 2. Each creation uses about 11.8
 million gas, so each is its own transaction. Run the step again after some have
 landed and it writes files only for the fleets still missing. Each founding
 fleet is created with its deck and no joining requirements, and its sales stay
@@ -287,8 +309,7 @@ closed.
 
 ## Step 5: record
 
-Once the broadcast has finished, the collection is a consumer and the founding
-fleets exist:
+Once the shared deployment and the intended founding fleets exist:
 
 ```sh
 KEYFLEET_MANIFEST=base \
@@ -317,10 +338,10 @@ fleets created since: it lists every fleet in the collection's registry.
   code or do not point at each other, the collection and the fleet, or a
   founding fleet of another type or deck than the manifest's
   (`FleetNotBound(fleetId, part)`).
-- A collection the subscription does not list as a consumer
+- A collection with drawn Keys that the subscription does not list as a consumer
   (`CollectionNotVrfConsumer`).
-- On Base, a subscription whose owner is not the Regents Safe
-  (`VrfSubscriptionNotOwnedByRegentsSafe`).
+- On Base, when a recorded fleet needs random draws, a subscription whose
+  owner is not the Regents Safe (`VrfSubscriptionNotOwnedByRegentsSafe`).
 
 ### What the record step writes
 
@@ -382,11 +403,12 @@ transaction lands. The phase number changes when the
 transaction lands, and what it opens waits for the named moment.
 
 It checks the step against Base's current state as the Safe and writes one file,
-`deployments/safe/base.phase-1.json`, `base.phase-2.json` or
-`base.phase-3.json`, for the founder to sign. Phase 1 needs all five founding
-fleets and opens Classic #1's sales and the Regents Club's gifts together.
-Phase 2 opens Syndicate #1, Accelerant #1 and Cascade #1's sales together.
-Phase 3 lets anyone create a fleet
+`deployments/safe/base.phase-1.json`, `base.phase-2.json`,
+`base.phase-3.json` or `base.phase-4.json`, for the founder to sign. Phases 1
+to 3 require only their intended fleets: Club for phase 1, also Classic for
+phase 2, and all five for phase 3. Phase 1 opens only Regents Club gifts.
+Phase 2 opens Classic #1 sales. Phase 3 opens Syndicate #1, Accelerant #1
+and Cascade #1 sales together. Phase 4 lets anyone create a fleet
 from its opening, and each such fleet sells from the moment it is created. There is no step back, and nothing
 else moves a phase.
 
@@ -413,7 +435,7 @@ A Pass that changes hands after the step ran makes its batch revert whole, since
 the contract gives key N only to the current holder of Pass N or to the claims
 contract. Run the step again: it writes files only for the keys still not
 given, read afresh. Whoever holds Pass N can later take a key held for it with
-`claim(N)` on the claims contract, at any time, together with what it earned
+`claim(N, payee)` on the claims contract, at any time, together with what it earned
 while it waited. A key held for a burned Pass stays held, since nobody holds
 that Pass.
 
@@ -422,6 +444,17 @@ gift makes its whole batch revert, and the step reads it the same way again.
 Name its key numbers in `KEYFLEET_CLUB_TO_CLAIMS`, comma-separated, and run the
 step again: those keys go to the claims contract whoever holds their Pass.
 
+An ownership mismatch returns `NotPassHolder(keyNumber, receiver)`. A receiver
+rejection may return only its own error or its address; inspect the simulation
+or execution trace to find the failing mint's Key number. A batch stops at its
+first failure and retains no mint events when it reverts. Rebuild with that Key
+routed to claims, then simulate again to find any further failures before
+signing. Keep all Key numbers in order: replace a failed receiver with the
+claims contract rather than delete an entry, which would shift later Keys.
+The Key is claimed by, and sent to, the current Pass holder; `payee` selects
+only the rewards destination. A wallet that cannot receive NFTs must first
+move its Pass to one that can before claiming.
+
 ```sh
 KEYFLEET_MANIFEST=base KEYFLEET_STEP=club-gifts KEYFLEET_CLUB_TO_CLAIMS=212,977 \
   forge script script/KeyfleetSafeSteps.s.sol:KeyfleetSafeSteps --rpc-url "$BASE_RPC_URL"
@@ -429,7 +462,7 @@ KEYFLEET_MANIFEST=base KEYFLEET_STEP=club-gifts KEYFLEET_CLUB_TO_CLAIMS=212,977 
 
 ## Fleets anyone creates
 
-From phase 3 anyone may call `createFleet` on the factory, buying the new
+From phase 4 anyone may call `createFleet` on the factory, buying the new
 fleet's key 1 in the same transaction. Such a fleet starts with no card deck, so
 its keys wait for their random numbers. The deck backend sees `FleetCreated`,
 builds the fleet's deck by the same process as the founding fleets, records it
@@ -616,9 +649,10 @@ from the treasury to Lit's account contract,
 configuration). The calls create the account, register the inbox action, make
 one group with it, and mint one usage key for the operator that may run that
 action and nothing else; later proposals replace or remove the key. When Lit
-asks the account's owner to sign a request, a proposal approves that exact
-request's digest with `approveSignatureHash`, and the treasury answers Lit's
-check for it. Lit takes a signed request only within five minutes of the time it
+asks the account's owner to sign its `CreateWallet` request, a proposal
+approves that request with `approveLitCreateWallet` (the time the request
+names; the treasury builds the request as its own, under Lit's own signing
+domain), and the treasury answers Lit's check for it. Lit takes a signed request only within five minutes of the time it
 names, and only once, so the proposal names the time it will be carried out and
 the operator sends the request to Lit straight after. Voting and claims never
 depend on Lit.
@@ -633,6 +667,10 @@ which deposits the whole owed amount into REGENT revenue staking on Base for
 REGENT stakers. Every other amount a fleet's treasury receives is its capital,
 spent only by a passed proposal's exact calls, apart from the daily split that
 shares a small part of its ETH, REGENT and USDC among the keys.
+
+**Club opening separated (9 October 2026).** Club gifts open in phase 1,
+Classic sales in phase 2, the other sold founding fleets in phase 3, and
+public creation in phase 4. Each step is a separate Safe transaction.
 
 **One collection, phases, and fleets anyone can create (7 October 2026).** One
 collection named "Keyfleet" with the symbol KEYFLEET holds every key, with a

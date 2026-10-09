@@ -3,6 +3,8 @@
 **Date:** 6 October 2026, brought up to date 7 October 2026
 **Branches:** built on `kf/contracts-v03`, then reshaped on `kf/fleet-manager-factory`
 **Binding source:** [contracts-build-now-spec-v0.3.md](contracts-build-now-spec-v0.3.md) (Sean, 6 October 2026), plus the HQ-recorded founder rule 41 a: every protocol USDC revenue path reaches REGENT staking on Base. The contract shape is the one Sean chose on 7 October 2026: one key collection, one factory and four contracts per fleet, set out in [fleet-manager-factory-design.md](fleet-manager-factory-design.md).
+**Phase update (9 October 2026):** Club gifts now open alone in phase 1, Classic sales in phase 2, the other sold founding fleets in phase 3, and public creation in phase 4. The original numbering below is historical; use the contracts README and deployment guide for current steps.
+
 **Status:** built and tested locally. Nothing is deployed, broadcast, signed or pushed. The [contracts README](../contracts/README.md) is the reference for what the code does.
 
 This plan is for the engineer who built v0.3 and for the reviewer who checks it. Section 1 records the starting point and the economic rules. Section 2 maps the spec onto the contracts. Section 3 lists the Base addresses pinned. Section 4 designs each piece. Section 5 lists what the site must change. Section 6 is the build order. Sections 7 to 9 hold the decisions.
@@ -109,7 +111,7 @@ The factory and its four deployers hold nothing of value. The REGENT buyer holds
 
 - One proposal shape: author key, content hash, ordered `Call[]` (stored as a hash, with the full bytes emitted), `closesAt` (exactly 24 h after creation, Sean 7 Oct), and `executionExpiry` (`closesAt` + 48 h, plus 1 day for a proposal that moves money, KF-VOTE-DELAY a). The lifecycle is Open → Waiting (money proposals only), Approved, Rejected or Cancelled, then Executed or ExecutionExpired.
 - Cancellation by whoever may vote the author key. Resubmission gets a new id.
-- Typed effects are treasury functions only the treasury itself can call (`onlySelf`), each reached through an exact CALL: `pay`, `advance`, `setDailySplitBps`, `runVotedSplit`, `admitOusd`, `approveSignatureHash` and `revokeSignatureHash`. Restricting edits is a CALL to `Votes.setEditsRestricted`, and changing the fleet's name, description or image a CALL to the manager's `setProfile`, both callable only by the treasury. A Decision is a proposal with an empty call list.
+- Typed effects are treasury functions only the treasury itself can call (`onlySelf`), each reached through an exact CALL: `pay`, `advance`, `setDailySplitBps`, `runVotedSplit`, `admitOusd`, `approveLitCreateWallet` and `revokeLitCreateWallet`. Restricting edits is a CALL to `Votes.setEditsRestricted`, and changing the fleet's name, description or image a CALL to the manager's `setProfile`, both callable only by the treasury. A Decision is a proposal with an empty call list.
 
 ### §8 Daily fair split
 
@@ -449,7 +451,7 @@ Tallies cannot change after `closesAt`, so this view is final. The `proposal_fin
 | `runVotedSplit()` | Runs the daily split now, whenever the last run was (section 4.6). |
 | `setDailySplitBps(bps)` | Section 4.6. |
 | `admitOusd(token)` | Fills the OUSD slot once, split from the next run. |
-| `approveSignatureHash(h)` / `revokeSignatureHash(h)` | Section 4.9. |
+| `approveLitCreateWallet(issuedAt)` / `revokeLitCreateWallet(issuedAt)` | Section 4.9. |
 
 Two functions elsewhere accept only the fleet's treasury, so they too are reached only by an approved CALL: `KeyfleetVotes.setEditsRestricted(tokenId, bool)` and `KeyfleetManager.setProfile(profile)`, which changes the fleet's name, description and image link and refreshes the fleet's metadata.
 
@@ -559,8 +561,8 @@ What Lit's documentation says, from [S4](https://developer.litprotocol.com/manag
 
 Design:
 
-- **The treasury implements ERC-1271.** `isValidSignature(h, sig)` returns the magic value exactly when `approvedHash[h]` is true. A proposal that calls `approveSignatureHash(h)` sets it, and a later one can revoke it. No raw bytes are ever signed by default, and no backend signer exists.
-- **Flow:** every write to `AccountConfig` is a CALL in an approved proposal, and every signed message is approved first with `approveSignatureHash`. The steps are: create the account, create one inbox group with its action, mint one execute-only usage key for the operator, then replace or revoke that key.
+- **The treasury implements ERC-1271.** `isValidSignature(h, sig)` returns the magic value exactly when `approvedHash[h]` is true. A proposal that calls `approveLitCreateWallet(issuedAt)` sets the digest of the treasury's own Lit `CreateWallet` request at that time under Lit's own domain, and a later one can revoke it; no approval can be a signature for any other verifier, owner or kind of request. No raw bytes are ever signed by default, and no backend signer exists.
+- **Flow:** every write to `AccountConfig` is a CALL in an approved proposal, and the one signed Lit request, `CreateWallet`, is approved first with `approveLitCreateWallet`. The steps are: create the account, create one inbox group with its action, mint one execute-only usage key for the operator, then replace or revoke that key.
 - **Base governance and claims never depend on Lit.**
 - **Signed requests have a five-minute window.** Lit's server (`lit-api-server/src/core/eip712.rs`) takes a signed request such as `CreateWallet` only within 300 seconds either side of its `issuedAt`, and each digest only once. Its domain is name "Lit ChainSecured", version "1" and the chain id, with no verifying contract, and the message is `(address, issuedAt)`. So a proposal that approves a Lit digest sets `issuedAt` to when it will be carried out, at or after it closes, and the operator posts the request to Lit within five minutes of that.
 
@@ -731,7 +733,7 @@ The scanner reads the collection, the factory, the shard record, and each fleet'
 - **Shards:** `ShardIssued`, `ShardEnded` and `AgentVotingSet`.
 - **Manager:** `Purchased`, `LevelCompleted`, `RegentBought`, `ProtocolShareSent`, `ForwardedToTreasury`, `ProfileChanged` and `RequirementsSet`.
 - **Votes:** `ProposalCreated` (with calls), `BallotCast(choice)`, `ProposalCancelled`, `ProposalExecuted`, `EditsRestrictionSet`, `Present`, `PresenceCleared` and `Swept`.
-- **Treasury:** `Paid`, `Advanced`, `AdvanceReturned`, `DailySplitRun`, `SplitAllocated`, `SplitSkipped`, `SplitTransferFailed`, `DailySplitRateSet`, `OusdAdmitted`, `LaunchTokenBound`, `SignatureHashApproved` and `SignatureHashRevoked`.
+- **Treasury:** `Paid`, `Advanced`, `AdvanceReturned`, `DailySplitRun`, `SplitAllocated`, `SplitSkipped`, `SplitTransferFailed`, `DailySplitRateSet`, `OusdAdmitted`, `LaunchTokenBound`, `LitCreateWalletApproved` and `LitCreateWalletRevoked`.
 - **Rewards:** `KeyEnrolled`, `Allocated`, `Credited`, `SplitFunded`, `Settled` and `Claimed`.
 - Every decoder for an event these contracts do not emit is deleted.
 

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 2.0.0
+  version: 7.0.0
 paths:
   /api/v1/profile:
     get:
@@ -4086,7 +4086,7 @@ components:
         hours. kind names what the proposal does, and the other fields it needs are those of its
         kind. decision: nothing more. pay: asset, share and recipient, paid from the treasury.
         advance: asset, share and recipient, the operator the advance goes to. rate: rate. edits: target and
-        restricted. signature: hash and signature. launch: name, symbol, description, website
+        restricted. signature: issued_at and signature. launch: name, symbol, description, website
         and image.
       properties:
         kind: {type: string, enum: [decision, pay, advance, rate, edits, signature, launch]}
@@ -4098,8 +4098,8 @@ components:
         rate: {type: string, description: "The daily split in percent, 0.1 to 2, with at most two decimals"}
         target: {type: string, description: "The Key whose workspace edits it restricts or frees, in decimal"}
         restricted: {type: string, description: "\"true\" restricts the Key's workspace edits; anything else frees them"}
-        signature: {type: string, description: "\"revoke\" withdraws the treasury's approval of the hash; anything else approves it"}
-        hash: {type: string, description: "A 32-byte message hash, 64 hex characters, with or without 0x"}
+        signature: {type: string, description: "\"revoke\" withdraws the treasury's approval of its Lit wallet request; anything else approves it"}
+        issued_at: {type: string, description: "The time the treasury's Lit wallet request names, in whole seconds since 1970, as Lit gives it"}
         name: {type: string, description: "The launched token's name, at most 64 bytes"}
         symbol: {type: string, description: "Its symbol, at most 16 bytes"}
         description: {type: string, description: "At most 512 bytes"}

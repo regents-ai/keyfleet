@@ -1,7 +1,7 @@
 {
   "chainId": 8453,
   "safe": "0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e",
-  "keeper": "0x0000000000000000000000000000000000000000",
+  "keeper": "0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e",
   "regentStaking": "0xb027Dc261636E30Cbc0fE25b2F8e1ed273354AB5",
   "autolaunchFactory": "0xf4F591E63f4B6d8240a150081C1CA7Edfaeb768E",
   "regentsClubPass": "0x2208aaDBdEcd47D3B4430b5b75a175f6d885D487",
@@ -13,7 +13,7 @@
   },
   "vrf": {
     "coordinator": "0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634",
-    "subscriptionId": "0",
+    "subscriptionId": "58953026474889286452657611148401201221788353993662160123850640810329610213433",
     "keyHash": "0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab"
   },
   "traitTableHash": "0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe",

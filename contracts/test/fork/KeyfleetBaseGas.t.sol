@@ -43,7 +43,7 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
             return;
         }
 
-        // The Safe's calls: the five founding fleets, each its own transaction, and phase 1.
+        // The Safe's calls: the five founding fleets, each its own transaction, and phases 1 and 2.
         KeyfleetSafeSteps.SafeCall[] memory founding = safeSteps.foundingFleetCalls(_manifest(), factory);
         for (uint256 i = 0; i < founding.length; ++i) {
             _asSafe(founding[i]);
@@ -51,6 +51,8 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         }
         _advancePhase();
         _log("advancePhase, to phase 1");
+        _advancePhase();
+        _log("advancePhase, to phase 2");
 
         // Purchases on Classic #1: its first sale, then a later one, each booking the treasury's
         // part. Both keys hold their deck's card of the same number and ask for no random word.
@@ -71,7 +73,7 @@ contract KeyfleetBaseGasTest is KeyfleetForkFixture {
         // A creator's own fleet, once the collection reaches its last phase.
         _advancePhase();
         _advancePhase();
-        _log("advancePhase, to phase 3");
+        _log("advancePhase, to phase 4");
         KeyfleetManager created = _createFleet();
 
         // A key that draws: the keeper records the new fleet's deck, then its key 2 is bought and

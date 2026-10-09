@@ -170,10 +170,10 @@
           "description": "signature: approve or revoke."
         },
         {
-          "field": "hash",
+          "field": "issued_at",
           "type": "string",
           "required": false,
-          "description": "signature: the 32-byte message hash."
+          "description": "signature: the time the treasury's Lit wallet request names, in seconds."
         },
         {
           "field": "name",

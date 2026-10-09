@@ -229,6 +229,7 @@ contract KeyfleetRevealTest is RevealFixture {
             factory.createFoundingFleet(preset, _deckHash(id), deckSize, _profile("Founding fleet"));
         }
         _advancePhase();
+        _advancePhase();
         KeyfleetManager fleet = KeyfleetManager(keys.managerOf(1));
         _fund(fleet);
 
@@ -626,22 +627,14 @@ contract KeyfleetRevealTest is RevealFixture {
 
     /// @dev Invariant: only the Safe sets the coordinator, subscription and gas lane, every change
     /// is announced, and a coordinator without code is refused. Later requests go to the new
-    /// coordinator and only it may answer, so a key whose accepted request went to the old one is
-    /// never answered and is never asked for again.
+    /// coordinator and only it may answer.
     function test_theSafeMovesRevealsToANewCoordinator() public {
         KeyfleetManager fleet = _drawing();
-        uint256 stranded = _buyKey(fleet);
-        uint256 oldRequest = _lastRequestId();
+        uint256 earlier = _buyKey(fleet);
+        vrf.fulfill(_lastRequestId(), _words(3));
+        assertEq(keys.revealsWaiting(), 0, "no key waits");
 
-        MockVRFCoordinatorV2Plus next = new MockVRFCoordinatorV2Plus();
-        uint256 subscription = next.createSubscription();
-        next.addConsumer(subscription, address(keys));
-        KeyfleetKeys.Randomness memory moved = KeyfleetKeys.Randomness({
-            coordinator: IVRFCoordinatorV2Plus(address(next)),
-            subscriptionId: subscription,
-            keyHash: bytes32(uint256(7))
-        });
-
+        (MockVRFCoordinatorV2Plus next, KeyfleetKeys.Randomness memory moved) = _nextCoordinator();
         address[3] memory others = [keeper, creator, address(0xBAD)];
         for (uint256 i = 0; i < others.length; ++i) {
             vm.prank(others[i]);
@@ -655,28 +648,172 @@ contract KeyfleetRevealTest is RevealFixture {
         moved.coordinator = IVRFCoordinatorV2Plus(address(next));
 
         vm.expectEmit(true, false, false, true, address(keys));
-        emit RandomnessSet(address(next), subscription, bytes32(uint256(7)));
+        emit RandomnessSet(address(next), moved.subscriptionId, moved.keyHash);
         vm.prank(safe);
         keys.setRandomness(moved);
         {
             (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId, bytes32 keyHash) = keys.randomness();
             assertEq(address(coordinator), address(next), "the new coordinator");
-            assertEq(subscriptionId, subscription, "its subscription");
-            assertEq(keyHash, bytes32(uint256(7)), "its gas lane");
+            assertEq(subscriptionId, moved.subscriptionId, "its subscription");
+            assertEq(keyHash, moved.keyHash, "its gas lane");
         }
 
         vm.prank(address(vrf));
         vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.OnlyCoordinator.selector, address(vrf)));
-        keys.rawFulfillRandomWords(oldRequest, _words(3));
+        keys.rawFulfillRandomWords(1, _words(3));
 
         uint256 later = _buyKey(fleet);
         next.fulfill(_lastRequestOn(next, moved), _words(4));
         assertEq(keys.revealSeed(later), _seed(later, 4), "the new coordinator answers later keys");
+        assertEq(keys.revealSeed(earlier), _seed(earlier, 3), "the earlier key keeps its seed");
+    }
 
+    /// @dev Invariant: no key is left without its seed by a change of coordinator. While any
+    /// accepted request waits, the Safe cannot name a new coordinator, however long the wait; it
+    /// may still change the subscription and gas lane, and the current coordinator still answers
+    /// the waiting keys. Once the last waiting key has its seed, the new coordinator is accepted.
+    function test_theCoordinatorCannotChangeWhileKeysWaitForTheirSeeds() public {
+        KeyfleetManager fleet = _drawing();
+        uint256 first = _buyKey(fleet);
+        uint256 firstRequest = _lastRequestId();
+        uint256 second = _buyKey(fleet);
+        uint256 secondRequest = _lastRequestId();
+        assertEq(keys.revealsWaiting(), 2, "two keys wait");
+
+        (MockVRFCoordinatorV2Plus next, KeyfleetKeys.Randomness memory moved) = _nextCoordinator();
         vm.warp(block.timestamp + 365 days);
-        vm.expectRevert(_alreadyRequested(stranded));
-        keys.requestReveal(stranded);
-        assertEq(keys.revealSeed(stranded), bytes32(0), "the stranded key keeps no seed");
+        vm.prank(safe);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealsWaiting.selector, 2));
+        keys.setRandomness(moved);
+
+        uint256 laneSubscription = vrf.createSubscription();
+        vrf.addConsumer(laneSubscription, address(keys));
+        bytes32 lane = keccak256("second lane");
+        KeyfleetKeys.Randomness memory sameCoordinator = KeyfleetKeys.Randomness({
+            coordinator: IVRFCoordinatorV2Plus(address(vrf)), subscriptionId: laneSubscription, keyHash: lane
+        });
+        vm.prank(safe);
+        keys.setRandomness(sameCoordinator);
+
+        vrf.fulfill(firstRequest, _words(5));
+        assertEq(keys.revealSeed(first), _seed(first, 5), "the waiting key is answered after the lane change");
+        assertEq(keys.revealsWaiting(), 1, "one key waits");
+        vm.prank(safe);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealsWaiting.selector, 1));
+        keys.setRandomness(moved);
+
+        vrf.fulfill(secondRequest, _words(6));
+        assertEq(keys.revealSeed(second), _seed(second, 6), "the last waiting key is answered");
+        assertEq(keys.revealsWaiting(), 0, "no key waits");
+        vm.prank(safe);
+        keys.setRandomness(moved);
+        (IVRFCoordinatorV2Plus coordinator,,) = keys.randomness();
+        assertEq(address(coordinator), address(next), "the new coordinator is accepted");
+    }
+
+    /// @dev Invariant: only an accepted request makes a key wait, and only its seed ends the wait.
+    /// A refused request and an ignored answer leave the count as it was; expiry is the only other
+    /// way to end an accepted request's wait.
+    function test_onlyAnAcceptedRequestMakesAKeyWait() public {
+        KeyfleetManager fleet = _drawing();
+        vrf.setRevertAll(true);
+        uint256 refused = _buyKey(fleet);
+        assertEq(keys.revealsWaiting(), 0, "a refused request does not wait");
+
+        vrf.setRevertAll(false);
+        keys.requestReveal(refused);
+        uint256 requestId = _lastRequestId();
+        assertEq(keys.revealsWaiting(), 1, "the accepted retry waits");
+
+        vm.prank(address(vrf));
+        keys.rawFulfillRandomWords(requestId, new uint256[](0));
+        assertEq(keys.revealsWaiting(), 1, "an empty answer does not end the wait");
+
+        vrf.fulfill(requestId, _words(8));
+        assertEq(keys.revealsWaiting(), 0, "the seed ends the wait");
+        vm.prank(address(vrf));
+        keys.rawFulfillRandomWords(requestId, _words(9));
+        assertEq(keys.revealsWaiting(), 0, "a second answer changes nothing");
+    }
+
+    /// @dev Invariant: expiry is permissionless at exactly 24 hours, never earlier; it releases only
+    /// that request's lock, never allows a retry, and a late answer never writes a seed or counts twice.
+    function test_anyoneExpiresAnUnansweredRequestAfterTwentyFourHoursWithoutRetry() public {
+        KeyfleetManager fleet = _drawing();
+        uint256 expired = _buyKey(fleet);
+        uint256 expiredRequest = _lastRequestId();
+        uint256 waiting = _buyKey(fleet);
+        uint256 waitingRequest = _lastRequestId();
+        uint256 requestedAt = keys.revealRequestedAt(expired);
+        uint256 expiresAt = requestedAt + 24 hours;
+        assertEq(keys.REVEAL_TIMEOUT(), 24 hours);
+
+        vm.warp(expiresAt - 1);
+        vm.prank(address(0xBAD));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealTooEarlyToExpire.selector, expired, expiresAt));
+        keys.expireReveal(expired);
+        assertEq(keys.revealsWaiting(), 2, "an early attempt changes nothing");
+
+        vm.warp(expiresAt);
+        vm.expectEmit(true, false, false, false, address(keys));
+        emit KeyfleetKeys.RevealExpired(expired);
+        vm.prank(address(0xBAD));
+        keys.expireReveal(expired);
+        assertTrue(keys.revealExpired(expired), "the request is permanently expired");
+        assertEq(keys.revealRequestedAt(expired), requestedAt, "the accepted request remains recorded");
+        assertEq(keys.revealsWaiting(), 1, "only the expired request stops waiting");
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealNotWaiting.selector, expired));
+        keys.expireReveal(expired);
+        vm.expectRevert(_alreadyRequested(expired));
+        keys.requestReveal(expired);
+
+        vrf.fulfill(expiredRequest, _words(7));
+        assertTrue(vrf.lastCallbackSuccess(), "an expired answer is ignored without reverting");
+        assertEq(keys.revealSeed(expired), bytes32(0), "the expired key never receives a seed");
+        assertEq(keys.revealsWaiting(), 1, "a late answer does not end another key's wait");
+
+        (, KeyfleetKeys.Randomness memory moved) = _nextCoordinator();
+        vm.prank(safe);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealsWaiting.selector, 1));
+        keys.setRandomness(moved);
+        vrf.fulfill(waitingRequest, _words(8));
+        assertEq(keys.revealsWaiting(), 0, "the other answer ends its own wait");
+        vm.prank(safe);
+        keys.setRandomness(moved);
+    }
+
+    /// @dev Invariant: expiry cannot touch a nonexistent key, a never-accepted request, or a seed.
+    function test_expiryRefusesKeysWithoutAnUnansweredAcceptedRequest() public {
+        KeyfleetManager fleet = _drawing();
+        uint256 notRequested = _key(fleet, 1);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealNotWaiting.selector, notRequested));
+        keys.expireReveal(notRequested);
+        uint256 unminted = _key(fleet, 2);
+        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, unminted));
+        keys.expireReveal(unminted);
+
+        uint256 seeded = _buyKey(fleet);
+        vrf.fulfill(_lastRequestId(), _words(9));
+        vm.warp(block.timestamp + 24 hours);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealNotWaiting.selector, seeded));
+        keys.expireReveal(seeded);
+        assertEq(keys.revealSeed(seeded), _seed(seeded, 9), "the seed stays fixed");
+        assertFalse(keys.revealExpired(seeded), "a seeded request cannot expire");
+        assertEq(keys.revealsWaiting(), 0);
+    }
+
+    /// @dev A second coordinator with its own subscription that lists the collection, and the
+    /// randomness that names it.
+    function _nextCoordinator() private returns (MockVRFCoordinatorV2Plus next, KeyfleetKeys.Randomness memory moved) {
+        next = new MockVRFCoordinatorV2Plus();
+        uint256 subscription = next.createSubscription();
+        next.addConsumer(subscription, address(keys));
+        moved = KeyfleetKeys.Randomness({
+            coordinator: IVRFCoordinatorV2Plus(address(next)),
+            subscriptionId: subscription,
+            keyHash: bytes32(uint256(7))
+        });
     }
 
     /// @dev The id of the collection's latest accepted request on `coordinator`.

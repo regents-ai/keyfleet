@@ -7,7 +7,8 @@ defmodule Keyfleet.Proposals.Actions do
 
   Every call but a launch is made to the fleet's own treasury or vote
   contract: paying, advancing, the daily split's rate, approving or revoking
-  a hash the treasury will answer as its signature, and restricting a key's
+  the treasury's own Lit wallet request, which it then answers as its
+  signature, and restricting a key's
   edits, which names the Key by its id in the Key collection. A launch calls Autolaunch v2's factory and names the fleet's
   treasury as the launch's treasury. A decision makes no call at all.
   """
@@ -18,8 +19,8 @@ defmodule Keyfleet.Proposals.Actions do
   @pay "pay(address,address,uint32)"
   @advance "advance(uint256,address,address,uint32,bytes32)"
   @rate "setDailySplitBps(uint256)"
-  @approve_hash "approveSignatureHash(bytes32)"
-  @revoke_hash "revokeSignatureHash(bytes32)"
+  @approve_lit "approveLitCreateWallet(uint256)"
+  @revoke_lit "revokeLitCreateWallet(uint256)"
   @voted_split "runVotedSplit()"
   @admit_ousd "admitOusd(address)"
   @edits "setEditsRestricted(uint256,bool)"
@@ -28,8 +29,8 @@ defmodule Keyfleet.Proposals.Actions do
                @pay,
                @advance,
                @rate,
-               @approve_hash,
-               @revoke_hash,
+               @approve_lit,
+               @revoke_lit,
                @voted_split,
                @admit_ousd,
                @edits
@@ -47,7 +48,9 @@ defmodule Keyfleet.Proposals.Actions do
       share, purpose}` from the treasury, `share` in parts per million of
       the treasury's balance of `asset` when the proposal is carried out;
     * `{:rate, bps}`, the daily split's rate;
-    * `{:signature, :approve | :revoke, hash}`;
+    * `{:signature, :approve | :revoke, issued_at}`, the treasury's own Lit
+      `CreateWallet` request at `issued_at`, in seconds, which the treasury
+      builds and signs under Lit's own domain;
     * `{:edits, token_id, restricted?}`, `token_id` the fleet's Key number;
     * `{:launch, %{name:, symbol:, description:, website:, image:}}`.
   """
@@ -61,11 +64,11 @@ defmodule Keyfleet.Proposals.Actions do
 
   def encode({:rate, bps}, fleet), do: [treasury(fleet, Call.encode(@rate, [bps]))]
 
-  def encode({:signature, :approve, hash}, fleet),
-    do: [treasury(fleet, Call.encode(@approve_hash, [hash]))]
+  def encode({:signature, :approve, issued_at}, fleet),
+    do: [treasury(fleet, Call.encode(@approve_lit, [issued_at]))]
 
-  def encode({:signature, :revoke, hash}, fleet),
-    do: [treasury(fleet, Call.encode(@revoke_hash, [hash]))]
+  def encode({:signature, :revoke, issued_at}, fleet),
+    do: [treasury(fleet, Call.encode(@revoke_lit, [issued_at]))]
 
   def encode({:edits, token_id, restricted?}, fleet),
     do: [
@@ -154,13 +157,13 @@ defmodule Keyfleet.Proposals.Actions do
       selector == Call.selector(@rate) ->
         with {:ok, [bps]} <- Abi.decode(bytes, [{:uint, 256}]), do: {:ok, {:rate, bps}}
 
-      selector == Call.selector(@approve_hash) ->
-        with {:ok, [hash]} <- Abi.decode(bytes, [:bytes32]),
-             do: {:ok, {:signature, :approve, hash}}
+      selector == Call.selector(@approve_lit) ->
+        with {:ok, [issued_at]} <- Abi.decode(bytes, [{:uint, 256}]),
+             do: {:ok, {:signature, :approve, issued_at}}
 
-      selector == Call.selector(@revoke_hash) ->
-        with {:ok, [hash]} <- Abi.decode(bytes, [:bytes32]),
-             do: {:ok, {:signature, :revoke, hash}}
+      selector == Call.selector(@revoke_lit) ->
+        with {:ok, [issued_at]} <- Abi.decode(bytes, [{:uint, 256}]),
+             do: {:ok, {:signature, :revoke, issued_at}}
 
       selector == Call.selector(@voted_split) ->
         with {:ok, []} <- Abi.decode(bytes, []), do: {:ok, :voted_split}

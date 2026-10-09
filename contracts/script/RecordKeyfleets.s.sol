@@ -23,8 +23,8 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// The record refuses, before it writes, a failed or unfinished broadcast, a factory with no code,
 /// any value that differs from the manifest, a fleet whose four contracts are not the ones the
 /// factory places for it or do not point at each other, a founding fleet of another type or deck
-/// than the manifest's, and a collection the VRF subscription does not list as a consumer yet, so
-/// the site only lists keys that can be revealed. Run it after the founding fleets exist, and again
+/// than the manifest's, and missing VRF ownership/consumer setup when any recorded Key needs a
+/// draw. Fixed founding decks can be recorded with setup deferred. Run after the intended fleets exist, and again
 /// whenever the record should list the fleets created since.
 ///
 /// `record` takes values and returns JSON, so the suite runs it against systems deployed in the
@@ -116,8 +116,18 @@ contract RecordKeyfleets is KeyfleetManifest {
         );
     }
 
-    /// @dev The subscription lists the collection, and on Base the Regents Safe owns it.
+    /// @dev Drawn Keys require a listed collection and, on Base, Safe subscription ownership.
     function _requireVrfConsumer(KeyfleetKeys keys) private view {
+        bool needed;
+        for (uint256 id = 1; id <= keys.fleetCount(); ++id) {
+            if (!keys.fleetExists(id)) continue;
+            KeyfleetKeys.Fleet memory fleet = keys.fleet(id);
+            if (id > keys.FOUNDING_FLEETS() || KeyfleetManager(fleet.manager).totalMinted() > fleet.deckSize) {
+                needed = true;
+                break;
+            }
+        }
+        if (!needed) return;
         (IVRFCoordinatorV2Plus coordinator, uint256 subscriptionId,) = keys.randomness();
         (,,, address owner, address[] memory consumers) = coordinator.getSubscription(subscriptionId);
         if (block.chainid == BASE_CHAIN_ID && owner != BASE_REGENTS_SAFE) {
@@ -173,6 +183,7 @@ contract RecordKeyfleets is KeyfleetManifest {
         fleets = "{}";
         uint256 count = keys.fleetCount();
         for (uint256 fleetId = 1; fleetId <= count; ++fleetId) {
+            if (!keys.fleetExists(fleetId)) continue;
             KeyfleetManager manager = _requireFleetBound(manifest, factory, keys, fleetId);
             fleets = vm.serializeString(object, vm.toString(fleetId), _fleetJson(keys, fleetId, manager));
         }
@@ -345,7 +356,7 @@ contract RecordKeyfleets is KeyfleetManifest {
         return vm.serializeString(
             object,
             "safeAuthority",
-            "The Regents Safe owns the randomness subscription and REGENT revenue staking, opens key sales"
+            "The Regents Safe owns REGENT revenue staking, must own the randomness subscription before drawn Keys are recorded, opens key sales"
             " step by step and names the wallet that records card decks. It has no vote, claim or price in"
             " any fleet and cannot move a fleet's money."
         );

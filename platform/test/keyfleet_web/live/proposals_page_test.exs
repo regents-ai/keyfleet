@@ -94,7 +94,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       fleet = Fleets.get_fleet!(@fleet)
       paid = ProposalHelpers.wallet("b")
       operator = ProposalHelpers.wallet("d")
-      message = "0x" <> String.duplicate("ab", 32)
+      issued_at = 1_790_000_000
 
       launch = %{
         name: "Fleet Coin",
@@ -109,7 +109,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         {:advance, 5, operator, @eth, 100_000, "0x" <> String.duplicate("e", 64)},
         {:rate, 75},
         {:edits, 12, true},
-        {:signature, :approve, message},
+        {:signature, :approve, issued_at},
         {:launch, launch}
       ]
 
@@ -160,7 +160,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                "Advance 10% of the treasury’s ETH (advance 5) to #{operator}",
                "Set the daily split to 0.75%",
                "Stop Key 12 changing the workspace",
-               "Sign a message for the fleet: #{message}",
+               "Sign the fleet’s Lit wallet request timed 1790000000 (21 September 2026 at 14:13:20 UTC)",
                "Launch Fleet Coin (FLT) through Autolaunch, for the treasury",
                "A call Keyfleet doesn’t recognize. Check it before you vote."
              ]
@@ -623,17 +623,15 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         "Allows Key 12’s edits."
       )
 
-      hash = "0x" <> String.duplicate("ab", 32)
-
       expect.(
-        [kind: "signature", signature: "approve", hash: hash],
-        {:signature, :approve, hash},
-        "Signs the message for the fleet."
+        [kind: "signature", signature: "approve", issued_at: "1790000000"],
+        {:signature, :approve, 1_790_000_000},
+        "Signs the fleet’s Lit wallet request."
       )
 
       expect.(
         [kind: "signature", signature: "revoke"],
-        {:signature, :revoke, hash},
+        {:signature, :revoke, 1_790_000_000},
         "Withdraws the fleet’s signature."
       )
 

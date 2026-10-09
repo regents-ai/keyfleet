@@ -204,8 +204,9 @@ contract CollectionHandler is Test {
         }
 
         ghostPhase = keys.phase();
-        ghostOpensAt[1] = keys.salesOpenAt(1);
-        ghostOpensAt[2] = keys.salesOpenAt(2);
+        ghostOpensAt[1] = keys.salesOpenAt(CLUB_FLEET);
+        ghostOpensAt[2] = keys.salesOpenAt(1);
+        ghostOpensAt[3] = keys.salesOpenAt(2);
         if (ghostPhase == keys.FINAL_PHASE()) ghostOpensAt[ghostPhase] = keys.phaseOpensAt();
         ghostFleetCount = keys.fleetCount();
         for (uint256 id = 1; id <= ghostFleetCount; ++id) {
@@ -450,12 +451,12 @@ contract CollectionHandler is Test {
 
         vm.prank(creator);
         try factory.createFleet(terms) returns (uint256 fleetId, uint256 tokenId) {
-            if (!creationOpen) _breach("an open fleet was created before phase 3 opened");
+            if (!creationOpen) _breach("an open fleet was created before phase 4 opened");
             if (fleetId != id || tokenId != keys.tokenIdOf(id, 1)) _breach("a creation numbered its fleet wrongly");
             _checkCreation(id, terms, creator, before);
         } catch (bytes memory err) {
             if (creationOpen || bytes4(err) != KeyfleetFactory.CreationClosed.selector) {
-                _breach("a creation was refused other than before phase 3 opened");
+                _breach("a creation was refused other than before phase 4 opened");
             }
             vm.prank(creator);
             usdc.approve(address(factory), 0);
@@ -1020,6 +1021,7 @@ contract CollectionHandler is Test {
             pending = manager.pendingConversion();
             piece =
                 Math.min(pending, Math.max(Math.min(maxUsdc, regentBuyer.PIECE_USDC()), regentBuyer.MIN_PIECE_USDC()));
+            if (pending - piece < regentBuyer.MIN_PIECE_USDC()) piece = pending;
             treasuryRegent = regent.balanceOf(address(manager.TREASURY()));
         }
         vm.prank(_stranger(callerSeed, 0));
@@ -1096,9 +1098,9 @@ contract CollectionHandler is Test {
         uint256 tokenId = _requestToken[requestId];
         uint256[] memory words = new uint256[](1);
         words[0] = word;
-        // A retried key has two answerable requests; the first answer writes the seed.
+        // An expired request is ignored; otherwise the one answer writes the seed.
         bytes32 seed = ghostSeed[tokenId];
-        if (seed == bytes32(0)) {
+        if (seed == bytes32(0) && !keys.revealExpired(tokenId)) {
             seed = keccak256(abi.encode(keys.TRAIT_SEED_TAG(), block.chainid, address(keys), tokenId, word));
         }
         vrf.fulfill(requestId, words);
@@ -1106,12 +1108,31 @@ contract CollectionHandler is Test {
         ghostSeed[tokenId] = seed;
     }
 
+    /// @notice Anyone may expire an unanswered accepted request after 24 hours, exactly once.
+    function expireReveal(uint256 fleetSeed, uint256 keySeed, uint256 callerSeed) external step(_fleetFrom(fleetSeed)) {
+        (, uint256 tokenId,) = _pickKey(fleetSeed, keySeed);
+        if (tokenId == 0) return;
+        uint256 requestedAt = keys.revealRequestedAt(tokenId);
+        bytes4 expected;
+        if (requestedAt == 0 || ghostSeed[tokenId] != bytes32(0) || keys.revealExpired(tokenId)) {
+            expected = KeyfleetKeys.RevealNotWaiting.selector;
+        } else if (block.timestamp < requestedAt + 24 hours) {
+            expected = KeyfleetKeys.RevealTooEarlyToExpire.selector;
+        }
+        vm.prank(_stranger(callerSeed, 0));
+        try keys.expireReveal(tokenId) {
+            if (expected != bytes4(0) || !keys.revealExpired(tokenId)) _breach("a reveal was expired wrongly");
+        } catch (bytes memory err) {
+            if (bytes4(err) != expected || expected == bytes4(0)) _breach("a reveal expiry was refused wrongly");
+        }
+    }
+
     /// @notice The Safe, or a stranger, steps the phase with an opening up to 31 days away; an
     /// opening now, more than 30 days ahead or before the current phase's is refused.
     function advancePhase(uint256 callerSeed, uint256 opensSeed) external step(0) {
         address caller = callerSeed % 3 == 0 ? _stranger(callerSeed, 0) : safe;
         uint8 phase = keys.phase();
-        uint256 needed = phase < 2 ? keys.FOUNDING_FLEETS() : 0;
+        uint256 needed = phase + 1 < keys.FINAL_PHASE() ? keys.FOUNDING_FLEETS() : 0;
         uint64 opensAt = uint64(block.timestamp + bound(opensSeed, 0, 31 days));
         bytes4 expected;
         if (caller != safe) {
@@ -1341,7 +1362,7 @@ contract CollectionHandler is Test {
         } else if (a.pick == 36) {
             bytes memory data = a.caller == address(this)
                 ? abi.encodeCall(KeyfleetTreasury.admitOusd, (weth))
-                : abi.encodeCall(KeyfleetTreasury.approveSignatureHash, (keccak256("order")));
+                : abi.encodeCall(KeyfleetTreasury.approveLitCreateWallet, (1));
             _attempt(a, t, data, onlySelf);
         }
     }
@@ -1539,13 +1560,12 @@ contract CollectionHandler is Test {
         if (actor == not) actor = _accounts[(seed % ACTORS + 1) % ACTORS];
     }
 
-    /// @notice Whether a fleet's sales should be open now: Classic #1 and the Regents Club from phase
-    /// 1's opening, fleets 2 to 4 from phase 2's, and an open fleet from its creation.
+    /// @notice Whether a fleet's sales should be open now: the Regents Club from phase 1,
+    /// Classic #1 from phase 2, fleets 2 to 4 from phase 3, and an open fleet from its creation.
     function salesOpenExpected(uint256 fleetId) public view returns (bool) {
-        if (fleetId == 1 || fleetId == CLUB_FLEET) {
-            return ghostPhase >= 1 && block.timestamp >= ghostOpensAt[1];
-        }
-        if (fleetId < FIRST_OPEN_FLEET) return ghostPhase >= 2 && block.timestamp >= ghostOpensAt[2];
+        if (fleetId == CLUB_FLEET) return ghostPhase >= 1 && block.timestamp >= ghostOpensAt[1];
+        if (fleetId == 1) return ghostPhase >= 2 && block.timestamp >= ghostOpensAt[2];
+        if (fleetId < FIRST_OPEN_FLEET) return ghostPhase >= 3 && block.timestamp >= ghostOpensAt[3];
         return true;
     }
 
@@ -1839,13 +1859,13 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
     }
 
     /// @dev 3. A fleet with closed sales has sold nothing, the phase is the one the Safe stepped
-    /// to, sales open only at each phase's opening, and no open fleet exists before phase 3 opens.
+    /// to, sales open only at each phase's opening, and no open fleet exists before phase 4 opens.
     function invariant_phasesGateSalesAndCreation() public view {
         uint8 phase = keys.phase();
         assertEq(phase, handler.ghostPhase(), "the phase is the one the Safe stepped to");
         uint256 count = keys.fleetCount();
         if (phase < keys.FINAL_PHASE() || block.timestamp < handler.ghostOpensAt(phase)) {
-            assertLe(count, keys.FOUNDING_FLEETS(), "no open fleet before phase 3 opens");
+            assertLe(count, keys.FOUNDING_FLEETS(), "no open fleet before phase 4 opens");
         }
         for (uint256 id = 1; id <= count; ++id) {
             bool open = handler.salesOpenExpected(id);
@@ -1970,8 +1990,10 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
     }
 
     /// @dev 10. A fleet's deck is recorded at most once (item 4 holds it to the record), a key of a
-    /// fleet without a deck has no seed and no draw, and every seed came from a draw.
+    /// fleet without a deck has no seed and no draw, every seed came from a draw, and the keys the
+    /// collection counts as waiting are exactly those drawn, not yet seeded and not expired.
     function invariant_onlyKeysOfAFleetWithADeckAreDrawn() public view {
+        uint256 waiting;
         for (uint256 id = 1; id <= keys.fleetCount(); ++id) {
             bool hasDeck = handler.recordOf(id).deckHash != bytes32(0);
             uint256 minted = _manager(id).totalMinted();
@@ -1979,13 +2001,21 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
                 uint256 tokenId = keys.tokenIdOf(id, k);
                 bytes32 seed = keys.revealSeed(tokenId);
                 uint64 requestedAt = keys.revealRequestedAt(tokenId);
+                bool expired = keys.revealExpired(tokenId);
+                if (expired) {
+                    assertGt(requestedAt, 0, "every expired request was accepted");
+                    assertEq(seed, bytes32(0), "an expired request never receives a seed");
+                    assertGe(block.timestamp, uint256(requestedAt) + 24 hours, "expiry is never early");
+                }
                 if (!hasDeck) {
                     assertEq(seed, bytes32(0), "a key of a fleet without a deck has no seed");
                     assertEq(requestedAt, 0, "a key of a fleet without a deck has no draw");
                 }
                 if (seed != bytes32(0)) assertGt(requestedAt, 0, "every seed came from a draw");
+                if (requestedAt != 0 && seed == bytes32(0) && !expired) ++waiting;
             }
         }
+        assertEq(keys.revealsWaiting(), waiting, "the waiting count excludes seeded and expired requests");
     }
 
     /// @dev 11. Every token is where the books say: all USDC sits with known holders, every USDC
@@ -2103,7 +2133,7 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
 }
 
 /// @dev Design §10.8 run with the five founding fleets and two open fleets on one collection in
-/// phase 3: open fleet 6 is a Classic fleet at 12.50 USDC open to anyone; open fleet 7 is a Cascade
+/// phase 4: open fleet 6 is a Classic fleet at 12.50 USDC open to anyone; open fleet 7 is a Cascade
 /// fleet at 25 USDC open only to holders of any Keyfleet key.
 /// The everyday run is short; `FOUNDRY_PROFILE=deep` runs it at the design's 256 runs × depth 100.
 /// forge-config: default.invariant.runs = 24
@@ -2133,7 +2163,7 @@ contract KeyfleetCollectionInvariantTest is KeyfleetCollectionInvariantBase {
         require(keys.fleetCount() == 7, "seven fleets");
         _buyRounds(6, 7);
 
-        bytes4[] memory selectors = new bytes4[](32);
+        bytes4[] memory selectors = new bytes4[](33);
         selectors[0] = CollectionHandler.buy.selector;
         selectors[1] = CollectionHandler.buy.selector;
         selectors[2] = CollectionHandler.transfer.selector;
@@ -2166,6 +2196,7 @@ contract KeyfleetCollectionInvariantTest is KeyfleetCollectionInvariantBase {
         selectors[29] = CollectionHandler.attack.selector;
         selectors[30] = CollectionHandler.attack.selector;
         selectors[31] = CollectionHandler.give.selector;
+        selectors[32] = CollectionHandler.expireReveal.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
@@ -2198,7 +2229,7 @@ contract KeyfleetCollectionPhasesInvariantTest is KeyfleetCollectionInvariantBas
         }
         _startHandler();
 
-        bytes4[] memory selectors = new bytes4[](14);
+        bytes4[] memory selectors = new bytes4[](15);
         selectors[0] = CollectionHandler.buy.selector;
         selectors[1] = CollectionHandler.buy.selector;
         selectors[2] = CollectionHandler.advancePhase.selector;
@@ -2213,6 +2244,7 @@ contract KeyfleetCollectionPhasesInvariantTest is KeyfleetCollectionInvariantBas
         selectors[11] = CollectionHandler.wait.selector;
         selectors[12] = CollectionHandler.convert.selector;
         selectors[13] = CollectionHandler.give.selector;
+        selectors[14] = CollectionHandler.expireReveal.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }

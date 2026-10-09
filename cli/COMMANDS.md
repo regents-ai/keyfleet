@@ -178,7 +178,7 @@ answer the steps, with blocked "No keys to use" when the wallet has none
   lasts 24 hours. `pay` and `advance`: `asset`, `share` (percent of the treasury's
   balance of that asset, 0.0001 to 99) and `recipient`; for now the transaction names
   the amount that share is at the latest block. `rate`: `rate`, the daily split in percent, 0.1 to 2. `edits`: `target`
-  and `restricted`. `signature`: `hash` and `signature` (`approve` or `revoke`).
+  and `restricted`. `signature`: `issued_at`, the time the treasury's Lit wallet request names, in seconds, and `signature` (`approve` or `revoke`).
   `launch`: `name`, `symbol`, `description`, `website`, `image`.
 
   ```sh

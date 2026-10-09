@@ -130,14 +130,14 @@ abstract contract KeyfleetFixture is Test {
     // --- fleets ------------------------------------------------------------
 
     /// @dev The founding fleet of `preset`, with its sales open: creates the five founding fleets in
-    /// order the first time, as the Safe, and moves the collection to phase 2.
+    /// order the first time, as the Safe, and moves the collection to phase 3.
     function _deploy(KeyfleetPresets.Preset preset) internal returns (KeyfleetManager fleet) {
         if (keys.fleetCount() == 0) {
             for (uint256 id = 1; id <= keys.FOUNDING_FLEETS(); ++id) {
                 _createFounding(keys.foundingPreset(id));
             }
         }
-        while (keys.phase() < 2) {
+        while (keys.phase() < 3) {
             _advancePhase();
         }
         for (uint256 id = 1; id <= keys.FOUNDING_FLEETS(); ++id) {
@@ -157,14 +157,14 @@ abstract contract KeyfleetFixture is Test {
     /// @dev Creates the next founding fleet as the Safe, with a stand-in deck: one card per key on
     /// the Regents Club, `DECK_SIZE` cards on the others.
     function _createFounding(KeyfleetPresets.Preset preset) internal returns (KeyfleetManager fleet) {
-        uint256 id = keys.fleetCount() + 1;
+        uint256 id = keys.nextFleetId(preset);
         uint256 deckSize = preset == KeyfleetPresets.Preset.RegentsClub ? KeyfleetPresets.CLUB_SUPPLY : DECK_SIZE;
         vm.prank(safe);
         factory.createFoundingFleet(preset, _deckHash(id), deckSize, _profile("Founding fleet"));
         fleet = KeyfleetManager(keys.managerOf(id));
     }
 
-    /// @dev Moves the collection to phase 3, creating the founding fleets first if needed.
+    /// @dev Moves the collection to phase 4, creating the founding fleets first if needed.
     function _openCreation() internal {
         if (keys.fleetCount() == 0) _deploy(KeyfleetPresets.Preset.FleetTechClassic);
         while (keys.phase() < keys.FINAL_PHASE()) {

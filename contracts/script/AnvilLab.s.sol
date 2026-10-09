@@ -28,7 +28,7 @@ import {MockWeth} from "../test/mocks/MockWeth.sol";
 /// Autolaunch factory, and a VRF coordinator whose subscription holds 0.1 ETH. The sender is the
 /// Safe and the keeper. It runs in two steps, because the Safe must name a sales opening in the
 /// future. `run` creates the five founding fleets with a stand-in deck, since phase 1 needs them
-/// all, and moves the collection to phase 1, with Classic #1's sales opening `OPENING` later. Once the chain's clock is past that, `sell` buys two
+/// all, and moves the collection to phase 2, with Classic #1's sales opening `OPENING` later. Once the chain's clock is past that, `sell` buys two
 /// keys while the coordinator refuses every request, so neither key's reveal was ever accepted;
 /// then the coordinator takes requests again, and it turns the treasury's booked USDC into REGENT
 /// with one piece. The manager owes the protocol share of both sales, the treasury holds the REGENT
@@ -58,7 +58,7 @@ contract AnvilLab is Script {
     /// @notice How long after `run` Classic #1's sales open.
     uint64 public constant OPENING = 1 minutes;
 
-    /// @notice Builds the lab up to phase 1, broadcast from `--sender`, and returns where its
+    /// @notice Builds the lab up to phase 2, broadcast from `--sender`, and returns where its
     /// contracts are.
     function run() external returns (Lab memory lab) {
         vm.startBroadcast();
@@ -101,6 +101,7 @@ contract AnvilLab is Script {
                 KeyfleetManager.Profile({name: "Founding fleet", description: "", imageLink: ""})
             );
         }
+        keys.advancePhase(uint64(block.timestamp) + OPENING);
         keys.advancePhase(uint64(block.timestamp) + OPENING);
         KeyfleetManager classic = KeyfleetManager(keys.managerOf(1));
 

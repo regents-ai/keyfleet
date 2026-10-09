@@ -924,3 +924,44 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   deployment again (new column on fleets; no fleet is recorded yet).
 - Before any deploy, the contracts now go through the internal audit Sean chose
   on 9 Oct in place of an outside one.
+
+## 2026-10-09 — Two contract fixes from the internal audit
+
+- The shared REGENT buyer can no longer be stopped for every fleet by a
+  leftover too small to buy anything (audit KF-A-01, critical). A piece that
+  would leave a fleet less than 1 USDC booked takes the rest with it, so a
+  fleet's booking is always nothing or at least 1 USDC.
+- A proposal can now only approve a Lit request for the treasury to answer as
+  its signature, never a bare hash (audit KF-A-02). The treasury puts the
+  request under Lit's own signing domain, so no vote can make it sign a USDC
+  transfer or a permit. The calls are `approveLitRequest` and
+  `revokeLitRequest`, and the logs `LitRequestApproved` and
+  `LitRequestRevoked`; the site reads the new names.
+
+## 2026-10-09 — More contract fixes from the internal audit
+
+- One fleet can no longer hold up REGENT buying for every fleet (audit
+  KF-A-06). When a fleet's USDC can't be handed over, for instance because
+  USDC's issuer froze it, that fleet is skipped with its booking whole and
+  waits at the back of the line, and the next fleet is served straight away.
+  Nobody can make a working fleet be skipped by sending too little gas.
+- A proposal can now only sign the treasury's own Lit wallet request, named by
+  its time, never a request built elsewhere (audit KF-A-02, replacing the fix
+  above). The proposal form asks for the request time instead of a message
+  code; the HTTP contract's `hash` field is now `issued_at`. The calls are
+  `approveLitCreateWallet` and `revokeLitCreateWallet`, and the logs
+  `LitCreateWalletApproved` and `LitCreateWalletRevoked`.
+- Voting directly now uses up any ballot the voter signed earlier, so an old
+  signature can't be sent later to change the vote (audit KF-A-09).
+- A proposal may run the voted daily split at most once, and not together with
+  a payment or an advance (audit KF-A-11).
+
+## 2026-10-09 — No forced skip in REGENT buying
+
+- A fleet's USDC is now handed to the REGENT buyer even when the buying starts
+  from inside another call to that same fleet, such as a purchase whose new
+  owner starts it, or a worthless token sent on from the fleet. Before, anyone
+  could use that to have a working fleet skipped and sent to the back of the
+  line (security review of the KF-A-06 fix).
+- The HTTP contract files now carry version 7.0.0, matching the public API
+  description.

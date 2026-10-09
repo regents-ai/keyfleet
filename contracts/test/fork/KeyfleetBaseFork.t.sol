@@ -35,16 +35,15 @@ interface IVRFRequestCommitments {
 }
 
 /// @dev The Keyfleet system on a fork of Base, deployed the way the release deploys it: the
-/// committed Base manifest through `DeployKeyfleets.deploy`, then the Regents Safe's own calls from
-/// `KeyfleetSafeSteps`, made from the Safe's address on the fork. The manifest's keeper and VRF
-/// subscription are still blank in the committed file, so a test keeper is written in and the test
+/// committed Base manifest through `DeployKeyfleets.deploy`, then founding-fleet calls made from
+/// the Safe's address on the fork. A test keeper is written in and the test
 /// creates and funds its own subscription on the real coordinator; the collection is not added to it
 /// until a test does so. Everything runs in the local EVM only: nothing is sent to Base.
 ///
 /// A fork test runs only when `BASE_RPC_URL` is set in the environment and skips itself otherwise;
 /// the URL is never printed.
 abstract contract KeyfleetForkFixture is Test {
-    /// @dev The keeper the tests name; the committed manifest leaves it blank until release.
+    /// @dev The keeper the tests use instead of the production Safe.
     address internal constant KEEPER = address(0x4EE9E4);
 
     DeployKeyfleets internal script;
@@ -89,11 +88,14 @@ abstract contract KeyfleetForkFixture is Test {
         manifest.bindings.randomness.subscriptionId = subscriptionId;
     }
 
-    /// @dev Makes the first `count` founding-fleet calls the Safe step builds, from the Safe.
+    /// @dev Creates the requested founding slots for complete-system fork proofs. The launch
+    /// script separately prepares Club, then Classic, then the remaining three by phase.
     function _found(uint256 count) internal {
-        KeyfleetSafeSteps.SafeCall[] memory calls = safeSteps.foundingFleetCalls(_manifest(), factory);
+        KeyfleetManifest.Manifest memory manifest = _manifest();
         for (uint256 i = 0; i < count; ++i) {
-            _asSafe(calls[i]);
+            KeyfleetManifest.FoundingFleet memory fleet = manifest.founding[i];
+            vm.prank(manifest.bindings.safe);
+            factory.createFoundingFleet(fleet.preset, fleet.deckHash, fleet.deckSize, fleet.profile);
         }
     }
 
@@ -194,7 +196,8 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
     function setUp() public {
         if (!_setUpFork(0)) return;
         staking = IRegentRevenueStakingViews(script.BASE_REGENT_REVENUE_STAKING());
-        _found(1);
+        _found(keys.FOUNDING_FLEETS());
+        _advancePhase();
         _advancePhase();
         classic = _fleet(1);
     }
@@ -237,12 +240,12 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
         KeyfleetRegentBuyer buyer = factory.REGENT_BUYER();
         assertEq(address(buyer.V3_POOL()), script.BASE_USDC_WETH_POOL(), "the v3 pool");
         assertEq(address(buyer.POOL_MANAGER()), script.BASE_POOL_MANAGER(), "the PoolManager");
-        assertEq(keys.fleetCount(), 1, "Classic #1 founded by the Safe's call");
-        assertEq(keys.phase(), 1, "and opened by its phase call");
+        assertEq(keys.fleetCount(), keys.FOUNDING_FLEETS(), "all five founded by the Safe's calls");
+        assertEq(keys.phase(), 2, "and opened by its phase call");
         assertTrue(keys.salesOpen(1), "Classic #1 sells");
     }
 
-    /// @dev A key that draws, key 2 of a fleet created in phase 3, is sold once the keeper has
+    /// @dev A key that draws, key 2 of a fleet created in phase 4, is sold once the keeper has
     /// recorded the fleet's deck and before the collection is a consumer. Then the collection is
     /// added, the request is retried, and answered; key 3 sold by a consumer is accepted straight away.
     function test_theRealCoordinatorAcceptsTheRequestAndTheAnswerFits() public {
@@ -294,10 +297,9 @@ contract KeyfleetBaseForkTest is KeyfleetForkFixture {
         assertEq(keys.revealSeed(first), seed, "the seed");
     }
 
-    /// @dev Founds the other founding fleets, opens phases 2 and 3, and creates a Classic fleet at
+    /// @dev Opens phases 3 and 4, and creates a Classic fleet at
     /// 10 USDC, whose key 1 the creator buys before it has a deck; then the keeper records its deck.
     function _drawingFleet() private returns (KeyfleetManager fleet) {
-        _found(keys.FOUNDING_FLEETS() - 1);
         _advancePhase();
         _advancePhase();
         uint256 startPrice = KeyfleetPresets.MIN_START_USDC;

@@ -80,7 +80,8 @@ contract KeyfleetAutolaunchForkTest is KeyfleetForkFixture {
     function setUp() public {
         if (!_setUpFork(FORK_BLOCK)) return;
         autolaunch = IRegentsAutolaunchFactoryV2(script.BASE_AUTOLAUNCH_FACTORY());
-        _found(1);
+        _found(keys.FOUNDING_FLEETS());
+        _advancePhase();
         _advancePhase();
         classic = _fleet(1);
         treasury = classic.TREASURY();

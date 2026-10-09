@@ -240,11 +240,23 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       approved!(url, %{"kind" => "edits", "target" => "2", "restricted" => "true"})
       assert uint!(url, lab.votes, "editsRestricted(uint256)", [id(2)]) == 1
 
-      hash = "0x" <> String.duplicate("ab", 32)
-      approved!(url, %{"kind" => "signature", "signature" => "approve", "hash" => hash})
-      assert uint!(url, lab.treasury, "approvedHash(bytes32)", [hash]) == 1
-      approved!(url, %{"kind" => "signature", "signature" => "revoke", "hash" => hash})
-      assert uint!(url, lab.treasury, "approvedHash(bytes32)", [hash]) == 0
+      signed = lit_digest!(lab.treasury, 1_790_000_000)
+
+      approved!(url, %{
+        "kind" => "signature",
+        "signature" => "approve",
+        "issued_at" => "1790000000"
+      })
+
+      assert uint!(url, lab.treasury, "approvedHash(bytes32)", [signed]) == 1
+
+      approved!(url, %{
+        "kind" => "signature",
+        "signature" => "revoke",
+        "issued_at" => "1790000000"
+      })
+
+      assert uint!(url, lab.treasury, "approvedHash(bytes32)", [signed]) == 0
     end
 
     test "an advance goes out, and comes back in part from whoever presses, approved first",
@@ -506,7 +518,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       pass = address!(url, lab.club_claims, "PASS()")
       send!(url, @buyer, pass, Call.encode("mint(address,uint256)", [@second, 1]))
 
-      # Phase 1 opened the Club with Classic #1; the Safe gives its Keys 1 and
+      # Phase 2 opened Classic #1 after the Club; the Safe gives its Keys 1 and
       # 2 to the claims contract, and Pass 2 is never minted.
       claims = [lab.club_claims, lab.club_claims]
       send!(url, @buyer, club.manager_address, Call.encode("give(address[])", [claims]))
@@ -738,6 +750,29 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   defp uint!(url, to, signature, arguments \\ []) do
     "0x" <> hex = view!(url, to, signature, arguments)
     String.to_integer(hex, 16)
+  end
+
+  # The digest Lit checks for the treasury's CreateWallet request at
+  # `issued_at`, worked out here from Lit's typed data: domain "Lit
+  # ChainSecured", version 1 and the chain id, no verifying contract.
+  defp lit_digest!(treasury, issued_at) do
+    hash = &ExKeccak.hash_256/1
+
+    domain =
+      hash.(
+        hash.("EIP712Domain(string name,string version,uint256 chainId)") <>
+          hash.("Lit ChainSecured") <> hash.("1") <> <<@chain_id::256>>
+      )
+
+    {:ok, owner} = RegentChain.Address.decode(treasury)
+
+    message =
+      hash.(
+        hash.("CreateWallet(address address,uint256 issuedAt)") <>
+          <<0::96>> <> owner <> <<issued_at::256>>
+      )
+
+    "0x" <> Base.encode16(hash.(<<0x19, 0x01>> <> domain <> message), case: :lower)
   end
 
   defp address!(url, to, signature, arguments \\ []) do

@@ -43,7 +43,8 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     );
 
     function setUp() public {
-        vm.warp(1_000_000);
+        // Three phase steps leave purchases at the independent vectors' fixed time, 1,000,002.
+        vm.warp(999_999);
         vm.roll(1_000);
         _setUpFixture();
         fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
@@ -186,8 +187,8 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     /// this suite's addresses. The fleet contracts are deployed with CREATE2, so a change to their
     /// code moves these addresses, and then both vectors must be worked out and signed again.
     function test_aSignatureFromAnIndependentEncoderIsAccepted() public {
-        assertEq(address(votes), 0x81Be8Dae63350219873fceDa4BF69814bfD7D902, "the address the vector was signed for");
-        assertEq(address(fleet), 0xc5cD9C989De6e2123D8e40E589C7784277420099, "the manager the vector names");
+        assertEq(address(votes), 0x012f7238937F36D0FaB34194abeEab71Cf95E793, "the address the vector was signed for");
+        assertEq(address(fleet), 0xb24059EAeC495104625766586CB7aa98F019B84C, "the manager the vector names");
         assertEq(block.chainid, 31337);
         assertEq(k1, 10_000_000_001);
         assertEq(k2, 10_000_000_002);
@@ -198,7 +199,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
             _pair(k1, k2),
             alice,
             2_000_000,
-            hex"304bea7e41610fb721f69db0dbf59ba055b0e2fdb7becae805c9b561d6246cea758e907031294fe828a95cd0d4115556df32382628ebf7527b332a3a6e666ed31c"
+            hex"aa95c41d9314490906cd6004914e8f1feabb98d4280d60710e3b7060125211a609ed757a5098b2f8652e07cd5e38a2987de30212ed945862e743d3335b942de51b"
         );
         assertTrue(votes.isActive(k1) && votes.isActive(k2));
     }
@@ -211,7 +212,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     /// treasury address; Alice signs Yes for keys 1 and 2 at epochs 1 and 1 and delegation
     /// revisions 0 and 0, nonce 0 and deadline 2,000,000.
     function test_aBallotFromAnIndependentEncoderIsAccepted() public {
-        assertEq(address(fleet.TREASURY()), 0xE144b61Aec5Fef6A38c8b53abca7057b24237705, "the treasury the encoder used");
+        assertEq(address(fleet.TREASURY()), 0xB25d36daC4aAbC9361c2c19906384502A447c088, "the treasury the encoder used");
         uint256 proposalId = _propose();
         assertEq(
             votes.proposal(proposalId).actionsHash,
@@ -220,7 +221,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
         );
         assertEq(
             votes.proposal(proposalId).proposalHash,
-            0x4832b62b20bd50c8100fc456195fde3f1572175e5ed2ceec37fd91630e1dac5d,
+            0xa8358a019750a84b80ccce562dfd2af56d779f450b2efecbd77bbd4bced505dc,
             "the proposal hash the encoder worked out"
         );
 
@@ -230,7 +231,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
             YES,
             alice,
             2_000_000,
-            hex"5e0b3ab53d99844505c958a00fbd85a65b64a9fb9b2c78d1d4d98e156f794ac722c9bfdb13bd625ad782f20b793019b77bc3e40f6c544c3572f7f2bc2b10b1801b"
+            hex"9c398a92f4652f6207f595e275f4d21f9415bafafcb0c3ccb334eb753d18090060c10380b309bc125ce4f66221766ca55005451012f89dbaf9e730fb91202c1a1c"
         );
         assertEq(votes.proposal(proposalId).yes, 2);
     }
@@ -318,6 +319,24 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
         vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
         votes.castBallotBySig(proposalId, _ids(k1), YES, alice, deadline, signature);
         assertEq(votes.nonces(alice), 2);
+    }
+
+    /// @dev Invariant: voting directly uses the signer's nonce too, so a ballot signed earlier and
+    /// not yet submitted cannot be cast afterwards to change the vote.
+    function test_aDirectVoteVoidsABallotSignedBeforeIt() public {
+        uint256 proposalId = _propose();
+        uint256 deadline = _deadline();
+        bytes memory signedYes = _signBallot(ALICE_KEY, proposalId, _ids(k1), YES, deadline);
+
+        vm.prank(alice);
+        votes.castBallot(proposalId, _ids(k1), NO);
+        assertEq(votes.nonces(alice), 1, "the direct vote used the nonce");
+
+        vm.prank(keeper);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetVotes.InvalidSignature.selector, alice));
+        votes.castBallotBySig(proposalId, _ids(k1), YES, alice, deadline, signedYes);
+        assertEq(votes.proposal(proposalId).yes, 0);
+        assertEq(votes.proposal(proposalId).no, 1, "the direct vote stands");
     }
 
     /// @dev Invariant: a signed message is good up to and including its deadline, and not after.

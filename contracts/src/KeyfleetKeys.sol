@@ -26,8 +26,8 @@ interface IKeyfleetKeyHook {
 /// bumps the key's ownership epoch, and a mint records when the key was minted.
 ///
 /// Sales open in phases the Regents Safe moves forward, one step at a time and never back, each at
-/// a future second the Safe names when it moves: phase 1 opens fleet 1 and the Regents Club, fleet
-/// 5, together; phase 2 opens fleets 2 to 4; and phase 3 lets anyone create a fleet, which sells
+/// a future second the Safe names when it moves: phase 1 opens the Regents Club, fleet 5;
+/// phase 2 opens fleet 1; phase 3 opens fleets 2 to 4; and phase 4 lets anyone create a fleet, which sells
 /// from the moment it is created. `mint` is the only way a key comes to exist, and it refuses a
 /// fleet whose sales have not opened.
 ///
@@ -39,7 +39,9 @@ interface IKeyfleetKeyHook {
 /// A key's Chainlink VRF request is sent only once its fleet has a deck, so no seed of a fleet
 /// exists before its deck is fixed, and nobody can choose a deck after seeing the seeds. A key's
 /// seed is written once from the one answer to its one accepted request. The Safe may change the
-/// coordinator, subscription and gas lane, which only the next requests use.
+/// subscription and gas lane, which only the next requests use, and the coordinator only while no
+/// accepted request waits for its answer. Anyone may expire an unanswered request after 24 hours;
+/// that key stays without a seed and can never request again.
 ///
 /// `tokenURI` is one fixed base followed by the token id, and reverts for an id that has not been
 /// minted. Resales carry an ERC-2981 royalty of 2.5% to the Regents Safe. There is no upgrade path,
@@ -96,10 +98,10 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     /// @notice The most fleets the collection numbers, so every token id stays below 10^19 and fits
     /// in 64 bits.
     uint256 public constant MAX_FLEETS = 999_999_999;
-    /// @notice The founding fleets, created by the Safe before phase 3.
+    /// @notice The founding fleets, created by the Safe before phase 4.
     uint256 public constant FOUNDING_FLEETS = 5;
     /// @notice The last phase: anyone may create a fleet.
-    uint8 public constant FINAL_PHASE = 3;
+    uint8 public constant FINAL_PHASE = 4;
     /// @notice The resale royalty, in basis points: 2.5%.
     uint256 public constant ROYALTY_BPS = 250;
 
@@ -111,6 +113,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     uint32 public constant REVEAL_CALLBACK_GAS_LIMIT = 100_000;
     /// @notice Random words asked for per key.
     uint32 public constant REVEAL_WORDS = 1;
+    /// @notice How long an accepted request must wait before anyone may expire it.
+    uint256 public constant REVEAL_TIMEOUT = 24 hours;
     /// @notice The furthest ahead a phase step may name its opening: 30 days.
     uint256 public constant MAX_OPENING_LEAD = 30 days;
 
@@ -123,7 +127,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     /// @notice `keccak256` of the published trait-table file every key's traits are drawn from.
     bytes32 public immutable TRAIT_TABLE_HASH;
 
-    /// @notice The current phase, 0 to 3.
+    /// @notice The current phase, 0 to 4.
     uint8 public phase;
     /// @notice When the current phase opens its sales, as the Safe named it; zero in phase 0.
     uint64 public phaseOpensAt;
@@ -132,7 +136,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     /// @notice The Regents wallet that records decks for fleets anyone creates and asks for card
     /// refreshes.
     address public keeper;
-    /// @notice Fleets registered so far. Fleet ids are `1..fleetCount`.
+    /// @notice Highest registered fleet id. Founding slots may be absent until created.
     uint256 public fleetCount;
     /// @notice Whether an account may register fleets: the factory that deployed this collection,
     /// and any the Safe adds.
@@ -141,14 +145,19 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     mapping(address manager => uint256 fleetId) public fleetOfManager;
     /// @notice Fleets registered of each type.
     mapping(KeyfleetPresets.Preset preset => uint256 count) public typeCount;
-    /// @notice When a fleet's sales open: fleets 1 and 5 at the second phase 1 names, fleets 2 to 4
-    /// at the second phase 2 names, any later fleet at its registration. Zero until the phase that
+    /// @notice When a fleet's sales open: fleet 5 at the second phase 1 names, fleet 1 at phase 2,
+    /// fleets 2 to 4 at phase 3, any later fleet at its registration. Zero until the phase that
     /// opens them is reached, and for a fleet that does not exist.
     mapping(uint256 fleetId => uint64 opensAt) public salesOpenAt;
     /// @notice A key's trait seed, zero until the coordinator answers. Written once.
     mapping(uint256 tokenId => bytes32 seed) public revealSeed;
     /// @notice When the coordinator accepted the request for a key, zero if it never has.
     mapping(uint256 tokenId => uint64 requestedAt) public revealRequestedAt;
+    /// @notice Whether an unanswered accepted request was expired. Its key can never receive a seed.
+    mapping(uint256 tokenId => bool expired) public revealExpired;
+    /// @notice Keys whose accepted request has neither given them a seed nor been expired. The
+    /// coordinator cannot be changed while any wait.
+    uint256 public revealsWaiting;
 
     mapping(uint256 fleetId => Fleet fleet) private _fleets;
     mapping(uint256 tokenId => Holding holding) private _holdings;
@@ -160,6 +169,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     error ZeroAddress();
     /// @notice The VRF coordinator holds no code.
     error CoordinatorMissing(address coordinator);
+    /// @notice The coordinator cannot change while keys wait for its answer.
+    error RevealsWaiting(uint256 waiting);
     /// @notice No trait table was named.
     error TraitTableHashZero();
     /// @notice Only the Regents Safe may do this.
@@ -179,9 +190,9 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     error OpensAtInvalid(uint256 opensAt);
     /// @notice The fleets a phase opens do not all exist yet.
     error FleetsMissing(uint256 needed, uint256 registered);
-    /// @notice Before phase 3 only the founding fleets may be registered, in order, each with its deck.
+    /// @notice Before phase 4 only reserved founding fleets may be registered, each once with its deck.
     error NotFoundingFleet(uint256 fleetId, KeyfleetPresets.Preset preset);
-    /// @notice A fleet registered in phase 3 gets its deck from the keeper, not at registration.
+    /// @notice A fleet registered in phase 4 gets its deck from the keeper, not at registration.
     error DeckGivenAtCreation();
     /// @notice The collection numbers no more fleets.
     error TooManyFleets();
@@ -207,6 +218,10 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     error AlreadyRevealed(uint256 tokenId);
     /// @notice The coordinator has already accepted a request for this key.
     error RevealAlreadyRequested(uint256 tokenId);
+    /// @notice The key has no accepted request still waiting for an answer.
+    error RevealNotWaiting(uint256 tokenId);
+    /// @notice The accepted request has not waited long enough to expire.
+    error RevealTooEarlyToExpire(uint256 tokenId, uint256 expiresAt);
     /// @notice The key holds its deck's card of the same number and draws nothing.
     error DealtByNumber(uint256 tokenId);
 
@@ -235,6 +250,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     /// @notice The coordinator refused a request for a key's random word; the key waits for
     /// `requestReveal`.
     event RevealRequestFailed(uint256 indexed tokenId);
+    /// @notice An unanswered request was expired; its key stays without a seed and cannot ask again.
+    event RevealExpired(uint256 indexed tokenId);
     /// @notice A key's seed was written. It never changes afterwards.
     /// @param seed `keccak256(abi.encode(TRAIT_SEED_TAG, block.chainid, address(this), tokenId, word))`.
     event KeyRevealed(
@@ -311,6 +328,20 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         revert UnknownFleet(fleetId);
     }
 
+    /// @notice Whether this fleet slot has been registered.
+    function fleetExists(uint256 fleetId) public view returns (bool) {
+        return _fleets[fleetId].manager != address(0);
+    }
+
+    /// @notice Reserved founding id before public creation opens; otherwise the next public id.
+    function nextFleetId(KeyfleetPresets.Preset preset) public view returns (uint256) {
+        if (phase == FINAL_PHASE && block.timestamp >= phaseOpensAt) return fleetCount + 1;
+        for (uint256 id = 1; id <= FOUNDING_FLEETS; ++id) {
+            if (foundingPreset(id) == preset) return id;
+        }
+        revert NotFoundingFleet(0, preset);
+    }
+
     /// @notice Whether a key holds its deck's card of the same number instead of drawing one: keys
     /// 1 to the deck's size of a founding fleet.
     function dealtByNumber(uint256 tokenId) public view returns (bool) {
@@ -364,8 +395,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
 
     // --- the Safe ----------------------------------------------------------
 
-    /// @notice Moves to the next phase, whose sales open at `opensAt`. Phases 1 and 2 need all five
-    /// founding fleets, since the Regents Club, registered last, opens with Classic #1 in phase 1.
+    /// @notice Moves to the next phase, requiring only the fleets that phase opens.
+    /// Phase 1 needs Club; phase 2 also needs Classic; phase 3 needs every founding fleet.
     /// @param opensAt When the phase opens: in the future, at most `MAX_OPENING_LEAD` from now, and
     /// not before the phase it follows.
     function advancePhase(uint64 opensAt) external onlySafe {
@@ -375,14 +406,25 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
             revert OpensAtInvalid(opensAt);
         }
         uint8 next = current + 1;
-        if (next < FINAL_PHASE && fleetCount < FOUNDING_FLEETS) revert FleetsMissing(FOUNDING_FLEETS, fleetCount);
+        uint256 required = next == 1 ? 1 : next == 2 ? 2 : FOUNDING_FLEETS;
+        uint256 present;
+        if (fleetExists(5)) ++present;
+        if (next >= 2 && fleetExists(1)) ++present;
+        if (next >= 3) {
+            for (uint256 id = 2; id <= 4; ++id) {
+                if (fleetExists(id)) ++present;
+            }
+        }
+        if (present < required) revert FleetsMissing(required, present);
         phase = next;
         phaseOpensAt = opensAt;
         if (next == 1) {
-            salesOpenAt[1] = opensAt;
             salesOpenAt[FOUNDING_FLEETS] = opensAt;
         }
         if (next == 2) {
+            salesOpenAt[1] = opensAt;
+        }
+        if (next == 3) {
             for (uint256 fleetId = 2; fleetId < FOUNDING_FLEETS; ++fleetId) {
                 salesOpenAt[fleetId] = opensAt;
             }
@@ -391,10 +433,14 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     }
 
     /// @notice Sets the VRF coordinator, subscription and gas lane for every request from now on.
-    /// @dev Only the coordinator set here may answer, so a request already accepted by an earlier
-    /// coordinator is never answered and its key keeps no seed. Keys minted before their fleet's deck
-    /// and keys whose requests were refused are asked for through the new one.
+    /// @dev Only the current coordinator may answer, so a new coordinator is refused while any
+    /// accepted request waits for the current one's answer. Keys minted before their fleet's deck and
+    /// keys whose requests were refused are asked for through the new one.
     function setRandomness(Randomness calldata randomness_) external onlySafe {
+        uint256 waiting = revealsWaiting;
+        if (waiting != 0 && address(randomness_.coordinator) != address(randomness.coordinator)) {
+            revert RevealsWaiting(waiting);
+        }
         _setRandomness(randomness_);
     }
 
@@ -415,7 +461,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     // --- factories ---------------------------------------------------------
 
     /// @notice Registers a new fleet whose manager will be at `manager`.
-    /// @dev Until phase 3 opens only the five founding fleets may be registered, in order, each with
+    /// @dev Until phase 4 opens only the five reserved founding slots may be registered, each with
     /// its deck. Once it opens a fleet is registered without a deck, which the keeper records later,
     /// and sells from that moment.
     /// @return fleetId The new fleet's id.
@@ -427,12 +473,12 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         if (!isFactory[msg.sender]) revert OnlyFactory(msg.sender);
         if (manager == address(0)) revert ZeroAddress();
         if (fleetOfManager[manager] != 0) revert ManagerTaken(manager);
-        fleetId = fleetCount + 1;
+        fleetId = nextFleetId(preset);
         if (fleetId > MAX_FLEETS) revert TooManyFleets();
         bool hasDeck = deckHash != bytes32(0) || deckSize != 0;
         bool open = phase == FINAL_PHASE && block.timestamp >= phaseOpensAt;
         if (!open) {
-            if (fleetId > FOUNDING_FLEETS || preset != foundingPreset(fleetId)) {
+            if (fleetId > FOUNDING_FLEETS || fleetExists(fleetId) || preset != foundingPreset(fleetId)) {
                 revert NotFoundingFleet(fleetId, preset);
             }
             _requireDeck(deckHash, deckSize);
@@ -440,7 +486,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
             revert DeckGivenAtCreation();
         }
 
-        fleetCount = fleetId;
+        if (fleetId > fleetCount) fleetCount = fleetId;
         typeNumber = ++typeCount[preset];
         _fleets[fleetId] = Fleet({
             manager: manager,
@@ -510,8 +556,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     /// @notice Asks the coordinator for a key's random word.
     /// @dev Open to anyone, for a minted key that draws, whose fleet has its deck and whose request
     /// the coordinator has never accepted: it was minted before the deck was recorded, or every
-    /// request for it was refused. Once a request is accepted the key waits for that answer. A refused
-    /// request emits `RevealRequestFailed` and does not revert.
+    /// request for it was refused. Once accepted, the key waits for its answer or expiry and never
+    /// requests again. A refused request emits `RevealRequestFailed` and does not revert.
     function requestReveal(uint256 tokenId) external nonReentrant {
         _requireOwned(tokenId);
         if (revealSeed[tokenId] != bytes32(0)) revert AlreadyRevealed(tokenId);
@@ -522,16 +568,36 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         _requestReveal(tokenId);
     }
 
+    /// @notice Expires a key's unanswered request after 24 hours, releasing its coordinator lock.
+    /// @dev Anyone may call. Final: the key never receives a seed and cannot ask again. The original
+    /// request time stays recorded so expiry cannot bypass the one-accepted-request rule.
+    function expireReveal(uint256 tokenId) external {
+        _requireOwned(tokenId);
+        uint256 requestedAt = revealRequestedAt[tokenId];
+        if (requestedAt == 0 || revealSeed[tokenId] != bytes32(0) || revealExpired[tokenId]) {
+            revert RevealNotWaiting(tokenId);
+        }
+        uint256 expiresAt = requestedAt + REVEAL_TIMEOUT;
+        if (block.timestamp < expiresAt) revert RevealTooEarlyToExpire(tokenId, expiresAt);
+        revealExpired[tokenId] = true;
+        --revealsWaiting;
+        emit RevealExpired(tokenId);
+    }
+
     /// @notice The coordinator's answer to a request.
     /// @dev Only the current coordinator may call, and for it this never reverts. An unknown
-    /// request, an empty answer, or an answer for a key that already has its seed is ignored.
+    /// request, an empty answer, or an answer for a key already seeded or expired is ignored.
+    /// Writing the seed ends the key's wait.
     function rawFulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) external {
         if (msg.sender != address(randomness.coordinator)) revert OnlyCoordinator(msg.sender);
         uint256 tokenId = _requestToken[requestId];
-        if (tokenId == 0 || randomWords.length == 0 || revealSeed[tokenId] != bytes32(0)) return;
+        if (tokenId == 0 || randomWords.length == 0 || revealSeed[tokenId] != bytes32(0) || revealExpired[tokenId]) {
+            return;
+        }
 
         bytes32 seed = keccak256(abi.encode(TRAIT_SEED_TAG, block.chainid, address(this), tokenId, randomWords[0]));
         revealSeed[tokenId] = seed;
+        --revealsWaiting;
         emit KeyRevealed(tokenId, fleetOf(tokenId), keyNumberOf(tokenId), requestId, seed);
         emit MetadataUpdate(tokenId);
     }
@@ -556,6 +622,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         ) {
             _requestToken[requestId] = tokenId;
             revealRequestedAt[tokenId] = uint64(block.timestamp);
+            ++revealsWaiting;
             emit RevealRequested(tokenId, requestId);
         } catch {
             emit RevealRequestFailed(tokenId);
@@ -594,7 +661,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     }
 
     function _requireFleet(uint256 fleetId) private view {
-        if (fleetId == 0 || fleetId > fleetCount) revert UnknownFleet(fleetId);
+        if (!fleetExists(fleetId)) revert UnknownFleet(fleetId);
     }
 
     function _requireDeck(bytes32 deckHash, uint256 deckSize) private pure {
