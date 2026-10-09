@@ -419,11 +419,13 @@ The coordinator, the subscription id and the gas lane are one setting,
 `randomness()`, which the Safe may replace with `setRandomness(randomness)`
 (`OnlySafe`; `CoordinatorMissing` for an address without code). The
 constructor and every change emit `RandomnessSet(coordinator, subscriptionId,
-keyHash)`. Every request from then on goes to the new setting. A request
-already accepted by an earlier coordinator can no longer be answered, since
-only the current coordinator may answer, and its key is never asked for again:
-it keeps no seed. Keys minted before their fleet's deck and keys whose requests
-were refused are asked for through the new setting.
+keyHash)`. Every request from then on goes to the new setting. Only the current
+coordinator may answer, so `revealsWaiting()` counts the keys whose accepted
+request has not yet given them a seed, and while any wait the Safe may change
+the subscription and gas lane but not the coordinator
+(`RevealsWaiting(waiting)`). No key is left without its answer by a change of
+coordinator. Keys minted before their fleet's deck and keys whose requests were
+refused are asked for through the new setting.
 
 The answer arrives through `rawFulfillRandomWords`, which only the current
 coordinator may call (`OnlyCoordinator`). The key's seed is
@@ -473,7 +475,7 @@ beside them.
 
 ### Errors and events
 
-Errors: `ZeroAddress`, `CoordinatorMissing`, `TraitTableHashZero`, `OnlySafe`,
+Errors: `ZeroAddress`, `CoordinatorMissing`, `RevealsWaiting`, `TraitTableHashZero`, `OnlySafe`,
 `OnlyFactory`, `OnlyManager`, `OnlyKeeper`, `NotOwnerOrKeeper`, `NoNextPhase`,
 `OpensAtInvalid`, `FleetsMissing`, `NotFoundingFleet`, `DeckGivenAtCreation`, `TooManyFleets`,
 `ManagerTaken`, `UnknownFleet`, `SalesClosed`, `KeyNumberOutOfRange`,
@@ -1666,8 +1668,8 @@ Nothing below can be fixed after the fact unless it says so.
    lane's cap, and a key whose one request waits unanswered for 24 hours never
    gets a seed (see "Keeping the subscription funded" in
    [../docs/deployment.md](../docs/deployment.md)). The Safe can move the
-   collection to another coordinator, subscription or gas lane later with
-   `setRandomness`.
+   collection to another subscription or gas lane later with `setRandomness`,
+   and to another coordinator once no key waits for its answer.
 6. **Add the collection as a VRF consumer.** Straight after the deployment the
    Safe adds the collection to the subscription; the record step refuses until
    it has. A key minted before that has its draw refused and asks again later.

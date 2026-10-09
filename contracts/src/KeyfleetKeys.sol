@@ -39,7 +39,8 @@ interface IKeyfleetKeyHook {
 /// A key's Chainlink VRF request is sent only once its fleet has a deck, so no seed of a fleet
 /// exists before its deck is fixed, and nobody can choose a deck after seeing the seeds. A key's
 /// seed is written once from the one answer to its one accepted request. The Safe may change the
-/// coordinator, subscription and gas lane, which only the next requests use.
+/// subscription and gas lane, which only the next requests use, and the coordinator only while no
+/// accepted request waits for its answer, so no key is left without one.
 ///
 /// `tokenURI` is one fixed base followed by the token id, and reverts for an id that has not been
 /// minted. Resales carry an ERC-2981 royalty of 2.5% to the Regents Safe. There is no upgrade path,
@@ -149,6 +150,9 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     mapping(uint256 tokenId => bytes32 seed) public revealSeed;
     /// @notice When the coordinator accepted the request for a key, zero if it never has.
     mapping(uint256 tokenId => uint64 requestedAt) public revealRequestedAt;
+    /// @notice Keys whose accepted request has not yet given them a seed. The coordinator cannot be
+    /// changed while any wait.
+    uint256 public revealsWaiting;
 
     mapping(uint256 fleetId => Fleet fleet) private _fleets;
     mapping(uint256 tokenId => Holding holding) private _holdings;
@@ -160,6 +164,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     error ZeroAddress();
     /// @notice The VRF coordinator holds no code.
     error CoordinatorMissing(address coordinator);
+    /// @notice The coordinator cannot change while keys wait for its answer.
+    error RevealsWaiting(uint256 waiting);
     /// @notice No trait table was named.
     error TraitTableHashZero();
     /// @notice Only the Regents Safe may do this.
@@ -391,10 +397,14 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     }
 
     /// @notice Sets the VRF coordinator, subscription and gas lane for every request from now on.
-    /// @dev Only the coordinator set here may answer, so a request already accepted by an earlier
-    /// coordinator is never answered and its key keeps no seed. Keys minted before their fleet's deck
-    /// and keys whose requests were refused are asked for through the new one.
+    /// @dev Only the current coordinator may answer, so a new coordinator is refused while any
+    /// accepted request waits for the current one's answer. Keys minted before their fleet's deck and
+    /// keys whose requests were refused are asked for through the new one.
     function setRandomness(Randomness calldata randomness_) external onlySafe {
+        uint256 waiting = revealsWaiting;
+        if (waiting != 0 && address(randomness_.coordinator) != address(randomness.coordinator)) {
+            revert RevealsWaiting(waiting);
+        }
         _setRandomness(randomness_);
     }
 
@@ -524,7 +534,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
 
     /// @notice The coordinator's answer to a request.
     /// @dev Only the current coordinator may call, and for it this never reverts. An unknown
-    /// request, an empty answer, or an answer for a key that already has its seed is ignored.
+    /// request, an empty answer, or an answer for a key that already has its seed is ignored. Writing
+    /// the seed ends the key's wait.
     function rawFulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) external {
         if (msg.sender != address(randomness.coordinator)) revert OnlyCoordinator(msg.sender);
         uint256 tokenId = _requestToken[requestId];
@@ -532,6 +543,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
 
         bytes32 seed = keccak256(abi.encode(TRAIT_SEED_TAG, block.chainid, address(this), tokenId, randomWords[0]));
         revealSeed[tokenId] = seed;
+        --revealsWaiting;
         emit KeyRevealed(tokenId, fleetOf(tokenId), keyNumberOf(tokenId), requestId, seed);
         emit MetadataUpdate(tokenId);
     }
@@ -556,6 +568,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         ) {
             _requestToken[requestId] = tokenId;
             revealRequestedAt[tokenId] = uint64(block.timestamp);
+            ++revealsWaiting;
             emit RevealRequested(tokenId, requestId);
         } catch {
             emit RevealRequestFailed(tokenId);

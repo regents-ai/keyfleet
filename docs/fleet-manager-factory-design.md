@@ -138,7 +138,7 @@ Every fleet gets a number from the collection when it is created: `1, 2, 3, ...`
 
 ### 3.4 Reveal, `tokenURI` and ERC-4906
 
-- **VRF moves into the collection, once.** One coordinator, subscription and gas lane for every fleet, and one VRF consumer for the Safe to add, instead of one per fleet (a Chainlink v2.5 subscription takes at most 100 consumers; to confirm in B1). The coordinator, subscription and gas lane sit in storage the Safe may change with `setRandomness`, so keys not yet asked for, or whose requests were refused, are asked for through the new one. The request settings (3 confirmations, 100,000 callback gas, native payment) and the never-reverting callback stay as written today. A key has one accepted request and is never asked for again (KF-REVEAL-RULE b, 8 Oct: no retry), and only the current coordinator may answer, so a key whose accepted request is never answered, or went to a coordinator the Safe has since replaced, keeps no seed. The seed stays `keccak256(TAG, chainid, collection, tokenId, word)`.
+- **VRF moves into the collection, once.** One coordinator, subscription and gas lane for every fleet, and one VRF consumer for the Safe to add, instead of one per fleet (a Chainlink v2.5 subscription takes at most 100 consumers; to confirm in B1). The coordinator, subscription and gas lane sit in storage the Safe may change with `setRandomness`, so keys not yet asked for, or whose requests were refused, are asked for through the new one. The request settings (3 confirmations, 100,000 callback gas, native payment) and the never-reverting callback stay as written today. A key has one accepted request and is never asked for again (KF-REVEAL-RULE b, 8 Oct: no retry), and only the current coordinator may answer, so a key whose accepted request is never answered keeps no seed. The Safe cannot replace the coordinator while any key waits for its answer. The seed stays `keccak256(TAG, chainid, collection, tokenId, word)`.
 - **What a draw costs (Sean asked, KF-SOL-23).** Regents' subscription pays every draw, in ETH. The Base coordinator `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634` charges the fulfilment gas plus a 60% premium. Sixteen real fulfilments read on 7 Oct cost between 0.0000017 and 0.0000053 ETH each: about 0.4 to 1.4 US cents with ETH at about 2,574 USD. A Key's draw, with a 100,000-gas callback, sits at the low end: **about half a cent per Key**, so less than "a few cents".
 - **One trait table for every fleet:** `TRAIT_TABLE_HASH` `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, fixed once on the collection (keyfleet main `3172c4a`). The earlier table appears nowhere in contracts, tests or scripts.
 - **`tokenURI(id)` = one fixed base + the id**, and it reverts for an id that has not been minted. The base is fixed forever (Sean, KF-SOL-5).
@@ -235,7 +235,7 @@ Base's gas price read on 7 Oct was 0.006 gwei with ETH at about 2,574 USD, so a 
 | Safe → factory `createFoundingFleet` | Only the Safe creates the five founding fleets, in fixed order | `msg.sender == SAFE`; fleet count < 5; type matches the slot |
 | Anyone → factory `createFleet` | Phase 3 lets anyone create, from its opening | `KEYS.phase() == 3` and `phaseOpensAt` reached; input bounds (section 8) |
 | Safe → collection `advancePhase(opensAt)` | Only the Safe moves phases, one way, naming when the new phase opens | `msg.sender == SAFE`; `opensAt` in the future, at most 30 days ahead, and not before the last phase's |
-| Safe → collection `setRandomness` | Only the Safe moves reveals to another coordinator, subscription or gas lane | `msg.sender == SAFE` |
+| Safe → collection `setRandomness` | Only the Safe moves reveals to another coordinator, subscription or gas lane; never to another coordinator while a key waits for its answer | `msg.sender == SAFE`, `revealsWaiting == 0` for a new coordinator |
 | Safe → collection `setKeeper` | Only the Safe names the keeper | `msg.sender == SAFE` |
 | Keeper → collection `setDeck` | Records an open fleet's deck once, before any of its seeds exist | `msg.sender == keeper`; fleet has no deck |
 | Keeper or key holder → collection `refreshMetadata` | Announces a published permanent card | `msg.sender == keeper` or the key's owner |
@@ -493,7 +493,7 @@ Sean: "The art / traits should only become known after that Keycard is minted."
 
 ### 10.7 Upgradeability
 
-None. Every contract is final when deployed. The Safe may register a newer factory for new fleets (KF-SOL-4 a); existing fleets never change. The swap route, metadata base and royalty are fixed forever. The Safe may move reveals to another VRF coordinator, subscription or gas lane with `setRandomness`.
+None. Every contract is final when deployed. The Safe may register a newer factory for new fleets (KF-SOL-4 a); existing fleets never change. The swap route, metadata base and royalty are fixed forever. The Safe may move reveals to another VRF subscription or gas lane with `setRandomness`, and to another coordinator once no key waits for its answer.
 
 ### 10.8 Invariants to test (Foundry, handler-based)
 

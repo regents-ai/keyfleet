@@ -1971,8 +1971,10 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
     }
 
     /// @dev 10. A fleet's deck is recorded at most once (item 4 holds it to the record), a key of a
-    /// fleet without a deck has no seed and no draw, and every seed came from a draw.
+    /// fleet without a deck has no seed and no draw, every seed came from a draw, and the keys the
+    /// collection counts as waiting are exactly those drawn and not yet seeded.
     function invariant_onlyKeysOfAFleetWithADeckAreDrawn() public view {
+        uint256 waiting;
         for (uint256 id = 1; id <= keys.fleetCount(); ++id) {
             bool hasDeck = handler.recordOf(id).deckHash != bytes32(0);
             uint256 minted = _manager(id).totalMinted();
@@ -1985,8 +1987,10 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
                     assertEq(requestedAt, 0, "a key of a fleet without a deck has no draw");
                 }
                 if (seed != bytes32(0)) assertGt(requestedAt, 0, "every seed came from a draw");
+                if (requestedAt != 0 && seed == bytes32(0)) ++waiting;
             }
         }
+        assertEq(keys.revealsWaiting(), waiting, "the waiting count is the drawn keys without a seed");
     }
 
     /// @dev 11. Every token is where the books say: all USDC sits with known holders, every USDC
