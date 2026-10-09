@@ -337,7 +337,8 @@ Recording puts no key on sale. The collection opens sales in phases, and each
 phase is a Safe transaction the founder signs, written by the phase step in
 [deployment.md](deployment.md):
 
-1. Phase 1 opens only Regents Club gifts, once all five founding fleets exist.
+1. Phase 1 opens only Regents Club gifts, requiring only the Club fleet.
+   Classic and the other founding fleets are created later, at their launch stages.
 2. Phase 2 opens Classic #1 sales.
 3. Phase 3 opens Syndicate #1, Accelerant #1 and Cascade #1 sales together.
 4. Phase 4 lets anyone create a fleet, which sells from the moment it is

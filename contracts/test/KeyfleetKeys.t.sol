@@ -184,7 +184,7 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         }
 
         vm.prank(safe);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 5, 0));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 1, 0));
         keys.advancePhase(_soon());
 
         _createFounding(KeyfleetPresets.Preset.FleetTechClassic);
@@ -192,7 +192,7 @@ contract KeyfleetKeysTest is KeyfleetFixture {
         _createFounding(KeyfleetPresets.Preset.FleetTechAccelerant);
         _createFounding(KeyfleetPresets.Preset.FibonacciCascade);
         vm.prank(safe);
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 5, 4));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 1, 0));
         keys.advancePhase(_soon());
         assertEq(keys.phase(), 0, "a refused step changes nothing");
 

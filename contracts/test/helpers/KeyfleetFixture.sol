@@ -157,7 +157,7 @@ abstract contract KeyfleetFixture is Test {
     /// @dev Creates the next founding fleet as the Safe, with a stand-in deck: one card per key on
     /// the Regents Club, `DECK_SIZE` cards on the others.
     function _createFounding(KeyfleetPresets.Preset preset) internal returns (KeyfleetManager fleet) {
-        uint256 id = keys.fleetCount() + 1;
+        uint256 id = keys.nextFleetId(preset);
         uint256 deckSize = preset == KeyfleetPresets.Preset.RegentsClub ? KeyfleetPresets.CLUB_SUPPLY : DECK_SIZE;
         vm.prank(safe);
         factory.createFoundingFleet(preset, _deckHash(id), deckSize, _profile("Founding fleet"));

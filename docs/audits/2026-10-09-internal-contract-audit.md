@@ -508,3 +508,42 @@ Sean selected the Base Regents Safe
 `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e` as keeper. The Base deployment
 manifest now records that address. The randomness subscription id is still
 `"0"`, awaiting creation/funding and Safe ownership. Nothing was deployed or signed.
+
+### Club-only launch release check — 9 October 2026
+
+Sean authorized preparing the release, deploying only Regents Club, and minting
+all 1,998 Keys in 25 sequential Safe transactions. Deployment wallet:
+`0x9b2C414614aEE294202c1219520955EF3B596031` on Base. The Safe controls the
+system from creation; the deployment wallet has no administrative authority.
+
+Founding IDs are now reserved rather than tied to creation order. Club is
+still fleet 5; Classic remains fleet 1. Phase 1 needs Club alone, phase 2
+needs Club and Classic, and phases 3–4 need all five. The Safe preparation
+script emits only Club at phase 0, Classic at phase 1, and the other three at
+phase 2. Recording skips empty founding slots. Subscription setup and Safe
+ownership are deferred for fixed-deck Keys, but required when a public fleet
+is recorded or a founding fleet has minted beyond its deck. Sean's supplied
+subscription ID replaces the older zero-placeholder notes above.
+
+Independent review found no blocker in sparse registration, phase gates,
+recording or deferred VRF checks. `make check-contracts` passed 581 tests,
+with six optional fork checks skipped; formatting, compilation and bytecode
+limits passed. All four `make check-audit-fork` proofs passed on pinned Base,
+and all four real-dependency Base fork checks passed. These are internal
+checks, not an outside audit; KF-A-03 remains Sean's accepted conversion risk.
+KF-A-04 remains an execution-time risk handled by fresh simulation and claims.
+
+A local fork of Base block 52,392,518 rehearsed the selected wallet's five
+shared-system deployments, only Club creation, phase 1, and all 25 gifts.
+The real Safe contract executed Club creation, opening, 24 batches of 80 and
+one of 78. Every final destination was checked. 1,449 Keys went directly to
+Pass holders; 549 went to claims because two holder contracts reject receipts
+(one holds 548 Passes, the other one). No Pass owner read failed. Mint calls
+through the Safe used at most 13,545,895 gas, below 16,777,216. Club alone
+existed, all paid fleets remained absent, and no reveal was requested.
+
+Local-only proof files are under
+`/Users/sean/Documents/regent/artifacts/keyfleet-club-only-rehearsal/`:
+`result.json`, `destinations.json`, and `safe-execution.json`.
+No live deployment, transaction signature or mainnet transaction is claimed.
+Live batches must be rebuilt and simulated against current ownership.

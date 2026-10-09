@@ -9,6 +9,7 @@ import {IRegentRevenueStaking} from "../src/interfaces/IRegentRevenueStaking.sol
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {IRegentsAutolaunchFactoryV2} from "../src/interfaces/IRegentsAutolaunchFactoryV2.sol";
 import {IVRFCoordinatorV2Plus} from "../src/vendor/chainlink/interfaces/IVRFCoordinatorV2Plus.sol";
+import {MockToken} from "./mocks/MockToken.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 import {KeyfleetManifest} from "../script/KeyfleetManifest.sol";
 import {RecordKeyfleets} from "../script/RecordKeyfleets.s.sol";
@@ -133,6 +134,7 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
     function test_recordRefusesACollectionTheSubscriptionDoesNotListYet() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         KeyfleetFactory deployed = deployScript.deploy(manifest);
+        _drawnFleet(manifest, deployed);
         vm.expectRevert(
             abi.encodeWithSelector(RecordKeyfleets.CollectionNotVrfConsumer.selector, address(deployed.KEYS()))
         );
@@ -258,6 +260,7 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
         KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
         KeyfleetFactory deployed = _deployListed(manifest);
         MockVRFCoordinatorV2Plus coordinator = MockVRFCoordinatorV2Plus(deployScript.BASE_VRF_COORDINATOR());
+        _drawnFleet(manifest, deployed);
         coordinator.openSubscription(subscriptionId, keeper);
 
         vm.expectRevert(abi.encodeWithSelector(RecordKeyfleets.VrfSubscriptionNotOwnedByRegentsSafe.selector, keeper));
@@ -270,8 +273,21 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
     function test_theBaseManifestDeploysFoundsAndRecords() public {
         uint256 subscriptionId = _standInBase();
         KeyfleetManifest.Manifest memory manifest = _committedBaseManifest(subscriptionId);
-        KeyfleetFactory deployed = _deployListed(manifest);
-        _found(manifest, deployed);
+        KeyfleetFactory deployed = deployScript.deploy(manifest);
+        MockVRFCoordinatorV2Plus coordinator = MockVRFCoordinatorV2Plus(deployScript.BASE_VRF_COORDINATOR());
+        coordinator.openSubscription(subscriptionId, keeper);
+        _make(safeSteps.foundingFleetCalls(manifest, deployed), manifest.bindings.safe);
+        _openPhase(manifest, deployed);
+        string memory clubOnly = recorder.record(manifest, _summary(deployed));
+        assertEq(
+            vm.parseJsonKeys(clubOnly, ".fleets").length, 1, "Only Club recorded without VRF consumer or Safe ownership"
+        );
+        _assertFleet(clubOnly, 5, "regentsClub", _managerOf(deployed, 5));
+        _make(safeSteps.foundingFleetCalls(manifest, deployed), manifest.bindings.safe);
+        _openPhase(manifest, deployed);
+        string memory clubAndClassic = recorder.record(manifest, _summary(deployed));
+        assertEq(vm.parseJsonKeys(clubAndClassic, ".fleets").length, 2, "Later Classic fills its own slot");
+        _make(safeSteps.foundingFleetCalls(manifest, deployed), manifest.bindings.safe);
 
         string memory json = recorder.record(manifest, _summary(deployed));
 
@@ -343,6 +359,20 @@ contract RecordKeyfleetsTest is KeyfleetScriptFixture {
             receipts,
             "]}"
         );
+    }
+
+    function _drawnFleet(KeyfleetManifest.Manifest memory manifest, KeyfleetFactory deployed) private {
+        _found(manifest, deployed);
+        while (deployed.KEYS().phase() < deployed.KEYS().FINAL_PHASE()) {
+            _openPhase(manifest, deployed);
+        }
+        MockToken token = MockToken(address(deployed.USDC()));
+        token.mint(creator, 10e6);
+        vm.prank(creator);
+        token.approve(address(deployed), 10e6);
+        KeyfleetManager.Requirements memory anyone;
+        vm.prank(creator);
+        deployed.createFleet(_terms(KeyfleetPresets.Preset.FleetTechClassic, 10e6, anyone));
     }
 
     function _summary(KeyfleetFactory deployed) private pure returns (KeyfleetManifest.BroadcastSummary memory) {

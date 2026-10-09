@@ -34,15 +34,22 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
     function test_foundingStepCreatesEveryFoundingFleetWithTheManifestsDeckAndProfile() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         KeyfleetSafeSteps.SafeCall[] memory calls = safeSteps.foundingFleetCalls(manifest, deployed);
-        assertEq(calls.length, 5, "One call per founding fleet");
-        for (uint256 index = 0; index < 5; ++index) {
-            assertEq(calls[index].name, string.concat("founding-fleet-", vm.toString(index + 1)), "Named");
-            assertEq(calls[index].to, address(deployed), "To the factory");
-        }
-
+        assertEq(calls.length, 1, "Only Club in phase zero");
+        assertEq(calls[0].name, "founding-fleet-5");
+        _make(calls, safe);
+        assertFalse(collection.fleetExists(1));
+        _openPhase(manifest, deployed);
+        assertTrue(collection.salesOpen(5));
+        assertFalse(collection.salesOpen(1));
+        calls = safeSteps.foundingFleetCalls(manifest, deployed);
+        assertEq(calls.length, 1, "Only Classic in phase one");
+        assertEq(calls[0].name, "founding-fleet-1");
+        _make(calls, safe);
+        _openPhase(manifest, deployed);
+        calls = safeSteps.foundingFleetCalls(manifest, deployed);
+        assertEq(calls.length, 3, "Other sold founding fleets in phase two");
         _make(calls, safe);
 
-        assertEq(collection.fleetCount(), 5, "Five fleets");
         for (uint256 fleetId = 1; fleetId <= 5; ++fleetId) {
             KeyfleetManifest.FoundingFleet memory expected = manifest.founding[fleetId - 1];
             KeyfleetKeys.Fleet memory fleet = collection.fleet(fleetId);
@@ -53,9 +60,9 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
             assertEq(profile.name, expected.profile.name, "Name");
             assertEq(profile.description, expected.profile.description, "Description");
             assertEq(profile.imageLink, expected.profile.imageLink, "Image");
-            assertFalse(collection.salesOpen(fleetId), "Sales stay closed");
+            assertEq(collection.salesOpen(fleetId), fleetId == 1 || fleetId == 5, "Only opened phases sell");
         }
-        assertEq(collection.phase(), 0, "No phase moved");
+        assertEq(collection.phase(), 2, "Club then Classic opened");
     }
 
     /// @dev Run again partway, the step names only the founding fleets still missing, and once all
@@ -63,17 +70,21 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
     function test_foundingStepNamesOnlyTheFleetsStillMissing() public {
         KeyfleetManifest.Manifest memory manifest = _manifest();
         KeyfleetSafeSteps.SafeCall[] memory calls = safeSteps.foundingFleetCalls(manifest, deployed);
-        KeyfleetSafeSteps.SafeCall[] memory firstTwo = new KeyfleetSafeSteps.SafeCall[](2);
-        (firstTwo[0], firstTwo[1]) = (calls[0], calls[1]);
-        _make(firstTwo, safe);
-
-        calls = safeSteps.foundingFleetCalls(manifest, deployed);
-        assertEq(calls.length, 3, "Three left");
-        assertEq(calls[0].name, "founding-fleet-3", "Accelerant next");
-        assertEq(calls[1].name, "founding-fleet-4", "Cascade then");
-        assertEq(calls[2].name, "founding-fleet-5", "the Regents Club last");
         _make(calls, safe);
-
+        assertEq(safeSteps.foundingFleetCalls(manifest, deployed).length, 0, "Club already exists");
+        _openPhase(manifest, deployed);
+        _make(safeSteps.foundingFleetCalls(manifest, deployed), safe);
+        assertEq(safeSteps.foundingFleetCalls(manifest, deployed).length, 0, "Classic already exists");
+        _openPhase(manifest, deployed);
+        calls = safeSteps.foundingFleetCalls(manifest, deployed);
+        KeyfleetSafeSteps.SafeCall[] memory first = new KeyfleetSafeSteps.SafeCall[](1);
+        first[0] = calls[0];
+        _make(first, safe);
+        calls = safeSteps.foundingFleetCalls(manifest, deployed);
+        assertEq(calls.length, 2);
+        assertEq(calls[0].name, "founding-fleet-3");
+        assertEq(calls[1].name, "founding-fleet-4");
+        _make(calls, safe);
         assertEq(safeSteps.foundingFleetCalls(manifest, deployed).length, 0, "Nothing left");
     }
 
@@ -95,7 +106,7 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         assertEq(calls[0].name, "phase-1", "Named for the phase it reaches");
         assertEq(calls[0].to, address(collection), "To the collection");
         assertEq(calls[0].data, abi.encodeCall(KeyfleetKeys.advancePhase, (opensAt)), "Opening when it says");
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 5, 0));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.FleetsMissing.selector, 1, 0));
         this.make(calls, safe);
 
         _found(manifest, deployed);
@@ -143,7 +154,7 @@ contract KeyfleetSafeStepsTest is KeyfleetScriptFixture {
         assertEq(vm.parseJsonString(file, ".version"), "1.0", "Version");
         assertEq(vm.parseJsonString(file, ".chainId"), vm.toString(block.chainid), "Chain, as a string");
         assertGt(vm.parseJsonUint(file, ".createdAt"), 0, "Created at");
-        assertEq(vm.parseJsonString(file, ".meta.name"), "Keyfleet founding-fleet-1", "Name");
+        assertEq(vm.parseJsonString(file, ".meta.name"), "Keyfleet founding-fleet-5", "Name");
         assertEq(vm.parseJsonAddress(file, ".meta.createdFromSafeAddress"), safe, "The Safe");
         assertFalse(vm.keyExistsJson(file, ".transactions[1]"), "One transaction");
         assertEq(vm.parseJsonAddress(file, ".transactions[0].to"), call.to, "To");

@@ -35,8 +35,10 @@ any price, supply, split, rate bound, route or royalty.
 **9 October founder update:** KF-A-03's conversion-price risk is accepted; Sean
 requested no fix. Batch receiver/ownership changes (KF-A-04) were acknowledged,
 with the existing probe and claims fallback retained. The Base keeper is the
-Regents Safe. Sean supplied the randomness subscription; its consumer setup and
-transfer to the Safe follow deployment and precede recording. No deployment occurred.
+Regents Safe. Sean supplied the randomness subscription. Club launches alone;
+Classic follows testing, then the other founding fleets. Consumer setup, funding
+and Safe subscription ownership may wait while all minted Keys use fixed founding
+decks. No deployment occurred.
 
 Decided by the founder on 27, 28 and 29 September and 6, 7 and 8 October 2026,
 and what the code on this branch does:
@@ -171,11 +173,12 @@ On hold or not yet done:
   (`0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`, eight
   traits of sixteen values each, every trait's weights adding up to 1,000), the
   five founding fleets' deck fingerprints, the Regents Safe as keeper and Sean's
-  verified Base VRF subscription. Before recording, the subscription must list
-  the collection as consumer and be owned by the Regents Safe.
+  verified Base VRF subscription. Recording may defer consumer setup and Safe
+  ownership while all minted Keys are within fixed founding decks.
 - On Base every deployment refuses any staking contract but REGENT revenue
   staking and any swap route but the pinned one, and the record step refuses a
-  randomness subscription not owned by the Regents Safe.
+  randomness subscription not owned by the Regents Safe once a recorded fleet needs
+  random draws.
 - Lit's own servers (registering the treasury's account, checking its answer to
   a signed request, minting a usage key and running the inbox action) work only
   against a treasury deployed on Base itself, so they are untested until one is.
@@ -272,8 +275,8 @@ stays below 10^19 and fits in 64 bits. Key numbers run from 1 to
 `registerFleet(preset, manager, deckHash, deckSize)` may be called only by a
 factory (`OnlyFactory`). It refuses a zero manager (`ZeroAddress`), an account
 that already manages a fleet (`ManagerTaken`) and a fleet past `MAX_FLEETS`
-(`TooManyFleets`). Before phase 4 it accepts only the five founding fleets, in
-order, each with its deck: fleet 1 Classic, 2 Syndicate, 3 Accelerant, 4
+(`TooManyFleets`). Before phase 4 it accepts only the five reserved founding
+slots, each once with its deck: fleet 1 Classic, 2 Syndicate, 3 Accelerant, 4
 Cascade, 5 Regents Club (`foundingPreset(fleetId)`; `NotFoundingFleet` otherwise, `DeckInvalid`
 for a missing deck). In phase 4 a fleet is registered without a deck
 (`DeckGivenAtCreation` otherwise). It records the manager, the type, the type
@@ -282,7 +285,8 @@ number (`typeCount` per type plus one) and the deck, and emits
 `DeckSet(fleetId, deckHash, deckSize)` when a deck is given. Registry entries
 are written once and never changed or removed. `fleet(fleetId)`,
 `managerOf(fleetId)`, `deckOf(fleetId)`, `fleetCount()`, `typeCount(preset)`
-and `fleetOfManager(manager)` read it; an unknown fleet reverts with
+and `fleetOfManager(manager)` read it. `fleetCount` is the highest registered
+id; `fleetExists` distinguishes absent founding slots. An unknown fleet reverts with
 `UnknownFleet`.
 
 The deploying factory is the first factory (`isFactory`). The Safe may allow
@@ -304,10 +308,10 @@ for `opensAt`, to the second, with nobody acting again.
 | Phase | What it opens at `opensAt` | Refused unless |
 | --- | --- | --- |
 | 0 | Nothing sells. The Safe creates the founding fleets, one per transaction | — |
-| 1 | Only the Regents Club's gifts | fleets 1 to 5 exist (`FleetsMissing(5, registered)`) |
-| 2 | Classic #1's sales | fleets 1 to 5 exist (`FleetsMissing(5, registered)`) |
+| 1 | Only the Regents Club's gifts | Club fleet 5 exists (`FleetsMissing(1, present)`) |
+| 2 | Classic #1's sales | Club 5 and Classic 1 exist (`FleetsMissing(2, present)`) |
 | 3 | Syndicate #1, Accelerant #1 and Cascade #1's sales, together | fleets 1 to 5 exist (`FleetsMissing(5, registered)`) |
-| 4 | Anyone may create a fleet; each sells from the moment it is created | — |
+| 4 | Anyone may create a fleet; each sells from the moment it is created | all five founding fleets exist |
 
 Past phase 4, `advancePhase` reverts with `NoNextPhase`. `salesOpenAt(fleetId)`
 is the time a fleet's sales open: fleet 5's is the `opensAt` of the step
@@ -478,10 +482,11 @@ The site draws traits with this rule in `platform/lib/keyfleet/traits.ex`, and
 `test/KeyfleetTraitDraw.t.sol` pins the same golden results the site's tests pin.
 The table's file format is in [../docs/deployment.md](../docs/deployment.md).
 
-Before deployment the operator creates the VRF subscription, funds it in ETH,
-moves its ownership to the Regents Safe, and writes its id into the manifest.
-After deployment the Safe adds the collection to the subscription as its one
-consumer, and only then does the record step accept it. A key minted before
+The operator writes a known VRF subscription id into the manifest before deployment.
+Funding, consumer setup and Safe ownership may be deferred while all minted Keys
+are dealt from their fixed founding decks. Complete them before minting a Key
+past its founding deck or any public fleet's Key; recording drawn Keys requires
+consumer setup and Safe ownership. A key minted before
 that has its request refused and can ask again once the collection is added.
 The deploy-day checklist is under Deployment scripts.
 The three Chainlink files the collection uses are copied unchanged into
@@ -1582,7 +1587,7 @@ without six decimals, a zero keeper and a zero trait table hash.
   subscription.
 - `script/KeyfleetSafeSteps.s.sol` makes the Safe's calls, named by
   `KEYFLEET_STEP`: `founding-fleets` (one `createFoundingFleet` per founding
-  fleet the collection does not have yet, in order, with the manifest's deck
+  fleet needed for the current stage (Club, then Classic, then the other three), with the manifest's deck
   and profile), `advance-phase` (one `advancePhase`, opening at the Unix time
   in `KEYFLEET_OPENS_AT`, which must still be in the future when the Safe's
   transaction lands) or `club-gifts` (one `give` per 80 Regents Club keys not
@@ -1612,7 +1617,7 @@ without six decimals, a zero keeper and a zero trait table hash.
   Regents Club Pass and the whole route), a fleet whose four contracts are not where the factory
   places them, hold no code or do not point at each other, or a founding fleet
   of another type or deck than the manifest's (`FleetNotBound(fleetId, part)`),
-  a collection the subscription does not list as a consumer
+  a collection needing randomness whose subscription does not list it as a consumer
   (`CollectionNotVrfConsumer`) and, on Base, a subscription the Regents Safe
   does not own (`VrfSubscriptionNotOwnedByRegentsSafe`). It lists every fleet
   in the collection's registry, so it can be rerun at any time to add fleets
@@ -1677,8 +1682,8 @@ Nothing below can be fixed after the fact unless it says so.
    the manifest and that it already serves the right file. It is fixed at
    deployment and nothing can change it.
 5. **VRF subscription id.** Sean's subscription id is set in `vrf.subscriptionId`.
-   Fund it with 0.5 ETH; after deployment, add the collection as consumer and move
-   ownership to the Regents Safe before recording. The
+   Before the first Key that needs randomness, fund it with 0.5 ETH, add the
+   collection as consumer and transfer ownership to the Regents Safe. The
    placeholder `"0"` is refused. The balance is checked by hand: top it up
    back to 0.5 ETH when it is below 0.3 ETH, and never leave it below
    0.25 ETH. One answer can cost up to about 0.001 ETH at the
@@ -1687,9 +1692,9 @@ Nothing below can be fixed after the fact unless it says so.
    [../docs/deployment.md](../docs/deployment.md)). The Safe can move the
    collection to another subscription or gas lane later with `setRandomness`,
    and to another coordinator once no key waits for its answer.
-6. **Add the collection as a VRF consumer.** Straight after the deployment the
-   Safe adds the collection to the subscription; the record step refuses until
-   it has. A key minted before that has its draw refused and asks again later.
+6. **Add the collection as a VRF consumer.** This may wait during fixed-deck
+   minting. Before drawn Keys, add the collection and transfer ownership to the
+   Safe; recording such Keys requires both. A key minted before that has its draw refused and asks again later.
 7. **REGENT staking is unpaused.** The 10% protocol share goes to REGENT revenue
    staking only while staking accepts deposits. While the Safe has it paused,
    every fleet's share waits in its manager, still owed, and sales go on.

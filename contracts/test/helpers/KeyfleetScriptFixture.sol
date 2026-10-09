@@ -88,9 +88,13 @@ abstract contract KeyfleetScriptFixture is KeyfleetFixture {
         }
     }
 
-    /// @dev Creates every founding fleet through the Safe step, as the Safe.
+    /// @dev Creates all founding slots as the Safe for fixtures that exercise the complete system.
     function _found(KeyfleetManifest.Manifest memory manifest, KeyfleetFactory deployed) internal {
-        _make(safeSteps.foundingFleetCalls(manifest, deployed), manifest.bindings.safe);
+        for (uint256 index = 0; index < manifest.founding.length; ++index) {
+            KeyfleetManifest.FoundingFleet memory fleet = manifest.founding[index];
+            vm.prank(manifest.bindings.safe);
+            deployed.createFoundingFleet(fleet.preset, fleet.deckHash, fleet.deckSize, fleet.profile);
+        }
     }
 
     /// @dev Moves the collection one phase on through the Safe's phase step, opening a second from

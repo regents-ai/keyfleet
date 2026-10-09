@@ -21,7 +21,7 @@ import {KeyfleetManifest} from "./KeyfleetManifest.sol";
 /// load, check and sign. Nothing is signed or sent from here. On a local anvil chain the Safe is an
 /// account anvil has unlocked and the calls are sent directly, from the Safe's address.
 ///
-/// Moving to phase 1 opens only the Regents Club's gifts once all five founding fleets exist.
+/// Moving to phase 1 opens only the Regents Club's gifts once its own fleet exists.
 /// Phase 2 opens Classic #1's sales, and phase 3 opens Syndicate, Accelerant and Cascade, at the second
 /// `KEYFLEET_OPENS_AT` names (Unix time, in the future when the Safe's transaction lands), so the
 /// phase step is run only when the founder says when sales open.
@@ -83,21 +83,30 @@ contract KeyfleetSafeSteps is KeyfleetManifest {
         }
     }
 
-    /// @notice The Safe's calls creating every founding fleet the collection does not have yet, in
-    /// founding order, each with the manifest's deck and profile.
+    /// @notice The Safe's calls creating missing founding fleets for the current launch stage, in
+    /// reserved id order within that stage, each with the manifest's deck and profile.
     function foundingFleetCalls(Manifest memory manifest, KeyfleetFactory factory)
         public
         view
         returns (SafeCall[] memory calls)
     {
         _requireManifestFitsChain(manifest);
-        uint256 created = factory.KEYS().fleetCount();
-        uint256 founding = manifest.founding.length;
-        calls = new SafeCall[](created < founding ? founding - created : 0);
-        for (uint256 index = 0; index < calls.length; ++index) {
-            FoundingFleet memory fleet = manifest.founding[created + index];
-            calls[index] = SafeCall({
-                name: string.concat("founding-fleet-", vm.toString(created + index + 1)),
+        KeyfleetKeys keys = factory.KEYS();
+        uint8 phase = keys.phase();
+        if (phase >= 3) return new SafeCall[](0);
+        uint256 first = phase == 0 ? 5 : phase == 1 ? 1 : 2;
+        uint256 last = phase == 2 ? 4 : first;
+        uint256 missing;
+        for (uint256 id = first; id <= last; ++id) {
+            if (!keys.fleetExists(id)) ++missing;
+        }
+        calls = new SafeCall[](missing);
+        uint256 index;
+        for (uint256 id = first; id <= last; ++id) {
+            if (keys.fleetExists(id)) continue;
+            FoundingFleet memory fleet = manifest.founding[id - 1];
+            calls[index++] = SafeCall({
+                name: string.concat("founding-fleet-", vm.toString(id)),
                 to: address(factory),
                 data: abi.encodeCall(
                     KeyfleetFactory.createFoundingFleet, (fleet.preset, fleet.deckHash, fleet.deckSize, fleet.profile)

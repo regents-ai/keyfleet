@@ -16,32 +16,31 @@ open only through a phase step, which is a Safe transaction the founder signs.
 
 The release runs in seven steps, in this order:
 
-1. **Subscription.** Create the Chainlink VRF subscription, fund it and move it
-   to the Regents Safe. Write its id and the keeper's address into the manifest.
-2. **Deploy.** `DeployKeyfleets` deploys the system in five transactions from
-   one account. It writes no file of its own and creates no fleet.
-3. **Consumer.** The Safe adds the collection to the subscription.
-4. **Founding fleets.** `KeyfleetSafeSteps` with the step `founding-fleets`
-   writes one Safe transaction per founding fleet. The founder signs each, in
-   order: Classic #1, Syndicate #1, Accelerant #1, Cascade #1, Regents Club #1.
-5. **Record.** `RecordKeyfleets` reads the system and every fleet back from the
-   chain, checks them against the manifest, and writes the published record,
-   `contracts/deployments/base.deployed.json`.
-6. **Phases.** Only when the founder says when sales open, `KeyfleetSafeSteps`
-   with the step `advance-phase` writes the next phase step for the founder to
-   sign, naming that moment: phase 1 opens only Regents Club gifts,
-   phase 2 opens Classic #1 sales, phase 3 opens Syndicate #1, Accelerant #1
-   and Cascade #1 sales, and phase 4 lets anyone create a fleet.
-7. **Regents Club gifts.** Once phase 1 has opened, `KeyfleetSafeSteps` with
-   the step `club-gifts` writes the Safe transactions that give the 1,998
-   Regents Club keys, 80 per transaction, each to the holder of its Pass, for
-   the founder to sign.
+1. **Configuration.** The keeper Safe and existing subscription id are set.
+   The deployment wallet is `0x9b2C414614aEE294202c1219520955EF3B596031`.
+2. **Deploy.** `DeployKeyfleets` deploys the shared system in five transactions
+   from that wallet. It creates no fleet.
+3. **Randomness setup, deferred.** Consumer setup, funding and Safe ownership
+   can wait while every minted Key is within its fixed founding deck. Complete
+   setup before any Key needs a random draw.
+4. **Club fleet.** In phase 0, `founding-fleets` prepares only Club fleet 5.
+   After Club testing, the same step in phase 1 prepares Classic fleet 1.
+   In phase 2 it prepares missing Syndicate, Accelerant and Cascade fleets.
+5. **Record.** Verify and record only fleets that exist, then load the record
+   into the site. Absent founding slots are retained for later creation.
+6. **Phases.** Phase 1 requires Club and opens only its gifts. Phase 2 requires
+   Club and Classic and opens Classic sales. Phase 3 requires all five and
+   opens the other three; phase 4 permits public fleet creation.
+7. **Club gifts.** Simulate and sign 25 separate sequential Safe transactions:
+   24 batches of 80 and one of 78. Route failed receivers to claims and verify
+   every final destination. Do not create the other four fleets at this launch.
 
 Before step 1, go through the deploy-day checklist in the
 [contracts README](../contracts/README.md#deploy-day-checklist): the keeper,
 the keeper's job list of public buttons (pieces, daily splits and the protocol
 share), the REGENT pool hook's fee that pieces rely on, the collection metadata
-address, the subscription id and the consumer, REGENT staking unpaused, and
+address, the subscription id (consumer setup is deferred for fixed-deck Keys),
+REGENT staking unpaused, and
 factories that can never be removed.
 
 Nothing in steps 1 to 5 puts any key on sale. The site lists the fleets only
@@ -78,9 +77,9 @@ creation code itself.
 
 The factory holds no money and has no administrator. The deploying account
 receives no authority anywhere in the system, so it matters only for paying gas.
-The gas these five transactions use on Base is still to measure on a Base fork;
-the [contracts README](../contracts/README.md#gas) has the figures measured so
-far.
+The five transactions used 22,595,625 gas on a local Base fork at block
+52,392,518 from the selected deployment wallet. Live fees must be rechecked
+before signing; the wallet must send no intervening transaction.
 
 ## What a manifest says
 
@@ -120,8 +119,8 @@ steps 5% per key. The Regents Club is never sold: its 1,998 keys are given.
 founding decks below, profiles named "Classic #1", "Syndicate #1",
 "Accelerant #1", "Cascade #1" and "Regents Club #1" with an empty description
 and image link, the Regents Safe as `keeper`, and Sean's verified Base
-subscription id as a decimal string. The subscription must list the deployed
-collection as consumer and belong to the Safe before the recording step.
+subscription id as a decimal string. The subscription's consumer setup and
+Safe ownership may be deferred while minted Keys use fixed founding decks.
 
 | Founding fleet | `deckHash` | `deckSize` |
 | --- | --- | --- |
@@ -153,9 +152,10 @@ The Base keeper is already set to the Regents Safe by Sean's 9 October decision.
 Sean supplied subscription
 `58953026474889286452657611148401201221788353993662160123850640810329610213433`,
 now written as a decimal string in `base.json`. A read-only Base check confirmed
-it exists and belongs to his wallet. Sean will add the collection as consumer
-and transfer subscription ownership to the Safe after deployment; the Safe must
-accept that transfer before the recording step. Its native ETH balance must be
+it exists and belongs to his wallet. Sean will add the consumer and transfer
+ownership later, before the first Key beyond its founding deck or any public
+fleet Key. The Safe must accept that transfer. Recording checks ownership and
+consumer setup once a recorded Key needs randomness. Its native ETH balance must be
 funded before randomness requests begin. Club cards use the fixed founding deck
 and make no VRF request, but the shared system's deployment still requires a
 valid subscription.
@@ -168,12 +168,12 @@ pays for every fleet's randomness requests in ETH. Setup order:
    [Chainlink's Base app](https://vrf.chain.link/base/new)) and fund it in ETH with
    `fundSubscriptionWithNative(subId)`.
 2. Write the subscription id into `vrf.subscriptionId` in `base.json`, then
-   deploy the collection. Add it as a subscription consumer.
+   deploy the collection. Consumer setup may wait during fixed-deck minting.
 3. Move its ownership to the Regents Safe on Base,
    `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`:
    `requestSubscriptionOwnerTransfer(subId, 0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e)`
    from the creator, then `acceptSubscriptionOwnerTransfer(subId)` from the Safe.
-   Complete the transfer before recording the deployment. The `keeper` is
+   Complete setup before the first random draw; recording drawn Keys requires it. The `keeper` is
    already set to the Regents Safe.
 
 ### Keeping the subscription funded
@@ -278,7 +278,7 @@ The Safe adds the collection to the subscription with
 transaction. The collection's address is `KEYS()` on the factory. A key sold
 before this is still sold; its request is refused, and anyone can ask again
 with `requestReveal(tokenId)` once the collection is added. The record step
-refuses the deployment until the collection is listed.
+requires this setup only once a recorded Key needs randomness.
 
 ## Step 4: the founding fleets
 
@@ -288,7 +288,7 @@ KEYFLEET_MANIFEST=base KEYFLEET_STEP=founding-fleets \
 ```
 
 This sends nothing and needs no signer. It runs one `createFoundingFleet` per
-founding fleet the collection does not have yet, in order, from the Safe's
+missing founding fleet needed for the current phase, from the Safe's
 address against Base's current state, and stops at the first call that would
 revert with the collection's or factory's own error. It then writes each call as
 its own Safe Transaction Builder file:
@@ -300,7 +300,8 @@ its own Safe Transaction Builder file:
 - `deployments/safe/base.founding-fleet-5.json` (Regents Club #1)
 
 The Safe's signers load each file in the Safe's Transaction Builder, check it
-and sign it, one after another in that order: each creation uses about 11.8
+and sign it. Initially only `base.founding-fleet-5.json` is prepared. Classic's
+file follows in phase 1; the other three follow in phase 2. Each creation uses about 11.8
 million gas, so each is its own transaction. Run the step again after some have
 landed and it writes files only for the fleets still missing. Each founding
 fleet is created with its deck and no joining requirements, and its sales stay
@@ -308,8 +309,7 @@ closed.
 
 ## Step 5: record
 
-Once the broadcast has finished, the collection is a consumer and the founding
-fleets exist:
+Once the shared deployment and the intended founding fleets exist:
 
 ```sh
 KEYFLEET_MANIFEST=base \
@@ -338,10 +338,10 @@ fleets created since: it lists every fleet in the collection's registry.
   code or do not point at each other, the collection and the fleet, or a
   founding fleet of another type or deck than the manifest's
   (`FleetNotBound(fleetId, part)`).
-- A collection the subscription does not list as a consumer
+- A collection with drawn Keys that the subscription does not list as a consumer
   (`CollectionNotVrfConsumer`).
-- On Base, a subscription whose owner is not the Regents Safe
-  (`VrfSubscriptionNotOwnedByRegentsSafe`).
+- On Base, when a recorded fleet needs random draws, a subscription whose
+  owner is not the Regents Safe (`VrfSubscriptionNotOwnedByRegentsSafe`).
 
 ### What the record step writes
 
@@ -405,7 +405,8 @@ transaction lands, and what it opens waits for the named moment.
 It checks the step against Base's current state as the Safe and writes one file,
 `deployments/safe/base.phase-1.json`, `base.phase-2.json`,
 `base.phase-3.json` or `base.phase-4.json`, for the founder to sign. Phases 1
-to 3 need all five founding fleets. Phase 1 opens only Regents Club gifts.
+to 3 require only their intended fleets: Club for phase 1, also Classic for
+phase 2, and all five for phase 3. Phase 1 opens only Regents Club gifts.
 Phase 2 opens Classic #1 sales. Phase 3 opens Syndicate #1, Accelerant #1
 and Cascade #1 sales together. Phase 4 lets anyone create a fleet
 from its opening, and each such fleet sells from the moment it is created. There is no step back, and nothing

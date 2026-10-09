@@ -136,7 +136,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     /// @notice The Regents wallet that records decks for fleets anyone creates and asks for card
     /// refreshes.
     address public keeper;
-    /// @notice Fleets registered so far. Fleet ids are `1..fleetCount`.
+    /// @notice Highest registered fleet id. Founding slots may be absent until created.
     uint256 public fleetCount;
     /// @notice Whether an account may register fleets: the factory that deployed this collection,
     /// and any the Safe adds.
@@ -190,7 +190,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     error OpensAtInvalid(uint256 opensAt);
     /// @notice The fleets a phase opens do not all exist yet.
     error FleetsMissing(uint256 needed, uint256 registered);
-    /// @notice Before phase 4 only the founding fleets may be registered, in order, each with its deck.
+    /// @notice Before phase 4 only reserved founding fleets may be registered, each once with its deck.
     error NotFoundingFleet(uint256 fleetId, KeyfleetPresets.Preset preset);
     /// @notice A fleet registered in phase 4 gets its deck from the keeper, not at registration.
     error DeckGivenAtCreation();
@@ -328,6 +328,20 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         revert UnknownFleet(fleetId);
     }
 
+    /// @notice Whether this fleet slot has been registered.
+    function fleetExists(uint256 fleetId) public view returns (bool) {
+        return _fleets[fleetId].manager != address(0);
+    }
+
+    /// @notice Reserved founding id before public creation opens; otherwise the next public id.
+    function nextFleetId(KeyfleetPresets.Preset preset) public view returns (uint256) {
+        if (phase == FINAL_PHASE && block.timestamp >= phaseOpensAt) return fleetCount + 1;
+        for (uint256 id = 1; id <= FOUNDING_FLEETS; ++id) {
+            if (foundingPreset(id) == preset) return id;
+        }
+        revert NotFoundingFleet(0, preset);
+    }
+
     /// @notice Whether a key holds its deck's card of the same number instead of drawing one: keys
     /// 1 to the deck's size of a founding fleet.
     function dealtByNumber(uint256 tokenId) public view returns (bool) {
@@ -381,8 +395,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
 
     // --- the Safe ----------------------------------------------------------
 
-    /// @notice Moves to the next phase, whose sales open at `opensAt`. Phases 1 to 3 need all five
-    /// founding fleets. Phase 1 opens only the Regents Club; Classic #1 waits for phase 2.
+    /// @notice Moves to the next phase, requiring only the fleets that phase opens.
+    /// Phase 1 needs Club; phase 2 also needs Classic; phase 3 needs every founding fleet.
     /// @param opensAt When the phase opens: in the future, at most `MAX_OPENING_LEAD` from now, and
     /// not before the phase it follows.
     function advancePhase(uint64 opensAt) external onlySafe {
@@ -392,7 +406,16 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
             revert OpensAtInvalid(opensAt);
         }
         uint8 next = current + 1;
-        if (next < FINAL_PHASE && fleetCount < FOUNDING_FLEETS) revert FleetsMissing(FOUNDING_FLEETS, fleetCount);
+        uint256 required = next == 1 ? 1 : next == 2 ? 2 : FOUNDING_FLEETS;
+        uint256 present;
+        if (fleetExists(5)) ++present;
+        if (next >= 2 && fleetExists(1)) ++present;
+        if (next >= 3) {
+            for (uint256 id = 2; id <= 4; ++id) {
+                if (fleetExists(id)) ++present;
+            }
+        }
+        if (present < required) revert FleetsMissing(required, present);
         phase = next;
         phaseOpensAt = opensAt;
         if (next == 1) {
@@ -438,7 +461,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     // --- factories ---------------------------------------------------------
 
     /// @notice Registers a new fleet whose manager will be at `manager`.
-    /// @dev Until phase 4 opens only the five founding fleets may be registered, in order, each with
+    /// @dev Until phase 4 opens only the five reserved founding slots may be registered, each with
     /// its deck. Once it opens a fleet is registered without a deck, which the keeper records later,
     /// and sells from that moment.
     /// @return fleetId The new fleet's id.
@@ -450,12 +473,12 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         if (!isFactory[msg.sender]) revert OnlyFactory(msg.sender);
         if (manager == address(0)) revert ZeroAddress();
         if (fleetOfManager[manager] != 0) revert ManagerTaken(manager);
-        fleetId = fleetCount + 1;
+        fleetId = nextFleetId(preset);
         if (fleetId > MAX_FLEETS) revert TooManyFleets();
         bool hasDeck = deckHash != bytes32(0) || deckSize != 0;
         bool open = phase == FINAL_PHASE && block.timestamp >= phaseOpensAt;
         if (!open) {
-            if (fleetId > FOUNDING_FLEETS || preset != foundingPreset(fleetId)) {
+            if (fleetId > FOUNDING_FLEETS || fleetExists(fleetId) || preset != foundingPreset(fleetId)) {
                 revert NotFoundingFleet(fleetId, preset);
             }
             _requireDeck(deckHash, deckSize);
@@ -463,7 +486,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
             revert DeckGivenAtCreation();
         }
 
-        fleetCount = fleetId;
+        if (fleetId > fleetCount) fleetCount = fleetId;
         typeNumber = ++typeCount[preset];
         _fleets[fleetId] = Fleet({
             manager: manager,
@@ -638,7 +661,7 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     }
 
     function _requireFleet(uint256 fleetId) private view {
-        if (fleetId == 0 || fleetId > fleetCount) revert UnknownFleet(fleetId);
+        if (!fleetExists(fleetId)) revert UnknownFleet(fleetId);
     }
 
     function _requireDeck(bytes32 deckHash, uint256 deckSize) private pure {
