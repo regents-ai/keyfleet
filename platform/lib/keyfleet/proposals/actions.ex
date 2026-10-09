@@ -7,7 +7,7 @@ defmodule Keyfleet.Proposals.Actions do
 
   Every call but a launch is made to the fleet's own treasury or vote
   contract: paying, advancing, the daily split's rate, approving or revoking
-  a hash the treasury will answer as its signature, and restricting a key's
+  a Lit request the treasury will answer as its signature, and restricting a key's
   edits, which names the Key by its id in the Key collection. A launch calls Autolaunch v2's factory and names the fleet's
   treasury as the launch's treasury. A decision makes no call at all.
   """
@@ -18,8 +18,8 @@ defmodule Keyfleet.Proposals.Actions do
   @pay "pay(address,address,uint32)"
   @advance "advance(uint256,address,address,uint32,bytes32)"
   @rate "setDailySplitBps(uint256)"
-  @approve_hash "approveSignatureHash(bytes32)"
-  @revoke_hash "revokeSignatureHash(bytes32)"
+  @approve_hash "approveLitRequest(bytes32)"
+  @revoke_hash "revokeLitRequest(bytes32)"
   @voted_split "runVotedSplit()"
   @admit_ousd "admitOusd(address)"
   @edits "setEditsRestricted(uint256,bool)"
@@ -47,7 +47,8 @@ defmodule Keyfleet.Proposals.Actions do
       share, purpose}` from the treasury, `share` in parts per million of
       the treasury's balance of `asset` when the proposal is carried out;
     * `{:rate, bps}`, the daily split's rate;
-    * `{:signature, :approve | :revoke, hash}`;
+    * `{:signature, :approve | :revoke, hash}`, `hash` a Lit request's EIP-712
+      struct hash, which the treasury signs under Lit's own domain;
     * `{:edits, token_id, restricted?}`, `token_id` the fleet's Key number;
     * `{:launch, %{name:, symbol:, description:, website:, image:}}`.
   """

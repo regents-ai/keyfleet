@@ -18,8 +18,8 @@ defmodule Keyfleet.Chain.MoneyLog do
   asset (`:split_allocated`, `:split_skipped`, `:split_transfer_failed`); a
   new split rate (`:daily_split_rate_set`); OUSD admitted
   (`:ousd_admitted`); the fleet's launch token bound (`:launch_token_bound`);
-  and a hash the treasury signs approved or revoked (`:signature_approved`,
-  `:signature_revoked`).
+  and a Lit request the treasury signs approved or revoked
+  (`:signature_approved`, `:signature_revoked`), by its struct hash.
 
   From its reward ledger (`rewards_topics/0`): a key's rewards settled to its
   holder (`:settled`) and credit paid out (`:claimed`).
@@ -81,8 +81,8 @@ defmodule Keyfleet.Chain.MoneyLog do
       "LaunchTokenBound(uint256,address,uint256)" =>
         {:launch_token_bound, [launch_id: {:uint, 256}, asset: :address],
          [threshold: {:uint, 256}]},
-      "SignatureHashApproved(bytes32)" => {:signature_approved, [signed_hash: :bytes32], []},
-      "SignatureHashRevoked(bytes32)" => {:signature_revoked, [signed_hash: :bytes32], []}
+      "LitRequestApproved(bytes32)" => {:signature_approved, [signed_hash: :bytes32], []},
+      "LitRequestRevoked(bytes32)" => {:signature_revoked, [signed_hash: :bytes32], []}
     },
     rewards: %{
       "Settled(uint256,address,address,uint256)" =>

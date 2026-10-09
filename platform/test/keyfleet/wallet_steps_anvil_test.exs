@@ -240,11 +240,12 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       approved!(url, %{"kind" => "edits", "target" => "2", "restricted" => "true"})
       assert uint!(url, lab.votes, "editsRestricted(uint256)", [id(2)]) == 1
 
-      hash = "0x" <> String.duplicate("ab", 32)
-      approved!(url, %{"kind" => "signature", "signature" => "approve", "hash" => hash})
-      assert uint!(url, lab.treasury, "approvedHash(bytes32)", [hash]) == 1
-      approved!(url, %{"kind" => "signature", "signature" => "revoke", "hash" => hash})
-      assert uint!(url, lab.treasury, "approvedHash(bytes32)", [hash]) == 0
+      request = "0x" <> String.duplicate("ab", 32)
+      signed = lit_digest!(url, lab.treasury, request)
+      approved!(url, %{"kind" => "signature", "signature" => "approve", "hash" => request})
+      assert uint!(url, lab.treasury, "approvedHash(bytes32)", [signed]) == 1
+      approved!(url, %{"kind" => "signature", "signature" => "revoke", "hash" => request})
+      assert uint!(url, lab.treasury, "approvedHash(bytes32)", [signed]) == 0
     end
 
     test "an advance goes out, and comes back in part from whoever presses, approved first",
@@ -738,6 +739,19 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   defp uint!(url, to, signature, arguments \\ []) do
     "0x" <> hex = view!(url, to, signature, arguments)
     String.to_integer(hex, 16)
+  end
+
+  # The digest the treasury signs for a Lit request: its struct hash under Lit's domain.
+  defp lit_digest!(url, treasury, "0x" <> request) do
+    "0x" <> domain = view!(url, treasury, "LIT_DOMAIN_SEPARATOR()", [])
+
+    digest =
+      ExKeccak.hash_256(
+        <<0x19, 0x01>> <>
+          Base.decode16!(domain, case: :mixed) <> Base.decode16!(request, case: :mixed)
+      )
+
+    "0x" <> Base.encode16(digest, case: :lower)
   end
 
   defp address!(url, to, signature, arguments \\ []) do

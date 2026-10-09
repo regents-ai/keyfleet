@@ -443,13 +443,17 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     }
 
     /// @notice Hands the shared REGENT buyer the next piece of the booked USDC: at most `limit`,
-    /// approved to the buyer exactly, with the treasury as the REGENT's recipient.
+    /// or the whole booking when `limit` would leave less than `MIN_PIECE_USDC`, approved to the
+    /// buyer exactly, with the treasury as the REGENT's recipient.
     /// @dev Only the buyer calls this, from `convert`, with a limit of at most `PIECE_USDC`, and
-    /// then pulls exactly `amount`.
-    /// @param limit The most USDC the piece may be.
+    /// then pulls exactly `amount`. Every booking adds at least 1 USDC, so what stays booked is
+    /// always nothing or at least one minimum piece: a piece too small to buy anything never
+    /// reaches the front of the queue.
+    /// @param limit The most USDC the piece may be, unless the rest of the booking joins it.
     function takePiece(uint256 limit) external nonReentrant returns (uint256 amount, address recipient) {
         if (msg.sender != address(REGENT_BUYER)) revert OnlyRegentBuyer();
         amount = Math.min(pendingConversion, limit);
+        if (pendingConversion - amount < REGENT_BUYER.MIN_PIECE_USDC()) amount = pendingConversion;
         pendingConversion -= amount;
         USDC.forceApprove(address(REGENT_BUYER), amount);
         recipient = address(TREASURY);

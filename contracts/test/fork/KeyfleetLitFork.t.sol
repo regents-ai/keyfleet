@@ -116,7 +116,7 @@ contract KeyfleetLitForkTest is KeyfleetForkFixture {
     }
 
     /// @dev The treasury answers Lit's `CreateWallet` request for itself once a proposal approves
-    /// its digest, on Base's chain id. Lit's server takes it only within 300 seconds of `issuedAt`,
+    /// the request, on Base's chain id. Lit's server takes it only within 300 seconds of `issuedAt`,
     /// once, so a real proposal sets `issuedAt` to when it will be carried out.
     function test_theTreasuryAnswersAnApprovedCreateWalletRequest() public {
         _execute(classic, _setUpAccount());
@@ -126,7 +126,15 @@ contract KeyfleetLitForkTest is KeyfleetForkFixture {
 
         _execute(
             classic,
-            _one(KeyfleetTreasury.Call(address(treasury), 0, abi.encodeCall(treasury.approveSignatureHash, (digest))))
+            _one(
+                KeyfleetTreasury.Call(
+                    address(treasury),
+                    0,
+                    abi.encodeCall(
+                        treasury.approveLitRequest, (LitAdminCalls.createWalletStructHash(address(treasury), issuedAt))
+                    )
+                )
+            )
         );
         assertEq(treasury.isValidSignature(digest, ""), IERC1271.isValidSignature.selector);
         assertTrue(SignatureChecker.isValidERC1271SignatureNow(address(treasury), digest, ""));

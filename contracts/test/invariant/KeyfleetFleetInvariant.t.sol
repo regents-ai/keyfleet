@@ -136,10 +136,15 @@ contract FleetHandler is Test {
         regentBuyer.convert(maxUsdc);
         uint256 piece = pending - f.pendingConversion();
         uint256 ask = Math.max(Math.min(maxUsdc, regentBuyer.PIECE_USDC()), regentBuyer.MIN_PIECE_USDC());
-        if (piece != Math.min(pending, ask)) {
+        uint256 expected = Math.min(pending, ask);
+        if (pending - expected < regentBuyer.MIN_PIECE_USDC()) expected = pending;
+        if (piece != expected) {
             _breach(
-                "a piece was other than the smaller of its booking and the ask held between 1 USDC and a full piece"
+                "a piece was other than the smaller of its booking and the ask held between 1 USDC and a full piece, with any rest under 1 USDC"
             );
+        }
+        if (f.pendingConversion() != 0 && f.pendingConversion() < regentBuyer.MIN_PIECE_USDC()) {
+            _breach("a piece left less than 1 USDC booked");
         }
         if (regentBuyer.nextPieceAt() != block.timestamp + Math.ceilDiv(15 minutes * piece, FULL_PIECE)) {
             _breach("the next piece's wait is out of proportion");

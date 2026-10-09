@@ -332,21 +332,20 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         assertEq(fleet.pendingConversion(), 898e6, "zero asks for the minimum too");
     }
 
-    /// @dev Invariant: a fleet with less than the minimum left converts all of it, waiting in
-    /// proportion rounded up to at least a second, so two pieces never run in one block.
-    function test_ARemainderUnderTheMinimumConvertsWhole() public {
+    /// @dev Invariant: a piece that would leave the fleet less than the minimum booked takes the
+    /// rest with it, so no booking is ever left too small to buy anything (audit KF-A-01).
+    function test_APieceThatWouldLeaveUnderTheMinimumTakesTheRest() public {
         KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 1000e6);
-        regentBuyer.convert(900e6 - 5e5 - 3 * FULL_PIECE);
         for (uint256 i; i < 3; ++i) {
-            vm.warp(regentBuyer.nextPieceAt());
+            if (i != 0) vm.warp(regentBuyer.nextPieceAt());
             regentBuyer.convert(FULL_PIECE);
         }
-        assertEq(fleet.pendingConversion(), 5e5, "half a USDC left");
+        assertEq(fleet.pendingConversion(), 150e6);
 
         vm.warp(regentBuyer.nextPieceAt());
-        regentBuyer.convert(1);
-        assertEq(fleet.pendingConversion(), 0, "the whole remainder");
-        assertEq(regentBuyer.nextPieceAt(), block.timestamp + 2, "1.8 seconds, rounded up");
+        regentBuyer.convert(150e6 - 1);
+        assertEq(fleet.pendingConversion(), 0, "not one atomic unit left behind");
+        assertEq(regentBuyer.nextPieceAt(), block.timestamp + 540, "150 USDC waits 9 minutes");
         assertEq(regentBuyer.queueLength(), 0, "and the fleet leaves the queue");
     }
 

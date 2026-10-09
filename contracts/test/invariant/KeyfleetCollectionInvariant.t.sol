@@ -1020,6 +1020,7 @@ contract CollectionHandler is Test {
             pending = manager.pendingConversion();
             piece =
                 Math.min(pending, Math.max(Math.min(maxUsdc, regentBuyer.PIECE_USDC()), regentBuyer.MIN_PIECE_USDC()));
+            if (pending - piece < regentBuyer.MIN_PIECE_USDC()) piece = pending;
             treasuryRegent = regent.balanceOf(address(manager.TREASURY()));
         }
         vm.prank(_stranger(callerSeed, 0));
@@ -1341,7 +1342,7 @@ contract CollectionHandler is Test {
         } else if (a.pick == 36) {
             bytes memory data = a.caller == address(this)
                 ? abi.encodeCall(KeyfleetTreasury.admitOusd, (weth))
-                : abi.encodeCall(KeyfleetTreasury.approveSignatureHash, (keccak256("order")));
+                : abi.encodeCall(KeyfleetTreasury.approveLitRequest, (keccak256("order")));
             _attempt(a, t, data, onlySelf);
         }
     }

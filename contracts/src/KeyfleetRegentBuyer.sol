@@ -18,7 +18,8 @@ import {IUniswapV4PoolManager, IUnlockCallback, V4PoolKey, V4SwapParams} from ".
 /// part as `pendingConversion` and joins this contract's queue of fleets waiting for REGENT. Anyone
 /// may call `convert(maxUsdc)`, which turns one piece of the first queued fleet's booked USDC into
 /// REGENT: at most `PIECE_USDC` (250 USDC), and less when the caller names less, but never under
-/// `MIN_PIECE_USDC` (1 USDC) unless that is all the fleet has left. A piece holds the
+/// `MIN_PIECE_USDC` (1 USDC), and never leaving the fleet less than that booked: a piece that would
+/// takes the rest with it, so it can reach `PIECE_USDC + MIN_PIECE_USDC - 1`. A piece holds the
 /// next one back for its share of `PIECE_INTERVAL`, 15 minutes for a full piece and in proportion
 /// for a smaller one, rounded up to the second, so across every fleet at most 250 USDC turns into
 /// REGENT every 15 minutes and never two pieces in one block. A fleet with USDC still booked goes to
@@ -219,7 +220,8 @@ contract KeyfleetRegentBuyer is IUniswapV3SwapCallback, IUnlockCallback, Reentra
     /// at the market price. Anyone may call it, and may name a smaller piece, for instance when a
     /// full one would move the price more than 1%.
     /// @dev Only from `nextPieceAt`. The fleet's manager hands over the least of its booking and
-    /// `maxUsdc` held between `MIN_PIECE_USDC` and `PIECE_USDC`, and approves exactly that; the
+    /// `maxUsdc` held between `MIN_PIECE_USDC` and `PIECE_USDC`, or its whole booking when that
+    /// would leave less than `MIN_PIECE_USDC`, and approves exactly that; the
     /// piece then holds the next one back for `PIECE_INTERVAL` times its share of `PIECE_USDC`,
     /// rounded up to the second, which also keeps two pieces out of one block. The fleet goes to the back of the queue if it still has
     /// USDC booked. Locked, so the REGENT pool's hook cannot start a second piece inside the first.

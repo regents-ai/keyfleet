@@ -212,7 +212,7 @@ contract KeyfleetVotesTopicsTest is Test {
         assertEq(KeyfleetRewards.Settled.selector, 0xbfed4c9aef0cc82058a0d9ecf93fff780a20d63bb650b7fcde95bf639097b402);
     }
 
-    /// @dev The fleet's launch token bound to its treasury, and the signature hashes a proposal
+    /// @dev The fleet's launch token bound to its treasury, and the Lit requests a proposal
     /// approves or revokes.
     function test_launchAndSignatureTopics() public pure {
         assertEq(
@@ -220,12 +220,12 @@ contract KeyfleetVotesTopicsTest is Test {
             0x8d7b7447fbb1198714566de25638e562cbbad2f5d24d09970b1793414994acf4
         );
         assertEq(
-            KeyfleetTreasury.SignatureHashApproved.selector,
-            0x78cba52b865a35eb982d79c8f8c7226f18a37db81001cc4edeb11a495ea17b81
+            KeyfleetTreasury.LitRequestApproved.selector,
+            0xc712963b0ead96ec164811f3a9a9c00f62ab2baa2199c7213d26b6d391e2db8d
         );
         assertEq(
-            KeyfleetTreasury.SignatureHashRevoked.selector,
-            0x7e49e1e3d94a832d547af8b63cf8178a42412db0ec293cde6d88e34df5ce80f8
+            KeyfleetTreasury.LitRequestRevoked.selector,
+            0xa65357a6f222686e1bbced327674cb6435e5a419bcfe4eb6341ad9eef78094c3
         );
     }
 }

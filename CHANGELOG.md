@@ -924,3 +924,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   deployment again (new column on fleets; no fleet is recorded yet).
 - Before any deploy, the contracts now go through the internal audit Sean chose
   on 9 Oct in place of an outside one.
+
+## 2026-10-09 — Two contract fixes from the internal audit
+
+- The shared REGENT buyer can no longer be stopped for every fleet by a
+  leftover too small to buy anything (audit KF-A-01, critical). A piece that
+  would leave a fleet less than 1 USDC booked takes the rest with it, so a
+  fleet's booking is always nothing or at least 1 USDC.
+- A proposal can now only approve a Lit request for the treasury to answer as
+  its signature, never a bare hash (audit KF-A-02). The treasury puts the
+  request under Lit's own signing domain, so no vote can make it sign a USDC
+  transfer or a permit. The calls are `approveLitRequest` and
+  `revokeLitRequest`, and the logs `LitRequestApproved` and
+  `LitRequestRevoked`; the site reads the new names.

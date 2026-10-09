@@ -834,7 +834,7 @@ does not name exactly WETH and REGENT (`RouteInvalid`). It records
 | Constant | Value |
 | --- | --- |
 | `PIECE_USDC` | 250 USDC (250,000,000), the most one piece turns into REGENT |
-| `MIN_PIECE_USDC` | 1 USDC (1,000,000), the least one piece turns into REGENT unless the fleet has less left |
+| `MIN_PIECE_USDC` | 1 USDC (1,000,000), the least one piece turns into REGENT, and the least a piece may leave booked |
 | `PIECE_INTERVAL` | 15 minutes, the wait after a full piece, across every fleet; a smaller piece waits in proportion |
 | `MAX_PRICE_MOVE_BPS` | 100, so a piece may move the route's price by at most 1% |
 
@@ -850,7 +850,12 @@ empty queue (`NothingQueued`). It takes the fleet at the front of the queue,
 asks that manager for a piece of `maxUsdc` held between `MIN_PIECE_USDC`
 (1 USDC) and `PIECE_USDC` (`takePiece`), which the manager cuts to what it has
 left, swaps it and returns the
-REGENT the treasury received. A fleet that still has USDC booked afterwards goes
+REGENT the treasury received. A piece that would leave the fleet less than
+1 USDC booked takes the rest too, so a piece can be up to 250.999999 USDC and
+the booking is always nothing or at least 1 USDC. Every sale and every
+completed Cascade level books at least 1 USDC, so a piece too small to buy any
+WETH (one that would round to nothing in the pool) never reaches the front of
+the queue and stops it. A fleet that still has USDC booked afterwards goes
 to the back of the queue. The keeper asks for `250000000`; anyone may ask for
 less, for example when a full piece would fail the 1% rule.
 
@@ -1172,10 +1177,15 @@ The treasury answers ERC-1271's `isValidSignature(hash, signature)` with the
 magic value `0x1626ba7e` exactly when `approvedHash(hash)` is true, and with
 `0xffffffff` otherwise. The signature bytes are ignored: the treasury has no key,
 and nothing is signed for it unless a proposal said so.
-`approveSignatureHash(hash)` and `revokeSignatureHash(hash)` accept only the
-treasury itself as caller (`OnlySelf`), so only a passed proposal's call sets or
-clears a hash, and they emit `SignatureHashApproved(hash)` and
-`SignatureHashRevoked(hash)`.
+`approveLitRequest(structHash)` and `revokeLitRequest(structHash)` accept only
+the treasury itself as caller (`OnlySelf`), so only a passed proposal's call sets
+or clears one. Each takes a Lit request's EIP-712 struct hash and sets or clears
+its digest under Lit's own domain, `LIT_DOMAIN_SEPARATOR` (name
+`Lit ChainSecured`, version `1`, this chain's id, no verifying contract), and
+they emit `LitRequestApproved(structHash)` and `LitRequestRevoked(structHash)`.
+So an approval is only ever a Lit request: no proposal can make the treasury
+sign a token transfer, a permit or a message for any other verifier, whatever
+hash it names (audit KF-A-02, 9 Oct).
 
 This is how the fleet owns its Lit account. Lit's account contract on Base,
 `0xaaaaa9120fe271f653cfdb6bf400db93d2dea7aa` (named by Lit's node
