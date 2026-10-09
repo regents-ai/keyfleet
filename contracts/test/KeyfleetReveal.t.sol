@@ -711,7 +711,8 @@ contract KeyfleetRevealTest is RevealFixture {
     }
 
     /// @dev Invariant: only an accepted request makes a key wait, and only its seed ends the wait.
-    /// A refused request and an ignored answer leave the count as it was.
+    /// A refused request and an ignored answer leave the count as it was; expiry is the only other
+    /// way to end an accepted request's wait.
     function test_onlyAnAcceptedRequestMakesAKeyWait() public {
         KeyfleetManager fleet = _drawing();
         vrf.setRevertAll(true);
@@ -732,6 +733,73 @@ contract KeyfleetRevealTest is RevealFixture {
         vm.prank(address(vrf));
         keys.rawFulfillRandomWords(requestId, _words(9));
         assertEq(keys.revealsWaiting(), 0, "a second answer changes nothing");
+    }
+
+    /// @dev Invariant: expiry is permissionless at exactly 24 hours, never earlier; it releases only
+    /// that request's lock, never allows a retry, and a late answer never writes a seed or counts twice.
+    function test_anyoneExpiresAnUnansweredRequestAfterTwentyFourHoursWithoutRetry() public {
+        KeyfleetManager fleet = _drawing();
+        uint256 expired = _buyKey(fleet);
+        uint256 expiredRequest = _lastRequestId();
+        uint256 waiting = _buyKey(fleet);
+        uint256 waitingRequest = _lastRequestId();
+        uint256 requestedAt = keys.revealRequestedAt(expired);
+        uint256 expiresAt = requestedAt + 24 hours;
+        assertEq(keys.REVEAL_TIMEOUT(), 24 hours);
+
+        vm.warp(expiresAt - 1);
+        vm.prank(address(0xBAD));
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealTooEarlyToExpire.selector, expired, expiresAt));
+        keys.expireReveal(expired);
+        assertEq(keys.revealsWaiting(), 2, "an early attempt changes nothing");
+
+        vm.warp(expiresAt);
+        vm.expectEmit(true, false, false, false, address(keys));
+        emit KeyfleetKeys.RevealExpired(expired);
+        vm.prank(address(0xBAD));
+        keys.expireReveal(expired);
+        assertTrue(keys.revealExpired(expired), "the request is permanently expired");
+        assertEq(keys.revealRequestedAt(expired), requestedAt, "the accepted request remains recorded");
+        assertEq(keys.revealsWaiting(), 1, "only the expired request stops waiting");
+
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealNotWaiting.selector, expired));
+        keys.expireReveal(expired);
+        vm.expectRevert(_alreadyRequested(expired));
+        keys.requestReveal(expired);
+
+        vrf.fulfill(expiredRequest, _words(7));
+        assertTrue(vrf.lastCallbackSuccess(), "an expired answer is ignored without reverting");
+        assertEq(keys.revealSeed(expired), bytes32(0), "the expired key never receives a seed");
+        assertEq(keys.revealsWaiting(), 1, "a late answer does not end another key's wait");
+
+        (, KeyfleetKeys.Randomness memory moved) = _nextCoordinator();
+        vm.prank(safe);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealsWaiting.selector, 1));
+        keys.setRandomness(moved);
+        vrf.fulfill(waitingRequest, _words(8));
+        assertEq(keys.revealsWaiting(), 0, "the other answer ends its own wait");
+        vm.prank(safe);
+        keys.setRandomness(moved);
+    }
+
+    /// @dev Invariant: expiry cannot touch a nonexistent key, a never-accepted request, or a seed.
+    function test_expiryRefusesKeysWithoutAnUnansweredAcceptedRequest() public {
+        KeyfleetManager fleet = _drawing();
+        uint256 notRequested = _key(fleet, 1);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealNotWaiting.selector, notRequested));
+        keys.expireReveal(notRequested);
+        uint256 unminted = _key(fleet, 2);
+        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, unminted));
+        keys.expireReveal(unminted);
+
+        uint256 seeded = _buyKey(fleet);
+        vrf.fulfill(_lastRequestId(), _words(9));
+        vm.warp(block.timestamp + 24 hours);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealNotWaiting.selector, seeded));
+        keys.expireReveal(seeded);
+        assertEq(keys.revealSeed(seeded), _seed(seeded, 9), "the seed stays fixed");
+        assertFalse(keys.revealExpired(seeded), "a seeded request cannot expire");
+        assertEq(keys.revealsWaiting(), 0);
     }
 
     /// @dev A second coordinator with its own subscription that lists the collection, and the

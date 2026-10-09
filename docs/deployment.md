@@ -176,6 +176,12 @@ balance cannot cover waits up to 24 hours and then expires. Each key gets one
 accepted request and never another, so a key whose request expires never gets
 its card or traits, and nothing can give it one later.
 
+After an accepted request has waited 24 hours, anyone may call
+`expireReveal(tokenId)` on the collection. That permanently leaves the Key
+without a seed, refuses late answers and releases that request's lock on replacing
+the coordinator. It never permits a second request. Expiry requires this call;
+time passing alone does not release the lock.
+
 - **Fund it with 0.5 ETH before the first sale.** That covers 500 keys waiting
   at once at the cap, and about 100,000 answers at today's prices.
 - **Never let it fall below 0.25 ETH**, enough for 250 keys waiting at once at

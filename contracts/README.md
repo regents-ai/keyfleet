@@ -415,16 +415,24 @@ answer takes, one dealt by number (`DealtByNumber(tokenId)`) and one whose fleet
 has no deck (`DeckNotSet`). A key has at most
 one accepted request, so its seed can come from only one answer.
 
+`expireReveal(tokenId)` lets anyone permanently expire an unanswered accepted
+request once `revealRequestedAt + REVEAL_TIMEOUT` (24 hours) is reached. It emits
+`RevealExpired(tokenId)` and sets `revealExpired(tokenId)`. The Key stays without
+a seed, late answers are ignored, and its original accepted request remains
+recorded so it can never ask again. Expiry is explicit, not automatic. A call
+before the deadline is refused (`RevealTooEarlyToExpire`); a never-requested,
+already-seeded or already-expired Key is refused (`RevealNotWaiting`).
+
 The coordinator, the subscription id and the gas lane are one setting,
 `randomness()`, which the Safe may replace with `setRandomness(randomness)`
 (`OnlySafe`; `CoordinatorMissing` for an address without code). The
 constructor and every change emit `RandomnessSet(coordinator, subscriptionId,
 keyHash)`. Every request from then on goes to the new setting. Only the current
 coordinator may answer, so `revealsWaiting()` counts the keys whose accepted
-request has not yet given them a seed, and while any wait the Safe may change
+request has neither given them a seed nor been expired, and while any wait the Safe may change
 the subscription and gas lane but not the coordinator
-(`RevealsWaiting(waiting)`). No key is left without its answer by a change of
-coordinator. Keys minted before their fleet's deck and keys whose requests were
+(`RevealsWaiting(waiting)`). A provider change cannot interrupt a request still
+waiting for its answer. Keys minted before their fleet's deck and keys whose requests were
 refused are asked for through the new setting.
 
 The answer arrives through `rawFulfillRandomWords`, which only the current
@@ -438,7 +446,7 @@ with `TRAIT_SEED_TAG = keccak256("keyfleet.trait-seed")` and `word` the first
 random word. It is stored once in `revealSeed(tokenId)`, and the collection
 emits `KeyRevealed(tokenId, fleetId, keyNumber, requestId, seed)` and
 `MetadataUpdate(tokenId)`. An answer for a key that already has a seed, for an
-unknown request, or with no words is ignored without reverting, because a
+request already expired, unknown request, or with no words is ignored without reverting, because a
 reverted answer is final and still charged.
 
 The trait draw, for keys beyond their fleet's deck, uses the seed and a
@@ -562,8 +570,8 @@ per contract. Measured with `forge build --sizes`:
 | Contract | Runtime (bytes) | Deployment (bytes) |
 | --- | --- | --- |
 | `KeyfleetClubClaims` | 3,687 | 3,910 |
-| `KeyfleetFactory` | 6,387 | 40,725 |
-| `KeyfleetKeys` | 12,191 | 13,749 |
+| `KeyfleetFactory` | 6,387 | 41,277 |
+| `KeyfleetKeys` | 12,743 | 14,301 |
 | `KeyfleetManager` | 16,383 | 18,376 |
 | `KeyfleetManagerDeployer` | 18,866 | 18,997 |
 | `KeyfleetRegentBuyer` | 8,098 | 9,832 |
@@ -1720,7 +1728,7 @@ transaction of its own. The suite asserts each ceiling.
 | Open creation with key 1: Syndicate | 12,455,776 | 16,777,216 |
 | Open creation with key 1: Accelerant | 12,478,565 | 16,777,216 |
 | Open creation with key 1: Cascade | 12,430,502 | 16,777,216 |
-| The coordinator's answer to a key, cold | 31,554 | 100,000 given |
+| The coordinator's answer to a key, cold | 36,098 | 100,000 given |
 
 The purchase ceiling stays above every first purchase, the dearest of which is
 Syndicate level 40. Every purchase enrols its key's automatic presence in the
@@ -1853,8 +1861,8 @@ requests.
 repeats a finding's original attack and checks the safe outcome. KF-A-04 checks
 the gift-batch behaviour left open by decision. KF-A-05 proves a coordinator
 change is refused while an accepted reveal waits, and succeeds after its answer.
-A request never answered still leaves its key without a seed and blocks replacing
-the coordinator; the expiry policy remains a founder decision.
+Anyone can expire an unanswered request after 24 hours to release its lock on
+the coordinator; its Key stays without a seed and cannot request again.
 `KeyfleetAuditLocal.t.sol` and `Agent5QueueBrick.t.sol` run on the
 local stand-ins with the rest. `KeyfleetAuditFork.t.sol` runs against real Base
 USDC, Permit2 and the REGENT route at the pinned block 52,366,000; it fails, and

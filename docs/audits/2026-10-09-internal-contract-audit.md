@@ -459,12 +459,35 @@ their coordinator-change disposition.
   were considered safe under the genuine Chainlink coordinator model because all
   old requests have seeds before replacement. The tests do not deliberately force
   that collision, and the collection invariant does not exercise replacement.
-- **Remaining policy decision:** an accepted request never answered permanently
+- **Policy at this first check:** an accepted request never answered permanently
   blocks coordinator replacement. Chainlink documents expiry after 24 hours for
   underfunded subscriptions in its [subscription
   guide](https://docs.chain.link/vrf/v2-5/overview/subscription). Funding reduces
   the risk but does not provide recovery. No expiry or second-request path was
-  added. Sean's choice remains pending.
+  added at this check. Sean subsequently approved expiry, as recorded below.
 
 KF-A-03 and KF-A-04 remain open. The Base fork checks were not rerun during this
 continuation. This audit branch has not been pushed, merged into main or deployed.
+
+### Sean's expiry decision — 9 October 2026
+
+Sean answered in the chief's chat: **"Add expiry after 24 hours, with no retry"**.
+
+`expireReveal(tokenId)` now lets anyone explicitly close an accepted, unanswered
+request at or after its request time plus 24 hours. `revealExpired` marks it
+permanently; the waiting count falls once, its original request time stays
+recorded, a second request remains refused, and late callbacks are ignored. Other
+waiting requests still block coordinator replacement. Passing time alone does
+not expire a request.
+
+The focused reveal checks pass, including the exact deadline, an early attempt,
+never-requested and already-seeded Keys, repeated expiry, no retry, late answers
+and another Key still waiting. Independent review found no new blocker. The cold
+callback uses 36,098 gas against its 100,000 limit. The collection handler now
+exercises expiry and late answers; its waiting-count invariant excludes expired
+requests and requires every expired Key to remain seedless.
+
+Final amendment checks: `make check-contracts` passed 581 tests with six fork
+tests skipped; formatting, build and bytecode checks passed. The deep collection
+run passed all 24 checks, with invariant cases at 256 runs and depth 100. The
+collection and factory remain within Base's runtime and deployment size limits.

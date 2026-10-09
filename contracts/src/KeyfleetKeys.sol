@@ -40,7 +40,8 @@ interface IKeyfleetKeyHook {
 /// exists before its deck is fixed, and nobody can choose a deck after seeing the seeds. A key's
 /// seed is written once from the one answer to its one accepted request. The Safe may change the
 /// subscription and gas lane, which only the next requests use, and the coordinator only while no
-/// accepted request waits for its answer, so no key is left without one.
+/// accepted request waits for its answer. Anyone may expire an unanswered request after 24 hours;
+/// that key stays without a seed and can never request again.
 ///
 /// `tokenURI` is one fixed base followed by the token id, and reverts for an id that has not been
 /// minted. Resales carry an ERC-2981 royalty of 2.5% to the Regents Safe. There is no upgrade path,
@@ -112,6 +113,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     uint32 public constant REVEAL_CALLBACK_GAS_LIMIT = 100_000;
     /// @notice Random words asked for per key.
     uint32 public constant REVEAL_WORDS = 1;
+    /// @notice How long an accepted request must wait before anyone may expire it.
+    uint256 public constant REVEAL_TIMEOUT = 24 hours;
     /// @notice The furthest ahead a phase step may name its opening: 30 days.
     uint256 public constant MAX_OPENING_LEAD = 30 days;
 
@@ -150,8 +153,10 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     mapping(uint256 tokenId => bytes32 seed) public revealSeed;
     /// @notice When the coordinator accepted the request for a key, zero if it never has.
     mapping(uint256 tokenId => uint64 requestedAt) public revealRequestedAt;
-    /// @notice Keys whose accepted request has not yet given them a seed. The coordinator cannot be
-    /// changed while any wait.
+    /// @notice Whether an unanswered accepted request was expired. Its key can never receive a seed.
+    mapping(uint256 tokenId => bool expired) public revealExpired;
+    /// @notice Keys whose accepted request has neither given them a seed nor been expired. The
+    /// coordinator cannot be changed while any wait.
     uint256 public revealsWaiting;
 
     mapping(uint256 fleetId => Fleet fleet) private _fleets;
@@ -213,6 +218,10 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     error AlreadyRevealed(uint256 tokenId);
     /// @notice The coordinator has already accepted a request for this key.
     error RevealAlreadyRequested(uint256 tokenId);
+    /// @notice The key has no accepted request still waiting for an answer.
+    error RevealNotWaiting(uint256 tokenId);
+    /// @notice The accepted request has not waited long enough to expire.
+    error RevealTooEarlyToExpire(uint256 tokenId, uint256 expiresAt);
     /// @notice The key holds its deck's card of the same number and draws nothing.
     error DealtByNumber(uint256 tokenId);
 
@@ -241,6 +250,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     /// @notice The coordinator refused a request for a key's random word; the key waits for
     /// `requestReveal`.
     event RevealRequestFailed(uint256 indexed tokenId);
+    /// @notice An unanswered request was expired; its key stays without a seed and cannot ask again.
+    event RevealExpired(uint256 indexed tokenId);
     /// @notice A key's seed was written. It never changes afterwards.
     /// @param seed `keccak256(abi.encode(TRAIT_SEED_TAG, block.chainid, address(this), tokenId, word))`.
     event KeyRevealed(
@@ -520,8 +531,8 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
     /// @notice Asks the coordinator for a key's random word.
     /// @dev Open to anyone, for a minted key that draws, whose fleet has its deck and whose request
     /// the coordinator has never accepted: it was minted before the deck was recorded, or every
-    /// request for it was refused. Once a request is accepted the key waits for that answer. A refused
-    /// request emits `RevealRequestFailed` and does not revert.
+    /// request for it was refused. Once accepted, the key waits for its answer or expiry and never
+    /// requests again. A refused request emits `RevealRequestFailed` and does not revert.
     function requestReveal(uint256 tokenId) external nonReentrant {
         _requireOwned(tokenId);
         if (revealSeed[tokenId] != bytes32(0)) revert AlreadyRevealed(tokenId);
@@ -532,14 +543,32 @@ contract KeyfleetKeys is IERC4906, IERC2981, ERC721, ReentrancyGuardTransient {
         _requestReveal(tokenId);
     }
 
+    /// @notice Expires a key's unanswered request after 24 hours, releasing its coordinator lock.
+    /// @dev Anyone may call. Final: the key never receives a seed and cannot ask again. The original
+    /// request time stays recorded so expiry cannot bypass the one-accepted-request rule.
+    function expireReveal(uint256 tokenId) external {
+        _requireOwned(tokenId);
+        uint256 requestedAt = revealRequestedAt[tokenId];
+        if (requestedAt == 0 || revealSeed[tokenId] != bytes32(0) || revealExpired[tokenId]) {
+            revert RevealNotWaiting(tokenId);
+        }
+        uint256 expiresAt = requestedAt + REVEAL_TIMEOUT;
+        if (block.timestamp < expiresAt) revert RevealTooEarlyToExpire(tokenId, expiresAt);
+        revealExpired[tokenId] = true;
+        --revealsWaiting;
+        emit RevealExpired(tokenId);
+    }
+
     /// @notice The coordinator's answer to a request.
     /// @dev Only the current coordinator may call, and for it this never reverts. An unknown
-    /// request, an empty answer, or an answer for a key that already has its seed is ignored. Writing
-    /// the seed ends the key's wait.
+    /// request, an empty answer, or an answer for a key already seeded or expired is ignored.
+    /// Writing the seed ends the key's wait.
     function rawFulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) external {
         if (msg.sender != address(randomness.coordinator)) revert OnlyCoordinator(msg.sender);
         uint256 tokenId = _requestToken[requestId];
-        if (tokenId == 0 || randomWords.length == 0 || revealSeed[tokenId] != bytes32(0)) return;
+        if (tokenId == 0 || randomWords.length == 0 || revealSeed[tokenId] != bytes32(0) || revealExpired[tokenId]) {
+            return;
+        }
 
         bytes32 seed = keccak256(abi.encode(TRAIT_SEED_TAG, block.chainid, address(this), tokenId, randomWords[0]));
         revealSeed[tokenId] = seed;

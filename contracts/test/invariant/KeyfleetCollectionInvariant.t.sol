@@ -1097,14 +1097,33 @@ contract CollectionHandler is Test {
         uint256 tokenId = _requestToken[requestId];
         uint256[] memory words = new uint256[](1);
         words[0] = word;
-        // A retried key has two answerable requests; the first answer writes the seed.
+        // An expired request is ignored; otherwise the one answer writes the seed.
         bytes32 seed = ghostSeed[tokenId];
-        if (seed == bytes32(0)) {
+        if (seed == bytes32(0) && !keys.revealExpired(tokenId)) {
             seed = keccak256(abi.encode(keys.TRAIT_SEED_TAG(), block.chainid, address(keys), tokenId, word));
         }
         vrf.fulfill(requestId, words);
         if (keys.revealSeed(tokenId) != seed) _breach("a fulfilment did not set the seed from the first answer");
         ghostSeed[tokenId] = seed;
+    }
+
+    /// @notice Anyone may expire an unanswered accepted request after 24 hours, exactly once.
+    function expireReveal(uint256 fleetSeed, uint256 keySeed, uint256 callerSeed) external step(_fleetFrom(fleetSeed)) {
+        (, uint256 tokenId,) = _pickKey(fleetSeed, keySeed);
+        if (tokenId == 0) return;
+        uint256 requestedAt = keys.revealRequestedAt(tokenId);
+        bytes4 expected;
+        if (requestedAt == 0 || ghostSeed[tokenId] != bytes32(0) || keys.revealExpired(tokenId)) {
+            expected = KeyfleetKeys.RevealNotWaiting.selector;
+        } else if (block.timestamp < requestedAt + 24 hours) {
+            expected = KeyfleetKeys.RevealTooEarlyToExpire.selector;
+        }
+        vm.prank(_stranger(callerSeed, 0));
+        try keys.expireReveal(tokenId) {
+            if (expected != bytes4(0) || !keys.revealExpired(tokenId)) _breach("a reveal was expired wrongly");
+        } catch (bytes memory err) {
+            if (bytes4(err) != expected || expected == bytes4(0)) _breach("a reveal expiry was refused wrongly");
+        }
     }
 
     /// @notice The Safe, or a stranger, steps the phase with an opening up to 31 days away; an
@@ -1972,7 +1991,7 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
 
     /// @dev 10. A fleet's deck is recorded at most once (item 4 holds it to the record), a key of a
     /// fleet without a deck has no seed and no draw, every seed came from a draw, and the keys the
-    /// collection counts as waiting are exactly those drawn and not yet seeded.
+    /// collection counts as waiting are exactly those drawn, not yet seeded and not expired.
     function invariant_onlyKeysOfAFleetWithADeckAreDrawn() public view {
         uint256 waiting;
         for (uint256 id = 1; id <= keys.fleetCount(); ++id) {
@@ -1982,15 +2001,21 @@ abstract contract KeyfleetCollectionInvariantBase is KeyfleetFixture {
                 uint256 tokenId = keys.tokenIdOf(id, k);
                 bytes32 seed = keys.revealSeed(tokenId);
                 uint64 requestedAt = keys.revealRequestedAt(tokenId);
+                bool expired = keys.revealExpired(tokenId);
+                if (expired) {
+                    assertGt(requestedAt, 0, "every expired request was accepted");
+                    assertEq(seed, bytes32(0), "an expired request never receives a seed");
+                    assertGe(block.timestamp, uint256(requestedAt) + 24 hours, "expiry is never early");
+                }
                 if (!hasDeck) {
                     assertEq(seed, bytes32(0), "a key of a fleet without a deck has no seed");
                     assertEq(requestedAt, 0, "a key of a fleet without a deck has no draw");
                 }
                 if (seed != bytes32(0)) assertGt(requestedAt, 0, "every seed came from a draw");
-                if (requestedAt != 0 && seed == bytes32(0)) ++waiting;
+                if (requestedAt != 0 && seed == bytes32(0) && !expired) ++waiting;
             }
         }
-        assertEq(keys.revealsWaiting(), waiting, "the waiting count is the drawn keys without a seed");
+        assertEq(keys.revealsWaiting(), waiting, "the waiting count excludes seeded and expired requests");
     }
 
     /// @dev 11. Every token is where the books say: all USDC sits with known holders, every USDC
@@ -2138,7 +2163,7 @@ contract KeyfleetCollectionInvariantTest is KeyfleetCollectionInvariantBase {
         require(keys.fleetCount() == 7, "seven fleets");
         _buyRounds(6, 7);
 
-        bytes4[] memory selectors = new bytes4[](32);
+        bytes4[] memory selectors = new bytes4[](33);
         selectors[0] = CollectionHandler.buy.selector;
         selectors[1] = CollectionHandler.buy.selector;
         selectors[2] = CollectionHandler.transfer.selector;
@@ -2171,6 +2196,7 @@ contract KeyfleetCollectionInvariantTest is KeyfleetCollectionInvariantBase {
         selectors[29] = CollectionHandler.attack.selector;
         selectors[30] = CollectionHandler.attack.selector;
         selectors[31] = CollectionHandler.give.selector;
+        selectors[32] = CollectionHandler.expireReveal.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
@@ -2203,7 +2229,7 @@ contract KeyfleetCollectionPhasesInvariantTest is KeyfleetCollectionInvariantBas
         }
         _startHandler();
 
-        bytes4[] memory selectors = new bytes4[](14);
+        bytes4[] memory selectors = new bytes4[](15);
         selectors[0] = CollectionHandler.buy.selector;
         selectors[1] = CollectionHandler.buy.selector;
         selectors[2] = CollectionHandler.advancePhase.selector;
@@ -2218,6 +2244,7 @@ contract KeyfleetCollectionPhasesInvariantTest is KeyfleetCollectionInvariantBas
         selectors[11] = CollectionHandler.wait.selector;
         selectors[12] = CollectionHandler.convert.selector;
         selectors[13] = CollectionHandler.give.selector;
+        selectors[14] = CollectionHandler.expireReveal.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
