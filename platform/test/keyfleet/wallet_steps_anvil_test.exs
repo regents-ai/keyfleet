@@ -528,6 +528,14 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert pressed(url, built, "club-claim") == {:ok, :reverted}
 
       assert club_claim!(@second, 2).figures.blocked == %{"club-claim" => :pass_burned}
+
+      # claim(N) always moves Club Key N, so another fleet's Key gets no step.
+      assert {:ok, %{problem: :not_club, review: review}} =
+               WalletSteps.build_steps(@fleet_id, :club_claim, @second, "lab", %{token_id: 1},
+                 actor: actor(@second)
+               )
+
+      assert Review.find(review, "club-claim") == nil
     end
   end
 

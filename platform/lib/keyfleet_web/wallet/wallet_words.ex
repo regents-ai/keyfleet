@@ -120,6 +120,7 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:unread), do: "Can’t reach the network right now. Trying again."
   defp problem(:sold_out), do: "Sold out."
   defp problem(:not_for_sale), do: "Regents Club Keys are given, never sold."
+  defp problem(:not_club), do: "Only a Regents Club Key is claimed with its Pass."
 
   defp field_name(:text), do: "The proposal"
   defp field_name(:name), do: "The name"

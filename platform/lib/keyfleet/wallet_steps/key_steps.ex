@@ -121,11 +121,14 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # waited, in every asset at once. Certain to fail once the Key has left the
   # contract, while the signer doesn't hold that Pass, and for good once the
   # Pass is burned, which the Pass collection then refuses to name a holder of.
+  # Only a Regents Club Key waits there: the contract's claim(N) always moves
+  # Club Key N, so any other fleet's Key gets no step.
   def steps(:club_claim, %{fleet: fleet, signer: signer, token_id: token_id}) do
     figures = %{token_id: token_id}
     claims = fleet.club_claims_address
 
-    with {:ok, reads} <- Reads.at_head(),
+    with :ok <- club(fleet),
+         {:ok, reads} <- Reads.at_head(),
          {:ok, holder} <- Reads.holder(reads, fleet, token_id),
          {:ok, pass} <- Reads.one(reads, claims, "PASS()", [], :address),
          {:ok, pass_holder} <- pass_holder(reads, pass, token_id) do
@@ -140,9 +143,12 @@ defmodule Keyfleet.WalletSteps.KeySteps do
       step = Review.step("club-claim", claims, Call.encode("claim(uint256)", [token_id]))
       {:ok, [step], Map.put(figures, :blocked, blocked)}
     else
+      {:problem, :not_club} -> {:problem, :not_club, figures}
       _unread -> {:problem, :unread, figures}
     end
   end
+
+  defp club(fleet), do: if(Presets.given?(fleet.id), do: :ok, else: {:problem, :not_club})
 
   # Marking Keys present: the one Key a Key's page is about, or every Key the
   # signer holds or holds an active shard of. A Key's page shows whether its
