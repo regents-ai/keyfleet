@@ -1787,8 +1787,8 @@ not in these figures; it is about half a US cent per key (see Status).
 ## Checks
 
 Run `make check-contracts` from the repository root. It runs, in `contracts/`,
-`forge fmt --check`, `forge build`, `forge test` and
-`script/check_bytecode.sh`.
+`forge fmt --check`, `forge build`, `forge test` (all but the audit's fork
+proofs) and `script/check_bytecode.sh`.
 
 The suites in `test/`, all against local stand-ins, cover the presets, the
 collection (registry, phases, sales, decks, the keeper, metadata and royalty),
@@ -1846,6 +1846,15 @@ themselves unless `BASE_RPC_URL` is set:
 
 Run them one suite at a time, as a public endpoint may refuse a burst of
 requests.
+
+`test/audit/` keeps the proofs of the internal contract audit (9 Oct): each
+repeats a finding's original attack and checks the safe outcome, and the two
+findings left open by decision (KF-A-04, KF-A-05) check the behaviour that
+remains. `KeyfleetAuditLocal.t.sol` and `Agent5QueueBrick.t.sol` run on the
+local stand-ins with the rest. `KeyfleetAuditFork.t.sol` runs against real Base
+USDC, Permit2 and the REGENT route at the pinned block 52,366,000; it fails, and
+does not skip, without `BASE_RPC_URL`, and needs an endpoint that serves that
+block. `make check-audit-fork` runs it.
 
 OpenZeppelin and forge-std are git submodules, so clone with submodules or run
 `git submodule update --init`.

@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help check check-platform check-required-fixes check-cli check-contracts check-notebook-hub release readiness
+.PHONY: help check check-platform check-required-fixes check-cli check-contracts check-audit-fork check-notebook-hub release readiness
 help:
 	@echo "Run make check for every gate, or check-platform, check-required-fixes, check-cli or check-contracts for one component."
 	@echo "Run make check-notebook-hub for the fleet notebook hub; it is not part of make check and must succeed before any hub image is pushed."
@@ -24,7 +24,11 @@ check-cli:
 	uv run --no-project --with "regents-cli[check] @ git+https://github.com/regents-ai/regents-cli@$(REGENTS_CLI_REV)" \
 	  python -m regents_cli.check_commands cli/commands.json platform/priv/public/openapi.json platform/priv/static/api-contract.openapiv3.yaml
 check-contracts:
-	cd contracts && forge fmt --check && forge build && forge test && script/check_bytecode.sh
+	cd contracts && forge fmt --check && forge build && forge test --no-match-path 'test/audit/KeyfleetAuditFork.t.sol' && script/check_bytecode.sh
+# The audit's proofs against real Base contracts, on a fork pinned to one block.
+# Needs BASE_RPC_URL and fails without it.
+check-audit-fork:
+	cd contracts && forge test --match-path 'test/audit/KeyfleetAuditFork.t.sol' -vv
 # The fleet notebook hub: compute-fly in the pinned marimohub workspace, the hub
 # and runner images, and the runner helper's tests. Needs Node 24 and Docker. It
 # is not part of make check because it builds a 3 GB image; run it before any hub
