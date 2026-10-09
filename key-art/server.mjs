@@ -68,22 +68,23 @@ async function serveFile(res, path) {
 }
 
 const server = createServer(async (req, res) => {
-  const {pathname} = new URL(req.url, "http://key-art")
-  if (req.method === "GET" && pathname === "/healthz") return replyJson(res, 200, {ok: true})
-  if (req.method === "GET") return serveFile(res, pathname)
-  if (req.method !== "POST" || pathname !== "/draw") return replyJson(res, 404, {error: "not found"})
-
-  const asked = await readJson(req)
-  if (!asked || ![asked.seed, asked.top_line, asked.table].every(v => typeof v === "string"))
-    return replyJson(res, 400, {error: "send seed, top_line and table as strings"})
   try {
+    const {pathname} = new URL(req.url, "http://key-art")
+    if (req.method === "GET" && pathname === "/healthz") return replyJson(res, 200, {ok: true})
+    if (req.method === "GET") return await serveFile(res, pathname)
+    if (req.method !== "POST" || pathname !== "/draw") return replyJson(res, 404, {error: "not found"})
+
+    const asked = await readJson(req)
+    if (!asked || ![asked.seed, asked.top_line, asked.table].every(v => typeof v === "string"))
+      return replyJson(res, 400, {error: "send seed, top_line and table as strings"})
     const {png, reason} = await drawCard(asked)
     if (!png) return replyJson(res, 422, {error: reason})
     const bytes = Buffer.from(png.slice(png.indexOf(",") + 1), "base64")
     res.writeHead(200, {"content-type": "image/png", "content-length": bytes.length})
     res.end(bytes)
   } catch (error) {
-    replyJson(res, 500, {error: String(error)})
+    // A client that hung up mid-request is owed no answer.
+    if (!res.destroyed) replyJson(res, 500, {error: String(error)})
   }
 })
 
