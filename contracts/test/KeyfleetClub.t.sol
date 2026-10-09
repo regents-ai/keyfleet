@@ -26,9 +26,7 @@ contract KeyfleetClubTest is KeyfleetFixture {
     address private carol = makeAddr("carol");
 
     event Given(uint256 indexed tokenId, address indexed receiver);
-    event KeyClaimed(
-        uint256 indexed passId, uint256 indexed tokenId, address indexed holder, address[] assets, uint256[] paid
-    );
+    event KeysClaimed(address indexed holder, uint256[] passIds, address[] assets, uint256[] paid);
 
     function setUp() public {
         _setUpFixture();
@@ -270,15 +268,15 @@ contract KeyfleetClubTest is KeyfleetFixture {
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetClubClaims.NotPassHolder.selector, 2, alice));
-        claims.claim(2);
+        claims.claim(_ids(2));
 
         vm.prank(address(vault));
         clubPass.transferFrom(address(vault), bob, 2);
         address[] memory assets = club.REWARDS().rewardAssets();
         vm.expectEmit(true, true, true, true, address(claims));
-        emit KeyClaimed(2, held, bob, assets, new uint256[](assets.length));
+        emit KeysClaimed(bob, _ids(2), assets, new uint256[](assets.length));
         vm.prank(bob);
-        (, uint256[] memory paid) = claims.claim(2);
+        (, uint256[] memory paid) = claims.claim(_ids(2));
         assertEq(keys.ownerOf(held), bob, "the Pass's holder has the key");
         for (uint256 i = 0; i < paid.length; ++i) {
             assertEq(paid[i], 0, "nothing earned, nothing paid");
@@ -289,7 +287,7 @@ contract KeyfleetClubTest is KeyfleetFixture {
         vm.expectRevert(
             abi.encodeWithSelector(IERC721Errors.ERC721InsufficientApproval.selector, address(claims), held)
         );
-        claims.claim(2);
+        claims.claim(_ids(2));
     }
 
     /// @dev Invariant: what a held key earns while it waits is paid to whoever claims it, exactly
@@ -313,7 +311,7 @@ contract KeyfleetClubTest is KeyfleetFixture {
 
         uint256 ethBefore = carol.balance;
         vm.prank(carol);
-        (address[] memory assets, uint256[] memory paid) = claims.claim(2);
+        (address[] memory assets, uint256[] memory paid) = claims.claim(_ids(2));
 
         assertEq(keys.ownerOf(held), carol);
         assertEq(carol.balance - ethBefore, eth, "the ETH it earned");
@@ -332,6 +330,64 @@ contract KeyfleetClubTest is KeyfleetFixture {
         vm.prank(carol);
         rewards.claim(_ids(held), assets);
         assertGt(regent.balanceOf(carol), earned);
+    }
+
+    /// @dev Invariant: one claim takes the held keys of every Pass the caller names and holds, with
+    /// exactly what they earned together, and `claimable` names those Passes and no others.
+    function test_oneClaimTakesTheKeysOfManyPasses() public {
+        NoReceiver vault = new NoReceiver();
+        clubPass.mint(alice, 1);
+        for (uint256 pass = 2; pass <= 4; ++pass) {
+            clubPass.mint(address(vault), pass);
+        }
+        clubPass.mint(alice, 5);
+        address[] memory receivers = new address[](5);
+        (receivers[0], receivers[1], receivers[2], receivers[3], receivers[4]) =
+        (alice, address(claims), address(claims), address(claims), alice);
+        vm.prank(safe);
+        club.give(receivers);
+        _split();
+        vm.startPrank(address(vault));
+        clubPass.transferFrom(address(vault), carol, 2);
+        clubPass.transferFrom(address(vault), carol, 3);
+        vm.stopPrank();
+
+        uint256[] memory named = _range(1, 6);
+        uint256[] memory takes = claims.claimable(carol, named);
+        assertEq(takes.length, 2, "Passes 2 and 3: held keys, Passes carol holds");
+        (uint256 first, uint256 second) = (takes[0], takes[1]);
+        assertEq(first, 2);
+        assertEq(second, 3);
+        assertEq(claims.claimable(alice, named).length, 0, "alice's keys were given, none held");
+        assertEq(claims.claimable(address(vault), named)[0], 4, "Pass 4 is still the vault's");
+
+        KeyfleetRewards rewards = club.REWARDS();
+        uint256 earned = rewards.accrued(address(regent), keys.tokenIdOf(5, 2))
+            + rewards.accrued(address(regent), keys.tokenIdOf(5, 3));
+        assertGt(earned, 0, "the held keys earned REGENT");
+
+        vm.prank(carol);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetClubClaims.NotPassHolder.selector, 4, carol));
+        claims.claim(_range(2, 3));
+
+        vm.prank(carol);
+        claims.claim(takes);
+        assertEq(keys.ownerOf(keys.tokenIdOf(5, 2)), carol, "both keys in one claim");
+        assertEq(keys.ownerOf(keys.tokenIdOf(5, 3)), carol);
+        assertEq(regent.balanceOf(carol), earned, "with exactly what they earned together");
+        assertEq(regent.balanceOf(address(claims)), 0, "the claims contract keeps nothing");
+        assertEq(keys.ownerOf(keys.tokenIdOf(5, 4)), address(claims), "Pass 4's key still waits");
+        assertEq(claims.claimable(carol, named).length, 0, "nothing left for carol");
+    }
+
+    /// @dev Invariant: a Pass burned or never minted, and a key not given yet, are never claimable.
+    function test_claimableLeavesOutBurnedAndUnmintedPassesAndUngivenKeys() public {
+        clubPass.mint(alice, 1);
+        assertEq(claims.claimable(alice, _ids(1)).length, 0, "a key not given yet");
+        vm.prank(safe);
+        club.give(_receivers(address(claims), address(claims), address(claims)));
+        assertEq(claims.claimable(alice, _range(1, 3)).length, 1, "only the Pass alice holds");
+        assertEq(claims.claimable(address(0), _range(1, 3)).length, 0, "nobody holds an unminted Pass");
     }
 
     /// @dev Invariant: the claims contract takes only Regents Club keys as they are minted, and ETH

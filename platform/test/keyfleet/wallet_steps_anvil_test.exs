@@ -499,6 +499,44 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     end
   end
 
+  describe "Regents Club Keys kept for their Passes" do
+    test "one press claims every Key kept for the signer's Passes; with none kept, the button says why",
+         %{url: url, lab: lab} do
+      club = club!(url, lab)
+      claims = address!(url, club.manager_address, "CLUB_CLAIMS()")
+      pass = address!(url, claims, "PASS()")
+
+      for {holder, number} <- [{@second, 1}, {@second, 2}, {@third, 3}] do
+        send!(url, @buyer, pass, Call.encode("mint(address,uint256)", [holder, number]))
+      end
+
+      send!(
+        url,
+        @buyer,
+        club.manager_address,
+        Call.encode("give(address[])", [[claims, claims, claims]])
+      )
+
+      assert club_claim!(@third).figures.kept == 1
+      assert club_claim!(@buyer).figures.blocked == %{"club-claim" => :no_kept_keys}
+
+      built = club_claim!(@second)
+      assert %{kept: 2, claiming: 2, blocked: blocked} = built.figures
+      assert blocked == %{}
+      assert %{to: ^claims, data: data} = Review.find(built.review, "club-claim")
+      assert data == Call.encode("claim(uint256[])", [[1, 2]])
+      assert pressed(url, built, "club-claim") == {:ok, :confirmed}
+
+      for number <- [1, 2] do
+        key = Fleet.onchain_token_id(club, number)
+        assert address!(url, lab.keys, "ownerOf(uint256)", [key]) == @second
+      end
+
+      assert club_claim!(@second).figures.blocked == %{"club-claim" => :no_kept_keys}
+      assert pressed(url, built, "club-claim") == {:ok, :reverted}
+    end
+  end
+
   # --- building and sending --------------------------------------------
 
   defp actor(wallet),
@@ -510,6 +548,33 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   defp build!(flow, signer, arguments \\ []) do
     {:ok, built} = build(flow, signer, actor(signer), arguments)
     built
+  end
+
+  defp club_claim!(signer) do
+    {:ok, built} =
+      WalletSteps.build_steps("regents_club", :club_claim, signer, "lab", %{},
+        actor: actor(signer)
+      )
+
+    built
+  end
+
+  # The Regents Club as the lab made it, its deployment recorded.
+  defp club!(url, lab) do
+    manager = address!(url, lab.keys, "managerOf(uint256)", [5])
+
+    "regents_club"
+    |> Fleets.get_fleet!()
+    |> Fleets.record_deployment!(
+      Map.merge(deployment(lab), %{
+        chain_fleet_id: 5,
+        manager_address: manager,
+        rewards_address: address!(url, manager, "REWARDS()"),
+        votes_address: address!(url, manager, "VOTES()"),
+        treasury_address: address!(url, manager, "TREASURY()")
+      }),
+      actor: %System{}
+    )
   end
 
   # Classic #1's deployment as the lab made it.

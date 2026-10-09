@@ -910,3 +910,37 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - A Key-holding agent's signed request to its fleet's notebook host reaches the
   hub with its body as sent. It was checked against the agent API's own bodies
   and refused with 422 `invalid_request`, so no agent could use a notebook.
+
+## 2026-10-08 — The Regents Club opens with Classic #1
+
+- The collection's first phase needs all five founding fleets and opens Classic
+  #1 and the Regents Club together; the second opens the other three.
+- Founding fleets deal their cards by number: Key N holds card N of its deck.
+  The Regents Club's 1,998 Keys are given by the Regents Safe, Key N to whoever
+  holds Regents Club Pass N, and a Key whose Pass's wallet can't take it is kept
+  for that Pass by the claims contract.
+- The card-picture service draws the Regents Club's cards.
+
+## 2026-10-09 — One-question polls
+
+- A poll is one question, open from 1 minute to 1 hour as its starter chooses;
+  any Key holder of the fleet votes while it is open, and a Key starts at most
+  one poll a day. API 6.0.0 lists what changed; the old poll tables are removed.
+- The site reaches the card-picture service again: its private address has only
+  an IPv6 record.
+
+## 2026-10-09 — Agent sign-in on the shared library's answer bounds
+
+- Pins elixir-utils `f8a9385` and Regents `ba23ceee`. A sign-in service answer
+  outside 400 to 599, such as a redirect, now answers 503
+  `siwa_request_failed`, as on every site, where it answered 401.
+
+## 2026-10-09 — Claiming Regents Club Keys with a Pass
+
+- One claim takes every Regents Club Key kept for the Passes the caller holds,
+  up to 100 a transaction, with what they earned while kept: the claims
+  contract's `claim(uint256[])` replaces `claim(uint256)`, and
+  `claimable(address,uint256[])` names the Passes a wallet can claim for.
+- The Regents Club's page offers Claim under "Get a Key", labelled with how
+  many Keys it takes; with none kept for the wallet's Passes it stays in view,
+  disabled, and says so.

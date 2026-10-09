@@ -1,7 +1,8 @@
 defmodule Keyfleet.WalletSteps.KeySteps do
   @moduledoc """
   The steps of a key's own buttons: buying the next key, asking again for a
-  key's random draw, claiming what a key has earned, marking keys present,
+  key's random draw, claiming what a key has earned, claiming the Regents Club
+  Keys kept for the Passes the signer holds, marking keys present,
   issuing, renewing and ending shards, and turning agent voting on or off.
   `Keyfleet.WalletSteps.Build` describes what every builder answers.
 
@@ -28,6 +29,9 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   @sweep_limit 256
   # How long a presence lasts, in seconds.
   @presence_seconds 172_800
+  # How many kept Regents Club Keys one claim takes: about 13.2M gas, under
+  # Base's limit for one transaction.
+  @club_claim_limit 100
 
   @doc false
   def steps(:buy, request) do
@@ -113,6 +117,16 @@ defmodule Keyfleet.WalletSteps.KeySteps do
     else
       _unread -> {:problem, :unread, figures}
     end
+  end
+
+  # Taking the Regents Club Keys the claims contract keeps for the Passes the
+  # signer holds, Key N for Pass N, with everything they earned while kept, in
+  # one transaction of up to 100; a holder of more claims again. Certain to
+  # fail while it keeps none for the signer's Passes.
+  def steps(:club_claim, %{fleet: fleet, signer: signer}) do
+    if Presets.given?(fleet.id),
+      do: club_claim(fleet, signer),
+      else: {:problem, :not_club, %{}}
   end
 
   # Marking Keys present: the one Key a Key's page is about, or every Key the
@@ -455,4 +469,29 @@ defmodule Keyfleet.WalletSteps.KeySteps do
     do: Call.encode("setAgentVoting(uint256[],bool)", [onchain(fleet, keys), on])
 
   defp onchain(fleet, keys), do: Enum.map(keys, &Fleet.onchain_token_id(fleet, &1))
+
+  defp club_claim(fleet, signer) do
+    with {:ok, reads} <- Reads.at_head(),
+         {:ok, claims} <- Reads.one(reads, fleet.manager_address, "CLUB_CLAIMS()", [], :address),
+         {:ok, kept} <- kept_for(reads, claims, signer) do
+      claiming = Enum.take(kept, @club_claim_limit)
+      step = Review.step("club-claim", claims, Call.encode("claim(uint256[])", [claiming]))
+      blocked = if claiming == [], do: %{"club-claim" => :no_kept_keys}, else: %{}
+      {:ok, [step], %{kept: length(kept), claiming: length(claiming), blocked: blocked}}
+    else
+      _unread -> {:problem, :unread, %{kept: 0, claiming: 0}}
+    end
+  end
+
+  # The Passes, of all the Club's, the signer holds whose Keys the claims
+  # contract keeps, read in one call at the head block.
+  defp kept_for(reads, claims, signer) do
+    Reads.one(
+      reads,
+      claims,
+      "claimable(address,uint256[])",
+      [signer, Enum.to_list(1..Presets.club_supply())],
+      {:array, {:uint, 256}}
+    )
+  end
 end

@@ -120,6 +120,7 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:unread), do: "Can’t reach the network right now. Trying again."
   defp problem(:sold_out), do: "Sold out."
   defp problem(:not_for_sale), do: "Regents Club Keys are given, never sold."
+  defp problem(:not_club), do: "Only Regents Club Keys are claimed with a Pass."
 
   defp field_name(:text), do: "The proposal"
   defp field_name(:name), do: "The name"
@@ -133,6 +134,7 @@ defmodule KeyfleetWeb.WalletWords do
   def blocked(:not_your_key), do: "Not your Key"
   def blocked(:no_keys), do: "No Keys to use"
   def blocked(:nothing_to_claim), do: "Nothing to claim"
+  def blocked(:no_kept_keys), do: "No Keys kept for your Passes"
   def blocked(:own_wallet), do: "That’s your wallet"
   def blocked(:shard_ended), do: "Already ended"
   def blocked(:revealed), do: "Traits drawn"
@@ -165,6 +167,7 @@ defmodule KeyfleetWeb.WalletWords do
   def title(%{name: "buy"}), do: "Buy Key"
   def title(%{name: "reveal"}), do: "Ask again for the draw"
   def title(%{name: "claim-" <> _asset}), do: "Claim"
+  def title(%{name: "club-claim"}), do: "Claim Club Keys"
   def title(%{name: "present"}), do: "Mark present"
   def title(%{name: "sweep"}), do: "Tidy up"
   def title(%{name: "issue"}), do: "Issue a shard"

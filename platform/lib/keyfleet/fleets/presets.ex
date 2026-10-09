@@ -88,6 +88,9 @@ defmodule Keyfleet.Fleets.Presets do
   @doc "Whether a fleet's Keys are given, one per Regents Club Pass, rather than sold."
   def given?(fleet_id), do: preset(fleet_id) == :regents_club
 
+  @doc "How many Regents Club Keys there are, one for each Pass, numbered from 1."
+  def club_supply, do: @club_supply
+
   @doc "Whether a fleet's keys come in levels, as the two Fibonacci fleets' do."
   def levelled?(fleet_id), do: Map.fetch!(@presets, fleet_id) == :fibonacci
 

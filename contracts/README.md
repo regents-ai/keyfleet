@@ -791,15 +791,21 @@ by a contract that refuses NFTs. The factory deploys it, bound for ever to the
 collection (`KEYS`) and the Pass (`PASS`). It has no administrator, no upgrade
 path and no other way out.
 
-`claim(passId)` gives key `passId` to the caller when the caller holds Pass
-`passId` (`NotPassHolder(passId, caller)`), with no deadline. It first collects
-the key's rewards from the Regents Club ledger into the claims contract, then
-moves the key to the caller with `safeTransferFrom`, then sends the caller
-exactly what was collected, and emits `KeyClaimed(passId, tokenId, holder,
-assets, paid)`. A key already claimed is no longer the contract's, so a second
-claim reverts. It accepts only Regents Club keys as they are minted to it
-(`OnlyClubMints`), and ETH only from the Regents Club's rewards ledger during a
-claim (`OnlyRewards(sender)`). Nobody votes or presents a key while it waits.
+`claim(passIds)` gives key N to the caller for each Pass N in `passIds`, in one
+transaction, when the caller holds every one of those Passes (`NotPassHolder(passId,
+caller)`), with no deadline. It first collects the keys' rewards from the Regents
+Club ledger into the claims contract, then moves the keys to the caller with
+`safeTransferFrom`, then sends the caller exactly what was collected, and emits
+`KeysClaimed(holder, passIds, assets, paid)`. A key already claimed is no longer
+the contract's, so a claim naming it reverts whole. One claim of 100 keys takes
+about 13.2M gas, so the site claims up to 100 a transaction. `claimable(holder,
+passIds)` names, of `passIds`, the Passes `holder` holds whose keys the contract
+holds now, leaving out a Pass burned or never minted and a key not given yet or
+already claimed; over all 1,998 Passes it reads in about 10.4M gas.
+
+It accepts only Regents Club keys as they are minted to it (`OnlyClubMints`),
+and ETH only from the Regents Club's rewards ledger during a claim
+(`OnlyRewards(sender)`). Nobody votes or presents a key while it waits.
 
 ## The REGENT buyer
 

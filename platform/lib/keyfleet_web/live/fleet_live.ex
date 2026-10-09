@@ -704,6 +704,12 @@ defmodule KeyfleetWeb.FleetLive do
       </div>
 
       <.buy_key :if={@fleet.buy} fleet={@fleet} buy={@fleet.buy} actor={@actor} lease={@lease} />
+      <.club_claim
+        :if={@fleet.deployed? and Presets.given?(@fleet.fleet_id)}
+        fleet={@fleet}
+        actor={@actor}
+        lease={@lease}
+      />
 
       <p>{Rules.pricing(@fleet.fleet_id)}</p>
 
@@ -907,6 +913,44 @@ defmodule KeyfleetWeb.FleetLive do
     </section>
     """
   end
+
+  attr :fleet, :map, required: true
+  attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
+
+  # A Regents Club Key whose Pass's wallet couldn't take it is kept for that
+  # Pass. Whoever holds the Pass claims it here with what it earned, every
+  # kept Key of theirs in one press, up to 100 a press.
+  defp club_claim(assigns) do
+    ~H"""
+    <section id="club-claim" aria-labelledby="club-claim-title">
+      <h3 id="club-claim-title">
+        Claim with your Pass
+        <Regent.Primitives.tip id="club-claim-tip" label="About claiming">
+          When a Pass’s wallet couldn’t take its Key, the Key is kept for that Pass. Whoever holds the Pass can claim it at any time, with what it has earned. One claim takes up to 100 Keys.
+        </Regent.Primitives.tip>
+      </h3>
+      <.live_component
+        module={WalletPanel}
+        id="club-claim-action"
+        flow={:club_claim}
+        fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
+        actor={@actor}
+        lease={@lease}
+      >
+        <:buttons :let={panel}>
+          <WalletPanel.step_button panel={panel} step="club-claim" id="club-claim-button">
+            {club_claim_label(WalletPanel.figures(panel))}
+          </WalletPanel.step_button>
+        </:buttons>
+      </.live_component>
+    </section>
+    """
+  end
+
+  defp club_claim_label(%{claiming: 1}), do: "Claim 1 Key"
+  defp club_claim_label(%{claiming: count}) when count > 1, do: "Claim #{count} Keys"
+  defp club_claim_label(_figures), do: "Claim"
 
   attr :id, :string, required: true, doc: "names the group and prefixes its buttons' ids"
   attr :fleet, :map, required: true
