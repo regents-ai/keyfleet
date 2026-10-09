@@ -16,9 +16,10 @@ import {KeyfleetRewards} from "./KeyfleetRewards.sol";
 /// @dev Deployed by the factory with the collection, bound to the collection and the Pass for ever.
 /// It accepts only Regents Club keys as they are minted, and gives key N only to the wallet that
 /// holds Pass N when it claims, with no deadline. Rewards a held key earns while it waits are paid
-/// out with it: the claim first collects the key's rewards here, then moves the key, then sends the
-/// claimer exactly what was collected. Nobody votes or presents a held key. There is no
-/// administrator, no upgrade path and no other way out.
+/// out with it: the claim first collects the key's rewards here, then moves the key to the claimer,
+/// then sends exactly what was collected to the wallet the claimer names, so a holder that refuses
+/// ETH still takes its key. Nobody votes or presents a held key. There is no administrator, no
+/// upgrade path and no other way out.
 contract KeyfleetClubClaims is IERC721Receiver, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
@@ -36,11 +37,19 @@ contract KeyfleetClubClaims is IERC721Receiver, ReentrancyGuardTransient {
     error NotPassHolder(uint256 passId, address caller);
     /// @notice ETH arrives here only from the Regents Club's reward ledger.
     error OnlyRewards(address sender);
+    /// @notice The rewards need a wallet to go to.
+    error ZeroPayee();
 
-    /// @notice The holder of Pass `passId` claimed its key and the rewards it earned while held.
+    /// @notice The holder of Pass `passId` claimed its key, and the rewards it earned while held
+    /// went to `payee`.
     /// @param paid What was paid out with the key, in the order of `assets`.
     event KeyClaimed(
-        uint256 indexed passId, uint256 indexed tokenId, address indexed holder, address[] assets, uint256[] paid
+        uint256 indexed passId,
+        uint256 indexed tokenId,
+        address indexed holder,
+        address payee,
+        address[] assets,
+        uint256[] paid
     );
 
     constructor(KeyfleetKeys keys, IERC721 pass) {
@@ -48,12 +57,17 @@ contract KeyfleetClubClaims is IERC721Receiver, ReentrancyGuardTransient {
         PASS = pass;
     }
 
-    /// @notice Gives the caller key `passId` of the Regents Club, with what it earned while held
-    /// here, when the caller holds Pass `passId`.
+    /// @notice Gives the caller key `passId` of the Regents Club when the caller holds Pass
+    /// `passId`, and sends what the key earned while held here to `payee`.
     /// @return assets The assets the key's rewards were checked in; ETH is `address(0)`.
     /// @return paid What was paid out in each.
-    function claim(uint256 passId) external nonReentrant returns (address[] memory assets, uint256[] memory paid) {
+    function claim(uint256 passId, address payee)
+        external
+        nonReentrant
+        returns (address[] memory assets, uint256[] memory paid)
+    {
         if (PASS.ownerOf(passId) != msg.sender) revert NotPassHolder(passId, msg.sender);
+        if (payee == address(0)) revert ZeroPayee();
         uint256 tokenId = KEYS.tokenIdOf(CLUB_FLEET, passId);
         KeyfleetRewards rewards = _rewards();
         assets = rewards.rewardAssets();
@@ -68,10 +82,10 @@ contract KeyfleetClubClaims is IERC721Receiver, ReentrancyGuardTransient {
         for (uint256 i = 0; i < assets.length; ++i) {
             uint256 amount = paid[i];
             if (amount == 0) continue;
-            if (assets[i] == address(0)) Address.sendValue(payable(msg.sender), amount);
-            else IERC20(assets[i]).safeTransfer(msg.sender, amount);
+            if (assets[i] == address(0)) Address.sendValue(payable(payee), amount);
+            else IERC20(assets[i]).safeTransfer(payee, amount);
         }
-        emit KeyClaimed(passId, tokenId, msg.sender, assets, paid);
+        emit KeyClaimed(passId, tokenId, msg.sender, payee, assets, paid);
     }
 
     /// @notice Accepts a Regents Club key as it is minted here.

@@ -118,7 +118,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
   # Taking Regents Club Key N from the claims contract, where it waits for
   # whoever holds Regents Club Pass N, with everything it earned while it
-  # waited, in every asset at once. Certain to fail once the Key has left the
+  # waited, in every asset at once, paid to the same wallet. Certain to fail once the Key has left the
   # contract, while the signer doesn't hold that Pass, and for good once the
   # Pass is burned, which the Pass collection then refuses to name a holder of.
   # Only a Regents Club Key waits there: the contract's claim(N) always moves
@@ -140,7 +140,13 @@ defmodule Keyfleet.WalletSteps.KeySteps do
           true -> %{}
         end
 
-      step = Review.step("club-claim", claims, Call.encode("claim(uint256)", [token_id]))
+      step =
+        Review.step(
+          "club-claim",
+          claims,
+          Call.encode("claim(uint256,address)", [token_id, signer])
+        )
+
       {:ok, [step], Map.put(figures, :blocked, blocked)}
     else
       {:problem, :not_club} -> {:problem, :not_club, figures}

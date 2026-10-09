@@ -559,7 +559,7 @@ per contract. Measured with `forge build --sizes`:
 
 | Contract | Runtime (bytes) | Deployment (bytes) |
 | --- | --- | --- |
-| `KeyfleetClubClaims` | 3,568 | 3,791 |
+| `KeyfleetClubClaims` | 3,687 | 3,910 |
 | `KeyfleetFactory` | 6,387 | 40,228 |
 | `KeyfleetKeys` | 12,177 | 13,735 |
 | `KeyfleetManager` | 16,245 | 18,231 |
@@ -793,12 +793,15 @@ by a contract that refuses NFTs. The factory deploys it, bound for ever to the
 collection (`KEYS`) and the Pass (`PASS`). It has no administrator, no upgrade
 path and no other way out.
 
-`claim(passId)` gives key `passId` to the caller when the caller holds Pass
-`passId` (`NotPassHolder(passId, caller)`), with no deadline. It first collects
-the key's rewards from the Regents Club ledger into the claims contract, then
-moves the key to the caller with `safeTransferFrom`, then sends the caller
-exactly what was collected, and emits `KeyClaimed(passId, tokenId, holder,
-assets, paid)`. A key already claimed is no longer the contract's, so a second
+`claim(passId, payee)` gives key `passId` to the caller when the caller holds
+Pass `passId` (`NotPassHolder(passId, caller)`), with no deadline. It first
+collects the key's rewards from the Regents Club ledger into the claims
+contract, then moves the key to the caller with `safeTransferFrom`, then sends
+exactly what was collected to `payee` (`ZeroPayee` for the zero address), and
+emits `KeyClaimed(passId, tokenId, holder, payee, assets, paid)`. The holder
+names the payee, so a Pass held by a contract that refuses ETH still takes its
+key and sends the earnings to a wallet that accepts them. The site always names
+the claiming wallet. A key already claimed is no longer the contract's, so a second
 claim reverts. It accepts only Regents Club keys as they are minted to it
 (`OnlyClubMints`), and ETH only from the Regents Club's rewards ledger during a
 claim (`OnlyRewards(sender)`). Nobody votes or presents a key while it waits.

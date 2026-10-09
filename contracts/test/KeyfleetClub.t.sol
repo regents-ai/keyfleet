@@ -2,6 +2,8 @@
 pragma solidity 0.8.26;
 
 import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import {Errors} from "@openzeppelin/contracts/utils/Errors.sol";
 import {KeyfleetClubClaims} from "../src/KeyfleetClubClaims.sol";
 import {KeyfleetFactory} from "../src/KeyfleetFactory.sol";
 import {KeyfleetKeys} from "../src/KeyfleetKeys.sol";
@@ -15,6 +17,13 @@ import {MockContractWallet} from "./mocks/MockContractWallet.sol";
 /// @dev A contract that cannot take an NFT sent with a safe transfer, as many Pass holders are.
 contract NoReceiver {}
 
+/// @dev A contract that takes NFTs but refuses ETH, as some Pass holders do.
+contract EthRefuser is IERC721Receiver {
+    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
+    }
+}
+
 /// @dev The Regents Club: the fifth founding fleet, one key per Regents Club Pass, given by the
 /// Regents Safe and never sold, its cards dealt by number, and the claims contract that holds a
 /// key for a Pass whose holder cannot take one until whoever holds that Pass claims it.
@@ -27,7 +36,12 @@ contract KeyfleetClubTest is KeyfleetFixture {
 
     event Given(uint256 indexed tokenId, address indexed receiver);
     event KeyClaimed(
-        uint256 indexed passId, uint256 indexed tokenId, address indexed holder, address[] assets, uint256[] paid
+        uint256 indexed passId,
+        uint256 indexed tokenId,
+        address indexed holder,
+        address payee,
+        address[] assets,
+        uint256[] paid
     );
 
     function setUp() public {
@@ -270,15 +284,15 @@ contract KeyfleetClubTest is KeyfleetFixture {
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(KeyfleetClubClaims.NotPassHolder.selector, 2, alice));
-        claims.claim(2);
+        claims.claim(2, alice);
 
         vm.prank(address(vault));
         clubPass.transferFrom(address(vault), bob, 2);
         address[] memory assets = club.REWARDS().rewardAssets();
         vm.expectEmit(true, true, true, true, address(claims));
-        emit KeyClaimed(2, held, bob, assets, new uint256[](assets.length));
+        emit KeyClaimed(2, held, bob, bob, assets, new uint256[](assets.length));
         vm.prank(bob);
-        (, uint256[] memory paid) = claims.claim(2);
+        (, uint256[] memory paid) = claims.claim(2, bob);
         assertEq(keys.ownerOf(held), bob, "the Pass's holder has the key");
         for (uint256 i = 0; i < paid.length; ++i) {
             assertEq(paid[i], 0, "nothing earned, nothing paid");
@@ -289,7 +303,7 @@ contract KeyfleetClubTest is KeyfleetFixture {
         vm.expectRevert(
             abi.encodeWithSelector(IERC721Errors.ERC721InsufficientApproval.selector, address(claims), held)
         );
-        claims.claim(2);
+        claims.claim(2, bob);
     }
 
     /// @dev Invariant: what a held key earns while it waits is paid to whoever claims it, exactly
@@ -313,7 +327,7 @@ contract KeyfleetClubTest is KeyfleetFixture {
 
         uint256 ethBefore = carol.balance;
         vm.prank(carol);
-        (address[] memory assets, uint256[] memory paid) = claims.claim(2);
+        (address[] memory assets, uint256[] memory paid) = claims.claim(2, carol);
 
         assertEq(keys.ownerOf(held), carol);
         assertEq(carol.balance - ethBefore, eth, "the ETH it earned");
@@ -332,6 +346,41 @@ contract KeyfleetClubTest is KeyfleetFixture {
         vm.prank(carol);
         rewards.claim(_ids(held), assets);
         assertGt(regent.balanceOf(carol), earned);
+    }
+
+    /// @dev Invariant: a Pass holder that refuses ETH still takes its key, and what the key earned
+    /// while held goes to the wallet it names.
+    function test_aHolderThatRefusesEthTakesItsKeyAndNamesWhereTheEarningsGo() public {
+        EthRefuser refuser = new EthRefuser();
+        clubPass.mint(alice, 1);
+        clubPass.mint(address(refuser), 2);
+        address[] memory receivers = new address[](2);
+        (receivers[0], receivers[1]) = (alice, address(claims));
+        vm.prank(safe);
+        club.give(receivers);
+        _split();
+
+        KeyfleetRewards rewards = club.REWARDS();
+        uint256 held = keys.tokenIdOf(5, 2);
+        uint256 eth = rewards.accrued(rewards.NATIVE(), held);
+        uint256 earned = rewards.accrued(address(regent), held);
+        assertGt(eth, 0, "the held key earned ETH");
+
+        vm.prank(address(refuser));
+        vm.expectRevert(Errors.FailedCall.selector);
+        claims.claim(2, address(refuser));
+
+        vm.prank(address(refuser));
+        vm.expectRevert(KeyfleetClubClaims.ZeroPayee.selector);
+        claims.claim(2, address(0));
+
+        uint256 ethBefore = carol.balance;
+        vm.prank(address(refuser));
+        claims.claim(2, carol);
+        assertEq(keys.ownerOf(held), address(refuser), "the key goes to the Pass's holder");
+        assertEq(carol.balance - ethBefore, eth, "the ETH it earned goes to the named wallet");
+        assertEq(regent.balanceOf(carol), earned, "and the REGENT");
+        assertEq(address(claims).balance, 0, "the claims contract keeps no ETH");
     }
 
     /// @dev Invariant: the claims contract takes only Regents Club keys as they are minted, and ETH

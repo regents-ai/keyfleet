@@ -519,7 +519,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert built.figures.blocked == %{}
       assert %{to: to, data: data} = Review.find(built.review, "club-claim")
       assert to == lab.club_claims
-      assert data == Call.encode("claim(uint256)", [1])
+      assert data == Call.encode("claim(uint256,address)", [1, @second])
       assert pressed(url, built, "club-claim") == {:ok, :confirmed}
 
       key = Fleet.onchain_token_id(club, 1)
