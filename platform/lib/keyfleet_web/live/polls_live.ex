@@ -475,13 +475,13 @@ defmodule KeyfleetWeb.PollsLive do
   def read_polls(socket, :polls, %{"fleet_id" => fleet_id}) do
     socket
     |> assign(polls_notice: nil, poll_form: start_form())
-    |> show(fn -> read_list(socket, fleet_id) end)
+    |> show([Polls.fleet_topic(fleet_id)], fn -> read_list(socket, fleet_id) end)
   end
 
   def read_polls(socket, :poll, %{"fleet_id" => fleet_id, "poll_id" => poll_id}) do
     socket
     |> assign(polls_notice: nil, poll_form: nil)
-    |> show(fn -> read_detail(socket, fleet_id, poll_id) end)
+    |> show([Polls.topic(poll_id)], fn -> read_detail(socket, fleet_id, poll_id) end)
   end
 
   def read_polls(socket, _route_id, _params) do
@@ -493,14 +493,18 @@ defmodule KeyfleetWeb.PollsLive do
 
   @doc "The polls on show, read again: after a change to them, or to who holds the fleet's Keys."
   def refresh(%{assigns: %{polls: %{kind: :list, fleet_id: fleet_id}}} = socket),
-    do: show(socket, fn -> read_list(socket, fleet_id) end)
+    do: show(socket, [Polls.fleet_topic(fleet_id)], fn -> read_list(socket, fleet_id) end)
 
   def refresh(%{assigns: %{polls: %{kind: :poll, fleet_id: fleet_id, poll_id: id}}} = socket),
-    do: show(socket, fn -> read_detail(socket, fleet_id, id) end)
+    do: show(socket, [Polls.topic(id)], fn -> read_detail(socket, fleet_id, id) end)
 
   def refresh(socket), do: socket
 
-  defp show(socket, read) do
+  # The page listens to the address's own topic before it reads, so a change
+  # made between the read and the listening is still heard.
+  defp show(socket, topics, read) do
+    socket = listen(socket, Enum.uniq(socket.assigns.polls_topics ++ topics))
+
     case PageRead.run("polls", read) do
       {:ok, page} -> socket |> assign(:polls, page) |> listen(topics(page)) |> start_clock()
       {:error, _failure} -> socket |> assign(:polls, :unreadable) |> listen([]) |> stop_clock()
