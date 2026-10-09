@@ -180,6 +180,8 @@ defmodule Keyfleet.Rooms.Room do
     end
 
     create :create do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       accept [:fleet_id, :slug, :name]
 
       change {Keyfleet.Rooms.Changes.NormalizeName, attribute: :name}
@@ -226,6 +228,8 @@ defmodule Keyfleet.Rooms.Room do
     end
 
     update :set_topic do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       accept [:topic]
       require_atomic? false
 
@@ -281,6 +285,10 @@ defmodule Keyfleet.Rooms.Room do
   end
 
   attributes do
+    attribute :acting_agent_wallet, :string, writable?: false
+    attribute :beneficiary_privy_user_id, :string, writable?: false, sensitive?: true
+    attribute :agent_pairing_id, :uuid, writable?: false
+
     uuid_primary_key :id
 
     attribute :slug, :string,

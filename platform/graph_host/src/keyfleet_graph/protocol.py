@@ -124,6 +124,8 @@ class Auth(_Shape):
     kind: Literal["human", "agent"]
     operator_wallet: Address
     credential_ref: Optional[Sha256Ref]
+    beneficiary_privy_user_id: Optional[str] = None
+    pairing_id: Optional[str] = None
     checked_at: UtcTimestamp
     chain_block: Optional[Count]
 

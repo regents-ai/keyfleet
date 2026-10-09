@@ -103,12 +103,17 @@ defmodule Keyfleet.Dms.Conversation do
     end
 
     update :set_auto_delete do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      require_atomic? false
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       accept [:auto_delete_days]
       validate one_of(:auto_delete_days, @auto_delete_days), where: present(:auto_delete_days)
     end
 
     # Everything in the conversation goes with it (`dm_messages`' foreign key).
     destroy :delete do
+      require_atomic? false
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       primary? true
     end
   end
@@ -146,6 +151,10 @@ defmodule Keyfleet.Dms.Conversation do
   end
 
   attributes do
+    attribute :acting_agent_wallet, :string, writable?: false
+    attribute :beneficiary_privy_user_id, :string, writable?: false, sensitive?: true
+    attribute :agent_pairing_id, :uuid, writable?: false
+
     uuid_primary_key :id
 
     attribute :key_a, :integer,

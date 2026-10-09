@@ -3,8 +3,7 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
   Who may write a fleet's workspace as one of its keys: the person or agent
   whose wallet owns that key today, an agent holding an active shard of it
   whose wallet owns none of the fleet's keys, or an agent holding neither in
-  the fleet that is paired with the person who owns the key today, backed by
-  World ID (`Keyfleet.Actors.Agent`'s `pairing`). A paired agent writes as its
+  the fleet that is paired with the person who owns the key today (`Keyfleet.Actors.Agent`'s `pairing`). A paired agent writes as its
   person's key, marked as its own: the stamp is the agent's, with its wallet.
   This is the rule rooms and direct messages use (`Keyfleet.Keys.identity/2`).
   Nobody writes as a key whose edits a vote of the fleet has restricted, its
@@ -154,10 +153,19 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
     end
   end
 
-  defp holding(%Agent{wallet_address: wallet} = actor, fleet_id, token_id, opts) do
+  defp holding(%Agent{} = actor, fleet_id, token_id, opts) do
+    case Agent.refresh(actor) do
+      {:ok, current} -> agent_holding(current, fleet_id, token_id, opts)
+      _ -> not_a_holder(fleet_id, token_id)
+    end
+  end
+
+  defp holding(_actor, fleet_id, token_id, _opts), do: not_a_holder(fleet_id, token_id)
+
+  defp agent_holding(%Agent{wallet_address: wallet} = actor, fleet_id, token_id, opts) do
     case Keys.current_key(fleet_id, token_id, [actor: actor] ++ opts) do
       {:ok, %{owner_wallet: ^wallet} = key} ->
-        {:ok, stamp(key.ownership_epoch, "agent", wallet, actor.credential_ref)}
+        {:ok, agent_stamp(key.ownership_epoch, actor)}
 
       {:ok, %{} = key} ->
         shard_holding(actor, key, opts)
@@ -170,8 +178,6 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
     end
   end
 
-  defp holding(_actor, fleet_id, token_id, _opts), do: not_a_holder(fleet_id, token_id)
-
   # A wallet that owns one of the fleet's keys acts as its own key, never as
   # a shard or as its person.
   defp shard_holding(%Agent{wallet_address: wallet} = actor, key, opts) do
@@ -179,7 +185,7 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
 
     with {:ok, nil} <- Keys.held_identity_key(key.fleet_id, [wallet], read),
          {:ok, %{} = shard} <- Keys.active_shard(key.fleet_id, key.token_id, wallet, read) do
-      {:ok, stamp(shard.ownership_epoch, "agent", wallet, actor.credential_ref)}
+      {:ok, agent_stamp(shard.ownership_epoch, actor)}
     else
       {:ok, nil} -> paired_holding(actor, key, read)
       {:ok, _held} -> not_a_holder(key.fleet_id, key.token_id)
@@ -193,7 +199,7 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
     with true <- key.owner_wallet in wallets,
          {:ok, shards} <- Keys.active_shards_held_by(actor.wallet_address, read),
          false <- Enum.any?(shards, &(&1.fleet_id == key.fleet_id)) do
-      {:ok, stamp(key.ownership_epoch, "agent", actor.wallet_address, actor.credential_ref)}
+      {:ok, agent_stamp(key.ownership_epoch, actor)}
     else
       {:error, _error} = error -> error
       _not_its_person -> not_a_holder(key.fleet_id, key.token_id)
@@ -201,6 +207,11 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
   end
 
   defp paired_holding(_unpaired, key, _read), do: not_a_holder(key.fleet_id, key.token_id)
+
+  defp agent_stamp(epoch, actor) do
+    stamp(epoch, "agent", actor.wallet_address, actor.credential_ref)
+    |> Map.merge(%{beneficiary_privy_user_id: actor.privy_user_id, pairing_id: actor.pairing_id})
+  end
 
   defp stamp(ownership_epoch, kind, wallet, credential_ref),
     do: %{

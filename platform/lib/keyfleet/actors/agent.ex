@@ -26,13 +26,9 @@ defmodule Keyfleet.Actors.Agent do
   stands behind (`RegentAgents.HumanBacking`), each nil when there is none. The
   agent's profile saves them. The person's number is never shown or logged.
 
-  `pairing` says whether the agent may also write as the person it is paired
-  with (`Keyfleet.Agents.pairing/1`): that person's account here, as a
-  `Keyfleet.Actors.Human`, when the agent is paired with them on regents.sh and
-  backed by a person verified with World ID; otherwise what it is missing,
-  `:none` (not paired), `:not_backed` or `:person_not_here` (the person has no
-  account here). It never signs with the person's wallets: what it writes as
-  them is marked as its own.
+  `pairing_id` and `privy_user_id` identify the current server-resolved
+  delegation episode. World ID is optional. Pairing admits protected work;
+  Key and shard ownership still decide the product permissions.
   """
   @enforce_keys [:wallet_address, :chain_id, :verification_method, :audience]
   @derive {Inspect, except: [:human_id]}
@@ -46,6 +42,10 @@ defmodule Keyfleet.Actors.Agent do
     :registry_url,
     :human_id,
     :same_person_agent_count,
+    :pairing_id,
+    :privy_user_id,
+    :human_account_id,
+    role: :agent,
     pairing: :none
   ]
 
@@ -62,7 +62,7 @@ defmodule Keyfleet.Actors.Agent do
           pairing: Keyfleet.Actors.Human.t() | :none | :not_backed | :person_not_here
         }
 
-  def valid?(%__MODULE__{
+  def authenticated?(%__MODULE__{
         wallet_address: wallet,
         chain_id: chain_id,
         verification_method: method,
@@ -72,6 +72,31 @@ defmodule Keyfleet.Actors.Agent do
              ((method == :eoa_recovery and chain_id in [1, 8453]) or
                 (method in [:erc1271, :erc6492] and chain_id == 8453)),
       do: Regex.match?(~r/\A0x[0-9a-f]{40}\z/, wallet)
+
+  def authenticated?(_), do: false
+
+  @doc "Refresh account wallets without replacing the original pairing episode."
+  def refresh(%__MODULE__{pairing_id: id, privy_user_id: owner} = actor)
+      when is_binary(id) and is_binary(owner) do
+    with true <- authenticated?(actor),
+         {:ok, %__MODULE__{pairing_id: ^id, privy_user_id: ^owner} = current} <-
+           Keyfleet.Agents.with_pairing(actor) do
+      {:ok, current}
+    else
+      _ -> {:error, :not_paired}
+    end
+  end
+
+  def refresh(_), do: {:error, :not_paired}
+
+  def valid?(%__MODULE__{pairing_id: id, privy_user_id: owner} = actor)
+      when is_binary(id) and is_binary(owner) do
+    authenticated?(actor) and
+      case RegentAgents.Authority.resolve(Keyfleet.Repo, actor.wallet_address) do
+        {:ok, %{id: ^id, privy_user_id: ^owner}} -> true
+        _ -> false
+      end
+  end
 
   def valid?(_), do: false
 end

@@ -29,6 +29,8 @@ defmodule KeyfleetWeb.CodePassword do
         %{
           "fleet_id" => fleet_id,
           "wallet" => actor.wallet_address,
+          "pairing_id" => actor.pairing_id,
+          "privy_user_id" => actor.privy_user_id,
           "chain_id" => actor.chain_id,
           "method" => Atom.to_string(actor.verification_method),
           "signed_in_until" => DateTime.to_unix(actor.receipt_expires_at)
@@ -74,19 +76,24 @@ defmodule KeyfleetWeb.CodePassword do
          "wallet" => wallet,
          "chain_id" => chain_id,
          "method" => method,
-         "signed_in_until" => until
-       }) do
-    if DateTime.to_unix(DateTime.utc_now()) < until,
-      do:
-        {:ok, "w_" <> wallet,
-         %Agent{
-           wallet_address: wallet,
-           chain_id: chain_id,
-           verification_method: Map.fetch!(@methods, method),
-           audience: "keyfleet",
-           receipt_expires_at: DateTime.from_unix!(until)
-         }},
-      else: :error
+         "signed_in_until" => until,
+         "pairing_id" => pairing_id,
+         "privy_user_id" => owner
+       })
+       when is_map_key(@methods, method) do
+    with true <- DateTime.to_unix(DateTime.utc_now()) < until,
+         {:ok, %Agent{pairing_id: ^pairing_id, privy_user_id: ^owner} = actor} <-
+           Keyfleet.Agents.with_pairing(%Agent{
+             wallet_address: wallet,
+             chain_id: chain_id,
+             verification_method: Map.fetch!(@methods, method),
+             audience: "keyfleet",
+             receipt_expires_at: DateTime.from_unix!(until)
+           }) do
+      {:ok, "w_" <> wallet <> "_" <> pairing_id, actor}
+    else
+      _ -> :error
+    end
   end
 
   defp actor(%{"account_id" => account_id, "session_authority_id" => session_id}) do
@@ -95,6 +102,8 @@ defmodule KeyfleetWeb.CodePassword do
       :signed_out -> :error
     end
   end
+
+  defp actor(_old_or_invalid_password), do: :error
 
   defp known(fleet_id) do
     case Fleets.get_fleet(fleet_id, actor: %System{}) do

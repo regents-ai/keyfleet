@@ -6,6 +6,7 @@ defmodule Keyfleet.Accounts do
   resources do
     resource Keyfleet.Accounts.HumanAccount do
       define :get_by_privy_did, action: :by_privy_did, args: [:privy_did], not_found_error?: false
+      define :points_account, action: :points_account, args: [:id]
       define :get_human_account, action: :read_self, args: [:id]
       define :accounts_holding_wallets, action: :holding_wallets, args: [:wallets]
 

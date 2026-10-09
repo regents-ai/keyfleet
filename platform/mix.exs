@@ -4,11 +4,9 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one published commit. To move a pin,
   # change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "f8a93857d4ae914e752d7d838a76d4c19c995872"
+  @elixir_utils_ref "a24d9bf5ce8dbca5852b081613e9e1674623512e"
   @design_system "https://github.com/regents-ai/design-system.git"
   @design_system_ref "4da6db2bfe3559a8f8a761018dc099a28ab5f6a3"
-  @regents "https://github.com/regents-ai/regents.git"
-  @regents_ref "ba23ceee534c34ff9f773a8c1b38bfca49d7b790"
 
   def project do
     [
@@ -64,14 +62,24 @@ defmodule Keyfleet.MixProject do
       {:ash_oban, "~> 0.9.0"},
       {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
       {:mdex, "== 0.13.3"},
-      {:regent_privy, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "privy"},
-      {:regent_identity, git: @regents, ref: @regents_ref, sparse: "identity"},
-      {:regent_agents, git: @regents, ref: @regents_ref, sparse: "agents"},
+      {:regent_privy,
+       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "privy", override: true},
+      {:regent_identity,
+       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "ash_components/identity"},
+      {:regent_agents,
+       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "ash_components/agents", override: true},
       {:regent_ui, git: @design_system, ref: @design_system_ref, sparse: "regent_ui"},
       {:regent_agent_access, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "agent_access"},
-      {:siwa, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "siwa/siwa-elixir/apps/siwa"},
+      {:siwa,
+       git: @elixir_utils,
+       ref: @elixir_utils_ref,
+       sparse: "siwa/siwa-elixir/apps/siwa",
+       override: true},
       {:regent_format, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "format"},
-      {:regent_chain, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "chain"},
+      {:regent_chain,
+       git: @elixir_utils, ref: @elixir_utils_ref, sparse: "chain", override: true},
+      {:regent_credits, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "credits"},
+      {:regent_points, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "points"},
       {:simple_sat, "~> 0.1"},
       {:sourceror, "~> 1.12", only: [:dev, :test], runtime: false},
       {:lazy_html, ">= 0.1.0", only: :test},
@@ -134,11 +142,13 @@ defmodule Keyfleet.MixProject do
         "compile",
         "regent_ui.assets",
         "regent_identity.assets",
+        "regent_agent_access.assets",
         "esbuild keyfleet"
       ],
       "assets.deploy": [
         "regent_ui.assets",
         "regent_identity.assets",
+        "regent_agent_access.assets",
         "esbuild keyfleet --minify",
         "phx.digest"
       ],

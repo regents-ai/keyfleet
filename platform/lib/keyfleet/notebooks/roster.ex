@@ -106,15 +106,18 @@ defmodule Keyfleet.Notebooks.Roster do
     agents =
       [fleet_id]
       |> Keyfleet.Agents.agents_here_in!(actor: %System{})
-      |> Enum.map(fn profile ->
-        {Notebooks.agent_subject(profile.id),
-         Keyfleet.Agents.with_pairing(%Agent{
-           wallet_address: profile.wallet_address,
-           chain_id: 8453,
-           verification_method: :eoa_recovery,
-           audience: "keyfleet",
-           human_id: profile.human_id
-         })}
+      |> Enum.flat_map(fn profile ->
+        case Keyfleet.Agents.with_pairing(%Agent{
+               wallet_address: profile.wallet_address,
+               chain_id: 8453,
+               verification_method: :eoa_recovery,
+               audience: "keyfleet",
+               human_id: profile.human_id
+             }) do
+          {:ok, actor} -> [{Notebooks.agent_subject(profile.id), actor}]
+          {:error, :not_paired} -> []
+          {:error, error} -> raise "notebook pairing check failed: #{inspect(error.__struct__)}"
+        end
       end)
 
     Enum.reduce_while(people ++ agents, {:ok, MapSet.new()}, fn {subject, actor},

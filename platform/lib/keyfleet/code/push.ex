@@ -23,7 +23,16 @@ defmodule Keyfleet.Code.Push do
     defaults [:read]
 
     create :record do
-      accept [:fleet_id, :token_id, :wallet, :ref, :head]
+      accept [
+        :fleet_id,
+        :token_id,
+        :wallet,
+        :ref,
+        :head,
+        :acting_agent_wallet,
+        :beneficiary_privy_user_id,
+        :agent_pairing_id
+      ]
     end
 
     read :recent do
@@ -44,6 +53,9 @@ defmodule Keyfleet.Code.Push do
   end
 
   attributes do
+    attribute :acting_agent_wallet, :string
+    attribute :beneficiary_privy_user_id, :string, sensitive?: true
+    attribute :agent_pairing_id, :uuid
     uuid_primary_key :id
     attribute :fleet_id, :string, allow_nil?: false, public?: true
     attribute :token_id, :integer, allow_nil?: false, public?: true

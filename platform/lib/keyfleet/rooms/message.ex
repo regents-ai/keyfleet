@@ -124,6 +124,8 @@ defmodule Keyfleet.Rooms.Message do
 
   actions do
     create :send_message do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       accept []
       transaction? true
 
@@ -157,6 +159,8 @@ defmodule Keyfleet.Rooms.Message do
     # A post written to one of the fleet's keys, in that key's thread, which
     # the first post opens. Otherwise the same as posting in a room.
     create :send_to_key do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       accept []
       transaction? true
 
@@ -190,6 +194,8 @@ defmodule Keyfleet.Rooms.Message do
     # naming itself (`Keyfleet.Rooms.Changes.NameRoom`), so the room's watchers
     # hear of it once the naming commits. Its body is the room's new topic.
     create :note_room_named do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       public? false
       accept []
       transaction? true
@@ -497,6 +503,10 @@ defmodule Keyfleet.Rooms.Message do
   end
 
   attributes do
+    attribute :acting_agent_wallet, :string, writable?: false
+    attribute :beneficiary_privy_user_id, :string, writable?: false, sensitive?: true
+    attribute :agent_pairing_id, :uuid, writable?: false
+
     uuid_primary_key :id
 
     attribute :seq, :integer,

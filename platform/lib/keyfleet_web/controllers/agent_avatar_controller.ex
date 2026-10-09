@@ -26,7 +26,10 @@ defmodule KeyfleetWeb.AgentAvatarController do
     :chain_id,
     :verification_method,
     :audience,
-    :credential_ref
+    :credential_ref,
+    :pairing_id,
+    :privy_user_id,
+    :human_account_id
   ]
 
   def start(conn, params) do
@@ -78,12 +81,14 @@ defmodule KeyfleetWeb.AgentAvatarController do
   defp store(conn, actor, profile_id, declared) do
     cap = Avatar.max_bytes()
 
-    with [type] when type == declared.content_type <- get_req_header(conn, "content-type"),
+    with true <- Agent.valid?(actor),
+         [type] when type == declared.content_type <- get_req_header(conn, "content-type"),
          {:ok, bytes, conn} when byte_size(bytes) <= cap <-
            read_body(conn, length: cap, read_length: cap + 1),
          {:ok, profile} <- Agents.store_avatar(actor, profile_id, declared, bytes) do
       json(conn, %{avatar_url: Avatar.url(profile)})
     else
+      false -> Refusal.json(conn, 403, "agent_not_paired")
       {:more, _partial, conn} -> Refusal.json(conn, 413, "request_too_large")
       {:error, :mismatch} -> Refusal.json(conn, 422, "avatar_mismatch")
       {:error, :unreadable} -> Refusal.json(conn, 422, "invalid_avatar")

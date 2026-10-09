@@ -82,6 +82,14 @@ defmodule KeyfleetWeb.NotebookSocket do
     if state.sign_in_topic,
       do: :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, state.sign_in_topic)
 
+    case state.holder do
+      {:agent, agent} ->
+        Phoenix.PubSub.subscribe(Keyfleet.PubSub, RegentAgents.topic(agent.privy_user_id))
+
+      _ ->
+        :ok
+    end
+
     case still_holds(state) do
       :ok -> listen(state)
       {:closed, reason} -> {:stop, :normal, {1008, reason}, state}
@@ -100,7 +108,8 @@ defmodule KeyfleetWeb.NotebookSocket do
     end
   end
 
-  defp signed_in({:agent, agent}), do: {:ok, agent}
+  defp signed_in({:agent, agent}),
+    do: if(Keyfleet.Actors.Agent.valid?(agent), do: {:ok, agent}, else: :signed_out)
 
   defp signed_in({:person, session_authority_id, account_id}) do
     case Notebooks.person(session_authority_id, account_id) do
@@ -123,9 +132,25 @@ defmodule KeyfleetWeb.NotebookSocket do
   end
 
   @impl WebSock
+  def handle_in({data, opcode: opcode}, %{holder: {:agent, _}} = state) do
+    case still_holds(state) do
+      :ok -> to_hub(state, {opcode, data})
+      {:closed, reason} -> {:stop, :normal, {1008, reason}, state}
+      :unreadable -> {:stop, :normal, 1011, state}
+    end
+  end
+
   def handle_in({data, opcode: opcode}, state), do: to_hub(state, {opcode, data})
 
   @impl WebSock
+  def handle_info(:agents_changed, state) do
+    case still_holds(state) do
+      :ok -> {:ok, state}
+      {:closed, reason} -> {:stop, :normal, {1008, reason}, state}
+      :unreadable -> {:stop, :normal, 1011, state}
+    end
+  end
+
   def handle_info(:notebook_access_ended, state),
     do: {:stop, :normal, {1008, @closed_reason}, state}
 
@@ -161,7 +186,17 @@ defmodule KeyfleetWeb.NotebookSocket do
   end
 
   # Passes what the hub sent on to the client, in order.
-  defp relay(state, parts) do
+  defp relay(%{holder: {:agent, _}} = state, parts) do
+    case still_holds(state) do
+      :ok -> relay_parts(state, parts)
+      {:closed, reason} -> {:stop, :normal, {1008, reason}, state}
+      :unreadable -> {:stop, :normal, 1011, state}
+    end
+  end
+
+  defp relay(state, parts), do: relay_parts(state, parts)
+
+  defp relay_parts(state, parts) do
     Enum.reduce_while(parts, {:ok, state, []}, fn data, {:ok, state, out} ->
       case from_hub(state, data) do
         {:ok, state, frames} -> {:cont, {:ok, state, out ++ frames}}

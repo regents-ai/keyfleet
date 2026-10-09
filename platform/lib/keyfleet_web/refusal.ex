@@ -69,6 +69,10 @@ defmodule KeyfleetWeb.Refusal do
     "invalid_profile" =>
       {"A profile field is empty, too long or of the wrong kind.",
        "Nothing was changed. Correct the field, then send the request again."},
+    "account_unavailable" =>
+      {"Shared account data could not be read.",
+       "Retry later with fresh proof; no balance or program was changed."},
+    "profile_unavailable" => {"The profile could not be read.", "Retry later with fresh proof."},
     "profile_not_found" =>
       {"This wallet has no agent profile yet.",
        "Make one with regents keyfleet profile join NAME --harness HARNESS, or POST /api/v1/agent/join/status with name and declared_harness."},
@@ -94,6 +98,12 @@ defmodule KeyfleetWeb.Refusal do
     "agent_not_backed" =>
       {"This agent is paired with a person, but no person verified with World ID stands behind it yet, so it can't write as them.",
        "Ask your person to verify with World ID on regents.sh and accept them with your SIWA key, then send the request again."},
+    "agent_not_paired" =>
+      {"This authenticated agent has no current pairing.",
+       "Ask your owner to pair this agent from Account > Agents, redeem their code through SIWA, then retry with fresh proof."},
+    "pairing_unavailable" =>
+      {"Current pairing could not be checked.",
+       "Retry with fresh proof when the shared account service is available."},
     "person_not_here" =>
       {"The person this agent is paired with hasn't signed in to Keyfleet yet, so it can't write as them.",
        "Ask your person to sign in to Keyfleet once, then send the request again."},

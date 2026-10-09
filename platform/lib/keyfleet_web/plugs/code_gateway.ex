@@ -61,7 +61,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
     with {:route, {:ok, fleet_id, need, target}} <- {:route, route(conn)},
          {:password, {:ok, subject, actor}} <- {:password, signed_in(conn, fleet_id)},
          {:holder, {:ok, %{} = holder}} <-
-           {:holder, Code.admitted(fleet_id, subject, fn -> Code.holder(actor, fleet_id) end)},
+           {:holder, current_holder(fleet_id, subject, actor)},
          {:allowed, {:ok, pass}} <- {:allowed, pass(fleet_id, holder, need)},
          {:owner, {:ok, owner}} <- {:owner, Code.owner(fleet_id)} do
       forward(
@@ -95,6 +95,12 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
         refuse(conn, 503, "code_unavailable")
     end
   end
+
+  defp current_holder(fleet_id, _subject, %Keyfleet.Actors.Agent{} = actor),
+    do: Code.holder(actor, fleet_id)
+
+  defp current_holder(fleet_id, subject, actor),
+    do: Code.admitted(fleet_id, subject, fn -> Code.holder(actor, fleet_id) end)
 
   # When the store took a push, what it moved is recorded under the holder.
   defp sent(

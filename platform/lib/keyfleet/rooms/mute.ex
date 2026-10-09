@@ -32,6 +32,8 @@ defmodule Keyfleet.Rooms.Mute do
     defaults [:read]
 
     create :mute do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       accept [:fleet_id, :token_id]
       upsert? true
       upsert_identity :one_per_key
@@ -42,7 +44,10 @@ defmodule Keyfleet.Rooms.Mute do
       change Keyfleet.Rooms.Changes.SetMuter
     end
 
-    destroy :unmute
+    destroy :unmute do
+      require_atomic? false
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+    end
 
     # The actor's mutes in a fleet, by key number.
     read :in_fleet do
@@ -86,6 +91,10 @@ defmodule Keyfleet.Rooms.Mute do
   end
 
   attributes do
+    attribute :acting_agent_wallet, :string, writable?: false
+    attribute :beneficiary_privy_user_id, :string, writable?: false, sensitive?: true
+    attribute :agent_pairing_id, :uuid, writable?: false
+
     uuid_primary_key :id
 
     attribute :muter, :string, allow_nil?: false, public?: true

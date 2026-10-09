@@ -36,6 +36,8 @@ defmodule Keyfleet.Dms.Block do
 
     # Blocking a Key that is already blocked keeps the block it has.
     create :block do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       accept []
 
       argument :fleet_id, :string, allow_nil?: false
@@ -55,7 +57,10 @@ defmodule Keyfleet.Dms.Block do
       change set_attribute(:blocked_token_id, arg(:blocked_token_id))
     end
 
-    destroy :unblock
+    destroy :unblock do
+      require_atomic? false
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+    end
 
     # The Keys one Key has blocked, lowest first.
     read :of_key do
@@ -98,6 +103,10 @@ defmodule Keyfleet.Dms.Block do
   end
 
   attributes do
+    attribute :acting_agent_wallet, :string, writable?: false
+    attribute :beneficiary_privy_user_id, :string, writable?: false, sensitive?: true
+    attribute :agent_pairing_id, :uuid, writable?: false
+
     uuid_primary_key :id
 
     attribute :blocker_token_id, :integer,

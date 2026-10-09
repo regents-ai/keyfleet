@@ -35,6 +35,12 @@ defmodule Keyfleet.Accounts.HumanAccount do
       filter expr(privy_user_id == ^arg(:privy_did))
     end
 
+    read :points_account do
+      get? true
+      argument :id, :integer, allow_nil?: false
+      filter expr(id == ^arg(:id))
+    end
+
     read :read_self do
       get? true
       argument :id, :integer, allow_nil?: false
@@ -72,7 +78,13 @@ defmodule Keyfleet.Accounts.HumanAccount do
   end
 
   policies do
-    policy action([:by_privy_did, :holding_wallets, :register_verified, :refresh_verified]) do
+    policy action([
+             :by_privy_did,
+             :holding_wallets,
+             :register_verified,
+             :refresh_verified,
+             :points_account
+           ]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
 

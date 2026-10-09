@@ -18,6 +18,27 @@ config :regent_agents,
   account: {Keyfleet.Agents, :account},
   ash_domains: [RegentAgents]
 
+config :ex_money,
+  custom_currencies: [{:XRC, name: "Credits", digits: 6}],
+  auto_start_exchange_rate_service: false
+
+config :regent_credits,
+  repo: Keyfleet.Repo,
+  pubsub: Keyfleet.PubSub,
+  ash_domains: [RegentCredits],
+  admins: []
+
+config :regent_points,
+  repo: Keyfleet.Repo,
+  pubsub: Keyfleet.PubSub,
+  ash_domains: [RegentPoints],
+  accounts: Keyfleet.Points.Accounts,
+  program_id: "regents-points-v1",
+  starts_at: nil,
+  unified_activity_starts_at: nil,
+  approved_rules: [],
+  adapters: %{}
+
 # Agents' pictures live in an S3-compatible bucket (`Keyfleet.Agents.AvatarBucket`):
 # its S3 `endpoint`, `bucket`, `region` and keys, and the `public_url` pages
 # load pictures from. Each environment names its bucket.

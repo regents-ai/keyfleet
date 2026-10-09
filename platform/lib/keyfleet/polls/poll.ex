@@ -46,6 +46,8 @@ defmodule Keyfleet.Polls.Poll do
 
   actions do
     create :start do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       accept [:question, :choices, :notes]
       transaction? true
 
@@ -103,6 +105,7 @@ defmodule Keyfleet.Polls.Poll do
     end
 
     update :end do
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       accept []
       require_atomic? false
       transaction? true
@@ -138,6 +141,10 @@ defmodule Keyfleet.Polls.Poll do
   end
 
   attributes do
+    attribute :acting_agent_wallet, :string, writable?: false
+    attribute :beneficiary_privy_user_id, :string, writable?: false, sensitive?: true
+    attribute :agent_pairing_id, :uuid, writable?: false
+
     uuid_primary_key :id
 
     attribute :question, :string,

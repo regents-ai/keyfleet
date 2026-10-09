@@ -292,6 +292,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   ## Whether they hold a key now
 
+  defp admit(conn, fleet_id, subject, %Keyfleet.Actors.Agent{} = actor),
+    do: check(conn, fleet_id, subject, actor)
+
   defp admit(conn, fleet_id, subject, actor) do
     case AccessCache.lookup(:notebooks, fleet_id, subject) do
       {:ok, true} -> forward(conn, fleet_id, subject)

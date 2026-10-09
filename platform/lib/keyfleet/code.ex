@@ -71,6 +71,19 @@ defmodule Keyfleet.Code do
     within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
     holder = %{token_id: token_id, wallet: wallet, restricted?: false}
 
+    holder =
+      case actor do
+        %Keyfleet.Actors.Agent{} ->
+          Map.merge(holder, %{
+            acting_agent_wallet: actor.wallet_address,
+            beneficiary_privy_user_id: actor.privy_user_id,
+            agent_pairing_id: actor.pairing_id
+          })
+
+        _ ->
+          holder
+      end
+
     case KeyActor.command(actor, fleet_id, token_id, "code", within) do
       {:ok, _command} -> {:ok, holder}
       {:error, %EditsRestrictedError{}} -> {:ok, %{holder | restricted?: true}}
@@ -128,7 +141,13 @@ defmodule Keyfleet.Code do
   def record_pushes(fleet_id, holder, updates) do
     updates
     |> Enum.map(
-      &Map.merge(&1, %{fleet_id: fleet_id, token_id: holder.token_id, wallet: holder.wallet})
+      &Map.merge(
+        &1,
+        Map.merge(
+          %{fleet_id: fleet_id, token_id: holder.token_id, wallet: holder.wallet},
+          Map.take(holder, [:acting_agent_wallet, :beneficiary_privy_user_id, :agent_pairing_id])
+        )
+      )
     )
     |> Ash.bulk_create!(Push, :record,
       actor: %System{},

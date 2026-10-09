@@ -93,6 +93,8 @@ defmodule Keyfleet.Dms.Message do
     end
 
     create :send do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       accept []
       transaction? true
 
@@ -302,6 +304,10 @@ defmodule Keyfleet.Dms.Message do
   end
 
   attributes do
+    attribute :acting_agent_wallet, :string, writable?: false
+    attribute :beneficiary_privy_user_id, :string, writable?: false, sensitive?: true
+    attribute :agent_pairing_id, :uuid, writable?: false
+
     uuid_primary_key :id
 
     attribute :seq, :integer,

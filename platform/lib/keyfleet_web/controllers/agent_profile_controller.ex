@@ -17,6 +17,14 @@ defmodule KeyfleetWeb.AgentProfileController do
     end
   end
 
+  def show(conn, _params) do
+    case Keyfleet.Agents.get_my_profile(actor: conn.assigns.agent_actor) do
+      {:ok, nil} -> Refusal.json(conn, 404, "profile_not_found")
+      {:ok, profile} -> respond_profile(conn, profile)
+      {:error, _} -> Refusal.json(conn, 503, "profile_unavailable")
+    end
+  end
+
   def update(conn, params) do
     actor = conn.assigns.agent_actor
 

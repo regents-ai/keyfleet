@@ -7,9 +7,6 @@
 // the wallet asks the person to approve. A button the chain's state holds back
 // answers why, as the page shows it.
 //
-// A page's rooms and a Key's messages: an element names its tools with
-// `data-webmcp-tools`, and the page's own server answers each call, as the
-// person signed in on the page (KeyfleetWeb.RoomTools).
 
 import manifest from "../../priv/tool_manifest.json" with {type: "json"}
 
@@ -147,55 +144,5 @@ export function offerPageTool(root: HTMLElement, pressButton: PressButton): Abor
       registration.abort()
       console.warn("The browser tool could not be offered.", error)
     })
-  return registration
-}
-
-/** Asks the page's server to answer one call of the named tool; it answers in the tool's own shape. */
-export type AskServer = (tool: string, input: unknown) => Promise<unknown>
-
-function liveTool(entry: Entry, askServer: AskServer): ModelContextTool {
-  const changes = !entry.annotations.readOnlyHint
-  return {
-    name: entry.name,
-    title: entry.title,
-    description: entry.description,
-    inputSchema: entry.input_schema,
-    annotations: entry.annotations,
-    async execute(input: unknown, {signal}: {signal?: AbortSignal}) {
-      const problem = inputProblem(input, entry.input_schema)
-      if (problem) return refusal("invalid_input", problem, "Fix the call, then call again.")
-      if (signal?.aborted) return refusal("cancelled", "The call was cancelled; nothing was sent.", "Call again to send it.")
-      try {
-        return await askServer(entry.name, input)
-      } catch {
-        // The server may have heard a change before the page lost it.
-        return changes
-          ? refusal(
-              "connection_lost",
-              "This page lost its connection, so it may or may not have gone through.",
-              "Read again once the page is back, before calling again.",
-            )
-          : refusal("connection_lost", "This page lost its connection.", "Call again once the page is back.")
-      }
-    },
-  }
-}
-
-/**
- * Offers the tools the element at `root` names, while it is on the page.
- * Aborting the answer takes them all away again; if the browser turns one
- * down, none of them is offered.
- */
-export function offerLiveTools(root: HTMLElement, askServer: AskServer): AbortController | undefined {
-  if (!("modelContext" in document)) return undefined
-  const names = (root.dataset.webmcpTools ?? "").split(" ")
-  const registration = new AbortController()
-
-  for (const entry of entries.filter(candidate => names.includes(candidate.name) && candidate.scope !== "site")) {
-    document.modelContext.registerTool(liveTool(entry, askServer), {signal: registration.signal}).catch((error: unknown) => {
-      registration.abort()
-      console.warn("The browser tools could not be offered.", error)
-    })
-  }
   return registration
 }

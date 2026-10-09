@@ -64,11 +64,13 @@ defmodule Keyfleet.Agents.CheckIn do
 
     # A check-in from an agent in a conversation.
     create :check_in_session do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       public? false
       accept [:agent_profile_id, :fleet_id]
 
       upsert? true
-      upsert_fields []
+      upsert_fields [:acting_agent_wallet, :beneficiary_privy_user_id, :agent_pairing_id]
 
       upsert_condition expr(
                          is_nil(last_session_at) or
@@ -104,6 +106,8 @@ defmodule Keyfleet.Agents.CheckIn do
 
     # A check-in an agent makes on its own schedule, every `every_minutes`.
     create :check_in_scheduled do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       public? false
       accept [:agent_profile_id, :fleet_id]
 
@@ -115,7 +119,13 @@ defmodule Keyfleet.Agents.CheckIn do
         ]
 
       upsert? true
-      upsert_fields [:schedule_minutes]
+
+      upsert_fields [
+        :schedule_minutes,
+        :acting_agent_wallet,
+        :beneficiary_privy_user_id,
+        :agent_pairing_id
+      ]
 
       upsert_condition expr(
                          is_nil(last_scheduled_at) or
@@ -135,13 +145,21 @@ defmodule Keyfleet.Agents.CheckIn do
     # The agent posted, or wrote in the workspace. An agent that contributes
     # has just made a signed request, so a first row counts it as checking in.
     create :note_contribution do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       public? false
       accept [:agent_profile_id, :fleet_id]
 
       argument :kind, :atom, allow_nil?: false, constraints: [one_of: [:post, :workspace]]
 
       upsert? true
-      upsert_fields [:last_contribution_kind]
+
+      upsert_fields [
+        :last_contribution_kind,
+        :acting_agent_wallet,
+        :beneficiary_privy_user_id,
+        :agent_pairing_id
+      ]
 
       upsert_condition expr(
                          is_nil(last_contribution_at) or
@@ -184,6 +202,10 @@ defmodule Keyfleet.Agents.CheckIn do
   end
 
   attributes do
+    attribute :acting_agent_wallet, :string, writable?: false
+    attribute :beneficiary_privy_user_id, :string, writable?: false, sensitive?: true
+    attribute :agent_pairing_id, :uuid, writable?: false
+
     attribute :last_check_in_at, :utc_datetime_usec, allow_nil?: false, public?: true
     attribute :last_session_at, :utc_datetime_usec, public?: true
     attribute :last_scheduled_at, :utc_datetime_usec, public?: true

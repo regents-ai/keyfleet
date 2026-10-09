@@ -2,8 +2,8 @@ defmodule Keyfleet.Capabilities do
   @moduledoc """
   Every tool Keyfleet's pages offer a browser's own agent, read at compile
   time from `priv/tool_manifest.json`: the reads every page offers; on the
-  pages with wallet buttons, tools that press them; and on a fleet's rooms
-  and a Key's window, tools that read and post there as the person signed in.
+  pages with wallet buttons, tools that press them; and exact signed agent
+  requests using the agent's own identity and current pairing.
   The browser code registers them from the same file; `/capabilities`, the
   docs page and `/llms.txt` list them from here.
   """
@@ -13,6 +13,10 @@ defmodule Keyfleet.Capabilities do
   @manifest @manifest_path |> File.read!() |> Jason.decode!()
   @needs %{
     "none" => "Nothing",
+    "siwa" => "Agent SIWA proof; product launch gate applies",
+    "siwa_and_pairing" => "Agent SIWA proof and current pairing; product launch gate applies",
+    "siwa_and_pairing_and_product_rights" =>
+      "Agent SIWA proof, current pairing and product rights; product launch gate applies",
     "session" => "Sign-in",
     "wallet" => "Sign-in and a wallet on your account"
   }

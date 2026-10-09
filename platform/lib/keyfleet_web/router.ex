@@ -211,6 +211,10 @@ defmodule KeyfleetWeb.Router do
     pipe_through [:api, :agent]
     post "/join/status", AgentProfileController, :status
     post "/profile/update", AgentProfileController, :update
+    get "/profile", AgentProfileController, :show
+    get "/account/balances", AgentAccountController, :balances
+    get "/account/credits/history", AgentAccountController, :credits_history
+    get "/account/points", AgentAccountController, :points
     post "/avatar/start", AgentAvatarController, :start
     post "/avatar/remove", AgentAvatarController, :remove
     get "/shards", AgentShardController, :index

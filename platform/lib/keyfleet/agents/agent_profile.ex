@@ -38,6 +38,9 @@ defmodule Keyfleet.Agents.AgentProfile do
 
   actions do
     create :ensure_profile do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
+
       accept [
         :name,
         :declared_harness,
@@ -161,6 +164,9 @@ defmodule Keyfleet.Agents.AgentProfile do
     end
 
     update :edit_my_profile do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      require_atomic? false
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       atomic_upgrade_with :get_my_profile
 
       accept [
@@ -179,6 +185,8 @@ defmodule Keyfleet.Agents.AgentProfile do
     # (`Keyfleet.Agents.store_avatar/4`). The picture it replaces is deleted
     # after the change commits.
     update :set_avatar do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       require_atomic? false
       accept [:avatar_key]
       require_attributes [:avatar_key]
@@ -187,6 +195,8 @@ defmodule Keyfleet.Agents.AgentProfile do
     end
 
     update :remove_avatar do
+      change Keyfleet.Agents.Changes.RecordAuthority
+      change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       require_atomic? false
       change get_and_lock_for_update()
       change set_attribute(:avatar_key, nil)
@@ -231,6 +241,10 @@ defmodule Keyfleet.Agents.AgentProfile do
   end
 
   attributes do
+    attribute :acting_agent_wallet, :string, writable?: false
+    attribute :beneficiary_privy_user_id, :string, writable?: false, sensitive?: true
+    attribute :agent_pairing_id, :uuid, writable?: false
+
     uuid_primary_key :id
 
     attribute :wallet_address, :string do
@@ -393,39 +407,35 @@ defmodule Keyfleet.Agents.AgentProfile do
     end
 
     # The lowest-numbered of the fleets' keys held now by any wallet of the
-    # World ID person this agent is backed by and paired with
+    # person this agent is paired with
     # (`Keyfleet.Agents.Pairing`). Read in SQL because the pairing and the
     # person's wallets are for trusted code only (their policies admit the
     # system actor alone); only the key's number leaves here.
     calculate :paired_key,
               :integer,
               expr(
-                if is_nil(human_id) do
-                  nil
-                else
-                  fragment(
-                    """
-                    (SELECT min(held.token_id)
-                     FROM regent_agents.paired_agents AS pairing
-                     JOIN regent_names.platform_human_users AS account
-                       ON account.privy_user_id = pairing.privy_user_id
-                     JOIN keyfleet_app.key_attachments AS held
-                       ON held.owner_wallet IN (
-                         SELECT lower(linked.wallet)
-                         FROM unnest(account.wallet_address || account.wallet_addresses)
-                           AS linked(wallet)
-                       )
-                       AND held.ownership_epoch = (
-                         SELECT max(epoch.ownership_epoch)
-                         FROM keyfleet_app.key_attachments AS epoch
-                         WHERE epoch.fleet_id = held.fleet_id AND epoch.token_id = held.token_id
-                       )
-                     WHERE pairing.wallet = ? AND held.fleet_id = ANY(?))
-                    """,
-                    wallet_address,
-                    ^arg(:fleet_ids)
-                  )
-                end
+                fragment(
+                  """
+                  (SELECT min(held.token_id)
+                   FROM regent_agents.paired_agents AS pairing
+                   JOIN regent_names.platform_human_users AS account
+                     ON account.privy_user_id = pairing.privy_user_id
+                   JOIN keyfleet_app.key_attachments AS held
+                     ON held.owner_wallet IN (
+                       SELECT lower(linked.wallet)
+                       FROM unnest(account.wallet_address || account.wallet_addresses)
+                         AS linked(wallet)
+                     )
+                     AND held.ownership_epoch = (
+                       SELECT max(epoch.ownership_epoch)
+                       FROM keyfleet_app.key_attachments AS epoch
+                       WHERE epoch.fleet_id = held.fleet_id AND epoch.token_id = held.token_id
+                     )
+                   WHERE pairing.wallet = ? AND held.fleet_id = ANY(?))
+                  """,
+                  wallet_address,
+                  ^arg(:fleet_ids)
+                )
               ) do
       argument :fleet_ids, {:array, :string}, allow_nil?: false
     end

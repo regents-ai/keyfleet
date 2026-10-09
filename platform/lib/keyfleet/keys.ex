@@ -154,8 +154,7 @@ defmodule Keyfleet.Keys do
   highest-ranked key it holds an active shard of, and `wallet` is its own. Everything
   either writes in the fleet is written as that key.
 
-  An agent with neither, paired with a person whose account is here and backed
-  by World ID (`Keyfleet.Actors.Agent`'s `pairing`), is that person's key, with
+  An agent with neither, paired with a person whose account is here (`Keyfleet.Actors.Agent`'s `pairing`), is that person's key, with
   `for_person: true`: what it writes there is the person's, marked as the
   agent's.
   """
@@ -167,11 +166,15 @@ defmodule Keyfleet.Keys do
   end
 
   def identity(%Agent{wallet_address: wallet} = actor, fleet_id) do
-    if Agent.valid?(actor) do
-      case held_or_shard(fleet_id, wallet, actor) do
-        %{token_id: token_id} -> %{token_id: token_id, wallet: wallet}
-        nil -> for_person(actor.pairing, fleet_id)
-      end
+    case Agent.refresh(actor) do
+      {:ok, actor} ->
+        case held_or_shard(fleet_id, wallet, actor) do
+          %{token_id: token_id} -> %{token_id: token_id, wallet: wallet}
+          nil -> for_person(actor.pairing, fleet_id)
+        end
+
+      _ ->
+        nil
     end
   end
 
@@ -193,7 +196,7 @@ defmodule Keyfleet.Keys do
   as `identity/2`: a person is every key their wallets hold, with the wallet
   holding it; an agent is every key its wallet holds and every key it holds an
   active shard of, with its own wallet; an agent with neither, paired with a
-  person here and backed by World ID, is that person's keys, `for_person: true`.
+  person here, is that person's keys, `for_person: true`.
   Nobody else is any key. Direct messages read and send as these keys
   (`Keyfleet.Dms`): a key's new holder sees only messages from when they got it.
   """
@@ -208,20 +211,22 @@ defmodule Keyfleet.Keys do
   end
 
   def held_keys(%Agent{wallet_address: wallet} = actor, fleet_id) do
-    if Agent.valid?(actor) do
-      held = keys_held_in_fleet!(fleet_id, [wallet], actor: actor)
+    case Agent.refresh(actor) do
+      {:ok, actor} ->
+        held = keys_held_in_fleet!(fleet_id, [wallet], actor: actor)
 
-      sharded =
-        for shard <- active_shards_held_by!(wallet, actor: actor),
-            shard.fleet_id == fleet_id,
-            do: shard
+        sharded =
+          for shard <- active_shards_held_by!(wallet, actor: actor),
+              shard.fleet_id == fleet_id,
+              do: shard
 
-      case Enum.uniq_by(Enum.sort_by(held ++ sharded, & &1.token_id), & &1.token_id) do
-        [] -> person_keys(actor.pairing, fleet_id)
-        keys -> Enum.map(keys, &agent_key(&1, wallet))
-      end
-    else
-      []
+        case Enum.uniq_by(Enum.sort_by(held ++ sharded, & &1.token_id), & &1.token_id) do
+          [] -> person_keys(actor.pairing, fleet_id)
+          keys -> Enum.map(keys, &agent_key(&1, wallet))
+        end
+
+      _ ->
+        []
     end
   end
 

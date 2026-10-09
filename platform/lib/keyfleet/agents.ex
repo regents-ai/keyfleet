@@ -48,29 +48,22 @@ defmodule Keyfleet.Agents do
     %{display_name: account && account.display_name}
   end
 
-  @doc """
-  The agent with its `pairing` (`Keyfleet.Actors.Agent`): the account of the
-  person it is paired with, when it is backed by a person verified with World
-  ID and that person has an account here; otherwise what it is missing.
-  """
-  def with_pairing(%Keyfleet.Actors.Agent{} = agent),
-    do: %{agent | pairing: pairing(agent)}
-
-  defp pairing(agent) do
-    system = %Keyfleet.Actors.System{}
-
-    case get_pairing!(agent.wallet_address, actor: system) do
-      nil ->
-        :none
-
-      _paired when is_nil(agent.human_id) ->
-        :not_backed
-
-      %{privy_user_id: person} ->
-        case Keyfleet.Accounts.get_by_privy_did!(person, actor: system) do
-          nil -> :person_not_here
-          account -> Keyfleet.Actors.Human.for_account(account)
-        end
+  @doc "Resolve current delegation from the shared pairing authority."
+  def with_pairing(%Keyfleet.Actors.Agent{} = agent) do
+    with {:ok, pairing} <- RegentAgents.Authority.resolve(Keyfleet.Repo, agent.wallet_address),
+         {:ok, account} <-
+           Keyfleet.Accounts.get_by_privy_did(pairing.privy_user_id,
+             actor: %Keyfleet.Actors.System{}
+           ) do
+      {:ok,
+       %{
+         agent
+         | pairing_id: pairing.id,
+           privy_user_id: pairing.privy_user_id,
+           human_account_id: account && account.id,
+           pairing:
+             if(account, do: Keyfleet.Actors.Human.for_account(account), else: :person_not_here)
+       }}
     end
   end
 
@@ -135,7 +128,7 @@ defmodule Keyfleet.Agents do
 
   @doc """
   How many agents are here in the fleet: holding one of its keys or an active
-  shard of one, or paired with a World ID person who holds one. `{:ok,
+  shard of one, or paired with a person who holds one. `{:ok,
   count}`, or `{:error, failure}` when the database doesn't answer (see
   `Keyfleet.Count`).
   """

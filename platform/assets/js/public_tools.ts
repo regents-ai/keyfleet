@@ -1,11 +1,21 @@
-// The read-only tools every page offers a browser's own agent (WebMCP draft,
-// document.modelContext). priv/tool_manifest.json describes each tool once;
-// this file only adds the public read behind it. Nothing here signs in, writes
-// or spends; page_tools.ts offers the tools that press a page's wallet buttons.
+// Manifest-listed public reads and exact signed agent tools. The existing SIWA
+// signer supplies proof; browser cookies never authorize these requests.
+// page_tools.ts keeps the separately approved wallet-button interaction.
 
 import manifest from "../../priv/tool_manifest.json" with {type: "json"}
 
+import {signedTools, type SignedOperation, type SignedInput} from "../vendor/regent_agent_access/signed_tools"
+
 import {inputProblem, type Schema} from "./tool_input"
+
+function signedTransport() {
+  return signedTools({origin: window.location.origin,
+    trustedOrigins: [document.querySelector<HTMLMetaElement>('meta[name="agent-request-origin"]')?.content ?? ""],
+    audience: manifest.audience, proofHeaders: manifest.proof_headers,
+    operations: manifest.tools.map(entry => ({...entry,
+      input_schema: "operation_input_schema" in entry ? entry.operation_input_schema : entry.input_schema,
+    })) as unknown as SignedOperation[]})
+}
 
 type Entry = {
   name: string
@@ -14,6 +24,8 @@ type Entry = {
   input_schema: Schema
   annotations: {readOnlyHint: boolean}
   scope: string
+  authentication: string
+  state_changing: boolean
 }
 
 // The site's refusal, as its API answers one: {"error": {"code", "message", "hint"}}.
@@ -59,6 +71,25 @@ const tools: ModelContextTool[] = entries.filter(entry => entry.scope === "site"
   inputSchema: entry.input_schema,
   annotations: entry.annotations,
   async execute(input: unknown, {signal}: {signal?: AbortSignal}) {
+    if (entry.name === "prepare_agent_request") {
+      try {
+        const args = input as {operation: string; input: Record<string, unknown>}
+        return {ok: true, request: signedTransport().prepare(args.operation, args.input)}
+      } catch (error) {
+        return {ok: false, error: {code: "invalid_preparation", message: String(error)}}
+      }
+    }
+    if (entry.authentication === "siwa_per_request") {
+      try {
+        const response = await signedTransport().execute(entry.name, input as SignedInput, signal)
+        const data = await response.json()
+        return response.ok ? {ok: true, status: response.status, data} : {ok: false, status: response.status, error: data.error}
+      } catch (error) {
+        return {ok: false, error: {code: "signed_request_failed", message: String(error),
+          hint: entry.state_changing ? "Check the outcome before retrying. Keep the logical operation ID and sign fresh proof."
+            : "Prepare and sign this exact request with your own SIWA signer. Report a missing signer as a blocker."}}
+      }
+    }
     const problem = inputProblem(input, entry.input_schema)
     if (problem) return {ok: false, error: {code: "invalid_input", message: problem}}
     try {
@@ -101,5 +132,5 @@ export function installPublicTools(): void {
         console.warn("The browser tools could not be offered.", error)
       })
   })
-  window.addEventListener("pagehide", () => registration!.abort())
+  window.addEventListener("pagehide", () => registration?.abort())
 }

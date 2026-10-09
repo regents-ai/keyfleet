@@ -42,5 +42,7 @@ defmodule Keyfleet.LocalDatabaseFixture do
     |> Enum.each(&Ecto.Adapters.SQL.query!(Keyfleet.Repo, &1, []))
 
     RegentAgents.Migrator.up(Keyfleet.Repo)
+    RegentCredits.Migrator.up(Keyfleet.Repo)
+    RegentPoints.Migrator.up(Keyfleet.Repo)
   end
 end

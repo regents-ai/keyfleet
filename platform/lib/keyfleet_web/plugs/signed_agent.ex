@@ -9,6 +9,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   @join_path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
+  @profile_path "/api/v1/agent/profile"
+  @account_paths ~w(/api/v1/agent/account/balances /api/v1/agent/account/credits/history /api/v1/agent/account/points)
   @shards_path "/api/v1/agent/shards"
   # An agent's picture: a signed start names the upload, whose bytes then go
   # to the address it answers, outside this plug (`AgentAvatarController`).
@@ -148,17 +150,40 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp authenticate(conn) do
     with true <- supported_request?(conn),
-         [type] <- get_req_header(conn, "content-type"),
-         {:ok, "application", "json", _} <- Plug.Conn.Utils.media_type(type),
+         true <- json_or_bodyless_get?(conn),
          %Plug.Conn.Unfetched{} <- conn.body_params do
       case read_signed(conn) do
-        {:ok, _raw, conn} -> verify(conn)
-        {:error, _reason} -> deny(conn, %{reason: :invalid_request})
-        {:more, _raw, conn} -> answer(conn, 413, "request_too_large")
-        :too_large -> answer(conn, 413, "request_too_large")
+        {:ok, "", %{method: "GET"} = conn} ->
+          verify(%{conn | assigns: Map.delete(conn.assigns, :raw_body)})
+
+        {:ok, _raw, conn} ->
+          verify_json(conn)
+
+        {:error, _reason} ->
+          deny(conn, %{reason: :invalid_request})
+
+        {:more, _raw, conn} ->
+          answer(conn, 413, "request_too_large")
+
+        :too_large ->
+          answer(conn, 413, "request_too_large")
       end
     else
       _ -> deny(conn, %{reason: :invalid_request})
+    end
+  end
+
+  defp verify_json(conn) do
+    if json_or_bodyless_get?(%{conn | method: "POST"}),
+      do: verify(conn),
+      else: deny(conn, %{reason: :invalid_request})
+  end
+
+  defp json_or_bodyless_get?(conn) do
+    case get_req_header(conn, "content-type") do
+      [] -> conn.method == "GET"
+      [type] -> match?({:ok, "application", "json", _}, Plug.Conn.Utils.media_type(type))
+      _ -> false
     end
   end
 
@@ -178,7 +203,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       client: Keyfleet.SiwaBroker,
       hooks: __MODULE__,
       audience: "keyfleet",
-      body: :always
+      body: if(conn.method == "GET", do: :if_present, else: :always)
     )
   end
 
@@ -259,6 +284,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   # Only a request whose signature verified is told what is wrong with its
   # body, and nothing it asks for is acted on until the body fits.
+  defp take_body(%{method: "GET", assigns: assigns} = conn)
+       when not is_map_key(assigns, :raw_body),
+       do: {:ok, %{conn | body_params: %{}, params: %{}}}
+
   defp take_body(%{assigns: %{raw_body: raw}} = conn) do
     with {:ok, params} <- Jason.decode(raw),
          :ok <- check_body(conn.request_path, params) do
@@ -275,9 +304,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp admit(conn, actor) do
     cond do
-      Agent.valid?(actor) ->
-        :ok = Keyfleet.Agents.save_listing(actor)
-        {:ok, assign(conn, :agent_actor, Keyfleet.Agents.with_pairing(actor))}
+      Agent.authenticated?(actor) ->
+        case Keyfleet.Agents.with_pairing(actor) do
+          {:ok, paired} -> {:ok, assign(conn, :agent_actor, paired)}
+          {:error, :not_paired} -> {:error, %{reason: :agent_not_paired}}
+          {:error, _} -> {:error, %{reason: :pairing_unavailable}}
+        end
 
       smart_wallet_on_ethereum?(actor) ->
         {:error, %{reason: :smart_wallet_on_ethereum}}
@@ -308,6 +340,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @impl Siwa.AgentAuthPlug.Hooks
   def deny(conn, %{reason: :smart_wallet_on_ethereum}),
     do: answer(conn, 401, "smart_wallet_on_ethereum")
+
+  def deny(conn, %{reason: :agent_not_paired}), do: answer(conn, 403, "agent_not_paired")
+  def deny(conn, %{reason: :pairing_unavailable}), do: answer(conn, 503, "pairing_unavailable")
 
   def deny(conn, %{reason: :out_of_range}), do: answer(conn, 422, "out_of_range")
 
@@ -357,6 +392,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("POST", @avatar_start_path), do: true
   defp supported?("POST", @avatar_remove_path), do: true
   defp supported?("GET", @shards_path), do: true
+  defp supported?("GET", @profile_path), do: true
+  defp supported?("GET", path) when path in @account_paths, do: true
 
   defp supported?("GET", path),
     do:
@@ -425,6 +462,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: admit(map_size(params) > 0 and Enum.all?(Map.keys(params), &(&1 in @editable)))
 
   def check_body(@shards_path, params), do: admit(params == %{})
+  def check_body(@profile_path, params), do: admit(params == %{})
+  def check_body(path, params) when path in @account_paths, do: admit(params == %{})
 
   def check_body(
         @avatar_start_path,

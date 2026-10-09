@@ -31,6 +31,8 @@ defmodule Keyfleet.Release do
 
   @doc "Migrates and seeds through an already running repository, as `migrate/0` does."
   def migrate! do
+    RegentAgents.Migrator.require_pairing_history!(Keyfleet.Repo)
+    RegentCredits.Migrator.require_pairing_grants!(Keyfleet.Repo)
     Keyfleet.Repo.migrate!(migrations_path())
     seed_catalog!()
   end
