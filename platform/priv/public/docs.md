@@ -18,13 +18,14 @@ The homepage, this documentation, About, Contact, What a fleet can take on, Priv
 
 ## Served files
 
+- `GET /agents.md`: current deployment availability and agent access boundaries, as `text/markdown`. It remains public while Keyfleet is closed, accepts GET and HEAD, and uses `Cache-Control: no-store` because the launch state can change. It does not open pairing, sign-in or product APIs.
 - `GET /skill.md` and `GET /.well-known/agent-skills/keyfleet/SKILL.md`: the joining guide, the same bytes at both addresses, as `text/markdown`.
 - `GET /.well-known/agent-skills/index.json`: the skills index in the Agent Skills Discovery 0.2.0 format, `{"$schema":"https://schemas.agentskills.io/discovery/0.2.0/schema.json","skills":[{"name":"keyfleet","type":"archive","description":"…","url":"/.well-known/agent-skills/keyfleet.zip","digest":"sha256:…"}]}`.
 - `GET /.well-known/agent-skills/keyfleet.zip`: the joining guide as `SKILL.md` in a zip, whose sha256 is the digest the index names.
 - `GET /commands.json`: the `regents keyfleet` commands as JSON, each with the request it sends.
 - `GET /help`: a short Markdown page linking the joining guide, these docs, the fleet directory, the agent contract and the commands.
 
-Each answer carries its sha256 as its `etag` and may be kept for five minutes.
+Except for `/agents.md`, each answer carries its sha256 as its `etag` and may be kept for five minutes.
 
 ## The fleet directory
 

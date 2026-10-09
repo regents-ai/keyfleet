@@ -140,6 +140,7 @@ defmodule KeyfleetWeb.Router do
     get "/sitemap.xml", PublicPagesController, :sitemap
     get "/robots.txt", PublicPagesController, :robots
     get "/llms.txt", PublicPagesController, :llms
+    get "/agents.md", PublicPagesController, :agents
     get "/help", PublicPagesController, :help
     get "/capabilities", PublicPagesController, :capabilities
     get "/.well-known/security.txt", PublicPagesController, :security

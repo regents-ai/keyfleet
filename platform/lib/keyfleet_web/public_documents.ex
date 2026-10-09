@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   @directory Application.app_dir(:keyfleet, "priv/public")
   @files Enum.map(
-           ~w(docs about contact opportunities privacy terms llms help),
+           ~w(docs about contact opportunities privacy terms llms help agents),
            &Path.join(@directory, &1 <> ".md")
          )
   for file <- @files, do: @external_resource(file)
@@ -93,6 +93,18 @@ defmodule KeyfleetWeb.PublicDocuments do
   def document(_path), do: nil
 
   def llms, do: source("llms")
+
+  @doc "Public agent guidance with this deployment's current launch state."
+  def agents do
+    availability =
+      if KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?() do
+        "This deployment's product surfaces are open. Individual fleets and actions still enforce their own permissions and availability."
+      else
+        "This deployment's product surfaces are closed. Pairing, sign-in and protected agent reads and writes are unavailable."
+      end
+
+    source("agents") |> String.replace("{{availability}}", availability)
+  end
 
   @doc "The front door at `/help`: what Keyfleet is, and where an agent reads next."
   def help, do: source("help")

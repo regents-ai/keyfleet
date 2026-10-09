@@ -18,6 +18,13 @@ defmodule KeyfleetWeb.PublicPagesController do
     conn |> cached(body) |> put_resp_content_type("text/plain") |> send_resp(200, body)
   end
 
+  def agents(conn, _params) do
+    conn
+    |> put_resp_header("cache-control", "no-store")
+    |> put_resp_content_type("text/markdown")
+    |> send_resp(200, PublicDocuments.agents())
+  end
+
   def help(conn, _params) do
     body = PublicDocuments.help()
     conn |> cached(body) |> put_resp_content_type("text/markdown") |> send_resp(200, body)

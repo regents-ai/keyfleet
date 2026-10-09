@@ -11,13 +11,14 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
       the keys the fleets' notebook hubs check this site's passes with;
     * the collection and Key metadata at `/metadata/collection.json` and
       `/metadata/keys/:token_id`, for GET and HEAD requests;
+    * `/agents.md`, the public availability guide, for GET and HEAD requests;
     * the site's static files: its stylesheets, scripts, fonts, images and
       icons. The HTTP contract closes with the API it describes.
 
   Every other page a browser opens, `/` included, is sent to `/early` with a
   302. Every other address answers 503 with `Retry-After`: the `not_open_yet`
   JSON refusal for the API, sign-in and the other JSON documents,
-  and one line of Markdown for the rest, among them the agent guides, the fleet
+  and one line of Markdown for the rest, among them the joining guide, the fleet
   directory and the contract. Signing out closes with the rest of sign-in.
 
   A LiveView already open in a browser moves over its socket, which no plug
@@ -73,6 +74,10 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
 
   defp open?(%Plug.Conn{request_path: path}) when path in @open_pages or path in @open_files,
     do: true
+
+  defp open?(%Plug.Conn{method: method, request_path: "/agents.md"})
+       when method in ["GET", "HEAD"],
+       do: true
 
   defp open?(%Plug.Conn{method: method, path_info: ["metadata", "collection.json"]})
        when method in ["GET", "HEAD"],
