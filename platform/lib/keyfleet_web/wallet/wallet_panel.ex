@@ -280,7 +280,8 @@ defmodule KeyfleetWeb.WalletPanel do
     # Signed out there is no wallet to build figures for: the flows shown to
     # visitors read theirs without one, and steps are built only for a wallet
     # the signed-in person or agent owns.
-    wallet = linked && OnchainSteps.shown_wallet(linked, own_wallet(linked), socket.assigns.active)
+    wallet =
+      linked && OnchainSteps.shown_wallet(linked, own_wallet(linked), socket.assigns.active)
 
     socket =
       socket
@@ -426,9 +427,9 @@ defmodule KeyfleetWeb.WalletPanel do
       <p id={"#{@id}-line"} class="wallet-panel-line" aria-live="polite" hidden={!@line}>
         {@line}
       </p>
-      <p id={"#{@id}-from"} class="wallet-panel-note" hidden={!@wallet}>
-        <%= if @wallet do %>
-          Sending from <code>{RegentFormat.short_address(@wallet)}</code> on {@chain}.
+      <p id={"#{@id}-from"} class="wallet-panel-note" hidden={!@signer}>
+        <%= if @signer do %>
+          Sending from <code>{RegentFormat.short_address(@signer)}</code> on {@chain}.
         <% end %>
       </p>
       <p id={"#{@id}-mismatch"} class="wallet-panel-note" hidden={!@mismatch}>{@mismatch}</p>
