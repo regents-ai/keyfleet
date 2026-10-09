@@ -166,15 +166,15 @@
           },
           "signature": {
             "type": "string",
-            "description": "signature: \"approve\" signs the message for the fleet, \"revoke\" withdraws the signature.",
+            "description": "signature: \"approve\" authorizes the treasury's Lit CreateWallet request, \"revoke\" withdraws that approval.",
             "enum": [
               "approve",
               "revoke"
             ]
           },
-          "hash": {
+          "issued_at": {
             "type": "string",
-            "description": "signature: the message code (its 32-byte hash)."
+            "description": "signature: the planned Lit CreateWallet request time, in Unix seconds, after the vote and execution delay."
           },
           "name": {
             "type": "string",
