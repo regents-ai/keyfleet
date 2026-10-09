@@ -46,6 +46,7 @@ contract AnvilLab is Script {
         address staking;
         address usdc;
         address regent;
+        address clubClaims;
     }
 
     bytes32 private constant KEY_HASH = keccak256("anvil lab key hash");
@@ -120,7 +121,8 @@ contract AnvilLab is Script {
             treasury: address(classic.TREASURY()),
             staking: address(staking),
             usdc: address(usdc),
-            regent: address(regent)
+            regent: address(regent),
+            clubClaims: address(factory.CLUB_CLAIMS())
         });
     }
 

@@ -18,7 +18,19 @@ defmodule Keyfleet.AnvilLab do
   # Anvil's own chain id.
   @chain_id 31_337
   # The fields of the script's `Lab` struct, in order.
-  @lab [:keys, :factory, :manager, :rewards, :shards, :votes, :treasury, :staking, :usdc, :regent]
+  @lab [
+    :keys,
+    :factory,
+    :manager,
+    :rewards,
+    :shards,
+    :votes,
+    :treasury,
+    :staking,
+    :usdc,
+    :regent,
+    :club_claims
+  ]
   # AnvilLab.OPENING: how long after the lab's first step Classic #1's sales open.
   @opening 60
 

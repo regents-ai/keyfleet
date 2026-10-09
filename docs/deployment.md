@@ -6,8 +6,9 @@ shared REGENT buyer and the Regents Club claims contract. Fleets are then
 created through the factory: the five founding fleets by the Regents Safe, and later fleets by anyone once the Safe
 has moved the collection to phase 3.
 
-Nothing may be deployed yet. Before any deploy the contracts must be audited by
-an outside auditor, and the founder must give the go; the
+Nothing may be deployed yet. Before any deploy every Keyfleet contract must pass
+the internal audit the founder chose on 9 Oct in place of an outside one, with
+its findings fixed, and the founder must give the go; the
 [contracts README](../contracts/README.md#status) lists what is decided and what
 is on hold. Key sales stay off until the founder says so: every fleet's sales
 open only through a phase step, which is a Safe transaction the founder signs.

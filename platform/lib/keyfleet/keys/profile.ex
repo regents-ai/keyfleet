@@ -153,6 +153,7 @@ defmodule Keyfleet.Keys.Profile do
       held_since: current.observed_at,
       holder: holder,
       yours?: holder in wallets(viewer),
+      held_for_pass?: holder == fleet.club_claims_address,
       changed_hands:
         count(KeyAttachment, :history, %{fleet_id: fleet_id, token_id: token_id}) - 1,
       shards: shards(fleet_id, token_id),

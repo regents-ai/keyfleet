@@ -141,7 +141,8 @@ defmodule Keyfleet.Fleets do
   Recording the same record again changes nothing; a record naming other
   contracts for a bound fleet is refused, and so is one whose chain,
   collection, shard record, USDC, REGENT, staking contract, Autolaunch
-  factory or trait table differs from a fleet already bound.
+  factory, Regents Club claims contract or trait table differs from a fleet
+  already bound.
   """
   def record_manifest!(%{
         "chainId" => chain_id,
@@ -152,6 +153,7 @@ defmodule Keyfleet.Fleets do
         "regent" => regent,
         "regentStaking" => regent_staking,
         "autolaunchFactory" => autolaunch_factory,
+        "clubClaims" => %{"address" => club_claims},
         "traitTableHash" => trait_table_hash,
         "fleets" => fleets
       })
@@ -166,6 +168,7 @@ defmodule Keyfleet.Fleets do
       regent_address: String.downcase(regent),
       regent_staking_address: String.downcase(regent_staking),
       autolaunch_factory_address: String.downcase(autolaunch_factory),
+      club_claims_address: String.downcase(club_claims),
       deployed_block: block,
       trait_table_hash: String.downcase(trait_table_hash)
     }

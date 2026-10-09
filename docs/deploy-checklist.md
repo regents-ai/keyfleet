@@ -313,7 +313,10 @@ order:
    fleet, before anything is recorded. Each fleet's buy button reads whether the
    collection has opened that fleet's sales, and shows it disabled with a few
    words saying sales have not opened while it has not.
-3. **An outside audit.**
+3. **The internal audit.** Every Keyfleet contract is audited by a Claude Opus
+   5.5 reviewer with the Solidity auditing, Solidity security, Ethereum
+   vulnerability and Slither skills, in place of an outside audit (founder,
+   9 Oct), and its findings are fixed.
 4. **Deployed on Base** with the founder's go, following
    [deployment.md](deployment.md): the system is deployed, the Regents Safe on
    Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, adds the collection to

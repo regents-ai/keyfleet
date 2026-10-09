@@ -499,6 +499,38 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     end
   end
 
+  describe "a Regents Club Key held for its Pass" do
+    test "only its Pass's holder claims it; once claimed, or with no Pass, the button says why",
+         %{url: url, lab: lab} do
+      club = club!(url, lab)
+      pass = address!(url, lab.club_claims, "PASS()")
+      send!(url, @buyer, pass, Call.encode("mint(address,uint256)", [@second, 1]))
+
+      # Phase 1 opened the Club with Classic #1; the Safe gives its Keys 1 and
+      # 2 to the claims contract, and Pass 2 is never minted.
+      claims = [lab.club_claims, lab.club_claims]
+      send!(url, @buyer, club.manager_address, Call.encode("give(address[])", [claims]))
+
+      stranger = club_claim!(@third, 1)
+      assert stranger.figures.blocked == %{"club-claim" => :not_pass_holder}
+      assert pressed(url, stranger, "club-claim") == {:ok, :reverted}
+
+      built = club_claim!(@second, 1)
+      assert built.figures.blocked == %{}
+      assert %{to: to, data: data} = Review.find(built.review, "club-claim")
+      assert to == lab.club_claims
+      assert data == Call.encode("claim(uint256)", [1])
+      assert pressed(url, built, "club-claim") == {:ok, :confirmed}
+
+      key = Fleet.onchain_token_id(club, 1)
+      assert address!(url, lab.keys, "ownerOf(uint256)", [key]) == @second
+      assert club_claim!(@second, 1).figures.blocked == %{"club-claim" => :club_claimed}
+      assert pressed(url, built, "club-claim") == {:ok, :reverted}
+
+      assert club_claim!(@second, 2).figures.blocked == %{"club-claim" => :pass_burned}
+    end
+  end
+
   # --- building and sending --------------------------------------------
 
   defp actor(wallet),
@@ -509,6 +541,15 @@ defmodule Keyfleet.WalletStepsAnvilTest do
 
   defp build!(flow, signer, arguments \\ []) do
     {:ok, built} = build(flow, signer, actor(signer), arguments)
+    built
+  end
+
+  defp club_claim!(signer, token_id) do
+    {:ok, built} =
+      WalletSteps.build_steps("regents_club", :club_claim, signer, "lab", %{token_id: token_id},
+        actor: actor(signer)
+      )
+
     built
   end
 
@@ -526,12 +567,31 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       regent_address: lab.regent,
       regent_staking_address: lab.staking,
       autolaunch_factory_address: lab.autolaunch,
+      club_claims_address: lab.club_claims,
       usdc_address: lab.usdc,
       deployed_block: 1,
       trait_table_hash: Traits.keccak256("anvil lab trait table"),
       deck_hash: @deck,
       deck_size: 1
     }
+  end
+
+  # The Regents Club's deployment, fleet 5 of the lab's founding fleets, recorded.
+  defp club!(url, lab) do
+    manager = address!(url, lab.keys, "managerOf(uint256)", [5])
+
+    "regents_club"
+    |> Fleets.get_fleet!()
+    |> Fleets.record_deployment!(
+      Map.merge(deployment(lab), %{
+        chain_fleet_id: 5,
+        manager_address: manager,
+        rewards_address: address!(url, manager, "REWARDS()"),
+        votes_address: address!(url, manager, "VOTES()"),
+        treasury_address: address!(url, manager, "TREASURY()")
+      }),
+      actor: %System{}
+    )
   end
 
   # A proposal made with Key 1 by `signer`, and recorded by the chain reader.

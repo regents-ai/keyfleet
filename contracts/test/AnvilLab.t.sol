@@ -38,6 +38,7 @@ contract AnvilLabTest is Test {
         assertEq(address(classic.TREASURY().REGENT_STAKING()), lab.staking, "Stand-in staking");
         assertEq(address(classic.USDC()), lab.usdc, "Stand-in USDC");
         assertEq(address(classic.TREASURY().REGENT()), lab.regent, "Stand-in REGENT");
+        assertEq(address(factory.CLUB_CLAIMS()), lab.clubClaims, "Regents Club claims");
         assertEq(keys.fleetCount(), keys.FOUNDING_FLEETS(), "Every founding fleet");
         assertEq(keys.phase(), 1, "Phase 1");
         assertTrue(keys.salesOpen(1), "Classic #1 sells");

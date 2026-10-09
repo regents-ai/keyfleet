@@ -910,3 +910,17 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - A Key-holding agent's signed request to its fleet's notebook host reaches the
   hub with its body as sent. It was checked against the agent API's own bodies
   and refused with 422 `invalid_request`, so no agent could use a notebook.
+
+## 2026-10-09 — Claim a Regents Club Key with its Pass
+
+- A Regents Club Key kept for its Pass, because that Pass's holder couldn't
+  take it when the Keys were given, shows "Waiting for Pass N" and a Claim
+  button on its page. Whoever holds Pass N claims it, with everything it earned
+  while it waited (Sean, 9 Oct: one Pass per claim, no claiming many at once).
+- The button stays visible but turns off, with the reason beside it, only when
+  the chain says the claim would certainly fail: the Key was already claimed,
+  you don't hold that Pass, or the Pass was burned.
+- The site records the Regents Club claims contract with each fleet's
+  deployment again (new column on fleets; no fleet is recorded yet).
+- Before any deploy, the contracts now go through the internal audit Sean chose
+  on 9 Oct in place of an outside one.

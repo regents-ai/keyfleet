@@ -2,8 +2,9 @@ defmodule Keyfleet.Fleets.Validations.SharedWiring do
   @moduledoc """
   Every deployed fleet lives on one chain, in one Key collection with one shard
   record, sells for one USDC, pays Regents' share through one REGENT token and
-  staking contract, launches its token through one Autolaunch factory and
-  draws traits from one trait table, so a deployment whose wiring differs from
+  staking contract, launches its token through one Autolaunch factory, holds
+  Regents Club Keys for Passes in one claims contract and draws traits from
+  one trait table, so a deployment whose wiring differs from
   any other bound fleet's is refused.
 
   It runs inside the action's transaction and first locks every fleet row, in
@@ -22,6 +23,7 @@ defmodule Keyfleet.Fleets.Validations.SharedWiring do
     :regent_address,
     :regent_staking_address,
     :autolaunch_factory_address,
+    :club_claims_address,
     :trait_table_hash
   ]
 

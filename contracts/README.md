@@ -156,7 +156,9 @@ and what the code on this branch does:
 
 On hold or not yet done:
 
-- Nothing is deployed. Before any deploy: an outside audit and the founder's go.
+- Nothing is deployed. Before any deploy: the internal audit of every Keyfleet
+  contract the founder chose on 9 Oct in place of an outside one, its findings
+  fixed, and the founder's go.
 - Key sales stay off until the founder explicitly says so. On chain no key of
   any fleet can be minted before the Safe's phase step that opens it.
 - `deployments/base.json` carries the trait table's hash
@@ -800,6 +802,8 @@ assets, paid)`. A key already claimed is no longer the contract's, so a second
 claim reverts. It accepts only Regents Club keys as they are minted to it
 (`OnlyClubMints`), and ETH only from the Regents Club's rewards ledger during a
 claim (`OnlyRewards(sender)`). Nobody votes or presents a key while it waits.
+There is one claim per Pass; nothing claims the keys of several Passes at once.
+On the site, a waiting key's page shows Claim to whoever holds its Pass.
 
 ## The REGENT buyer
 
