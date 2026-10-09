@@ -201,7 +201,9 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       end)
 
     Application.put_env(:keyfleet, :siwa_broker_url, redirect)
-    assert send_request(c, signed(c, @body)).status == 401
+    redirected = send_request(c, signed(c, @body))
+    assert redirected.status == 503
+    assert redirected.body["error"]["code"] == "siwa_request_failed"
     assert_receive :redirect_called
     refute_receive :redirect_followed
 

@@ -324,7 +324,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   # The sign-in service answered with a refusal or a failure: its status and its
   # own words, as on every site.
-  def deny(conn, %{siwa_status: status} = failure) when status in 400..599 do
+  def deny(conn, %{siwa_status: status} = failure) do
     send_refusal(conn, status, %{
       error: %{
         code: failure[:siwa_code] || "sign_in_refused",
