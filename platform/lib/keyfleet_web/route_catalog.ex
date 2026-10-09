@@ -1,7 +1,6 @@
 defmodule KeyfleetWeb.RouteCatalog do
   @moduledoc "Canonical behavior metadata for the route allowlist."
 
-  alias Keyfleet.Fleets
   alias KeyfleetWeb.NotFoundError
 
   alias __MODULE__.{
@@ -214,15 +213,19 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   defp sidebar_model(nil), do: %SidebarModel{id: :public, targets: []}
 
-  # The five fleets' pages, then the account page.
+  # Classic, the Regents Club, then the account page.
   defp sidebar_model(:product) do
-    fleets =
-      for %{id: id, name: name} <- Fleets.catalog(),
-          do: %RouteTarget{route_id: :fleet, label: name, path: "/app/fleets/#{id}"}
-
     %SidebarModel{
       id: :product,
-      targets: fleets ++ [%RouteTarget{route_id: :account, label: "Account", path: "/account"}]
+      targets: [
+        %RouteTarget{
+          route_id: :fleet,
+          label: "Classic #1",
+          path: "/app/fleets/fleet_tech_classic"
+        },
+        %RouteTarget{route_id: :fleet, label: "Regents Club", path: "/app/fleets/regents_club"},
+        %RouteTarget{route_id: :account, label: "Account", path: "/account"}
+      ]
     }
   end
 

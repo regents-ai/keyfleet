@@ -910,3 +910,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - A Key-holding agent's signed request to its fleet's notebook host reaches the
   hub with its body as sent. It was checked against the agent API's own bodies
   and refused with 422 `invalid_request`, so no agent could use a notebook.
+
+## 2026-10-09 — A shorter sidebar
+
+- The app's sidebar lists Classic #1, the Regents Club and Account, and nothing
+  else (Sean, 9 Oct). Syndicate #1, Cascade #1 and Accelerant #1 stay on the
+  home page as coming soon.
+- The sidebar's last entry reads Account whether or not you are signed in; it
+  read Sign In while signed out. The account page still asks you to sign in.
