@@ -100,7 +100,7 @@ test("a wallet the account doesn't link: a note names both, and a press sends no
 
   // The figures stay on the account's own wallet.
   await expect(page.locator("#buy-key-order-mismatch")).toHaveText(
-    "You're signed in with 0x1111..1111, but your wallet app has 0x9999..9999 open. Switch to a wallet on your account to send from here.",
+    "Your wallet is on 0x9999..9999, which isn't linked to this account. Switch to 0x1111..1111.",
   )
   await expect(page.locator("#buy-key-order-from")).toBeHidden()
   await expect(page.locator("#buy-key-approve")).toBeVisible()

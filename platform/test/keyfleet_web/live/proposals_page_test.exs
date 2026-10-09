@@ -1061,8 +1061,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       refute_push_event(view, "onchain-steps:review", %{component_id: "proposal-vote-action"})
 
       assert text(view, "#proposal-vote-action-mismatch") ==
-               "You're signed in with 0x1111..1111, but your wallet app has 0xbbbb..bbbb open. " <>
-                 "Switch to a wallet on your account to send from here."
+               "Your wallet is on 0xbbbb..bbbb, which isn't linked to this account. " <>
+                 "Switch to 0x1111..1111."
 
       assert has_element?(view, "#proposal-vote-action-from[hidden]")
       assert ballot_pressable?(view)

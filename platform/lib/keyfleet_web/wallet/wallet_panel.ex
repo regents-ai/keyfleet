@@ -122,6 +122,7 @@ defmodule KeyfleetWeb.WalletPanel do
      |> assign(
        active: nil,
        signer: nil,
+       wallet: nil,
        built: nil,
        mismatch: nil,
        inputs: %{},
@@ -276,16 +277,25 @@ defmodule KeyfleetWeb.WalletPanel do
     linked = linked(socket)
     signer = OnchainSteps.signer(linked, socket.assigns.active)
 
+    # Signed out there is no wallet to build figures for: the flows shown to
+    # visitors read theirs without one, and steps are built only for a wallet
+    # the signed-in person or agent owns.
+    wallet = linked && OnchainSteps.shown_wallet(linked, own_wallet(linked), socket.assigns.active)
+
     socket =
       socket
       |> assign(
         signer: signer,
+        wallet: wallet,
         mismatch: OnchainSteps.mismatch_note(linked, socket.assigns.active)
       )
       |> drop_other_signer(signer)
 
-    {socket, signer || List.first(linked || [])}
+    {socket, wallet}
   end
+
+  # `Keyfleet.Actors.Human` lists the account's own wallet first.
+  defp own_wallet(linked), do: List.first(linked)
 
   # Steps built for a wallet that may no longer send leave the page at once,
   # before new ones are read.
@@ -416,14 +426,12 @@ defmodule KeyfleetWeb.WalletPanel do
       <p id={"#{@id}-line"} class="wallet-panel-line" aria-live="polite" hidden={!@line}>
         {@line}
       </p>
-      <p id={"#{@id}-from"} class="wallet-panel-note" hidden={!@signer}>
-        <%= if @signer do %>
-          Sending from <code>{RegentFormat.short_address(@signer)}</code> on {@chain}.
+      <p id={"#{@id}-from"} class="wallet-panel-note" hidden={!@wallet}>
+        <%= if @wallet do %>
+          Sending from <code>{RegentFormat.short_address(@wallet)}</code> on {@chain}.
         <% end %>
       </p>
-      <p id={"#{@id}-mismatch"} class="wallet-panel-note" hidden={!@mismatch}>
-        {@mismatch} Switch to a wallet on your account to send from here.
-      </p>
+      <p id={"#{@id}-mismatch"} class="wallet-panel-note" hidden={!@mismatch}>{@mismatch}</p>
 
       <div :if={!@read_only} class="wallet-panel-buttons">
         {render_slot(@buttons, @panel)}
