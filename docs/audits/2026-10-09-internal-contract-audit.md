@@ -435,3 +435,36 @@ Date: 9 October 2026.
   - Audit fork file on https://mainnet.base.org: 4 of 4 succeeded. Cold hand-over gas 66,032; 62 gas limits converted, 61 reverted untouched, 0 skipped.
 - **Slither:** run the same way on e05deae and 02b3ad2 (`slither . --exclude-dependencies`), both give 199 results. They differ only in the order of the listed calls in one existing KeyfleetKeys entry, so the fix adds no Slither result. The earlier count of 192 came from a different invocation; this like-for-like comparison replaces it.
 - **Still open, unchanged:** KF-A-03 (waits on economic fork testing), KF-A-04, and KF-A-05 (Sean's decision on blocking coordinator changes while reveals are pending).
+
+## KF-A-05 continuation — 9 October 2026
+
+The cloud fix `2c166b1` was cherry-picked onto `kf/audit-fixes` as `e59ffab`.
+The earlier sections describe the earlier audit states; this section supersedes
+their coordinator-change disposition.
+
+- **Coordinator-change cause blocked:** `revealsWaiting` counts accepted requests
+  without a seed. `setRandomness` refuses a different coordinator while that count
+  is nonzero. Subscription and gas-lane changes remain allowed.
+- **Audit proof updated:**
+  `test_KFA05_pendingRevealBlocksCoordinatorChangeUntilAnswered` proves replacement
+  is refused, the current coordinator still answers, replacement succeeds after
+  the answer, the seed stays fixed, and the Key cannot request again.
+- **Checks on the integrated branch:** `make check-contracts` passed: 579 tests
+  passed, six fork tests skipped, formatting/build and bytecode checks passed.
+  `FOUNDRY_PROFILE=deep forge test --match-path
+  test/invariant/KeyfleetCollectionInvariant.t.sol` passed all 24 checks, with
+  the invariant cases running 256 runs at depth 100.
+- **Independent focused review:** no new blocker found in the waiting count,
+  coordinator guard or callback behavior. Cross-coordinator request-id collisions
+  were considered safe under the genuine Chainlink coordinator model because all
+  old requests have seeds before replacement. The tests do not deliberately force
+  that collision, and the collection invariant does not exercise replacement.
+- **Remaining policy decision:** an accepted request never answered permanently
+  blocks coordinator replacement. Chainlink documents expiry after 24 hours for
+  underfunded subscriptions in its [subscription
+  guide](https://docs.chain.link/vrf/v2-5/overview/subscription). Funding reduces
+  the risk but does not provide recovery. No expiry or second-request path was
+  added. Sean's choice remains pending.
+
+KF-A-03 and KF-A-04 remain open. The Base fork checks were not rerun during this
+continuation. This audit branch has not been pushed, merged into main or deployed.

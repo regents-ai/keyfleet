@@ -1850,9 +1850,12 @@ Run them one suite at a time, as a public endpoint may refuse a burst of
 requests.
 
 `test/audit/` keeps the proofs of the internal contract audit (9 Oct): each
-repeats a finding's original attack and checks the safe outcome, and the two
-findings left open by decision (KF-A-04, KF-A-05) check the behaviour that
-remains. `KeyfleetAuditLocal.t.sol` and `Agent5QueueBrick.t.sol` run on the
+repeats a finding's original attack and checks the safe outcome. KF-A-04 checks
+the gift-batch behaviour left open by decision. KF-A-05 proves a coordinator
+change is refused while an accepted reveal waits, and succeeds after its answer.
+A request never answered still leaves its key without a seed and blocks replacing
+the coordinator; the expiry policy remains a founder decision.
+`KeyfleetAuditLocal.t.sol` and `Agent5QueueBrick.t.sol` run on the
 local stand-ins with the rest. `KeyfleetAuditFork.t.sol` runs against real Base
 USDC, Permit2 and the REGENT route at the pinned block 52,366,000; it fails, and
 does not skip, without `BASE_RPC_URL`, and needs an endpoint that serves that

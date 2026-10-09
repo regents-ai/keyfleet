@@ -119,7 +119,7 @@ contract SkipperReceiver is IERC721Receiver {
 
 /// @dev Audit proofs that run on the local stand-ins (no fork). Re-check at e05deae, KF-R-01 at
 /// 02b3ad2: each fixed finding's PoC repeats the original attack steps and asserts the attack now
-/// fails; the open findings (KF-A-04, KF-A-05) assert the behaviour that is still there.
+/// fails; the open finding KF-A-04 asserts the behaviour that is still there.
 ///   forge test --match-path 'test/audit/KeyfleetAuditLocal.t.sol' -vv
 contract KeyfleetAuditLocalTest is KeyfleetFixture {
     bytes4 private constant ERC1271_MAGIC = 0x1626ba7e;
@@ -549,12 +549,11 @@ contract KeyfleetAuditLocalTest is KeyfleetFixture {
         assertEq(club.totalMinted(), 0, "no key of the batch was given");
     }
 
-    // ------------------------------------------------------------------ KF-A-05 (open, unchanged)
+    // ------------------------------------------------------------------ KF-A-05 (coordinator change blocked)
 
-    /// @dev KF-A-05. Once the coordinator accepts a key's request, nothing can ask again. If that
-    /// request is never answered (here: the Safe moves to a new coordinator while it is pending),
-    /// the key keeps no seed for ever.
-    function test_KFA05_pendingRevealIsStrandedForeverAfterCoordinatorChange() public {
+    /// @dev KF-A-05. The Safe cannot replace the coordinator while a request waits. The current
+    /// coordinator can still answer; only then may the Safe replace it. No second request is allowed.
+    function test_KFA05_pendingRevealBlocksCoordinatorChangeUntilAnswered() public {
         KeyfleetManager fleet = _createOpen(KeyfleetPresets.Preset.FleetTechClassic, 10e6);
         uint256 fleetId = fleet.FLEET_ID();
         vm.prank(keeper);
@@ -569,24 +568,38 @@ contract KeyfleetAuditLocalTest is KeyfleetFixture {
             if (logs[i].topics[0] == KeyfleetKeys.RevealRequested.selector) requestId = uint256(logs[i].topics[2]);
         }
         assertTrue(requestId != 0, "request accepted");
+        assertEq(keys.revealsWaiting(), 1, "one accepted request waits");
 
         MockVRFCoordinatorV2Plus next = new MockVRFCoordinatorV2Plus();
         uint256 sub = next.createSubscription();
         next.addConsumer(sub, address(keys));
         vm.prank(safe);
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealsWaiting.selector, 1));
         keys.setRandomness(
             KeyfleetKeys.Randomness({
                 coordinator: IVRFCoordinatorV2Plus(address(next)), subscriptionId: sub, keyHash: keccak256("key hash")
             })
         );
 
-        // The old coordinator's answer is refused (recorded as a failed callback) ...
+        // The refused change leaves the current coordinator able to answer.
         vrf.fulfill(requestId, _oneWord(7));
-        assertFalse(vrf.lastCallbackSuccess(), "old coordinator cannot answer");
-        assertEq(keys.revealSeed(tokenId), bytes32(0), "no seed");
+        assertTrue(vrf.lastCallbackSuccess(), "current coordinator answers");
+        bytes32 seed = keys.revealSeed(tokenId);
+        assertTrue(seed != bytes32(0), "key received its seed");
+        assertEq(keys.revealsWaiting(), 0, "answer ends the wait");
 
-        // ... and nobody can ask the new one.
-        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.RevealAlreadyRequested.selector, tokenId));
+        vm.prank(safe);
+        keys.setRandomness(
+            KeyfleetKeys.Randomness({
+                coordinator: IVRFCoordinatorV2Plus(address(next)), subscriptionId: sub, keyHash: keccak256("key hash")
+            })
+        );
+        (IVRFCoordinatorV2Plus coordinator,,) = keys.randomness();
+        assertEq(address(coordinator), address(next), "coordinator changes after the answer");
+        assertEq(keys.revealSeed(tokenId), seed, "the seed stays fixed");
+
+        // Changing coordinator never permits a second accepted request for this key.
+        vm.expectRevert(abi.encodeWithSelector(KeyfleetKeys.AlreadyRevealed.selector, tokenId));
         keys.requestReveal(tokenId);
     }
 
