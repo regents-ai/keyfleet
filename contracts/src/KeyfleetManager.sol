@@ -448,9 +448,12 @@ contract KeyfleetManager is ReentrancyGuardTransient {
     /// @dev Only the buyer calls this, from `convert`, with a limit of at most `PIECE_USDC`, and
     /// then pulls exactly `amount`. Every booking adds at least 1 USDC, so what stays booked is
     /// always nothing or at least one minimum piece: a piece too small to buy anything never
-    /// reaches the front of the queue.
+    /// reaches the front of the queue. It takes no lock: a convert run from inside another call to
+    /// this fleet, such as a purchase's mint or a surplus token's transfer, must still convert this
+    /// fleet's piece rather than see it skipped, and every call here makes its outside call only
+    /// after its bookings are written.
     /// @param limit The most USDC the piece may be, unless the rest of the booking joins it.
-    function takePiece(uint256 limit) external nonReentrant returns (uint256 amount, address recipient) {
+    function takePiece(uint256 limit) external returns (uint256 amount, address recipient) {
         if (msg.sender != address(REGENT_BUYER)) revert OnlyRegentBuyer();
         amount = Math.min(pendingConversion, limit);
         if (pendingConversion - amount < REGENT_BUYER.MIN_PIECE_USDC()) amount = pendingConversion;

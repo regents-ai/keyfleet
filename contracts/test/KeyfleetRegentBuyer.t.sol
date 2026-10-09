@@ -3,6 +3,7 @@ pragma solidity 0.8.26;
 
 import {Vm} from "forge-std/Vm.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {KeyfleetManager} from "../src/KeyfleetManager.sol";
 import {KeyfleetPresets} from "../src/KeyfleetPresets.sol";
@@ -49,6 +50,41 @@ contract PieceManager {
         pendingConversion -= amount;
         USDC.approve(address(BUYER), amount);
         recipient = TREASURY;
+    }
+}
+
+/// @dev A worthless token that reports a balance for anyone and, when a fleet sends it on, runs a
+/// conversion from inside that fleet's call.
+contract ConvertingToken {
+    KeyfleetRegentBuyer private immutable BUYER;
+    uint256 public regentOut;
+
+    constructor(KeyfleetRegentBuyer buyer) {
+        BUYER = buyer;
+    }
+
+    function balanceOf(address) external pure returns (uint256) {
+        return 1;
+    }
+
+    function transfer(address, uint256) external returns (bool) {
+        regentOut = BUYER.convert(FULL_PIECE);
+        return true;
+    }
+}
+
+/// @dev Runs a conversion from inside the purchase that mints it a key.
+contract ConvertingReceiver is IERC721Receiver {
+    KeyfleetRegentBuyer private immutable BUYER;
+    uint256 public regentOut;
+
+    constructor(KeyfleetRegentBuyer buyer) {
+        BUYER = buyer;
+    }
+
+    function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
+        regentOut = BUYER.convert(FULL_PIECE);
+        return IERC721Receiver.onERC721Received.selector;
     }
 }
 
@@ -307,6 +343,55 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
         assertEq(next.pendingConversion(), 0);
         assertEq(regentBuyer.nextInQueue(), address(frozen));
         assertEq(frozen.pendingConversion(), frozenBooked);
+    }
+
+    /// @dev Invariant: a conversion run from inside another call to the fleet at the front, here a
+    /// worthless token's transfer during `recognizeSurplus`, converts that fleet's piece; it is not
+    /// skipped and keeps its place in turn.
+    function test_AConversionFromInsideAFleetsOwnCallConvertsItsPiece() public {
+        KeyfleetManager target = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        KeyfleetManager other = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        uint256 booked = target.pendingConversion();
+        uint256 opensAt = regentBuyer.nextPieceAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+        assertEq(regentBuyer.nextInQueue(), address(target));
+
+        ConvertingToken token = new ConvertingToken(regentBuyer);
+        vm.recordLogs();
+        target.recognizeSurplus(address(token));
+
+        _assertNoSkip();
+        assertEq(token.regentOut(), _regentFor(booked), "the fleet's piece converts");
+        assertEq(target.pendingConversion(), 0, "and leaves nothing booked");
+        assertEq(regentBuyer.nextInQueue(), address(other), "the next fleet takes its turn");
+        assertGt(regentBuyer.nextPieceAt(), opensAt, "and the clock moves");
+        _assertBuyerEmpty();
+    }
+
+    /// @dev Invariant: a conversion run from a receiver's mint hook inside a purchase converts the
+    /// purchasing fleet's whole booking, the new purchase's share included; it is not skipped.
+    function test_AConversionFromInsideAPurchaseConvertsThatFleetsPiece() public {
+        KeyfleetManager target = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        KeyfleetManager other = _createOpen(KeyfleetPresets.Preset.FibonacciSyndicate, 10e6);
+        uint256 opensAt = regentBuyer.nextPieceAt();
+        if (block.timestamp < opensAt) vm.warp(opensAt);
+        assertEq(regentBuyer.nextInQueue(), address(target));
+
+        ConvertingReceiver receiver = new ConvertingReceiver(regentBuyer);
+        uint256 treasuryBefore = regent.balanceOf(address(target.TREASURY()));
+        vm.recordLogs();
+        _buy(target, address(receiver));
+
+        _assertNoSkip();
+        assertGt(receiver.regentOut(), 0, "the fleet's piece converts");
+        assertEq(target.pendingConversion(), 0, "with the new purchase's share in it");
+        assertEq(
+            regent.balanceOf(address(target.TREASURY())) - treasuryBefore,
+            receiver.regentOut(),
+            "and the REGENT reaches the fleet's treasury"
+        );
+        assertEq(regentBuyer.nextInQueue(), address(other), "the next fleet takes its turn");
+        _assertBuyerEmpty();
     }
 
     /// @dev Invariant: a caller cannot make a working fleet be skipped by sending too little gas;
@@ -720,6 +805,17 @@ contract KeyfleetRegentBuyerTest is KeyfleetFixture {
                 logs[i].emitter == address(regentBuyer) && logs[i].topics[0] == KeyfleetRegentBuyer.Queued.selector
                     && logs[i].topics[1] == bytes32(uint256(uint160(manager)))
             ) ++count;
+        }
+    }
+
+    function _assertNoSkip() private {
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i = 0; i < logs.length; ++i) {
+            assertFalse(
+                logs[i].emitter == address(regentBuyer)
+                    && logs[i].topics[0] == KeyfleetRegentBuyer.PieceSkipped.selector,
+                "no fleet is skipped"
+            );
         }
     }
 

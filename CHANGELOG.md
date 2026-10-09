@@ -955,3 +955,13 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   signature can't be sent later to change the vote (audit KF-A-09).
 - A proposal may run the voted daily split at most once, and not together with
   a payment or an advance (audit KF-A-11).
+
+## 2026-10-09 — No forced skip in REGENT buying
+
+- A fleet's USDC is now handed to the REGENT buyer even when the buying starts
+  from inside another call to that same fleet, such as a purchase whose new
+  owner starts it, or a worthless token sent on from the fleet. Before, anyone
+  could use that to have a working fleet skipped and sent to the back of the
+  line (security review of the KF-A-06 fix).
+- The HTTP contract files now carry version 7.0.0, matching the public API
+  description.

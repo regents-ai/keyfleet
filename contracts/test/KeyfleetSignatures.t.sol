@@ -187,7 +187,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
     /// code moves these addresses, and then both vectors must be worked out and signed again.
     function test_aSignatureFromAnIndependentEncoderIsAccepted() public {
         assertEq(address(votes), 0x012f7238937F36D0FaB34194abeEab71Cf95E793, "the address the vector was signed for");
-        assertEq(address(fleet), 0x06129d8073EF152d7FD587D0023AD755cE0c3B68, "the manager the vector names");
+        assertEq(address(fleet), 0xb24059EAeC495104625766586CB7aa98F019B84C, "the manager the vector names");
         assertEq(block.chainid, 31337);
         assertEq(k1, 10_000_000_001);
         assertEq(k2, 10_000_000_002);
@@ -198,7 +198,7 @@ contract KeyfleetSignaturesTest is KeyfleetFixture {
             _pair(k1, k2),
             alice,
             2_000_000,
-            hex"ea4ce2f5965aead78a38b6d39ecaffc0953bf1cfa9b81a2ae44edfee54d9deb8489bb5159b90407a7baa4673ee6fea67bd43eaf44eef50402f4b088e0dc6b4b01c"
+            hex"aa95c41d9314490906cd6004914e8f1feabb98d4280d60710e3b7060125211a609ed757a5098b2f8652e07cd5e38a2987de30212ed945862e743d3335b942de51b"
         );
         assertTrue(votes.isActive(k1) && votes.isActive(k2));
     }

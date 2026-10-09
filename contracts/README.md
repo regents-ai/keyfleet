@@ -562,14 +562,14 @@ per contract. Measured with `forge build --sizes`:
 | `KeyfleetClubClaims` | 3,687 | 3,910 |
 | `KeyfleetFactory` | 6,387 | 40,725 |
 | `KeyfleetKeys` | 12,191 | 13,749 |
-| `KeyfleetManager` | 16,399 | 18,392 |
-| `KeyfleetManagerDeployer` | 18,882 | 19,013 |
+| `KeyfleetManager` | 16,383 | 18,376 |
+| `KeyfleetManagerDeployer` | 18,866 | 18,997 |
 | `KeyfleetRegentBuyer` | 8,098 | 9,832 |
 | `KeyfleetRewards` | 9,069 | 10,319 |
 | `KeyfleetRewardsDeployer` | 10,809 | 10,940 |
 | `KeyfleetShards` | 3,604 | 3,810 |
-| `KeyfleetTreasury` | 12,009 | 14,108 |
-| `KeyfleetTreasuryDeployer` | 14,598 | 14,729 |
+| `KeyfleetTreasury` | 11,951 | 14,050 |
+| `KeyfleetTreasuryDeployer` | 14,540 | 14,671 |
 | `KeyfleetVotes` | 19,574 | 21,188 |
 | `KeyfleetVotesDeployer` | 21,678 | 21,809 |
 
@@ -648,7 +648,11 @@ never surplus, never forwarded and never seen by the treasury's split or
 payments. The buyer later takes it in pieces through `takePiece(limit)`, which
 only the buyer may call (`OnlyRegentBuyer`): it hands over the smaller of what is
 booked and `limit`, which the buyer keeps to at most 250 USDC, approved to the
-buyer exactly, with the fleet's treasury as the REGENT's recipient. The
+buyer exactly, with the fleet's treasury as the REGENT's recipient. It takes
+no lock, so a conversion run from inside another call to the same fleet (a
+purchase's mint, or a surplus token's transfer) still converts that fleet's
+piece instead of seeing it skipped; every call to the manager makes its outside
+call only after its bookings are written (audit KF-A-06 follow-up, 9 Oct). The
 protocol share, the Cascade reserve and repayment and the Accelerant rebate stay
 USDC.
 
@@ -1709,11 +1713,11 @@ transaction of its own. The suite asserts each ceiling.
 | Transfer of a key with five split assets waiting | 385,319 | 435,000 |
 | One wallet claiming ten keys in five assets | 1,727,767 | 1,904,000 |
 | The next day's claim of the same ten keys | 582,714 | 694,000 |
-| Founding Classic creation | 11,983,584 | 16,777,216 |
-| Open creation with key 1: Classic | 12,507,906 | 16,777,216 |
-| Open creation with key 1: Syndicate | 12,458,984 | 16,777,216 |
-| Open creation with key 1: Accelerant | 12,481,773 | 16,777,216 |
-| Open creation with key 1: Cascade | 12,433,710 | 16,777,216 |
+| Founding Classic creation | 11,980,376 | 16,777,216 |
+| Open creation with key 1: Classic | 12,504,698 | 16,777,216 |
+| Open creation with key 1: Syndicate | 12,455,776 | 16,777,216 |
+| Open creation with key 1: Accelerant | 12,478,565 | 16,777,216 |
+| Open creation with key 1: Cascade | 12,430,502 | 16,777,216 |
 | The coordinator's answer to a key, cold | 31,554 | 100,000 given |
 
 The purchase ceiling stays above every first purchase, the dearest of which is
