@@ -48,7 +48,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
              "description" => "Key 3 of Cascade #1. Its traits appear here once they are drawn.",
              "image" => @interim_pass,
              "attributes" => [
-               %{"trait_type" => "Set Type", "value" => "cascade"},
+               %{"trait_type" => "Set Type", "value" => "Cascade"},
                %{"trait_type" => "Set ID", "value" => "001"},
                %{"trait_type" => "Level", "value" => 2},
                %{"trait_type" => "Status", "value" => "Revealing"}
@@ -88,7 +88,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
       "name" => "CASCADE—001—003",
       "description" => "Key 3 of Cascade #1.",
       "attributes" => [
-        %{"trait_type" => "Set Type", "value" => "cascade"},
+        %{"trait_type" => "Set Type", "value" => "Cascade"},
         %{"trait_type" => "Set ID", "value" => "001"},
         %{"trait_type" => "Level", "value" => 2},
         %{"trait_type" => "Hull", "value" => "Steel"},

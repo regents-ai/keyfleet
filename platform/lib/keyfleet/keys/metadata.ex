@@ -127,7 +127,10 @@ defmodule Keyfleet.Keys.Metadata do
     # The fixed catalog accepts only founding fleets (typeNumber 1), each the
     # first set of its own type. chain_fleet_id numbers all types together.
     [
-      %{trait_type: "Set Type", value: String.downcase(type)},
+      %{
+        trait_type: "Set Type",
+        value: type |> String.split() |> Enum.map_join(" ", &String.capitalize/1)
+      },
       %{trait_type: "Set ID", value: number |> Integer.to_string() |> String.pad_leading(3, "0")}
     ]
   end
