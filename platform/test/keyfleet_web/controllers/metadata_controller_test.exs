@@ -48,6 +48,8 @@ defmodule KeyfleetWeb.MetadataControllerTest do
              "description" => "Key 3 of Cascade #1. Its traits appear here once they are drawn.",
              "image" => @interim_pass,
              "attributes" => [
+               %{"trait_type" => "Set Type", "value" => "Cascade"},
+               %{"trait_type" => "Set ID", "value" => "001"},
                %{"trait_type" => "Level", "value" => 2},
                %{"trait_type" => "Status", "value" => "Revealing"}
              ]
@@ -86,6 +88,8 @@ defmodule KeyfleetWeb.MetadataControllerTest do
       "name" => "CASCADE—001—003",
       "description" => "Key 3 of Cascade #1.",
       "attributes" => [
+        %{"trait_type" => "Set Type", "value" => "Cascade"},
+        %{"trait_type" => "Set ID", "value" => "001"},
         %{"trait_type" => "Level", "value" => 2},
         %{"trait_type" => "Hull", "value" => "Steel"},
         %{"trait_type" => "Sky", "value" => "Noon"},
@@ -152,7 +156,7 @@ defmodule KeyfleetWeb.MetadataControllerTest do
     accelerant = get(conn, key_path("fleet_tech_accelerant", 1))
 
     assert Enum.map(json_response(accelerant, 200)["attributes"], & &1["trait_type"]) ==
-             ["Hull", "Sky", "Mark"]
+             ["Set Type", "Set ID", "Hull", "Sky", "Mark"]
 
     for response <- [cascade, accelerant] do
       assert ContractSchema.response_errors(json_response(response, 200), "GET", @path, 200) == []

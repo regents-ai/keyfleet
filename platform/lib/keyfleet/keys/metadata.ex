@@ -34,7 +34,7 @@ defmodule Keyfleet.Keys.Metadata do
     %{
       name: "Keyfleet",
       description: "Every Keyfleet Key. A Key is a seat in its fleet.",
-      image: picture(nil),
+      image: site |> URI.merge("/favicon-192.png") |> URI.to_string(),
       external_link: site
     }
   end
@@ -91,7 +91,7 @@ defmodule Keyfleet.Keys.Metadata do
       description:
         "Key #{token_id} of #{fleet.name}. Its traits appear here once they are drawn.",
       image: picture(nil),
-      attributes: level(key) ++ [%{trait_type: "Status", value: "Revealing"}]
+      attributes: set(key) ++ level(key) ++ [%{trait_type: "Status", value: "Revealing"}]
     }
   end
 
@@ -114,12 +114,26 @@ defmodule Keyfleet.Keys.Metadata do
       name: name(key),
       description: "Key #{token_id} of #{fleet.name}.",
       image: image,
-      attributes: level(key) ++ traits,
+      attributes: set(key) ++ level(key) ++ traits,
       properties: Map.merge(%{seed: seed, trait_table_hash: hash}, card)
     }
   end
 
   defp name(%{fleet: fleet, token_id: token_id}), do: Fleets.key_name(fleet.id, token_id)
+
+  defp set(%{fleet: fleet}) do
+    %{card: type, type_number: number} = Enum.find(Fleets.catalog(), &(&1.id == fleet.id))
+
+    # The fixed catalog accepts only founding fleets (typeNumber 1), each the
+    # first set of its own type. chain_fleet_id numbers all types together.
+    [
+      %{
+        trait_type: "Set Type",
+        value: type |> String.split() |> Enum.map_join(" ", &String.capitalize/1)
+      },
+      %{trait_type: "Set ID", value: number |> Integer.to_string() |> String.pad_leading(3, "0")}
+    ]
+  end
 
   defp level(%{fleet: fleet, token_id: token_id}) do
     if Presets.levelled?(fleet.id),
