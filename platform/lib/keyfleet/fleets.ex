@@ -14,22 +14,37 @@ defmodule Keyfleet.Fleets do
       id: "fleet_tech_classic",
       name: "Classic #1",
       card: "CLASSIC",
+      type_number: 1,
       coming_soon?: true
     },
     %{
       id: "fibonacci_syndicate",
       name: "Syndicate #1",
       card: "SYNDICATE",
+      type_number: 1,
       coming_soon?: true
     },
-    %{id: "fibonacci_cascade", name: "Cascade #1", card: "CASCADE", coming_soon?: true},
+    %{
+      id: "fibonacci_cascade",
+      name: "Cascade #1",
+      card: "CASCADE",
+      type_number: 1,
+      coming_soon?: true
+    },
     %{
       id: "fleet_tech_accelerant",
       name: "Accelerant #1",
       card: "ACCELERANT",
+      type_number: 1,
       coming_soon?: true
     },
-    %{id: "regents_club", name: "Regents Club #1", card: "REGENTS CLUB", coming_soon?: true}
+    %{
+      id: "regents_club",
+      name: "Regents Club #1",
+      card: "REGENTS CLUB",
+      type_number: 1,
+      coming_soon?: true
+    }
   ]
 
   resources do
@@ -42,8 +57,9 @@ defmodule Keyfleet.Fleets do
   end
 
   @doc """
-  The fixed catalog's fleets as `%{id: id, name: name, card: card, coming_soon?: marked}`,
-  in the order the site shows them. `coming_soon?` is the catalog's mark
+  The fixed catalog's fleets as `%{id: id, name: name, card: card, type_number: number,
+  coming_soon?: marked}`, in the order the site shows them. `type_number` is the
+  contract's per-type set number, not its global fleet id. `coming_soon?` is the catalog's mark
   alone; `coming_soon?/2` says whether a fleet is coming soon.
   """
   def catalog, do: @catalog
@@ -58,8 +74,8 @@ defmodule Keyfleet.Fleets do
   def key_name("regents_club", token_id), do: "REGENTS CLUB " <> padded(token_id, 4)
 
   def key_name(fleet_id, token_id) do
-    %{card: card} = Enum.find(@catalog, &(&1.id == fleet_id))
-    Enum.join([card, padded(1, 3), padded(token_id, 3)], "—")
+    %{card: card, type_number: number} = Enum.find(@catalog, &(&1.id == fleet_id))
+    Enum.join([card, padded(number, 3), padded(token_id, 3)], "—")
   end
 
   defp padded(number, digits),
