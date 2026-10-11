@@ -262,17 +262,6 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  def handle_event("page_tool", _params, socket) do
-    {:reply,
-     %{
-       ok: false,
-       error: %{
-         code: "signed_agent_required",
-         message: "Use the signed agent tool with your own SIWA identity."
-       }
-     }, socket}
-  end
-
   def handle_event(event, params, socket) when event in @room_events,
     do: RoomsLive.handle_event(event, params, socket)
 

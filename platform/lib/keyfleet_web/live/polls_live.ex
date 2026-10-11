@@ -59,10 +59,6 @@ defmodule KeyfleetWeb.PollsLive do
         <p class="polls-lede">Questions this fleet’s Keys answer together.</p>
       </header>
 
-      <%!-- The tools a browser's own agent reads and starts polls with (page_tools.ts). --%>
-      <div id="polls-tools" phx-hook="LiveTools" data-webmcp-tools="list_polls start_poll" hidden>
-      </div>
-
       <.notice notice={@notice} />
 
       <section
@@ -249,15 +245,6 @@ defmodule KeyfleetWeb.PollsLive do
     ~H"""
     <article id="poll-page" class="polls-page">
       <.detail_heading page={@page} title={@poll.question} />
-
-      <%!-- The tools a browser's own agent follows and takes part in this poll with (page_tools.ts). --%>
-      <div
-        id="poll-tools"
-        phx-hook="LiveTools"
-        data-webmcp-tools="read_poll vote_in_poll end_poll"
-        hidden
-      >
-      </div>
 
       <p id="poll-status" class="polls-status">
         <span class="polls-badge" data-open={to_string(@open?)}>

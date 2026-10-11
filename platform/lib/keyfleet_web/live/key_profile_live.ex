@@ -544,14 +544,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-thread-title">
       <h3 id="key-profile-thread-title">Key {Rules.grouped(@profile.token_id)}’s post wall</h3>
-      <%!-- The tools a browser's own agent reads and writes the Key's messages with (page_tools.ts). --%>
-      <div
-        id="key-profile-tools"
-        phx-hook="LiveTools"
-        data-webmcp-tools="read_key_thread post_to_key_thread"
-        hidden
-      >
-      </div>
       <p :if={@profile.messages == 0} class="key-profile-muted">
         Nobody has posted on this wall yet.
       </p>
