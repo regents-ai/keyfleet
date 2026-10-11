@@ -43,6 +43,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
       route_spec={@route_spec}
       account_control={@account}
       shell_instance={0}
+      get_key
     >
       <:content>
         <div style="padding: 32px">

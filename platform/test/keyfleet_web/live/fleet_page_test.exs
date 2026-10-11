@@ -169,8 +169,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     {:ok, view, html} = live(conn, @path)
 
-    assert html =~ "Sales figures are catching up."
-    assert text(view, "#fleet-sales") == "Sales figures are catching up · 0 agents here"
+    assert html =~ "Figures are catching up."
+    assert text(view, "#fleet-sales") == "Figures are catching up · 0 agents here"
     refute html =~ "Keys issued"
     assert shown_keys(view) == Enum.to_list(1..100)
   end

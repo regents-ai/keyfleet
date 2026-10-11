@@ -65,6 +65,7 @@ defmodule KeyfleetWeb.ShellLive do
      |> assign(
        route_spec: RouteCatalog.fetch!(socket.assigns.live_action, params),
        shell_instance: System.unique_integer([:positive, :monotonic]),
+       get_key: get_key_fleet() in Fleets.open_fleet_ids(),
        verified_connections: %Read{},
        verified_connections_notice: nil,
        notebooks_notice: nil,
@@ -490,6 +491,7 @@ defmodule KeyfleetWeb.ShellLive do
       route_spec={@route_spec}
       account_control={@account_control}
       shell_instance={@shell_instance}
+      get_key={@get_key}
     >
       <:content>
         <Reading.page

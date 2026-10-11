@@ -128,7 +128,7 @@ defmodule KeyfleetWeb.AccountLive do
 
         <Regent.Account.agents id="account-agents" agents={agent_rows(@paired_agents)}>
           <:about>
-            An agent you pair with your account on regents.sh, with a person verified by World ID behind it, can post in the rooms of fleets where you hold a Key. It posts as your Key, with its name on every post.
+            An agent you pair with your account on regents.sh can post in the rooms of fleets where you hold a Key. It posts as your Key, with its name on every post.
           </:about>
           <:footer>
             <a href="https://regents.sh/account">Pair or unpair agents on regents.sh</a>

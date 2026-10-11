@@ -355,6 +355,7 @@ defmodule KeyfleetWeb.HomeLive do
     <Regent.Structure.frame id="public-home" class="rl-root">
       <Shell.header
         account_control={@account_control}
+        get_key={Enum.any?(@fleets, &(&1.id == Shell.get_key_fleet() and not &1.coming_soon?))}
         get_key_link={:navigate}
         menu={false}
         theme={false}

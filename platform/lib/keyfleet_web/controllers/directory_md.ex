@@ -10,7 +10,7 @@ defmodule KeyfleetWeb.DirectoryMD do
   an HTML block of its own.
   """
 
-  alias Keyfleet.Fleets.Rules
+  alias Keyfleet.Fleets.{Presets, Rules}
   alias KeyfleetWeb.{DirectoryJSON, PublicDocuments}
 
   @special ~r/[\\`*_\[\]()#<>|!~]/
@@ -144,7 +144,10 @@ defmodule KeyfleetWeb.DirectoryMD do
     "“" <> Regex.replace(@special, text, "\\\\\\0") <> "”"
   end
 
-  defp sales(%{sales: %{on_sale: false}}), do: "Not on sale yet."
+  defp sales(%{sales: %{on_sale: false}} = fleet) do
+    if Presets.given?(fleet.id), do: "Nothing is for sale here.", else: "Not on sale yet."
+  end
+
   defp sales(%{sales: %{current: false}}), do: "Sales figures are catching up."
 
   defp sales(%{sales: %{next_key: nil, keys_total: total}}),

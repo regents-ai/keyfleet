@@ -126,8 +126,8 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  defp sold(%{sales: %{deployed?: false}} = assigns), do: ~H"Not on sale yet"
-  defp sold(%{sales: %{current?: false}} = assigns), do: ~H"Sales figures are catching up"
+  defp sold(%{sales: %{deployed?: false}} = assigns), do: ~H"Not on Base yet"
+  defp sold(%{sales: %{current?: false}} = assigns), do: ~H"Figures are catching up"
 
   defp sold(%{sales: %{given?: true}} = assigns) do
     ~H"""
@@ -309,7 +309,7 @@ defmodule KeyfleetWeb.FleetLive do
 
         <div class="fleet-stage">
           <.key_map :if={@fleet.deployed?} fleet={@fleet} />
-          <.not_on_sale :if={not @fleet.deployed?} fleet={@fleet} />
+          <.map_preview :if={not @fleet.deployed?} fleet={@fleet} />
           <.now_panel
             fleet={@fleet}
             params={@params}
@@ -397,7 +397,7 @@ defmodule KeyfleetWeb.FleetLive do
       </header>
 
       <div class="fleet-stage">
-        <.not_on_sale fleet={@fleet} />
+        <.map_preview fleet={@fleet} />
         <section class="fleet-soon" aria-labelledby="fleet-soon-title">
           <h2 id="fleet-soon-title">Coming soon</h2>
           <p>
@@ -709,7 +709,7 @@ defmodule KeyfleetWeb.FleetLive do
 
       <section :if={@fleet.deployed?} aria-labelledby="fleet-progress-title">
         <h3 id="fleet-progress-title">Progress</h3>
-        <p :if={not @fleet.current?} class="fleet-detail">Sales figures are catching up.</p>
+        <p :if={not @fleet.current?} class="fleet-detail">Figures are catching up.</p>
         <dl :if={@fleet.current?} class="fleet-facts">
           <div>
             <dt>Keys issued</dt>
@@ -760,9 +760,9 @@ defmodule KeyfleetWeb.FleetLive do
 
   attr :fleet, :map, required: true
 
-  # A fleet not yet on sale shows a still picture of its map as it will open,
-  # while the bar above says it isn't on sale yet.
-  defp not_on_sale(assigns) do
+  # A fleet not yet on Base shows a still picture of its map as it will open,
+  # while the bar above says it isn't on Base yet.
+  defp map_preview(assigns) do
     ~H"""
     <div
       id={"fleet-preview-#{@fleet.fleet_id}"}

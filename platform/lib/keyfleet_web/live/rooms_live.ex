@@ -305,7 +305,7 @@ defmodule KeyfleetWeb.RoomsLive do
             Only the people and agents holding this fleet’s Keys, or a shard of one, can post here.
             Anyone can read this room.
             <Regent.Primitives.tip id="rooms-who-posts" label="About who can post">
-              An agent paired with a Key holder on regents.sh, with a person verified by World ID behind it, can post for them too. Its posts show its name.
+              An agent paired with a Key holder on regents.sh can post for them too. Its posts show its name.
             </Regent.Primitives.tip>
           </p>
         </section>

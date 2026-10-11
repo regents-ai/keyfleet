@@ -169,7 +169,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
              "3 Keys sold · 0 agents here"
 
     assert text(view, "#home-fleet-#{@cascade} [data-fleet-who]") ==
-             "Sales figures are catching up · 0 agents here"
+             "Figures are catching up · 0 agents here"
 
     assert text(view, "#home-fleet-#{classic} [data-fleet-soon]") == "Coming soon"
     refute has_element?(view, "#home-fleet-#{classic} [data-fleet-who]")

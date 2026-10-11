@@ -7,13 +7,19 @@ defmodule KeyfleetWeb.Components.Shell do
   alias KeyfleetWeb.RouteCatalog.RouteTarget
   alias Phoenix.LiveView.JS
 
-  # Classic is the open fleet: "Get a Key" in the header opens its page with
-  # its own "Get a Key" pressed (`KeyfleetWeb.FleetLive`).
-  @get_key_path "/app/fleets/fleet_tech_classic?buy"
+  # Classic is the fleet that sells Keys: once it is open, "Get a Key" in the
+  # header opens its page with its own "Get a Key" pressed
+  # (`KeyfleetWeb.FleetLive`). Until then the header has no "Get a Key".
+  @get_key_fleet "fleet_tech_classic"
+  @get_key_path "/app/fleets/#{@get_key_fleet}?buy"
+
+  @doc "The fleet the header's \"Get a Key\" opens, shown only while it is open."
+  def get_key_fleet, do: @get_key_fleet
 
   attr(:route_spec, :map, required: true)
   attr(:account_control, Keyfleet.AccessContext.AccountControl, required: true)
   attr(:shell_instance, :integer, required: true)
+  attr(:get_key, :boolean, required: true)
   slot(:content, required: true)
 
   def shell(assigns) do
@@ -31,7 +37,7 @@ defmodule KeyfleetWeb.Components.Shell do
       data-shell-instance={@shell_instance}
     >
       <a class="shell-skip" href="#route-content">Skip to content</a>
-      <.header account_control={@account_control} get_key_link={:patch} menu theme />
+      <.header account_control={@account_control} get_key={@get_key} get_key_link={:patch} menu theme />
 
       <nav
         id="shell-sidebar"
@@ -79,6 +85,10 @@ defmodule KeyfleetWeb.Components.Shell do
 
   attr :account_control, Keyfleet.AccessContext.AccountControl, required: true
 
+  attr :get_key, :boolean,
+    required: true,
+    doc: "whether the fleet \"Get a Key\" opens is open, so the header shows it"
+
   attr :get_key_link, :atom,
     required: true,
     values: [:patch, :navigate],
@@ -92,8 +102,8 @@ defmodule KeyfleetWeb.Components.Shell do
 
   @doc """
   The site header: brand, Menu (only where there is a sidebar), the theme
-  switch (not on the always-dark homepage), links, "Get a Key" and the account
-  control. It fits one line on a phone.
+  switch (not on the always-dark homepage), links, "Get a Key" (once Classic
+  is open) and the account control. It fits one line on a phone.
   """
   def header(assigns) do
     ~H"""
@@ -132,7 +142,7 @@ defmodule KeyfleetWeb.Components.Shell do
         <RegentLinks.header_links id="shell-token-menu" />
       </div>
 
-      <div class="shell-get-key">
+      <div :if={@get_key} class="shell-get-key">
         <.get_key id="shell-get-key" link={@get_key_link} />
       </div>
       <.account_control account_control={@account_control} />
@@ -148,8 +158,8 @@ defmodule KeyfleetWeb.Components.Shell do
     doc: "`:patch` from the app's own pages, `:navigate` from any other"
 
   @doc """
-  "Get a Key" in the site header, for everyone, signed in or not: it opens
-  Classic's page with its buying panel open.
+  "Get a Key" in the site header, for everyone, signed in or not, once Classic
+  is open: it opens Classic's page with its buying panel open.
   """
   def get_key(assigns) do
     assigns = assign(assigns, :to, [{assigns.link, @get_key_path}])

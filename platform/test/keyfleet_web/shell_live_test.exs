@@ -456,6 +456,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
       route_spec: route_spec,
       account_control: account_control,
       shell_instance: 1,
+      get_key: true,
       content: [%{inner_block: fn _, _ -> "Fixture content" end}]
     )
   end
