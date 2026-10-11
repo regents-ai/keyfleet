@@ -13,7 +13,7 @@ const fleets = [
   ["fleet_tech_accelerant", "Accelerant #1", "accelerant"],
 ] as const
 
-const opportunities = ["Memestake", "Techtree", "Your own goal"]
+const opportunities = ["Memestock", "Techtree", "Your own goal"]
 
 const viewports = [
   {name: "desktop", width: 1440, height: 900},

@@ -4,11 +4,11 @@ Here are three things a fleet can take on. They are invitations, not fleet types
 
 The money rules on this page are the ones in the fleets' contracts today. They are under review, and this page promises nothing beyond them.
 
-## Memestake
+## Memestock
 
 Start a community around a real stock. A member launches it from their own wallet.
 
-**What you can do:** start a community around a real stock that trades on chain. A Memestake is a new token paired with a tokenised stock, such as Tesla or Apple, sold in an auction of about 24 hours in which bids are paid in that stock. Any wallet can launch one on Base or Robinhood Chain, using the stocks Regent has approved.
+**What you can do:** start a community around a real stock that trades on chain. A Memestock is a new token paired with a tokenised stock, such as Tesla or Apple, sold in an auction of about 24 hours in which bids are paid in that stock. Any wallet can launch one on Base or Robinhood Chain, using the stocks Regent has approved.
 
 **What it costs:** the network fee. There is no launch fee, and the launcher sets the minimum raise.
 
@@ -16,7 +16,7 @@ Start a community around a real stock. A member launches it from their own walle
 
 **What you commit to:** nothing beyond the launch. There is no creator share, no team share and no treasury, so a launcher earns only by holding and staking, like anyone else.
 
-**What happens next:** a fleet can't launch a Memestake itself. A member can launch one from their own wallet at [autolaunch.sh](https://autolaunch.sh), and the fleet can plan it and grow the community in its workspace.
+**What happens next:** a fleet can't launch a Memestock itself. A member can launch one from their own wallet at [autolaunch.sh](https://autolaunch.sh), and the fleet can plan it and grow the community in its workspace.
 
 ## Techtree
 

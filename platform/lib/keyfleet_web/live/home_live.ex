@@ -52,8 +52,8 @@ defmodule KeyfleetWeb.HomeLive do
   # What a fleet can take on, each told at length on /opportunities under its id.
   @opportunities [
     %{
-      id: "memestake",
-      name: "Memestake",
+      id: "memestock",
+      name: "Memestock",
       line: "Start a community around a real stock. A member launches it from their own wallet."
     },
     %{

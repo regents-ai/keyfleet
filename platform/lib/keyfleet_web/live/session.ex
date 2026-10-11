@@ -29,11 +29,11 @@ defmodule KeyfleetWeb.Live.Session do
   # header; they act for nobody, so they hold no lease.
   def on_mount(:show_account, _params, session, socket) do
     {_lineage, account} = session |> SessionAuthority.claim() |> SessionAuthority.resolve()
-    {:cont, assign_principal(socket, account)}
+    {:cont, socket |> assign(signed_out_reason: :signed_out) |> assign_principal(account)}
   end
 
   def on_mount(:load_human, _params, session, socket) do
-    socket = assign(socket, session_lease: nil)
+    socket = assign(socket, session_lease: nil, signed_out_reason: :signed_out)
 
     if connected?(socket) do
       connected(socket, session, get_connect_info(socket, :session))
@@ -77,7 +77,8 @@ defmodule KeyfleetWeb.Live.Session do
   # account's own provider evidence are re-read every time, and the principal is
   # rebuilt from that read rather than from the struct the mount captured. A
   # lapsed lease withdraws the principal, so nothing downstream can still
-  # present it as authority. Components receive the lease as `session_lease`
+  # present it as authority, and a page that stays open says the sign-in ended
+  # (`signed_out_reason: :expired`) rather than that no one signed in. Components receive the lease as `session_lease`
   # and check it on their own events (`check_component_events/1`); one that
   # finds it lapsed asks the page to withdraw the principal here.
   defp hold(socket, lineage, account) do
@@ -137,8 +138,12 @@ defmodule KeyfleetWeb.Live.Session do
 
   defp recheck(socket, lease, lapsed) do
     case SessionAuthority.leased_account(lease.lineage, lease.account_id) do
-      nil -> {:halt, socket |> assign_principal(nil) |> lapsed.()}
-      account -> {:cont, assign_principal(socket, account)}
+      nil ->
+        {:halt,
+         socket |> assign_principal(nil) |> assign(signed_out_reason: :expired) |> lapsed.()}
+
+      account ->
+        {:cont, assign_principal(socket, account)}
     end
   end
 

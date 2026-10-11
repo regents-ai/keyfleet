@@ -19,6 +19,7 @@ defmodule Keyfleet.Application do
         # hands clears its holder at once, through PubSub.
         Keyfleet.AccessCache,
         agents_listener_child(),
+        credits_listener_child(),
         # A key's profile reads its rewards wherever the site runs.
         Keyfleet.Chain.RewardsWaiting,
         graph_children(),
@@ -57,6 +58,13 @@ defmodule Keyfleet.Application do
   defp agents_listener_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false),
       do: RegentAgents.Listener
+  end
+
+  # A Credits balance changed on any Regent site, announced through the
+  # database, reaches the account pages showing it.
+  defp credits_listener_child do
+    if Application.get_env(:keyfleet, :database_startup_enabled, false),
+      do: RegentCredits.Listener
   end
 
   # Metrics are served beside the site, never by a process that only runs a task.

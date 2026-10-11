@@ -74,6 +74,10 @@ defmodule KeyfleetWeb.ShellLive do
        held_keys: [],
        paired_agents: %Read{},
        agents_topic: nil,
+       credits: %Read{},
+       credits_topic: nil,
+       points: %Read{},
+       points_earning: [],
        fleet: nil,
        fleet_params: nil,
        keys_topic: nil,
@@ -122,7 +126,7 @@ defmodule KeyfleetWeb.ShellLive do
        |> assign(route_spec: route_spec, send_agent_open: false)
        |> assign(PublicDocuments.page(route_spec.route_id))
        |> load_verified_connections(route_spec)
-       |> load_held_keys(route_spec)
+       |> load_account_page(route_spec)
        |> follow_keys(keys_fleet(route_spec, params))
        |> load_fleet(route_spec, params)
        |> load_key_profile(socket.assigns)
@@ -304,6 +308,13 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_info(:agents_changed, socket) do
     account = current_account(socket.assigns.access_context)
     {:noreply, read_paired_agents(socket, account)}
+  end
+
+  # The person's Credits balance changed on any Regent site: a purchase, a
+  # gift, a hold or its close.
+  def handle_info(:credits_changed, socket) do
+    account = current_account(socket.assigns.access_context)
+    {:noreply, read_credits(socket, account)}
   end
 
   def handle_info(%Broadcast{event: event} = notice, socket)
@@ -489,11 +500,15 @@ defmodule KeyfleetWeb.ShellLive do
         <AccountLive.page
           :if={@route_spec.route_id == :account}
           account={current_account(@access_context)}
+          signed_out_reason={@signed_out_reason}
           account_control={@account_control}
           verified_connections={@verified_connections}
           verified_connections_notice={@verified_connections_notice}
           held_keys={@held_keys}
           paired_agents={@paired_agents}
+          credits={@credits}
+          points={@points}
+          points_earning={@points_earning}
         />
 
         <FleetLive.page
@@ -828,16 +843,20 @@ defmodule KeyfleetWeb.ShellLive do
     assign(socket, verified_connections_notice: notice, connection_outcome: nil)
   end
 
-  defp load_held_keys(socket, %{route_id: :account}) do
+  defp load_account_page(socket, %{route_id: :account}) do
     account = current_account(socket.assigns.access_context)
 
     socket
     |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
     |> read_paired_agents(account)
     |> follow_agents(account)
+    |> read_credits(account)
+    |> follow_credits(account)
+    |> read_points()
+    |> assign(:points_earning, RegentPoints.Rules.active())
   end
 
-  defp load_held_keys(socket, _route_spec), do: assign(socket, :held_keys, [])
+  defp load_account_page(socket, _route_spec), do: assign(socket, :held_keys, [])
 
   # The agents are read beside the page, so a failed read leaves the rest of
   # the account page working.
@@ -858,6 +877,36 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   defp follow_agents(socket, _account), do: socket
+
+  # Credits and Points are read beside the page too, each with its own loading
+  # and could-not-be-read state.
+  defp read_credits(socket, %{privy_user_id: person} = account),
+    do: Read.start(socket, :credits, person, fn -> AccountLive.credits(account) end)
+
+  defp read_credits(socket, nil), do: Read.clear(socket, :credits)
+
+  # Hears when the person's Credits balance changes, once per page.
+  defp follow_credits(%{assigns: %{credits_topic: nil}} = socket, %{privy_user_id: person}) do
+    if connected?(socket) do
+      topic = RegentCredits.topic(person)
+      :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
+      assign(socket, :credits_topic, topic)
+    else
+      socket
+    end
+  end
+
+  defp follow_credits(socket, _account), do: socket
+
+  defp read_points(socket) do
+    case human_actor(socket) do
+      %Human{} = actor ->
+        Read.start(socket, :points, actor.human_account_id, fn -> AccountLive.points(actor) end)
+
+      nil ->
+        Read.clear(socket, :points)
+    end
+  end
 
   defp identity_request("link", provider, _identities) do
     {:ok, %{action: :link, provider: provider}}

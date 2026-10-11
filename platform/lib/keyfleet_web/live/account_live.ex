@@ -1,8 +1,8 @@
 defmodule KeyfleetWeb.AccountLive do
   @moduledoc """
   The signed-in person's own page: who the site knows them as, the keys their
-  wallets hold, the agents paired with their account, the wallets their sign-in
-  verified and the accounts they have connected.
+  wallets hold, the agents paired with their account, their Credits and Points,
+  the wallets their sign-in verified and the accounts they have connected.
 
   Everything here is read from the sign-in the shell already holds; nothing on
   the page asks the visitor to sign in again.
@@ -18,8 +18,10 @@ defmodule KeyfleetWeb.AccountLive do
   alias Keyfleet.PublicIdentity
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.Read
+  alias RegentPoints.Amount
 
   attr :account, :map, default: nil
+  attr :signed_out_reason, :atom, default: :signed_out
   attr :account_control, :map, required: true
   attr :verified_connections, KeyfleetWeb.Read, required: true
   attr :verified_connections_notice, :map, default: nil
@@ -27,6 +29,18 @@ defmodule KeyfleetWeb.AccountLive do
   attr :paired_agents, KeyfleetWeb.Read,
     default: %KeyfleetWeb.Read{},
     doc: "the read of the agents paired with the account on regents.sh, most recent first"
+
+  attr :credits, KeyfleetWeb.Read,
+    default: %KeyfleetWeb.Read{},
+    doc: "the read of the account's Credits balance, kept on regents.sh"
+
+  attr :points, KeyfleetWeb.Read,
+    default: %KeyfleetWeb.Read{},
+    doc: "the read of the account's Points summary"
+
+  attr :points_earning, :list,
+    default: [],
+    doc: "the Points rules earning now; their daily allowances show only while one is"
 
   attr :held_keys, :list,
     default: [],
@@ -43,7 +57,11 @@ defmodule KeyfleetWeb.AccountLive do
         </p>
       </header>
 
-      <Regent.Account.signed_out :if={is_nil(@account)} id="account-page-signed-out">
+      <Regent.Account.signed_out
+        :if={is_nil(@account)}
+        id="account-page-signed-out"
+        reason={@signed_out_reason}
+      >
         <:sign_in>
           <Regent.Primitives.button type="button" data-account-target="sign-in">
             Sign in
@@ -140,6 +158,25 @@ defmodule KeyfleetWeb.AccountLive do
           </div>
         </section>
 
+        <div class="account-credits">
+          <Regent.Account.credits_summary
+            id="account-credits"
+            available={@credits.value && RegentCredits.Amount.format(@credits.value.available)}
+            held={@credits.value && RegentCredits.Amount.format(@credits.value.held)}
+            state={summary_state(@credits.state)}
+          />
+          <a href="https://regents.sh/account">Manage Credits on regents.sh</a>
+        </div>
+
+        <Regent.Account.points_summary
+          id="account-points"
+          confirmed={@points.value && Amount.format(@points.value.balance_micro)}
+          today={@points.value && Amount.format(@points.value.earned_today_micro)}
+          pending={@points.value && to_string(@points.value.pending)}
+          state={summary_state(@points.state)}
+          allowances={allowances(@points, @points_earning)}
+        />
+
         <.verified_connections
           id="account-verified-connections"
           class="account-panel"
@@ -177,6 +214,27 @@ defmodule KeyfleetWeb.AccountLive do
 
   defp short_wallet(_account), do: nil
 
+  # A read not yet answered shows as loading, and an answer with nothing in it
+  # as current figures.
+  defp summary_state(state) when state in [:idle, :loading], do: :loading
+  defp summary_state(:empty), do: :ready
+  defp summary_state(state), do: state
+
+  defp allowances(_points, []), do: []
+  defp allowances(%Read{value: nil}, _earning), do: []
+
+  defp allowances(%Read{value: points}, _earning) do
+    Enum.map(
+      points.allowances,
+      &%{label: scope_name(&1.scope), value: "#{Amount.format(&1.remaining)} remaining"}
+    )
+  end
+
+  defp scope_name("activity:account"), do: "You and your agents"
+  defp scope_name("credits"), do: "Credits purchases"
+  defp scope_name("activity:human"), do: "Your actions"
+  defp scope_name("activity:agent"), do: "Your agents’ actions"
+
   # Still being read shows as loading; a failed read shows as unavailable,
   # never as no agents. A re-read keeps the agents already listed on screen.
   defp agent_rows(%Read{state: state}) when state in [:error, :stale], do: :unavailable
@@ -204,6 +262,12 @@ defmodule KeyfleetWeb.AccountLive do
   """
   def paired_agents(%{privy_user_id: person}),
     do: RegentAgents.list_my_agents(actor: %RegentAgents.Person{privy_user_id: person})
+
+  @doc "Reads the signed-in person's Credits balance, kept once for every Regent site."
+  def credits(%{privy_user_id: person}), do: {:ok, RegentCredits.balance(person)}
+
+  @doc "Reads the signed-in person's Points summary: `{:ok, summary}` or `{:error, reason}`."
+  def points(%Human{} = actor), do: RegentPoints.summary(actor: actor)
 
   @doc """
   Every key the signed-in person's wallets hold, fleet by fleet in catalog
