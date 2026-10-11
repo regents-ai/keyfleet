@@ -182,7 +182,7 @@ defmodule KeyfleetWeb.Live.SessionAuthorityGateTest do
   test "HANDSHAKE_IS_CONNECTED_AUTHORITY: a handshake and render with no claim mount anonymous" do
     {:ok, view, _html} = live(build_conn(), "/app/fleets/fibonacci_syndicate")
 
-    assert has_element?(view, @sign_in, "Sign In")
+    assert has_element?(view, @sign_in, "Sign in")
   end
 
   test "HANDSHAKE_IS_CONNECTED_AUTHORITY: a different current lineage reloads the same route once",
@@ -218,7 +218,7 @@ defmodule KeyfleetWeb.Live.SessionAuthorityGateTest do
 
     assert SessionAuthority.revoke(claim(signed_in))
     render_click(view, "refresh_verified_connections", %{})
-    assert has_element?(view, @sign_in, "Sign In")
+    assert has_element?(view, @sign_in, "Sign in")
 
     # The revoked lease halts navigation at the authority hook itself.
     assert {:error, {:redirect, %{to: "/"}}} =
@@ -236,7 +236,7 @@ defmodule KeyfleetWeb.Live.SessionAuthorityGateTest do
     assert {:ok, _lapsed} = Accounts.refresh_verified(account, nil, [], actor: %System{})
 
     render_click(view, "refresh_verified_connections", %{})
-    assert has_element?(view, @sign_in, "Sign In")
+    assert has_element?(view, @sign_in, "Sign in")
 
     # A fleet's page renders for anonymous visitors, so only the authority hook
     # can be refusing this navigation.

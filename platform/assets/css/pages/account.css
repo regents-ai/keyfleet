@@ -93,10 +93,6 @@
   line-height: 1.1;
 }
 
-.account-signed-out {
-  justify-items: start;
-}
-
 /* Identity card */
 
 .account-identity .rg-holo__content {
@@ -133,30 +129,6 @@
 
 .account-identity__name code {
   color: color-mix(in srgb, var(--rg-holo-ink) 70%, transparent);
-}
-
-/* Your agents */
-
-.account-agents__list {
-  display: grid;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.account-agents__list li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.75rem;
-  align-items: baseline;
-  padding-block-start: 0.5rem;
-  border-block-start: 1px solid var(--color-border);
-}
-
-.account-agents__list span {
-  color: var(--color-fg-muted);
-  font-size: 0.9rem;
 }
 
 /* Your keys */
@@ -196,7 +168,7 @@
   border-color: var(--ash-line-strong);
 }
 
-/* Details */
+/* Profile */
 
 .account-details dl {
   display: grid;

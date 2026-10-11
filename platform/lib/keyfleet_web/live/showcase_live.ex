@@ -466,17 +466,17 @@ defmodule KeyfleetWeb.ShowcaseLive do
                       <P.button
                         :if={@privy_mode == :configured && @account_control.kind == :sign_in}
                         data-account-target="sign-in"
-                      >Connect Privy</P.button>
+                      >Sign in with Privy</P.button>
                       <P.button
                         :if={@privy_mode == :configured && @account_control.kind == :signed_in}
                         variant="secondary"
                         data-account-target="sign-out"
-                      >Disconnect Privy</P.button>
+                      >Sign out</P.button>
                       <P.button
                         :if={@privy_mode != :configured}
                         disabled
                         aria-describedby="privy-unavailable"
-                      >Connect Privy</P.button>
+                      >Sign in with Privy</P.button>
                     </div>
                     <p :if={@privy_mode == :configured && @account_control.kind == :signed_in}>
                       Signed in as {@account_control.label}.
@@ -498,7 +498,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                     <p>
                       These controls use the application's existing Privy bridge and verified
                       session loader. Only the action matching the server's current account
-                      state is offered. Connecting may open Privy; disconnecting ends the local
+                      state is offered. Signing in may open Privy; signing out ends the local
                       app session. Provider readiness and the allowed origin still need to be
                       verified with a real account. Wallet fixture state is separate.
                     </p>

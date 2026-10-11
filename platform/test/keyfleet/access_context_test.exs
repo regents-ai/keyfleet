@@ -8,7 +8,7 @@ defmodule Keyfleet.AccessContextTest do
 
   test "anonymous account control exposes only sign in" do
     assert AccessContext.account_control(AccessContext.for_account(nil)) ==
-             %AccountControl{kind: :sign_in, label: "Sign In", avatar_src: nil}
+             %AccountControl{kind: :sign_in, label: "Sign in", avatar_src: nil}
   end
 
   test "a signed human is named by their display name and drawn from their wallet" do

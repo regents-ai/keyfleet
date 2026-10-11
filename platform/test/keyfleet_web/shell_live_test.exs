@@ -21,7 +21,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert html =~ ~s(id="app-shell")
     assert has_element?(view, "#route-content h1", "Account")
-    assert has_element?(view, "#account-page button[data-account-target=sign-in]", "Sign In")
+    assert has_element?(view, "#account-page button[data-account-target=sign-in]", "Sign in")
     refute has_element?(view, "#account-identity")
     refute has_element?(view, "#route-content .verified-connections")
   end
@@ -61,14 +61,14 @@ defmodule KeyfleetWeb.ShellLiveTest do
     end
   end
 
-  test "anonymous account control renders Sign In separately from the brand link", %{conn: conn} do
+  test "anonymous account control renders Sign in separately from the brand link", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/account")
 
     assert has_element?(view, ~s(#shell-brand[href="/"]), "Keyfleet")
     assert has_element?(view, "#shell-brand .shell-brand__mark img.shell-brand__mark-light")
     assert has_element?(view, "#shell-brand .shell-brand__mark img.shell-brand__mark-dark")
     assert has_element?(view, "#theme-control button.theme-toggle[data-theme-toggle]")
-    assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign In")
+    assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign in")
 
     assert has_element?(
              view,
@@ -94,7 +94,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(
              view,
              "#account-control button[type=button][data-account-target=sign-out]",
-             "Disconnect"
+             "Sign out"
            )
 
     assert has_element?(view, "#account-control a[data-account-menu-item=account]", "Account")
@@ -113,8 +113,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> init_test_session(%{human_account_id: account.id})
       |> live("/account")
 
-    assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign In")
-    refute has_element?(view, "#account-control [data-account-target=sign-out]", "Disconnect")
+    assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign in")
+    refute has_element?(view, "#account-control [data-account-target=sign-out]", "Sign out")
   end
 
   test "signed-in account presentation survives an in-shell patch", %{conn: conn} do
@@ -136,10 +136,10 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert view.pid == pid
     assert render(view) =~ ~s(data-shell-instance="#{instance}")
     assert has_element?(view, "#account-control [data-account-target=profile]", "0x2222..2222")
-    assert has_element?(view, "#account-control [data-account-target=sign-out]", "Disconnect")
+    assert has_element?(view, "#account-control [data-account-target=sign-out]", "Sign out")
   end
 
-  test "the signed-in account menu shows the picture, the name, Account and Disconnect" do
+  test "the signed-in account menu shows the picture, the name, Account and Sign out" do
     html =
       render_shell(%AccountControl{
         kind: :signed_in,
@@ -152,20 +152,20 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert html =~ ~s(src="data:image/svg+xml;base64,PHN2Zy8+")
     assert html =~ ~s(href="/account")
     assert html =~ ~s(data-account-menu-item="account")
-    assert html =~ "Disconnect"
+    assert html =~ "Sign out"
     refute html =~ "Sign Out"
   end
 
   test "Account owns its own page rather than relabeling the whole shell" do
     html =
       render_component(&KeyfleetWeb.AccountLive.page/1, %{
-        account_control: %AccountControl{kind: :sign_in, label: "Sign In"},
+        account_control: %AccountControl{kind: :sign_in, label: "Sign in"},
         verified_connections: %KeyfleetWeb.Read{}
       })
 
     assert html =~ ~s(id="account-page")
     assert html =~ ">Account<"
-    assert html =~ "Sign In to see your account"
+    assert html =~ "Sign in to see your account"
     refute html =~ "Verified connections"
   end
 
@@ -193,7 +193,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     {view, html} = open_account(conn, account)
 
-    refute html =~ "Sign In to see your account"
+    refute html =~ "Sign in to see your account"
     assert has_element?(view, "#account-identity h2", "0x6666..6666")
     assert has_element?(view, "#account-identity canvas[data-holo-canvas]")
     assert has_element?(view, ".account-details code", wallet)
@@ -374,7 +374,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     [instance] = Regex.run(~r/data-shell-instance="(\d+)"/, html, capture: :all_but_first)
 
     view
-    |> element("#shell-sidebar a", "Sign In")
+    |> element("#shell-sidebar a", "Sign in")
     |> render_click()
 
     assert_patch(view, "/account")

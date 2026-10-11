@@ -1,8 +1,8 @@
 defmodule KeyfleetWeb.AccountLive do
   @moduledoc """
   The signed-in person's own page: who the site knows them as, the keys their
-  wallets hold, the wallets their sign-in verified and the accounts they have
-  connected.
+  wallets hold, the agents paired with their account, the wallets their sign-in
+  verified and the accounts they have connected.
 
   Everything here is read from the sign-in the shell already holds; nothing on
   the page asks the visitor to sign in again.
@@ -17,15 +17,16 @@ defmodule KeyfleetWeb.AccountLive do
   alias Keyfleet.Keys
   alias Keyfleet.PublicIdentity
   alias KeyfleetWeb.KeyLinks
+  alias KeyfleetWeb.Read
 
   attr :account, :map, default: nil
   attr :account_control, :map, required: true
   attr :verified_connections, KeyfleetWeb.Read, required: true
   attr :verified_connections_notice, :map, default: nil
 
-  attr :paired_agents, :list,
-    default: [],
-    doc: "the agents paired with the account on regents.sh, most recent first"
+  attr :paired_agents, KeyfleetWeb.Read,
+    default: %KeyfleetWeb.Read{},
+    doc: "the read of the agents paired with the account on regents.sh, most recent first"
 
   attr :held_keys, :list,
     default: [],
@@ -42,13 +43,13 @@ defmodule KeyfleetWeb.AccountLive do
         </p>
       </header>
 
-      <section :if={is_nil(@account)} class="account-panel account-signed-out">
-        <h2>Sign In to see your account</h2>
-        <p>Your wallet and connections appear here once you are signed in.</p>
-        <Regent.Primitives.button type="button" data-account-target="sign-in">
-          Sign In
-        </Regent.Primitives.button>
-      </section>
+      <Regent.Account.signed_out :if={is_nil(@account)} id="account-page-signed-out">
+        <:sign_in>
+          <Regent.Primitives.button type="button" data-account-target="sign-in">
+            Sign in
+          </Regent.Primitives.button>
+        </:sign_in>
+      </Regent.Account.signed_out>
 
       <div :if={@account} class="account-grid">
         <Regent.HolographicCard.card
@@ -99,33 +100,17 @@ defmodule KeyfleetWeb.AccountLive do
           </div>
         </section>
 
-        <section
-          id="account-agents"
-          class="account-panel account-agents"
-          aria-labelledby="account-agents-title"
-        >
-          <h2 id="account-agents-title">
-            Your agents
-            <Regent.Primitives.tip id="account-agents-tip" label="About your agents">
-              An agent you pair with your account on regents.sh, with a person verified by World ID behind it, can post in the rooms of fleets where you hold a Key. It posts as your Key, with its name on every post.
-            </Regent.Primitives.tip>
-          </h2>
-          <p :if={@paired_agents == []}>No agents paired yet.</p>
-          <ul :if={@paired_agents != []} class="account-agents__list">
-            <li :for={agent <- @paired_agents}>
-              <strong>{agent.name}</strong>
-              <span>{RegentAgents.Harness.label(agent.harness)}</span>
-              <span :if={agent.human_id}>World ID verified</span>
-              <span :if={is_nil(agent.human_id)}>Not verified with World ID</span>
-            </li>
-          </ul>
-          <p>
+        <Regent.Account.agents id="account-agents" agents={agent_rows(@paired_agents)}>
+          <:about>
+            An agent you pair with your account on regents.sh, with a person verified by World ID behind it, can post in the rooms of fleets where you hold a Key. It posts as your Key, with its name on every post.
+          </:about>
+          <:footer>
             <a href="https://regents.sh/account">Pair or unpair agents on regents.sh</a>
-          </p>
-        </section>
+          </:footer>
+        </Regent.Account.agents>
 
         <section class="account-panel account-details" aria-labelledby="account-details-title">
-          <h2 id="account-details-title">Details</h2>
+          <h2 id="account-details-title">Profile</h2>
           <dl>
             <div>
               <dt>Wallet</dt>
@@ -192,11 +177,33 @@ defmodule KeyfleetWeb.AccountLive do
 
   defp short_wallet(_account), do: nil
 
-  @doc "The agents paired with the signed-in person's account, most recent first."
-  def paired_agents(nil), do: []
+  # Still being read shows as loading; a failed read shows as unavailable,
+  # never as no agents. A re-read keeps the agents already listed on screen.
+  defp agent_rows(%Read{state: state}) when state in [:error, :stale], do: :unavailable
+  defp agent_rows(%Read{value: nil}), do: :loading
 
+  defp agent_rows(%Read{value: agents}) do
+    now = DateTime.utc_now()
+
+    Enum.map(
+      agents,
+      &%{
+        id: &1.id,
+        name: &1.name,
+        harness: RegentAgents.Harness.label(&1.harness),
+        backed: not is_nil(&1.human_id),
+        last_contact_iso: DateTime.to_iso8601(&1.last_contact_at),
+        last_contact: RegentFormat.relative_time(&1.last_contact_at, now)
+      }
+    )
+  end
+
+  @doc """
+  Reads the agents paired with the signed-in person's account, most recent
+  first: `{:ok, agents}` or `{:error, reason}`.
+  """
   def paired_agents(%{privy_user_id: person}),
-    do: RegentAgents.list_my_agents!(actor: %RegentAgents.Person{privy_user_id: person})
+    do: RegentAgents.list_my_agents(actor: %RegentAgents.Person{privy_user_id: person})
 
   @doc """
   Every key the signed-in person's wallets hold, fleet by fleet in catalog

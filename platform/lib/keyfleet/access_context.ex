@@ -18,7 +18,7 @@ defmodule Keyfleet.AccessContext do
   def linked_wallets(%__MODULE__{principal: :anonymous}), do: nil
 
   def account_control(%__MODULE__{principal: :anonymous}),
-    do: %AccountControl{kind: :sign_in, label: "Sign In"}
+    do: %AccountControl{kind: :sign_in, label: "Sign in"}
 
   def account_control(%__MODULE__{principal: {:human, account}}) do
     %AccountControl{

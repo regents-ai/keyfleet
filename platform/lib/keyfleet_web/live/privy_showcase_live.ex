@@ -98,7 +98,7 @@ defmodule KeyfleetWeb.PrivyShowcaseLive do
             <span data-press-label>Connect wallet</span>
           </P.button>
           <p>
-            Signing in and having a transaction-ready wallet are separate states. Disconnect in the header clears this wallet selection.
+            Signing in and having a transaction-ready wallet are separate states. Sign out in the header clears this wallet selection.
           </p>
         </section>
 

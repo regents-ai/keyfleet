@@ -119,7 +119,7 @@ test("all approved routes render within their page budget", async ({page, reques
   await expect(page.locator("#app-shell")).toBeVisible()
 })
 
-test("anonymous Sign In stays separate from the brand link", async ({page}) => {
+test("anonymous Sign in stays separate from the brand link", async ({page}) => {
   await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
 
@@ -129,7 +129,7 @@ test("anonymous Sign In stays separate from the brand link", async ({page}) => {
   await expect(brand).toContainText("Keyfleet")
   await expect(brand).toHaveAttribute("href", "/")
   await expect(brand.getByRole("button")).toHaveCount(0)
-  await expect(accountControl.getByRole("button", {name: "Sign In"})).toBeVisible()
+  await expect(accountControl.getByRole("button", {name: "Sign in"})).toBeVisible()
   await expect(accountControl.getByRole("link")).toHaveCount(0)
 })
 
@@ -185,12 +185,12 @@ test("a signed-in account shows its account menu", async ({page}) => {
     .poll(() => account.locator("img.account-avatar").evaluate(image => image.naturalWidth))
     .toBeGreaterThan(0)
   await account.locator("summary").first().click()
-  await expect(account.locator(".account-menu__row")).toHaveText(["Account", "Disconnect"])
+  await expect(account.locator(".account-menu__row")).toHaveText(["Account", "Sign out"])
   await expect(account.getByRole("link", {name: "Account", exact: true})).toHaveAttribute(
     "href",
     "/account",
   )
-  await expect(account.getByRole("button", {name: "Disconnect"})).toBeVisible()
+  await expect(account.getByRole("button", {name: "Sign out"})).toBeVisible()
 
   // Nothing chosen and a device that asks for dark: dark shows, so a press chooses light.
   await page.emulateMedia({colorScheme: "dark"})
@@ -220,13 +220,13 @@ test("the sidebar lists the four fleets, Classic first, then the Account page", 
     ["Syndicate #1", "/app/fleets/fibonacci_syndicate"],
     ["Cascade #1", "/app/fleets/fibonacci_cascade"],
     ["Accelerant #1", "/app/fleets/fleet_tech_accelerant"],
-    ["Sign In", "/account"],
+    ["Sign in", "/account"],
   ])
 
-  await sidebar.getByRole("link", {name: "Sign In"}).click()
+  await sidebar.getByRole("link", {name: "Sign in"}).click()
   await expect(page).toHaveURL(/\/account$/)
   await expect(page.locator("#account-page").getByRole("heading", {level: 1, name: "Account"})).toBeVisible()
-  await expect(page.getByRole("heading", {level: 2, name: "Sign In to see your account"})).toBeVisible()
+  await expect(page.locator("#account-page-signed-out").getByRole("heading", {level: 2, name: "Account"})).toBeVisible()
 })
 
 test("navigation keeps brand, document, shell identity, and starts at the top", async ({page}) => {

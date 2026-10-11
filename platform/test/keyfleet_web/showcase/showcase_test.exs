@@ -84,7 +84,13 @@ defmodule KeyfleetWeb.ShowcaseTest do
     assert has_element?(view, "#showcase-facts [data-sc-copy=showcase-facts-content]")
 
     assert has_element?(view, "[data-sc-privy-mode=fixture]", "Real sign-in is unavailable")
-    assert has_element?(view, "[data-sc-privy-mode=fixture] button[disabled]", "Connect Privy")
+
+    assert has_element?(
+             view,
+             "[data-sc-privy-mode=fixture] button[disabled]",
+             "Sign in with Privy"
+           )
+
     refute has_element?(view, "#account-control [data-account-target]")
 
     assert view

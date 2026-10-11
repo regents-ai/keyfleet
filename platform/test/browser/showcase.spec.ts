@@ -128,7 +128,7 @@ test("Ash validation, utility outcomes, local database and disclosure fixtures w
   const realAuth = page.locator("[data-sc-privy-mode]")
   await expect(realAuth).toHaveAttribute("data-sc-privy-mode", "fixture")
   await expect(realAuth).toContainText("Real sign-in is unavailable")
-  await expect(realAuth.getByRole("button", {name: "Connect Privy"})).toBeDisabled()
+  await expect(realAuth.getByRole("button", {name: "Sign in with Privy"})).toBeDisabled()
   await expect(page.locator("#account-control [data-account-target]")).toHaveCount(0)
 
   await page.locator("#sample-title").fill("Test record")

@@ -226,7 +226,7 @@ test("the header offers sign-in, as every app page does", async ({page}) => {
   await page.goto("/")
   await waitForHomepage(page)
 
-  await expect(page.locator("#shell-header").getByRole("button", {name: "Sign In"})).toBeVisible()
+  await expect(page.locator("#shell-header").getByRole("button", {name: "Sign in"})).toBeVisible()
 })
 
 test("the homepage settles immediately for reduced motion", async ({browser}) => {

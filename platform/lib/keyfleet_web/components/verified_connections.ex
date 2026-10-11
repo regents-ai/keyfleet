@@ -94,7 +94,7 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
             type="button"
             data-account-target="sign-in"
           >
-            Sign In to connect
+            Sign in to connect
           </Regent.Primitives.button>
         </li>
       </ul>

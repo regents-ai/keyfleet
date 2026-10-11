@@ -185,7 +185,7 @@ test("anonymous Account page sign-in loads Privy and opens its sign-in", async (
 
   await page.goto("/account")
   await expect(page.locator("#account-control [data-account-target='sign-in']")).toBeVisible()
-  await page.locator("#account-page .account-signed-out [data-account-target='sign-in']").click()
+  await page.locator("#account-page-signed-out [data-account-target='sign-in']").click()
 
   const bridgeCalls = () =>
     page.evaluate(() => (window as Window & {__u3BridgeCalls?: string[]}).__u3BridgeCalls ?? [])
@@ -209,7 +209,7 @@ for (const invalidHandoff of [
     })
 
     await page.goto("/account")
-    await expect(page.locator("#account-control").getByRole("button", {name: "Sign In"})).toBeVisible()
+    await expect(page.locator("#account-control").getByRole("button", {name: "Sign in"})).toBeVisible()
     await page.waitForLoadState("networkidle")
     expect(bridgeRequests).toBe(0)
     expect(
@@ -246,7 +246,7 @@ test("a production-like digested bridge source remains same-origin and callable"
   )
 
   await page.goto("/account")
-  await page.locator("#account-control").getByRole("button", {name: "Sign In"}).click()
+  await page.locator("#account-control").getByRole("button", {name: "Sign in"}).click()
   await expect
     .poll(() =>
       page.evaluate(
@@ -287,14 +287,14 @@ for (const viewport of retryViewports) {
     expect(headerHeight).toBeDefined()
     const status = page.locator("#account-auth-status")
 
-    await page.locator("#account-control").getByRole("button", {name: "Sign In"}).click()
+    await page.locator("#account-control").getByRole("button", {name: "Sign in"}).click()
     await expect.poll(() => bridgeRequests.length).toBe(1)
     await expect(status).toBeVisible()
     await expect(status).toContainText(
       "Sign-in isn’t available right now. Reload this page.",
     )
     await expectStatusAnchored(page, headerHeight ?? 0)
-    await expect(page.locator("#account-control").getByRole("button", {name: "Sign In"})).toBeDisabled()
+    await expect(page.locator("#account-control").getByRole("button", {name: "Sign in"})).toBeDisabled()
     await expect.poll(() => failureDiagnostics).toEqual([
       JSON.stringify({reason: "bridge_startup"}),
     ])
@@ -342,7 +342,7 @@ test("the bounded failure report survives the recommended immediate reload exact
 
   await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-  await page.locator("#account-control").getByRole("button", {name: "Sign In"}).click()
+  await page.locator("#account-control").getByRole("button", {name: "Sign in"}).click()
   await expect(page.locator("#account-auth-status")).toContainText(
     "Sign-in isn’t available right now. Reload this page.",
   )
@@ -439,7 +439,7 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
   ).toBe(false)
   await expect(page.locator("[data-phx-session]").first()).toBeVisible()
   await page.locator("#account-menu summary").click()
-  await expect(page.getByRole("button", {name: "Disconnect"})).toBeVisible()
+  await expect(page.locator("#account-menu").getByRole("button", {name: "Sign out"})).toBeVisible()
   await page.locator("#account-menu summary").click()
   // Exercise the same live session on the Account page.
   await page.locator("#shell-sidebar a[href='/account']").click()
@@ -653,7 +653,7 @@ test("sign out replaces pending sync and runs once after the bridge is ready", a
   await page.goto("/account")
   await expect(page.locator("#account-menu [data-account-target='profile']")).toBeVisible()
   await page.locator("#account-menu summary").click()
-  await page.getByRole("button", {name: "Disconnect"}).click()
+  await page.locator("#account-menu").getByRole("button", {name: "Sign out"}).click()
   await expect.poll(() => sessionDeletes).toBe(1)
 
   await expect.poll(() => documentRequests.length).toBe(2)
@@ -794,7 +794,7 @@ test("the second document proves anonymous server truth before importing Privy",
   await expect.poll(() => bridgeLoads).toBe(1)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await page.locator("#account-menu summary").click()
-  await page.getByRole("button", {name: "Disconnect"}).click()
+  await page.locator("#account-menu").getByRole("button", {name: "Sign out"}).click()
 
   await expect.poll(() => sessionDeletes).toBe(1)
   await expect.poll(() => documentRequests.length).toBe(2)

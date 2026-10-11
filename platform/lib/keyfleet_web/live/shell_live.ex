@@ -72,7 +72,7 @@ defmodule KeyfleetWeb.ShellLive do
        code_notice: nil,
        connection_outcome: nil,
        held_keys: [],
-       paired_agents: [],
+       paired_agents: %Read{},
        agents_topic: nil,
        fleet: nil,
        fleet_params: nil,
@@ -303,7 +303,7 @@ defmodule KeyfleetWeb.ShellLive do
   # corrected or unpaired.
   def handle_info(:agents_changed, socket) do
     account = current_account(socket.assigns.access_context)
-    {:noreply, assign(socket, :paired_agents, AccountLive.paired_agents(account))}
+    {:noreply, read_paired_agents(socket, account)}
   end
 
   def handle_info(%Broadcast{event: event} = notice, socket)
@@ -833,11 +833,18 @@ defmodule KeyfleetWeb.ShellLive do
 
     socket
     |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
-    |> assign(:paired_agents, AccountLive.paired_agents(account))
+    |> read_paired_agents(account)
     |> follow_agents(account)
   end
 
   defp load_held_keys(socket, _route_spec), do: assign(socket, :held_keys, [])
+
+  # The agents are read beside the page, so a failed read leaves the rest of
+  # the account page working.
+  defp read_paired_agents(socket, %{privy_user_id: person} = account),
+    do: Read.start(socket, :paired_agents, person, fn -> AccountLive.paired_agents(account) end)
+
+  defp read_paired_agents(socket, nil), do: Read.clear(socket, :paired_agents)
 
   # Hears when the person's agents change, once per page.
   defp follow_agents(%{assigns: %{agents_topic: nil}} = socket, %{privy_user_id: person}) do

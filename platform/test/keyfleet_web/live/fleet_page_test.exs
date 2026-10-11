@@ -417,7 +417,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       })
 
       refute has_element?(view, "#buy-key-order-sent li")
-      assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign In")
+      assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign in")
     end
 
     test "signed out, nothing is built and a press says to sign in", %{conn: _conn} do

@@ -215,7 +215,7 @@ defmodule KeyfleetWeb.Components.Shell do
             data-account-menu-item="disconnect"
             data-account-target="sign-out"
           >
-            <.account_menu_icon name={:logout} /><span>Disconnect</span>
+            <.account_menu_icon name={:logout} /><span>Sign out</span>
           </Regent.Primitives.button>
         </div>
       </details>

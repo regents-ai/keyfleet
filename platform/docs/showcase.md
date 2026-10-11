@@ -27,7 +27,7 @@ listed at `/showcase/catalog`. The catalog never reads resource records.
 
 `/showcase/privy` uses the real account control and auth bridge, not the
 separate wallet fixture in the main gallery. It includes configuration
-instructions, header Sign In/Disconnect, in-page connection controls and the
+instructions, header Sign in/Sign out, in-page connection controls and the
 selected wallet. Controls are disabled with an explanation when configuration is
 missing or the server uses a test verifier. No configuration values, tokens or
 provider objects are displayed, and the page requests no transaction or extra
