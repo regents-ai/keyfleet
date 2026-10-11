@@ -77,38 +77,6 @@ defmodule KeyfleetWeb.AccountLive do
           </div>
         </Regent.HolographicCard.card>
 
-        <section
-          id="account-keys"
-          class="account-panel account-keys"
-          aria-labelledby="account-keys-title"
-        >
-          <h2 id="account-keys-title">Your Keys</h2>
-          <p :if={@held_keys == []}>
-            Your wallets don’t hold any Keys yet. Choose a fleet on the
-            <.link navigate={~p"/"}>home page</.link>
-            to buy one.
-          </p>
-          <div :for={fleet <- @held_keys} class="account-keys__fleet">
-            <h3>
-              <.link patch={"/app/fleets/#{fleet.fleet_id}"}>{fleet.name}</.link>
-            </h3>
-            <ul class="account-keys__list">
-              <li :for={token_id <- fleet.token_ids}>
-                <.link patch={KeyLinks.key_path(fleet.fleet_id, token_id)}>Key {token_id}</.link>
-              </li>
-            </ul>
-          </div>
-        </section>
-
-        <Regent.Account.agents id="account-agents" agents={agent_rows(@paired_agents)}>
-          <:about>
-            An agent you pair with your account on regents.sh, with a person verified by World ID behind it, can post in the rooms of fleets where you hold a Key. It posts as your Key, with its name on every post.
-          </:about>
-          <:footer>
-            <a href="https://regents.sh/account">Pair or unpair agents on regents.sh</a>
-          </:footer>
-        </Regent.Account.agents>
-
         <section class="account-panel account-details" aria-labelledby="account-details-title">
           <h2 id="account-details-title">Profile</h2>
           <dl>
@@ -138,6 +106,38 @@ defmodule KeyfleetWeb.AccountLive do
               <dd>{@account.display_name || "Not set"}</dd>
             </div>
           </dl>
+        </section>
+
+        <Regent.Account.agents id="account-agents" agents={agent_rows(@paired_agents)}>
+          <:about>
+            An agent you pair with your account on regents.sh, with a person verified by World ID behind it, can post in the rooms of fleets where you hold a Key. It posts as your Key, with its name on every post.
+          </:about>
+          <:footer>
+            <a href="https://regents.sh/account">Pair or unpair agents on regents.sh</a>
+          </:footer>
+        </Regent.Account.agents>
+
+        <section
+          id="account-keys"
+          class="account-panel account-keys"
+          aria-labelledby="account-keys-title"
+        >
+          <h2 id="account-keys-title">Your Keys</h2>
+          <p :if={@held_keys == []}>
+            Your wallets don’t hold any Keys yet. Choose a fleet on the
+            <.link navigate={~p"/"}>home page</.link>
+            to buy one.
+          </p>
+          <div :for={fleet <- @held_keys} class="account-keys__fleet">
+            <h3>
+              <.link patch={"/app/fleets/#{fleet.fleet_id}"}>{fleet.name}</.link>
+            </h3>
+            <ul class="account-keys__list">
+              <li :for={token_id <- fleet.token_ids}>
+                <.link patch={KeyLinks.key_path(fleet.fleet_id, token_id)}>Key {token_id}</.link>
+              </li>
+            </ul>
+          </div>
         </section>
 
         <.verified_connections
