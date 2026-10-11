@@ -53,7 +53,7 @@ defmodule KeyfleetWeb.AccountLive do
         <p class="account-kicker">Keyfleet</p>
         <h1 tabindex="-1">Account</h1>
         <p class="account-lede">
-          The wallet you signed in with and the accounts you have connected.
+          Your profile, your agents, your Keys, your Credits and Points, and the accounts you have connected.
         </p>
       </header>
 
