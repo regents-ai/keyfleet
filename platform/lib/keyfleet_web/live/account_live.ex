@@ -158,15 +158,14 @@ defmodule KeyfleetWeb.AccountLive do
           </div>
         </section>
 
-        <div class="account-credits">
-          <Regent.Account.credits_summary
-            id="account-credits"
-            available={@credits.value && RegentCredits.Amount.format(@credits.value.available)}
-            held={@credits.value && RegentCredits.Amount.format(@credits.value.held)}
-            state={summary_state(@credits.state)}
-          />
+        <Regent.Account.credits_summary
+          id="account-credits"
+          available={@credits.value && RegentCredits.Amount.format(@credits.value.available)}
+          held={@credits.value && RegentCredits.Amount.format(@credits.value.held)}
+          state={summary_state(@credits.state)}
+        >
           <a href="https://regents.sh/account">Manage Credits on regents.sh</a>
-        </div>
+        </Regent.Account.credits_summary>
 
         <Regent.Account.points_summary
           id="account-points"
