@@ -179,7 +179,8 @@ config :keyfleet, Oban,
   cron: [
     crontab: [
       {"*/10 * * * *", Keyfleet.Notebooks.Reconcile},
-      {"* * * * *", Keyfleet.Chain.Watch}
+      {"* * * * *", Keyfleet.Chain.Watch},
+      {"17 4 * * *", Keyfleet.ErrorPruner}
     ]
   ],
   pruner: [max_age: {7, :days}],
@@ -274,14 +275,14 @@ config :logger, :default_formatter,
 # Failed requests, pages and jobs are saved in the site's own schema and shown
 # to Credits admins at /admin/errors. Only server faults are saved
 # (Keyfleet.ErrorIgnorer), only where each one happened is kept
-# (Keyfleet.ErrorFilter), and a resolved error is cleared after a week.
+# (Keyfleet.ErrorFilter), and Keyfleet.ErrorPruner clears each one a week
+# after it was last seen.
 config :error_tracker,
   repo: Keyfleet.Repo,
   otp_app: :keyfleet,
   prefix: "keyfleet_app",
   ignorer: Keyfleet.ErrorIgnorer,
-  filter: Keyfleet.ErrorFilter,
-  plugins: [{ErrorTracker.Plugins.Pruner, max_age: :timer.hours(24 * 7)}]
+  filter: Keyfleet.ErrorFilter
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
