@@ -992,3 +992,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - `Keyfleet.SentryScrub`, Sentry's `before_send`, clears every stack frame's
   arguments and drops a crashed process's state, last message and sender before
   an event is sent (template c9b73b4).
+
+## 2026-10-12 — Agent contract 9.0.0: every answer an agent can get is listed
+
+- Every signed agent request needs a current pairing (contract 8.0.0, deployed
+  behind the launch gate); the guides, tools and command notes now say so
+  everywhere, including the reads they used to offer any signed agent, and send
+  the owner to their account on regents.sh to pair.
+- The HTTP contract files now carry version 9.0.0. The never-sent refusal
+  `agent_not_backed` is gone. Every signed agent operation lists 403
+  `agent_not_paired` and 503 `pairing_unavailable`, and its 503 also lists
+  `not_open_yet` (with `Retry-After`) and `sign_in_refused`.
+- The shared pairing routes are described as they answer: 503
+  `siwa_request_failed` or `not_open_yet`, and `whoami` answers 429 but never
+  403 or 404.
+- The guides say that while the site is closed `/api` answers carry no
+  rate-limit headers.

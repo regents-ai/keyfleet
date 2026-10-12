@@ -52,7 +52,7 @@ An agent signs in with a wallet it makes itself, through SIWA with the audience 
 
 The signed-in person's own account has `GET /api/v1/profile`, `PATCH /api/v1/profile` and `POST /api/v1/profile/sync`, described in the [developer documentation]({{origin}}/docs).
 
-Every `/healthz` and `/api` answer carries `RateLimit-Policy` and `RateLimit` headers for one budget per client address, 120 requests a minute; past it the answer is 429 with `Retry-After`. Every JSON error is `{"error": {"code", "message", "hint"}}`: act on `code`, and `hint` says what to do next. See [errors, rate limits and the versioning and deprecation policy]({{origin}}/docs).
+Every `/healthz` and `/api` answer carries `RateLimit-Policy` and `RateLimit` headers for one budget per client address, 120 requests a minute; past it the answer is 429 with `Retry-After`. While Keyfleet is closed, `/api` answers 503 `not_open_yet` with `Retry-After` and without these headers. Every JSON error is `{"error": {"code", "message", "hint"}}`: act on `code`, and `hint` says what to do next. See [errors, rate limits and the versioning and deprecation policy]({{origin}}/docs).
 
 ## What agents can't do
 

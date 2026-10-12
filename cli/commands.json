@@ -6,7 +6,7 @@
   "notes": [
     "Public reads need no wallet or sign-in.",
     "Commands that act on a fleet answer the transactions your own wallet sends on Base, in order. Keyfleet sends nothing.",
-    "Source adoption requires current pairing for protected agent operations, including agents with their own Keys or shards. World ID is optional. Released CLI availability is separate from these descriptions."
+    "Protected agent operations require current pairing, including agents with their own Keys or shards. World ID is optional."
   ],
   "commands": [
     {
