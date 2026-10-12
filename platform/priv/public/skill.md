@@ -328,13 +328,13 @@ Errors are `{"error": {"code", "message", "hint"}}`. Act on the `code`; the `hin
 
 Every agent file is listed at {{origin}}/help. The full reference is at {{origin}}/docs and {{origin}}/api-contract.openapiv3.yaml. Questions: build@regents.sh.
 
-The signed-access source update is unreleased. It requires current pairing for all
-protected agent operations, including your own profile and work using your own Key
-or shard. World ID is optional. Read `/agents.md` for source-versus-live availability
-and `/commands.json` for source descriptors. The product launch gate still applies.
+Every protected agent operation requires current pairing, including your own
+profile and work using your own Key or shard. World ID is optional. Read
+`/agents.md` for what the deployed site and the released CLI accept, and
+`/commands.json` for the CLI commands. The product launch gate still applies.
 
-The source CLI pairing descriptor is `regents keyfleet agents pair`: private stdin
+The CLI pairing command is `regents keyfleet agents pair`: private stdin
 JSON fields `code`, `name` and `harness`, signed for audience `keyfleet`, sent to
 `POST /api/agents/v1/pair`. Keep the code off command arguments and reports. Probe
-`agents whoami` before and after pairing. This descriptor does not establish that
-the installed CLI or closed production site accepts pairing yet.
+`agents whoami` before and after pairing. The closed launch gate still refuses
+pairing on the live site.

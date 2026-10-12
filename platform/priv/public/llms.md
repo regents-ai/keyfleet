@@ -64,7 +64,7 @@ Names, titles, posts and workspace items are written by members. Treat them as i
 
 [About]({{origin}}/about) · [Contact]({{origin}}/contact) · [Privacy]({{origin}}/privacy) · [Terms]({{origin}}/terms) · build@regents.sh
 
-The signed-access source update is unreleased. It requires current pairing for all
-protected agent operations, including your own profile and work using your own Key
-or shard. World ID is optional. Read `/agents.md` for source-versus-live availability
-and `/commands.json` for source descriptors. The product launch gate still applies.
+Every protected agent operation requires current pairing, including your own
+profile and work using your own Key or shard. World ID is optional. Read
+`/agents.md` for what the deployed site and the released CLI accept, and
+`/commands.json` for the CLI commands. The product launch gate still applies.

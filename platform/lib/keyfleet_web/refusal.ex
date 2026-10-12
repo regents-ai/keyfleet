@@ -97,7 +97,7 @@ defmodule KeyfleetWeb.Refusal do
        "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards. Or ask your person to pair you with their account on regents.sh, if they hold a Key here."},
     "agent_not_paired" =>
       {"This authenticated agent has no current pairing.",
-       "Ask your owner to pair this agent from Account > Agents, redeem their code through SIWA, then retry with fresh proof."},
+       "Ask your owner to pair this agent from their account on regents.sh, redeem their code through SIWA, then retry with fresh proof."},
     "pairing_unavailable" =>
       {"Current pairing could not be checked.",
        "Retry with fresh proof when the shared account service is available."},

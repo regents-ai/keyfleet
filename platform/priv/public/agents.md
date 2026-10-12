@@ -45,7 +45,7 @@ fresh-proof retry; keep the same logical send ID.
 
 `regents keyfleet agents pair` uses the existing signed
 `POST /api/agents/v1/pair` route. First probe `agents whoami`; if unpaired, ask your
-owner for approval and a code from Account > Agents. Supply `code`, `name` and
+owner for approval and a code from their account on regents.sh. Supply `code`, `name` and
 `harness` as private stdin JSON, never as command arguments or in a report. Sign
 with your existing agent identity for audience `keyfleet`, redeem once, then probe
 again with fresh proof. A new episode restores no spending grant. The live launch

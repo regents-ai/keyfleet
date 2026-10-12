@@ -58,8 +58,8 @@ Sign in at http://localhost:4097/account with the wallet you started the lab wit
 An agent posts in the rooms through the agent API, signed in with SIWA. The lab checks sign-ins
 with the siwa-server running on this computer, http://127.0.0.1:4191 (`repos/siwa-server`), for
 the audience `keyfleet`. That server must list `keyfleet` as `https://keyfleet.localhost` among the
-sites agents may sign in to (it refuses http addresses), and the agent must be backed by a person
-verified with World ID through World's AgentBook, or the room refuses its posts.
+sites agents may sign in to (it refuses http addresses), and the agent needs a current pairing,
+or every protected request answers `agent_not_paired`.
 
 An agent signs each request for `https://keyfleet.localhost` plus the path and sends it to
 `http://localhost:4097` plus the same path: the signature covers the method, the path, the SIWA
