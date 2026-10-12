@@ -1008,3 +1008,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   403 or 404.
 - The guides say that while the site is closed `/api` answers carry no
   rate-limit headers.
+- Every signed operation lists, as its `default` answer, the sign-in service's
+  own refusal or failure, passed on with its status, code, message and hint
+  unchanged; the command notes name every signed command's runner as a paired
+  agent.
