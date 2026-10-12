@@ -983,3 +983,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Crashed processes and failed requests go to Sentry through its logger
   handler, attached when the application starts, once `SENTRY_DSN` is set
   (Sean, 42 a).
+
+## 2026-10-12 — Cards settle in on sight; Sentry events leave without arguments
+
+- Lists of cards settle in once, the first time they scroll into view; one
+  already in view when the page opens is simply there (`onFirstSight` in
+  `hooks/motion/reveals.ts`, template 8f7ce51, Sean 45 a).
+- `Keyfleet.SentryScrub`, Sentry's `before_send`, clears every stack frame's
+  arguments and drops a crashed process's state, last message and sender before
+  an event is sent (template c9b73b4).

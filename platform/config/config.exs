@@ -270,11 +270,13 @@ config :logger, :default_formatter,
 
 # Errors go to Sentry once SENTRY_DSN is set (config/runtime.exs): crashed
 # processes and failed requests, through the handler the application adds.
+# Each event leaves without its frames' arguments or a crashed process's state.
 config :sentry,
   environment_name: config_env(),
   json_library: Jason,
   enable_metrics: false,
-  tags: %{app: "keyfleet"}
+  tags: %{app: "keyfleet"},
+  before_send: {Keyfleet.SentryScrub, :scrub}
 
 config :keyfleet, :logger, [
   {:handler, :sentry_handler, Sentry.LoggerHandler, %{config: %{metadata: [:file, :line]}}}
