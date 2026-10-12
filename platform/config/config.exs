@@ -151,9 +151,8 @@ config :keyfleet, :graph,
   projection_wait: 2_000
 
 # Background work, in this site's own schema of the shared database. AshOban
-# adds the jobs of each resource's triggers (`AshOban.config/2` at start). The
-# serving connection goes through a pooler that drops LISTEN/NOTIFY, so queues
-# hear about new jobs through Erlang process groups instead.
+# adds the jobs of each resource's triggers (`AshOban.config/2` at start).
+# Queues hear about new jobs through Erlang process groups.
 config :keyfleet, Oban,
   repo: Keyfleet.Repo,
   prefix: "keyfleet_app",
