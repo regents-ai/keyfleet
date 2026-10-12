@@ -1522,10 +1522,13 @@ paths:
           description: >-
             room_taken: the fleet already has a room at this slug. name_taken: another room of the
             fleet already goes by this name. room_limit_reached: the fleet already has 100 created
-            rooms.
+            rooms. request_replayed: the sign-in service has seen this signed request before; sign it again and send it.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/RoomOpenConflictError"}
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/RoomOpenConflictError"}
+                  - {$ref: "#/components/schemas/SignInServiceError"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422":
           description: >-
@@ -1576,10 +1579,13 @@ paths:
               schema: {$ref: "#/components/schemas/RoomMemberError"}
         "404": {$ref: "#/components/responses/RoomNotFound"}
         "409":
-          description: Another room of the fleet already goes by this name
+          description: "name_taken: another room of the fleet already goes by this name. request_replayed: the sign-in service has seen this signed request before; sign it again and send it."
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/RoomNameTakenError"}
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/RoomNameTakenError"}
+                  - {$ref: "#/components/schemas/SignInServiceError"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422":
           description: >-
@@ -1904,10 +1910,13 @@ paths:
         "409":
           description: >-
             poll_closed: the poll has closed and takes no more votes. vote_conflict: the Key
-            already voted in this poll, for another choice.
+            already voted in this poll, for another choice. request_replayed: the sign-in service has seen this signed request before; sign it again and send it.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/PollConflictError"}
+              schema:
+                oneOf:
+                  - {$ref: "#/components/schemas/PollConflictError"}
+                  - {$ref: "#/components/schemas/SignInServiceError"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422":
           description: >-
@@ -2161,7 +2170,8 @@ components:
         verification_failed: the signed request could not be verified for audience keyfleet.
         duplicate_proof: a signature header was sent more than once. unsupported_query: the
         request carried a query string. missing_signed_body: the body was not JSON signed with
-        the rest of the request.
+        the rest of the request. The sign-in service's own 401 refusal comes back with its code,
+        message and hint unchanged.
       content:
         application/json:
           schema: {$ref: "#/components/schemas/SharedAgentError"}
@@ -2330,10 +2340,13 @@ components:
     AgentFleetNotOnChain:
       description: >-
         fleet_not_on_chain: the fleet's contracts aren't on the chain yet, so there is nothing to
-        send.
+        send. request_replayed: the sign-in service has seen this signed request before; sign it again and send it.
       content:
         application/json:
-          schema: {$ref: "#/components/schemas/FleetNotOnChainError"}
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/FleetNotOnChainError"}
+              - {$ref: "#/components/schemas/SignInServiceError"}
     AgentProposalNotFound:
       description: >-
         fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or Keys. proposal_unknown: the fleet has no
@@ -2365,10 +2378,13 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/PollNotFoundError"}
     PollClosed:
-      description: "poll_closed: the poll has closed."
+      description: "poll_closed: the poll has closed. request_replayed: the sign-in service has seen this signed request before; sign it again and send it."
       content:
         application/json:
-          schema: {$ref: "#/components/schemas/PollConflictError"}
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/PollConflictError"}
+              - {$ref: "#/components/schemas/SignInServiceError"}
     AgentFleetNotFound:
       description: "fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it does it has no rooms, workspace, proposals or Keys."
       content:
@@ -2412,10 +2428,14 @@ components:
               - {$ref: "#/components/schemas/WorkspaceError"}
               - {$ref: "#/components/schemas/FleetComingSoonError"}
     WorkspaceConflict:
-      description: The object changed since the version the caller named; details carry the current version and the object as it now stands
+      description: >-
+        The object changed since the version the caller named; details carry the current version and the object as it now stands. request_replayed: the sign-in service has seen this signed request before; sign it again and send it.
       content:
         application/json:
-          schema: {$ref: "#/components/schemas/WorkspaceError"}
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/WorkspaceError"}
+              - {$ref: "#/components/schemas/SignInServiceError"}
     WorkspaceInvalid:
       description: >-
         The write does not fit the workspace. invalid: a field value is not admitted.

@@ -1012,3 +1012,5 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   own refusal or failure, passed on with its status, code, message and hint
   unchanged; the command notes name every signed command's runner as a paired
   agent.
+- Every signed operation's own 409 answer also admits the sign-in service's
+  409 `request_replayed`; the poll commands' notes name a paired agent.

@@ -696,7 +696,7 @@ answer the latest 100 polls, newest first; notes only to the fleet's Key holders
 
 - **What it does:** asks the fleet's Keys one question, open for `<minutes>`. The
   agent's Key can end it early.
-- **Who may run it:** an agent that takes part as one of the fleet's Keys. Each Key
+- **Who may run it:** a paired agent that takes part as one of the fleet's Keys. Each Key
   starts one poll in any 24 hours, counted from its last one.
 - **What it changes:** a new poll (write).
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/polls/start` → `startPoll`
@@ -752,7 +752,7 @@ the fleet's Key holders: also their Key's vote and, once closed, every vote
 
 - **What it does:** votes once with the agent's Key in an open poll. Sending the same
   choice again answers the vote it already has.
-- **Who may run it:** an agent that takes part as one of the fleet's Keys.
+- **Who may run it:** a paired agent that takes part as one of the fleet's Keys.
 - **What it changes:** the poll's votes (write); a vote can't be changed.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/polls/{poll_id}/vote` → `voteInPoll`
 - **Inputs:** `<fleet>`, `<poll>` and `<choice>` (one of the poll's choices, exactly as
@@ -782,7 +782,7 @@ answer the vote; 200 when it was already cast, else 201
 ## regents keyfleet polls end <fleet> <poll>
 
 - **What it does:** ends an open poll now. It takes no more votes and its totals show.
-- **Who may run it:** an agent of the Key that started the poll.
+- **Who may run it:** a paired agent of the Key that started the poll.
 - **What it changes:** the poll (write); it can't be undone.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/polls/{poll_id}/end` → `endPoll`
 - **Inputs:** `<fleet>` and `<poll>`. The body is `{}`.
