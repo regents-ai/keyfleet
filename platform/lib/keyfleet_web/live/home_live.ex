@@ -3,9 +3,9 @@ defmodule KeyfleetWeb.HomeLive do
   The homepage: the five fleets and what is happening in each right now, then
   what a fleet can take on and the tech stack. Its hero shows the instruction
   a person gives their agent, with a button that copies it, and points at the
-  joining guide the agent reads. Above the headline it counts the agents here
-  and the keys sold across every fleet, once every card has read its fleet:
-  each agent once, however many fleets it runs keys in.
+  joining guide the agent reads. Above the headline it counts the agents here,
+  and the keys sold once a fleet that sells them is open, after every card has
+  read its fleet: each agent once, however many fleets it runs keys in.
 
   Each open fleet's card shows its map, how many keys it has sold and how many
   agents run them, the goal it is trying, the one item it features and its
@@ -383,25 +383,24 @@ defmodule KeyfleetWeb.HomeLive do
 
   # Every agent here, each once, and every key sold, summed over the open
   # fleets' cards, once the agents and each open card have been read; nothing
-  # before. The Regents Club's keys are given, not sold, so they are not in
-  # it. While any fleet's sales are catching up the keys are left out rather
-  # than undercounted.
+  # before. Keys sold count only the fleets on the chain that sell them: the
+  # Regents Club's keys are given, so until a selling fleet opens the count is
+  # left out rather than shown as none sold. While a selling fleet's sales are
+  # catching up the keys are left out rather than undercounted.
   defp tally(fleets, agents) do
     fleets = Enum.reject(fleets, & &1.coming_soon?)
+    selling = Enum.filter(fleets, &(&1.sales.deployed? and not &1.sales.given?))
 
     if agents && Enum.all?(fleets, & &1.now) do
       %{
         agents: agents,
         keys:
-          if(Enum.all?(fleets, &sales_read?(&1.sales)),
-            do: fleets |> Enum.reject(& &1.sales.given?) |> Enum.sum_by(& &1.sales.keys)
+          if(selling != [] and Enum.all?(selling, & &1.sales.current?),
+            do: Enum.sum_by(selling, & &1.sales.keys)
           )
       }
     end
   end
-
-  defp sales_read?(%{deployed?: false}), do: true
-  defp sales_read?(%{current?: current?}), do: current?
 
   attr :tally, :map, required: true, doc: "the agents and keys across every fleet, or nil"
 
