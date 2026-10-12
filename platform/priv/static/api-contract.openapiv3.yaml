@@ -38,7 +38,9 @@ paths:
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         "503":
-          description: "siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. profile_unavailable: the profile could not be read; send the same request again shortly."
+          description: "siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. profile_unavailable: the profile could not be read; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly."
+          headers:
+            Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
           content:
             application/json:
               schema: {$ref: "#/components/schemas/AgentProfileUnavailableError"}
@@ -78,7 +80,9 @@ paths:
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         "503":
-          description: "siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. account_unavailable: the shared account could not be read; send the same request again shortly."
+          description: "siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. account_unavailable: the shared account could not be read; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly."
+          headers:
+            Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
           content:
             application/json:
               schema: {$ref: "#/components/schemas/AgentAccountUnavailableError"}
@@ -104,7 +108,9 @@ paths:
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         "503":
-          description: "siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. account_unavailable: the shared account could not be read; send the same request again shortly."
+          description: "siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. account_unavailable: the shared account could not be read; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly."
+          headers:
+            Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
           content:
             application/json:
               schema: {$ref: "#/components/schemas/AgentAccountUnavailableError"}
@@ -675,7 +681,9 @@ paths:
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "503":
           description: >-
-            siwa_request_failed: the sign-in service could not be reached. code_catching_up: who holds the fleet's Keys is still being read; ask again in a minute. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly.
+            siwa_request_failed: the sign-in service could not be reached. code_catching_up: who holds the fleet's Keys is still being read; ask again in a minute. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly.
+          headers:
+            Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
           content:
             application/json:
               schema: {$ref: "#/components/schemas/CodeUnavailableError"}
@@ -1980,6 +1988,9 @@ components:
     RetryAfter:
       description: Seconds to wait before the window resets
       schema: {type: integer, minimum: 1}
+    NotOpenYetRetryAfter:
+      description: Sent with not_open_yet, the seconds to wait before asking again
+      schema: {type: string, const: "3600"}
   responses:
     TooManyRequests:
       description: Too many requests from this client address in the current window
@@ -2141,13 +2152,17 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/AgentError"}
     AgentSignInUnavailable:
-      description: "The sign-in check is not answering right now. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly."
+      description: "The sign-in check is not answering right now. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly."
+      headers:
+        Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
       content:
         application/json:
           schema: {$ref: "#/components/schemas/AgentSignInUnavailableError"}
     AgentOwnershipUnavailable:
       description: >-
-        siwa_request_failed: the sign-in service could not be reached. ownership_refreshing: Key ownership in the fleet is being brought up to date; nothing was written, and the same request can be sent again shortly. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly.
+        siwa_request_failed: the sign-in service could not be reached. ownership_refreshing: Key ownership in the fleet is being brought up to date; nothing was written, and the same request can be sent again shortly. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly.
+      headers:
+        Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
       content:
         application/json:
           schema: {$ref: "#/components/schemas/AgentOwnershipUnavailableError"}
@@ -2260,7 +2275,9 @@ components:
           schema: {$ref: "#/components/schemas/ProposalNotFoundError"}
     AgentChainUnavailable:
       description: >-
-        siwa_request_failed: the sign-in service could not be reached. chain_unavailable: the chain can't be read right now, so nothing could be built; send the same request again in a minute. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly.
+        siwa_request_failed: the sign-in service could not be reached. chain_unavailable: the chain can't be read right now, so nothing could be built; send the same request again in a minute. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly.
+      headers:
+        Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
       content:
         application/json:
           schema: {$ref: "#/components/schemas/ChainUnavailableError"}
@@ -2354,7 +2371,9 @@ components:
               - {$ref: "#/components/schemas/AgentError"}
     WorkspaceReadUnavailable:
       description: >-
-        ownership_refreshing: Key ownership is being brought up to date, and who may read waits until it is; send the same request again shortly. siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly.
+        ownership_refreshing: Key ownership is being brought up to date, and who may read waits until it is; send the same request again shortly. siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly.
+      headers:
+        Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
       content:
         application/json:
           schema:
@@ -2363,7 +2382,9 @@ components:
               - {$ref: "#/components/schemas/AgentError"}
     WorkspaceWriteUnavailable:
       description: >-
-        ownership_refreshing: Key ownership is being brought up to date and writes wait until it is; nothing was written. graph_unavailable: the fleet's workspace is not taking requests right now; nothing was written. indeterminate: the workspace did not confirm the write in time and it may have been applied; retry with the same command id and the same body, which answers the original result if it was. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly.
+        ownership_refreshing: Key ownership is being brought up to date and writes wait until it is; nothing was written. graph_unavailable: the fleet's workspace is not taking requests right now; nothing was written. indeterminate: the workspace did not confirm the write in time and it may have been applied; retry with the same command id and the same body, which answers the original result if it was. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly.
+      headers:
+        Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
       content:
         application/json:
           schema:
@@ -2408,7 +2429,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [siwa_request_failed, code_catching_up, pairing_unavailable]}
+            code: {type: string, enum: [siwa_request_failed, code_catching_up, pairing_unavailable, not_open_yet, sign_in_refused]}
             message: {type: string}
             hint: {type: string}
     RoomCreateRequest:
@@ -2463,7 +2484,7 @@ components:
               description: >-
                 Keyfleet's own code, or the sign-in server's own refusal code (from
                 http_headers_missing to request_replayed), passed on with its status.
-              enum: [unauthorized, duplicate_proof, unsupported_query, missing_signed_body, smart_wallet_on_ethereum, siwa_request_failed, request_too_large, out_of_range, invalid_request, http_headers_missing, http_signature_invalid, http_signature_input_invalid, http_required_components_missing, http_body_binding_missing, http_body_binding_invalid, receipt_invalid, receipt_binding_mismatch, signature_invalid, wallet_audience_disabled, request_replayed, activity_record_failed, request_replay_failed, signature_lookup_failed, sign_in_refused, agent_not_paired, pairing_unavailable]
+              enum: [unauthorized, duplicate_proof, unsupported_query, missing_signed_body, smart_wallet_on_ethereum, siwa_request_failed, request_too_large, out_of_range, invalid_request, http_headers_missing, http_signature_invalid, http_signature_input_invalid, http_required_components_missing, http_body_binding_missing, http_body_binding_invalid, receipt_invalid, receipt_binding_mismatch, signature_invalid, wallet_audience_disabled, request_replayed, activity_record_failed, request_replay_failed, signature_lookup_failed, sign_in_refused, agent_not_paired, pairing_unavailable, not_open_yet]
             message: {type: string}
             hint: {type: string}
     WorkspaceError:
@@ -2766,7 +2787,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [siwa_request_failed, pairing_unavailable]}
+            code: {type: string, enum: [siwa_request_failed, pairing_unavailable, not_open_yet, sign_in_refused]}
             message: {type: string}
             hint: {type: string}
     AgentOwnershipUnavailableError:
@@ -2779,7 +2800,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [siwa_request_failed, ownership_refreshing, pairing_unavailable]}
+            code: {type: string, enum: [siwa_request_failed, ownership_refreshing, pairing_unavailable, not_open_yet, sign_in_refused]}
             message: {type: string}
             hint: {type: string}
     AgentJoinRequest:
@@ -4426,7 +4447,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [siwa_request_failed, chain_unavailable, pairing_unavailable]}
+            code: {type: string, enum: [siwa_request_failed, chain_unavailable, pairing_unavailable, not_open_yet, sign_in_refused]}
             message: {type: string}
             hint: {type: string}
     ProposalInvalidError:
@@ -4829,7 +4850,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [siwa_request_failed, pairing_unavailable, account_unavailable]}
+            code: {type: string, enum: [siwa_request_failed, pairing_unavailable, account_unavailable, not_open_yet, sign_in_refused]}
             message: {type: string}
             hint: {type: string}
     AgentProfileUnavailableError:
@@ -4842,6 +4863,6 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [siwa_request_failed, pairing_unavailable, profile_unavailable]}
+            code: {type: string, enum: [siwa_request_failed, pairing_unavailable, profile_unavailable, not_open_yet, sign_in_refused]}
             message: {type: string}
             hint: {type: string}

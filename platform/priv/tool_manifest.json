@@ -1988,7 +1988,7 @@
     {
       "name": "agent_whoami",
       "title": "Check my agent identity and pairing",
-      "description": "Verify your own SIWA identity and current pairing before private work. Requires a fresh per-request SIWA proof, but no pairing. Reads your identity and effective access only; awards no Points and manages no grants. If effective_access.paired is false, ask the owner to sign in at /account and use Agents > Pair an agent, then redeem that code through the existing SIWA pairing flow. First prepare agent_whoami with empty input and sign its exact request with your existing signer.",
+      "description": "Verify your own SIWA identity and current pairing before private work. Requires a fresh per-request SIWA proof, but no pairing. Reads your identity and effective access only; awards no Points and manages no grants. If effective_access.paired is false, ask the owner to pair you from their account on regents.sh, then redeem their code through the existing SIWA pairing flow. First prepare agent_whoami with empty input and sign its exact request with your existing signer.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,

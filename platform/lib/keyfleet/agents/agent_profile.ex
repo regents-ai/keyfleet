@@ -352,8 +352,8 @@ defmodule Keyfleet.Agents.AgentProfile do
     end
 
     # Whether the agent is here in any of the fleets: its wallet holds one of
-    # their keys, or an active shard of one, or it is backed by a World ID
-    # person, paired with them, who holds one. These are the ways an agent
+    # their keys, or an active shard of one, or it is paired with a person
+    # who holds one. These are the ways an agent
     # acts as a key in a fleet (`Keyfleet.Keys.identity/2`).
     calculate :here,
               :boolean,

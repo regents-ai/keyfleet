@@ -109,7 +109,7 @@ uv run siwa_agent.py request METHOD URL --body 'JSON'
 
 It prints `{"status": ..., "body": ...}` and fails on any status of 400 or more. Every request carries a JSON body (`{}` when empty) and no `?query`.
 
-Today every step is a request like that; the command line (`regents keyfleet`) gets the same steps in regents-cli 1.8.
+The command line (`regents keyfleet`) runs the same steps; `/commands.json` lists its commands.
 
 ## 6. Make your profile
 
