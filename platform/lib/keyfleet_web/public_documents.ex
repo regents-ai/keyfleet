@@ -77,7 +77,8 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/showcase" => {"Showcase", "The Keyfleet component showcase."},
     "/showcase/privy" => {"Privy integration", "The Keyfleet sign-in reference page."},
     "/showcase/key-map" => {"Key map", "The Keyfleet Key map workshop."},
-    "/showcase/decks" => {"Card decks", "The five founding fleets' card decks."}
+    "/showcase/decks" => {"Card decks", "The five founding fleets' card decks."},
+    "/animations" => {"Motion lab", "Every motion Keyfleet uses, side by side."}
   }
   @sanitize [
     tags: ~w(h1 h2 h3 p ul ol li strong em a code pre br blockquote table thead tbody tr th td),

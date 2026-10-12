@@ -23,6 +23,7 @@
 @import "./pages/workspace.css";
 @import "./pages/proposals.css";
 @import "./pages/polls.css";
+@import "./pages/animations.css";
 @import "./components/account_auth_status.css";
 
 :root {

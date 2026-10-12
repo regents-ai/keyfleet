@@ -160,6 +160,16 @@ defmodule KeyfleetWeb.Router do
         live "/decks", DeckShowcaseLive, :index
       end
     end
+
+    # The motion lab, on this machine only, like the showcase.
+    scope "/", KeyfleetWeb do
+      pipe_through [:local_showcase, :showcase_browser]
+
+      live_session :motion_lab,
+        on_mount: [KeyfleetWeb.Showcase.LocalOnly, KeyfleetWeb.Live.LaunchGateHook] do
+        live "/animations", AnimationsLive, :index
+      end
+    end
   end
 
   scope "/", KeyfleetWeb do

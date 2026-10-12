@@ -273,8 +273,11 @@ const shellBehavior: Hook = {
 // Design composes presentation behavior here; the Ash-owned behavior remains first.
 const showcaseHooks = window.location.pathname.startsWith("/showcase")
   ? (await import("./showcase")).hooks : {}
+const labHooks = window.location.pathname === "/animations"
+  ? (await import("./motion_lab")).hooks : {}
 const hooks = {
   ...showcaseHooks,
+  ...labHooks,
   ...colocatedHooks,
   FleetPreview,
   HolographicCard,
