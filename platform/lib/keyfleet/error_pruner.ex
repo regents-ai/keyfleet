@@ -9,8 +9,8 @@ defmodule Keyfleet.ErrorPruner do
 
   import Ecto.Query
 
-  alias Keyfleet.Repo
   alias ErrorTracker.{Error, Occurrence}
+  alias Keyfleet.Repo
 
   @batch 5_000
 
