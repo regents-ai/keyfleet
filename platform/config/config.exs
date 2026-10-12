@@ -165,13 +165,15 @@ config :keyfleet, Oban,
   # Drawing revealed Keys' cards waits on the key-art service, one at a time.
   # Reading the fleets from the chain waits on a node, so it has its own queue:
   # one long-lived history job per fleet and its minutely balance readings.
+  # Reading a signed-in wallet's ENS name waits on an Ethereum mainnet node.
   queues: [
     default: 5,
     notebook_hubs: 1,
     code_store: 2,
     avatars: 2,
     key_art: 1,
-    chain: 10
+    chain: 10,
+    ens: 3
   ],
   cron: [
     crontab: [

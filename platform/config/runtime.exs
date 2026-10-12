@@ -75,6 +75,20 @@ if config_env() != :test and rpc_url do
   config :keyfleet, :chain_nodes, Map.put(nodes, chain_id, rpc_url)
 end
 
+# Each sign-in reads the wallet's ENS name from Ethereum mainnet while this
+# endpoint is set (Keyfleet.Accounts.EnsIdentity). Tests never read it.
+if config_env() != :test do
+  if ethereum_read_rpc_url = System.get_env("ETHEREUM_READ_RPC_URL") do
+    case URI.new(ethereum_read_rpc_url) do
+      {:ok, %URI{scheme: "https", host: host}} when host not in [nil, ""] ->
+        config :keyfleet, :ethereum_read_rpc_url, ethereum_read_rpc_url
+
+      _invalid ->
+        raise "ETHEREUM_READ_RPC_URL must be an https address"
+    end
+  end
+end
+
 # Each fleet's trait table, and card deck if it has one, ships with the
 # release, named by its hash; the tests keep theirs elsewhere.
 if config_env() != :test do

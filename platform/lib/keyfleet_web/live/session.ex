@@ -5,7 +5,7 @@ defmodule KeyfleetWeb.Live.Session do
   import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1, get_connect_info: 2, redirect: 2]
 
   alias Keyfleet.AccessContext
-  alias Keyfleet.Accounts.SessionAuthority
+  alias Keyfleet.Accounts.{EnsIdentity, SessionAuthority}
 
   @public_root "/"
 
@@ -78,7 +78,9 @@ defmodule KeyfleetWeb.Live.Session do
   # rebuilt from that read rather than from the struct the mount captured. A
   # lapsed lease withdraws the principal, so nothing downstream can still
   # present it as authority, and a page that stays open says the sign-in ended
-  # (`signed_out_reason: :expired`) rather than that no one signed in.
+  # (`signed_out_reason: :expired`) rather than that no one signed in. A
+  # finished ENS lookup reads the account again, so the header shows the name
+  # and picture it found.
   #
   # Every message and every background result is re-read the same way before
   # the page sees it, because a notification or a read can arrive after the
@@ -89,6 +91,8 @@ defmodule KeyfleetWeb.Live.Session do
   # to withdraw the principal here.
   defp hold(socket, lineage, account) do
     lease = %{lineage: lineage, account_id: account.id}
+    ens_topic = EnsIdentity.topic(account.id)
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, ens_topic)
 
     socket
     |> assign_principal(account)
@@ -101,6 +105,10 @@ defmodule KeyfleetWeb.Live.Session do
       recheck(socket, lease, & &1)
     end)
     |> attach_hook(:session_authority_info, :handle_info, fn
+      %{topic: ^ens_topic}, socket ->
+        {_cont_or_halt, socket} = recheck(socket, lease, & &1)
+        {:halt, socket}
+
       {__MODULE__, :component_lease_lapsed}, socket ->
         {_cont_or_halt, socket} = recheck(socket, lease, & &1)
         {:halt, socket}

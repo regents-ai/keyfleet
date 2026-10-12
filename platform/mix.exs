@@ -80,6 +80,7 @@ defmodule Keyfleet.MixProject do
        git: @elixir_utils, ref: @elixir_utils_ref, sparse: "chain", override: true},
       {:regent_credits, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "credits"},
       {:regent_points, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "points"},
+      {:ens_elixir, git: @elixir_utils, ref: @elixir_utils_ref, sparse: "ens"},
       {:simple_sat, "~> 0.1"},
       {:sourceror, "~> 1.12", only: [:dev, :test], runtime: false},
       {:lazy_html, ">= 0.1.0", only: :test},

@@ -23,9 +23,33 @@ defmodule Keyfleet.Accounts.HumanAccount do
     update_timestamp :updated_at
   end
 
+  relationships do
+    has_one :ens_identity, Keyfleet.Accounts.EnsIdentity do
+      destination_attribute :human_account_id
+    end
+  end
+
   calculations do
     # The name set in the person's shared Regent profile.
     calculate :display_name, :string, Keyfleet.Accounts.HumanAccount.ProfileName, public?: true
+
+    # The ENS name and picture, only while they were read for the account's
+    # current wallet.
+    calculate :ens_name,
+              :string,
+              expr(
+                if ens_identity.wallet_address == wallet_address do
+                  ens_identity.ens_name
+                end
+              )
+
+    calculate :ens_avatar_url,
+              :string,
+              expr(
+                if ens_identity.wallet_address == wallet_address do
+                  ens_identity.ens_avatar_url
+                end
+              )
   end
 
   identities do
@@ -33,8 +57,8 @@ defmodule Keyfleet.Accounts.HumanAccount do
   end
 
   actions do
-    # Loading the name after sign-in writes the account reads it again through
-    # the primary read.
+    # Loading the name and picture after sign-in writes the account reads it
+    # again through the primary read.
     read :read do
       primary? true
     end
@@ -43,7 +67,7 @@ defmodule Keyfleet.Accounts.HumanAccount do
       get? true
       argument :privy_did, :string, allow_nil?: false
       filter expr(privy_user_id == ^arg(:privy_did))
-      prepare build(load: [:display_name])
+      prepare build(load: [:display_name, :ens_name, :ens_avatar_url])
     end
 
     read :points_account do
@@ -56,7 +80,7 @@ defmodule Keyfleet.Accounts.HumanAccount do
       get? true
       argument :id, :integer, allow_nil?: false
       filter expr(id == ^arg(:id))
-      prepare build(load: [:display_name])
+      prepare build(load: [:display_name, :ens_name, :ens_avatar_url])
     end
 
     # The accounts linking any of these wallets, which are lowercase; the
@@ -87,7 +111,7 @@ defmodule Keyfleet.Accounts.HumanAccount do
       accept [:wallet_address, :wallet_addresses]
       require_atomic? false
       validate present(:wallet_addresses)
-      change load([:display_name])
+      change load([:display_name, :ens_name, :ens_avatar_url])
     end
   end
 

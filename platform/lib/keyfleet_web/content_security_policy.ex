@@ -3,7 +3,8 @@ defmodule KeyfleetWeb.ContentSecurityPolicy do
   The content security policies the site's pages are served under.
 
   `reading/0` is the strict baseline: scripts, styles, images and fonts come
-  from this site, requests and the live connection go back to it, no page frames
+  from this site, apart from people's ENS pictures, which the ENS avatar service
+  serves; requests and the live connection go back to it, no page frames
   another site or is framed itself, and forms submit only here.
 
   `sign_in/0` is the baseline plus exactly what Privy's wallet sign-in loads,
@@ -43,7 +44,7 @@ defmodule KeyfleetWeb.ContentSecurityPolicy do
     # the showcase's ratio card sizes its fill with one. Rising words and digits
     # clip by class (`.split-clip`), not with one.
     {"style-src-attr", ["'unsafe-inline'"]},
-    {"img-src", ["'self'", "data:"]},
+    {"img-src", ["'self'", "data:", "https://metadata.ens.domains"]},
     {"font-src", ["'self'"]},
     {"connect-src", ["'self'"]},
     {"frame-src", @own_frames},

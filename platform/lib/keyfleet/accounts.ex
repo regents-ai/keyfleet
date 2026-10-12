@@ -22,6 +22,12 @@ defmodule Keyfleet.Accounts do
     resource Keyfleet.Accounts.SessionAuthority
     resource Keyfleet.Accounts.SharedProfile
 
+    resource Keyfleet.Accounts.EnsIdentity do
+      define :request_ens_lookup,
+        action: :request_lookup,
+        args: [:human_account_id, :wallet_address]
+    end
+
     resource Keyfleet.Accounts.LinkedIdentity do
       define :upsert_linked_identity, action: :upsert_verified
 

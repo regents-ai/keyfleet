@@ -1,17 +1,23 @@
 defmodule Keyfleet.PublicIdentity do
   @moduledoc """
-  The public name and picture of a signed-in account: its display name or else
-  its shortened wallet address, and a picture generated from that address.
+  The public name and picture of a signed-in account.
+
+  The name is its display name, else its wallet's ENS name, else its shortened
+  wallet address. The picture is its ENS name's picture, else one generated
+  from its wallet address.
   """
 
   @wallet ~r/\A0x[0-9a-fA-F]{40}\z/
 
   def label(account),
     do:
-      present(Map.get(account, :display_name)) || short_wallet(Map.get(account, :wallet_address))
+      present(Map.get(account, :display_name)) || present(Map.get(account, :ens_name)) ||
+        short_wallet(Map.get(account, :wallet_address))
 
   def avatar_src(account),
-    do: account |> Map.get(:wallet_address) |> normalize_wallet() |> avatar()
+    do:
+      present(Map.get(account, :ens_avatar_url)) ||
+        account |> Map.get(:wallet_address) |> normalize_wallet() |> avatar()
 
   def short_wallet(wallet) when is_binary(wallet) do
     if Regex.match?(@wallet, wallet), do: RegentFormat.short_address(wallet), else: "Account"

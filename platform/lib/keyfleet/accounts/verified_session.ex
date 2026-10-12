@@ -2,13 +2,15 @@ defmodule Keyfleet.Accounts.VerifiedSession do
   @moduledoc "Exchanges verified Privy evidence for the canonical human account."
 
   alias Keyfleet.Accounts
+  alias Keyfleet.Accounts.EnsIdentity
   alias Keyfleet.Actors.System
 
   @actor %System{}
 
   @doc """
-  Registers or refreshes the account the verified session names and reconciles
-  its linked socials, returning the providers another account already holds.
+  Registers or refreshes the account the verified session names, reconciles
+  its linked socials and asks Ethereum for its wallet's ENS name again,
+  returning the providers another account already holds.
   Without a linked wallet the account's wallet evidence is withdrawn instead.
   """
   def establish(%RegentPrivy.Session{privy_user_id: did} = verified) do
@@ -19,7 +21,8 @@ defmodule Keyfleet.Accounts.VerifiedSession do
         with {:ok, account} <- Accounts.register_verified(did, primary, addresses, actor: @actor),
              {:ok, account} <-
                Accounts.refresh_verified(account, primary, addresses, actor: @actor),
-             {:ok, conflicts} <- reconcile(account.id, verified.linked_socials) do
+             {:ok, conflicts} <- reconcile(account.id, verified.linked_socials),
+             :ok <- request_ens_lookup(account) do
           {:ok, account, conflicts}
         end
 
@@ -34,6 +37,16 @@ defmodule Keyfleet.Accounts.VerifiedSession do
       do: addresses != [] and primary in addresses
 
   def current?(_account), do: false
+
+  defp request_ens_lookup(account) do
+    if EnsIdentity.looking_up?() do
+      with {:ok, _identity} <-
+             Accounts.request_ens_lookup(account.id, account.wallet_address, actor: @actor),
+           do: :ok
+    else
+      :ok
+    end
+  end
 
   defp reconcile(account_id, linked_socials) do
     with {:ok, existing} <- Accounts.list_linked_identities_for_account(account_id, actor: @actor),

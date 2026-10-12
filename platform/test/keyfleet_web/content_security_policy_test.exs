@@ -49,8 +49,13 @@ defmodule KeyfleetWeb.ContentSecurityPolicyTest do
            ]
   end
 
-  test "the reading policy names no other site, and sign-in adds Privy's sources and Key cards" do
-    refute ContentSecurityPolicy.reading() =~ "://"
+  test "the reading policy names no other site but ENS pictures, and sign-in adds Privy's sources and Key cards" do
+    reading = directives(ContentSecurityPolicy.reading())
+    assert reading["img-src"] == ["'self'", "data:", "https://metadata.ens.domains"]
+
+    refute ContentSecurityPolicy.reading() |> String.replace("https://metadata.ens.domains", "") =~
+             "://"
+
     refute ContentSecurityPolicy.reading() =~ "'unsafe-eval'"
 
     sign_in = directives(ContentSecurityPolicy.sign_in())

@@ -3059,9 +3059,10 @@ components:
             account:
               type: object
               additionalProperties: false
-              required: [display_name]
+              required: [display_name, ens_name]
               properties:
                 display_name: {type: [string, "null"]}
+                ens_name: {type: [string, "null"]}
     SharedAgentError:
       type: object
       additionalProperties: false

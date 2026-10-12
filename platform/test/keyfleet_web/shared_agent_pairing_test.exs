@@ -87,8 +87,12 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
 
     checked_in = get(build_conn(), "/api/agents/v1/me")
 
-    assert %{"data" => %{"wallet" => @wallet, "account" => %{"display_name" => "Sol's owner"}}} =
-             json_response(checked_in, 200)
+    assert %{
+             "data" => %{
+               "wallet" => @wallet,
+               "account" => %{"display_name" => "Sol's owner", "ens_name" => nil}
+             }
+           } = json_response(checked_in, 200)
 
     assert_received {:verified, ["keyfleet"], %{"method" => "GET", "path" => "/api/agents/v1/me"}}
   end
