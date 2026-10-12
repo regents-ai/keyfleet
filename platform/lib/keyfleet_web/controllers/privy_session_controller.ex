@@ -147,21 +147,6 @@ defmodule KeyfleetWeb.PrivySessionController do
     :telemetry.execute([:keyfleet, :privy, :browser_failure], %{count: 1}, %{
       reason: reason
     })
-
-    if sentry_configured?() do
-      Sentry.capture_message("Privy browser sign-in failure",
-        level: :warning,
-        tags: %{reason: reason},
-        fingerprint: ["privy_browser_failure", reason]
-      )
-    end
-  end
-
-  defp sentry_configured? do
-    case Application.get_env(:sentry, :dsn) do
-      dsn when is_binary(dsn) -> String.trim(dsn) != ""
-      _absent -> false
-    end
   end
 
   defp browser_failure_bucket("flow_closed"), do: :retryable

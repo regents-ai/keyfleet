@@ -1,5 +1,6 @@
 defmodule KeyfleetWeb.Router do
   use KeyfleetWeb, :router
+  use ErrorTracker.Web, :router
 
   alias KeyfleetWeb.ContentSecurityPolicy
 
@@ -75,6 +76,33 @@ defmodule KeyfleetWeb.Router do
   # site starts, so they are read for each response.
   def put_sign_in_policy(conn, _opts),
     do: put_resp_header(conn, "content-security-policy", ContentSecurityPolicy.sign_in())
+
+  # The saved errors: Credits admins only. Anyone else gets the not-found page under
+  # the reading policy; an admin's page replaces it with one carrying this
+  # request's nonce (KeyfleetWeb.ErrorsAdmin). Like every page, it is closed while
+  # the site is.
+  pipeline :errors_admin do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :enforce_session_authority
+    plug :protect_from_forgery
+
+    plug :put_secure_browser_headers, %{
+      "content-security-policy" => ContentSecurityPolicy.reading(),
+      "referrer-policy" => "no-referrer"
+    }
+
+    plug KeyfleetWeb.ErrorsAdmin
+  end
+
+  scope "/admin" do
+    pipe_through :errors_admin
+
+    error_tracker_dashboard("/errors",
+      on_mount: [KeyfleetWeb.Live.LaunchGateHook, KeyfleetWeb.ErrorsAdmin],
+      csp_nonce_assign_key: %{script: :csp_nonce, style: :csp_nonce}
+    )
+  end
 
   if Application.compile_env(:keyfleet, :local_showcase, false) do
     pipeline :local_showcase do

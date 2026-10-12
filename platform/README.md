@@ -74,7 +74,7 @@ production.
 | `KEYFLEET_SIWA_URL` | Yes in production | The SIWA sign-in server that checks signed agent requests and that the joining guide names; `fly.toml` sets it. Development and tests default to a local siwa-server on port 4100. |
 | `KEYFLEET_RPC_URL` | For the fleet reader | The Ethereum node the site reads the fleets through, and what a page's wallet buttons sent (`:chain_nodes`); see [the chain reader](../docs/chain-reader.md). Wallets are still given Ethereum's public address. Unset, the fleet reader does not run and sent steps are read from Ethereum's public node. |
 | `PORT` | No | HTTP port. Defaults to `4000`. |
-| `SENTRY_DSN`, `SENTRY_RELEASE`, `SENTRY_ENVIRONMENT` | No | Error reporting. Unset means no reporting. |
+| `REGENT_CREDITS_ADMINS` | No | The Privy accounts, comma separated, that may give Credits, handle refunds and read the saved errors at `/admin/errors`. Unset, nobody can, and `/admin/errors` answers not found. |
 | `KEYFLEET_DEPLOYMENT_ROLE` | Yes in production | `production` or `staging`. There is no default; each role admits only its own database hosts. |
 | `DATABASE_POOLED_URL` | Yes in production | Pooled PostgreSQL connection string for an approved host. |
 | `DATABASE_DIRECT_URL` | Only when migrating | Direct PostgreSQL connection string used by the migration release command. |

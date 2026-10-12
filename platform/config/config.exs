@@ -271,19 +271,17 @@ config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
 
-# Errors go to Sentry once SENTRY_DSN is set (config/runtime.exs): crashed
-# processes and failed requests, through the handler the application adds.
-# Each event leaves without its frames' arguments or a crashed process's state.
-config :sentry,
-  environment_name: config_env(),
-  json_library: Jason,
-  enable_metrics: false,
-  tags: %{app: "keyfleet"},
-  before_send: {Keyfleet.SentryScrub, :scrub}
-
-config :keyfleet, :logger, [
-  {:handler, :sentry_handler, Sentry.LoggerHandler, %{config: %{metadata: [:file, :line]}}}
-]
+# Failed requests, pages and jobs are saved in the site's own schema and shown
+# to Credits admins at /admin/errors. Only server faults are saved
+# (Keyfleet.ErrorIgnorer), only where each one happened is kept
+# (Keyfleet.ErrorFilter), and a resolved error is cleared after a week.
+config :error_tracker,
+  repo: Keyfleet.Repo,
+  otp_app: :keyfleet,
+  prefix: "keyfleet_app",
+  ignorer: Keyfleet.ErrorIgnorer,
+  filter: Keyfleet.ErrorFilter,
+  plugins: [{ErrorTracker.Plugins.Pruner, max_age: :timer.hours(24 * 7)}]
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason

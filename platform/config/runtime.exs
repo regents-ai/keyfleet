@@ -2,16 +2,18 @@ import Config
 
 require Logger
 
-config :sentry,
-  dsn: System.get_env("SENTRY_DSN"),
-  release: System.get_env("SENTRY_RELEASE"),
-  environment_name: System.get_env("SENTRY_ENVIRONMENT", to_string(config_env()))
-
 # Tests use the fixed app id in config/test.exs, whatever the shell sets.
 if config_env() != :test do
   config :keyfleet, :privy,
     app_id: System.get_env("PRIVY_APP_ID"),
     verification_key: System.get_env("PRIVY_VERIFICATION_KEY")
+end
+
+# The Privy accounts that may give Credits, handle refunds and read the saved
+# errors at /admin/errors, comma separated.
+if admins = System.get_env("REGENT_CREDITS_ADMINS") do
+  config :regent_credits,
+    admins: admins |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
 end
 
 # Without its Privy settings a local server answers every page while nobody can

@@ -7,8 +7,6 @@ defmodule Keyfleet.Application do
 
   @impl true
   def start(_type, _args) do
-    :ok = Logger.add_handlers(:keyfleet)
-
     children =
       [
         KeyfleetWeb.Telemetry,
