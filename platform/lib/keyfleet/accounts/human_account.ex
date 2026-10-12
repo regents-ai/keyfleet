@@ -18,10 +18,14 @@ defmodule Keyfleet.Accounts.HumanAccount do
     attribute :privy_user_id, :string, allow_nil?: false, sensitive?: true
     attribute :wallet_address, :string, sensitive?: true
     attribute :wallet_addresses, {:array, :string}, default: [], sensitive?: true
-    attribute :display_name, :string, public?: true, constraints: [max_length: 80]
     attribute :avatar, :map
     create_timestamp :created_at
     update_timestamp :updated_at
+  end
+
+  calculations do
+    # The name set in the person's shared Regent profile.
+    calculate :display_name, :string, Keyfleet.Accounts.HumanAccount.ProfileName, public?: true
   end
 
   identities do
@@ -29,10 +33,17 @@ defmodule Keyfleet.Accounts.HumanAccount do
   end
 
   actions do
+    # Loading the name after sign-in writes the account reads it again through
+    # the primary read.
+    read :read do
+      primary? true
+    end
+
     read :by_privy_did do
       get? true
       argument :privy_did, :string, allow_nil?: false
       filter expr(privy_user_id == ^arg(:privy_did))
+      prepare build(load: [:display_name])
     end
 
     read :points_account do
@@ -45,6 +56,7 @@ defmodule Keyfleet.Accounts.HumanAccount do
       get? true
       argument :id, :integer, allow_nil?: false
       filter expr(id == ^arg(:id))
+      prepare build(load: [:display_name])
     end
 
     # The accounts linking any of these wallets, which are lowercase; the
@@ -68,17 +80,20 @@ defmodule Keyfleet.Accounts.HumanAccount do
       upsert? true
       upsert_identity :unique_privy_user_id
       upsert_fields []
+      change load([:display_name])
     end
 
     update :refresh_verified do
       accept [:wallet_address, :wallet_addresses]
       require_atomic? false
       validate present(:wallet_addresses)
+      change load([:display_name])
     end
   end
 
   policies do
     policy action([
+             :read,
              :by_privy_did,
              :holding_wallets,
              :register_verified,

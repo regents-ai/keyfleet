@@ -88,8 +88,8 @@ function accountDocument({
         return bridgeSource === null ? null : {content: bridgeSource}
       }
       if (selector === "#account-auth-status") return status
-      if (selector === "#account-control [data-account-target='sign-out']") {
-        return signedIn ? new AccountElement("sign-out") : null
+      if (selector === "#account-control [data-account-target='profile']") {
+        return signedIn ? new AccountElement("profile") : null
       }
       return null
     },
@@ -760,7 +760,10 @@ describe("lazy browser authentication", () => {
     )
   })
 
-  it("confirms the handoff, awaits local deletion, and reloads for provider work", async () => {
+  // The pressing page asks its bridge to log Privy out. This bridge never
+  // loads, so the handoff is written again, freshly dated, and the next page
+  // still owes the logout.
+  it("confirms the handoff, awaits local deletion, tries Privy's logout, and reloads", async () => {
     vi.stubGlobal("Element", AccountElement)
     const order: string[] = []
     const page = accountDocument()
@@ -787,16 +790,17 @@ describe("lazy browser authentication", () => {
     page.click("sign-out")
 
     await vi.waitFor(() => expect(clearSession).toHaveBeenCalledOnce())
-    expect(order).toEqual(["handoff", "local", "reload"])
-    expect(storage.setItem).toHaveBeenCalledOnce()
+    expect(order).toEqual(["handoff", "local", "handoff", "reload"])
+    expect(storage.setItem).toHaveBeenCalledTimes(2)
     expect(clearSession).toHaveBeenCalledOnce()
     expect(reload).toHaveBeenCalledOnce()
-    expect(importer).not.toHaveBeenCalled()
+    expect(importer).toHaveBeenCalledOnce()
   })
 
   // Disconnect is one command: the Regent session goes, every wallet Privy holds
   // is released and asked to drop the site, this page is disconnected for good,
-  // and the document that replaces it finishes the provider sign out.
+  // and a provider sign out this page could not finish is handed on to the
+  // document that replaces it.
   it("ends the session, releases every wallet, and hands the provider sign out on", async () => {
     vi.stubGlobal("Element", AccountElement)
     vi.stubGlobal("window", {
@@ -855,6 +859,7 @@ describe("lazy browser authentication", () => {
       "revoke:first",
       "disconnect:second",
       "revoke:second",
+      "handoff",
       "reload",
     ])
 
@@ -889,6 +894,33 @@ describe("lazy browser authentication", () => {
       handoffStorage: storage,
       now: () => 1_001,
     })
+
+    await vi.waitFor(() => expect(request).toHaveBeenCalledWith("sign-out"))
+  })
+
+  // The account switch that stayed on the old wallet: the page after Sign out
+  // gave Privy's logout 1.5 s and dropped it when Privy loaded later, so the
+  // next Sign in found Privy still on the old wallet. It now waits.
+  it("a handed-on Privy logout waits for a bridge that loads late", async () => {
+    vi.stubGlobal("Element", AccountElement)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({authenticated: false}), {status: 200})),
+    )
+    const request = vi.fn(async () => undefined)
+    let bridgeLoaded!: (bridge: PrivyBridgeModule) => void
+    const importer = vi.fn(() => new Promise<PrivyBridgeModule>(resolve => void (bridgeLoaded = resolve)))
+
+    installAccountAuthLazyLoader(accountDocument().documentRoot, importer, {
+      handoffStorage: memoryStorage(JSON.stringify({version: 1, issuedAtMs: 1_000})),
+      now: () => 1_001,
+    })
+
+    await vi.waitFor(() => expect(importer).toHaveBeenCalledOnce())
+    await new Promise(resolve => setTimeout(resolve, 1_600))
+    bridgeLoaded({
+      startPrivyBridge: vi.fn(async () => ({request, finishSignOutOnly: vi.fn()})),
+    } as unknown as PrivyBridgeModule)
 
     await vi.waitFor(() => expect(request).toHaveBeenCalledWith("sign-out"))
   })
@@ -1098,7 +1130,7 @@ describe("lazy browser authentication", () => {
       installAccountAuthLazyLoader(page.documentRoot, cleanupImporter, {
         handoffStorage: storage,
         now: () => 1_001,
-        providerSignOutTimeoutMs: 10,
+        walletSignOutTimeoutMs: 10,
       })
 
       await vi.advanceTimersByTimeAsync(0)

@@ -90,7 +90,7 @@ describe("a press sends the server's step from the wallet it was built for", () 
 
     expect(answers).toEqual([{transaction_hash: hash}, {transaction_hash: hash}])
     expect(active.sent).toHaveLength(2)
-    expect(active.sent[0]).toEqual([{from: signer, to: fleet, data: "0x1234", value: "0x0"}])
+    expect(active.sent[0]).toEqual([{from: signer, to: fleet, data: "0x1234", value: "0x0", chainId: "0x2105"}])
     expect(pushed).toEqual([
       ["step_sent", {review_id: "review-1", step: "buy", transaction_hash: hash}],
       ["step_sent", {review_id: "review-1", step: "buy", transaction_hash: hash}],

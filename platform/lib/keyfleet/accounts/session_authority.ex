@@ -321,6 +321,9 @@ defmodule Keyfleet.Accounts.SessionAuthority do
 
   # Bind and refresh may ensure the unbound generation-zero row the claim names,
   # so the absent-row order of a race takes the same lock as the present-row one.
+  # `Repo.transaction`, not `Ash.transact`: an exhausted lineage is revoked and
+  # then answers `{:error, :reset}`, and that revocation must commit, while
+  # `Ash.transact` rolls back whenever the function returns an error.
   defp locked(%{lineage: lineage, generation: generation}, callback) do
     {:ok, result} =
       Repo.transaction(fn ->
@@ -358,12 +361,15 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   end
 
   defp lock(lineage),
-    do: lineage |> lookup() |> Ash.Query.lock(:for_update) |> Ash.read_one!(actor: @actor)
+    do: lineage |> lookup() |> Ash.Query.lock(:for_update) |> Ash.read_one!()
 
-  defp row(lineage), do: lineage |> lookup() |> Ash.read_one!(actor: @actor)
+  defp row(lineage), do: lineage |> lookup() |> Ash.read_one!()
 
-  defp lookup(lineage),
-    do: Ash.Query.for_read(__MODULE__, :by_lineage_digest, %{lineage_digest: digest(lineage)})
+  defp lookup(lineage) do
+    Ash.Query.for_read(__MODULE__, :by_lineage_digest, %{lineage_digest: digest(lineage)},
+      actor: @actor
+    )
+  end
 
   defp verified(nil), do: nil
 

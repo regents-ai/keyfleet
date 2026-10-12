@@ -1,7 +1,6 @@
 import {execFileSync} from "node:child_process"
 import {readdirSync} from "node:fs"
 import {expect, test, type Page} from "@playwright/test"
-import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {forget, leftovers, moved, pageChangeMoved, pressRapidly, watchMotion} from "./support/motion"
 
 // However fast a reader presses, every move ends at rest: a move begun over
@@ -103,22 +102,6 @@ test("a menu opened and closed again and again mid-move leaves the menu at rest"
   await settle(page)
 
   expect(await moved(page, "#fleet-rooms")).toBe(true)
-  expect(await leftovers(page)).toEqual([])
-})
-
-test("the account menu opened and closed again and again mid-move ends at rest", async ({page}) => {
-  const auth = await installAuthenticatedPrivy(page, "valid")
-  await auth.establishLocalSession()
-  await watchMotion(page)
-  await page.goto("/account")
-  await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-  await auth.expectAuthenticatedSession()
-  await forget(page)
-
-  await pressRapidly(page, "#account-menu summary")
-  await settle(page)
-
-  expect(await moved(page, "#account-menu .account-menu__content")).toBe(true)
   expect(await leftovers(page)).toEqual([])
 })
 

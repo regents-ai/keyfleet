@@ -210,7 +210,19 @@ defmodule KeyfleetWeb.ApiContractTest do
                  "get" => %{
                    "operationId" => "getBrowserSession",
                    "responses" => %{
-                     "200" => %{"$ref" => "#/components/responses/Session"}
+                     "200" => %{
+                       "description" => "Current browser session",
+                       "headers" => %{
+                         "Cache-Control" => %{
+                           "schema" => %{"type" => "string", "const" => "no-store"}
+                         }
+                       },
+                       "content" => %{
+                         "application/json" => %{
+                           "schema" => %{"$ref" => "#/components/schemas/Session"}
+                         }
+                       }
+                     }
                    }
                  }
                }
@@ -312,19 +324,9 @@ defmodule KeyfleetWeb.ApiContractTest do
                  }
                }
              },
-             # Only the browser sign-in exchange may publish the marker, and only
-             # as an optional header on a body identical to every other refusal.
              "PrivySessionUnauthorized" => %{
                "description" =>
                  "The Privy access and identity tokens were not both present and valid for one signed-in session",
-               "headers" => %{
-                 "x-ash-provider-relogin" => %{
-                   "description" =>
-                     "Present only when the access token itself could not be verified, which permits one fresh provider login",
-                   "required" => false,
-                   "schema" => %{"type" => "string", "const" => "allowed"}
-                 }
-               },
                "content" => %{
                  "application/json" => %{
                    "schema" => %{"$ref" => "#/components/schemas/Error"}

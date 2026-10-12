@@ -22,7 +22,6 @@ async function openAccount(page: Page) {
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await auth.expectAuthenticatedSession()
   await forget(page)
-  return page.locator("#account-menu")
 }
 
 // The account page hears that a connection couldn't be verified, as it does
@@ -97,28 +96,6 @@ test("a headline's words rise each in a box clipped by class, so a policy refusi
   expect(refusals).toEqual([])
 })
 
-test("a pointer press squishes the account button and pops its menu, and both end clean", async ({page}) => {
-  const account = await openAccount(page)
-
-  await account.locator("summary").click()
-  await expect(account.locator(".account-menu__content")).toBeVisible()
-
-  await expect.poll(() => moved(page, "#account-menu summary")).toBe(true)
-  await expect.poll(() => moved(page, "#account-menu .account-menu__content")).toBe(true)
-  await expect.poll(() => leftovers(page)).toEqual([])
-})
-
-test("a keyboard press opens the account menu at once, with no squish or pop", async ({page}) => {
-  const account = await openAccount(page)
-
-  await account.locator("summary").focus()
-  await page.keyboard.press("Enter")
-  await expect(account.locator(".account-menu__content")).toBeVisible()
-  await page.waitForTimeout(600)
-
-  expect(await anythingMoved(page)).toBe(false)
-})
-
 test("a refusal shakes once as it appears, and refusals again and again end at rest", async ({page}) => {
   await openAccount(page)
 
@@ -137,16 +114,11 @@ test("a refusal shakes once as it appears, and refusals again and again end at r
   expect(await page.locator(REFUSAL).getAttribute("style")).toBeNull()
 })
 
-test("a reader who asked for less motion sees presses, menus, refusals and cards without movement", async ({browser}) => {
+test("a reader who asked for less motion sees refusals and cards without movement", async ({browser}) => {
   const context = await browser.newContext({reducedMotion: "reduce"})
   const page = await context.newPage()
 
-  const account = await openAccount(page)
-  await account.locator("summary").click()
-  await expect(account.locator(".account-menu__content")).toBeVisible()
-  await page.waitForTimeout(600)
-  expect(await anythingMoved(page), "the account menu").toBe(false)
-
+  await openAccount(page)
   await refuseConnection(page)
   await expect(page.locator(REFUSAL)).toBeVisible()
   await page.waitForTimeout(600)

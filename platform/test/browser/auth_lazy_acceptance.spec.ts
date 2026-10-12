@@ -438,9 +438,7 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
     ),
   ).toBe(false)
   await expect(page.locator("[data-phx-session]").first()).toBeVisible()
-  await page.locator("#account-menu summary").click()
-  await expect(page.locator("#account-menu").getByRole("button", {name: "Sign out"})).toBeVisible()
-  await page.locator("#account-menu summary").click()
+  await expect(page.locator("#account-control").getByRole("button", {name: "Sign out"})).toBeVisible()
   // Exercise the same live session on the Account page.
   await page.locator("#shell-sidebar a[href='/account']").click()
   await expect(page.locator("#account-page")).toBeVisible()
@@ -651,9 +649,8 @@ test("sign out replaces pending sync and runs once after the bridge is ready", a
   await establishLocalSession(page)
 
   await page.goto("/account")
-  await expect(page.locator("#account-menu [data-account-target='profile']")).toBeVisible()
-  await page.locator("#account-menu summary").click()
-  await page.locator("#account-menu").getByRole("button", {name: "Sign out"}).click()
+  await expect(page.locator("#account-control [data-account-target='profile']")).toBeVisible()
+  await page.locator("#account-control").getByRole("button", {name: "Sign out"}).click()
   await expect.poll(() => sessionDeletes).toBe(1)
 
   await expect.poll(() => documentRequests.length).toBe(2)
@@ -762,10 +759,9 @@ test("a valid handoff uses the real session resource and refuses authenticated t
   expect((await (await page.request.get("/auth/session")).json()).authenticated).toBe(true)
 })
 
-test("the second document proves anonymous server truth before importing Privy", async ({
+test("Privy's logout finished on the page pressed leaves the next page without Privy", async ({
   page,
 }) => {
-  const order: string[] = []
   let bridgeLoads = 0
   let sessionDeletes = 0
   const documentRequests: string[] = []
@@ -778,14 +774,8 @@ test("the second document proves anonymous server truth before importing Privy",
       documentRequests.push(request.url())
     }
   })
-  page.on("response", response => {
-    if (response.request().method() === "GET" && response.url().endsWith("/auth/session")) {
-      order.push("anonymous-proof")
-    }
-  })
   await page.route(bridgePattern, route => {
     bridgeLoads += 1
-    order.push(`bridge-${bridgeLoads}`)
     return route.fulfill({body: bridgeStub, contentType: "application/javascript"})
   })
 
@@ -793,14 +783,16 @@ test("the second document proves anonymous server truth before importing Privy",
   await page.goto("/account")
   await expect.poll(() => bridgeLoads).toBe(1)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-  await page.locator("#account-menu summary").click()
-  await page.locator("#account-menu").getByRole("button", {name: "Sign out"}).click()
+  await page.locator("#account-control").getByRole("button", {name: "Sign out"}).click()
 
   await expect.poll(() => sessionDeletes).toBe(1)
   await expect.poll(() => documentRequests.length).toBe(2)
-  await expect.poll(() => bridgeLoads).toBe(2)
-  expect(order.indexOf("anonymous-proof")).toBeGreaterThan(order.indexOf("bridge-1"))
-  expect(order.indexOf("anonymous-proof")).toBeLessThan(order.indexOf("bridge-2"))
+  await expect(page.locator("#account-control [data-account-target='sign-in']")).toBeVisible()
+  await page.waitForLoadState("networkidle")
+  expect(bridgeLoads).toBe(1)
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("regent:privy-sign-out-handoff:v1")),
+  ).toBeNull()
   expect((await (await page.request.get("/auth/session")).json()).authenticated).toBe(false)
 })
 
@@ -961,7 +953,7 @@ test("COOKIE_TO_CSRF_HAS_A_REAL_LIVESOCKET_BARRIER: nothing connects before the 
   // Released, the held reconnect goes out once and lands, with no reload.
   await expect.poll(connected).toBe(true)
   expect(documents.map(url => new URL(url).pathname)).toEqual(["/account"])
-  await expect(page.locator("#account-menu [data-account-target='profile']")).toBeVisible()
+  await expect(page.locator("#account-control [data-account-target='profile']")).toBeVisible()
 })
 
 test("a tab left stale by a failed adoption recovers on its next connect", async ({page}) => {
@@ -1075,7 +1067,7 @@ test("a refresh between another tab's dead render and its connect recovers in on
   // token. Phoenix refuses that handshake at the transport, before any mount
   // hook runs, and LiveView falls back to exactly one further request for the
   // same route, which then carries the current token.
-  await expect(waitingTab.locator("#account-menu [data-account-target='profile']")).toBeVisible()
+  await expect(waitingTab.locator("#account-control [data-account-target='profile']")).toBeVisible()
   await waitingTab.waitForLoadState("networkidle")
 
   expect(documents.map(url => new URL(url).pathname)).toEqual(["/account", "/account"])
@@ -1132,7 +1124,7 @@ test("a refresh in one tab leaves another tab mounted and its next reconnect use
 
   // A deploy-style reconnect carries the adopted token, so nothing reloads.
   expect(documents).toHaveLength(1)
-  await expect(mountedTab.locator("#account-menu [data-account-target='profile']")).toBeVisible()
+  await expect(mountedTab.locator("#account-control [data-account-target='profile']")).toBeVisible()
 })
 
 test("a tab holding a stale token still signs out, and the revoked lineage cannot reconnect", async ({

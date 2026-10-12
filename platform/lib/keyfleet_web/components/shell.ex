@@ -5,7 +5,6 @@ defmodule KeyfleetWeb.Components.Shell do
 
   alias KeyfleetWeb.Components.RegentLinks
   alias KeyfleetWeb.RouteCatalog.RouteTarget
-  alias Phoenix.LiveView.JS
 
   # Classic is the fleet that sells Keys: once it is open, "Get a Key" in the
   # header opens its page with its own "Get a Key" pressed
@@ -175,60 +174,42 @@ defmodule KeyfleetWeb.Components.Shell do
   attr :enabled, :boolean, default: true
 
   @doc """
-  The real account control, also rendered by the local Privy reference.
-  These markers are consumed by auth_lazy.ts; this component never authenticates
-  a user itself. The caller supplies the server-verified account presentation.
+  The account control: Sign in, or the account's name with Sign out beside it.
+  auth_lazy.ts drives its `data-account-target` markers; the component itself
+  never authenticates anyone.
   """
   def account_control(assigns) do
     ~H"""
     <div id="account-control" class="account-control">
       <Regent.Primitives.button
         :if={@account_control.kind == :sign_in}
-        variant="secondary"
         type="button"
         data-account-target="sign-in"
         disabled={!@enabled}
       >
         {@account_control.label}
       </Regent.Primitives.button>
-      <details :if={@account_control.kind == :signed_in} id="account-menu">
-        <summary>
-          <img
-            :if={@account_control.avatar_src}
-            class="account-avatar"
-            src={@account_control.avatar_src}
-            referrerpolicy="no-referrer"
-            width="36"
-            height="36"
-            alt=""
-          />
-          <span data-account-target="profile">{@account_control.label}</span>
-          <span class="shell-chevron" aria-hidden="true">⌄</span>
-        </summary>
-        <div
-          class="account-menu__content shell-popover"
-          data-panel="menu"
-          phx-mounted={JS.ignore_attributes(["style"])}
-        >
-          <.link
-            patch="/account"
-            class="account-menu__row account-menu__row--account"
-            data-account-menu-item="account"
-          >
-            <.account_menu_icon name={:settings} /><span>Account</span>
-          </.link>
-          <Regent.Primitives.button
-            variant="quiet"
-            type="button"
-            disabled={!@enabled}
-            class="account-menu__row account-menu__row--danger"
-            data-account-menu-item="disconnect"
-            data-account-target="sign-out"
-          >
-            <.account_menu_icon name={:logout} /><span>Sign out</span>
-          </Regent.Primitives.button>
-        </div>
-      </details>
+      <span :if={@account_control.kind == :signed_in} class="account-chip">
+        <img
+          :if={@account_control.avatar_src}
+          class="account-avatar"
+          src={@account_control.avatar_src}
+          referrerpolicy="no-referrer"
+          width="36"
+          height="36"
+          alt=""
+        />
+        <span class="account-name" data-account-target="profile">{@account_control.label}</span>
+      </span>
+      <Regent.Primitives.button
+        :if={@account_control.kind == :signed_in}
+        variant="quiet"
+        type="button"
+        disabled={!@enabled}
+        data-account-target="sign-out"
+      >
+        Sign out
+      </Regent.Primitives.button>
       <p
         id="account-auth-status"
         class="account-auth-status"
@@ -283,29 +264,4 @@ defmodule KeyfleetWeb.Components.Shell do
     do: label
 
   defp sidebar_label(%RouteTarget{label: label}, _account_control), do: label
-
-  attr(:name, :atom, required: true)
-
-  defp account_menu_icon(assigns) do
-    ~H"""
-    <svg
-      class="account-menu__icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.8"
-      stroke-linecap="square"
-      stroke-linejoin="miter"
-      aria-hidden="true"
-    >
-      <g :if={@name == :settings}>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" />
-      </g>
-      <g :if={@name == :logout}>
-        <path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10" />
-      </g>
-    </svg>
-    """
-  end
 end

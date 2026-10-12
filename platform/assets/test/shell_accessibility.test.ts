@@ -42,8 +42,6 @@ class FakeElement {
   disabled = false
   hidden = false
   inert = false
-  open = false
-  parentElement: {id?: string} | null = null
   attributes = new Map<string, string>()
   focusCount = 0
   closestSelectors = new Set<string>()
@@ -67,12 +65,10 @@ class FakeElement {
 
   setAttribute(name: string, value: string) {
     this.attributes.set(name, value)
-    if (name === "open") this.open = true
   }
 
   removeAttribute(name: string) {
     this.attributes.delete(name)
-    if (name === "open") this.open = false
   }
 }
 
@@ -125,18 +121,6 @@ function shellFixture() {
   navigationLink.closestSelectors.add("#shell-sidebar a")
   const scrim = new FakeElement()
   scrim.closestSelectors.add("[data-shell-menu-scrim]")
-  const accountMenu = new FakeElement()
-  accountMenu.parentElement = {id: "account-control"}
-  const accountMenuLink = new FakeElement()
-  accountMenuLink.closestSelectors.add("#account-menu a")
-  accountMenuLink.closest = (selector: string) => {
-    if (selector === "details") return accountMenu
-    return selector
-      .split(",")
-      .some(candidate => accountMenuLink.closestSelectors.has(candidate.trim()))
-      ? accountMenuLink
-      : null
-  }
   const scroller = Object.assign(new FakeElement(), {scrollTo: vi.fn()})
   const sidebar = Object.assign(new FakeElement(), {
     querySelectorAll: () => [firstLink, lastLink],
@@ -148,11 +132,9 @@ function shellFixture() {
       if (selector === "#shell-sidebar") return sidebar
       if (selector === "#app-shell-scroller") return scroller
       if (selector === "[data-shell-menu-scrim]") return scrim
-      if (selector === "#account-control > details") return accountMenu
       return null
     },
-    querySelectorAll(selector: string) {
-      if (selector.includes("details[open]")) return accountMenu.open ? [accountMenu] : []
+    querySelectorAll() {
       return []
     },
     addEventListener(type: string, listener: Listener) {
@@ -172,8 +154,6 @@ function shellFixture() {
     menuButton,
     sidebar,
     scrim,
-    accountMenu,
-    accountMenuLink,
     scroller,
     firstLink,
     lastLink,
@@ -249,35 +229,7 @@ describe("mobile shell navigation", () => {
     },
   )
 
-  it("closes the account menu after a selection", () => {
-    const page = shellFixture()
-    const hook = captured.hooks.ShellBehavior
-    const context = {el: page.shell} as never
-
-    hook.mounted?.call(context)
-    page.accountMenu.open = true
-    page.accountMenu.setAttribute("open", "")
-    page.click(page.accountMenuLink)
-    expect(page.accountMenu.open).toBe(false)
-    expect(page.accountMenu.getAttribute("open")).toBeNull()
-  })
-
-  it("preserves an open account menu across a same-destination route patch", () => {
-    const page = shellFixture()
-    const hook = captured.hooks.ShellBehavior
-    const context = {el: page.shell} as never
-
-    hook.mounted?.call(context)
-    page.accountMenu.setAttribute("open", "")
-    hook.beforeUpdate?.call(context)
-    page.accountMenu.removeAttribute("open")
-    hook.updated?.call(context)
-
-    expect(page.accountMenu.open).toBe(true)
-    expect(page.accountMenu.getAttribute("open")).toBe("")
-  })
-
-  it("closes the drawer and account menu when the destination updates", async () => {
+  it("closes the drawer when the destination updates", async () => {
     const page = shellFixture()
     const hook = captured.hooks.ShellBehavior
     const context = {el: page.shell} as never
@@ -285,9 +237,6 @@ describe("mobile shell navigation", () => {
     hook.mounted?.call(context)
     page.click(page.menuButton)
     await Promise.resolve()
-    page.accountMenu.setAttribute("open", "")
-    hook.beforeUpdate?.call(context)
-    page.accountMenu.removeAttribute("open")
     page.shell.dataset.destination = "/app/fleets/fibonacci_syndicate"
     hook.updated?.call(context)
 
@@ -295,7 +244,5 @@ describe("mobile shell navigation", () => {
     expect(page.scroller.inert).toBe(false)
     expect(page.scrim.hidden).toBe(true)
     expect(page.menuButton.focusCount).toBeGreaterThan(0)
-    expect(page.accountMenu.open).toBe(false)
-    expect(page.accountMenu.getAttribute("open")).toBeNull()
   })
 })

@@ -79,14 +79,13 @@
 }
 
 .account-control,
-.theme-control,
-.account-control details {
+.theme-control {
   position: relative;
 }
 
 /* Every header control is a bordered cell, as the marketing header's tabs are. */
 .shell-brand,
-.account-control summary,
+.account-chip,
 .mobile-menu-button {
   display: flex;
   align-items: center;
@@ -108,8 +107,16 @@
   margin-inline-start: -1px;
 }
 
-.account-control {
+.account-control,
+.account-chip {
   display: flex;
+  align-items: center;
+}
+
+/* The name only shows who is signed in; it is not a control. */
+.account-chip {
+  min-width: 0;
+  cursor: default;
 }
 
 /* The shared prism control draws its own box and hover; the header only centres it.
@@ -124,20 +131,11 @@
   margin-inline-end: var(--space-1);
 }
 
-.account-control summary::-webkit-details-marker {
-  display: none;
-}
-
 @media (hover: hover) {
   .shell-brand:hover,
-  .account-control summary:hover,
   .mobile-menu-button:hover {
     background: color-mix(in oklch, var(--color-fg) 6%, transparent);
   }
-}
-
-.account-control details[open] summary {
-  background: color-mix(in oklch, var(--color-fg) 6%, transparent);
 }
 
 .account-avatar {
@@ -187,84 +185,6 @@
   :root:not([data-theme]) .shell-brand__mark-dark {
     display: none;
   }
-}
-
-.shell-chevron {
-  margin-left: 0.25rem;
-  color: var(--color-fg-muted);
-  font-family: var(--font-family-ui);
-  transition: transform var(--duration-fast) var(--ease-out);
-}
-
-details[open] > summary .shell-chevron {
-  transform: rotate(180deg);
-}
-
-.shell-popover {
-  position: absolute;
-  top: 100%;
-  z-index: 6;
-  display: grid;
-  min-width: 13rem;
-  border: 1px solid var(--ash-line-strong);
-  background: var(--color-surface);
-}
-
-.account-menu__content > a {
-  min-height: 2.75rem;
-  padding: 0.7rem 0.85rem;
-}
-
-@media (hover: hover) {
-  .account-menu__content > a:hover {
-    background: color-mix(in oklch, var(--color-fg) 8%, transparent);
-  }
-}
-
-.theme-control .shell-popover,
-.account-menu__content {
-  right: 0;
-}
-
-.account-menu__content {
-  min-width: 14rem;
-  transform-origin: calc(100% - 1.5rem) 0;
-}
-
-.account-menu__row {
-  display: grid;
-  grid-template-columns: 1.75rem minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  min-height: 3rem;
-  padding: 0.8rem 0.85rem;
-  border: 0;
-  border-block-end: 1px solid var(--color-border);
-  border-radius: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-}
-
-@media (hover: hover) {
-  .account-menu__row:hover {
-    background: color-mix(in oklch, var(--color-fg) 8%, transparent);
-  }
-}
-
-.account-menu__icon {
-  width: 1.4rem;
-  height: 1.4rem;
-}
-
-#account-menu .account-menu__row--account {
-  color: var(--ash-accent-warm);
-}
-
-.account-menu__row--danger {
-  border-block-end: 0;
-  color: var(--ash-accent-warm);
 }
 
 .mobile-menu-button {
@@ -411,11 +331,10 @@ details[open] > summary .shell-chevron {
     text-transform: uppercase;
   }
 
-    .account-control summary {
+  .account-chip {
     max-width: 6rem;
     padding-inline: 0.5rem;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -468,22 +387,6 @@ details[open] > summary .shell-chevron {
   #route-content {
     padding: 1rem;
   }
-
-  .shell-popover {
-    position: fixed;
-    top: 3.5rem;
-    right: 0;
-    left: 0;
-    max-height: calc(100dvh - 3.5rem);
-    overflow: auto;
-    border-inline: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .shell-chevron {
-    transition: none;
-  }
 }
 
 /* The frame itself owns the ruled edges; there is no decorative page mat. */
@@ -507,11 +410,18 @@ details[open] > summary .shell-chevron {
   #shell-header .rl-header-links { display: none; }
   #shell-header > a:not(.shell-brand) { display: none; }
   #shell-header .account-control { min-width: 0; }
-  /* The account button keeps its 6rem cap; the name shrinks to an ellipsis so
-     the avatar and chevron stay inside the cap instead of spilling past the
-     screen edge. */
-  #shell-header .account-control summary [data-account-target="profile"] { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  #shell-header .account-control summary .shell-chevron { flex: 0 0 auto; }
+  /* The name keeps its 6rem cap and shrinks to an ellipsis, so the picture
+     stays inside the cap instead of spilling past the screen edge. */
+  #shell-header .account-chip .account-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  /* With a picture, the name is for screen readers only. */
+  #shell-header .account-chip .account-avatar + .account-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   .account-control > .rg-button { font-size: .75rem; margin: 4px; padding-inline: .75rem; white-space: nowrap; }
   .shell-get-key > .rg-button { font-size: .75rem; margin: 4px 0; padding-inline: .5rem; }
 }

@@ -822,44 +822,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
              "Privy session refused stage=access_verification reason=invalid_token"
   end
 
-  test "ONE_MARKED_REFUSAL: only an unverifiable access token invites a fresh provider login" do
-    :ets.delete_all_objects(RequestRateLimiter)
-    on_exit(fn -> :ets.delete_all_objects(RequestRateLimiter) end)
-
-    {marked, marked_log} =
-      with_log(fn ->
-        browser() |> put_privy_pair("stale-access") |> post("/auth/privy/session", %{})
-      end)
-
-    assert get_resp_header(marked, "x-ash-provider-relogin") == ["allowed"]
-
-    # Every other way this endpoint refuses, across all three of its stages.
-    unmarked = [
-      put_headers(browser(), [{"authorization", "Bearer valid"}]),
-      put_headers(browser(), [{"privy-id-token", @identity}]),
-      put_headers(browser(), [
-        {"authorization", "Bearer valid"},
-        {"privy-id-token", Keyfleet.TestPrivyVerifier.identity_token("other-account")}
-      ]),
-      put_privy_pair(browser(), "unverifiable"),
-      put_privy_pair(browser(), "no-wallet")
-    ]
-
-    log =
-      capture_log(fn ->
-        for refused <- unmarked do
-          refused = post(refused, "/auth/privy/session", %{})
-
-          assert get_resp_header(refused, "x-ash-provider-relogin") == []
-          assert json_response(refused, 401) == json_response(marked, 401)
-          assert refused.private[:plug_session_info] == marked.private[:plug_session_info]
-        end
-      end)
-
-    assert failures(marked_log <> log, "session_exchange") == 1 + length(unmarked)
-  end
-
-  test "ONE_MARKED_REFUSAL: the marked refusal still revokes, drops and disconnects" do
+  test "a refused access token revokes, drops and disconnects" do
     :ets.delete_all_objects(RequestRateLimiter)
     on_exit(fn -> :ets.delete_all_objects(RequestRateLimiter) end)
     {browser, signed_in} = signed_in_browser()
@@ -869,7 +832,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     {browser, csrf} = refreshed_csrf(browser)
     flush_test_messages()
 
-    {marked, log} =
+    {refusal, log} =
       with_log(fn ->
         browser
         |> enforce_csrf()
@@ -879,11 +842,10 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
       end)
 
     assert_response_sent_then_disconnect(topic)
-    assert json_response(marked, 401) == refused("unauthorized")
+    assert json_response(refusal, 401) == refused("unauthorized")
     assert failures(log, "session_exchange") == 1
-    assert get_resp_header(marked, "x-ash-provider-relogin") == ["allowed"]
-    assert marked.private[:plug_session_info] == :drop
-    assert_no_token_disclosure(marked)
+    assert refusal.private[:plug_session_info] == :drop
+    assert_no_token_disclosure(refusal)
 
     assert authority_of(claim(signed_in)) == {:error, :reset}
     assert SessionAuthority.sign_in(claim(signed_in), account_id) == {:error, :reset}

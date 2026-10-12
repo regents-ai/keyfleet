@@ -61,7 +61,11 @@ defmodule KeyfleetWeb.PrivySessionController do
     end
   end
 
-  def show(conn, _params), do: json(conn, session_payload(conn.assigns.current_human_account))
+  def show(conn, _params) do
+    conn
+    |> put_resp_header("cache-control", "no-store")
+    |> json(session_payload(conn.assigns.current_human_account))
+  end
 
   def delete(conn, _params) do
     topic = SessionAuthority.revoke(claim(conn))
@@ -227,17 +231,8 @@ defmodule KeyfleetWeb.PrivySessionController do
     })
 
     report_bounded_sign_in_failure(conn, "session_exchange")
-    conn |> mark_recoverable(stage, reason) |> unauthorized()
+    unauthorized(conn)
   end
-
-  # The one refusal a browser may answer with a fresh provider login: the access
-  # token itself did not verify, so the provider session behind it is spent. The
-  # marker names nothing about the refusal, and every other refusal carries none,
-  # so no other 401 can end a provider session.
-  defp mark_recoverable(conn, :access_verification, :token_verification_failed),
-    do: put_resp_header(conn, "x-ash-provider-relogin", "allowed")
-
-  defp mark_recoverable(conn, _stage, _reason), do: conn
 
   # The provider attempt is over before any authority work starts, so no external
   # call sits inside the transaction: a bearer this browser cannot prove revokes

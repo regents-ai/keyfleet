@@ -20,6 +20,7 @@ defmodule Keyfleet.Accounts do
     end
 
     resource Keyfleet.Accounts.SessionAuthority
+    resource Keyfleet.Accounts.SharedProfile
 
     resource Keyfleet.Accounts.LinkedIdentity do
       define :upsert_linked_identity, action: :upsert_verified

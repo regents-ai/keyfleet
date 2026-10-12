@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
   use Phoenix.Component
 
   alias Keyfleet.Accounts.LinkedIdentity.Providers
+  alias Regent.Primitives, as: P
 
   attr :id, :string, required: true
   attr :identities, :list, default: [], doc: "nil until the account's connections are read"
@@ -19,10 +20,7 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
   attr :class, :string, default: nil
 
   def verified_connections(assigns) do
-    assigns =
-      assigns
-      |> assign(:providers, Providers.all())
-      |> assign(:identities_by_provider, by_provider(assigns.identities))
+    assigns = assign(assigns, :rows, rows(assigns.identities))
 
     ~H"""
     <section
@@ -37,13 +35,13 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
         <p
           :if={@notice}
           id={"#{@id}-notice"}
-          phx-hook="MotionRefusal"
-          data-refused={@notice.tone == :error}
           class={[
             "verified-connections__notice",
             @notice.tone == :error && "verified-connections__notice--error"
           ]}
           role={if(@notice.tone == :error, do: "alert", else: "status")}
+          phx-hook="MotionRefusal"
+          data-refused={@notice.tone == :error}
         >
           {@notice.message}
         </p>
@@ -62,48 +60,40 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
         </p>
       </div>
 
-      <ul :if={@identities_by_provider} class="verified-connections__list">
-        <li :for={entry <- @providers} id={"#{@id}-#{entry.provider}"}>
+      <ul :if={@rows} class="verified-connections__list">
+        <li :for={{entry, identity} <- @rows} id={"#{@id}-#{entry.provider}"}>
           <div>
             <strong>{entry.label}</strong>
-            <.connection identity={@identities_by_provider[entry.provider]} />
+            <.connection identity={identity} />
           </div>
 
-          <Regent.Primitives.button
-            :if={@authenticated && is_nil(@identities_by_provider[entry.provider])}
+          <P.button
+            :if={@authenticated}
             type="button"
             phx-click="request_verified_connection"
-            phx-value-action="link"
+            phx-value-action={if identity, do: "unlink", else: "link"}
             phx-value-provider={entry.provider}
           >
-            Connect
-          </Regent.Primitives.button>
+            {if identity, do: "Disconnect", else: "Connect"}
+          </P.button>
 
-          <Regent.Primitives.button
-            :if={@authenticated && @identities_by_provider[entry.provider]}
-            type="button"
-            phx-click="request_verified_connection"
-            phx-value-action="unlink"
-            phx-value-provider={entry.provider}
-          >
-            Disconnect
-          </Regent.Primitives.button>
-
-          <Regent.Primitives.button
-            :if={!@authenticated}
-            type="button"
-            data-account-target="sign-in"
-          >
+          <P.button :if={!@authenticated} type="button" data-account-target="sign-in">
             Sign in to connect
-          </Regent.Primitives.button>
+          </P.button>
         </li>
       </ul>
     </section>
     """
   end
 
-  defp by_provider(nil), do: nil
-  defp by_provider(identities), do: Map.new(identities, &{&1.provider, &1})
+  # One row per provider with the identity connected to it, or nothing at all
+  # until the connections are read.
+  defp rows(nil), do: nil
+
+  defp rows(identities) do
+    for entry <- Providers.all(),
+        do: {entry, Enum.find(identities, &(&1.provider == entry.provider))}
+  end
 
   attr :identity, :map, default: nil
 
@@ -113,11 +103,11 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
     """
   end
 
-  defp connection(assigns) do
+  defp connection(%{identity: identity} = assigns) do
     assigns =
       assign(assigns,
-        handle: Providers.handle(assigns.identity),
-        profile_url: Providers.profile_url(assigns.identity.provider, assigns.identity.username)
+        handle: Providers.handle(identity),
+        profile_url: Providers.profile_url(identity.provider, identity.username)
       )
 
     ~H"""

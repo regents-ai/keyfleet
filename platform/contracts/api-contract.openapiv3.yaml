@@ -226,7 +226,13 @@ paths:
     get:
       operationId: getBrowserSession
       responses:
-        "200": {$ref: "#/components/responses/Session"}
+        "200":
+          description: Current browser session
+          headers:
+            Cache-Control: {schema: {type: string, const: no-store}}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Session"}
   /api/v1/agent/join/status:
     post:
       x-pairing-required: true
@@ -2087,11 +2093,6 @@ components:
             schema: {$ref: "#/components/schemas/Error"}
     PrivySessionUnauthorized:
       description: The Privy access and identity tokens were not both present and valid for one signed-in session
-      headers:
-        x-ash-provider-relogin:
-          description: Present only when the access token itself could not be verified, which permits one fresh provider login
-          required: false
-          schema: {type: string, const: allowed}
       content:
         application/json:
           schema: {$ref: "#/components/schemas/Error"}

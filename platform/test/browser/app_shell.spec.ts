@@ -176,7 +176,7 @@ test("a signed-in account shows its account menu", async ({page}) => {
   await auth.expectAuthenticatedSession()
   await auth.expectCounts({documents: 1, sessionChecks: 1, syncs: 1})
 
-  const account = page.locator("#account-menu")
+  const account = page.locator("#account-control")
   await expect(account.locator("img.account-avatar")).toHaveAttribute(
     "src",
     /^data:image\/svg\+xml;base64,/,
@@ -184,12 +184,6 @@ test("a signed-in account shows its account menu", async ({page}) => {
   await expect
     .poll(() => account.locator("img.account-avatar").evaluate(image => image.naturalWidth))
     .toBeGreaterThan(0)
-  await account.locator("summary").first().click()
-  await expect(account.locator(".account-menu__row")).toHaveText(["Account", "Sign out"])
-  await expect(account.getByRole("link", {name: "Account", exact: true})).toHaveAttribute(
-    "href",
-    "/account",
-  )
   await expect(account.getByRole("button", {name: "Sign out"})).toBeVisible()
 
   // Nothing chosen and a device that asks for dark: dark shows, so a press chooses light.

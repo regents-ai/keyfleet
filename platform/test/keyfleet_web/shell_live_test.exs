@@ -76,7 +76,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
   end
 
-  test "signed-in account control renders its address avatar and requested menu", %{conn: conn} do
+  test "signed-in account control renders its address avatar and Sign out", %{conn: conn} do
     account = register_account("signed-in-control", "0x1111111111111111111111111111111111111111")
 
     {:ok, view, _html} =
@@ -97,7 +97,6 @@ defmodule KeyfleetWeb.ShellLiveTest do
              "Sign out"
            )
 
-    assert has_element?(view, "#account-control a[data-account-menu-item=account]", "Account")
     assert has_element?(view, "#theme-control button.theme-toggle[data-theme-toggle]")
     refute has_element?(view, "#account-control [phx-click]")
   end
@@ -139,7 +138,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#account-control [data-account-target=sign-out]", "Sign out")
   end
 
-  test "the signed-in account menu shows the picture, the name, Account and Sign out" do
+  test "the signed-in account chip shows the picture, the name and Sign out" do
     html =
       render_shell(%AccountControl{
         kind: :signed_in,
@@ -150,8 +149,6 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert html =~ ~r/data-account-target="profile">\s*Ada\s*</
     assert html =~ ~s(class="account-avatar")
     assert html =~ ~s(src="data:image/svg+xml;base64,PHN2Zy8+")
-    assert html =~ ~s(href="/account")
-    assert html =~ ~s(data-account-menu-item="account")
     assert html =~ "Sign out"
     refute html =~ "Sign Out"
   end
