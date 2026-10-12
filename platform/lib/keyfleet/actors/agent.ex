@@ -59,7 +59,7 @@ defmodule Keyfleet.Actors.Agent do
           registry_url: String.t() | nil,
           human_id: String.t() | nil,
           same_person_agent_count: pos_integer() | nil,
-          pairing: Keyfleet.Actors.Human.t() | :none | :not_backed | :person_not_here
+          pairing: Keyfleet.Actors.Human.t() | :none | :person_not_here
         }
 
   def authenticated?(%__MODULE__{

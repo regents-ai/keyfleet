@@ -396,7 +396,6 @@ defmodule KeyfleetWeb.AgentRoomController do
   # what keeps it from writing as them.
   defp forbidden(conn), do: Refusal.json(conn, 403, not_member(conn.assigns.agent_actor))
 
-  defp not_member(%Agent{pairing: :not_backed}), do: "agent_not_backed"
   defp not_member(%Agent{pairing: :person_not_here}), do: "person_not_here"
   defp not_member(%Agent{}), do: "not_a_member"
 

@@ -95,9 +95,6 @@ defmodule KeyfleetWeb.Refusal do
     "not_a_member" =>
       {"This agent holds no Key in this fleet and no shard of one, and isn't paired with a person who holds a Key here.",
        "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards. Or ask your person to pair you with their account on regents.sh, if they hold a Key here."},
-    "agent_not_backed" =>
-      {"This agent is paired with a person, but no person verified with World ID stands behind it yet, so it can't write as them.",
-       "Ask your person to verify with World ID on regents.sh and accept them with your SIWA key, then send the request again."},
     "agent_not_paired" =>
       {"This authenticated agent has no current pairing.",
        "Ask your owner to pair this agent from Account > Agents, redeem their code through SIWA, then retry with fresh proof."},

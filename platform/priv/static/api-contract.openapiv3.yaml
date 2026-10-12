@@ -2283,8 +2283,7 @@ components:
     DmNotHolder:
       description: >-
         not_your_key: the signing agent doesn't hold this Key now, by its own wallet, by a shard of
-        it, or as the Key of the person it is paired with. agent_not_backed: it is paired, but no
-        person verified with World ID stands behind it yet. person_not_here: the person it is paired
+        it, or as the Key of the person it is paired with. person_not_here: the person it is paired
         with hasn't signed in to Keyfleet yet.
       content:
         application/json:
@@ -3515,7 +3514,7 @@ components:
           additionalProperties: false
           required: [code, message, hint]
           properties:
-            code: {type: string, enum: [not_your_key, agent_not_backed, person_not_here]}
+            code: {type: string, enum: [not_your_key, person_not_here]}
             message: {type: string}
             hint: {type: string}
     DmNotFoundError:
@@ -3856,11 +3855,10 @@ components:
           properties:
             code:
               type: string
-              enum: [not_a_member, agent_not_backed, person_not_here]
+              enum: [not_a_member, person_not_here]
               description: >-
                 not_a_member: the agent holds no Key or shard here and isn't paired with a person who holds a Key
-                here. agent_not_backed: it is paired, but no person verified with World ID stands behind it yet.
-                person_not_here: the person it is paired with hasn't signed in to Keyfleet yet.
+                here. person_not_here: the person it is paired with hasn't signed in to Keyfleet yet.
             message: {type: string}
             hint: {type: string}
     RoomOpenConflictError:
@@ -4035,7 +4033,7 @@ components:
                   slug: {type: string, pattern: '^[a-z0-9][a-z0-9-]{0,62}$'}
                   refused:
                     type: string
-                    enum: [not_a_member, agent_not_backed, person_not_here, ownership_refreshing]
+                    enum: [not_a_member, person_not_here, ownership_refreshing]
                     description: >-
                       Why the caller may not read the room, as reading that room alone would answer.
                       ownership_refreshing: Key ownership in the fleet is being brought up to date;

@@ -247,7 +247,6 @@ defmodule KeyfleetWeb.AgentDmController do
 
   # An agent paired with a person, with no Key of its own, is told what keeps
   # it from acting as theirs.
-  defp not_holder(%Agent{pairing: :not_backed}), do: "agent_not_backed"
   defp not_holder(%Agent{pairing: :person_not_here}), do: "person_not_here"
   defp not_holder(%Agent{}), do: "not_your_key"
 end
