@@ -194,7 +194,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       end
 
       refute html =~ "Keys sold"
-      refute html =~ "USDC"
+      # The header's Buy Credits dialog is on every signed-in page; the fleet offers nothing.
+      refute view |> element("#route-content") |> render() =~ "USDC"
     end
 
     test "its rooms, workspace and proposals lead back to its page", %{conn: conn} do

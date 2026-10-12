@@ -45,10 +45,12 @@ defmodule Keyfleet.Application do
       do: Keyfleet.Repo
   end
 
-  # Background work lives in the database, so it starts with it.
+  # Background work lives in the database, so it starts with it. AshOban adds a
+  # queue and a sweep for every trigger in the site's domains and in Regent
+  # Credits, whose purchase checks and deposit reads run on this site's Oban.
   defp oban_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false) do
-      domains = Application.fetch_env!(:keyfleet, :ash_domains)
+      domains = Application.fetch_env!(:keyfleet, :ash_domains) ++ [RegentCredits]
       {Oban, AshOban.config(domains, Application.fetch_env!(:keyfleet, Oban))}
     end
   end

@@ -17,6 +17,13 @@ defmodule Keyfleet.AccessContext do
 
   def linked_wallets(%__MODULE__{principal: :anonymous}), do: nil
 
+  @doc "The account's own wallet, the one its sign-in verified, lowercase; `nil` signed out."
+  def own_wallet(%__MODULE__{principal: {:human, %{wallet_address: address}}})
+      when is_binary(address),
+      do: String.downcase(address)
+
+  def own_wallet(_context), do: nil
+
   def account_control(%__MODULE__{principal: :anonymous}),
     do: %AccountControl{kind: :sign_in, label: "Sign in"}
 

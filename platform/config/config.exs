@@ -18,6 +18,11 @@ config :regent_agents,
   account: {Keyfleet.Agents, :account},
   ash_domains: [RegentAgents]
 
+# Regent Credits: one prepaid balance per Privy account, shared by every Regent
+# site. Credits are the private currency XRC, kept to the millionth. Admins come
+# from REGENT_CREDITS_ADMINS at runtime. Credits are bought here with USDC on
+# Base (`KeyfleetWeb.CreditsPanel`); the site's Oban checks each purchase and
+# reads Credits deposits on Base.
 config :ex_money,
   custom_currencies: [{:XRC, name: "Credits", digits: 6}],
   auto_start_exchange_rate_service: false
@@ -26,7 +31,13 @@ config :regent_credits,
   repo: Keyfleet.Repo,
   pubsub: Keyfleet.PubSub,
   ash_domains: [RegentCredits],
-  admins: []
+  admins: [],
+  chain_client: Keyfleet.ChainClient,
+  on_credited: Keyfleet.Credits.Credited,
+  chains: %{
+    base: %{chain_id: 8453, name: "Base", rpc_url: "https://mainnet.base.org"},
+    ethereum: %{chain_id: 1, name: "Ethereum", rpc_url: "https://ethereum-rpc.publicnode.com"}
+  }
 
 config :regent_points,
   repo: Keyfleet.Repo,
@@ -72,7 +83,10 @@ config :keyfleet, :wallet_chains, %{8453 => %{name: "Base", rpc_url: "https://ma
 # page's wallet sent. A wallet adds a chain with its public `rpc_url` above;
 # the server reads through the node `KEYFLEET_RPC_URL` names when it is set,
 # such as a private node or a lab fork, and this address never reaches a page.
-config :keyfleet, :chain_nodes, %{8453 => "https://mainnet.base.org"}
+config :keyfleet, :chain_nodes, %{
+  8453 => "https://mainnet.base.org",
+  1 => "https://ethereum-rpc.publicnode.com"
+}
 
 # How long an agent's waiting request is held open with nothing new, before
 # it answers and the agent asks again: well inside the 60 seconds the proxy
@@ -125,6 +139,12 @@ config :keyfleet, :early_signup_rate_limit, limit: 5, window_seconds: 600
 # keeping one account to about 80 KB of words an hour.
 config :keyfleet, :proposal_words_rate_limit, limit: 20, window_seconds: 3600
 
+# How often one signed-in person's Buy Credits panel may read their wallet's USDC
+# and report a sent purchase, each window (Keyfleet.Limits).
+config :keyfleet, :limits,
+  wallet_read: [limit: 30, window_seconds: 60],
+  credits_report: [limit: 120, window_seconds: 60]
+
 # Rate limits key on the direct peer. Production turns on Fly's client header.
 config :keyfleet, :behind_fly_proxy, false
 
@@ -167,6 +187,7 @@ config :keyfleet, Oban,
   # Reading the fleets from the chain waits on a node, so it has its own queue:
   # one long-lived history job per fleet and its minutely balance readings.
   # Reading a signed-in wallet's ENS name waits on an Ethereum mainnet node.
+  # `regent_credits` checks Credits purchases on chain.
   queues: [
     default: 5,
     notebook_hubs: 1,
@@ -174,7 +195,8 @@ config :keyfleet, Oban,
     avatars: 2,
     key_art: 1,
     chain: 10,
-    ens: 3
+    ens: 3,
+    regent_credits: 3
   ],
   cron: [
     crontab: [

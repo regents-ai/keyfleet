@@ -41,6 +41,14 @@ defmodule KeyfleetWeb.OnchainSteps do
     if active in Enum.map(linked, &String.downcase/1), do: active
   end
 
+  @doc """
+  The wallet a panel shows figures for. Signed in, the wallet that may act, or
+  with none the account's own wallet (`own`), so a wrong or missing active wallet
+  never empties the panel. Signed out (`linked` is `nil`), Privy's active wallet.
+  """
+  def shown_wallet(nil, _own, active), do: active
+  def shown_wallet(linked, own, active), do: signer(linked, active) || own
+
   @doc "Privy's active wallet as the page reported it, or `nil`."
   def active_wallet(%{"address" => address}) when is_binary(address) do
     if Regex.match?(@address, address), do: String.downcase(address)

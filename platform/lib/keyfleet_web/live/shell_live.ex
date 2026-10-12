@@ -114,7 +114,9 @@ defmodule KeyfleetWeb.ShellLive do
        polls_notice: nil,
        check_ins_timer: nil,
        send_agent_open: false
-     )}
+     )
+     |> read_credits(current_account(socket.assigns.access_context))
+     |> follow_credits(current_account(socket.assigns.access_context))}
   end
 
   @impl true
@@ -495,7 +497,17 @@ defmodule KeyfleetWeb.ShellLive do
       account_control={@account_control}
       shell_instance={@shell_instance}
       get_key={@get_key}
+      credits={signed_in_credits(@access_context, @credits)}
     >
+      <:credits_panel :if={signed_in_credits(@access_context, @credits)}>
+        <.live_component
+          module={KeyfleetWeb.CreditsPanel}
+          id="credits-panel"
+          lease={@session_lease}
+          account={current_account(@access_context)}
+          credits={@credits}
+        />
+      </:credits_panel>
       <:content>
         <Reading.page
           :if={@route_spec.route_id in [:about, :opportunities]}
@@ -614,6 +626,12 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp current_account(%{principal: {:human, account}}), do: account
   defp current_account(_access_context), do: nil
+
+  # A sign-in that ends while the page is open withdraws the account, and its
+  # balance and the Buy Credits panel go with it. While signed in, the panel and
+  # its wallet buttons are there whatever the reading.
+  defp signed_in_credits(access_context, credits),
+    do: current_account(access_context) && credits
 
   # The page starts listening for changed keys before it reads, so a change
   # that lands while it loads still reaches it. The map is told when the key
@@ -874,8 +892,6 @@ defmodule KeyfleetWeb.ShellLive do
     |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
     |> read_paired_agents(account)
     |> follow_agents(account)
-    |> read_credits(account)
-    |> follow_credits(account)
   end
 
   defp load_account_page(socket, _route_spec), do: assign(socket, :held_keys, [])
@@ -901,7 +917,9 @@ defmodule KeyfleetWeb.ShellLive do
   defp follow_agents(socket, _account), do: socket
 
   # Credits and Points are read beside the page too, each with its own loading
-  # and could-not-be-read state.
+  # and could-not-be-read state. Credits are read on every page: the header's
+  # balance and the Buy Credits panel behind it go wherever a signed-in person
+  # goes.
   defp read_credits(socket, %{privy_user_id: person} = account),
     do: Read.start(socket, :credits, person, fn -> AccountLive.credits(account) end)
 

@@ -145,6 +145,18 @@ const shellBehavior: Hook = {
       if (restoreFocus && !menuOpen) menuButton()?.focus()
     }
 
+    // Opening Buy Credits reads the wallet's funds again, so Buy is held back
+    // only by what the chain says now. The browser alone opens and closes it.
+    const credits = () => shell.querySelector<HTMLDialogElement>("#shell-credits")
+    const openCredits = () => {
+      const dialog = credits()
+      if (!dialog || dialog.open) return
+      dialog.showModal()
+      dialog
+        .querySelectorAll("[data-refresh-funds]")
+        .forEach(panel => panel.dispatchEvent(new CustomEvent("ash:refresh-funds")))
+    }
+
     const closeMenu = (restoreFocus = true) => {
       if (this.shellState) this.shellState.menuOpen = false
       this.restoreState?.()
@@ -175,6 +187,10 @@ const shellBehavior: Hook = {
       }
 
       if (target?.closest("#shell-sidebar a")) closeMenu()
+
+      if (target?.closest("#shell-credits-button")) openCredits()
+      // A press on the dialog's own backdrop lands on the dialog itself.
+      if (target?.closest("[data-credits-close]") || (target && target === credits())) credits()?.close()
     }
 
     const onKeydown = (event: KeyboardEvent) => {
