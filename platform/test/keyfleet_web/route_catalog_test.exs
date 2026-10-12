@@ -34,9 +34,11 @@ defmodule KeyfleetWeb.RouteCatalogTest do
       Router
       |> Phoenix.Router.routes()
       |> Enum.filter(&(&1.verb == :get and &1.plug == Phoenix.LiveView.Plug))
-      # Compile-disabled in production; the workshop has its own loopback gate.
+      # Compile-disabled in production, the workshop has its own loopback gate;
+      # the saved errors are ErrorTracker's own pages, for Credits admins only.
       |> Enum.reject(fn route ->
-        :local_showcase in Phoenix.Router.route_info(Router, "GET", route.path, "localhost").pipe_through
+        pipes = Phoenix.Router.route_info(Router, "GET", route.path, "localhost").pipe_through
+        :local_showcase in pipes or :errors_admin in pipes
       end)
       |> Enum.map(&{&1.path, &1.plug_opts})
 
