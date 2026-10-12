@@ -60,10 +60,18 @@ defmodule Keyfleet.Notebooks.Pass do
     }
   end
 
+  # The set is private, so a value that isn't one is named, never quoted.
   defp keys do
     case Notebooks.config()[:signing_keys] do
       nil -> []
-      set -> set |> Jason.decode!() |> Map.fetch!("keys") |> Enum.map(&JOSE.JWK.from_map/1)
+      set -> set |> jwk_set() |> Enum.map(&JOSE.JWK.from_map/1)
+    end
+  end
+
+  defp jwk_set(set) do
+    case Jason.decode(set) do
+      {:ok, %{"keys" => keys}} when is_list(keys) -> keys
+      _not_a_set -> raise "KEYFLEET_HUB_SIGNING_KEY is not a JWK Set"
     end
   end
 
