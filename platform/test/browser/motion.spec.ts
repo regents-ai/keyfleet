@@ -14,17 +14,17 @@ async function openHomepage(page: Page) {
   await forget(page)
 }
 
-async function openAccount(page: Page) {
+async function openConnections(page: Page) {
   const auth = await installAuthenticatedPrivy(page, "valid")
   await auth.establishLocalSession()
   await watchMotion(page)
-  await page.goto("/account")
+  await page.goto("/account/connections")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await auth.expectAuthenticatedSession()
   await forget(page)
 }
 
-// The account page hears that a connection couldn't be verified, as it does
+// The Connections tab hears that a connection couldn't be verified, as it does
 // when the provider turns one down, and shows why.
 const refuseConnection = (page: Page) =>
   page.evaluate(() => window.dispatchEvent(new CustomEvent("ash:identity-state", {detail: {error: "failed"}})))
@@ -97,7 +97,7 @@ test("a headline's words rise each in a box clipped by class, so a policy refusi
 })
 
 test("a refusal shakes once as it appears, and refusals again and again end at rest", async ({page}) => {
-  await openAccount(page)
+  await openConnections(page)
 
   await refuseConnection(page)
   await expect(page.locator(REFUSAL)).toHaveText("That connection couldn’t be verified. Try again.")
@@ -118,7 +118,7 @@ test("a reader who asked for less motion sees refusals and cards without movemen
   const context = await browser.newContext({reducedMotion: "reduce"})
   const page = await context.newPage()
 
-  await openAccount(page)
+  await openConnections(page)
   await refuseConnection(page)
   await expect(page.locator(REFUSAL)).toBeVisible()
   await page.waitForTimeout(600)

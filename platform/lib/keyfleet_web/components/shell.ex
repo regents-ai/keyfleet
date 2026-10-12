@@ -74,6 +74,20 @@ defmodule KeyfleetWeb.Components.Shell do
       ></Regent.Primitives.button>
 
       <div id="app-shell-scroller" tabindex="-1">
+        <nav
+          :if={@route_spec.tabs != []}
+          id="shell-tabs"
+          class="shell-tabs"
+          aria-label="Account views"
+        >
+          <.link
+            :for={tab <- @route_spec.tabs}
+            patch={tab.path}
+            aria-current={@route_spec.route_id == tab.route_id && "page"}
+          >
+            {tab.label}
+          </.link>
+        </nav>
         <main id="route-content" tabindex="-1">
           {render_slot(@content)}
         </main>
@@ -252,12 +266,20 @@ defmodule KeyfleetWeb.Components.Shell do
     ~H"""
     <.link
       patch={@target.path}
-      aria-current={if @route_spec.destination == @target.path, do: "page"}
+      aria-current={current?(@target, @route_spec) && "page"}
     >
       {@label}
     </.link>
     """
   end
+
+  # A destination with tabs stays current on every one of its tabs.
+  defp current?(target, route_spec),
+    do:
+      Enum.any?(
+        [route_spec.destination | Enum.map(route_spec.tabs, & &1.path)],
+        &(&1 == target.path)
+      )
 
   # Signed out, the account page is named as the header's button names it.
   defp sidebar_label(%RouteTarget{route_id: :account}, %{kind: :sign_in, label: label}),

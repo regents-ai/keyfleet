@@ -38,6 +38,27 @@ defmodule KeyfleetWeb.RouteCatalog do
       route_spec_id: :account
     },
     %Entry{
+      path_pattern: "/account/points",
+      live_action: :points,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :points
+    },
+    %Entry{
+      path_pattern: "/account/wallets",
+      live_action: :wallets,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :wallets
+    },
+    %Entry{
+      path_pattern: "/account/connections",
+      live_action: :connections,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :connections
+    },
+    %Entry{
       path_pattern: "/about",
       live_action: :about,
       parameter_schema: %{},
@@ -132,7 +153,11 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   @specs %{
     home: {:home, nil, nil, "Keyfleet", "/", [], :home, %{}},
-    account: {:account, :product, "Keyfleet", "Account", "/", [:profile_actions], :product, %{}},
+    account: {:account, :product, "Keyfleet", "Profile", "/", [:profile_actions], :product, %{}},
+    points: {:points, :product, "Keyfleet", "Points", "/", [:profile_actions], :product, %{}},
+    wallets: {:wallets, :product, "Keyfleet", "Wallets", "/", [:profile_actions], :product, %{}},
+    connections:
+      {:connections, :product, "Keyfleet", "Connections", "/", [:profile_actions], :product, %{}},
     about: {:about, :product, "Keyfleet", "About", "/", [:profile_actions], :product, %{}},
     opportunities:
       {:opportunities, :product, "Keyfleet", "What a fleet can take on", "/", [:profile_actions],
@@ -153,6 +178,15 @@ defmodule KeyfleetWeb.RouteCatalog do
     polls: {:polls, :product, "Keyfleet", "Polls", "/", [:profile_actions], :product, %{}},
     poll: {:poll, :product, "Keyfleet", "Polls", "/", [:profile_actions], :product, %{}}
   }
+
+  # The account's views, each its own page under one tab bar.
+  @account_tabs [
+    %RouteTarget{route_id: :account, label: "Profile", path: "/account"},
+    %RouteTarget{route_id: :points, label: "Points", path: "/account/points"},
+    %RouteTarget{route_id: :wallets, label: "Wallets", path: "/account/wallets"},
+    %RouteTarget{route_id: :connections, label: "Connections", path: "/account/connections"}
+  ]
+  @account_tab_ids Enum.map(@account_tabs, & &1.route_id)
 
   def entries, do: @entries
 
@@ -205,12 +239,16 @@ defmodule KeyfleetWeb.RouteCatalog do
       page_display_label: page_label,
       canonical_root: root,
       sidebar_model: sidebar_model(app_id),
+      tabs: tabs(route_id),
       header_controls: controls,
       background_slot: background,
       scroll_policy: :top,
       local_state: local_state
     }
   end
+
+  defp tabs(route_id) when route_id in @account_tab_ids, do: @account_tabs
+  defp tabs(_route_id), do: []
 
   defp sidebar_model(nil), do: %SidebarModel{id: :public, targets: []}
 
@@ -246,15 +284,16 @@ defmodule KeyfleetWeb.RouteCatalog do
       "reserved_values" => entry.reserved_values,
       "route_id" => spec.route_id,
       "scroll_policy" => spec.scroll_policy,
-      "sidebar_model" => sidebar_handoff(spec.sidebar_model)
+      "sidebar_model" => sidebar_handoff(spec.sidebar_model),
+      "tabs" => Enum.map(spec.tabs, &target_handoff/1)
     }
   end
 
   defp sidebar_handoff(sidebar) do
-    %{"id" => sidebar.id, "targets" => Enum.map(sidebar.targets, &sidebar_target_handoff/1)}
+    %{"id" => sidebar.id, "targets" => Enum.map(sidebar.targets, &target_handoff/1)}
   end
 
-  defp sidebar_target_handoff(%RouteTarget{} = target) do
+  defp target_handoff(%RouteTarget{} = target) do
     %{
       "type" => "route",
       "route_id" => target.route_id,

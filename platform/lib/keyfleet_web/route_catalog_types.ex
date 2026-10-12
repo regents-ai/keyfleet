@@ -26,6 +26,7 @@ defmodule KeyfleetWeb.RouteCatalog.Spec do
     :page_display_label,
     :canonical_root,
     :sidebar_model,
+    :tabs,
     :header_controls,
     :background_slot,
     :scroll_policy,

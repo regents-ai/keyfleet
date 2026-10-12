@@ -7,6 +7,9 @@ defmodule KeyfleetWeb.RouteCatalogTest do
   @paths [
     "/",
     "/account",
+    "/account/points",
+    "/account/wallets",
+    "/account/connections",
     "/about",
     "/opportunities",
     "/app/fleets/:fleet_id",
@@ -145,7 +148,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert account.destination == "/account"
     assert account.app_id == :product
     assert account.app_display_label == "Keyfleet"
-    assert account.page_display_label == "Account"
+    assert account.page_display_label == "Profile"
     assert account.canonical_root == "/"
     assert account.header_controls == [:profile_actions]
     assert account.background_slot == :product
@@ -218,11 +221,14 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 15
+    assert length(decoded["routes"]) == 18
 
     assert Enum.map(decoded["routes"], & &1["route_id"]) == [
              "home",
              "account",
+             "points",
+             "wallets",
+             "connections",
              "about",
              "opportunities",
              "fleet",

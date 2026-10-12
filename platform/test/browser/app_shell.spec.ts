@@ -200,7 +200,7 @@ test("a signed-in account shows its account menu", async ({page}) => {
 })
 
 // Signed out, the account page is named as the header's button names it.
-test("the sidebar lists the four fleets, Classic first, then the Account page", async ({page}) => {
+test("the sidebar lists the five fleets, Classic first, then the Account page", async ({page}) => {
   await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await expect(page.getByRole("heading", {level: 1, name: "Syndicate #1"})).toBeVisible()
@@ -214,13 +214,14 @@ test("the sidebar lists the four fleets, Classic first, then the Account page", 
     ["Syndicate #1", "/app/fleets/fibonacci_syndicate"],
     ["Cascade #1", "/app/fleets/fibonacci_cascade"],
     ["Accelerant #1", "/app/fleets/fleet_tech_accelerant"],
+    ["Regents Club #1", "/app/fleets/regents_club"],
     ["Sign in", "/account"],
   ])
 
   await sidebar.getByRole("link", {name: "Sign in"}).click()
   await expect(page).toHaveURL(/\/account$/)
-  await expect(page.locator("#account-page").getByRole("heading", {level: 1, name: "Account"})).toBeVisible()
-  await expect(page.locator("#account-page-signed-out").getByRole("heading", {level: 2, name: "Account"})).toBeVisible()
+  await expect(page.locator("#account-page").getByRole("heading", {level: 1, name: "Profile"})).toBeVisible()
+  await expect(page.locator("#account-page-signed-out")).toContainText("Sign in to see your account.")
 })
 
 test("navigation keeps brand, document, shell identity, and starts at the top", async ({page}) => {

@@ -20,7 +20,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
     {:ok, view, html} = live(conn, "/account")
 
     assert html =~ ~s(id="app-shell")
-    assert has_element?(view, "#route-content h1", "Account")
+    assert has_element?(view, "#route-content h1", "Profile")
+    assert has_element?(view, "#shell-tabs a[aria-current=page]", "Profile")
     assert has_element?(view, "#account-page button[data-account-target=sign-in]", "Sign in")
     refute has_element?(view, "#account-identity")
     refute has_element?(view, "#route-content .verified-connections")
@@ -155,13 +156,12 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
   test "Account owns its own page rather than relabeling the whole shell" do
     html =
-      render_component(&KeyfleetWeb.AccountLive.page/1, %{
-        account_control: %AccountControl{kind: :sign_in, label: "Sign in"},
-        verified_connections: %KeyfleetWeb.Read{}
+      render_component(&KeyfleetWeb.AccountLive.profile/1, %{
+        account_control: %AccountControl{kind: :sign_in, label: "Sign in"}
       })
 
     assert html =~ ~s(id="account-page")
-    assert html =~ ">Account<"
+    assert html =~ ">Profile<"
     assert html =~ "Sign in to see your account"
     refute html =~ "Verified connections"
   end
@@ -193,10 +193,19 @@ defmodule KeyfleetWeb.ShellLiveTest do
     refute html =~ "Sign in to see your account"
     assert has_element?(view, "#account-identity h2", "0x6666..6666")
     assert has_element?(view, "#account-identity canvas[data-holo-canvas]")
+    assert has_element?(view, ".account-details dd", "Not set")
+    assert has_element?(view, "#account-page button[data-account-target=sign-out]", "Sign out")
+
+    view |> element("#shell-tabs a", "Wallets") |> render_click()
+    assert_patch(view, "/account/wallets")
+    assert has_element?(view, "#shell-sidebar a[aria-current=page]", "Account")
     assert has_element?(view, ".account-details code", wallet)
     assert has_element?(view, "#account-wallet-copy[data-copy-text='#{wallet}']", "Copy")
     assert has_element?(view, ".account-wallet-list code", other)
-    assert has_element?(view, ".account-details dd", "Not set")
+
+    view |> element("#shell-tabs a", "Connections") |> render_click()
+    assert_patch(view, "/account/connections")
+    render_async(view)
 
     assert has_element?(
              view,
@@ -208,7 +217,6 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#account-verified-connections-github", "Not connected")
     assert has_element?(view, "#account-verified-connections-github button", "Connect")
     refute render(view) =~ "account-x-subject"
-    assert has_element?(view, "#account-page button[data-account-target=sign-out]", "Sign out")
 
     view
     |> element("#account-verified-connections-x button", "Disconnect")
@@ -289,7 +297,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
       actor: %System{}
     )
 
-    {view, _html} = open_account(conn, account)
+    {view, _html} = open_account(conn, account, "/account/connections")
 
     view |> element("#account-verified-connections-github button", "Connect") |> render_click()
     assert_push_event(view, "verified-connections:request", %{action: :link, provider: :github})
@@ -377,7 +385,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert_patch(view, "/account")
     assert view.pid == pid
     assert render(view) =~ ~s(data-shell-instance="#{instance}")
-    assert has_element?(view, "#route-content h1", "Account")
+    assert has_element?(view, "#route-content h1", "Profile")
   end
 
   test "a patch to another fleet's page stops hearing the fleet it left", %{conn: conn} do
@@ -406,11 +414,11 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
   defp topics(view), do: Keyfleet.PubSub |> Registry.keys(view.pid) |> Enum.sort()
 
-  defp open_account(conn, account) do
+  defp open_account(conn, account, path \\ "/account") do
     {:ok, view, _html} =
       conn
       |> init_test_session(%{human_account_id: account.id})
-      |> live("/account")
+      |> live(path)
 
     {view, render_async(view)}
   end

@@ -1,8 +1,10 @@
 defmodule KeyfleetWeb.AccountLive do
   @moduledoc """
-  The signed-in person's own page: who the site knows them as, the keys their
-  wallets hold, the agents paired with their account, their Credits and Points,
-  the wallets their sign-in verified and the accounts they have connected.
+  The signed-in person's account, one tab each: Profile (who the site knows
+  them as, the keys their wallets hold, the agents paired with their account,
+  their Credits and this browser's session), Wallets (the wallets their sign-in
+  verified) and Connections (the accounts they have connected). Points has its
+  own page (`KeyfleetWeb.PointsLive`).
 
   Everything here is read from the sign-in the shell already holds; nothing on
   the page asks the visitor to sign in again.
@@ -18,13 +20,10 @@ defmodule KeyfleetWeb.AccountLive do
   alias Keyfleet.PublicIdentity
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.Read
-  alias RegentPoints.Amount
 
   attr :account, :map, default: nil
   attr :signed_out_reason, :atom, default: :signed_out
   attr :account_control, :map, required: true
-  attr :verified_connections, KeyfleetWeb.Read, required: true
-  attr :verified_connections_notice, :map, default: nil
 
   attr :paired_agents, KeyfleetWeb.Read,
     default: %KeyfleetWeb.Read{},
@@ -34,42 +33,20 @@ defmodule KeyfleetWeb.AccountLive do
     default: %KeyfleetWeb.Read{},
     doc: "the read of the account's Credits balance, kept on regents.sh"
 
-  attr :points, KeyfleetWeb.Read,
-    default: %KeyfleetWeb.Read{},
-    doc: "the read of the account's Points summary"
-
-  attr :points_earning, :list,
-    default: [],
-    doc: "the Points rules earning now; their daily allowances show only while one is"
-
   attr :held_keys, :list,
     default: [],
     doc: "the keys the account's wallets hold, as `%{fleet_id, name, token_ids}` per fleet"
 
-  def page(assigns) do
+  def profile(assigns) do
     ~H"""
-    <article id="account-page" class="account-page">
-      <header class="account-heading">
-        <p class="account-kicker">Keyfleet</p>
-        <h1 tabindex="-1">Account</h1>
-        <p class="account-lede">
-          Your profile, your agents, your Keys, your Credits and Points, and the accounts you have connected.
-        </p>
-      </header>
-
-      <Regent.Account.signed_out
-        :if={is_nil(@account)}
-        id="account-page-signed-out"
-        reason={@signed_out_reason}
-      >
-        <:sign_in>
-          <Regent.Primitives.button type="button" data-account-target="sign-in">
-            Sign in
-          </Regent.Primitives.button>
-        </:sign_in>
-      </Regent.Account.signed_out>
-
-      <div :if={@account} class="account-grid">
+    <.settings_page
+      id="account-page"
+      title="Profile"
+      account={@account}
+      signed_out_reason={@signed_out_reason}
+    >
+      <:lede>Who Keyfleet knows you as, your Keys, your agents and your Credits.</:lede>
+      <div class="account-grid">
         <Regent.HolographicCard.card
           id="account-identity"
           class="account-identity"
@@ -96,44 +73,14 @@ defmodule KeyfleetWeb.AccountLive do
         </Regent.HolographicCard.card>
 
         <section class="account-panel account-details" aria-labelledby="account-details-title">
-          <h2 id="account-details-title">Profile</h2>
+          <h2 id="account-details-title">Details</h2>
           <dl>
-            <div>
-              <dt>Wallet</dt>
-              <dd :if={@account.wallet_address} class="account-wallet">
-                <code>{@account.wallet_address}</code>
-                <Regent.Primitives.copy_button
-                  id="account-wallet-copy"
-                  text={@account.wallet_address}
-                >
-                  Copy
-                </Regent.Primitives.copy_button>
-              </dd>
-              <dd :if={is_nil(@account.wallet_address)}>No wallet linked</dd>
-            </div>
-            <div :if={other_wallets(@account) != []}>
-              <dt>Other linked wallets</dt>
-              <dd>
-                <ul class="account-wallet-list">
-                  <li :for={wallet <- other_wallets(@account)}><code>{wallet}</code></li>
-                </ul>
-              </dd>
-            </div>
             <div>
               <dt>Display name</dt>
               <dd>{@account.display_name || "Not set"}</dd>
             </div>
           </dl>
         </section>
-
-        <Regent.Account.agents id="account-agents" agents={agent_rows(@paired_agents)}>
-          <:about>
-            An agent you pair with your account on regents.sh can post in the rooms of fleets where you hold a Key. It posts as your Key, with its name on every post.
-          </:about>
-          <:footer>
-            <a href="https://regents.sh/account">Pair or unpair agents on regents.sh</a>
-          </:footer>
-        </Regent.Account.agents>
 
         <section
           id="account-keys"
@@ -158,6 +105,15 @@ defmodule KeyfleetWeb.AccountLive do
           </div>
         </section>
 
+        <Regent.Account.agents id="account-agents" agents={agent_rows(@paired_agents)}>
+          <:about>
+            An agent you pair with your account on regents.sh can post in the rooms of fleets where you hold a Key. It posts as your Key, with its name on every post.
+          </:about>
+          <:footer>
+            <a href="https://regents.sh/account">Pair or unpair agents on regents.sh</a>
+          </:footer>
+        </Regent.Account.agents>
+
         <Regent.Account.credits_summary
           id="account-credits"
           available={@credits.value && RegentCredits.Amount.format(@credits.value.available)}
@@ -167,23 +123,6 @@ defmodule KeyfleetWeb.AccountLive do
           <a href="https://regents.sh/account">Manage Credits on regents.sh</a>
         </Regent.Account.credits_summary>
 
-        <Regent.Account.points_summary
-          id="account-points"
-          confirmed={@points.value && Amount.format(@points.value.balance_micro)}
-          today={@points.value && Amount.format(@points.value.earned_today_micro)}
-          pending={@points.value && to_string(@points.value.pending)}
-          state={summary_state(@points.state)}
-          allowances={allowances(@points, @points_earning)}
-        />
-
-        <.verified_connections
-          id="account-verified-connections"
-          class="account-panel"
-          identities={@verified_connections.value}
-          read_state={@verified_connections.state}
-          notice={@verified_connections_notice}
-        />
-
         <section class="account-panel account-session" aria-labelledby="account-session-title">
           <h2 id="account-session-title">Session</h2>
           <p>Signing out ends this session on this browser only.</p>
@@ -192,6 +131,104 @@ defmodule KeyfleetWeb.AccountLive do
           </Regent.Primitives.button>
         </section>
       </div>
+    </.settings_page>
+    """
+  end
+
+  attr :account, :map, default: nil
+  attr :signed_out_reason, :atom, default: :signed_out
+
+  def wallets(assigns) do
+    ~H"""
+    <.settings_page
+      id="wallets-page"
+      title="Wallets"
+      account={@account}
+      signed_out_reason={@signed_out_reason}
+    >
+      <:lede>The wallets your sign-in verified.</:lede>
+      <section class="account-panel account-details" aria-labelledby="account-wallets-title">
+        <h2 id="account-wallets-title">Your wallets</h2>
+        <dl>
+          <div>
+            <dt>Wallet</dt>
+            <dd :if={@account.wallet_address} class="account-wallet">
+              <code>{@account.wallet_address}</code>
+              <Regent.Primitives.copy_button id="account-wallet-copy" text={@account.wallet_address}>
+                Copy
+              </Regent.Primitives.copy_button>
+            </dd>
+            <dd :if={is_nil(@account.wallet_address)}>No wallet linked</dd>
+          </div>
+          <div :if={other_wallets(@account) != []}>
+            <dt>Other linked wallets</dt>
+            <dd>
+              <ul class="account-wallet-list">
+                <li :for={wallet <- other_wallets(@account)}><code>{wallet}</code></li>
+              </ul>
+            </dd>
+          </div>
+        </dl>
+      </section>
+    </.settings_page>
+    """
+  end
+
+  attr :account, :map, default: nil
+  attr :signed_out_reason, :atom, default: :signed_out
+  attr :verified_connections, KeyfleetWeb.Read, required: true
+  attr :verified_connections_notice, :map, default: nil
+
+  def connections(assigns) do
+    ~H"""
+    <.settings_page
+      id="connections-page"
+      title="Connections"
+      account={@account}
+      signed_out_reason={@signed_out_reason}
+    >
+      <:lede>The accounts you have connected, such as X, GitHub and Farcaster.</:lede>
+      <.verified_connections
+        id="account-verified-connections"
+        class="account-panel"
+        identities={@verified_connections.value}
+        read_state={@verified_connections.state}
+        notice={@verified_connections_notice}
+      />
+    </.settings_page>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :title, :string, required: true
+  attr :account, :map, default: nil
+  attr :signed_out_reason, :atom, required: true
+  slot :lede, required: true
+  slot :inner_block, required: true
+
+  @doc "One account view: its heading, then its panels, or a sign-in when signed out."
+  def settings_page(assigns) do
+    ~H"""
+    <article id={@id} class="account-page">
+      <header class="account-heading">
+        <p class="account-kicker">Account</p>
+        <h1 tabindex="-1">{@title}</h1>
+        <p class="account-lede">{render_slot(@lede)}</p>
+      </header>
+
+      <Regent.Account.signed_out
+        :if={is_nil(@account)}
+        id={"#{@id}-signed-out"}
+        reason={@signed_out_reason}
+      >
+        <:sign_in>
+          <Regent.Primitives.button type="button" data-account-target="sign-in">
+            Sign in
+          </Regent.Primitives.button>
+        </:sign_in>
+      </Regent.Account.signed_out>
+
+      {@account && render_slot(@inner_block)}
     </article>
     """
   end
@@ -218,21 +255,6 @@ defmodule KeyfleetWeb.AccountLive do
   defp summary_state(state) when state in [:idle, :loading], do: :loading
   defp summary_state(:empty), do: :ready
   defp summary_state(state), do: state
-
-  defp allowances(_points, []), do: []
-  defp allowances(%Read{value: nil}, _earning), do: []
-
-  defp allowances(%Read{value: points}, _earning) do
-    Enum.map(
-      points.allowances,
-      &%{label: scope_name(&1.scope), value: "#{Amount.format(&1.remaining)} remaining"}
-    )
-  end
-
-  defp scope_name("activity:account"), do: "You and your agents"
-  defp scope_name("credits"), do: "Credits purchases"
-  defp scope_name("activity:human"), do: "Your actions"
-  defp scope_name("activity:agent"), do: "Your agents’ actions"
 
   # Still being read shows as loading; a failed read shows as unavailable,
   # never as no agents. A re-read keeps the agents already listed on screen.
@@ -264,9 +286,6 @@ defmodule KeyfleetWeb.AccountLive do
 
   @doc "Reads the signed-in person's Credits balance, kept once for every Regent site."
   def credits(%{privy_user_id: person}), do: {:ok, RegentCredits.balance(person)}
-
-  @doc "Reads the signed-in person's Points summary: `{:ok, summary}` or `{:error, reason}`."
-  def points(%Human{} = actor), do: RegentPoints.summary(actor: actor)
 
   @doc """
   Every key the signed-in person's wallets hold, fleet by fleet in catalog

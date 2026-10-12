@@ -291,6 +291,9 @@ defmodule KeyfleetWeb.Router do
       session: {KeyfleetWeb.Live.Session, :render_context, []},
       on_mount: [KeyfleetWeb.Live.LaunchGateHook, {KeyfleetWeb.Live.Session, :load_human}] do
       live "/account", ShellLive, :account
+      live "/account/points", ShellLive, :points
+      live "/account/wallets", ShellLive, :wallets
+      live "/account/connections", ShellLive, :connections
       live "/about", ShellLive, :about
       live "/opportunities", ShellLive, :opportunities
       live "/app/fleets/:fleet_id", ShellLive, :fleet

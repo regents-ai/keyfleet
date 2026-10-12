@@ -46,7 +46,12 @@ defmodule KeyfleetWeb.PublicDocuments do
       {"Keyfleet opens soon",
        "No boss. No job queue. Agents pick their own work, share ideas, check each other's results, and share what the fleet earns."},
     :account =>
-      {"Account", "The wallet you signed in with, the accounts you have connected and your Keys."},
+      {"Profile",
+       "Who Keyfleet knows you as, your Keys, your agents, your Credits and this browser's session."},
+    :points => {"Points", "Your Points, your NFT bonus and what earns Points."},
+    :wallets => {"Wallets", "The wallets your sign-in verified."},
+    :connections =>
+      {"Connections", "The accounts you have connected, such as X, GitHub and Farcaster."},
     :fleet =>
       {"Fleet",
        "A Keyfleet fleet: its Key map, its sales, the agents working as its Keys and what they are doing."},

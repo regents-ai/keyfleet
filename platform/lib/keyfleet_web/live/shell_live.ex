@@ -29,6 +29,7 @@ defmodule KeyfleetWeb.ShellLive do
     KeyMap,
     KeyProfileLive,
     KeysLive,
+    PointsLive,
     PollsLive,
     ProposalsLive,
     Read,
@@ -78,6 +79,8 @@ defmodule KeyfleetWeb.ShellLive do
        credits: %Read{},
        credits_topic: nil,
        points: %Read{},
+       points_bonus: %Read{},
+       points_topic: nil,
        points_earning: [],
        fleet: nil,
        fleet_params: nil,
@@ -128,6 +131,7 @@ defmodule KeyfleetWeb.ShellLive do
        |> assign(PublicDocuments.page(route_spec.route_id))
        |> load_verified_connections(route_spec)
        |> load_account_page(route_spec)
+       |> load_points(route_spec)
        |> follow_keys(keys_fleet(route_spec, params))
        |> load_fleet(route_spec, params)
        |> load_key_profile(socket.assigns)
@@ -306,6 +310,16 @@ defmodule KeyfleetWeb.ShellLive do
     account = current_account(socket.assigns.access_context)
     {:noreply, read_credits(socket, account)}
   end
+
+  # A Points award or correction landed for this account; the Points page follows.
+  def handle_info(
+        %{topic: "points:" <> _, payload: :points_changed},
+        %{assigns: %{route_spec: %{route_id: :points}}} = socket
+      ),
+      do: {:noreply, read_points(socket)}
+
+  def handle_info(%{topic: "points:" <> _, payload: :points_changed}, socket),
+    do: {:noreply, socket}
 
   def handle_info(%Broadcast{event: event} = notice, socket)
       when event in ["dm_head", "dm_deleted"],
@@ -488,18 +502,37 @@ defmodule KeyfleetWeb.ShellLive do
           path={@route_spec.destination}
         />
 
-        <AccountLive.page
+        <AccountLive.profile
           :if={@route_spec.route_id == :account}
           account={current_account(@access_context)}
           signed_out_reason={@signed_out_reason}
           account_control={@account_control}
-          verified_connections={@verified_connections}
-          verified_connections_notice={@verified_connections_notice}
           held_keys={@held_keys}
           paired_agents={@paired_agents}
           credits={@credits}
+        />
+
+        <PointsLive.page
+          :if={@route_spec.route_id == :points}
+          account={current_account(@access_context)}
+          signed_out_reason={@signed_out_reason}
           points={@points}
-          points_earning={@points_earning}
+          bonus={@points_bonus}
+          earning={@points_earning}
+        />
+
+        <AccountLive.wallets
+          :if={@route_spec.route_id == :wallets}
+          account={current_account(@access_context)}
+          signed_out_reason={@signed_out_reason}
+        />
+
+        <AccountLive.connections
+          :if={@route_spec.route_id == :connections}
+          account={current_account(@access_context)}
+          signed_out_reason={@signed_out_reason}
+          verified_connections={@verified_connections}
+          verified_connections_notice={@verified_connections_notice}
         />
 
         <FleetLive.page
@@ -788,7 +821,7 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  defp load_verified_connections(socket, %{route_id: :account}),
+  defp load_verified_connections(socket, %{route_id: :connections}),
     do: read_verified_connections(socket)
 
   defp load_verified_connections(socket, _route_spec) do
@@ -843,8 +876,6 @@ defmodule KeyfleetWeb.ShellLive do
     |> follow_agents(account)
     |> read_credits(account)
     |> follow_credits(account)
-    |> read_points()
-    |> assign(:points_earning, RegentPoints.Rules.active())
   end
 
   defp load_account_page(socket, _route_spec), do: assign(socket, :held_keys, [])
@@ -889,15 +920,53 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp follow_credits(socket, _account), do: socket
 
+  # The NFT tier is read from Base once per page open, never on each award notice.
+  defp load_points(socket, %{route_id: :points}) do
+    socket
+    |> assign(:points_earning, RegentPoints.Rules.active())
+    |> follow_points()
+    |> read_points()
+    |> read_points_bonus()
+  end
+
+  defp load_points(socket, _route_spec),
+    do: socket |> Read.clear(:points) |> Read.clear(:points_bonus)
+
   defp read_points(socket) do
     case human_actor(socket) do
       %Human{} = actor ->
-        Read.start(socket, :points, actor.human_account_id, fn -> AccountLive.points(actor) end)
+        Read.start(socket, :points, actor.human_account_id, fn -> PointsLive.summary(actor) end)
 
       nil ->
         Read.clear(socket, :points)
     end
   end
+
+  defp read_points_bonus(socket) do
+    case human_actor(socket) do
+      %Human{} = actor ->
+        Read.start(socket, :points_bonus, actor.human_account_id, fn ->
+          PointsLive.bonus(actor)
+        end)
+
+      nil ->
+        Read.clear(socket, :points_bonus)
+    end
+  end
+
+  # Hears when the account's Points change, once per page.
+  defp follow_points(%{assigns: %{points_topic: nil}} = socket) do
+    with true <- connected?(socket),
+         %Human{human_account_id: id} <- human_actor(socket) do
+      topic = "points:#{id}"
+      :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
+      assign(socket, :points_topic, topic)
+    else
+      _not_yet -> socket
+    end
+  end
+
+  defp follow_points(socket), do: socket
 
   defp identity_request("link", provider, _identities) do
     {:ok, %{action: :link, provider: provider}}

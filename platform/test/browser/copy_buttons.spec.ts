@@ -53,9 +53,9 @@ test("a fleet's Send your agent copies its instruction", async ({page}) => {
   expect(errors).toEqual([])
 })
 
-test("the account page copies the account's wallet", async ({page}) => {
+test("the Wallets tab copies the account's wallet", async ({page}) => {
   const errors = await signIn(page)
-  await open(page, "/account")
+  await open(page, "/account/wallets")
 
   await copies(page, "account-wallet-copy", me)
   expect(errors).toEqual([])

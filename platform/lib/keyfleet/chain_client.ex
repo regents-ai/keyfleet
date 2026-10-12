@@ -2,12 +2,15 @@ defmodule Keyfleet.ChainClient do
   @moduledoc """
   JSON-RPC reads at the latest block of the chain a review names.
 
-  `RegentChain.Outcome` reads sent steps through `transaction/2` and `receipt/2`.
+  `RegentChain.Outcome` reads sent steps through `transaction/2` and `receipt/2`;
+  Regent Points reads the NFTs an account's wallets hold through `rpc/3`.
   Every read is at `latest`: never count confirmations and never wait for `safe`
   or `finalized`. The node is the site's own for the chain (`:chain_nodes`), never
   the public address a wallet adds the chain with, and never from the browser, so a
   private node or a lab fork reads what the site's steps sent.
   """
+
+  @behaviour RegentPoints.ChainClient
 
   @doc "The transaction sent as `hash`, or `nil` while the chain does not know it."
   def transaction(chain, hash), do: rpc(chain, "eth_getTransactionByHash", [hash])
@@ -19,6 +22,7 @@ defmodule Keyfleet.ChainClient do
   One JSON-RPC request to the chain's node. Every request that gets no answer
   is counted in `health.chain_request_failures.total` (`KeyfleetWeb.Telemetry`).
   """
+  @impl RegentPoints.ChainClient
   def rpc(%{chain_id: chain_id} = chain, method, params) do
     url = :keyfleet |> Application.fetch_env!(:chain_nodes) |> Map.fetch!(chain_id)
 
