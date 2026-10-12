@@ -107,6 +107,11 @@ defmodule KeyfleetWeb.Live.Session do
       when event in ["dm_head", "dm_deleted"] ->
         recheck(socket, lease, &redirect(&1, to: @public_root))
 
+      # A change to the person's Credits or agents is read again only for a
+      # sign-in that still holds; one that has ended renders signed out.
+      message, socket when message in [:credits_changed, :agents_changed] ->
+        recheck(socket, lease, & &1)
+
       _message, socket ->
         {:cont, socket}
     end)
