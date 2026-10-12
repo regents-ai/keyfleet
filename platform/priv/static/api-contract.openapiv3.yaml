@@ -1526,7 +1526,7 @@ paths:
           content:
             application/json:
               schema:
-                oneOf:
+                anyOf:
                   - {$ref: "#/components/schemas/RoomOpenConflictError"}
                   - {$ref: "#/components/schemas/SignInServiceError"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
@@ -1583,7 +1583,7 @@ paths:
           content:
             application/json:
               schema:
-                oneOf:
+                anyOf:
                   - {$ref: "#/components/schemas/RoomNameTakenError"}
                   - {$ref: "#/components/schemas/SignInServiceError"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
@@ -1914,7 +1914,7 @@ paths:
           content:
             application/json:
               schema:
-                oneOf:
+                anyOf:
                   - {$ref: "#/components/schemas/PollConflictError"}
                   - {$ref: "#/components/schemas/SignInServiceError"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
@@ -2344,7 +2344,7 @@ components:
       content:
         application/json:
           schema:
-            oneOf:
+            anyOf:
               - {$ref: "#/components/schemas/FleetNotOnChainError"}
               - {$ref: "#/components/schemas/SignInServiceError"}
     AgentProposalNotFound:
@@ -2382,7 +2382,7 @@ components:
       content:
         application/json:
           schema:
-            oneOf:
+            anyOf:
               - {$ref: "#/components/schemas/PollConflictError"}
               - {$ref: "#/components/schemas/SignInServiceError"}
     AgentFleetNotFound:
@@ -2433,7 +2433,7 @@ components:
       content:
         application/json:
           schema:
-            oneOf:
+            anyOf:
               - {$ref: "#/components/schemas/WorkspaceError"}
               - {$ref: "#/components/schemas/SignInServiceError"}
     WorkspaceInvalid:
