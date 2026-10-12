@@ -10,10 +10,6 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
   @wallet "0x2222222222222222222222222222222222222222"
 
   setup do
-    privy = Application.get_env(:keyfleet, :privy)
-    Application.put_env(:keyfleet, :privy, Keyword.put(privy, :app_id, "pairing-fixture"))
-    on_exit(fn -> Application.put_env(:keyfleet, :privy, privy) end)
-
     Accounts.register_verified!(@owner, nil, [], actor: %System{})
 
     # Ash is bypassed on purpose: a person names themselves through the shared
@@ -23,7 +19,7 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
       [
         %{
           id: Ecto.UUID.bingenerate(),
-          app_id: "pairing-fixture",
+          app_id: "keyfleet-test",
           privy_user_id: @owner,
           display_name: "Sol's owner",
           wallet_addresses: [],

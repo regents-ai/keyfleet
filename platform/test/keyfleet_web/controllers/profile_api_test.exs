@@ -15,14 +15,9 @@ defmodule KeyfleetWeb.ProfileApiTest do
   setup do
     key = JOSE.JWK.generate_key({:ec, "P-256"})
     {_, public} = key |> JOSE.JWK.to_public() |> JOSE.JWK.to_pem()
-    previous = Application.get_env(:keyfleet, :privy)
-
-    Application.put_env(:keyfleet, :privy,
-      app_id: "profile-fixture",
-      verification_key: public
-    )
-
-    on_exit(fn -> Application.put_env(:keyfleet, :privy, previous || []) end)
+    previous = Application.fetch_env!(:keyfleet, :privy)
+    Application.put_env(:keyfleet, :privy, Keyword.put(previous, :verification_key, public))
+    on_exit(fn -> Application.put_env(:keyfleet, :privy, previous) end)
     %{key: key}
   end
 
@@ -61,7 +56,7 @@ defmodule KeyfleetWeb.ProfileApiTest do
 
     claims = %{
       "iss" => "privy.io",
-      "aud" => "profile-fixture",
+      "aud" => "keyfleet-test",
       "sub" => subject,
       "iat" => now - 1,
       "exp" => now + 600

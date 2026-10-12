@@ -29,7 +29,12 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     previous =
       {Application.get_env(:keyfleet, :privy), Application.get_env(:keyfleet, :privy_verifier)}
 
-    Application.put_env(:keyfleet, :privy, app_id: "two-wallet-fixture", verification_key: public)
+    Application.put_env(
+      :keyfleet,
+      :privy,
+      Keyword.put(Application.fetch_env!(:keyfleet, :privy), :verification_key, public)
+    )
+
     Application.put_env(:keyfleet, :privy_verifier, RegentPrivy.Session)
 
     on_exit(fn ->
@@ -44,7 +49,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
 
     claims = %{
       "iss" => "privy.io",
-      "aud" => "two-wallet-fixture",
+      "aud" => "keyfleet-test",
       "sub" => "did:privy:two-wallets",
       "iat" => now - 1,
       "exp" => now + 600

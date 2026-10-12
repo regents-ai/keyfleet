@@ -7,9 +7,12 @@ config :sentry,
   release: System.get_env("SENTRY_RELEASE"),
   environment_name: System.get_env("SENTRY_ENVIRONMENT", to_string(config_env()))
 
-config :keyfleet, :privy,
-  app_id: System.get_env("PRIVY_APP_ID"),
-  verification_key: System.get_env("PRIVY_VERIFICATION_KEY")
+# Tests use the fixed app id in config/test.exs, whatever the shell sets.
+if config_env() != :test do
+  config :keyfleet, :privy,
+    app_id: System.get_env("PRIVY_APP_ID"),
+    verification_key: System.get_env("PRIVY_VERIFICATION_KEY")
+end
 
 # Without its Privy settings a local server answers every page while nobody can
 # sign in, so it refuses to start. A worktree holds no settings files of its own.
@@ -23,11 +26,8 @@ if config_env() == :dev and Phoenix.Endpoint.server?(:keyfleet, KeyfleetWeb.Endp
   end
 end
 
-# The browser test server signs in through a deterministic test-only
-# verifier. Production can never take this branch.
+# The browser test server. Production can never take this branch.
 if config_env() == :test and System.get_env("KEYFLEET_BROWSER_TEST") == "1" do
-  config :keyfleet, :privy, app_id: "browser-test-public-id", verification_key: nil
-
   # Under the test pool every process that touches the database keeps its own
   # connection until it exits: the site's background workers for good, and each
   # page for as long as it is open. One homepage load alone takes seven (the
