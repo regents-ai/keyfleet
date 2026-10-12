@@ -24,8 +24,9 @@ defmodule KeyfleetWeb.WalletPanel do
 
     * `id`, `flow` (a `Keyfleet.WalletSteps` flow), `fleet` (its `fleet_id`
       and `chain_id`), `actor` (the signed-in person, or nil) and `lease`
-      (the page's `session_lease`, which each of the panel's events checks
-      first: `KeyfleetWeb.Live.Session.check_component_events/1`);
+      (the page's `session_lease`, which each of the panel's events and
+      results checks first, taking the account as it reads now:
+      `KeyfleetWeb.Live.Session.check_component_lease/2`);
     * `inputs`, each field the steps read with its first value; `proposal`,
       `token_id` or `advance_id` when the flow acts on one; `refresh`, anything whose
       change means the steps are built again; `tool`, the browser tool in
@@ -40,6 +41,7 @@ defmodule KeyfleetWeb.WalletPanel do
   """
   use KeyfleetWeb, :live_component
 
+  alias Keyfleet.Actors.Human
   alias Keyfleet.Proposals
   alias Keyfleet.WalletSteps
   alias KeyfleetWeb.Live.Session
@@ -117,7 +119,7 @@ defmodule KeyfleetWeb.WalletPanel do
   def mount(socket) do
     {:ok,
      socket
-     |> Session.check_component_events()
+     |> Session.check_component_lease(&take_account/2)
      |> OnchainSteps.init()
      |> assign(
        active: nil,
@@ -133,7 +135,8 @@ defmodule KeyfleetWeb.WalletPanel do
        class: nil,
        fields: [],
        notes: [],
-       rebuild: nil
+       rebuild: nil,
+       shown: nil
      )}
   end
 
@@ -238,10 +241,24 @@ defmodule KeyfleetWeb.WalletPanel do
     {:noreply, if(landed?, do: sync(socket), else: socket)}
   end
 
-  def handle_async(:build, {:ok, built}, socket), do: {:noreply, show(socket, built)}
+  # Figures land only while the wallet they were read for is still the one
+  # shown; a build for another is dropped, and the one for the shown wallet
+  # follows.
+  def handle_async(:build, {:ok, {wallet, built}}, %{assigns: %{shown: wallet}} = socket),
+    do: {:noreply, show(socket, built)}
+
+  def handle_async(:build, {:ok, _other_wallet}, socket), do: {:noreply, socket}
 
   def handle_async(:build, {:exit, _reason}, socket),
     do: {:noreply, show(socket, %{review: nil, figures: %{}, problem: :unread})}
+
+  # The signed-in person as the sign-in reads now. A wallet unlinked since
+  # leaves the panel at once: its steps go and the figures follow the wallets
+  # the account still links.
+  defp take_account(socket, account) do
+    actor = Human.for_account(account)
+    if actor == socket.assigns.actor, do: socket, else: socket |> assign(actor: actor) |> sync()
+  end
 
   defp take_inputs(socket, params) do
     typed =
@@ -267,9 +284,13 @@ defmodule KeyfleetWeb.WalletPanel do
   defp sync_now(socket) do
     {socket, figures_wallet} = follow_signer(socket)
 
-    if figures_wallet,
-      do: show(socket, build_steps!(request(socket, figures_wallet))),
-      else: build(socket, nil)
+    if figures_wallet do
+      socket
+      |> assign(shown: figures_wallet)
+      |> show(build_steps!(request(socket, figures_wallet)))
+    else
+      build(socket, nil)
+    end
   end
 
   defp follow_signer(socket) do
@@ -301,20 +322,28 @@ defmodule KeyfleetWeb.WalletPanel do
 
     socket
     |> OnchainSteps.put_review(nil)
+    |> assign(shown: nil)
     |> start_async(:build, fn ->
-      fleet_id
-      |> WalletSteps.read_figures!(flow, %{token_id: token_id})
-      |> Map.put(:review, nil)
+      built =
+        fleet_id
+        |> WalletSteps.read_figures!(flow, %{token_id: token_id})
+        |> Map.put(:review, nil)
+
+      {nil, built}
     end)
   end
 
-  defp build(socket, nil), do: socket |> assign(built: nil) |> OnchainSteps.put_review(nil)
+  defp build(socket, nil),
+    do: socket |> assign(built: nil, shown: nil) |> OnchainSteps.put_review(nil)
 
   # Every group reads the chain, so its steps are built away from the page's
   # own process.
   defp build(socket, wallet) do
     request = request(socket, wallet)
-    start_async(socket, :build, fn -> build_steps!(request) end)
+
+    socket
+    |> assign(shown: wallet)
+    |> start_async(:build, fn -> {wallet, build_steps!(request)} end)
   end
 
   defp request(socket, wallet) do
@@ -422,7 +451,7 @@ defmodule KeyfleetWeb.WalletPanel do
         <% end %>
       </p>
       <p id={"#{@id}-mismatch"} class="wallet-panel-note" hidden={!@mismatch}>
-        {@mismatch} Switch to a wallet on your account to send from here.
+        {@mismatch}
       </p>
 
       <div :if={!@read_only} class="wallet-panel-buttons">

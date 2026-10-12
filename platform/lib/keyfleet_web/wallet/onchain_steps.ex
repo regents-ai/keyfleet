@@ -125,7 +125,7 @@ defmodule KeyfleetWeb.OnchainSteps do
       when reason in ~w(step_unknown wallet_unavailable) do
     cond do
       signer(linked, active) == nil ->
-        "Switch to a wallet on your account in your wallet app, then press again. Nothing was sent."
+        "#{mismatch_note(linked, active)} Nothing was sent."
 
       reason == "step_unknown" ->
         "This can't be sent as it stands. Check the details above, then press again. Nothing was sent."
@@ -151,11 +151,11 @@ defmodule KeyfleetWeb.OnchainSteps do
 
   @doc """
   The note beside the buttons while the wallet app has open a wallet the
-  signed-in account does not link, naming both.
+  signed-in account does not link, naming both and asking the person to switch.
   """
   def mismatch_note(linked, active) when is_list(linked) and is_binary(active) do
     if signer(linked, active) == nil do
-      "You're signed in with #{wallets(linked, " and ")}, but your wallet app has #{short(active)} open."
+      "Your wallet is on #{short(active)}, which isn't linked to this account. Switch to #{wallets(linked, " or ")}."
     end
   end
 

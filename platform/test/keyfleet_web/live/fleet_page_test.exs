@@ -374,8 +374,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute_push_event(view, "onchain-steps:review", %{review: %{}})
 
       assert text(view, "#buy-key-order-mismatch") ==
-               "You're signed in with 0xaaaa..aaaa, but your wallet app has 0xbbbb..bbbb open. " <>
-                 "Switch to a wallet on your account to send from here."
+               "Your wallet is on 0xbbbb..bbbb, which isn't linked to this account. " <>
+                 "Switch to 0xaaaa..aaaa."
 
       assert has_element?(view, "#buy-key-order-from[hidden]")
       assert text(view, "#buy-key-order-line") == "Key 151: 42.99817 USDC."
@@ -385,7 +385,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       |> render_hook("step_failed", %{"step" => "buy", "reason" => "wallet_unavailable"})
 
       assert text(view, "#buy-key-order-press-note") ==
-               "Switch to a wallet on your account in your wallet app, then press again. Nothing was sent."
+               "Your wallet is on 0xbbbb..bbbb, which isn't linked to this account. " <>
+                 "Switch to 0xaaaa..aaaa. Nothing was sent."
     end
 
     # Costly failure: a press on the wallet panel is acted on for a sign-in

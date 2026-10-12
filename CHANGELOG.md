@@ -965,3 +965,21 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   line (security review of the KF-A-06 fix).
 - The HTTP contract files now carry version 7.0.0, matching the public API
   description.
+
+## 2026-10-12 — Sign-in re-checked before every update; wallet notes ask to switch
+
+- An open page re-checks the sign-in before every update it receives and every
+  background result, not only Credits and agent updates. Wallet panels do the
+  same for their own results and act with the wallets the account links now.
+  When the sign-in has ended, the update is dropped and the page shows that the
+  sign-in ended.
+- A wallet panel's figures land only while the wallet they were read for is
+  still the one shown.
+- With a wallet the account doesn't link, the note beside the buttons reads
+  "Your wallet is on 0x9a8b..c1d2, which isn't linked to this account. Switch
+  to 0x1234..abcd.", and a press from it says the same, then "Nothing was sent."
+- Browser agents' signed tools are built only from the tools that have their
+  own signed inputs.
+- Crashed processes and failed requests go to Sentry through its logger
+  handler, attached when the application starts, once `SENTRY_DSN` is set
+  (Sean, 42 a).
