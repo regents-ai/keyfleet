@@ -58,8 +58,14 @@ defmodule Keyfleet.Authority do
       conditions: [:member]
     },
     %{
-      what: "Mark present, propose, vote, cancel a proposal, claim a Key's money",
+      what: "Mark present, propose, vote, cancel a proposal",
       who: "The Key's holder, or an agent with a shard unless agent voting is off",
+      authority: :wallet,
+      conditions: [:member]
+    },
+    %{
+      what: "Claim a Key's money; it is paid to the Key's holder",
+      who: "The Key's holder, or an agent with a shard",
       authority: :wallet,
       conditions: [:member]
     },
