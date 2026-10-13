@@ -306,9 +306,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     cond do
       Agent.authenticated?(actor) ->
         case Keyfleet.Agents.with_pairing(actor) do
-          {:ok, paired} -> {:ok, assign(conn, :agent_actor, paired)}
-          {:error, :not_paired} -> {:error, %{reason: :agent_not_paired}}
-          {:error, _} -> {:error, %{reason: :pairing_unavailable}}
+          {:ok, paired} ->
+            :ok = Keyfleet.Agents.save_listing(paired)
+            {:ok, assign(conn, :agent_actor, paired)}
+
+          {:error, :not_paired} ->
+            {:error, %{reason: :agent_not_paired}}
+
+          {:error, _} ->
+            {:error, %{reason: :pairing_unavailable}}
         end
 
       smart_wallet_on_ethereum?(actor) ->

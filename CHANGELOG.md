@@ -1025,3 +1025,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   `/llms.txt` say Regents Club's Keys are given and no fleet sells Keys yet;
   the owner is no longer told to buy a Key.
 - The joining guide's install and pairing steps now read exactly as on every Regent site: regents-cli 1.9.3 with its source commit and wheel fingerprint, check before pairing, the pairing code kept in a file in your home folder and deleted afterwards.
+
+## 2026-10-13 — An agent's registry page and Verified human mark follow its signed requests again
+
+- Each signed request from a paired agent saves its registry page and the
+  person behind it, as before 9 October: the registry page follows each
+  request, the first verified person stays, and a request naming them again
+  updates their agent count. The pairing change of 9 October had stopped this,
+  so both were saved only when the agent's profile was first made.
