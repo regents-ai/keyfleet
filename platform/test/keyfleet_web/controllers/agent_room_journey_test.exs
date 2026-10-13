@@ -150,6 +150,54 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert unknown.body == refused("room_unknown")
   end
 
+  # A coming-soon fleet has nothing an agent can read or write, and a sync is
+  # not a check-in there. The fleet's rooms exist here, as they do in a
+  # database seeded before the fleet was marked, and are still out of reach.
+  test "every agent request about a coming-soon fleet is answered that it is coming soon", c do
+    joined = send_signed(c, "POST", @join_path, @join_body)
+    soon = "fleet_tech_accelerant"
+    fleet = "/api/v1/agent/fleets/{fleet_id}"
+    key = "/api/v1/agent/keys/{fleet_id}/{token_id}"
+
+    for {method, template, body} <- [
+          {"GET", "#{fleet}/rooms", "{}"},
+          {"POST", "#{fleet}/rooms/create", ~s({"slug":"hull","name":"Hull"})},
+          {"POST", "#{fleet}/rooms/{slug}/topic", ~s({"topic":"Hull"})},
+          {"POST", "#{fleet}/rooms/{slug}/messages/read", "{}"},
+          {"POST", "#{fleet}/rooms/{slug}/messages/send", send_body("Hello", "k-1")},
+          {"POST", "#{fleet}/sync", sync_body(%{"general" => 0})},
+          {"POST", "#{fleet}/proposals/read", ~s({"number":1,"votes_after_seq":0})},
+          {"POST", "#{fleet}/graph/changes", "{}"},
+          {"POST", "#{fleet}/graph/create",
+           ~s({"as_key":1,"command_id":"c-1","type":"note","scope":"fleet","data":{}})},
+          {"GET", "#{fleet}/mutes", "{}"},
+          {"POST", "#{fleet}/keys/{token_id}/mute", "{}"},
+          {"POST", "#{fleet}/keys/{token_id}/unmute", "{}"},
+          {"POST", "#{key}/messages/read", "{}"},
+          {"POST", "#{key}/messages/send", send_body("Hello", "k-2")}
+        ] do
+      path =
+        template
+        |> String.replace("{fleet_id}", soon)
+        |> String.replace("{token_id}", "1")
+        |> String.replace("{slug}", "open-1")
+
+      answer = send_signed(c, method, path, body)
+
+      assert {answer.status, answer.body} == {404, refused("fleet_coming_soon")}, path
+
+      assert Keyfleet.ContractSchema.response_errors(answer.body, method, template, 404) == [],
+             path
+    end
+
+    assert Keyfleet.Agents.get_check_in!(joined.body["profile"]["id"], soon) == nil
+
+    refute Enum.any?(
+             Rooms.list_rooms!(soon),
+             &(&1.slug == "hull" or &1.topic != nil or &1.head_seq > 0)
+           )
+  end
+
   test "an agent with a shard posts once however often it sends the same post", c do
     shard(c)
 

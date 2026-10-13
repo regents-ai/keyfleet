@@ -1047,3 +1047,17 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   for a reason that passes (a Key sold less than two days ago, the treasury
   not open yet, no ETH for the fee), so a proposal sent once that clears has
   its words.
+
+## 2026-10-13 — The Propose form saves words only for a Key the wallet may vote
+
+- When a person presses Propose, the words are saved only if the fleet's own
+  contracts, read at the latest block for the steps on the page, say their
+  wallet may vote the Key the form names: it holds that Key of this fleet, or
+  is a voting shard of it. A Key of another fleet does not count. Before, a
+  signed-in person could have their words saved without holding a Key; they
+  were never shown, since no proposal could carry them.
+- The page now tells the site about a press once the steps for the form as
+  typed are built, just before the wallet opens. The press still goes
+  straight to the wallet and never waits on the save.
+- The test that a fleet not open yet answers every agent request the same way
+  and writes nothing is kept again (48 kept, 80 set aside).

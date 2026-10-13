@@ -78,17 +78,24 @@ export const OnchainSteps: Hook = {
       const release = mark(button)
       const asks = asksServer(this.review, name, form)
       lost(this.el, false)
-      // The server hears the press, and the form it was made from, before the
-      // wallet does: a proposal's words are saved then. It never waits on this.
-      push("step_pressed", {step: name, form})
+      // The server hears the press, and the form it was made from, just before
+      // the wallet does and once its steps are built from that form: a
+      // proposal's words are saved then. The press never waits on this.
+      const heard = () => push("step_pressed", {step: name, form})
 
       try {
-        if (!(activeEthereumWallet() && asks)) return await press(this.review, name, push)
+        if (!(activeEthereumWallet() && asks)) {
+          heard()
+          return await press(this.review, name, push)
+        }
         const [result] = await this.pushEventTo(this.el, "prepare_and_send", {form, step: name})
         // The server never heard the press, so it cannot say why; the page does.
         if (result?.status !== "fulfilled") return lostPress(this.el)
         const reply = result.value.reply as {review?: Review; send?: string}
-        if (reply.review && reply.send) return await press(reply.review, reply.send, push)
+        if (reply.review && reply.send) {
+          heard()
+          return await press(reply.review, reply.send, push)
+        }
         push("step_failed", {step: name, reason: "step_unknown"})
         return {reason: "step_unknown"}
       } catch {

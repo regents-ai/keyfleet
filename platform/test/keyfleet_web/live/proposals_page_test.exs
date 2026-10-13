@@ -669,13 +669,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       {:ok, view, _html} = live(signed_in_as(conn, @holder), @list)
       active!(view, "#propose-action", @holder)
+      form = %{"kind" => "decision", "key" => "7", "text" => "  #{words} "}
+
+      view |> form("#propose-action-form", form) |> render_change()
+      render_async(view)
 
       view
       |> with_target("#propose-action")
-      |> render_hook("step_pressed", %{
-        "step" => "propose",
-        "form" => %{"kind" => "decision", "key" => "7", "text" => "  #{words} "}
-      })
+      |> render_hook("step_pressed", %{"step" => "propose", "form" => form})
 
       ProposalHelpers.proposal!(@fleet, 1, content_hash: keccak(words))
       ProposalHelpers.proposal!(@fleet, 2, content_hash: keccak("Other words"))
@@ -706,6 +707,16 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert has_element?(view, "#propose-button[disabled]")
       assert has_element?(view, "#propose-button-why", "Not your Key")
+
+      # Its words are not kept, however the press is sent.
+      view
+      |> with_target("#propose-action")
+      |> render_hook("step_pressed", %{
+        "step" => "propose",
+        "form" => %{"kind" => "decision", "key" => "7", "text" => "Hire a designer"}
+      })
+
+      assert Ash.read!(Keyfleet.Proposals.Words) == []
     end
 
     test "the split preview shows each asset's share now, and the split opens on time", %{

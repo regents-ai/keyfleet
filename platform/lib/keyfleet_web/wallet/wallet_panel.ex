@@ -187,12 +187,22 @@ defmodule KeyfleetWeb.WalletPanel do
 
   # A proposal's words are saved as soon as the press is heard, before the
   # wallet sends the proposal, from the same form the steps are built from, so
-  # the chain reader finds them when it lands. The press never waits on this,
-  # and a save that fails leaves the proposal without its words on the page.
+  # the chain reader finds them when it lands. The page says so once the steps
+  # here are the ones built from that form, and the words are saved only when
+  # those steps found the wallet may vote the Key the form names: one that
+  # may not can't make the proposal. The press never waits on this, and a
+  # save that fails leaves the proposal without its words on the page.
   def handle_event(
         "step_pressed",
         %{"step" => "propose", "form" => %{"text" => text}},
-        %{assigns: %{flow: :propose, fleet: %{fleet_id: fleet_id}, actor: actor}} = socket
+        %{
+          assigns: %{
+            flow: :propose,
+            fleet: %{fleet_id: fleet_id},
+            actor: actor,
+            built: %{figures: %{governs?: true}}
+          }
+        } = socket
       )
       when is_binary(text) do
     Proposals.save_words(fleet_id, text, actor)

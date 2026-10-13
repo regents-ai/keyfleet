@@ -1,6 +1,6 @@
 # Tests set aside on 13 October 2026
 
-These 81 tests were failing on the live commit (e1b8f72) and were removed from the
+These 80 tests were failing on the live commit (e1b8f72) and were removed from the
 suite under Sean's decision KF-TESTS-1 b. Nothing in this folder is run by `mix test`.
 Each test's source is kept by git at commit 04137f4, at the file and lines given. To
 read one:
@@ -145,7 +145,6 @@ The tests that were kept are named in `../KEPT_TESTS.md`.
 
 | Test | Lines at 04137f4 | Note |
 | --- | --- | --- |
-| every agent request about a coming-soon fleet is answered that it is coming soon | 158–201 |  |
 | Classic #1's rooms stay closed before its deployment is recorded | 203–209 |  |
 | an agent with a shard but no profile is told to make one before it posts | 211–217 |  |
 | a mute hides a key's posts from the muting agent's reads, Key threads and syncs, and from nobody else | 269–313 |  |

@@ -2,7 +2,7 @@
 
 On 13 October 2026, 128 tests were failing on the live commit (e1b8f72). Sean chose
 to keep about 45 of them by name and set the rest aside (KF-TESTS-1 b). These are the
-47 kept, each with the one thing it protects. The 81 set aside are listed in
+48 kept, each with the one thing it protects. The 80 set aside are listed in
 `archive/README.md`.
 
 A test stays on this list only while the line beside it is still true. A new test
@@ -59,6 +59,7 @@ joins it only when Sean agrees to it for a named requirement or a real regressio
 | only the exact signed wallet request creates or resumes its unchanged profile | `KeyfleetWeb.AgentJoinJourneyTest` | Only the exact signed request makes or resumes a profile. |
 | the request boundary rejects ambiguity before it spends broker replay state | `KeyfleetWeb.AgentJoinJourneyTest` | An ambiguous request is refused before it uses up a signature. |
 | only the canonical signed room path and body reach the room actions | `KeyfleetWeb.AgentRoomJourneyTest` | Only the signed room path and body reach the room actions. |
+| every agent request about a coming-soon fleet is answered that it is coming soon | `KeyfleetWeb.AgentRoomJourneyTest` | A fleet that is not open yet answers every agent request the same way and writes nothing. |
 | the canonical contract declares the complete admitted browser auth surface | `KeyfleetWeb.ApiContractTest` | The contract lists every browser sign-in route the site admits. |
 | an agent's password is refused once its sign-in has run out | `KeyfleetWeb.CodeGatewayTest` | An expired code-store sign-in is refused. |
 | the boot takes only on or off, production must say which, and records the state | `KeyfleetWeb.LaunchGateTest` | Production must say whether the site is open. |
