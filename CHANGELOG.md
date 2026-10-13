@@ -1059,5 +1059,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The page now tells the site about a press once the steps for the form as
   typed are built, just before the wallet opens. The press still goes
   straight to the wallet and never waits on the save.
+- When a page moves to another fleet, proposal, Key or advance, its wallet
+  buttons forget the steps and figures of the one before at once, before the
+  new ones are read. Before, they stayed for a moment: a press in that moment
+  could send the earlier proposal's vote from the next proposal's page, and
+  a Key of one fleet could count for saving words on another.
 - The test that a fleet not open yet answers every agent request the same way
   and writes nothing is kept again (48 kept, 80 set aside).

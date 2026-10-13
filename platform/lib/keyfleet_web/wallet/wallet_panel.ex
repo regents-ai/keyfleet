@@ -147,16 +147,15 @@ defmodule KeyfleetWeb.WalletPanel do
   end
 
   def update(assigns, socket) do
-    rebuild? =
-      Enum.any?(
-        [:actor, :fleet, :proposal, :token_id, :advance_id, :refresh],
-        &(Map.get(assigns, &1) != Map.get(socket.assigns, &1))
-      )
+    changed? = &(Map.get(assigns, &1) != Map.get(socket.assigns, &1))
+    moved? = Enum.any?([:actor, :fleet, :proposal, :token_id, :advance_id], changed?)
+    rebuild? = moved? or changed?.(:refresh)
 
     # What was typed stays; a field the page gives later starts from the
     # value it gives.
     inputs = Map.merge(Map.get(assigns, :inputs, %{}), socket.assigns.inputs)
     socket = socket |> assign(Map.delete(assigns, :inputs)) |> assign(inputs: inputs)
+    socket = if moved?, do: drop_built(socket), else: socket
 
     {:ok, if(rebuild?, do: sync(socket), else: socket)}
   end
@@ -317,6 +316,12 @@ defmodule KeyfleetWeb.WalletPanel do
 
     {socket, signer || List.first(linked || [])}
   end
+
+  # Steps and figures built for another person, fleet, proposal, Key or advance
+  # leave at once, before new ones are read: nothing here speaks for what the
+  # panel showed before, and a press finds no step and asks for the ones built
+  # from what it shows now.
+  defp drop_built(socket), do: socket |> assign(built: nil) |> OnchainSteps.put_review(nil)
 
   # Steps built for a wallet that may no longer send leave the page at once,
   # before new ones are read.

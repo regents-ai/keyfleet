@@ -674,9 +674,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       view |> form("#propose-action-form", form) |> render_change()
       render_async(view)
 
-      view
-      |> with_target("#propose-action")
-      |> render_hook("step_pressed", %{"step" => "propose", "form" => form})
+      press = fn ->
+        view
+        |> with_target("#propose-action")
+        |> render_hook("step_pressed", %{"step" => "propose", "form" => form})
+      end
+
+      press.()
 
       ProposalHelpers.proposal!(@fleet, 1, content_hash: keccak(words))
       ProposalHelpers.proposal!(@fleet, 2, content_hash: keccak("Other words"))
@@ -687,6 +691,23 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, unmatched, _html} = live(conn, "#{@list}/2")
       refute has_element?(unmatched, "#proposal-text")
       assert has_element?(unmatched, "#proposal-content-tip", "weren’t saved")
+
+      # Moved to another fleet's proposals, the same press saves nothing there,
+      # also while that fleet's figures are still being read: a Key of the
+      # first fleet says nothing about this one.
+      ChainHelpers.deploy!("fibonacci_cascade", %{keys_address: @keys, shards_address: @shards})
+      ChainHelpers.seed_cursor!("fibonacci_cascade")
+
+      Keyfleet.Chain.StubClient.put_chain(ChainViews.head(), [],
+        calls: fn _to, _data, _block_hash ->
+          Process.sleep(300)
+          {:error, :timeout}
+        end
+      )
+
+      render_patch(view, "/app/fleets/fibonacci_cascade/proposals")
+      press.()
+      assert [%{fleet_id: @fleet}] = Ash.read!(Keyfleet.Proposals.Words)
     end
 
     test "proposing with a key the wallet may not use stays in view, saying why", %{conn: conn} do
@@ -902,10 +923,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ProposalHelpers.keys_sold!(@fleet, 1..2, @holder)
       ProposalHelpers.keys_sold!(@fleet, [3], @other)
       ChainHelpers.issue_shard!(@fleet, 3, @holder)
-      ProposalHelpers.proposal!(@fleet, 1)
+      for number <- 1..2, do: ProposalHelpers.proposal!(@fleet, number)
 
       ChainViews.put!(
         on_chain(1, :open) ++
+          on_chain(2, :open) ++
           owners([{1, @holder}, {2, @holder}, {3, @other}]) ++
           [{@shards, "mayGovern(uint256,address)", [id(3), @holder], {"bool", [true]}}]
       )
@@ -931,6 +953,15 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert text(view, "#proposal-vote-action-line") == "With Keys 1, 2, 3."
       assert text(view, "#proposal-vote-action-from") == "Sending from 0x1111..1111 on Base."
       assert ballot_pressable?(view)
+
+      # Moved to another proposal, this one's ballot leaves the page at once,
+      # before the next one's is read.
+      render_patch(view, "#{@list}/2")
+
+      assert_push_event(view, "onchain-steps:review", %{
+        component_id: "proposal-vote-action",
+        review: nil
+      })
     end
 
     # Each button the chain's own state makes certain to fail stays in view,
