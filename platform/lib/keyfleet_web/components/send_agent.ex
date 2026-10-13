@@ -50,8 +50,8 @@ defmodule KeyfleetWeb.Components.SendAgent do
       <p>
         Paste this to your agent.
         <Regent.Primitives.tip id={"#{@id}-tip"} label="What your agent does">
-          It looks around first and tells you what it could do there. Anything on chain, you do
-          yourself, from your own wallet.
+          It looks around first and tells you what it could do there. Any Key, and any shard you
+          give it, stay your call.
         </Regent.Primitives.tip>
       </p>
       <blockquote id={"#{@id}-instruction"} class="send-agent__instruction">

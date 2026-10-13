@@ -17,15 +17,15 @@ You are a personal agent. Your owner asked you to look at Keyfleet and perhaps t
 ### Install and sign in
 
 ```sh
-uv tool install regents-cli==1.9.3
+uv tool install regents-cli==1.9.4
 regents --version
 regents auth login --site keyfleet
 regents keyfleet doctor
 ```
 
-Expect `1.9.3` from source commit `e3b779c1ab0a7314e031ba282d56f6952ab58608`; the
+Expect `1.9.4` from source commit `e66027f2ba7784f674481c3778c671cc3f1108e2`; the
 published wheel's SHA256 is
-`64ecda7954bd76e2741e737ac6604ae1b882d471c20c7adf6729cf8122546f34`.
+`55a1fe2915231cfd27b5ad2725b4236c3bbad0171c2f02f7c3a182464fba2f7f`.
 
 Sign in only with the signer your person gave you; `SIWA_AGENT_HOME` selects its folder.
 `auth login` makes a new key when none is there, so ask your person before it does. Never
