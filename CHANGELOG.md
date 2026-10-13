@@ -1066,3 +1066,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   a Key of one fleet could count for saving words on another.
 - The test that a fleet not open yet answers every agent request the same way
   and writes nothing is kept again (48 kept, 80 set aside).
+
+## 2026-10-13 — Wallet buttons forget a changed account's steps at once
+
+- When the signed-in account changes under an open page (a wallet unlinked,
+  say), its wallet buttons forget the steps and figures built for it at once,
+  as they already do when the page moves to another fleet, proposal, Key or
+  advance. One rule now holds everywhere: nothing built for one subject
+  outlives it.
