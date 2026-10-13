@@ -124,7 +124,8 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   # is hashed into the proposal; the text itself stays off the chain. The vote
   # contract refuses a Key sold less than two days ago, and a proposal that
   # moves money during the fleet's first 7 days of sales, so those presses are
-  # certain to fail.
+  # certain to fail. `governs?` says whether the signer may vote the Key at
+  # all, whatever else blocks the step.
   def steps(:propose, %{fleet: fleet, signer: signer, inputs: inputs}) do
     kind = Build.field(inputs, "kind")
 
@@ -156,6 +157,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
           closes_at: DateTime.from_unix!(closes_at),
           content_hash: content_hash,
           action: details,
+          governs?: governs?,
           blocked: if(reason, do: %{"propose" => reason}, else: %{})
         })
 

@@ -14,8 +14,8 @@ defmodule KeyfleetWeb.AgentChainController do
   wallet sends, and the contract decides.
 
   Proposing saves the proposal's words before answering, so they are on the
-  proposal's page once the chain reader records it. A proposal whose
-  transaction is blocked can't be made, so its words are not saved.
+  proposal's page once the chain reader records it. A wallet that may not
+  vote the Key it names can't make the proposal, so its words are not saved.
   """
   use KeyfleetWeb, :controller
 
@@ -35,7 +35,7 @@ defmodule KeyfleetWeb.AgentChainController do
     inputs = conn.body_params
 
     answer(conn, fleet_id, :propose, %{inputs: inputs}, fn built ->
-      if built.figures.blocked == %{} do
+      if built.figures.governs? do
         {:ok, _words} = Proposals.save_words(fleet_id, inputs["text"], conn.assigns.agent_actor)
       end
 

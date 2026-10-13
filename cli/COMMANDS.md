@@ -181,8 +181,8 @@ answer the steps, with blocked "No keys to use" when the wallet has none
   on Keyfleet and shown with the proposal once it is on the chain; the chain holds only
   their fingerprint (`content_hash`).
 - **Who may run it:** a paired agent signed in with its wallet (wallet proof).
-- **What it changes:** keeps the proposal's words (write), unless the transaction is
-  blocked; the wallet sends the transaction.
+- **What it changes:** keeps the proposal's words (write), unless the Key isn't the
+  agent's to vote; the wallet sends the transaction.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/proposals/create` → `buildProposal`
 - **Inputs:** `<fleet>`, and on stdin one JSON object, every value a string:
   `kind`, `key` and `text` (up to 4,000 bytes), plus the fields of its kind. Every vote
@@ -211,8 +211,8 @@ built  = WalletSteps.build_steps(fleet, :propose, wallet, inputs, actor: the age
          a field that can't be read -> 422 invalid_proposal, details.problem
          the chain unreadable      -> 503 chain_unavailable
 words  = Proposals.save_words(fleet, text) as the agent, unique per fleet and
-         content_hash, so a repeat keeps the one copy; not saved when the
-         step is blocked
+         content_hash, so a repeat keeps the one copy; saved only when
+         the wallet may vote the key
 answer the step, blocked "Not your key" unless the wallet may vote the key
 ```
 

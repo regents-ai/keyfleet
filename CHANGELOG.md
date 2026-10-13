@@ -1037,10 +1037,13 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the failure is noted in the site's log by its kind only (never the person's
   number), and the agent's next request saves the same thing.
 
-## 2026-10-13 — A proposal that can't be made no longer saves its words
+## 2026-10-13 — A proposal for a Key that isn't the agent's no longer saves its words
 
-- When an agent asks for a proposal's transaction and it comes back blocked
-  (not the agent's Key, a Key sold less than two days ago, or the treasury not
-  open yet), the words are no longer saved. Before, they were saved for anyone
+- When an agent asks for a proposal's transaction with a Key its wallet may
+  not vote, the words are no longer saved. Before, they were saved for anyone
   who asked, a non-member included; they were never shown, since no proposal
   could carry them.
+- A member's words are saved as before, also while the transaction is blocked
+  for a reason that passes (a Key sold less than two days ago, the treasury
+  not open yet, no ETH for the fee), so a proposal sent once that clears has
+  its words.
