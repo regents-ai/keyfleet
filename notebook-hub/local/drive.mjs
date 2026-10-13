@@ -110,6 +110,22 @@ function withBundle(script) {
 	);
 }
 
+/** What another machine on the private network gets from `url`, asked with no password. */
+function fromNeighbour(url) {
+	return JSON.parse(
+		docker(
+			'run', '--rm', '--network', NET6, HUB_IMAGE, 'node', '--input-type=module', '-e',
+			`const response = await fetch(${JSON.stringify(url)}, { redirect: 'manual' });
+			const body = await response.text();
+			console.log(JSON.stringify({
+				status: response.status,
+				location: response.headers.get('location'),
+				page: body.includes('<marimo-server-token'),
+			}));`,
+		),
+	);
+}
+
 async function runCells(sandboxUrl) {
 	const page = await (await fetch(sandboxUrl)).text();
 	const serverToken = page.match(/<marimo-server-token[^>]*data-token="([^"]*)"/)?.[1];
@@ -197,6 +213,14 @@ async function main() {
 	check(output.includes('token_in_env=False'), 'helper token not in the notebook environment');
 	check(output.includes('token_readable_in_proc=[]'), 'helper token not readable through /proc');
 	ok(`cell ran on the runner: ${output.replace(/<[^>]+>/g, '').replaceAll('&#x27;', "'").trim()}`);
+
+	// Every member can read a running notebook's address, so a neighbour may know its path.
+	const neighbour = fromNeighbour(`http://[${addresses[0]}]:2718${new URL(session.sandbox_url).pathname}`);
+	check(
+		neighbour.status === 303 && neighbour.location.includes('/auth/login') && !neighbour.page,
+		`another machine is refused on the kernel port (got ${JSON.stringify(neighbour)})`,
+	);
+	ok(`another machine on the private network, knowing the notebook's path but not its password, is sent to the kernel's password page (${neighbour.status})`);
 
 	const scoped = JSON.parse(
 		withBundle(`

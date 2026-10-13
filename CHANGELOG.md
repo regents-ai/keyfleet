@@ -1175,3 +1175,15 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   requests carrying Keyfleet's signed note.
 - "Tokens on record" lists the Regents Club hub's token by its listed ID and
   last day, 13 October 2027.
+
+## 2026-10-13 — Notebook hub: a password on every running notebook, and a health check
+
+- Each running notebook now gets its own password, which only the hub holds
+  and adds after checking who is asking. Before, another notebook machine in
+  the same fleet that knew a running notebook's address could run code in it
+  directly, with no record. The local proof has a fourteenth step for this.
+- The hub answers a health check, so Fly restarts it if it stops answering.
+- The guide now says that a fleet's notebooks and their running machines are
+  shared by all its members, that the hub's record names whoever started a
+  machine, and that the first start logs one harmless error until someone
+  signs in.

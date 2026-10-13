@@ -76,7 +76,7 @@ What runs:
   each "machine" as a Docker container. Those containers sit on a network that
   only carries IPv6 addresses, as Fly's private network does.
 
-What it checks, in 13 steps:
+What it checks, in 14 steps:
 
 - A session starts on a new machine.
 - The hub reaches the notebook through the relay.
@@ -85,6 +85,8 @@ What it checks, in 13 steps:
 - The notebook's files and results are saved back to the hub after the session
   ends.
 - The machine is gone afterwards.
+- Another machine on the same private network, knowing a running notebook's
+  address but not its password, is turned away.
 - A second hub name sees only its own machines.
 
 It uses a free local port (4791) and removes everything it started. Hub and
@@ -235,6 +237,21 @@ its listed ID.
   `MARIMOHUB_SANDBOX_PROXY_ACK_UNTRUSTED` acknowledges. Sean chose
   `<fleet>.notebooks.keyfleet.ai` (4 Oct 2026). Keyfleet's own sign-in cookie
   is a `__Host-` cookie, so a notebook page cannot set or replace it.
+- **A fleet's notebooks are shared by its members, all of them.** Every member
+  is an editor of the fleet's one project: nothing in a hub is private to one
+  person. A notebook has one running machine, shared by everyone who opens it,
+  so any member can run code in a notebook you have open, and the hub's record
+  names whoever started the machine, not whoever ran or saved something on it.
+  Nothing on Keyfleet reads that record: no Points, payment, vote or standing
+  depends on it.
+- **Each running notebook has its own password** (`MARIMOHUB_SANDBOX_AUTH=on`),
+  which the hub adds after checking who is asking. Without it, any machine on
+  the fleet's network that knew a notebook's address could run code in it,
+  unrecorded.
+- **The first start logs one error until someone signs in.** The hub makes its
+  catalog in the bucket on the first signed-in request, which is Keyfleet's
+  own setup identity once step 10 is done. Until then its clean-up round logs
+  "Catalog not found"; nothing needs doing.
 - **Each fleet has its own private network.** A fleet's notebook machines can
   reach that fleet's hub and the fleet's other notebook machines, and nothing
   else on Fly's private network. The hub's sign-in and each machine's helper

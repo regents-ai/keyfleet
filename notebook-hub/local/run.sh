@@ -49,6 +49,7 @@ docker create --name kf-nb-local-hub \
   -e "MARIMOHUB_APP_BASE_URL=http://127.0.0.1:$port" \
   -e "MARIMOHUB_AUTH_SESSION_SECRET=$session_secret" \
   -e MARIMOHUB_SANDBOX_PROXY_ACK_UNTRUSTED=true \
+  -e MARIMOHUB_SANDBOX_AUTH=on \
   -e MARIMOHUB_PERSIST_WORKSPACE=workspace \
   -e MARIMOHUB_RUN_MAINTENANCE=true \
   -e "MARIMOHUB_COMPUTE_IMAGE=$runner_image" \
