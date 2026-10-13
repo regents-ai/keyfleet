@@ -56,7 +56,7 @@ defmodule Keyfleet.Fleets do
       id: "regents_club",
       path: "/app/fleets/regents_club",
       sidebar: :link,
-      name: "Regents Club #1",
+      name: "Regents Club",
       card: "REGENTS CLUB",
       type_number: 1,
       coming_soon?: true

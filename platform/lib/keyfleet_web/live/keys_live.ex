@@ -15,6 +15,7 @@ defmodule KeyfleetWeb.KeysLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.AddressLinks
   import KeyfleetWeb.Components.AgentPicture
 
   alias Keyfleet.Actors.Human
@@ -70,12 +71,14 @@ defmodule KeyfleetWeb.KeysLive do
           <p class="key-wallet">
             <code title={@key.owner_wallet}>{RegentFormat.short_address(@key.owner_wallet)}</code>
             <span :if={@key.owner?} id="key-owner-you" class="key-detail">You</span>
+            <.address_links id="key-owner-links" address={@key.owner_wallet} />
           </p>
         </section>
 
         <PresenceCard.card
           :if={@key.deployed?}
           id="key-present"
+          names_sender={false}
           class="key-panel"
           fleet={@key.fleet}
           actor={@actor}
@@ -96,6 +99,7 @@ defmodule KeyfleetWeb.KeysLive do
           <.live_component
             :if={@key.owner? and @key.shards != []}
             module={WalletPanel}
+            names_sender={false}
             id="key-shards-action"
             flow={:end_shard}
             fleet={@key.fleet}
@@ -129,6 +133,7 @@ defmodule KeyfleetWeb.KeysLive do
 
           <.live_component
             module={WalletPanel}
+            names_sender={false}
             id="key-issue-shard-action"
             class="key-issue-shard"
             flow={:issue_shard}
@@ -178,6 +183,7 @@ defmodule KeyfleetWeb.KeysLive do
 
           <.live_component
             module={WalletPanel}
+            names_sender={false}
             id="key-agent-voting-action"
             flow={:agent_voting}
             fleet={@key.fleet}

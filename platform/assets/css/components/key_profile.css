@@ -111,6 +111,22 @@
   font-size: 1.1rem;
 }
 
+/* "Held by", with what a person can do with that address beside it. */
+.key-profile-holder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.address-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
 .key-profile__section a {
   color: inherit;
 }

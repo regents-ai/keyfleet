@@ -13,7 +13,10 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     "/proposals",
     "/proposals/:number",
     "/polls",
-    "/polls/:poll_id"
+    "/polls/:poll_id",
+    "/keys/:token_id",
+    "/keys/:token_id/dms",
+    "/keys/:token_id/dms/:other_token_id"
   ]
 
   @paths [
@@ -23,10 +26,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
            "/account/wallets",
            "/account/connections",
            "/about",
-           "/opportunities",
-           "/app/keys/:fleet_id/:token_id",
-           "/app/keys/:fleet_id/:token_id/dms",
-           "/app/keys/:fleet_id/:token_id/dms/:other_token_id"
+           "/opportunities"
          ] ++
            for(
              fleet <-
@@ -81,26 +81,22 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
   test "one key's page names the key it was asked for" do
     key =
-      RouteCatalog.fetch!("/app/keys/:fleet_id/:token_id", %{
-        "fleet_id" => "fibonacci_syndicate",
-        "token_id" => "7"
-      })
+      RouteCatalog.fetch!("/syndicate/1/keys/:token_id", %{"token_id" => "7"})
 
     assert key.route_id == :keys
-    assert key.destination == "/app/keys/fibonacci_syndicate/7"
+    assert key.fleet_id == "fibonacci_syndicate"
+    assert key.destination == "/syndicate/1/keys/7"
     assert key.page_display_label == "Key"
     assert key.canonical_root == "/"
 
     for params <- [
-          %{"fleet_id" => "Fibonacci_syndicate", "token_id" => "7"},
-          %{"fleet_id" => "fibonacci-syndicate", "token_id" => "7"},
-          %{"fleet_id" => "fibonacci_syndicate", "token_id" => "07"},
-          %{"fleet_id" => "fibonacci_syndicate", "token_id" => "0"},
-          %{"fleet_id" => "fibonacci_syndicate", "token_id" => String.duplicate("9", 19)},
-          %{"fleet_id" => "fibonacci_syndicate"}
+          %{"token_id" => "07"},
+          %{"token_id" => "0"},
+          %{"token_id" => String.duplicate("9", 19)},
+          %{}
         ] do
       assert_raise KeyfleetWeb.NotFoundError, fn ->
-        RouteCatalog.fetch!("/app/keys/:fleet_id/:token_id", params)
+        RouteCatalog.fetch!("/syndicate/1/keys/:token_id", params)
       end
     end
   end
@@ -172,7 +168,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
                    %RouteCatalog.NameOnly{label: "Classic #1"},
                    %RouteTarget{
                      route_id: :fleet,
-                     label: "Regents Club #1",
+                     label: "Regents Club",
                      path: "/app/fleets/regents_club"
                    },
                    %RouteTarget{route_id: :account, label: "Account", path: "/account"}
@@ -210,13 +206,13 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 50
+    assert length(decoded["routes"]) == 62
 
     assert Enum.map(decoded["routes"], & &1["route_id"]) ==
-             ~w(home account points wallets connections about opportunities keys dms dm) ++
+             ~w(home account points wallets connections about opportunities) ++
                List.flatten(
                  List.duplicate(
-                   ~w(fleet rooms workspace workspace_item proposals proposal polls poll),
+                   ~w(fleet rooms workspace workspace_item proposals proposal polls poll keys dms dm),
                    5
                  )
                )
@@ -245,7 +241,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert %{"sidebar_model" => %{"targets" => []}} =
              Enum.find(decoded["routes"], &(&1["route_id"] == "home"))
 
-    assert %{"destination" => "/app/keys/:fleet_id/:token_id"} =
+    assert %{"destination" => "/classic/1/keys/:token_id"} =
              Enum.find(decoded["routes"], &(&1["route_id"] == "keys"))
   end
 

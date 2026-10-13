@@ -21,7 +21,7 @@ async function openKey(page: Page, key: number) {
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
-  await page.goto(`/app/keys/${fleet}/${key}`)
+  await page.goto(`/classic/1/keys/${key}`)
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   await useStandInWallet(page, me)
   return errors
@@ -88,7 +88,7 @@ test("an owner issues a shard, renews it and ends it, and every press reaches th
 test("a visitor sees a key's shards without the owner's buttons", async ({page}) => {
   const key = sellKey(fleet, "0x2222222222222222222222222222222222222222")
   issueShard(fleet, key, agentWallet, 10)
-  await page.goto(`/app/keys/${fleet}/${key}`)
+  await page.goto(`/classic/1/keys/${key}`)
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
 
   await expect(page.locator(`#key-shard-${agentWallet}`)).toBeVisible()

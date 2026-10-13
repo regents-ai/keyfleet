@@ -14,6 +14,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.AddressLinks
   import KeyfleetWeb.Components.AgentPicture
   import KeyfleetWeb.Components.SentFrom
   import Phoenix.LiveView, only: [push_patch: 2, start_async: 3, stream: 4]
@@ -258,7 +259,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <.link
         :if={@profile.yours?}
         id="key-profile-manage"
-        patch={"/app/keys/#{@profile.fleet_id}/#{@profile.token_id}"}
+        patch={KeyLinks.page_path(@profile.fleet_id, @profile.token_id)}
       >
         Manage shards
       </.link>
@@ -369,6 +370,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       </h3>
       <.live_component
         module={WalletPanel}
+        names_sender={false}
         id="key-profile-claim-action"
         flow={:claim}
         tool="claim"
@@ -416,6 +418,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       </h3>
       <.live_component
         module={WalletPanel}
+        names_sender={false}
         id="key-profile-reveal-action"
         flow={:reveal}
         fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
@@ -456,6 +459,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       </h3>
       <.live_component
         module={WalletPanel}
+        names_sender={false}
         id="key-profile-club-claim-action"
         flow={:club_claim}
         fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
@@ -488,7 +492,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp holder(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-holder-title">
-      <h3 id="key-profile-holder-title">Held by {held_by(@profile)}</h3>
+      <div class="key-profile-holder">
+        <h3 id="key-profile-holder-title">Held by {held_by(@profile)}</h3>
+        <.address_links id="key-profile-holder-links" address={@profile.holder} />
+      </div>
       <dl class="key-profile-facts">
         <div>
           <dt>Keys in this fleet</dt>

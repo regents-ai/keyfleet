@@ -335,9 +335,6 @@ defmodule KeyfleetWeb.Router do
       live "/account/connections", ShellLive, :connections
       live "/about", ShellLive, :about
       live "/opportunities", ShellLive, :opportunities
-      live "/app/keys/:fleet_id/:token_id", ShellLive, :keys
-      live "/app/keys/:fleet_id/:token_id/dms", ShellLive, :dms
-      live "/app/keys/:fleet_id/:token_id/dms/:other_token_id", ShellLive, :dm
 
       # Each fleet's pages, under the fleet's own address, such as `/classic/1`.
       for %{fleet_id: fleet_id} = page when fleet_id != nil <- KeyfleetWeb.RouteCatalog.entries() do

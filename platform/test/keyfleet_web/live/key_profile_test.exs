@@ -64,6 +64,19 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     assert has_element?(view, ".key-profile__card #key-profile-traits-title", "Traits")
     assert text(view, ".key-profile__card .key-profile__traits p") == "Revealing"
     assert text(view, "#key-profile-holder") == "0xeeee..eeee"
+    holder = wallet("e")
+    assert has_element?(view, "#key-profile-holder-links-copy[data-copy-text='#{holder}']")
+
+    assert has_element?(
+             view,
+             "#key-profile-holder-links-opensea[href='https://opensea.io/#{holder}']"
+           )
+
+    assert has_element?(
+             view,
+             "#key-profile-holder-links-basescan[href='https://basescan.org/address/#{holder}']"
+           )
+
     assert render(view) =~ "17.28 USDC"
     assert render(view) =~ "Once"
     assert text(view, "#key-profile-holder-keys") == "3"
@@ -396,13 +409,13 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     conn: conn
   } do
     {:ok, view, _html} = conn |> signed_in_as(wallet("e")) |> live(@path <> "?key=12")
-    assert has_element?(view, ~s(#key-profile-dms[href="/app/keys/#{@fleet}/12/dms"]), "Messages")
+    assert has_element?(view, ~s(#key-profile-dms[href="/cascade/1/keys/12/dms"]), "Messages")
 
     {:ok, view, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
 
     assert has_element?(
              view,
-             ~s(#key-profile-dms[href="/app/keys/#{@fleet}/1/dms/12"]),
+             ~s(#key-profile-dms[href="/cascade/1/keys/1/dms/12"]),
              "Message"
            )
 
@@ -420,7 +433,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
     assert has_element?(
              view,
-             ~s(#key-profile-dms[href="/app/keys/#{@fleet}/3/dms/12"]),
+             ~s(#key-profile-dms[href="/cascade/1/keys/3/dms/12"]),
              "Message"
            )
   end

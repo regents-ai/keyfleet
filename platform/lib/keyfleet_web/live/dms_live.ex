@@ -303,9 +303,10 @@ defmodule KeyfleetWeb.DmsLive do
   defp closed_reason(_dms), do: "Only this Key’s holder can read its messages."
 
   defp inbox_path(%{fleet_id: fleet_id, token_id: token_id}),
-    do: "/app/keys/#{fleet_id}/#{token_id}/dms"
+    do: KeyLinks.dms_path(fleet_id, token_id)
 
-  defp conversation_path(dms, other_token_id), do: "#{inbox_path(dms)}/#{other_token_id}"
+  defp conversation_path(%{fleet_id: fleet_id, token_id: token_id}, other_token_id),
+    do: KeyLinks.dm_path(fleet_id, token_id, other_token_id)
 
   defp preview(%{last_from_token_id: token_id, last_body: body}, token_id), do: "You: #{body}"
   defp preview(%{last_body: body}, _token_id), do: body
@@ -333,10 +334,10 @@ defmodule KeyfleetWeb.DmsLive do
   def message_link(%Human{} = actor, owner, fleet_id, token_id) when is_binary(owner) do
     cond do
       owner in actor.wallet_addresses ->
-        %{label: "Messages", path: "/app/keys/#{fleet_id}/#{token_id}/dms"}
+        %{label: "Messages", path: KeyLinks.dms_path(fleet_id, token_id)}
 
       held = List.first(Keys.held_keys(actor, fleet_id)) ->
-        %{label: "Message", path: "/app/keys/#{fleet_id}/#{held.token_id}/dms/#{token_id}"}
+        %{label: "Message", path: KeyLinks.dm_path(fleet_id, held.token_id, token_id)}
 
       true ->
         nil

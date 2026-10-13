@@ -16,7 +16,8 @@ defmodule KeyfleetWeb.Components.IdleKeys do
   alias KeyfleetWeb.KeyLinks
 
   @impl true
-  def mount(socket), do: {:ok, socket |> assign(open?: false, next: nil) |> stream(:keys, [])}
+  def mount(socket),
+    do: {:ok, socket |> assign(open?: false, next: nil, unlisted?: false) |> stream(:keys, [])}
 
   @impl true
   def update(assigns, socket) do
@@ -48,14 +49,19 @@ defmodule KeyfleetWeb.Components.IdleKeys do
     end
   end
 
-  # The next hundred idle Keys, and where the hundred after them begin.
+  # The next hundred idle Keys, and where the hundred after them begin. When
+  # they couldn't be read the list stays as it was and says so; pressing
+  # again tries again.
   defp page(%{assigns: %{fleet_id: fleet_id}} = socket, position, stream_opts) do
-    %Ash.Page.Keyset{results: keys, more?: more?} =
-      Keys.idle_keys_in_fleet!(fleet_id, page: position)
+    case Keys.idle_keys_page(fleet_id, position) do
+      {:ok, %Ash.Page.Keyset{results: keys, more?: more?}} ->
+        socket
+        |> stream(:keys, keys, stream_opts)
+        |> assign(unlisted?: false, next: if(more?, do: List.last(keys).__metadata__.keyset))
 
-    socket
-    |> stream(:keys, keys, stream_opts)
-    |> assign(next: if(more?, do: List.last(keys).__metadata__.keyset))
+      {:error, _failure} ->
+        assign(socket, unlisted?: true)
+    end
   end
 
   @impl true
@@ -85,6 +91,9 @@ defmodule KeyfleetWeb.Components.IdleKeys do
       >
         <h2 id={"#{@id}-title"} tabindex="-1" data-modal-title>Idle Keys</h2>
         <p :if={@count == 0} id={"#{@id}-none"}>No Keys are idle.</p>
+        <p :if={@unlisted?} id={"#{@id}-unlisted"} role="status">
+          The list couldn’t be read. Close it and try again.
+        </p>
         <ol id={"#{@id}-list"} class="idle-keys__list" phx-update="stream" data-modal-scroll>
           <li :for={{dom_id, key} <- @streams.keys} id={dom_id}>
             <.link

@@ -24,6 +24,10 @@ defmodule KeyfleetWeb.Components.PresenceCard do
   attr :tool, :string, default: nil, doc: "the browser tool that presses Mark present, if any"
   attr :class, :any, default: nil
 
+  attr :names_sender, :boolean,
+    default: true,
+    doc: "false where the page leaves out the line naming the sending wallet"
+
   def card(assigns) do
     ~H"""
     <section id={@id} class={@class} aria-labelledby={"#{@id}-title"}>
@@ -38,6 +42,7 @@ defmodule KeyfleetWeb.Components.PresenceCard do
       </p>
       <.live_component
         module={WalletPanel}
+        names_sender={@names_sender}
         id={"#{@id}-action"}
         flow={:present}
         fleet={@fleet}

@@ -6,6 +6,8 @@ defmodule Keyfleet.Keys do
   """
   use Ash.Domain
 
+  require Logger
+
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Actors.Human
   alias Keyfleet.Decks
@@ -242,6 +244,25 @@ defmodule Keyfleet.Keys do
     Keyfleet.Keys.KeyAttachment
     |> Ash.Query.for_read(:idle_in_fleet, %{fleet_id: fleet_id})
     |> Keyfleet.Count.of()
+  end
+
+  @doc """
+  A hundred of the fleet's idle keys by key number, from the start or from
+  `position` (`[after: keyset]`), as `{:ok, page}`, or `{:error, failure}`
+  when the database doesn't answer, which is logged, so the page says it
+  couldn't list them rather than crashing.
+  """
+  def idle_keys_page(fleet_id, position) do
+    with {:error, failure} <- idle_keys_in_fleet(fleet_id, page: position),
+         do: idle_keys_unlisted(fleet_id, failure)
+  rescue
+    failure in [Postgrex.Error, DBConnection.ConnectionError] ->
+      idle_keys_unlisted(fleet_id, failure)
+  end
+
+  defp idle_keys_unlisted(fleet_id, failure) do
+    Logger.warning("Listing the idle keys of #{fleet_id} failed: " <> Exception.message(failure))
+    {:error, failure}
   end
 
   @doc """

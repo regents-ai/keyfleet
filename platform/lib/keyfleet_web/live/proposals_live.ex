@@ -17,6 +17,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   use KeyfleetWeb, :html
 
   alias Keyfleet.Fleets.Rules
+  alias KeyfleetWeb.Components.AddressLinks
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.PresenceCard
   alias KeyfleetWeb.Motion
@@ -636,7 +637,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       <p id="proposals-treasury-address" class="proposals-address">
         <a
           id="proposals-treasury-link"
-          href={"https://basescan.org/address/#{@treasury.address}"}
+          href={AddressLinks.basescan(@treasury.address)}
           title="See it on Basescan"
           rel="noopener noreferrer"
           target="_blank"

@@ -211,7 +211,7 @@ test("the sidebar names Classic, links the Regents Club, then the Account page",
   )
   expect(items).toEqual([
     ["Classic #1", null],
-    ["Regents Club #1", "/app/fleets/regents_club"],
+    ["Regents Club", "/app/fleets/regents_club"],
     ["Sign in", "/account"],
   ])
 

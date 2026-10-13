@@ -4,6 +4,9 @@ defmodule KeyfleetWeb.KeyLinks do
   address. The fleet page's tab (the hall, or the map with `view=map`) and its
   list position stay in the address beside it, so closing the profile leaves
   the page as it was.
+
+  A key's own page and its messages are under its fleet's address, such as
+  `/classic/1/keys/72`.
   """
 
   @kept ["after", "before", "view"]
@@ -11,6 +14,16 @@ defmodule KeyfleetWeb.KeyLinks do
   @doc "The fleet page with key `token_id`'s profile open, keeping what `params` kept."
   def key_path(fleet_id, token_id, params \\ %{}),
     do: fleet_path(fleet_id, kept(params) ++ [{"key", token_id}])
+
+  @doc "Key `token_id`'s own page, where its holder manages it."
+  def page_path(fleet_id, token_id), do: "#{Keyfleet.Fleets.path(fleet_id)}/keys/#{token_id}"
+
+  @doc "The messages written to and from key `token_id`."
+  def dms_path(fleet_id, token_id), do: "#{page_path(fleet_id, token_id)}/dms"
+
+  @doc "The messages between key `token_id` and key `other_token_id`."
+  def dm_path(fleet_id, token_id, other_token_id),
+    do: "#{dms_path(fleet_id, token_id)}/#{other_token_id}"
 
   @doc "The fleet page with no key's profile open, keeping what `params` kept."
   def closed_path(fleet_id, params), do: fleet_path(fleet_id, kept(params))

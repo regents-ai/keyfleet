@@ -2,7 +2,7 @@
 
 The five founding fleets each have a deck made before the fleet was created:
 Classic #1, Syndicate #1, Accelerant #1 and Cascade #1 have 1,000 cards each,
-and Regents Club #1 has 1,998, one for each Regents Club Pass. A fleet anyone
+and the Regents Club has 1,998, one for each Regents Club Pass. A fleet anyone
 creates gets its deck later, recorded on chain by the keeper. Keys past their
 fleet's deck draw their own card from their own seed. With these rules, the
 fleet's record on chain, its reveals and the deck file give every Key's card.

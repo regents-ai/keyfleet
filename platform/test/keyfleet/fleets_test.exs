@@ -9,7 +9,7 @@ defmodule Keyfleet.FleetsTest do
     "fibonacci_cascade" => "Cascade #1",
     "fleet_tech_classic" => "Classic #1",
     "fleet_tech_accelerant" => "Accelerant #1",
-    "regents_club" => "Regents Club #1"
+    "regents_club" => "Regents Club"
   }
 
   setup do

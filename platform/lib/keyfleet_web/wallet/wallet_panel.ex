@@ -29,7 +29,9 @@ defmodule KeyfleetWeb.WalletPanel do
       `KeyfleetWeb.Live.Session.check_component_lease/2`);
     * `inputs`, each field the steps read with its first value; `proposal`,
       `token_id` or `advance_id` when the flow acts on one; `refresh`, anything whose
-      change means the steps are built again; `tool`, the browser tool in
+      change means the steps are built again; `names_sender`, false where
+      the page leaves out the line naming the wallet a press is sent from;
+      `tool`, the browser tool in
       `priv/tool_manifest.json` that presses these buttons for a browser's own
       agent (`assets/js/page_tools.ts`), if any; and `class`;
     * the slots `fields`, `notes` and `buttons`, each given the panel's state
@@ -132,6 +134,7 @@ defmodule KeyfleetWeb.WalletPanel do
        advance_id: nil,
        refresh: nil,
        tool: nil,
+       names_sender: true,
        class: nil,
        fields: [],
        notes: [],
@@ -463,7 +466,7 @@ defmodule KeyfleetWeb.WalletPanel do
       <p id={"#{@id}-line"} class="wallet-panel-line" aria-live="polite" hidden={!@line}>
         {@line}
       </p>
-      <p id={"#{@id}-from"} class="wallet-panel-note" hidden={!@signer}>
+      <p :if={@names_sender} id={"#{@id}-from"} class="wallet-panel-note" hidden={!@signer}>
         <%= if @signer do %>
           Sending from <code>{RegentFormat.short_address(@signer)}</code> on {@chain}.
         <% end %>

@@ -13,7 +13,6 @@ defmodule KeyfleetWeb.RouteCatalog do
   }
 
   @slug ~r/\A[a-z0-9][a-z0-9-]{0,62}\z/
-  @fleet_id ~r/\A[a-z][a-z0-9_]{0,62}\z/
   # Eighteen digits at most, so every admitted key number is a database integer.
   @token_id ~r/\A[1-9][0-9]{0,17}\z/
   # A workspace item is named by its type and its number, such as `task#12`.
@@ -72,33 +71,12 @@ defmodule KeyfleetWeb.RouteCatalog do
       parameter_schema: %{},
       reserved_values: %{},
       route_spec_id: :opportunities
-    },
-    %Entry{
-      path_pattern: "/app/keys/:fleet_id/:token_id",
-      live_action: :keys,
-      parameter_schema: %{fleet_id: :fleet_id, token_id: :token_id},
-      reserved_values: %{},
-      route_spec_id: :keys
-    },
-    %Entry{
-      path_pattern: "/app/keys/:fleet_id/:token_id/dms",
-      live_action: :dms,
-      parameter_schema: %{fleet_id: :fleet_id, token_id: :token_id},
-      reserved_values: %{},
-      route_spec_id: :dms
-    },
-    %Entry{
-      path_pattern: "/app/keys/:fleet_id/:token_id/dms/:other_token_id",
-      live_action: :dm,
-      parameter_schema: %{fleet_id: :fleet_id, token_id: :token_id, other_token_id: :token_id},
-      reserved_values: %{},
-      route_spec_id: :dm
     }
   ]
 
   # The pages every fleet has, each under the fleet's own address
   # (`Keyfleet.Fleets.path/1`): the fleet's page itself, then its rooms,
-  # workspace, proposals and polls.
+  # workspace, proposals and polls, and each of its Keys' pages and messages.
   @fleet_pages [
     {"", :fleet, %{}},
     {"/rooms/:slug", :rooms, %{slug: :slug}},
@@ -107,7 +85,11 @@ defmodule KeyfleetWeb.RouteCatalog do
     {"/proposals", :proposals, %{}},
     {"/proposals/:number", :proposal, %{number: :number}},
     {"/polls", :polls, %{}},
-    {"/polls/:poll_id", :poll, %{poll_id: :poll_id}}
+    {"/polls/:poll_id", :poll, %{poll_id: :poll_id}},
+    {"/keys/:token_id", :keys, %{token_id: :token_id}},
+    {"/keys/:token_id/dms", :dms, %{token_id: :token_id}},
+    {"/keys/:token_id/dms/:other_token_id", :dm,
+     %{token_id: :token_id, other_token_id: :token_id}}
   ]
 
   @entries @pages ++
@@ -196,7 +178,6 @@ defmodule KeyfleetWeb.RouteCatalog do
   end
 
   defp valid_parameter?(:slug, value), do: is_binary(value) and Regex.match?(@slug, value)
-  defp valid_parameter?(:fleet_id, value), do: is_binary(value) and Regex.match?(@fleet_id, value)
   defp valid_parameter?(:token_id, value), do: is_binary(value) and Regex.match?(@token_id, value)
 
   defp valid_parameter?(:number, value), do: is_binary(value) and Regex.match?(@number, value)

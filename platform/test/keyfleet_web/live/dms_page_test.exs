@@ -21,8 +21,8 @@ defmodule KeyfleetWeb.Live.DmsPageTest do
   end
 
   test "a message written on the page reaches the other Key's open inbox", %{conn: conn} do
-    {:ok, inbox, _html} = conn |> signed_in_as(wallet("b")) |> live("/app/keys/#{@fleet}/2/dms")
-    {:ok, page, _html} = conn |> signed_in_as(wallet("a")) |> live("/app/keys/#{@fleet}/1/dms/2")
+    {:ok, inbox, _html} = conn |> signed_in_as(wallet("b")) |> live("/cascade/1/keys/2/dms")
+    {:ok, page, _html} = conn |> signed_in_as(wallet("a")) |> live("/cascade/1/keys/1/dms/2")
 
     page |> form("#dms-composer", dm: %{body: "Hello, Key 2"}) |> render_submit()
 
@@ -31,7 +31,7 @@ defmodule KeyfleetWeb.Live.DmsPageTest do
   end
 
   test "a Key sold while its conversation is open closes it at the next message", %{conn: conn} do
-    {:ok, page, _html} = conn |> signed_in_as(wallet("a")) |> live("/app/keys/#{@fleet}/1/dms/2")
+    {:ok, page, _html} = conn |> signed_in_as(wallet("a")) |> live("/cascade/1/keys/1/dms/2")
 
     epoch!(1, 2, wallet("f"))
     send!(wallet("b"), 2, 1, "Are you there?")
@@ -46,7 +46,7 @@ defmodule KeyfleetWeb.Live.DmsPageTest do
     setup %{conn: conn} do
       account = account!(wallet("c"), [wallet("c"), wallet("a")])
       signed_in = init_test_session(conn, %{human_account_id: account.id})
-      {:ok, page, _html} = live(signed_in, "/app/keys/#{@fleet}/1/dms/2")
+      {:ok, page, _html} = live(signed_in, "/cascade/1/keys/1/dms/2")
       %{account: account, signed_in: signed_in, page: page}
     end
 

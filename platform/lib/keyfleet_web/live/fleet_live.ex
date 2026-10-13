@@ -52,6 +52,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Rooms.QuoteRequest
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
+  alias KeyfleetWeb.Components.AddressLinks
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.SendAgent
@@ -232,6 +233,7 @@ defmodule KeyfleetWeb.FleetLive do
               instruction={SendAgent.fleet_instruction(@fleet.name)}
               open={@send_agent_open}
             />
+            <.agent_files />
           </div>
 
           <nav class="fleet-bar__nav" aria-label="This fleet">
@@ -435,7 +437,6 @@ defmodule KeyfleetWeb.FleetLive do
         Enter as Key {grouped(@token_id)}
       </.link>
       <.buy_key_button :if={@fleet.buy && @fleet.buy.price} buy={@fleet.buy} variant="secondary" />
-      <.agent_files />
     </section>
     """
   end
@@ -466,7 +467,6 @@ defmodule KeyfleetWeb.FleetLive do
       >
         Sign in
       </Regent.Primitives.button>
-      <.agent_files />
     </section>
     """
   end
@@ -476,7 +476,6 @@ defmodule KeyfleetWeb.FleetLive do
     <section id="fleet-entry" class="fleet-entry" data-entry="buy" aria-label="Get a Key">
       <p class="fleet-entry__line">Key {grouped(@fleet.buy.token_id)} · {usdc(@fleet.buy.price)}</p>
       <.buy_key_button buy={@fleet.buy} variant="primary" />
-      <.agent_files />
     </section>
     """
   end
@@ -488,7 +487,6 @@ defmodule KeyfleetWeb.FleetLive do
       <Regent.Primitives.button id="fleet-entry-sign-in" type="button" data-account-target="sign-in">
         Sign in
       </Regent.Primitives.button>
-      <.agent_files />
     </section>
     """
   end
@@ -497,7 +495,6 @@ defmodule KeyfleetWeb.FleetLive do
     ~H"""
     <section id="fleet-entry" class="fleet-entry" data-entry="watch" aria-label="Your Keys">
       <p class="fleet-entry__line">No Keys on sale right now.</p>
-      <.agent_files />
     </section>
     """
   end
@@ -520,10 +517,10 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  # Where an agent starts reading, beside the way in.
+  # Where an agent starts reading, under "Send your agent".
   defp agent_files(assigns) do
     ~H"""
-    <p class="fleet-entry__agents">
+    <p id="fleet-agent-files" class="fleet-bar__agents">
       For agents: <a href="/agents.md">agents.md</a> · <a href="/skill.md">skill.md</a>
     </p>
     """
@@ -733,7 +730,7 @@ defmodule KeyfleetWeb.FleetLive do
           <.link
             id="fleet-dms-link"
             class="fleet-channel"
-            patch={"/app/keys/#{@fleet.fleet_id}/#{@fleet.held.first}/dms"}
+            patch={KeyLinks.dms_path(@fleet.fleet_id, @fleet.held.first)}
           >
             Direct messages
           </.link>
@@ -995,7 +992,7 @@ defmodule KeyfleetWeb.FleetLive do
         <p :if={@fleet.manager_address} class="fleet-wallet">
           <a
             id="fleet-contract-link"
-            href={"https://basescan.org/address/#{@fleet.manager_address}"}
+            href={AddressLinks.basescan(@fleet.manager_address)}
             title={@fleet.manager_address}
             rel="noopener noreferrer"
             target="_blank"

@@ -47,7 +47,7 @@ test("the main pages load with nothing refused", async ({page}) => {
     "/",
     `/syndicate/1`,
     `/syndicate/1/proposals`,
-    `/app/keys/${fleet}/${key}`,
+    `/syndicate/1/keys/${key}`,
     "/account",
   ]) {
     await open(page, path)
