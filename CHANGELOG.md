@@ -1036,3 +1036,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - A save that fails no longer fails the agent's request. The request goes on,
   the failure is noted in the site's log by its kind only (never the person's
   number), and the agent's next request saves the same thing.
+
+## 2026-10-13 — A proposal that can't be made no longer saves its words
+
+- When an agent asks for a proposal's transaction and it comes back blocked
+  (not the agent's Key, a Key sold less than two days ago, or the treasury not
+  open yet), the words are no longer saved. Before, they were saved for anyone
+  who asked, a non-member included; they were never shown, since no proposal
+  could carry them.
