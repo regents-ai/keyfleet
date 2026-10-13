@@ -222,6 +222,9 @@ defmodule KeyfleetWeb.Refusal do
     "notebooks_sign_in" =>
       {"You aren't signed in to this fleet's notebooks.",
        "Open them from the fleet's workspace on Keyfleet. An agent signs each request it sends here."},
+    "notebooks_other_site" =>
+      {"This request came from a page at another address, so it wasn't taken.",
+       "Make the change from this fleet's own notebooks, opened from its workspace on Keyfleet."},
     "notebooks_link_used" =>
       {"This notebook link has been used already or has run out.",
        "Open the notebooks again from the fleet's workspace on Keyfleet."},

@@ -13,7 +13,13 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       account, run out) it signs no one in either, checked on every request.
     * A request signed by an agent (SIWA, as on `/api/v1/agent`) is that
       agent's, whatever cookie it carries.
-    * Anything else is the cookie's person's, or is refused.
+    * Anything else is the cookie's person's, or is refused. A notebook page
+      runs whatever its authors wrote, and a browser sends this host's cookie
+      with what a page at any other keyfleet.ai address sends here. So the
+      cookie signs no one in for a request that changes something, or opens a
+      connection, when the browser says it came from another address
+      (`from_elsewhere?/2`). The hub's own check of this reads headers that
+      never reach it.
 
   Each one's key ownership is read at most every `access_ttl_ms`
   (`Keyfleet.AccessCache`); the first time in that span, they are
@@ -249,6 +255,20 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   defp identify_person(conn, fleet_id) do
+    if from_elsewhere?(conn, fleet_id),
+      do: {:refused, Refusal.json(conn, 403, "notebooks_other_site")},
+      else: cookie_person(conn, fleet_id)
+  end
+
+  # What a browser says of where a request came from: `Origin` names the page's
+  # address, `Sec-Fetch-Site` how it relates to this one. A read is not asked.
+  defp from_elsewhere?(conn, fleet_id) do
+    (conn.method not in ["GET", "HEAD"] or websocket?(conn)) and
+      (Enum.any?(get_req_header(conn, "origin"), &(&1 != Notebooks.url(fleet_id, nil))) or
+         Enum.any?(get_req_header(conn, "sec-fetch-site"), &(&1 in ["same-site", "cross-site"])))
+  end
+
+  defp cookie_person(conn, fleet_id) do
     conn = fetch_cookies(conn)
     max_age = Notebooks.config()[:session_max_age]
 

@@ -188,7 +188,9 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refute_received {:hub, _method, _path, _subject, _body}
   end
 
-  # Costly failure: one fleet's notebook sign-in opens another fleet's hub.
+  # Costly failure: one fleet's notebook sign-in opens another fleet's hub, or
+  # a notebook page of one fleet, which runs whatever its authors wrote, changes
+  # another fleet's notebooks as a person who holds Keys in both.
   test "a sign-in cookie for one fleet signs no one in on another fleet's host", c do
     cookie = enter!(c.holder)
 
@@ -196,6 +198,33 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert refused.status == 401
     assert json_response(refused, 401)["error"]["code"] == "notebooks_sign_in"
     refute_received {:hub, _method, _path, _subject, _body}
+
+    create = "/api/v1/projects/proj-fleet/notebooks"
+    own = Notebooks.url(@fleet, nil)
+    other = Notebooks.url(@other_fleet, nil)
+
+    for from <- [
+          [{"origin", other}],
+          [{"origin", "null"}],
+          [{"sec-fetch-site", "same-site"}],
+          [{"origin", own}, {"sec-fetch-site", "cross-site"}]
+        ] do
+      elsewhere = notebook(@host, :post, create, cookie, from)
+
+      assert json_response(elsewhere, 403)["error"]["code"] == "notebooks_other_site",
+             inspect(from)
+
+      socket = notebook(@host, :get, "/api/v1/events", cookie, [{"upgrade", "websocket"} | from])
+      assert json_response(socket, 403)["error"]["code"] == "notebooks_other_site", inspect(from)
+    end
+
+    refute_received {:hub, _method, _path, _subject, _body}
+
+    here =
+      notebook(@host, :post, create, cookie, [{"origin", own}, {"sec-fetch-site", "same-origin"}])
+
+    assert here.status == 201
+    assert_receive {:hub, "POST", ^create, "u_" <> _, _body}
   end
 
   # Costly failure: a holder mints a lasting hub credential that skips the key check.
@@ -407,8 +436,13 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   defp get_notebook(host, path, cookie), do: notebook(host, :get, path, cookie)
   defp post_notebook(host, path, cookie), do: notebook(host, :post, path, cookie)
 
-  defp notebook(host, method, path, cookie) do
-    conn = %{build_conn() | host: host}
+  defp notebook(host, method, path, cookie, headers \\ []) do
+    conn =
+      Enum.reduce(
+        headers,
+        %{build_conn() | host: host},
+        &put_req_header(&2, elem(&1, 0), elem(&1, 1))
+      )
 
     conn =
       if cookie, do: put_req_header(conn, "cookie", "__Host-kf_notebooks=" <> cookie), else: conn

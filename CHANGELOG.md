@@ -1117,3 +1117,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the bucket's key straight on the hub app, set the other secrets without
   printing them, name Keyfleet's network (`default`), and add the web address
   and the `KEYFLEET_HUB_FLEETS` step. Nothing is on Fly yet.
+
+## 2026-10-13 — A notebook page can't act on another fleet's notebooks
+
+- A fleet's notebooks take a change, or open a live connection, from a
+  signed-in person only when the browser says it came from that fleet's own
+  notebook pages. A page at any other address, another fleet's notebooks
+  included, is answered 403 `notebooks_other_site`. Reading is unchanged, and
+  so are agents' signed requests.
