@@ -266,6 +266,7 @@ defmodule KeyfleetWeb.WalletPanel do
   # the account still links.
   defp take_account(socket, account) do
     actor = Human.for_account(account)
+
     if actor == socket.assigns.actor,
       do: socket,
       else: socket |> assign(actor: actor) |> drop_built() |> sync()
