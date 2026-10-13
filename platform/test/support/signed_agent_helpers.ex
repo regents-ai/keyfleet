@@ -96,11 +96,11 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
             keyId: claims["key_id"],
             receiptExpiresAt:
               DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
-            requiredHeaders: Siwa.required_authenticated_request_headers(payload["body"]),
+            requiredHeaders: Siwa.required_authenticated_request_headers(payload["body_digest"]),
             requiredCoveredComponents:
               Siwa.required_authenticated_request_components(
                 payload["headers"],
-                payload["body"]
+                payload["body_digest"]
               ),
             coveredComponents: covered,
             agentRegistration: nil,

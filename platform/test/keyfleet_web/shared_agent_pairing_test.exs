@@ -83,7 +83,11 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
              json_response(paired, 201)
 
     assert_received {:verified, ["keyfleet"], envelope}
-    assert %{"method" => "POST", "path" => "/api/agents/v1/pair", "body" => ^raw} = envelope
+    # The sign-in server is sent the digest of the bytes read.
+    digest = Siwa.content_digest_for_body(raw)
+
+    assert %{"method" => "POST", "path" => "/api/agents/v1/pair", "body_digest" => ^digest} =
+             envelope
 
     checked_in = get(build_conn(), "/api/agents/v1/me")
 
