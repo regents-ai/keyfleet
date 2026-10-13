@@ -4,7 +4,8 @@ Each Keyfleet fleet gets its own private notebook hub on Fly: a copy of
 [marimohub](https://github.com/marimo-team/marimohub) that only that fleet's
 members can open. When someone opens a notebook, the hub starts a short-lived
 Fly machine for it, the notebook's code runs on that machine, and the machine
-is deleted when the session ends. Nothing here is on Fly yet.
+is deleted when the session ends. The Regents Club's hub is being set up on
+Fly; no other fleet's is.
 
 People never reach the hub directly. Keyfleet's own server sits in front of it,
 checks who is signed in and what they may see, and passes a signed note about
@@ -113,9 +114,9 @@ For four fleets, setting this up means:
   machines) for each fleet.
 - **4 Tigris buckets**: one per fleet, holding its notebooks and results.
 - **4 private networks**: one per fleet, holding only that fleet's two apps,
-  plus one Flycast address per hub on Keyfleet's network.
+  plus one Flycast address per hub on the organization's default network.
 - **Tokens and secrets per fleet**:
-  - a Fly token that may manage machines in `kf-nbk-<fleet>` only;
+  - a Fly token, good for a year, narrowed to the app `kf-nbk-<fleet>` alone;
   - a key for that fleet's bucket only;
   - two random secrets made locally, one for hub sign-in cookies and one for
     helper passwords.
@@ -124,17 +125,22 @@ For four fleets, setting this up means:
   - notebook machines, charged only while sessions run;
   - Tigris storage.
 
-None of this exists yet, and nothing here creates it.
+The Regents Club's is being set up (13 October 2026). The other fleets have
+none of this yet, and nothing here creates it.
 
 ## Setting up one fleet
 
 Each step names the command. The flags were checked against the help text of
-flyctl v0.4.107, but none of this has run against real Fly yet.
+flyctl v0.4.107. Steps 1 to 3, 5, 8 and 9 have run on real Fly for the Regents
+Club; the bucket and the hub's deploy have not yet.
 
 Each fleet's hub and runner apps share a private network of their own,
 `kf-nb-<fleet>-net`. Notebook machines therefore cannot reach the shared
-database or any other Regent app over Fly's private network, and the hub is
-reachable from Keyfleet's server only through one private (Flycast) address.
+database or any other Regent app over Fly's private network. The hub has one
+private (Flycast) address on the organization's default network, which is how
+Keyfleet's server reaches it. Every other app on that network can reach that
+address too: what keeps them out of a fleet's notebooks is the signed note
+Keyfleet's server puts on each request, which the hub checks.
 
 1. **Check and build the images**: run `make check-notebook-hub` from the
    repository root. It must succeed before anything is pushed.
@@ -147,23 +153,47 @@ reachable from Keyfleet's server only through one private (Flycast) address.
    (same tags). Then run `fly auth docker` and:
    - tag `keyfleet/notebook-runner:f103eb2` as `registry.fly.io/kf-nbk-<fleet>:f103eb2` and push it;
    - tag `keyfleet/notebook-hub:f103eb2` as `registry.fly.io/kf-nb-<fleet>:f103eb2` and push it.
-4. **Create the fleet's bucket on the hub app**:
+4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:
    `fly storage create --app kf-nb-<fleet> --name <bucket>`. Fly sets the
    bucket's key on the hub app itself, as the secrets `AWS_ACCESS_KEY_ID` and
-   `AWS_SECRET_ACCESS_KEY`, so nothing secret is printed or copied. The hub's
-   storage reads those two when its own `MARIMOHUB_STORAGE_S3_ACCESS_KEY_ID`
-   and `MARIMOHUB_STORAGE_S3_SECRET_ACCESS_KEY` are unset, so leave them unset.
-   Accepting Tigris' terms at the prompt is Sean's decision each time.
-5. **Set the hub's other secrets, without printing any of them**:
+   `AWS_SECRET_ACCESS_KEY`, and also shows both values on the screen of
+   whoever runs it. So no agent runs it, and nothing it prints is pasted
+   anywhere. The hub's storage reads those two when its own
+   `MARIMOHUB_STORAGE_S3_ACCESS_KEY_ID` and
+   `MARIMOHUB_STORAGE_S3_SECRET_ACCESS_KEY` are unset, so leave them unset.
+   Accepting Tigris' terms at the prompt is Sean's decision each time; never
+   pass `-y`.
+5. **Make the hub's Fly token and set its other secrets, without printing any
+   of them.** A plain deploy token for `kf-nbk-<fleet>` can also list and
+   manage the organization's WireGuard connections (tried 13 October 2026), so
+   it is narrowed before it is stored:
+   - `fly tokens create deploy --app kf-nbk-<fleet> --name kf-nb-<fleet>-hub --expiry 8760h`
+     makes it, good for one year. Its value goes straight into the next
+     command, never to the screen or a file that outlives the command.
+   - `fly tokens attenuate -f <caveat file>`, with the token in
+     `FLY_API_TOKEN`, narrows it. The caveat file holds exactly:
 
-   ```sh
-   fly secrets set --app kf-nb-<fleet> --stage \
-     MARIMOHUB_AUTH_SESSION_SECRET="$(openssl rand -hex 32)" \
-     MARIMOHUB_COMPUTE_FLY_HELPER_SECRET="$(openssl rand -hex 32)" \
-     FLY_API_TOKEN="$(fly tokens create deploy --app kf-nbk-<fleet>)"
-   ```
+     ```json
+     [{"type":"IfPresent","body":{"ifs":[{"type":"FeatureSet","body":{"features":{}}}],"else":"rwcdC"}}]
+     ```
 
-   The token can manage machines in the runner app only.
+   - Check the narrowed token three ways before storing it: listing the
+     machines of `kf-nbk-<fleet>` answers; listing WireGuard connections is
+     refused; listing the machines of `keyfleet` is refused.
+   - Store it with the two random secrets:
+
+     ```sh
+     fly secrets set --app kf-nb-<fleet> --stage \
+       MARIMOHUB_AUTH_SESSION_SECRET="$(openssl rand -hex 32)" \
+       MARIMOHUB_COMPUTE_FLY_HELPER_SECRET="$(openssl rand -hex 32)" \
+       FLY_API_TOKEN="<the narrowed token>"
+     ```
+
+   The narrowed token has full control of the runner app, which holds only
+   notebook machines, and nothing else: no WireGuard, no image builder, no
+   other app. Write its listed ID and its last day under "Tokens on record"
+   below. To withdraw one, `fly tokens list --app kf-nbk-<fleet>` and
+   `fly tokens revoke <listed ID>`; a token's own value is not accepted there.
 6. **Fill in the hub's settings.** Copy `hub/fly.hub.toml` and
    `hub/fly.runner.toml` into `hub/fleets/` as `<fleet>.hub.toml` and
    `<fleet>.runner.toml`, and replace every `<…>` placeholder
@@ -173,10 +203,10 @@ reachable from Keyfleet's server only through one private (Flycast) address.
    `fly deploy --config notebook-hub/hub/fleets/<fleet>.hub.toml --no-public-ips --ha=false`.
    Nothing is deployed to `kf-nbk-<fleet>`: the hub starts its machines there.
 8. **Give Keyfleet's server one private address for the hub**:
-   `fly ips allocate-v6 --private --network default --app kf-nb-<fleet>`.
-   This makes a Flycast address on Keyfleet's network, not the fleet's. The
-   `keyfleet` app is on the organization's network named `default`: the code
-   store's own Flycast address (`fly ips list --app keyfleet-code`) names it.
+   `fly ips allocate-v6 --private --app kf-nb-<fleet>`, with no `--network`.
+   This makes a Flycast address on the organization's default network, which
+   the `keyfleet` app is on and which has no name to pass, not on the fleet's
+   own network.
 9. **Give the fleet's notebooks their web address.** In Vercel DNS, point
    `<fleet, hyphenated>.notebooks.keyfleet.ai` at the `keyfleet` app as a CNAME
    to `keyfleet.fly.dev`, then
@@ -186,6 +216,16 @@ reachable from Keyfleet's server only through one private (Flycast) address.
     `<fleet_id>=http://kf-nb-<fleet>.flycast` to the `keyfleet` app's
     `KEYFLEET_HUB_FLEETS` secret (pairs separated by commas). Setting it
     restarts the live site once.
+
+## Tokens on record
+
+Each hub's Fly token lasts a year and is replaced before its last day: make
+and narrow a new one as in step 5, set it, deploy, then revoke the old one by
+its listed ID.
+
+| Fleet | Token name | Listed ID | Made | Last day |
+| --- | --- | --- | --- | --- |
+| Regents Club | `kf-nb-regents-club-hub` | `60XMXnbzk4eybuLoxgj02GxemnCgP23j2v2DXkMFZ7` | 13 October 2026 | 13 October 2027, 17:48 UTC |
 
 ## Things to know
 
@@ -199,7 +239,11 @@ reachable from Keyfleet's server only through one private (Flycast) address.
   reach that fleet's hub and the fleet's other notebook machines, and nothing
   else on Fly's private network. The hub's sign-in and each machine's helper
   password still guard those ports.
-- **Not verified on real Fly:**
+- **The hub's Flycast address is open to the default network.** Any Regent app
+  on the organization's default network can connect to it. The hub lets in
+  only requests carrying Keyfleet's signed note.
+- **Not verified on real Fly** (waiting on the Regents Club hub's first
+  deploy):
   - that the hub, on its own network, still reaches Fly's machine service at
     `_api.internal:4280` (if not, `MARIMOHUB_COMPUTE_FLY_API_URL` can point at
     Fly's public machine service instead);

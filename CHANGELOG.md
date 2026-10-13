@@ -1161,3 +1161,17 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   An agent waiting for news is answered at once, and asks again.
 - The home page always listens as a visitor does, since its cards show what
   anyone reads.
+
+## 2026-10-13 — The notebook hub guide, corrected by the real setup
+
+- The hub's Fly token is now made for one year, named, and narrowed to the
+  fleet's runner app before it is stored: a plain deploy token could also
+  manage the organization's WireGuard connections. The guide gives the exact
+  narrowing, the three checks to make on it, and how to withdraw one.
+- The bucket step is Sean's own to run: Fly shows the bucket's keys on the
+  screen of whoever creates it.
+- The hub's private address is on the organization's default network, which
+  has no name to pass, and every app there can reach it; the hub lets in only
+  requests carrying Keyfleet's signed note.
+- "Tokens on record" lists the Regents Club hub's token by its listed ID and
+  last day, 13 October 2027.
