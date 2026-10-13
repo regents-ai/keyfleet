@@ -30,7 +30,6 @@ import {OnchainSteps} from "./hooks/onchain_steps"
 import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
 import {MotionCascade, ShellViews} from "./hooks/motion/reveals"
 import {MotionPanels} from "./hooks/motion/slides"
-import {OpenWhenWide} from "./hooks/open_when_wide"
 import {VerifiedConnections} from "./hooks/verified_connections"
 import {mountMotion} from "./motion"
 
@@ -306,7 +305,6 @@ const hooks = {
   MotionPanels,
   MotionRefusal,
   OnchainSteps,
-  OpenWhenWide,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
   VerifiedConnections,
 }

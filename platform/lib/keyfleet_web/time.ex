@@ -16,4 +16,16 @@ defmodule KeyfleetWeb.Time do
       true -> Calendar.strftime(at, "%-d %b %Y")
     end
   end
+
+  @doc """
+  When `at` was, short enough for a line of a feed: "14:03" today, then
+  "Yesterday", then the day as `moment/2` gives it.
+  """
+  def clock(%DateTime{} = at, %DateTime{} = now) do
+    case Date.diff(DateTime.to_date(now), DateTime.to_date(at)) do
+      0 -> Calendar.strftime(at, "%H:%M")
+      1 -> "Yesterday"
+      _days -> moment(at, now)
+    end
+  end
 end

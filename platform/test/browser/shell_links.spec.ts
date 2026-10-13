@@ -17,7 +17,9 @@ test.describe.configure({mode: "serial"})
 
 let key: number
 
+// The walk's sidebar also opens Classic #1, so it is deployed too.
 test.beforeAll(() => {
+  prepareFleet("fleet_tech_classic")
   prepareFleet(fleet)
   key = furnishFleet(fleet, me)
 })
@@ -146,19 +148,21 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   const toFleet = () => walk.follow(page.locator("#shell-sidebar").getByRole("link", {name: "Syndicate #1"}), fleetPage)
 
   // The fleet's rooms, workspace and proposals.
-  await page.locator("#fleet-rooms-toggle").click()
-  await walk.follow(page.locator("#fleet-rooms").getByRole("link", {name: "General"}), general)
+  await walk.follow(page.locator("#fleet-channels").getByRole("link", {name: "General"}), general)
   await toFleet()
   await walk.follow(page.locator("#fleet-workspace-link"), board)
 
-  // The workspace's heading leads back to the fleet, and a card's key to the key's page.
+  // The workspace's heading leads back to the fleet, and a card's key to the
+  // key's profile over the fleet's page. Close is no link: it starts no page
+  // load and leaves the fleet's page.
   await walk.follow(page.locator("#workspace-page .workspace-kicker a"), fleetPage)
   await walk.follow(page.locator("#fleet-workspace-link"), board)
-  await walk.follow(page.locator(`#workspace-page a[href="/app/keys/${fleet}/${key}"]`).first(), {
-    path: `/app/keys/${fleet}/${key}`,
-    shows: "#key-page",
+  await walk.follow(page.locator(`#workspace-page a[href="${fleetPath}?key=${key}"]`).first(), {
+    path: `${fleetPath}?key=${key}`,
+    shows: "dialog#key-profile",
   })
-  await toFleet()
+  await page.locator("#key-profile-close").click()
+  await walk.arrive(fleetPage)
 
   // A goal on the workspace opens on its own page. A proposal's heading leads
   // to every proposal, and that page's heading back to the fleet.

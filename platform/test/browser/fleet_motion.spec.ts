@@ -12,10 +12,10 @@ import {
   watchMotion,
 } from "./support/motion"
 
-// A fleet page's motion: presses squish, the Rooms menu pops and dialogs rise
-// only for a pointer, the panels beside the map simply open, a sale rolls its
-// numbers, and everything ends clean. Nothing moves for a reader who asked for
-// less motion.
+// A fleet page's motion: presses squish and dialogs rise only for a pointer,
+// How this fleet works simply opens, a sale rolls its numbers and its line
+// joins the hall's feed, and everything ends clean. Nothing moves for a reader
+// who asked for less motion.
 const fleet = "fleet_tech_classic"
 const buyer = "0x2222222222222222222222222222222222222222"
 
@@ -26,28 +26,25 @@ test.beforeAll(() => {
 async function openFleet(page: Page) {
   await watchMotion(page)
   await page.goto(`/app/fleets/${fleet}`)
-  await expect(page.locator(`#key-map-${fleet}.key-map--ready`)).toBeAttached()
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   await forget(page)
 }
 
 const plainNumber = (page: Page, id: string) =>
   page.locator(`#${id} [data-count]`).evaluate(el => (el.children.length === 0 ? el.textContent!.trim() : null))
 
-test("a pointer press squishes its control, pops the Rooms menu and rises a dialog, all ending clean", async ({
-  page,
-}) => {
+test("a pointer press squishes its control and rises a dialog, all ending clean", async ({page}) => {
   await openFleet(page)
 
-  await page.locator("#fleet-rooms-toggle").click()
-  await expect(page.locator("#fleet-rooms")).toBeVisible()
-  await expect.poll(() => moved(page, "#fleet-rooms-toggle")).toBe(true)
-  await expect.poll(() => moved(page, "#fleet-rooms")).toBe(true)
+  await page.locator("#fleet-show-chat").click()
+  await expect(page.locator("#fleet-show-chat")).toHaveAttribute("aria-pressed", "true")
+  await expect.poll(() => moved(page, "#fleet-show-chat")).toBe(true)
 
-  await page.locator("#fleet-who-toggle").click()
-  await expect(page.locator("#fleet-who")).toBeVisible()
-  await expect.poll(() => moved(page, "#fleet-who-toggle")).toBe(true)
+  await page.locator("#fleet-about-toggle").click()
+  await expect(page.locator("#fleet-about")).toBeVisible()
+  await expect.poll(() => moved(page, "#fleet-about-toggle")).toBe(true)
   await page.waitForTimeout(600)
-  expect(await moved(page, "#fleet-who")).toBe(false)
+  expect(await moved(page, "#fleet-about")).toBe(false)
 
   await page.locator("#fleet-send-agent").click()
   await expect(page.locator("dialog.send-agent")).toBeVisible()
@@ -56,15 +53,15 @@ test("a pointer press squishes its control, pops the Rooms menu and rises a dial
   await expect.poll(() => leftovers(page)).toEqual([])
 })
 
-test("a keyboard press opens the Rooms menu, panels and dialogs at once, with no squish", async ({page}) => {
+test("a keyboard press picks a channel and opens panels and dialogs at once, with no squish", async ({page}) => {
   await openFleet(page)
 
-  await page.locator("#fleet-rooms-toggle").focus()
+  await page.locator("#fleet-show-chat").focus()
   await page.keyboard.press("Enter")
-  await expect(page.locator("#fleet-rooms")).toBeVisible()
-  await page.locator("#fleet-who-toggle").focus()
+  await expect(page.locator("#fleet-show-chat")).toHaveAttribute("aria-pressed", "true")
+  await page.locator("#fleet-about-toggle").focus()
   await page.keyboard.press("Enter")
-  await expect(page.locator("#fleet-who")).toBeVisible()
+  await expect(page.locator("#fleet-about")).toBeVisible()
   // Opening a panel takes the reader to its heading, and again two frames later.
   await page.evaluate(
     () => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(done)))),
@@ -96,7 +93,7 @@ test("Buy pressed again and again squishes only its label, which ends at rest, a
   await expect(page.locator("#buy-key-order-press-note")).toHaveText("Sign in to send this. Nothing was sent.")
 })
 
-test("a sale rolls the count, each digit clipped by class, and its line shows in What's happening without moving the list, ending as plain text", async ({page}) => {
+test("a sale rolls the count, each digit clipped by class, and its line joins the feed without moving the lines below, ending as plain text", async ({page}) => {
   await openFleet(page)
   const sold = Number(await plainNumber(page, "fleet-sales-keys"))
 
@@ -106,10 +103,10 @@ test("a sale rolls the count, each digit clipped by class, and its line shows in
   expect(await rolled(page, "fleet-sales-keys")).toBe(true)
   // Each digit rolls in a box its stylesheet clips, not one styled in markup.
   expect(await clippedByClass(page, "fleet-sales-keys")).toBe(true)
-  // What's happening hears of the sale a moment after the count does.
-  await expect(page.locator(`#fleet-now-sale-${sold + 1}`)).toBeAttached({timeout: 10_000})
+  // The feed hears of the sale a moment after the count does.
+  await expect(page.locator(`#fleet-feed-sale-${sold + 1}`)).toBeAttached({timeout: 10_000})
   await page.waitForTimeout(600)
-  expect(await movedCount(page, "#fleet-now-list > li")).toBe(0)
+  expect(await movedCount(page, `#fleet-feed-list > li:not(#fleet-feed-sale-${sold + 1})`)).toBe(0)
   await expect.poll(() => leftovers(page)).toEqual([])
 })
 
@@ -142,7 +139,8 @@ test("a reader who asked for less motion sees presses, panels and a sale without
   await openFleet(page)
   const sold = Number(await plainNumber(page, "fleet-sales-keys"))
 
-  await page.locator("#fleet-who-toggle").click()
+  await page.locator("#fleet-show-chat").click()
+  await page.locator("#fleet-about-toggle").click()
   await page.locator("#fleet-send-agent").click()
   await expect(page.locator("dialog.send-agent")).toBeVisible()
   await page.keyboard.press("Escape")

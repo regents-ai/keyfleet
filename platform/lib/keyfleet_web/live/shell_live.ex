@@ -42,7 +42,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias Phoenix.Socket.Broadcast
 
   # The events each area's page sends, which that area's module answers.
-  @fleet_events ~w(open_send_agent close_send_agent activity_earlier keymap_ready select_key)
+  @fleet_events ~w(open_send_agent close_send_agent activity_earlier open_pass_key keymap_ready select_key)
   @room_events ~w(validate_post send_message validate_naming name_room mute_key unmute_key)
   @key_profile_events ~w(post_to_key close_key)
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)

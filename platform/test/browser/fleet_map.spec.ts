@@ -12,13 +12,13 @@ const someoneElse = "0x2222222222222222222222222222222222222222"
 
 type Socket = {liveSocket: {connect(): void; disconnect(): void}}
 
-// Opens a fleet page signed in as `me` and waits for the map's first load.
+// Opens a fleet page's map signed in as `me` and waits for its first load.
 async function openFleet(page: Page, id = fleet) {
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   const auth = await installAuthenticatedPrivy(page, "valid")
   await auth.establishLocalSession()
-  await page.goto(`/app/fleets/${id}`)
+  await page.goto(`/app/fleets/${id}?view=map`)
   const stage = page.locator(`#key-map-${id}.key-map--ready`)
   await expect(stage.locator(".km-tile").first()).toBeAttached()
   await stage.scrollIntoViewIfNeeded()
@@ -156,19 +156,19 @@ test.describe("the fleet page's map", () => {
     const at = await tileAt(page, key)
     expect(at, `key ${key} is on screen`).toBeDefined()
     await page.mouse.click(at.x, at.y)
-    await expect(page).toHaveURL(new RegExp(`\\?key=${key}$`))
+    await expect(page).toHaveURL(new RegExp(`&key=${key}$`))
     await expect(page.locator("#key-profile-title")).toHaveText(`Key ${key.toLocaleString("en-US")}`)
     await expect(chosen).toHaveText(`Key ${key.toLocaleString("en-US")} chosen.`)
     await expectMarks(page, key, ["selected"])
 
     await page.goBack()
-    await expect(page).toHaveURL(new RegExp(`/app/fleets/${fleet}$`))
+    await expect(page).toHaveURL(new RegExp(`/app/fleets/${fleet}\\?view=map$`))
     await expect(page.locator("#key-profile")).toHaveCount(0)
     await expect(chosen).toHaveText("No Key chosen yet.")
     await expectMarks(page, key, [], ["selected"])
 
     await page.goForward()
-    await expect(page).toHaveURL(new RegExp(`\\?key=${key}$`))
+    await expect(page).toHaveURL(new RegExp(`&key=${key}$`))
     await expect(page.locator("#key-profile-title")).toBeFocused()
     await expectMarks(page, key, ["selected"])
 

@@ -8,7 +8,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
   alias KeyfleetWeb.Live.LaunchGateHook
   alias KeyfleetWeb.Plugs.LaunchGate
 
-  @closed_pages ~w(/ /docs /about /opportunities /account /app/fleets/fibonacci_syndicate
+  @closed_pages ~w(/ /docs /about /opportunities /account /app /app/fleets/fibonacci_syndicate
                    /app/keys/fibonacci_syndicate/1 /fleets/fibonacci_syndicate /no-such-page)
   @closed_message "This part of the site isn't open yet."
 

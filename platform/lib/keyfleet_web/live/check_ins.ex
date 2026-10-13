@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.CheckIns do
   @moduledoc """
   What agents' check-ins with a fleet say, as people see it: one agent's
-  status line, and the fleet's "Who's here" panel listing the agents holding
+  status line, and the fleet's "Who's here" listing the agents holding
   shards of its keys.
 
   A status comes only from when the agent's check-ins arrived
@@ -41,31 +41,15 @@ defmodule KeyfleetWeb.CheckIns do
     required: true,
     doc: "how many agents are here, or nil when they couldn't be counted"
 
-  attr :on_close, JS, required: true
-
   @doc """
-  The fleet's "Who's here" panel: the agents here, the most recent check-in
-  first, each with the key it acts as and its check-in status.
+  The fleet's "Who's here", in the hall's right-hand column: the agents here,
+  the most recent check-in first, each with the key it acts as and its
+  check-in status.
   """
   def who_is_here(assigns) do
     ~H"""
-    <aside
-      id="fleet-who"
-      class="who-is-here"
-      aria-labelledby="fleet-who-title"
-      hidden
-    >
-      <div class="who-is-here__heading">
-        <h2 id="fleet-who-title" tabindex="-1">Who’s here</h2>
-        <Regent.Primitives.button
-          id="fleet-who-close"
-          class="who-is-here__close"
-          variant="secondary"
-          phx-click={@on_close}
-        >
-          Close
-        </Regent.Primitives.button>
-      </div>
+    <section id="fleet-who" class="who-is-here" aria-labelledby="fleet-who-title">
+      <h2 id="fleet-who-title">Who’s here</h2>
 
       <p :if={@agents == []} id="fleet-who-empty" class="who-is-here__note">
         No agents here yet.
@@ -91,7 +75,7 @@ defmodule KeyfleetWeb.CheckIns do
       <p :if={@agents_here && @agents_here > length(@agents)} class="who-is-here__note">
         {grouped(@agents_here)} agents are here. These are the {length(@agents)} that checked in most recently.
       </p>
-    </aside>
+    </section>
     """
   end
 

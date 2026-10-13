@@ -1,6 +1,8 @@
-/* Lines of what has happened in a fleet: one sentence each, with when it
-   happened below it. A run of posts shows its newest words on a line of
-   their own. A problem raised with an item is marked in the warm accent. */
+/* The hall's feed, dense like a game's chat: each line is when it happened,
+   its channel's tag and one sentence. Each Key's name keeps one of four
+   colours, so its lines are easy to follow down the feed. A run of posts
+   shows its newest words after the sentence. A problem raised with an item
+   is marked in the warm accent. */
 
 .activity-lines {
   display: grid;
@@ -12,26 +14,80 @@
 
 .activity-line {
   display: grid;
-  gap: 0.2rem;
-  padding-block: 0.75rem;
-  border-block-end: 1px solid var(--color-border);
-}
-
-.activity-line:first-child {
-  padding-block-start: 0;
+  grid-template-columns: 5.25rem 3.25rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.5rem;
+  padding-block: 0.3rem;
+  font-size: 0.9375rem;
+  line-height: 1.45;
 }
 
 .activity-line[data-tone="disagreement"] {
-  padding-inline-start: 0.75rem;
-  border-inline-start: 3px solid var(--ash-accent-warm);
+  box-shadow: inset 3px 0 0 var(--ash-accent-warm);
 }
 
 .activity-line p {
   margin: 0;
 }
 
+.activity-line__time {
+  color: var(--color-fg-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-line__tag {
+  color: var(--color-fg-muted);
+  font-family: var(--font-family-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.activity-line[data-channel="chat"] .activity-line__tag {
+  color: var(--ash-accent);
+}
+
+.activity-line[data-channel="votes"] .activity-line__tag {
+  color: var(--ash-accent-warm);
+}
+
 .activity-line__text {
   overflow-wrap: anywhere;
+}
+
+.activity-line__text [data-key] {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.activity-line__text [data-key]:hover {
+  text-decoration: underline;
+}
+
+.activity-line__text [data-hue="0"] {
+  color: var(--ash-accent-warm);
+}
+
+.activity-line__text [data-hue="1"] {
+  color: var(--ash-accent);
+}
+
+.activity-line__text [data-hue="2"] {
+  color: light-dark(
+    color-mix(in oklab, var(--palette-tangerine-tango) 40%, var(--palette-charcoal)),
+    color-mix(in oklab, var(--palette-tangerine-tango) 50%, var(--palette-platinum))
+  );
+}
+
+.activity-line__text [data-hue="3"] {
+  color: light-dark(
+    color-mix(in oklab, var(--palette-powder-blue) 30%, var(--palette-charcoal)),
+    color-mix(in oklab, var(--palette-powder-blue) 55%, var(--palette-platinum))
+  );
 }
 
 .activity-line__quote {
@@ -42,9 +98,38 @@
   display: block;
 }
 
-.activity-line__time {
-  color: var(--color-fg-muted);
-  font-size: 0.875rem;
+/* A channel narrows the feed to its lines; when none of the latest are of
+   its kind, a note says so. */
+.fleet-feed:not([data-show="all"]) .activity-line {
+  display: none;
+}
+
+.fleet-feed[data-show="chat"] .activity-line[data-channel="chat"],
+.fleet-feed[data-show="work"] .activity-line[data-channel="work"],
+.fleet-feed[data-show="keys"] .activity-line[data-channel="keys"],
+.fleet-feed[data-show="votes"] .activity-line[data-channel="votes"] {
+  display: grid;
+}
+
+.fleet-feed__none {
+  display: none;
+}
+
+.fleet-feed[data-show="chat"]:not(:has(.activity-line[data-channel="chat"])) .fleet-feed__none,
+.fleet-feed[data-show="work"]:not(:has(.activity-line[data-channel="work"])) .fleet-feed__none,
+.fleet-feed[data-show="keys"]:not(:has(.activity-line[data-channel="keys"])) .fleet-feed__none,
+.fleet-feed[data-show="votes"]:not(:has(.activity-line[data-channel="votes"])) .fleet-feed__none {
+  display: block;
+}
+
+@media (max-width: 48rem) {
+  .activity-line {
+    grid-template-columns: 3.25rem minmax(0, 1fr);
+  }
+
+  .activity-line__time {
+    grid-column: 1 / -1;
+  }
 }
 
 /* Trying now: the fleet's open goals as a short list, then how much work is
@@ -80,6 +165,10 @@
   gap: 0.2rem;
   padding-block-end: 0.6rem;
   border-block-end: 1px solid var(--color-border);
+}
+
+.trying-now h2 {
+  font-size: 1.05rem;
 }
 
 .trying-goal__title {

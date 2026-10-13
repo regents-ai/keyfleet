@@ -1,39 +1,10 @@
-/* "Who's here": the agents holding shards of a fleet's keys, opened beside the map */
+/* "Who's here": the agents holding shards of a fleet's keys, in the hall's
+   right-hand column */
 
 .who-is-here {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-end: 0;
-  z-index: 2;
   display: grid;
   align-content: start;
-  gap: 1.25rem;
-  width: min(26rem, 100%);
-  overflow: auto;
-  overscroll-behavior: contain;
-  padding: var(--rg-panel-padding);
-  border-inline-start: 1px solid var(--ash-line-strong);
-  background: var(--color-surface);
-}
-
-.who-is-here[hidden] {
-  display: none;
-}
-
-.who-is-here__heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.who-is-here__heading h2 {
-  font-size: 1.35rem;
-  line-height: 1.1;
-}
-
-.who-is-here__close {
-  flex: none;
+  gap: 0.75rem;
 }
 
 .who-is-here__list {

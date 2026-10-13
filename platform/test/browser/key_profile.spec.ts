@@ -27,7 +27,7 @@ async function openFleet(page: Page, query = "") {
 const profile = (page: Page) => page.locator("dialog#key-profile")
 const focusInside = (page: Page) =>
   page.evaluate(() => document.querySelector("#key-profile")?.contains(document.activeElement) ?? false)
-const withoutKey = new RegExp(`${fleetPath}$`)
+const withoutKey = new RegExp(`${fleetPath}(\\?view=map)?$`)
 
 test.describe("a key's profile", () => {
   test.beforeAll(() => {
@@ -37,11 +37,11 @@ test.describe("a key's profile", () => {
   test("opens from the list with its title focused, keeps Tab inside, and Escape hands focus back", async ({page}) => {
     const key = sellKey(fleet, me)
     const errors = await signIn(page)
-    await openFleet(page)
+    await openFleet(page, "?view=map")
 
     const link = page.locator(`#fleet-key-link-${key}`)
     await link.click()
-    await expect(page).toHaveURL(new RegExp(`\\?key=${key}$`))
+    await expect(page).toHaveURL(new RegExp(`[?&]key=${key}$`))
     await expect(profile(page)).toBeVisible()
     await expect(page.locator("#key-profile-title")).toHaveText(`Key ${key}`)
     await expect(page.locator("#key-profile-title")).toBeFocused()
@@ -63,7 +63,7 @@ test.describe("a key's profile", () => {
   test("Back closes it and Forward opens it again", async ({page}) => {
     const key = sellKey(fleet, me)
     const errors = await signIn(page)
-    await openFleet(page)
+    await openFleet(page, "?view=map")
 
     await page.locator(`#fleet-key-link-${key}`).click()
     await expect(profile(page)).toBeVisible()
@@ -73,7 +73,7 @@ test.describe("a key's profile", () => {
     await expect(page).toHaveURL(withoutKey)
 
     await page.goForward()
-    await expect(page).toHaveURL(new RegExp(`\\?key=${key}$`))
+    await expect(page).toHaveURL(new RegExp(`[?&]key=${key}$`))
     await expect(profile(page)).toBeVisible()
     await expect(page.locator("#key-profile-title")).toBeFocused()
     expect(errors).toEqual([])

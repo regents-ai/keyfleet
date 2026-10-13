@@ -232,6 +232,26 @@ defmodule Keyfleet.Keys do
 
   def held_keys(_actor, _fleet_id), do: []
 
+  @doc """
+  The lowest of the fleet's keys a person's wallets hold and how many they
+  hold, as `%{first: token_id, count: count}`, or `nil` for someone holding
+  none. Reads one key and a count, however many the person holds.
+  """
+  def held_summary(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
+    with %{token_id: first} <- held_identity_key!(fleet_id, wallets, actor: actor) do
+      count =
+        Keyfleet.Keys.KeyAttachment
+        |> Ash.Query.for_read(:held_in_fleet, %{fleet_id: fleet_id, owner_wallets: wallets},
+          actor: actor
+        )
+        |> Ash.count!()
+
+      %{first: first, count: count}
+    end
+  end
+
+  def held_summary(_actor, _fleet_id), do: nil
+
   defp agent_key(key, wallet),
     do: %{
       token_id: key.token_id,

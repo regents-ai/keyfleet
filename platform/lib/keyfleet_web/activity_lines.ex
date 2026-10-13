@@ -70,6 +70,21 @@ defmodule KeyfleetWeb.ActivityLines do
   @doc "The item as a list of parts; see the module documentation."
   def parts(item), do: item |> sentence() |> opening()
 
+  @channels %{
+    chat: ~w(post posts room_named)a,
+    work: ~w(created claimed unclaimed progress status revised archived linked open_question)a,
+    keys: ~w(sale given transfer shard_issued shard_ended)a,
+    votes: ~w(proposed votes executed)a
+  }
+  @channel_of for {channel, kinds} <- @channels, kind <- kinds, into: %{}, do: {kind, channel}
+
+  @doc """
+  The channel an item of the hall's feed belongs to: `:chat` for what was
+  said in the rooms, `:work` for the workspace, `:keys` for Keys and their
+  shards, and `:votes` for proposals.
+  """
+  def channel(%{kind: kind}), do: Map.fetch!(@channel_of, kind)
+
   # A sentence that opens on an item named by its type opens with a capital.
   defp opening([words | rest]) when words in @untitled_words,
     do: [String.capitalize(words) | rest]

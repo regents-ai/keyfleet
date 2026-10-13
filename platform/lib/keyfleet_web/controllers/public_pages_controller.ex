@@ -8,6 +8,9 @@ defmodule KeyfleetWeb.PublicPagesController do
     render(conn, :show, [document: document] ++ PublicDocuments.page(conn.request_path))
   end
 
+  @doc "`/app` opens the Regents Club's hall, the fleet every Club Pass comes with."
+  def app(conn, _params), do: redirect(conn, to: ~p"/app/fleets/regents_club")
+
   def openapi(conn, _params) do
     body = Jason.encode!(PublicDocuments.openapi())
     conn |> cached(body) |> put_resp_content_type("application/json") |> send_resp(200, body)

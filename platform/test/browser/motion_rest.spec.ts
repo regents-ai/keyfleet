@@ -95,16 +95,6 @@ test("a phone's menu button pressed again and again mid-move leaves the button a
   expect(await leftovers(page)).toEqual([])
 })
 
-test("a menu opened and closed again and again mid-move leaves the menu at rest", async ({page}) => {
-  await openFleet(page)
-
-  await pressRapidly(page, "#fleet-rooms-toggle")
-  await settle(page)
-
-  expect(await moved(page, "#fleet-rooms")).toBe(true)
-  expect(await leftovers(page)).toEqual([])
-})
-
 test("a refused copy shakes over the press's squish and still ends at rest", async ({page}) => {
   await page.addInitScript(() => {
     navigator.clipboard.writeText = () => Promise.reject(new DOMException("Refused", "NotAllowedError"))

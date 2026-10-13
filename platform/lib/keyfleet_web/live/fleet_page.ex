@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.FleetPage do
   @moduledoc """
   What a fleet's page reads: the key on offer, a page of its keys with the
   agents holding their shards, the links to the pages either side, the key the map
-  has chosen, and "What's happening" with what the fleet is trying now.
+  has chosen, and the hall's feed with what the fleet is trying now.
 
   A page name that isn't one the keys can answer is a page that doesn't exist.
   """
@@ -72,8 +72,8 @@ defmodule KeyfleetWeb.FleetPage do
         _first_page -> {false, more?}
       end
 
-    # The map keeps its chosen key while the visitor pages through keys.
-    kept = for name <- ["key"], is_binary(params[name]), do: {name, params[name]}
+    # The map tab and its chosen key stay while the visitor pages through keys.
+    kept = for name <- ["view", "key"], is_binary(params[name]), do: {name, params[name]}
 
     %{
       previous:
@@ -152,13 +152,13 @@ defmodule KeyfleetWeb.FleetPage do
   def chosen_key(_progress, _key), do: nil
 
   @doc """
-  "Trying now", at the top of "What's happening": the fleet's open goals and
+  "Trying now", beside the hall's feed: the fleet's open goals and
   the work on them, with the key on each task named.
   """
   def read_trying_now(fleet_id), do: fleet_id |> Graph.trying_now() |> ActivityLines.trying_now()
 
   @doc """
-  The first `wanted` pages of "What's happening", newest first, as `actor`
+  The first `wanted` pages of the hall's feed, newest first, as `actor`
   reads them (`Keyfleet.Activity.page/3`): the items, the cursor for the
   page after them and how many pages were read.
   """

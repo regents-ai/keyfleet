@@ -17,6 +17,8 @@ defmodule Keyfleet.ChainHelpers do
   # test/support/fixtures/decks: one card, the seed keccak256("golden-1"),
   # drawing from the fixture trait table.
   @deck_hash "0xf11579d3bd868d9a111bc512d814d04c0f10beb44fba7f3a92fa26eb67500356"
+  # The fixture trait table that deck draws from (test/support/fixtures/trait_tables).
+  @trait_table_hash "0x1249d615f793a311bcb27def92766224fb544df85aa74359a785a6349df18610"
 
   @doc """
   The whole deployment on Base of `fleet_id`, as `record_deployment` takes
@@ -48,7 +50,7 @@ defmodule Keyfleet.ChainHelpers do
         club_claims_address: "0x" <> String.duplicate("a2", 20),
         usdc_address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
         deployed_block: 1,
-        trait_table_hash: "0x" <> String.duplicate("a", 64)
+        trait_table_hash: @trait_table_hash
       },
       Map.new(overrides)
     )
