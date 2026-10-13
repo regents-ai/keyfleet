@@ -130,22 +130,43 @@ class Auth(_Shape):
     chain_block: Optional[Count]
 
 
+class FleetRef(_Shape):
+    chain_id: Annotated[int, Field(ge=1, le=MAX_INT)]
+    contract: Address
+
+
+class FleetAuth(_Shape):
+    """The fleet itself, writing through Keyfleet's own work: no key, no member.
+
+    It writes only the types in `pack.FLEET_MODELS`, and only in the fleet
+    scope; see `Keyfleet.Graph.Checks.FleetAuthor`.
+    """
+
+    kind: Literal["fleet"]
+    fleet: FleetRef
+    checked_at: UtcTimestamp
+
+
 class Command(_Shape):
     id: Id
     principal: str
     # Resolved by the gateway from the acting key and the fleet's sales, never
     # by the member; see `Keyfleet.Graph.Checks.KeyActor`.
     writable_scopes: Annotated[list[Scope], Field(max_length=MAX_WRITABLE_SCOPES)]
-    auth: Auth
+    auth: Annotated[Auth | FleetAuth, Field(discriminator="kind")]
 
     @model_validator(mode="after")
-    def _principal_names_the_audited_key(self) -> "Command":
-        if self.principal != member_principal(self.auth):
-            raise ValueError("principal must name the audited key, epoch and wallet")
+    def _principal_names_the_audited_author(self) -> "Command":
+        if self.principal != principal(self.auth):
+            raise ValueError("principal must name the audited author")
+        if isinstance(self.auth, FleetAuth) and self.writable_scopes != ["fleet"]:
+            raise ValueError("the fleet writes the fleet scope only")
         return self
 
 
-def member_principal(auth: Auth) -> str:
+def principal(auth: Auth | FleetAuth) -> str:
+    if isinstance(auth, FleetAuth):
+        return f"fleet:{auth.fleet.chain_id}:{auth.fleet.contract}"
     key = auth.key
     return (
         f"member:{key.chain_id}:{key.contract}:{key.token_id}"

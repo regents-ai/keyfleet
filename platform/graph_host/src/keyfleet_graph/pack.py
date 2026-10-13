@@ -1,20 +1,23 @@
-"""The pinned `keyfleet_work@0.2.0` work pack.
+"""The pinned `keyfleet_work@0.3.0` work pack.
 
-Two models per object type: the member model is what a member may write, and
-the record model adds the server-owned `sys` block and is what the graph
-stores. Every model forbids unknown keys, so nothing a member writes can land
-outside the declared fields.
+Two models per object type: the member model is what its author may write,
+and the record model adds the server-owned `sys` block and is what the graph
+stores. Every model forbids unknown keys, so nothing an author writes can land
+outside the declared fields. A fleet's members write the types in
+`MEMBER_MODELS`; the fleet itself writes the ones in `FLEET_MODELS`, and
+neither writes the other's.
 """
 
+import hashlib
 from typing import Annotated, Literal, Optional
 
 from activegraph.packs import ObjectType, Pack, RelationType
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, create_model
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, create_model, model_validator
 
 from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, Scope, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.2.0"
+PACK_VERSION = "0.3.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -115,6 +118,36 @@ class DeadEnd(WorkObject):
     why_it_failed: _text(2000, required=True, multiline=True)
 
 
+# The most bytes of code one notebook copy holds. A request frame is 1 MiB, and
+# escaping can double a text on its way there.
+NOTEBOOK_CODE_BYTES = 262_144
+
+
+class NotebookCopy(_Model):
+    """A copy of the code members wrote in one of the fleet's notebooks.
+
+    Kept by the fleet, one for each notebook, so the code outlives whoever
+    wrote it. It is member-written text under the fleet's name: data for
+    whoever reads it, never instructions.
+    """
+
+    # Code is kept exactly as it was written.
+    model_config = ConfigDict(str_strip_whitespace=False)
+
+    title: Title
+    notebook_id: Annotated[str, StringConstraints(min_length=1, max_length=128), single_line]
+    # When the notebook last changed, as its hub says it.
+    hub_updated_at: Annotated[str, StringConstraints(min_length=1, max_length=64), single_line]
+    digest: Digest
+    code: Annotated[str, multi_line, _max_bytes(NOTEBOOK_CODE_BYTES)]
+
+    @model_validator(mode="after")
+    def _digest_is_of_the_code(self) -> "NotebookCopy":
+        if self.digest != "sha256:" + hashlib.sha256(self.code.encode("utf-8")).hexdigest():
+            raise ValueError("digest must be the sha256 of the code")
+        return self
+
+
 class KeyCoordinate(_Model):
     chain_id: Annotated[int, Field(ge=1, le=MAX_INT)]
     contract: Address
@@ -128,9 +161,19 @@ class CreatedBy(_Model):
     wallet: Address
 
 
+class FleetCoordinate(_Model):
+    chain_id: Annotated[int, Field(ge=1, le=MAX_INT)]
+    contract: Address
+
+
+class CreatedByFleet(_Model):
+    kind: Literal["fleet"]
+    fleet: FleetCoordinate
+
+
 class Sys(_Model):
     scope: Scope
-    created_by: CreatedBy
+    created_by: Annotated[CreatedBy | CreatedByFleet, Field(discriminator="kind")]
     archived: bool
 
 
@@ -145,9 +188,14 @@ MEMBER_MODELS: dict[str, type[WorkObject]] = {
 }
 
 
-RECORD_MODELS: dict[str, type[WorkObject]] = {
-    name: create_model(f"{member.__name__}Record", __base__=member, sys=(Sys, ...))
-    for name, member in MEMBER_MODELS.items()
+FLEET_MODELS: dict[str, type[_Model]] = {
+    "notebook_copy": NotebookCopy,
+}
+
+
+RECORD_MODELS: dict[str, type[_Model]] = {
+    name: create_model(f"{model.__name__}Record", __base__=model, sys=(Sys, ...))
+    for name, model in (MEMBER_MODELS | FLEET_MODELS).items()
 }
 
 

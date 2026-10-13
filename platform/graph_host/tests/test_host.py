@@ -7,7 +7,9 @@ import activegraph
 from activegraph import Event
 import pytest
 from activegraph.store.sqlite import SQLiteEventStore
-from conftest import CONTRACT, WALLET, HostProcess, command, request
+import hashlib
+
+from conftest import CONTRACT, WALLET, HostProcess, command, fleet_command, request
 
 from keyfleet_graph import protocol
 from keyfleet_graph.__main__ import EXIT_FAILED, EXIT_LOCKED
@@ -513,3 +515,82 @@ def test_emoji_joined_with_a_zero_width_joiner_are_kept_as_written(db):
     assert host.graph.get_object(goal["id"]).data["title"] == family
     stored = host.graph.get_object(note["id"]).data
     assert (stored["title"], stored["body"]) == (mechanic, f"{family}\n{mechanic}")
+
+
+def _copy(code="import marimo\n", **fields):
+    digest = "sha256:" + hashlib.sha256(code.encode("utf-8")).hexdigest()
+    data = {"title": "Sales", "notebook_id": "nb_1", "hub_updated_at": "2026-10-13T12:00:00Z", "digest": digest, "code": code}
+    return {"type": "notebook_copy", "scope": "fleet", "data": {**data, **fields}}
+
+
+def _refusal(host, op, body, cmd):
+    reply = _call(host, request(op, body, cmd))
+    assert not reply["ok"], reply
+    return reply["error"]["code"]
+
+
+def test_the_fleet_keeps_one_copy_of_each_notebook_and_asks_nobody_to_look(seeded):
+    head = _call(seeded, request("hello", {}))["result"]["head_seq"]
+
+    kept = _call(seeded, request("create", _copy(), fleet_command("f1")))["result"]
+    again = _call(seeded, request("create", _copy(), fleet_command("f2")))
+    newer = _copy("import marimo\napp = marimo.App()\n")["data"]
+    changed = {"id": kept["id"], "expected_version": 1, "set": {"code": newer["code"], "digest": newer["digest"]}}
+    patched = _call(seeded, request("patch", changed, fleet_command("f3")))
+
+    stored = seeded.graph.get_object(kept["id"]).data
+    assert stored["sys"]["created_by"] == {"kind": "fleet", "fleet": {"chain_id": 8453, "contract": CONTRACT}}
+    assert (again["error"]["code"], again["error"]["details"]["object"]["id"]) == ("conflict", kept["id"])
+    assert (patched["ok"], stored["code"]) == (True, newer["code"])
+    written = seeded._events_after(head)
+    assert {event["actor"] for event in written if event["type"].startswith("object.")} == {f"fleet:8453:{CONTRACT}"}
+    assert [event for event in written if event["type"] == "keyfleet.attention"] == []
+
+
+def test_the_fleet_writes_only_its_copies_and_only_in_the_fleet_scope(seeded):
+    goal = {"type": "goal", "scope": "fleet", "data": GOAL}
+
+    assert _refusal(seeded, "create", goal, fleet_command("f1")) == "forbidden_type"
+    assert _refusal(seeded, "patch", {"id": "goal#1", "expected_version": 2, "set": {"title": "T"}}, fleet_command("f2")) == "forbidden_type"
+    assert _refusal(seeded, "archive", {"id": "goal#1", "expected_version": 2}, fleet_command("f3")) == "forbidden_op"
+    assert _refusal(seeded, "link", {"source": "task#2", "target": "goal#1", "type": "implements"}, fleet_command("f4")) == "forbidden_op"
+    assert _refusal(seeded, "unlink", {"relation_id": "rel#1"}, fleet_command("f5")) == "forbidden_op"
+    assert _refusal(seeded, "create", _copy(), fleet_command("f6", scopes=("fleet", "level:1"))) == "bad_request"
+    assert _refusal(seeded, "create", _copy(), {**fleet_command("f7"), "principal": command("f7")["principal"]}) == "bad_request"
+
+
+def test_a_member_never_writes_archives_or_links_the_fleets_copy(seeded):
+    kept = _call(seeded, request("create", _copy(), fleet_command("f1")))["result"]["id"]
+
+    assert _refusal(seeded, "create", _copy(notebook_id="nb_2"), command("m1")) == "forbidden_type"
+    assert _refusal(seeded, "patch", {"id": kept, "expected_version": 1, "set": {"title": "Mine"}}, command("m2")) == "forbidden_type"
+    assert _refusal(seeded, "archive", {"id": kept, "expected_version": 1}, command("m3")) == "forbidden_type"
+    assert _refusal(seeded, "link", {"source": "goal#1", "target": kept, "type": "references"}, command("m4")) == "invalid"
+    assert seeded.graph.get_object(kept).version == 1
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        _copy("x" * 262_145)["data"],
+        _copy("é" * 131_073)["data"],
+        {**_copy()["data"], "digest": "sha256:" + "0" * 64},
+        _copy("a = 1\r\n")["data"],
+        _copy("a = '\u202e'\n")["data"],
+        {**_copy()["data"], "notebook_id": "nb\n1"},
+    ],
+    ids=["too many bytes", "too many bytes in fewer characters", "a digest of other code", "a carriage return", "a direction override", "a control character in the notebook's id"],
+)
+def test_a_copy_holds_only_code_that_fits_and_matches_its_digest(seeded, data):
+    assert _refusal(seeded, "create", {"type": "notebook_copy", "scope": "fleet", "data": data}, fleet_command("f1")) == "invalid"
+
+
+def test_a_copy_keeps_its_code_exactly_and_stays_with_its_notebook(seeded, db):
+    code = "\n\timport marimo\n\n"
+    kept = _call(seeded, request("create", _copy(code), fleet_command("f1")))["result"]["id"]
+    moved = {"id": kept, "expected_version": 1, "set": {"notebook_id": "nb_2"}}
+
+    assert seeded.graph.get_object(kept).data["code"] == code
+    assert _refusal(seeded, "patch", moved, fleet_command("f2")) == "forbidden_field"
+    # A reopened host still knows which notebook each copy is of.
+    assert Host("fleet_a", str(db))._copies == {"nb_1": kept}

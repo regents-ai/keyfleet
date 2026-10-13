@@ -26,6 +26,7 @@ from pydantic_core import from_json
 
 from keyfleet_graph import protocol
 from keyfleet_graph.pack import (
+    FLEET_MODELS,
     MEMBER_MODELS,
     PACK,
     PACK_NAME,
@@ -34,7 +35,7 @@ from keyfleet_graph.pack import (
     RELATION_ENDPOINTS,
     RelationData,
 )
-from keyfleet_graph.protocol import Command
+from keyfleet_graph.protocol import Command, FleetAuth
 from keyfleet_graph.reactions import ATTENTION_EVENT, DependsOnLinks, Reactions
 
 LEDGER_EVENT = "keyfleet.command"
@@ -93,6 +94,10 @@ class Host:
             if event.type == LEDGER_EVENT
         }
         self.depends_on = DependsOnLinks(self.graph)
+        # The fleet keeps one copy for each notebook: the copy's id by its notebook's.
+        self._copies = {
+            obj.data["notebook_id"]: obj.id for obj in self.graph.objects_in_types(["notebook_copy"])
+        }
 
     # ---------- request handling ----------
 
@@ -181,16 +186,25 @@ class Host:
     # ---------- planners: every check, then the closure that writes ----------
 
     def _plan_create(self, command: Command, body: protocol.CreateBody) -> Callable[[Reactions], dict]:
-        member = MEMBER_MODELS.get(body.type)
-        if member is None:
+        if body.type not in RECORD_MODELS:
             raise _invalid("type", f"unknown object type {body.type!r}")
+        member = _authored(command, body.type)
         if body.scope not in command.writable_scopes:
             raise Refusal("forbidden_scope", "the command may not write this scope", {"scope": body.scope})
         _check_fields(member, body.data.keys(), body.data, command)
         record = _validate(RECORD_MODELS[body.type], {**body.data, "sys": _sys(command, body.scope)})
+        if body.type == "notebook_copy" and record["notebook_id"] in self._copies:
+            kept = self.graph.get_object(self._copies[record["notebook_id"]])
+            raise Refusal(
+                "conflict",
+                "the fleet already keeps a copy of this notebook",
+                {"current_version": kept.version, "object": _object_view(kept)},
+            )
 
         def apply(reactions: Reactions) -> dict:
             obj = self.graph.add_object(body.type, record, actor=command.principal)
+            if body.type == "notebook_copy":
+                self._copies[record["notebook_id"]] = obj.id
             reactions.created(obj, self._last_event_id())
             return {"id": obj.id, "version": obj.version}
 
@@ -200,7 +214,9 @@ class Host:
         obj = self._live(body.id, "id")
         _check_version(obj, body.expected_version)
         _check_scope(command, obj)
-        _check_fields(MEMBER_MODELS[obj.type], set(body.set) | set(body.unset), body.set, command)
+        _check_fields(_authored(command, obj.type), set(body.set) | set(body.unset), body.set, command)
+        if "notebook_id" in body.set and body.set["notebook_id"] != obj.data.get("notebook_id"):
+            raise Refusal("forbidden_field", "a copy stays with its notebook", {"fields": ["notebook_id"]})
         merged = {**obj.data, **body.set}
         for field in body.unset:
             merged.pop(field, None)
@@ -220,9 +236,11 @@ class Host:
         return apply
 
     def _plan_archive(self, command: Command, body: protocol.ArchiveBody) -> Callable[[Reactions], dict]:
+        _members_only(command, "archive")
         obj = self._live(body.id, "id")
         _check_version(obj, body.expected_version)
         _check_scope(command, obj)
+        _authored(command, obj.type)
         archived = {**obj.data["sys"], "archived": True}
 
         def apply(reactions: Reactions) -> dict:
@@ -234,6 +252,7 @@ class Host:
         return apply
 
     def _plan_link(self, command: Command, body: protocol.LinkBody) -> Callable[[Reactions], dict]:
+        _members_only(command, "link")
         source = self._live(body.source, "source")
         target = self._live(body.target, "target")
         _check_scope(command, source, target)
@@ -259,6 +278,7 @@ class Host:
         return apply
 
     def _plan_unlink(self, command: Command, body: protocol.UnlinkBody) -> Callable[[Reactions], dict]:
+        _members_only(command, "unlink")
         rel = self.graph.get_relation(body.relation_id)
         if rel is None:
             raise Refusal("not_found", "no such relation", {"id": body.relation_id})
@@ -452,11 +472,26 @@ def _check_scope(command: Command, *objects) -> None:
             raise Refusal("forbidden_scope", "the command may not write this scope", {"scope": scope})
 
 
+def _authored(command: Command, object_type: str) -> type[BaseModel]:
+    """The model of a type the command's author writes: members theirs, the fleet its own."""
+    models = FLEET_MODELS if isinstance(command.auth, FleetAuth) else MEMBER_MODELS
+    model = models.get(object_type)
+    if model is None:
+        raise Refusal("forbidden_type", "this author does not write this type", {"type": object_type})
+    return model
+
+
+def _members_only(command: Command, op: str) -> None:
+    if isinstance(command.auth, FleetAuth):
+        raise Refusal("forbidden_op", f"the fleet does not {op}", {"op": op})
+
+
 def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], command: Command) -> None:
     unknown = sorted(field for field in fields if field not in member.model_fields)
     if unknown:
         raise Refusal("forbidden_field", "these fields are not member-writable", {"fields": unknown})
-    if values.get("assignee_key") not in (None, command.auth.key.token_id):
+    # Only a task has an assignee, and only a member writes a task.
+    if values.get("assignee_key") is not None and values["assignee_key"] != command.auth.key.token_id:
         raise Refusal(
             "forbidden_field",
             "a task may be assigned only to the acting Key, or cleared",
@@ -465,16 +500,17 @@ def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], comma
 
 
 def _sys(command: Command, scope: str) -> dict[str, Any]:
-    auth = command.auth
+    return {"scope": scope, "created_by": _created_by(command.auth), "archived": False}
+
+
+def _created_by(auth) -> dict[str, Any]:
+    if isinstance(auth, FleetAuth):
+        return {"kind": "fleet", "fleet": auth.fleet.model_dump(mode="json")}
     return {
-        "scope": scope,
-        "created_by": {
-            "key": auth.key.model_dump(mode="json"),
-            "ownership_epoch": auth.ownership_epoch,
-            "kind": auth.kind,
-            "wallet": auth.operator_wallet,
-        },
-        "archived": False,
+        "key": auth.key.model_dump(mode="json"),
+        "ownership_epoch": auth.ownership_epoch,
+        "kind": auth.kind,
+        "wallet": auth.operator_wallet,
     }
 
 

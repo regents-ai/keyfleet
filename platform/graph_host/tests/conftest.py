@@ -28,6 +28,20 @@ def command(command_id, *, token_id=17, scopes=("fleet",), wallet=WALLET, contra
     }
 
 
+def fleet_command(command_id, *, scopes=("fleet",), contract=CONTRACT):
+    """A command of the fleet itself, as Keyfleet's own work sends it."""
+    return {
+        "id": command_id,
+        "principal": f"fleet:8453:{contract}",
+        "writable_scopes": list(scopes),
+        "auth": {
+            "kind": "fleet",
+            "fleet": {"chain_id": 8453, "contract": contract},
+            "checked_at": "2026-10-13T12:00:00Z",
+        },
+    }
+
+
 def request(op, body, cmd=None, req="r1"):
     message = {"v": 1, "req": req, "op": op, "body": body}
     if cmd is not None:
