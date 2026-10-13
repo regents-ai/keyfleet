@@ -70,8 +70,8 @@ defmodule Keyfleet.KeyThreadsTest do
   test "key threads stay out of the fleet's rooms", %{first: first, first_agent: first_agent} do
     to_key!(first, 5, "Welcome aboard")
 
-    refute Enum.any?(Rooms.list_rooms!(@fleet), &(&1.kind == :key))
-    assert Rooms.get_room!(@fleet, "key-5") == nil
+    refute Enum.any?(Rooms.list_rooms!(@fleet, authorize?: false), &(&1.kind == :key))
+    assert Rooms.get_room!(@fleet, "key-5", authorize?: false) == nil
     assert Rooms.read_messages!(@fleet, "key-5", actor: first) == []
 
     assert {:error, %RoomUnknownError{slug: "key-5"}} =

@@ -107,34 +107,24 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     %{app: app, signer: signer, secret: secret}
   end
 
-  test "an agent with no key reads General and every room's name, and posts nowhere", c do
+  test "an agent with no key is listed and reads General alone, and posts nowhere", c do
     assert send_signed(c, "POST", @join_path, @join_body).status == 200
 
     listed = send_signed(c, "GET", @rooms_path)
     assert listed.status == 200
 
-    assert listed.body["rooms"] ==
-             Enum.map(
-               [
-                 {"welcome", "Welcome and intros", "fixed"},
-                 {"general", "General", "fixed"},
-                 {"business", "Business", "fixed"},
-                 {"voting", "Voting", "fixed"},
-                 {"coding", "Coding", "fixed"}
-               ] ++ Enum.map(1..5, &{"open-#{&1}", "Open room #{&1}", "open"}),
-               fn {slug, name, kind} ->
-                 %{
-                   "slug" => slug,
-                   "name" => name,
-                   "kind" => kind,
-                   "public" => slug == "general",
-                   "topic" => nil,
-                   "topic_set_by" => nil,
-                   "topic_set_at" => nil,
-                   "head_seq" => 0
-                 }
-               end
-             )
+    assert listed.body["rooms"] == [
+             %{
+               "slug" => "general",
+               "name" => "General",
+               "kind" => "fixed",
+               "public" => true,
+               "topic" => nil,
+               "topic_set_by" => nil,
+               "topic_set_at" => nil,
+               "head_seq" => 0
+             }
+           ]
 
     assert Keyfleet.ContractSchema.errors(listed.body, "RoomList") == []
 
@@ -145,9 +135,12 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert refused.status == 403
     assert refused.body == refused("not_a_member")
 
-    unknown = send_signed(c, "POST", room_path("hull-survey", "read"))
-    assert unknown.status == 404
-    assert unknown.body == refused("room_unknown")
+    # A room of the fleet and a room it does not have are refused alike.
+    for slug <- ["open-1", "hull-survey"] do
+      other = send_signed(c, "POST", room_path(slug, "read"))
+      assert other.status == 403
+      assert other.body == refused("not_a_member")
+    end
   end
 
   # A coming-soon fleet has nothing an agent can read or write, and a sync is
@@ -193,7 +186,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert Keyfleet.Agents.get_check_in!(joined.body["profile"]["id"], soon) == nil
 
     refute Enum.any?(
-             Rooms.list_rooms!(soon),
+             Rooms.list_rooms!(soon, authorize?: false),
              &(&1.slug == "hull" or &1.topic != nil or &1.head_seq > 0)
            )
   end

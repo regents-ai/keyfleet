@@ -304,32 +304,37 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   describe "the fleet's rooms" do
     @open_one "/app/fleets/fleet_tech_classic/rooms/open-1"
 
-    test "a fleet lists its five fixed rooms, then its five open rooms by their own names",
+    test "a member is listed the five fixed rooms, then the five open rooms by their own names, and anyone else General alone",
          %{conn: conn} do
       signed_out = conn
       stranger = signed_in_as(conn, @stranger)
       member = signed_in_as(conn, @owner)
 
-      for conn <- [signed_out, stranger, member] do
+      labels = fn conn ->
         {:ok, view, _html} = live(conn, @path)
 
-        labels =
-          view
-          |> element(".rooms-list")
-          |> render()
-          |> then(&Regex.scan(~r/<a[^>]*>\s*([^<]+?)\s*</u, &1, capture: :all_but_first))
-          |> List.flatten()
-
-        assert labels ==
-                 ["Welcome and intros", "General", "Business", "Voting", "Coding"] ++
-                   Enum.map(1..5, &"Open room #{&1}")
+        view
+        |> element(".rooms-list")
+        |> render()
+        |> then(&Regex.scan(~r/<a[^>]*>\s*([^<]+?)\s*</u, &1, capture: :all_but_first))
+        |> List.flatten()
       end
 
-      # Only a member reads an open room.
+      assert labels.(member) ==
+               ["Welcome and intros", "General", "Business", "Voting", "Coding"] ++
+                 Enum.map(1..5, &"Open room #{&1}")
+
+      # Anyone else is shown General alone. Any other address is for keys
+      # only to them, whether or not the fleet has a room there.
       for conn <- [signed_out, stranger] do
-        {:ok, view, _html} = live(conn, @open_one)
-        assert has_element?(view, "#rooms-locked #rooms-thread-title", "Open room 1")
-        assert has_element?(view, "#rooms-locked", "Anyone can read General.")
+        assert labels.(conn) == ["General"]
+
+        for path <- [@open_one, "/app/fleets/fleet_tech_classic/rooms/no-such-room"] do
+          {:ok, view, html} = live(conn, path)
+          assert has_element?(view, "#rooms-locked #rooms-thread-title", "Keys only")
+          assert has_element?(view, "#rooms-locked", "Anyone can read General.")
+          refute html =~ "Open room 1"
+        end
       end
 
       {:ok, view, _html} = live(member, @open_one)
@@ -337,7 +342,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       assert has_element?(view, "#rooms-thread-title", "Open room 1")
     end
 
-    test "an agent names an open room, and everyone watching sees who named it",
+    test "an agent names an open room, and the members watching see who named it",
          %{conn: conn, writer: writer} do
       {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@open_one)
       {:ok, watcher, _html} = conn |> signed_in_as(@stranger) |> live(@open_one)
@@ -355,14 +360,16 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       assert has_element?(view, ".rooms-naming", "named this room “Hull survey” on")
       assert has_element?(view, ~s(a[href="#{@open_one}"]), "Hull survey")
 
-      # Someone with no key sees the room's new name, never what is said in it.
-      assert has_element?(watcher, "#rooms-locked #rooms-thread-title", "Hull survey")
-      refute has_element?(watcher, ".rooms-naming")
-      assert has_element?(elsewhere, ~s(a[href="#{@open_one}"]), "Hull survey")
+      # Someone with no key sees neither the room's new name nor what is said
+      # in it.
+      assert has_element?(watcher, "#rooms-locked")
+      refute render(watcher) =~ "Hull survey"
+      refute render(elsewhere) =~ "Hull survey"
 
       a_minute_passes("open-1")
       {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Dry dock", actor: writer)
-      assert has_element?(watcher, "#rooms-thread-title", "Dry dock")
+      assert has_element?(view, "#rooms-thread-title", "Dry dock")
+      refute render(watcher) =~ "Dry dock"
 
       assert Enum.map(
                Rooms.read_messages!(@fleet, "open-1", actor: owner_actor()),
@@ -392,13 +399,13 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       assert has_element?(view, ".rooms-body", "Hull survey")
     end
 
-    test "a room an agent creates joins the list for everyone watching", %{conn: conn} do
+    test "a room an agent creates joins the list for the members watching", %{conn: conn} do
       agent = shard_agent()
 
       Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "local"}, actor: agent)
       ChainHelpers.issue_shard!(@fleet, 1, @agent)
 
-      {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
+      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
 
       Rooms.create_room!(%{fleet_id: @fleet, slug: "hull-survey", name: "Hull survey"},
         actor: agent

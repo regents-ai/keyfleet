@@ -74,11 +74,10 @@ defmodule KeyfleetWeb.AgentRoomController do
     # The posts are read before the room's head, so the head answered is never
     # behind the posts answered with it. Posts written as a key the agent has
     # muted are left out, and the cursor still counts them, so reading on from
-    # it never reads them again. A room other than General is refused to an
-    # agent holding none of the fleet's keys or shards, once it is known to be
-    # one of the fleet's rooms, whose names are public.
-    with {:ok, %{}} <- Rooms.get_room(fleet_id, slug, actor: actor),
-         {:ok, messages} <-
+    # it never reads them again. Any room other than General is refused to an
+    # agent that is not one of the fleet's members, whether or not the fleet
+    # has it; a member is told when the fleet has no such room.
+    with {:ok, messages} <-
            Rooms.read_messages(fleet_id, slug, Map.take(params, ["after_seq", "limit"]),
              actor: actor
            ),
@@ -92,7 +91,6 @@ defmodule KeyfleetWeb.AgentRoomController do
         messages: messages |> Rooms.unmuted(muted) |> Enum.map(&RoomJSON.message/1)
       })
     else
-      {:ok, nil} -> not_found(conn)
       nil -> not_found(conn)
       {:error, %Ash.Error.Forbidden{} = error} -> refuse_forbidden(conn, fleet_id, error)
       {:error, error} -> refuse(conn, error)

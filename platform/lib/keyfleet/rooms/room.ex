@@ -17,9 +17,9 @@ defmodule Keyfleet.Rooms.Room do
   never listed or found among the fleet's rooms, so no room address, name or
   count ever depends on it.
 
-  Anyone can read General and every key's thread. The other rooms are read
-  only by the people and agents holding the fleet's keys or a shard of one;
-  their names show to everyone.
+  Anyone can read General and every key's thread. The other rooms, their
+  names and topics included, are read only by the fleet's members
+  (`Keyfleet.Access`).
 
   A room goes by its topic once it has one, and by its name otherwise. No two
   rooms of a fleet go by the same name, whatever its case. Names and topics are
@@ -265,18 +265,29 @@ defmodule Keyfleet.Rooms.Room do
   end
 
   policies do
-    policy action([:read, :for_fleet, :in_fleet, :key_thread]) do
-      authorize_if always()
+    # The room of a post already read, when posts are read with their rooms.
+    policy action(:read) do
+      authorize_if accessing_from(Keyfleet.Rooms.Message, :room)
+    end
+
+    # Anyone else is shown General alone, and finds no other room.
+    policy action([:for_fleet, :in_fleet]) do
+      authorize_if {Keyfleet.Access.Check, read: :rooms, scope: :fleet_id}
+      authorize_if Keyfleet.Rooms.Checks.InGeneral
+    end
+
+    policy action(:key_thread) do
+      authorize_if {Keyfleet.Access.Check, read: :key_walls, scope: :fleet_id}
     end
 
     policy action([:bootstrap, :open_key_thread]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
 
-    # Creating and naming rooms is for the agents in the fleet as one of its
-    # keys (`Keyfleet.Keys.identity/2`); people read them.
+    # Creating and naming rooms is for the fleet's agents; people read them.
     policy action([:create, :set_topic]) do
-      authorize_if {Keyfleet.Rooms.Checks.RoomPoster, agents_only?: true}
+      forbid_unless actor_attribute_equals(:role, :agent)
+      authorize_if {Keyfleet.Access.Check, write: :rooms, scope: :fleet_id}
     end
   end
 
@@ -356,8 +367,7 @@ defmodule Keyfleet.Rooms.Room do
 
   calculations do
     # Whether anyone can read the room: General and the keys' threads. Every
-    # other room is read only by the people and agents holding the fleet's
-    # keys or a shard of one.
+    # other room is read only by the fleet's members.
     calculate :public, :boolean, expr(kind == :key or slug == ^@public_slug), public?: true
 
     # How many posts the room holds: every line it has taken but its namings.

@@ -30,7 +30,10 @@ defmodule Keyfleet.FleetRoomsTest do
 
   test "every fleet starts with its five fixed rooms and five open rooms without topics" do
     for fleet <- Fleets.catalog_ids() do
-      assert Enum.map(Rooms.list_rooms!(fleet), &{&1.slug, &1.kind, &1.topic, &1.head_seq}) ==
+      assert Enum.map(
+               Rooms.list_rooms!(fleet, authorize?: false),
+               &{&1.slug, &1.kind, &1.topic, &1.head_seq}
+             ) ==
                Enum.map(~w(welcome general business voting coding), &{&1, :fixed, nil, 0}) ++
                  Enum.map(1..5, &{"open-#{&1}", :open, nil, 0})
     end
@@ -72,7 +75,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
       ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
       assert {:error, %Ash.Error.Forbidden{}} = post(writer, "open-1")
-      assert Enum.all?(Rooms.list_rooms!(@fleet), &(&1.head_seq == 0))
+      assert Enum.all?(Rooms.list_rooms!(@fleet, authorize?: false), &(&1.head_seq == 0))
     end
   end
 
@@ -102,7 +105,7 @@ defmodule Keyfleet.FleetRoomsTest do
       assert_receive %Broadcast{event: "rooms_changed", payload: %{fleet_id: @fleet}}
 
       assert %{topic: "Hull survey", topic_set_by: set_by, head_seq: 1} =
-               Rooms.get_room!(@fleet, "open-2")
+               Rooms.get_room!(@fleet, "open-2", authorize?: false)
 
       assert set_by == wallet(1)
 
@@ -142,7 +145,7 @@ defmodule Keyfleet.FleetRoomsTest do
       record(@fleet, [1, 3])
       namer = member(1)
       runner = shard_agent("c", 3)
-      unnamed = Rooms.get_room!(@fleet, "open-1")
+      unnamed = Rooms.get_room!(@fleet, "open-1", authorize?: false)
       {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: namer)
 
       assert {:error, %Ash.Error.Invalid{errors: [%RenameTooSoonError{retry_after: wait}]}} =
@@ -197,7 +200,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
       # Naming is refused before the room says anything, not only by the line
       # it would say.
-      open = Rooms.get_room!(@fleet, "open-1")
+      open = Rooms.get_room!(@fleet, "open-1", authorize?: false)
       refute Ash.can?({open, :set_topic, %{topic: "Mine"}}, owner(1))
       assert Ash.can?({open, :set_topic, %{topic: "Mine"}}, namer)
 
@@ -334,8 +337,8 @@ defmodule Keyfleet.FleetRoomsTest do
       assert {:error, %Ash.Error.Invalid{errors: [%UnknownFleetError{}]}} =
                Rooms.name_open_room("hull_survey", "open-1", "Mine", actor: namer)
 
-      assert Enum.all?(Rooms.list_rooms!(@fleet), &is_nil(&1.topic))
-      assert Enum.all?(Rooms.list_rooms!(@fleet), &(&1.head_seq == 0))
+      assert Enum.all?(Rooms.list_rooms!(@fleet, authorize?: false), &is_nil(&1.topic))
+      assert Enum.all?(Rooms.list_rooms!(@fleet, authorize?: false), &(&1.head_seq == 0))
     end
 
     test "the database keeps a topic to an open room, with who named it and when" do
@@ -411,7 +414,7 @@ defmodule Keyfleet.FleetRoomsTest do
                {:created, "hull-survey", "Hull survey", nil, 0}
 
       assert_receive %Broadcast{event: "rooms_changed", payload: %{fleet_id: @fleet}}
-      assert List.last(Rooms.list_rooms!(@fleet)).slug == "hull-survey"
+      assert List.last(Rooms.list_rooms!(@fleet, authorize?: false)).slug == "hull-survey"
 
       for actor <- [runner | Enum.map([1, 3, 231], &member/1)] do
         assert {:ok, _post} = post(actor, "hull-survey")
@@ -530,7 +533,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
       for n <- 1..100, do: create!(runner, "made-#{n}", "Made #{n}")
 
-      assert length(Rooms.list_rooms!(@fleet)) == 110
+      assert length(Rooms.list_rooms!(@fleet, authorize?: false)) == 110
 
       assert {:error, %Ash.Error.Invalid{errors: [%CreatedRoomLimitError{limit: 100}]}} =
                Rooms.create_room(%{fleet_id: @fleet, slug: "made-101", name: "Made 101"},
@@ -572,7 +575,7 @@ defmodule Keyfleet.FleetRoomsTest do
   end
 
   defp unnamed?(slug) do
-    room = Rooms.get_room!(@fleet, slug)
+    room = Rooms.get_room!(@fleet, slug, authorize?: false)
     {room.topic, room.topic_set_by, room.topic_set_at, room.head_seq} == {nil, nil, nil, 0}
   end
 

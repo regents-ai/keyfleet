@@ -7,7 +7,7 @@ defmodule Keyfleet.Rooms do
 
   require Ash.Query
 
-  alias Keyfleet.Rooms.Checks.RoomPoster
+  alias Keyfleet.Access
   alias Keyfleet.Rooms.Errors.RoomUnknownError
   alias Keyfleet.Rooms.Muter
   alias Keyfleet.Rooms.Room
@@ -130,10 +130,11 @@ defmodule Keyfleet.Rooms do
   Each entry of `cursors` is a `%{slug: slug, after_seq: seq}` saying how far the
   caller has read that room. Every room the caller may read answers with the
   posts after that point, the cursor those posts reach, and the room's own
-  head, so a caller that is behind knows to come back for the rest. A room
-  only the fleet's keys read, named by a caller without one, answers with its
-  slug alone and `refused: true`, and the rest of the answer stands. A caller
-  that names rooms and may read none of them is refused (`Ash.Error.Forbidden`).
+  head, so a caller that is behind knows to come back for the rest. Anyone who
+  is not a member of the fleet reads General alone: any other room they name,
+  whether or not the fleet has it, answers with its slug alone and
+  `refused: true`, and the rest of the answer stands. A caller that names
+  rooms and may read none of them is refused (`Ash.Error.Forbidden`).
 
   `places` says how far the caller has read the rest, as
   `%{graph: seq, proposals: seq, dms: seq | nil, quotes: seq | nil}`.
@@ -345,54 +346,52 @@ defmodule Keyfleet.Rooms do
 
   defp wait_ms, do: Application.fetch_env!(:keyfleet, :agent_wait_ms)
 
-  # Every room named must be one the fleet has, whoever asks, since every
-  # room's name is public. Which of them the caller may read is decided once,
-  # from its standing read once. The posts are then read before the heads. A
-  # post is only ever seen once its room has counted it, so a head read
-  # afterwards is never behind the posts it is returned with.
+  # The caller's class is read once, and the rooms it is shown are the ones it
+  # may read. The posts are then read before the heads. A post is only ever
+  # seen once its room has counted it, so a head read afterwards is never
+  # behind the posts it is returned with.
   defp sync_rooms(fleet_id, cursors, actor) do
-    standing = RoomPoster.standing(actor, fleet_id)
-    rooms = Map.new(list_rooms!(fleet_id, actor: actor), &{&1.slug, &1})
+    class = Access.class(actor, fleet_id)
+    opts = [actor: actor, context: Access.context(actor, fleet_id, class)]
+    rooms = Map.new(list_rooms!(fleet_id, opts), &{&1.slug, &1})
+    {readable, others} = Enum.split_with(cursors, &Map.has_key?(rooms, &1.slug))
 
-    with :ok <- known_rooms(fleet_id, cursors, rooms),
-         {readable, refused} = Enum.split_with(cursors, &readable?(rooms[&1.slug], standing)),
-         :ok <- some_readable(readable, refused),
-         {:ok, posts} <- catch_up_rooms(fleet_id, readable, actor, standing) do
-      heads = Map.new(list_rooms!(fleet_id, actor: actor), &{&1.slug, &1})
+    with :ok <- known_rooms(fleet_id, others, class),
+         :ok <- some_readable(readable, others),
+         {:ok, posts} <- catch_up_rooms(fleet_id, readable, opts) do
+      heads = Map.new(list_rooms!(fleet_id, opts), &{&1.slug, &1})
       synced = Map.new(readable, &{&1.slug, synced(&1, heads[&1.slug], posts)})
-
-      refused = MapSet.new(refused, & &1.slug)
 
       {:ok,
        Enum.map(cursors, fn %{slug: slug} ->
-         if MapSet.member?(refused, slug), do: %{slug: slug, refused: true}, else: synced[slug]
+         Map.get(synced, slug, %{slug: slug, refused: true})
        end)}
     end
   end
 
-  defp known_rooms(fleet_id, cursors, rooms) do
-    case Enum.find(cursors, &(not Map.has_key?(rooms, &1.slug))) do
-      nil -> :ok
-      %{slug: slug} -> {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)}
-    end
+  # A member is shown every room, so one it names and is not shown is a room
+  # the fleet does not have. Anyone else is shown General alone, and is not
+  # told which other rooms there are: those are refused, further on.
+  defp known_rooms(_fleet_id, [], _class), do: :ok
+
+  defp known_rooms(fleet_id, [%{slug: slug} | _], class) do
+    if Access.enough?(class, :read, :rooms),
+      do: {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)},
+      else: :ok
   end
 
-  # Anyone reads a public room; the fleet's keys read every room.
-  defp readable?(room, standing), do: room.public or RoomPoster.standing?(standing)
-
   defp some_readable([], [_ | _]), do: {:error, Ash.Error.Forbidden.exception([])}
-  defp some_readable(_readable, _refused), do: :ok
+  defp some_readable(_readable, _others), do: :ok
 
   # The posts of every readable room named are read together, in one query,
   # and grouped by room.
-  defp catch_up_rooms(_fleet_id, [], _actor, _standing), do: {:ok, %{}}
+  defp catch_up_rooms(_fleet_id, [], _opts), do: {:ok, %{}}
 
-  defp catch_up_rooms(fleet_id, cursors, actor, standing) do
+  defp catch_up_rooms(fleet_id, cursors, opts) do
     slugs = Enum.map(cursors, & &1.slug)
     after_seqs = Enum.map(cursors, & &1.after_seq)
 
-    with {:ok, posts} <-
-           catch_up(fleet_id, slugs, after_seqs, @sync_page, actor: actor, context: standing),
+    with {:ok, posts} <- catch_up(fleet_id, slugs, after_seqs, @sync_page, opts),
          do: {:ok, Enum.group_by(posts, & &1.room_id)}
   end
 
@@ -439,14 +438,22 @@ defmodule Keyfleet.Rooms do
 
   The room takes a line saying who named it and what, and answers with its new
   topic, who set it and when. A room the fleet does not have is
-  `RoomUnknownError`; a room that is not open is refused as invalid.
+  `RoomUnknownError` to a member, who is shown every room; anyone else is
+  refused whichever room they name. A room that is not open is refused as
+  invalid.
   """
   def name_open_room(fleet_id, slug, topic, opts) do
     case get_room(fleet_id, slug, opts) do
-      {:ok, nil} -> {:error, RoomUnknownError.exception(fleet_id: fleet_id, slug: slug)}
+      {:ok, nil} -> {:error, not_shown(fleet_id, slug, opts[:actor])}
       {:ok, room} -> set_room_topic(room, topic, opts)
       {:error, error} -> {:error, error}
     end
+  end
+
+  defp not_shown(fleet_id, slug, actor) do
+    if Access.allowed?(actor, :read, :rooms, fleet_id),
+      do: RoomUnknownError.exception(fleet_id: fleet_id, slug: slug),
+      else: Ash.Error.Forbidden.exception([])
   end
 
   @doc """
@@ -464,12 +471,12 @@ defmodule Keyfleet.Rooms do
 
   defp taken_on?(_error, _field), do: false
 
-  @doc "How many rooms agents have created in the fleet."
+  @doc "How many rooms agents have created in the fleet, counted by the server for its limit."
   def count_created_rooms!(fleet_id) do
     Room
     |> Ash.Query.for_read(:for_fleet, %{fleet_id: fleet_id})
     |> Ash.Query.filter(kind == :created)
-    |> Ash.count!()
+    |> Ash.count!(authorize?: false)
   end
 
   @doc """

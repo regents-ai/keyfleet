@@ -19,11 +19,11 @@ defmodule KeyfleetWeb.RoomsLive do
   import Phoenix.LiveView, only: [stream: 4]
 
   alias Keyfleet.Actors.Human
+  alias Keyfleet.Access
   alias Keyfleet.Chain
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Rooms
-  alias Keyfleet.Rooms.Checks.RoomPoster
   alias Keyfleet.Rooms.Errors.PostLimitError
   alias Keyfleet.Rooms.Muter
   alias KeyfleetWeb.KeyLinks
@@ -98,9 +98,6 @@ defmodule KeyfleetWeb.RoomsLive do
                   aria-current={if room.slug == @room.slug, do: "page"}
                 >
                   {room_label(room)}
-                  <small :if={not room.public and not @room.key?} class="rooms-access">
-                    Keys only
-                  </small>
                   <small :if={room.public and @room.key?} class="rooms-access">Public</small>
                 </.link>
               </li>
@@ -132,18 +129,18 @@ defmodule KeyfleetWeb.RoomsLive do
           </section>
         </div>
 
-        <section :if={is_nil(@room.room_id)} class="rooms-panel rooms-thread">
+        <section :if={is_nil(@room.room_id) and @room.key?} class="rooms-panel rooms-thread">
           <h2>This room doesn’t exist.</h2>
           <p>Choose one of this fleet’s rooms instead.</p>
         </section>
 
         <section
-          :if={@room.room_id != nil and not @room.readable?}
+          :if={is_nil(@room.room_id) and not @room.key?}
           id="rooms-locked"
           class="rooms-panel rooms-thread"
           aria-labelledby="rooms-thread-title"
         >
-          <h2 id="rooms-thread-title">{@room.name}</h2>
+          <h2 id="rooms-thread-title">Keys only</h2>
           <.notice notice={@notice} />
           <p :if={@room.refreshing?}>
             Key ownership is being refreshed; try again in a moment.
@@ -155,7 +152,7 @@ defmodule KeyfleetWeb.RoomsLive do
         </section>
 
         <section
-          :if={@room.room_id != nil and @room.readable?}
+          :if={@room.room_id != nil}
           class="rooms-panel rooms-thread"
           aria-labelledby="rooms-thread-title"
         >
@@ -327,10 +324,8 @@ defmodule KeyfleetWeb.RoomsLive do
   def handle_info(
         %Broadcast{event: "rooms_changed", payload: %{fleet_id: fleet_id}},
         %{assigns: %{room: %{fleet_id: fleet_id}}} = socket
-      ) do
-    rooms = Rooms.list_rooms!(fleet_id, actor: ShellLive.human_actor(socket), load: [:fleet])
-    {:noreply, update(socket, :room, &show_rooms(&1, rooms))}
-  end
+      ),
+      do: {:noreply, recheck_standing(socket)}
 
   # A mute added or taken away on another of the muter's pages.
   def handle_info(
@@ -356,19 +351,17 @@ defmodule KeyfleetWeb.RoomsLive do
 
   defp show_room(socket, fleet_id, slug) do
     actor = ShellLive.human_actor(socket)
-    standing = RoomPoster.standing(actor, fleet_id)
+    {key?, opts} = standing(actor, fleet_id)
     # A fleet outside the catalog has no rooms and no mutes, and the page says
     # it doesn't exist.
     {rooms, muted} =
-      case Rooms.list_rooms(fleet_id, actor: actor, load: [:fleet]) do
+      case Rooms.list_rooms(fleet_id, [load: [:fleet]] ++ opts) do
         {:ok, rooms} -> {rooms, Rooms.muted_keys!(fleet_id, actor)}
         {:error, %Ash.Error.Invalid{errors: [%UnknownFleetError{}]}} -> {[], MapSet.new()}
         {:error, failure} -> raise failure
       end
 
-    room = Enum.find(rooms, &(&1.slug == slug))
-    key? = RoomPoster.standing?(standing)
-    {readable?, posts} = read_latest(room, actor: actor, context: standing)
+    posts = read_latest(Enum.find(rooms, &(&1.slug == slug)), opts)
 
     socket
     |> assign(
@@ -382,7 +375,6 @@ defmodule KeyfleetWeb.RoomsLive do
             muted: muted,
             muter?: Muter.of(actor) != nil,
             key?: key?,
-            readable?: readable?,
             refreshing?: refreshing?(actor, rooms, fleet_id)
           },
           rooms
@@ -400,17 +392,16 @@ defmodule KeyfleetWeb.RoomsLive do
 
   # The room's latest posts read again without the keys muted now, when the
   # keys muted have changed.
-  defp show_unmuted(%{assigns: %{room: %{room_id: room_id, readable?: true} = shown}} = socket)
+  defp show_unmuted(%{assigns: %{room: %{room_id: room_id} = shown}} = socket)
        when is_binary(room_id) do
-    actor = ShellLive.human_actor(socket)
-    muted = Rooms.muted_keys!(shown.fleet_id, actor)
+    muted = Rooms.muted_keys!(shown.fleet_id, ShellLive.human_actor(socket))
 
     if muted == shown.muted do
       socket
     else
       socket
       |> assign(:room, %{shown | muted: muted})
-      |> show_latest(actor: actor)
+      |> show_latest()
     end
   end
 
@@ -419,7 +410,20 @@ defmodule KeyfleetWeb.RoomsLive do
     assign(socket, :room, %{shown | muted: muted})
   end
 
-  # The fleet's rooms, and what the page shows of the one it is on.
+  # Whether the reader is one of the fleet's members now, and what reads the
+  # fleet's rooms as them with that answer, so it is read once for the page.
+  defp standing(actor, fleet_id) do
+    class = Access.class(actor, fleet_id)
+
+    {Access.enough?(class, :read, :rooms),
+     [actor: actor, context: Access.context(actor, fleet_id, class)]}
+  end
+
+  defp list_rooms!(fleet_id, opts), do: Rooms.list_rooms!(fleet_id, [load: [:fleet]] ++ opts)
+
+  # The rooms the reader is shown, and what the page shows of the one it is
+  # on. A member is shown every room; anyone else General alone, so any other
+  # address is a room for keys only to them, whether or not the fleet has it.
   defp show_rooms(%{slug: slug} = shown, rooms) do
     room = Enum.find(rooms, &(&1.slug == slug))
 
@@ -446,48 +450,38 @@ defmodule KeyfleetWeb.RoomsLive do
 
   defp refreshing?(_actor, _rooms, _fleet_id), do: false
 
-  # The room's latest posts, read again from where the room has got to now, or
-  # the room cleared and shown as for keys only when the reader may not read
-  # it.
-  defp show_latest(%{assigns: %{room: shown}} = socket, opts) do
-    room = Rooms.get_room!(shown.fleet_id, shown.slug, actor: opts[:actor])
+  # The room's latest posts, read again from where the room has got to now.
+  defp show_latest(%{assigns: %{room: %{room_id: room_id} = shown}} = socket)
+       when is_binary(room_id) do
+    {_key?, opts} = standing(ShellLive.human_actor(socket), shown.fleet_id)
+    posts = read_latest(Rooms.get_room!(shown.fleet_id, shown.slug, opts), opts)
 
-    case read_latest(room, opts) do
-      {true, posts} ->
-        socket
-        |> assign(:room, %{shown | readable?: true, last_seq: last_seq(posts, 0)})
-        |> stream(:posts, Rooms.unmuted(posts, shown.muted), reset: true, limit: -@thread_kept)
-
-      {false, []} ->
-        lock_room(socket)
-    end
+    socket
+    |> assign(:room, %{shown | last_seq: last_seq(posts, 0)})
+    |> stream(:posts, Rooms.unmuted(posts, shown.muted), reset: true, limit: -@thread_kept)
   end
 
-  # Whether the reader may read the room, as its own policy answers, and its
-  # latest posts when they may. Places in a room's order run unbroken, so the
-  # newest hundred posts start one hundred places back from where the room
-  # has got to.
-  defp read_latest(nil, _opts), do: {false, []}
+  defp show_latest(socket), do: stream(socket, :posts, [], reset: true)
+
+  # The latest posts of a room the reader is shown. Places in a room's order
+  # run unbroken, so the newest hundred posts start one hundred places back
+  # from where the room has got to. A room they are not shown has none.
+  defp read_latest(nil, _opts), do: []
 
   defp read_latest(room, opts) do
     page = %{after_seq: max(room.head_seq - @thread_page, 0), limit: @thread_page}
-
-    case Rooms.read_messages(room.fleet_id, room.slug, page, [load: [:reply_to_seq]] ++ opts) do
-      {:ok, posts} -> {true, posts}
-      {:error, %Ash.Error.Forbidden{}} -> {false, []}
-      {:error, failure} -> raise failure
-    end
+    Rooms.read_messages!(room.fleet_id, room.slug, page, [load: [:reply_to_seq]] ++ opts)
   end
 
   @doc """
   Only the posts after the last one on the page are read and added to it. A
   room the reader may no longer read, because the key they read it with
-  changed hands, is cleared and shown as for keys only. A room shown as for
-  keys only is looked at afresh: a Key may have arrived.
+  changed hands, is looked at afresh and shown as for keys only.
   """
   def show_new_posts(socket, opts \\ [])
 
-  def show_new_posts(%{assigns: %{room: %{readable?: true} = room}} = socket, opts) do
+  def show_new_posts(%{assigns: %{room: %{room_id: room_id} = room}} = socket, opts)
+      when is_binary(room_id) do
     case Rooms.read_messages(
            room.fleet_id,
            room.slug,
@@ -500,56 +494,40 @@ defmodule KeyfleetWeb.RoomsLive do
         |> stream(:posts, Rooms.unmuted(posts, room.muted), limit: -@thread_kept)
 
       {:error, %Ash.Error.Forbidden{}} ->
-        lock_room(socket)
+        recheck_standing(socket)
 
       {:error, failure} ->
         raise failure
     end
   end
 
-  def show_new_posts(%{assigns: %{room: %{readable?: false}}} = socket, _opts),
-    do: recheck_standing(socket)
-
   def show_new_posts(socket, _opts), do: socket
 
   @doc """
-  The reader's standing in the fleet, read afresh rather than carried over
-  from what the page showed, when their Keys or the fleet's rooms change and
-  after a refusal: a Key arriving opens a room shown as for keys only, and a
-  Key leaving closes one only the keys read.
+  Who the reader is in the fleet, read afresh rather than carried over from
+  what the page showed, when the fleet's Keys change and after a refusal: a
+  Key arriving opens the fleet's rooms to them, and a Key leaving leaves them
+  General alone, with any other room cleared and shown as for keys only.
   """
-  def recheck_standing(%{assigns: %{room: %{room_id: room_id} = room}} = socket)
-      when is_binary(room_id) do
+  def recheck_standing(%{assigns: %{room: %{fleet_id: fleet_id} = room}} = socket) do
     actor = ShellLive.human_actor(socket)
-    standing = RoomPoster.standing(actor, room.fleet_id)
-    key? = RoomPoster.standing?(standing)
+    {key?, opts} = standing(actor, fleet_id)
+    rooms = list_rooms!(fleet_id, opts)
 
-    socket =
-      assign(socket, :room, %{
-        room
-        | key?: key?,
-          refreshing?: refreshing?(actor, room.rooms, room.fleet_id)
-      })
+    shown =
+      show_rooms(
+        %{room | key?: key?, refreshing?: refreshing?(actor, rooms, fleet_id)},
+        rooms
+      )
 
-    if room.readable?,
-      do: show_new_posts(socket, context: standing),
-      else: show_latest(socket, actor: actor, context: standing)
+    socket = assign(socket, :room, shown)
+
+    if shown.room_id != nil and shown.room_id == room.room_id,
+      do: show_new_posts(socket, Keyword.take(opts, [:context])),
+      else: show_latest(socket)
   end
 
   def recheck_standing(socket), do: socket
-
-  defp lock_room(%{assigns: %{room: room}} = socket) do
-    actor = ShellLive.human_actor(socket)
-
-    socket
-    |> assign(:room, %{
-      room
-      | key?: false,
-        readable?: false,
-        refreshing?: refreshing?(actor, room.rooms, room.fleet_id)
-    })
-    |> stream(:posts, [], reset: true)
-  end
 
   defp last_seq([], shown), do: shown
   defp last_seq(posts, _shown), do: List.last(posts).seq

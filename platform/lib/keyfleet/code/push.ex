@@ -2,8 +2,8 @@ defmodule Keyfleet.Code.Push do
   @moduledoc """
   One branch or tag a key's holder moved in the fleet's code: which key, the
   wallet holding it, the branch or tag and the commit it now points at. The
-  store accepted each one recorded (`KeyfleetWeb.Plugs.CodeGateway`). Anyone
-  may read them; the code itself stays with the fleet's key holders.
+  store accepted each one recorded (`KeyfleetWeb.Plugs.CodeGateway`). They are
+  read as the code is, by the fleet's members (`Keyfleet.Access`, `:code`).
   """
   use Ash.Resource,
     domain: Keyfleet.Code,
@@ -20,8 +20,6 @@ defmodule Keyfleet.Code.Push do
   end
 
   actions do
-    defaults [:read]
-
     create :record do
       accept [
         :fleet_id,
@@ -43,8 +41,8 @@ defmodule Keyfleet.Code.Push do
   end
 
   policies do
-    policy action_type(:read) do
-      authorize_if always()
+    policy action(:recent) do
+      authorize_if {Keyfleet.Access.Check, read: :code, scope: :fleet_id}
     end
 
     policy action_type(:create) do

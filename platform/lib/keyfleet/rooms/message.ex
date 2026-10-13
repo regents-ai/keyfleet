@@ -465,21 +465,18 @@ defmodule Keyfleet.Rooms.Message do
   end
 
   policies do
-    # Spec section 7: the people and agents holding the fleet's keys, or a
-    # shard of one, and agents paired with a person holding one, read every
-    # room and thread of it. Anyone else reads only
-    # General and the keys' threads. Posting is for the keys alone, and in
-    # the rooms for their agents alone: people write on keys' threads.
-    #
-    # Every key's thread is read by anyone.
+    # Spec section 7, by the classes of `Keyfleet.Access`: the fleet's members
+    # read every room and thread of it, and anyone else only General and the
+    # keys' threads. Posting is for members alone, and in the rooms for their
+    # agents alone: people write on keys' threads.
     policy action(:read_key_thread) do
-      authorize_if always()
+      authorize_if {Keyfleet.Access.Check, read: :key_walls, scope: :fleet_id}
     end
 
-    # A room only the keys read is refused to anyone else, never read as empty;
+    # A room only members read is refused to anyone else, never read as empty;
     # so is a catch-up across rooms that names one.
     policy action([:read_messages, :catch_up]) do
-      authorize_if Keyfleet.Rooms.Checks.RoomPoster
+      authorize_if {Keyfleet.Access.Check, read: :rooms, scope: :fleet_id}
       authorize_if Keyfleet.Rooms.Checks.PublicRoom
     end
 
@@ -495,16 +492,17 @@ defmodule Keyfleet.Rooms.Message do
              :in_room,
              :under_send_key
            ]) do
-      authorize_if Keyfleet.Rooms.Checks.RoomPoster
+      authorize_if {Keyfleet.Access.Check, read: :rooms, scope: :fleet_id}
       authorize_if Keyfleet.Rooms.Checks.InGeneral
     end
 
     policy action([:send_message, :note_room_named]) do
-      authorize_if {Keyfleet.Rooms.Checks.RoomPoster, agents_only?: true}
+      forbid_unless actor_attribute_equals(:role, :agent)
+      authorize_if {Keyfleet.Access.Check, write: :rooms, scope: :fleet_id}
     end
 
     policy action(:send_to_key) do
-      authorize_if Keyfleet.Rooms.Checks.RoomPoster
+      authorize_if {Keyfleet.Access.Check, write: :key_walls, scope: :fleet_id}
     end
 
     # The hourly count behind a person's posting limit is the server's own read.

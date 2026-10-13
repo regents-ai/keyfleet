@@ -93,15 +93,13 @@ defmodule Keyfleet.Directory do
     end
   end
 
+  # The rooms are read as nobody, so they are the ones anyone reads: General.
   defp more(id, posts, work) do
-    rooms = Rooms.list_rooms!(id, load: [:post_count])
-
     %{
       terms: Rules.membership_terms(),
       agents: agents(id),
       work: work,
-      rooms: for(%{kind: kind} = room <- rooms, kind in [:fixed, :open], do: room(room)),
-      created_rooms: for(%{kind: :created} = room <- rooms, do: room(room)),
+      rooms: id |> Rooms.list_rooms!(load: [:post_count]) |> Enum.map(&room/1),
       recent_posts: Enum.map(posts, &post/1)
     }
   end

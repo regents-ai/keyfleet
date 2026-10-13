@@ -22,7 +22,7 @@ defmodule Keyfleet.Rooms.Preparations.OneRoom do
   def prepare(query, opts, context) do
     Ash.Query.before_action(query, fn query ->
       query =
-        case room(query, Keyword.fetch!(opts, :in), context.actor) do
+        case room(query, Keyword.fetch!(opts, :in), Ash.Scope.to_opts(context)) do
           nil -> Ash.Query.do_filter(query, false)
           %{id: room_id} -> Ash.Query.filter(query, room_id == ^room_id)
         end
@@ -45,19 +45,20 @@ defmodule Keyfleet.Rooms.Preparations.OneRoom do
     end)
   end
 
-  defp room(query, :room, actor),
+  # Looked up as the reader, with the class the request already read.
+  defp room(query, :room, opts),
     do:
       Rooms.get_room!(
         Ash.Query.get_argument(query, :fleet_id),
         Ash.Query.get_argument(query, :slug),
-        actor: actor
+        opts
       )
 
-  defp room(query, :key, actor),
+  defp room(query, :key, opts),
     do:
       Rooms.get_key_thread!(
         Ash.Query.get_argument(query, :fleet_id),
         Ash.Query.get_argument(query, :token_id),
-        actor: actor
+        opts
       )
 end

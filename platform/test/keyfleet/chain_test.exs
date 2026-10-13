@@ -500,7 +500,7 @@ defmodule Keyfleet.ChainTest do
     end
   end
 
-  defp slugs(fleet), do: Enum.map(Rooms.list_rooms!(fleet), & &1.slug)
+  defp slugs(fleet), do: Enum.map(Rooms.list_rooms!(fleet, authorize?: false), & &1.slug)
 
   # The record `RecordKeyfleets` writes holding the first fleet of type
   # `slot`, on the wiring every fleet shares unless `wiring` says otherwise.

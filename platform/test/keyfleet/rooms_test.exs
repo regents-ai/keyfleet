@@ -29,7 +29,7 @@ defmodule Keyfleet.RoomsTest do
     assert persisted_rooms() == first
 
     for fleet <- Fleets.list_fleets!() do
-      rooms = Rooms.list_rooms!(fleet.id)
+      rooms = Rooms.list_rooms!(fleet.id, authorize?: false)
 
       assert Enum.map(rooms, &{&1.slug, &1.name, &1.kind, &1.topic}) == [
                {"welcome", "Welcome and intros", :fixed, nil},
@@ -69,7 +69,7 @@ defmodule Keyfleet.RoomsTest do
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
     assert %{topic: "Hull survey", topic_set_by: "0x" <> _} =
-             Rooms.get_room!("fibonacci_syndicate", "open-2")
+             Rooms.get_room!("fibonacci_syndicate", "open-2", authorize?: false)
   end
 
   test "ordinary actors cannot write rooms and leave persisted state unchanged" do

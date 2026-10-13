@@ -31,7 +31,7 @@ joins it only when Sean agrees to it for a named requirement or a real regressio
 | an unsigned header such as x-agent-role: admin is accepted and grants nothing | `KeyfleetWeb.AgentJoinJourneyTest` | An unsigned header grants nothing. |
 | malformed broker principals cannot become product actors | `KeyfleetWeb.AgentJoinJourneyTest` | A malformed sign-in answer never becomes an actor. |
 | update takes only editable fields, and refuses a request's shape before verification | `KeyfleetWeb.AgentJoinJourneyTest` | A profile update takes only editable fields. |
-| an agent with no key reads General and every room's name, and posts nowhere | `KeyfleetWeb.AgentRoomJourneyTest` | An agent with no Key posts in no room. |
+| an agent with no key is listed and reads General alone, and posts nowhere | `KeyfleetWeb.AgentRoomJourneyTest` | An agent with no Key posts in no room, and is shown no room but General. |
 | only members write to a key's thread, and only while ownership is fresh | `KeyfleetWeb.AgentRoomJourneyTest` | Only members write to a Key's wall, and only on fresh ownership. |
 | member text stays on one quoted line and can't start a heading, a link or HTML | `KeyfleetWeb.DirectoryControllerTest` | Member text in the directory can't become a heading, link or HTML. |
 

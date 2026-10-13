@@ -1,35 +1,43 @@
 defmodule Keyfleet.Rooms.Checks.InGeneral do
   @moduledoc """
-  The lines written in the fleet's General room
-  (`Keyfleet.Rooms.Room.public_slug/0`), the one room of a fleet anyone reads,
-  for reads that name their fleet. A read without a fleet has none.
+  The fleet's General room (`Keyfleet.Rooms.Room.public_slug/0`) and the lines
+  written in it, for reads that name their fleet and for whoever may read
+  General (`Keyfleet.Access`, `:general_room`). A read without a fleet has
+  none.
 
-  General's id is found once, in the same statement, so the read keeps to its
-  index on the fleet's room and time (`messages_fleet_room_lines_index`)
-  rather than joining every line to its room.
+  For lines, General's id is found once, in the same statement, so the read
+  keeps to its index on the fleet's room and time
+  (`messages_fleet_room_lines_index`) rather than joining every line to its
+  room.
   """
   use Ash.Policy.FilterCheck
 
+  alias Keyfleet.Access
+  alias Keyfleet.Rooms.Message
   alias Keyfleet.Rooms.Room
 
   @impl true
-  def describe(_opts), do: "the line is in the fleet's General room"
+  def describe(_opts), do: "it is the fleet's General room, or a line in it"
 
   @impl true
-  def filter(_actor, %{query: %Ash.Query{} = query}, _opts) do
-    case Ash.Query.get_argument(query, :fleet_id) do
-      nil ->
-        expr(false)
+  def filter(actor, %{query: %Ash.Query{} = query}, _opts) do
+    fleet_id = Ash.Query.get_argument(query, :fleet_id)
 
-      fleet_id ->
-        expr(
-          room_id ==
-            fragment(
-              "(SELECT general.id FROM keyfleet_app.rooms AS general WHERE general.fleet_id = ? AND general.slug = ?)",
-              ^fleet_id,
-              ^Room.public_slug()
-            )
-        )
-    end
+    if is_binary(fleet_id) and Access.allowed?(actor, :read, :general_room, fleet_id),
+      do: general(query.resource, fleet_id),
+      else: expr(false)
   end
+
+  defp general(Room, _fleet_id), do: expr(slug == ^Room.public_slug())
+
+  defp general(Message, fleet_id),
+    do:
+      expr(
+        room_id ==
+          fragment(
+            "(SELECT general.id FROM keyfleet_app.rooms AS general WHERE general.fleet_id = ? AND general.slug = ?)",
+            ^fleet_id,
+            ^Room.public_slug()
+          )
+      )
 end

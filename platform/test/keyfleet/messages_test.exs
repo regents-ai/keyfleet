@@ -340,7 +340,7 @@ defmodule Keyfleet.MessagesTest do
     writer: writer
   } do
     Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
-    room = Rooms.get_room!(@fleet, "general")
+    room = Rooms.get_room!(@fleet, "general", authorize?: false)
 
     {:ok, sent} = send_as(writer, "general", "Hull survey started", "k-1")
     assert_receive %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: 1}}
@@ -550,7 +550,7 @@ defmodule Keyfleet.MessagesTest do
 
   defp heads do
     @fleet
-    |> Rooms.list_rooms!()
+    |> Rooms.list_rooms!(authorize?: false)
     |> Map.new(&{{&1.fleet_id, &1.slug}, &1.head_seq})
   end
 

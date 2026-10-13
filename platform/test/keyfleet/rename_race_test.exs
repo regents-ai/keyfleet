@@ -88,7 +88,7 @@ defmodule Keyfleet.RenameRaceTest do
     assert wait in 59..60
 
     Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
-      assert Rooms.get_room!(@fleet, @slug).topic == topic
+      assert Rooms.get_room!(@fleet, @slug, authorize?: false).topic == topic
 
       # Read as the system would, past the policy: the test checks what the
       # open room holds after the race, not who may read it.

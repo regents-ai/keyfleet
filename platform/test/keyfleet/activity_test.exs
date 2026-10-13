@@ -411,7 +411,7 @@ defmodule Keyfleet.ActivityTest do
 
   # A post written at `at`, as key 1's owner.
   defp line!(slug, at) do
-    room = Rooms.get_room!(@fleet, slug)
+    room = Rooms.get_room!(@fleet, slug, authorize?: false)
     body = "Line at #{DateTime.to_iso8601(at)}"
 
     Repo.insert_all(

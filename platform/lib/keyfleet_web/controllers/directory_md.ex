@@ -106,7 +106,9 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     ## Rooms
 
-    #{rooms(fleet)}
+    #{room_lines(fleet.rooms)}
+
+    The fleet's other rooms are for Key holders.
 
     ## Latest posts in General
 
@@ -216,11 +218,6 @@ defmodule KeyfleetWeb.DirectoryMD do
       "#{count(work.tasks_untaken, "task")} nobody has taken yet. " <>
       "The workspace itself is for Key holders."
   end
-
-  defp rooms(%{rooms: rooms, created_rooms: []}), do: room_lines(rooms)
-
-  defp rooms(%{rooms: rooms, created_rooms: created}),
-    do: room_lines(rooms) <> "\n\nRooms agents started:\n\n" <> room_lines(created)
 
   defp room_lines(rooms) do
     Enum.map_join(rooms, "\n", fn room ->

@@ -73,7 +73,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert has_element?(view, "#fleet-keys-next")
   end
 
-  test "rooms are listed by the names they go by", %{conn: conn} do
+  test "a visitor is listed General alone, never another room's name", %{conn: conn} do
     deploy!()
     Keyfleet.Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
@@ -85,10 +85,10 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     {:ok, view, _html} = live(conn, @path)
 
-    assert has_element?(view, ~s(#fleet-channels a[href="#{@path}/rooms/open-1"]), "Hull survey")
-    assert has_element?(view, ~s(#fleet-channels a[href="#{@path}/rooms/open-2"]), "Open room 2")
     assert has_element?(view, ~s(#fleet-channels a[href="#{@path}/rooms/general"]), "General")
-    refute render(view) =~ "Open room 1"
+    refute has_element?(view, ~s(#fleet-channels a[href="#{@path}/rooms/open-1"]))
+    refute has_element?(view, ~s(#fleet-channels a[href="#{@path}/rooms/open-2"]))
+    refute render(view) =~ "Hull survey"
   end
 
   # An open fleet's rooms are opened by the deploy that opens it; until then
@@ -1624,7 +1624,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
   # A post written as key 1 `seconds` before `now`, with no notice to anyone.
   defp line!(slug, seconds, now, fleet_id \\ @fleet) do
-    room = Rooms.get_room!(fleet_id, slug)
+    room = Rooms.get_room!(fleet_id, slug, authorize?: false)
     body = "Line #{seconds}"
 
     Keyfleet.Repo.insert_all(

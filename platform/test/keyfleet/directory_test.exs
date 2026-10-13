@@ -95,16 +95,18 @@ defmodule Keyfleet.DirectoryTest do
     writer = PairingHelpers.agent_for!(owner())
 
     "open-1"
-    |> then(&Rooms.get_room!(@fleet, &1))
+    |> then(&Rooms.get_room!(@fleet, &1, authorize?: false))
     |> Rooms.set_room_topic!("Dry dock", actor: writer)
 
     post!(writer, "open-1", "First")
     post!(writer, "open-1", "Second")
 
-    {:ok, fleet} = Directory.fleet(@fleet)
+    rooms = Rooms.list_rooms!(@fleet, authorize?: false, load: [:post_count])
+    assert %{topic: "Dry dock", post_count: 2} = Enum.find(rooms, &(&1.slug == "open-1"))
 
-    assert %{name: "Dry dock", posts: 2} = Enum.find(fleet.rooms, &(&1.slug == "open-1"))
-    assert %{posts: 0} = Enum.find(fleet.rooms, &(&1.slug == "general"))
+    # The directory, read by anyone, lists General alone.
+    {:ok, fleet} = Directory.fleet(@fleet)
+    assert [%{slug: "general", posts: 0}] = fleet.rooms
   end
 
   test "a fleet whose sales are still being read shows no price" do
