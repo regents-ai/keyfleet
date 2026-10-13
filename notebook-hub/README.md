@@ -76,7 +76,7 @@ What runs:
   each "machine" as a Docker container. Those containers sit on a network that
   only carries IPv6 addresses, as Fly's private network does.
 
-What it checks, in 14 steps:
+What it checks, in 15 steps:
 
 - A session starts on a new machine.
 - The hub reaches the notebook through the relay.
@@ -85,6 +85,8 @@ What it checks, in 14 steps:
 - The notebook's files and results are saved back to the hub after the session
   ends.
 - The machine is gone afterwards.
+- Notebook code is passed none of the caller's sign-in: not Keyfleet's signed
+  note, not a cookie. It sees only its own notebook's password.
 - Another machine on the same private network, knowing a running notebook's
   address but not its password, is turned away.
 - A second hub name sees only its own machines.

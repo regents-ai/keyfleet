@@ -7,6 +7,12 @@ import { join } from 'node:path';
 
 const { HUB_URL, DATA_DIR, NET6, APP, HUB_IMAGE, FLY_TOKEN, HELPER_SECRET } = process.env;
 const MARKER = 'kf-relay-ok-42';
+// What a member's request carries for the hub and must never reach notebook code:
+// Keyfleet's signed note and a cookie, stood in for here by values 97 long.
+const SIGN_IN_HEADERS = {
+	'x-keyfleet-assertion': 'n'.repeat(97),
+	cookie: `hub=${'c'.repeat(92)}`,
+};
 const LABEL = 'keyfleet.local-fly';
 
 const NOTEBOOK = `import marimo
@@ -34,6 +40,16 @@ def _():
         f"token_in_env={token_named} token_readable_in_proc={found}"
     )
     summary
+    return
+
+
+@app.cell
+def _():
+    import marimo as mo
+
+    request = mo.app_meta().request
+    arrived = sorted(f"{name.lower()}:{len(value)}" for name, value in request.headers.items())
+    f"${MARKER} headers={' '.join(arrived)}"
     return
 
 
@@ -133,10 +149,13 @@ async function runCells(sandboxUrl) {
 	ok('marimo page loaded through the hub proxy');
 
 	const sessionId = randomUUID();
-	const socket = new WebSocket(`${sandboxUrl.replace(/^http/, 'ws')}ws?session_id=${sessionId}`);
-	const outputs = [];
+	const socket = new WebSocket(`${sandboxUrl.replace(/^http/, 'ws')}ws?session_id=${sessionId}`, {
+		headers: SIGN_IN_HEADERS,
+	});
+	const outputs = {};
 	let resolveReady;
 	let resolveDone;
+	let cells = Infinity;
 	const ready = new Promise((resolve) => (resolveReady = resolve));
 	const done = new Promise((resolve) => (resolveDone = resolve));
 	socket.addEventListener('message', (event) => {
@@ -144,13 +163,14 @@ async function runCells(sandboxUrl) {
 		if (message.op === 'kernel-ready') resolveReady(message.data);
 		if (message.op === 'cell-op') {
 			const data = message.data.output?.data;
-			if (typeof data === 'string' && data.includes(MARKER)) outputs.push(data);
-			if (outputs.length > 0 && message.data.status === 'idle') resolveDone();
+			if (typeof data === 'string' && data.includes(MARKER)) outputs[message.data.cell_id] = data;
+			if (Object.keys(outputs).length === cells) resolveDone();
 		}
 	});
 	const timeout = (ms, what) =>
 		new Promise((_, reject) => setTimeout(() => reject(new Error(`timed out: ${what}`)), ms));
 	const kernel = await Promise.race([ready, timeout(60_000, 'kernel-ready')]);
+	cells = kernel.cell_ids.length;
 	ok(`kernel WebSocket open through the hub; kernel ready with ${kernel.cell_ids.length} cell(s)`);
 
 	const instantiate = await fetch(`${sandboxUrl}api/kernel/instantiate`, {
@@ -159,13 +179,14 @@ async function runCells(sandboxUrl) {
 			'content-type': 'application/json',
 			'Marimo-Session-Id': sessionId,
 			'Marimo-Server-Token': serverToken,
+			...SIGN_IN_HEADERS,
 		},
 		body: JSON.stringify({ objectIds: [], values: [], autoRun: true }),
 	});
 	check(instantiate.ok, `instantiate returned ${instantiate.status}`);
 	await Promise.race([done, timeout(60_000, 'cell output')]);
 	socket.close();
-	return outputs.at(-1);
+	return Object.values(outputs).map((output) => output.replace(/<[^>]+>/g, '').replaceAll('&#x27;', "'").trim());
 }
 
 async function main() {
@@ -208,11 +229,25 @@ async function main() {
 	check(ipv6.includes(2717), 'helper on IPv6');
 	ok(`in the runner: marimo listens on IPv4 ${ipv4.join(',')}; relay and helper on IPv6 ${ipv6.join(',')}`);
 
-	const output = await runCells(session.sandbox_url);
+	const outputs = await runCells(session.sandbox_url);
+	const output = outputs.find((text) => text.includes('user='));
 	check(output.includes(`${MARKER} user=appuser`), 'cell ran as appuser');
 	check(output.includes('token_in_env=False'), 'helper token not in the notebook environment');
 	check(output.includes('token_readable_in_proc=[]'), 'helper token not readable through /proc');
-	ok(`cell ran on the runner: ${output.replace(/<[^>]+>/g, '').replaceAll('&#x27;', "'").trim()}`);
+	ok(`cell ran on the runner: ${output}`);
+
+	const arrived = outputs.find((text) => text.includes('headers=')).split('headers=')[1].replace(/'$/, '').split(' ');
+	const names = arrived.map((header) => header.split(':')[0]);
+	check(names.includes('authorization'), 'the hub adds the kernel password to what it passes on');
+	check(
+		!names.includes('cookie') && !names.includes('x-keyfleet-assertion'),
+		`no sign-in cookie or note reaches notebook code (got ${names.join(',')})`,
+	);
+	check(
+		arrived.every((header) => Number(header.split(':')[1]) < 97),
+		`nothing the caller sent as sign-in reaches notebook code (got ${arrived.join(' ')})`,
+	);
+	ok(`notebook code sees none of the caller's sign-in, only the kernel's own password: ${arrived.join(' ')}`);
 
 	// Every member can read a running notebook's address, so a neighbour may know its path.
 	const neighbour = fromNeighbour(`http://[${addresses[0]}]:2718${new URL(session.sandbox_url).pathname}`);

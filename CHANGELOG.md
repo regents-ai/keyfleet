@@ -1181,7 +1181,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Each running notebook now gets its own password, which only the hub holds
   and adds after checking who is asking. Before, another notebook machine in
   the same fleet that knew a running notebook's address could run code in it
-  directly, with no record. The local proof has a fourteenth step for this.
+  directly, with no record. The local proof has a step for this, and one
+  more showing that notebook code is passed none of the caller's sign-in.
 - The hub answers a health check, so Fly restarts it if it stops answering.
 - The guide now says that a fleet's notebooks and their running machines are
   shared by all its members, that the hub's record names whoever started a
