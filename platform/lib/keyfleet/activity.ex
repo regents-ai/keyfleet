@@ -49,6 +49,8 @@ defmodule Keyfleet.Activity do
       `source` and `target` (items): the source supports, contradicts or
       produces the target.
     * `:sale`: `token_ids`, the keys bought one after another, lowest first.
+    * `:given`: the same, for a fleet whose Keys are given rather than sold
+      (`Keyfleet.Fleets.Presets.given?/1`).
     * `:transfer`: `token_id`, a key that changed hands.
     * `:shard_issued`: `token_id`, `wallet`, `agent` (`%{id: id, name: name}`,
       or nil while no agent has signed in with the wallet) and `expires_at`.
@@ -103,6 +105,7 @@ defmodule Keyfleet.Activity do
   """
 
   alias Keyfleet.Agents
+  alias Keyfleet.Fleets.Presets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
@@ -323,7 +326,8 @@ defmodule Keyfleet.Activity do
 
   defp read(:keys, fleet_id, seq, _limit, _actor) do
     epochs = Keys.epochs_recorded_before!(fleet_id, seq, @keys_read)
-    {group_epochs(epochs), length(epochs) == @keys_read, top(epochs, :record_seq)}
+    first = if Presets.given?(fleet_id), do: :given, else: :sale
+    {group_epochs(epochs, first), length(epochs) == @keys_read, top(epochs, :record_seq)}
   end
 
   defp read(:shards, fleet_id, seq, limit, _actor) do
@@ -434,10 +438,11 @@ defmodule Keyfleet.Activity do
   defp author(line),
     do: %{token_id: line.as_key, agent: line.agent_profile && line.agent_profile.name}
 
-  # Keys: consecutive first sales are one item, fifty at most.
-  defp group_epochs([]), do: []
+  # Keys: consecutive first owners are one item, fifty at most, of `kind`:
+  # `:sale`, or `:given` where the fleet's Keys are given.
+  defp group_epochs([], _kind), do: []
 
-  defp group_epochs([%{ownership_epoch: 1} = first | _] = epochs) do
+  defp group_epochs([%{ownership_epoch: 1} = first | _] = epochs, kind) do
     {sold, rest} =
       epochs |> Enum.take(@group_cap) |> Enum.split_while(&(&1.ownership_epoch == 1))
 
@@ -445,20 +450,20 @@ defmodule Keyfleet.Activity do
     last = List.last(sold)
 
     item =
-      entry("sale:#{first.record_seq}", first.observed_at, :sale, last.record_seq, %{
+      entry("#{kind}:#{first.record_seq}", first.observed_at, kind, last.record_seq, %{
         token_ids: sold |> Enum.map(& &1.token_id) |> Enum.sort()
       })
 
-    [item | group_epochs(rest)]
+    [item | group_epochs(rest, kind)]
   end
 
-  defp group_epochs([epoch | rest]) do
+  defp group_epochs([epoch | rest], kind) do
     item =
       entry("transfer:#{epoch.record_seq}", epoch.observed_at, :transfer, epoch.record_seq, %{
         token_id: epoch.token_id
       })
 
-    [item | group_epochs(rest)]
+    [item | group_epochs(rest, kind)]
   end
 
   # Proposal records: consecutive votes on one proposal are one item, fifty

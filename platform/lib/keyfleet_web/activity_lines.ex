@@ -52,6 +52,9 @@ defmodule KeyfleetWeb.ActivityLines do
     "dead_end" => "a dead end"
   }
   @unknown_type "an item"
+
+  # How a Key reached its first owner.
+  @first_owner %{sale: "bought", given: "given"}
   @untitled_words [@unknown_type | Map.values(@untitled)]
 
   # How long words the site didn't write may run in Markdown, by what they
@@ -124,15 +127,16 @@ defmodule KeyfleetWeb.ActivityLines do
   defp sentence(%{kind: :linked, facts: %{relation: "produces"} = f}),
     do: [item(f.source), " produced ", item(f.target), "."]
 
-  defp sentence(%{kind: :sale, facts: %{token_ids: [token_id]}}),
-    do: ["Key #{Rules.grouped(token_id)} was bought."]
+  defp sentence(%{kind: kind, facts: %{token_ids: [token_id]}}) when kind in [:sale, :given],
+    do: ["Key #{Rules.grouped(token_id)} was #{@first_owner[kind]}."]
 
-  defp sentence(%{kind: :sale, facts: %{token_ids: [first | _] = token_ids}}) do
+  defp sentence(%{kind: kind, facts: %{token_ids: [first | _] = token_ids}})
+       when kind in [:sale, :given] do
     last = List.last(token_ids)
 
     if token_ids == Enum.to_list(first..last),
-      do: ["Keys #{Rules.grouped(first)}–#{Rules.grouped(last)} were bought."],
-      else: ["#{Rules.keys(length(token_ids))} were bought."]
+      do: ["Keys #{Rules.grouped(first)}–#{Rules.grouped(last)} were #{@first_owner[kind]}."],
+      else: ["#{Rules.keys(length(token_ids))} were #{@first_owner[kind]}."]
   end
 
   defp sentence(%{kind: :transfer, facts: f}),
