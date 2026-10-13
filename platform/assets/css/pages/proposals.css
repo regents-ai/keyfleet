@@ -153,6 +153,16 @@
   font-size: 0.9rem;
 }
 
+.proposals-address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .proposals-facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));

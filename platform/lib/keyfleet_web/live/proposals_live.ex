@@ -624,13 +624,33 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
-  # The shared money: each asset's balance and what is set aside for claims,
+  # The shared money: the treasury's address on Base, to check and to send to;
+  # each asset's balance and what is set aside for claims,
   # the daily split's rate and when it next opens with its preview, the
   # advances still out, and the protocol share owed to Regents.
   defp treasury(assigns) do
     ~H"""
     <section id="proposals-budget" class="proposals-panel" aria-labelledby="proposals-budget-title">
       <h2 id="proposals-budget-title">Treasury</h2>
+
+      <p id="proposals-treasury-address" class="proposals-address">
+        <a
+          id="proposals-treasury-link"
+          href={"https://basescan.org/address/#{@treasury.address}"}
+          title="See it on Basescan"
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          <code id="proposals-treasury-address-text">{@treasury.address}</code>
+        </a>
+        <Regent.Primitives.copy_button
+          id="proposals-treasury-copy"
+          variant="quiet"
+          target="proposals-treasury-address-text"
+        >
+          Copy
+        </Regent.Primitives.copy_button>
+      </p>
 
       <p :if={not @treasury.read?} id="proposals-budget-pending" class="proposals-detail">
         Reading…

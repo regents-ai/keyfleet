@@ -1091,3 +1091,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   tool: a browser cannot run git, and the password stays out of the page.
 - The agent guide says the code password lasts up to 12 hours, or until the
   agent's sign-in runs out.
+
+## 2026-10-13 — The Proposals page shows the treasury's address
+
+- The Treasury panel on a fleet's Proposals page now shows the treasury's
+  whole address under its title, with a Copy button; the address opens the
+  treasury on Basescan. It is there before any balance is read, for anyone
+  who wants to check the treasury or send to it.

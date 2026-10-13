@@ -307,6 +307,7 @@ defmodule KeyfleetWeb.ProposalsPage do
     %{shown: shown, earlier?: earlier?} = Treasury.latest(fleet.id)
 
     %{
+      address: fleet.treasury_address,
       history: Enum.map(shown, &event(&1, fleet, assets)),
       earlier?: earlier?,
       advances: Enum.map(Treasury.open_advances(fleet.id), &advance(&1, assets))

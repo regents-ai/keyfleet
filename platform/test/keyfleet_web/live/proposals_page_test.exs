@@ -373,6 +373,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = live(conn, @list)
       assert has_element?(view, "#proposals-budget-pending", "Reading…")
 
+      # The treasury's whole address is there before any balance is read.
+      assert has_element?(
+               view,
+               ~s(#proposals-treasury-link[href="https://basescan.org/address/#{@treasury}"]),
+               @treasury
+             )
+
       ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 3_000_000)])
       assert has_element?(view, "#proposals-budget-pending")
 
