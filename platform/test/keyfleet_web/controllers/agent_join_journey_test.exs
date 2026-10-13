@@ -340,6 +340,16 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
   test "malformed broker principals cannot become product actors", c do
     wallet = c.signer.address
 
+    Keyfleet.PairingHelpers.pair!(
+      %Keyfleet.Actors.Agent{
+        wallet_address: wallet,
+        chain_id: 8453,
+        verification_method: :eoa_recovery,
+        audience: "keyfleet"
+      },
+      ["0x" <> String.duplicate("a", 40)]
+    )
+
     good = %{
       "verified" => true,
       "walletAddress" => wallet,
