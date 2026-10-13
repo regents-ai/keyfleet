@@ -165,9 +165,26 @@
       "where": null
     }
   ],
-  "custom_statements": [],
+  "custom_statements": [
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP TRIGGER immutable_wall_removals ON keyfleet_app.wall_removals;",
+      "global?": false,
+      "name": "immutable_wall_removals_trigger",
+      "up": "CREATE TRIGGER immutable_wall_removals BEFORE UPDATE OR DELETE ON keyfleet_app.wall_removals\nFOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+    },
+    {
+      "after_tables": [],
+      "code?": false,
+      "down": "DROP TRIGGER untruncatable_wall_removals ON keyfleet_app.wall_removals;",
+      "global?": false,
+      "name": "untruncatable_wall_removals_trigger",
+      "up": "CREATE TRIGGER untruncatable_wall_removals BEFORE TRUNCATE ON keyfleet_app.wall_removals\nFOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();\n"
+    }
+  ],
   "has_create_action": true,
-  "hash": "4899F3D93D4030FEE3C99A5E28040477D12CCB9EF13168BDDB549F0271A9011B",
+  "hash": "7F4759AD6D6657338F639AE2A9A6DF0FCFC5A11313B1C6DA3D980B8CB90787DB",
   "identities": [
     {
       "all_tenants?": false,

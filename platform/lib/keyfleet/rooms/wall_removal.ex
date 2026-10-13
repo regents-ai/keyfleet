@@ -7,7 +7,8 @@ defmodule Keyfleet.Rooms.WallRemoval do
   it, on the site and through the agent API. A removal names only the post;
   the wall it is on and the wallet holding that Key are read from the post
   (`Keyfleet.Rooms.Changes.OffItsWall`), so nobody takes a post off a wall it
-  isn't on. A removal is never undone, and removing a post twice keeps the
+  isn't on. A removal is never undone, which the database enforces by refusing
+  to change, delete or empty the table, and removing a post twice keeps the
   one removal.
   """
   use Ash.Resource,
@@ -33,6 +34,28 @@ defmodule Keyfleet.Rooms.WallRemoval do
     custom_indexes do
       # How many posts are off one Key's wall.
       index(["fleet_id", "token_id"], name: "wall_removals_wall_index")
+    end
+
+    # A removal is never undone: the same refusal every proposal record has,
+    # which names the table.
+    custom_statements do
+      statement :immutable_wall_removals_trigger do
+        up("""
+        CREATE TRIGGER immutable_wall_removals BEFORE UPDATE OR DELETE ON keyfleet_app.wall_removals
+        FOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();
+        """)
+
+        down("DROP TRIGGER immutable_wall_removals ON keyfleet_app.wall_removals;")
+      end
+
+      statement :untruncatable_wall_removals_trigger do
+        up("""
+        CREATE TRIGGER untruncatable_wall_removals BEFORE TRUNCATE ON keyfleet_app.wall_removals
+        FOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();
+        """)
+
+        down("DROP TRIGGER untruncatable_wall_removals ON keyfleet_app.wall_removals;")
+      end
     end
   end
 

@@ -470,6 +470,13 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     end
 
     assert Rooms.read_key_thread!(@fleet, 12) == []
+
+    # A removal is never undone: the database refuses to delete it, so the
+    # post stays off the wall.
+    assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
+             Keyfleet.Repo.query("DELETE FROM keyfleet_app.wall_removals", [], mode: :savepoint)
+
+    assert Rooms.read_key_thread!(@fleet, 12) == []
   end
 
   test "the key changing hands shows its new holder", %{conn: conn} do

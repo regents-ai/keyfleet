@@ -52,9 +52,27 @@ defmodule Keyfleet.Repo.Migrations.AddWallRemovals do
            )
 
     create index(:wall_removals, ["fleet_id", "token_id"], name: "wall_removals_wall_index")
+
+    execute("""
+    CREATE TRIGGER immutable_wall_removals BEFORE UPDATE OR DELETE ON keyfleet_app.wall_removals
+    FOR EACH ROW EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();
+    """)
+
+    execute("""
+    CREATE TRIGGER untruncatable_wall_removals BEFORE TRUNCATE ON keyfleet_app.wall_removals
+    FOR EACH STATEMENT EXECUTE FUNCTION keyfleet_app.refuse_proposal_record_change();
+    """)
   end
 
   def down do
+    execute("""
+    DROP TRIGGER untruncatable_wall_removals ON keyfleet_app.wall_removals;
+    """)
+
+    execute("""
+    DROP TRIGGER immutable_wall_removals ON keyfleet_app.wall_removals;
+    """)
+
     drop_if_exists(
       index(:wall_removals, ["fleet_id", "token_id"], name: "wall_removals_wall_index")
     )

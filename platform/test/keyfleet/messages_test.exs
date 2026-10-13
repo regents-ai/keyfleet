@@ -351,7 +351,7 @@ defmodule Keyfleet.MessagesTest do
     refute_receive %Broadcast{event: "room_head"}, 100
   end
 
-  test "the database refuses to edit, delete or empty posts, key ownership or shards",
+  test "the database refuses to edit, delete or empty posts, key ownership, shards or wall removals",
        %{writer: writer} do
     posted = post!(writer, "general", "Hull survey started")
 
@@ -369,7 +369,7 @@ defmodule Keyfleet.MessagesTest do
                mode: :savepoint
              )
 
-    for table <- ~w(messages key_attachments shard_events) do
+    for table <- ~w(messages key_attachments shard_events wall_removals) do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
                Repo.query("TRUNCATE keyfleet_app.#{table} CASCADE", [], mode: :savepoint)
     end
