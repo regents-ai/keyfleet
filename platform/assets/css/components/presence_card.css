@@ -1,7 +1,7 @@
 @layer regents-product {
-/* Whether keys are present (KeyfleetWeb.Components.PresenceCard): each key
-   on its own line with when its presence lapses, and a mark when lapsed
-   presences wait to be tidied up. */
+/* Whether keys are present (KeyfleetWeb.Components.PresenceCard): the rule
+   for idle keys, each key on its own line with when its presence lapses,
+   and the count of idle keys, which opens the list of them. */
 
 .presence-title {
   display: inline-flex;
@@ -34,10 +34,103 @@
   color: var(--color-fg-muted);
 }
 
-.presence-maintenance {
+.presence-rule {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* The count of idle keys reads as a field and is pressed as a button. */
+.idle-keys__field {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.5rem;
-  color: var(--color-warning);
+  min-block-size: 2.75rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--ash-line-strong);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.idle-keys__field span {
+  color: var(--color-fg-muted);
+}
+
+.idle-keys__field strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The list of idle keys, in a small dialog over the page. Phones see it
+   across the whole width. The list scrolls; its title and buttons stay. */
+.idle-keys__dialog {
+  width: min(28rem, calc(100vw - 2rem));
+  max-width: none;
+  max-height: min(40rem, calc(100dvh - 2rem));
+  padding: clamp(1rem, 4vw, 1.5rem);
+  border: 1px solid var(--ash-line-strong);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font-size: 1rem;
+}
+
+.idle-keys__dialog[open] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 1rem;
+}
+
+.idle-keys__dialog::backdrop {
+  background: var(--ash-scrim);
+}
+
+.idle-keys__dialog h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.1;
+}
+
+/* The title takes focus when the dialog opens so it is read out first; it
+   is not something to press, so it shows no focus ring. */
+.idle-keys__dialog h2:focus {
+  outline: none;
+}
+
+.idle-keys__dialog p {
+  margin: 0;
+}
+
+.idle-keys__list {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.idle-keys__list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  min-width: 0;
+}
+
+.idle-keys__list span {
+  color: var(--color-fg-muted);
+}
+
+.idle-keys__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.idle-keys__actions form {
+  margin: 0;
 }
 }

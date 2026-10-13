@@ -172,7 +172,7 @@ defmodule KeyfleetWeb.WalletWords do
   def title(%{name: "claim-" <> _asset}), do: "Claim"
   def title(%{name: "club-claim"}), do: "Claim Key"
   def title(%{name: "present"}), do: "Mark present"
-  def title(%{name: "sweep"}), do: "Tidy up"
+  def title(%{name: "sweep"}), do: "Continue"
   def title(%{name: "issue"}), do: "Issue a shard"
   def title(%{name: "end-" <> _wallet}), do: "End a shard"
   def title(%{name: "renew-" <> _wallet}), do: "Renew a shard"
@@ -217,7 +217,9 @@ defmodule KeyfleetWeb.WalletWords do
   defp reverted("claim-" <> _asset), do: "Nothing claimed."
   defp reverted("club-claim"), do: "Not claimed. Nothing moved."
   defp reverted("present"), do: "Not marked. A Key may have changed hands."
-  defp reverted("propose"), do: "Not proposed. Tidy up first, or check the Key."
+
+  defp reverted("propose"),
+    do: "Not proposed. Press Continue under Present first, or check the Key."
 
   defp reverted(choice) when choice in ["yes", "no", "abstain"],
     do: "Not counted. Voting may have closed."

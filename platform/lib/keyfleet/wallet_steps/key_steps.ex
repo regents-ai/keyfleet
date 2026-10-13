@@ -25,7 +25,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   @no_seed "0x" <> String.duplicate("0", 64)
   # How long a renewed shard lasts, in days.
   @renew_days 30
-  # How many lapsed presences one press of Tidy up clears.
+  # How many lapsed presences one press of Continue clears.
   @sweep_limit 256
   # How long a presence lasts, in seconds.
   @presence_seconds 172_800
@@ -158,7 +158,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # signer holds or holds an active shard of. A Key's page shows whether its
   # Key is present whoever is looking. A Key sold less than two days ago can't
   # be marked yet: the vote contract refuses it, so the press is certain to
-  # fail. Tidy up clears presences that have lapsed, which anyone may do. A
+  # fail. Continue clears presences that have lapsed, which anyone may do. A
   # visitor holds no Keys.
   def steps(:present, %{fleet: fleet, signer: signer, token_id: token_id}) do
     candidates = present_candidates(fleet, signer, token_id)
@@ -447,7 +447,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
   # Whether lapsed presences are waiting to be cleared: a proposal clears up
   # to 256 itself and is refused while more are left. Asked of the vote
-  # contract by simulating a Tidy up that clears none.
+  # contract by simulating a Continue that clears none.
   defp maintenance?(reads, fleet) do
     with {:ok, [_moved, due?]} <-
            Reads.many(reads, fleet.votes_address, "sweepExpired(uint256)", [0], [

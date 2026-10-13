@@ -2,7 +2,7 @@ import type {Hook} from "../hook_composition"
 
 interface ModalDialogHook {
   el: HTMLDialogElement
-  pushEvent(event: string, payload: Record<string, never>): void
+  pushEventTo(target: HTMLElement, event: string, payload: Record<string, never>): void
   opener?: string
   shown?: string
 }
@@ -51,7 +51,8 @@ export function stepTab(event: KeyboardEvent, controls: HTMLElement[], active: E
 // A <dialog> the page opens as a modal for as long as it is in the page. It
 // opens with focus on its title, and on its title again when it comes to show
 // something else. Closing it asks the page to take it away: by going back when
-// `data-close` is "back", or else by sending `data-close-event`. Once it has
+// `data-close` is "back", or else by sending `data-close-event` to whichever
+// part of the page drew it. Once it has
 // gone, focus returns to whatever opened it. Signing in from inside it
 // lets the sign-in window above it be used, and a press back inside makes it
 // modal again.
@@ -65,7 +66,7 @@ export const ModalDialog: Hook = {
       // Closed only to be shown again, modal or not.
       if (dialog.open) return
       if (dialog.dataset.close === "back") history.back()
-      else if (dialog.dataset.closeEvent) this.pushEvent(dialog.dataset.closeEvent, {})
+      else if (dialog.dataset.closeEvent) this.pushEventTo(dialog, dialog.dataset.closeEvent, {})
     })
 
     dialog.addEventListener("keydown", event => stepTab(event, visibleControls(dialog), document.activeElement))

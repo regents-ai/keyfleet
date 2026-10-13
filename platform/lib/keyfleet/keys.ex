@@ -23,6 +23,7 @@ defmodule Keyfleet.Keys do
         not_found_error?: false
 
       define :keys_in_fleet, action: :current_in_fleet, args: [:fleet_id]
+      define :idle_keys_in_fleet, action: :idle_in_fleet, args: [:fleet_id]
       define :keys_held_in_fleet, action: :held_in_fleet, args: [:fleet_id, :owner_wallets]
 
       define :recorded_in_blocks,
@@ -231,6 +232,17 @@ defmodule Keyfleet.Keys do
   end
 
   def held_keys(_actor, _fleet_id), do: []
+
+  @doc """
+  How many of the fleet's keys have no vote now (see the `idle` calculation of
+  `Keyfleet.Keys.KeyAttachment`), as `{:ok, count}`, or `{:error, failure}`
+  when the database doesn't answer (see `Keyfleet.Count`).
+  """
+  def count_idle_keys(fleet_id) do
+    Keyfleet.Keys.KeyAttachment
+    |> Ash.Query.for_read(:idle_in_fleet, %{fleet_id: fleet_id})
+    |> Keyfleet.Count.of()
+  end
 
   @doc """
   The lowest of the fleet's keys a person's wallets hold and how many they

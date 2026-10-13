@@ -516,12 +516,15 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   describe "the wallet buttons on the list" do
     # Keys 1 and 2 are the holder's; Key 3 is another's, with the holder's
     # shard on it, so the holder may mark it present too.
-    test "the present card marks every key the wallet may, and says when tidying is needed", %{
+    test "the present card marks every key the wallet may, and lists the idle keys", %{
       conn: conn
     } do
       ProposalHelpers.keys_sold!(@fleet, 1..2, @holder)
       ProposalHelpers.keys_sold!(@fleet, [3], @other)
       ChainHelpers.issue_shard!(@fleet, 3, @holder)
+      # The site's own record: Key 1 was marked present just now, so Keys 2
+      # and 3 are the idle ones.
+      ProposalHelpers.presence!(@fleet, 1, DateTime.utc_now())
       until = now() + 3_600
 
       ChainViews.put!(
@@ -541,7 +544,22 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                "Key 3 Not present"
              ]
 
-      assert has_element?(view, "#proposals-present-maintenance", "Maintenance needed")
+      assert has_element?(view, "#proposals-present-rule", "Any Key idle for 48 hours")
+      assert has_element?(view, "#proposals-present-sweep", "Continue")
+      assert has_element?(view, "#proposals-present-idle-count", "2")
+
+      view |> element("#proposals-present-idle-open") |> render_click()
+
+      assert lines(view, "#proposals-present-idle-list li") == [
+               "Key 2 Held by #{RegentFormat.short_address(@holder)}",
+               "Key 3 Held by #{RegentFormat.short_address(@other)}"
+             ]
+
+      assert has_element?(
+               view,
+               ~s(#proposals-present-idle-key-2[href="/syndicate/1?key=2"])
+             )
+
       assert pressable?(view, "present", ["#proposals-present-mark"])
       assert pressable?(view, "sweep", ["#proposals-present-sweep"])
 
@@ -556,7 +574,9 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert {sweep.to, sweep.data} == {@votes, Call.encode("sweepExpired(uint256)", [256])}
     end
 
-    test "a wallet with no keys can't mark any present, but may still tidy up", %{conn: conn} do
+    test "a wallet with no keys can't mark any present, but may still press Continue", %{
+      conn: conn
+    } do
       ChainViews.put!(list_views())
 
       {:ok, view, _html} = live(signed_in_as(conn, @holder), @list)
@@ -565,7 +585,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert has_element?(view, "#proposals-present-mark[disabled]")
       assert has_element?(view, "#proposals-present-mark-why", "No Keys to use")
       assert pressable?(view, "sweep", ["#proposals-present-sweep"])
-      refute has_element?(view, "#proposals-present-maintenance")
+      assert has_element?(view, "#proposals-present-idle-count", "0")
     end
 
     # Each proposal is built on the server from the form as typed, for the
@@ -922,7 +942,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       render_async(view)
 
       assert preview(view, @usdc) == ["USDC", "250 USDC", "100 USDC", "0.625 USDC"]
-      assert has_element?(view, "#proposals-present-maintenance", "Maintenance needed")
+      assert has_element?(view, "#proposals-present-idle-count", "0")
       refute has_element?(view, "#proposals-split-action [data-onchain-step]")
       refute has_element?(view, "#proposals-present-action [data-onchain-step]")
 

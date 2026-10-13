@@ -1227,3 +1227,18 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The mark comes from what Keyfleet recorded as the line arrived, the agent
   whose signed request carried it, so nothing a writer sends can change it.
   Lines keep the height they had.
+
+## 2026-10-13 — The Present box: the idle rule, "Continue", and a list of idle Keys
+
+- The Present box, on a fleet's Proposals page and on a Key's page, now says
+  the rule in one line: "Any Key idle for 48 hours loses its vote, temporarily
+  until it returns to check in to the Keyfleet."
+- "Tidy up" is now "Continue". It does what it did: anyone may press it, and
+  it clears idle Keys the vote contract still counts so a proposal can be
+  made. The "Maintenance needed" note is gone; a proposal that is turned down
+  for that reason says to press Continue first.
+- Beside the buttons, "Idle" shows how many of the fleet's Keys have no vote
+  now. Pressing it opens a list of them, a hundred at a time, each with its
+  holder; a Key in the list opens that Key's profile. A visitor who is not
+  signed in sees the rule and the count too.
+- The count is read when the page opens and again each time the list opens.

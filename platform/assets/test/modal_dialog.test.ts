@@ -42,7 +42,7 @@ function mountDialog(dataset: Record<string, string>, page: Record<string, Retur
     getElementById: (id: string) => Object.values(page).find(opened => opened.id === id) ?? null,
   })
   const pushEvent = vi.fn()
-  const hook = {el: dialog, pushEvent}
+  const hook = {el: dialog, pushEventTo: pushEvent}
   ModalDialog.mounted!.call(hook)
 
   const closeBy = () => {
@@ -81,11 +81,11 @@ it("goes back when the page opened it", () => {
 })
 
 it("asks the page to close it in place when the visitor arrived on it", () => {
-  const {closeBy, back, pushEvent} = mountDialog({close: "replace", closeEvent: "close_key"})
+  const {dialog, closeBy, back, pushEvent} = mountDialog({close: "replace", closeEvent: "close_key"})
 
   closeBy()
 
-  expect(pushEvent).toHaveBeenCalledWith("close_key", {})
+  expect(pushEvent).toHaveBeenCalledWith(dialog, "close_key", {})
   expect(back).not.toHaveBeenCalled()
 })
 

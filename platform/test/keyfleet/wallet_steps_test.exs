@@ -325,7 +325,7 @@ defmodule Keyfleet.WalletStepsTest do
       assert steps(built)["sweep"].data == Call.encode("sweepExpired(uint256)", [256])
     end
 
-    test "a key's page shows its key to anyone, and lapsed presences need tidying",
+    test "a key's page shows its key to anyone, and lapsed presences need clearing",
          %{fleet: fleet} do
       ChainViews.put!(
         [owner(fleet, 9, @other), shard(fleet, "isActive", 9, @signer, false), sweep(fleet, true)] ++
@@ -335,11 +335,11 @@ defmodule Keyfleet.WalletStepsTest do
       built = build!(:present, token_id: 9)
       assert built.figures.keys == [%{token_id: 9, until: DateTime.from_unix!(@now + 60)}]
       assert built.figures.maintenance? == true
-      # Tidy up stays open to anyone.
+      # Continue stays open to anyone.
       assert built.figures.blocked == %{"present" => :not_your_key}
     end
 
-    test "a wallet with no keys may still tidy up", %{fleet: fleet} do
+    test "a wallet with no keys may still press Continue", %{fleet: fleet} do
       ChainViews.put!([sweep(fleet, false)])
       assert build!(:present).figures.blocked == %{"present" => :no_keys}
     end
