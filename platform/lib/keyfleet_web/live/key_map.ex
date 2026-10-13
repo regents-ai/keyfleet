@@ -7,7 +7,13 @@ defmodule KeyfleetWeb.KeyMap do
   it has an active shard today. Someone signed out holds nothing. Owners are never
   sent to the map; the map draws every key sold and the rest of the level on
   sale, so how many are sold travels with the marks.
+
+  A search marks the keys it finds: one key by its number, or every key a
+  wallet address holds in the fleet now. Who holds each key is on its page and
+  in the Member List for anyone to read, so a search tells nobody anything new.
   """
+
+  import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
   alias Keyfleet.Actors.Human
   alias Keyfleet.Fleets.Presets
@@ -62,6 +68,53 @@ defmodule KeyfleetWeb.KeyMap do
   """
   def choosable?(%{total_minted: minted, next_token_id: next}, token_id),
     do: is_integer(token_id) and token_id in 1..max(minted, next || 0)//1
+
+  @doc """
+  What a search of the map found: the keys to mark, as a `bitset/1`, and a
+  few words saying so. A number finds that key once it can be chosen; a wallet
+  address finds every key it holds in the fleet now; nothing typed clears the
+  marks.
+  """
+  def find(fleet_id, progress, query) when is_binary(query) do
+    case sought(String.trim(query)) do
+      :nothing ->
+        found([], "")
+
+      {:key, token_id} ->
+        if choosable?(progress, token_id),
+          do: found([token_id], "Key #{grouped(token_id)}."),
+          else: found([], "No Key #{grouped(token_id)} yet.")
+
+      {:wallet, wallet} ->
+        token_ids = fleet_id |> Keys.keys_held_in_fleet!([wallet]) |> Enum.map(& &1.token_id)
+
+        found(
+          token_ids,
+          "#{RegentFormat.short_address(wallet)} holds #{keys_held(token_ids)} here."
+        )
+
+      :unreadable ->
+        found([], "Enter a Key number or a 0x address.")
+    end
+  end
+
+  def find(_fleet_id, _progress, _query), do: found([], "Enter a Key number or a 0x address.")
+
+  defp sought(""), do: :nothing
+
+  defp sought(query) do
+    cond do
+      query =~ ~r/\A[0-9]{1,12}\z/ -> {:key, String.to_integer(query)}
+      query =~ ~r/\A0x[0-9a-fA-F]{40}\z/ -> {:wallet, String.downcase(query)}
+      true -> :unreadable
+    end
+  end
+
+  defp found(token_ids, words), do: %{keys: bitset(token_ids), words: words}
+
+  defp keys_held([]), do: "no Keys"
+  defp keys_held([_one]), do: "1 Key"
+  defp keys_held(token_ids), do: "#{grouped(length(token_ids))} Keys"
 
   @doc """
   The levels the map can go to, which are the levels it draws: each level

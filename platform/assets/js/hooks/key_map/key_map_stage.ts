@@ -3,6 +3,7 @@ import {axialToPixel, nearestCopy, pixelToAxial, SQRT3, type Cell, type Point} f
 import {buildMap, levelStart, type KeyMapGrid, type LayoutKind} from "./layouts"
 import {
   applyPatch,
+  decodeBits,
   decodeSnapshot,
   describeKey,
   drawnKeys,
@@ -13,6 +14,7 @@ import {
   levelSale,
   nextHeldKey,
   nextKey,
+  nextMarkedKey,
   onSaleLevel,
   startKey,
   step,
@@ -34,6 +36,12 @@ export type KeyMapStage = {
   /** The keyboard cursor moves to your next key, coming back round to the first. */
   focusMine(): void
   focusLevel(level: number): void
+  /**
+   * Marks the keys a search found, as the base64 bitset the page sent, and
+   * moves the keyboard cursor to the first of them; the same search again
+   * moves it to the next.
+   */
+  find(keys: string): void
   destroy(): void
 }
 
@@ -70,6 +78,9 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
   let state: KeyMapState | null = null
   let selected = 0
   let cursor: Cell | null = null
+  // The keys the last search found, as sent and as bits.
+  let sought = ""
+  let found = new Uint8Array()
   // Circumradius of a cell and the stage's size, in CSS pixels.
   let size = 0
   let width = 0
@@ -81,7 +92,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
   const choosable = (key: number) => key >= 1 && key <= lastChoosable(state!)
 
   const tiles = createTiles(layer, {
-    marks: key => keyMarks(state!, key, selected, cursorKey()),
+    marks: key => keyMarks(state!, key, selected, cursorKey(), found),
     caption: key => (key === nextKey(state!) ? "Next" : ""),
     sale: level => levelSale(onSaleLevel(grid!, state!), level),
     heading: level => levelHeading(level, levelSale(onSaleLevel(grid!, state!), level)),
@@ -263,6 +274,16 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
 
     focusLevel(level) {
       focusKey(levelStart(level))
+    },
+
+    find(keys) {
+      if (!state) return
+      const after = keys === sought ? cursorKey() : 0
+      sought = keys
+      found = decodeBits(keys)
+      tiles.refresh()
+      const key = nextMarkedKey(state, found, after)
+      if (key) focusKey(key)
     },
 
     destroy() {

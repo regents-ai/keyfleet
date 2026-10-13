@@ -1307,3 +1307,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   records.
 - Ending a poll now asks "End this poll now?" first, as its button was
   written to. The prompt never appeared before.
+
+## 2026-10-13 — The map: find a Key by number, or an address's Keys
+
+- The Fleet Grid has a search field. A Key number takes the map to that Key
+  and marks it. A 0x address marks every Key it holds in the fleet and says
+  how many; "Find" again steps to the next one.
+- On a phone the map is taller, so Keys show between its controls and notes.

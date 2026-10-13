@@ -209,6 +209,15 @@
 
 .km-tile > span:last-child:empty { display: none; }
 
+/* A key the last search found is drawn dark, with light words. */
+.km-tile[data-state~="found"] {
+  --km-face: var(--color-fg);
+  --km-rim: var(--color-fg);
+  color: var(--color-bg);
+}
+
+.km-tile[data-state~="found"] > span:last-child { color: inherit; }
+
 .km-tile[data-state~="mine"] { --km-rim: var(--palette-tangerine-tango); }
 
 .km-tile[data-state~="next"] {
@@ -279,6 +288,7 @@
   .km-tile[data-state~="mine"],
   .km-tile[data-state~="next"],
   .km-tile[data-state~="cursor"] { --km-rim: Highlight; }
+  .km-tile[data-state~="found"] { --km-face: CanvasText; color: Canvas; }
   .km-tile[data-state~="selected"] { --km-face: Highlight; color: HighlightText; }
   .km-tile[data-state~="agent"] > span:first-of-type::before { background: CanvasText; }
   .km-edge,

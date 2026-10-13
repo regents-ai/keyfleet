@@ -993,7 +993,8 @@ defmodule KeyfleetWeb.FleetLive do
 
   attr :fleet, :map, required: true
 
-  # The controls only move the map, so they never wait on the page. The map
+  # The controls only move the map, so they never wait on the page; a search
+  # asks the page which Keys to mark, and the map writes what was found. The map
   # draws itself once its script loads; until then it says so, and the list
   # of keys below still has every key. While "Get a Key" is open, the Key on
   # offer stands out on the map and the note under it names that Key.
@@ -1033,6 +1034,27 @@ defmodule KeyfleetWeb.FleetLive do
           </select>
           <Regent.Primitives.button type="submit" variant="secondary">Go</Regent.Primitives.button>
         </form>
+        <form
+          id="key-map-find"
+          class="fleet-map-level fleet-map-find"
+          role="search"
+          phx-submit={JS.dispatch("keymap:find", to: @map)}
+        >
+          <label for="key-map-find-q" class="visually-hidden">Find a Key or an address’s Keys</label>
+          <input
+            id="key-map-find-q"
+            name="q"
+            type="search"
+            placeholder="Key number or 0x address"
+            maxlength="42"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+          />
+          <Regent.Primitives.button type="submit" variant="secondary">
+            Find
+          </Regent.Primitives.button>
+        </form>
       </div>
 
       <div
@@ -1066,6 +1088,14 @@ defmodule KeyfleetWeb.FleetLive do
               else: "No Key chosen yet."}
           </span>
         </p>
+        <output
+          id="key-map-found"
+          class="key-map-found"
+          name="found"
+          form="key-map-find"
+          for="key-map-find-q"
+          phx-update="ignore"
+        ></output>
       </div>
     </section>
     """
@@ -1300,6 +1330,14 @@ defmodule KeyfleetWeb.FleetLive do
     %{fleet_id: fleet_id, progress: progress} = socket.assigns.fleet
     {:reply, KeyMap.snapshot(fleet_id, progress, ShellLive.human_actor(socket)), socket}
   end
+
+  # A search of the map: the Keys found come back for the map to mark.
+  def handle_event(
+        "find_keys",
+        %{"q" => query},
+        %{assigns: %{fleet: %{deployed?: true} = fleet}} = socket
+      ),
+      do: {:reply, KeyMap.find(fleet.fleet_id, fleet.progress, query), socket}
 
   # A key chosen on the map goes into the address and its profile opens over
   # the page, so Back closes it. Chosen while a profile is open, it takes that

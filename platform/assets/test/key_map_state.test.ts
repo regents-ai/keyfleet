@@ -14,6 +14,7 @@ import {
   levelTone,
   lastChoosable,
   nextHeldKey,
+  nextMarkedKey,
   nextKey,
   onSaleLevel,
   type KeyMapState,
@@ -95,13 +96,18 @@ describe("key map changes", () => {
 })
 
 describe("key map controls", () => {
-  it("steps through your keys and comes back round to the first", () => {
+  it("steps through your keys, and through the keys a search found, and comes back round to the first", () => {
     const state = accelerant(20, bits(5, 12, 20))
     expect(nextHeldKey(state, 0)).toBe(5)
     expect(nextHeldKey(state, 5)).toBe(12)
     expect(nextHeldKey(state, 12)).toBe(20)
     expect(nextHeldKey(state, 20)).toBe(5)
     expect(nextHeldKey(accelerant(20, bits()), 7)).toBe(0)
+    // The keys a search found are stepped through the same way, and marked.
+    const found = bits(5, 9)
+    expect([0, 5, 9].map(after => nextMarkedKey(state, found, after))).toEqual([5, 9, 5])
+    expect(nextMarkedKey(state, bits(), 0)).toBe(0)
+    expect([5, 9, 10].map(key => keyMarks(state, key, 0, 0, found))).toEqual(["found mine", "found", ""])
   })
 
   it("never goes to a key of yours past the next key", () => {
@@ -153,7 +159,7 @@ describe("key map levels", () => {
   it("marks keys not sold yet, other than the next, and says so", () => {
     const state = fibonacci(60)
     const grid = buildMap("fibonacci", drawnKeys(state))
-    expect([60, 61, 62, 80].map(key => keyMarks(state, key, 0, 0))).toEqual(["", "next", "unsold", "unsold"])
+    expect([60, 61, 62, 80].map(key => keyMarks(state, key, 0, 0, bits()))).toEqual(["", "next", "unsold", "unsold"])
     expect(describeKey(grid, state, 80)).toBe("Key 80, level 7, not sold yet.")
   })
 

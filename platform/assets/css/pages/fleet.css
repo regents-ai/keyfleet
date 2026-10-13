@@ -493,13 +493,38 @@
   gap: 0.5rem;
 }
 
-.fleet-map-level select {
+.fleet-map-level select,
+.fleet-map-level input {
   min-height: 2.75rem;
   padding: 0 0.75rem;
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-fg);
   font: inherit;
+}
+
+/* The search takes what room the controls have, and its field gives way
+   before its button does. */
+.fleet-map-find {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+.fleet-map-find input {
+  flex: 1 1 15rem;
+  inline-size: 15rem;
+  min-inline-size: 0;
+}
+
+.fleet-map-find button {
+  flex: none;
+}
+
+/* What the last search found; the line keeps its space while empty. */
+.key-map-found {
+  display: block;
+  min-block-size: 1lh;
 }
 
 .fleet-map-notes {
@@ -725,6 +750,12 @@
     z-index: 3;
     width: auto;
     border-inline-start: 0;
+  }
+
+  /* The map's controls and notes sit over it and take three rows on a
+     phone, so the map is given the height to show Keys between them. */
+  .fleet-view[data-view="map"] {
+    grid-template-rows: auto auto minmax(34rem, 1fr);
   }
 
   /* The directions stay for screen readers; on a phone the map is the page. */

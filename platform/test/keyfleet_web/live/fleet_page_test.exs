@@ -699,7 +699,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#key-map-level")
     end
 
-    test "someone signed out holds none of the keys", %{conn: conn} do
+    test "someone signed out holds none of the keys, and can search the map", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       assert {:ok, _view, _html} = live(conn, @map_path)
@@ -709,6 +709,28 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert_reply(view, %{mine: mine})
       assert Base.decode64!(mine) == ""
+
+      # Anyone can search the map: a number finds that Key, an address every
+      # Key it holds here, in either case of letters.
+      assert has_element?(view, ~s(#key-map-find input[name="q"]))
+      assert has_element?(view, ~s(output#key-map-found[form="key-map-find"]))
+      all = KeyfleetWeb.KeyMap.bitset(1..@issued)
+
+      for {sought, keys, words} <- [
+            {" 12 ", KeyfleetWeb.KeyMap.bitset([12]), "Key 12."},
+            {"151", KeyfleetWeb.KeyMap.bitset([151]), "Key 151."},
+            {"152", "", "No Key 152 yet."},
+            {@owner, all, "0xaaaa..aaaa holds 150 Keys here."},
+            {String.upcase(@owner) |> String.replace_prefix("0X", "0x"), all,
+             "0xaaaa..aaaa holds 150 Keys here."},
+            {"0x" <> String.duplicate("b", 40), "", "0xbbbb..bbbb holds no Keys here."},
+            {"twelve", "", "Enter a Key number or a 0x address."},
+            {"0xaaaa", "", "Enter a Key number or a 0x address."},
+            {"", "", ""}
+          ] do
+        render_hook(view, "find_keys", %{"q" => sought})
+        assert_reply(view, %{keys: ^keys, words: ^words})
+      end
     end
 
     # Every key sold and the next one can be chosen; the choice goes into the

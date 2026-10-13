@@ -22,6 +22,12 @@ export type KeyMapPatch = {
   keys: [number, number][]
 }
 
+/** The server's reply to `find_keys`: the keys found, as a bitset like `mine`, and words saying so. */
+export type KeyMapFound = {
+  keys: string
+  words: string
+}
+
 export type KeyMapState = {
   minted: number
   maxSupply: number | null
@@ -32,7 +38,8 @@ export type KeyMapState = {
 
 export type Direction = "left" | "right" | "up" | "down"
 
-const decodeBits = (base64: string) => Uint8Array.from(atob(base64), character => character.charCodeAt(0))
+/** A base64 bitset's bytes. */
+export const decodeBits = (base64: string) => Uint8Array.from(atob(base64), character => character.charCodeAt(0))
 
 export const decodeSnapshot = (snapshot: KeyMapSnapshot): KeyMapState => ({
   minted: snapshot.minted,
@@ -109,26 +116,30 @@ export const levelHeading = (level: number, sale: LevelSale) =>
 export const startKey = (state: KeyMapState) => nextKey(state) || 1
 
 /**
- * The first key after `after` that is yours, coming back round to key 1 past
- * the next key, or 0 when you hold none.
+ * The first key after `after` marked in `bits`, coming back round to key 1
+ * past the last key that can be chosen, or 0 when none is marked.
  */
-export function nextHeldKey(state: KeyMapState, after: number) {
+export function nextMarkedKey(state: KeyMapState, bits: Uint8Array, after: number) {
   const shown = lastChoosable(state)
   for (let step = 1; step <= shown; step++) {
     const key = ((after + step - 1) % shown) + 1
-    if (hasBit(state.mine, key)) return key
+    if (hasBit(bits, key)) return key
   }
   return 0
 }
 
+/** The first key after `after` that is yours, or 0 when you hold none. */
+export const nextHeldKey = (state: KeyMapState, after: number) => nextMarkedKey(state, state.mine, after)
+
 /** A key drawn but not minted, other than the next key, which can't be chosen yet. */
 const unsold = (state: KeyMapState, key: number) => key > lastChoosable(state)
 
-/** A tile's marks, for `data-state`. */
-export function keyMarks(state: KeyMapState, key: number, selected: number, cursor: number) {
+/** A tile's marks, for `data-state`; `found` is the keys the last search found. */
+export function keyMarks(state: KeyMapState, key: number, selected: number, cursor: number, found: Uint8Array) {
   const marks: string[] = []
   if (key === nextKey(state)) marks.push("next")
   if (unsold(state, key)) marks.push("unsold")
+  if (hasBit(found, key)) marks.push("found")
   if (hasBit(state.mine, key)) marks.push("mine")
   if (hasBit(state.agent, key)) marks.push("agent")
   if (key === selected) marks.push("selected")

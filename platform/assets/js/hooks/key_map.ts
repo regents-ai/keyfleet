@@ -1,7 +1,7 @@
 import type {Hook} from "../hook_composition"
 import type {KeyMapStage} from "./key_map/key_map_stage"
 import type {LayoutKind} from "./key_map/layouts"
-import type {KeyMapPatch, KeyMapSnapshot} from "./key_map/state"
+import type {KeyMapFound, KeyMapPatch, KeyMapSnapshot} from "./key_map/state"
 
 type KeyMapHook = {
   el: HTMLElement
@@ -19,9 +19,11 @@ type KeyMapHook = {
  * `phx-update="ignore"` element carrying `data-layout`, and `data-selected`
  * while the page has a key chosen.
  *
- * The page's controls reach the map as `keymap:next`, `keymap:mine` and
- * `keymap:level` events on the element; `keymap:level` comes from a form whose
- * `level` field names the level.
+ * The page's controls reach the map as `keymap:next`, `keymap:mine`,
+ * `keymap:level` and `keymap:find` events on the element; `keymap:level` comes
+ * from a form whose `level` field names the level, and `keymap:find` from a
+ * form whose `q` field holds what to look for and whose `found` output takes
+ * the words saying what was found.
  */
 export const KeyMap: Hook = {
   mounted(this: KeyMapHook) {
@@ -48,15 +50,25 @@ export const KeyMap: Hook = {
       const form = (event as CustomEvent<{dispatcher: HTMLFormElement}>).detail.dispatcher
       stage?.focusLevel(Number(new FormData(form).get("level")))
     }
+    const find = (event: Event) => {
+      const form = (event as CustomEvent<{dispatcher: HTMLFormElement}>).detail.dispatcher
+      const note = form.elements.namedItem("found") as HTMLOutputElement
+      this.pushEvent<KeyMapFound>("find_keys", {q: String(new FormData(form).get("q"))}, ({keys, words}) => {
+        note.value = words
+        stage?.find(keys)
+      })
+    }
     this.el.addEventListener("keymap:next", next)
     this.el.addEventListener("keymap:mine", mine)
     this.el.addEventListener("keymap:level", level)
+    this.el.addEventListener("keymap:find", find)
 
     this.cleanup = () => {
       alive = false
       this.el.removeEventListener("keymap:next", next)
       this.el.removeEventListener("keymap:mine", mine)
       this.el.removeEventListener("keymap:level", level)
+      this.el.removeEventListener("keymap:find", find)
       stage?.destroy()
     }
   },
