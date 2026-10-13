@@ -66,6 +66,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
            )
 
     assert has_element?(view, ".rooms-author .rooms-writer", "Their agent for 0xdddd..dddd")
+    assert has_element?(view, ~s(.rooms-writer .sent-from[aria-label="Sent by an agent"]))
     refute html =~ "Nothing has been said here yet."
 
     {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@path)

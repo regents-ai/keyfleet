@@ -381,6 +381,12 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       assert html =~ "Hull survey started"
       assert has_element?(view, "#key-profile-thread li", "Key 1")
       assert has_element?(view, "#key-profile-thread li .rooms-writer", "0xffff..ffff")
+
+      assert has_element?(
+               view,
+               ~s(#key-profile-thread .sent-from[aria-label="Sent from the website"])
+             )
+
       assert text(view, "#key-profile-messages") == "1"
       assert text(view, "#key-profile-composer-body") == ""
     end

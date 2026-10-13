@@ -15,6 +15,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   use KeyfleetWeb, :html
 
   import KeyfleetWeb.Components.AgentPicture
+  import KeyfleetWeb.Components.SentFrom
   import Phoenix.LiveView, only: [push_patch: 2, start_async: 3, stream: 4]
 
   alias Keyfleet.Chain
@@ -657,7 +658,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
         :if={RoomsLive.writer_picture(@message)}
         src={RoomsLive.writer_picture(@message)}
       />
-      <small class="rooms-writer">{RoomsLive.writer(@message)}</small>
+      <small class="rooms-writer">
+        <.sent_from via={RoomsLive.arrival(@message)} /> {RoomsLive.writer(@message)}
+      </small>
     </.link>
     <RoomsLive.verified_human
       :if={RoomsLive.human_backed?(@message)}

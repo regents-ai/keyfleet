@@ -156,6 +156,26 @@
   font-weight: 400;
 }
 
+/* How the line reached Keyfleet: a mark the size of the writer's name, before it. */
+.sent-from {
+  display: inline-block;
+  inline-size: 1em;
+  block-size: 1em;
+  margin-inline-end: 0.1rem;
+  vertical-align: -0.125em;
+}
+
+.sent-from svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* The Verified human mark keeps its tip beside it. */
 .rooms-human {
   display: inline-flex;

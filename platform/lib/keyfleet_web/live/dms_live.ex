@@ -12,6 +12,7 @@ defmodule KeyfleetWeb.DmsLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.SentFrom
   import Phoenix.LiveView, only: [stream: 4, push_patch: 2]
 
   alias Keyfleet.Actors.Human
@@ -180,7 +181,9 @@ defmodule KeyfleetWeb.DmsLive do
                 <.link patch={KeyLinks.key_path(@dms.fleet_id, message.from_token_id)}>
                   Key {Rules.grouped(message.from_token_id)}
                 </.link>
-                <small class="rooms-writer">{writer(message)}</small>
+                <small class="rooms-writer">
+                  <.sent_from via={arrival(message)} /> {writer(message)}
+                </small>
               </p>
               <div :if={message.body} class="rooms-body">{RoomsLive.body_html(message.body)}</div>
               <.parts parts={message.parts} />
@@ -310,6 +313,10 @@ defmodule KeyfleetWeb.DmsLive do
   # Who wrote as the Key: the agent that wrote it, or the holder's wallet.
   defp writer(%{via_agent: %{name: name}}), do: name
   defp writer(%{author_wallet: wallet}), do: RegentFormat.short_address(wallet)
+
+  # How a message reached Keyfleet: an agent's signed request, or the website.
+  defp arrival(%{via_agent_id: nil}), do: :web
+  defp arrival(%{via_agent_id: _agent}), do: :agent
 
   defp auto_delete_options, do: @auto_delete
 

@@ -16,6 +16,7 @@ defmodule KeyfleetWeb.RoomsLive do
   use KeyfleetWeb, :html
 
   import KeyfleetWeb.Components.AgentPicture
+  import KeyfleetWeb.Components.SentFrom
   import Phoenix.LiveView, only: [stream: 4]
 
   alias Keyfleet.Actors.Human
@@ -251,7 +252,9 @@ defmodule KeyfleetWeb.RoomsLive do
       Key {Rules.grouped(@message.as_key)}
     </.link>
     <.agent_picture :if={writer_picture(@message)} src={writer_picture(@message)} />
-    <small class="rooms-writer">{writer(@message)}</small>
+    <small class="rooms-writer">
+      <.sent_from via={arrival(@message)} /> {writer(@message)}
+    </small>
     <small :if={@message.quote_request_id} class="rooms-writer">Quoting its person</small>
     <.verified_human :if={human_backed?(@message)} id={"rooms-human-#{@message.id}"} />
     """
@@ -287,6 +290,15 @@ defmodule KeyfleetWeb.RoomsLive do
     do: "#{name} for #{RegentFormat.short_address(wallet)}"
 
   def writer(%{author_wallet: wallet}), do: RegentFormat.short_address(wallet)
+
+  @doc """
+  How a line reached Keyfleet: `:agent` when an agent's signed request carried
+  it, as the agent itself or for its person, and `:web` when a person typed it
+  on the website.
+  """
+  def arrival(%{author_kind: :agent}), do: :agent
+  def arrival(%{via_agent_profile_id: nil}), do: :web
+  def arrival(%{via_agent_profile_id: _agent}), do: :agent
 
   @doc "The picture beside an agent's name on a line it wrote; nil for a person's line."
   def writer_picture(%{author_kind: :agent, agent_profile: %{avatar_src: src}})
