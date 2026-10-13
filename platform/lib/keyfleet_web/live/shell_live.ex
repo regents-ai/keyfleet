@@ -8,6 +8,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   import KeyfleetWeb.Components.Shell
 
+  alias Keyfleet.Access
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.LinkedIdentity.Providers
   alias Keyfleet.Actors.Human
@@ -84,6 +85,7 @@ defmodule KeyfleetWeb.ShellLive do
        points_earning: [],
        fleet: nil,
        fleet_params: nil,
+       fleet_class: nil,
        keys_topic: nil,
        activity: nil,
        activity_refresh: nil,
@@ -134,6 +136,7 @@ defmodule KeyfleetWeb.ShellLive do
        |> load_verified_connections(route_spec)
        |> load_account_page(route_spec)
        |> load_points(route_spec)
+       |> read_class(params)
        |> follow_keys(keys_fleet(route_spec, params))
        |> load_fleet(route_spec, params)
        |> load_key_profile(socket.assigns)
@@ -349,56 +352,10 @@ defmodule KeyfleetWeb.ShellLive do
     {:noreply, KeyProfileLive.show_unmuted(socket, fleet_id)}
   end
 
-  # Keys changed in the fleet on show: its sales figures, the key on offer and
-  # the agents here are read again (an agent starting or stopping on a key
-  # sends this notice too), the key list only when a changed key is on it, the
-  # open key's profile when the key or one of its holder's changed, and the
-  # map is told the changed keys' marks, or told to load again when too many
-  # changed to list.
-  def handle_info(
-        {:keys_changed, fleet_id, token_ids},
-        %{assigns: %{fleet: %{fleet_id: fleet_id, deployed?: true}}} = socket
-      ) do
-    socket =
-      socket
-      |> FleetLive.refresh_sales()
-      |> FleetLive.refresh_agents()
-      |> FleetLive.refresh_listed(token_ids)
-      |> KeyProfileLive.refresh_key_profile(token_ids)
-      |> FleetLive.refresh_activity_soon(fleet_id)
-
-    progress = socket.assigns.fleet.progress
-
-    case KeyMap.change(fleet_id, progress, token_ids, human_actor(socket)) do
-      :reset -> {:noreply, push_event(socket, "keymap:reset", %{})}
-      {:patch, patch} -> {:noreply, push_event(socket, "keymap:patch", patch)}
-    end
-  end
-
-  # Keys changed in the fleet whose polls are on show: who takes part as which
-  # Key is read afresh.
-  def handle_info(
-        {:keys_changed, fleet_id, _token_ids},
-        %{assigns: %{polls: %{fleet_id: fleet_id}}} = socket
-      ),
-      do: {:noreply, PollsLive.refresh(socket)}
-
-  # Keys changed in the fleet whose room is on show: who may read and post
-  # there is read afresh.
-  def handle_info(
-        {:keys_changed, fleet_id, _token_ids},
-        %{assigns: %{room: %{fleet_id: fleet_id}}} = socket
-      ),
-      do: {:noreply, RoomsLive.recheck_standing(socket)}
-
-  # A notice for the key page on show, or for a fleet the page has since
-  # left, or one not yet on sale.
+  # Keys changed in a fleet. What the reader may read of the fleet in the
+  # address is read again first, and the page moves to what that class hears.
   def handle_info({:keys_changed, fleet_id, token_ids}, socket),
-    do:
-      {:noreply,
-       socket
-       |> KeysLive.refresh_key(fleet_id, token_ids)
-       |> FleetLive.refresh_activity_soon(fleet_id)}
+    do: socket |> reread_class(fleet_id) |> keys_changed(fleet_id, token_ids)
 
   # A notice that the open fleet's workspace has moved past what the page last
   # read is only a nudge to read it again, once, a moment later: the notices
@@ -410,6 +367,11 @@ defmodule KeyfleetWeb.ShellLive do
       do: {:noreply, WorkspaceLive.refresh_soon(socket, seen, run_id, watermark)}
 
   def handle_info({:graph_head, fleet_id, _run_id, _watermark}, socket),
+    do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
+
+  # What anyone hears of the workspace: the fleet's activity has a new change
+  # of it to show.
+  def handle_info({:graph_notable, fleet_id}, socket),
     do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
   def handle_info(:refresh_workspace = message, socket),
@@ -655,10 +617,97 @@ defmodule KeyfleetWeb.ShellLive do
       |> stream(:fleet_keys, [], reset: true)
       |> stream(:activity, [], reset: true)
 
+  # Keys changed in the fleet on show: its sales figures, the key on offer and
+  # the agents here are read again (an agent starting or stopping on a key
+  # sends this notice too), the key list only when a changed key is on it, the
+  # open key's profile when the key or one of its holder's changed, and the
+  # map is told the changed keys' marks, or told to load again when too many
+  # changed to list.
+  defp keys_changed(
+         %{assigns: %{fleet: %{fleet_id: fleet_id, deployed?: true}}} = socket,
+         fleet_id,
+         token_ids
+       ) do
+    socket =
+      socket
+      |> FleetLive.refresh_sales()
+      |> FleetLive.refresh_agents()
+      |> FleetLive.refresh_listed(token_ids)
+      |> KeyProfileLive.refresh_key_profile(token_ids)
+      |> FleetLive.refresh_activity_soon(fleet_id)
+
+    progress = socket.assigns.fleet.progress
+
+    case KeyMap.change(fleet_id, progress, token_ids, human_actor(socket)) do
+      :reset -> {:noreply, push_event(socket, "keymap:reset", %{})}
+      {:patch, patch} -> {:noreply, push_event(socket, "keymap:patch", patch)}
+    end
+  end
+
+  # Keys changed in the fleet whose polls are on show: who takes part as which
+  # Key is read afresh.
+  defp keys_changed(%{assigns: %{polls: %{fleet_id: fleet_id}}} = socket, fleet_id, _token_ids),
+    do: {:noreply, PollsLive.refresh(socket)}
+
+  # Keys changed in the fleet whose room is on show: who may read and post
+  # there is read afresh.
+  defp keys_changed(%{assigns: %{room: %{fleet_id: fleet_id}}} = socket, fleet_id, _token_ids),
+    do: {:noreply, RoomsLive.recheck_standing(socket)}
+
+  # Keys changed in the fleet whose workspace is on show: whether its reader
+  # may read it is read afresh.
+  defp keys_changed(
+         %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket,
+         fleet_id,
+         _token_ids
+       ),
+       do: {:noreply, WorkspaceLive.refresh_later(socket)}
+
+  # A notice for the key page on show, or for a fleet the page has since
+  # left, or one not yet on sale.
+  defp keys_changed(socket, fleet_id, token_ids),
+    do:
+      {:noreply,
+       socket
+       |> KeysLive.refresh_key(fleet_id, token_ids)
+       |> FleetLive.refresh_activity_soon(fleet_id)}
+
+  # What the reader may read of the fleet in the address
+  # (`Keyfleet.Access.class/2`), read on every visit before the page listens
+  # to anything of the fleet.
+  defp read_class(socket, %{"fleet_id" => fleet_id}),
+    do: assign(socket, :fleet_class, fleet_class(socket, fleet_id))
+
+  defp read_class(socket, _params), do: assign(socket, :fleet_class, nil)
+
+  defp fleet_class(socket, fleet_id),
+    do: %{fleet_id: fleet_id, class: Access.class(human_actor(socket), fleet_id)}
+
+  # The class read again, and with a new one the page leaves what the old
+  # one heard of the fleet's rooms and workspace for what the new one hears.
+  defp reread_class(%{assigns: %{fleet_class: %{fleet_id: fleet_id} = was}} = socket, fleet_id) do
+    case fleet_class(socket, fleet_id) do
+      ^was ->
+        socket
+
+      now ->
+        socket
+        |> assign(:fleet_class, now)
+        |> listen_to(socket.assigns.room_topic && fleet_id)
+        |> follow_workspace(socket.assigns.workspace_topics not in [nil, []] && fleet_id)
+    end
+  end
+
+  defp reread_class(socket, _fleet_id), do: socket
+
+  # The class of the fleet in the address, as it was last read.
+  defp class(%{assigns: %{fleet_class: %{fleet_id: fleet_id, class: class}}}, fleet_id),
+    do: class
+
   # The fleet whose keys the page on show follows: the fleet's own page, one
-  # of its keys' pages, one of its rooms, or its polls.
+  # of its keys' pages, one of its rooms, its workspace, or its polls.
   defp keys_fleet(%{route_id: route_id}, %{"fleet_id" => fleet_id})
-       when route_id in [:fleet, :keys, :rooms, :polls, :poll],
+       when route_id in [:fleet, :keys, :rooms, :workspace, :workspace_item, :polls, :poll],
        do: fleet_id
 
   defp keys_fleet(_route_spec, _params), do: nil
@@ -756,9 +805,10 @@ defmodule KeyfleetWeb.ShellLive do
   defp fleet_on_show(_socket), do: nil
 
   # One subscription per fleet, taken up on the way into its rooms and dropped
-  # on the way out, so a page only hears about the fleet it is showing.
+  # on the way out, so a page only hears about the fleet it is showing, and of
+  # that only what its reader's class hears.
   defp listen_to(socket, fleet_id) do
-    topic = fleet_id && Rooms.fleet_topic(fleet_id)
+    topic = fleet_id && Rooms.topic(fleet_id, class(socket, fleet_id))
 
     if connected?(socket) and topic != socket.assigns.room_topic do
       stop_listening(socket.assigns.room_topic)
@@ -797,9 +847,10 @@ defmodule KeyfleetWeb.ShellLive do
     |> assign(workspace: nil, workspace_params: nil)
   end
 
-  # The workspace's log, and changes sent to the fleet's code.
+  # The workspace as the reader's class hears it, and changes sent to the
+  # fleet's code for whoever reads that.
   defp follow_workspace(socket, fleet_id) do
-    topics = if fleet_id, do: [Graph.head_topic(fleet_id), Code.topic(fleet_id)], else: []
+    topics = if fleet_id, do: workspace_topics(fleet_id, class(socket, fleet_id)), else: []
 
     if connected?(socket) and topics != socket.assigns.workspace_topics do
       Enum.each(List.wrap(socket.assigns.workspace_topics), &stop_listening/1)
@@ -808,6 +859,11 @@ defmodule KeyfleetWeb.ShellLive do
     else
       socket
     end
+  end
+
+  defp workspace_topics(fleet_id, class) do
+    code = if Access.enough?(class, :read, :code), do: [Code.topic(fleet_id)], else: []
+    [Graph.topic(fleet_id, class) | code]
   end
 
   # The page starts listening before it reads, so votes recorded while it

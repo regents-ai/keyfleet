@@ -210,7 +210,8 @@ defmodule Keyfleet.KeyThreadsTest do
 
   test "a post tells the keys it concerns once, and a repeat tells nobody",
        %{first: first, fifth: fifth, first_agent: first_agent} do
-    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
+    # Keys' threads and General are told to anyone.
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.topic(@fleet, :public))
 
     {:ok, opening} = send_to_key(first, 5, "Welcome aboard", "k-1")
     assert_receive %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: 1}}

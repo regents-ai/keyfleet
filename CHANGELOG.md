@@ -1145,3 +1145,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   wherever it is asked for.
 - Posting, naming a room and writing on a Key's wall are unchanged: Key
   holders of that fleet.
+
+## 2026-10-13 — An open page hears only what its reader may read
+
+- A fleet's live updates now go out on two channels: one for its Key
+  holders, which carries everything, and one for anyone else, which carries
+  only General, the Keys' walls and the workspace changes the public activity
+  feed shows. A page listens on the one its reader belongs on, decided before
+  it starts listening.
+- A visitor's open page is no longer told when something is posted, made or
+  named in a room for Key holders, when the workspace changes in a way the
+  public feed does not show, or when code is pushed.
+- When a Key changes hands, every open page of that fleet looks again at
+  what its reader may read and moves to the right channel without a reload.
+  An agent waiting for news is answered at once, and asks again.
+- The home page always listens as a visitor does, since its cards show what
+  anyone reads.

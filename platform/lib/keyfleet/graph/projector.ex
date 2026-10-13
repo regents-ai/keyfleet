@@ -12,7 +12,9 @@ defmodule Keyfleet.Graph.Projector do
 
   It remembers which log, and how far along it, the tables reached last; a
   place in one log says nothing about another. Each time that changes, it
-  says so on `Keyfleet.Graph.head_topic/1`.
+  says so to the fleet's members on `Keyfleet.Graph.head_topic/1`, and, when
+  what was copied holds a change the fleet's activity shows anyone, or the log
+  started over, on `Keyfleet.Graph.notable_topic/1`.
   """
   use GenServer
 
@@ -94,13 +96,8 @@ defmodule Keyfleet.Graph.Projector do
   defp catch_up(state) do
     case copy(state.fleet_id) do
       {:ok, {run_id, watermark}} ->
-        if {run_id, watermark} != {state.run_id, state.watermark} do
-          Phoenix.PubSub.broadcast(
-            Keyfleet.PubSub,
-            Graph.head_topic(state.fleet_id),
-            {:graph_head, state.fleet_id, run_id, watermark}
-          )
-        end
+        if {run_id, watermark} != {state.run_id, state.watermark},
+          do: announce(state, run_id, watermark)
 
         %{state | run_id: run_id, watermark: watermark}
 
@@ -113,6 +110,31 @@ defmodule Keyfleet.Graph.Projector do
         state
     end
   end
+
+  defp announce(%{fleet_id: fleet_id} = state, run_id, watermark) do
+    Phoenix.PubSub.broadcast(
+      Keyfleet.PubSub,
+      Graph.head_topic(fleet_id),
+      {:graph_head, fleet_id, run_id, watermark}
+    )
+
+    if run_id != state.run_id or notable_since?(fleet_id, state.watermark),
+      do:
+        Phoenix.PubSub.broadcast(
+          Keyfleet.PubSub,
+          Graph.notable_topic(fleet_id),
+          {:graph_notable, fleet_id}
+        )
+  end
+
+  # Whether the newest change the activity shows anyone was copied after
+  # `watermark`. A notice is only a hint, so a read that fails sends none.
+  defp notable_since?(fleet_id, watermark),
+    do:
+      match?(
+        {:ok, [%{seq: seq}]} when seq > watermark,
+        Graph.notable_before(fleet_id, nil, 1)
+      )
 
   # The kind of failure only: the same one repeats every round until it clears.
   defp short(reason) when is_atom(reason), do: Atom.to_string(reason)

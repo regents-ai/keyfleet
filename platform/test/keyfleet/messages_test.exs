@@ -339,7 +339,7 @@ defmodule Keyfleet.MessagesTest do
   test "a room's notice of a new post carries its place, and a repeat sends none", %{
     writer: writer
   } do
-    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.topic(@fleet, :public))
     room = Rooms.get_room!(@fleet, "general", authorize?: false)
 
     {:ok, sent} = send_as(writer, "general", "Hull survey started", "k-1")

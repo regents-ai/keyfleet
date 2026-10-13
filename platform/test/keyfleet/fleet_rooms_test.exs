@@ -83,7 +83,9 @@ defmodule Keyfleet.FleetRoomsTest do
     test "an agent of a member names it, the room says so, and it keeps who named it and when" do
       record(@fleet, [1, 3])
       namer = member(1)
-      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
+      members = Rooms.topic(@fleet, :member)
+      anyone = Rooms.topic(@fleet, :public)
+      Enum.each([members, anyone], &Phoenix.PubSub.subscribe(Keyfleet.PubSub, &1))
       before = DateTime.utc_now()
 
       assert {:ok, named} = Rooms.name_open_room(@fleet, "open-2", "Hull survey", actor: namer)
@@ -100,9 +102,19 @@ defmodule Keyfleet.FleetRoomsTest do
       assert {line.kind, line.body, line.author_wallet, line.seq, line.inserted_at} ==
                {:room_named, "Hull survey", wallet(1), 1, named.topic_set_at}
 
-      assert_receive %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: 1}}
+      assert_receive %Broadcast{
+        topic: ^members,
+        event: "room_head",
+        payload: %{room_id: room_id, seq: 1}
+      }
+
       assert room_id == named.id
-      assert_receive %Broadcast{event: "rooms_changed", payload: %{fleet_id: @fleet}}
+
+      assert_receive %Broadcast{
+        topic: ^members,
+        event: "rooms_changed",
+        payload: %{fleet_id: @fleet}
+      }
 
       assert %{topic: "Hull survey", topic_set_by: set_by, head_seq: 1} =
                Rooms.get_room!(@fleet, "open-2", authorize?: false)
@@ -111,6 +123,10 @@ defmodule Keyfleet.FleetRoomsTest do
 
       # Posts carry on after the line.
       assert {:ok, %{seq: 2, kind: :post}} = post(member(3), "open-2")
+      assert_receive %Broadcast{topic: ^members, event: "key_activity"}
+
+      # Nothing of a room only members read is told to anyone else.
+      refute_receive %Broadcast{topic: ^anyone}, 100
     end
 
     test "an agent renames it, and naming it what it is already called changes nothing" do
@@ -406,7 +422,7 @@ defmodule Keyfleet.FleetRoomsTest do
     test "an agent creates a room every agent of the fleet posts in" do
       record(@fleet, [1, 3, 231])
       runner = shard_agent("c", 3)
-      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
+      Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.topic(@fleet, :member))
 
       room = create!(runner, "hull-survey", "Hull survey")
 

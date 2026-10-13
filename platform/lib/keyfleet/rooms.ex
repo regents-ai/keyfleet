@@ -111,10 +111,17 @@ defmodule Keyfleet.Rooms do
     do: Enum.reject(messages, &(&1.kind == :post and MapSet.member?(muted, &1.as_key)))
 
   @doc """
-  Where the fleet's rooms, posts and keys' threads publish what changed in
-  them: "room_head", "key_activity" and "rooms_changed".
+  Where a reader of `class` (`Keyfleet.Access.class/2`) hears what changed in
+  the fleet's rooms, posts and keys' threads: "room_head", "key_activity" and
+  "rooms_changed". Whoever reads every room hears of every room. Anyone else
+  hears of General and the keys' threads alone, and of no room made or named.
+  A listener is on one of the two, never both.
   """
-  def fleet_topic(fleet_id), do: "fleet:#{fleet_id}:rooms"
+  def topic(fleet_id, class) do
+    if Access.enough?(class, :read, :rooms),
+      do: "fleet:#{fleet_id}:rooms:members",
+      else: "fleet:#{fleet_id}:rooms"
+  end
 
   @doc """
   Whether posts wait after the last of `posts`, a page read with
@@ -171,8 +178,22 @@ defmodule Keyfleet.Rooms do
     read = fn -> read_sync(fleet_id, cursors, places, actor) end
 
     if wait?,
-      do: wait_for_news(fleet_id, inbox_topics(fleet_id, places, actor), read),
+      do: wait_for_news(fleet_id, news_topics(fleet_id, places, actor), read),
       else: read.()
+  end
+
+  # What a waiting caller hears: the rooms and the workspace as its class
+  # hears them, the fleet's proposals, its own inbox, and the fleet's keys,
+  # since a key changing hands may change its class.
+  defp news_topics(fleet_id, places, actor) do
+    class = Access.class(actor, fleet_id)
+
+    [
+      topic(fleet_id, class),
+      Keyfleet.Graph.topic(fleet_id, class),
+      Keyfleet.Proposals.topic(fleet_id),
+      Keyfleet.Keys.topic(fleet_id) | inbox_topics(fleet_id, places, actor)
+    ]
   end
 
   defp read_sync(fleet_id, cursors, places, actor) do
@@ -253,13 +274,7 @@ defmodule Keyfleet.Rooms do
 
   # Subscribed before the first read, so nothing announced between that read
   # and the wait is missed.
-  defp wait_for_news(fleet_id, inbox_topics, read) do
-    topics = [
-      fleet_topic(fleet_id),
-      Keyfleet.Graph.head_topic(fleet_id),
-      Keyfleet.Proposals.topic(fleet_id) | inbox_topics
-    ]
-
+  defp wait_for_news(fleet_id, topics, read) do
     Enum.each(topics, &Phoenix.PubSub.subscribe(Keyfleet.PubSub, &1))
 
     try do
@@ -279,8 +294,9 @@ defmodule Keyfleet.Rooms do
   # the caller tells a log that started over by its `run_id`. A post is read
   # only when it is past the caller's place in a room it follows, and a direct
   # message only when it is past the caller's place in them; either is answered
-  # once that read has something new. The fleet's other announcements bring the
-  # caller nothing.
+  # once that read has something new. Keys changing in the fleet end the wait
+  # with what there is, so the caller asks again and hears what its class
+  # hears now. The fleet's other announcements bring the caller nothing.
   # A steady run of other announcements must not hold the caller past its
   # deadline, so the time left is read before every wait.
   defp await_news(fleet_id, read, synced, until) do
@@ -293,7 +309,13 @@ defmodule Keyfleet.Rooms do
           {:graph_head, ^fleet_id, _run_id, _watermark} ->
             read.()
 
+          {:graph_notable, ^fleet_id} ->
+            read.()
+
           {:proposals_changed, ^fleet_id} ->
+            read.()
+
+          {:keys_changed, ^fleet_id, _token_ids} ->
             read.()
 
           %Phoenix.Socket.Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}} ->
@@ -337,7 +359,9 @@ defmodule Keyfleet.Rooms do
   defp flush_news(fleet_id) do
     receive do
       {:graph_head, ^fleet_id, _run_id, _watermark} -> flush_news(fleet_id)
+      {:graph_notable, ^fleet_id} -> flush_news(fleet_id)
       {:proposals_changed, ^fleet_id} -> flush_news(fleet_id)
+      {:keys_changed, ^fleet_id, _token_ids} -> flush_news(fleet_id)
       %Phoenix.Socket.Broadcast{} -> flush_news(fleet_id)
     after
       0 -> :ok

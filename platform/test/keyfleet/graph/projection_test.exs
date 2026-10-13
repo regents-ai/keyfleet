@@ -171,16 +171,34 @@ defmodule Keyfleet.Graph.ProjectionTest do
     assert [%{applied_seq: 0}] = tables()[Graph.Cursor]
   end
 
-  test "a write the projector was never told about is copied on its next round" do
+  test "a write the projector was never told about is copied on its next round, and anyone is told only of what the activity shows them" do
     Phoenix.PubSub.subscribe(Keyfleet.PubSub, Graph.head_topic(@fleet))
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Graph.notable_topic(@fleet))
     start_projector(catch_up_interval: 200)
+    run_id = log_id()
+
+    told = fn ->
+      {:messages, messages} = Process.info(self(), :messages)
+      Enum.count(messages, &(&1 == {:graph_notable, @fleet}))
+    end
 
     # Straight to the writer, so nothing asks the projector to copy it.
     {:ok, %{"head_seq" => head, "result" => %{"id" => id}}} =
       command("create", note("Unannounced"), "quiet-1")
 
-    assert await_head(log_id(), head) == head
+    assert await_head(run_id, head) == head
     assert Graph.read_object!(@fleet, id, actor: @holder).data["title"] == "Unannounced"
+
+    # A new item shows in the activity anyone reads; a note reworded does not.
+    assert Projector.await(@fleet, run_id, head) == head
+    told_of_item = told.()
+    assert told_of_item > 0
+
+    reworded =
+      write!("patch", %{id: id, expected_version: 1, set: %{body: "Hold it."}}, "quiet-2")
+
+    assert Projector.await(@fleet, run_id, reworded) == reworded
+    assert told.() == told_of_item
   end
 
   test "a link removed on a later page than the one that made it is gone, and a patch keeps the fields it does not name" do

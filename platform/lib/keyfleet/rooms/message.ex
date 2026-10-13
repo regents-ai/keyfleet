@@ -433,11 +433,14 @@ defmodule Keyfleet.Rooms.Message do
   end
 
   # Delivered after the transaction commits, as `%Phoenix.Socket.Broadcast{}`
-  # on `Keyfleet.Rooms.fleet_topic/1`: "room_head" with `%{room_id, seq}` for
-  # every new line, and "key_activity" with `%{fleet_id, token_ids}` for a new
-  # post, naming the key it was written as and the key whose thread it went to.
-  # A repeat the database handed back is not announced. Best effort: anyone
-  # reading a room reads it from the room itself.
+  # on the two topics of `Keyfleet.Rooms.topic/2`: "room_head" with
+  # `%{room_id, seq}` for every new line, and "key_activity" with
+  # `%{fleet_id, token_ids}` for a new post, naming the key it was written as
+  # and the key whose thread it went to. The members' topic takes every line.
+  # The other takes a line of General or of a key's thread, which anyone
+  # reads, and nothing of any other room. A repeat the database handed back is
+  # not announced. Best effort: anyone reading a room reads it from the room
+  # itself.
   pub_sub do
     module Phoenix.PubSub
     name Keyfleet.PubSub
@@ -445,11 +448,25 @@ defmodule Keyfleet.Rooms.Message do
     broadcast_type :phoenix_broadcast
     filter &(!Ash.Resource.get_metadata(&1.data, :upsert_skipped))
 
+    publish_all :create, [:fleet_id, "rooms", "members"],
+      event: "room_head",
+      transform: &Keyfleet.Rooms.Message.head/1
+
     publish_all :create, [:fleet_id, "rooms"],
       event: "room_head",
-      transform: &%{room_id: &1.data.room_id, seq: &1.data.seq}
+      transform: &Keyfleet.Rooms.Message.head/1,
+      filter: &Keyfleet.Rooms.Message.read_by_anyone?/1
+
+    publish :send_message, [:fleet_id, "rooms", "members"],
+      event: "key_activity",
+      transform: &Keyfleet.Rooms.Message.key_activity/1
 
     publish :send_message, [:fleet_id, "rooms"],
+      event: "key_activity",
+      transform: &Keyfleet.Rooms.Message.key_activity/1,
+      filter: &Keyfleet.Rooms.Message.read_by_anyone?/1
+
+    publish :send_to_key, [:fleet_id, "rooms", "members"],
       event: "key_activity",
       transform: &Keyfleet.Rooms.Message.key_activity/1
 
@@ -457,6 +474,16 @@ defmodule Keyfleet.Rooms.Message do
       event: "key_activity",
       transform: &Keyfleet.Rooms.Message.key_activity/1
   end
+
+  @doc false
+  def head(%{data: message}), do: %{room_id: message.room_id, seq: message.seq}
+
+  # A line of a key's thread, or one written to the room anyone reads.
+  @doc false
+  def read_by_anyone?(%{data: message, changeset: changeset}),
+    do:
+      message.in_key_thread or
+        Ash.Changeset.get_argument(changeset, :slug) == Keyfleet.Rooms.Room.public_slug()
 
   @doc false
   def key_activity(%{data: message, changeset: changeset}) do

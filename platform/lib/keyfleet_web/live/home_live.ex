@@ -198,14 +198,16 @@ defmodule KeyfleetWeb.HomeLive do
     }
   end
 
+  # The cards show what anyone reads of each fleet, so the page hears what
+  # anyone hears of it, whoever is signed in.
   defp watch(socket) do
     socket = start_agents_read(socket)
 
     Enum.reduce(open_fleet_ids(socket), socket, fn fleet_id, socket ->
       for topic <- [
             Keys.topic(fleet_id),
-            Rooms.fleet_topic(fleet_id),
-            Graph.head_topic(fleet_id),
+            Rooms.topic(fleet_id, :public),
+            Graph.topic(fleet_id, :public),
             Proposals.topic(fleet_id)
           ],
           do: Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
@@ -254,11 +256,10 @@ defmodule KeyfleetWeb.HomeLive do
 
   # Something changed in one fleet: its card, and the count of agents across
   # every fleet, read again once, a moment later, for however many notices
-  # come in the meantime. A room's head
-  # names no fleet; the post or naming behind it also sends a notice that
-  # does. Balances aren't on the card.
+  # come in the meantime. A room's head names no fleet; the post behind it
+  # also sends a notice that does. Balances aren't on the card.
   @impl true
-  def handle_info({:graph_head, fleet_id, _run_id, _watermark}, socket),
+  def handle_info({:graph_notable, fleet_id}, socket),
     do: {:noreply, nudge(socket, fleet_id)}
 
   def handle_info({:keys_changed, fleet_id, _token_ids}, socket),
@@ -267,9 +268,8 @@ defmodule KeyfleetWeb.HomeLive do
   def handle_info({:proposals_changed, fleet_id}, socket),
     do: {:noreply, nudge(socket, fleet_id)}
 
-  def handle_info(%Broadcast{event: event, payload: %{fleet_id: fleet_id}}, socket)
-      when event in ["key_activity", "rooms_changed"],
-      do: {:noreply, nudge(socket, fleet_id)}
+  def handle_info(%Broadcast{event: "key_activity", payload: %{fleet_id: fleet_id}}, socket),
+    do: {:noreply, nudge(socket, fleet_id)}
 
   def handle_info(%Broadcast{event: "room_head"}, socket), do: {:noreply, socket}
   def handle_info({:balances_changed, _fleet_id}, socket), do: {:noreply, socket}

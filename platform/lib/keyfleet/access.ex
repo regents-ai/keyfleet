@@ -51,7 +51,9 @@ defmodule Keyfleet.Access do
     # Each Key's own thread.
     key_walls: %{read: :public, write: :member},
     # Which branches and tags moved in the fleet's code, and who moved them.
-    code: %{read: :member, write: :member}
+    code: %{read: :member, write: :member},
+    # The fleet's workspace, but for what its activity shows anyone.
+    workspace: %{read: :member, write: :member}
   }
 
   # What is written by the same act as another component is written by the

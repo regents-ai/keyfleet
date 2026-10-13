@@ -5,7 +5,6 @@ defmodule KeyfleetWeb.ShellLiveTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Actors.System
   alias Keyfleet.ChainHelpers
-  alias Keyfleet.Code
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
@@ -388,7 +387,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#route-content h1", "Profile")
   end
 
-  test "a patch to another fleet's page stops hearing the fleet it left", %{conn: conn} do
+  test "a visitor's page hears what anyone hears of the fleet on show, and stops hearing the fleet it left",
+       %{conn: conn} do
     Fleets.bootstrap_catalog!()
     ChainHelpers.deploy!("fleet_tech_classic")
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
@@ -397,7 +397,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert topics(view) ==
              Enum.sort([
                Keys.topic("fleet_tech_classic"),
-               Rooms.fleet_topic("fleet_tech_classic")
+               Rooms.topic("fleet_tech_classic", :public)
              ])
 
     render_patch(view, "/app/fleets/fibonacci_cascade")
@@ -405,9 +405,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert topics(view) ==
              Enum.sort([
                Keys.topic("fibonacci_cascade"),
-               Rooms.fleet_topic("fibonacci_cascade"),
-               Graph.head_topic("fibonacci_cascade"),
-               Code.topic("fibonacci_cascade"),
+               Rooms.topic("fibonacci_cascade", :public),
+               Graph.notable_topic("fibonacci_cascade"),
                Proposals.topic("fibonacci_cascade")
              ])
   end

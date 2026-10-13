@@ -131,7 +131,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     goal("Sell the first audit")
     Workspace.create(@cascade, "goal", %{"title" => "Map the cascade", "outcome" => "O"})
 
-    send(view.pid, {:graph_head, @classic, "log_fixture", 2})
+    send(view.pid, {:graph_notable, @classic})
     render(view)
     render_async(view, 3_000)
     assert text(view, "#home-fleet-#{@classic} [data-fleet-trying]") == "No goal set yet"
@@ -252,10 +252,15 @@ defmodule KeyfleetWeb.HomeLiveTest do
     :erlang.trace(view.pid, true, [:call])
     on_exit(fn -> :erlang.trace_pattern({:erlang, :send_after, 3}, false, [:global]) end)
 
-    send(view.pid, {:graph_head, @classic, "log_fixture", 2})
-    send(view.pid, {:graph_head, @classic, "log_fixture", 3})
+    send(view.pid, {:graph_notable, @classic})
+    send(view.pid, {:graph_notable, @classic})
     send(view.pid, {:proposals_changed, @classic})
-    send(view.pid, %Broadcast{event: "rooms_changed", payload: %{fleet_id: @cascade}})
+
+    send(view.pid, %Broadcast{
+      event: "key_activity",
+      payload: %{fleet_id: @cascade, token_ids: [1]}
+    })
+
     render(view)
 
     assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @classic}]}}
@@ -266,7 +271,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     # Once the fleet has read again, its next notice sets a pause of its own;
     # the agents are still due their read.
     send(view.pid, {:refresh, @classic})
-    send(view.pid, {:graph_head, @classic, "log_fixture", 4})
+    send(view.pid, {:graph_notable, @classic})
     render(view)
 
     assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @classic}]}}

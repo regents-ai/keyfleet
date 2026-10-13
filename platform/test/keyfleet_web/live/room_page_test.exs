@@ -392,11 +392,18 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       assert has_element?(view, "#rooms-locked")
       refute html =~ "Hull survey"
 
+      # Until then the page hears of the rooms only what anyone hears.
+      heard = fn -> Registry.keys(Keyfleet.PubSub, view.pid) end
+      assert Rooms.topic(@fleet, :public) in heard.()
+      refute Rooms.topic(@fleet, :member) in heard.()
+
       transfer!(1, @stranger)
       Phoenix.PubSub.broadcast(Keyfleet.PubSub, Keys.topic(@fleet), {:keys_changed, @fleet, [1]})
 
       refute has_element?(view, "#rooms-locked")
       assert has_element?(view, ".rooms-body", "Hull survey")
+      assert Rooms.topic(@fleet, :member) in heard.()
+      refute Rooms.topic(@fleet, :public) in heard.()
     end
 
     test "a room an agent creates joins the list for the members watching", %{conn: conn} do

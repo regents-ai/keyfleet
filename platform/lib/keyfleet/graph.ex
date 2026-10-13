@@ -157,10 +157,28 @@ defmodule Keyfleet.Graph do
   end
 
   @doc """
-  Where a fleet says how far its workspace's read tables have reached, as
-  `{:graph_head, fleet_id, run_id, watermark}`: the log they copy and the
-  place in it. A notice is only a hint to read again; a reader that misses one
-  loses nothing, because it reads on from its own cursor.
+  Where a fleet tells its members how far its workspace's read tables have
+  reached, as `{:graph_head, fleet_id, run_id, watermark}`: the log they copy
+  and the place in it. A notice is only a hint to read again; a reader that
+  misses one loses nothing, because it reads on from its own cursor.
   """
   def head_topic(fleet_id), do: "fleet:#{fleet_id}:graph"
+
+  @doc """
+  Where a fleet tells anyone that its activity has a new workspace change to
+  show them (`notable_before/3`), as `{:graph_notable, fleet_id}`. It says
+  nothing of any other change, nor how far the log has got.
+  """
+  def notable_topic(fleet_id), do: "fleet:#{fleet_id}:graph:notable"
+
+  @doc """
+  Where a reader of `class` (`Keyfleet.Access.class/2`) hears of the fleet's
+  workspace: `head_topic/1` for whoever reads the workspace, `notable_topic/1`
+  for anyone else. A listener is on one of the two, never both.
+  """
+  def topic(fleet_id, class) do
+    if Keyfleet.Access.enough?(class, :read, :workspace),
+      do: head_topic(fleet_id),
+      else: notable_topic(fleet_id)
+  end
 end
