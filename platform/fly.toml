@@ -35,8 +35,8 @@ primary_region = "iad"
 # Machine count is managed by `fly scale count 1`; deploy with `--ha=false`.
 # BEAM release + migrations OOM at Fly's 256MB default.
 [[vm]]
-  cpu_kind = "shared"
-  cpus = 2
+  cpu_kind = "performance"
+  cpus = 1
   memory_mb = 2048
 
 # The check reaches the machine directly over plain HTTP. `Host: localhost` is
