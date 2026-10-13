@@ -1324,3 +1324,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   contract has always taken it; the page showed "Voting closed".
 - "Active voters" on the Treasury page counts only Keys whose 48 hours are
   running. A Key in its first 2 days was counted too.
+
+## 2026-10-13 — ENS names: a new wallet's lookup is never lost
+
+- Signing in with another wallet while the first wallet's ENS name was being
+  read could leave the account showing the first wallet's name for good. The
+  read now finishes for the wallet the account has.

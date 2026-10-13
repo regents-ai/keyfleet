@@ -7,9 +7,16 @@ defmodule Keyfleet.Accounts.EnsIdentity.LookUp do
   the ENS avatar service answers with one (`AgentEns.PrimaryName`). A failed
   read fails the action, so the job retries with backoff; a server with no
   Ethereum endpoint cancels it.
+
+  The answer is written only while the row still names the wallet it was read
+  for. A sign-in with another wallet while the read runs can't queue a second
+  job for the row, so the write fails as stale instead, and the retry reads the
+  row's new wallet.
   """
 
   use Ash.Resource.Change
+
+  require Ash.Expr
 
   alias AgentEns.PrimaryName
   alias AshOban.Errors.CancelJob
@@ -17,14 +24,14 @@ defmodule Keyfleet.Accounts.EnsIdentity.LookUp do
 
   @impl true
   def change(changeset, _opts, _context) do
-    Ash.Changeset.before_action(changeset, fn changeset ->
-      wallet = changeset.data.wallet_address
+    wallet = changeset.data.wallet_address
 
+    changeset
+    |> Ash.Changeset.filter(Ash.Expr.expr(wallet_address == ^wallet))
+    |> Ash.Changeset.before_action(fn changeset ->
       case look_up(wallet) do
         {:ok, identity} ->
           changeset
-          # The wallet this answer is for, should a sign-in have changed it since.
-          |> Ash.Changeset.force_change_attribute(:wallet_address, wallet)
           |> Ash.Changeset.force_change_attribute(:ens_name, identity[:name])
           |> Ash.Changeset.force_change_attribute(:ens_avatar_url, identity[:avatar_url])
           |> Ash.Changeset.force_change_attribute(:lookup_state, :done)
