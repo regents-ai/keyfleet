@@ -29,7 +29,6 @@ import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
 import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
 import {MotionCascade, ShellViews} from "./hooks/motion/reveals"
-import {MotionPanels} from "./hooks/motion/slides"
 import {VerifiedConnections} from "./hooks/verified_connections"
 import {mountMotion} from "./motion"
 
@@ -302,7 +301,6 @@ const hooks = {
   MotionCascade,
   MotionCount,
   MotionList,
-  MotionPanels,
   MotionRefusal,
   OnchainSteps,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
