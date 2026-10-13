@@ -1175,3 +1175,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   requests carrying Keyfleet's signed note.
 - "Tokens on record" lists the Regents Club hub's token by its listed ID and
   last day, 13 October 2027.
+
+## 2026-10-13 — Proposals: the Daily Treasury Slice to Keys, and "Open now"
+
+- On a fleet's Proposals page the daily split now reads "Daily Treasury Slice
+  to Keys", and its button says "Release". The words shown while the wallet
+  works say "release" too.
+- "Next release" shows "Open now" once its time has come, in the treasury
+  figures and beside the button. It used to keep showing the time it opened,
+  which read as a date in the past for as long as nobody had released it. A
+  time is shown only while the next release is still ahead.
+- "Last run" reads "Last release".
