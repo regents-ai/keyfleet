@@ -39,6 +39,8 @@ export const CAMERA_ORBIT_DEGREES = 3.5
 export const CAMERA_ORBIT_LERP = 0.08
 /** The beams are rebuilt on the processor, so their aim moves in visible steps only. */
 export const CROWN_AIM_STEP = 1 / 64
+/** How quickly the beams take a new tint: gently, and home well inside the easing. */
+export const CROWN_TINT_LERP = 0.14
 
 /** Falloff of a beam across its width and along its path. */
 export const CROWN_LIGHT = {
@@ -157,24 +159,43 @@ export interface CrownBeams {
   readonly spectralIntensity: number
 }
 
-export interface CrownBeamColors {
+/** The colour of the three beams at each stage of their path. */
+export interface CrownBeamTint {
   /** The beam on its way to the glass. */
   readonly input: Vec3
   /** The faint path inside the glass. */
   readonly internal: Vec3
   /** The light that leaves the glass. */
   readonly fan: Vec3
+}
+
+export interface CrownBeamColors extends CrownBeamTint {
   /** True when the glass fans the light into its colours, each tinted by `fan`. */
   readonly spectrum: boolean
 }
 
+/** One colour for the whole beam. */
+export const tintOf = (color: Vec3): CrownBeamTint => ({input: color, internal: color, fan: color})
+
 /** One colour for the whole beam, fanned into a spectrum by the glass. */
-export const beamOf = (color: Vec3): CrownBeamColors => ({
-  input: color,
-  internal: color,
-  fan: color,
-  spectrum: true,
-})
+export const beamOf = (color: Vec3): CrownBeamColors => ({...tintOf(color), spectrum: true})
+
+/**
+ * A tint for each quarter of the stage. While the pointer is over a quarter the
+ * beams ease to its tint, and back to the look's own colours when it leaves.
+ */
+export interface CrownQuadrants {
+  readonly topLeft: CrownBeamTint
+  readonly topRight: CrownBeamTint
+  readonly bottomLeft: CrownBeamTint
+  readonly bottomRight: CrownBeamTint
+}
+
+/** The tint for a pointer position over the stage, both components in [0, 1]. */
+export const quadrantTint = (quadrants: CrownQuadrants, x: number, y: number): CrownBeamTint =>
+  y < 0.5
+    ? x < 0.5 ? quadrants.topLeft : quadrants.topRight
+    : x < 0.5 ? quadrants.bottomLeft : quadrants.bottomRight
 
 /** What is drawn behind the crown: one full-canvas pass the site supplies. */
 export interface CrownBackdrop {
@@ -192,6 +213,8 @@ export interface CrownStyle {
   readonly bloom: CrownBloom
   readonly beams: CrownBeams
   readonly colors: CrownBeamColors
+  /** Set when the pointer's place over the stage tints the beams. */
+  readonly quadrants?: CrownQuadrants
 }
 
 /** A site's whole crown. Its size, its place and its backdrop pass are fixed once drawn. */

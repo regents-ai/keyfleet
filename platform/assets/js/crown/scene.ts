@@ -17,6 +17,7 @@ import {crownLightGeometry, updateCrownLightGeometry, type CrownLighting} from "
 import {
   CROWN_LIGHT,
   crownShape,
+  type CrownBeamTint,
   type CrownLook,
   type CrownStyle,
   type Vec2,
@@ -37,9 +38,11 @@ const BLOOM_SCATTER = 0.65
 export interface CrownScene {
   /** Tilts the camera; both components in [-1, 1] with 0 at rest. */
   orbit(x: number, y: number): void
-  /** Swings the three beams, which means retracing them on the processor. */
+  /** Swings the three beams; both components in [-1, 1] with 0 at rest. */
   aim(x: number, y: number): void
-  /** Changes glass, bloom and beams. The beams are retraced once. */
+  /** Colours the three beams, in place of the look's own colours. */
+  tint(tint: CrownBeamTint): void
+  /** Changes glass, bloom and beams, and returns the beams to the look's own colours. */
   restyle(style: CrownStyle): void
   /** Follows the surface to its current size. */
   resize(): void
@@ -63,6 +66,10 @@ export async function createCrownScene(
   const shape = crownShape(framing.scale)
 
   let style: CrownStyle = look
+  let colors = style.colors
+  // Aim, tint, style and size each change the beams, which are retraced on the
+  // processor: once for the next frame, however many of them moved.
+  let lightStale = false
   let environment = rotationMatrix(style.glass.environmentRotation)
   let size: Vec2 = output.size
   let aspect = size[0] / Math.max(1, size[1])
@@ -73,7 +80,7 @@ export async function createCrownScene(
   const lighting = (): CrownLighting => ({
     shape,
     beams: style.beams,
-    colors: style.colors,
+    colors,
     ior: style.glass.ior,
     aim,
     aspect,
@@ -231,12 +238,17 @@ export async function createCrownScene(
     },
     aim(x, y) {
       aim = [clampSigned(x), clampSigned(y)]
-      updateCrownLightGeometry(lightSheet, lighting())
+      lightStale = true
+    },
+    tint(tint) {
+      colors = {...tint, spectrum: style.colors.spectrum}
+      lightStale = true
     },
     restyle(next) {
       style = next
+      colors = next.colors
       environment = rotationMatrix(next.glass.environmentRotation)
-      updateCrownLightGeometry(lightSheet, lighting())
+      lightStale = true
     },
     resize() {
       size = output.size
@@ -245,9 +257,13 @@ export async function createCrownScene(
       sceneB.resize(size)
       blooms.forEach((bloom, level) => bloom.resize(bloomLevelSize(size, level)))
       view = cameraView(shape, framing, aspect, orbit[0], orbit[1])
-      updateCrownLightGeometry(lightSheet, lighting())
+      lightStale = true
     },
     present() {
+      if (lightStale) {
+        updateCrownLightGeometry(lightSheet, lighting())
+        lightStale = false
+      }
       const clear = bind()
       frame(gpu, current => {
         current.pass({target: sceneA, clear}, pass => {

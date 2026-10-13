@@ -13,16 +13,25 @@ import {init, surface} from "vgpu"
 
 import {
   CAMERA_ORBIT_LERP,
+  CROWN_TINT_LERP,
+  quadrantTint,
   quantizeCrownAim,
+  type CrownBeamTint,
   type CrownLook,
   type CrownStyle,
   type Vec2,
+  type Vec3,
 } from "./look"
 import {createCrownScene} from "./scene"
 
 export interface CrownRenderer {
   /** Pointer position over the crown's stage, both components in [0, 1]. */
   aim(x: number, y: number): void
+  /**
+   * The pointer's own place over the stage, both components in [0, 1]. A look
+   * with quadrants eases its beams to the tint of the quarter the pointer is in.
+   */
+  point(x: number, y: number): void
   /** The pointer left: ease everything back to the composed shot. */
   rest(): void
   /** Changes glass, bloom and beams without rebuilding the crown. */
@@ -46,6 +55,33 @@ function stepPair(current: Vec2, target: Vec2, rate: number, snap: boolean): Vec
   if (dx === 0 && dy === 0) return undefined
   if (snap || (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4)) return target
   return [current[0] + dx * rate, current[1] + dy * rate]
+}
+
+const TINT_PARTS = ["input", "internal", "fan"] as const
+/** A difference in a colour channel too small to see. */
+const TINT_ARRIVED = 1 / 512
+
+/** The next tint on the way to the target, or nothing when this one has arrived. */
+function stepTint(
+  current: CrownBeamTint,
+  target: CrownBeamTint,
+  snap: boolean,
+): CrownBeamTint | undefined {
+  if (current === target) return undefined
+  const far = TINT_PARTS.some(part =>
+    current[part].some((channel, index) => Math.abs(target[part][index]! - channel) >= TINT_ARRIVED),
+  )
+  if (snap || !far) return target
+  const eased = (part: (typeof TINT_PARTS)[number]): Vec3 => {
+    const [r, g, b] = current[part]
+    const [targetR, targetG, targetB] = target[part]
+    return [
+      r + (targetR - r) * CROWN_TINT_LERP,
+      g + (targetG - g) * CROWN_TINT_LERP,
+      b + (targetB - b) * CROWN_TINT_LERP,
+    ]
+  }
+  return {input: eased("input"), internal: eased("internal"), fan: eased("fan")}
 }
 
 export async function createCrownRenderer(
@@ -73,20 +109,30 @@ export async function createCrownRenderer(
     throw error
   })
 
+  let style: CrownStyle = look
   let orbitTarget = AT_REST
   let orbitCurrent = AT_REST
   let aimApplied = AT_REST
+  let tintTarget: CrownBeamTint = style.colors
+  let tintCurrent: CrownBeamTint = style.colors
 
   return {
     // Pointer motion is decorative: it turns the camera and swings the beams.
     aim(x, y) {
       orbitTarget = [clampUnit(x) * 2 - 1, clampUnit(y) * 2 - 1]
     },
+    point(x, y) {
+      if (style.quadrants) tintTarget = quadrantTint(style.quadrants, x, y)
+    },
     rest() {
       orbitTarget = AT_REST
+      tintTarget = style.colors
     },
-    restyle(style) {
-      scene.restyle(style)
+    restyle(next) {
+      style = next
+      tintTarget = next.colors
+      tintCurrent = next.colors
+      scene.restyle(next)
     },
     resize(width, height) {
       stage.resize([width, height])
@@ -106,7 +152,12 @@ export async function createCrownRenderer(
         aimApplied = nextAim
         scene.aim(nextAim[0], nextAim[1])
       }
-      return Boolean(nextOrbit) || aimMoved
+      const nextTint = stepTint(tintCurrent, tintTarget, snap)
+      if (nextTint) {
+        tintCurrent = nextTint
+        scene.tint(nextTint)
+      }
+      return Boolean(nextOrbit) || aimMoved || Boolean(nextTint)
     },
     present() {
       scene.present()

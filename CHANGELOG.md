@@ -1353,6 +1353,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   (`platform/assets/css/pages/home.css`). The picture is the same: at rest it
   matches the old crown pixel for pixel at six sizes of its box, from
   1920×512 down to a phone's 358×192.
+- A visitor who asked for less motion now gets the crown as one composed
+  shot, drawn once and left alone, where before they kept the still picture.
+  The still picture stays wherever the browser cannot draw the crown.
 - `vgpu` moves from 0.5.0 to 0.6.0 and `@vgpu/wgsl` 0.6.0 is added; 0.6
   prepares each shader in the browser before it first draws. The key cards on
   the early-access page and the deck page prepare theirs once

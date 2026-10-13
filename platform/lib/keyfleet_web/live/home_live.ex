@@ -411,7 +411,16 @@ defmodule KeyfleetWeb.HomeLive do
   defp hero(assigns) do
     ~H"""
     <section id="home-hero" class="rl-hero rl-hero--home" aria-labelledby="home-title">
-      <Crown.crown id="home-crown" look="white" />
+      <Crown.crown id="home-crown" look="white">
+        <img
+          class="crown__still"
+          src={~p"/images/home/hero-bg-dark.svg"}
+          width="1700"
+          height="1200"
+          alt=""
+          fetchpriority="high"
+        />
+      </Crown.crown>
 
       <div class="rl-hero-column" data-home-hero-copy>
         <div id="home-tally" class="rl-hero-tally">
