@@ -71,6 +71,12 @@ defmodule Keyfleet.ContractSchema do
     end
   end
 
+  defp rule("anyOf", choices, value, _schema, schemas, at) do
+    if Enum.any?(choices, &(check(value, &1, schemas, at) == [])),
+      do: [],
+      else: ["#{at}: fits none of the #{length(choices)} choices"]
+  end
+
   defp rule("type", types, value, _schema, _schemas, at) do
     if Enum.any?(List.wrap(types), &type?(&1, value)),
       do: [],

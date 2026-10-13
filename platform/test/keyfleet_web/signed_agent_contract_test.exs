@@ -253,7 +253,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     # The site's server reads the test's chain.
     ChainViews.share!()
-    {:ok, signer} = Siwa.LocalSigner.new()
+    signer = new_signer()
     record_owner(1, @owner)
     record_owner(2, signer.address)
 
@@ -457,7 +457,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     # Reading rooms.
     answer(c, c.signer, "GET", @rooms, @address, %{}, 200)
     read = answer(c, c.signer, "POST", @read, @address, %{}, 200).body["messages"]
-    assert Enum.map(read, & &1["author_kind"]) == ["human", "agent", "agent"]
+    # The last is the person's words their agent quoted.
+    assert Enum.map(read, & &1["author_kind"]) == ["human", "agent", "agent", "human"]
     answer(c, c.signer, "POST", @read, Map.put(@address, "slug", "hull-survey"), %{}, 404)
     answer(c, c.signer, "POST", @read, @address, %{"limit" => 201}, 422)
 
@@ -468,12 +469,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert [%{"token_id" => 1}] = answer(c, c.signer, "POST", @mute, one, %{}, 200).body["mutes"]
     muted = answer(c, c.signer, "POST", @read, @address, %{}, 200).body
     assert Enum.map(muted["messages"], & &1["author_kind"]) == ["agent", "agent"]
-    assert muted["cursor"] == List.last(muted["messages"])["seq"]
-    assert length(answer(c, stranger, "POST", @read, @address, %{}, 200).body["messages"]) == 3
+    assert muted["cursor"] == List.last(read)["seq"]
+    assert length(answer(c, stranger, "POST", @read, @address, %{}, 200).body["messages"]) == 4
     answer(c, stranger, "POST", @read, %{@address | "slug" => "coding"}, %{}, 403)
     assert answer(c, c.signer, "POST", @unmute, one, %{}, 200).body["mutes"] == []
     assert answer(c, c.signer, "POST", @unmute, one, %{}, 200).body["mutes"] == []
-    assert length(answer(c, c.signer, "POST", @read, @address, %{}, 200).body["messages"]) == 3
+    assert length(answer(c, c.signer, "POST", @read, @address, %{}, 200).body["messages"]) == 4
 
     # A key's thread: read before its first post, written to, repeated,
     # conflicting, misplaced, for a key not sold, and by an outsider.
@@ -651,12 +652,20 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              refused("code_catching_up")
 
     # Every route: unsigned, too large, signed with a body that fits none of
-    # them, and with the sign-in check away.
+    # them, signed by an unpaired agent, and with the sign-in check away.
     for {method, template} <- routes() do
       answer_raw(c, method, template, "{}", 401)
       answer_raw(c, method, template, String.duplicate(" ", body_cap(template) + 1), 413)
       misfit = answer(c, c.signer, method, template, @address, %{"not_a_field" => 1}, 422)
       assert misfit.body["error"]["hint"] == SignedAgent.takes(fill(template, @address))
+    end
+
+    # Every route, signed by an agent no person has paired.
+    unpaired = unpaired_signer()
+
+    for {method, template} <- routes() do
+      refused = answer(c, unpaired, method, template, @address, empty_or_minimal(template), 403)
+      assert refused.body == refused("agent_not_paired")
     end
 
     Application.put_env(:keyfleet, :siwa_broker_url, nil)
@@ -694,7 +703,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   # An agent paired with key 1's holder quotes the words they sent it: once,
   # then refused as already quoted.
   defp quote_routes(c) do
-    quoter = new_signer()
+    quoter = unpaired_signer()
 
     agent =
       PairingHelpers.pair!(
@@ -1076,6 +1085,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     for {method, template} <- routes(),
         status <- Map.keys(contract["paths"][template][String.downcase(method)]["responses"]),
+        # `default` is the sign-in server's own refusal, at the status it gives.
+        status != "default",
         do: {method, template, String.to_integer(status)}
   end
 
@@ -1261,7 +1272,14 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     )
   end
 
+  # A signing wallet whose agent is paired with a person of its own.
   defp new_signer do
+    signer = unpaired_signer()
+    PairingHelpers.pair_wallet!(signer.address)
+    signer
+  end
+
+  defp unpaired_signer do
     {:ok, signer} = Siwa.LocalSigner.new()
     signer
   end

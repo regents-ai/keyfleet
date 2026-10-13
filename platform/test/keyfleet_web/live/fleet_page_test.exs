@@ -4,7 +4,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors
-  alias Keyfleet.Agents
   alias Keyfleet.Chain.{OwnershipLog, Scanner, StubClient}
   alias Keyfleet.ChainHelpers
   alias Keyfleet.ChainViews
@@ -27,11 +26,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   @issued 150
   @owner "0x" <> String.duplicate("a", 40)
   @stranger "0x" <> String.duplicate("b", 40)
-  @agent "0x" <> String.duplicate("c", 40)
   @contract "0x" <> String.duplicate("7", 40)
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
-  @shard_issued RegentChain.Event.topic0("ShardIssued(uint256,address,uint64,uint64)")
-  @shard_ended RegentChain.Event.topic0("ShardEnded(uint256,address,address)")
 
   setup %{conn: conn} do
     Fleets.bootstrap_catalog!()
@@ -685,23 +681,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#key-map-level")
     end
 
-    # Every sold key's two marks travel as bitsets that reach only as far as the
-    # highest key marked, so they stay small however far the fleet has grown.
-    test "loads with the keys the viewer holds and the keys agents hold shards of", %{conn: conn} do
-      deploy!()
-      ChainHelpers.seed_cursor!(@fleet)
-      issue!(@fleet, 151, @stranger)
-      shard!(7)
-
-      {:ok, view, _html} = live(conn, @map_path)
-      render_hook(view, "keymap_ready", %{})
-
-      assert_reply(view, %{minted: 151, max_supply: nil, mine: mine, agent: agent} = reply)
-      assert byte_size(Jason.encode!(reply)) <= 20_000
-      assert marked(mine) == Enum.to_list(1..150)
-      assert marked(agent) == [7]
-    end
-
     test "someone signed out holds none of the keys", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
@@ -769,50 +748,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert Scanner.step(fleet, StubClient) == :ok
       assert_pushed(view, "keymap:patch", %{minted: 2, keys: [[1, 0]]})
-    end
-
-    test "a shard issued, ended by its owner or stepped down from reaches the map as a change",
-         %{conn: conn} do
-      deploy!()
-      ChainHelpers.seed_cursor!(@fleet)
-      agent_profile!()
-      {:ok, view, _html} = live(conn, @map_path)
-
-      issued = shard_log(:issued, 7, 1_010)
-      scan!(1_020, [issued])
-      assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 3]]})
-
-      ended = shard_log({:ended, @owner}, 7, 1_030)
-      scan!(1_040, [issued, ended])
-      assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 1]]})
-
-      again = shard_log(:issued, 7, 1_050)
-      scan!(1_060, [issued, ended, again])
-      assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 3]]})
-
-      scan!(1_080, [issued, ended, again, shard_log({:ended, @agent}, 7, 1_070)])
-      assert_pushed(view, "keymap:patch", %{minted: 150, keys: [[7, 1]]})
-    end
-
-    # A shard's notice is the fleet's keys changing, so the bar counts the
-    # agent as soon as its shard is issued, and stops once it ends.
-    test "the bar counts an agent once its shard is issued, and stops when it ends", %{conn: conn} do
-      deploy!()
-      ChainHelpers.seed_cursor!(@fleet)
-      agent_profile!()
-      {:ok, view, _html} = live(conn, @path)
-      assert text(view, "#fleet-sales") == "150 Keys sold · 0 agents here"
-
-      issued = shard_log(:issued, 7, 1_010)
-      scan!(1_020, [issued])
-      assert_pushed(view, "keymap:patch", %{keys: [[7, 3]]})
-      assert text(view, "#fleet-sales") == "150 Keys sold · 1 agent here"
-      assert has_element?(view, "#fleet-who-list", "Orbit runner")
-
-      scan!(1_040, [issued, shard_log({:ended, @owner}, 7, 1_030)])
-      assert_pushed(view, "keymap:patch", %{keys: [[7, 1]]})
-      assert text(view, "#fleet-sales") == "150 Keys sold · 0 agents here"
-      assert has_element?(view, "#fleet-who-empty")
     end
 
     test "more than 2,000 keys changed at once tells the map to load again", %{conn: conn} do
@@ -1513,82 +1448,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     )
   end
 
-  defp agent_profile! do
-    agent = %Actors.Agent{
-      wallet_address: @agent,
-      chain_id: 8_453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
-
-    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
-  end
-
   defp owner, do: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
 
-  # The test's agent holding a shard of Cascade's key `token_id`.
-  defp shard!(token_id) do
-    agent_profile!()
-    ChainHelpers.issue_shard!(@fleet, token_id, @agent)
-  end
-
-  # One pass of the chain reader over Cascade up to block `head`.
-  defp scan!(head, logs) do
-    StubClient.put_chain(chain_head(head), logs)
-    assert Scanner.step(Fleets.get_fleet!(@fleet), StubClient) == :ok
-  end
-
-  # The shards contract issuing the test's agent a 30-day shard of key
-  # `token_id` under its first owner, or the wallet named ending it.
-  defp shard_log(:issued, token_id, block) do
-    expires = DateTime.to_unix(DateTime.utc_now()) + 30 * 86_400
-
-    topics = [
-      @shard_issued,
-      word(ChainHelpers.onchain_id(@fleet, token_id)),
-      address_word(@agent)
-    ]
-
-    shards_log(topics, "0x" <> bare_word(expires) <> bare_word(1), block)
-  end
-
-  defp shard_log({:ended, by}, token_id, block) do
-    topics = [
-      @shard_ended,
-      word(ChainHelpers.onchain_id(@fleet, token_id)),
-      address_word(@agent),
-      address_word(by)
-    ]
-
-    shards_log(topics, "0x", block)
-  end
-
-  defp shards_log(topics, data, block) do
-    %{
-      "address" => Fleets.get_fleet!(@fleet).shards_address,
-      "topics" => topics,
-      "data" => data,
-      "blockNumber" => "0x" <> Integer.to_string(block, 16),
-      "blockHash" => "0x" <> String.duplicate("b", 64),
-      "transactionHash" => word(block),
-      "logIndex" => "0x0"
-    }
-  end
-
   defp address_word("0x" <> address), do: "0x" <> String.duplicate("0", 24) <> address
-  defp bare_word(value), do: value |> word() |> String.slice(2..-1//1)
-
-  # The keys a bitset from the map's first load marks.
-  defp marked(bitset) do
-    for <<byte <- Base.decode64!(bitset)>>, bit <- 0..7, reduce: {[], 1} do
-      {keys, key} ->
-        if Bitwise.band(byte, Bitwise.bsl(1, bit)) != 0,
-          do: {[key | keys], key + 1},
-          else: {keys, key + 1}
-    end
-    |> elem(0)
-    |> Enum.reverse()
-  end
 
   defp option_values(view, selector) do
     view

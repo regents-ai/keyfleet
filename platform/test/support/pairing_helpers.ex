@@ -30,6 +30,24 @@ defmodule Keyfleet.PairingHelpers do
   end
 
   @doc """
+  Pairs the agent that signs as `wallet` with a person of its own, the way a
+  signed request finds it.
+  """
+  def pair_wallet!(wallet) do
+    person = "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
+
+    pair!(
+      %Agent{
+        wallet_address: wallet,
+        chain_id: 8453,
+        verification_method: :eoa_recovery,
+        audience: "keyfleet"
+      },
+      [person]
+    )
+  end
+
+  @doc """
   An agent paired with `person`, with a profile of its own, so it writes in a
   fleet's rooms as the person's Key. Its wallet is made from the person's
   first wallet, so the same person always has the same agent: paired the

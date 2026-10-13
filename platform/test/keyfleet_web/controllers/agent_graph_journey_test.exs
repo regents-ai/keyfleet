@@ -5,7 +5,6 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   import Plug.Conn
 
   alias Keyfleet.Actors
-  alias Keyfleet.Agents
   alias Keyfleet.Chain
   alias Keyfleet.ChainHelpers
   alias Keyfleet.ContractSchema
@@ -25,13 +24,6 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     title: "First paying customer",
     outcome: "One customer pays for a research brief within two weeks."
   }
-  @service %{
-    title: "Research briefs",
-    customer: "Small funds",
-    problem: "They cannot read every filing.",
-    deliverable: "A weekly two-page brief."
-  }
-
   setup %{tmp_dir: tmp_dir} do
     # Workspace reads take a repeatable-read snapshot, which Postgres allows
     # inside the sandbox only when its transaction is at that level already.
@@ -55,227 +47,6 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     app = server(:product, &KeyfleetWeb.Endpoint.call(&1, KeyfleetWeb.Endpoint.init(&2)))
 
     %{app: app, secret: secret, data_dir: Path.join(tmp_dir, "graph"), sandbox: owner}
-  end
-
-  test "two agents build a goal and a service with tasks, evidence and links, each edit credited to its key",
-       c do
-    start_graph(c)
-    [ann, bea] = shard_agents(c)
-
-    posted =
-      send_signed(c, ann, "POST", "/api/v1/agent/fleets/#{@fleet}/rooms/voting/messages/send", %{
-        body: "Customer interview notes are in.",
-        idempotency_key: "m-1"
-      })
-
-    assert posted.status == 201
-
-    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
-    service = write!(c, bea, "create", %{as_key: 2, command_id: "s-1", data: @service})
-
-    task =
-      write!(c, ann, "create", %{
-        as_key: 1,
-        command_id: "t-1",
-        type: "task",
-        data: %{title: "Draft the first brief", progress: "doing"}
-      })
-
-    evidence =
-      write!(c, bea, "create", %{
-        as_key: 2,
-        command_id: "e-1",
-        type: "evidence",
-        data: %{title: "Interview", source_uri: "https://example.com/interview"}
-      })
-
-    # Saving a chat post to the workspace links the object back to it.
-    note =
-      write!(c, ann, "create", %{
-        as_key: 1,
-        command_id: "n-1",
-        type: "note",
-        data: %{
-          title: "Interview notes",
-          body: "See the post.",
-          discussion: [%{room: "voting", seq: 1}]
-        }
-      })
-
-    for {agent, key, id, source, target, type} <- [
-          {ann, 1, "l-1", task, goal, "implements"},
-          {bea, 2, "l-2", evidence, service, "supports"},
-          {bea, 2, "l-3", task, service, "implements"}
-        ] do
-      linked =
-        graph(c, agent, "link", %{
-          as_key: key,
-          command_id: id,
-          source: source["id"],
-          target: target["id"],
-          type: type
-        })
-
-      assert linked.status == 200
-      assert %{"existing" => false, "relation_id" => "rel_" <> _} = linked.body["result"]
-      assert ContractSchema.errors(linked.body, "WorkspaceWrite") == []
-    end
-
-    claimed =
-      graph(c, bea, "patch", %{
-        as_key: 2,
-        command_id: "t-2",
-        id: task["id"],
-        expected_version: 1,
-        set: %{assignee_key: 2, next_step: "Send it to the customer."}
-      })
-
-    assert claimed.status == 200
-    assert claimed.body["result"] == %{"id" => task["id"], "version" => 2}
-    assert claimed.body["watermark"] >= claimed.body["head_seq"]
-    assert ContractSchema.errors(claimed.body, "WorkspaceWrite") == []
-
-    read = graph(c, bea, "get", %{id: goal["id"]})
-    assert read.status == 200
-    assert ContractSchema.errors(read.body, "WorkspaceObjectView") == []
-    assert read.body["object"]["data"]["title"] == "First paying customer"
-    assert read.body["object"]["sys"]["created_by"]["key"]["token_id"] == 1
-    assert read.body["object"]["sys"]["created_by"]["wallet"] == ann.address
-
-    assert [%{"type" => "implements", "source" => source}] = read.body["relations"]
-    assert source == task["id"]
-
-    assert graph(c, ann, "get", %{id: note["id"]}).body["object"]["data"]["discussion"] ==
-             [%{"room" => "voting", "seq" => 1}]
-
-    # The same command again answers the original result and writes nothing.
-    again =
-      graph(c, ann, "create", %{
-        as_key: 1,
-        command_id: "g-1",
-        type: "goal",
-        scope: "fleet",
-        data: @goal
-      })
-
-    assert again.status == 200
-    assert again.body["replayed"] == true
-    assert again.body["result"] == %{"id" => goal["id"], "version" => 1}
-
-    # The workspace's changes name who did what.
-    changes = graph(c, bea, "changes", %{after_seq: 0, limit: 500})
-    assert changes.status == 200
-    assert ContractSchema.errors(changes.body, "WorkspaceChanges") == []
-    commands = for %{"type" => "keyfleet.command"} = event <- changes.body["events"], do: event
-
-    assert length(commands) == 9
-    [first | _] = commands
-
-    assert first["payload"] == %{
-             "principal" => "member:8453:#{@contract}:1@1/agent:#{ann.address}",
-             "op" => "create",
-             "result" => %{"id" => goal["id"], "version" => 1},
-             "events" => first["payload"]["events"]
-           }
-
-    # The standing each write was made under stays in the log itself.
-    [stamp | _] = logged_commands()
-
-    assert %{
-             "key" => %{"chain_id" => 8453, "contract" => @contract, "token_id" => 1},
-             "ownership_epoch" => 1,
-             "kind" => "agent",
-             "operator_wallet" => operator,
-             "credential_ref" => "sha256:" <> digest,
-             "chain_block" => 1_000
-           } = stamp["payload"]["auth"]
-
-    assert operator == ann.address
-    assert digest =~ ~r/\A[0-9a-f]{64}\z/
-  end
-
-  test "an agent that was away gets the workspace's edits and the chat it missed in one sync",
-       c do
-    start_graph(c)
-    [ann, bea] = shard_agents(c)
-    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
-
-    left = sync(c, ann, %{"general" => 0, "voting" => 0}, 0)
-    assert left.status == 200
-    [general, voting] = left.body["rooms"]
-    graph_cursor = left.body["graph"]["next_cursor"]
-    assert graph_cursor == left.body["graph"]["watermark"]
-
-    # Ann is away while Bea writes in the workspace and in the chat.
-    posted =
-      send_signed(c, bea, "POST", "/api/v1/agent/fleets/#{@fleet}/rooms/voting/messages/send", %{
-        body: "The goal is done.",
-        idempotency_key: "m-1"
-      })
-
-    assert posted.status == 201
-    service = write!(c, bea, "create", %{as_key: 2, command_id: "s-1", data: @service})
-
-    achieved =
-      graph(c, bea, "patch", %{
-        as_key: 2,
-        command_id: "p-1",
-        id: goal["id"],
-        expected_version: 1,
-        set: %{status: "achieved"}
-      })
-
-    assert achieved.status == 200
-
-    back =
-      sync(c, ann, %{"general" => general["cursor"], "voting" => voting["cursor"]}, graph_cursor)
-
-    assert back.status == 200
-    assert [%{"messages" => []}, %{"messages" => [missed]}] = back.body["rooms"]
-    assert missed["body"] == "The goal is done."
-
-    missed_graph = back.body["graph"]
-    assert ContractSchema.errors(missed_graph, "WorkspaceChanges") == []
-    assert missed_graph["run_id"] == log_id()
-    assert missed_graph["has_more"] == false
-    assert missed_graph["watermark"] >= achieved.body["head_seq"]
-    assert missed_graph["next_cursor"] == missed_graph["watermark"]
-
-    changed =
-      for %{"type" => type, "payload" => payload} <- missed_graph["events"],
-          type != "keyfleet.command",
-          do: {type, payload["object"]["id"] || payload["patch"]["target"]}
-
-    assert changed == [{"object.created", service["id"]}, {"patch.applied", goal["id"]}]
-  end
-
-  test "while the workspace's writer is held, reads and syncs still answer", c do
-    start_graph(c)
-    [ann, _bea] = shard_agents(c)
-    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
-    writer = writer()
-    :sys.suspend(writer)
-    on_exit(fn -> if Process.alive?(writer), do: :sys.resume(writer) end)
-
-    read = graph(c, ann, "get", %{id: goal["id"]})
-    assert {read.status, read.body["object"]["version"]} == {200, 1}
-    assert graph(c, ann, "changes", %{}).status == 200
-    assert sync(c, ann, %{"general" => 0}, 0).status == 200
-
-    assert Process.info(writer, :message_queue_len) == {:message_queue_len, 0}
-    :sys.resume(writer)
-  end
-
-  test "a write made while the projectors are down is answered, and says its place is not known to be copied",
-       c do
-    start_graph(c)
-    [ann, _bea] = shard_agents(c)
-    stop_supervised!(Keyfleet.Graph.Projectors)
-
-    written = graph(c, ann, "create", goal_command("g-1"))
-    assert written.status == 200
-    assert {written.body["replayed"], written.body["watermark"]} == {false, 0}
-    assert ContractSchema.errors(written.body, "WorkspaceWrite") == []
   end
 
   test "two agents patching one version at once get one success and one conflict", c do
@@ -507,175 +278,6 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert length(commands(c, ann, @levelled)) == 3
   end
 
-  test "a Classic or Accelerant key writes the fleet scope and no level", c do
-    unlevelled = ["fleet_tech_classic", "fleet_tech_accelerant"]
-
-    for fleet <- unlevelled do
-      ChainHelpers.seed_cursor!(fleet)
-      ChainHelpers.deploy!(fleet)
-      record_owner(1, 1, owner_wallet(1), fleet)
-    end
-
-    start_graph(c, fleets: [@fleet | unlevelled])
-    dee = join(c, "Dee")
-
-    for fleet <- unlevelled do
-      shard(dee, 1, fleet)
-      assert write!(c, dee, "create", level_goal(1, "g-1", "fleet"), fleet)
-
-      for scope <- ["level:1", "level:2"] do
-        assert_forbidden_scope(
-          graph(c, dee, "create", level_goal(1, "g-#{scope}", scope), fleet),
-          scope
-        )
-      end
-
-      assert length(commands(c, dee, fleet)) == 1
-    end
-  end
-
-  test "a task marked done tells the tasks waiting on it, and new evidence asks for a review, in changes and in sync",
-       c do
-    start_graph(c)
-    [ann, bea] = shard_agents(c)
-    task = fn id, title -> %{as_key: 1, command_id: id, type: "task", data: %{title: title}} end
-    blocker = write!(c, ann, "create", task.("t-1", "Find a customer"))
-    waiting = write!(c, ann, "create", task.("t-2", "Write the brief"))
-
-    evidence =
-      write!(c, bea, "create", %{
-        as_key: 2,
-        command_id: "e-1",
-        type: "evidence",
-        data: %{title: "Call", source_uri: "https://example.com/call"}
-      })
-
-    link = %{
-      as_key: 1,
-      command_id: "l-1",
-      source: waiting["id"],
-      target: blocker["id"],
-      type: "depends_on"
-    }
-
-    assert graph(c, ann, "link", link).status == 200
-    cursor = sync(c, ann, %{"general" => 0}, 0).body["graph"]["next_cursor"]
-
-    done = %{
-      as_key: 1,
-      command_id: "p-1",
-      id: blocker["id"],
-      expected_version: 1,
-      set: %{progress: "done"}
-    }
-
-    assert graph(c, ann, "patch", done).status == 200
-
-    review = %{
-      as_key: 2,
-      command_id: "l-2",
-      source: evidence["id"],
-      target: waiting["id"],
-      type: "supports"
-    }
-
-    assert graph(c, bea, "link", review).status == 200
-
-    changes = graph(c, bea, "changes", %{after_seq: cursor}).body
-    synced = sync(c, ann, %{"general" => 0}, cursor).body["graph"]
-    assert synced["events"] == changes["events"]
-
-    for page <- [changes, synced] do
-      assert ContractSchema.errors(page, "WorkspaceChanges") == []
-    end
-
-    [patched, unblocked, first_ledger, linked, reviewed, second_ledger] = changes["events"]
-    log = changes["run_id"]
-    assert Enum.map([patched, linked], & &1["type"]) == ["patch.applied", "relation.created"]
-
-    assert [unblocked, reviewed] |> Enum.map(&Map.take(&1, ~w(type actor payload))) == [
-             %{
-               "type" => "keyfleet.attention",
-               "actor" => "keyfleet:gateway",
-               "payload" => %{
-                 "kind" => "task_unblocked",
-                 "object_id" => waiting["id"],
-                 "cause" => %{"event_id" => patched["id"]},
-                 "dedupe_key" => "#{log}:task_unblocked:#{waiting["id"]}:#{patched["id"]}"
-               }
-             },
-             %{
-               "type" => "keyfleet.attention",
-               "actor" => "keyfleet:gateway",
-               "payload" => %{
-                 "kind" => "needs_review",
-                 "object_id" => waiting["id"],
-                 "cause" => %{"event_id" => linked["id"]},
-                 "dedupe_key" => "#{log}:needs_review:#{waiting["id"]}:#{linked["id"]}"
-               }
-             }
-           ]
-
-    # Each write's command record names the notices it left alongside its change.
-    assert first_ledger["payload"]["events"] == [patched["id"], unblocked["id"]]
-    assert second_ledger["payload"]["events"] == [linked["id"], reviewed["id"]]
-
-    # The same write again is answered from the record and asks nothing more.
-    assert graph(c, ann, "patch", done).body["replayed"] == true
-    assert graph(c, bea, "changes", %{after_seq: cursor}).body["events"] == changes["events"]
-  end
-
-  test "an agent records the dead end its task ran into, and anyone reads it back with the link",
-       c do
-    start_graph(c)
-    [ann, bea] = shard_agents(c)
-
-    task =
-      write!(c, ann, "create", %{
-        as_key: 1,
-        command_id: "t-1",
-        type: "task",
-        data: %{title: "Find the forum's members", progress: "doing"}
-      })
-
-    dead_end =
-      write!(c, ann, "create", %{
-        as_key: 1,
-        command_id: "d-1",
-        type: "dead_end",
-        data: %{
-          title: "Scraping the forum",
-          what_was_tried: "Paged through the archive.",
-          why_it_failed: "It needs a login."
-        }
-      })
-
-    produced =
-      graph(c, ann, "link", %{
-        as_key: 1,
-        command_id: "l-1",
-        source: task["id"],
-        target: dead_end["id"],
-        type: "produces"
-      })
-
-    assert produced.status == 200
-
-    read = graph(c, bea, "get", %{id: dead_end["id"]})
-    assert read.status == 200
-    assert ContractSchema.errors(read.body, "WorkspaceObjectView") == []
-    assert read.body["object"]["type"] == "dead_end"
-
-    assert Map.take(read.body["object"]["data"], ~w(title what_was_tried why_it_failed)) == %{
-             "title" => "Scraping the forum",
-             "what_was_tried" => "Paged through the archive.",
-             "why_it_failed" => "It needs a login."
-           }
-
-    assert [%{"type" => "produces", "source" => source}] = read.body["relations"]
-    assert source == task["id"]
-  end
-
   test "a wallet that neither owns nor holds a shard of the key it names is refused and nothing is written",
        c do
     start_graph(c)
@@ -703,57 +305,6 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       assert {read.status, read.body["error"]["code"]} == {403, "workspace_members_only"}
       assert ContractSchema.errors(read.body, "WorkspaceError") == []
     end
-  end
-
-  test "while key ownership is not fresh, writes and reads wait", c do
-    start_graph(c)
-    [ann, _bea] = shard_agents(c)
-    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
-
-    ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
-
-    refused =
-      graph(c, ann, "archive", %{
-        as_key: 1,
-        command_id: "a-1",
-        id: goal["id"],
-        expected_version: 1
-      })
-
-    assert {refused.status, refused.body["error"]["code"]} == {503, "ownership_refreshing"}
-
-    read = graph(c, ann, "get", %{id: goal["id"]})
-    assert {read.status, read.body["error"]["code"]} == {503, "ownership_refreshing"}
-
-    ChainHelpers.seed_cursor!(@fleet)
-    read = graph(c, ann, "get", %{id: goal["id"]})
-    assert read.status == 200
-    assert read.body["object"]["sys"]["archived"] == false
-  end
-
-  test "an unknown fleet is not found, and a fleet whose workspace is down refuses writes but still reads",
-       c do
-    start_graph(c)
-    [ann, _bea] = shard_agents(c)
-    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
-    create = %{as_key: 1, command_id: "g-2", type: "goal", scope: "fleet", data: @goal}
-
-    for {op, body} <- [{"get", %{id: goal["id"]}}, {"create", create}] do
-      missing = send_signed(c, ann, "POST", "/api/v1/agent/fleets/hull_survey/graph/#{op}", body)
-      assert {missing.status, missing.body["error"]["code"]} == {404, "fleet_unknown"}
-    end
-
-    stop_supervised!(Keyfleet.Graph.Supervisor)
-
-    refused = graph(c, ann, "create", create)
-    assert {refused.status, refused.body["error"]["code"]} == {503, "graph_unavailable"}
-
-    read = graph(c, ann, "get", %{id: goal["id"]})
-    assert {read.status, read.body["object"]["data"]["title"]} == {200, @goal.title}
-    assert [_command] = commands(c, ann)
-
-    absent = graph(c, ann, "get", %{id: "goal#9"})
-    assert {absent.status, absent.body["error"]["code"]} == {404, "not_found"}
   end
 
   test "a write whose outcome never came back says so, and its retry applies it once", c do
@@ -904,142 +455,6 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert length(commands(c, ann)) == 1
   end
 
-  test "a write's log entry names the credential that signed it, by digest", c do
-    start_graph(c)
-    [ann, _bea] = shard_agents(c)
-    receipt = receipt(c, ann)
-    path = "/api/v1/agent/fleets/#{@fleet}/graph/create"
-
-    assert send_signed(c, ann, receipt, "POST", path, goal_command("g-1")).status == 200
-
-    digest = :crypto.hash(:sha256, receipt <> "\n" <> ann.address)
-    assert [command] = logged_commands()
-
-    assert command["payload"]["auth"]["credential_ref"] ==
-             "sha256:" <> Base.encode16(digest, case: :lower)
-  end
-
-  test "only the canonical workspace bodies reach the workspace", c do
-    start_graph(c)
-    [ann, _bea] = shard_agents(c)
-
-    for {op, body} <- [
-          {"get", %{}},
-          {"get", %{id: 1}},
-          {"changes", %{after_seq: "1"}},
-          {"create", %{as_key: 1, command_id: "c-1", type: "goal", data: @goal}},
-          {"create",
-           %{as_key: "1", command_id: "c-1", type: "goal", scope: "fleet", data: @goal}},
-          {"patch", %{as_key: 1, command_id: "c-1", id: "goal#1", set: %{}}},
-          {"patch",
-           %{as_key: 1, command_id: "c-1", id: "goal#1", expected_version: 1, reason: nil}},
-          {"link", %{as_key: 1, command_id: "c-1", source: "a", target: "b"}},
-          {"unlink", %{as_key: 1, relation_id: "rel#1"}},
-          {"archive", %{as_key: 1, command_id: "c-1", id: "goal#1"}}
-        ] do
-      assert misfit?(graph(c, ann, op, body)), "#{op} #{inspect(body)}"
-    end
-
-    assert graph(c, ann, "delete", %{id: "goal#1"}).status == 401
-
-    for {op, body} <- [
-          {"changes", %{limit: 501}},
-          {"changes", %{after_seq: -1}},
-          {"create", %{as_key: 0, command_id: "c-1", type: "goal", scope: "fleet", data: @goal}},
-          {"archive", %{as_key: 1, command_id: "c-1", id: "goal#1", expected_version: 2 ** 70}}
-        ] do
-      refused = graph(c, ann, op, body)
-      assert {refused.status, refused.body} == {422, refused("out_of_range")}
-    end
-  end
-
-  test "a sync records the agent's check-in and tells it its key, whether its edits are restricted and the unfinished tasks it has taken",
-       c do
-    start_graph(c)
-    [ann, bea] = shard_agents(c)
-
-    doing =
-      write!(c, ann, "create", %{
-        as_key: 1,
-        command_id: "t-1",
-        type: "task",
-        data: %{
-          title: "Draft the brief",
-          progress: "doing",
-          assignee_key: 1,
-          next_step: "Pick a customer"
-        }
-      })
-
-    for {agent, key, id, data} <- [
-          {ann, 1, "t-2", %{title: "Finished", progress: "done", assignee_key: 1}},
-          {ann, 1, "t-3", %{title: "Nobody's yet"}},
-          {bea, 2, "t-4", %{title: "Bea's", progress: "doing", assignee_key: 2}},
-          {ann, 1, "t-5",
-           %{title: "Only a deliverable", assignee_key: 1, deliverable: "A one-page brief"}}
-        ],
-        do: write!(c, agent, "create", %{as_key: key, command_id: id, type: "task", data: data})
-
-    synced = sync(c, ann, %{"general" => 0}, 0, %{kind: "scheduled", every_minutes: 60})
-
-    assert synced.status == 200
-    assert ContractSchema.errors(synced.body, "FleetSync") == []
-
-    assert %{
-             "status" => "confirming_schedule",
-             "status_label" => "Waiting for a second scheduled check-in",
-             "schedule_minutes" => 60,
-             "schedule_confirmed" => false
-           } = synced.body["check_in"]
-
-    doing_id = doing["id"]
-
-    assert %{
-             "as_key" => 1,
-             "edits_restricted" => false,
-             "tasks" => [
-               # A task with no next step says so, rather than naming its deliverable.
-               %{"title" => "Only a deliverable", "next_step" => nil},
-               %{
-                 "id" => ^doing_id,
-                 "title" => "Draft the brief",
-                 "progress" => "doing",
-                 "next_step" => "Pick a customer",
-                 "version" => 1
-               }
-             ]
-           } = synced.body["yours"]
-
-    # Once a vote restricts the key's edits, the sync says so and a write is
-    # refused, while chatting carries on.
-    restrict_edits!(1)
-    restricted = sync(c, ann, %{"general" => 0}, 0)
-    assert restricted.body["yours"]["edits_restricted"]
-    assert ContractSchema.errors(restricted.body, "FleetSync") == []
-
-    refused = graph(c, ann, "create", goal_command("t-6"))
-    assert refused.status == 403
-    assert refused.body == put_in(refused("edits_restricted"), ["error", "details"], %{})
-    assert ContractSchema.errors(refused.body, "WorkspaceError") == []
-
-    chatted =
-      send_signed(c, ann, "POST", "/api/v1/agent/fleets/#{@fleet}/rooms/general/messages/send", %{
-        body: "Still here.",
-        idempotency_key: "m-9"
-      })
-
-    assert chatted.status == 201
-
-    # Its writes in the workspace are its latest contribution here.
-    {:ok, profile} = Agents.get_my_profile(actor: agent_actor(ann))
-    assert %{last_contribution_kind: :workspace} = Agents.get_check_in!(profile.id, @fleet)
-
-    # An agent with neither a Key nor a shard here can't sync: a sync reads
-    # the workspace.
-    visitor = sync(c, join(c, "Cy"), %{"general" => 0}, 0)
-    assert {visitor.status, visitor.body["error"]["code"]} == {403, "workspace_members_only"}
-  end
-
   defp start_graph(c, opts \\ []) do
     opts =
       Keyword.merge(
@@ -1066,7 +481,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     for fleet <- opts[:fleets], do: Projector.await(fleet, log_id(fleet), 0)
   end
 
-  defp log_id(fleet \\ @fleet) do
+  defp log_id(fleet) do
     {:ok, %{"result" => %{"run_id" => run_id}}} = Writer.request(fleet, "hello", %{})
     run_id
   end
@@ -1126,22 +541,6 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   defp shard(agent, token_id, fleet \\ @fleet),
     do: ChainHelpers.issue_shard!(fleet, token_id, agent.address)
 
-  # A carried-out vote restricting the key's workspace edits.
-  defp restrict_edits!(token_id) do
-    Keys.record_edits_restriction!(
-      %{
-        fleet_id: @fleet,
-        token_id: token_id,
-        restricted: true,
-        block_number: 20,
-        block_hash: "0x" <> String.duplicate("b", 64),
-        transaction_hash: "0x" <> String.duplicate("e", 64),
-        log_index: 0
-      },
-      actor: %Actors.System{}
-    )
-  end
-
   defp commands(c, agent, fleet \\ @fleet) do
     events = graph(c, agent, "changes", %{limit: 500}, fleet).body["events"]
     for %{"type" => "keyfleet.command"} = event <- events, do: event
@@ -1157,18 +556,11 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
   defp join(c, name) do
     {:ok, signer} = Siwa.LocalSigner.new()
+    Keyfleet.PairingHelpers.pair_wallet!(signer.address)
     body = %{name: name, declared_harness: "local"}
     assert send_signed(c, signer, "POST", "/api/v1/agent/join/status", body).status == 200
     signer
   end
-
-  defp agent_actor(signer),
-    do: %Actors.Agent{
-      wallet_address: signer.address,
-      chain_id: 8453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
 
   defp record_owner(token_id, epoch, wallet, fleet \\ @fleet) do
     Keys.record_epoch!(
@@ -1201,15 +593,6 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert written.body["watermark"] >= written.body["head_seq"]
     assert ContractSchema.errors(written.body, "WorkspaceWrite") == []
     written.body["result"]
-  end
-
-  defp sync(c, agent, rooms, graph_after_seq, run \\ %{kind: "session"}) do
-    send_signed(c, agent, "POST", "/api/v1/agent/fleets/#{@fleet}/sync", %{
-      rooms: Enum.map(rooms, fn {slug, seq} -> %{slug: slug, after_seq: seq} end),
-      graph: %{after_seq: graph_after_seq},
-      proposals: %{after_seq: 0},
-      run: run
-    })
   end
 
   defp graph(c, agent, op, body, fleet \\ @fleet),

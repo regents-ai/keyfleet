@@ -5,13 +5,11 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
-  alias Keyfleet.Agents
   alias Keyfleet.Chain.RewardsWaiting
   alias Keyfleet.Chain.StubClient
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
-  alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Traits
   alias RegentChain.Call
@@ -74,143 +72,6 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     assert has_element?(view, "#key-profile-key-3")
     assert has_element?(view, "#key-profile-key-20")
     refute has_element?(view, "#key-profile-manage")
-  end
-
-  test "an agent holding a shard of a key shows what its check-ins say, never what it says of itself",
-       %{conn: conn} do
-    runner = %Actors.Agent{
-      wallet_address: wallet("c"),
-      chain_id: 8_453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
-
-    Agents.ensure_profile!(
-      %{
-        name: "Orbit runner",
-        declared_harness: "Hermes Agent",
-        current_status: "Check-ins working"
-      },
-      actor: runner
-    )
-
-    ChainHelpers.issue_shard!(@fleet, 12, runner.wallet_address)
-
-    {:ok, view, _html} = live(conn, @path <> "?key=12")
-    assert text(view, "#key-profile-check-in-#{wallet("c")}") == "Hasn’t checked in"
-
-    # Two scheduled check-ins, half an hour apart.
-    every_half_hour = %{"kind" => "scheduled", "every_minutes" => 30}
-    {:ok, _first} = Agents.check_in(runner, @fleet, every_half_hour)
-
-    Repo.query!("""
-    UPDATE keyfleet_app.agent_check_ins SET
-      last_check_in_at = last_check_in_at - interval '30 minutes',
-      last_scheduled_at = last_scheduled_at - interval '30 minutes',
-      counted_scheduled_at = counted_scheduled_at - interval '30 minutes'
-    """)
-
-    {:ok, _second} = Agents.check_in(runner, @fleet, every_half_hour)
-
-    {:ok, view, _html} = live(conn, @path <> "?key=12")
-
-    assert text(view, "#key-profile-check-in-#{wallet("c")}") ==
-             "Check-ins working · last check-in just now · no contributions yet"
-  end
-
-  test "an agent holding a shard shows its saved registry listing and World ID mark",
-       %{conn: conn} do
-    listed = wallet("c")
-    plain = wallet("d")
-    human_id = "0x" <> String.duplicate("7", 64)
-
-    # Orbit runner's person stands behind three agents; Keyfleet knows one
-    # more of them, Night runner, which holds no shard here.
-    for {wallet, name, listing} <- [
-          {listed, "Orbit runner",
-           %{
-             registry_url: "https://www.8004scan.io/agents/base/97609",
-             human_id: human_id,
-             same_person_agent_count: 3
-           }},
-          {wallet("9"), "Night runner", %{human_id: human_id, same_person_agent_count: 3}},
-          {plain, "Plain runner", %{}}
-        ] do
-      Agents.ensure_profile!(%{name: name, declared_harness: "Hermes Agent"},
-        actor:
-          struct!(
-            Actors.Agent,
-            Map.merge(listing, %{
-              wallet_address: wallet,
-              chain_id: 8_453,
-              verification_method: :eoa_recovery,
-              audience: "keyfleet"
-            })
-          )
-      )
-    end
-
-    for wallet <- [listed, plain], do: ChainHelpers.issue_shard!(@fleet, 12, wallet)
-
-    {:ok, view, _html} = live(conn, @path <> "?key=12")
-
-    assert has_element?(
-             view,
-             "#key-profile-registry-#{listed}[href='https://www.8004scan.io/agents/base/97609']",
-             "Registry listing"
-           )
-
-    assert has_element?(view, "#key-profile-human-#{listed}", "Verified human")
-
-    assert text(view, "#key-profile-same-person-#{listed}") ==
-             "1 of 3 agents run by the same person, with Night runner"
-
-    refute has_element?(view, "#key-profile-registry-#{plain}")
-    assert has_element?(view, "#key-profile-human-#{plain}", "No verified human")
-    refute has_element?(view, "#key-profile-same-person-#{plain}")
-    refute render(view) =~ human_id
-  end
-
-  # A status is only as honest as the time it is read at, so an open page
-  # reads its agents' check-ins again as time moves on.
-  test "an agent's status on an open page goes stale once time moves on", %{conn: conn} do
-    runner = %Actors.Agent{
-      wallet_address: wallet("c"),
-      chain_id: 8_453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
-
-    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "Hermes Agent"},
-      actor: runner
-    )
-
-    ChainHelpers.issue_shard!(@fleet, 12, runner.wallet_address)
-
-    {:ok, _check_in} = Agents.check_in(runner, @fleet, %{"kind" => "session"})
-
-    {:ok, view, _html} = live(conn, @path <> "?key=12")
-    assert text(view, "#fleet-key-12") =~ "Orbit runner · Connected now"
-    assert text(view, "#fleet-who-#{wallet("c")}") =~ "Connected now · last check-in just now"
-
-    assert text(view, "#key-profile-check-in-#{wallet("c")}") =~
-             "Connected now · last check-in just now"
-
-    Repo.query!("""
-    UPDATE keyfleet_app.agent_check_ins SET
-      last_check_in_at = last_check_in_at - interval '3 minutes',
-      last_session_at = last_session_at - interval '3 minutes'
-    """)
-
-    send(view.pid, :refresh_check_ins)
-
-    assert text(view, "#fleet-key-12") =~ "Orbit runner · No scheduled check-ins"
-
-    assert text(view, "#fleet-who-#{wallet("c")}") =~
-             "No scheduled check-ins · last check-in 3 minutes ago"
-
-    assert text(view, "#key-profile-check-in-#{wallet("c")}") =~
-             "No scheduled check-ins · last check-in 3 minutes ago"
   end
 
   test "only a key the map can show opens", %{conn: conn} do

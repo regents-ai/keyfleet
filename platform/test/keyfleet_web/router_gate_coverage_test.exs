@@ -25,6 +25,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
              {:get, "/healthz"},
              {:get, "/sitemap.xml"},
              {:get, "/robots.txt"},
+             {:get, "/agents.md"},
              {:get, "/.well-known/security.txt"},
              {:get, "/.well-known/hub-jwks.json"},
              {:get, "/metadata/collection.json"},
@@ -39,7 +40,9 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     # Every page a browser opens is sent to the early-access page, and every
     # other address answers 503.
     assert for({:get, path, :to_early} <- answers, do: path) ==
-             ~w(/help /docs /fleets/:file /fleets/:fleet_id/rooms / /account /about /opportunities) ++
+             ~w(/admin/errors /admin/errors/:id /admin/errors/:id/:occurrence_id /app) ++
+               ~w(/help /docs /fleets/:file /fleets/:fleet_id/rooms / /account) ++
+               ~w(/account/points /account/wallets /account/connections /about /opportunities) ++
                ~w(/app/fleets/:fleet_id /app/keys/:fleet_id/:token_id) ++
                ~w(/app/keys/:fleet_id/:token_id/dms) ++
                ~w(/app/keys/:fleet_id/:token_id/dms/:other_token_id) ++

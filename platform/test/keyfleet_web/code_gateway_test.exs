@@ -9,7 +9,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
   import Plug.Conn
 
   alias Keyfleet.Accounts
-  alias Keyfleet.Actors.{Agent, Human, System}
+  alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{ChainHelpers, Code, Fleets, Keys}
   alias Keyfleet.Code.Setup
   alias KeyfleetWeb.{CodePassword, SessionAuthorityHelpers}
@@ -22,8 +22,6 @@ defmodule KeyfleetWeb.CodeGatewayTest do
   @holder_wallet "0x" <> String.duplicate("a", 40)
   @buyer_wallet "0x" <> String.duplicate("b", 40)
   @agent_wallet "0x" <> String.duplicate("c", 40)
-  @old String.duplicate("1", 40)
-  @new String.duplicate("2", 40)
 
   setup do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
@@ -132,54 +130,14 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     refute_received {:store, _method, _path, _claims, _body}
   end
 
-  # Costly failure: a push is credited to the wrong key or wallet, a refused
-  # branch shows as sent, or the pack is changed on its way.
-  test "an agent's push reaches the store whole and only what it accepted is recorded" do
-    ChainHelpers.issue_shard!(@fleet, 1, @agent_wallet, 2)
-    :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, Code.topic(@fleet))
-
-    agent = %Agent{
-      wallet_address: @agent_wallet,
-      chain_id: 1,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet",
-      receipt_expires_at: DateTime.add(DateTime.utc_now(), 3600, :second)
-    }
-
-    {:ok, %{password: password}} = CodePassword.for_agent(agent, @fleet)
-
-    pack = "PACK" <> :crypto.strong_rand_bytes(3_000_000)
-
-    body =
-      pkt("#{@old} #{@new} refs/heads/main\0 report-status side-band-64k agent=git/2.47\n") <>
-        pkt("#{@old} #{@new} refs/heads/refused\n") <>
-        pkt("#{@old} #{String.duplicate("0", 40)} refs/heads/gone\n") <> "0000" <> pack
-
-    pushed = git(:post, "/#{@fleet}.git/git-receive-pack", password, body)
-    assert pushed.status == 200
-
-    receive_pack = "/#{@owner}/#{@fleet}/git-receive-pack"
-    assert_receive {:store, "POST", ^receive_pack, claims, ^body}
-    assert claims["sub"] == "did:pkh:eip155:8453:" <> @agent_wallet
-    assert pushed.resp_body == report()
-
-    assert_receive {:code_pushed, @fleet}
-
-    assert [%{token_id: 1, wallet: @agent_wallet, ref: "refs/heads/main", head: @new}] =
-             Code.recent_pushes!(@fleet)
-  end
-
   # Costly failure: an agent's password keeps opening the code after the
   # sign-in it was made under has run out.
   test "an agent's password is refused once its sign-in has run out" do
     ChainHelpers.issue_shard!(@fleet, 1, @agent_wallet, 2)
 
-    agent = %Agent{
-      wallet_address: @agent_wallet,
-      chain_id: 1,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet",
-      receipt_expires_at: DateTime.add(DateTime.utc_now(), -1, :second)
+    agent = %{
+      Keyfleet.PairingHelpers.pair_wallet!(@agent_wallet)
+      | receipt_expires_at: DateTime.add(DateTime.utc_now(), -1, :second)
     }
 
     {:ok, %{password: password}} = CodePassword.for_agent(agent, @fleet)

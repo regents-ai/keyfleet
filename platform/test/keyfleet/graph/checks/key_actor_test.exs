@@ -123,10 +123,11 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
     fleet = "fleet_tech_classic"
     sell(fleet, 1..2)
     helper = agent("9")
-    paired = %{helper | pairing: owner(1)}
 
     assert {:error, %NotKeyHolderError{}} = KeyActor.command(helper, fleet, 1, "c-1", 1_000)
     assert KeyActor.member(helper, fleet, 1_000) == {:ok, false}
+
+    paired = Keyfleet.PairingHelpers.pair!(helper, owner(1).wallet_addresses)
 
     assert {:ok, %{auth: %{kind: "agent", operator_wallet: operator}, principal: principal}} =
              KeyActor.command(paired, fleet, 1, "c-1", 1_000)
@@ -145,7 +146,7 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
   test "a paired agent holding a shard in the fleet acts as that shard, never as its person" do
     fleet = "fleet_tech_classic"
     sell(fleet, 1..2)
-    paired = %{agent("9") | pairing: owner(1)}
+    paired = Keyfleet.PairingHelpers.pair!(agent("9"), owner(1).wallet_addresses)
     ChainHelpers.issue_shard!(fleet, 2, paired.wallet_address)
 
     assert {:ok, _command} = KeyActor.command(paired, fleet, 2, "c-1", 1_000)

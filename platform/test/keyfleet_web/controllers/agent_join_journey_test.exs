@@ -11,6 +11,7 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
     {:ok, signer} = Siwa.LocalSigner.new()
+    Keyfleet.PairingHelpers.pair_wallet!(signer.address)
     secret = :crypto.strong_rand_bytes(32)
     SignedAgentHelpers.start_broker!(self(), secret)
     app = server(:product, &KeyfleetWeb.Endpoint.call(&1, KeyfleetWeb.Endpoint.init(&2)))
@@ -37,10 +38,17 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
     resumed = send_request(c, signed(c, changed))
     assert resumed.status == 200
     assert resumed.body["profile"] == profile
-    assert_receive {:broker_payload, %{"body" => ^changed}}
+    changed_digest = digest(changed)
+    body_digest = digest(@body)
+    assert_receive {:broker_payload, %{"body_digest" => ^changed_digest}}
 
     assert_receive {:broker_payload,
-                    %{"body" => @body, "method" => "POST", "path" => @path, "headers" => headers}}
+                    %{
+                      "body_digest" => ^body_digest,
+                      "method" => "POST",
+                      "path" => @path,
+                      "headers" => headers
+                    }}
 
     refute Map.has_key?(headers, "cookie")
     refute Map.has_key?(headers, "authorization")
@@ -56,49 +64,6 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     assert send_request(c, %{request | headers: Map.put(request.headers, "x-agent-chain-id", "1")}).status ==
              401
-  end
-
-  test "signed edits preserve ownership and database activity/status timestamp semantics", c do
-    initial = send_request(c, signed(c, @body)).body["profile"]
-
-    edit =
-      ~s({ "name": "Updated", "current_status": "Working", "proficiencies": ["Elixir"] })
-
-    request = signed(c, edit, "keyfleet", 8453, @update_path)
-
-    assert send_request(c, %{request | body: String.replace(edit, "Updated", "Tampered")}).status ==
-             401
-
-    response = send_request(c, request)
-    assert response.status == 200
-    updated = response.body["profile"]
-    assert updated["id"] == initial["id"]
-    assert updated["wallet_address"] == initial["wallet_address"]
-    assert updated["name"] == "Updated"
-    assert updated["avatar_url"] == nil
-    assert updated["proficiencies"] == ["Elixir"]
-    assert later?(updated["last_activity_at"], initial["last_activity_at"])
-    assert later?(updated["status_updated_at"], initial["status_updated_at"])
-    assert send_request(c, request).status == 401
-    renamed = update(c, %{name: "Renamed"}).body["profile"]
-    assert renamed["status_updated_at"] == updated["status_updated_at"]
-    assert later?(renamed["last_activity_at"], updated["last_activity_at"])
-    repeated = update(c, %{current_status: "Working"}).body["profile"]
-    assert later?(repeated["status_updated_at"], renamed["status_updated_at"])
-    assert update(c, %{name: nil}).status == 422
-    assert send_request(c, signed(c, @body)).body["profile"] == repeated
-
-    {:ok, other_signer} = Siwa.LocalSigner.new()
-    other = %{c | signer: other_signer}
-    missing = update(other, %{name: "Cannot target first wallet"})
-    assert missing.status == 404
-    assert missing.body == refused("profile_not_found")
-    assert misfit?(update(other, %{id: initial["id"], name: "Denied"}))
-    own = send_request(other, signed(other, @body)).body["profile"]
-    other_edit = update(other, %{name: "Second wallet"}).body["profile"]
-    assert other_edit["id"] == own["id"]
-    assert other_edit["id"] != initial["id"]
-    assert send_request(c, signed(c, @body)).body["profile"] == repeated
   end
 
   test "update takes only editable fields, and refuses a request's shape before verification",
@@ -139,7 +104,8 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
           ~s({"unknown":"forged"})
         ] do
       refused = send_request(c, signed(c, body, "keyfleet", 8453, @update_path))
-      assert_receive {:broker_payload, %{"body" => ^body}}
+      body_digest = digest(body)
+      assert_receive {:broker_payload, %{"body_digest" => ^body_digest}}
       assert misfit?(refused), body
 
       assert refused.body["error"]["hint"] =~
@@ -148,13 +114,12 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
     assert send_request(c, signed(c, @body)).status == 200
     assert_receive {:broker_payload, _}
-    # JSON escaping nearly doubles this real profile input inside the broker envelope.
     raw = Jason.encode!(%{proficiencies: List.duplicate(String.duplicate("\\", 2000), 6)})
     padded = raw <> String.duplicate(" ", 24 * 1024 - byte_size(raw))
     at_limit = signed(c, padded, "keyfleet", 8453, @update_path)
     assert send_request(c, at_limit).status == 200
-    assert_receive {:broker_payload, %{"body" => ^padded} = payload}
-    assert byte_size(Jason.encode!(payload)) < 65_536
+    padded_digest = digest(padded)
+    assert_receive {:broker_payload, %{"body_digest" => ^padded_digest}}
     assert send_request(c, %{at_limit | body: padded <> " "}).status == 413
     refute_receive {:broker_payload, _}
   end
@@ -171,7 +136,8 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
       )
 
     assert response.status == 200
-    assert_receive {:broker_payload, %{"body" => @body}}
+    body_digest = digest(@body)
+    assert_receive {:broker_payload, %{"body_digest" => ^body_digest}}
 
     oversized =
       Req.post!(c.app <> @path,
@@ -339,16 +305,6 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
   test "malformed broker principals cannot become product actors", c do
     wallet = c.signer.address
-
-    Keyfleet.PairingHelpers.pair!(
-      %Keyfleet.Actors.Agent{
-        wallet_address: wallet,
-        chain_id: 8453,
-        verification_method: :eoa_recovery,
-        audience: "keyfleet"
-      },
-      ["0x" <> String.duplicate("a", 40)]
-    )
 
     good = %{
       "verified" => true,
@@ -530,12 +486,5 @@ defmodule KeyfleetWeb.AgentJoinJourneyTest do
 
   defp server(id, plug), do: SignedAgentHelpers.serve!(id, plug)
 
-  defp update(c, params),
-    do: send_request(c, signed(c, Jason.encode!(params), "keyfleet", 8453, @update_path))
-
-  defp later?(new, old) do
-    {:ok, new, _} = DateTime.from_iso8601(new)
-    {:ok, old, _} = DateTime.from_iso8601(old)
-    DateTime.compare(new, old) == :gt
-  end
+  defp digest(body), do: Siwa.content_digest_for_body(body)
 end

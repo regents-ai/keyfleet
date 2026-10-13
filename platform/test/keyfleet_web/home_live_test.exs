@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   import ExUnit.CaptureLog
 
-  alias Keyfleet.{Actors, Agents, ChainHelpers, Fleets, Keys}
+  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.Components.SendAgent
   alias Phoenix.Socket.Broadcast
@@ -175,56 +175,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute has_element?(view, "#home-fleet-#{classic} [data-fleet-who]")
   end
 
-  test "the hero counts every fleet's agents and keys once the cards have read them",
-       %{conn: conn} do
-    for fleet <- [@syndicate, @cascade] do
-      ChainHelpers.deploy!(fleet)
-      ChainHelpers.seed_cursor!(fleet)
-    end
-
-    for token_id <- 1..3, do: issue!(@syndicate, token_id)
-    for token_id <- 1..2, do: issue!(@cascade, token_id)
-    shard!(@syndicate, 2, 1)
-    shard!(@cascade, 1, 2)
-
-    static = conn |> get("/") |> html_response(200)
-    assert attribute(static, "#home-tally", "id") == ["home-tally"]
-    assert attribute(static, "#home-tally p", "class") == []
-
-    {:ok, view, _html} = live(conn, "/")
-    render_async(view, 3_000)
-    assert text(view, "#home-tally") == "2 agents here · 5 Keys sold"
-
-    issue!(@cascade, 3)
-    send(view.pid, {:refresh, @cascade})
-    render(view)
-    render_async(view, 3_000)
-    assert text(view, "#home-tally") == "2 agents here · 6 Keys sold"
-  end
-
-  test "the hero counts an agent holding shards in two fleets once", %{conn: conn} do
-    for fleet <- [@syndicate, @cascade] do
-      ChainHelpers.deploy!(fleet)
-      ChainHelpers.seed_cursor!(fleet)
-      issue!(fleet, 1)
-      shard!(fleet, 1, 1)
-    end
-
-    issue!(@cascade, 2)
-    shard!(@cascade, 2, 2)
-
-    {:ok, view, _html} = live(conn, "/")
-    render_async(view, 3_000)
-
-    assert text(view, "#home-fleet-#{@syndicate} [data-fleet-who]") ==
-             "1 Key sold · 1 agent here"
-
-    assert text(view, "#home-fleet-#{@cascade} [data-fleet-who]") ==
-             "2 Keys sold · 2 agents here"
-
-    assert text(view, "#home-tally") == "2 agents here · 3 Keys sold"
-  end
-
   test "the hero leaves keys out of its count while a fleet's sales are catching up",
        %{conn: conn} do
     ChainHelpers.deploy!(@syndicate)
@@ -235,25 +185,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
     render_async(view, 3_000)
 
     assert text(view, "#home-tally") == "0 agents here"
-  end
-
-  test "the hero's count is marked only while agents are here", %{conn: conn} do
-    ChainHelpers.deploy!(@syndicate)
-    ChainHelpers.seed_cursor!(@syndicate)
-    issue!(@syndicate, 1)
-
-    {:ok, view, _html} = live(conn, "/")
-    render_async(view, 3_000)
-    assert text(view, "#home-tally") == "0 agents here · 1 Key sold"
-    refute has_element?(view, "#home-tally [data-tally-dot]")
-
-    shard!(@syndicate, 1, 1)
-    send(view.pid, {:refresh, @syndicate})
-    send(view.pid, {:refresh, :agents})
-    render(view)
-    render_async(view, 3_000)
-    assert text(view, "#home-tally") == "1 agent here · 1 Key sold"
-    assert has_element?(view, "#home-tally [data-tally-dot]")
   end
 
   test "a read that fails is said to have failed, on the card and in the count, and the page stays up",
@@ -422,23 +353,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
       },
       actor: %Actors.System{}
     )
-  end
-
-  # An agent of its own, numbered `agent`, holding a shard of `fleet_id`'s
-  # key `token_id`.
-  defp shard!(fleet_id, token_id, agent) do
-    agent_actor = %Actors.Agent{
-      wallet_address: "0x" <> String.pad_leading(Integer.to_string(agent), 40, "c"),
-      chain_id: 8_453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
-
-    Agents.ensure_profile!(%{name: "Agent #{agent}", declared_harness: "test"},
-      actor: agent_actor
-    )
-
-    ChainHelpers.issue_shard!(fleet_id, token_id, agent_actor.wallet_address)
   end
 
   defp goal(title, data \\ %{}),

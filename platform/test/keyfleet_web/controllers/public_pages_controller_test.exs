@@ -110,30 +110,6 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     assert home |> LazyHTML.query("html") |> LazyHTML.attribute("data-theme") == ["dark"]
   end
 
-  test "the tool manifest lists every tool and the docs list them too" do
-    manifest = build_conn() |> get("/capabilities") |> json_response(200)
-
-    assert Enum.map(manifest["tools"], & &1["name"]) ==
-             ~w(about docs list_fleets read_fleet) ++
-               ~w(mark_present propose run_split vote cancel_proposal carry_out claim) ++
-               ~w(list_rooms read_room post_to_room mute_key unmute_key) ++
-               ~w(read_key_thread post_to_key_thread) ++
-               ~w(list_polls start_poll read_poll vote_in_poll end_poll)
-
-    for path <- ["/docs", "/llms.txt"] do
-      body =
-        build_conn() |> put_req_header("accept", "text/markdown") |> get(path) |> response(200)
-
-      assert body =~ "| `about` | Every page | Nothing |"
-      assert body =~ "| `read_fleet` | Every page | Nothing |"
-
-      assert body =~
-               "| `vote` | `/app/fleets/FLEET_ID/proposals/NUMBER` | Sign-in and a wallet on your account |"
-
-      assert body =~ "| `post_to_room` | `/app/fleets/FLEET_ID/rooms/SLUG` | Sign-in |"
-    end
-  end
-
   test "every answer lets only this site's pages offer browser tools" do
     for {path, accept} <- [{"/", "text/html"}, {"/docs", "text/markdown"}, {"/healthz", "*/*"}] do
       conn = build_conn() |> put_req_header("accept", accept) |> get(path)

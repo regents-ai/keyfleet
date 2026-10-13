@@ -195,6 +195,7 @@ defmodule Keyfleet.ReleaseTest do
     assert applied_versions(config) == release_versions()
 
     assert table_names(config, "keyfleet_app") == [
+             "account_ens_identities",
              "agent_check_ins",
              "agent_profiles",
              "agent_voting_settings",
@@ -206,6 +207,9 @@ defmodule Keyfleet.ReleaseTest do
              "dm_messages",
              "early_signups",
              "edits_restrictions",
+             "error_tracker_errors",
+             "error_tracker_meta",
+             "error_tracker_occurrences",
              "fleets",
              "graph_cursors",
              "graph_events",
@@ -229,6 +233,7 @@ defmodule Keyfleet.ReleaseTest do
              "proposal_votes",
              "proposal_words",
              "proposals",
+             "quote_requests",
              "rooms",
              "schema_migrations",
              "session_authorities",

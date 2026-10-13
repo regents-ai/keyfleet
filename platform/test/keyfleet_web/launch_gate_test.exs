@@ -49,7 +49,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     end
 
     assert {config, _log} = read_runtime_config(:test)
-    refute Keyword.has_key?(config[:keyfleet], :app_surfaces)
+    refute config |> Keyword.get(:keyfleet, []) |> Keyword.has_key?(:app_surfaces)
 
     System.put_env("KEYFLEET_APP_SURFACES", "on")
     assert {config, log} = read_runtime_config(:test)

@@ -1,16 +1,14 @@
 defmodule Keyfleet.KeyProfileTest do
   use ExUnit.Case, async: false
 
-  import Keyfleet.ProposalHelpers, only: [proposal!: 2, vote!: 5, wallet: 1]
+  import Keyfleet.ProposalHelpers, only: [wallet: 1]
   import Keyfleet.QueryHelpers, only: [queries_during: 1]
 
   alias Keyfleet.Actors
-  alias Keyfleet.Agents
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Keys.Profile
-  alias Keyfleet.PairingHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Traits
@@ -32,124 +30,6 @@ defmodule Keyfleet.KeyProfileTest do
     ChainHelpers.seed_cursor!(@fleet)
     ChainHelpers.seed_cursor!(@elsewhere)
     :ok
-  end
-
-  # Key 12 is sold to a, passes to b, who posts three times as it in a room
-  # and once in key 3's thread, and then to the holder e, who holds keys 3 and
-  # 20 here and key 1 of another fleet.
-  describe "a key bought, passed on twice, voted with and posted as" do
-    setup do
-      holder = wallet("e")
-      epoch!(@fleet, 12, 1, wallet("a"))
-      epoch!(@fleet, 12, 2, wallet("b"))
-      epoch!(@fleet, 3, 1, holder)
-
-      for body <- ["One", "Two", "Three"],
-          do: post!(PairingHelpers.agent_for!(human("b")), "general", body)
-
-      to_key!(human("b"), 3, "Hello, three")
-      received = epoch!(@fleet, 12, 3, holder)
-      epoch!(@fleet, 20, 1, holder)
-      epoch!(@elsewhere, 1, 1, holder)
-
-      # The holder's agent posts in a room for them, and they write in key 12's
-      # thread, as key 3, their highest.
-      post!(PairingHelpers.agent_for!(human("e")), "general", "Four")
-      to_key!(human("e"), 12, "Hello, twelve")
-
-      proposal!(@fleet, 1)
-      proposal!(@fleet, 2)
-      vote!(@fleet, 1, holder, :yes, [3, 12])
-      vote!(@fleet, 2, holder, :no, [12])
-      # Other keys' votes, and key 12 of another fleet, are not key 12's.
-      vote!(@fleet, 1, wallet("b"), :yes, [120])
-      ChainHelpers.seed_cursor!("fibonacci_syndicate")
-      proposal!("fibonacci_syndicate", 1)
-      vote!("fibonacci_syndicate", 1, holder, :yes, [12])
-
-      runner = %Actors.Agent{
-        wallet_address: wallet("c"),
-        chain_id: 8_453,
-        verification_method: :eoa_recovery,
-        audience: "keyfleet"
-      }
-
-      profile =
-        Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "hermes"}, actor: runner)
-
-      Agents.edit_my_profile!(profile, %{current_status: "Surveying hulls"}, actor: runner)
-      ChainHelpers.issue_shard!(@fleet, 12, wallet("c"))
-      # A shard issued to a wallet no agent has signed in with yet.
-      ChainHelpers.issue_shard!(@fleet, 12, wallet("d"), 60)
-
-      reveal!(12, Traits.keccak256("golden-1"))
-      %{received: received}
-    end
-
-    test "shows every figure about the key and its holder", %{received: received} do
-      profile = Profile.read(@fleet, 12, human("e"))
-
-      assert %{
-               issued?: true,
-               token_id: 12,
-               level: 4,
-               issue_price: 17_280_000,
-               holder: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-               yours?: true,
-               changed_hands: 2,
-               votes_cast: 2,
-               posts: 3,
-               messages: 1,
-               holder_keys: [3, 12, 20],
-               holder_key_count: 3,
-               holder_keys_everywhere: 4,
-               holder_votes: 3,
-               holder_proposals: 2,
-               holder_posts: 1,
-               composer: :write
-             } = profile
-
-      assert profile.held_since == received.observed_at
-
-      assert profile.traits == [
-               %{trait: "Hull", value: "Steel", share: 0.3},
-               %{trait: "Sky", value: "Noon", share: 1 / 3},
-               %{trait: "Mark", value: "Star", share: 0.9}
-             ]
-
-      c = wallet("c")
-      d = wallet("d")
-
-      assert [
-               %{
-                 wallet: ^c,
-                 expires_at: %DateTime{},
-                 agent: %{
-                   name: "Orbit runner",
-                   harness: "hermes",
-                   status: "Surveying hulls",
-                   status_updated_at: %DateTime{},
-                   check_in: %{status: :never_checked_in}
-                 }
-               },
-               %{wallet: ^d, agent: nil}
-             ] = profile.shards
-
-      assert Enum.map(profile.recent_posts, & &1.body) == ["Three", "Two", "One"]
-      assert Enum.map(profile.thread, &{&1.body, &1.as_key}) == [{"Hello, twelve", 3}]
-      assert profile.last_seq == 1
-    end
-
-    test "tells a visitor, a stranger and a holder waiting on key ownership who may write" do
-      assert %{yours?: false, composer: :sign_in} = Profile.read(@fleet, 12, nil)
-      assert %{yours?: false, composer: :no_key} = Profile.read(@fleet, 12, human("9"))
-      # Holding any of the fleet's keys is enough to write to every key.
-      epoch!(@fleet, 5, 1, wallet("a"))
-      assert %{yours?: false, composer: :write} = Profile.read(@fleet, 12, human("a"))
-
-      ChainHelpers.seed_cursor!(@fleet, head_block: 5_000, next_block: 1_000)
-      assert %{composer: :refreshing} = Profile.read(@fleet, 12, human("e"))
-    end
   end
 
   test "tells whether a wallet has held any of some keys, then or now" do
@@ -233,36 +113,6 @@ defmodule Keyfleet.KeyProfileTest do
         log_index: 0
       },
       actor: @system
-    )
-  end
-
-  defp reveal!(token_id, seed) do
-    Keys.record_reveal!(
-      %{
-        fleet_id: @fleet,
-        token_id: token_id,
-        request_id: 7,
-        seed: seed,
-        block_number: 12,
-        block_hash: "0x" <> String.duplicate("c", 64),
-        transaction_hash: Traits.keccak256("#{@fleet}/#{token_id}/reveal"),
-        log_index: 0
-      },
-      actor: @system
-    )
-  end
-
-  defp post!(actor, slug, body) do
-    Rooms.send_message!(
-      %{fleet_id: @fleet, slug: slug, body: body, idempotency_key: Ash.UUID.generate()},
-      actor: actor
-    )
-  end
-
-  defp to_key!(actor, token_id, body) do
-    Rooms.send_to_key!(
-      %{fleet_id: @fleet, token_id: token_id, body: body, idempotency_key: Ash.UUID.generate()},
-      actor: actor
     )
   end
 

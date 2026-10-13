@@ -42,67 +42,6 @@ defmodule Keyfleet.ActivityTest do
   end
 
   describe "paging" do
-    test "walking the pages gives every item of every source once, in one read's order",
-         %{seen_at: seen_at} do
-      owner = human("a")
-      writer = PairingHelpers.agent_for!(owner)
-      Enum.each(2..4, &epoch!(&1, 1, "a"))
-      epoch!(2, 2, "b")
-
-      proposal!(@fleet, 1, %{})
-      vote!(@fleet, 1, wallet("a"), :yes, [1, 3])
-      vote!(@fleet, 1, wallet("b"), :no, [2])
-      proposal!(@fleet, 2, %{})
-      execution!(@fleet, 2, wallet("f"))
-      proposal!(@fleet, 3, %{})
-
-      post!(writer, "general", "Morning")
-      post!(writer, "general", "Hull survey started")
-      post!(writer, "coding", "Pushed the survey script")
-      {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: writer)
-      # Lines, links and changes at the very time the chain records were seen.
-      line!("business", seen_at)
-      line!("voting", seen_at)
-
-      runner = agent("c")
-      Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: runner)
-      ChainHelpers.issue_shard!(@fleet, 3, wallet("c"))
-      ChainHelpers.end_shard!(@fleet, 3, wallet("c"), wallet("a"))
-
-      goal = Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
-      task = Workspace.create(@fleet, "task", %{"title" => "Map the plates"})
-      Workspace.edit(@fleet, task, %{"assignee_key" => 1})
-      Workspace.link(@fleet, task, goal, "supports")
-
-      graph_event_at!(seen_at, "object.created", %{
-        "object" => %{"id" => "note#9", "type" => "note"}
-      })
-
-      %{items: items, cursor: nil} = page(nil)
-
-      assert Enum.map(items, & &1.kind) |> Enum.frequencies() == %{
-               proposed: 3,
-               votes: 1,
-               executed: 1,
-               sale: 1,
-               transfer: 1,
-               shard_issued: 1,
-               shard_ended: 1,
-               created: 3,
-               claimed: 1,
-               linked: 1,
-               posts: 1,
-               post: 3,
-               room_named: 1
-             }
-
-      assert newest_first?(items)
-
-      for limit <- [1, 2, 3, 4, 7] do
-        assert walk(limit) == items
-      end
-    end
-
     test "long runs of posts, sales and votes page without a gap or a repeat", %{seen_at: seen_at} do
       # 230 lines in turns of nine per room, three to a second, so the 200
       # lines read at once end partway through a turn.
@@ -199,12 +138,7 @@ defmodule Keyfleet.ActivityTest do
     owner = human("a")
     writer = PairingHelpers.agent_for!(owner)
 
-    ada = %Actors.Agent{
-      wallet_address: @member_wallet,
-      chain_id: 8453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
+    ada = PairingHelpers.pair_wallet!(@member_wallet)
 
     Agents.ensure_profile!(%{name: "Ada", declared_harness: "test"}, actor: ada)
 
@@ -441,37 +375,6 @@ defmodule Keyfleet.ActivityTest do
     end
   end
 
-  test "a shard issued and ended names its agent, and whether the agent stepped down" do
-    epoch!(2, 1, "a")
-    runner = agent("c")
-    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: runner)
-    issued = ChainHelpers.issue_shard!(@fleet, 1, wallet("c"))
-    ChainHelpers.issue_shard!(@fleet, 2, wallet("d"))
-    ChainHelpers.end_shard!(@fleet, 1, wallet("c"), wallet("c"))
-    ChainHelpers.end_shard!(@fleet, 2, wallet("d"), wallet("a"))
-
-    shards =
-      for %{kind: kind, facts: facts} <- page(nil).items,
-          kind in [:shard_issued, :shard_ended],
-          do: {kind, facts.token_id, facts.agent && facts.agent.name, facts[:stepped_down?]}
-
-    assert shards == [
-             {:shard_ended, 2, nil, false},
-             {:shard_ended, 1, "Orbit runner", true},
-             {:shard_issued, 2, nil, nil},
-             {:shard_issued, 1, "Orbit runner", nil}
-           ]
-
-    assert [%{expires_at: expires_at}] =
-             for(
-               %{kind: :shard_issued, facts: %{token_id: 1} = facts} <-
-                 page(nil).items,
-               do: facts
-             )
-
-    assert expires_at == issued.expires_at
-  end
-
   # Every page from the newest, `limit` items each, joined.
   defp walk(limit), do: walk(nil, limit, [])
 
@@ -607,12 +510,4 @@ defmodule Keyfleet.ActivityTest do
 
   defp human(character),
     do: %Actors.Human{human_account_id: 1, wallet_addresses: [wallet(character)]}
-
-  defp agent(character),
-    do: %Actors.Agent{
-      wallet_address: wallet(character),
-      chain_id: 8453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
 end

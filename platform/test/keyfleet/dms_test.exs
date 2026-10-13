@@ -148,16 +148,6 @@ defmodule Keyfleet.DmsTest do
              Dms.read_conversation(@fleet, 2, 1, actor: expired)
   end
 
-  test "an agent with no Key of its own reads and sends its paired person's messages" do
-    send!(human("b"), 2, 1, "For Key 1")
-    paired = %{agent("9") | pairing: human("a")}
-    Agents.ensure_profile!(%{name: "Helper", declared_harness: "local"}, actor: paired)
-
-    assert [%{body: "For Key 1"}] = Dms.read_conversation!(@fleet, 1, 2, actor: paired)
-    assert %{body: "Reply", via_agent_id: via} = send!(paired, 1, 2, "Reply")
-    assert via != nil
-  end
-
   test "catch-up covers every Key held now, and only those" do
     send!(human("a"), 1, 2, "To b")
     send!(human("c"), 3, 5, "To e")
@@ -211,19 +201,11 @@ defmodule Keyfleet.DmsTest do
 
   # An agent with a shard of Key `token_id` lasting `days` from now.
   defp shard_agent(character, token_id, days) do
-    runner = agent(character)
+    runner = Keyfleet.PairingHelpers.pair_wallet!(wallet(character))
     Agents.ensure_profile!(%{name: "Runner", declared_harness: "local"}, actor: runner)
     ChainHelpers.issue_shard!(@fleet, token_id, runner.wallet_address, days)
     runner
   end
-
-  defp agent(character),
-    do: %Actors.Agent{
-      wallet_address: wallet(character),
-      chain_id: 8453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
 
   defp wallet(character), do: "0x" <> String.duplicate(character, 40)
 

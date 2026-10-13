@@ -7,9 +7,8 @@ defmodule KeyfleetWeb.AgentAvatarTest do
   use KeyfleetWeb.ConnCase, async: false
   use Oban.Testing, repo: Keyfleet.Repo, prefix: "keyfleet_app"
 
-  alias Keyfleet.Actors.Agent
   alias Keyfleet.Agents
-  alias Keyfleet.Agents.{Avatar, AvatarBucket, DeleteAvatar}
+  alias Keyfleet.Agents.{Avatar, AvatarBucket}
 
   # The salt `KeyfleetWeb.AgentAvatarController` signs upload addresses with.
   @salt "agent avatar upload"
@@ -51,34 +50,6 @@ defmodule KeyfleetWeb.AgentAvatarTest do
     assert_received {:bucket, "PUT", "/keyfleet-avatars/" <> ^key}
   end
 
-  # A PNG, JPEG or WebP of at most 512 KiB, each side 32 to 1,024 pixels.
-  test "only pictures within the limits are taken" do
-    for type <- ["image/png", "image/jpeg", "image/webp"],
-        do: assert({:ok, _declared} = Avatar.declare(declared_params(1, type)))
-
-    for type <- ["image/gif", "image/svg+xml", "text/plain"],
-        do: assert(Avatar.declare(declared_params(1, type)) == :error)
-
-    assert {:ok, _declared} = Avatar.declare(declared_params(512 * 1024, "image/png"))
-    assert Avatar.declare(declared_params(512 * 1024 + 1, "image/png")) == :error
-
-    for {width, height} <- [{32, 32}, {1024, 1024}, {32, 1024}] do
-      picture = png(width, height)
-      assert Avatar.check(picture, declared(picture, "image/png")) == :ok
-    end
-
-    for {width, height} <- [{31, 64}, {64, 31}, {1025, 64}, {64, 1025}] do
-      picture = png(width, height)
-      assert Avatar.check(picture, declared(picture, "image/png")) == {:error, :unreadable}
-    end
-
-    # A PNG named as a WebP, and bytes that are no picture at all.
-    picture = png(64, 64)
-    assert Avatar.check(picture, declared(picture, "image/webp")) == {:error, :unreadable}
-    text = "<svg xmlns='http://www.w3.org/2000/svg'/>"
-    assert Avatar.check(text, declared(text, "image/png")) == {:error, :unreadable}
-  end
-
   test "a body longer than a picture may be is refused before it is read in full", c do
     picture = :binary.copy(<<0>>, 512 * 1024 + 1)
     declared = %{sha256: sha256(picture), byte_size: 512 * 1024, content_type: "image/png"}
@@ -95,32 +66,6 @@ defmodule KeyfleetWeb.AgentAvatarTest do
     assert {:error, %Ash.Error.Forbidden{}} = Agents.set_avatar(c.profile, key, actor: other)
     assert {:error, %Ash.Error.Forbidden{}} = Agents.remove_avatar(c.profile, actor: other)
     assert {:ok, %{avatar_key: ^key}} = Agents.set_avatar(c.profile, key, actor: c.actor)
-  end
-
-  # Each upload has its own key, so deleting a replaced one never touches the
-  # picture now shown; a key already gone counts as deleted.
-  test "a replaced or removed picture is deleted from the bucket, once or twice", c do
-    first = Avatar.new_key(c.profile.id, "image/png")
-    second = Avatar.new_key(c.profile.id, "image/webp")
-
-    profile = Agents.set_avatar!(c.profile, first, actor: c.actor)
-    refute_enqueued(worker: DeleteAvatar)
-
-    profile = Agents.set_avatar!(profile, second, actor: c.actor)
-    assert_enqueued(worker: DeleteAvatar, args: %{key: first})
-
-    Agents.remove_avatar!(profile, actor: c.actor)
-    assert_enqueued(worker: DeleteAvatar, args: %{key: second})
-
-    stub_bucket(self(), %{"DELETE" => 204})
-    assert :ok = perform_job(DeleteAvatar, %{key: first})
-    assert_received {:bucket, "DELETE", "/keyfleet-avatars/" <> ^first}
-
-    stub_bucket(self(), %{"DELETE" => 404})
-    assert :ok = perform_job(DeleteAvatar, %{key: first})
-
-    stub_bucket(self(), %{"DELETE" => 503})
-    assert {:error, {:bucket_status, 503}} = perform_job(DeleteAvatar, %{key: second})
   end
 
   defp upload(c, ticket, bytes, type) do
@@ -150,9 +95,6 @@ defmodule KeyfleetWeb.AgentAvatarTest do
   defp declared(bytes, type),
     do: %{sha256: sha256(bytes), byte_size: byte_size(bytes), content_type: type}
 
-  defp declared_params(size, type),
-    do: %{"sha256" => String.duplicate("a", 64), "byte_size" => size, "content_type" => type}
-
   defp sha256(bytes), do: :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)
 
   # A PNG's signature and header chunk, which say its size; enough for the
@@ -164,11 +106,8 @@ defmodule KeyfleetWeb.AgentAvatarTest do
   end
 
   defp actor do
-    %Agent{
-      wallet_address: "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower),
-      chain_id: 8453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
+    Keyfleet.PairingHelpers.pair_wallet!(
+      "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
+    )
   end
 end

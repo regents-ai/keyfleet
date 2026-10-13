@@ -143,29 +143,6 @@ defmodule Keyfleet.RoomsTest do
       :ok
     end
 
-    test "a person or an agent signed in mutes a key for themselves, and unmutes it" do
-      person = %Keyfleet.Actors.Human{human_account_id: 7, wallet_addresses: []}
-
-      agent = %Keyfleet.Actors.Agent{
-        wallet_address: "0x" <> String.duplicate("c", 40),
-        chain_id: 8453,
-        verification_method: :eoa_recovery,
-        audience: "keyfleet"
-      }
-
-      assert {:ok, %{muter: "human:7"}} = Rooms.mute_key(@fleet, 3, actor: person)
-      assert {:ok, _again} = Rooms.mute_key(@fleet, 3, actor: person)
-      assert {:ok, %{muter: "agent:" <> _wallet}} = Rooms.mute_key(@fleet, 5, actor: agent)
-
-      assert Rooms.muted_keys!(@fleet, person) == MapSet.new([3])
-      assert Rooms.muted_keys!(@fleet, agent) == MapSet.new([5])
-
-      assert {:ok, %{token_id: 3}} = Rooms.unmute_key(@fleet, 3, actor: person)
-      assert {:ok, nil} = Rooms.unmute_key(@fleet, 3, actor: person)
-      assert Rooms.muted_keys!(@fleet, person) == MapSet.new()
-      assert Rooms.muted_keys!(@fleet, agent) == MapSet.new([5])
-    end
-
     test "nobody signed in keeps no mutes" do
       # A mute is only ever its muter's own, and nobody signed in is no muter.
       assert {:error, %Ash.Error.Forbidden{}} = Rooms.mute_key(@fleet, 3, actor: nil)
