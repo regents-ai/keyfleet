@@ -105,7 +105,13 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @create, [], %{"slug" => "probe-room", "name" => "Probe"}},
     {"POST", @topic, [], %{"topic" => "Probe"}},
     {"POST", @read, [], %{"after_seq" => 0, "limit" => 1}},
-    {"POST", @send, [], %{"body" => "probe", "idempotency_key" => "p-1", "reply_to_id" => nil}},
+    {"POST", @send, [],
+     %{
+       "body" => "probe",
+       "idempotency_key" => "p-1",
+       "reply_to_id" => nil,
+       "quote_request_id" => nil
+     }},
     {"POST", @key_read, [], %{"after_seq" => 0, "limit" => 1}},
     {"POST", @key_send, [],
      %{"body" => "probe", "idempotency_key" => "p-1", "reply_to_id" => nil}},
@@ -115,6 +121,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "graph" => %{"after_seq" => 0},
        "proposals" => %{"after_seq" => 0},
        "dms" => %{"after_seq" => 0},
+       "quotes" => %{"after_seq" => 0},
        "run" => %{"kind" => "session"}
      }},
     {"POST", @sync, ["rooms", 0], %{"slug" => "general", "after_seq" => 0}},
@@ -123,6 +130,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @sync, ["graph"], %{"after_seq" => 0}},
     {"POST", @sync, ["proposals"], %{"after_seq" => 0}},
     {"POST", @sync, ["dms"], %{"after_seq" => 0}},
+    {"POST", @sync, ["quotes"], %{"after_seq" => 0}},
     {"POST", @proposal, [], %{"number" => 1, "votes_after_seq" => 0}},
     {"POST", @presence, [], %{}},
     {"POST", @propose, [],
@@ -444,6 +452,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     answer(c, c.signer, "POST", @send, Map.put(@address, "slug", "hull-survey"), post, 404)
     answer(c, stranger, "POST", @send, @address, %{post | "idempotency_key" => "s-1"}, 403)
+    quote_routes(c)
 
     # Reading rooms.
     answer(c, c.signer, "GET", @rooms, @address, %{}, 200)
@@ -680,6 +689,44 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     assert Enum.sort(documented -- answered) == Enum.sort(legacy)
     assert answered -- documented == []
+  end
+
+  # An agent paired with key 1's holder quotes the words they sent it: once,
+  # then refused as already quoted.
+  defp quote_routes(c) do
+    quoter = new_signer()
+
+    agent =
+      PairingHelpers.pair!(
+        %Actors.Agent{
+          wallet_address: quoter.address,
+          chain_id: 8453,
+          verification_method: :eoa_recovery,
+          audience: "keyfleet"
+        },
+        [@owner]
+      )
+
+    answer(
+      c,
+      quoter,
+      "POST",
+      @join,
+      @address,
+      %{"name" => "Quoter", "declared_harness" => "local"},
+      200
+    )
+
+    request = Rooms.ask_to_quote!(@fleet, "Hull survey done", actor: agent.pairing)
+
+    quoted = %{
+      "body" => request.body,
+      "idempotency_key" => "q-1",
+      "quote_request_id" => request.id
+    }
+
+    answer(c, quoter, "POST", @send, @address, quoted, 201)
+    answer(c, quoter, "POST", @send, @address, %{quoted | "idempotency_key" => "q-2"}, 409)
   end
 
   # The agent writes as key 2, which it holds, to key 1: a conversation

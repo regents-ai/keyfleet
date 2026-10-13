@@ -330,12 +330,12 @@ defmodule Keyfleet.Graph.ProjectionTest do
     assert List.last(pages).next_cursor == head
 
     {:ok, synced} =
-      Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, 0, nil, @holder, false)
+      Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], places(0), @holder, false)
 
     assert {length(synced.graph.events), synced.graph.has_more} == {100, true}
 
     {:ok, caught_up} =
-      Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], head, 0, nil, @holder, false)
+      Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], places(head), @holder, false)
 
     assert {caught_up.graph.events, caught_up.graph.next_cursor} == {[], head}
   end
@@ -393,9 +393,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
             Rooms.sync(
               @fleet,
               [%{slug: "general", after_seq: 0}],
-              rem(n, head),
-              0,
-              nil,
+              places(rem(n, head)),
               @holder,
               false
             )
@@ -556,7 +554,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     assert {changes.run_id, changes.watermark} == {new_run, new_head}
 
     {:ok, synced} =
-      Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], old_head, 0, nil, @holder, false)
+      Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], places(old_head), @holder, false)
 
     assert {synced.graph.run_id, synced.graph.watermark} == {new_run, new_head}
 
@@ -774,4 +772,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
         await_ready(attempts - 1)
     end
   end
+
+  defp places(graph_after_seq),
+    do: %{graph: graph_after_seq, proposals: 0, dms: nil, quotes: nil}
 end

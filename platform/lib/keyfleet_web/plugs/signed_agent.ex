@@ -60,13 +60,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # The fields each room, sync, proposal read and poll body holds: the ones it
   # must name, then the ones it may add.
   @body_fields [
-    {@sync_path, {~w(rooms graph proposals run), ~w(dms)}},
+    {@sync_path, {~w(rooms graph proposals run), ~w(dms quotes)}},
     {@proposal_read_path, {~w(number votes_after_seq), []}},
     {@create_room_path, {~w(slug name), []}},
     {@topic_path, {~w(topic), []}},
     {@read_path, {[], ~w(after_seq limit)}},
     {@key_read_path, {[], ~w(after_seq limit)}},
-    {@send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
+    {@send_path, {~w(body idempotency_key), ~w(reply_to_id quote_request_id)}},
     {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
     {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
     {@poll_vote_path, {~w(choice), ~w(reason)}}
@@ -504,8 +504,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       Regex.match?(@read_path, path) or Regex.match?(@key_read_path, path) ->
         check_read_body(params)
 
-      Regex.match?(@send_path, path) or Regex.match?(@key_send_path, path) ->
-        admit(valid_send_body?(params))
+      Regex.match?(@send_path, path) ->
+        admit(valid_send_body?(params, ~w(body idempotency_key reply_to_id quote_request_id)))
+
+      Regex.match?(@key_send_path, path) ->
+        admit(valid_send_body?(params, ~w(body idempotency_key reply_to_id)))
 
       true ->
         :invalid
@@ -633,8 +636,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   # A read names how far it has already read and how much it wants; a post names
   # the words, the key the sender filed them under and what it answers, in a
-  # room and in a key's thread alike. Who a post is written as is never named:
-  # it is always the sender's own key.
+  # room and in a key's thread alike, and in a room the request of its person
+  # it quotes. Who a post is written as is never named: it is always the
+  # sender's own key.
   defp check_read_body(params) when is_map(params) do
     if Enum.all?(params, fn {key, value} -> key in ~w(after_seq limit) and is_integer(value) end) do
       in_range(
@@ -648,13 +652,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_read_body(_params), do: :invalid
 
-  defp valid_send_body?(%{"body" => body, "idempotency_key" => key} = params) do
+  defp valid_send_body?(%{"body" => body, "idempotency_key" => key} = params, fields) do
     is_binary(body) and is_binary(key) and
-      Enum.all?(Map.keys(params), &(&1 in ~w(body idempotency_key reply_to_id))) and
-      answers_a_post?(Map.get(params, "reply_to_id"))
+      Enum.all?(Map.keys(params), &(&1 in fields)) and
+      id_or_none?(Map.get(params, "reply_to_id")) and
+      id_or_none?(Map.get(params, "quote_request_id"))
   end
 
-  defp valid_send_body?(_params), do: false
+  defp valid_send_body?(_params, _fields), do: false
 
   # A created room names its address and its name; naming an open room names
   # its topic.
@@ -668,15 +673,16 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp valid_topic_body?(_params), do: false
 
-  # Direct messages are followed only when `dms` names a place in them.
+  # Direct messages are followed only when `dms` names a place in them, and
+  # the person's requests to quote them only when `quotes` does.
   defp check_sync_body(
          %{"rooms" => rooms, "graph" => graph, "proposals" => proposals, "run" => run} = params
        )
        when is_list(rooms) do
-    logs = [graph, proposals | params |> Map.take(["dms"]) |> Map.values()]
+    logs = [graph, proposals | params |> Map.take(["dms", "quotes"]) |> Map.values()]
 
     cond do
-      map_size(Map.delete(params, "dms")) != 4 ->
+      map_size(Map.drop(params, ["dms", "quotes"])) != 4 ->
         :invalid
 
       not (Enum.all?(rooms, &cursor?/1) and Enum.all?(logs, &log_cursor?/1) and run?(run)) ->
@@ -767,8 +773,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp run_in_range?(%{"every_minutes" => minutes}),
     do: minutes in CheckInStatus.schedule_minutes()
 
-  defp answers_a_post?(nil), do: true
-  defp answers_a_post?(value), do: is_binary(value) and Regex.match?(@post_id, value)
+  defp id_or_none?(nil), do: true
+  defp id_or_none?(value), do: is_binary(value) and Regex.match?(@post_id, value)
 
   @doc """
   What a body that doesn't fit the operation at `path` is told: the fields it

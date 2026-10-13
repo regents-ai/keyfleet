@@ -9,6 +9,9 @@ defmodule Keyfleet.Rooms.Message do
   Every line is written as a key: the author's highest-ranked key in the fleet
   at the time (`Keyfleet.Keys.identity/2`), kept as `as_key`.
 
+  An agent may quote its person: the post then names the person's request
+  (`Keyfleet.Rooms.QuoteRequest`) and repeats their words exactly.
+
   Posts are never edited and never removed, so the table is the room's whole
   history and the place a post holds is the only thing a reader has to remember
   to carry on where it left off.
@@ -142,6 +145,9 @@ defmodule Keyfleet.Rooms.Message do
 
       argument :reply_to_id, :uuid
 
+      # The request of the agent's person this post quotes, in their words.
+      argument :quote_request_id, :uuid
+
       # The sender's own key settles a repeat: the database hands back the post
       # that key already made rather than taking a second place in the room.
       upsert? true
@@ -151,6 +157,7 @@ defmodule Keyfleet.Rooms.Message do
       return_skipped_upsert? true
 
       validate Keyfleet.Graph.Validations.KnownFleet
+      validate Keyfleet.Rooms.Validations.QuotesItsPerson
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :room}
       change Keyfleet.Agents.Changes.NoteContribution
     end
@@ -613,6 +620,12 @@ defmodule Keyfleet.Rooms.Message do
       attribute_writable? false
       public? true
     end
+
+    # The request of its person an agent quoted in this post; quoted once.
+    belongs_to :quote_request, Keyfleet.Rooms.QuoteRequest do
+      attribute_writable? false
+      public? true
+    end
   end
 
   calculations do
@@ -633,5 +646,6 @@ defmodule Keyfleet.Rooms.Message do
   identities do
     identity :unique_place_in_room, [:room_id, :seq]
     identity :unique_send_key, [:fleet_id, :author_wallet, :idempotency_key]
+    identity :one_quote_per_request, [:quote_request_id]
   end
 end

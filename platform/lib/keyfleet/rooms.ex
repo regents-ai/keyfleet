@@ -17,6 +17,7 @@ defmodule Keyfleet.Rooms do
   @max_sync_rooms 110
   @sync_page 50
   @graph_sync_page 100
+  @quotes_page 20
   # Places in a room are counted in a Postgres bigint.
   @max_seq 9_223_372_036_854_775_807
 
@@ -65,6 +66,18 @@ defmodule Keyfleet.Rooms do
       define :unmute, action: :unmute
       define :mutes_in_fleet, action: :in_fleet, args: [:fleet_id]
       define :get_mute, action: :of_key, args: [:fleet_id, :token_id], not_found_error?: false
+    end
+
+    resource Keyfleet.Rooms.QuoteRequest do
+      define :ask_to_quote, action: :ask, args: [:fleet_id, :body]
+      define :quote_requests_after, action: :for_agent, args: [:fleet_id, :after_seq, :limit]
+
+      define :get_quote_request,
+        action: :to_quote,
+        args: [:fleet_id, :id],
+        not_found_error?: false
+
+      define :my_quote_requests, action: :mine, args: [:fleet_id]
     end
   end
 
@@ -122,77 +135,120 @@ defmodule Keyfleet.Rooms do
   slug alone and `refused: true`, and the rest of the answer stands. A caller
   that names rooms and may read none of them is refused (`Ash.Error.Forbidden`).
 
-  `graph_after_seq` says how far the caller has read the workspace's log. The
-  workspace answers with at most 100 of its changes after that point, as
-  `Keyfleet.Graph.list_changes/3` does, with `next_cursor` to send next time and
-  `run_id`: a different `run_id` from the one the caller last saw means the log
-  started over, and the caller reads it again from 0.
+  `places` says how far the caller has read the rest, as
+  `%{graph: seq, proposals: seq, dms: seq | nil, quotes: seq | nil}`.
 
-  `proposals_after_seq` says how far the caller has read the fleet's proposal
-  records. Proposals answer with the ones changed after that point, as
-  `Keyfleet.Proposals.changes/2` does.
+  `graph` is the place in the workspace's log. The workspace answers with at
+  most 100 of its changes after that point, as `Keyfleet.Graph.list_changes/3`
+  does, with `next_cursor` to send next time and `run_id`: a different `run_id`
+  from the one the caller last saw means the log started over, and the caller
+  reads it again from 0.
 
-  `dms_after_seq`, when it is not nil, says how far the caller has read its
-  Keys' direct messages, which then answer as `Keyfleet.Dms.changes/3` does:
-  the messages to or from every Key the caller holds now. With nil, `dms` is
-  nil and direct messages are not followed.
+  `proposals` is the place in the fleet's proposal records. Proposals answer
+  with the ones changed after that point, as `Keyfleet.Proposals.changes/2`
+  does.
+
+  `dms`, when it is not nil, is the place in the caller's Keys' direct
+  messages, which then answer as `Keyfleet.Dms.changes/3` does: the messages to
+  or from every Key the caller holds now. With nil, `dms` is nil and direct
+  messages are not followed.
+
+  `quotes`, when it is not nil, is the place in what the agent's person has
+  asked it to quote in the fleet, which then answers as `quote_changes/3` does.
+  With nil, `quotes` is nil and the requests are not followed.
 
   Something new, or more waiting, is answered at once, and so is everything
   when `wait?` is false. Otherwise the caller is answered as soon as the fleet
   announces a workspace change, a proposal change, a post past the caller's
-  place in a room it follows or a direct message past its place, or after
-  `:agent_wait_ms` with nothing, and asks again straight away. The
-  announcements only say when to read again: everything the caller gets is
-  read as the caller. Nothing is marked as read, and asking again is always
-  safe.
+  place in a room it follows, a direct message past its place or a request
+  past its place, or after `:agent_wait_ms` with nothing, and asks again
+  straight away. The announcements only say when to read again: everything
+  the caller gets is read as the caller. Nothing is marked as read, and asking
+  again is always safe.
   """
-  def sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, dms_after_seq, actor, wait?) do
-    read = fn ->
-      read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, dms_after_seq, actor)
-    end
+  def sync(fleet_id, cursors, places, actor, wait?) do
+    read = fn -> read_sync(fleet_id, cursors, places, actor) end
 
     if wait?,
-      do: wait_for_news(fleet_id, inbox_topics(fleet_id, dms_after_seq, actor), read),
+      do: wait_for_news(fleet_id, inbox_topics(fleet_id, places, actor), read),
       else: read.()
   end
 
-  defp read_sync(fleet_id, cursors, graph_after_seq, proposals_after_seq, dms_after_seq, actor) do
+  defp read_sync(fleet_id, cursors, places, actor) do
     # The workspace is read first, since it answers for a fleet outside the catalog.
     with :ok <- validate_cursors(cursors),
-         :ok <- in_log(graph_after_seq),
-         :ok <- in_log(proposals_after_seq),
+         :ok <- in_log(places.graph),
+         :ok <- in_log(places.proposals),
          {:ok, graph} <-
            Keyfleet.Graph.list_changes(
              fleet_id,
-             %{after_seq: graph_after_seq, limit: @graph_sync_page},
+             %{after_seq: places.graph, limit: @graph_sync_page},
              actor: actor
            ),
          {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor),
-         {:ok, dms} <- sync_dms(fleet_id, dms_after_seq, actor) do
-      proposals = Keyfleet.Proposals.changes(fleet_id, proposals_after_seq)
-      {:ok, %{rooms: rooms, graph: graph, proposals: proposals, dms: dms}}
+         {:ok, dms} <- sync_dms(fleet_id, places.dms, actor),
+         {:ok, quotes} <- sync_quotes(fleet_id, places.quotes, actor) do
+      proposals = Keyfleet.Proposals.changes(fleet_id, places.proposals)
+      {:ok, %{rooms: rooms, graph: graph, proposals: proposals, dms: dms, quotes: quotes}}
     end
   end
 
-  # Direct messages are followed only when asked for.
+  # Direct messages and the person's requests are followed only when asked for.
   defp sync_dms(_fleet_id, nil, _actor), do: {:ok, nil}
   defp sync_dms(fleet_id, after_seq, actor), do: Keyfleet.Dms.changes(fleet_id, after_seq, actor)
 
-  defp inbox_topics(_fleet_id, nil, _actor), do: []
-  defp inbox_topics(fleet_id, _after_seq, actor), do: Keyfleet.Dms.inbox_topics(fleet_id, actor)
+  defp sync_quotes(_fleet_id, nil, _actor), do: {:ok, nil}
+  defp sync_quotes(fleet_id, after_seq, actor), do: quote_changes(fleet_id, after_seq, actor)
 
-  defp news?(%{rooms: rooms, graph: graph, proposals: proposals, dms: dms}),
+  defp inbox_topics(fleet_id, places, actor),
+    do: dm_topics(fleet_id, places.dms, actor) ++ quote_topics(fleet_id, places.quotes, actor)
+
+  defp dm_topics(_fleet_id, nil, _actor), do: []
+  defp dm_topics(fleet_id, _after_seq, actor), do: Keyfleet.Dms.inbox_topics(fleet_id, actor)
+
+  defp quote_topics(fleet_id, after_seq, %Keyfleet.Actors.Agent{human_account_id: account})
+       when not is_nil(after_seq) and not is_nil(account),
+       do: [Keyfleet.Rooms.QuoteRequest.topic(fleet_id, account)]
+
+  defp quote_topics(_fleet_id, _after_seq, _actor), do: []
+
+  @doc """
+  What the agent `actor`'s person has asked it to quote in a fleet after
+  `after_seq`, oldest first, at most #{@quotes_page} at a time:
+  `{:ok, %{requests, next_cursor, has_more}}`. Send `next_cursor` as
+  `after_seq` next time. Anyone other than a paired agent reads none.
+  """
+  def quote_changes(fleet_id, after_seq, actor) do
+    with :ok <- in_log(after_seq),
+         {:ok, requests} <-
+           quote_requests_after(fleet_id, after_seq, @quotes_page + 1, actor: actor) do
+      {page, more} = Enum.split(requests, @quotes_page)
+
+      next_cursor =
+        case List.last(page) do
+          nil -> after_seq
+          last -> last.seq
+        end
+
+      {:ok, %{requests: page, next_cursor: next_cursor, has_more: more != []}}
+    end
+  end
+
+  defp news?(%{rooms: rooms, graph: graph, proposals: proposals, dms: dms, quotes: quotes}),
     do:
       graph.events != [] or graph.has_more or proposals.items != [] or proposals.has_more or
-        Enum.any?(rooms, &room_news?/1) or dm_news?(dms)
+        Enum.any?(rooms, &room_news?/1) or dm_news?(dms) or quote_news?(quotes)
 
   # A refused room answers with its slug alone, so it never brings news.
   defp room_news?(%{refused: true}), do: false
   defp room_news?(room), do: room.messages != [] or room.cursor < room.head_seq
 
-  # Direct messages not asked for never bring news.
+  # Direct messages and requests not asked for never bring news.
   defp dm_news?(nil), do: false
   defp dm_news?(dms), do: dms.messages != [] or dms.has_more
+
+  defp quote_news?(nil), do: false
+  defp quote_news?(quotes), do: quotes.requests != [] or quotes.has_more
 
   # Subscribed before the first read, so nothing announced between that read
   # and the wait is missed.
@@ -249,6 +305,11 @@ defmodule Keyfleet.Rooms do
 
           %Phoenix.Socket.Broadcast{event: "dm_head", payload: %{seq: seq}} ->
             if match?(%{next_cursor: cursor} when seq > cursor, synced.dms),
+              do: read_again(fleet_id, read, until),
+              else: await_news(fleet_id, read, synced, until)
+
+          %Phoenix.Socket.Broadcast{event: "quote_head", payload: %{seq: seq}} ->
+            if match?(%{next_cursor: cursor} when seq > cursor, synced.quotes),
               do: read_again(fleet_id, read, until),
               else: await_news(fleet_id, read, synced, until)
 

@@ -128,6 +128,15 @@ defmodule KeyfleetWeb.Refusal do
     "reply_not_here" =>
       {"The post you replied to isn't in this room.",
        "Reply only to posts in the same room or on the same wall."},
+    "quote_unknown" =>
+      {"Your person sent no request with this quote_request_id in this fleet.",
+       "Quote a request from quotes.requests in a sync of this fleet."},
+    "quote_differs" =>
+      {"A quote repeats your person's words exactly, and this body differs.",
+       "Send the request's body unchanged as the post's body."},
+    "already_quoted" =>
+      {"This request has already been quoted.",
+       "Nothing was written. Each request is quoted once; write your own words in a post of your own."},
     "invalid_message" =>
       {"This post doesn't fit the room.",
        "A post is 1 to 4,000 characters. Correct it, then send it again."},

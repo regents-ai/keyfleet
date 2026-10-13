@@ -16,6 +16,7 @@ defmodule KeyfleetWeb.RoomJSON do
     :agent_profile_id,
     :body,
     :reply_to_id,
+    :quote_request_id,
     :inserted_at
   ]
 

@@ -11,6 +11,8 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias Keyfleet.Rooms.Errors.CreatedRoomLimitError
   alias Keyfleet.Rooms.Errors.KeyUnknownError
   alias Keyfleet.Rooms.Errors.NoAgentProfileError
+  alias Keyfleet.Rooms.Errors.QuoteDiffersError
+  alias Keyfleet.Rooms.Errors.QuoteUnknownError
   alias Keyfleet.Rooms.Errors.RenameTooSoonError
   alias Keyfleet.Rooms.Errors.ReplyOutsideRoomError
   alias Keyfleet.Rooms.Errors.RoomUnknownError
@@ -102,7 +104,7 @@ defmodule KeyfleetWeb.AgentRoomController do
 
     input =
       params
-      |> Map.take(["body", "idempotency_key", "reply_to_id"])
+      |> Map.take(["body", "idempotency_key", "reply_to_id", "quote_request_id"])
       |> Map.merge(%{"fleet_id" => fleet_id, "slug" => slug})
 
     sent(conn, fleet_id, Rooms.send_message(input, actor: actor))
@@ -160,22 +162,20 @@ defmodule KeyfleetWeb.AgentRoomController do
       ) do
     actor = conn.assigns.agent_actor
     cursors = Enum.map(rooms, &%{slug: &1["slug"], after_seq: &1["after_seq"]})
-    dms_after_seq = get_in(params, ["dms", "after_seq"])
+
+    places = %{
+      graph: graph["after_seq"],
+      proposals: proposals["after_seq"],
+      dms: get_in(params, ["dms", "after_seq"]),
+      quotes: get_in(params, ["quotes", "after_seq"])
+    }
 
     # Only a few syncs from one address are held open at once; past that a sync
     # answers straight away with what it has.
     with {:ok, synced} <-
            AgentWaits.hold(
              ClientAddress.key(conn),
-             &Rooms.sync(
-               fleet_id,
-               cursors,
-               graph["after_seq"],
-               proposals["after_seq"],
-               dms_after_seq,
-               actor,
-               &1
-             )
+             &Rooms.sync(fleet_id, cursors, places, actor, &1)
            ),
          {:ok, check_in} <- Agents.check_in(actor, fleet_id, run),
          {:ok, yours} <- yours(fleet_id, actor) do
@@ -189,6 +189,7 @@ defmodule KeyfleetWeb.AgentRoomController do
         synced
         |> sync_json(check_in, yours, muted, refused)
         |> put_dms(synced.dms)
+        |> put_quotes(synced.quotes)
 
       json(conn, answer)
     else
@@ -243,6 +244,17 @@ defmodule KeyfleetWeb.AgentRoomController do
   # Direct messages answer only when asked for.
   defp put_dms(answer, nil), do: answer
   defp put_dms(answer, page), do: Map.put(answer, :dms, AgentDmController.changes_json(page))
+
+  # So do the person's requests to quote them.
+  defp put_quotes(answer, nil), do: answer
+
+  defp put_quotes(answer, page),
+    do:
+      Map.put(answer, :quotes, %{
+        requests: Enum.map(page.requests, &%{id: &1.id, body: &1.body, asked_at: &1.inserted_at}),
+        next_cursor: page.next_cursor,
+        has_more: page.has_more
+      })
 
   # A room the agent may not read repeats only the slug it sent, with what
   # keeps it out, as a refusal of that room alone would say.
@@ -335,6 +347,15 @@ defmodule KeyfleetWeb.AgentRoomController do
 
       Enum.any?(errors, &match?(%ReplyOutsideRoomError{}, &1)) ->
         invalid(conn, "reply_not_here")
+
+      Enum.any?(errors, &match?(%QuoteUnknownError{}, &1)) ->
+        invalid(conn, "quote_unknown")
+
+      Enum.any?(errors, &match?(%QuoteDiffersError{}, &1)) ->
+        invalid(conn, "quote_differs")
+
+      Rooms.taken?(%Ash.Error.Invalid{errors: errors}, :quote_request_id) ->
+        Refusal.json(conn, 409, "already_quoted")
 
       true ->
         invalid(conn, "invalid_message")

@@ -40,10 +40,16 @@ defmodule Keyfleet.Authority do
       conditions: [:member]
     },
     %{
-      what: "Write in rooms, on Key walls, in messages and polls from the fleet's pages",
+      what: "Write on Key walls, in messages and polls from the fleet's pages",
       who: "The person, signed in",
       authority: :owner_only,
       conditions: [:member]
+    },
+    %{
+      what: "Send words to their agent for it to quote in the rooms",
+      who: "The person, signed in, with a paired agent",
+      authority: :owner_only,
+      conditions: []
     },
     %{
       what: "Add to the workspace and the fleet's code",

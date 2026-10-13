@@ -39,6 +39,22 @@ defmodule Keyfleet.Agents do
   alias Keyfleet.Agents.{Avatar, AvatarBucket, CheckIn, DeleteAvatar}
 
   @doc """
+  Whether the signed-in person has an agent paired to their account, from
+  their account on regents.sh. A reading that fails counts as none.
+  """
+  def has_paired_agent?(%Keyfleet.Actors.Human{human_account_id: id} = actor) do
+    with {:ok, account} <- Keyfleet.Accounts.get_human_account(id, actor: actor),
+         {:ok, [_ | _]} <-
+           RegentAgents.list_my_agents(
+             actor: %RegentAgents.Person{privy_user_id: account.privy_user_id}
+           ) do
+      true
+    else
+      _none -> false
+    end
+  end
+
+  @doc """
   How a check-in from an agent paired with a person's Regent account
   (`regent_agents`) names that person's Keyfleet account: by its display name
   and its wallet's ENS name, each nil when they have none or no account here.

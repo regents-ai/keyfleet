@@ -475,6 +475,108 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert Keyfleet.ContractSchema.errors(synced.body, "FleetSync") == []
   end
 
+  # A person's words reach their paired agent while it waits, and it quotes
+  # each once, exactly.
+  test "a paired agent hears its person's words in a sync and quotes each once", c do
+    Application.put_env(:keyfleet, :agent_wait_ms, 1_000)
+    on_exit(fn -> Application.put_env(:keyfleet, :agent_wait_ms, 200) end)
+
+    agent =
+      PairingHelpers.pair!(
+        %Actors.Agent{
+          wallet_address: c.signer.address,
+          chain_id: 8453,
+          verification_method: :eoa_recovery,
+          audience: "keyfleet"
+        },
+        [@owner]
+      )
+
+    assert send_signed(c, "POST", @join_path, @join_body).status == 200
+    person = agent.pairing
+
+    body =
+      [{"general", 0}]
+      |> sync_body()
+      |> Jason.decode!()
+      |> Map.put("quotes", %{"after_seq" => 0})
+      |> Jason.encode!()
+
+    started = System.monotonic_time(:millisecond)
+    sync = Task.async(fn -> send_signed(c, "POST", @sync_path, body) end)
+    listening(Rooms.QuoteRequest.topic("fibonacci_syndicate", person.human_account_id))
+    request = Rooms.ask_to_quote!("fibonacci_syndicate", "The hull survey is done", actor: person)
+
+    synced = Task.await(sync)
+    assert System.monotonic_time(:millisecond) - started < 1_000
+    assert Keyfleet.ContractSchema.errors(synced.body, "FleetSync") == []
+
+    assert %{"requests" => [%{"id" => id, "body" => words}], "next_cursor" => 1} =
+             synced.body["quotes"]
+
+    assert {id, words} == {request.id, request.body}
+    refute Map.has_key?(send_signed(c, "POST", @sync_path, sync_body([])).body, "quotes")
+
+    quote = fn words, key ->
+      send_signed(
+        c,
+        "POST",
+        @send_general,
+        Jason.encode!(%{body: words, idempotency_key: key, quote_request_id: id})
+      )
+    end
+
+    differs = quote.("The hull survey is done.", "q-0")
+    assert {differs.status, differs.body} == {422, refused("quote_differs")}
+
+    quoted = quote.(words, "q-1")
+    assert quoted.status == 201
+    assert quoted.body["message"]["quote_request_id"] == id
+    assert documented(quoted, "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send") == []
+    assert quote.(words, "q-1").status == 200
+
+    twice = quote.(words, "q-2")
+    assert {twice.status, twice.body} == {409, refused("already_quoted")}
+    assert documented(twice, "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send") == []
+
+    unknown =
+      send_signed(
+        c,
+        "POST",
+        @send_general,
+        Jason.encode!(%{
+          body: words,
+          idempotency_key: "q-3",
+          quote_request_id: Ash.UUID.generate()
+        })
+      )
+
+    assert {unknown.status, unknown.body} == {422, refused("quote_unknown")}
+    assert documented(unknown, "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/messages/send") == []
+
+    # A quote names its request by id, only in a room, and a sync reads on
+    # from a place.
+    for {path, body} <- [
+          {@send_general, ~s({"body":"Hi","idempotency_key":"q-4","quote_request_id":"seven"})},
+          {"/api/v1/agent/keys/fibonacci_syndicate/1/messages/send",
+           ~s({"body":"Hi","idempotency_key":"q-5","quote_request_id":"#{id}"})},
+          {@sync_path,
+           ~s({"rooms":[],"graph":{"after_seq":0},"proposals":{"after_seq":0},"quotes":{"after_seq":"0"},"run":{"kind":"session"}})}
+        ] do
+      assert misfit?(send_signed(c, "POST", path, body)), "#{path} #{body}"
+    end
+
+    beyond =
+      send_signed(
+        c,
+        "POST",
+        @sync_path,
+        ~s({"rooms":[],"graph":{"after_seq":0},"proposals":{"after_seq":0},"quotes":{"after_seq":-1},"run":{"kind":"session"}})
+      )
+
+    assert {beyond.status, beyond.body} == {422, refused("out_of_range")}
+  end
+
   test "only the canonical signed room path and body reach the room actions", c do
     shard(c)
 
@@ -566,7 +668,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert refused.status == 422
 
     assert refused.body["error"]["hint"] ==
-             "This operation takes a JSON object with these fields: rooms, graph, proposals, run; and only these besides, each optional: dms. Check each field's kind and range against the docs, then send it again."
+             "This operation takes a JSON object with these fields: rooms, graph, proposals, run; and only these besides, each optional: dms, quotes. Check each field's kind and range against the docs, then send it again."
   end
 
   test "an agent reads and writes a key's thread by the key's number", c do
@@ -986,7 +1088,8 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
 
       member = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
       cursors = Enum.map(one_more, fn {slug, seq} -> %{slug: slug, after_seq: seq} end)
-      assert Rooms.sync(@cascade, cursors, 0, 0, nil, member, false) == {:error, :invalid_request}
+      places = %{graph: 0, proposals: 0, dms: nil, quotes: nil}
+      assert Rooms.sync(@cascade, cursors, places, member, false) == {:error, :invalid_request}
     end
 
     test "only a slug and a name reach creating a room, and only a topic reaches naming one", c do

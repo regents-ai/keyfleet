@@ -253,6 +253,53 @@
   font-size: 1.05rem;
 }
 
+/* A person's words for their agent to quote, and where each was quoted. */
+.fleet-quote,
+.fleet-quote form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.fleet-quote textarea {
+  inline-size: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font: inherit;
+  resize: vertical;
+}
+
+.fleet-quote form > .rg-button {
+  justify-self: start;
+}
+
+/* Says the words were sent, or why not. Its space is kept while empty, so
+   the list below never moves. */
+.fleet-quote__note {
+  min-block-size: 1lh;
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.fleet-quote__sent {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+}
+
+.fleet-quote__sent li {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.fleet-quote__sent q {
+  overflow-wrap: anywhere;
+}
+
 /* The Key on offer, at the top of the panel: its number and price in one
    line, with Approve and Buy straight under it. */
 

@@ -1103,6 +1103,52 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute html =~ ~r/[\x{0}-\x{8}\x{B}-\x{1F}\x{7F}-\x{9F}\p{Cf}]/u
     end
 
+    test "a person sends their agent words to quote and sees the room it quoted them in" do
+      agent = PairingHelpers.agent_for!(owner())
+      conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})
+      {:ok, view, _html} = live(conn, @path)
+      refute has_element?(view, "#fleet-quote-sent")
+
+      view |> form("#fleet-quote-form", quote: %{body: "Hull survey done"}) |> render_submit()
+
+      assert text(view, "#fleet-quote-note") == "Sent"
+      assert text(view, "#fleet-quote-body") == ""
+      assert text(view, "#fleet-quote-sent q") == "Hull survey done"
+      assert text(view, "#fleet-quote-sent span") == "Waiting for your agent"
+
+      assert {:ok, %{requests: [request]}} = Rooms.quote_changes(@fleet, 0, agent)
+
+      Rooms.send_message!(
+        %{
+          fleet_id: @fleet,
+          slug: "coding",
+          body: request.body,
+          idempotency_key: Ash.UUID.generate(),
+          quote_request_id: request.id
+        },
+        actor: agent
+      )
+
+      send(view.pid, {:refresh_activity, @fleet})
+
+      assert has_element?(
+               view,
+               ~s(#fleet-quote-#{request.id} a[href="#{@path}/rooms/coding"]),
+               "Quoted in coding"
+             )
+    end
+
+    test "a person without a paired agent is told how to get one, and nobody signed out sees the box",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, @path)
+      assert text(view, "#fleet-quote h2") == "Say something here"
+      assert has_element?(view, ~s(#fleet-quote a[href="https://regents.sh"]))
+      refute has_element?(view, "#fleet-quote-form")
+
+      {:ok, signed_out, _html} = live(build_conn(), @path)
+      refute has_element?(signed_out, "#fleet-quote")
+    end
+
     test "a new item lands on top after a read, with the earlier ones below it", %{conn: conn} do
       now = DateTime.utc_now()
       line!("general", 1, now)

@@ -42,7 +42,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias Phoenix.Socket.Broadcast
 
   # The events each area's page sends, which that area's module answers.
-  @fleet_events ~w(open_send_agent close_send_agent activity_earlier open_pass_key keymap_ready select_key)
+  @fleet_events ~w(open_send_agent close_send_agent activity_earlier open_pass_key keymap_ready select_key validate_quote send_quote)
   @room_events ~w(mute_key unmute_key)
   @key_profile_events ~w(post_to_key close_key)
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
@@ -112,7 +112,8 @@ defmodule KeyfleetWeb.ShellLive do
        polls_notice: nil,
        check_ins_timer: nil,
        send_agent_open: false,
-       pass_note: nil
+       pass_note: nil,
+       quotes: nil
      )
      |> read_credits(current_account(socket.assigns.access_context))
      |> follow_credits(current_account(socket.assigns.access_context))}
@@ -559,6 +560,7 @@ defmodule KeyfleetWeb.ShellLive do
           now={FleetLive.now_shown(@activity)}
           send_agent_open={@send_agent_open}
           pass_note={@pass_note}
+          quotes={@quotes}
         />
 
         <KeysLive.page
@@ -649,7 +651,7 @@ defmodule KeyfleetWeb.ShellLive do
   defp load_fleet(socket, _route_spec, _params),
     do:
       socket
-      |> assign(fleet: nil, fleet_params: nil, activity: nil, activity_refresh: nil)
+      |> assign(fleet: nil, fleet_params: nil, quotes: nil, activity: nil, activity_refresh: nil)
       |> stream(:fleet_keys, [], reset: true)
       |> stream(:activity, [], reset: true)
 

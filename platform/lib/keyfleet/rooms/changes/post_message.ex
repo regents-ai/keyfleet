@@ -116,7 +116,8 @@ defmodule Keyfleet.Rooms.Changes.PostMessage do
             body: body,
             body_digest: digest(body),
             idempotency_key: idempotency_key,
-            reply_to_id: Ash.Changeset.get_argument(changeset, :reply_to_id)
+            reply_to_id: Ash.Changeset.get_argument(changeset, :reply_to_id),
+            quote_request_id: Ash.Changeset.get_argument(changeset, :quote_request_id)
           })
         )
     end

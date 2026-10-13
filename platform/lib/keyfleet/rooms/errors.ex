@@ -72,3 +72,27 @@ defmodule Keyfleet.Rooms.Errors.KeyUnknownError do
   def message(%{fleet_id: fleet_id, token_id: token_id}),
     do: "#{fleet_id} has not issued Key #{token_id}"
 end
+
+defmodule Keyfleet.Rooms.Errors.NoPairedAgentError do
+  @moduledoc "Raised when a person sends words to their agent without an agent paired to their account."
+  use Splode.Error, fields: [], class: :invalid
+
+  def message(_error), do: "no agent is paired with this account"
+end
+
+defmodule Keyfleet.Rooms.Errors.QuoteUnknownError do
+  @moduledoc """
+  Raised when a post names a request to quote that is not one the agent's
+  person sent in this fleet.
+  """
+  use Splode.Error, fields: [:quote_request_id], class: :invalid
+
+  def message(%{quote_request_id: id}), do: "#{id} is not a request from this agent's person here"
+end
+
+defmodule Keyfleet.Rooms.Errors.QuoteDiffersError do
+  @moduledoc "Raised when a quote's words are not exactly the words its person sent."
+  use Splode.Error, fields: [:quote_request_id], class: :invalid
+
+  def message(%{quote_request_id: id}), do: "the post's words differ from request #{id}"
+end

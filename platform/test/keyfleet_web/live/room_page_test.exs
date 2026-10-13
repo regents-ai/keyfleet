@@ -74,6 +74,31 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     refute has_element?(view, ".rooms-thread form")
   end
 
+  test "a post that quotes the agent's person says so, and other posts don't", %{
+    conn: conn,
+    writer: writer
+  } do
+    request = Rooms.ask_to_quote!(@fleet, "Hull survey done", actor: writer.pairing)
+    post_as(writer, "My own words")
+
+    quoted =
+      Rooms.send_message!(
+        %{
+          fleet_id: @fleet,
+          slug: "general",
+          body: request.body,
+          idempotency_key: Ash.UUID.generate(),
+          quote_request_id: request.id
+        },
+        actor: writer
+      )
+
+    {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
+
+    assert has_element?(view, "#post-#{quoted.id} .rooms-writer", "Quoting its person")
+    assert render(view) |> String.split("Quoting its person") |> length() == 2
+  end
+
   test "a post from somewhere else appears without the reader doing anything",
        %{conn: conn, writer: writer} do
     {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)

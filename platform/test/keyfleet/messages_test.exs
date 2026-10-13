@@ -202,7 +202,13 @@ defmodule Keyfleet.MessagesTest do
     post!(writer, "coding", "Coding 1")
 
     {:ok, first} =
-      Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, 0, nil, writer, false)
+      Rooms.sync(
+        @fleet,
+        [%{slug: "general", after_seq: 0}],
+        %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+        writer,
+        false
+      )
 
     assert [%{slug: "general", head_seq: 3, cursor: 3, messages: caught_up}] = first.rooms
     assert %{items: [], has_more: false} = first.proposals
@@ -214,9 +220,7 @@ defmodule Keyfleet.MessagesTest do
       Rooms.sync(
         @fleet,
         [%{slug: "general", after_seq: 3}, %{slug: "coding", after_seq: 1}],
-        0,
-        0,
-        nil,
+        %{graph: 0, proposals: 0, dms: nil, quotes: nil},
         writer,
         false
       )
@@ -227,25 +231,53 @@ defmodule Keyfleet.MessagesTest do
     assert {coding.messages, coding.cursor, coding.head_seq} == {[], 1, 1}
 
     assert {:error, %Rooms.Errors.RoomUnknownError{}} =
-             Rooms.sync(@fleet, [%{slug: "hull-survey", after_seq: 0}], 0, 0, nil, writer, false)
+             Rooms.sync(
+               @fleet,
+               [%{slug: "hull-survey", after_seq: 0}],
+               %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+               writer,
+               false
+             )
 
     too_many = for n <- 1..101, do: %{slug: "general", after_seq: n}
-    assert {:error, :invalid_request} = Rooms.sync(@fleet, too_many, 0, 0, nil, writer, false)
+
+    assert {:error, :invalid_request} =
+             Rooms.sync(
+               @fleet,
+               too_many,
+               %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+               writer,
+               false
+             )
 
     beyond = [%{slug: "general", after_seq: 2 ** 70}]
-    assert {:error, :invalid_request} = Rooms.sync(@fleet, beyond, 0, 0, nil, writer, false)
+
+    assert {:error, :invalid_request} =
+             Rooms.sync(
+               @fleet,
+               beyond,
+               %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+               writer,
+               false
+             )
 
     twice = [%{slug: "general", after_seq: 0}, %{slug: "general", after_seq: 0}]
-    assert {:error, :invalid_request} = Rooms.sync(@fleet, twice, 0, 0, nil, writer, false)
+
+    assert {:error, :invalid_request} =
+             Rooms.sync(
+               @fleet,
+               twice,
+               %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+               writer,
+               false
+             )
 
     for after_seq <- [-1, 2 ** 70] do
       assert {:error, :invalid_request} =
                Rooms.sync(
                  @fleet,
                  [%{slug: "general", after_seq: 0}],
-                 after_seq,
-                 0,
-                 nil,
+                 %{graph: after_seq, proposals: 0, dms: nil, quotes: nil},
                  writer,
                  false
                )
@@ -254,9 +286,7 @@ defmodule Keyfleet.MessagesTest do
                Rooms.sync(
                  @fleet,
                  [%{slug: "general", after_seq: 0}],
-                 0,
-                 after_seq,
-                 nil,
+                 %{graph: 0, proposals: after_seq, dms: nil, quotes: nil},
                  writer,
                  false
                )
@@ -270,7 +300,10 @@ defmodule Keyfleet.MessagesTest do
 
     # Each room is read up to its own page, however busy the others are.
     cursors = [%{slug: "general", after_seq: 0}, %{slug: "coding", after_seq: 0}]
-    {:ok, synced} = Rooms.sync(@fleet, cursors, 0, 0, nil, writer, false)
+
+    {:ok, synced} =
+      Rooms.sync(@fleet, cursors, %{graph: 0, proposals: 0, dms: nil, quotes: nil}, writer, false)
+
     assert [%{cursor: 50, head_seq: 51}, %{cursor: 1, head_seq: 1}] = synced.rooms
     assert synced.graph.has_more == false
 

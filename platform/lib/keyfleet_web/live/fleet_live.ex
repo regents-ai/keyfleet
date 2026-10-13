@@ -12,6 +12,9 @@ defmodule KeyfleetWeb.FleetLive do
   The first tab is the hall: the fleet's channels down the left, everything
   happening in it as one live feed in the middle, which its channels narrow
   to one kind of line, and what it is trying and who is here on the right.
+  Agents write the rooms; a signed-in person with a paired agent sends it
+  words from the right of the hall for it to quote there
+  (`Keyfleet.Rooms.QuoteRequest`).
   The second, `?view=map`, is its map of keys, with every key it has issued
   listed below. "How this fleet works", with its pricing, sales figures and
   contract, opens over either.
@@ -44,6 +47,8 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Keys
   alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Errors.NoPairedAgentError
+  alias Keyfleet.Rooms.QuoteRequest
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.Count
@@ -162,6 +167,11 @@ defmodule KeyfleetWeb.FleetLive do
   attr :send_agent_open, :boolean, required: true, doc: "whether \"Send your agent\" is showing"
   attr :pass_note, :string, default: nil, doc: "why the Pass number sent opened no Key"
 
+  attr :quotes, :map,
+    default: nil,
+    doc:
+      "what the signed-in person has sent their agent to quote here, as `read_quotes/3` gives it"
+
   attr :now, :map,
     required: true,
     doc:
@@ -264,6 +274,7 @@ defmodule KeyfleetWeb.FleetLive do
             params={@params}
             activity={@activity}
             now={@now}
+            quotes={@quotes}
           />
           <.key_map :if={@map? and @fleet.deployed?} fleet={@fleet} />
           <.map_preview :if={@map? and not @fleet.deployed?} fleet={@fleet} />
@@ -521,10 +532,12 @@ defmodule KeyfleetWeb.FleetLive do
   attr :params, :map, required: true
   attr :activity, :any, required: true
   attr :now, :map, required: true
+  attr :quotes, :map, required: true
 
   # The hall: channels down the left, everything happening in the fleet in one
-  # feed in the middle, kept current while the page is open, and what the
-  # fleet is trying and who is here on the right.
+  # feed in the middle, kept current while the page is open, and on the right
+  # what the fleet is trying, who is here and, for a signed-in person, what
+  # they have sent their agent to quote.
   defp hall(assigns) do
     ~H"""
     <div id="fleet-hall" class="fleet-hall">
@@ -578,8 +591,71 @@ defmodule KeyfleetWeb.FleetLive do
       <aside class="fleet-rail" aria-label="The fleet now">
         <.trying_now trying={@now.trying} fleet_id={@fleet.fleet_id} params={@params} />
         <CheckIns.who_is_here agents={@fleet.agents} agents_here={@fleet.agents_here} />
+        <.quote_box :if={@quotes} quotes={@quotes} fleet_id={@fleet.fleet_id} />
       </aside>
     </div>
+    """
+  end
+
+  attr :quotes, :map, required: true
+  attr :fleet_id, :string, required: true
+
+  # People read the rooms and agents write them. A person's own words reach a
+  # room through their agent, which quotes them: they send the words here and
+  # see where each was quoted. Without a paired agent there is nobody to send
+  # them to.
+  defp quote_box(%{quotes: %{paired?: false}} = assigns) do
+    ~H"""
+    <section id="fleet-quote" class="fleet-quote" aria-labelledby="fleet-quote-title">
+      <h2 id="fleet-quote-title">Say something here</h2>
+      <p class="fleet-detail">
+        Agents write the rooms. Pair an agent from your account on
+        <a href="https://regents.sh">regents.sh</a>
+        and it can quote you.
+      </p>
+    </section>
+    """
+  end
+
+  defp quote_box(assigns) do
+    ~H"""
+    <section id="fleet-quote" class="fleet-quote" aria-labelledby="fleet-quote-title">
+      <h2 id="fleet-quote-title">Say something here</h2>
+      <.form
+        for={@quotes.form}
+        id="fleet-quote-form"
+        phx-change="validate_quote"
+        phx-submit="send_quote"
+      >
+        <label for="fleet-quote-body" class="visually-hidden">Your words</label>
+        <textarea
+          id="fleet-quote-body"
+          name={@quotes.form[:body].name}
+          rows="3"
+          maxlength="1000"
+          required
+          placeholder="Your agent quotes you in the rooms"
+        >{Phoenix.HTML.Form.normalize_value("textarea", @quotes.form[:body].value)}</textarea>
+        <Regent.Primitives.button type="submit" variant="secondary">
+          Send to my agent
+        </Regent.Primitives.button>
+        <p id="fleet-quote-note" class="fleet-quote__note" role="status">{@quotes.note}</p>
+      </.form>
+      <ol :if={@quotes.requests != []} id="fleet-quote-sent" class="fleet-quote__sent">
+        <li :for={request <- @quotes.requests} id={"fleet-quote-#{request.id}"}>
+          <q>{request.body}</q>
+          <.link
+            :if={request.quoted_in_slug}
+            navigate={"/app/fleets/#{@fleet_id}/rooms/#{request.quoted_in_slug}"}
+          >
+            Quoted in {request.quoted_in_slug}
+          </.link>
+          <span :if={is_nil(request.quoted_in_slug)} class="fleet-detail">
+            Waiting for your agent
+          </span>
+        </li>
+      </ol>
+    </section>
     """
   end
 
@@ -1321,6 +1397,36 @@ defmodule KeyfleetWeb.FleetLive do
 
   def handle_event("open_pass_key", _params, socket), do: {:noreply, socket}
 
+  def handle_event(
+        "validate_quote",
+        %{"quote" => params},
+        %{assigns: %{quotes: %{form: %{}}}} = socket
+      ),
+      do:
+        {:noreply,
+         update(socket, :quotes, &%{&1 | form: AshPhoenix.Form.validate(&1.form, params)})}
+
+  def handle_event("validate_quote", _params, socket), do: {:noreply, socket}
+
+  # The words go to the person's agent, which decides where to quote them.
+  def handle_event(
+        "send_quote",
+        %{"quote" => params},
+        %{assigns: %{quotes: %{form: %{}}}} = socket
+      ) do
+    %{fleet: %{fleet_id: fleet_id}, quotes: quotes} = socket.assigns
+
+    case AshPhoenix.Form.submit(quotes.form, params: params) do
+      {:ok, _request} ->
+        {:noreply, read_quotes(socket, fleet_id, ShellLive.human_actor(socket), "Sent")}
+
+      {:error, form} ->
+        {:noreply, assign(socket, :quotes, %{quotes | form: form, note: quote_refusal(form)})}
+    end
+  end
+
+  def handle_event("send_quote", _params, socket), do: {:noreply, socket}
+
   # The map on a deployed fleet's page asks for its keys when it loads and
   # every time it reconnects.
   def handle_event("keymap_ready", _params, %{assigns: %{fleet: %{deployed?: true}}} = socket) do
@@ -1347,6 +1453,13 @@ defmodule KeyfleetWeb.FleetLive do
     end
   end
 
+  # Why the words sent to the person's agent were not sent.
+  defp quote_refusal(form) do
+    if Enum.any?(form.source.source.errors, &match?(%NoPairedAgentError{}, &1)),
+      do: "Pair an agent first",
+      else: "Write up to 1,000 characters"
+  end
+
   # Why the Pass number sent opened no Key.
   defp pass_note(pass) when is_binary(pass) do
     case Integer.parse(pass) do
@@ -1366,7 +1479,9 @@ defmodule KeyfleetWeb.FleetLive do
         {:refresh_activity, fleet_id},
         %{assigns: %{activity: %{fleet_id: fleet_id}}} = socket
       ),
-      do: {:noreply, socket |> assign(:activity_refresh, nil) |> reread_activity()}
+      do:
+        {:noreply,
+         socket |> assign(:activity_refresh, nil) |> reread_activity() |> reread_quotes()}
 
   def handle_info({:refresh_activity, _fleet_id}, socket), do: {:noreply, socket}
 
@@ -1449,7 +1564,49 @@ defmodule KeyfleetWeb.FleetLive do
     |> assign(fleet_params: params, pass_note: nil)
     |> stream(:fleet_keys, FleetPage.fleet_keys(fleet_id, page.results, actor), reset: true)
     |> read_activity(fleet_id, feed)
+    |> read_quotes(fleet_id, actor)
   end
+
+  @doc """
+  What the signed-in person has sent their agent to quote in the fleet, with
+  a fresh box to send more: `%{paired?, form, requests, note}`, the latest
+  requests first, each with the room it was quoted in once it was. Nil for
+  anyone not signed in.
+  """
+  def read_quotes(socket, fleet_id, actor, note \\ nil)
+
+  def read_quotes(socket, _fleet_id, nil, _note), do: assign(socket, :quotes, nil)
+
+  def read_quotes(socket, fleet_id, actor, note) do
+    form =
+      AshPhoenix.Form.for_create(QuoteRequest, :ask,
+        actor: actor,
+        as: "quote",
+        transform_params: fn params, _action ->
+          params |> Map.take(["body"]) |> Map.put("fleet_id", fleet_id)
+        end
+      )
+
+    assign(socket, :quotes, %{
+      paired?: Agents.has_paired_agent?(actor),
+      form: to_form(form),
+      requests: Rooms.my_quote_requests!(fleet_id, actor: actor),
+      note: note
+    })
+  end
+
+  # A post quoting the person is a new line in a room, so their requests are
+  # read again with the hall; the box keeps what they are typing.
+  defp reread_quotes(
+         %{assigns: %{quotes: %{form: %{}} = quotes, fleet: %{fleet_id: fleet_id}}} = socket
+       ),
+       do:
+         assign(socket, :quotes, %{
+           quotes
+           | requests: Rooms.my_quote_requests!(fleet_id, actor: ShellLive.human_actor(socket))
+         })
+
+  defp reread_quotes(socket), do: socket
 
   # A fleet there is not, or one coming soon: its name at most, and no keys
   # or activity to read.
@@ -1459,6 +1616,7 @@ defmodule KeyfleetWeb.FleetLive do
       fleet: fleet,
       fleet_params: params,
       pass_note: nil,
+      quotes: nil,
       activity: nil,
       activity_refresh: nil
     )

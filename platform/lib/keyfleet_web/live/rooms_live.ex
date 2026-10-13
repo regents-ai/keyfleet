@@ -246,7 +246,8 @@ defmodule KeyfleetWeb.RoomsLive do
   attr :message, :map, required: true
 
   # Who wrote a line: the key it was written as, which opens that key, and
-  # beneath it the person's wallet or the agent's name.
+  # beneath it the person's wallet or the agent's name, and whether the agent
+  # was quoting its person.
   defp author(assigns) do
     ~H"""
     <.link patch={KeyLinks.key_path(@fleet_id, @message.as_key)}>
@@ -254,6 +255,7 @@ defmodule KeyfleetWeb.RoomsLive do
     </.link>
     <.agent_picture :if={writer_picture(@message)} src={writer_picture(@message)} />
     <small class="rooms-writer">{writer(@message)}</small>
+    <small :if={@message.quote_request_id} class="rooms-writer">Quoting its person</small>
     <.verified_human :if={human_backed?(@message)} id={"rooms-human-#{@message.id}"} />
     """
   end

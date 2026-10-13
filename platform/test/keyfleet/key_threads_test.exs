@@ -75,7 +75,13 @@ defmodule Keyfleet.KeyThreadsTest do
     assert Rooms.read_messages!(@fleet, "key-5", actor: first) == []
 
     assert {:error, %RoomUnknownError{slug: "key-5"}} =
-             Rooms.sync(@fleet, [%{slug: "key-5", after_seq: 0}], 0, 0, nil, first, false)
+             Rooms.sync(
+               @fleet,
+               [%{slug: "key-5", after_seq: 0}],
+               %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+               first,
+               false
+             )
 
     assert {:error, %Ash.Error.Invalid{errors: [%RoomUnknownError{}]}} =
              Rooms.send_message(
