@@ -94,7 +94,7 @@ defmodule KeyfleetWeb.Live.KeyPageTest do
 
     {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
     render_async(view)
-    assert has_element?(view, "#key-no-shards", "None")
+    assert has_element?(view, "#key-no-shards", "No agents yet")
 
     ChainHelpers.issue_shard!(@fleet, 1, @agent)
     epoch!(2, @stranger)

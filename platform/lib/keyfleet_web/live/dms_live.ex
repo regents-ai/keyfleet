@@ -23,6 +23,7 @@ defmodule KeyfleetWeb.DmsLive do
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Keys
   alias Keyfleet.Rooms.Errors.KeyUnknownError
+  alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.RoomsLive
@@ -96,7 +97,7 @@ defmodule KeyfleetWeb.DmsLive do
       <div :if={open?(@dms)} class="rooms-grid">
         <section class="rooms-panel dms-settings" aria-label="Conversation settings">
           <.link id="dms-back" patch={inbox_path(@dms)}>All messages</.link>
-          <.link id="dms-other-key" patch={"/app/keys/#{@dms.fleet_id}/#{@dms.other_token_id}"}>
+          <.link id="dms-other-key" patch={KeyLinks.key_path(@dms.fleet_id, @dms.other_token_id)}>
             Key {Rules.grouped(@dms.other_token_id)}’s page
           </.link>
 
@@ -176,7 +177,7 @@ defmodule KeyfleetWeb.DmsLive do
           <ol id="dms-thread-list" class="rooms-thread-list" phx-update="stream">
             <li :for={{dom_id, message} <- @messages} id={dom_id}>
               <p class="rooms-author">
-                <.link patch={"/app/keys/#{@dms.fleet_id}/#{message.from_token_id}"}>
+                <.link patch={KeyLinks.key_path(@dms.fleet_id, message.from_token_id)}>
                   Key {Rules.grouped(message.from_token_id)}
                 </.link>
                 <small class="rooms-writer">{writer(message)}</small>

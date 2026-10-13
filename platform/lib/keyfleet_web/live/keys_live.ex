@@ -66,9 +66,11 @@ defmodule KeyfleetWeb.KeysLive do
         </p>
 
         <section class="key-panel" aria-labelledby="key-owner-title">
-          <h2 id="key-owner-title">Owner</h2>
-          <p class="key-wallet"><code>{@key.owner_wallet}</code></p>
-          <p :if={@key.owner?} id="key-owner-you" class="key-detail">You</p>
+          <h2 id="key-owner-title">Held by</h2>
+          <p class="key-wallet">
+            <code title={@key.owner_wallet}>{RegentFormat.short_address(@key.owner_wallet)}</code>
+            <span :if={@key.owner?} id="key-owner-you" class="key-detail">You</span>
+          </p>
         </section>
 
         <PresenceCard.card
@@ -89,7 +91,7 @@ defmodule KeyfleetWeb.KeysLive do
             </Regent.Primitives.tip>
           </h2>
 
-          <p :if={@key.shards == []} id="key-no-shards">None</p>
+          <p :if={@key.shards == []} id="key-no-shards">No agents yet</p>
 
           <.live_component
             :if={@key.owner? and @key.shards != []}

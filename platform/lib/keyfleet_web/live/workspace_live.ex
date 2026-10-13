@@ -11,6 +11,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   use KeyfleetWeb, :html
 
+  alias Keyfleet.Fleets.Rules
+  alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WorkspacePage
@@ -463,9 +465,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :fleet_id, :string, required: true
   attr :token_id, :integer, required: true
 
-  # A key's page is named by its number, eighteen digits at most.
+  # A key's profile is named by its number, eighteen digits at most.
   defp key(%{token_id: token_id} = assigns) when token_id in 1..999_999_999_999_999_999,
-    do: ~H|<.link patch={"/app/keys/#{@fleet_id}/#{@token_id}"}>Key {@token_id}</.link>|
+    do:
+      ~H|<.link patch={KeyLinks.key_path(@fleet_id, @token_id)}>Key {Rules.grouped(@token_id)}</.link>|
 
   defp key(assigns), do: ~H|<span>Key {@token_id}</span>|
 
