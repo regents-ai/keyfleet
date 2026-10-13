@@ -128,6 +128,16 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert text(view, "#fleet-about") =~
              "When a level sells out, the holders of the level before it are paid back"
 
+    for row <- Keyfleet.Authority.rows() do
+      assert has_element?(view, "#fleet-authority dt", row.what)
+
+      assert has_element?(
+               view,
+               "#fleet-authority dd",
+               "#{row.who} · #{Keyfleet.Authority.needs(row)}"
+             )
+    end
+
     assert has_element?(
              view,
              ~s(#fleet-about a#fleet-contract-link[href="https://basescan.org/address/#{@contract}"][title="#{@contract}"])

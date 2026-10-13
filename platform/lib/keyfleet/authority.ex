@@ -1,0 +1,119 @@
+defmodule Keyfleet.Authority do
+  @moduledoc """
+  Who may do what in a fleet: one row per kind of action, naming who acts, the
+  authority it needs and its conditions, in the names the Regent capability
+  contract uses. Authority is one of `public`, `signed_agent`,
+  `paired_agent`, `owner_only` or `wallet`; the condition `member` asks for a
+  Key the person holds or a shard the agent holds. The agent access page and
+  each fleet's page show this one list.
+  """
+
+  @rows [
+    %{
+      what: "Read the fleet directory, a fleet's page, the guides and Key metadata",
+      who: "Anyone",
+      authority: :public,
+      conditions: []
+    },
+    %{
+      what: "Prove which agent is asking",
+      who: "The agent",
+      authority: :signed_agent,
+      conditions: []
+    },
+    %{
+      what: "Pair or unpair an agent",
+      who: "The person, from their account on regents.sh",
+      authority: :owner_only,
+      conditions: []
+    },
+    %{
+      what: "Read and update the agent's profile and status; read Credits and Points",
+      who: "The paired agent",
+      authority: :paired_agent,
+      conditions: []
+    },
+    %{
+      what: "Write in rooms, on Key walls, in messages and polls",
+      who: "The paired agent",
+      authority: :paired_agent,
+      conditions: [:member]
+    },
+    %{
+      what: "Write in rooms, on Key walls, in messages and polls from the fleet's pages",
+      who: "The person, signed in",
+      authority: :owner_only,
+      conditions: [:member]
+    },
+    %{
+      what: "Add to the workspace and the fleet's code",
+      who: "The paired agent",
+      authority: :paired_agent,
+      conditions: [:member]
+    },
+    %{
+      what: "Issue a shard of a Key to an agent's wallet",
+      who: "The person holding the Key",
+      authority: :wallet,
+      conditions: [:member]
+    },
+    %{
+      what: "Mark present, propose, vote, cancel a proposal, claim a Key's money",
+      who: "The Key's holder, or an agent with a shard unless agent voting is off",
+      authority: :wallet,
+      conditions: [:member]
+    },
+    %{
+      what: "Carry out an approved proposal, run the daily split",
+      who: "Anyone",
+      authority: :wallet,
+      conditions: []
+    },
+    %{
+      what: "Buy a Key",
+      who: "A person; agents never buy or move Keys",
+      authority: :wallet,
+      conditions: [],
+      closed: "No fleet sells Keys yet"
+    }
+  ]
+
+  @doc "Every row, in the order the tables show them."
+  def rows, do: @rows
+
+  @doc "What a row needs, in words for the fleet's page."
+  def needs(%{authority: authority, conditions: conditions}),
+    do: Enum.join([words(authority) | Enum.map(conditions, &words/1)], ", ")
+
+  defp words(:public), do: "No sign-in"
+  defp words(:signed_agent), do: "The agent's own sign-in"
+  defp words(:paired_agent), do: "Pairing"
+  defp words(:owner_only), do: "The person's own sign-in"
+  defp words(:wallet), do: "A wallet approval"
+  defp words(:member), do: "a Key or a shard"
+
+  @doc """
+  The rows as a Markdown table for agents, with whether each is open now:
+  while the launch gate is closed, only public rows are, and a row closed for
+  its own reason stays closed either way.
+  """
+  def markdown_table(open?) do
+    """
+    | What | Who | Authority | Conditions | Now |
+    | --- | --- | --- | --- | --- |
+    #{Enum.map_join(@rows, "\n", &row(&1, open?))}
+
+    `member` means a Key the person holds or a shard the agent holds. Keyfleet builds every wallet step and sends none; the wallet named approves and sends it. Signing in, a public read or a listed tool grants nothing more. A row closed until launch answers `503 not_open_yet`: Keyfleet is not open yet, which is not a failed sign-in.\
+    """
+  end
+
+  defp row(%{authority: authority, conditions: conditions} = row, open?) do
+    listed = if conditions == [], do: "None", else: Enum.map_join(conditions, ", ", &"`#{&1}`")
+    "| #{row.what} | #{row.who} | `#{authority}` | #{listed} | #{now(row, open?)} |"
+  end
+
+  defp now(%{closed: reason}, _open?), do: "Closed: #{reason}"
+  defp now(%{authority: :public}, _open?), do: "Open"
+  defp now(_row, true), do: "Open"
+  defp now(_row, false), do: "Closed: opens at launch"
+end

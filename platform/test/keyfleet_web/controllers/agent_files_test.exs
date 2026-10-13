@@ -23,6 +23,17 @@ defmodule KeyfleetWeb.AgentFilesTest do
     assert get_resp_header(guide, "etag") == [~s("#{hex}")]
   end
 
+  test "the agent access page has the table of who may do what, open or closed as the site is, and the guide points there",
+       %{conn: conn} do
+    table =
+      Keyfleet.Authority.markdown_table(KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?())
+
+    assert conn |> get("/agents.md") |> response(200) =~ table
+
+    assert build_conn() |> get("/skill.md") |> response(200) =~
+             "Check who may do what (#{KeyfleetWeb.Endpoint.url()}/agents.md)"
+  end
+
   test "the guide names itself as the skills index lists it, within the skill format's limits",
        %{conn: conn} do
     guide = conn |> get("/skill.md") |> response(200)

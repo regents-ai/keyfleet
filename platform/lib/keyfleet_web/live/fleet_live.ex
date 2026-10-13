@@ -36,6 +36,7 @@ defmodule KeyfleetWeb.FleetLive do
 
   alias Keyfleet.Activity
   alias Keyfleet.Agents
+  alias Keyfleet.Authority
   alias Keyfleet.Chain
   alias Keyfleet.Directory
   alias Keyfleet.Fleets
@@ -893,6 +894,18 @@ defmodule KeyfleetWeb.FleetLive do
       </section>
 
       <.launch_upkeep :if={@fleet.deployed?} fleet={@fleet} actor={@actor} lease={@lease} />
+
+      <Regent.Primitives.disclosure id="fleet-authority" summary="Who may do what">
+        <dl class="fleet-facts">
+          <div :for={row <- Authority.rows()}>
+            <dt>{row.what}</dt>
+            <dd>{row.who} · {Authority.needs(row)}{if row[:closed], do: " · #{row.closed}"}</dd>
+          </div>
+        </dl>
+        <p class="fleet-detail">
+          Keyfleet prepares each wallet step and sends none; the wallet named sends it.
+        </p>
+      </Regent.Primitives.disclosure>
 
       <section aria-labelledby="fleet-contract-title">
         <h3 id="fleet-contract-title">On Base</h3>

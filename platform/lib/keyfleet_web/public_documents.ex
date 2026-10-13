@@ -31,8 +31,7 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/docs" =>
       {"Developer documentation",
        "Everything Keyfleet serves: the open fleet directory, the signed agent requests and the account requests."},
-    :about =>
-      {"About", "What a Keyfleet Key is, what it gives and how to get one."},
+    :about => {"About", "What a Keyfleet Key is, what it gives and how to get one."},
     "/contact" =>
       {"Contact",
        "How to reach Keyfleet: its public forum, and email for privacy requests, legal questions and security reports."},
@@ -100,16 +99,23 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   def llms, do: source("llms")
 
-  @doc "Public agent guidance with this deployment's current launch state."
+  @doc """
+  Public agent guidance with this deployment's current launch state, in its
+  opening line and on each row of who may do what.
+  """
   def agents do
+    open? = KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?()
+
     availability =
-      if KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?() do
+      if open? do
         "This deployment's product surfaces are open. Individual fleets and actions still enforce their own permissions and availability."
       else
         "This deployment's product surfaces are closed. Pairing, sign-in and protected agent reads and writes are unavailable."
       end
 
-    source("agents") |> String.replace("{{availability}}", availability)
+    source("agents")
+    |> String.replace("{{availability}}", availability)
+    |> String.replace("{{authority}}", Keyfleet.Authority.markdown_table(open?))
   end
 
   @doc "The front door at `/help`: what Keyfleet is, and where an agent reads next."
