@@ -1246,7 +1246,7 @@ defmodule KeyfleetWeb.FleetLive do
       <h3 id="fleet-launch-title">
         Token launch
         <Regent.Primitives.tip id="fleet-launch-tip" label="About the token launch">
-          A launch the fleet voted for sells its token through Autolaunch. Once the sale ends, anyone can settle it, add the token to the daily split, release the tokens set aside for the treasury, and collect the pool’s fees for it.
+          A launch the fleet voted for sells its token through Autolaunch. Once the sale ends, anyone can settle it, add the token to the Daily Treasury Slice to Keys, release the tokens set aside for the treasury, and collect the pool’s fees for it.
         </Regent.Primitives.tip>
       </h3>
       <.live_component
@@ -1272,7 +1272,7 @@ defmodule KeyfleetWeb.FleetLive do
               <dd id="fleet-launch-sale">{sale(panel)}</dd>
             </div>
             <div>
-              <dt>Daily split</dt>
+              <dt>Daily Treasury Slice to Keys</dt>
               <dd id="fleet-launch-split">
                 {if WalletPanel.figures(panel).bound?, do: "Included", else: "Not yet"}
               </dd>
@@ -1294,7 +1294,7 @@ defmodule KeyfleetWeb.FleetLive do
             step="bind"
             id="fleet-launch-bind"
           >
-            Add to split
+            Add to slice
           </WalletPanel.step_button>
           <WalletPanel.step_button
             :if={launched?(panel)}

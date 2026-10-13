@@ -59,7 +59,8 @@ defmodule KeyfleetWeb.WalletWords do
     do:
       "Advances #{share_words(asset, share, amount)} to #{RegentFormat.short_address(operator)}."
 
-  defp action({:rate, bps}), do: "Sets the daily split to #{ProposalsPage.units(bps, 2)}%."
+  defp action({:rate, bps}),
+    do: "Sets the Daily Treasury Slice to Keys to #{ProposalsPage.units(bps, 2)}%."
 
   defp action({:edits, target, true}), do: "Restricts Key #{Rules.grouped(target)}’s edits."
   defp action({:edits, target, false}), do: "Allows Key #{Rules.grouped(target)}’s edits."
@@ -187,7 +188,7 @@ defmodule KeyfleetWeb.WalletWords do
   def title(%{name: "return"}), do: "Return"
   def title(%{name: "send_share"}), do: "Send Regents its share"
   def title(%{name: "settle"}), do: "Settle the sale"
-  def title(%{name: "bind"}), do: "Add to the daily split"
+  def title(%{name: "bind"}), do: "Add to the Daily Treasury Slice to Keys"
   def title(%{name: "release"}), do: "Release tokens"
   def title(%{name: "collect"}), do: "Collect pool fees"
   def title(_unknown), do: "Transaction"

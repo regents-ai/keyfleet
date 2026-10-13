@@ -170,7 +170,7 @@
           },
           "rate": {
             "type": "string",
-            "description": "rate: the daily split in percent, 0.1 to 2."
+            "description": "rate: the Daily Treasury Slice to Keys in percent, 0.1 to 2."
           },
           "target": {
             "type": "string",
@@ -240,8 +240,8 @@
     },
     {
       "name": "run_split",
-      "title": "Run the daily split",
-      "description": "Press this page's Run split: shares each asset at or above its minimum, its balance times the rate, equally across every key sold. Anyone may, 24 hours after the last run; the split preview on the page shows what it shares. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "title": "Release the Daily Treasury Slice to Keys",
+      "description": "Press this page's Release: releases the Daily Treasury Slice to Keys, which shares each asset at or above its minimum, its balance times the rate, equally across every key sold. Anyone may, 24 hours after the last release; the preview on the page shows what it shares. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
       "input_schema": {
         "type": "object",
         "properties": {},
@@ -345,7 +345,7 @@
     {
       "name": "claim",
       "title": "Claim",
-      "description": "Press one of the open key's Claim buttons: claims what the daily split shared with the key in one asset. It is always paid to the key's holder. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "description": "Press one of the open key's Claim buttons: claims what the Daily Treasury Slice to Keys shared with the key in one asset. It is always paid to the key's holder. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
       "input_schema": {
         "type": "object",
         "properties": {

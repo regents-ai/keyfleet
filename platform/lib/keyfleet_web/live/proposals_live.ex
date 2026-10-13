@@ -44,7 +44,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     {"decision", "Decision"},
     {"pay", "Payment"},
     {"advance", "Advance"},
-    {"rate", "Daily split rate"},
+    {"rate", "Daily Treasury Slice to Keys rate"},
     {"edits", "A Key’s edits"},
     {"signature", "Signature"},
     {"launch", "Token launch"}
@@ -538,7 +538,7 @@ defmodule KeyfleetWeb.ProposalsLive do
               <.text_field
                 id="propose-rate"
                 name="rate"
-                label="Daily split, %"
+                label="Daily Treasury Slice to Keys, %"
                 inputmode="decimal"
                 value={panel.inputs["rate"]}
               >

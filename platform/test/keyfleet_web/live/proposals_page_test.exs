@@ -158,7 +158,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert lines(view, "#proposal-calls .proposals-call-words") == [
                "Pay 12.5% of the treasury’s USDC to #{paid}",
                "Advance 10% of the treasury’s ETH (advance 5) to #{operator}",
-               "Set the daily split to 0.75%",
+               "Set the Daily Treasury Slice to Keys to 0.75%",
                "Stop Key 12 changing the workspace",
                "Sign the fleet’s Lit wallet request timed 1790000000 (21 September 2026 at 14:13:20 UTC)",
                "Launch Fleet Coin (FLT) through Autolaunch, for the treasury",
@@ -619,7 +619,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         "Advances 50% of the treasury’s ETH (about 0.5 ETH today) to 0xbbbb..bbbb."
       )
 
-      expect.([kind: "rate", rate: "0.75"], {:rate, 75}, "Sets the daily split to 0.75%.")
+      expect.(
+        [kind: "rate", rate: "0.75"],
+        {:rate, 75},
+        "Sets the Daily Treasury Slice to Keys to 0.75%."
+      )
 
       expect.(
         [kind: "edits", target: "12", restricted: "true"],

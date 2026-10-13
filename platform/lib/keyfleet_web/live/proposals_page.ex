@@ -229,7 +229,7 @@ defmodule KeyfleetWeb.ProposalsPage do
     }
 
   defp said({:rate, bps}, _assets, _balances),
-    do: plain("Set the daily split to #{units(bps, 2)}%")
+    do: plain("Set the Daily Treasury Slice to Keys to #{units(bps, 2)}%")
 
   defp said({:signature, :approve, issued_at}, _assets, _balances),
     do: plain("Sign the fleet’s Lit wallet request #{request_time(issued_at)}")
@@ -247,10 +247,11 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp said({:launch, launch}, _assets, _balances),
     do: plain("Launch #{launch.name} (#{launch.symbol}) through Autolaunch, for the treasury")
 
-  defp said(:voted_split, _assets, _balances), do: plain("Run the daily split now")
+  defp said(:voted_split, _assets, _balances),
+    do: plain("Release the Daily Treasury Slice to Keys now")
 
   defp said({:admit_ousd, token}, _assets, _balances),
-    do: plain("Add OUSD to the daily split:", token)
+    do: plain("Add OUSD to the Daily Treasury Slice to Keys:", token)
 
   defp said({:other, _target, _data}, _assets, _balances),
     do: plain("A call Keyfleet doesn’t recognize. Check it before you vote.")

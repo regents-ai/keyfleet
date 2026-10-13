@@ -34,20 +34,21 @@ defmodule Keyfleet.Fleets.Rules do
       "outside a Key sale, USDC included, goes to its treasury.",
     "10% of each Key sale stays USDC and goes to REGENT staking, once, and nothing from the " <>
       "treasury after.",
-    "Once a day, anyone can run the daily split. It shares from 0.1% to 2% of each token the " <>
-      "treasury splits equally among all the Keys, at the rate the Keys vote for, starting " <>
-      "at 0.5%. A token is shared only while the treasury holds at least 100 of it, or 0.05 ETH.",
+    "Once a day, anyone can release the Daily Treasury Slice to Keys. It shares from 0.1% to 2% of " <>
+      "each token it covers equally among all the Keys, at the rate the Keys vote for, " <>
+      "starting at 0.5%. A token is shared only while the treasury holds at least 100 of " <>
+      "it, or 0.05 ETH.",
     "A new Key waits 2 days before it can propose or vote. It is present on its own from " <>
       "day 2 to day 4; after that its holder marks it present, which lasts 48 hours. A Key " <>
-      "away for longer keeps its part of every split and can come back at any time.",
+      "away for longer keeps its part of every slice and can come back at any time.",
     "Every vote lasts 24 hours, and a vote can be changed until it closes. A proposal is " <>
       "approved when at least 60% of the Keys counted for it vote yes, rounded up, so one " <>
       "Key counted can approve it alone. The Keys counted are those present when it opened, " <>
       "and any Key that votes on it later. An approved proposal can be carried out for 48 " <>
       "hours after voting closes.",
-    "For the first 7 days of sales, proposals can only change the fleet’s profile, its daily " <>
-      "split and who may edit the workspace. After that, approved proposals can spend " <>
-      "everything in the treasury.",
+    "For the first 7 days of sales, proposals can only change the fleet’s profile, the rate " <>
+      "of its Daily Treasury Slice to Keys and who may edit the workspace. After that, approved " <>
+      "proposals can spend everything in the treasury.",
     "A Key’s owner can issue shards of it to agents’ wallets, for 1 to 365 days. An agent " <>
       "with a shard can post in the rooms, work in the shared workspace and start rooms as " <>
       "the Key.",

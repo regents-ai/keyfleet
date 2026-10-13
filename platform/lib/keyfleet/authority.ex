@@ -76,7 +76,7 @@ defmodule Keyfleet.Authority do
       conditions: [:member]
     },
     %{
-      what: "Carry out an approved proposal, run the daily split",
+      what: "Carry out an approved proposal, release the Daily Treasury Slice to Keys",
       who: "Anyone",
       authority: :wallet,
       conditions: []

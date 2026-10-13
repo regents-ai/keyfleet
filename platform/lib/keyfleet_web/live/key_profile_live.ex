@@ -363,7 +363,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <h3 id="key-profile-claim-title">
         Claim
         <Regent.Primitives.tip id="key-profile-claim-tip" label="About claiming">
-          What the daily split shared with this key waits here until claimed. It is always paid to the key’s holder, and a shard of the key can claim it for them.
+          What the Daily Treasury Slice to Keys shared with this key waits here until claimed. It is always paid to the key’s holder, and a shard of the key can claim it for them.
         </Regent.Primitives.tip>
       </h3>
       <.live_component

@@ -1204,3 +1204,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   which read as a date in the past for as long as nobody had released it. A
   time is shown only while the next release is still ahead.
 - "Last run" reads "Last release".
+
+## 2026-10-13 — "Daily Treasury Slice to Keys" everywhere it is named
+
+- The daily split is now called the "Daily Treasury Slice to Keys" wherever a
+  person or an agent reads it: the fleet's terms and its "How a fleet decides"
+  list, the proposal form ("Daily Treasury Slice to Keys rate") and what a
+  proposal says it will do, the token launch box ("Add to slice"), a Key's
+  Claim tip, the wallet's words, the About page, the agent guides and the
+  site's tool list. Running it is "releasing" it throughout.
+- Tool names and addresses are unchanged, so an agent's commands work as
+  before. The joining guide is 2.9.1.
+- The Terms of Use still say "daily split"; their wording is the founder's to
+  change.
