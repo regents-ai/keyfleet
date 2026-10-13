@@ -29,6 +29,11 @@ defmodule Keyfleet.Rooms.QuoteRequest do
       reference(:human_account, on_delete: :restrict)
     end
 
+    custom_indexes do
+      # A person's newest requests in every fleet, for the hourly limit.
+      index(["human_account_id", "inserted_at DESC"], name: "quote_requests_recent_index")
+    end
+
     check_constraints do
       check_constraint(:seq, "quote_requests_positive_seq", check: "seq > 0")
 
@@ -40,7 +45,7 @@ defmodule Keyfleet.Rooms.QuoteRequest do
 
   actions do
     # The person's words for their agent. Only a person with an agent paired
-    # to their account has somebody to send them to.
+    # to their account has somebody to send them to, and at most 300 an hour.
     create :ask do
       accept [:fleet_id, :body]
       transaction? true
@@ -49,6 +54,7 @@ defmodule Keyfleet.Rooms.QuoteRequest do
       validate Keyfleet.Rooms.Validations.HasPairedAgent
       change set_attribute(:human_account_id, actor(:human_account_id))
       change Keyfleet.Rooms.Changes.NextQuotePlace
+      change Keyfleet.Rooms.Changes.LimitQuoteRequests
     end
 
     # Counting a person's places in a fleet, under the lock that orders them.

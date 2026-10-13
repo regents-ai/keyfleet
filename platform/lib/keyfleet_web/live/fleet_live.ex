@@ -48,6 +48,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Keys
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.NoPairedAgentError
+  alias Keyfleet.Rooms.Errors.QuoteLimitError
   alias Keyfleet.Rooms.QuoteRequest
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
@@ -1455,9 +1456,19 @@ defmodule KeyfleetWeb.FleetLive do
 
   # Why the words sent to the person's agent were not sent.
   defp quote_refusal(form) do
-    if Enum.any?(form.source.source.errors, &match?(%NoPairedAgentError{}, &1)),
-      do: "Pair an agent first",
-      else: "Write up to 1,000 characters"
+    case Enum.find(
+           form.source.source.errors,
+           &(is_struct(&1, NoPairedAgentError) or is_struct(&1, QuoteLimitError))
+         ) do
+      %NoPairedAgentError{} ->
+        "Pair an agent first"
+
+      %QuoteLimitError{limit: limit, retry_after: seconds} ->
+        "You've sent #{limit} in the last hour. Try again in #{RoomsLive.minutes(seconds)}."
+
+      nil ->
+        "Write up to 1,000 characters"
+    end
   end
 
   # Why the Pass number sent opened no Key.

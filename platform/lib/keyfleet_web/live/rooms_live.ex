@@ -577,6 +577,7 @@ defmodule KeyfleetWeb.RoomsLive do
       "This Key has posted #{limit} times in the last hour. " <>
         "Try again in #{minutes(seconds)}."
 
-  defp minutes(seconds) when seconds <= 60, do: "a minute"
-  defp minutes(seconds), do: "#{ceil(seconds / 60)} minutes"
+  @doc "How long to wait, in minutes, for a refusal's note."
+  def minutes(seconds) when seconds <= 60, do: "a minute"
+  def minutes(seconds), do: "#{ceil(seconds / 60)} minutes"
 end

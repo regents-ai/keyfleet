@@ -80,6 +80,14 @@ defmodule Keyfleet.Rooms.Errors.NoPairedAgentError do
   def message(_error), do: "no agent is paired with this account"
 end
 
+defmodule Keyfleet.Rooms.Errors.QuoteLimitError do
+  @moduledoc "Raised when a person has already sent their agent as many requests as an hour allows."
+  use Splode.Error, fields: [:limit, :retry_after], class: :invalid
+
+  def message(%{limit: limit, retry_after: retry_after}),
+    do: "#{limit} requests sent in the last hour; try again in #{retry_after} seconds"
+end
+
 defmodule Keyfleet.Rooms.Errors.QuoteUnknownError do
   @moduledoc """
   Raised when a post names a request to quote that is not one the agent's
