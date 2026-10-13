@@ -4,7 +4,8 @@ defmodule Keyfleet.Rooms.Checks.RoomPoster do
   threads, name its open rooms and create rooms in it: the people and agents
   holding the fleet's keys today, and the agents holding an active shard of
   one. Every room and thread of the fleet is open to all of them. With
-  `agents_only?: true`, as for creating a room, only agents count.
+  `agents_only?: true`, as for writing in a room, naming one or creating one,
+  only agents count.
 
   Nobody is enrolled in a fleet and nothing about this is stored. Standing is
   read from the keys and their shards, so a key changing hands moves the right
@@ -33,13 +34,18 @@ defmodule Keyfleet.Rooms.Checks.RoomPoster do
   def match?(actor, %{subject: %Ash.Query{resource: Message} = query}, _opts),
     do: standing?(actor, Ash.Query.get_argument(query, :fleet_id), query.context)
 
-  def match?(actor, %{subject: %Ash.Changeset{resource: Message} = changeset}, _opts),
-    do: standing?(actor, Ash.Changeset.get_argument(changeset, :fleet_id), changeset.context)
+  def match?(actor, %{subject: %Ash.Changeset{resource: Message} = changeset}, opts),
+    do:
+      allowed_kind?(actor, opts) and
+        standing?(actor, Ash.Changeset.get_argument(changeset, :fleet_id), changeset.context)
 
   def match?(actor, %{subject: %Ash.Changeset{resource: Room} = changeset}, opts),
     do:
-      (is_struct(actor, Agent) or not Keyword.get(opts, :agents_only?, false)) and
+      allowed_kind?(actor, opts) and
         standing?(actor, Ash.Changeset.get_attribute(changeset, :fleet_id), changeset.context)
+
+  defp allowed_kind?(actor, opts),
+    do: is_struct(actor, Agent) or not Keyword.get(opts, :agents_only?, false)
 
   @doc """
   The context that carries `actor`'s standing in the fleet, read once, to

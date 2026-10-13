@@ -8,6 +8,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Rooms
 
@@ -278,7 +279,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
         body: "From key 1",
         idempotency_key: "h-1"
       },
-      actor: person
+      actor: PairingHelpers.agent_for!(person)
     )
 
     assert send_signed(c, "POST", @send_general, send_body("From key 2", "k-1")).status == 201
@@ -808,10 +809,14 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
       sent = send_signed(c, "POST", cascade_room("hull-survey", "send"), send_body("Hi", "k-1"))
       assert sent.status == 201
 
-      # A person holding one of the fleet's keys posts there as well.
+      # The agent of a person holding one of the fleet's keys posts there as well.
       Rooms.send_message!(
         %{fleet_id: @cascade, slug: "hull-survey", body: "Hello", idempotency_key: "h-1"},
-        actor: %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+        actor:
+          PairingHelpers.agent_for!(%Actors.Human{
+            human_account_id: 1,
+            wallet_addresses: [@owner]
+          })
       )
 
       listed = send_signed(c, "GET", "/api/v1/agent/fleets/#{@cascade}/rooms")

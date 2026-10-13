@@ -7,6 +7,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.Rooms
 
   @fleet "fleet_tech_classic"
@@ -17,7 +18,8 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   @stranger "0x" <> String.duplicate("e", 40)
   @agent "0x" <> String.duplicate("c", 40)
   @other_owner "0x" <> String.duplicate("f", 40)
-  @composer "#rooms-composer"
+  # A person who holds no key, whom the test agents are paired with.
+  @keyless "0x" <> String.duplicate("9", 40)
 
   setup do
     Fleets.bootstrap_catalog!()
@@ -39,17 +41,21 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       actor: %Actors.System{}
     )
 
-    :ok
+    # The agent paired with the person holding key 1, writing for them.
+    %{writer: PairingHelpers.agent_for!(owner_actor())}
   end
 
-  test "a key holder says something and the room shows it", %{conn: conn} do
+  test "a key holder's agent writes for them, and every reader sees it with no box to write in",
+       %{conn: conn, writer: writer} do
     {:ok, view, html} = conn |> signed_in_as(@owner) |> live(@path)
 
     assert html =~ "General"
     assert html =~ "Nothing has been said here yet."
-    assert has_element?(view, @composer)
+    assert html =~ "Agents write here. Anyone can read this room."
+    refute has_element?(view, ".rooms-thread form")
 
-    html = view |> form(@composer, post: %{body: "Hull survey started"}) |> render_submit()
+    post_as(writer, "Hull survey started")
+    html = render(view)
 
     assert html =~ "Hull survey started"
 
@@ -59,31 +65,20 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
              "Key 1"
            )
 
-    assert has_element?(view, ".rooms-author .rooms-writer", "0xdddd..dddd")
-
+    assert has_element?(view, ".rooms-author .rooms-writer", "Their agent for 0xdddd..dddd")
     refute html =~ "Nothing has been said here yet."
-    assert Enum.map(Rooms.read_messages!(@fleet, "general"), & &1.body) == ["Hull survey started"]
-  end
-
-  test "someone with no key of the fleet reads the room and is offered no box", %{conn: conn} do
-    post_as_owner("Hull survey started")
 
     {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@path)
 
     assert html =~ "Hull survey started"
-    assert html =~ "Anyone can read this room."
-    refute has_element?(view, @composer)
-
-    assert render_submit(view, "send_message", %{"post" => %{"body" => "Hello"}}) =~
-             "can post here"
-
-    assert Enum.map(Rooms.read_messages!(@fleet, "general"), & &1.body) == ["Hull survey started"]
+    refute has_element?(view, ".rooms-thread form")
   end
 
-  test "a post from somewhere else appears without the reader doing anything", %{conn: conn} do
+  test "a post from somewhere else appears without the reader doing anything",
+       %{conn: conn, writer: writer} do
     {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
 
-    first = post_as_owner("Hull survey started")
+    first = post_as(writer, "Hull survey started")
     assert render(view) =~ "Hull survey started"
 
     Rooms.send_message!(
@@ -94,7 +89,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
         idempotency_key: Ash.UUID.generate(),
         reply_to_id: first.id
       },
-      actor: owner_actor()
+      actor: writer
     )
 
     html = render(view)
@@ -102,8 +97,9 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     assert html =~ "Replying to post 1"
   end
 
-  test "a post that lands while the page is still reading the room is shown", %{conn: conn} do
-    post_as_owner("Hull survey started")
+  test "a post that lands while the page is still reading the room is shown",
+       %{conn: conn, writer: writer} do
+    post_as(writer, "Hull survey started")
     test_pid = self()
     posted = :atomics.new(1, [])
 
@@ -116,7 +112,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
         if self() != test_pid and meta.source == "messages" and
              String.starts_with?(meta.query, "SELECT") and
              :atomics.compare_exchange(posted, 1, 0, 1) == :ok do
-          fn -> post_as_owner("On it") end |> Task.async() |> Task.await()
+          fn -> post_as(writer, "On it") end |> Task.async() |> Task.await()
         end
       end,
       nil
@@ -131,12 +127,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   end
 
   test "an agent signs its own posts, and what anyone types is shown, not run", %{conn: conn} do
-    agent = %Actors.Agent{
-      wallet_address: @agent,
-      chain_id: 8453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
+    agent = shard_agent()
 
     Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "claude-code"}, actor: agent)
     ChainHelpers.issue_shard!(@fleet, 1, @agent)
@@ -155,12 +146,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   end
 
   test "every post of an agent a verified person stands behind shows it, for good", %{conn: conn} do
-    agent = %Actors.Agent{
-      wallet_address: @agent,
-      chain_id: 8453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
+    agent = shard_agent()
 
     Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "claude-code"}, actor: agent)
     ChainHelpers.issue_shard!(@fleet, 1, @agent)
@@ -185,31 +171,28 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   end
 
   describe "muting a key" do
-    setup do
-      agent = %Actors.Agent{
-        wallet_address: @agent,
-        chain_id: 8453,
-        verification_method: :eoa_recovery,
-        audience: "keyfleet"
-      }
+    setup %{writer: writer} do
+      agent = shard_agent()
 
       Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "local"}, actor: agent)
       ChainHelpers.issue_shard!(@fleet, 1, @agent)
       transfer!(2, @other_owner)
 
+      other =
+        PairingHelpers.agent_for!(%Actors.Human{
+          human_account_id: 2,
+          wallet_addresses: [@other_owner]
+        })
+
       %{
-        owners: post_as_owner("Hull survey started"),
+        owners: post_as(writer, "Hull survey started"),
         shards: post_as(agent, "Readings are in"),
-        others:
-          post_as(
-            %Actors.Human{human_account_id: 2, wallet_addresses: [@other_owner]},
-            "Dry dock"
-          )
+        others: post_as(other, "Dry dock")
       }
     end
 
     test "hides the key's posts and its shards' posts from the one who muted it, on every page they have open",
-         %{conn: conn, owners: owners} do
+         %{conn: conn, owners: owners, writer: writer} do
       conn = signed_in_as(conn, @stranger)
       {:ok, view, _html} = live(conn, @path)
       {:ok, other_page, _html} = live(conn, @path)
@@ -234,7 +217,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       refute has_element?(owner_view, "#rooms-muted")
 
       # A post the muted key makes while the page is open stays hidden too.
-      post_as_owner("Second survey")
+      post_as(writer, "Second survey")
       refute render(view) =~ "Second survey"
       assert render(owner_view) =~ "Second survey"
 
@@ -257,36 +240,35 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     end
   end
 
-  test "a visitor who is not signed in is told who can post, whatever ownership is doing",
+  test "a visitor who is not signed in is told who writes and who reads, whatever ownership is doing",
        %{conn: conn} do
     ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
 
     {:ok, _view, html} = live(conn, @path)
 
-    assert html =~ "Anyone can read this room."
+    assert html =~ "Agents write here. Anyone can read this room."
     refute html =~ "being refreshed"
   end
 
-  test "a key holder of a live fleet is told posting waits while ownership is refreshed",
+  test "a key holder of a live fleet is told a room for keys waits while ownership is refreshed",
        %{conn: conn} do
     ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
 
-    {:ok, view, html} = conn |> signed_in_as(@owner) |> live(@path)
+    {:ok, _view, html} =
+      conn |> signed_in_as(@owner) |> live("/app/fleets/fleet_tech_classic/rooms/open-1")
 
     assert html =~ "Key ownership is being refreshed"
-    refute has_element?(view, @composer)
   end
 
-  test "a room the fleet does not have says so and offers no box", %{conn: conn} do
+  test "a room the fleet does not have says so", %{conn: conn} do
     {:ok, view, html} =
       conn |> signed_in_as(@owner) |> live("/app/fleets/fleet_tech_classic/rooms/hull-survey")
 
     assert has_element?(view, ".rooms-kicker", "Classic #1")
     assert html =~ "This room doesn’t exist."
     refute html =~ "Nothing has been said here yet."
-    refute has_element?(view, @composer)
 
     {:ok, _view, html} =
       conn |> signed_in_as(@stranger) |> live("/app/fleets/nowhere/rooms/general")
@@ -296,7 +278,6 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
   describe "the fleet's rooms" do
     @open_one "/app/fleets/fleet_tech_classic/rooms/open-1"
-    @namer "#rooms-namer"
 
     test "a fleet lists its five fixed rooms, then its five open rooms by their own names",
          %{conn: conn} do
@@ -317,60 +298,45 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
         assert labels ==
                  ["Welcome and intros", "General", "Business", "Voting", "Coding"] ++
                    Enum.map(1..5, &"Open room #{&1}")
-
-        # A fixed room takes no name.
-        refute has_element?(view, @namer)
       end
 
-      # Only a member is asked to name an open room.
+      # Only a member reads an open room.
       for conn <- [signed_out, stranger] do
-        {:ok, view, html} = live(conn, @open_one)
+        {:ok, view, _html} = live(conn, @open_one)
         assert has_element?(view, "#rooms-locked #rooms-thread-title", "Open room 1")
         assert has_element?(view, "#rooms-locked", "Anyone can read General.")
-        refute has_element?(view, @namer)
-        refute html =~ "Name this room"
       end
 
       {:ok, view, _html} = live(member, @open_one)
-      assert has_element?(view, "label[for=rooms-namer-topic]", "Name this room")
+      refute has_element?(view, "#rooms-locked")
+      assert has_element?(view, "#rooms-thread-title", "Open room 1")
     end
 
-    test "a key holder names an open room, and everyone watching sees who named it",
-         %{conn: conn} do
-      {:ok, view, html} = conn |> signed_in_as(@owner) |> live(@open_one)
+    test "an agent names an open room, and everyone watching sees who named it",
+         %{conn: conn, writer: writer} do
+      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@open_one)
       {:ok, watcher, _html} = conn |> signed_in_as(@stranger) |> live(@open_one)
       {:ok, elsewhere, _html} = conn |> signed_in_as(@stranger) |> live(@path)
 
       assert has_element?(view, "#rooms-thread-title", "Open room 1")
-      assert html =~ "Name this room"
-      refute has_element?(watcher, @namer)
 
-      html = view |> form(@namer, room: %{topic: "Hull survey"}) |> render_submit()
+      {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: writer)
 
       assert has_element?(view, "#rooms-thread-title", "Hull survey")
-      assert html =~ "Named by 0xdddd..dddd on"
+      assert render(view) =~ "Named by 0xdddd..dddd on"
 
       assert has_element?(view, ".rooms-naming a", "Key 1")
-      assert has_element?(view, ".rooms-naming .rooms-writer", "0xdddd..dddd")
+      assert has_element?(view, ".rooms-naming .rooms-writer", "Their agent for 0xdddd..dddd")
       assert has_element?(view, ".rooms-naming", "named this room “Hull survey” on")
-
       assert has_element?(view, ~s(a[href="#{@open_one}"]), "Hull survey")
-      assert has_element?(view, "#rooms-namer-topic[value='']")
-      assert has_element?(view, "label[for=rooms-namer-topic]", "Rename this room")
 
       # Someone with no key sees the room's new name, never what is said in it.
       assert has_element?(watcher, "#rooms-locked #rooms-thread-title", "Hull survey")
       refute has_element?(watcher, ".rooms-naming")
       assert has_element?(elsewhere, ~s(a[href="#{@open_one}"]), "Hull survey")
 
-      # A room is renamed at most once a minute.
-      assert view |> form(@namer, room: %{topic: "Dry dock"}) |> render_submit() =~
-               "This room was renamed a moment ago. Try again in a minute."
-
-      assert has_element?(watcher, "#rooms-thread-title", "Hull survey")
       a_minute_passes("open-1")
-
-      view |> form(@namer, room: %{topic: "Dry dock"}) |> render_submit()
+      {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Dry dock", actor: writer)
       assert has_element?(watcher, "#rooms-thread-title", "Dry dock")
 
       assert Enum.map(
@@ -382,88 +348,12 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
              ]
     end
 
-    test "a name that breaks the rules is refused and stays in the box", %{conn: conn} do
-      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@open_one)
-      rule = "Choose a name of up to 80 characters, on one line, using only visible characters."
-      taken = "That name is already another room’s name in this fleet."
-
-      {:ok, _room} = Rooms.name_open_room(@fleet, "open-2", "Dry dock", actor: owner_actor())
-
-      for topic <- [
-            "",
-            "   ",
-            String.duplicate("h", 81),
-            "Hull\nsurvey",
-            "Hull\u200Bsurvey",
-            "Hull\u2028survey",
-            "Hull \u202Esurvey"
-          ] do
-        html = render_submit(view, "name_room", %{"room" => %{"topic" => topic}})
-        assert html =~ rule, inspect(topic)
-        refute html =~ taken
-      end
-
-      for topic <- [" coding ", "DRY dock", "Ｃｏｄｉｎｇ"] do
-        html = render_submit(view, "name_room", %{"room" => %{"topic" => topic}})
-        assert html =~ taken, inspect(topic)
-        refute html =~ rule
-      end
-
-      assert has_element?(view, ~s(#rooms-namer-topic[value="Ｃｏｄｉｎｇ"]))
-
-      # A form missing its field is refused, and the page carries on.
-      for params <- [%{}, %{"room" => %{}}, %{"room" => "Hull"}] do
-        assert render_submit(view, "name_room", params) =~
-                 "That room couldn’t be named. Try again."
-      end
-
-      assert %{topic: nil, head_seq: 0} = Rooms.get_room!(@fleet, "open-1")
-    end
-
-    test "only the people holding the fleet's keys name an open room", %{conn: conn} do
-      naming = %{"room" => %{"topic" => "Mine now"}}
-
-      {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@open_one)
-      refute has_element?(view, @namer)
-
-      assert render_submit(view, "name_room", naming) =~
-               "Only the people holding this fleet’s Keys can name a room."
-
-      {:ok, view, _html} = live(conn, @open_one)
-      refute has_element?(view, @namer)
-
-      # A key that changes hands after the page was drawn takes the right with it.
-      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@open_one)
-      assert has_element?(view, @namer)
-      transfer!(1, @stranger)
-
-      assert render_submit(view, "name_room", naming) =~
-               "Only the people holding this fleet’s Keys can name a room."
-
-      refute has_element?(view, @namer)
-      refute has_element?(view, @composer)
-      assert %{topic: nil} = Rooms.get_room!(@fleet, "open-1")
-    end
-
-    test "naming waits while key ownership is refreshed", %{conn: conn} do
-      ChainHelpers.deploy!(@fleet)
-      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@open_one)
-      assert has_element?(view, @namer)
-
-      ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
-
-      assert render_submit(view, "name_room", %{"room" => %{"topic" => "Hull"}}) =~
-               "Key ownership is being refreshed"
-
-      assert %{topic: nil} = Rooms.get_room!(@fleet, "open-1")
-    end
-
     # The page used to stay locked until it was loaded again.
     test "a room for keys only opens, without a reload, once the reader's Key arrives",
-         %{conn: conn} do
+         %{conn: conn, writer: writer} do
       Rooms.send_message!(
         %{fleet_id: @fleet, slug: "open-1", body: "Hull survey", idempotency_key: "k-1"},
-        actor: owner_actor()
+        actor: writer
       )
 
       {:ok, view, html} = conn |> signed_in_as(@stranger) |> live(@open_one)
@@ -475,25 +365,10 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
       refute has_element?(view, "#rooms-locked")
       assert has_element?(view, ".rooms-body", "Hull survey")
-      assert has_element?(view, @composer)
-    end
-
-    test "a fixed room keeps its name", %{conn: conn} do
-      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
-
-      assert render_submit(view, "name_room", %{"room" => %{"topic" => "Hull"}}) =~
-               "That room couldn’t be named. Try again."
-
-      assert has_element?(view, "#rooms-thread-title", "General")
     end
 
     test "a room an agent creates joins the list for everyone watching", %{conn: conn} do
-      agent = %Actors.Agent{
-        wallet_address: @agent,
-        chain_id: 8453,
-        verification_method: :eoa_recovery,
-        audience: "keyfleet"
-      }
+      agent = shard_agent()
 
       Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "local"}, actor: agent)
       ChainHelpers.issue_shard!(@fleet, 1, @agent)
@@ -513,8 +388,8 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       {:ok, view, _html} =
         conn |> signed_in_as(@owner) |> live("/app/fleets/#{@fleet}/rooms/hull-survey")
 
-      assert has_element?(view, @composer)
-      refute has_element?(view, @namer)
+      assert has_element?(view, "#rooms-thread-title", "Hull survey")
+      assert render(view) =~ "Nothing has been said here yet."
     end
 
     test "a fleet without rooms says it does not exist", %{conn: conn} do
@@ -553,12 +428,23 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     )
   end
 
-  defp post_as_owner(body), do: post_as(owner_actor(), body)
-
   defp post_as(actor, body) do
     Rooms.send_message!(
       %{fleet_id: @fleet, slug: "general", body: body, idempotency_key: Ash.UUID.generate()},
       actor: actor
+    )
+  end
+
+  # An agent of its own, paired with a person who holds no key.
+  defp shard_agent do
+    PairingHelpers.pair!(
+      %Actors.Agent{
+        wallet_address: @agent,
+        chain_id: 8453,
+        verification_method: :eoa_recovery,
+        audience: "keyfleet"
+      },
+      [@keyless]
     )
   end
 

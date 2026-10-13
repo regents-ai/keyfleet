@@ -10,6 +10,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias Keyfleet.ChainViews
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Proposals.Actions
   alias Keyfleet.Rooms
@@ -1072,6 +1073,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
 
     test "a post appears once the page reads the fleet again, its words as text", %{conn: conn} do
+      writer = PairingHelpers.agent_for!(owner())
       {:ok, view, _html} = live(conn, @path)
       refute has_element?(view, ~s(#fleet-feed-list li[data-kind="post"]))
 
@@ -1083,7 +1085,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
             body: "<b>Hull</b> <script>alert(1)</script>\u0007\u202Esurvey\u2066 done",
             idempotency_key: Ash.UUID.generate()
           },
-          actor: owner()
+          actor: writer
         )
 
       # The notice of the post came first; the message stands in for the wait.
@@ -1319,13 +1321,27 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#fleet-next-key")
       refute has_element?(view, "#fleet-entry-sign-in")
 
-      for refused <- ["4", "0", "abc", ""] do
+      assert text(view, "#fleet-entry-pass-note") == ""
+
+      for {refused, note} <- [
+            {"4", "No Key for Pass 4"},
+            {"0", "No Key for Pass 0"},
+            {"abc", "Enter a Pass number"},
+            {"", "Enter a Pass number"}
+          ] do
         view |> form("#fleet-entry-pass", pass: refused) |> render_submit()
         refute_patched(view)
+        assert text(view, "#fleet-entry-pass-note") == note
       end
+
+      # A Pass number sent as anything but text is refused the same way.
+      render_submit(view, "open_pass_key", %{"pass" => ["2"]})
+      refute_patched(view)
+      assert text(view, "#fleet-entry-pass-note") == "Enter a Pass number"
 
       view |> form("#fleet-entry-pass", pass: "2") |> render_submit()
       assert_patch(view, path <> "?key=2")
+      assert text(view, "#fleet-entry-pass-note") == ""
 
       {:ok, view, _html} = live(build_conn(), path)
       assert has_element?(view, ~s(#fleet-entry-sign-in[data-account-target="sign-in"]))

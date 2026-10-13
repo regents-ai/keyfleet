@@ -6,6 +6,7 @@ defmodule Keyfleet.FleetRoomsTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.CreatedRoomLimitError
@@ -42,15 +43,16 @@ defmodule Keyfleet.FleetRoomsTest do
       runner = shard_agent("c", 6)
       room = create!(runner, "hull-survey", "Hull survey")
 
-      for actor <- [owner(1), owner(3), owner(6), owner(231), runner],
+      for actor <- [runner | Enum.map([1, 3, 6, 231], &member/1)],
           slug <- [room.slug | @own_slugs] do
         assert {:ok, %{kind: :post}} = post(actor, slug), inspect({actor, slug})
       end
     end
 
-    test "nobody without one of the fleet's keys posts, and nobody while ownership is not fresh" do
+    test "no person posts, nor any agent without one of the fleet's keys, nor any while ownership is not fresh" do
       record(@fleet, 1)
       record("fleet_tech_classic", 2)
+      writer = member(1)
       # The wallet of an agent with a shard of key 1, proven as a smart wallet
       # on Ethereum only, or signed in for another site.
       runner = shard_agent("c", 1)
@@ -60,27 +62,28 @@ defmodule Keyfleet.FleetRoomsTest do
         %{runner | audience: "elsewhere"}
       ]
 
-      for actor <- [human("e"), owner(2), agent("d"), nil | elsewhere],
+      for actor <- [owner(1), human("e"), member(2), agent("d"), nil | elsewhere],
           slug <- ~w(general open-1) do
         assert {:error, %Ash.Error.Forbidden{}} = post(actor, slug), inspect({actor, slug})
       end
 
       ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
-      assert {:error, %Ash.Error.Forbidden{}} = post(owner(1), "general")
+      assert {:error, %Ash.Error.Forbidden{}} = post(writer, "general")
 
       ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
-      assert {:error, %Ash.Error.Forbidden{}} = post(owner(1), "open-1")
+      assert {:error, %Ash.Error.Forbidden{}} = post(writer, "open-1")
       assert Enum.all?(Rooms.list_rooms!(@fleet), &(&1.head_seq == 0))
     end
   end
 
   describe "naming an open room" do
-    test "a member names it, the room says so, and it keeps who named it and when" do
+    test "an agent of a member names it, the room says so, and it keeps who named it and when" do
       record(@fleet, [1, 3])
+      namer = member(1)
       Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
       before = DateTime.utc_now()
 
-      assert {:ok, named} = Rooms.name_open_room(@fleet, "open-2", "Hull survey", actor: owner(1))
+      assert {:ok, named} = Rooms.name_open_room(@fleet, "open-2", "Hull survey", actor: namer)
 
       assert {named.topic, named.topic_set_by, named.head_seq} ==
                {"Hull survey", wallet(1), 1}
@@ -104,13 +107,14 @@ defmodule Keyfleet.FleetRoomsTest do
       assert set_by == wallet(1)
 
       # Posts carry on after the line.
-      assert {:ok, %{seq: 2, kind: :post}} = post(owner(3), "open-2")
+      assert {:ok, %{seq: 2, kind: :post}} = post(member(3), "open-2")
     end
 
     test "an agent renames it, and naming it what it is already called changes nothing" do
       record(@fleet, [1, 3])
+      namer = member(1)
       runner = shard_agent("c", 3)
-      {:ok, first} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: owner(1))
+      {:ok, first} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: namer)
       a_minute_passes("open-1")
 
       assert {:ok, renamed} = Rooms.name_open_room(@fleet, "open-1", "Dry dock", actor: runner)
@@ -120,7 +124,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
       assert DateTime.compare(renamed.topic_set_at, first.topic_set_at) == :gt
 
-      assert {:ok, again} = Rooms.name_open_room(@fleet, "open-1", "Dry dock", actor: owner(1))
+      assert {:ok, again} = Rooms.name_open_room(@fleet, "open-1", "Dry dock", actor: namer)
       assert {again.topic_set_by, again.topic_set_at} == {wallet("c"), renamed.topic_set_at}
 
       # Read as the system would, past the policy: the test checks what the
@@ -136,9 +140,10 @@ defmodule Keyfleet.FleetRoomsTest do
 
     test "an open room is renamed at most once a minute, counted from its last naming" do
       record(@fleet, [1, 3])
+      namer = member(1)
       runner = shard_agent("c", 3)
       unnamed = Rooms.get_room!(@fleet, "open-1")
-      {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: owner(1))
+      {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: namer)
 
       assert {:error, %Ash.Error.Invalid{errors: [%RenameTooSoonError{retry_after: wait}]}} =
                Rooms.name_open_room(@fleet, "open-1", "Dry dock", actor: runner)
@@ -161,13 +166,13 @@ defmodule Keyfleet.FleetRoomsTest do
       backdate("open-1", 59)
 
       assert {:error, %Ash.Error.Invalid{errors: [%RenameTooSoonError{retry_after: wait}]}} =
-               Rooms.name_open_room(@fleet, "open-1", "Ship ops", actor: owner(1))
+               Rooms.name_open_room(@fleet, "open-1", "Ship ops", actor: namer)
 
       assert wait in 1..2
       backdate("open-1", 2)
 
       assert {:ok, %{topic: "Ship ops", topic_set_by: set_by}} =
-               Rooms.name_open_room(@fleet, "open-1", "Ship ops", actor: owner(1))
+               Rooms.name_open_room(@fleet, "open-1", "Ship ops", actor: namer)
 
       assert set_by == wallet(1)
 
@@ -179,11 +184,12 @@ defmodule Keyfleet.FleetRoomsTest do
              ]
     end
 
-    test "only a key holder names it, and only while ownership is fresh" do
+    test "only an agent of the fleet names it, never a person, and only while ownership is fresh" do
       record(@fleet, 1)
+      namer = member(1)
       record("fleet_tech_classic", 2)
 
-      for actor <- [human("e"), owner(2), agent("d"), nil] do
+      for actor <- [owner(1), human("e"), member(2), agent("d"), nil] do
         assert {:error, %Ash.Error.Forbidden{}} =
                  Rooms.name_open_room(@fleet, "open-1", "Mine", actor: actor),
                inspect(actor)
@@ -192,19 +198,20 @@ defmodule Keyfleet.FleetRoomsTest do
       # Naming is refused before the room says anything, not only by the line
       # it would say.
       open = Rooms.get_room!(@fleet, "open-1")
-      refute Ash.can?({open, :set_topic, %{topic: "Mine"}}, human("e"))
-      assert Ash.can?({open, :set_topic, %{topic: "Mine"}}, owner(1))
+      refute Ash.can?({open, :set_topic, %{topic: "Mine"}}, owner(1))
+      assert Ash.can?({open, :set_topic, %{topic: "Mine"}}, namer)
 
       ChainHelpers.seed_cursor!(@fleet, observed_at: DateTime.add(DateTime.utc_now(), -3600))
 
       assert {:error, %Ash.Error.Forbidden{}} =
-               Rooms.name_open_room(@fleet, "open-1", "Mine", actor: owner(1))
+               Rooms.name_open_room(@fleet, "open-1", "Mine", actor: namer)
 
       assert unnamed?("open-1")
     end
 
     test "a topic follows the rules for a room's name" do
       record(@fleet, 1)
+      namer = member(1)
 
       for topic <- [
             "",
@@ -230,7 +237,7 @@ defmodule Keyfleet.FleetRoomsTest do
             "\u3000"
           ] do
         assert {:error, %Ash.Error.Invalid{errors: [%{field: :topic} | _]}} =
-                 Rooms.name_open_room(@fleet, "open-1", topic, actor: owner(1)),
+                 Rooms.name_open_room(@fleet, "open-1", topic, actor: namer),
                inspect(topic)
       end
 
@@ -247,16 +254,17 @@ defmodule Keyfleet.FleetRoomsTest do
             {"open-5", "Ｓｈｉｐ ｏｐｓ ﬁx", "Ship ops fix"}
           ] do
         assert {:ok, %{topic: ^named}} =
-                 Rooms.name_open_room(@fleet, slug, topic, actor: owner(1)),
+                 Rooms.name_open_room(@fleet, slug, topic, actor: namer),
                inspect(topic)
       end
     end
 
     test "a topic is never, in any case, a name another room of the fleet goes by" do
       record(@fleet, 1)
+      namer = member(1)
       runner = shard_agent("c", 1)
       create!(runner, "ship-ops", "Ship ops")
-      assert {:ok, _room} = Rooms.name_open_room(@fleet, "open-2", "Hull survey", actor: owner(1))
+      assert {:ok, _room} = Rooms.name_open_room(@fleet, "open-2", "Hull survey", actor: namer)
 
       # A fixed room's name, an unnamed open room's name, another open room's
       # topic and a created room's name, in any case and in any Unicode form
@@ -277,7 +285,7 @@ defmodule Keyfleet.FleetRoomsTest do
                   errors: [
                     %{field: :name, message: "is already another room's name in this fleet"}
                   ]
-                }} = Rooms.name_open_room(@fleet, "open-1", topic, actor: owner(1)),
+                }} = Rooms.name_open_room(@fleet, "open-1", topic, actor: namer),
                inspect(topic)
       end
 
@@ -289,7 +297,7 @@ defmodule Keyfleet.FleetRoomsTest do
       a_minute_passes("open-2")
 
       assert {:ok, %{topic: "HULL Survey"}} =
-               Rooms.name_open_room(@fleet, "open-2", "HULL Survey", actor: owner(1))
+               Rooms.name_open_room(@fleet, "open-2", "HULL Survey", actor: namer)
 
       for topic <- ["Open room 1", "Hull survey 2", "Ship ops team", "Generally"] do
         assert {:ok, %{topic: ^topic}} =
@@ -300,29 +308,31 @@ defmodule Keyfleet.FleetRoomsTest do
 
       # Another fleet's rooms go by their own names.
       record("fleet_tech_classic", 2)
+      other = member(2)
 
       for {slug, topic} <- [{"open-2", "Hull survey"}, {"open-3", "Ship ops"}] do
         assert {:ok, %{topic: ^topic}} =
-                 Rooms.name_open_room("fleet_tech_classic", slug, topic, actor: owner(2))
+                 Rooms.name_open_room("fleet_tech_classic", slug, topic, actor: other)
       end
     end
 
     test "only an open room the fleet has takes a topic" do
       record(@fleet, 1)
+      namer = member(1)
       runner = shard_agent("c", 1)
       create!(runner, "hull-survey", "Hull survey")
 
       for slug <- ~w(general coding hull-survey) do
         assert {:error, %Ash.Error.Invalid{errors: [%{field: :kind}]}} =
-                 Rooms.name_open_room(@fleet, slug, "Mine", actor: owner(1)),
+                 Rooms.name_open_room(@fleet, slug, "Mine", actor: namer),
                slug
       end
 
       assert {:error, %RoomUnknownError{slug: "open-6"}} =
-               Rooms.name_open_room(@fleet, "open-6", "Mine", actor: owner(1))
+               Rooms.name_open_room(@fleet, "open-6", "Mine", actor: namer)
 
       assert {:error, %Ash.Error.Invalid{errors: [%UnknownFleetError{}]}} =
-               Rooms.name_open_room("hull_survey", "open-1", "Mine", actor: owner(1))
+               Rooms.name_open_room("hull_survey", "open-1", "Mine", actor: namer)
 
       assert Enum.all?(Rooms.list_rooms!(@fleet), &is_nil(&1.topic))
       assert Enum.all?(Rooms.list_rooms!(@fleet), &(&1.head_seq == 0))
@@ -390,7 +400,7 @@ defmodule Keyfleet.FleetRoomsTest do
   end
 
   describe "created rooms" do
-    test "an agent creates a room the whole fleet posts in" do
+    test "an agent creates a room every agent of the fleet posts in" do
       record(@fleet, [1, 3, 231])
       runner = shard_agent("c", 3)
       Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
@@ -403,11 +413,13 @@ defmodule Keyfleet.FleetRoomsTest do
       assert_receive %Broadcast{event: "rooms_changed", payload: %{fleet_id: @fleet}}
       assert List.last(Rooms.list_rooms!(@fleet)).slug == "hull-survey"
 
-      for actor <- [owner(1), owner(3), owner(231), runner] do
+      for actor <- [runner | Enum.map([1, 3, 231], &member/1)] do
         assert {:ok, _post} = post(actor, "hull-survey")
       end
 
-      assert {:error, %Ash.Error.Forbidden{}} = post(human("e"), "hull-survey")
+      for actor <- [owner(1), human("e")] do
+        assert {:error, %Ash.Error.Forbidden{}} = post(actor, "hull-survey")
+      end
     end
 
     test "only an agent with a shard of one of the fleet's keys creates a room, while ownership is fresh" do
@@ -427,6 +439,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
     test "a created room takes a free address and a name no fixed or open room has" do
       record(@fleet, 1)
+      namer = member(1)
       runner = shard_agent("c", 1)
 
       assert {:error, %Ash.Error.Invalid{errors: [%UnknownFleetError{}]}} =
@@ -467,7 +480,7 @@ defmodule Keyfleet.FleetRoomsTest do
       end
 
       create!(runner, "hull", "Hull")
-      assert {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Dry dock", actor: owner(1))
+      assert {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Dry dock", actor: namer)
 
       # A fixed room's name, an unnamed open room's name, an open room's topic
       # and another created room's name, in any case.
@@ -512,6 +525,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
     test "a fleet holds 100 created rooms, however many one agent made" do
       record(@fleet, 1)
+      namer = member(1)
       runner = shard_agent("c", 1)
 
       for n <- 1..100, do: create!(runner, "made-#{n}", "Made #{n}")
@@ -524,7 +538,7 @@ defmodule Keyfleet.FleetRoomsTest do
                )
 
       # Open rooms still take topics, and another fleet's rooms are its own.
-      assert {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull", actor: owner(1))
+      assert {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull", actor: namer)
       record("fleet_tech_classic", 2)
       other = shard_agent("d", 2, "fleet_tech_classic")
 
@@ -570,19 +584,27 @@ defmodule Keyfleet.FleetRoomsTest do
     runner
   end
 
+  # An agent paired with the person holding the fleet's key `token_id`.
+  defp member(token_id), do: PairingHelpers.agent_for!(owner(token_id))
+
   defp owner(token_id),
     do: %Actors.Human{human_account_id: token_id, wallet_addresses: [wallet(token_id)]}
 
   defp human(character),
     do: %Actors.Human{human_account_id: 1, wallet_addresses: [wallet(character)]}
 
+  # An agent paired with a person who holds no key.
   defp agent(character),
-    do: %Actors.Agent{
-      wallet_address: wallet(character),
-      chain_id: 8453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
+    do:
+      PairingHelpers.pair!(
+        %Actors.Agent{
+          wallet_address: wallet(character),
+          chain_id: 8453,
+          verification_method: :eoa_recovery,
+          audience: "keyfleet"
+        },
+        [wallet("9")]
+      )
 
   defp wallet(token_id) when is_integer(token_id),
     do: "0x" <> String.pad_leading(Integer.to_string(token_id), 40, "0")

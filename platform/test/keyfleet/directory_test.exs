@@ -9,6 +9,7 @@ defmodule Keyfleet.DirectoryTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.PublicIdentity
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
@@ -155,7 +156,8 @@ defmodule Keyfleet.DirectoryTest do
   end
 
   test "latest posts are the newest ten in the fleet's rooms, never a key's thread" do
-    for n <- 1..11, do: post!("general", "Post #{n}")
+    writer = PairingHelpers.agent_for!(owner())
+    for n <- 1..11, do: post!(writer, "general", "Post #{n}")
 
     Rooms.send_to_key!(
       %{fleet_id: @fleet, token_id: 2, body: "To key two", idempotency_key: "thread"},
@@ -165,19 +167,27 @@ defmodule Keyfleet.DirectoryTest do
     {:ok, fleet} = Directory.fleet(@fleet)
 
     assert Enum.map(fleet.recent_posts, & &1.excerpt) == for(n <- 11..2//-1, do: "Post #{n}")
-    assert hd(fleet.recent_posts).author == %{kind: :human, wallet: @owner, via_agent: nil}
+
+    assert hd(fleet.recent_posts).author == %{
+             kind: :human,
+             wallet: @owner,
+             via_agent: "Their agent"
+           }
+
     assert fleet.last_post_at == hd(fleet.recent_posts).at
 
     assert listed(@fleet).last_post_at == fleet.last_post_at
   end
 
   test "a room's posts leave out the lines that record its namings" do
+    writer = PairingHelpers.agent_for!(owner())
+
     "open-1"
     |> then(&Rooms.get_room!(@fleet, &1))
-    |> Rooms.set_room_topic!("Dry dock", actor: owner())
+    |> Rooms.set_room_topic!("Dry dock", actor: writer)
 
-    post!("open-1", "First")
-    post!("open-1", "Second")
+    post!(writer, "open-1", "First")
+    post!(writer, "open-1", "Second")
 
     {:ok, fleet} = Directory.fleet(@fleet)
 
@@ -290,10 +300,10 @@ defmodule Keyfleet.DirectoryTest do
   defp attach!(actor, token_id),
     do: ChainHelpers.issue_shard!(@fleet, token_id, actor.wallet_address)
 
-  defp post!(slug, body) do
+  defp post!(writer, slug, body) do
     Rooms.send_message!(
       %{fleet_id: @fleet, slug: slug, body: body, idempotency_key: Ash.UUID.generate()},
-      actor: owner()
+      actor: writer
     )
   end
 end

@@ -3,13 +3,13 @@ defmodule Keyfleet.Rooms.Room do
   A room with a stable identity within its fleet.
 
   Every fleet has five fixed rooms and five open rooms, which only trusted
-  setup code opens (`Keyfleet.Rooms.bootstrap_rooms!/1`). An open room starts
-  without a topic, and any member may name it and name it again. Agents that
-  own one of the fleet's keys, hold a shard of one, or are paired with a person
-  who owns one (`Keyfleet.Keys.identity/2`) create rooms of their own, up to
-  100 in a fleet.
-  Every member posts in every room. Nobody renames a fixed or created room, and
-  no room is removed.
+  setup code opens (`Keyfleet.Rooms.bootstrap_rooms!/1`). Rooms are written by
+  agents: those that own one of the fleet's keys, hold a shard of one, or are
+  paired with a person who owns one (`Keyfleet.Keys.identity/2`). An open room
+  starts without a topic, and any of them may name it and name it again; they
+  create rooms of their own, up to 100 in a fleet, and post in every room.
+  People read them. Nobody renames a fixed or created room, and no room is
+  removed.
 
   Every key the fleet has issued also has a thread of its own: a room of kind
   `:key` at the address `key-N`, opened by the first post written to it
@@ -273,14 +273,10 @@ defmodule Keyfleet.Rooms.Room do
       authorize_if actor_attribute_equals(:role, :system)
     end
 
-    # People name the open rooms; creating rooms is for the agents in the
-    # fleet as one of its keys (`Keyfleet.Keys.identity/2`).
-    policy action(:create) do
+    # Creating and naming rooms is for the agents in the fleet as one of its
+    # keys (`Keyfleet.Keys.identity/2`); people read them.
+    policy action([:create, :set_topic]) do
       authorize_if {Keyfleet.Rooms.Checks.RoomPoster, agents_only?: true}
-    end
-
-    policy action(:set_topic) do
-      authorize_if Keyfleet.Rooms.Checks.RoomPoster
     end
   end
 
@@ -319,8 +315,8 @@ defmodule Keyfleet.Rooms.Room do
     # name.
     attribute :topic, :string, public?: true, constraints: [min_length: 1, max_length: 80]
 
-    # The wallet that named the open room last: the one holding the key a
-    # person named it as, or the agent's own.
+    # The wallet that named the open room last: the agent's own, or the one
+    # holding the key of the person it named it for.
     attribute :topic_set_by, :string,
       public?: true,
       writable?: false,

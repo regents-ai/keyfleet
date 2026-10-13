@@ -10,6 +10,7 @@ defmodule Keyfleet.KeyProfileTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Keys.Profile
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Traits
@@ -42,14 +43,18 @@ defmodule Keyfleet.KeyProfileTest do
       epoch!(@fleet, 12, 1, wallet("a"))
       epoch!(@fleet, 12, 2, wallet("b"))
       epoch!(@fleet, 3, 1, holder)
-      for body <- ["One", "Two", "Three"], do: post!(human("b"), "general", body)
+
+      for body <- ["One", "Two", "Three"],
+          do: post!(PairingHelpers.agent_for!(human("b")), "general", body)
+
       to_key!(human("b"), 3, "Hello, three")
       received = epoch!(@fleet, 12, 3, holder)
       epoch!(@fleet, 20, 1, holder)
       epoch!(@elsewhere, 1, 1, holder)
 
-      # The holder posts in a room and in key 12's thread, as key 3, their highest.
-      post!(human("e"), "general", "Four")
+      # The holder's agent posts in a room for them, and they write in key 12's
+      # thread, as key 3, their highest.
+      post!(PairingHelpers.agent_for!(human("e")), "general", "Four")
       to_key!(human("e"), 12, "Hello, twelve")
 
       proposal!(@fleet, 1)

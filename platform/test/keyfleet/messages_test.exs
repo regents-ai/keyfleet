@@ -6,6 +6,7 @@ defmodule Keyfleet.MessagesTest do
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Phoenix.Socket.Broadcast
@@ -26,13 +27,15 @@ defmodule Keyfleet.MessagesTest do
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     owner = human("a")
     epoch!(owner_wallet: wallet("a"))
-    %{owner: owner}
+    # People read the rooms; the agent paired with key 1's holder writes in
+    # them as that key.
+    %{owner: owner, writer: PairingHelpers.agent_for!(owner)}
   end
 
-  test "each room counts its own posts from one upwards", %{owner: owner} do
-    first = post!(owner, "general", "Morning")
-    second = post!(owner, "general", "Anyone on the hull survey?")
-    elsewhere = post!(owner, "coding", "Hull survey started")
+  test "each room counts its own posts from one upwards", %{writer: writer} do
+    first = post!(writer, "general", "Morning")
+    second = post!(writer, "general", "Anyone on the hull survey?")
+    elsewhere = post!(writer, "coding", "Hull survey started")
 
     assert Enum.map([first, second, elsewhere], & &1.seq) == [1, 2, 1]
 
@@ -42,9 +45,9 @@ defmodule Keyfleet.MessagesTest do
            }
   end
 
-  test "the same send key and the same words give back the one post", %{owner: owner} do
-    {:ok, sent} = send_as(owner, "general", "Hull survey started", "k-1")
-    {:ok, again} = send_as(owner, "general", "Hull survey started", "k-1")
+  test "the same send key and the same words give back the one post", %{writer: writer} do
+    {:ok, sent} = send_as(writer, "general", "Hull survey started", "k-1")
+    {:ok, again} = send_as(writer, "general", "Hull survey started", "k-1")
 
     assert again.id == sent.id
     assert again.seq == sent.seq
@@ -52,26 +55,28 @@ defmodule Keyfleet.MessagesTest do
     assert heads()[{@fleet, "general"}] == 1
   end
 
-  test "the same send key with different words is refused and writes nothing", %{owner: owner} do
-    {:ok, sent} = send_as(owner, "general", "Hull survey started", "k-1")
+  test "the same send key with different words is refused and writes nothing", %{writer: writer} do
+    {:ok, sent} = send_as(writer, "general", "Hull survey started", "k-1")
 
     assert {:error, %Ash.Error.Invalid{errors: [%Rooms.Errors.SendConflictError{}]}} =
-             send_as(owner, "general", "Hull survey finished", "k-1")
+             send_as(writer, "general", "Hull survey finished", "k-1")
 
     assert Enum.map(read("general"), & &1.id) == [sent.id]
     assert heads()[{@fleet, "general"}] == 1
   end
 
-  test "a room the fleet does not have refuses the post", %{owner: owner} do
+  test "a room the fleet does not have refuses the post", %{writer: writer} do
     assert {:error, %Ash.Error.Invalid{errors: [%Rooms.Errors.RoomUnknownError{}]}} =
-             send_as(owner, "hull-survey", "Anyone there?", "k-1")
+             send_as(writer, "hull-survey", "Anyone there?", "k-1")
   end
 
-  test "only people holding a key of the fleet may post in it", %{owner: owner} do
-    stranger = human("e")
+  test "only agents writing as a key of the fleet post in it; people never do",
+       %{owner: owner, writer: writer} do
+    stranger = PairingHelpers.agent_for!(human("e"))
 
     assert {:error, %Ash.Error.Forbidden{}} = send_as(stranger, "general", "Hello", "k-1")
     assert {:error, %Ash.Error.Forbidden{}} = send_as(nil, "general", "Hello", "k-2")
+    assert {:error, %Ash.Error.Forbidden{}} = send_as(owner, "general", "Hello", "k-4")
 
     assert {:error, %Ash.Error.Forbidden{}} =
              Rooms.send_message(
@@ -81,18 +86,21 @@ defmodule Keyfleet.MessagesTest do
                  body: "Hello",
                  idempotency_key: "k-3"
                },
-               actor: owner
+               actor: writer
              )
 
     assert read("general") == []
-    assert post!(owner, "general", "Hello").author_kind == :human
+    # Written for its person, the line is the person's, marked with the agent.
+    posted = post!(writer, "general", "Hello")
+    assert {posted.author_kind, posted.author_wallet} == {:human, wallet("a")}
+    assert posted.via_agent_profile_id != nil
   end
 
   # Holding a key grants nothing while its ownership may be out of date.
-  test "a key holder cannot post while key ownership is being refreshed", %{owner: owner} do
+  test "a key holder cannot post while key ownership is being refreshed", %{writer: writer} do
     ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
 
-    assert {:error, %Ash.Error.Forbidden{}} = send_as(owner, "general", "Hello", "k-1")
+    assert {:error, %Ash.Error.Forbidden{}} = send_as(writer, "general", "Hello", "k-1")
     assert read("general") == []
   end
 
@@ -138,15 +146,19 @@ defmodule Keyfleet.MessagesTest do
     )
 
     post!(agent, "general", "Hull survey started", "k-1")
-    post!(owner, "general", "Thanks", "k-2")
+
+    Rooms.send_to_key!(
+      %{fleet_id: @fleet, token_id: 1, body: "Thanks", idempotency_key: "k-2"},
+      actor: owner
+    )
 
     assert [repeated] = Ash.read!(Agents.CheckIn)
     assert repeated.last_contribution_at == DateTime.add(noted.last_contribution_at, -2, :minute)
   end
 
-  test "a post can only answer a post in the same room", %{owner: owner} do
-    elsewhere = post!(owner, "coding", "Hull survey started")
-    here = post!(owner, "general", "Morning")
+  test "a post can only answer a post in the same room", %{writer: writer} do
+    elsewhere = post!(writer, "coding", "Hull survey started")
+    here = post!(writer, "general", "Morning")
 
     assert {:error, %Ash.Error.Invalid{errors: [%Rooms.Errors.ReplyOutsideRoomError{}]}} =
              Rooms.send_message(
@@ -157,7 +169,7 @@ defmodule Keyfleet.MessagesTest do
                  idempotency_key: "k-2",
                  reply_to_id: elsewhere.id
                },
-               actor: owner
+               actor: writer
              )
 
     answer =
@@ -169,14 +181,14 @@ defmodule Keyfleet.MessagesTest do
           idempotency_key: "k-3",
           reply_to_id: here.id
         },
-        actor: owner
+        actor: writer
       )
 
     assert answer.reply_to_id == here.id
   end
 
-  test "anyone may read a room, and a reader never gets more than it asked for", %{owner: owner} do
-    for n <- 1..5, do: post!(owner, "general", "Post #{n}")
+  test "anyone may read a room, and a reader never gets more than it asked for", %{writer: writer} do
+    for n <- 1..5, do: post!(writer, "general", "Post #{n}")
 
     assert Enum.map(read("general"), & &1.seq) == [1, 2, 3, 4, 5]
     assert Enum.map(read("general", %{after_seq: 3}), & &1.seq) == [4, 5]
@@ -185,16 +197,18 @@ defmodule Keyfleet.MessagesTest do
     assert {:error, %Ash.Error.Invalid{}} = Rooms.read_messages(@fleet, "general", %{limit: 201})
   end
 
-  test "a reader behind on every room catches up on each post exactly once", %{owner: owner} do
-    for n <- 1..3, do: post!(owner, "general", "General #{n}")
-    post!(owner, "coding", "Coding 1")
+  test "a reader behind on every room catches up on each post exactly once", %{writer: writer} do
+    for n <- 1..3, do: post!(writer, "general", "General #{n}")
+    post!(writer, "coding", "Coding 1")
 
-    {:ok, first} = Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, 0, nil, owner, false)
+    {:ok, first} =
+      Rooms.sync(@fleet, [%{slug: "general", after_seq: 0}], 0, 0, nil, writer, false)
+
     assert [%{slug: "general", head_seq: 3, cursor: 3, messages: caught_up}] = first.rooms
     assert %{items: [], has_more: false} = first.proposals
     assert Enum.map(caught_up, & &1.seq) == [1, 2, 3]
 
-    post!(owner, "general", "General 4")
+    post!(writer, "general", "General 4")
 
     {:ok, second} =
       Rooms.sync(
@@ -203,7 +217,7 @@ defmodule Keyfleet.MessagesTest do
         0,
         0,
         nil,
-        owner,
+        writer,
         false
       )
 
@@ -213,16 +227,16 @@ defmodule Keyfleet.MessagesTest do
     assert {coding.messages, coding.cursor, coding.head_seq} == {[], 1, 1}
 
     assert {:error, %Rooms.Errors.RoomUnknownError{}} =
-             Rooms.sync(@fleet, [%{slug: "hull-survey", after_seq: 0}], 0, 0, nil, owner, false)
+             Rooms.sync(@fleet, [%{slug: "hull-survey", after_seq: 0}], 0, 0, nil, writer, false)
 
     too_many = for n <- 1..101, do: %{slug: "general", after_seq: n}
-    assert {:error, :invalid_request} = Rooms.sync(@fleet, too_many, 0, 0, nil, owner, false)
+    assert {:error, :invalid_request} = Rooms.sync(@fleet, too_many, 0, 0, nil, writer, false)
 
     beyond = [%{slug: "general", after_seq: 2 ** 70}]
-    assert {:error, :invalid_request} = Rooms.sync(@fleet, beyond, 0, 0, nil, owner, false)
+    assert {:error, :invalid_request} = Rooms.sync(@fleet, beyond, 0, 0, nil, writer, false)
 
     twice = [%{slug: "general", after_seq: 0}, %{slug: "general", after_seq: 0}]
-    assert {:error, :invalid_request} = Rooms.sync(@fleet, twice, 0, 0, nil, owner, false)
+    assert {:error, :invalid_request} = Rooms.sync(@fleet, twice, 0, 0, nil, writer, false)
 
     for after_seq <- [-1, 2 ** 70] do
       assert {:error, :invalid_request} =
@@ -232,7 +246,7 @@ defmodule Keyfleet.MessagesTest do
                  after_seq,
                  0,
                  nil,
-                 owner,
+                 writer,
                  false
                )
 
@@ -243,20 +257,20 @@ defmodule Keyfleet.MessagesTest do
                  0,
                  after_seq,
                  nil,
-                 owner,
+                 writer,
                  false
                )
     end
   end
 
   test "a reader behind in a room is told how far it got, even when the workspace is read up",
-       %{owner: owner} do
-    for n <- 1..51, do: post!(owner, "general", "Post #{n}")
-    post!(owner, "coding", "Coding 1")
+       %{writer: writer} do
+    for n <- 1..51, do: post!(writer, "general", "Post #{n}")
+    post!(writer, "coding", "Coding 1")
 
     # Each room is read up to its own page, however busy the others are.
     cursors = [%{slug: "general", after_seq: 0}, %{slug: "coding", after_seq: 0}]
-    {:ok, synced} = Rooms.sync(@fleet, cursors, 0, 0, nil, owner, false)
+    {:ok, synced} = Rooms.sync(@fleet, cursors, 0, 0, nil, writer, false)
     assert [%{cursor: 50, head_seq: 51}, %{cursor: 1, head_seq: 1}] = synced.rooms
     assert synced.graph.has_more == false
 
@@ -268,17 +282,19 @@ defmodule Keyfleet.MessagesTest do
              Rooms.catch_up(@fleet, ["general", "coding"], [0, 0], 50, actor: stranger)
   end
 
-  # Posting from the page and its tools reaches no per-address limit.
+  # Posting from the page and its tools reaches no per-address limit. People
+  # write on keys' threads.
   test "a person posts as a key 300 times an hour at most; repeats and agents go through",
        %{owner: owner} do
-    for n <- 1..299, do: post!(owner, Enum.random(["general", "coding"]), "Post #{n}")
-    {:ok, last} = send_as(owner, "general", "Post 300", "k-300")
+    epoch!(token_id: 2, owner_wallet: wallet("b"))
+    for n <- 1..299, do: {:ok, _} = to_key(owner, Enum.random([1, 2]), "Post #{n}")
+    {:ok, last} = to_key(owner, 1, "Post 300", "k-300")
 
     assert {:error, %Ash.Error.Invalid{errors: [%Rooms.Errors.PostLimitError{} = too_many]}} =
-             send_as(owner, "coding", "One more", "k-301")
+             to_key(owner, 2, "One more", "k-301")
 
     assert too_many.retry_after in 3_500..3_600
-    assert {:ok, %{id: id}} = send_as(owner, "general", "Post 300", "k-300")
+    assert {:ok, %{id: id}} = to_key(owner, 1, "Post 300", "k-300")
     assert id == last.id
 
     agent = agent("c")
@@ -287,22 +303,24 @@ defmodule Keyfleet.MessagesTest do
     assert %{as_key: 1, author_kind: :agent} = post!(agent, "general", "Hull survey started")
   end
 
-  test "a room's notice of a new post carries its place, and a repeat sends none", %{owner: owner} do
+  test "a room's notice of a new post carries its place, and a repeat sends none", %{
+    writer: writer
+  } do
     Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
     room = Rooms.get_room!(@fleet, "general")
 
-    {:ok, sent} = send_as(owner, "general", "Hull survey started", "k-1")
+    {:ok, sent} = send_as(writer, "general", "Hull survey started", "k-1")
     assert_receive %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: 1}}
     assert room_id == room.id
     assert sent.seq == 1
 
-    {:ok, _again} = send_as(owner, "general", "Hull survey started", "k-1")
+    {:ok, _again} = send_as(writer, "general", "Hull survey started", "k-1")
     refute_receive %Broadcast{event: "room_head"}, 100
   end
 
   test "the database refuses to edit, delete or empty posts, key ownership or shards",
-       %{owner: owner} do
-    posted = post!(owner, "general", "Hull survey started")
+       %{writer: writer} do
+    posted = post!(writer, "general", "Hull survey started")
 
     assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
              Repo.query(
@@ -326,8 +344,8 @@ defmodule Keyfleet.MessagesTest do
     assert Enum.map(read("general"), &{&1.id, &1.body}) == [{posted.id, "Hull survey started"}]
   end
 
-  test "the database holds only posts and room namings", %{owner: owner} do
-    posted = post!(owner, "general", "Hull survey started")
+  test "the database holds only posts and room namings", %{writer: writer} do
+    posted = post!(writer, "general", "Hull survey started")
 
     assert {:error,
             %Postgrex.Error{postgres: %{code: :check_violation, constraint: "messages_kind"}}} =
@@ -341,10 +359,15 @@ defmodule Keyfleet.MessagesTest do
              )
   end
 
-  test "a person always writes as the highest-ranked key their wallets hold, from its wallet" do
+  test "an agent writing for its person writes as the highest-ranked key the person's wallets hold, from its wallet" do
     epoch!(token_id: 7, owner_wallet: wallet("b"))
     epoch!(token_id: 30, owner_wallet: wallet("c"))
-    person = %Actors.Human{human_account_id: 2, wallet_addresses: [wallet("c"), wallet("b")]}
+
+    person =
+      PairingHelpers.agent_for!(%Actors.Human{
+        human_account_id: 2,
+        wallet_addresses: [wallet("c"), wallet("b")]
+      })
 
     first = post!(person, "general", "Morning")
     assert {first.as_key, first.author_wallet} == {7, wallet("b")}
@@ -378,19 +401,24 @@ defmodule Keyfleet.MessagesTest do
     assert {:error, %Ash.Error.Forbidden{}} = send_as(agent, "general", "Anyone?", "k-3")
   end
 
-  test "a repeated send key answers with the key the post was first written as", %{owner: owner} do
-    {:ok, sent} = send_as(owner, "general", "Hull survey started", "k-1")
+  test "a repeated send key answers with the key the post was first written as", %{writer: writer} do
+    {:ok, sent} = send_as(writer, "general", "Hull survey started", "k-1")
     epoch!(token_id: 1, ownership_epoch: 2, owner_wallet: wallet("b"), log_index: 1)
     epoch!(token_id: 2, owner_wallet: wallet("a"))
 
-    {:ok, again} = send_as(owner, "general", "Hull survey started", "k-1")
+    {:ok, again} = send_as(writer, "general", "Hull survey started", "k-1")
     assert {again.id, again.as_key} == {sent.id, 1}
   end
 
-  test "a person's retry is known whichever of their wallets now holds the key they write as" do
+  test "an agent's retry for its person is known whichever of the person's wallets now holds the key it writes as" do
     epoch!(token_id: 7, owner_wallet: wallet("b"))
     epoch!(token_id: 30, owner_wallet: wallet("c"))
-    person = %Actors.Human{human_account_id: 2, wallet_addresses: [wallet("b"), wallet("c")]}
+
+    person =
+      PairingHelpers.agent_for!(%Actors.Human{
+        human_account_id: 2,
+        wallet_addresses: [wallet("b"), wallet("c")]
+      })
 
     {:ok, sent} = send_as(person, "general", "Hull survey started", "k-1")
     assert {sent.as_key, sent.author_wallet} == {7, wallet("b")}
@@ -415,7 +443,13 @@ defmodule Keyfleet.MessagesTest do
     # A wallet of its own, so the key it sells is the only key it holds.
     seller_wallet = "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
     epoch!(ownership_epoch: 2, owner_wallet: seller_wallet, log_index: 1)
-    seller = %Actors.Human{human_account_id: 1, wallet_addresses: [seller_wallet]}
+
+    seller =
+      PairingHelpers.agent_for!(%Actors.Human{
+        human_account_id: 1,
+        wallet_addresses: [seller_wallet]
+      })
+
     test_pid = self()
     moved = :atomics.new(1, [])
 
@@ -443,8 +477,11 @@ defmodule Keyfleet.MessagesTest do
     assert heads()[{@fleet, "general"}] == 0
   end
 
-  test "naming an open room is written as the namer's key", %{owner: owner} do
-    {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: owner)
+  test "naming an open room is written as the namer's key", %{owner: owner, writer: writer} do
+    assert {:error, %Ash.Error.Forbidden{}} =
+             Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: owner)
+
+    {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: writer)
 
     assert [%{kind: :room_named, as_key: 1, author_wallet: author}] = read("open-1")
     assert author == wallet("a")
@@ -458,6 +495,18 @@ defmodule Keyfleet.MessagesTest do
   defp send_as(actor, slug, body, idempotency_key) do
     Rooms.send_message(
       %{fleet_id: @fleet, slug: slug, body: body, idempotency_key: idempotency_key},
+      actor: actor
+    )
+  end
+
+  defp to_key(actor, token_id, body, key \\ nil) do
+    Rooms.send_to_key(
+      %{
+        fleet_id: @fleet,
+        token_id: token_id,
+        body: body,
+        idempotency_key: key || Ash.UUID.generate()
+      },
       actor: actor
     )
   end
@@ -477,13 +526,19 @@ defmodule Keyfleet.MessagesTest do
   defp human(character),
     do: %Actors.Human{human_account_id: 1, wallet_addresses: [wallet(character)]}
 
+  # An agent paired with a person holding no Key here, so it writes only as
+  # its own Key or a shard.
   defp agent(character),
-    do: %Actors.Agent{
-      wallet_address: wallet(character),
-      chain_id: 8453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
+    do:
+      PairingHelpers.pair!(
+        %Actors.Agent{
+          wallet_address: wallet(character),
+          chain_id: 8453,
+          verification_method: :eoa_recovery,
+          audience: "keyfleet"
+        },
+        [wallet("9")]
+      )
 
   defp epoch!(overrides) do
     %{

@@ -160,6 +160,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :thread, :any, required: true, doc: "the messages written to the open key"
   attr :activity, :any, required: true, doc: "the fleet's latest activity, newest first"
   attr :send_agent_open, :boolean, required: true, doc: "whether \"Send your agent\" is showing"
+  attr :pass_note, :string, default: nil, doc: "why the Pass number sent opened no Key"
 
   attr :now, :map,
     required: true,
@@ -254,7 +255,7 @@ defmodule KeyfleetWeb.FleetLive do
           </nav>
         </header>
 
-        <.entry fleet={@fleet} actor={@actor} params={@params} />
+        <.entry fleet={@fleet} actor={@actor} params={@params} pass_note={@pass_note} />
 
         <div class="fleet-stage">
           <.hall
@@ -401,6 +402,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
   attr :params, :map, required: true
+  attr :pass_note, :string, default: nil
 
   # The one way in, under the bar: the reader's own Key, the Club Pass a Club
   # Key comes with, the Key on sale, or signing in, whichever applies first.
@@ -442,6 +444,7 @@ defmodule KeyfleetWeb.FleetLive do
           required
         />
         <Regent.Primitives.button type="submit" variant="secondary">Open its Key</Regent.Primitives.button>
+        <p id="fleet-entry-pass-note" class="fleet-entry__note" role="status">{@pass_note}</p>
       </form>
       <Regent.Primitives.button
         :if={is_nil(@actor)}
@@ -1295,20 +1298,24 @@ defmodule KeyfleetWeb.FleetLive do
   def handle_event("activity_earlier", _params, socket), do: {:noreply, socket}
 
   # A Club Key opens from its Pass's number, since it waits for whoever holds
-  # that Pass; its window shows Claim to them.
+  # that Pass; its window shows Claim to them. A number with no Key says so
+  # beside the field.
   def handle_event(
         "open_pass_key",
         %{"pass" => pass},
         %{assigns: %{fleet: %{deployed?: true} = fleet}} = socket
       ) do
-    with {token_id, ""} <- Integer.parse(pass),
-         true <- KeyMap.choosable?(fleet.progress, token_id) do
-      {:noreply,
-       push_patch(socket,
-         to: KeyLinks.key_path(fleet.fleet_id, token_id, socket.assigns.fleet_params)
-       )}
-    else
-      _ -> {:noreply, socket}
+    case FleetPage.chosen_key(fleet.progress, pass) do
+      nil ->
+        {:noreply, assign(socket, :pass_note, pass_note(pass))}
+
+      token_id ->
+        {:noreply,
+         socket
+         |> assign(:pass_note, nil)
+         |> push_patch(
+           to: KeyLinks.key_path(fleet.fleet_id, token_id, socket.assigns.fleet_params)
+         )}
     end
   end
 
@@ -1339,6 +1346,16 @@ defmodule KeyfleetWeb.FleetLive do
       {:noreply, socket}
     end
   end
+
+  # Why the Pass number sent opened no Key.
+  defp pass_note(pass) when is_binary(pass) do
+    case Integer.parse(pass) do
+      {number, ""} -> "No Key for Pass #{number}"
+      _not_a_number -> "Enter a Pass number"
+    end
+  end
+
+  defp pass_note(_pass), do: "Enter a Pass number"
 
   @doc """
   The hall's feed is read again from the top, as many pages as are
@@ -1429,7 +1446,7 @@ defmodule KeyfleetWeb.FleetLive do
       agents: Directory.agents(fleet_id),
       agents_here: agents_here(fleet_id)
     })
-    |> assign(:fleet_params, params)
+    |> assign(fleet_params: params, pass_note: nil)
     |> stream(:fleet_keys, FleetPage.fleet_keys(fleet_id, page.results, actor), reset: true)
     |> read_activity(fleet_id, feed)
   end
@@ -1438,7 +1455,13 @@ defmodule KeyfleetWeb.FleetLive do
   # or activity to read.
   defp show_without_keys(socket, fleet, params) do
     socket
-    |> assign(fleet: fleet, fleet_params: params, activity: nil, activity_refresh: nil)
+    |> assign(
+      fleet: fleet,
+      fleet_params: params,
+      pass_note: nil,
+      activity: nil,
+      activity_refresh: nil
+    )
     |> stream(:fleet_keys, [], reset: true)
     |> stream(:activity, [], reset: true)
   end

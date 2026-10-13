@@ -10,6 +10,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
   alias Keyfleet.ContractSchema
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.Rooms
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.DirectoryMD
@@ -290,7 +291,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
   defp post!(body) do
     Rooms.send_message!(
       %{fleet_id: @fleet, slug: "general", body: body, idempotency_key: Ash.UUID.generate()},
-      actor: owner()
+      actor: PairingHelpers.agent_for!(owner())
     )
   end
 end

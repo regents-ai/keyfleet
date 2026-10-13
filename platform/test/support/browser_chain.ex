@@ -38,6 +38,7 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
@@ -300,10 +301,11 @@ defmodule Keyfleet.BrowserChain do
 
   @doc """
   Gives a deployed fleet something on each of its pages to link to the
-  others: a key sold to `owner` says something in the General room, the
-  workspace holds a goal that discusses that message and a task assigned to
-  the Key the message speaks as, and the fleet has proposal 1. Returns that
-  Key's number: an owner who already holds a lower Key speaks as that one.
+  others: the agent of `owner`, sold a key, says something for them in the
+  General room, the workspace holds a goal that discusses that message and a
+  task assigned to the Key the message speaks as, and the fleet has proposal 1.
+  Returns that Key's number: an owner who already holds a lower Key speaks as
+  that one.
   """
   def furnish!(fleet_id, owner) do
     {_sold, message} = speak!(fleet_id, owner, "The plan is in the workspace.")
@@ -326,7 +328,8 @@ defmodule Keyfleet.BrowserChain do
   end
 
   @doc """
-  Sells the fleet's next key to `owner`, who says `body` in the General room.
+  Sells the fleet's next key to `owner`, whose agent says `body` for them in the
+  General room.
   Returns the key's number.
   """
   def say!(fleet_id, owner, body) do
@@ -344,7 +347,7 @@ defmodule Keyfleet.BrowserChain do
     message =
       Rooms.send_message!(
         %{fleet_id: fleet_id, slug: "general", body: body, idempotency_key: Ash.UUID.generate()},
-        actor: %Human{human_account_id: 1, wallet_addresses: [owner]}
+        actor: PairingHelpers.agent_for!(%Human{human_account_id: 1, wallet_addresses: [owner]})
       )
 
     {token_id, message}

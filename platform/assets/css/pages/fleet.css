@@ -147,6 +147,16 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Says why a Pass number opened nothing. Its space is kept while empty, so
+   the card never changes height. */
+.fleet-entry__note {
+  min-inline-size: 11rem;
+  min-block-size: 1lh;
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .fleet-entry__agents {
   margin-inline-start: auto;
   color: var(--color-fg-muted);

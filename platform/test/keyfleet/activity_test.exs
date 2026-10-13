@@ -11,6 +11,7 @@ defmodule Keyfleet.ActivityTest do
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.WorkspaceFixtures, as: Workspace
@@ -44,6 +45,7 @@ defmodule Keyfleet.ActivityTest do
     test "walking the pages gives every item of every source once, in one read's order",
          %{seen_at: seen_at} do
       owner = human("a")
+      writer = PairingHelpers.agent_for!(owner)
       Enum.each(2..4, &epoch!(&1, 1, "a"))
       epoch!(2, 2, "b")
 
@@ -54,10 +56,10 @@ defmodule Keyfleet.ActivityTest do
       execution!(@fleet, 2, wallet("f"))
       proposal!(@fleet, 3, %{})
 
-      post!(owner, "general", "Morning")
-      post!(owner, "general", "Hull survey started")
-      post!(owner, "coding", "Pushed the survey script")
-      {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: owner)
+      post!(writer, "general", "Morning")
+      post!(writer, "general", "Hull survey started")
+      post!(writer, "coding", "Pushed the survey script")
+      {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: writer)
       # Lines, links and changes at the very time the chain records were seen.
       line!("business", seen_at)
       line!("voting", seen_at)
@@ -158,9 +160,10 @@ defmodule Keyfleet.ActivityTest do
 
     test "what happens after the first page is read stays out of the pages after it" do
       owner = human("a")
+      writer = PairingHelpers.agent_for!(owner)
       Enum.each(2..3, &epoch!(&1, 1, "a"))
-      post!(owner, "general", "Morning")
-      post!(owner, "coding", "Pushed the survey script")
+      post!(writer, "general", "Morning")
+      post!(writer, "coding", "Pushed the survey script")
       Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
       Workspace.create(@fleet, "task", %{"title" => "Map the plates"})
       proposal!(@fleet, 1, %{})
@@ -179,7 +182,7 @@ defmodule Keyfleet.ActivityTest do
 
       # One of everything, each newer than the first page by place or time.
       Workspace.create(@fleet, "note", %{"title" => "Plates"})
-      post!(owner, "general", "Survey done")
+      post!(writer, "general", "Survey done")
       ChainHelpers.end_shard!(@fleet, 2, wallet("c"), wallet("c"))
       epoch!(4, 1, "a")
       epoch!(2, 2, "b")
@@ -194,6 +197,7 @@ defmodule Keyfleet.ActivityTest do
 
   test "key threads and word edits stay out; claims, progress and links show; only goal titles are public" do
     owner = human("a")
+    writer = PairingHelpers.agent_for!(owner)
 
     ada = %Actors.Agent{
       wallet_address: @member_wallet,
@@ -209,7 +213,7 @@ defmodule Keyfleet.ActivityTest do
       actor: owner
     )
 
-    post!(owner, "general", "For everyone")
+    post!(writer, "general", "For everyone")
 
     note = Workspace.create(@fleet, "note", %{"title" => "Plates", "body" => "First pass"})
     task = Workspace.create(@fleet, "task", %{"title" => "Map the plates"})
@@ -304,8 +308,9 @@ defmodule Keyfleet.ActivityTest do
 
   test "someone holding none of the fleet's keys sees only General's posts" do
     owner = human("a")
-    post!(owner, "general", "For everyone")
-    post!(owner, "coding", "For the keys")
+    writer = PairingHelpers.agent_for!(owner)
+    post!(writer, "general", "For everyone")
+    post!(writer, "coding", "For the keys")
 
     for actor <- [nil, human("e")] do
       assert [%{facts: %{excerpt: "For everyone", room: %{slug: "general"}}}] =
@@ -384,7 +389,7 @@ defmodule Keyfleet.ActivityTest do
       proposal!(@fleet, 1, %{})
       # Carried out at the time the chain records were seen.
       execution!(@fleet, 1, wallet("f"))
-      post!(human("a"), "general", "Paid")
+      post!(PairingHelpers.agent_for!(human("a")), "general", "Paid")
       now = DateTime.add(seen_at, 1, :hour)
 
       graph_event_at!(DateTime.add(seen_at, -1, :minute), "patch.applied", done(task))

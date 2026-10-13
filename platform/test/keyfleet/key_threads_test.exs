@@ -6,6 +6,7 @@ defmodule Keyfleet.KeyThreadsTest do
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.KeyUnknownError
@@ -27,7 +28,13 @@ defmodule Keyfleet.KeyThreadsTest do
     ChainHelpers.seed_cursor!(@fleet)
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     for {token_id, owner} <- [{1, "a"}, {5, "b"}, {7, "c"}], do: epoch!(token_id, wallet(owner))
-    %{first: human("a"), fifth: human("b")}
+    # People write on keys' threads; in the rooms their agents write for them.
+    %{
+      first: human("a"),
+      fifth: human("b"),
+      first_agent: PairingHelpers.agent_for!(human("a")),
+      fifth_agent: PairingHelpers.agent_for!(human("b"))
+    }
   end
 
   test "a key's first post opens its thread, and later posts join it",
@@ -60,7 +67,7 @@ defmodule Keyfleet.KeyThreadsTest do
     assert Rooms.get_key_thread!(@fleet, 5).head_seq == 1
   end
 
-  test "key threads stay out of the fleet's rooms", %{first: first} do
+  test "key threads stay out of the fleet's rooms", %{first: first, first_agent: first_agent} do
     to_key!(first, 5, "Welcome aboard")
 
     refute Enum.any?(Rooms.list_rooms!(@fleet), &(&1.kind == :key))
@@ -73,7 +80,7 @@ defmodule Keyfleet.KeyThreadsTest do
     assert {:error, %Ash.Error.Invalid{errors: [%RoomUnknownError{}]}} =
              Rooms.send_message(
                %{fleet_id: @fleet, slug: "key-5", body: "Hello", idempotency_key: "k-2"},
-               actor: first
+               actor: first_agent
              )
   end
 
@@ -118,8 +125,9 @@ defmodule Keyfleet.KeyThreadsTest do
     assert Rooms.get_key_thread!(@fleet, 7) == nil
   end
 
-  test "a reply answers a post in its own thread or room only", %{first: first} do
-    in_room = post!(first, "general", "Morning")
+  test "a reply answers a post in its own thread or room only",
+       %{first: first, first_agent: first_agent} do
+    in_room = post!(first_agent, "general", "Morning")
     in_thread = to_key!(first, 5, "Welcome aboard")
 
     assert {:error, %Ash.Error.Invalid{errors: [%ReplyOutsideRoomError{}]}} =
@@ -137,7 +145,7 @@ defmodule Keyfleet.KeyThreadsTest do
                  idempotency_key: "k-3",
                  reply_to_id: in_thread.id
                },
-               actor: first
+               actor: first_agent
              )
 
     assert Rooms.get_key_thread!(@fleet, 7) == nil
@@ -166,12 +174,12 @@ defmodule Keyfleet.KeyThreadsTest do
   end
 
   test "a key's own posts leave out its thread and come newest first",
-       %{first: first, fifth: fifth} do
-    post!(first, "general", "Morning")
-    post!(first, "coding", "Hull survey started")
+       %{first: first, first_agent: first_agent, fifth_agent: fifth_agent} do
+    post!(first_agent, "general", "Morning")
+    post!(first_agent, "coding", "Hull survey started")
     to_key!(first, 5, "Welcome aboard")
-    post!(fifth, "general", "Hello")
-    post!(first, "general", "Anyone on the hull survey?")
+    post!(fifth_agent, "general", "Hello")
+    post!(first_agent, "general", "Anyone on the hull survey?")
 
     assert Enum.map(Rooms.posts_as_key!(@fleet, 1, actor: first), &{&1.room.slug, &1.body}) == [
              {"general", "Anyone on the hull survey?"},
@@ -188,14 +196,14 @@ defmodule Keyfleet.KeyThreadsTest do
     assert Enum.map(Rooms.posts_as_key!(@fleet, 5), & &1.body) == ["Hello"]
     assert Rooms.posts_as_key!(@fleet, 7) == []
 
-    for n <- 1..21, do: post!(first, "general", "Post #{n}")
+    for n <- 1..21, do: post!(first_agent, "general", "Post #{n}")
     assert [%{body: "Post 21"} | _rest] = latest = Rooms.posts_as_key!(@fleet, 1)
     assert length(latest) == 20
     assert length(Rooms.posts_as_key!(@fleet, 1, %{limit: 2})) == 2
   end
 
   test "a post tells the keys it concerns once, and a repeat tells nobody",
-       %{first: first, fifth: fifth} do
+       %{first: first, fifth: fifth, first_agent: first_agent} do
     Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.fleet_topic(@fleet))
 
     {:ok, opening} = send_to_key(first, 5, "Welcome aboard", "k-1")
@@ -215,7 +223,7 @@ defmodule Keyfleet.KeyThreadsTest do
     {:ok, _again} = send_to_key(first, 5, "Welcome aboard", "k-1")
     refute_receive %Broadcast{}, 100
 
-    post!(first, "general", "Morning")
+    post!(first_agent, "general", "Morning")
     assert_receive %Broadcast{event: "key_activity", payload: %{token_ids: [1]}}
     refute_receive %Broadcast{event: "key_activity"}, 100
   end
@@ -310,13 +318,18 @@ defmodule Keyfleet.KeyThreadsTest do
   defp human(character),
     do: %Actors.Human{human_account_id: 1, wallet_addresses: [wallet(character)]}
 
+  # An agent paired with a person who holds no key.
   defp agent(character),
-    do: %Actors.Agent{
-      wallet_address: wallet(character),
-      chain_id: 8453,
-      verification_method: :eoa_recovery,
-      audience: "keyfleet"
-    }
+    do:
+      PairingHelpers.pair!(
+        %Actors.Agent{
+          wallet_address: wallet(character),
+          chain_id: 8453,
+          verification_method: :eoa_recovery,
+          audience: "keyfleet"
+        },
+        [wallet("9")]
+      )
 
   defp epoch!(token_id, owner_wallet) do
     Keys.record_epoch!(

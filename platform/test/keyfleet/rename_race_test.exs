@@ -5,13 +5,17 @@ defmodule Keyfleet.RenameRaceTest do
   alias Keyfleet.ChainHelpers
   alias Keyfleet.CommittedCatalog
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.RenameTooSoonError
 
   # Each naming runs on a connection of its own and commits. The room, its
   # naming lines, the keys, the fleet's key reading and any fleets committed
-  # here are all removed when the test ends, so no other test sees them.
+  # here are all removed when the test ends, so no other test sees them. The
+  # two people, their agents and the pairings stay: those tables are never
+  # emptied. Their wallets are made up for this run and hold nothing once the
+  # keys are gone.
   @fleet "fibonacci_syndicate"
   @slug "open-5"
 
@@ -20,6 +24,17 @@ defmodule Keyfleet.RenameRaceTest do
     token_ids = for _ <- 1..2, do: :rand.uniform(1_000_000_000) + 1_000_000_000
 
     added_fleets = Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, &CommittedCatalog.commit!/0)
+
+    # The agents of the two key holders, who name rooms for them.
+    namers =
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+        for owner <- owners,
+            do:
+              PairingHelpers.agent_for!(%Actors.Human{
+                human_account_id: 1,
+                wallet_addresses: [owner]
+              })
+      end)
 
     on_exit(fn ->
       Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
@@ -58,11 +73,12 @@ defmodule Keyfleet.RenameRaceTest do
       end
     end)
 
-    %{owners: Enum.map(owners, &%Actors.Human{human_account_id: 1, wallet_addresses: [&1]})}
+    %{namers: namers}
   end
 
-  test "two members renaming a room at the same moment rename it once", %{owners: owners} do
-    results = race(Enum.zip(owners, ["Hull survey", "Dry dock"]))
+  test "two members' agents renaming a room at the same moment rename it once",
+       %{namers: namers} do
+    results = race(Enum.zip(namers, ["Hull survey", "Dry dock"]))
 
     assert [%{topic: topic}] = for({:ok, room} <- results, do: room)
 
@@ -86,13 +102,13 @@ defmodule Keyfleet.RenameRaceTest do
     parent = self()
 
     callers =
-      for {owner, topic} <- namings do
+      for {namer, topic} <- namings do
         Task.async(fn ->
           :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo, sandbox: false)
           send(parent, {:ready, self()})
 
           receive do
-            :go -> Rooms.name_open_room(@fleet, @slug, topic, actor: owner)
+            :go -> Rooms.name_open_room(@fleet, @slug, topic, actor: namer)
           after
             10_000 -> raise "naming barrier timed out"
           end

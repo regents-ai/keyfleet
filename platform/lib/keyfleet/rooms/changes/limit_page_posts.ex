@@ -1,8 +1,8 @@
 defmodule Keyfleet.Rooms.Changes.LimitPagePosts do
   @moduledoc """
-  Holds what people post as each key to 300 posts an hour, in the fleet's
-  rooms and keys' threads together, counted from the posts stored in the last
-  hour (`Keyfleet.Rooms.Message`'s `:page_posts_last_hour`).
+  Holds what people post as each key to 300 posts an hour on keys' threads,
+  counted from the posts stored in the last hour (`Keyfleet.Rooms.Message`'s
+  `:page_posts_last_hour`). Rooms are written by agents alone.
 
   People post from the page and its tools, which the API's per-address limit
   doesn't reach. Agents post through the API, and a post an agent writes for
@@ -28,9 +28,11 @@ defmodule Keyfleet.Rooms.Changes.LimitPagePosts do
   @hour 3_600
 
   @impl true
-  def change(changeset, _opts, _context) do
+  def change(changeset, _opts, %{actor: actor}) do
     Ash.Changeset.before_action(changeset, fn changeset ->
-      if changeset.valid? and persons_own?(changeset), do: limit(changeset), else: changeset
+      if changeset.valid? and persons_own?(changeset),
+        do: limit(changeset, actor),
+        else: changeset
     end)
   end
 
@@ -39,7 +41,7 @@ defmodule Keyfleet.Rooms.Changes.LimitPagePosts do
       Ash.Changeset.get_attribute(changeset, :author_kind) == :human and
         is_nil(Ash.Changeset.get_attribute(changeset, :via_agent_profile_id))
 
-  defp limit(changeset) do
+  defp limit(changeset, actor) do
     fleet_id = Ash.Changeset.get_attribute(changeset, :fleet_id)
     token_id = Ash.Changeset.get_attribute(changeset, :as_key)
 
@@ -58,18 +60,20 @@ defmodule Keyfleet.Rooms.Changes.LimitPagePosts do
         changeset
 
       [oldest] ->
-        if repeat?(changeset),
+        if repeat?(changeset, actor),
           do: changeset,
           else: Ash.Changeset.add_error(changeset, refusal(oldest))
     end
   end
 
-  defp repeat?(changeset) do
+  # Looked for as the person posting, who may read their own posts on every
+  # key's thread.
+  defp repeat?(changeset, actor) do
     Rooms.get_post_under_send_key!(
       Ash.Changeset.get_attribute(changeset, :fleet_id),
       [Ash.Changeset.get_attribute(changeset, :author_wallet)],
       Ash.Changeset.get_attribute(changeset, :idempotency_key),
-      actor: %System{}
+      actor: actor
     ) != nil
   end
 

@@ -43,7 +43,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   # The events each area's page sends, which that area's module answers.
   @fleet_events ~w(open_send_agent close_send_agent activity_earlier open_pass_key keymap_ready select_key)
-  @room_events ~w(validate_post send_message validate_naming name_room mute_key unmute_key)
+  @room_events ~w(mute_key unmute_key)
   @key_profile_events ~w(post_to_key close_key)
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
   @poll_events ~w(start_poll end_poll cast_vote)
@@ -97,8 +97,6 @@ defmodule KeyfleetWeb.ShellLive do
        room: nil,
        room_notice: nil,
        room_topic: nil,
-       post_form: nil,
-       naming_form: nil,
        workspace: nil,
        workspace_params: nil,
        workspace_topics: nil,
@@ -113,7 +111,8 @@ defmodule KeyfleetWeb.ShellLive do
        poll_form: nil,
        polls_notice: nil,
        check_ins_timer: nil,
-       send_agent_open: false
+       send_agent_open: false,
+       pass_note: nil
      )
      |> read_credits(current_account(socket.assigns.access_context))
      |> follow_credits(current_account(socket.assigns.access_context))}
@@ -559,6 +558,7 @@ defmodule KeyfleetWeb.ShellLive do
           activity={@streams.activity}
           now={FleetLive.now_shown(@activity)}
           send_agent_open={@send_agent_open}
+          pass_note={@pass_note}
         />
 
         <KeysLive.page
@@ -583,8 +583,6 @@ defmodule KeyfleetWeb.ShellLive do
           :if={@route_spec.route_id == :rooms}
           room={@room}
           posts={@streams.posts}
-          post_form={@post_form}
-          naming_form={@naming_form}
           notice={@room_notice}
         />
 
@@ -749,7 +747,7 @@ defmodule KeyfleetWeb.ShellLive do
   defp load_room(socket, _route_spec, _params) do
     socket
     |> listen_to(fleet_on_show(socket))
-    |> assign(room: nil, room_notice: nil, post_form: nil, naming_form: nil)
+    |> assign(room: nil, room_notice: nil)
   end
 
   defp fleet_on_show(%{assigns: %{fleet: %{fleet_id: fleet_id}}}), do: fleet_id

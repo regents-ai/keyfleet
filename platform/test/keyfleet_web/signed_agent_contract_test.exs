@@ -13,6 +13,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   alias Keyfleet.ContractSchema
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Rooms
   alias KeyfleetWeb.Plugs.SignedAgent
@@ -404,12 +405,13 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              ])
 
     # Posting: new, repeated, conflicting, misplaced, empty, nowhere, and by an outsider.
-    human = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
+    owners_agent =
+      PairingHelpers.agent_for!(%Actors.Human{human_account_id: 1, wallet_addresses: [@owner]})
 
     {:ok, by_person} =
       Rooms.send_message(
         %{fleet_id: @fleet, slug: "general", body: "From the owner", idempotency_key: "h-1"},
-        actor: human
+        actor: owners_agent
       )
 
     post = %{"body" => "Hull survey started", "idempotency_key" => "k-1"}

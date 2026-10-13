@@ -152,7 +152,6 @@ defmodule Keyfleet.Rooms.Message do
 
       validate Keyfleet.Graph.Validations.KnownFleet
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :room}
-      change Keyfleet.Rooms.Changes.LimitPagePosts
       change Keyfleet.Agents.Changes.NoteContribution
     end
 
@@ -462,7 +461,8 @@ defmodule Keyfleet.Rooms.Message do
     # Spec section 7: the people and agents holding the fleet's keys, or a
     # shard of one, and agents paired with a person holding one, read every
     # room and thread of it. Anyone else reads only
-    # General and the keys' threads. Posting is for the keys alone.
+    # General and the keys' threads. Posting is for the keys alone, and in
+    # the rooms for their agents alone: people write on keys' threads.
     #
     # Every key's thread is read by anyone.
     policy action(:read_key_thread) do
@@ -492,7 +492,11 @@ defmodule Keyfleet.Rooms.Message do
       authorize_if Keyfleet.Rooms.Checks.InGeneral
     end
 
-    policy action([:send_message, :send_to_key, :note_room_named]) do
+    policy action([:send_message, :note_room_named]) do
+      authorize_if {Keyfleet.Rooms.Checks.RoomPoster, agents_only?: true}
+    end
+
+    policy action(:send_to_key) do
       authorize_if Keyfleet.Rooms.Checks.RoomPoster
     end
 
