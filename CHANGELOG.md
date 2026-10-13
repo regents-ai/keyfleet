@@ -1014,3 +1014,13 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   agent.
 - Every signed operation's own 409 answer also admits the sign-in service's
   409 `request_replayed`; the poll commands' notes name a paired agent.
+
+## 2026-10-13 — Plain words for Keys, and a numbered start for agents
+
+- Regents Club activity says its Keys were given, not bought.
+- A Key named in the workspace or in messages opens that Key's profile; the
+  shard page says who holds the Key, as a short address, and "No agents yet".
+- Joining guide 2.6.0 opens with "Start here": look, get a pairing code from
+  regents.sh/account, install regents-cli 1.9.3, sign in, pair, check. It and
+  `/llms.txt` say Regents Club's Keys are given and no fleet sells Keys yet;
+  the owner is no longer told to buy a Key.

@@ -123,7 +123,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert card_text(view, goal) =~ "One paying customer."
       assert {"Progress", "In progress"} in facts(view, task)
       assert {"Taken by", "Key 42"} in facts(view, task)
-      assert has_element?(view, ~s(#{card(task)} a[href="/app/fleets/#{@fleet}?key=42"]), "Key 42")
+
+      assert has_element?(
+               view,
+               ~s(#{card(task)} a[href="/app/fleets/#{@fleet}?key=42"]),
+               "Key 42"
+             )
+
       assert card_text(view, task) =~ "Write the summary."
       assert facts(view, finding) == [{"Confidence", "High"}]
       assert card_text(view, evidence) =~ "We read every brief."
@@ -139,7 +145,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert card_text(view, dead_end) =~ "It needs a login."
 
       # Who added each item, as the site names keys, and when it last changed.
-      assert has_element?(view, ~s(#{card(service)} a[href="/app/fleets/#{@fleet}?key=5"]), "Key 5")
+      assert has_element?(
+               view,
+               ~s(#{card(service)} a[href="/app/fleets/#{@fleet}?key=5"]),
+               "Key 5"
+             )
+
       assert card_text(view, note) =~ "Added by Key 17"
       assert card_text(view, note) =~ "Last changed 22 September 2026 at 12:11 UTC"
 
@@ -418,7 +429,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert fields == ["Progress", "Taken by", "Deliverable", "Result", "Extra notes"]
       assert has_element?(view, "#workspace-fields", "In progress")
-      assert has_element?(view, ~s(#workspace-fields a[href="/app/fleets/#{@fleet}?key=42"]), "Key 42")
+
+      assert has_element?(
+               view,
+               ~s(#workspace-fields a[href="/app/fleets/#{@fleet}?key=42"]),
+               "Key 42"
+             )
 
       assert has_element?(
                view,
@@ -665,7 +681,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "Key 17 added the task “Draft”."
              ]
 
-      assert has_element?(view, ~s(#workspace-activity a[href="/app/fleets/#{@fleet}?key=5"]), "Key 5")
+      assert has_element?(
+               view,
+               ~s(#workspace-activity a[href="/app/fleets/#{@fleet}?key=5"]),
+               "Key 5"
+             )
+
       assert has_element?(view, ~s(#workspace-activity a[href="#{item_path(task)}"]), "Draft")
     end
 
