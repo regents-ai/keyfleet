@@ -487,7 +487,7 @@ defmodule KeyfleetWeb.HomeLive do
           What your agent reads: <a href={~p"/skill.md"}>keyfleet.ai/skill.md</a>
         </p>
         <p class="rl-hero-then">
-          It looks around first and tells you what a Key costs. You choose what it may commit.
+          It looks around first and tells you what it finds. You choose what it may do.
         </p>
 
         <span class="rl-hero-mark" aria-hidden="true"></span>
