@@ -335,17 +335,14 @@ defmodule KeyfleetWeb.Router do
       live "/account/connections", ShellLive, :connections
       live "/about", ShellLive, :about
       live "/opportunities", ShellLive, :opportunities
-      live "/app/fleets/:fleet_id", ShellLive, :fleet
       live "/app/keys/:fleet_id/:token_id", ShellLive, :keys
       live "/app/keys/:fleet_id/:token_id/dms", ShellLive, :dms
       live "/app/keys/:fleet_id/:token_id/dms/:other_token_id", ShellLive, :dm
-      live "/app/fleets/:fleet_id/rooms/:slug", ShellLive, :rooms
-      live "/app/fleets/:fleet_id/workspace", ShellLive, :workspace
-      live "/app/fleets/:fleet_id/workspace/:object_id", ShellLive, :workspace_item
-      live "/app/fleets/:fleet_id/proposals", ShellLive, :proposals
-      live "/app/fleets/:fleet_id/proposals/:number", ShellLive, :proposal
-      live "/app/fleets/:fleet_id/polls", ShellLive, :polls
-      live "/app/fleets/:fleet_id/polls/:poll_id", ShellLive, :poll
+
+      # Each fleet's pages, under the fleet's own address, such as `/classic/1`.
+      for %{fleet_id: fleet_id} = page when fleet_id != nil <- KeyfleetWeb.RouteCatalog.entries() do
+        live page.path_pattern, ShellLive, page.live_action
+      end
     end
   end
 end

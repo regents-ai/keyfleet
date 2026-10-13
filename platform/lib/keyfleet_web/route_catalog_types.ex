@@ -1,7 +1,8 @@
 defmodule KeyfleetWeb.RouteCatalog.Entry do
   @moduledoc false
   @enforce_keys [:path_pattern, :live_action, :parameter_schema, :reserved_values, :route_spec_id]
-  defstruct @enforce_keys
+  # `fleet_id` is the fleet whose page it is, on a fleet's own pages.
+  defstruct @enforce_keys ++ [fleet_id: nil]
 end
 
 defmodule KeyfleetWeb.RouteCatalog.SidebarModel do
@@ -16,11 +17,18 @@ defmodule KeyfleetWeb.RouteCatalog.RouteTarget do
   defstruct @enforce_keys
 end
 
+defmodule KeyfleetWeb.RouteCatalog.NameOnly do
+  @moduledoc false
+  @enforce_keys [:label]
+  defstruct @enforce_keys
+end
+
 defmodule KeyfleetWeb.RouteCatalog.Spec do
   @moduledoc false
   @enforce_keys [
     :route_id,
     :destination,
+    :fleet_id,
     :app_id,
     :app_display_label,
     :page_display_label,

@@ -25,7 +25,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
        result: nil,
        identities: [],
        connection_notice: nil,
-       route_spec: KeyfleetWeb.RouteCatalog.fetch!(:account),
+       route_spec: KeyfleetWeb.RouteCatalog.fetch!("/account"),
        account: %Keyfleet.AccessContext.AccountControl{
          kind: :preview,
          label: "Fixture"

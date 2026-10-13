@@ -39,7 +39,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
     <article id="workspace-page" class="workspace-page">
       <header class="workspace-heading">
         <p class="workspace-kicker">
-          <.link patch={"/app/fleets/#{@board.fleet_id}"}>{@board.fleet_name}</.link>
+          <.link patch={Keyfleet.Fleets.path(@board.fleet_id)}>{@board.fleet_name}</.link>
         </p>
         <h1 tabindex="-1">Workspace</h1>
         <p class="workspace-lede">
@@ -181,10 +181,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
     <article id="workspace-item-page" class="workspace-page">
       <header class="workspace-heading">
         <p class="workspace-kicker">
-          <.link :if={@item.ready?} patch={"/app/fleets/#{@item.fleet_id}/workspace"}>
+          <.link :if={@item.ready?} patch={"#{Keyfleet.Fleets.path(@item.fleet_id)}/workspace"}>
             {@item.fleet_name} workspace
           </.link>
-          <.link :if={not @item.ready?} patch={"/app/fleets/#{@item.fleet_id}"}>
+          <.link :if={not @item.ready?} patch={Keyfleet.Fleets.path(@item.fleet_id)}>
             {@item.fleet_name}
           </.link>
         </p>
@@ -203,7 +203,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
       <section :if={@item.ready? and is_nil(@item.object)} class="workspace-panel">
         <h2>This item isn’t in the workspace.</h2>
-        <.link patch={"/app/fleets/#{@item.fleet_id}/workspace"}>See everything in the workspace</.link>
+        <.link patch={"#{Keyfleet.Fleets.path(@item.fleet_id)}/workspace"}>See everything in the workspace</.link>
       </section>
 
       <div :if={@item[:object]} class="workspace-item-grid">
@@ -384,14 +384,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
     <article id={@id} class="workspace-page">
       <header class="workspace-heading">
         <p class="workspace-kicker">
-          <.link patch={"/app/fleets/#{@fleet.fleet_id}"}>{@fleet.fleet_name}</.link>
+          <.link patch={Keyfleet.Fleets.path(@fleet.fleet_id)}>{@fleet.fleet_name}</.link>
         </p>
         <h1 tabindex="-1">Workspace</h1>
       </header>
 
       <p id="workspace-members-only" class="workspace-panel">
         The workspace is for Key holders.
-        <.link patch={"/app/fleets/#{@fleet.fleet_id}#fleet-keys"}>See the Keys</.link>
+        <.link patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}#fleet-keys"}>See the Keys</.link>
       </p>
     </article>
     """

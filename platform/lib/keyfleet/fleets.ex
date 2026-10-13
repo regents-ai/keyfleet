@@ -9,9 +9,17 @@ defmodule Keyfleet.Fleets do
   # by marking them `coming_soon?: false` here or by recording their
   # deployment. `card` is the fleet's type as its Keys' names print it; each
   # is the first fleet of its type.
+  #
+  # `path` is where the fleet's pages are on the site: its type and its number
+  # within that type, so the next Classic is `/classic/2`. The Regents Club's
+  # are where they have been since it opened. `sidebar` is how the fleet shows
+  # in the site's sidebar: `:link` to its page, `:name` as its name alone, or
+  # `nil`, left out.
   @catalog [
     %{
       id: "fleet_tech_classic",
+      path: "/classic/1",
+      sidebar: :name,
       name: "Classic #1",
       card: "CLASSIC",
       type_number: 1,
@@ -19,6 +27,8 @@ defmodule Keyfleet.Fleets do
     },
     %{
       id: "fibonacci_syndicate",
+      path: "/syndicate/1",
+      sidebar: nil,
       name: "Syndicate #1",
       card: "SYNDICATE",
       type_number: 1,
@@ -26,6 +36,8 @@ defmodule Keyfleet.Fleets do
     },
     %{
       id: "fibonacci_cascade",
+      path: "/cascade/1",
+      sidebar: nil,
       name: "Cascade #1",
       card: "CASCADE",
       type_number: 1,
@@ -33,6 +45,8 @@ defmodule Keyfleet.Fleets do
     },
     %{
       id: "fleet_tech_accelerant",
+      path: "/accelerant/1",
+      sidebar: nil,
       name: "Accelerant #1",
       card: "ACCELERANT",
       type_number: 1,
@@ -40,6 +54,8 @@ defmodule Keyfleet.Fleets do
     },
     %{
       id: "regents_club",
+      path: "/app/fleets/regents_club",
+      sidebar: :link,
       name: "Regents Club #1",
       card: "REGENTS CLUB",
       type_number: 1,
@@ -57,12 +73,15 @@ defmodule Keyfleet.Fleets do
   end
 
   @doc """
-  The fixed catalog's fleets as `%{id: id, name: name, card: card, type_number: number,
-  coming_soon?: marked}`, in the order the site shows them. `type_number` is the
+  The fixed catalog's fleets as `%{id: id, path: path, sidebar: shown, name: name, card: card,
+  type_number: number, coming_soon?: marked}`, in the order the site shows them. `type_number` is the
   contract's per-type set number, not its global fleet id. `coming_soon?` is the catalog's mark
   alone; `coming_soon?/2` says whether a fleet is coming soon.
   """
   def catalog, do: @catalog
+
+  @doc "Where the fleet's pages are on the site, such as `/classic/1`."
+  def path(fleet_id), do: Enum.find(@catalog, &(&1.id == fleet_id)).path
 
   @doc """
   A Key's name, on its card and in its metadata: the fleet's type, the

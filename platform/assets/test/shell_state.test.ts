@@ -9,7 +9,7 @@ import {
 
 const state = (overrides: Partial<ShellState> = {}): ShellState => ({
   routeId: "fleet",
-  destination: "/app/fleets/fibonacci_syndicate",
+  destination: "/syndicate/1",
   menuOpen: false,
   ...overrides,
 })
@@ -35,7 +35,7 @@ describe("shell state restoration", () => {
   it("requests top scroll only when the actual destination changes", () => {
     const current = state({routeId: "account", destination: "/account"})
 
-    expect(shellDestinationChanged(current, state({routeId: "fleet", destination: "/app/fleets/fibonacci_syndicate"}))).toBe(true)
+    expect(shellDestinationChanged(current, state({routeId: "fleet", destination: "/syndicate/1"}))).toBe(true)
     expect(shellDestinationChanged(current, state({routeId: "account", destination: "/account"}))).toBe(false)
   })
 })

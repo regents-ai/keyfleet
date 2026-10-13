@@ -25,7 +25,7 @@ test.beforeAll(() => {
 
 async function openFleet(page: Page) {
   await watchMotion(page)
-  await page.goto(`/app/fleets/${fleet}`)
+  await page.goto(`/classic/1`)
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   await forget(page)
 }

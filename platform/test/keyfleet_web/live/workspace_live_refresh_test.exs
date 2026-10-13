@@ -21,7 +21,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
   @moduletag :tmp_dir
 
   @fleet "fleet_tech_classic"
-  @board "/app/fleets/fleet_tech_classic/workspace"
+  @board "/classic/1/workspace"
   @wallet "0x" <> String.duplicate("a1", 20)
   @contract "0x" <> String.duplicate("b2", 20)
 

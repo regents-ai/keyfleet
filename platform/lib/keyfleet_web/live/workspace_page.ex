@@ -122,7 +122,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   def item_path(fleet_id, id, query \\ []),
     do:
       with_query(
-        "/app/fleets/#{fleet_id}/workspace/#{URI.encode(id, &URI.char_unreserved?/1)}",
+        "#{Keyfleet.Fleets.path(fleet_id)}/workspace/#{URI.encode(id, &URI.char_unreserved?/1)}",
         query
       )
 
@@ -134,7 +134,7 @@ defmodule KeyfleetWeb.WorkspacePage do
         &is_nil(elem(&1, 1))
       )
 
-    with_query("/app/fleets/#{fleet_id}/workspace", query)
+    with_query("#{Keyfleet.Fleets.path(fleet_id)}/workspace", query)
   end
 
   defp with_query(path, []), do: path
@@ -465,7 +465,9 @@ defmodule KeyfleetWeb.WorkspacePage do
         room: name || room,
         seq: seq,
         path:
-          if(name && Regex.match?(@room_slug, room), do: "/app/fleets/#{fleet_id}/rooms/#{room}")
+          if(name && Regex.match?(@room_slug, room),
+            do: "#{Keyfleet.Fleets.path(fleet_id)}/rooms/#{room}"
+          )
       }
     end
   end

@@ -8,7 +8,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
   alias KeyfleetWeb.Live.LaunchGateHook
   alias KeyfleetWeb.Plugs.LaunchGate
 
-  @closed_pages ~w(/ /docs /about /opportunities /account /app /app/fleets/fibonacci_syndicate
+  @closed_pages ~w(/ /docs /about /opportunities /account /app /syndicate/1
                    /app/keys/fibonacci_syndicate/1 /fleets/fibonacci_syndicate /no-such-page)
   @closed_message "This part of the site isn't open yet."
 
@@ -213,7 +213,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
     {:ok, view, _html} = live(conn, "/account")
 
     close_surfaces()
-    render_patch(view, "/app/fleets/fibonacci_syndicate")
+    render_patch(view, "/syndicate/1")
 
     assert_redirect(view, "/early")
   end

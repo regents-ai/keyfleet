@@ -8,7 +8,7 @@ import {forget, leftovers, moved, pageChangeMoved, pressRapidly, watchMotion} fr
 // with no inline transform or opacity left. A page changed from the keyboard,
 // or for a reader who asked for less motion, shows at once every time.
 
-const fleetPath = "/app/fleets/fleet_tech_classic"
+const fleetPath = "/classic/1"
 
 async function openFleet(page: Page) {
   await watchMotion(page)

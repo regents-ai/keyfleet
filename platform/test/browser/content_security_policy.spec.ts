@@ -45,8 +45,8 @@ test("the main pages load with nothing refused", async ({page}) => {
 
   for (const path of [
     "/",
-    `/app/fleets/${fleet}`,
-    `/app/fleets/${fleet}/proposals`,
+    `/syndicate/1`,
+    `/syndicate/1/proposals`,
     `/app/keys/${fleet}/${key}`,
     "/account",
   ]) {

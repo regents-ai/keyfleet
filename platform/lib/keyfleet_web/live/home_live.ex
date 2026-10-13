@@ -147,7 +147,7 @@ defmodule KeyfleetWeb.HomeLive do
       socket
       |> assign(PublicDocuments.page("/"))
       |> assign(
-        route_spec: RouteCatalog.fetch!(:home),
+        route_spec: RouteCatalog.fetch!("/"),
         fleets: Enum.map(Fleets.catalog(), &card(&1, recorded[&1.id])),
         agents: %Read{},
         refreshing: MapSet.new()
@@ -325,7 +325,7 @@ defmodule KeyfleetWeb.HomeLive do
     end)
   end
 
-  defp fleet_path(fleet_id), do: "/app/fleets/#{fleet_id}"
+  defp fleet_path(fleet_id), do: Keyfleet.Fleets.path(fleet_id)
 
   # A card whose fleet has a Key on offer opens its page with "Get a Key"
   # pressed, as the header's "Get a Key" does; any other opens its page.

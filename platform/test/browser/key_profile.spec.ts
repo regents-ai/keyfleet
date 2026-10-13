@@ -8,7 +8,7 @@ import {offerRewards, prepareFleet, sellKey} from "./support/fleet_chain"
 const fleet = "fibonacci_cascade"
 const me = "0x1111111111111111111111111111111111111111"
 const otherAccount = "0x3333333333333333333333333333333333333333"
-const fleetPath = `/app/fleets/${fleet}`
+const fleetPath = `/cascade/1`
 
 // Opens a page signed in with `bearer`; returns the page's uncaught errors.
 async function signIn(page: Page, bearer = "valid") {

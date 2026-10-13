@@ -16,7 +16,7 @@ test("the marketing page is served with product surfaces open", async ({page, re
 })
 
 test("product routes render the shell while surfaces are open", async ({page, request}) => {
-  for (const route of ["/app/fleets/fibonacci_syndicate", "/account"]) {
+  for (const route of ["/syndicate/1", "/account"]) {
     const response = await request.get(route)
     expect(response.status()).toBe(200)
     expect(response.headers()["retry-after"]).toBeUndefined()

@@ -50,7 +50,7 @@ defmodule KeyfleetWeb.ShellLive do
   @poll_events ~w(start_poll end_poll cast_vote)
 
   @impl true
-  def mount(params, _session, socket) do
+  def mount(_params, _session, socket) do
     {:ok,
      socket
      |> follow_mutes()
@@ -65,7 +65,7 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream_configure(:activity, dom_id: &FleetLive.activity_dom_id/1)
      |> stream(:activity, [])
      |> assign(
-       route_spec: RouteCatalog.fetch!(socket.assigns.live_action, params),
+       route_spec: nil,
        shell_instance: System.unique_integer([:positive, :monotonic]),
        get_key: get_key_fleet() in Fleets.open_fleet_ids(),
        verified_connections: %Read{},
@@ -122,11 +122,12 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   @impl true
-  def handle_params(params, _uri, socket) do
-    route_spec = RouteCatalog.fetch!(socket.assigns.live_action, params)
+  def handle_params(params, uri, socket) do
+    route_spec = route_spec(uri, params)
+    params = name_fleet(params, route_spec)
 
     if coming_soon_inside?(route_spec, params) do
-      {:noreply, push_patch(socket, to: "/app/fleets/#{params["fleet_id"]}", replace: true)}
+      {:noreply, push_patch(socket, to: Fleets.path(route_spec.fleet_id), replace: true)}
     else
       # Going anywhere, back and forward included, closes "Send your agent".
       {:noreply,
@@ -148,6 +149,18 @@ defmodule KeyfleetWeb.ShellLive do
        |> PollsLive.read_polls(route_spec.route_id, params)}
     end
   end
+
+  # A fleet's page is asked for at the fleet's address, and read by its id.
+  # The page at the address, as the router matched it. Of `params`, the page
+  # list reads only the parts of the address its route names.
+  defp route_spec(uri, params) do
+    %URI{host: host, path: path} = URI.parse(uri)
+    %{route: route} = Phoenix.Router.route_info(KeyfleetWeb.Router, "GET", path, host)
+    RouteCatalog.fetch!(route, params)
+  end
+
+  defp name_fleet(params, %{fleet_id: nil}), do: params
+  defp name_fleet(params, %{fleet_id: fleet_id}), do: Map.put(params, "fleet_id", fleet_id)
 
   # A coming-soon fleet has only its own page: its rooms, workspace,
   # proposals and polls open with the fleet.

@@ -16,7 +16,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   # A fleet whose name sorts after this one's.
   @later "fleet_tech_classic"
   @too_far 9_223_372_036_854_775_808
-  @board "/app/fleets/fibonacci_syndicate/workspace"
+  @board "/syndicate/1/workspace"
   @notice "Every Key holder can read this. Never put passwords or private data here."
   @holder "0x" <> String.duplicate("d", 40)
 
@@ -112,7 +112,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(.workspace-kicker a[href="/app/fleets/#{@fleet}"]),
+               ~s(.workspace-kicker a[href="#{Keyfleet.Fleets.path(@fleet)}"]),
                "Syndicate #1"
              )
 
@@ -126,7 +126,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#{card(task)} a[href="/app/fleets/#{@fleet}?key=42"]),
+               ~s(#{card(task)} a[href="#{Keyfleet.Fleets.path(@fleet)}?key=42"]),
                "Key 42"
              )
 
@@ -147,7 +147,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       # Who added each item, as the site names keys, and when it last changed.
       assert has_element?(
                view,
-               ~s(#{card(service)} a[href="/app/fleets/#{@fleet}?key=5"]),
+               ~s(#{card(service)} a[href="#{Keyfleet.Fleets.path(@fleet)}?key=5"]),
                "Key 5"
              )
 
@@ -274,8 +274,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
             @board <> "?before=nonsense",
             item_path(task) <> "?links=nonsense",
             item_path(task) <> "?history=nonsense",
-            "/app/fleets/#{@fleet}/workspace/task%231%232",
-            "/app/fleets/#{@fleet}/workspace/rel_1"
+            "#{Keyfleet.Fleets.path(@fleet)}/workspace/task%231%232",
+            "#{Keyfleet.Fleets.path(@fleet)}/workspace/rel_1"
           ] do
         assert_raise KeyfleetWeb.NotFoundError, fn -> live(conn, path) end
       end
@@ -329,7 +329,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
 
     test "an item that isn't in the workspace says so", %{conn: conn} do
-      {:ok, view, html} = live(conn, "/app/fleets/#{@fleet}/workspace/task%23999")
+      {:ok, view, html} = live(conn, "#{Keyfleet.Fleets.path(@fleet)}/workspace/task%23999")
 
       assert html =~ @notice
       assert has_element?(view, "h2", "This item isn’t in the workspace.")
@@ -432,7 +432,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-fields a[href="/app/fleets/#{@fleet}?key=42"]),
+               ~s(#workspace-fields a[href="#{Keyfleet.Fleets.path(@fleet)}?key=42"]),
                "Key 42"
              )
 
@@ -476,21 +476,21 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-discussion a[href="/app/fleets/#{@fleet}/rooms/business"]),
+               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}/rooms/business"]),
                "Message 4 in Business"
              )
 
       # An open room goes by the name its members gave it.
       assert has_element?(
                view,
-               ~s(#workspace-discussion a[href="/app/fleets/#{@fleet}/rooms/open-2"]),
+               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}/rooms/open-2"]),
                "Message 1 in Hull survey"
              )
 
       # So does a room an agent created.
       assert has_element?(
                view,
-               ~s(#workspace-discussion a[href="/app/fleets/#{@fleet}/rooms/ship-ops"]),
+               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}/rooms/ship-ops"]),
                "Message 3 in Ship ops"
              )
 
@@ -683,7 +683,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-activity a[href="/app/fleets/#{@fleet}?key=5"]),
+               ~s(#workspace-activity a[href="#{Keyfleet.Fleets.path(@fleet)}?key=5"]),
                "Key 5"
              )
 
@@ -867,7 +867,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert history(item) == ["Key 17 added the task “Ours”."]
       refute render(item) =~ "Their"
 
-      {:ok, missing, _html} = live(conn, "/app/fleets/#{@fleet}/workspace/goal%237")
+      {:ok, missing, _html} = live(conn, "#{Keyfleet.Fleets.path(@fleet)}/workspace/goal%237")
       assert has_element?(missing, "h2", "This item isn’t in the workspace.")
     end
   end
@@ -942,7 +942,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         assert Enum.all?(
                  hrefs,
                  &String.starts_with?(&1, [
-                   "/app/",
+                   "/syndicate/1",
                    "https://",
                    "ipfs://",
                    "ar://",
@@ -1005,7 +1005,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       refute has_element?(view, "#workspace-cards")
 
-      {:ok, item, _html} = live(conn, "/app/fleets/#{@fleet}/workspace/task%231")
+      {:ok, item, _html} = live(conn, "#{Keyfleet.Fleets.path(@fleet)}/workspace/task%231")
 
       assert has_element?(
                item,
@@ -1014,21 +1014,20 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              )
     end
 
-    test "of a fleet there is not says so, as the fleet's own page does", %{conn: conn} do
+    test "at an address no fleet's pages are at is not found, as the fleet's own page is",
+         %{conn: conn} do
       for path <- [
             "/app/fleets/no_such_fleet/workspace",
-            "/app/fleets/no_such_fleet/workspace/task%231"
+            "/app/fleets/no_such_fleet/workspace/task%231",
+            "/app/fleets/no_such_fleet",
+            "/app/fleets/#{@fleet}/workspace",
+            "/app/fleets/#{@fleet}",
+            "/syndicate/2/workspace",
+            "/syndicate/2",
+            "/no-such-type/1"
           ] do
-        {:ok, view, html} = live(conn, path)
-        assert has_element?(view, "h1", "Keyfleet")
-        assert has_element?(view, ".workspace-kicker", "Fleet")
-        assert has_element?(view, "#workspace-unavailable h2", "This fleet doesn’t exist.")
-        refute html =~ @notice
+        assert get(conn, path).status == 404
       end
-
-      {:ok, fleet_page, _html} = live(conn, "/app/fleets/no_such_fleet")
-      assert has_element?(fleet_page, "h1", "Keyfleet")
-      assert has_element?(fleet_page, "h2", "This fleet doesn’t exist.")
     end
   end
 
@@ -1045,7 +1044,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-members-only a[href="/app/fleets/#{@fleet}#fleet-keys"])
+               ~s(#workspace-members-only a[href="#{Keyfleet.Fleets.path(@fleet)}#fleet-keys"])
              )
 
       refute html =~ "Draft the brief"
@@ -1054,7 +1053,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   end
 
   test "the fleet's page leads to its workspace", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/app/fleets/#{@fleet}")
+    {:ok, view, _html} = live(conn, "#{Keyfleet.Fleets.path(@fleet)}")
 
     assert has_element?(view, ~s(#fleet-workspace-link[href="#{@board}"]), "Workspace")
   end

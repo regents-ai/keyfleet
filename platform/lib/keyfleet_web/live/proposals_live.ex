@@ -72,7 +72,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     <article id="proposals-page" class="proposals-page">
       <header class="proposals-heading">
         <p class="proposals-kicker">
-          <.link patch={"/app/fleets/#{@page.fleet_id}"}>{@page.fleet_name}</.link>
+          <.link patch={Keyfleet.Fleets.path(@page.fleet_id)}>{@page.fleet_name}</.link>
         </p>
         <h1 tabindex="-1">Proposals</h1>
       </header>

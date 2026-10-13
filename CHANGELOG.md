@@ -1175,3 +1175,21 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   requests carrying Keyfleet's signed note.
 - "Tokens on record" lists the Regents Club hub's token by its listed ID and
   last day, 13 October 2027.
+
+## 2026-10-13 — Short fleet addresses, and a shorter sidebar
+
+- Classic, Syndicate, Cascade and Accelerant fleets now have short addresses:
+  the fleet's type, then its number within that type. Classic #1 is at
+  `/classic/1`, Syndicate #1 at `/syndicate/1`, Cascade #1 at `/cascade/1` and
+  Accelerant #1 at `/accelerant/1`, with the fleet's rooms, workspace,
+  proposals and polls under it, such as `/classic/1/proposals`. The next
+  Classic will be `/classic/2`. The old addresses for these four fleets
+  (`/app/fleets/...`) no longer answer.
+- The Regents Club stays where it is, at `/app/fleets/regents_club`.
+- The sidebar shows Classic #1 as a name, with nothing to press, then the
+  Regents Club and the account page. Syndicate #1, Cascade #1 and Accelerant
+  #1 are off the sidebar for now; they still show on the home page and in the
+  fleet list.
+- A Key's own page, the agent addresses under `/api/v1/agent/fleets/` and
+  each fleet's id are unchanged. In the agent guides, `FLEET_PAGE` is the
+  fleet's `links.page`.

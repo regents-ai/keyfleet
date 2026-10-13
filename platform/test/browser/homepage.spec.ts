@@ -12,6 +12,12 @@ const fleets = [
   ["fibonacci_cascade", "Cascade #1", "fibonacci"],
   ["fleet_tech_accelerant", "Accelerant #1", "accelerant"],
 ] as const
+const fleetPaths: Record<string, string> = {
+  fleet_tech_classic: "/classic/1",
+  fibonacci_syndicate: "/syndicate/1",
+  fibonacci_cascade: "/cascade/1",
+  fleet_tech_accelerant: "/accelerant/1",
+}
 
 const opportunities = ["Memestock", "Techtree", "Your own goal"]
 
@@ -71,7 +77,7 @@ test("the homepage reads without scripts: the headline, the instruction, then ev
   for (const [id, name, layout] of fleets) {
     const card = page.locator(`#home-fleet-${id}`)
     await expect(card.getByRole("heading", {level: 3})).toHaveText(name)
-    await expect(card.locator("a.rl-fleet-card__link")).toHaveAttribute("href", `/app/fleets/${id}`)
+    await expect(card.locator("a.rl-fleet-card__link")).toHaveAttribute("href", fleetPaths[id])
     await expect(card.locator("a.rl-fleet-card__link")).not.toHaveAttribute("target", /.+/)
     await expect(card.locator(".key-map-preview")).toHaveAttribute("data-layout", layout)
     await expect(card.locator(".key-map-preview")).toHaveAttribute("aria-hidden", "true")
@@ -218,7 +224,7 @@ test("a fleet's card opens that fleet's map", async ({page}) => {
   await waitForHomepage(page)
 
   await page.locator("#home-fleet-fleet_tech_classic a.rl-fleet-card__link").click()
-  await expect(page).toHaveURL(/\/app\/fleets\/fleet_tech_classic$/)
+  await expect(page).toHaveURL(/\/classic\/1$/)
   await expect(page.getByRole("heading", {level: 1, name: "Classic #1"})).toBeVisible()
 })
 

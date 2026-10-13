@@ -4,26 +4,36 @@ defmodule KeyfleetWeb.RouteCatalogTest do
   alias KeyfleetWeb.{RouteCatalog, Router}
   alias KeyfleetWeb.RouteCatalog.RouteTarget
 
-  @paths [
-    "/",
-    "/account",
-    "/account/points",
-    "/account/wallets",
-    "/account/connections",
-    "/about",
-    "/opportunities",
-    "/app/fleets/:fleet_id",
-    "/app/keys/:fleet_id/:token_id",
-    "/app/keys/:fleet_id/:token_id/dms",
-    "/app/keys/:fleet_id/:token_id/dms/:other_token_id",
-    "/app/fleets/:fleet_id/rooms/:slug",
-    "/app/fleets/:fleet_id/workspace",
-    "/app/fleets/:fleet_id/workspace/:object_id",
-    "/app/fleets/:fleet_id/proposals",
-    "/app/fleets/:fleet_id/proposals/:number",
-    "/app/fleets/:fleet_id/polls",
-    "/app/fleets/:fleet_id/polls/:poll_id"
+  # Every fleet has the same pages under its own address.
+  @fleet_pages [
+    "",
+    "/rooms/:slug",
+    "/workspace",
+    "/workspace/:object_id",
+    "/proposals",
+    "/proposals/:number",
+    "/polls",
+    "/polls/:poll_id"
   ]
+
+  @paths [
+           "/",
+           "/account",
+           "/account/points",
+           "/account/wallets",
+           "/account/connections",
+           "/about",
+           "/opportunities",
+           "/app/keys/:fleet_id/:token_id",
+           "/app/keys/:fleet_id/:token_id/dms",
+           "/app/keys/:fleet_id/:token_id/dms/:other_token_id"
+         ] ++
+           for(
+             fleet <-
+               ~w(/classic/1 /syndicate/1 /cascade/1 /accelerant/1 /app/fleets/regents_club),
+             page <- @fleet_pages,
+             do: fleet <> page
+           )
 
   test "contains exactly the approved pages" do
     assert Enum.map(RouteCatalog.entries(), & &1.path_pattern) == @paths
@@ -49,13 +59,13 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
   test "every catalog entry builds the route spec it declares" do
     assert Enum.all?(RouteCatalog.entries(), fn entry ->
-             spec = RouteCatalog.fetch!(entry.live_action, sample_params(entry))
+             spec = RouteCatalog.fetch!(entry.path_pattern, sample_params(entry))
              spec.route_id == entry.route_spec_id
            end)
   end
 
   test "the home page is the public landing outside the product shell" do
-    home = RouteCatalog.fetch!(:home)
+    home = RouteCatalog.fetch!("/")
 
     assert home.route_id == :home
     assert home.destination == "/"
@@ -70,7 +80,11 @@ defmodule KeyfleetWeb.RouteCatalogTest do
   end
 
   test "one key's page names the key it was asked for" do
-    key = RouteCatalog.fetch!(:keys, %{"fleet_id" => "fibonacci_syndicate", "token_id" => "7"})
+    key =
+      RouteCatalog.fetch!("/app/keys/:fleet_id/:token_id", %{
+        "fleet_id" => "fibonacci_syndicate",
+        "token_id" => "7"
+      })
 
     assert key.route_id == :keys
     assert key.destination == "/app/keys/fibonacci_syndicate/7"
@@ -85,24 +99,22 @@ defmodule KeyfleetWeb.RouteCatalogTest do
           %{"fleet_id" => "fibonacci_syndicate", "token_id" => String.duplicate("9", 19)},
           %{"fleet_id" => "fibonacci_syndicate"}
         ] do
-      assert_raise KeyfleetWeb.NotFoundError, fn -> RouteCatalog.fetch!(:keys, params) end
+      assert_raise KeyfleetWeb.NotFoundError, fn ->
+        RouteCatalog.fetch!("/app/keys/:fleet_id/:token_id", params)
+      end
     end
   end
 
   test "a workspace item's page names the item it was asked for" do
     item =
-      RouteCatalog.fetch!(:workspace_item, %{
-        "fleet_id" => "fibonacci_syndicate",
-        "object_id" => "task#12"
-      })
+      RouteCatalog.fetch!("/syndicate/1/workspace/:object_id", %{"object_id" => "task#12"})
 
     assert item.route_id == :workspace_item
-    assert item.destination == "/app/fleets/fibonacci_syndicate/workspace/task%2312"
+    assert item.destination == "/syndicate/1/workspace/task%2312"
     assert item.page_display_label == "Workspace"
     assert item.canonical_root == "/"
 
-    assert RouteCatalog.fetch!(:workspace, %{"fleet_id" => "fibonacci_syndicate"}).destination ==
-             "/app/fleets/fibonacci_syndicate/workspace"
+    assert item.fleet_id == "fibonacci_syndicate"
 
     for object_id <- [
           "task",
@@ -116,35 +128,29 @@ defmodule KeyfleetWeb.RouteCatalogTest do
           "rel_1"
         ] do
       assert_raise KeyfleetWeb.NotFoundError, fn ->
-        RouteCatalog.fetch!(:workspace_item, %{
-          "fleet_id" => "fibonacci_syndicate",
-          "object_id" => object_id
-        })
+        RouteCatalog.fetch!("/syndicate/1/workspace/:object_id", %{"object_id" => object_id})
       end
     end
   end
 
   test "a proposal's page names the proposal it was asked for" do
     proposal =
-      RouteCatalog.fetch!(:proposal, %{"fleet_id" => "fibonacci_syndicate", "number" => "3"})
+      RouteCatalog.fetch!("/syndicate/1/proposals/:number", %{"number" => "3"})
 
     assert proposal.route_id == :proposal
-    assert proposal.destination == "/app/fleets/fibonacci_syndicate/proposals/3"
+    assert proposal.destination == "/syndicate/1/proposals/3"
     assert proposal.page_display_label == "Proposals"
     assert proposal.canonical_root == "/"
 
-    assert RouteCatalog.fetch!(:proposals, %{"fleet_id" => "fibonacci_syndicate"}).destination ==
-             "/app/fleets/fibonacci_syndicate/proposals"
-
     for number <- ["0", "03", "-1", "1.5", "one", String.duplicate("9", 19)] do
       assert_raise KeyfleetWeb.NotFoundError, fn ->
-        RouteCatalog.fetch!(:proposal, %{"fleet_id" => "fibonacci_syndicate", "number" => number})
+        RouteCatalog.fetch!("/syndicate/1/proposals/:number", %{"number" => number})
       end
     end
   end
 
   test "account is the canonical product detail route" do
-    account = RouteCatalog.fetch!(:account)
+    account = RouteCatalog.fetch!("/account")
 
     assert account.route_id == :account
     assert account.destination == "/account"
@@ -157,32 +163,13 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert account.local_state == %{}
   end
 
-  test "the product sidebar lists the five fleets, Classic first, and Account on every product route" do
+  test "the product sidebar names Classic, links the Regents Club, and Account on every product route" do
     for entry <- Enum.reject(RouteCatalog.entries(), &(&1.live_action == :home)) do
-      assert RouteCatalog.fetch!(entry.live_action, sample_params(entry)).sidebar_model ==
+      assert RouteCatalog.fetch!(entry.path_pattern, sample_params(entry)).sidebar_model ==
                %RouteCatalog.SidebarModel{
                  id: :product,
                  targets: [
-                   %RouteTarget{
-                     route_id: :fleet,
-                     label: "Classic #1",
-                     path: "/app/fleets/fleet_tech_classic"
-                   },
-                   %RouteTarget{
-                     route_id: :fleet,
-                     label: "Syndicate #1",
-                     path: "/app/fleets/fibonacci_syndicate"
-                   },
-                   %RouteTarget{
-                     route_id: :fleet,
-                     label: "Cascade #1",
-                     path: "/app/fleets/fibonacci_cascade"
-                   },
-                   %RouteTarget{
-                     route_id: :fleet,
-                     label: "Accelerant #1",
-                     path: "/app/fleets/fleet_tech_accelerant"
-                   },
+                   %RouteCatalog.NameOnly{label: "Classic #1"},
                    %RouteTarget{
                      route_id: :fleet,
                      label: "Regents Club #1",
@@ -206,14 +193,14 @@ defmodule KeyfleetWeb.RouteCatalogTest do
       ])
 
     assert Enum.all?(RouteCatalog.entries(), fn entry ->
-             spec = RouteCatalog.fetch!(entry.live_action, sample_params(entry))
+             spec = RouteCatalog.fetch!(entry.path_pattern, sample_params(entry))
              MapSet.subset?(MapSet.new(spec.header_controls), allowed_controls)
            end)
   end
 
   test "every route starts at the top" do
     assert Enum.all?(RouteCatalog.entries(), fn entry ->
-             RouteCatalog.fetch!(entry.live_action, sample_params(entry)).scroll_policy == :top
+             RouteCatalog.fetch!(entry.path_pattern, sample_params(entry)).scroll_policy == :top
            end)
   end
 
@@ -223,28 +210,16 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 18
+    assert length(decoded["routes"]) == 50
 
-    assert Enum.map(decoded["routes"], & &1["route_id"]) == [
-             "home",
-             "account",
-             "points",
-             "wallets",
-             "connections",
-             "about",
-             "opportunities",
-             "fleet",
-             "keys",
-             "dms",
-             "dm",
-             "rooms",
-             "workspace",
-             "workspace_item",
-             "proposals",
-             "proposal",
-             "polls",
-             "poll"
-           ]
+    assert Enum.map(decoded["routes"], & &1["route_id"]) ==
+             ~w(home account points wallets connections about opportunities keys dms dm) ++
+               List.flatten(
+                 List.duplicate(
+                   ~w(fleet rooms workspace workspace_item proposals proposal polls poll),
+                   5
+                 )
+               )
 
     assert decoded["schema_version"] == 1
     assert first.digest == Base.encode16(:crypto.hash(:sha256, first.json), case: :lower)
@@ -258,6 +233,9 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert Enum.all?(targets, fn
              %{"type" => "route", "destination" => path, "route_id" => route_id}
              when is_binary(path) and is_binary(route_id) ->
+               true
+
+             %{"type" => "name", "label" => label} when is_binary(label) ->
                true
 
              _target ->

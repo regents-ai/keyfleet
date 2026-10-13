@@ -8,7 +8,7 @@ import {prepareFleet, sayInGeneral} from "./support/fleet_chain"
 // writes posts of its own, so a retried worker's posts are never mistaken for
 // them.
 const fleet = "fleet_tech_classic"
-const room = `/app/fleets/${fleet}/rooms/general`
+const room = `/classic/1/rooms/general`
 const loud = "0x7777777777777777777777777777777777777777"
 const quiet = "0x8888888888888888888888888888888888888888"
 

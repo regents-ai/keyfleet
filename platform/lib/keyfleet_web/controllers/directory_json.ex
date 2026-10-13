@@ -61,7 +61,7 @@ defmodule KeyfleetWeb.DirectoryJSON do
 
   defp links(fleet),
     do: %{
-      page: PublicDocuments.url("/app/fleets/#{fleet.id}"),
+      page: PublicDocuments.url(Keyfleet.Fleets.path(fleet.id)),
       markdown: PublicDocuments.url("/fleets/#{fleet.id}.md"),
       json: PublicDocuments.url("/api/v1/fleets/#{fleet.id}")
     }
@@ -76,7 +76,7 @@ defmodule KeyfleetWeb.DirectoryJSON do
       goal,
       :url,
       PublicDocuments.url(
-        "/app/fleets/#{fleet.id}/workspace/#{URI.encode(goal.id, &URI.char_unreserved?/1)}"
+        "#{Keyfleet.Fleets.path(fleet.id)}/workspace/#{URI.encode(goal.id, &URI.char_unreserved?/1)}"
       )
     )
   end
@@ -98,5 +98,6 @@ defmodule KeyfleetWeb.DirectoryJSON do
 
   defp linked(fleet, room), do: Map.put(room, :url, room_url(fleet.id, room.slug))
 
-  defp room_url(fleet_id, slug), do: PublicDocuments.url("/app/fleets/#{fleet_id}/rooms/#{slug}")
+  defp room_url(fleet_id, slug),
+    do: PublicDocuments.url("#{Keyfleet.Fleets.path(fleet_id)}/rooms/#{slug}")
 end

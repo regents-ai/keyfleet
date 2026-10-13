@@ -13,7 +13,7 @@ type PrivyBridgeModule = {
 }
 
 // A product page other than the Account page, for walking onto the Account page.
-const fleetPath = "/app/fleets/fibonacci_syndicate"
+const fleetPath = "/syndicate/1"
 
 const retryViewports = [
   {name: "desktop", width: 1280, height: 720},

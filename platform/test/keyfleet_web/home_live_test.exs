@@ -65,7 +65,11 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert attribute(html, ".rl-fleet-card", "id") == Enum.map(ids, &"home-fleet-#{&1}")
 
     for %{id: id, name: name} <- Fleets.catalog() do
-      assert has_element?(view, ~s(#home-fleet-#{id} a[href="/app/fleets/#{id}"] h3), name)
+      assert has_element?(
+               view,
+               ~s(#home-fleet-#{id} a[href="#{Keyfleet.Fleets.path(id)}"] h3),
+               name
+             )
     end
 
     assert attribute(html, ".key-map-preview", "data-layout") ==
@@ -329,7 +333,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     {:ok, _view, html} = live(conn, "/")
 
     anchors = attribute(html, "[id]", "id")
-    fleet_paths = Enum.map(Fleets.catalog_ids(), &"/app/fleets/#{&1}")
+    fleet_paths = Enum.map(Fleets.catalog_ids(), &"#{Keyfleet.Fleets.path(&1)}")
     briefing = conn |> get("/opportunities") |> html_response(200) |> attribute("[id]", "id")
 
     for href <- attribute(html, "a", "href"),

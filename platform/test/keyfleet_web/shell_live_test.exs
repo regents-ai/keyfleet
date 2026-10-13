@@ -122,7 +122,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     {:ok, view, html} =
       conn
       |> init_test_session(%{human_account_id: account.id})
-      |> live("/app/fleets/fibonacci_syndicate")
+      |> live("/syndicate/1")
 
     pid = view.pid
     [instance] = Regex.run(~r/data-shell-instance="(\d+)"/, html, capture: :all_but_first)
@@ -268,13 +268,13 @@ defmodule KeyfleetWeb.ShellLiveTest do
              "Classic #1Cascade #1"
 
     assert keys_listed(html) == [
-             "/app/fleets/fleet_tech_classic?key=2",
-             "/app/fleets/fibonacci_cascade?key=3",
-             "/app/fleets/fibonacci_cascade?key=5"
+             "/classic/1?key=2",
+             "/cascade/1?key=3",
+             "/cascade/1?key=5"
            ]
 
     view |> element("#account-keys a", "Key 5") |> render_click()
-    assert_patch(view, "/app/fleets/fibonacci_cascade?key=5")
+    assert_patch(view, "/cascade/1?key=5")
   end
 
   test "a connection is only called connected once the account's own record says so", %{
@@ -373,7 +373,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
   # Signed out, the sidebar names the account page as the header's button does.
   test "in-shell navigation keeps the LiveView and shell identity", %{conn: conn} do
-    {:ok, view, html} = live(conn, "/app/fleets/fibonacci_syndicate")
+    {:ok, view, html} = live(conn, "/syndicate/1")
     pid = view.pid
     [instance] = Regex.run(~r/data-shell-instance="(\d+)"/, html, capture: :all_but_first)
 
@@ -392,7 +392,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     Fleets.bootstrap_catalog!()
     ChainHelpers.deploy!("fleet_tech_classic")
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
-    {:ok, view, _html} = live(conn, "/app/fleets/fleet_tech_classic/rooms/general")
+    {:ok, view, _html} = live(conn, "/classic/1/rooms/general")
 
     assert topics(view) ==
              Enum.sort([
@@ -400,7 +400,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
                Rooms.topic("fleet_tech_classic", :public)
              ])
 
-    render_patch(view, "/app/fleets/fibonacci_cascade")
+    render_patch(view, "/cascade/1")
 
     assert topics(view) ==
              Enum.sort([
@@ -454,7 +454,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
   end
 
   defp render_shell(account_control) do
-    route_spec = RouteCatalog.fetch!(:account, %{})
+    route_spec = RouteCatalog.fetch!("/account")
 
     render_component(&Shell.shell/1,
       route_spec: route_spec,

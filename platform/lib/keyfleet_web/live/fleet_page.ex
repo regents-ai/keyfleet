@@ -88,7 +88,7 @@ defmodule KeyfleetWeb.FleetPage do
   end
 
   defp fleet_page_path(fleet_id, position, kept),
-    do: "/app/fleets/#{fleet_id}?#{URI.encode_query(position ++ kept)}"
+    do: "#{Keyfleet.Fleets.path(fleet_id)}?#{URI.encode_query(position ++ kept)}"
 
   @doc """
   Each key with its active shards: each shard's agent and what its check-ins

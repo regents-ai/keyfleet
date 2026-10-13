@@ -21,7 +21,7 @@ defmodule KeyfleetWeb.ContentSecurityPolicyTest do
   end
 
   test "every page with the account button carries the sign-in policy" do
-    for path <- ~w(/ /account /about /opportunities /app/fleets/fibonacci_syndicate) do
+    for path <- ~w(/ /account /about /opportunities /syndicate/1) do
       conn = get(build_conn(), path)
 
       assert conn.status == 200, "#{path} answered #{conn.status}"

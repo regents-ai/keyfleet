@@ -583,8 +583,8 @@ defmodule KeyfleetWeb.FleetLive do
           Show earlier
         </Regent.Primitives.button>
         <p :if={@now.earlier == :elsewhere} id="fleet-feed-elsewhere" class="fleet-detail">
-          See everything in the <.link patch={"/app/fleets/#{@fleet.fleet_id}/rooms/general"}>rooms</.link>,
-          <.link patch={"/app/fleets/#{@fleet.fleet_id}/workspace"}>workspace</.link>
+          See everything in the <.link patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}/rooms/general"}>rooms</.link>,
+          <.link patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}/workspace"}>workspace</.link>
           and <.link patch={ProposalsPage.list_path(@fleet.fleet_id)}>proposals</.link>.
         </p>
       </section>
@@ -647,7 +647,7 @@ defmodule KeyfleetWeb.FleetLive do
           <q>{request.body}</q>
           <.link
             :if={request.quoted_in_slug}
-            navigate={"/app/fleets/#{@fleet_id}/rooms/#{request.quoted_in_slug}"}
+            navigate={"#{Keyfleet.Fleets.path(@fleet_id)}/rooms/#{request.quoted_in_slug}"}
           >
             Quoted in {request.quoted_in_slug}
           </.link>
@@ -690,7 +690,10 @@ defmodule KeyfleetWeb.FleetLive do
       <h2 class="fleet-channels__title">Rooms</h2>
       <ul class="fleet-channels__group">
         <li :for={room <- @fleet.rooms}>
-          <.link class="fleet-channel" patch={"/app/fleets/#{@fleet.fleet_id}/rooms/#{room.slug}"}>
+          <.link
+            class="fleet-channel"
+            patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}/rooms/#{room.slug}"}
+          >
             {RoomsLive.room_label(room)}
           </.link>
         </li>
@@ -703,7 +706,7 @@ defmodule KeyfleetWeb.FleetLive do
           <.link
             id="fleet-workspace-link"
             class="fleet-channel"
-            patch={"/app/fleets/#{@fleet.fleet_id}/workspace"}
+            patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}/workspace"}
           >
             Workspace
           </.link>
@@ -721,7 +724,7 @@ defmodule KeyfleetWeb.FleetLive do
           <.link
             id="fleet-polls-link"
             class="fleet-channel"
-            patch={"/app/fleets/#{@fleet.fleet_id}/polls"}
+            patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}/polls"}
           >
             Polls
           </.link>
@@ -779,7 +782,7 @@ defmodule KeyfleetWeb.FleetLive do
         />
       </p>
 
-      <.link id="fleet-trying-workspace" patch={"/app/fleets/#{@fleet_id}/workspace"}>
+      <.link id="fleet-trying-workspace" patch={"#{Keyfleet.Fleets.path(@fleet_id)}/workspace"}>
         Open the workspace
       </.link>
     </section>
@@ -882,7 +885,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp activity_part(%{part: {:room, slug, name}} = assigns) do
     assigns = assign(assigns, slug: slug, name: name)
 
-    ~H|<.link patch={"/app/fleets/#{@fleet_id}/rooms/#{@slug}"} data-room={@slug}>{@name}</.link>|
+    ~H|<.link patch={"#{Keyfleet.Fleets.path(@fleet_id)}/rooms/#{@slug}"} data-room={@slug}>{@name}</.link>|
   end
 
   defp activity_part(%{part: {:agent, name}} = assigns) do

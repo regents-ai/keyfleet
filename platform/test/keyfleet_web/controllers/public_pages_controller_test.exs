@@ -50,7 +50,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
   test "a page inside the app is titled by its route" do
     document =
       build_conn()
-      |> get("/app/fleets/fibonacci_syndicate")
+      |> get("/syndicate/1")
       |> html_response(200)
       |> LazyHTML.from_document()
 

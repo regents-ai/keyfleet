@@ -23,6 +23,8 @@ defmodule KeyfleetWeb.KeyLinks do
 
   defp kept(params), do: for(name <- @kept, is_binary(params[name]), do: {name, params[name]})
 
-  defp fleet_path(fleet_id, []), do: "/app/fleets/#{fleet_id}"
-  defp fleet_path(fleet_id, query), do: "/app/fleets/#{fleet_id}?#{URI.encode_query(query)}"
+  defp fleet_path(fleet_id, []), do: Keyfleet.Fleets.path(fleet_id)
+
+  defp fleet_path(fleet_id, query),
+    do: "#{Keyfleet.Fleets.path(fleet_id)}?#{URI.encode_query(query)}"
 end

@@ -5,7 +5,7 @@ import {
 } from "./support/authenticated_privy"
 
 // The first fleet's page stands for every fleet's page.
-const fleetPath = "/app/fleets/fibonacci_syndicate"
+const fleetPath = "/syndicate/1"
 const shellRoutes = [fleetPath, "/account"]
 
 // The shell holds one live session across every page, so a link to another page
@@ -200,20 +200,17 @@ test("a signed-in account shows its account menu", async ({page}) => {
 })
 
 // Signed out, the account page is named as the header's button names it.
-test("the sidebar lists the five fleets, Classic first, then the Account page", async ({page}) => {
+test("the sidebar names Classic, links the Regents Club, then the Account page", async ({page}) => {
   await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await expect(page.getByRole("heading", {level: 1, name: "Syndicate #1"})).toBeVisible()
 
   const sidebar = page.locator("#shell-sidebar")
-  const links = await sidebar.locator("a[href^='/app/fleets/'], a[href='/account']").evaluateAll(elements =>
+  const items = await sidebar.locator("li > a, li > span").evaluateAll(elements =>
     elements.map(element => [element.textContent?.trim(), element.getAttribute("href")]),
   )
-  expect(links).toEqual([
-    ["Classic #1", "/app/fleets/fleet_tech_classic"],
-    ["Syndicate #1", "/app/fleets/fibonacci_syndicate"],
-    ["Cascade #1", "/app/fleets/fibonacci_cascade"],
-    ["Accelerant #1", "/app/fleets/fleet_tech_accelerant"],
+  expect(items).toEqual([
+    ["Classic #1", null],
     ["Regents Club #1", "/app/fleets/regents_club"],
     ["Sign in", "/account"],
   ])
@@ -247,7 +244,7 @@ test("navigation keeps brand, document, shell identity, and starts at the top", 
   expect(await page.locator("#app-shell-scroller").evaluate(element => element.scrollTop)).toBe(0)
 
   await patchTo(page, fleetPath)
-  await expect(page).toHaveURL(/\/app\/fleets\/fibonacci_syndicate$/)
+  await expect(page).toHaveURL(/\/syndicate\/1$/)
   await expect(page.locator("html")).toHaveAttribute("data-brand", "platform")
   await page.evaluate(() => {
     document
@@ -269,7 +266,7 @@ test("navigation keeps brand, document, shell identity, and starts at the top", 
     document.querySelector("#app-shell-scroller")?.scrollTo(0, 1000)
   })
   await page.goForward()
-  await expect(page).toHaveURL(/\/app\/fleets\/fibonacci_syndicate$/)
+  await expect(page).toHaveURL(/\/syndicate\/1$/)
   await expect(page.locator("html")).toHaveAttribute("data-brand", "platform")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-shell-instance", shellInstance ?? "")
   expect(await page.locator("#app-shell-scroller").evaluate(element => element.scrollTop)).toBe(0)
@@ -283,7 +280,7 @@ test("rapid page switches leave the latest page at rest", async ({page}) => {
   await expect(page).toHaveURL(/\/account$/)
   await patchTo(page, fleetPath)
 
-  await expect(page).toHaveURL(/\/app\/fleets\/fibonacci_syndicate$/)
+  await expect(page).toHaveURL(/\/syndicate\/1$/)
   await expect(page.getByRole("heading", {level: 1, name: "Syndicate #1"})).toBeVisible()
   await expect(page.locator("#route-content")).toHaveCSS("opacity", "1")
   for (const region of ["#route-content", "#shell-sidebar"]) {

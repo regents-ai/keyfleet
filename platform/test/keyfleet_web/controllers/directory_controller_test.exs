@@ -140,10 +140,10 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
       |> get(path)
     end
 
-    assert redirected_to(browser.("/fleets/#{@fleet}"), 302) == "/app/fleets/#{@fleet}"
+    assert redirected_to(browser.("/fleets/#{@fleet}"), 302) == "#{Keyfleet.Fleets.path(@fleet)}"
 
     assert redirected_to(browser.("/fleets/#{@fleet}/rooms"), 302) ==
-             "/app/fleets/#{@fleet}/rooms/general"
+             "#{Keyfleet.Fleets.path(@fleet)}/rooms/general"
 
     for path <- ["/fleets/fleet_unknown", "/fleets/fleet_unknown/rooms"] do
       assert html_response(browser.(path), 404) =~ "We can’t find that page"

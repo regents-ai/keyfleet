@@ -75,11 +75,11 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   @doc "The path of the fleet's proposals, from `position`."
   def list_path(fleet_id, position \\ []),
-    do: with_query("/app/fleets/#{fleet_id}/proposals", position)
+    do: with_query("#{Keyfleet.Fleets.path(fleet_id)}/proposals", position)
 
   @doc "The path of one proposal's page, from `position` in its votes."
   def detail_path(fleet_id, number, position \\ []),
-    do: with_query("/app/fleets/#{fleet_id}/proposals/#{number}", position)
+    do: with_query("#{Keyfleet.Fleets.path(fleet_id)}/proposals/#{number}", position)
 
   defp with_query(path, []), do: path
   defp with_query(path, query), do: path <> "?" <> URI.encode_query(query)

@@ -6,6 +6,7 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   alias __MODULE__.{
     Entry,
+    NameOnly,
     RouteTarget,
     SidebarModel,
     Spec
@@ -22,7 +23,7 @@ defmodule KeyfleetWeb.RouteCatalog do
   # A poll is named by its id, a UUID in lower case.
   @poll_id ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
 
-  @entries [
+  @pages [
     %Entry{
       path_pattern: "/",
       live_action: :home,
@@ -73,13 +74,6 @@ defmodule KeyfleetWeb.RouteCatalog do
       route_spec_id: :opportunities
     },
     %Entry{
-      path_pattern: "/app/fleets/:fleet_id",
-      live_action: :fleet,
-      parameter_schema: %{fleet_id: :fleet_id},
-      reserved_values: %{},
-      route_spec_id: :fleet
-    },
-    %Entry{
       path_pattern: "/app/keys/:fleet_id/:token_id",
       live_action: :keys,
       parameter_schema: %{fleet_id: :fleet_id, token_id: :token_id},
@@ -99,57 +93,36 @@ defmodule KeyfleetWeb.RouteCatalog do
       parameter_schema: %{fleet_id: :fleet_id, token_id: :token_id, other_token_id: :token_id},
       reserved_values: %{},
       route_spec_id: :dm
-    },
-    %Entry{
-      path_pattern: "/app/fleets/:fleet_id/rooms/:slug",
-      live_action: :rooms,
-      parameter_schema: %{fleet_id: :fleet_id, slug: :slug},
-      reserved_values: %{},
-      route_spec_id: :rooms
-    },
-    %Entry{
-      path_pattern: "/app/fleets/:fleet_id/workspace",
-      live_action: :workspace,
-      parameter_schema: %{fleet_id: :fleet_id},
-      reserved_values: %{},
-      route_spec_id: :workspace
-    },
-    %Entry{
-      path_pattern: "/app/fleets/:fleet_id/workspace/:object_id",
-      live_action: :workspace_item,
-      parameter_schema: %{fleet_id: :fleet_id, object_id: :object_id},
-      reserved_values: %{},
-      route_spec_id: :workspace_item
-    },
-    %Entry{
-      path_pattern: "/app/fleets/:fleet_id/proposals",
-      live_action: :proposals,
-      parameter_schema: %{fleet_id: :fleet_id},
-      reserved_values: %{},
-      route_spec_id: :proposals
-    },
-    %Entry{
-      path_pattern: "/app/fleets/:fleet_id/proposals/:number",
-      live_action: :proposal,
-      parameter_schema: %{fleet_id: :fleet_id, number: :number},
-      reserved_values: %{},
-      route_spec_id: :proposal
-    },
-    %Entry{
-      path_pattern: "/app/fleets/:fleet_id/polls",
-      live_action: :polls,
-      parameter_schema: %{fleet_id: :fleet_id},
-      reserved_values: %{},
-      route_spec_id: :polls
-    },
-    %Entry{
-      path_pattern: "/app/fleets/:fleet_id/polls/:poll_id",
-      live_action: :poll,
-      parameter_schema: %{fleet_id: :fleet_id, poll_id: :poll_id},
-      reserved_values: %{},
-      route_spec_id: :poll
     }
   ]
+
+  # The pages every fleet has, each under the fleet's own address
+  # (`Keyfleet.Fleets.path/1`): the fleet's page itself, then its rooms,
+  # workspace, proposals and polls.
+  @fleet_pages [
+    {"", :fleet, %{}},
+    {"/rooms/:slug", :rooms, %{slug: :slug}},
+    {"/workspace", :workspace, %{}},
+    {"/workspace/:object_id", :workspace_item, %{object_id: :object_id}},
+    {"/proposals", :proposals, %{}},
+    {"/proposals/:number", :proposal, %{number: :number}},
+    {"/polls", :polls, %{}},
+    {"/polls/:poll_id", :poll, %{poll_id: :poll_id}}
+  ]
+
+  @entries @pages ++
+             for(
+               %{id: fleet_id, path: path} <- Fleets.catalog(),
+               {under, action, schema} <- @fleet_pages,
+               do: %Entry{
+                 path_pattern: path <> under,
+                 fleet_id: fleet_id,
+                 live_action: action,
+                 parameter_schema: schema,
+                 reserved_values: %{},
+                 route_spec_id: action
+               }
+             )
 
   @specs %{
     home: {:home, nil, nil, "Keyfleet", "/", [], :home, %{}},
@@ -190,10 +163,17 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   def entries, do: @entries
 
-  def fetch!(action, params \\ %{}) do
-    entry = Enum.find(@entries, &(&1.live_action == action)) || raise(NotFoundError)
+  @doc """
+  The page at the route `path_pattern`, as the router names the route an
+  address matched, with the parts of the address the pattern names as
+  `params`. A fleet's pages are at the fleet's own address
+  (`Keyfleet.Fleets.path/1`) and nowhere else; the spec names that fleet as
+  `fleet_id`.
+  """
+  def fetch!(path_pattern, params \\ %{}) do
+    entry = Enum.find(@entries, &(&1.path_pattern == path_pattern)) || raise(NotFoundError)
     validate_params!(entry, params)
-    build_spec(entry.route_spec_id, destination(entry.path_pattern, params))
+    build_spec(entry.route_spec_id, destination(path_pattern, params), entry.fleet_id)
   end
 
   def design_handoff do
@@ -227,13 +207,14 @@ defmodule KeyfleetWeb.RouteCatalog do
   defp valid_parameter?(:object_id, value),
     do: is_binary(value) and Regex.match?(@object_id, value)
 
-  defp build_spec(route_spec_id, destination) do
+  defp build_spec(route_spec_id, destination, fleet_id) do
     {route_id, app_id, app_label, page_label, root, controls, background, local_state} =
       Map.fetch!(@specs, route_spec_id)
 
     %Spec{
       route_id: route_id,
       destination: destination,
+      fleet_id: fleet_id,
       app_id: app_id,
       app_display_label: app_label,
       page_display_label: page_label,
@@ -252,11 +233,16 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   defp sidebar_model(nil), do: %SidebarModel{id: :public, targets: []}
 
-  # The five fleets' pages, then the account page.
+  # The fleets the sidebar shows, as a link to the fleet's page or as its name
+  # alone, then the account page.
   defp sidebar_model(:product) do
     fleets =
-      for %{id: id, name: name} <- Fleets.catalog(),
-          do: %RouteTarget{route_id: :fleet, label: name, path: "/app/fleets/#{id}"}
+      for %{sidebar: shown, name: name, path: path} <- Fleets.catalog(), shown != nil do
+        case shown do
+          :link -> %RouteTarget{route_id: :fleet, label: name, path: path}
+          :name -> %NameOnly{label: name}
+        end
+      end
 
     %SidebarModel{
       id: :product,
@@ -267,7 +253,7 @@ defmodule KeyfleetWeb.RouteCatalog do
   # The handoff describes routes, not visits, so a parameterised route hands over
   # the pattern its paths are built from.
   defp handoff_route(entry) do
-    spec = build_spec(entry.route_spec_id, entry.path_pattern)
+    spec = build_spec(entry.route_spec_id, entry.path_pattern, nil)
 
     %{
       "app_display_label" => spec.app_display_label,
@@ -292,6 +278,8 @@ defmodule KeyfleetWeb.RouteCatalog do
   defp sidebar_handoff(sidebar) do
     %{"id" => sidebar.id, "targets" => Enum.map(sidebar.targets, &target_handoff/1)}
   end
+
+  defp target_handoff(%NameOnly{label: label}), do: %{"type" => "name", "label" => label}
 
   defp target_handoff(%RouteTarget{} = target) do
     %{

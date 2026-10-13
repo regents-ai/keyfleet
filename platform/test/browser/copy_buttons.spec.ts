@@ -41,7 +41,7 @@ async function copies(page: Page, id: string, value: string) {
 
 test("a fleet's Send your agent copies its instruction", async ({page}) => {
   const errors = await signIn(page)
-  await open(page, `/app/fleets/${fleet}`)
+  await open(page, `/classic/1`)
   await page.locator("#fleet-send-agent").click()
   await expect(page.locator("#fleet-send-agent-dialog")).toBeVisible()
 

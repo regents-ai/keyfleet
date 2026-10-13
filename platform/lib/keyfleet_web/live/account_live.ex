@@ -95,7 +95,7 @@ defmodule KeyfleetWeb.AccountLive do
           </p>
           <div :for={fleet <- @held_keys} class="account-keys__fleet">
             <h3>
-              <.link patch={"/app/fleets/#{fleet.fleet_id}"}>{fleet.name}</.link>
+              <.link patch={Keyfleet.Fleets.path(fleet.fleet_id)}>{fleet.name}</.link>
             </h3>
             <ul class="account-keys__list">
               <li :for={token_id <- fleet.token_ids}>

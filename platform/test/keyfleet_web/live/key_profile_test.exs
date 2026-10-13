@@ -17,7 +17,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   # Other suites commit Syndicate keys outside the sandbox; Cascade holds only
   # the keys each test issues.
   @fleet "fibonacci_cascade"
-  @path "/app/fleets/fibonacci_cascade"
+  @path "/cascade/1"
   @map_path @path <> "?view=map"
   @system %Actors.System{}
   @rewards "0x" <> String.duplicate("8", 40)

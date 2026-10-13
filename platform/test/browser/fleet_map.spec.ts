@@ -7,6 +7,12 @@ import {fillLevel, moveKey, prepareFleet, sellKey, shardKey} from "./support/fle
 // page that lost its connection catches up when it comes back. Every run
 // starts from the same unsold fleets.
 const fleet = "fleet_tech_accelerant"
+const fleetPaths: Record<string, string> = {
+  fleet_tech_classic: "/classic/1",
+  fibonacci_syndicate: "/syndicate/1",
+  fibonacci_cascade: "/cascade/1",
+  fleet_tech_accelerant: "/accelerant/1",
+}
 const me = "0x1111111111111111111111111111111111111111"
 const someoneElse = "0x2222222222222222222222222222222222222222"
 
@@ -18,7 +24,7 @@ async function openFleet(page: Page, id = fleet) {
   page.on("pageerror", error => errors.push(error.message))
   const auth = await installAuthenticatedPrivy(page, "valid")
   await auth.establishLocalSession()
-  await page.goto(`/app/fleets/${id}?view=map`)
+  await page.goto(`${fleetPaths[id]}?view=map`)
   const stage = page.locator(`#key-map-${id}.key-map--ready`)
   await expect(stage.locator(".km-tile").first()).toBeAttached()
   await stage.scrollIntoViewIfNeeded()
@@ -162,7 +168,7 @@ test.describe("the fleet page's map", () => {
     await expectMarks(page, key, ["selected"])
 
     await page.goBack()
-    await expect(page).toHaveURL(new RegExp(`/app/fleets/${fleet}\\?view=map$`))
+    await expect(page).toHaveURL(new RegExp(`${fleetPaths[fleet]}\\?view=map$`))
     await expect(page.locator("#key-profile")).toHaveCount(0)
     await expect(chosen).toHaveText("No Key chosen yet.")
     await expectMarks(page, key, [], ["selected"])

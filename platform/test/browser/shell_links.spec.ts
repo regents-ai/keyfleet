@@ -9,7 +9,7 @@ import {furnishFleet, prepareFleet} from "./support/fleet_chain"
 // as the owner of its Key, as only a Key holder reads the workspace.
 const fleet = "fibonacci_syndicate"
 const me = "0x1111111111111111111111111111111111111111"
-const fleetPath = `/app/fleets/${fleet}`
+const fleetPath = `/syndicate/1`
 const planPath = new RegExp(`${escape(fleetPath)}/workspace/goal%23\\d+$`)
 
 // The fleet is furnished once, so the specs run in order and stop at the first failure.
@@ -17,9 +17,7 @@ test.describe.configure({mode: "serial"})
 
 let key: number
 
-// The walk's sidebar also opens Classic #1, so it is deployed too.
 test.beforeAll(() => {
-  prepareFleet("fleet_tech_classic")
   prepareFleet(fleet)
   key = furnishFleet(fleet, me)
 })
@@ -130,11 +128,10 @@ test("the walk from home through every page, back, forward and the sidebar keeps
     await walk.arrive(visited[visited.length - 1 - back])
   }
 
-  // The sidebar's links: this fleet, another fleet, and the Account page.
-  await walk.follow(sidebar.getByRole("link", {name: "Syndicate #1"}), fleetPage)
-  await walk.follow(sidebar.getByRole("link", {name: "Classic #1"}), {
-    path: "/app/fleets/fleet_tech_classic",
-    shows: "#fleet-view",
+  // The sidebar's links: the Regents Club and the Account page.
+  await walk.follow(sidebar.getByRole("link", {name: "Regents Club #1"}), {
+    path: "/app/fleets/regents_club",
+    shows: "#fleet-page",
   })
   await walk.follow(sidebar.getByRole("link", {name: "Account"}), account)
 
@@ -145,11 +142,12 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
   await page.goto(fleetPath)
   const walk = await enterShell(page)
-  const toFleet = () => walk.follow(page.locator("#shell-sidebar").getByRole("link", {name: "Syndicate #1"}), fleetPage)
 
   // The fleet's rooms, workspace and proposals.
+  // The sidebar has no link to this fleet, so the way back from a room is the browser's own.
   await walk.follow(page.locator("#fleet-channels").getByRole("link", {name: "General"}), general)
-  await toFleet()
+  await page.goBack()
+  await walk.arrive(fleetPage)
   await walk.follow(page.locator("#fleet-workspace-link"), board)
 
   // The workspace's heading leads back to the fleet, and a card's key to the
@@ -168,7 +166,9 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   // to every proposal, and that page's heading back to the fleet.
   await walk.follow(page.locator("#fleet-workspace-link"), board)
   await walk.follow(page.locator("#workspace-page h3 a", {hasText: "Research plan"}), plan)
-  await toFleet()
+  await page.goBack()
+  await walk.arrive(board)
+  await walk.follow(page.locator("#workspace-page .workspace-kicker a"), fleetPage)
   await walk.follow(page.locator("#fleet-proposals-link"), proposals)
   await walk.follow(page.locator('#proposals-list [data-proposal="1"] h3 a'), proposal)
   await walk.follow(page.locator("#proposal-page .proposals-kicker a"), proposals)

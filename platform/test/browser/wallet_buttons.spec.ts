@@ -25,7 +25,7 @@ async function openBuying(page: Page, bearer: string | null = "valid") {
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   if (bearer) await (await installAuthenticatedPrivy(page, bearer)).establishLocalSession()
-  await page.goto(`/app/fleets/${fleet}`)
+  await page.goto(`/classic/1`)
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   await page.locator("#fleet-get-key").click()
   await expect(page.locator("#buy-key-title")).toBeVisible()
@@ -153,7 +153,7 @@ test("a key's income is claimed to the wallet that holds it, and the claim is fo
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
-  await page.goto(`/app/fleets/${fleet}?key=${key}`)
+  await page.goto(`/classic/1?key=${key}`)
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   await useStandInWallet(page, me)
 
@@ -179,7 +179,7 @@ test("a key whose draw was turned down can be asked again: every press reaches t
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
-  await page.goto(`/app/fleets/${fleet}?key=${key}`)
+  await page.goto(`/classic/1?key=${key}`)
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   await useStandInWallet(page, me)
 

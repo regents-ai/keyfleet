@@ -31,12 +31,12 @@ defmodule KeyfleetWeb.DirectoryController do
   def show_md(conn, %{"file" => file}) do
     case String.split(file, ".md", parts: 2) do
       [fleet_id, ""] -> fleet_md(conn, fleet_id)
-      _fleet_id -> open_fleet(conn, file, ~p"/app/fleets/#{file}")
+      _fleet_id -> open_fleet(conn, file, "")
     end
   end
 
   def rooms(conn, %{"fleet_id" => fleet_id}),
-    do: open_fleet(conn, fleet_id, ~p"/app/fleets/#{fleet_id}/rooms/general")
+    do: open_fleet(conn, fleet_id, "/rooms/general")
 
   defp fleet_md(conn, fleet_id) do
     case Directory.fleet(fleet_id) do
@@ -78,11 +78,11 @@ defmodule KeyfleetWeb.DirectoryController do
       "html"
   end
 
-  # A browser opens the fleet's page; anything else, an agent, reads the
-  # fleet's Markdown.
-  defp open_fleet(conn, fleet_id, page) do
+  # A browser opens the fleet's page, or the page `under` it; anything else, an
+  # agent, reads the fleet's Markdown.
+  defp open_fleet(conn, fleet_id, under) do
     case {fleet_id in Fleets.catalog_ids(), browser?(conn)} do
-      {true, true} -> redirect(conn, to: page)
+      {true, true} -> redirect(conn, to: Fleets.path(fleet_id) <> under)
       {true, false} -> redirect(conn, to: ~p"/fleets/#{fleet_id <> ".md"}")
       {false, true} -> not_found_html(conn)
       {false, false} -> Refusal.json(conn, 404, "fleet_unknown")

@@ -94,7 +94,7 @@ defmodule KeyfleetWeb.RoomsLive do
             <ul>
               <li :for={room <- @room.rooms}>
                 <.link
-                  patch={"/app/fleets/#{@room.fleet_id}/rooms/#{room.slug}"}
+                  patch={"#{Keyfleet.Fleets.path(@room.fleet_id)}/rooms/#{room.slug}"}
                   aria-current={if room.slug == @room.slug, do: "page"}
                 >
                   {room_label(room)}

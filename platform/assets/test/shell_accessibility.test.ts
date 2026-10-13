@@ -237,7 +237,7 @@ describe("mobile shell navigation", () => {
     hook.mounted?.call(context)
     page.click(page.menuButton)
     await Promise.resolve()
-    page.shell.dataset.destination = "/app/fleets/fibonacci_syndicate"
+    page.shell.dataset.destination = "/syndicate/1"
     hook.updated?.call(context)
 
     expect(page.shell.dataset.menuOpen).toBe("false")

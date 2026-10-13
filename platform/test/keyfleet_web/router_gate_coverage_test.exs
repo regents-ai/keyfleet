@@ -43,13 +43,16 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
              ~w(/admin/errors /admin/errors/:id /admin/errors/:id/:occurrence_id /app) ++
                ~w(/help /docs /fleets/:file /fleets/:fleet_id/rooms / /account) ++
                ~w(/account/points /account/wallets /account/connections /about /opportunities) ++
-               ~w(/app/fleets/:fleet_id /app/keys/:fleet_id/:token_id) ++
-               ~w(/app/keys/:fleet_id/:token_id/dms) ++
+               ~w(/app/keys/:fleet_id/:token_id /app/keys/:fleet_id/:token_id/dms) ++
                ~w(/app/keys/:fleet_id/:token_id/dms/:other_token_id) ++
-               ~w(/app/fleets/:fleet_id/rooms/:slug /app/fleets/:fleet_id/workspace) ++
-               ~w(/app/fleets/:fleet_id/workspace/:object_id /app/fleets/:fleet_id/proposals) ++
-               ~w(/app/fleets/:fleet_id/proposals/:number /app/fleets/:fleet_id/polls) ++
-               ~w(/app/fleets/:fleet_id/polls/:poll_id)
+               for(
+                 fleet <-
+                   ~w(/classic/1 /syndicate/1 /cascade/1 /accelerant/1 /app/fleets/regents_club),
+                 page <-
+                   ["", "/rooms/:slug", "/workspace", "/workspace/:object_id", "/proposals"] ++
+                     ["/proposals/:number", "/polls", "/polls/:poll_id"],
+                 do: fleet <> page
+               )
   end
 
   test "every product LiveView mounts through the gate" do

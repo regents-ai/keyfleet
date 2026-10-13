@@ -1170,7 +1170,7 @@ defmodule KeyfleetWeb.PrivySessionControllerTest do
     for read <- [
           &get(&1, "/account"),
           &get(&1, "/auth/session"),
-          &get(&1, "/app/fleets/fibonacci_syndicate")
+          &get(&1, "/syndicate/1")
         ] do
       refute browser |> recycled() |> read.() |> session_cookie()
     end

@@ -53,7 +53,7 @@ defmodule KeyfleetWeb.PollsLive do
     <article id="polls-page" class="polls-page">
       <header class="polls-heading">
         <p class="polls-kicker">
-          <.link patch={"/app/fleets/#{@page.fleet_id}"}>{@page.fleet_name}</.link>
+          <.link patch={Keyfleet.Fleets.path(@page.fleet_id)}>{@page.fleet_name}</.link>
         </p>
         <h1 tabindex="-1">Polls</h1>
         <p class="polls-lede">Questions this fleet’s Keys answer together.</p>
@@ -392,7 +392,7 @@ defmodule KeyfleetWeb.PollsLive do
     ~H"""
     <header class="polls-heading">
       <p class="polls-kicker">
-        <.link patch={"/app/fleets/#{@page.fleet_id}"}>{@page.fleet_name}</.link>
+        <.link patch={Keyfleet.Fleets.path(@page.fleet_id)}>{@page.fleet_name}</.link>
         · <.link patch={list_path(@page.fleet_id)}>Polls</.link>
       </p>
       <h1 tabindex="-1">{@title}</h1>
@@ -450,10 +450,10 @@ defmodule KeyfleetWeb.PollsLive do
   end
 
   @doc "The address of a fleet's polls."
-  def list_path(fleet_id), do: "/app/fleets/#{fleet_id}/polls"
+  def list_path(fleet_id), do: "#{Keyfleet.Fleets.path(fleet_id)}/polls"
 
   @doc "The address of one poll."
-  def poll_path(fleet_id, poll_id), do: "/app/fleets/#{fleet_id}/polls/#{poll_id}"
+  def poll_path(fleet_id, poll_id), do: "#{Keyfleet.Fleets.path(fleet_id)}/polls/#{poll_id}"
 
   @doc """
   The polls page named in the address, read as the person signed in, with the

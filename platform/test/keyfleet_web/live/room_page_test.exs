@@ -11,7 +11,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   alias Keyfleet.Rooms
 
   @fleet "fleet_tech_classic"
-  @path "/app/fleets/fleet_tech_classic/rooms/general"
+  @path "/classic/1/rooms/general"
   # Wallets that no committed fixture holds a key with, so this page's answers
   # come only from the keys this test issues.
   @owner "0x" <> String.duplicate("d", 40)
@@ -61,7 +61,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
     assert has_element?(
              view,
-             ~s(.rooms-author a[href="/app/fleets/fleet_tech_classic?key=1"]),
+             ~s(.rooms-author a[href="/classic/1?key=1"]),
              "Key 1"
            )
 
@@ -282,27 +282,27 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
 
     {:ok, _view, html} =
-      conn |> signed_in_as(@owner) |> live("/app/fleets/fleet_tech_classic/rooms/open-1")
+      conn |> signed_in_as(@owner) |> live("/classic/1/rooms/open-1")
 
     assert html =~ "Key ownership is being refreshed"
   end
 
   test "a room the fleet does not have says so", %{conn: conn} do
     {:ok, view, html} =
-      conn |> signed_in_as(@owner) |> live("/app/fleets/fleet_tech_classic/rooms/hull-survey")
+      conn |> signed_in_as(@owner) |> live("/classic/1/rooms/hull-survey")
 
     assert has_element?(view, ".rooms-kicker", "Classic #1")
     assert html =~ "This room doesn’t exist."
     refute html =~ "Nothing has been said here yet."
 
-    {:ok, _view, html} =
-      conn |> signed_in_as(@stranger) |> live("/app/fleets/nowhere/rooms/general")
-
-    assert html =~ "This fleet doesn’t exist."
+    assert conn
+           |> signed_in_as(@stranger)
+           |> get("/app/fleets/nowhere/rooms/general")
+           |> Map.fetch!(:status) == 404
   end
 
   describe "the fleet's rooms" do
-    @open_one "/app/fleets/fleet_tech_classic/rooms/open-1"
+    @open_one "/classic/1/rooms/open-1"
 
     test "a member is listed the five fixed rooms, then the five open rooms by their own names, and anyone else General alone",
          %{conn: conn} do
@@ -329,7 +329,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       for conn <- [signed_out, stranger] do
         assert labels.(conn) == ["General"]
 
-        for path <- [@open_one, "/app/fleets/fleet_tech_classic/rooms/no-such-room"] do
+        for path <- [@open_one, "/classic/1/rooms/no-such-room"] do
           {:ok, view, html} = live(conn, path)
           assert has_element?(view, "#rooms-locked #rooms-thread-title", "Keys only")
           assert has_element?(view, "#rooms-locked", "Anyone can read General.")
@@ -420,12 +420,12 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
       assert has_element?(
                view,
-               ~s(a[href="/app/fleets/#{@fleet}/rooms/hull-survey"]),
+               ~s(a[href="#{Keyfleet.Fleets.path(@fleet)}/rooms/hull-survey"]),
                "Hull survey"
              )
 
       {:ok, view, _html} =
-        conn |> signed_in_as(@owner) |> live("/app/fleets/#{@fleet}/rooms/hull-survey")
+        conn |> signed_in_as(@owner) |> live("#{Keyfleet.Fleets.path(@fleet)}/rooms/hull-survey")
 
       assert has_element?(view, "#rooms-thread-title", "Hull survey")
       assert render(view) =~ "Nothing has been said here yet."
@@ -435,7 +435,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       Keyfleet.Repo.query!("DELETE FROM keyfleet_app.rooms WHERE fleet_id = 'fleet_tech_classic'")
 
       {:ok, _view, html} =
-        conn |> signed_in_as(@owner) |> live("/app/fleets/fleet_tech_classic/rooms/general")
+        conn |> signed_in_as(@owner) |> live("/classic/1/rooms/general")
 
       assert html =~ "This fleet doesn’t exist."
     end

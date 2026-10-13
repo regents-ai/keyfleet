@@ -14,7 +14,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   alias RegentChain.Call
 
   @fleet "fibonacci_syndicate"
-  @list "/app/fleets/fibonacci_syndicate/proposals"
+  @list "/syndicate/1/proposals"
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
   @voter ProposalHelpers.wallet("e")
   @holder ProposalHelpers.wallet("1")
@@ -84,7 +84,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       ChainViews.put!(on_chain(2, :approved))
       view |> element(~s([data-proposal="2"] a)) |> render_click()
-      assert_patch(view, "/app/fleets/#{@fleet}/proposals/2")
+      assert_patch(view, "#{Keyfleet.Fleets.path(@fleet)}/proposals/2")
     end
 
     # Where it stands is what the vote contract says at the latest block, so
@@ -301,20 +301,23 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       end
     end
 
-    test "a fleet or proposal that isn't there says so, and a name that can't be one is not found",
+    test "a proposal that isn't there says so, and an address no fleet's proposals are at is not found",
          %{conn: conn} do
-      {:ok, _view, html} = live(conn, "/app/fleets/hull_survey/proposals")
-      assert html =~ "This fleet doesn’t exist."
-
-      {:ok, _view, html} = live(conn, "/app/fleets/hull_survey/proposals/1")
-      assert html =~ "This fleet doesn’t exist."
-
       {:ok, view, html} = live(conn, "#{@list}/9")
       assert html =~ "There is no proposal 9 in this fleet yet."
       assert has_element?(view, "#proposal-missing a[href='#{@list}']")
 
       {:ok, view, _html} = live(conn, @list)
       assert has_element?(view, "#proposals-empty", "No proposals yet.")
+
+      for path <- [
+            "/app/fleets/hull_survey/proposals",
+            "/app/fleets/hull_survey/proposals/1",
+            "/app/fleets/#{@fleet}/proposals",
+            "/syndicate/2/proposals"
+          ] do
+        assert get(conn, path).status == 404
+      end
 
       for path <- [
             "#{@list}/0",
@@ -500,12 +503,12 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     # Until a fleet is on chain it has no treasury, and its page has no
     # buttons and says nothing about one.
     test "a fleet not yet on chain shows no treasury and no buttons", %{conn: conn} do
-      assert {:error, {:live_redirect, %{to: "/app/fleets/fleet_tech_classic"}}} =
-               live(conn, "/app/fleets/fleet_tech_classic/proposals")
+      assert {:error, {:live_redirect, %{to: "/classic/1"}}} =
+               live(conn, "/classic/1/proposals")
     end
 
     test "the fleet's page leads to its proposals", %{conn: conn} do
-      {:ok, view, _html} = live(conn, "/app/fleets/#{@fleet}")
+      {:ok, view, _html} = live(conn, "#{Keyfleet.Fleets.path(@fleet)}")
       assert has_element?(view, "#fleet-proposals-link[href='#{@list}']", "Proposals")
     end
   end
@@ -712,7 +715,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         end
       )
 
-      render_patch(view, "/app/fleets/fibonacci_cascade/proposals")
+      render_patch(view, "/cascade/1/proposals")
       press.()
       assert [%{fleet_id: @fleet}] = Ash.read!(Keyfleet.Proposals.Words)
     end
