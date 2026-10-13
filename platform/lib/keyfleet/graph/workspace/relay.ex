@@ -3,8 +3,10 @@ defmodule Keyfleet.Graph.Workspace.Relay do
   Hands a workspace write to its fleet's writer as one graph operation.
 
   `op` names the operation and `body` the arguments that make up its body; an
-  argument left out is left out of the body. A write carries the command the
-  writer stamps, at its turn, from the actor's standing on the key it acts as.
+  argument left out is left out of the body, and `with` adds the parts of the
+  body the action fixes. A write carries the command the writer stamps, at its
+  turn, from the actor's standing on the key it acts as, or, for an action
+  that writes `as: :fleet`, the fleet's own (`Keyfleet.Graph.FleetAuthor`).
   When that standing cannot be read at the write's turn, because the database
   failed or ran out of time, the write is answered as unavailable: nothing was
   sent to the graph.
@@ -30,6 +32,7 @@ defmodule Keyfleet.Graph.Workspace.Relay do
   alias Keyfleet.Graph.Errors.NotKeyHolderError
   alias Keyfleet.Graph.Errors.RefusedError
   alias Keyfleet.Graph.Errors.UnavailableError
+  alias Keyfleet.Graph.FleetAuthor
   alias Keyfleet.Graph.Projector
   alias Keyfleet.Graph.Writer
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
@@ -40,14 +43,21 @@ defmodule Keyfleet.Graph.Workspace.Relay do
     arguments = input.arguments
     fleet_id = arguments.fleet_id
 
-    body = Map.take(arguments, Keyword.fetch!(opts, :body))
+    body =
+      arguments
+      |> Map.take(Keyword.fetch!(opts, :body))
+      |> Map.merge(Keyword.get(opts, :with, %{}))
 
-    authorize = fn within ->
-      KeyActor.command(context.actor, fleet_id, arguments.as_key, arguments.command_id, within)
-    end
+    authorize = author(Keyword.get(opts, :as, :key), context.actor, arguments)
 
     fleet_id |> Writer.command(op, body, authorize) |> write_reply(fleet_id, context.actor)
   end
+
+  defp author(:key, actor, %{fleet_id: fleet_id, as_key: token_id, command_id: command_id}),
+    do: &KeyActor.command(actor, fleet_id, token_id, command_id, &1)
+
+  defp author(:fleet, _actor, %{fleet_id: fleet_id, command_id: command_id}),
+    do: &FleetAuthor.command(fleet_id, command_id, &1)
 
   defp write_reply(
          {:ok, %{"run_id" => run_id, "head_seq" => head_seq} = reply},

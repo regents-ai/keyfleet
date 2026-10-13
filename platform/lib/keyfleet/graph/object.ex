@@ -139,6 +139,15 @@ defmodule Keyfleet.Graph.Object do
       filter expr(fleet_id == ^arg(:fleet_id) and id in ^arg(:ids))
     end
 
+    # The copies the fleet keeps of its notebooks' code, each with what it is
+    # a copy of and not the code itself.
+    read :notebook_copies do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id) and type == "notebook_copy")
+      prepare build(select: [:fleet_id, :id, :version], load: [:title, :copied])
+    end
+
     create :project do
       public? false
       accept [:fleet_id, :id, :type, :data, :sys, :version, :changed_seq, :changed_at]
@@ -164,7 +173,7 @@ defmodule Keyfleet.Graph.Object do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:with_ids, :project]) do
+    policy action([:with_ids, :notebook_copies, :project]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end
@@ -224,6 +233,7 @@ defmodule Keyfleet.Graph.Object do
                       WHEN 'service' THEN ? ->> 'problem'
                       WHEN 'note' THEN ? ->> 'body'
                       WHEN 'dead_end' THEN ? ->> 'why_it_failed'
+                      WHEN 'notebook_copy' THEN ? ->> 'code'
                     END, 240)))
                   """,
                   data,
@@ -240,6 +250,21 @@ defmodule Keyfleet.Graph.Object do
                   data,
                   data,
                   data,
+                  data,
+                  data,
+                  data,
+                  data
+                )
+              ),
+              public?: true
+
+    # Which notebook a notebook copy is of and how its code stood when it was
+    # copied, without the code; nothing useful for any other object.
+    calculate :copied,
+              :map,
+              expr(
+                fragment(
+                  "jsonb_build_object('notebook_id', ? ->> 'notebook_id', 'hub_updated_at', ? ->> 'hub_updated_at', 'digest', ? ->> 'digest')",
                   data,
                   data,
                   data

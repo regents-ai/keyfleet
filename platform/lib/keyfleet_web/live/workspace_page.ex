@@ -26,7 +26,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.RoomsLive
 
-  @types ~w(goal task finding evidence service note dead_end)
+  @types ~w(goal task finding evidence service note dead_end notebook_copy)
 
   @type_names %{
     "goal" => {"goal", "Goals"},
@@ -35,7 +35,8 @@ defmodule KeyfleetWeb.WorkspacePage do
     "evidence" => {"evidence", "Evidence"},
     "service" => {"service", "Services"},
     "note" => {"note", "Notes"},
-    "dead_end" => {"dead end", "Dead ends"}
+    "dead_end" => {"dead end", "Dead ends"},
+    "notebook_copy" => {"notebook copy", "Notebook copies"}
   }
 
   # Each type's fields in the order they are shown, with their names; any
@@ -77,6 +78,12 @@ defmodule KeyfleetWeb.WorkspacePage do
     "dead_end" => [
       {"what_was_tried", "What was tried"},
       {"why_it_failed", "Why it didn’t work"}
+    ],
+    "notebook_copy" => [
+      {"code", "Code"},
+      {"hub_updated_at", "Notebook last changed"},
+      {"notebook_id", "Notebook"},
+      {"digest", "Document code"}
     ]
   }
 
@@ -594,8 +601,10 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  # A member's change names the key it was made as; anything else was the
-  # workspace's own doing.
+  # A member's change names the key it was made as, the fleet's own is the
+  # fleet's, and anything else was the workspace's own doing.
+  defp who("fleet:" <> _fleet), do: "The fleet"
+
   defp who(actor) do
     case Regex.run(@member, actor, capture: :all_but_first) do
       [token_id] -> {:key, String.to_integer(token_id)}
@@ -603,7 +612,9 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
+  # The key an item was added as, or `:fleet` for what the fleet keeps itself.
   defp created_by(%{"created_by" => %{"key" => %{"token_id" => token_id}}}), do: token_id
+  defp created_by(%{"created_by" => %{"kind" => "fleet"}}), do: :fleet
 
   defp archived?(sys), do: sys["archived"] == true
 

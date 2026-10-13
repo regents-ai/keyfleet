@@ -30,6 +30,8 @@ defmodule Keyfleet.Graph do
       define :link_objects, action: :link, args: [:fleet_id]
       define :unlink_relation, action: :unlink, args: [:fleet_id]
       define :archive_object, action: :archive, args: [:fleet_id]
+      define :keep_notebook_copy, action: :keep_copy, args: [:fleet_id]
+      define :change_notebook_copy, action: :change_copy, args: [:fleet_id]
     end
 
     resource Keyfleet.Graph.Cursor do
@@ -55,6 +57,7 @@ defmodule Keyfleet.Graph do
       define :object_titles, action: :titled, args: [:fleet_id, :ids]
       define :open_work, action: :open_work, args: [:fleet_id, :kind]
       define :tasks_assigned_to, action: :assigned_to_keys, args: [:fleet_id, :token_ids]
+      define :notebook_copies, action: :notebook_copies, args: [:fleet_id]
       define :project_objects, action: :project
     end
 

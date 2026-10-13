@@ -11,6 +11,11 @@ defmodule Keyfleet.Graph.Workspace do
   one of a Fibonacci fleet's levels, and a write may touch only objects in the
   scopes its key may write; see `Keyfleet.Graph.Checks.KeyActor`.
 
+  The fleet itself writes one thing, through actions only Keyfleet's own work
+  may call: the copy it keeps of each notebook's code (`keep_copy`,
+  `change_copy`). Those are written as the fleet, not as a key; see
+  `Keyfleet.Graph.FleetAuthor`.
+
   Only the fleet's members read a workspace: whoever owns one of its keys
   today, or an agent holding an active shard of one; see
   `Keyfleet.Graph.Checks.KeyReader`. Reads are answered from the read tables
@@ -120,9 +125,35 @@ defmodule Keyfleet.Graph.Workspace do
       validate FreshOwnership, only_when_valid?: true
       run {Relay, op: "archive", body: [:id, :expected_version, :reason]}
     end
+
+    action :keep_copy, :map do
+      description "Adds the fleet's copy of one notebook's code, written as the fleet."
+      argument :fleet_id, :string, allow_nil?: false
+      argument :command_id, :string, allow_nil?: false, constraints: @text
+      argument :data, :map, allow_nil?: false
+      validate KnownFleet
+
+      run {Relay,
+           op: "create", as: :fleet, body: [:data], with: %{type: "notebook_copy", scope: "fleet"}}
+    end
+
+    action :change_copy, :map do
+      description "Changes the fleet's copy of a notebook's code at the version last read."
+      argument :fleet_id, :string, allow_nil?: false
+      argument :command_id, :string, allow_nil?: false, constraints: @text
+      argument :id, :string, allow_nil?: false, constraints: @text
+      argument :expected_version, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      argument :set, :map, allow_nil?: false
+      validate KnownFleet
+      run {Relay, op: "patch", as: :fleet, body: [:id, :expected_version, :set]}
+    end
   end
 
   policies do
+    policy action([:keep_copy, :change_copy]) do
+      authorize_if actor_attribute_equals(:role, :system)
+    end
+
     policy action([:get, :changes]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end

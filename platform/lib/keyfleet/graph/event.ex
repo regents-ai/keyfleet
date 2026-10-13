@@ -104,10 +104,15 @@ defmodule Keyfleet.Graph.Event do
 
     # The fleet's latest changes, newest first, for its workspace page. The
     # record each write leaves of itself is left out: the changes it made are
-    # listed on their own.
+    # listed on their own. So is what the fleet itself wrote, the copies it
+    # keeps of its notebooks' code: nobody did that work here.
     read :activity do
       argument :fleet_id, :string, allow_nil?: false
-      filter expr(fleet_id == ^arg(:fleet_id) and type != "keyfleet.command")
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and type != "keyfleet.command" and
+                 not fragment("starts_with(?, 'fleet:')", actor)
+             )
 
       prepare fn query, _context ->
         query
@@ -127,7 +132,8 @@ defmodule Keyfleet.Graph.Event do
       argument :before_seq, :integer, constraints: [min: 1, max: @bigint]
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 60]
 
-      filter expr(fleet_id == ^arg(:fleet_id))
+      # What the fleet itself wrote is nobody's work, so it is no one's news.
+      filter expr(fleet_id == ^arg(:fleet_id) and not fragment("starts_with(?, 'fleet:')", actor))
 
       prepare fn query, _context -> Ash.Query.filter(query, ^sql(@notable)) end
       prepare {Keyfleet.Preparations.NewestFirst, sort: [seq: :desc], before: [:before_seq]}

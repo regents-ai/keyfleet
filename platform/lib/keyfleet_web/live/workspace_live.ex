@@ -119,7 +119,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 </div>
               </dl>
               <p class="workspace-detail">
-                <span>Added by <.key fleet_id={@board.fleet_id} token_id={card.by} /></span>
+                <.added_by fleet_id={@board.fleet_id} by={card.by} />
                 <span>Last changed {card.changed_at}</span>
               </p>
             </li>
@@ -209,6 +209,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <div :if={@item[:object]} class="workspace-item-grid">
         <section class="workspace-panel" aria-labelledby="workspace-fields-title">
           <h2 id="workspace-fields-title">Details</h2>
+          <p :if={@item.object.type == "notebook_copy"} id="workspace-copy-note">
+            A copy of code members wrote in this fleet’s notebooks.
+          </p>
           <dl id="workspace-fields" class="workspace-fields">
             <div :for={{label, value} <- @item.object.fields}>
               <dt>{label}</dt>
@@ -216,9 +219,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
             </div>
           </dl>
           <p class="workspace-detail">
-            <span>
-              Added by <.key fleet_id={@item.fleet_id} token_id={@item.object.by} />
-            </span>
+            <.added_by fleet_id={@item.fleet_id} by={@item.object.by} />
             <span>Last changed {@item.object.changed_at}</span>
           </p>
         </section>
@@ -461,6 +462,15 @@ defmodule KeyfleetWeb.WorkspaceLive do
   end
 
   defp item_link(assigns), do: ~H"an item"
+
+  # Who added an item: the key it was added as, or the fleet for what it keeps itself.
+  attr :fleet_id, :string, required: true
+  attr :by, :any, required: true
+
+  defp added_by(%{by: :fleet} = assigns), do: ~H"<span>Kept by the fleet</span>"
+
+  defp added_by(assigns),
+    do: ~H|<span>Added by <.key fleet_id={@fleet_id} token_id={@by} /></span>|
 
   attr :fleet_id, :string, required: true
   attr :token_id, :integer, required: true
