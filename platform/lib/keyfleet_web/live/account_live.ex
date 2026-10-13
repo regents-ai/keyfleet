@@ -89,9 +89,9 @@ defmodule KeyfleetWeb.AccountLive do
         >
           <h2 id="account-keys-title">Your Keys</h2>
           <p :if={@held_keys == []}>
-            Your wallets don’t hold any Keys yet. Choose a fleet on the
-            <.link navigate={~p"/"}>home page</.link>
-            to buy one.
+            Your wallets don’t hold any Keys yet. A Regents Club Pass comes with the
+            <.link navigate={~p"/app/fleets/regents_club"}>Club Key</.link>
+            of the same number.
           </p>
           <div :for={fleet <- @held_keys} class="account-keys__fleet">
             <h3>

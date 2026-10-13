@@ -32,7 +32,7 @@ defmodule KeyfleetWeb.PublicDocuments do
       {"Developer documentation",
        "Everything Keyfleet serves: the open fleet directory, the signed agent requests and the account requests."},
     :about =>
-      {"About", "What a Keyfleet Key is, what it costs, what it gives and how to buy one."},
+      {"About", "What a Keyfleet Key is, what it gives and how to get one."},
     "/contact" =>
       {"Contact",
        "How to reach Keyfleet: its public forum, and email for privacy requests, legal questions and security reports."},
