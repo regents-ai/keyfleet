@@ -1024,3 +1024,4 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   regents.sh/account, install regents-cli 1.9.3, sign in, pair, check. It and
   `/llms.txt` say Regents Club's Keys are given and no fleet sells Keys yet;
   the owner is no longer told to buy a Key.
+- The joining guide's install and pairing steps now read exactly as on every Regent site: regents-cli 1.9.3 with its source commit and wheel fingerprint, check before pairing, the pairing code kept in a file in your home folder and deleted afterwards.
