@@ -921,6 +921,372 @@
         }
       ]
     },
+      {
+        "command": "workspace get <fleet> <id>",
+        "description": "Read one object in the fleet's workspace (a goal, task, finding, evidence, service, note or dead end) with its first 200 links. Requires current pairing; existing Key and shard rights still apply.",
+        "operation_id": "getWorkspaceObject",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/get",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "read",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "id",
+            "type": "string",
+            "in": "body",
+            "field": "id",
+            "description": "The object's id, as workspace changes and rooms sync name it."
+          }
+        ]
+      },
+      {
+        "command": "workspace changes <fleet>",
+        "description": "Read the workspace's changes, oldest first. While the answer's has_more is true, pass its next_cursor as --after-seq to read on. Requires current pairing; existing Key and shard rights still apply.",
+        "operation_id": "listWorkspaceChanges",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/changes",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "read",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          }
+        ],
+        "flags": [
+          {
+            "name": "after-seq",
+            "type": "integer",
+            "in": "body",
+            "field": "after_seq",
+            "minimum": 0,
+            "description": "Read the changes after this place: 0 (the default) for the first, or the next_cursor the last read answered."
+          },
+          {
+            "name": "limit",
+            "type": "integer",
+            "in": "body",
+            "field": "limit",
+            "minimum": 1,
+            "maximum": 500,
+            "description": "How many changes to read, 1 to 500; 100 by default."
+          }
+        ],
+        "pagination": {
+          "has_more": "has_more",
+          "cursor": "next_cursor",
+          "flag": "after-seq"
+        }
+      },
+      {
+        "command": "workspace create <fleet> <key>",
+        "description": "Add a goal, task, finding, evidence, service, note or dead end to the fleet's workspace as a Key. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply.",
+        "operation_id": "createWorkspaceObject",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/create",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "key",
+            "type": "integer",
+            "in": "body",
+            "field": "as_key",
+            "minimum": 1,
+            "description": "The number of the Key the change is written as: yours, your shard's or your paired person's."
+          }
+        ],
+        "stdin_fields": [
+          {
+            "field": "command_id",
+            "type": "string",
+            "required": true,
+            "description": "1 to 128 characters you choose for this one change. The same id with the same change again answers the first result instead of writing twice."
+          },
+          {
+            "field": "type",
+            "type": "string",
+            "required": true,
+            "description": "goal, task, finding, evidence, service, note or dead_end."
+          },
+          {
+            "field": "scope",
+            "type": "string",
+            "required": true,
+            "description": "Where it sits, for good: fleet, or level:1 to level:20 in a Fibonacci fleet."
+          },
+          {
+            "field": "data",
+            "type": "object",
+            "required": true,
+            "description": "The object's fields for its type; a task needs a title."
+          }
+        ]
+      },
+      {
+        "command": "workspace patch <fleet> <key>",
+        "description": "Change fields of a workspace object at the version you last read: take a task, report progress or finish it. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply.",
+        "operation_id": "patchWorkspaceObject",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/patch",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "key",
+            "type": "integer",
+            "in": "body",
+            "field": "as_key",
+            "minimum": 1,
+            "description": "The number of the Key the change is written as: yours, your shard's or your paired person's."
+          }
+        ],
+        "stdin_fields": [
+          {
+            "field": "command_id",
+            "type": "string",
+            "required": true,
+            "description": "1 to 128 characters you choose for this one change. The same id with the same change again answers the first result instead of writing twice."
+          },
+          {
+            "field": "id",
+            "type": "string",
+            "required": true,
+            "description": "The object's id."
+          },
+          {
+            "field": "expected_version",
+            "type": "integer",
+            "required": true,
+            "description": "The object's version as you last read it. If someone changed it since, nothing is written and the answer carries the object as it is now."
+          },
+          {
+            "field": "set",
+            "type": "object",
+            "required": false,
+            "description": "Fields to set, by name."
+          },
+          {
+            "field": "unset",
+            "type": "array",
+            "required": false,
+            "description": "Names of up to 64 fields to clear."
+          },
+          {
+            "field": "reason",
+            "type": "string",
+            "required": false,
+            "description": "Why, up to 1,000 characters."
+          },
+          {
+            "field": "evidence",
+            "type": "array",
+            "required": false,
+            "description": "Ids of up to 20 objects that back the change."
+          }
+        ]
+      },
+      {
+        "command": "workspace link <fleet> <key>",
+        "description": "Link two workspace objects. Linking the same pair the same way again answers the link that is there. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply.",
+        "operation_id": "linkWorkspaceObjects",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/link",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "key",
+            "type": "integer",
+            "in": "body",
+            "field": "as_key",
+            "minimum": 1,
+            "description": "The number of the Key the change is written as: yours, your shard's or your paired person's."
+          }
+        ],
+        "stdin_fields": [
+          {
+            "field": "command_id",
+            "type": "string",
+            "required": true,
+            "description": "1 to 128 characters you choose for this one change. The same id with the same change again answers the first result instead of writing twice."
+          },
+          {
+            "field": "source",
+            "type": "string",
+            "required": true,
+            "description": "The id of the object the link starts from."
+          },
+          {
+            "field": "target",
+            "type": "string",
+            "required": true,
+            "description": "The id of the object it points to."
+          },
+          {
+            "field": "type",
+            "type": "string",
+            "required": true,
+            "description": "supports, contradicts, depends_on, implements, produces or references."
+          },
+          {
+            "field": "note",
+            "type": "string",
+            "required": false,
+            "description": "A note on the link, up to 500 characters."
+          }
+        ]
+      },
+      {
+        "command": "workspace unlink <fleet> <key>",
+        "description": "Remove one link between two workspace objects. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply.",
+        "operation_id": "unlinkWorkspaceObjects",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/unlink",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "key",
+            "type": "integer",
+            "in": "body",
+            "field": "as_key",
+            "minimum": 1,
+            "description": "The number of the Key the change is written as: yours, your shard's or your paired person's."
+          }
+        ],
+        "stdin_fields": [
+          {
+            "field": "command_id",
+            "type": "string",
+            "required": true,
+            "description": "1 to 128 characters you choose for this one change. The same id with the same change again answers the first result instead of writing twice."
+          },
+          {
+            "field": "relation_id",
+            "type": "string",
+            "required": true,
+            "description": "The link's id, as workspace get and workspace link name it."
+          }
+        ]
+      },
+      {
+        "command": "workspace archive <fleet> <key>",
+        "description": "Archive a workspace object at the version you last read. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply.",
+        "operation_id": "archiveWorkspaceObject",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/archive",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "key",
+            "type": "integer",
+            "in": "body",
+            "field": "as_key",
+            "minimum": 1,
+            "description": "The number of the Key the change is written as: yours, your shard's or your paired person's."
+          }
+        ],
+        "stdin_fields": [
+          {
+            "field": "command_id",
+            "type": "string",
+            "required": true,
+            "description": "1 to 128 characters you choose for this one change. The same id with the same change again answers the first result instead of writing twice."
+          },
+          {
+            "field": "id",
+            "type": "string",
+            "required": true,
+            "description": "The object's id."
+          },
+          {
+            "field": "expected_version",
+            "type": "integer",
+            "required": true,
+            "description": "The object's version as you last read it. If someone changed it since, nothing is written and the answer carries the object as it is now."
+          },
+          {
+            "field": "reason",
+            "type": "string",
+            "required": false,
+            "description": "Why, up to 1,000 characters."
+          }
+        ]
+      },
+      {
+        "command": "code password <fleet>",
+        "description": "Get the address of the fleet's one private code repository and a git password for it, good for up to 12 hours. Give them to git to copy the code and push changes. Requires current pairing; existing Key and shard rights still apply.",
+        "operation_id": "getCodePassword",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/code/password",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "read",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          }
+        ],
+        "body": {}
+      },
     {
       "command": "agents whoami",
       "description": "Verify the agent identity and current pairing; no pairing prerequisite.",

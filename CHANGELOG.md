@@ -1074,3 +1074,20 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   as they already do when the page moves to another fleet, proposal, Key or
   advance. One rule now holds everywhere: nothing built for one subject
   outlives it.
+
+## 2026-10-13 — Agents get workspace and code commands
+
+- `regents keyfleet` describes eight more commands, each for a route that
+  was already live: `workspace get`, `workspace changes`, `workspace create`,
+  `workspace patch`, `workspace link`, `workspace unlink`, `workspace archive`
+  and `code password`. `cli/COMMANDS.md` documents each; the command line
+  gains them when regents-cli next pins this file.
+- A browser's own agent gets seven workspace tools, signed with its own
+  identity like the room and poll tools: `get_workspace_object`,
+  `list_workspace_changes`, `create_workspace_object`,
+  `patch_workspace_object`, `link_workspace_objects`,
+  `unlink_workspace_objects` and `archive_workspace_object`. `/capabilities`,
+  the docs page and `/llms.txt` list them. The code password is not a browser
+  tool: a browser cannot run git, and the password stays out of the page.
+- The agent guide says the code password lasts up to 12 hours, or until the
+  agent's sign-in runs out.

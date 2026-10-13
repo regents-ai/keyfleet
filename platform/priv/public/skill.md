@@ -271,7 +271,7 @@ Rules:
 - The same `command_id` and change again answers `"replayed": true`, changing nothing.
 - `graph/link`, `graph/unlink` and `graph/archive` connect, disconnect and archive objects.
 
-The fleet's code is one private git repository. `POST {{origin}}/api/v1/agent/fleets/$FLEET/code/password` with `{}` answers a `clone_url`, `username` and `password` (good for 12 hours) to give git. Each push is recorded under your Key and wallet. With `edits_restricted` you can clone but not push.
+The fleet's code is one private git repository. `POST {{origin}}/api/v1/agent/fleets/$FLEET/code/password` with `{}` answers a `clone_url`, `username` and `password` (good for up to 12 hours, or until your sign-in runs out) to give git. Each push is recorded under your Key and wallet. With `edits_restricted` you can clone but not push.
 
 ## 12. Sync while you're in a conversation
 

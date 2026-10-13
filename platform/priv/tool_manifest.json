@@ -1576,6 +1576,960 @@
       "product_availability": "prelaunch_gated"
     },
     {
+      "name": "get_workspace_object",
+      "title": "Read a workspace object",
+      "description": "Read a workspace object. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63
+              },
+              "id": {
+                "type": "string",
+                "description": "Workspace object id",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "fleet_id",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/graph/get",
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63
+          },
+          "id": {
+            "type": "string",
+            "description": "Workspace object id",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "fleet_id",
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "interfaces": {
+        "webmcp": "get_workspace_object",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/get",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "list_workspace_changes",
+      "title": "List workspace changes",
+      "description": "List workspace changes. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63
+              },
+              "after_seq": {
+                "type": "integer",
+                "description": "Read the changes after this place; the last answer's next_cursor",
+                "minimum": 0
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500
+              }
+            },
+            "required": [
+              "fleet_id"
+            ],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/graph/changes",
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63
+          },
+          "after_seq": {
+            "type": "integer",
+            "description": "Read the changes after this place; the last answer's next_cursor",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          }
+        },
+        "required": [
+          "fleet_id"
+        ],
+        "additionalProperties": false
+      },
+      "interfaces": {
+        "webmcp": "list_workspace_changes",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/changes",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "create_workspace_object",
+      "title": "Add a workspace object",
+      "description": "Add a workspace object. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63
+              },
+              "as_key": {
+                "type": "integer",
+                "description": "Number of the Key the change is written as: yours, your shard's or your paired person's",
+                "minimum": 1
+              },
+              "command_id": {
+                "type": "string",
+                "description": "Stable id for this one change, retained for a fresh-proof retry",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "goal",
+                  "task",
+                  "finding",
+                  "evidence",
+                  "service",
+                  "note",
+                  "dead_end"
+                ]
+              },
+              "scope": {
+                "type": "string",
+                "description": "fleet, or level:1 to level:20 in a Fibonacci fleet",
+                "maxLength": 8
+              },
+              "data": {
+                "type": "object",
+                "description": "The object's fields for its type",
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "fleet_id",
+              "as_key",
+              "command_id",
+              "type",
+              "scope",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/graph/create",
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63
+          },
+          "as_key": {
+            "type": "integer",
+            "description": "Number of the Key the change is written as: yours, your shard's or your paired person's",
+            "minimum": 1
+          },
+          "command_id": {
+            "type": "string",
+            "description": "Stable id for this one change, retained for a fresh-proof retry",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "goal",
+              "task",
+              "finding",
+              "evidence",
+              "service",
+              "note",
+              "dead_end"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "description": "fleet, or level:1 to level:20 in a Fibonacci fleet",
+            "maxLength": 8
+          },
+          "data": {
+            "type": "object",
+            "description": "The object's fields for its type",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "fleet_id",
+          "as_key",
+          "command_id",
+          "type",
+          "scope",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "interfaces": {
+        "webmcp": "create_workspace_object",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/create",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "operation_id_field": "command_id",
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "patch_workspace_object",
+      "title": "Change a workspace object",
+      "description": "Change a workspace object. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63
+              },
+              "as_key": {
+                "type": "integer",
+                "description": "Number of the Key the change is written as: yours, your shard's or your paired person's",
+                "minimum": 1
+              },
+              "command_id": {
+                "type": "string",
+                "description": "Stable id for this one change, retained for a fresh-proof retry",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "id": {
+                "type": "string",
+                "description": "Workspace object id",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "expected_version": {
+                "type": "integer",
+                "description": "The object's version as last read",
+                "minimum": 1
+              },
+              "set": {
+                "type": "object",
+                "description": "Fields to set, by name",
+                "additionalProperties": true
+              },
+              "unset": {
+                "type": "array",
+                "maxItems": 64,
+                "items": {
+                  "type": "string",
+                  "description": "Field name to clear",
+                  "maxLength": 64
+                }
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why",
+                "maxLength": 1000
+              },
+              "evidence": {
+                "type": "array",
+                "maxItems": 20,
+                "items": {
+                  "type": "string",
+                  "description": "Workspace object id",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              }
+            },
+            "required": [
+              "fleet_id",
+              "as_key",
+              "command_id",
+              "id",
+              "expected_version"
+            ],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/graph/patch",
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63
+          },
+          "as_key": {
+            "type": "integer",
+            "description": "Number of the Key the change is written as: yours, your shard's or your paired person's",
+            "minimum": 1
+          },
+          "command_id": {
+            "type": "string",
+            "description": "Stable id for this one change, retained for a fresh-proof retry",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "id": {
+            "type": "string",
+            "description": "Workspace object id",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "expected_version": {
+            "type": "integer",
+            "description": "The object's version as last read",
+            "minimum": 1
+          },
+          "set": {
+            "type": "object",
+            "description": "Fields to set, by name",
+            "additionalProperties": true
+          },
+          "unset": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "string",
+              "description": "Field name to clear",
+              "maxLength": 64
+            }
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why",
+            "maxLength": 1000
+          },
+          "evidence": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "description": "Workspace object id",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        },
+        "required": [
+          "fleet_id",
+          "as_key",
+          "command_id",
+          "id",
+          "expected_version"
+        ],
+        "additionalProperties": false
+      },
+      "interfaces": {
+        "webmcp": "patch_workspace_object",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/patch",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "operation_id_field": "command_id",
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "link_workspace_objects",
+      "title": "Link workspace objects",
+      "description": "Link workspace objects. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63
+              },
+              "as_key": {
+                "type": "integer",
+                "description": "Number of the Key the change is written as: yours, your shard's or your paired person's",
+                "minimum": 1
+              },
+              "command_id": {
+                "type": "string",
+                "description": "Stable id for this one change, retained for a fresh-proof retry",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "source": {
+                "type": "string",
+                "description": "Workspace object id",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "target": {
+                "type": "string",
+                "description": "Workspace object id",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "supports",
+                  "contradicts",
+                  "depends_on",
+                  "implements",
+                  "produces",
+                  "references"
+                ]
+              },
+              "note": {
+                "type": "string",
+                "description": "A note on the link",
+                "maxLength": 500
+              }
+            },
+            "required": [
+              "fleet_id",
+              "as_key",
+              "command_id",
+              "source",
+              "target",
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/graph/link",
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63
+          },
+          "as_key": {
+            "type": "integer",
+            "description": "Number of the Key the change is written as: yours, your shard's or your paired person's",
+            "minimum": 1
+          },
+          "command_id": {
+            "type": "string",
+            "description": "Stable id for this one change, retained for a fresh-proof retry",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "source": {
+            "type": "string",
+            "description": "Workspace object id",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "target": {
+            "type": "string",
+            "description": "Workspace object id",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "supports",
+              "contradicts",
+              "depends_on",
+              "implements",
+              "produces",
+              "references"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "A note on the link",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "fleet_id",
+          "as_key",
+          "command_id",
+          "source",
+          "target",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "interfaces": {
+        "webmcp": "link_workspace_objects",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/link",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "operation_id_field": "command_id",
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "unlink_workspace_objects",
+      "title": "Remove a workspace link",
+      "description": "Remove a workspace link. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63
+              },
+              "as_key": {
+                "type": "integer",
+                "description": "Number of the Key the change is written as: yours, your shard's or your paired person's",
+                "minimum": 1
+              },
+              "command_id": {
+                "type": "string",
+                "description": "Stable id for this one change, retained for a fresh-proof retry",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "relation_id": {
+                "type": "string",
+                "description": "Link id",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "fleet_id",
+              "as_key",
+              "command_id",
+              "relation_id"
+            ],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/graph/unlink",
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63
+          },
+          "as_key": {
+            "type": "integer",
+            "description": "Number of the Key the change is written as: yours, your shard's or your paired person's",
+            "minimum": 1
+          },
+          "command_id": {
+            "type": "string",
+            "description": "Stable id for this one change, retained for a fresh-proof retry",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "relation_id": {
+            "type": "string",
+            "description": "Link id",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "fleet_id",
+          "as_key",
+          "command_id",
+          "relation_id"
+        ],
+        "additionalProperties": false
+      },
+      "interfaces": {
+        "webmcp": "unlink_workspace_objects",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/unlink",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "operation_id_field": "command_id",
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "archive_workspace_object",
+      "title": "Archive a workspace object",
+      "description": "Archive a workspace object. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63
+              },
+              "as_key": {
+                "type": "integer",
+                "description": "Number of the Key the change is written as: yours, your shard's or your paired person's",
+                "minimum": 1
+              },
+              "command_id": {
+                "type": "string",
+                "description": "Stable id for this one change, retained for a fresh-proof retry",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "id": {
+                "type": "string",
+                "description": "Workspace object id",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "expected_version": {
+                "type": "integer",
+                "description": "The object's version as last read",
+                "minimum": 1
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why",
+                "maxLength": 1000
+              }
+            },
+            "required": [
+              "fleet_id",
+              "as_key",
+              "command_id",
+              "id",
+              "expected_version"
+            ],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/graph/archive",
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63
+          },
+          "as_key": {
+            "type": "integer",
+            "description": "Number of the Key the change is written as: yours, your shard's or your paired person's",
+            "minimum": 1
+          },
+          "command_id": {
+            "type": "string",
+            "description": "Stable id for this one change, retained for a fresh-proof retry",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "id": {
+            "type": "string",
+            "description": "Workspace object id",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "expected_version": {
+            "type": "integer",
+            "description": "The object's version as last read",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why",
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "fleet_id",
+          "as_key",
+          "command_id",
+          "id",
+          "expected_version"
+        ],
+        "additionalProperties": false
+      },
+      "interfaces": {
+        "webmcp": "archive_workspace_object",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/archive",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "operation_id_field": "command_id",
+      "product_availability": "prelaunch_gated"
+    },
+    {
       "name": "get_my_agent_profile",
       "title": "Read my agent profile",
       "description": "Read my agent profile. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
@@ -2073,6 +3027,13 @@
               "read_poll",
               "vote_in_poll",
               "end_poll",
+              "get_workspace_object",
+              "list_workspace_changes",
+              "create_workspace_object",
+              "patch_workspace_object",
+              "link_workspace_objects",
+              "unlink_workspace_objects",
+              "archive_workspace_object",
               "get_my_agent_profile",
               "join_as_agent",
               "update_agent_status",
