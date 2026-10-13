@@ -157,9 +157,10 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # Marking Keys present: the one Key a Key's page is about, or every Key the
   # signer holds or holds an active shard of. A Key's page shows whether its
   # Key is present whoever is looking. A Key sold less than two days ago can't
-  # be marked yet: the vote contract refuses it, so the press is certain to
-  # fail. Continue clears presences that have lapsed, which anyone may do. A
-  # visitor holds no Keys.
+  # be marked yet, and the vote contract refuses a call naming one, so only
+  # the Keys old enough are named; with none old enough the press is certain
+  # to fail. Continue clears presences that have lapsed, which anyone may do.
+  # A visitor holds no Keys.
   def steps(:present, %{fleet: fleet, signer: signer, token_id: token_id}) do
     candidates = present_candidates(fleet, signer, token_id)
     figures = %{keys: [], maintenance?: false}
@@ -170,8 +171,8 @@ defmodule Keyfleet.WalletSteps.KeySteps do
          {:ok, presence} <-
            Reads.each(if(token_id, do: [token_id], else: keys), &presence(reads, fleet, &1)),
          {:ok, maintenance?} <- maintenance?(reads, fleet) do
-      onchain = Enum.map(keys, &Fleet.onchain_token_id(fleet, &1))
-      too_new? = Enum.any?(presence, &(&1.token_id in keys and not &1.mature?))
+      ready = for %{token_id: key, mature?: true} <- presence, key in keys, do: key
+      onchain = Enum.map(ready, &Fleet.onchain_token_id(fleet, &1))
 
       steps = [
         Review.step("present", fleet.votes_address, Call.encode("present(uint256[])", [onchain])),
@@ -186,7 +187,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
        %{
          keys: Enum.map(presence, &Map.delete(&1, :mature?)),
          maintenance?: maintenance?,
-         blocked: present_blocked(keys, token_id, too_new?)
+         blocked: present_blocked(keys, ready, token_id)
        }}
     else
       _unread -> {:problem, :unread, figures}
@@ -301,12 +302,12 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   defp present_candidates(_fleet, nil, nil), do: []
   defp present_candidates(fleet, signer, nil), do: Build.own_keys(fleet, signer)
 
-  defp present_blocked([], token_id, _too_new?) when is_integer(token_id),
+  defp present_blocked([], _ready, token_id) when is_integer(token_id),
     do: %{"present" => :not_your_key}
 
-  defp present_blocked([], nil, _too_new?), do: %{"present" => :no_keys}
-  defp present_blocked(_keys, _token_id, true), do: %{"present" => :too_new}
-  defp present_blocked(_keys, _token_id, false), do: %{}
+  defp present_blocked([], _ready, nil), do: %{"present" => :no_keys}
+  defp present_blocked(_keys, [], _token_id), do: %{"present" => :too_new}
+  defp present_blocked(_keys, _ready, _token_id), do: %{}
 
   # The Key on offer at the price the page shows, bought from the fleet's
   # manager, which takes the USDC. The wallet approves exactly that price when

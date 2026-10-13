@@ -533,8 +533,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ProposalHelpers.keys_sold!(@fleet, [3], @other)
       ChainHelpers.issue_shard!(@fleet, 3, @holder)
       # The site's own record: Key 1 was marked present just now, so Keys 2
-      # and 3 are the idle ones.
+      # and 3 are the idle ones. Key 4 was sold today and waits two days for
+      # its automatic start: it has no vote yet and isn't idle.
       ProposalHelpers.presence!(@fleet, 1, DateTime.utc_now())
+      ProposalHelpers.keys_sold!(@fleet, [4], @other)
+      ProposalHelpers.scheduled!(@fleet, 4, DateTime.add(DateTime.utc_now(), 2, :day))
       until = now() + 3_600
 
       ChainViews.put!(
@@ -1191,8 +1194,12 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   end
 
   defp owners(holders) do
-    for {key, holder} <- holders,
-        do: {@keys, "ownerOf(uint256)", [id(key)], {"address", [holder]}}
+    Enum.flat_map(holders, fn {key, holder} ->
+      [
+        {@keys, "ownerOf(uint256)", [id(key)], {"address", [holder]}},
+        {@votes, "maturesAt(uint256)", [id(key)], {"uint64", [1]}}
+      ]
+    end)
   end
 
   # Cancelling proposal 1 reads whether its key, held by another, is the

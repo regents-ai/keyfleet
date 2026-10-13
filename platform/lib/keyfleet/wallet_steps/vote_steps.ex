@@ -5,7 +5,10 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   builder answers.
 
   A ballot is cast with every key the signer may vote: those it holds, and
-  those it holds an active shard of while the key's agent voting is on. A
+  those it holds an active shard of while the key's agent voting is on, less
+  any sold under two days ago, which the vote contract refuses. While a
+  proposal that moves money waits its day after closing, the one ballot the
+  vote contract takes is No. A
   proposal is made with one key, and its calls come from the kind of proposal
   chosen (`Keyfleet.Proposals.Actions`). Pages name Keys by their number in
   the fleet; every step names them by their id in the Key collection.
@@ -37,14 +40,19 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
 
     with {:ok, reads} <- Reads.at_head(),
          {:ok, status} <- status(reads, fleet, proposal),
-         {:ok, standing} <- Reads.acting(reads, fleet, signer, candidates, "mayGovern") do
-      keys = for key <- candidates, match?({_holder, true}, standing[key]), do: key
+         {:ok, standing} <- Reads.acting(reads, fleet, signer, candidates, "mayGovern"),
+         governed = for(key <- candidates, match?({_holder, true}, standing[key]), do: key),
+         {:ok, maturity} <- Reads.each(governed, &matures_at(reads, fleet, &1, figures)) do
+      now = DateTime.to_unix(Reads.now(reads))
+      keys = for {key, at} <- Enum.zip(governed, maturity), at != nil and at <= now, do: key
 
-      reason =
+      blocked =
         cond do
-          status != :open -> :voting_closed
-          keys == [] -> :no_keys
-          true -> nil
+          status not in [:open, :waiting] -> every_choice(:voting_closed)
+          governed == [] -> every_choice(:no_keys)
+          keys == [] -> every_choice(:too_new)
+          status == :waiting -> Map.delete(every_choice(:voting_closed), "no")
+          true -> %{}
         end
 
       steps =
@@ -60,7 +68,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
           )
         end
 
-      {:ok, steps, %{keys: keys, status: status, blocked: every_choice(reason)}}
+      {:ok, steps, %{keys: keys, status: status, blocked: blocked}}
     else
       _unread -> {:problem, :unread, figures}
     end
@@ -172,7 +180,6 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
     end
   end
 
-  defp every_choice(nil), do: %{}
   defp every_choice(reason), do: Map.new(@choices, fn {name, _choice} -> {name, reason} end)
 
   @doc "The hash a proposal's text is kept on the chain as."

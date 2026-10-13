@@ -94,6 +94,13 @@ defmodule Keyfleet.ProposalHelpers do
     |> Keys.record_presence!(actor: @system)
   end
 
+  @doc "A newly sold key's automatic presence, starting at `at`."
+  def scheduled!(fleet_id, token_id, at) do
+    %{fleet_id: fleet_id, token_id: token_id, kind: :scheduled, at: at, ownership_epoch: nil}
+    |> Map.merge(event())
+    |> Keys.record_presence!(actor: @system)
+  end
+
   @doc "A money event of `kind` with `fields`, every other field empty."
   def money_event!(fleet_id, kind, fields) do
     MoneyLog.fields()

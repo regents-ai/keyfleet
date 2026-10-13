@@ -861,7 +861,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     unreadable = answer(c, c.signer, "POST", @propose, @address, %{words | "kind" => "vote"}, 422)
     assert unreadable.body["error"]["code"] == "invalid_proposal"
 
-    ChainViews.put!([owner, status])
+    ChainViews.put!([owner, status, matures])
     vote = %{"number" => 1, "choice" => "no"}
 
     assert %{"keys" => [2], "transactions" => [ballot]} =

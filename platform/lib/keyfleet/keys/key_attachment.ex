@@ -273,7 +273,7 @@ defmodule Keyfleet.Keys.KeyAttachment do
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and ownership_epoch == current_ownership_epoch and
-                 not idle
+                 present
              )
     end
 
@@ -433,8 +433,35 @@ defmodule Keyfleet.Keys.KeyAttachment do
                 )
               )
 
-    # Whether the key has no vote now, as the vote contract counts it
+    # Whether the key has a vote now, as the vote contract counts it
     # (`KeyfleetPresence.isActive`): its latest presence record, in chain
+    # order, is a renewal or an automatic start whose 48 hours are running. A
+    # newly sold key waiting for its automatic start is neither present nor
+    # idle.
+    calculate :present,
+              :boolean,
+              expr(
+                fragment(
+                  """
+                  EXISTS (
+                    SELECT 1 FROM (
+                      SELECT presence.kind, presence.at
+                      FROM keyfleet_app.key_presences AS presence
+                      WHERE presence.fleet_id = ? AND presence.token_id = ?
+                      ORDER BY presence.block_number DESC, presence.log_index DESC
+                      LIMIT 1
+                    ) AS last
+                    WHERE last.kind IN ('present', 'scheduled')
+                      AND last.at <= (now() AT TIME ZONE 'utc')
+                      AND (now() AT TIME ZONE 'utc') < last.at + interval '48 hours'
+                  )
+                  """,
+                  fleet_id,
+                  token_id
+                )
+              )
+
+    # Whether the key's vote has lapsed: its latest presence record, in chain
     # order, is not a renewal or an automatic start whose 48 hours are still
     # running or still to come. A key whose 48 hours ran out, or that changed
     # hands, is idle until it is marked present again; a newly sold key

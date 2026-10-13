@@ -169,6 +169,16 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert new.figures.blocked == %{"present" => :too_new}
       assert pressed(url, new, "present") == {:ok, :reverted}
 
+      # A wallet's new Key is left out, so its older Keys are still marked.
+      buy_key!(url, @buyer)
+      mixed = build!(:present, @buyer)
+      assert mixed.figures.blocked == %{}
+
+      assert Review.find(mixed.review, "present").data ==
+               Call.encode("present(uint256[])", [[id(1), id(2)]])
+
+      assert pressed(url, mixed, "present") == {:ok, :confirmed}
+
       skip!(url, 49 * @hour)
       built = build!(:present, @third)
       assert built.figures.maintenance?
@@ -257,6 +267,20 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       })
 
       assert uint!(url, lab.treasury, "approvedHash(bytes32)", [signed]) == 0
+
+      # While a passed payment waits its day, No is the one ballot taken, and
+      # here it cancels the payment.
+      propose!(url, @buyer, pay)
+      number = uint!(url, lab.votes, "proposalCount()")
+      assert pressed(url, build!(:ballot, @buyer, proposal: number), "yes") == {:ok, :confirmed}
+      skip!(url, @day + 1)
+      waiting = build!(:ballot, @buyer, proposal: number)
+      assert waiting.figures.blocked == %{"yes" => :voting_closed, "abstain" => :voting_closed}
+      assert pressed(url, waiting, "abstain") == {:ok, :reverted}
+      assert pressed(url, waiting, "no") == {:ok, :confirmed}
+
+      assert build!(:carry_out, @third, proposal: number).figures.blocked ==
+               %{"carry_out" => :cancelled}
     end
 
     test "an advance goes out, and comes back in part from whoever presses, approved first",
@@ -655,7 +679,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     skip!(url, opens_at - timestamp!(url))
   end
 
-  # Key 3, bought by `wallet` with USDC minted for it.
+  # The next Key, bought by `wallet` with USDC minted for it.
   defp buy_key!(url, wallet) do
     %{usdc_address: usdc} = Fleets.get_fleet!(@fleet_id)
     send!(url, wallet, usdc, Call.encode("mint(address,uint256)", [wallet, 100_000_000]))

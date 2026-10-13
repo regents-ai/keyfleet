@@ -1314,3 +1314,13 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   and marks it. A 0x address marks every Key it holds in the fleet and says
   how many; "Find" again steps to the next one.
 - On a phone the map is taller, so Keys show between its controls and notes.
+
+## 2026-10-13 — Votes and "Mark present": new Keys no longer hold the others back
+
+- "Mark present" and a vote name only the Keys old enough to take part. A
+  wallet that had just got a new Key could not mark or vote any of its Keys
+  for that Key's first 2 days.
+- While a passed money proposal waits its day, "No" can be pressed. The vote
+  contract has always taken it; the page showed "Voting closed".
+- "Active voters" on the Treasury page counts only Keys whose 48 hours are
+  running. A Key in its first 2 days was counted too.

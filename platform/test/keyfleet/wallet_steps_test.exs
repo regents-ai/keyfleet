@@ -280,13 +280,13 @@ defmodule Keyfleet.WalletStepsTest do
 
   describe "being present" do
     # Key `key` present for 48 hours until `until`, or not present for nil,
-    # and old enough to take part.
-    defp presence(fleet, key, until) do
+    # and old enough to take part from `matures_at`.
+    defp presence(fleet, key, until, matures_at \\ @now - 1) do
       [
         {fleet.votes_address, "isActive(uint256)", [id(key)], {"bool", [until != nil]}},
         {fleet.votes_address, "presentFrom(uint256)", [id(key)],
          {"uint64", [if(until, do: until - 172_800, else: 0)]}},
-        matures(fleet, key, @now - 1)
+        matures(fleet, key, matures_at)
       ]
     end
 
@@ -299,14 +299,16 @@ defmodule Keyfleet.WalletStepsTest do
       ProposalHelpers.keys_sold!(@fleet, [7], @other)
       ChainHelpers.issue_shard!(@fleet, 7, @signer)
 
+      holding = [
+        owner(fleet, 1, @signer),
+        owner(fleet, 2, @signer),
+        owner(fleet, 7, @other),
+        shard(fleet, "isActive", 7, @signer, true),
+        sweep(fleet, false)
+      ]
+
       ChainViews.put!(
-        [
-          owner(fleet, 1, @signer),
-          owner(fleet, 2, @signer),
-          owner(fleet, 7, @other),
-          shard(fleet, "isActive", 7, @signer, true),
-          sweep(fleet, false)
-        ] ++
+        holding ++
           presence(fleet, 1, @now + 3_600) ++ presence(fleet, 2, nil) ++ presence(fleet, 7, nil)
       )
 
@@ -323,6 +325,26 @@ defmodule Keyfleet.WalletStepsTest do
       assert steps(built)["present"].to == fleet.votes_address
       assert steps(built)["present"].data == Call.encode("present(uint256[])", [ids([1, 2, 7])])
       assert steps(built)["sweep"].data == Call.encode("sweepExpired(uint256)", [256])
+
+      # A Key sold under two days ago is left out, so the others are still
+      # marked; with none old enough the press is certain to fail.
+      ChainViews.put!(
+        holding ++
+          presence(fleet, 1, @now + 3_600) ++
+          presence(fleet, 2, nil, @now + 60) ++ presence(fleet, 7, nil)
+      )
+
+      built = build!(:present)
+      assert built.figures.blocked == %{}
+      assert steps(built)["present"].data == Call.encode("present(uint256[])", [ids([1, 7])])
+
+      ChainViews.put!(
+        holding ++
+          presence(fleet, 1, nil, @now + 60) ++
+          presence(fleet, 2, nil, @now + 60) ++ presence(fleet, 7, nil, @now + 60)
+      )
+
+      assert build!(:present).figures.blocked == %{"present" => :too_new}
     end
 
     test "a key's page shows its key to anyone, and lapsed presences need clearing",
@@ -462,13 +484,17 @@ defmodule Keyfleet.WalletStepsTest do
       :ok
     end
 
-    defp ballot_views(fleet, state, governs_five?) do
+    # Key 2 may take part from `two_matures_at`; the others already may.
+    defp ballot_views(fleet, state, governs_five?, two_matures_at \\ @now - 1) do
       [
         status(fleet, 4, state),
         owner(fleet, 1, @signer),
         owner(fleet, 2, @signer),
         owner(fleet, 5, @other),
-        shard(fleet, "mayGovern", 5, @signer, governs_five?)
+        shard(fleet, "mayGovern", 5, @signer, governs_five?),
+        matures(fleet, 1, @now - 1),
+        matures(fleet, 2, two_matures_at),
+        matures(fleet, 5, @now - 1)
       ]
     end
 
@@ -484,6 +510,14 @@ defmodule Keyfleet.WalletStepsTest do
         assert steps(built)[name].data ==
                  Call.encode("castBallot(uint256,uint256[],uint8)", [4, ids([1, 2, 5]), choice])
       end
+
+      # A Key sold under two days ago is left out, so the others still vote.
+      ChainViews.put!(ballot_views(fleet, 0, true, @now + 60))
+      built = build!(:ballot, proposal: 4)
+      assert %{keys: [1, 5], blocked: %{}} = built.figures
+
+      assert steps(built)["yes"].data ==
+               Call.encode("castBallot(uint256,uint256[],uint8)", [4, ids([1, 5]), 1])
     end
 
     test "a shard whose key's agent voting is off doesn't vote", %{fleet: fleet} do
@@ -491,12 +525,20 @@ defmodule Keyfleet.WalletStepsTest do
       assert build!(:ballot, proposal: 4).figures.keys == [1, 2]
     end
 
-    test "a closed proposal can't be voted on", %{fleet: fleet} do
+    test "a closed proposal can't be voted on, but one waiting its day still takes No",
+         %{fleet: fleet} do
       ChainViews.put!(ballot_views(fleet, 2, true))
 
       assert build!(:ballot, proposal: 4).figures.blocked == %{
                "yes" => :voting_closed,
                "no" => :voting_closed,
+               "abstain" => :voting_closed
+             }
+
+      ChainViews.put!(ballot_views(fleet, 1, true))
+
+      assert build!(:ballot, proposal: 4).figures.blocked == %{
+               "yes" => :voting_closed,
                "abstain" => :voting_closed
              }
     end
