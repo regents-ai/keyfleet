@@ -371,7 +371,7 @@ defmodule Keyfleet.MessagesTest do
 
     for table <- ~w(messages key_attachments shard_events) do
       assert {:error, %Postgrex.Error{postgres: %{code: :check_violation}}} =
-               Repo.query("TRUNCATE keyfleet_app.#{table}", [], mode: :savepoint)
+               Repo.query("TRUNCATE keyfleet_app.#{table} CASCADE", [], mode: :savepoint)
     end
 
     assert Enum.map(read("general"), &{&1.id, &1.body}) == [{posted.id, "Hull survey started"}]

@@ -169,6 +169,12 @@
   display: grid;
 }
 
+/* The holder's own button on each post of their wall, at the line's end. */
+.key-profile-remove {
+  margin-inline-start: auto;
+  font-weight: 400;
+}
+
 .key-profile-keys a[aria-current="true"] {
   font-weight: 600;
   text-decoration: none;

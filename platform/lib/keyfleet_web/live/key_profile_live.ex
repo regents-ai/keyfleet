@@ -17,7 +17,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
   import KeyfleetWeb.Components.AddressLinks
   import KeyfleetWeb.Components.AgentPicture
   import KeyfleetWeb.Components.SentFrom
-  import Phoenix.LiveView, only: [push_patch: 2, start_async: 3, stream: 4]
+
+  import Phoenix.LiveView,
+    only: [push_patch: 2, start_async: 3, stream: 4, stream_delete_by_dom_id: 3]
 
   alias Keyfleet.Chain
   alias Keyfleet.Chain.RewardsWaiting
@@ -41,6 +43,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   # A key's profile keeps the latest hundred messages written to it.
   @key_thread_kept 100
+  @not_removed "That post couldn’t be taken off right now. Try again."
 
   attr :profile, :map, required: true
   attr :fleet, :map, required: true
@@ -567,6 +570,20 @@ defmodule KeyfleetWeb.KeyProfileLive do
         <li :for={{dom_id, message} <- @thread} id={dom_id} data-post data-layout-id={dom_id}>
           <p class="rooms-author">
             <.author fleet_id={@profile.fleet_id} message={message} params={@params} />
+            <Regent.Primitives.button
+              :if={@profile.yours?}
+              id={"key-profile-remove-#{message.id}"}
+              class="key-profile-remove"
+              type="button"
+              variant="quiet"
+              phx-click="remove_from_wall"
+              phx-value-id={message.id}
+              data-confirm="Take this post off your wall? It can’t be put back."
+              aria-label="Take this post off your wall"
+              title="Take this post off your wall"
+            >
+              ×
+            </Regent.Primitives.button>
           </p>
           <div class="rooms-body">{RoomsLive.body_html(message.body)}</div>
           <p class="rooms-detail">{RoomsLive.stamp(message.inserted_at)}</p>
@@ -724,6 +741,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
     {:noreply, post_to_key(socket, body)}
   end
 
+  def handle_event("remove_from_wall", %{"id" => message_id}, socket),
+    do: {:noreply, remove_from_wall(socket, message_id)}
+
   # A key the visitor arrived on closes by taking it out of the address in
   # place, so closing adds no step to go back through.
   def handle_event(
@@ -754,6 +774,19 @@ defmodule KeyfleetWeb.KeyProfileLive do
   end
 
   def handle_info(%Broadcast{event: "key_activity"}, socket), do: {:noreply, socket}
+
+  # A post its holder took off the open key's wall leaves the page.
+  def handle_info(
+        %Broadcast{
+          event: "wall_removed",
+          payload: %{fleet_id: fleet_id, token_id: token_id, message_id: message_id}
+        },
+        %{assigns: %{key_profile: %{fleet_id: fleet_id, token_id: token_id, issued?: true}}} =
+          socket
+      ),
+      do: {:noreply, off_wall(socket, message_id)}
+
+  def handle_info(%Broadcast{event: "wall_removed"}, socket), do: {:noreply, socket}
 
   @doc "What the key has waiting, once the chain answers. A read for a key no longer open is dropped."
   def handle_async(:rewards, result, %{assigns: %{key_profile: %{issued?: true}}} = socket),
@@ -996,6 +1029,29 @@ defmodule KeyfleetWeb.KeyProfileLive do
   end
 
   defp post_to_key(socket, _body), do: socket
+
+  # The holder's own page drops the post at once; every other page with the
+  # wall open hears of it (`Keyfleet.Rooms.WallRemoval`). A refusal says so
+  # and leaves the post where it is.
+  defp remove_from_wall(%{assigns: %{key_profile: %{issued?: true}}} = socket, message_id) do
+    case Rooms.remove_from_wall(message_id, actor: ShellLive.human_actor(socket)) do
+      {:ok, _removal} ->
+        socket |> update(:key_profile, &%{&1 | notice: nil}) |> off_wall(message_id)
+
+      {:error, _refusal} ->
+        update(socket, :key_profile, &%{&1 | notice: @not_removed})
+    end
+  end
+
+  defp remove_from_wall(socket, _message_id), do: socket
+
+  defp off_wall(%{assigns: %{key_profile: profile}} = socket, message_id) do
+    %{fleet_id: fleet_id, token_id: token_id, holder: holder} = profile
+
+    socket
+    |> assign(:key_profile, Map.merge(profile, Profile.activity(fleet_id, token_id, holder)))
+    |> stream_delete_by_dom_id(:key_thread, "key-message-#{message_id}")
+  end
 
   @doc "The open key's two vote figures, read again."
   def refresh_votes(%{assigns: %{key_profile: profile}} = socket) do

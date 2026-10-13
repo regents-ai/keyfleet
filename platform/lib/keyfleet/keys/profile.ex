@@ -25,6 +25,7 @@ defmodule Keyfleet.Keys.Profile do
   alias Keyfleet.Proposals.Vote
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Message
+  alias Keyfleet.Rooms.WallRemoval
   alias Keyfleet.Traits
 
   # A holder's keys in the fleet are listed this many at a time.
@@ -76,15 +77,20 @@ defmodule Keyfleet.Keys.Profile do
 
   @doc """
   What changes when the key, or a key its holder holds, has written or been
-  written to: its thread's length, its posts in General, and its holder's.
+  written to, or a post has come off its wall: how many posts its wall shows
+  (`messages`) and the place of the last one written to it (`wall_head`), its
+  posts in General, and its holder's.
   Read as nobody, so the fleet's other rooms, which only its keys read, never
   show here.
   """
   def activity(fleet_id, token_id, holder) do
     thread = Rooms.get_key_thread!(fleet_id, token_id)
+    wall_head = if(thread, do: thread.head_seq, else: 0)
+    removed = count(WallRemoval, :of_wall, %{fleet_id: fleet_id, token_id: token_id})
 
     %{
-      messages: if(thread, do: thread.head_seq, else: 0),
+      wall_head: wall_head,
+      messages: wall_head - removed,
       posts: count(Message, :room_posts_as_key, %{fleet_id: fleet_id, token_id: token_id}),
       recent_posts: Rooms.posts_as_key!(fleet_id, token_id),
       holder_posts: count(Message, :room_posts_by_wallet, %{fleet_id: fleet_id, wallet: holder})
@@ -136,7 +142,7 @@ defmodule Keyfleet.Keys.Profile do
     fleet = Fleets.get_fleet!(fleet_id)
     holder = current.owner_wallet
     activity = activity(fleet_id, token_id, holder)
-    thread = latest_thread(fleet_id, token_id, activity.messages)
+    thread = latest_thread(fleet_id, token_id, activity.wall_head)
 
     held =
       Keys.keys_held_in_fleet!(fleet_id, [holder], query: [limit: @listed])

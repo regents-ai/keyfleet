@@ -1,7 +1,8 @@
 defmodule Keyfleet.Rooms do
   @moduledoc """
-  Fleet-scoped rooms for native chat, a public thread for every key, and each
-  reader's own mutes of the keys whose posts they would rather not see.
+  Fleet-scoped rooms for native chat, a public thread for every key with the
+  posts its holder has taken off it, and each reader's own mutes of the keys
+  whose posts they would rather not see.
   """
   use Ash.Domain
 
@@ -59,6 +60,10 @@ defmodule Keyfleet.Rooms do
         action: :under_send_key,
         args: [:fleet_id, :author_wallets, :idempotency_key],
         not_found_error?: false
+    end
+
+    resource Keyfleet.Rooms.WallRemoval do
+      define :remove_from_wall, action: :remove, args: [:message_id]
     end
 
     resource Keyfleet.Rooms.Mute do

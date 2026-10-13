@@ -438,14 +438,38 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
            )
   end
 
-  test "a message written elsewhere to the key on show appears", %{conn: conn} do
+  # Only the Key's holder takes a post off its wall, and it then leaves every
+  # page with the wall open.
+  test "a message written elsewhere to the key on show appears, and goes when its holder takes it off",
+       %{conn: conn} do
     {:ok, view, _html} = live(conn, @path <> "?key=12")
 
-    to_key!(wallet("f"), 12, "Anyone aboard?")
+    message = to_key!(wallet("f"), 12, "Anyone aboard?")
+    remove = "#key-profile-remove-#{message.id}"
 
     assert render(view) =~ "Anyone aboard?"
     assert text(view, "#key-profile-news") == "New message to Key 12."
     assert text(view, "#key-profile-messages") == "1"
+    refute has_element?(view, remove)
+
+    {:ok, writer, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
+    refute has_element?(writer, remove)
+    render_hook(writer, "remove_from_wall", %{"id" => message.id})
+
+    assert text(writer, "#key-profile-notice") ==
+             "That post couldn’t be taken off right now. Try again."
+
+    assert render(writer) =~ "Anyone aboard?"
+
+    {:ok, holder, _html} = conn |> signed_in_as(wallet("e")) |> live(@path <> "?key=12")
+    holder |> element(remove) |> render_click()
+
+    for page <- [holder, writer, view] do
+      refute render(page) =~ "Anyone aboard?"
+      assert text(page, "#key-profile-messages") == "0"
+    end
+
+    assert Rooms.read_key_thread!(@fleet, 12) == []
   end
 
   test "the key changing hands shows its new holder", %{conn: conn} do

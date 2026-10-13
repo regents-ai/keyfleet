@@ -46,7 +46,7 @@ defmodule KeyfleetWeb.ShellLive do
   # The events each area's page sends, which that area's module answers.
   @fleet_events ~w(open_send_agent close_send_agent activity_earlier open_pass_key keymap_ready select_key validate_quote send_quote)
   @room_events ~w(mute_key unmute_key)
-  @key_profile_events ~w(post_to_key close_key)
+  @key_profile_events ~w(post_to_key remove_from_wall close_key)
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
   @poll_events ~w(start_poll end_poll cast_vote)
 
@@ -345,8 +345,9 @@ defmodule KeyfleetWeb.ShellLive do
       when event in ["dm_head", "dm_deleted"],
       do: DmsLive.handle_info(notice, socket)
 
-  def handle_info(%Broadcast{event: "key_activity"} = notice, socket),
-    do: KeyProfileLive.handle_info(notice, socket)
+  def handle_info(%Broadcast{event: event} = notice, socket)
+      when event in ["key_activity", "wall_removed"],
+      do: KeyProfileLive.handle_info(notice, socket)
 
   def handle_info(%Broadcast{event: "rooms_changed"} = notice, socket),
     do: RoomsLive.handle_info(notice, socket)

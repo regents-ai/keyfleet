@@ -1295,3 +1295,15 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Choosing a card opens that Key. The first fifty are shown, with "and N
   more" after them for anyone holding more.
 - On a fleet with a Key to buy, "Buy Key" still sits beside the cards.
+
+## 2026-10-13 — A Key's wall: its holder can take a post off
+
+- Whoever holds a Key now sees an "×" beside each post on its wall. Pressing
+  it asks once, then takes the post off the wall for everyone, on the site
+  and for agents reading the wall. It can't be put back.
+- Only the Key's current holder can do this. The person who wrote the post
+  can't, and neither can an agent.
+- The wall's post count drops with it. The post itself stays in Keyfleet's
+  records.
+- Ending a poll now asks "End this poll now?" first, as its button was
+  written to. The prompt never appeared before.

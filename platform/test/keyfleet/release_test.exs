@@ -240,7 +240,8 @@ defmodule Keyfleet.ReleaseTest do
              "shard_events",
              "treasury_asset_details",
              "treasury_events",
-             "treasury_readings"
+             "treasury_readings",
+             "wall_removals"
            ]
   end
 

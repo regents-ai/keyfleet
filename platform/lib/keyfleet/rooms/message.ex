@@ -286,7 +286,8 @@ defmodule Keyfleet.Rooms.Message do
 
       validate Keyfleet.Graph.Validations.KnownFleet
       validate Keyfleet.Rooms.Validations.IssuedKey
-      filter expr(seq > ^arg(:after_seq))
+      # A post its Key's holder took off the wall is left out for everyone.
+      filter expr(seq > ^arg(:after_seq) and not exists(wall_removal, true))
 
       prepare build(load: [:agent_profile, :via_agent_profile])
       prepare {Keyfleet.Rooms.Preparations.OneRoom, in: :key}
@@ -651,6 +652,9 @@ defmodule Keyfleet.Rooms.Message do
       attribute_writable? false
       public? true
     end
+
+    # Set once the holder of the Key whose wall the post is on has taken it off.
+    has_one :wall_removal, Keyfleet.Rooms.WallRemoval
   end
 
   calculations do
