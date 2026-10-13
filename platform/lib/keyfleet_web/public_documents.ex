@@ -67,6 +67,9 @@ defmodule KeyfleetWeb.PublicDocuments do
       {"Proposals", "What a Keyfleet fleet's Keys are voting on, and how each vote went."},
     :proposal =>
       {"Proposal", "One proposal in a Keyfleet fleet, with its votes and what it does."},
+    :treasury =>
+      {"Treasury",
+       "A Keyfleet fleet's treasury: what it holds, how many Keys have a vote and what its votes carried out."},
     :polls =>
       {"Polls",
        "Quick questions a Keyfleet fleet's Keys answer together: the active ones, then the past ones."},

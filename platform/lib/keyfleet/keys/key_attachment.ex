@@ -266,6 +266,17 @@ defmodule Keyfleet.Keys.KeyAttachment do
       pagination keyset?: true, required?: true, default_limit: 100, max_page_size: 100
     end
 
+    # The fleet's keys that have a vote now: the ones a proposal opening now
+    # would count.
+    read :present_in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and ownership_epoch == current_ownership_epoch and
+                 not idle
+             )
+    end
+
     # The fleet's highest key number read so far. Keys are numbered from 1 in
     # the order they are sold and are never burned, so it is also how many
     # have sold.

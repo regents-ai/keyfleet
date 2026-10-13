@@ -1,9 +1,9 @@
 defmodule KeyfleetWeb.KeyLinks do
   @moduledoc """
   Where a key's profile opens: its fleet's page, with the key named in the
-  address. The fleet page's tab (the hall, or the map with `view=map`) and its
-  list position stay in the address beside it, so closing the profile leaves
-  the page as it was.
+  address. The fleet page's view (the hall, the map with `view=map`, or the
+  list of Keys with `view=members`) and its list position stay in the address
+  beside it, so closing the profile leaves the page as it was.
 
   A key's own page and its messages are under its fleet's address, such as
   `/classic/1/keys/72`.
@@ -31,8 +31,11 @@ defmodule KeyfleetWeb.KeyLinks do
   @doc "The fleet page's hall, its first tab."
   def hall_path(fleet_id), do: fleet_path(fleet_id, [])
 
-  @doc "The fleet page's map of Keys, with the list of Keys under it."
+  @doc "The fleet page's map of Keys."
   def map_path(fleet_id), do: fleet_path(fleet_id, [{"view", "map"}])
+
+  @doc "The fleet page's list of its Keys and who holds each."
+  def members_path(fleet_id), do: fleet_path(fleet_id, [{"view", "members"}])
 
   defp kept(params), do: for(name <- @kept, is_binary(params[name]), do: {name, params[name]})
 

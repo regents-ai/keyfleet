@@ -18,7 +18,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   # the keys each test issues.
   @fleet "fibonacci_cascade"
   @path "/cascade/1"
-  @map_path @path <> "?view=map"
+  @members_path @path <> "?view=members"
   @system %Actors.System{}
   @rewards "0x" <> String.duplicate("8", 40)
   @usdc "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
@@ -110,15 +110,15 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   end
 
   test "another key chosen while one is open takes its place in the address", %{conn: conn} do
-    {:ok, view, _html} = live(conn, @map_path)
+    {:ok, view, _html} = live(conn, @members_path)
     assert has_element?(view, "#fleet-key-link-12[data-phx-link-state='push']")
 
     view |> element("#fleet-key-link-12") |> render_click()
-    assert_patch(view, @map_path <> "&key=12")
+    assert_patch(view, @members_path <> "&key=12")
     assert has_element?(view, "#fleet-key-link-5[data-phx-link-state='replace']")
 
     render_hook(view, "select_key", %{"token_id" => 5})
-    assert_receive {_ref, {:patch, _topic, %{to: @map_path <> "&key=5", kind: :replace}}}
+    assert_receive {_ref, {:patch, _topic, %{to: @members_path <> "&key=5", kind: :replace}}}
     assert has_element?(view, "dialog#key-profile[data-close='back']")
     assert text(view, "#key-profile-title") == "Key 5"
   end
@@ -126,10 +126,10 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   # The reader's own first Key opens from the list and from the way in alike.
   test "the reader's own first Key opens from the list and from Enter", %{conn: conn} do
     conn = signed_in_as(conn, wallet("e"))
-    {:ok, view, _html} = live(conn, @map_path)
+    {:ok, view, _html} = live(conn, @members_path)
 
     view |> element("#fleet-key-link-3") |> render_click()
-    assert_patch(view, @map_path <> "&key=3")
+    assert_patch(view, @members_path <> "&key=3")
     assert text(view, "#key-profile-title") == "Key 3"
 
     {:ok, view, _html} = live(conn, @path)
@@ -144,15 +144,15 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   end
 
   test "a key opened from the list closes by going back", %{conn: conn} do
-    {:ok, view, _html} = live(conn, @map_path)
+    {:ok, view, _html} = live(conn, @members_path)
 
     view |> element("#fleet-key-link-12") |> render_click()
 
-    assert_patch(view, @map_path <> "&key=12")
+    assert_patch(view, @members_path <> "&key=12")
     assert has_element?(view, "dialog#key-profile[data-close='back']")
 
     render_hook(view, "close_key", %{})
-    assert_patch(view, @map_path)
+    assert_patch(view, @members_path)
     refute has_element?(view, "#key-profile")
   end
 

@@ -255,7 +255,7 @@
       "requires": "wallet",
       "state_changing": true,
       "payment": "none",
-      "scope": "FLEET_PAGE/proposals",
+      "scope": "FLEET_PAGE/treasury",
       "authentication": "owner_wallet_approval",
       "pairing_required": false,
       "availability": "prelaunch_gated",

@@ -23,6 +23,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   @fleet "fibonacci_cascade"
   @path "/cascade/1"
   @map_path @path <> "?view=map"
+  @members_path @path <> "?view=members"
+  @treasury_path @path <> "/treasury"
   @issued 150
   @owner "0x" <> String.duplicate("a", 40)
   @stranger "0x" <> String.duplicate("b", 40)
@@ -50,13 +52,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
   end
 
-  # However many keys a fleet has issued, the map's list reads one page of
+  # However many keys a fleet has issued, the member list reads one page of
   # them; the count it shows comes from counting, not from reading every key.
   test "keys are listed a hundred at a time while the count covers them all", %{conn: conn} do
     deploy!()
     ChainHelpers.seed_cursor!(@fleet)
 
-    {rows, {:ok, view, _html}} = rows_read_during(fn -> live(conn, @map_path) end)
+    {rows, {:ok, view, _html}} = rows_read_during(fn -> live(conn, @members_path) end)
 
     assert Enum.max(rows) <= 101
     assert text(view, "#fleet-sales") == "150 Keys sold · 0 agents here"
@@ -101,28 +103,56 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     refute has_element?(view, ~s(#fleet-channels a[href*="/rooms/"]))
   end
 
-  test "the bar switches between the hall and the map, and opens how the fleet works", %{
-    conn: conn
-  } do
+  test "the bar leads to the hall, the map, the member list and the treasury", %{conn: conn} do
     deploy!()
     ChainHelpers.seed_cursor!(@fleet)
 
     {:ok, view, _html} = live(conn, @path)
 
-    assert has_element?(view, ~s(#fleet-tab-hall[href="#{@path}"][aria-current="page"]))
-    assert has_element?(view, ~s{#fleet-tab-map[href="#{@map_path}"]:not([aria-current])})
-    assert has_element?(view, "#fleet-hall")
-    refute has_element?(view, "#fleet-keys")
-    refute has_element?(view, ".fleet-bar__nav a[href=\"#fleet-keys\"]")
+    assert has_element?(view, "#fleet-nav-hall", "Hall")
+    assert has_element?(view, "#fleet-nav-map", "Map")
+    assert has_element?(view, ~s(#fleet-tab-hall[href="#{@path}"][aria-current="page"]), "Chat")
+    assert has_element?(view, ~s(#fleet-tab-workspace[href="#{@path}/workspace"]), "Workspace")
 
     assert has_element?(
              view,
-             ~s(#fleet-about-toggle[aria-expanded="false"][aria-controls="fleet-about"])
+             ~s{#fleet-tab-map[href="#{@map_path}"]:not([aria-current])},
+             "Fleet Grid"
            )
 
-    assert has_element?(view, "#fleet-about[hidden]")
+    assert has_element?(
+             view,
+             ~s{#fleet-tab-members[href="#{@members_path}"]:not([aria-current])},
+             "Member List"
+           )
 
-    assert text(view, "#fleet-about") =~
+    assert has_element?(view, ~s(#fleet-tab-treasury[href="#{@treasury_path}"]), "Treasury")
+    assert has_element?(view, "#fleet-hall")
+    refute has_element?(view, "#fleet-keys")
+    assert has_element?(view, ~s(#fleet-workspace-link[href="#{@path}/workspace"]))
+    assert has_element?(view, ~s(#fleet-proposals-link[href="#{@path}/proposals"]))
+
+    view |> element("#fleet-tab-map") |> render_click()
+    assert_patch(view, @map_path)
+
+    assert has_element?(view, ~s(#fleet-tab-map[aria-current="page"]))
+    assert has_element?(view, "#key-map-#{@fleet}")
+    refute has_element?(view, "#fleet-hall")
+    refute has_element?(view, "#fleet-keys")
+
+    view |> element("#fleet-tab-members") |> render_click()
+    assert_patch(view, @members_path)
+
+    assert has_element?(view, ~s(#fleet-tab-members[aria-current="page"]))
+    assert has_element?(view, "#fleet-keys h2", "Member List")
+    refute has_element?(view, "#key-map-#{@fleet}")
+    refute has_element?(view, "#fleet-hall")
+
+    # How the fleet works is on its Treasury page.
+    view |> element("#fleet-tab-treasury") |> render_click()
+    assert_patch(view, @treasury_path)
+
+    assert text(view, "#treasury-rules") =~
              "When a level sells out, the holders of the level before it are paid back"
 
     for row <- Keyfleet.Authority.rows() do
@@ -137,19 +167,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert has_element?(
              view,
-             ~s(#fleet-about a#fleet-contract-link[href="https://basescan.org/address/#{@contract}"][title="#{@contract}"])
+             ~s(#treasury-rules a#fleet-contract-link[href="https://basescan.org/address/#{@contract}"][title="#{@contract}"])
            )
-
-    assert has_element?(view, ~s(#fleet-workspace-link[href="#{@path}/workspace"]))
-    assert has_element?(view, ~s(#fleet-proposals-link[href="#{@path}/proposals"]))
-
-    view |> element("#fleet-tab-map") |> render_click()
-    assert_patch(view, @map_path)
-
-    assert has_element?(view, ~s(#fleet-tab-map[aria-current="page"]))
-    refute has_element?(view, "#fleet-hall")
-    assert has_element?(view, "#fleet-keys")
-    assert has_element?(view, ~s(.fleet-bar__nav a[href="#fleet-keys"]), "List of Keys")
   end
 
   test "a page name that is not one of the fleet's keys is a page that doesn't exist", %{
@@ -168,7 +187,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert html =~ "Coming soon"
     refute has_element?(view, "#fleet-sales")
     refute has_element?(view, "#fleet-get-key")
-    refute has_element?(view, "#fleet-progress-title")
 
     # In place of the map, a still picture of it as it will open.
     assert has_element?(
@@ -183,12 +201,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     deploy!()
     ChainHelpers.seed_cursor!(@fleet, head_block: 5_000, next_block: 1_000)
 
-    {:ok, view, html} = live(conn, @map_path)
+    {:ok, view, _html} = live(conn, @members_path)
 
-    assert html =~ "Figures are catching up."
     assert text(view, "#fleet-sales") == "Figures are catching up · 0 agents here"
-    refute html =~ "Keys issued"
     assert shown_keys(view) == Enum.to_list(1..100)
+
+    {:ok, treasury, html} = live(conn, @treasury_path)
+
+    assert text(treasury, "#fleet-progress-title + p") == "Figures are catching up."
+    refute html =~ "Keys issued"
   end
 
   describe "a fleet coming soon" do
@@ -205,7 +226,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, ~s(#fleet-soon a[href="/#fleets"]), "See the fleets")
 
       for id <- ~w(fleet-get-key fleet-send-agent fleet-channels fleet-keys fleet-workspace-link
-                   fleet-proposals-link fleet-progress-title fleet-feed-list fleet-entry) do
+                   fleet-proposals-link fleet-tab-treasury fleet-feed-list fleet-entry) do
         refute has_element?(view, "##{id}")
       end
 
@@ -214,12 +235,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute view |> element("#route-content") |> render() =~ "USDC"
     end
 
-    test "its rooms, workspace and proposals lead back to its page", %{conn: conn} do
+    test "its rooms, workspace, proposals and treasury lead back to its page", %{conn: conn} do
       Keyfleet.Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
       {:ok, view, _html} = live(conn, @path)
 
-      for page <- ~w(/rooms/general /workspace /workspace/task%231 /proposals /proposals/1) do
+      for page <-
+            ~w(/rooms/general /workspace /workspace/task%231 /proposals /proposals/1 /treasury) do
         assert {:error, {:live_redirect, %{to: @path}}} = live(conn, @path <> page)
 
         # Reached from inside the shell, the same page patches back.
@@ -564,9 +586,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#buy-key")
     end
 
-    # "Buy Key" opens How this fleet works, named "Get a Key", and takes the
-    # reader to buying a key.
-    test "Buy Key opens How this fleet works at Buying a key", %{conn: conn} do
+    # "Buy Key" opens "Get a Key" and takes the reader to buying a key.
+    test "Buy Key opens Get a Key at Buying a key", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
 
@@ -575,9 +596,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert ["remove_attr", %{"attr" => "hidden", "to" => "#fleet-about"}] in commands
 
-      assert ["set_attr", %{"attr" => ["aria-expanded", "true"], "to" => "#fleet-about-toggle"}] in commands
-
-      assert ["set_attr", %{"attr" => ["data-for", "buy"], "to" => "#fleet-about"}] in commands
+      assert ["set_attr", %{"attr" => ["aria-expanded", "true"], "to" => "#fleet-get-key"}] in commands
       assert ["focus", %{"to" => "#buy-key-title"}] in commands
       assert has_element?(view, ~s(#fleet-about #buy-key #buy-key-title[tabindex="-1"]))
     end
@@ -619,8 +638,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert_patch(view, "/classic/1?buy")
 
       # Drawn already open as "Get a Key", so it shows before the page connects.
-      assert has_element?(view, ~s(#fleet-about[data-for="buy"]))
-      refute has_element?(view, "#fleet-about[hidden]")
+      assert has_element?(view, "#fleet-about:not([hidden])")
 
       [arrival] =
         view
@@ -694,17 +712,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
 
     # Every key sold and the next one can be chosen; the choice goes into the
-    # address with the key list's page, and back and forward move through it.
+    # address, and back and forward move through it. The member list's pages
+    # keep it.
     test "a key chosen goes into the address, and back and forward follow it", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       {:ok, view, _html} = live(conn, @map_path)
-      second_page = view |> element("#fleet-keys-next") |> render() |> href()
-      view |> element("#fleet-keys-next") |> render_click()
-      assert_patch(view, second_page)
 
       render_hook(view, "select_key", %{"token_id" => 151})
-      assert_patch(view, second_page <> "&key=151")
+      assert_patch(view, @map_path <> "&key=151")
       assert text(view, "#key-map-selected .key-map-selected__chosen") == "Key 151 chosen."
       assert has_element?(view, ~s(#key-map-fibonacci_cascade[data-selected="151"]))
 
@@ -718,11 +734,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       render_patch(view, @map_path <> "&key=12")
       assert_push_event(view, "keymap:select", %{token_id: 12})
       assert text(view, "#key-map-selected .key-map-selected__chosen") == "Key 12 chosen."
-      assert has_element?(view, "#fleet-keys-next[href$='&key=12']")
 
       render_patch(view, @map_path <> "&key=152")
       assert_push_event(view, "keymap:select", %{token_id: nil})
       assert text(view, "#key-map-selected .key-map-selected__chosen") == "No Key chosen yet."
+
+      render_patch(view, @members_path <> "&key=12")
+      assert has_element?(view, "#fleet-keys-next[href$='&key=12']")
     end
 
     # A key sold, moved or given a shard reaches an open page as that key's new marks.
@@ -737,7 +755,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert Scanner.step(fleet, StubClient) == :ok
       assert_pushed(view, "keymap:patch", %{minted: 2, keys: [[1, 1], [2, 0]]})
-      assert text(view, "#fleet-progress-title + dl") =~ "Keys issued 2 of 2,000"
       assert text(view, "#fleet-sales") == "2 Keys sold · 0 agents here"
 
       StubClient.put_chain(chain_head(5_000_020), [
@@ -767,6 +784,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       {:ok, view, _html} = live(conn, @map_path)
+      # The Buy panel's own read of the chain lands first, so it isn't taken
+      # for a change.
+      render_async(view)
       shown = render(view)
 
       send(view.pid, {:keys_changed, "fibonacci_syndicate", [7, 151]})
@@ -778,14 +798,14 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute_push_event(view, "keymap:reset", _reset, 0)
     end
 
-    # The key list reads its page again only when a changed key is on it, and
-    # a key sold onto the last page joins it.
+    # The member list reads its page again only when a changed key is on it,
+    # and a key sold onto the last page joins it.
     test "the key list shows a changed key's new holder when that key is on the page", %{
       conn: conn
     } do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
-      {:ok, view, _html} = live(conn, @map_path)
+      {:ok, view, _html} = live(conn, @members_path)
       assert text(view, "#fleet-key-7") =~ "Held by 0xaaaa..aaaa"
 
       move!(7, @stranger)
@@ -878,10 +898,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   end
 
   # A key bought reaches the open page when the chain reader records it: the
-  # list, the sales figures, the map and the next key on offer all move on.
+  # member list, the map and the next key on offer all move on, and the
+  # Treasury page counts it.
   test "a key bought appears once the chain reader records it", %{conn: conn} do
     fleet = deploy!("fleet_tech_accelerant", 5_000_000)
-    {:ok, view, _html} = live(conn, "/accelerant/1?view=map")
+    {:ok, view, _html} = live(conn, "/accelerant/1?view=members")
     assert text(view, "#buy-key-number") == "1"
 
     StubClient.put_chain(chain_head(5_000_010), [ownership_log(1, 1, @owner, 5_000_003)])
@@ -889,8 +910,10 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert_pushed(view, "keymap:patch", %{minted: 1, keys: [[1, 1]]})
     assert text(view, "#buy-key-number") == "2"
-    assert text(view, "#fleet-progress-title + dl") =~ "Keys issued 1 of 2,000"
     assert shown_keys(view) == [1]
+
+    {:ok, treasury, _html} = live(conn, "/accelerant/1/treasury")
+    assert text(treasury, "#fleet-progress-title + dl") =~ "Keys issued 1 of 2,000"
   end
 
   describe "the token launch" do
@@ -911,7 +934,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     test "until the fleet has voted for a launch there is nothing to look after", %{conn: conn} do
       ChainViews.put!(launch_views(0, :active, 1))
 
-      {:ok, view, _html} = live(conn, @path)
+      {:ok, view, _html} = live(conn, @treasury_path)
       render_async(view)
 
       assert text(view, "#fleet-launch-action-line") == "No launch yet."
@@ -936,7 +959,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       # The sale ends at block 900, and the latest block is 1,000.
       ChainViews.put!(launch_views(0, :active, 900))
 
-      {:ok, view, _html} = live(conn, @path)
+      {:ok, view, _html} = live(conn, @treasury_path)
       active!(view, @owner, "#fleet-launch-action")
 
       assert_push_event(view, "onchain-steps:review", %{
@@ -958,7 +981,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       # While the sale is still running, settling it is certain to fail too.
       ChainViews.put!(launch_views(0, :active, 1_500))
-      {:ok, view, _html} = live(conn, @path)
+      {:ok, view, _html} = live(conn, @treasury_path)
       render_async(view)
       assert text(view, "#fleet-launch-settle-why") == "Sale still running"
     end
@@ -968,7 +991,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     } do
       ChainViews.put!(launch_views(7, :graduated, 900))
 
-      {:ok, view, _html} = live(conn, @path)
+      {:ok, view, _html} = live(conn, @treasury_path)
       render_async(view)
 
       assert text(view, "#fleet-launch-settle-why") == "Already settled"
@@ -978,7 +1001,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#fleet-launch-facts")
 
       # A visitor reads where the launch stands, with no buttons.
-      {:ok, view, _html} = live(build_conn(), @path)
+      {:ok, view, _html} = live(build_conn(), @treasury_path)
       render_async(view)
 
       assert text(view, "#fleet-launch-sale") == "Sold"
@@ -989,7 +1012,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     test "a sale that didn't sell says so beside each button that needs one", %{conn: conn} do
       ChainViews.put!(launch_views(7, :failed, 900))
 
-      {:ok, view, _html} = live(conn, @path)
+      {:ok, view, _html} = live(conn, @treasury_path)
       render_async(view)
 
       assert text(view, "#fleet-launch-settle-why") == "Already settled"

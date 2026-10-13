@@ -1,8 +1,9 @@
 @layer regents-product {
 /* The fleet page: a slim bar with the fleet's name, who is here, Send your
-   agent and two tabs; one way in under it; then the hall (channels, feed and
-   the fleet now) or the map filling the rest of the screen, with "How this
-   fleet works" opening over either. The key page's grammar carries over: one
+   agent and the fleet's places (Hall, Map, Treasury); one way in under it;
+   then the hall (channels, feed and the fleet now), the map filling the rest
+   of the screen, or the list of Keys, with "Get a Key" opening over any of
+   them. The key page's grammar carries over: one
    ground, hairline panels, the display face for headings. */
 
 .fleet-page {
@@ -103,12 +104,27 @@
   display: flex;
   flex: 1 1 100%;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  align-items: flex-end;
+  gap: 0.5rem 1.25rem;
 }
 
-/* The tab on show, and an open panel, are marked under their button. */
-.fleet-bar__nav [aria-current="page"],
-.fleet-bar__nav [aria-expanded="true"] {
+/* "Hall" and "Map": a name over the places it holds. */
+.fleet-bar__group {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 0.25rem 0.5rem;
+}
+
+.fleet-bar__group h2 {
+  grid-column: 1 / -1;
+  color: var(--color-fg-muted);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.2;
+}
+
+/* The view on show is marked under its button. */
+.fleet-bar__nav [aria-current="page"] {
   box-shadow: inset 0 -3px 0 var(--ash-accent);
 }
 
@@ -324,28 +340,22 @@
   white-space: nowrap;
 }
 
-/* The panel is named for the button that opened it. */
-.fleet-about[data-for="buy"] .fleet-about__for-about,
-.fleet-about[data-for="about"] .fleet-about__for-buy {
-  display: none;
-}
-
 /* While "Get a Key" is open, the Key on offer is marked on the map as a
    chosen Key is, and the note under the map names it in the same line. */
 .key-map-selected__offer {
   display: none;
 }
 
-.fleet-stage:has(#fleet-about[data-for="buy"]:not([hidden])) .km-tile[data-state~="next"] {
+.fleet-stage:has(#fleet-about:not([hidden])) .km-tile[data-state~="next"] {
   --km-face: var(--palette-tangerine-tango);
   color: var(--palette-charcoal);
 }
 
-.fleet-stage:has(#fleet-about[data-for="buy"]:not([hidden])) .key-map-selected__offer {
+.fleet-stage:has(#fleet-about:not([hidden])) .key-map-selected__offer {
   display: inline;
 }
 
-.fleet-stage:has(#fleet-about[data-for="buy"]:not([hidden])) .key-map-selected__chosen {
+.fleet-stage:has(#fleet-about:not([hidden])) .key-map-selected__chosen {
   display: none;
 }
 
@@ -449,7 +459,7 @@
   pointer-events: none;
 }
 
-/* How this fleet works */
+/* Get a Key */
 
 .fleet-about {
   position: absolute;
@@ -492,11 +502,6 @@
   font-size: 1.05rem;
 }
 
-.fleet-wallet {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
 .fleet-detail {
   color: var(--color-fg-muted);
 }
@@ -525,25 +530,6 @@
   line-height: 1;
 }
 
-.fleet-facts {
-  display: grid;
-  gap: 0.75rem;
-  margin: 0;
-}
-
-.fleet-facts div {
-  display: grid;
-  gap: 0.2rem;
-}
-
-.fleet-facts dt {
-  color: var(--color-fg-muted);
-}
-
-.fleet-facts dd {
-  margin: 0;
-}
-
 /* The list of keys, and a missing fleet */
 
 .fleet-panel {
@@ -563,8 +549,20 @@
   line-height: 1.1;
 }
 
+/* The list of Keys runs as long as its page of them, with the page. */
+.fleet-view[data-view="members"] .fleet-stage {
+  overflow: visible;
+}
+
 .fleet-keys {
-  scroll-margin-block-start: 1rem;
+  display: grid;
+  gap: 1rem;
+  padding: var(--rg-panel-padding);
+}
+
+.fleet-keys h2 {
+  font-size: 1.35rem;
+  line-height: 1.1;
 }
 
 .fleet-key-list {
@@ -683,14 +681,6 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
-}
-
-/* A heading with a tip beside it keeps the tip on its line. */
-#fleet-launch h3 {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
 }
 
 }

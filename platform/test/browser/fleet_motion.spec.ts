@@ -13,7 +13,7 @@ import {
 } from "./support/motion"
 
 // A fleet page's motion: presses squish and dialogs rise only for a pointer,
-// How this fleet works simply opens, a sale rolls its numbers and its line
+// "Get a Key" simply opens, a sale rolls its numbers and its line
 // joins the hall's feed, and everything ends clean. Nothing moves for a reader
 // who asked for less motion.
 const fleet = "fleet_tech_classic"
@@ -40,9 +40,9 @@ test("a pointer press squishes its control and rises a dialog, all ending clean"
   await expect(page.locator("#fleet-show-chat")).toHaveAttribute("aria-pressed", "true")
   await expect.poll(() => moved(page, "#fleet-show-chat")).toBe(true)
 
-  await page.locator("#fleet-about-toggle").click()
+  await page.locator("#fleet-get-key").click()
   await expect(page.locator("#fleet-about")).toBeVisible()
-  await expect.poll(() => moved(page, "#fleet-about-toggle")).toBe(true)
+  await expect.poll(() => moved(page, "#fleet-get-key")).toBe(true)
   await page.waitForTimeout(600)
   expect(await moved(page, "#fleet-about")).toBe(false)
 
@@ -59,7 +59,7 @@ test("a keyboard press picks a channel and opens panels and dialogs at once, wit
   await page.locator("#fleet-show-chat").focus()
   await page.keyboard.press("Enter")
   await expect(page.locator("#fleet-show-chat")).toHaveAttribute("aria-pressed", "true")
-  await page.locator("#fleet-about-toggle").focus()
+  await page.locator("#fleet-get-key").focus()
   await page.keyboard.press("Enter")
   await expect(page.locator("#fleet-about")).toBeVisible()
   // Opening a panel takes the reader to its heading, and again two frames later.
@@ -112,7 +112,7 @@ test("a sale rolls the count, each digit clipped by class, and its line joins th
 
 test("a panel closed while its key number rolls shows the new number whole", async ({page}) => {
   await openFleet(page)
-  await page.locator("#fleet-about-toggle").click()
+  await page.locator("#fleet-get-key").click()
   await expect(page.locator("#buy-key-number")).toBeVisible()
   const next = String(Number(await plainNumber(page, "buy-key-number")) + 1)
 
@@ -140,7 +140,7 @@ test("a reader who asked for less motion sees presses, panels and a sale without
   const sold = Number(await plainNumber(page, "fleet-sales-keys"))
 
   await page.locator("#fleet-show-chat").click()
-  await page.locator("#fleet-about-toggle").click()
+  await page.locator("#fleet-get-key").click()
   await page.locator("#fleet-send-agent").click()
   await expect(page.locator("dialog.send-agent")).toBeVisible()
   await page.keyboard.press("Escape")

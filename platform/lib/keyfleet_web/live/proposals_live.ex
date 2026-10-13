@@ -2,12 +2,13 @@ defmodule KeyfleetWeb.ProposalsLive do
   @moduledoc """
   A fleet's proposals, for anyone to read: what its key holders have put to
   a vote, how each vote stands, what each would do in plain words with every
-  vote cast on it; and beside them the treasury they vote on.
+  vote cast on it. The treasury they vote on is drawn here too (`treasury/1`)
+  and shown on the fleet's Treasury page (`KeyfleetWeb.TreasuryLive`).
 
   Once the fleet is on chain, its wallet buttons sit beside what they act on:
-  marking keys present, proposing, the treasury's daily split, returning an
-  advance and sending Regents its share on the list; voting, carrying out
-  and cancelling on a proposal's own page. Every press goes to the wallet,
+  marking keys present and proposing on the list; voting, carrying out and
+  cancelling on a proposal's own page; the treasury's daily split, returning
+  an advance and sending Regents its share with the treasury. Every press goes to the wallet,
   except one the chain's own state at the latest block makes certain to fail,
   whose button stays in view, disabled, with a few words saying why.
 
@@ -76,6 +77,11 @@ defmodule KeyfleetWeb.ProposalsLive do
           <.link patch={Keyfleet.Fleets.path(@page.fleet_id)}>{@page.fleet_name}</.link>
         </p>
         <h1 tabindex="-1">Proposals</h1>
+        <p>
+          <.link id="proposals-to-treasury" patch={ProposalsPage.treasury_path(@page.fleet_id)}>
+            Treasury
+          </.link>
+        </p>
       </header>
 
       <.catching_up :if={@page.catching_up?} />
@@ -141,13 +147,6 @@ defmodule KeyfleetWeb.ProposalsLive do
       </section>
 
       <.propose :if={@page.deployed?} page={@page} actor={@actor} lease={@lease} />
-      <.treasury
-        :if={@page.treasury}
-        treasury={@page.treasury}
-        page={@page}
-        actor={@actor}
-        lease={@lease}
-      />
     </article>
     """
   end
@@ -625,11 +624,13 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
-  # The shared money: the treasury's address on Base, to check and to send to;
-  # each asset's balance and what is set aside for claims,
-  # the daily split's rate and when it next opens with its preview, the
-  # advances still out, and the protocol share owed to Regents.
-  defp treasury(assigns) do
+  @doc """
+  The shared money: the treasury's address on Base, to check and to send to;
+  each asset's balance and what is set aside for claims, the daily split's
+  rate and when it next opens with its preview, the advances still out, and
+  the protocol share owed to Regents.
+  """
+  def treasury(assigns) do
     ~H"""
     <section id="proposals-budget" class="proposals-panel" aria-labelledby="proposals-budget-title">
       <h2 id="proposals-budget-title">Treasury</h2>
@@ -990,7 +991,8 @@ defmodule KeyfleetWeb.ProposalsLive do
     """
   end
 
-  defp catching_up(assigns) do
+  @doc "Said while the fleet's votes are still being read from the chain."
+  def catching_up(assigns) do
     ~H"""
     <p id="proposals-catching-up" class="proposals-notice" role="status">
       Vote counts are catching up.
@@ -1019,8 +1021,8 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   attr :id, :string, required: true
 
-  # Told the way the fleet's own page tells it.
-  defp unreadable(assigns) do
+  @doc "A page that couldn't be read, told the way the fleet's own page tells it."
+  def unreadable(assigns) do
     ~H"""
     <article id={@id} class="proposals-page">
       <header class="proposals-heading">
@@ -1038,8 +1040,8 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   attr :id, :string, required: true
 
-  # Told the way the fleet's own page tells it.
-  defp missing_fleet(assigns) do
+  @doc "A fleet that doesn't exist, told the way the fleet's own page tells it."
+  def missing_fleet(assigns) do
     ~H"""
     <article id={@id} class="proposals-page">
       <header class="proposals-heading">
@@ -1113,6 +1115,9 @@ abstain, of {keys(@proposal.counted)} counted</span>|
 
   defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposals}}}),
     do: ProposalsPage.list(params["fleet_id"], params)
+
+  defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :treasury}}}),
+    do: ProposalsPage.treasury_page(params["fleet_id"])
 
   defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposal}}}),
     do: ProposalsPage.detail(params["fleet_id"], params["number"], params)

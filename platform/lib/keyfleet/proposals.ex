@@ -184,6 +184,19 @@ defmodule Keyfleet.Proposals do
     |> Ash.read!()
   end
 
+  @doc """
+  The fleet's latest `count` proposals carried out, newest first, as
+  `status/2` needs them.
+  """
+  def latest_carried_out(fleet_id, count) do
+    Proposal
+    |> Ash.Query.filter(fleet_id == ^fleet_id and exists(execution, true))
+    |> Ash.Query.sort(number: :desc)
+    |> Ash.Query.limit(count)
+    |> Ash.Query.load(@summary)
+    |> Ash.read!()
+  end
+
   defp below(query, nil), do: query
   defp below(query, number), do: Ash.Query.filter(query, number < ^number)
 

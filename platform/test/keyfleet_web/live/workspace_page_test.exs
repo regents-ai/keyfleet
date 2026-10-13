@@ -1044,7 +1044,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-members-only a[href="#{Keyfleet.Fleets.path(@fleet)}#fleet-keys"])
+               ~s(#workspace-members-only a[href="#{Keyfleet.Fleets.path(@fleet)}?view=members"])
              )
 
       refute html =~ "Draft the brief"

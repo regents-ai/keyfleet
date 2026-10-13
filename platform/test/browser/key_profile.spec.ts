@@ -2,7 +2,7 @@ import {expect, test, type Browser, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {offerRewards, prepareFleet, sellKey} from "./support/fleet_chain"
 
-// A key's profile opens over its fleet's page: from the key list, from the
+// A key's profile opens over its fleet's page: from the member list, from the
 // map, or straight from an address naming the key. Every run starts from the
 // same unsold fleets.
 const fleet = "fibonacci_cascade"
@@ -27,7 +27,7 @@ async function openFleet(page: Page, query = "") {
 const profile = (page: Page) => page.locator("dialog#key-profile")
 const focusInside = (page: Page) =>
   page.evaluate(() => document.querySelector("#key-profile")?.contains(document.activeElement) ?? false)
-const withoutKey = new RegExp(`${fleetPath}(\\?view=map)?$`)
+const withoutKey = new RegExp(`${fleetPath}(\\?view=members)?$`)
 
 test.describe("a key's profile", () => {
   test.beforeAll(() => {
@@ -37,7 +37,7 @@ test.describe("a key's profile", () => {
   test("opens from the list with its title focused, keeps Tab inside, and Escape hands focus back", async ({page}) => {
     const key = sellKey(fleet, me)
     const errors = await signIn(page)
-    await openFleet(page, "?view=map")
+    await openFleet(page, "?view=members")
 
     const link = page.locator(`#fleet-key-link-${key}`)
     await link.click()
@@ -63,7 +63,7 @@ test.describe("a key's profile", () => {
   test("Back closes it and Forward opens it again", async ({page}) => {
     const key = sellKey(fleet, me)
     const errors = await signIn(page)
-    await openFleet(page, "?view=map")
+    await openFleet(page, "?view=members")
 
     await page.locator(`#fleet-key-link-${key}`).click()
     await expect(profile(page)).toBeVisible()

@@ -35,6 +35,7 @@ defmodule KeyfleetWeb.ShellLive do
     ProposalsLive,
     Read,
     RoomsLive,
+    TreasuryLive,
     WorkspaceLive
   }
 
@@ -163,7 +164,7 @@ defmodule KeyfleetWeb.ShellLive do
   defp name_fleet(params, %{fleet_id: fleet_id}), do: Map.put(params, "fleet_id", fleet_id)
 
   # A coming-soon fleet has only its own page: its rooms, workspace,
-  # proposals and polls open with the fleet.
+  # proposals, treasury and polls open with the fleet.
   defp coming_soon_inside?(%{route_id: route_id}, %{"fleet_id" => fleet_id})
        when route_id in [
               :rooms,
@@ -171,6 +172,7 @@ defmodule KeyfleetWeb.ShellLive do
               :workspace_item,
               :proposals,
               :proposal,
+              :treasury,
               :polls,
               :poll
             ],
@@ -583,6 +585,12 @@ defmodule KeyfleetWeb.ShellLive do
           actor={actor(@access_context)}
           lease={@session_lease}
         />
+        <TreasuryLive.page
+          :if={@route_spec.route_id == :treasury}
+          page={@proposals}
+          actor={actor(@access_context)}
+          lease={@session_lease}
+        />
         <PollsLive.list
           :if={@route_spec.route_id == :polls}
           page={@polls}
@@ -882,7 +890,7 @@ defmodule KeyfleetWeb.ShellLive do
   # The page starts listening before it reads, so votes recorded while it
   # loads still reach it. Each visit, reconnection included, reads afresh.
   defp load_proposals(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
-       when route_id in [:proposals, :proposal] do
+       when route_id in [:proposals, :proposal, :treasury] do
     socket
     |> follow_proposals(fleet_id)
     |> assign(:proposals_params, params)

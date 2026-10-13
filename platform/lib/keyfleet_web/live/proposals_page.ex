@@ -3,9 +3,11 @@ defmodule KeyfleetWeb.ProposalsPage do
   What a fleet's proposal pages show, read from the proposals and votes the
   chain reader recorded.
 
-  `list/2` is the fleet's proposals, newest first, twenty to a page, with
-  its shared money once it is on chain: the latest reading of its treasury,
-  its daily split, the advances still out and its latest money in and out.
+  `list/2` is the fleet's proposals, newest first, twenty to a page.
+  `treasury_page/1` is the fleet's Treasury page: how many of its Keys have a
+  vote now, its shared money once it is on chain (the latest reading of its
+  treasury, its daily split, the advances still out and its latest money in
+  and out), the votes carried out lately, and its sales so far.
   `detail/3` is one proposal with its votes, fifty to a page, its calls in
   plain words and exactly as carrying it out sends them, and where it stands as the vote contract says at the latest
   block: its status, the keys counted and each tally, never worked out here.
@@ -40,11 +42,39 @@ defmodule KeyfleetWeb.ProposalsPage do
         proposals: Enum.map(proposals, &summary/1),
         first_page?: is_nil(before),
         older: if(older?, do: list_path(fleet_id, before: List.last(proposals).number)),
-        treasury: reading.deployed? && treasury(fleet, Treasury.get_reading!(fleet_id)),
         propose: reading.deployed? && propose(fleet)
       })
     end)
   end
+
+  # How many of the latest votes carried out the Treasury page lists.
+  @carried 5
+
+  @doc """
+  The fleet's Treasury page. `voters` is how many Keys have a vote now, or nil
+  when they couldn't be counted.
+  """
+  def treasury_page(fleet_id) do
+    with_fleet(fleet_id, fn fleet, reading ->
+      Map.merge(reading, %{
+        voters: present_keys(fleet_id),
+        treasury: reading.deployed? && treasury(fleet, Treasury.get_reading!(fleet_id)),
+        carried: fleet_id |> Proposals.latest_carried_out(@carried) |> Enum.map(&summary/1),
+        progress: reading.deployed? && Chain.progress(fleet_id),
+        manager_address: fleet.manager_address
+      })
+    end)
+  end
+
+  defp present_keys(fleet_id) do
+    case Keyfleet.Keys.count_present_keys(fleet_id) do
+      {:ok, count} -> count
+      {:error, _failure} -> nil
+    end
+  end
+
+  @doc "The path of the fleet's Treasury page."
+  def treasury_path(fleet_id), do: "#{Keyfleet.Fleets.path(fleet_id)}/treasury"
 
   @doc """
   Proposal `number` and a page of its votes, from the one `params` names.

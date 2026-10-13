@@ -247,6 +247,17 @@ defmodule Keyfleet.Keys do
   end
 
   @doc """
+  How many of the fleet's keys have a vote now, the ones a proposal opening
+  now would count, as `{:ok, count}`, or `{:error, failure}` when the database
+  doesn't answer (see `Keyfleet.Count`).
+  """
+  def count_present_keys(fleet_id) do
+    Keyfleet.Keys.KeyAttachment
+    |> Ash.Query.for_read(:present_in_fleet, %{fleet_id: fleet_id})
+    |> Keyfleet.Count.of()
+  end
+
+  @doc """
   A hundred of the fleet's idle keys by key number, from the start or from
   `position` (`[after: keyset]`), as `{:ok, page}`, or `{:error, failure}`
   when the database doesn't answer, which is logged, so the page says it

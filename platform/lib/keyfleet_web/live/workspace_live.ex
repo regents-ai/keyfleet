@@ -391,7 +391,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
       <p id="workspace-members-only" class="workspace-panel">
         The workspace is for Key holders.
-        <.link patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}#fleet-keys"}>See the Keys</.link>
+        <.link patch={KeyLinks.members_path(@fleet.fleet_id)}>See the Keys</.link>
       </p>
     </article>
     """
