@@ -1,5 +1,5 @@
-/* Homepage-only composition: the header, a centred hero over the prism
-   artwork, the four fleet cards with what each is doing, what a fleet can take
+/* Homepage-only composition: the header, a centred hero over the crown,
+   the four fleet cards with what each is doing, what a fleet can take
    on and the footer. */
 @layer regents-product {
   .rl-root {
@@ -32,19 +32,14 @@
     position: relative; isolation: isolate;
     padding: clamp(1.5rem, 4.5svh, 3rem) var(--rg-panel-padding) 0;
   }
-  /* The renderer and its still art sit behind the top of the hero, no bigger
-     than the crown's old stage, showing at both sides and fading out toward
-     the centre column and downward. */
-  .rl-hero-prism {
-    position: absolute; inset: 0 0 auto; block-size: clamp(22rem, calc(60svh - 5rem), 32rem); z-index: -1; overflow: hidden; pointer-events: none; contain: strict;
+  /* The crown sits behind the top of the hero, no bigger than its old stage,
+     showing at both sides and fading out toward the centre column and
+     downward. */
+  .rl-hero--home > .crown {
+    inset: 0 0 auto; block-size: clamp(22rem, calc(60svh - 5rem), 32rem); z-index: -1;
     mask-image: linear-gradient(90deg, #000, transparent 30% 70%, #000), linear-gradient(#000 55%, transparent);
     mask-composite: intersect;
   }
-  .rl-hero-prism canvas, .rl-hero-art { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; }
-  .rl-hero-art { object-fit: cover; }
-  .rl-hero-prism canvas { opacity: 0; }
-  .rl-hero-prism[data-prism-ready="true"] canvas { opacity: 1; }
-  .rl-hero-prism[data-prism-ready="true"] .rl-hero-art { visibility: hidden; }
 
   .rl-hero-column { display: flex; flex-direction: column; align-items: center; max-width: 64rem; min-width: 0; margin-inline: auto; text-align: center; }
 
@@ -196,7 +191,7 @@
   @media (max-width: 47.99rem) {
     .rl-hero-copy { padding: 0; }
     .rl-hero-copy h1 { font-size: clamp(2.5rem, 10vw, 4.5rem); }
-    .rl-hero-prism { inset-inline: var(--rg-panel-padding); block-size: 12rem; opacity: .6; }
+    .rl-hero--home > .crown { inset-inline: var(--rg-panel-padding); block-size: 12rem; opacity: .6; }
     .rl-hero-command { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "prompt copy" "text text"; padding: var(--space-2); }
     .rl-hero-command__copy { justify-self: end; }
     .rl-hero-command__prompt, .rl-hero-command__text { font-size: .8125rem; line-height: 1.5; }

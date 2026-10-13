@@ -4,11 +4,14 @@
  * changes size.
  */
 
+import {prepareShader} from "@vgpu/wgsl/prepare"
 import {effect, frame, init, sampler, surface, target, texture, type Effect, type Gpu, type Surface, type Texture} from "vgpu"
 
 import {CARD_WGSL} from "./shader"
 import type {CardJob, Layers} from "./paint"
 
+/** The card's shader, read once for every stage and still on the page. */
+const CARD_SHADER = prepareShader(CARD_WGSL, "key_card.wgsl")
 /** How close the camera frames the card. */
 const STAGE_ZOOM = 0.84
 const TEX_NAMES = ["extAlb", "extAux", "extMat", "keyAlb", "keyAux"] as const
@@ -65,7 +68,7 @@ export async function startStage(canvas: HTMLCanvasElement): Promise<Stage | nul
       if (fx) {
         fx.set({u: params, ...next})
       } else {
-        const made = effect(gpu, CARD_WGSL, {label: "key-card", set: {u: params, ...next, samp}})
+        const made = effect(gpu, CARD_SHADER, {label: "key-card", set: {u: params, ...next, samp}})
         await made.compile({colors: [out.format]})
         out.onResize(() => made.set({u: {res: out.size}}))
         fx = made
@@ -94,7 +97,7 @@ export async function startStills(size: readonly [number, number]): Promise<((jo
     if (fx) {
       fx.set(params)
     } else {
-      const made = effect(gpu, CARD_WGSL, {label: "key-card", set: {...params, samp}})
+      const made = effect(gpu, CARD_SHADER, {label: "key-card", set: {...params, samp}})
       await made.compile({colors: [out.format]})
       fx = made
     }

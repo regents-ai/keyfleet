@@ -1342,3 +1342,27 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   page shows it the next time it loads: a map already open keeps the Key's
   number until then. Cards drawn before today get theirs over the first hour
   or so after this release; until then a Key shows its number.
+
+## 2026-10-13 — The homepage crown is the shared one, on vgpu 0.6 (local, unreleased)
+
+- The homepage's glass crown is now the copy every Regent site shares, taken
+  from ash-template: `platform/assets/js/crown/`, the `Crown` hook and the
+  `KeyfleetWeb.Components.Crown` component. Keyfleet keeps only its look
+  (`platform/assets/js/crown_looks.ts`): white beams over the near-black field
+  of squares, and where the crown sits behind the top of the hero
+  (`platform/assets/css/pages/home.css`). The picture is the same: at rest it
+  matches the old crown pixel for pixel at six sizes of its box, from
+  1920×512 down to a phone's 358×192.
+- `vgpu` moves from 0.5.0 to 0.6.0 and `@vgpu/wgsl` 0.6.0 is added; 0.6
+  prepares each shader in the browser before it first draws. The key cards on
+  the early-access page and the deck page prepare theirs once
+  (`platform/assets/js/key_card/stage.ts`) and draw the same pixels as before.
+- Removed with the old copy: `platform/assets/js/home_prism/`,
+  `platform/assets/js/home_field/` and the `HomePrism` hook, including the
+  highlight-colour switching nothing on the site ever triggered, and the four
+  unit test files that tested those files (`home_crown`, `home_palette`,
+  `home_prism`, `home_scene`). The browser checks follow the new names
+  (`#home-crown`, `.crown__still`, `data-crown-ready`).
+- Before release: the foil card needs the design-system revision that runs on
+  vgpu 0.6 (8bee776, not yet on GitHub), so `@design_system_ref` in
+  `platform/mix.exs` moves with this change once that revision is pushed.

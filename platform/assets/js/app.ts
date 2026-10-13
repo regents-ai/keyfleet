@@ -23,9 +23,9 @@ import {
 } from "./shell_state"
 import {installCopyButtons} from "./copy_buttons"
 import {installPublicTools} from "./public_tools"
+import {Crown} from "./hooks/crown"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {HolographicCard} from "./hooks/holographic_card"
-import {HomePrism} from "./hooks/home_prism"
 import {KeyMap} from "./hooks/key_map"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
@@ -295,9 +295,9 @@ const hooks = {
   ...showcaseHooks,
   ...labHooks,
   ...colocatedHooks,
+  Crown,
   FleetPreview,
   HolographicCard,
-  HomePrism,
   KeyMap,
   ModalDialog,
   MotionCascade,

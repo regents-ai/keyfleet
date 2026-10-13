@@ -318,9 +318,9 @@ test("the landing keeps its display face for headings", async ({page}) => {
 // brings a GPU decides which layer shows, never whether the words and links stay reachable.
 test("the crown never blocks the hero's words or links", async ({page}) => {
   const expectOneHeroLayer = async () => {
-    const layers = await page.locator("#home-prism").evaluate(element => ({
-      art: getComputedStyle(element.querySelector(".rl-hero-art")!).visibility,
-      crownReady: element.getAttribute("data-prism-ready") === "true",
+    const layers = await page.locator("#home-crown").evaluate(element => ({
+      art: getComputedStyle(element.querySelector(".crown__still")!).visibility,
+      crownReady: element.getAttribute("data-crown-ready") === "true",
     }))
     expect(layers.art).toBe(layers.crownReady ? "hidden" : "visible")
   }
@@ -328,9 +328,9 @@ test("the crown never blocks the hero's words or links", async ({page}) => {
   for (const viewport of [{width: 1280, height: 800}, {width: 390, height: 844}]) {
     await page.setViewportSize(viewport)
     await page.goto("/")
-    const prism = page.locator("#home-prism")
-    await expect(prism).toHaveAttribute("aria-hidden", "true")
-    expect(await prism.evaluate(element => getComputedStyle(element).pointerEvents)).toBe("none")
+    const crown = page.locator("#home-crown")
+    await expect(crown).toHaveAttribute("aria-hidden", "true")
+    expect(await crown.evaluate(element => getComputedStyle(element).pointerEvents)).toBe("none")
     await expectOneHeroLayer()
     await expect(page.locator("#home-title")).toBeVisible()
     await page.getByRole("link", {name: "See the fleets"}).click({trial: true})
@@ -348,7 +348,7 @@ test("the picture behind the hero carries no colour and no ground of its own", a
   await page.goto("/")
   await waitForHomepage(page)
 
-  const picture = await page.locator(".rl-hero-art").evaluate(element => {
+  const picture = await page.locator(".crown__still").evaluate(element => {
     const image = element as HTMLImageElement
     const meanBrightnessOver = (ground: string | null) => {
       const canvas = document.createElement("canvas")

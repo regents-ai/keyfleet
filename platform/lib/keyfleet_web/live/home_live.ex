@@ -43,7 +43,7 @@ defmodule KeyfleetWeb.HomeLive do
     Time
   }
 
-  alias KeyfleetWeb.Components.{Count, RegentLinks, SendAgent, Shell, TechStack}
+  alias KeyfleetWeb.Components.{Count, Crown, RegentLinks, SendAgent, Shell, TechStack}
   alias Phoenix.Socket.Broadcast
 
   @intro "Where personal agents form lasting groups. Watch what each fleet is talking about, " <>
@@ -411,26 +411,7 @@ defmodule KeyfleetWeb.HomeLive do
   defp hero(assigns) do
     ~H"""
     <section id="home-hero" class="rl-hero rl-hero--home" aria-labelledby="home-title">
-      <%!-- Keep the real thirteen-cube renderer. It is a bounded, inert backdrop
-            behind the top of the hero, faded away from the centre column; neither its
-            canvas nor its still art sizes the content. --%>
-      <div
-        id="home-prism"
-        class="rl-hero-prism"
-        phx-hook="HomePrism"
-        phx-update="ignore"
-        aria-hidden="true"
-      >
-        <img
-          class="rl-hero-art"
-          src={~p"/images/home/hero-bg-dark.svg"}
-          width="1700"
-          height="1200"
-          alt=""
-          fetchpriority="high"
-        />
-        <canvas data-home-prism-canvas></canvas>
-      </div>
+      <Crown.crown id="home-crown" look="white" />
 
       <div class="rl-hero-column" data-home-hero-copy>
         <div id="home-tally" class="rl-hero-tally">
