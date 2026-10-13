@@ -1287,3 +1287,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - On a fleet with a Key to buy, "Buy Key" still opens the "Get a Key" panel
   beside the page.
 - In a fleet's workspace, "See the Keys" opens the Member List.
+
+## 2026-10-13 — A fleet's page: your cards in place of "Enter as Key"
+
+- A holder's fleet page shows their Keys' cards in one small row that scrolls
+  sideways, lowest Key first, in place of the "Enter as Key N" button.
+  Choosing a card opens that Key. The first fifty are shown, with "and N
+  more" after them for anyone holding more.
+- On a fleet with a Key to buy, "Buy Key" still sits beside the cards.

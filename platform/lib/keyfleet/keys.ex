@@ -45,6 +45,7 @@ defmodule Keyfleet.Keys do
       define :record_reveal, action: :record
       define :get_reveal, action: :read, get_by: [:fleet_id, :token_id], not_found_error?: false
       define :reveals_recorded_since, action: :recorded_since, args: [:fleet_id, :after_seq]
+      define :reveals_of_keys, action: :of_keys, args: [:fleet_id, :token_ids]
     end
 
     resource Keyfleet.Keys.KeyPicture do
@@ -54,6 +55,8 @@ defmodule Keyfleet.Keys do
         action: :read,
         get_by: [:fleet_id, :token_id, :seed],
         not_found_error?: false
+
+      define :pictures_of_keys, action: :of_keys, args: [:fleet_id, :token_ids]
     end
 
     resource Keyfleet.Keys.ShardEvent do
@@ -130,6 +133,25 @@ defmodule Keyfleet.Keys do
         reveal -> reveal.seed
       end
     end
+  end
+
+  @doc """
+  The seed of each of the minted Keys `token_ids` of `fleet` that has one, by
+  Key number (`card_seed/2`), in one read however many Keys are asked for, a
+  hundred at most.
+  """
+  def card_seeds(%{id: fleet_id, deck_hash: deck_hash} = fleet, token_ids) do
+    {dealt, drawn} = Enum.split_with(token_ids, &Fleet.dealt?(fleet, &1))
+
+    dealt =
+      case dealt do
+        [] -> %{}
+        dealt -> Map.new(dealt, &{&1, elem(Decks.deck!(deck_hash).cards, &1 - 1)})
+      end
+
+    for reveal <- reveals_of_keys!(fleet_id, drawn),
+        into: dealt,
+        do: {reveal.token_id, reveal.seed}
   end
 
   @doc "Whether the key's workspace edits are restricted by a vote of the fleet right now."
@@ -277,24 +299,28 @@ defmodule Keyfleet.Keys do
   end
 
   @doc """
-  The lowest of the fleet's keys a person's wallets hold and how many they
-  hold, as `%{first: token_id, count: count}`, or `nil` for someone holding
-  none. Reads one key and a count, however many the person holds.
+  The fleet's keys a person's wallets hold: the lowest `shown` of them by
+  number, the lowest of all (who the person is in the fleet, `identity/2`) and
+  how many they hold, as `%{first: token_id, token_ids: token_ids, count: count}`,
+  or `nil` for someone holding none. Reads `shown` keys and a count, however
+  many the person holds.
   """
-  def held_summary(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
-    with %{token_id: first} <- held_identity_key!(fleet_id, wallets, actor: actor) do
-      count =
-        Keyfleet.Keys.KeyAttachment
-        |> Ash.Query.for_read(:held_in_fleet, %{fleet_id: fleet_id, owner_wallets: wallets},
-          actor: actor
-        )
-        |> Ash.count!()
+  def held_summary(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id, shown) do
+    held =
+      Ash.Query.for_read(
+        Keyfleet.Keys.KeyAttachment,
+        :held_in_fleet,
+        %{fleet_id: fleet_id, owner_wallets: wallets},
+        actor: actor
+      )
 
-      %{first: first, count: count}
+    case held |> Ash.Query.limit(shown) |> Ash.read!() |> Enum.map(& &1.token_id) do
+      [] -> nil
+      [first | _] = token_ids -> %{first: first, token_ids: token_ids, count: Ash.count!(held)}
     end
   end
 
-  def held_summary(_actor, _fleet_id), do: nil
+  def held_summary(_actor, _fleet_id, _shown), do: nil
 
   defp agent_key(key, wallet),
     do: %{

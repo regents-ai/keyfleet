@@ -1289,15 +1289,22 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       :ok
     end
 
-    test "a holder enters as their first Key, and can still buy the next", %{conn: conn} do
+    test "a holder's cards each open their Key, and the next can still be bought", %{conn: conn} do
       {:ok, view, _html} = live(conn, @path)
 
       assert text(view, "#fleet-entry .fleet-entry__line") == "You hold 150 Keys."
-      assert has_element?(view, ~s(#fleet-entry-enter[href="#{@path}?key=1"]), "Enter as Key 1")
+      assert has_element?(view, ~s(#fleet-entry-card-1[href="#{@path}?key=1"]), "Key 1")
+      assert has_element?(view, ~s(#fleet-entry-card-50[href="#{@path}?key=50"]), "Key 50")
+      refute has_element?(view, "#fleet-entry-card-51")
+      assert text(view, "#fleet-entry-more") == "and 100 more"
       assert has_element?(view, "#fleet-entry #fleet-get-key", "Buy Key 151")
 
+      view |> element("#fleet-entry-card-2") |> render_click()
+      assert_patch(view, @path <> "?key=2")
+      assert has_element?(view, "#fleet-entry-card-2[aria-current='true']")
+
       {:ok, view, _html} = live(conn, @map_path)
-      assert has_element?(view, ~s(#fleet-entry-enter[href="#{@map_path}&key=1"]))
+      assert has_element?(view, ~s(#fleet-entry-card-1[href="#{@map_path}&key=1"]))
     end
 
     test "someone holding no Key is offered the next one" do
@@ -1306,7 +1313,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, ~s(#fleet-entry[data-entry="buy"]))
       assert text(view, "#fleet-entry .fleet-entry__line") == "Key 151 · 42.99817 USDC"
       assert has_element?(view, "#fleet-entry #fleet-get-key", "Buy Key 151")
-      refute has_element?(view, "#fleet-entry-enter")
+      refute has_element?(view, "#fleet-entry-cards")
     end
 
     # The Club's Keys are given with its Passes, never sold: its way in asks

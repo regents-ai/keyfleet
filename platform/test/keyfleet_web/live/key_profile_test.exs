@@ -123,8 +123,8 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     assert text(view, "#key-profile-title") == "Key 5"
   end
 
-  # The reader's own first Key opens from the list and from the way in alike.
-  test "the reader's own first Key opens from the list and from Enter", %{conn: conn} do
+  # The reader's own first Key opens from the list and from their cards alike.
+  test "the reader's own first Key opens from the list and from their cards", %{conn: conn} do
     conn = signed_in_as(conn, wallet("e"))
     {:ok, view, _html} = live(conn, @members_path)
 
@@ -134,7 +134,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
     {:ok, view, _html} = live(conn, @path)
 
-    view |> element("#fleet-entry-enter") |> render_click()
+    view |> element("#fleet-entry-card-3") |> render_click()
     assert_patch(view, @path <> "?key=3")
     assert text(view, "#key-profile-title") == "Key 3"
 

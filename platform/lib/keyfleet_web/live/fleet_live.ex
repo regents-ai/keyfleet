@@ -48,7 +48,6 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Fleets.Rules
-  alias Keyfleet.Keys
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.NoPairedAgentError
   alias Keyfleet.Rooms.Errors.QuoteLimitError
@@ -286,7 +285,13 @@ defmodule KeyfleetWeb.FleetLive do
           </nav>
         </header>
 
-        <.entry fleet={@fleet} actor={@actor} params={@params} pass_note={@pass_note} />
+        <.entry
+          fleet={@fleet}
+          actor={@actor}
+          params={@params}
+          profile={@profile}
+          pass_note={@pass_note}
+        />
 
         <div class="fleet-stage">
           <.hall
@@ -430,26 +435,38 @@ defmodule KeyfleetWeb.FleetLive do
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
   attr :params, :map, required: true
+  attr :profile, :any, required: true, doc: "the Key profile open over the page, or nil"
   attr :pass_note, :string, default: nil
 
-  # The one way in, under the bar: the reader's own Key, the Club Pass a Club
+  # The one way in, under the bar: the reader's own Keys, the Club Pass a Club
   # Key comes with, the Key on sale, or signing in, whichever applies first.
-  # A holder can still buy the Key on sale beside entering with their own.
-  defp entry(%{fleet: %{held: %{first: token_id, count: count}}} = assigns) do
-    assigns = assign(assigns, token_id: token_id, count: count)
+  # A holder's cards sit in a row that scrolls sideways, each opening its Key,
+  # and the Key on sale can still be bought beside them.
+  defp entry(%{fleet: %{held: %{first: token_id, count: count, cards: cards}}} = assigns) do
+    assigns = assign(assigns, token_id: token_id, count: count, more: count - length(cards))
 
     ~H"""
-    <section id="fleet-entry" class="fleet-entry" data-entry="enter" aria-label="Your Keys">
+    <section id="fleet-entry" class="fleet-entry" data-entry="cards" aria-label="Your Keys">
       <p class="fleet-entry__line">
         You hold {if @count == 1, do: "Key #{grouped(@token_id)}", else: Rules.keys(@count)}.
       </p>
-      <.link
-        id="fleet-entry-enter"
-        class="rg-button rg-button--primary"
-        patch={KeyLinks.key_path(@fleet.fleet_id, @token_id, @params)}
-      >
-        Enter as Key {grouped(@token_id)}
-      </.link>
+      <ul id="fleet-entry-cards" class="fleet-entry__cards" aria-label="Your cards" tabindex="0">
+        <li :for={card <- @fleet.held.cards}>
+          <.link
+            id={"fleet-entry-card-#{card.token_id}"}
+            class="fleet-entry__card"
+            patch={KeyLinks.key_path(@fleet.fleet_id, card.token_id, @params)}
+            replace={@profile != nil}
+            aria-current={card.token_id == @fleet.chosen_key && "true"}
+          >
+            <img src={card.image} alt="" width="48" height="60" loading="lazy" decoding="async" />
+            Key {grouped(card.token_id)}
+          </.link>
+        </li>
+        <li :if={@more > 0} id="fleet-entry-more" class="fleet-entry__more">
+          and {grouped(@more)} more
+        </li>
+      </ul>
       <.buy_key_button :if={@fleet.buy && @fleet.buy.price} buy={@fleet.buy} variant="secondary" />
     </section>
     """
@@ -1037,7 +1054,7 @@ defmodule KeyfleetWeb.FleetLive do
       <div class="fleet-map-notes">
         <Regent.Primitives.tip id="key-map-help" label="About the Key map">
           Drag to look around. Arrow keys move between Keys, and Enter chooses one. Every Key is
-          also in the list of Keys.
+          also in the Member List.
         </Regent.Primitives.tip>
         <p id="key-map-selected" role="status">
           <span :if={@fleet.buy && @fleet.buy.price} class="key-map-selected__offer">
@@ -1418,7 +1435,8 @@ defmodule KeyfleetWeb.FleetLive do
       levels: if(deployed?, do: KeyMap.levels(progress), else: []),
       signed_in?: actor != nil,
       given?: Presets.given?(fleet_id),
-      held: Keys.held_summary(actor, fleet_id),
+      deck: Map.take(fleet, [:id, :deck_hash, :deck_size]),
+      held: FleetPage.held(fleet, actor),
       agents: Directory.agents(fleet_id),
       agents_here: agents_here(fleet_id)
     })
@@ -1564,7 +1582,7 @@ defmodule KeyfleetWeb.FleetLive do
         current?: Chain.fresh?(fleet_id),
         buy: FleetPage.next_sale(fleet_id, progress),
         levels: KeyMap.levels(progress),
-        held: Keys.held_summary(ShellLive.human_actor(socket), fleet_id)
+        held: FleetPage.held(fleet.deck, ShellLive.human_actor(socket))
     })
   end
 

@@ -107,6 +107,14 @@ defmodule Keyfleet.Keys.KeyReveal do
       filter expr(fleet_id == ^arg(:fleet_id) and record_seq > ^arg(:after_seq))
       prepare build(sort: [record_seq: :asc])
     end
+
+    # The reveals of these keys of the fleet, for the keys that have one.
+    read :of_keys do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_ids, {:array, :integer}, allow_nil?: false, constraints: [max_length: 100]
+      filter expr(fleet_id == ^arg(:fleet_id) and token_id in ^arg(:token_ids))
+      prepare build(select: [:token_id, :seed])
+    end
   end
 
   policies do

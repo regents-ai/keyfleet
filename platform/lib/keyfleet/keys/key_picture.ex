@@ -39,6 +39,15 @@ defmodule Keyfleet.Keys.KeyPicture do
       upsert_condition expr(false)
       return_skipped_upsert? true
     end
+
+    # Every picture kept for these keys of the fleet, whichever seed each was
+    # drawn from.
+    read :of_keys do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_ids, {:array, :integer}, allow_nil?: false, constraints: [max_length: 100]
+      filter expr(fleet_id == ^arg(:fleet_id) and token_id in ^arg(:token_ids))
+      prepare build(select: [:token_id, :seed, :cid])
+    end
   end
 
   policies do

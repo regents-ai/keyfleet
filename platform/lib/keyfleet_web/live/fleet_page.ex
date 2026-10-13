@@ -1,6 +1,6 @@
 defmodule KeyfleetWeb.FleetPage do
   @moduledoc """
-  What a fleet's page reads: the key on offer, a page of its keys with the
+  What a fleet's page reads: the reader's own keys, the key on offer, a page of its keys with the
   agents holding their shards, the links to the pages either side, the key the map
   has chosen, and the hall's feed with what the fleet is trying now.
 
@@ -13,9 +13,32 @@ defmodule KeyfleetWeb.FleetPage do
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
+  alias Keyfleet.Keys.Metadata
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.KeyMap
   alias KeyfleetWeb.NotFoundError
+
+  # How many of a holder's cards the way in shows.
+  @cards_shown 50
+
+  @doc """
+  The Keys of the fleet the signed-in person holds, for the way in: the
+  lowest, how many, and the first fifty by number, each with its card's
+  picture, as `%{first: token_id, count: count, cards: cards}`, or `nil` for
+  someone holding none. `deck` is the fleet's `id`, `deck_hash` and
+  `deck_size`, which say which card each Key shows.
+  """
+  def held(deck, actor) do
+    with %{token_ids: token_ids} = held <- Keys.held_summary(actor, deck.id, @cards_shown) do
+      images = Metadata.images(deck, token_ids)
+
+      %{
+        first: held.first,
+        count: held.count,
+        cards: for(token_id <- token_ids, do: %{token_id: token_id, image: images[token_id]})
+      }
+    end
+  end
 
   @doc """
   The key on offer now, which moves on with every sale; `nil` for the Regents
