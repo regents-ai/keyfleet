@@ -307,7 +307,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       Agent.authenticated?(actor) ->
         case Keyfleet.Agents.with_pairing(actor) do
           {:ok, paired} ->
-            :ok = Keyfleet.Agents.save_listing(paired)
+            # A listing that could not be saved is logged there and saved by
+            # the agent's next request; this request goes on.
+            _saved_or_logged = Keyfleet.Agents.save_listing(paired)
             {:ok, assign(conn, :agent_actor, paired)}
 
           {:error, :not_paired} ->

@@ -7,6 +7,7 @@ defmodule Keyfleet.Agents do
 
   import Ash.Expr, only: [expr: 1]
   require Ash.Query
+  require Logger
 
   resources do
     resource Keyfleet.Agents.AgentProfile do
@@ -120,15 +121,43 @@ defmodule Keyfleet.Agents do
   request naming nobody or someone else leaves them. Nothing is written when
   the request changes nothing, or when the agent has no profile yet;
   `ensure_profile` saves them when it makes one.
+
+  A save that fails is `{:error, failure}` and is logged by the kind of
+  failure alone, never its words, which could hold the person's number. The
+  agent's next request saves the same thing.
   """
   def save_listing(%Keyfleet.Actors.Agent{} = actor) do
     Keyfleet.Agents.AgentProfile
     |> Ash.Query.filter(wallet_address == ^actor.wallet_address)
     |> Ash.Query.filter(^listing_changes(actor))
-    |> Ash.bulk_update!(:save_listing, %{}, actor: actor, strategy: :atomic, notify?: false)
+    |> Ash.bulk_update(:save_listing, %{},
+      actor: actor,
+      strategy: :atomic,
+      notify?: false,
+      return_errors?: true,
+      rollback_on_error?: false
+    )
+    |> case do
+      %Ash.BulkResult{status: :success} ->
+        :ok
 
-    :ok
+      %Ash.BulkResult{errors: errors} ->
+        listing_not_saved(actor, Ash.Error.to_error_class(errors))
+    end
+  rescue
+    failure in [Postgrex.Error, DBConnection.ConnectionError] -> listing_not_saved(actor, failure)
   end
+
+  defp listing_not_saved(actor, failure) do
+    Logger.warning(
+      "Saving the listing of agent #{actor.wallet_address} failed: #{inspect(failure_kinds(failure))}"
+    )
+
+    {:error, failure}
+  end
+
+  defp failure_kinds(%{errors: [_ | _] = errors}), do: Enum.map(errors, & &1.__struct__)
+  defp failure_kinds(failure), do: [failure.__struct__]
 
   # The profiles this request would change: a new registry page, or a person
   # where none is saved, or a new count for the person saved.

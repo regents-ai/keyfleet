@@ -1033,3 +1033,6 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   request, the first verified person stays, and a request naming them again
   updates their agent count. The pairing change of 9 October had stopped this,
   so both were saved only when the agent's profile was first made.
+- A save that fails no longer fails the agent's request. The request goes on,
+  the failure is noted in the site's log by its kind only (never the person's
+  number), and the agent's next request saves the same thing.
