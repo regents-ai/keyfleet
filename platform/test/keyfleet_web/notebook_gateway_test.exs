@@ -288,8 +288,11 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   end
 
   # Costly failure: someone who sold their key keeps working in the fleet's
-  # notebooks, through a connection already open or the hub's own roster.
-  test "a key changing hands closes the old holder's connections and takes them off the hub", c do
+  # notebooks, through a connection already open, the hub's own roster, or a
+  # notebook they left running, which is missed when the hub lists its running
+  # notebooks a page at a time.
+  test "a key changing hands closes the old holder's connections, takes them off the hub and stops what they left running",
+       c do
     subject = Notebooks.subject(c.holder)
     :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, Notebooks.access_topic(@fleet, subject))
 
@@ -302,6 +305,12 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert_receive {:hub, "DELETE", ^member_path, "kf_provisioner_" <> _, _}
     suspension = "/api/v1/admin/users/#{subject}/suspension"
     assert_receive {:hub, "PUT", ^suspension, "kf_provisioner_" <> _, _}
+
+    sessions = "/api/v1/projects/proj-fleet/notebooks/nb-1/sessions/"
+    theirs = sessions <> "s-theirs"
+    assert_receive {:hub, "DELETE", ^theirs, "kf_provisioner_" <> _, _}
+    another = sessions <> "s-another"
+    refute_received {:hub, "DELETE", ^another, _, _}
 
     buyer = Notebooks.subject(c.buyer)
     assert_receive {:hub, "POST", "/api/v1/projects/proj-fleet/members", _, body}
@@ -466,6 +475,31 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       success: true,
       data: %{items: [%{id: Notebooks.subject(holder), suspended_at: nil}], next_cursor: nil}
     })
+  end
+
+  # The session the holder started is on the second page.
+  defp hub_answer(
+         %Plug.Conn{method: "GET", request_path: "/api/v1/projects/proj-fleet/sessions"} = conn,
+         holder
+       ) do
+    page =
+      case URI.decode_query(conn.query_string) do
+        %{"cursor" => "second"} ->
+          %{
+            items: [
+              %{session_id: "s-theirs", notebook_id: "nb-1", user_id: Notebooks.subject(holder)}
+            ],
+            next_cursor: nil
+          }
+
+        _first ->
+          %{
+            items: [%{session_id: "s-another", notebook_id: "nb-1", user_id: "someone-else"}],
+            next_cursor: "second"
+          }
+      end
+
+    json(conn, 200, %{success: true, data: page})
   end
 
   defp hub_answer(

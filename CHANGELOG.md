@@ -1189,3 +1189,17 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   shared by all its members, that the hub's record names whoever started a
   machine, and that the first start logs one harmless error until someone
   signs in.
+
+## 2026-10-13 — Notebooks: a seller's running notebooks stop, and long lists are read in full
+
+- When a Key changes hands, every running notebook the seller started in that
+  fleet's hub is now stopped, along with the steps already taken (their open
+  connections close, they leave the fleet's project, and they are suspended in
+  the hub). Members working in one of those notebooks start it again; saved
+  work is untouched.
+- The hub lists a fleet's running notebooks a hundred at a time. Keyfleet
+  reads that list, and the hub's other lists, to the end, so a seller's
+  running notebook is found however many are running.
+- The guide says what this does not end: code a seller set running in a
+  notebook someone else started keeps going until that notebook's machine
+  reaches the hub's longest session.

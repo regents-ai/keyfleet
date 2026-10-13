@@ -9,9 +9,10 @@ defmodule Keyfleet.Notebooks.Roster do
   Then everyone who holds one of the fleet's keys, an agent with an active
   shard of one, or an agent paired with a person who holds one, is an editor
   of that project; anyone else this site added
-  loses their place, their open notebook connections close, and they are
-  suspended in that hub, so nothing they hold there still lets them in. Someone
-  who holds a key again is let back in.
+  loses their place, their open notebook connections close, they are
+  suspended in that hub, so nothing they hold there still lets them in, and
+  every notebook session they started is stopped. Someone who holds a key
+  again is let back in.
 
   It runs whenever a key changes hands or a shard is issued or ended, and
   again when an issued shard runs out (`Keyfleet.Notebooks.Changes.UpdateRoster`),
@@ -155,6 +156,7 @@ defmodule Keyfleet.Notebooks.Roster do
           id in leaving,
           do: fn -> HubClient.suspend(fleet_id, id) end
         ),
+        if(leaving == [], do: [], else: [fn -> stop_sessions(fleet_id, project_id, leaving) end]),
         for(
           %{"id" => id, "suspended_at" => at} <- managed,
           at != nil,
@@ -174,6 +176,22 @@ defmodule Keyfleet.Notebooks.Roster do
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
+  end
+
+  # What a leaver started would keep running in the hub after their place is
+  # gone. It is asked for once they can no longer start another.
+  defp stop_sessions(fleet_id, project_id, leaving) do
+    with {:ok, sessions} <- HubClient.sessions(fleet_id, project_id) do
+      sessions
+      |> Enum.filter(&(&1["user_id"] in leaving))
+      |> Enum.reduce_while({:ok, nil}, fn %{"notebook_id" => notebook_id, "session_id" => id},
+                                          _stopped ->
+        case HubClient.stop_session(fleet_id, project_id, notebook_id, id) do
+          {:ok, _answer} = stopped -> {:cont, stopped}
+          {:error, error} -> {:halt, {:error, error}}
+        end
+      end)
+    end
   end
 
   defp member_subject(%{"user_id" => id}), do: if(Notebooks.managed_subject?(id), do: id)

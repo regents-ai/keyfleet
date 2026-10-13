@@ -246,6 +246,14 @@ its listed ID.
   names whoever started the machine, not whoever ran or saved something on it.
   Nothing on Keyfleet reads that record: no Points, payment, vote or standing
   depends on it.
+- **When a Key changes hands, the hub is brought in line within the same
+  job.** The seller's open connections close, they are taken off the fleet's
+  project and suspended in the hub, and every running notebook they started is
+  stopped; anyone else working in one of those starts it again and finds the
+  saved work as it was. What this does not end: code the seller set running in
+  a notebook someone else started. That keeps going until the notebook's
+  machine reaches the hub's longest session
+  (`MARIMOHUB_SESSION_MAX_LIFETIME_SECONDS`, four hours for Regents Club).
 - **Each running notebook has its own password** (`MARIMOHUB_SANDBOX_AUTH=on`),
   which the hub adds after checking who is asking. Without it, any machine on
   the fleet's network that knew a notebook's address could run code in it,

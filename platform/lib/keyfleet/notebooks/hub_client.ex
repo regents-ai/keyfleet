@@ -11,11 +11,14 @@ defmodule Keyfleet.Notebooks.HubClient do
   alias Keyfleet.Notebooks
   alias Keyfleet.Notebooks.Pass
 
+  # The most the hub answers in one page of a list.
+  @page_size 500
+
   @doc "The hub user this site manages the fleet's hub as."
   def provisioner(fleet_id), do: "kf_provisioner_#{fleet_id}"
 
   @doc "Every project in the hub."
-  def projects(fleet_id), do: fleet_id |> request(:get, "/api/v1/projects") |> page()
+  def projects(fleet_id), do: pages(fleet_id, "/api/v1/projects")
 
   @doc "Makes a project the provisioner owns."
   def create_project(fleet_id, name) do
@@ -48,7 +51,7 @@ defmodule Keyfleet.Notebooks.HubClient do
   end
 
   @doc "Every user who has signed in to the hub, with `suspended_at`."
-  def users(fleet_id), do: fleet_id |> request(:get, "/api/v1/admin/users") |> page()
+  def users(fleet_id), do: pages(fleet_id, "/api/v1/admin/users")
 
   @doc "Stops `user_id` signing in to the hub at all."
   def suspend(fleet_id, user_id) do
@@ -61,6 +64,20 @@ defmodule Keyfleet.Notebooks.HubClient do
   def reactivate(fleet_id, user_id) do
     fleet_id
     |> request(:delete, "/api/v1/admin/users/#{segment(user_id)}/suspension")
+    |> answer([200], [404])
+  end
+
+  @doc "Every notebook session running in the project, each with the `user_id` who started it."
+  def sessions(fleet_id, project_id),
+    do: pages(fleet_id, "/api/v1/projects/#{segment(project_id)}/sessions")
+
+  @doc "Stops a running notebook session, whoever started it."
+  def stop_session(fleet_id, project_id, notebook_id, session_id) do
+    fleet_id
+    |> request(
+      :delete,
+      "/api/v1/projects/#{segment(project_id)}/notebooks/#{segment(notebook_id)}/sessions/#{segment(session_id)}"
+    )
     |> answer([200], [404])
   end
 
@@ -80,11 +97,22 @@ defmodule Keyfleet.Notebooks.HubClient do
     )
   end
 
-  defp page(response) do
-    case answer(response, [200]) do
-      {:ok, %{"items" => items}} -> {:ok, items}
-      {:ok, other} -> {:error, {:unexpected_page, other}}
-      error -> error
+  # Every item of a list the hub answers a page at a time, in the hub's order.
+  defp pages(fleet_id, path, cursor \\ nil, earlier \\ []) do
+    params = [limit: @page_size] ++ if(cursor, do: [cursor: cursor], else: [])
+
+    case fleet_id |> request(:get, path, params: params) |> answer([200]) do
+      {:ok, %{"items" => items, "next_cursor" => nil}} ->
+        {:ok, earlier ++ items}
+
+      {:ok, %{"items" => items, "next_cursor" => next}} when is_binary(next) ->
+        pages(fleet_id, path, next, earlier ++ items)
+
+      {:ok, other} ->
+        {:error, {:unexpected_page, other}}
+
+      error ->
+        error
     end
   end
 
