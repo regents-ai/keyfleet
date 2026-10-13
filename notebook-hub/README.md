@@ -141,32 +141,51 @@ reachable from Keyfleet's server only through one private (Flycast) address.
 2. **Create both apps on the fleet's own network**:
    - `fly apps create kf-nb-<fleet> --org <org> --network kf-nb-<fleet>-net`
    - `fly apps create kf-nbk-<fleet> --org <org> --network kf-nb-<fleet>-net`
-3. **Push the images.** Run `fly auth docker`, then:
+3. **Build for Fly and push the images.** Fly's machines run `linux/amd64`. On an
+   Apple Silicon Mac the check above builds `arm64` images, so build again for
+   Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
+   (same tags). Then run `fly auth docker` and:
    - tag `keyfleet/notebook-runner:f103eb2` as `registry.fly.io/kf-nbk-<fleet>:f103eb2` and push it;
    - tag `keyfleet/notebook-hub:f103eb2` as `registry.fly.io/kf-nb-<fleet>:f103eb2` and push it.
-4. **Create the fleet's bucket**: `fly storage create --name <bucket> --org <org>`.
-   Keep the key id and secret it prints for step 6.
-5. **Make the machine token**: `fly tokens create deploy --app kf-nbk-<fleet>`.
-   It can manage machines in the runner app only.
-6. **Set the hub's secrets.** Use `fly secrets set --app kf-nb-<fleet> --stage`
-   to set:
-   - `MARIMOHUB_AUTH_SESSION_SECRET`
-   - `MARIMOHUB_COMPUTE_FLY_HELPER_SECRET` (each of these two from `openssl rand -hex 32`)
-   - `FLY_API_TOKEN` (from step 5)
-   - `MARIMOHUB_STORAGE_S3_ACCESS_KEY_ID` and `MARIMOHUB_STORAGE_S3_SECRET_ACCESS_KEY` (from step 4)
-7. **Fill in the hub's settings.** Copy `hub/fly.hub.toml`, replace every
-   `<…>` placeholder (`hub/hub.env.example` says what each setting means),
-   and copy `hub/fly.runner.toml` the same way.
-8. **Deploy the hub, private, as one machine**:
-   `fly deploy --config <copied fly.hub.toml> --no-public-ips --ha=false`.
+4. **Create the fleet's bucket on the hub app**:
+   `fly storage create --app kf-nb-<fleet> --name <bucket>`. Fly sets the
+   bucket's key on the hub app itself, as the secrets `AWS_ACCESS_KEY_ID` and
+   `AWS_SECRET_ACCESS_KEY`, so nothing secret is printed or copied. The hub's
+   storage reads those two when its own `MARIMOHUB_STORAGE_S3_ACCESS_KEY_ID`
+   and `MARIMOHUB_STORAGE_S3_SECRET_ACCESS_KEY` are unset, so leave them unset.
+   Accepting Tigris' terms at the prompt is Sean's decision each time.
+5. **Set the hub's other secrets, without printing any of them**:
+
+   ```sh
+   fly secrets set --app kf-nb-<fleet> --stage \
+     MARIMOHUB_AUTH_SESSION_SECRET="$(openssl rand -hex 32)" \
+     MARIMOHUB_COMPUTE_FLY_HELPER_SECRET="$(openssl rand -hex 32)" \
+     FLY_API_TOKEN="$(fly tokens create deploy --app kf-nbk-<fleet>)"
+   ```
+
+   The token can manage machines in the runner app only.
+6. **Fill in the hub's settings.** Copy `hub/fly.hub.toml` and
+   `hub/fly.runner.toml` into `hub/fleets/` as `<fleet>.hub.toml` and
+   `<fleet>.runner.toml`, and replace every `<…>` placeholder
+   (`hub/hub.env.example` says what each setting means). The Regents Club's
+   copies are there.
+7. **Deploy the hub, private, as one machine**:
+   `fly deploy --config notebook-hub/hub/fleets/<fleet>.hub.toml --no-public-ips --ha=false`.
    Nothing is deployed to `kf-nbk-<fleet>`: the hub starts its machines there.
-9. **Give Keyfleet's server one private address for the hub**:
-   `fly ips allocate-v6 --private --network <keyfleet's network> --app kf-nb-<fleet>`.
-   This makes a Flycast address on Keyfleet's network, not the fleet's.
-   **Not verified:** the `keyfleet` app was created without `--network`, so it
-   is on the organization's default network. The flyctl help text does not say
-   what name to pass for that network. Confirm it before running this step.
-10. **Point Keyfleet's server at the hub**: `http://kf-nb-<fleet>.flycast`.
+8. **Give Keyfleet's server one private address for the hub**:
+   `fly ips allocate-v6 --private --network default --app kf-nb-<fleet>`.
+   This makes a Flycast address on Keyfleet's network, not the fleet's. The
+   `keyfleet` app is on the organization's network named `default`: the code
+   store's own Flycast address (`fly ips list --app keyfleet-code`) names it.
+9. **Give the fleet's notebooks their web address.** In Vercel DNS, point
+   `<fleet, hyphenated>.notebooks.keyfleet.ai` at the `keyfleet` app as a CNAME
+   to `keyfleet.fly.dev`, then
+   `fly certs add <fleet, hyphenated>.notebooks.keyfleet.ai --app keyfleet` and
+   `fly certs check` until it is issued.
+10. **Point Keyfleet's server at the hub**: add
+    `<fleet_id>=http://kf-nb-<fleet>.flycast` to the `keyfleet` app's
+    `KEYFLEET_HUB_FLEETS` secret (pairs separated by commas). Setting it
+    restarts the live site once.
 
 ## Things to know
 

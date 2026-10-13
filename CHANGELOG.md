@@ -1106,3 +1106,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   marimo notebooks, Activegraph.ai, and Twigpine."
 - Fleet documents will be kept in the fleet's own notebook hub. The product
   spec and the phase 3 plan say so; the ddocs trial branch is left as it is.
+
+## 2026-10-13 — The Regents Club's notebook hub settings
+
+- `notebook-hub/hub/fleets/` holds the Regents Club's filled-in hub and
+  runner settings: sessions end after 15 idle minutes or four hours, each
+  notebook machine has two shared CPUs and 2 GB, and every workspace file is
+  kept.
+- The hub guide's setup steps now build the images for Fly's machines, put
+  the bucket's key straight on the hub app, set the other secrets without
+  printing them, name Keyfleet's network (`default`), and add the web address
+  and the `KEYFLEET_HUB_FLEETS` step. Nothing is on Fly yet.
