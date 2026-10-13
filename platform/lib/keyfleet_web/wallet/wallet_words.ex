@@ -183,7 +183,7 @@ defmodule KeyfleetWeb.WalletWords do
   def title(%{name: "propose"}), do: "Propose"
   def title(%{name: "cancel"}), do: "Cancel"
   def title(%{name: "carry_out"}), do: "Carry it out"
-  def title(%{name: "run_split"}), do: "Run the daily split"
+  def title(%{name: "run_split"}), do: "Release the Daily Treasury Slice to Keys"
   def title(%{name: "return"}), do: "Return"
   def title(%{name: "send_share"}), do: "Send Regents its share"
   def title(%{name: "settle"}), do: "Settle the sale"
@@ -222,7 +222,7 @@ defmodule KeyfleetWeb.WalletWords do
     do: "Not counted. Voting may have closed."
 
   defp reverted("carry_out"), do: "Not carried out. Nothing moved."
-  defp reverted("run_split"), do: "Not run. It may have run already today."
+  defp reverted("run_split"), do: "Not released. It may have been released already today."
   defp reverted("return"), do: "Not returned. Nothing moved."
   defp reverted(_step), do: "Didn’t go through. Nothing moved."
 

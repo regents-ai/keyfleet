@@ -1193,3 +1193,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - A Key's own page, the agent addresses under `/api/v1/agent/fleets/` and
   each fleet's id are unchanged. In the agent guides, `FLEET_PAGE` is the
   fleet's `links.page`.
+
+## 2026-10-13 — Proposals: the Daily Treasury Slice to Keys, and "Open now"
+
+- On a fleet's Proposals page the daily split now reads "Daily Treasury Slice
+  to Keys", and its button says "Release". The words shown while the wallet
+  works say "release" too.
+- "Next release" shows "Open now" once its time has come, in the treasury
+  figures and beside the button. It used to keep showing the time it opened,
+  which read as a date in the past for as long as nobody had released it. A
+  time is shown only while the next release is still ahead.
+- "Last run" reads "Last release".

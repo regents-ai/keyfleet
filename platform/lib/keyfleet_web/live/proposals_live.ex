@@ -684,12 +684,12 @@ defmodule KeyfleetWeb.ProposalsLive do
         </table>
         <dl id="proposals-split" class="proposals-facts">
           <div>
-            <dt>Daily split</dt>
+            <dt>Daily Treasury Slice to Keys</dt>
             <dd>{@treasury.split_rate}</dd>
           </div>
           <div :if={@treasury.next_run_at}>
-            <dt>Next split</dt>
-            <dd>{at(@treasury.next_run_at)}</dd>
+            <dt>Next release</dt>
+            <dd>{next_release(@treasury)}</dd>
           </div>
         </dl>
       </div>
@@ -809,9 +809,12 @@ defmodule KeyfleetWeb.ProposalsLive do
     >
       <:notes :let={panel}>
         <h3 id="proposals-split-title">
-          Split preview
-          <Regent.Primitives.tip id="proposals-split-tip" label="About the daily split">
-            Once a day anyone can run the split. Each asset at or above its minimum shares its balance times the rate, divided equally across every Key sold.
+          Daily Treasury Slice to Keys
+          <Regent.Primitives.tip
+            id="proposals-split-tip"
+            label="About the Daily Treasury Slice to Keys"
+          >
+            Once a day anyone can release it. Each asset at or above its minimum shares its balance times the rate, divided equally across every Key sold.
           </Regent.Primitives.tip>
         </h3>
         <table
@@ -838,20 +841,20 @@ defmodule KeyfleetWeb.ProposalsLive do
         </table>
         <dl :if={split(panel)[:assets]} class="proposals-facts">
           <div>
-            <dt>Last run</dt>
+            <dt>Last release</dt>
             <dd id="proposals-split-last">
               {if split(panel).last_run_at, do: at(split(panel).last_run_at), else: "Never"}
             </dd>
           </div>
           <div :if={split(panel).opens_at}>
-            <dt>Next opens</dt>
-            <dd id="proposals-split-opens">{at(split(panel).opens_at)}</dd>
+            <dt>Next release</dt>
+            <dd id="proposals-split-opens">{opens(split(panel))}</dd>
           </div>
         </dl>
       </:notes>
       <:buttons :let={panel}>
         <WalletPanel.step_button panel={panel} step="run_split" id="proposals-run-split">
-          Run split
+          Release
         </WalletPanel.step_button>
       </:buttons>
     </.live_component>
@@ -859,6 +862,15 @@ defmodule KeyfleetWeb.ProposalsLive do
   end
 
   defp split(panel), do: WalletPanel.figures(panel)
+
+  # A slice whose time has come stays open until someone releases it, so its
+  # time is shown only while it is still ahead: as the chain's own clock has it
+  # for the preview, and as of the treasury's reading for the figures above it.
+  defp opens(%{blocked: %{"run_split" => {:opens_at, opens_at}}}), do: at(opens_at)
+  defp opens(_figures), do: "Open now"
+
+  defp next_release(%{next_run_at: opens_at, as_of: read_at}),
+    do: if(DateTime.after?(opens_at, read_at), do: at(opens_at), else: "Open now")
 
   defp asset_name(%{usdc?: true}), do: "USDC"
   defp asset_name(%{symbol: symbol}) when is_binary(symbol), do: symbol

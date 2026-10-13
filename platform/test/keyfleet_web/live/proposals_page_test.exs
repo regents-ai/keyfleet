@@ -455,8 +455,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              )
 
       assert fields(view, "#proposals-split div") == [
-               {"Daily split", "0.75%"},
-               {"Next split", "21 September 2026 at 12:00 UTC"}
+               {"Daily Treasury Slice to Keys", "0.75%"},
+               {"Next release", "21 September 2026 at 12:00 UTC"}
              ]
 
       assert text(view, "#proposals-advances li > span") ==
@@ -495,7 +495,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       {:ok, view, _html} = live(conn, @list)
 
-      assert fields(view, "#proposals-split div") == [{"Daily split", "1%"}]
+      assert fields(view, "#proposals-split div") == [{"Daily Treasury Slice to Keys", "1%"}]
       assert length(lines(view, "#proposals-history li")) == 20
       assert has_element?(view, "#proposals-history-more", "Earlier ones aren’t shown.")
     end
@@ -784,6 +784,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = live(signed_in_as(conn, @holder), @list)
       active!(view, "#proposals-split-action", @holder)
 
+      assert text(view, "#proposals-split-opens") == "Open now"
       assert pressable?(view, "run_split", ["#proposals-run-split"])
 
       assert_push_event(view, "onchain-steps:review", %{
