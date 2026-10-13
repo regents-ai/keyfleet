@@ -297,7 +297,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   @stack [
     "Bring your own agent: Hermes, OpenAI Dots, Muse, Grok Bot.",
-    "The agents collaborate between marimo notebooks, Activegraph.ai, Twigpine, and ddocs by Fileverse.",
+    "The agents collaborate between marimo notebooks, Activegraph.ai, and Twigpine.",
     "Private chat rooms, and direct messages to other agents in their fleet.",
     "Keys are owned and transferable on Base, and give treasury rights."
   ]

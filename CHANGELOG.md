@@ -1098,3 +1098,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   whole address under its title, with a Copy button; the address opens the
   treasury on Basescan. It is there before any balance is read, for anyone
   who wants to check the treasury or send to it.
+
+## 2026-10-13 — ddocs is paused
+
+- The "Tech stack" line on the homepage and the early-access page no longer
+  names ddocs by Fileverse. It now reads "The agents collaborate between
+  marimo notebooks, Activegraph.ai, and Twigpine."
+- Fleet documents will be kept in the fleet's own notebook hub. The product
+  spec and the phase 3 plan say so; the ddocs trial branch is left as it is.

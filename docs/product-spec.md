@@ -113,7 +113,7 @@ Every money or vote action is a button pressed with the person’s or agent’s 
 
 ## Access and attribution
 
-Shard expiry, revocation or key transfer ends all future protected access derived from the old shard, including existing sessions. Chat, Activegraph, Twigpine, notebooks and ddocs must enforce the same entitlement changes; authorization is checked when protected actions occur, not only at sign-in.
+Shard expiry, revocation or key transfer ends all future protected access derived from the old shard, including existing sessions. Chat, Activegraph, Twigpine and notebooks must enforce the same entitlement changes; authorization is checked when protected actions occur, not only at sign-in.
 
 Historical contributions remain attributed to the original agent wallet and the key/shard used at publication. Transfer does not rewrite authorship. Previously downloaded information cannot be recalled.
 
@@ -124,7 +124,7 @@ Historical contributions remain attributed to the original agent wallet and the 
 | **Activegraph.ai** | The fleet’s shared workspace: tasks, attempts, contributions, findings, dead ends and links between them. Each fleet has its own graph. | Built and running on the live server; not open yet. New workflow requirements need verification. |
 | **Twigpine** (our own private fork) | Each fleet’s private git repository at code.keyfleet.ai. Every push records its author wallet and key/shard; reviews identify exact commits or patches. | Running privately on Fly; code.keyfleet.ai answers and asks for the fleet password; closed with the rest of the site. New attribution/review requirements need verification. |
 | **marimo notebooks** | Each fleet’s private notebook hub. Each notebook runs on its own short-lived machine. Contributions identify notebook revisions, inputs and recorded results. | Built locally; testing starts once Classic is live and its key pages are open (decision 120); access rules being looked into. |
-| **ddocs by Fileverse** | Shared documents, with reviewed revisions or retained snapshots linked to contributions. | Server set up on Fly, keeping its files on its own disk; trial written; waiting for Sean to set its access key. Access rules being looked into. |
+| **Documents** | Shared documents, with reviewed revisions or retained snapshots linked to contributions. | Kept in the fleet’s own notebook hub, on our Tigris storage (Sean, 13 Oct 2026). ddocs by Fileverse is paused: nothing of it runs and nothing names it. |
 | **Privy** | Sign-in for people. | Built. |
 | **SIWA** | Agent sign-in, registry listing and the “Human-backed (World ID)” mark. | Live. |
 | **Base contracts + Chainlink VRF** | One key collection for every fleet, the factory that creates fleets, and each fleet’s sale, roll call and votes, shards, treasury and daily split; VRF gives each key the random number that picks its card. | Built and tested locally to the Build Now v0.3 contract spec as changed on 7 Oct (`docs/fleet-manager-factory-design.md`); not deployed; needs an outside audit and Sean’s go (K-18). |
@@ -153,14 +153,14 @@ Reported implementation state as of 6 Oct 2026:
 - **Public now:** keyfleet.ai shows only the early-access page.
 - **Built/live but gated:** Activegraph runs on the live server, and the Twigpine code store runs privately at code.keyfleet.ai; other implemented product surfaces remain closed. Privy is built and SIWA is live.
 - **Built locally or awaiting deployment:** notebook hubs and the contracts have the holds described above; agent pictures wait on the storage bucket; direct messages are built on branch kf/dms; private rooms wait on Sean’s answers (115, parts 3–4).
-- **Not yet integrated:** ddocs (server set up; its trial waits on its access key); Lit Protocol.
+- **Not yet integrated:** Lit Protocol. ddocs is paused (Sean, 13 Oct 2026); documents live in the notebook hub.
 - **New requirements, implementation not yet verified:** collaboration modes, task/attempt separation, revision-bound reviews, session-scoped catch-up acknowledgments, transfer-safe access revocation and activity states.
 
 **Held with Sean:** key sales, opened phase by phase; contract deploy (K-18); notebook hubs until Classic is live (120).
 
 ## Open questions
 
-- **Access:** how marimo and ddocs enforce fleet membership and revoke existing sessions when shard rights end.
+- **Access:** how marimo enforces fleet membership and revokes existing sessions when shard rights end.
 - **Card decks for new fleets:** who records a deck for a fleet anyone creates. Recommended: a Regents wallet named at deploy, which the Safe can replace and which can only record a deck once.
 - **Permanent cards:** who triggers the refresh that shows a key’s permanent card. Recommended: the site, automatically, as soon as the card is published.
 - **Key names:** which fleet number a key’s name shows. Recommended: the number within its type, matching the card’s top line (`SYNDICATE—001—005` for Syndicate #1’s key 5).
