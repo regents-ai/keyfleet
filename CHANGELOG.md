@@ -1183,7 +1183,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the same fleet that knew a running notebook's address could run code in it
   directly, with no record. The local proof has a step for this, and one
   more showing that notebook code is passed none of the caller's sign-in.
-- The hub answers a health check, so Fly restarts it if it stops answering.
+- The hub answers a health check, which shows whether it is answering; Fly
+  holds requests back from it while it is not.
 - The guide now says that a fleet's notebooks and their running machines are
   shared by all its members, that the hub's record names whoever started a
   machine, and that the first start logs one harmless error until someone

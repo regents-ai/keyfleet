@@ -11,7 +11,7 @@ const MARKER = 'kf-relay-ok-42';
 // Keyfleet's signed note and a cookie, stood in for here by values 97 long.
 const SIGN_IN_HEADERS = {
 	'x-keyfleet-assertion': 'n'.repeat(97),
-	cookie: `hub=${'c'.repeat(92)}`,
+	cookie: `hub=${'c'.repeat(93)}`,
 };
 const LABEL = 'keyfleet.local-fly';
 

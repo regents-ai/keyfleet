@@ -49,8 +49,9 @@ primary_region = "<region>"
   auto_start_machines = false
   min_machines_running = 1
 
-  # Fly restarts the machine when the hub stops answering. This path asks the
-  # hub nothing about storage or sign-in.
+  # Shows whether the hub is answering; Fly holds requests back from it while
+  # it is not, and does not restart it. This path asks the hub nothing about
+  # storage or sign-in.
   [[http_service.checks]]
     method = "GET"
     path = "/api/health"
