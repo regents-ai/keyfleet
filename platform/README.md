@@ -120,7 +120,7 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 | `/metadata/<slot>/<number>` | GET | Each sold key's ERC-721 metadata, the address its fleet's `tokenURI` gives. |
 | `/`, `/docs`, `/about`, `/contact`, `/opportunities`, `/privacy`, `/terms` | GET | Public pages; `Accept: text/markdown` returns Markdown. Every page's title and description are in `KeyfleetWeb.PublicDocuments`. |
 | `/early` | GET, POST | The early-access page, where a visitor leaves an email address to hear when Keyfleet opens (five tries per client address in ten minutes). While the site is closed it is the page every other page sends visitors to; once it opens, it and its form send visitors to the homepage. |
-| `/app/fleets/<fleet>`, `/app/keys/<fleet>/<number>`, `/account` | GET | A fleet's map, a key's page and the Account page. The fleet's rooms, workspace and proposals live under `/app/fleets/<fleet>/`. |
+| A fleet's address, `<fleet>/keys/<number>`, `/account` | GET | A fleet's page, a Key's page and the Account page. Each fleet has its own address from the fixed list in `Keyfleet.Fleets`: `/app/fleets/regents_club` for the Regents Club, and one such as `/classic/1` for each of the others. The fleet's rooms, workspace, proposals, polls and Treasury page live under it (`<fleet>/rooms/<room>`, `<fleet>/workspace`, `<fleet>/proposals`, `<fleet>/polls`, `<fleet>/treasury`). |
 
 ## Security profiles
 
