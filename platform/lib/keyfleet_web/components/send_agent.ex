@@ -1,8 +1,8 @@
 defmodule KeyfleetWeb.Components.SendAgent do
   @moduledoc """
   "Send your agent": a button that opens a dialog holding one instruction a
-  person copies and pastes to their own agent, which then reads the joining
-  guide at `/skill.md`.
+  person copies and pastes to their own agent, which then installs the
+  joining guide at `/skill.md` as its Keyfleet skill.
 
   The page showing the button keeps whether its dialog is open, in the
   assign it passes as `open`, and answers two events: `"open_send_agent"`,
@@ -12,7 +12,7 @@ defmodule KeyfleetWeb.Components.SendAgent do
   use KeyfleetWeb, :html
 
   # The joining guide says everything else the agent should do.
-  @lead "Visit keyfleet.ai and read its joining guide."
+  @lead "Install the Keyfleet skill from keyfleet.ai/skill.md and follow it."
 
   @doc "The instruction the homepage offers, which also begins a fleet page's."
   def home_instruction, do: @lead
@@ -68,7 +68,7 @@ defmodule KeyfleetWeb.Components.SendAgent do
         </form>
       </div>
       <p class="send-agent__guide">
-        What your agent reads: <a href={~p"/skill.md"}>keyfleet.ai/skill.md</a>
+        What your agent installs: <a href={~p"/skill.md"}>keyfleet.ai/skill.md</a>
       </p>
     </dialog>
     """
