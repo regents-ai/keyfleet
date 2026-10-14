@@ -31,6 +31,7 @@ defmodule Keyfleet.Release do
 
   @doc "Migrates and seeds through an already running repository, as `migrate/0` does."
   def migrate! do
+    require_shared_migrations!(Keyfleet.Repo)
     RegentAgents.Migrator.require_pairing_history!(Keyfleet.Repo)
     RegentCredits.Migrator.require_pairing_grants!(Keyfleet.Repo)
     Keyfleet.Repo.migrate!(migrations_path())
@@ -211,6 +212,28 @@ defmodule Keyfleet.Release do
         {version, "_" <> _name} <- [file |> Path.basename() |> Integer.parse()],
         into: MapSet.new(),
         do: version
+  end
+
+  # The Credits and Points code this release carries reads tables and indexes
+  # from every migration its pinned library ships, so each must already be in
+  # that schema's own ledger. Every missing version is named at once.
+  defp require_shared_migrations!(repo) do
+    unapplied =
+      for {app, schema} <- [regent_credits: "regent_credits", regent_points: "regent_points"],
+          {:down, version, _name} <-
+            Ecto.Migrator.migrations(repo, [Application.app_dir(app, "priv/repo/migrations")],
+              prefix: schema,
+              skip_table_creation: true,
+              migration_lock: false
+            ),
+          do: "#{schema} #{version}"
+
+    if unapplied != [] do
+      raise "These separately approved shared migrations must be applied before deployment: " <>
+              Enum.join(unapplied, ", ")
+    end
+
+    :ok
   end
 
   defp refuse_existing_state!(repo) do

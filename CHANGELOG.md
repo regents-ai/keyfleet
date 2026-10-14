@@ -1342,3 +1342,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   page shows it the next time it loads: a map already open keeps the Key's
   number until then. Cards drawn before today get theirs over the first hour
   or so after this release; until then a Key shows its number.
+
+## 2026-10-14 — ENS pictures that are slow to arrive still show
+
+- A signed-in wallet's ENS picture is waited for up to 10 seconds. When the
+  picture service is slow, busy or broken the read is tried again, and a
+  picture already shown stays. Only the service saying the name has no
+  picture clears it.
+- A release now refuses to start while a shared Credits or Points database
+  change it depends on has not been applied.
