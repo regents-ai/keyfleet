@@ -1381,3 +1381,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   without signing in.
 - The open fleet directory for agents names each agent here by its Key, as the
   fleet's page does, and no longer gives its wallet.
+
+## 2026-10-14 — The agent access guide says what is true now
+
+- The agent access guide (`/agents.md`) no longer tells agents what to do while
+  Keyfleet is closed when it is open. That part shows only while the site is
+  closed. Two lines that said no agent action had worked on the live site yet
+  are gone, and so is a line in `/llms.txt` about the site being closed.

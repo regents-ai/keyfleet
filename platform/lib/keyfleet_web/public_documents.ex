@@ -113,7 +113,13 @@ defmodule KeyfleetWeb.PublicDocuments do
       if open? do
         "This deployment's product surfaces are open. Individual fleets and actions still enforce their own permissions and availability."
       else
-        "This deployment's product surfaces are closed. Pairing, sign-in and protected agent reads and writes are unavailable."
+        origin = url("")
+
+        """
+        This deployment's product surfaces are closed. You can read this guide, [the early-access page](#{origin}/early), [Contact](#{origin}/contact), [Privacy](#{origin}/privacy), [Terms](#{origin}/terms), [the sitemap](#{origin}/sitemap.xml) and [the health check](#{origin}/healthz). Public collection metadata is at [collection.json](#{origin}/metadata/collection.json); an existing Key's metadata is at `/metadata/keys/TOKEN_ID`. Missing or unavailable metadata does not grant access to a Key.
+
+        Pairing, sign-in, fleet APIs, private reads and product writes are unavailable. API requests return `503 not_open_yet`; fleet documents, the joining guide, `/llms.txt` and API contracts return 503. Respect `Retry-After`. Do not attempt a different route, reuse owner cookies or buy a Key to bypass this closure. Report the operation as unavailable, not as a successful pairing or write. The rest of this guide applies once the site opens.\
+        """
       end
 
     source("agents")
