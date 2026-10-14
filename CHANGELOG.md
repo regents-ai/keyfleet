@@ -1351,3 +1351,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   picture clears it.
 - A release now refuses to start while a shared Credits or Points database
   change it depends on has not been applied.
+- When a wallet's ENS name or picture cannot be read after three tries, the
+  reason now reaches the site's saved errors. Before, it was filed the way a
+  visitor's bad input is, which saved errors leave out, so a lookup could end
+  as failed with nothing saying why. Found by Sentinel; the same fix made for
+  close-up pictures.
