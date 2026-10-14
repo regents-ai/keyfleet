@@ -5,18 +5,21 @@ import {expect, test, type Page} from "@playwright/test"
 // down to one card per fleet. Each card has a still picture of its map, what the fleet is
 // doing once the page is live, and a link into the map; then what a fleet can take on.
 
-// Classic opens first; the other three are coming soon.
+// No fleet in the test data is deployed, so every one is coming soon. Regents Club's Keys
+// are given with its Passes, so it never has one on sale.
 const fleets = [
   ["fleet_tech_classic", "Classic #1", "classic"],
   ["fibonacci_syndicate", "Syndicate #1", "fibonacci"],
   ["fibonacci_cascade", "Cascade #1", "fibonacci"],
   ["fleet_tech_accelerant", "Accelerant #1", "accelerant"],
+  ["regents_club", "Regents Club", "regents_club"],
 ] as const
 const fleetPaths: Record<string, string> = {
   fleet_tech_classic: "/classic/1",
   fibonacci_syndicate: "/syndicate/1",
   fibonacci_cascade: "/cascade/1",
   fleet_tech_accelerant: "/accelerant/1",
+  regents_club: "/app/fleets/regents_club",
 }
 
 const opportunities = ["Memestock", "Techtree", "Your own goal"]
@@ -48,7 +51,7 @@ const waitForPreviews = (page: Page) =>
         elements.map(element => element.querySelectorAll("svg polygon").length > 0),
       ),
     )
-    .toEqual([true, true, true, true])
+    .toEqual(fleets.map(() => true))
 
 const assertNoOverflow = async (page: Page) =>
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
@@ -82,7 +85,7 @@ test("the homepage reads without scripts: the headline, the instruction, then ev
     await expect(card.locator(".key-map-preview")).toHaveAttribute("data-layout", layout)
     await expect(card.locator(".key-map-preview")).toHaveAttribute("aria-hidden", "true")
     await expect(card).not.toContainText("USDC")
-    await expect(card.locator("[data-fleet-soon]")).toHaveCount(id === "fleet_tech_classic" ? 0 : 1)
+    await expect(card.locator("[data-fleet-soon]")).toHaveCount(1)
   }
 
   await expect(page.getByRole("heading", {name: "What a fleet can take on", level: 2})).toBeVisible()
@@ -94,7 +97,7 @@ test("each card draws its fleet's map, with the next key on sale marked", async 
   await waitForHomepage(page)
   await waitForPreviews(page)
 
-  for (const [id] of fleets) {
+  for (const [id] of fleets.filter(([id]) => id !== "regents_club")) {
     const preview = page.locator(`#home-fleet-preview-${id}`)
     await expect(preview.locator("svg")).toHaveCount(1)
     // No fleet in the test data has sold out, so each shows its next key on sale; the
@@ -404,7 +407,7 @@ test("the fleet cards fit every viewport in catalog order", async ({page}) => {
           return {top: Math.round(top), left: Math.round(left), right, height}
         }),
       )
-      expect(boxes).toHaveLength(4)
+      expect(boxes).toHaveLength(fleets.length)
       expect(boxes.every(box => box.height >= 44 && box.left >= 0 && box.right <= viewport.width)).toBe(true)
 
       // Reading order: left to right along a row, then down to the next row.
@@ -415,8 +418,9 @@ test("the fleet cards fit every viewport in catalog order", async ({page}) => {
       }
 
       const rows = new Set(boxes.map(box => box.top)).size
-      if (viewport.width >= 1440) expect(rows, "four across on a wide screen").toBe(1)
-      if (viewport.width < 480) expect(rows, "one column on a phone").toBe(4)
+      const firstRow = boxes.filter(box => box.top === boxes[0].top).length
+      if (viewport.width >= 1440) expect(firstRow, "four across on a wide screen").toBe(4)
+      if (viewport.width < 480) expect(rows, "one column on a phone").toBe(fleets.length)
     })
   }
 })
