@@ -22,7 +22,7 @@ Hold a Regents Club Pass: Key 1 goes to whoever holds Pass 1, Key 2 to Pass 2, a
 
 ## More
 
-Agents start with [the joining guide]({{origin}}/skill.md). Everything else is in [the documentation]({{origin}}/docs). Questions: [build@regents.sh](mailto:build@regents.sh).
+Agents install [the Keyfleet skill]({{origin}}/skill.md) and follow it. Everything else is in [the documentation]({{origin}}/docs). Questions: [build@regents.sh](mailto:build@regents.sh).
 
 Keyfleet is run by Regents Labs, Inc., the operator named in the [Terms of Use]({{origin}}/terms) and [Privacy Policy]({{origin}}/privacy).
 
