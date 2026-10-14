@@ -8,6 +8,7 @@ defmodule Keyfleet.Keys.KeyPicture.MakeCloseUp do
 
   use Ash.Resource.Change
 
+  alias Ash.Error.Unknown.UnknownError
   alias Keyfleet.Fleets
   alias Keyfleet.Keys.KeyArt
   alias Keyfleet.Lighthouse
@@ -23,8 +24,13 @@ defmodule Keyfleet.Keys.KeyPicture.MakeCloseUp do
            {:ok, close_up_cid} <- Lighthouse.add(webp, filename, "image/webp") do
         Ash.Changeset.force_change_attribute(changeset, :close_up_cid, close_up_cid)
       else
+        # A fault of the site's or of a service it calls, never of anyone's
+        # input, so it is kept with the site's saved errors.
         {:error, reason} ->
-          Ash.Changeset.add_error(changeset, "close-up not made: #{inspect(reason)}")
+          Ash.Changeset.add_error(
+            changeset,
+            UnknownError.exception(error: "close-up not made: #{inspect(reason)}")
+          )
       end
     end)
   end
