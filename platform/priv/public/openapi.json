@@ -779,6 +779,42 @@
           }
         }
       }
+    },
+    "/api/v1/fleets/{fleet_id}/treasury": {
+      "get": {
+        "operationId": "readTreasury",
+        "summary": "Read public fleet treasury figures",
+        "description": "Indexed balances with exact atomic strings, separately held rewards, daily allocation, money history, permissions and contract links. Inspect catching_up and treasury.as_of before using these figures. Never submits transactions.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "fleet_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public treasury snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or unopened fleet"
+          },
+          "503": {
+            "description": "Treasury unavailable or site not open"
+          }
+        }
+      }
     }
   },
   "components": {

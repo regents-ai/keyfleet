@@ -48,6 +48,8 @@ defmodule KeyfleetWeb.Refusal do
     "fleet_coming_soon" =>
       {"This fleet hasn't opened yet.",
        "It has no rooms, workspace, proposals or Keys until it opens. GET /api/v1/fleets says when it has."},
+    "treasury_unavailable" =>
+      {"The treasury figures cannot be read right now.", "Try again in a moment."},
     "directory_unavailable" =>
       {"The fleet directory can't be read right now.", "Try again in a moment."},
     "key_not_found" =>

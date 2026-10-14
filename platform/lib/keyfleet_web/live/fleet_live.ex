@@ -349,7 +349,7 @@ defmodule KeyfleetWeb.FleetLive do
         </header>
 
         <.entry
-          :if={@view not in [:workspace, :proposals]}
+          :if={@view not in [:workspace, :proposals, :treasury]}
           fleet={@fleet}
           actor={@actor}
           params={@params}

@@ -47,6 +47,7 @@ const requests: Record<string, Request> = {
   docs: (_input, signal) => read("/docs", signal),
   list_fleets: (_input, signal) => read("/fleets.md", signal),
   read_fleet: (input, signal) => read(`/fleets/${encodeURIComponent(input.fleet_id)}.md`, signal),
+  read_treasury: (input, signal) => read(`/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/treasury`, signal, "application/json"),
   read_workspace_pulse: (input, signal) => read(`/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/workspace/pulse`, signal, "application/json"),
 }
 

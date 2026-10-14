@@ -93,6 +93,10 @@ defmodule Keyfleet.Authority do
   @doc "Every row, in the order the tables show them."
   def rows, do: @rows
 
+  @doc "Wallet permissions relevant to the treasury page."
+  def treasury_rows,
+    do: Enum.filter(@rows, &(&1.authority == :wallet and not Map.has_key?(&1, :closed)))
+
   @doc "What a row needs, in words for the fleet's page."
   def needs(%{authority: authority, conditions: conditions}),
     do: Enum.join([words(authority) | Enum.map(conditions, &words/1)], ", ")

@@ -1,16 +1,7 @@
 defmodule KeyfleetWeb.TreasuryLive do
   @moduledoc """
-  A fleet's Treasury page, for anyone to read: how many of its Keys have a
-  vote now and which are idle, its shared money with the buttons its rules
-  allow anyone to press, the votes carried out lately, and how the fleet
-  works: its pricing, its sales so far, its token launch, who may do what and
-  where its contract lives.
-
-  Everything shown is what `KeyfleetWeb.ProposalsPage.treasury_page/1` read,
-  and is read again when the fleet's votes or balances change. Every press
-  goes to the wallet, except one the chain's own state at the latest block
-  makes certain to fail, whose button stays in view, disabled, with a few
-  words saying why.
+  Public treasury balances, wallet actions, history, permissions and contracts.
+  Uses the existing indexed reads and wallet approval flow.
   """
 
   use KeyfleetWeb, :html
@@ -20,7 +11,6 @@ defmodule KeyfleetWeb.TreasuryLive do
   alias Keyfleet.Authority
   alias Keyfleet.Fleets.Rules
   alias KeyfleetWeb.Components.AddressLinks
-  alias KeyfleetWeb.Components.IdleKeys
   alias KeyfleetWeb.ProposalsLive
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WalletPanel
@@ -44,28 +34,9 @@ defmodule KeyfleetWeb.TreasuryLive do
   def page(assigns) do
     ~H"""
     <article id="treasury-page" class="proposals-page">
-      <ProposalsLive.catching_up :if={@page.catching_up?} />
-
-      <section id="treasury-voters" class="proposals-panel" aria-labelledby="treasury-voters-title">
-        <h2 id="treasury-voters-title">
-          Voters
-          <Regent.Primitives.tip id="treasury-voters-tip" label="About voters">
-            A Key present when a proposal opens is counted in its vote. Any Key idle for 48 hours loses its vote until it is marked present again.
-          </Regent.Primitives.tip>
-        </h2>
-        <dl class="proposals-facts">
-          <div>
-            <dt>Active voters</dt>
-            <dd id="treasury-active-voters">{count(@page.voters)}</dd>
-          </div>
-        </dl>
-        <.live_component module={IdleKeys} id="treasury-idle" fleet_id={@page.fleet_id} />
-        <p>
-          <.link id="treasury-proposals-link" patch={ProposalsPage.list_path(@page.fleet_id)}>
-            Proposals
-          </.link>
-        </p>
-      </section>
+      <p :if={@page.catching_up?} class="proposals-notice" role="status">
+        Treasury figures are catching up. Check the timestamp below before acting.
+      </p>
 
       <ProposalsLive.treasury
         :if={@page.treasury}
@@ -75,12 +46,14 @@ defmodule KeyfleetWeb.TreasuryLive do
         lease={@lease}
       />
 
-      <section id="treasury-carried" class="proposals-panel" aria-labelledby="treasury-carried-title">
+      <section
+        :if={@page.carried != []}
+        id="treasury-carried"
+        class="proposals-panel"
+        aria-labelledby="treasury-carried-title"
+      >
         <h2 id="treasury-carried-title">Votes carried out</h2>
-        <p :if={@page.carried == []} id="treasury-none-carried" class="proposals-detail">
-          None yet.
-        </p>
-        <ol :if={@page.carried != []} id="treasury-carried-list" class="proposals-lines">
+        <ol id="treasury-carried-list" class="proposals-lines">
           <li :for={proposal <- @page.carried} data-proposal={proposal.number}>
             <.link patch={ProposalsPage.detail_path(@page.fleet_id, proposal.number)}>
               Proposal {proposal.number}
@@ -93,45 +66,63 @@ defmodule KeyfleetWeb.TreasuryLive do
       </section>
 
       <section id="treasury-rules" class="proposals-panel" aria-labelledby="treasury-rules-title">
-        <h2 id="treasury-rules-title">How this fleet works</h2>
-        <p>{Rules.pricing(@page.fleet_id)}</p>
-
-        <.progress :if={@page.deployed?} page={@page} />
-        <.launch_upkeep :if={@page.deployed?} page={@page} actor={@actor} lease={@lease} />
-
-        <Regent.Primitives.disclosure id="fleet-authority" summary="Who may do what">
-          <dl class="proposals-facts">
-            <div :for={row <- Authority.rows()}>
-              <dt>{row.what}</dt>
-              <dd>{row.who} · {Authority.needs(row)}{if row[:closed], do: " · #{row.closed}"}</dd>
-            </div>
-          </dl>
-          <p class="proposals-detail">
-            Keyfleet prepares each wallet step and sends none; the wallet named sends it.
-          </p>
-        </Regent.Primitives.disclosure>
-
-        <h3 id="fleet-contract-title">On Base</h3>
-        <p :if={@page.manager_address} class="proposals-address">
+        <h2 id="treasury-rules-title">Permissions & contracts</h2>
+        <dl class="treasury-permissions">
+          <div :for={row <- Authority.treasury_rows()}>
+            <dt>{row.what}</dt>
+            <dd>{row.who}<span class="proposals-detail">{Authority.needs(row)}</span></dd>
+          </div>
+        </dl>
+        <p class="proposals-detail">Each action asks the acting wallet to approve and send it.</p>
+        <div :if={@page.manager_address} class="proposals-address">
+          <span>Manager</span>
+          <code title={@page.manager_address}>{RegentFormat.short_address(@page.manager_address)}</code>
+          <Regent.Primitives.copy_button
+            id="fleet-manager-copy"
+            text={@page.manager_address}
+            variant="quiet"
+            aria-label="Copy manager address"
+            title="Copy manager address"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              aria-hidden="true"
+            ><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V4H4v12h4" /></svg>
+          </Regent.Primitives.copy_button>
           <a
             id="fleet-contract-link"
             href={AddressLinks.basescan(@page.manager_address)}
-            title={@page.manager_address}
-            rel="noopener noreferrer"
             target="_blank"
-          >
-            <code>{RegentFormat.short_address(@page.manager_address)}</code>
-          </a>
-        </p>
-        <p :if={is_nil(@page.manager_address)} class="proposals-detail">Not on Base yet</p>
+            rel="noopener noreferrer"
+            aria-label="View manager on BaseScan"
+            title="View verified manager on BaseScan"
+          ><svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            aria-hidden="true"
+          ><path d="M6 18 18 6M6 6h12v12" /></svg></a>
+        </div>
+        <Regent.Primitives.disclosure
+          id="treasury-fleet-details"
+          summary="Fleet details & token launch"
+        >
+          <p>{Rules.pricing(@page.fleet_id)}</p>
+          <.progress :if={@page.deployed?} page={@page} />
+          <.launch_upkeep :if={@page.deployed?} page={@page} actor={@actor} lease={@lease} />
+        </Regent.Primitives.disclosure>
       </section>
     </article>
     """
   end
-
-  # A count, or a dash when it couldn't be read.
-  defp count(nil), do: "–"
-  defp count(count), do: grouped(count)
 
   attr :page, :map, required: true
 

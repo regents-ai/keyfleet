@@ -150,6 +150,37 @@
       "effect": "write"
     },
     {
+      "name": "read_treasury",
+      "title": "Read fleet treasury",
+      "description": "Read public treasury balances, separately held Key rewards, daily allocation, money history, permissions and verified contract links. Includes freshness; never submits a transaction.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "The fleet's id, such as fleet_tech_classic: the FLEET_ID in the /fleets/FLEET_ID.md address list_fleets gives for it."
+          }
+        },
+        "required": [
+          "fleet_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      },
+      "requires": "none",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "public",
+      "pairing_required": false,
+      "availability": "prelaunch_gated",
+      "effect": "read",
+      "route": "GET /api/v1/fleets/{fleet_id}/treasury"
+    },
+    {
       "name": "propose",
       "title": "Propose",
       "description": "Fill this page's proposal form with these fields and press Propose: opens a vote of every key on what the proposal does. Fields left out keep what the form shows. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
@@ -173,16 +204,6 @@
             "type": "string",
             "description": "The number of the key it is made with: one the wallet holds, or holds a shard of while the key's agent voting is on."
           },
-          "hours": {
-            "type": "string",
-            "description": "How long voting stays open.",
-            "enum": [
-              "1",
-              "6",
-              "24",
-              "48"
-            ]
-          },
           "text": {
             "type": "string",
             "description": "The proposal's words, up to 4,000 bytes. They are kept on Keyfleet; the chain holds their fingerprint."
@@ -190,10 +211,6 @@
           "asset": {
             "type": "string",
             "description": "pay and advance: the address of the asset paid, one the page offers."
-          },
-          "amount": {
-            "type": "string",
-            "description": "pay and advance: the amount in whole tokens."
           },
           "recipient": {
             "type": "string",
@@ -246,12 +263,15 @@
           "image": {
             "type": "string",
             "description": "launch: the token's image address."
+          },
+          "share": {
+            "type": "string",
+            "description": "pay and advance: percentage of the treasury balance, 0.0001 to 99. Voting lasts 24 hours."
           }
         },
         "required": [
           "kind",
           "key",
-          "hours",
           "text"
         ],
         "additionalProperties": false

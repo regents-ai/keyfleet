@@ -51,26 +51,17 @@ defmodule KeyfleetWeb.ProposalsPage do
   @carried 5
 
   @doc """
-  The fleet's Treasury page. `voters` is how many Keys have a vote now, or nil
-  when they couldn't be counted.
+  The fleet's Treasury page: indexed balances, money history and contract details.
   """
   def treasury_page(fleet_id) do
     with_fleet(fleet_id, fn fleet, reading ->
       Map.merge(reading, %{
-        voters: present_keys(fleet_id),
         treasury: reading.deployed? && treasury(fleet, Treasury.get_reading!(fleet_id)),
         carried: fleet_id |> Proposals.latest_carried_out(@carried) |> Enum.map(&summary/1),
         progress: reading.deployed? && Chain.progress(fleet_id),
         manager_address: fleet.manager_address
       })
     end)
-  end
-
-  defp present_keys(fleet_id) do
-    case Keyfleet.Keys.count_present_keys(fleet_id) do
-      {:ok, count} -> count
-      {:error, _failure} -> nil
-    end
   end
 
   @doc "The path of the fleet's Treasury page."
@@ -357,6 +348,8 @@ defmodule KeyfleetWeb.ProposalsPage do
           reading.assets,
           &%{
             asset: &1.asset,
+            held_atomic: Integer.to_string(&1.held),
+            backed_atomic: Integer.to_string(&1.backed),
             held: amount(&1.held, &1.asset, assets),
             backed: amount(&1.backed, &1.asset, assets)
           }

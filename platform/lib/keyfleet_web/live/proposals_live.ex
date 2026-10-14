@@ -628,27 +628,45 @@ defmodule KeyfleetWeb.ProposalsLive do
     <section id="proposals-budget" class="proposals-panel" aria-labelledby="proposals-budget-title">
       <h2 id="proposals-budget-title">Treasury</h2>
 
-      <p id="proposals-treasury-address" class="proposals-address">
+      <div id="proposals-treasury-address" class="proposals-address">
+        <span>Treasury · Base</span>
+        <code title={@treasury.address}>{RegentFormat.short_address(@treasury.address)}</code>
+        <Regent.Primitives.copy_button
+          id="proposals-treasury-copy"
+          text={@treasury.address}
+          variant="quiet"
+          aria-label="Copy treasury address"
+          title="Copy treasury address"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            aria-hidden="true"
+          ><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V4H4v12h4" /></svg>
+        </Regent.Primitives.copy_button>
         <a
           id="proposals-treasury-link"
           href={AddressLinks.basescan(@treasury.address)}
-          title="See it on Basescan"
-          rel="noopener noreferrer"
           target="_blank"
-        >
-          <code id="proposals-treasury-address-text">{@treasury.address}</code>
-        </a>
-        <Regent.Primitives.copy_button
-          id="proposals-treasury-copy"
-          variant="quiet"
-          target="proposals-treasury-address-text"
-        >
-          Copy
-        </Regent.Primitives.copy_button>
-      </p>
-
+          rel="noopener noreferrer"
+          aria-label="View treasury on BaseScan"
+          title="View treasury on BaseScan"
+        ><svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          aria-hidden="true"
+        ><path d="M6 18 18 6M6 6h12v12" /></svg></a>
+      </div>
       <p :if={not @treasury.read?} id="proposals-budget-pending" class="proposals-detail">
-        Reading…
+        Balances are not available yet.
       </p>
 
       <div
@@ -661,11 +679,11 @@ defmodule KeyfleetWeb.ProposalsLive do
         <table id="proposals-balances" class="proposals-table">
           <thead>
             <tr>
-              <th scope="col">Balance</th>
+              <th scope="col">In the treasury</th>
               <th scope="col">
-                Set aside
+                Unclaimed Key rewards
                 <Regent.Primitives.tip id="proposals-backed-tip" label="About set aside">
-                  Already shared with Keys and waiting to be claimed. It isn’t the treasury’s to spend.
+                  Held separately by the rewards contract, waiting for Key holders to claim. These amounts are not part of the treasury balance.
                 </Regent.Primitives.tip>
               </th>
             </tr>
@@ -677,24 +695,14 @@ defmodule KeyfleetWeb.ProposalsLive do
             </tr>
           </tbody>
         </table>
-        <dl id="proposals-split" class="proposals-facts">
-          <div>
-            <dt>Daily Treasury Slice to Keys</dt>
-            <dd>{@treasury.split_rate}</dd>
-          </div>
-          <div :if={@treasury.next_run_at}>
-            <dt>Next release</dt>
-            <dd>{next_release(@treasury)}</dd>
-          </div>
-        </dl>
+        <p class="proposals-detail">
+          Balances as of <time datetime={DateTime.to_iso8601(@treasury.as_of)}>{at(@treasury.as_of)}</time>.
+        </p>
       </div>
 
-      <.split_preview page={@page} actor={@actor} lease={@lease} />
+      <.split_preview page={@page} treasury={@treasury} actor={@actor} lease={@lease} />
 
-      <h3 id="proposals-advances-title">Advances out</h3>
-      <p :if={@treasury.advances == []} id="proposals-no-advances" class="proposals-detail">
-        None.
-      </p>
+      <h3 :if={@treasury.advances != []} id="proposals-advances-title">Advances out</h3>
       <ol :if={@treasury.advances != []} id="proposals-advances" class="proposals-lines">
         <li :for={advance <- @treasury.advances} data-advance={advance.id}>
           <span>
@@ -759,14 +767,24 @@ defmodule KeyfleetWeb.ProposalsLive do
         actor={@actor}
         lease={@lease}
       >
+        <:notes :let={panel}>
+          <p :if={is_integer(WalletPanel.figures(panel)[:owed])} class="proposals-detail">
+            {ProposalsPage.units(WalletPanel.figures(panel).owed, 6)} USDC owed to REGENT staking.
+          </p>
+        </:notes>
         <:buttons :let={panel}>
           <WalletPanel.step_button panel={panel} step="send_share" id="proposals-send-share">
-            Send
+            Send to REGENT staking
           </WalletPanel.step_button>
         </:buttons>
       </.live_component>
 
-      <Regent.Primitives.disclosure id="proposals-history-more" summary="Money in and out">
+      <section
+        id="proposals-history-more"
+        class="treasury-history"
+        aria-labelledby="treasury-history-title"
+      >
+        <h3 id="treasury-history-title">Money in and out</h3>
         <p :if={@treasury.history == []} id="proposals-no-history" class="proposals-detail">
           Nothing yet.
         </p>
@@ -779,7 +797,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           </li>
         </ol>
         <p :if={@treasury.earlier?} class="proposals-detail">Earlier ones aren’t shown.</p>
-      </Regent.Primitives.disclosure>
+      </section>
     </section>
     """
   end
@@ -787,6 +805,8 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :page, :map, required: true
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
+
+  attr :treasury, :map, required: true
 
   # What the daily split would share now, per asset, as the treasury works it
   # out at the latest block, and the button that runs it once it is due.
@@ -812,6 +832,17 @@ defmodule KeyfleetWeb.ProposalsLive do
             Once a day anyone can release it. Each asset at or above its minimum shares its balance times the rate, divided equally across every Key sold.
           </Regent.Primitives.tip>
         </h3>
+        <p :if={@treasury.read?} class="proposals-detail">
+          {@treasury.split_rate} of eligible balances, shared equally across issued Keys.
+        </p>
+        <p
+          :if={
+            @treasury.read? and not is_nil(@treasury.next_run_at) and is_nil(split(panel)[:assets])
+          }
+          class="proposals-detail"
+        >
+          Scheduled release: {at(@treasury.next_run_at)}. Live eligibility is checked before a wallet step is prepared.
+        </p>
         <table
           :if={split(panel)[:assets] not in [nil, []]}
           id="proposals-split-preview"
@@ -863,9 +894,6 @@ defmodule KeyfleetWeb.ProposalsLive do
   # for the preview, and as of the treasury's reading for the figures above it.
   defp opens(%{blocked: %{"run_split" => {:opens_at, opens_at}}}), do: at(opens_at)
   defp opens(_figures), do: "Open now"
-
-  defp next_release(%{next_run_at: opens_at, as_of: read_at}),
-    do: if(DateTime.after?(opens_at, read_at), do: at(opens_at), else: "Open now")
 
   defp asset_name(%{usdc?: true}), do: "USDC"
   defp asset_name(%{symbol: symbol}) when is_binary(symbol), do: symbol

@@ -66,3 +66,34 @@ This real signed production cycle has not been run. CLI source contains the exis
 - No new tests that mirror the product, no deployments, no wallet transactions and no GitHub push were made.
 
 Source-verification input, ABI, the runtime-match report, screenshots and local verification evidence are preserved in `/Users/sean/Documents/regent/artifacts/keyfleet-treasury-workspace-2026-10-14/`.
+
+## Treasury implementation and Club notebooks, 14 October
+
+Done criteria: balances and actions first; compact permissions and address controls;
+public WebMCP/HTTP parity; configured Club hub; actual Contessa notebook result and member note.
+
+Implemented in the release worktree: removed the Treasury voter/purchase panels,
+made money history visible, collapsed fleet/launch details, hid empty advances,
+labelled the separate treasury and rewards balances, added timestamps, copy icons
+and explorer arrows. Public `read_treasury` and HTTP expose the same indexed figures,
+including atomic amounts as strings. Proposal tool fields now match the actual
+24-hour vote and percentage-based payment form. Wallet submission behavior unchanged.
+
+Connected production Club hub using its existing private ingress IPv6 address;
+the `.flycast` name did not resolve across the isolated network. Existing Oban
+roster job 56029 completed on its first attempt and recorded project
+`proj-1snf5ggrrha8amb4`. Private health returned 200; unsigned public project access
+returned 401. No access bypass, new credentials or runner instances were introduced.
+Contessa's existing dots pairing is wallet
+`0xed8d2d7b5cea1544c03f4044cac43bf2f3852046`, under Sean's specified account.
+It has not yet established a Keyfleet profile. Sean was given the real-agent task;
+its signed notebook execution and saved-note acceptance remain pending.
+
+Verification: compilation, asset build, TypeScript and API-contract checks passed.
+Browser treasury read tool returned 200; copy control copies the full address and
+reports Copied. Unknown fleet returns 404. Desktop and 390px mobile checked; no page
+horizontal overflow. Browser checking caught a nullable timestamp condition and an integer/decimal
+format mismatch, both fixed and rechecked before release. No on-chain actions executed. New treasury changes are local until
+publication is authorized; the hub connection is already live as requested.
+
+The shared required-fixes gate passed against ash-template `3cd30cc5d87dce7da55cb01769736899bb1e09f5`. Closed fleets return 404 from the new treasury read. Public API descriptions and the served contract were updated together.
