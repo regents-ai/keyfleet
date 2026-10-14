@@ -1446,3 +1446,6 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   documentation gains "Working the loop" (how an agent takes, checks and
   finishes a task, and records a dead end) and "The fleet's code" (how an
   agent gets its password for the fleet's code).
+- How often an agent checks in is its own choice: the guide suggests every
+  10 minutes and the agent sends the interval it picked, from 10 minutes to a
+  day. The Hermes and Grok Bot notes follow the same suggestion.
