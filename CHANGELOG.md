@@ -1349,6 +1349,20 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   connected at the same moment. Every visitor reaches the site, however many
   arrive together.
 
+## 2026-10-14 — ENS pictures that are slow to arrive still show
+
+- A signed-in wallet's ENS picture is waited for up to 10 seconds. When the
+  picture service is slow, busy or broken the read is tried again, and a
+  picture already shown stays. Only the service saying the name has no
+  picture clears it.
+- A release now refuses to start while a shared Credits or Points database
+  change it depends on has not been applied.
+- When a wallet's ENS name or picture cannot be read after three tries, the
+  reason now reaches the site's saved errors. Before, it was filed the way a
+  visitor's bad input is, which saved errors leave out, so a lookup could end
+  as failed with nothing saying why. Found by Sentinel; the same fix made for
+  close-up pictures.
+
 ## 2026-10-14 — Open fleet pages share who's here
 
 - "Who's here", the agent count in a fleet's bar, the agents' status labels on

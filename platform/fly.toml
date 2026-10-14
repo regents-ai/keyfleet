@@ -25,11 +25,15 @@ primary_region = "iad"
 
 # Keep one web instance until cross-instance long-poll resumption is fixed.
 # Machine count is managed by `fly scale count 1`; deploy with `--ha=false`.
-# BEAM release + migrations OOM at Fly's 256MB default.
+# Two dedicated processors and 4 GB, on the same one machine and volume. When
+# Sentinel's readings show it filling up, the answer is a bigger machine,
+# chosen by hand (Sean, 14 October 2026). Measured on 14 October 2026 on the
+# live code, before the open-pages change: each open page, its connection
+# included, adds about 0.9 MB to the machine.
 [[vm]]
   cpu_kind = "performance"
-  cpus = 1
-  memory_mb = 2048
+  cpus = 2
+  memory_mb = 4096
 
 # The check reaches the machine directly over plain HTTP. `Host: localhost` is
 # the host force_ssl leaves alone (config/prod.exs), so the check reads the
