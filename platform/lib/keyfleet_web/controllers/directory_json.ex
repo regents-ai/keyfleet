@@ -85,16 +85,7 @@ defmodule KeyfleetWeb.DirectoryJSON do
   # names agents by name and Key.
   defp agent(agent), do: Map.delete(agent, :avatar_src)
 
-  defp post(fleet, post) do
-    post
-    |> Map.put(:author, author(post.author))
-    |> Map.put(:url, room_url(fleet.id, post.room))
-  end
-
-  defp author(%{kind: :human, wallet: wallet} = person),
-    do: %{person | wallet: RegentFormat.short_address(wallet)}
-
-  defp author(agent), do: agent
+  defp post(fleet, post), do: Map.put(post, :url, room_url(fleet.id, post.room))
 
   defp linked(fleet, room), do: Map.put(room, :url, room_url(fleet.id, room.slug))
 

@@ -60,7 +60,7 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream(:posts, [])
      |> stream_configure(:fleet_keys, dom_id: &"fleet-key-#{&1.token_id}")
      |> stream(:fleet_keys, [])
-     |> stream_configure(:fleet_who, dom_id: &"fleet-who-#{&1.wallet_address}")
+     |> stream_configure(:fleet_who, dom_id: &"fleet-who-#{&1.id}")
      |> stream(:fleet_who, [])
      |> stream_configure(:dm_thread, dom_id: &"dm-#{&1.id}")
      |> stream(:dm_thread, [])

@@ -353,7 +353,10 @@ defmodule KeyfleetWeb.FleetLive do
           </.link>
           <span>Held by {RegentFormat.short_address(key.owner_wallet)}</span>
           <span :if={key.shards == []}>No shards</span>
-          <span :for={shard <- key.shards} id={"fleet-key-shard-#{shard.wallet}"}>
+          <span
+            :for={{shard, place} <- Enum.with_index(key.shards, 1)}
+            id={"fleet-key-shard-#{key.token_id}-#{place}"}
+          >
             <%= if shard.name do %>
               <.agent_picture src={shard.avatar_src} />
               {shard.name}{shard.status_label && " · " <> shard.status_label}

@@ -7,10 +7,11 @@ defmodule Keyfleet.Agents.Here do
   Three readings come from each pass over a fleet:
 
     * `fleet_key/1`: "Who's here", the bar's count of agents and as many of
-      them as the fleet's directory lists, each with its status line and the
-      address of its own picture, or nil when it set none: a picture made from
-      its wallet is made where it is drawn (`Keyfleet.Agents.Avatar.shown/2`),
-      and is ten times the size of the address.
+      them as the fleet's directory lists, each with its status line, the id
+      that names its row and the address of its own picture, or nil when it
+      set none: a picture made from its wallet is made where it is drawn
+      (`Keyfleet.Agents.Avatar.shown/2`), and is ten times the size of the
+      address. The wallet is never written into the page.
     * `labels_key/2`: one Key's active shards, each with its agent's name, the
       address of its own picture and its status label, or the shard's wallet
       alone while no agent has signed in with it: everything a row of the key
@@ -108,6 +109,7 @@ defmodule Keyfleet.Agents.Here do
         {_label, line} = status(List.first(profile.check_ins), now)
 
         %{
+          id: profile.id,
           name: profile.name,
           avatar_url: Avatar.url(profile),
           key: profile.key,

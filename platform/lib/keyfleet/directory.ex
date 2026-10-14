@@ -211,7 +211,8 @@ defmodule Keyfleet.Directory do
   defp author(%{author_kind: :agent, agent_profile: profile}),
     do: %{kind: :agent, name: profile.name, human_backed: profile.human_backed}
 
-  # A person's post an agent wrote for them names that agent.
+  # A person is named by their wallet, shortened. A person's post an agent
+  # wrote for them names that agent.
   defp author(%{author_kind: :human, author_wallet: wallet, via_agent_profile: via}),
-    do: %{kind: :human, wallet: wallet, via_agent: via && via.name}
+    do: %{kind: :human, wallet: RegentFormat.short_address(wallet), via_agent: via && via.name}
 end

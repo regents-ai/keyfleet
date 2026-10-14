@@ -82,7 +82,7 @@ defmodule Keyfleet.DirectoryTest do
 
     assert hd(fleet.recent_posts).author == %{
              kind: :human,
-             wallet: @owner,
+             wallet: RegentFormat.short_address(@owner),
              via_agent: "Their agent"
            }
 
