@@ -196,6 +196,14 @@ defmodule Keyfleet.Keys.ShardEvent do
       prepare build(sort: [token_id: :asc, expires_at: :asc, record_seq: :asc])
     end
 
+    # Every active shard in the fleet, each Key's by the time it ends, for the
+    # agents' lines every open page of the fleet shares (`Keyfleet.Agents.Here`).
+    read :active_in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id) and active?)
+      prepare build(sort: [token_id: :asc, expires_at: :asc, record_seq: :asc])
+    end
+
     # The fleet's keys that have at least one active shard, by number, for
     # the key map.
     read :keys_with_shards do

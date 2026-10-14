@@ -39,12 +39,12 @@ defmodule KeyfleetWeb.FleetLive do
   import KeyfleetWeb.Components.AgentPicture
 
   import Phoenix.LiveView,
-    only: [connected?: 1, push_event: 3, push_patch: 2, stream: 3, stream: 4]
+    only: [push_event: 3, push_patch: 2, stream: 3, stream: 4]
 
   alias Keyfleet.Activity
   alias Keyfleet.Agents
+  alias Keyfleet.Agents.Here
   alias Keyfleet.Chain
-  alias Keyfleet.Directory
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Fleets.Rules
@@ -65,15 +65,13 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.RoomsLive
+  alias KeyfleetWeb.SharedFigures
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.Time
   alias KeyfleetWeb.WalletPanel
   alias KeyfleetWeb.WalletWords
   alias KeyfleetWeb.WorkspacePage
 
-  # A check-in status changes as time passes, so an open fleet page reads its
-  # agents' check-ins again this often.
-  @check_ins_refresh_after 60_000
   # How long an open fleet page waits after a notice that something happened
   # in the fleet before it reads the hall's feed again, so a burst of
   # changes is read once; and how many pages of it the page shows at most.
@@ -356,7 +354,7 @@ defmodule KeyfleetWeb.FleetLive do
           <span :for={shard <- key.shards} id={"fleet-key-shard-#{shard.wallet}"}>
             <%= if shard.name do %>
               <.agent_picture src={shard.avatar_src} />
-              {shard.name} · {shard.status_label}
+              {shard.name}{shard.status_label && " · " <> shard.status_label}
             <% else %>
               Shard {RegentFormat.short_address(shard.wallet)}
             <% end %>
@@ -1495,11 +1493,11 @@ defmodule KeyfleetWeb.FleetLive do
       given?: Presets.given?(fleet_id),
       deck: Map.take(fleet, [:id, :deck_hash, :deck_size]),
       held: FleetPage.held(fleet, actor),
-      agents: Directory.agents(fleet_id),
-      agents_here: agents_here(fleet_id)
+      labels: %{}
     })
     |> assign(fleet_params: params, pass_note: nil)
-    |> stream(:fleet_keys, FleetPage.fleet_keys(fleet_id, page.results, actor), reset: true)
+    |> follow_agents(fleet_id)
+    |> list_keys(page.results, actor, reset: true)
     |> read_activity(fleet_id, feed)
     |> read_quotes(fleet_id, actor)
   end
@@ -1554,6 +1552,8 @@ defmodule KeyfleetWeb.FleetLive do
   # or activity to read.
   defp show_without_keys(socket, fleet, params) do
     socket
+    |> SharedFigures.follow(:fleet, [])
+    |> SharedFigures.follow(:rows, [])
     |> assign(
       fleet: fleet,
       fleet_params: params,
@@ -1673,38 +1673,76 @@ defmodule KeyfleetWeb.FleetLive do
         listed: FleetPage.listed(page, pages),
         no_keys?: page.results == [] and not FleetPage.paged?(params)
     })
-    |> stream(:fleet_keys, FleetPage.fleet_keys(fleet_id, page.results, actor))
+    |> list_keys(page.results, actor, [])
   end
 
-  @doc "One timer per page, set while a fleet's page is open."
-  def watch_check_ins(%{assigns: %{fleet: %{agents: _}, check_ins_timer: nil}} = socket) do
-    if connected?(socket) do
-      timer = Process.send_after(self(), :refresh_check_ins, @check_ins_refresh_after)
-      assign(socket, :check_ins_timer, timer)
-    else
-      socket
+  # The rows' status labels come from the readings every page shares
+  # (`Keyfleet.Agents.Here`), heard from before they are read; the page keeps
+  # the labels it drew, to tell a change in them from a change in words it
+  # doesn't show.
+  defp list_keys(%{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket, keys, actor, opts) do
+    socket =
+      SharedFigures.follow(
+        socket,
+        :rows,
+        for(key <- keys, do: Here.labels_key(fleet_id, key.token_id))
+      )
+
+    labels = Map.new(keys, &{&1.token_id, labels(fleet_id, &1.token_id)})
+
+    socket
+    |> update(:fleet, &%{&1 | labels: labels})
+    |> stream(:fleet_keys, FleetPage.fleet_keys(fleet_id, keys, labels, actor), opts)
+  end
+
+  defp labels(fleet_id, token_id),
+    do: SharedFigures.reading(Here.labels_key(fleet_id, token_id)) || []
+
+  # "Who's here" and the bar's count of agents, as every page shares them,
+  # heard from before they are read.
+  defp follow_agents(socket, fleet_id) do
+    socket
+    |> SharedFigures.follow(:fleet, [Here.fleet_key(fleet_id)])
+    |> show_agents()
+  end
+
+  # Before the fleet's first reading, the agents are said to be uncounted,
+  # never shown as none.
+  defp show_agents(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
+    {agents, here} =
+      case SharedFigures.reading(Here.fleet_key(fleet_id)) do
+        %{agents: agents, here: here} -> {agents, here}
+        nil -> {[], nil}
+      end
+
+    assign(socket, :fleet, Map.merge(fleet, %{agents: agents, agents_here: here}))
+  end
+
+  @doc """
+  A shared reading the page hears has changed: "Who's here" is drawn again,
+  and the key list read again when a row's labels changed, never for words
+  the rows don't show.
+  """
+  def shared_changed(
+        %{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket,
+        {:fleet_agents, fleet_id}
+      ),
+      do: show_agents(socket)
+
+  def shared_changed(
+        %{assigns: %{fleet: %{fleet_id: fleet_id, labels: drawn}}} = socket,
+        {:key_labels, _id} = key
+      ) do
+    case Enum.find(Map.keys(drawn), &(Here.labels_key(fleet_id, &1) == key)) do
+      nil ->
+        socket
+
+      token_id ->
+        if labels(fleet_id, token_id) == drawn[token_id], do: socket, else: reread_listed(socket)
     end
   end
 
-  def watch_check_ins(socket), do: socket
-
-  @doc "\"Who's here\" and the bar's count of agents."
-  def refresh_agents(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
-    assign(socket, :fleet, %{
-      fleet
-      | agents: Directory.agents(fleet_id),
-        agents_here: agents_here(fleet_id)
-    })
-  end
-
-  # How many agents are here, or nil when they couldn't be counted; the page
-  # says so rather than showing a number.
-  defp agents_here(fleet_id) do
-    case Agents.count_agents_here(fleet_id) do
-      {:ok, count} -> count
-      {:error, _failure} -> nil
-    end
-  end
+  def shared_changed(socket, _key), do: socket
 
   def tell_map_chosen(
         %{assigns: %{fleet: %{fleet_id: fleet_id, chosen_key: chosen}}} = socket,

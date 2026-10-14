@@ -7,6 +7,9 @@ defmodule KeyfleetWeb.Telemetry do
   `[:keyfleet, :chain, :failure]` for each chain request that got no answer
   (`Keyfleet.ChainClient`), and `[:keyfleet, :wallet, :failure]` for each
   press the browser reported as not sent or not confirmed (`wallet_failed/2`).
+  The figures every visitor sees alike (`Keyfleet.SharedReading`) report, for
+  each kind, how many keys are held, how many have never been read, how long ago
+  the oldest was read, each reading that could not be taken and each one refused.
   """
 
   import Telemetry.Metrics
@@ -38,6 +41,14 @@ defmodule KeyfleetWeb.Telemetry do
 
   def wallet_failed(_flow, _reason), do: :ok
 
+  @doc "The poller for the measurements the site takes itself."
+  def site_poller,
+    do:
+      {:telemetry_poller,
+       measurements: [{Keyfleet.SharedReading, :measure, []}],
+       period: 10_000,
+       name: :keyfleet_site_poller}
+
   defp metrics do
     [
       counter("keyfleet.privy.browser_failure.total", tags: [:reason]),
@@ -60,6 +71,46 @@ defmodule KeyfleetWeb.Telemetry do
         event_name: [:keyfleet, :wallet, :failure],
         tags: [:flow, :reason],
         description: "Wallet presses the browser reported as not sent or not confirmed"
+      ),
+      last_value("health.shared_reading.oldest.seconds",
+        event_name: [:keyfleet, :shared_reading, :kind],
+        measurement: :oldest_seconds,
+        tags: [:kind],
+        description: "Seconds since the oldest shared reading of each kind was read"
+      ),
+      last_value("health.shared_reading.late.keys",
+        event_name: [:keyfleet, :shared_reading, :kind],
+        measurement: :late,
+        tags: [:kind],
+        description: "Keys of the kind last read longer ago than the kind's producer should allow"
+      ),
+      last_value("health.shared_reading.never_read.keys",
+        event_name: [:keyfleet, :shared_reading, :kind],
+        measurement: :never_read,
+        tags: [:kind],
+        description: "Keys of the kind that have had no reading since the site started"
+      ),
+      counter("health.shared_reading.degraded.total",
+        event_name: [:keyfleet, :shared_reading, :degraded],
+        tags: [:kind],
+        description: "Shared readings that could not be taken"
+      ),
+      last_value("keyfleet.shared_reading.keys",
+        event_name: [:keyfleet, :shared_reading, :kind],
+        measurement: :keys,
+        tags: [:kind]
+      ),
+      last_value("keyfleet.shared_reading.table.bytes",
+        event_name: [:keyfleet, :shared_reading, :table],
+        measurement: :bytes
+      ),
+      counter("keyfleet.shared_reading.refused.total",
+        event_name: [:keyfleet, :shared_reading, :refused],
+        tags: [:kind, :reason]
+      ),
+      counter("keyfleet.shared_reading.woken.total",
+        event_name: [:keyfleet, :shared_reading, :woken],
+        tags: [:kind]
       ),
       # Background jobs report each run's outcome and time from Oban's own events.
       counter("keyfleet.jobs.finished.total",

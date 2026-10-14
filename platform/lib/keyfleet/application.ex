@@ -13,8 +13,12 @@ defmodule Keyfleet.Application do
         {Keyfleet.Accounts.RequestRateLimiter, []},
         database_child(),
         {Phoenix.PubSub, name: Keyfleet.PubSub},
+        # Figures every visitor sees alike, read once for every open page; its
+        # producers start after it.
+        Keyfleet.SharedReading,
         # Jobs announce what they change, so they start after PubSub.
         oban_child(),
+        KeyfleetWeb.Telemetry.site_poller(),
         # Who was let into a fleet's notebooks or code lately; a key changing
         # hands clears its holder at once, through PubSub.
         Keyfleet.AccessCache,
@@ -23,6 +27,7 @@ defmodule Keyfleet.Application do
         # A key's profile reads its rewards wherever the site runs.
         Keyfleet.Chain.RewardsWaiting,
         graph_children(),
+        here_child(),
         # Agent requests held open waiting for news, by client address.
         KeyfleetWeb.AgentWaits,
         # Start a worker by calling: Keyfleet.Worker.start_link(arg)
@@ -71,9 +76,16 @@ defmodule Keyfleet.Application do
 
   # Metrics are served beside the site, never by a process that only runs a task.
   defp metrics_child do
-    if Phoenix.Endpoint.server?(:keyfleet, KeyfleetWeb.Endpoint),
-      do: KeyfleetWeb.Metrics
+    if serving?(), do: KeyfleetWeb.Metrics
   end
+
+  # The agents here are read only where pages are served, so a task or a test
+  # never reads them on its own.
+  defp here_child do
+    if serving?(), do: Keyfleet.Agents.Here
+  end
+
+  defp serving?, do: Phoenix.Endpoint.server?(:keyfleet, KeyfleetWeb.Endpoint)
 
   # The projectors read each fleet's log through its writer, so they start
   # after the writers.

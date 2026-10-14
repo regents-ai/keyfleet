@@ -21,6 +21,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   import Phoenix.LiveView,
     only: [push_patch: 2, start_async: 3, stream: 4, stream_delete_by_dom_id: 3]
 
+  alias Keyfleet.Agents.Here
   alias Keyfleet.Chain
   alias Keyfleet.Chain.RewardsWaiting
   alias Keyfleet.Fleets
@@ -36,6 +37,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias KeyfleetWeb.Motion
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.RoomsLive
+  alias KeyfleetWeb.SharedFigures
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WalletPanel
   alias KeyfleetWeb.WalletWords
@@ -253,7 +255,8 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <dd :if={@profile.shards != []} id="key-profile-shards">
             <ul class="key-profile-shards">
               <li :for={shard <- @profile.shards} id={"key-profile-shard-#{shard.wallet}"}>
-                <.shard_agent shard={shard} /> · until {day(shard.expires_at)}
+                <.shard_agent shard={shard} line={@profile.lines[shard.wallet]} />
+                · until {day(shard.expires_at)}
               </li>
             </ul>
           </dd>
@@ -271,6 +274,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
   end
 
   attr :shard, :map, required: true
+
+  attr :line, :string,
+    default: nil,
+    doc: "what the agent's check-ins say, as every page shares it"
 
   # The agent holding a shard, as its check-ins say, or its wallet while no
   # agent has signed in with it.
@@ -294,10 +301,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
     <CheckIns.status
       id={"key-profile-check-in-#{@shard.wallet}"}
       class="key-profile-status"
-      label={@shard.agent.check_in.label}
-      last_check_in_at={@shard.agent.last_check_in_at}
-      last_contribution_at={@shard.agent.last_contribution_at}
-      last_contribution={@shard.agent.last_contribution}
+      line={@line}
     />
     <span :if={@shard.agent.status != ""} class="key-profile-status">
       “{@shard.agent.status}”, {day(@shard.agent.status_updated_at)}
@@ -813,6 +817,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         send_key: Ash.UUID.generate()
       })
     )
+    |> follow_lines()
     |> read_rewards(before)
     |> stream(:key_thread, key_thread(profile), reset: true, limit: -@key_thread_kept)
   end
@@ -911,6 +916,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         |> Map.merge(Map.take(shown, [:close, :news, :notice, :draft, :send_key]))
         |> Map.put(:dms, dms(profile, actor))
       )
+      |> follow_lines()
       |> read_rewards(%{key_profile: shown})
       |> stream(:key_thread, key_thread(profile), limit: -@key_thread_kept)
     else
@@ -1059,7 +1065,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
     assign(socket, :key_profile, Map.merge(profile, votes))
   end
 
-  @doc "The open key's shards, as their agents' check-ins say now."
+  @doc "The open key's shards, read again."
   def refresh_key_shards(%{assigns: %{key_profile: %{issued?: true} = shown}} = socket),
     do:
       assign(socket, :key_profile, %{
@@ -1068,4 +1074,33 @@ defmodule KeyfleetWeb.KeyProfileLive do
       })
 
   def refresh_key_shards(socket), do: socket
+
+  # What the issued Key's agents' check-ins say comes from the readings every
+  # page shares (`Keyfleet.Agents.Here`), heard from before it is read; a Key
+  # not yet issued has no agents.
+  defp follow_lines(%{assigns: %{key_profile: %{issued?: true} = profile}} = socket) do
+    key = Here.lines_key(profile.fleet_id, profile.token_id)
+
+    socket
+    |> SharedFigures.follow(:key, [key])
+    |> assign(:key_profile, Map.put(profile, :lines, lines(key)))
+  end
+
+  defp follow_lines(socket),
+    do:
+      socket |> SharedFigures.follow(:key, []) |> update(:key_profile, &Map.put(&1, :lines, %{}))
+
+  defp lines(key), do: Map.new(SharedFigures.reading(key) || [])
+
+  @doc "The open Key's agents' lines, drawn again when their shared reading changes."
+  def shared_changed(
+        %{assigns: %{key_profile: %{issued?: true} = profile}} = socket,
+        {:key_agents, _id} = key
+      ) do
+    if key == Here.lines_key(profile.fleet_id, profile.token_id),
+      do: assign(socket, :key_profile, %{profile | lines: lines(key)}),
+      else: socket
+  end
+
+  def shared_changed(socket, _key), do: socket
 end

@@ -35,6 +35,7 @@ defmodule KeyfleetWeb.ShellLive do
     ProposalsLive,
     Read,
     RoomsLive,
+    SharedFigures,
     TreasuryLive,
     WorkspaceLive
   }
@@ -113,7 +114,7 @@ defmodule KeyfleetWeb.ShellLive do
        polls_clock: nil,
        poll_form: nil,
        polls_notice: nil,
-       check_ins_timer: nil,
+       shared: %{},
        send_agent_open: false,
        pass_note: nil,
        quotes: nil
@@ -438,23 +439,10 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_info(:refresh_proposals = message, socket),
     do: ProposalsLive.handle_info(message, socket)
 
-  # Time has passed on an open fleet page: its agents' statuses are read
-  # again, and the page waits for the next minute. A page that has left the
-  # fleet stops.
-  def handle_info(:refresh_check_ins, %{assigns: %{fleet: %{agents: _}}} = socket) do
-    # "Who's here", the key list and the open key's agent, as the agents'
-    # check-ins say now.
-    {:noreply,
-     socket
-     |> assign(:check_ins_timer, nil)
-     |> FleetLive.refresh_agents()
-     |> FleetLive.reread_listed()
-     |> KeyProfileLive.refresh_key_shards()
-     |> FleetLive.watch_check_ins()}
-  end
-
-  def handle_info(:refresh_check_ins, socket),
-    do: {:noreply, assign(socket, :check_ins_timer, nil)}
+  # A reading every page shares has changed: the part of the page showing it
+  # draws it again.
+  def handle_info({:shared_reading, key}, socket),
+    do: {:noreply, socket |> FleetLive.shared_changed(key) |> KeyProfileLive.shared_changed(key)}
 
   def handle_info({:refresh_activity, _fleet_id} = message, socket),
     do: FleetLive.handle_info(message, socket)
@@ -629,19 +617,20 @@ defmodule KeyfleetWeb.ShellLive do
     |> follow_proposals(fleet_id)
     |> FleetLive.read_fleet(params)
     |> FleetLive.tell_map_chosen(shown)
-    |> FleetLive.watch_check_ins()
   end
 
   defp load_fleet(socket, _route_spec, _params),
     do:
       socket
+      |> SharedFigures.follow(:fleet, [])
+      |> SharedFigures.follow(:rows, [])
       |> assign(fleet: nil, fleet_params: nil, quotes: nil, activity: nil, activity_refresh: nil)
       |> stream(:fleet_keys, [], reset: true)
       |> stream(:activity, [], reset: true)
 
-  # Keys changed in the fleet on show: its sales figures, the key on offer and
-  # the agents here are read again (an agent starting or stopping on a key
-  # sends this notice too), the key list only when a changed key is on it, the
+  # Keys changed in the fleet on show: its sales figures and the key on offer
+  # are read again, the key list only when a changed key is on it (the agents
+  # here come from the readings every page shares, `Keyfleet.Agents.Here`), the
   # open key's profile when the key or one of its holder's changed, and the
   # map is told the changed keys' marks, or told to load again when too many
   # changed to list.
@@ -653,7 +642,6 @@ defmodule KeyfleetWeb.ShellLive do
     socket =
       socket
       |> FleetLive.refresh_sales()
-      |> FleetLive.refresh_agents()
       |> FleetLive.refresh_listed(token_ids)
       |> KeyProfileLive.refresh_key_profile(token_ids)
       |> FleetLive.refresh_activity_soon(fleet_id)
@@ -763,7 +751,11 @@ defmodule KeyfleetWeb.ShellLive do
        do: KeyProfileLive.read_key_profile(socket, fleet, token_id, before)
 
   defp load_key_profile(socket, _before),
-    do: socket |> assign(:key_profile, nil) |> stream(:key_thread, [], reset: true)
+    do:
+      socket
+      |> SharedFigures.follow(:key, [])
+      |> assign(:key_profile, nil)
+      |> stream(:key_thread, [], reset: true)
 
   defp load_key(socket, %{route_id: :keys}, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
     assign(socket, :key, KeysLive.key_view(socket, fleet_id, String.to_integer(token_id)))

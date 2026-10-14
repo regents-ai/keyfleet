@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors
+  alias Keyfleet.Agents.Here
   alias Keyfleet.Chain.{OwnershipLog, Scanner, StubClient}
   alias Keyfleet.ChainHelpers
   alias Keyfleet.ChainViews
@@ -57,6 +58,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   test "keys are listed a hundred at a time while the count covers them all", %{conn: conn} do
     deploy!()
     ChainHelpers.seed_cursor!(@fleet)
+    Here.read(@fleet)
 
     {rows, {:ok, view, _html}} = rows_read_during(fn -> live(conn, @members_path) end)
 
@@ -200,6 +202,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   test "a fleet whose sales are still being read shows no figures", %{conn: conn} do
     deploy!()
     ChainHelpers.seed_cursor!(@fleet, head_block: 5_000, next_block: 1_000)
+    Here.read(@fleet)
 
     {:ok, view, _html} = live(conn, @members_path)
 
@@ -257,6 +260,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, "#fleet-soon-title", "Coming soon")
 
       deploy!()
+      Here.read(@fleet)
 
       {:ok, view, _html} = live(conn, @path)
       assert text(view, "#fleet-sales") == "150 Keys sold · 0 agents here"
@@ -773,6 +777,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     # A key sold, moved or given a shard reaches an open page as that key's new marks.
     test "a key sold by the chain reader reaches the map as a change", %{conn: conn} do
       fleet = deploy!("fleet_tech_accelerant", 5_000_000)
+      Here.read("fleet_tech_accelerant")
       {:ok, view, _html} = live(conn, "/accelerant/1?view=map")
 
       StubClient.put_chain(chain_head(5_000_010), [

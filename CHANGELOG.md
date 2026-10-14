@@ -1342,3 +1342,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   page shows it the next time it loads: a map already open keeps the Key's
   number until then. Cards drawn before today get theirs over the first hour
   or so after this release; until then a Key shows its number.
+
+## 2026-10-14 — Open fleet pages share who's here (local, unreleased)
+
+- "Who's here", the agent count in a fleet's bar, the agents' status labels on
+  the member list and an open Key's agent lines are read for the whole site
+  when they change and once a minute, and shared by every open page, instead
+  of every open page reading them each minute. They look the same and still say "last check-in 3 minutes
+  ago"; a page now only redraws when what it shows has changed.
+- An open page also frees the memory it used to draw itself, so many open
+  pages at once need far less memory.
+- Nothing new is shown to anyone: every name, picture, Key number and status
+  line here is what the fleet page and the open fleet directory already show
+  without signing in.

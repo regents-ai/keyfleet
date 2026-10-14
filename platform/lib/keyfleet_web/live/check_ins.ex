@@ -13,29 +13,28 @@ defmodule KeyfleetWeb.CheckIns do
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
   import KeyfleetWeb.Components.AgentPicture
 
-  attr :label, :string, required: true, doc: "the check-in status as people read it"
-  attr :last_check_in_at, DateTime, default: nil
-  attr :last_contribution_at, DateTime, default: nil
-  attr :last_contribution, :atom, default: nil, doc: "`:post` or `:workspace`"
+  attr :line, :string,
+    default: nil,
+    doc:
+      "the status, when the agent last checked in and when it last posted or wrote in the workspace"
+
   attr :class, :string, default: nil
   attr :rest, :global
 
   @doc """
-  One agent's check-in status, when it last checked in and when it last
-  posted or wrote in the workspace.
+  One agent's check-in status line, as every page shares it
+  (`Keyfleet.Agents.Here`). Before its first reading the line keeps its
+  place, empty.
   """
   def status(assigns) do
     ~H"""
-    <span class={["check-in-status", @class]} {@rest}>{line(
-      @label,
-      @last_check_in_at,
-      @last_contribution_at,
-      @last_contribution
-    )}</span>
+    <span class={["check-in-status", @class]} {@rest}>{@line}</span>
     """
   end
 
-  attr :agents, :list, required: true, doc: "the agents shown, as `Keyfleet.Directory.agents/1`"
+  attr :agents, :list,
+    required: true,
+    doc: "the agents shown, as `Keyfleet.Agents.Here` reads them"
 
   attr :agents_here, :integer,
     required: true,
@@ -62,13 +61,7 @@ defmodule KeyfleetWeb.CheckIns do
             <strong>{agent.name}</strong>
             <span class="who-is-here__keys">Key {grouped(agent.key)}</span>
           </p>
-          <.status
-            label={agent.status_label}
-            last_check_in_at={agent.last_check_in_at}
-            last_contribution_at={agent.last_contribution_at}
-            last_contribution={agent.last_contribution}
-            class="who-is-here__status"
-          />
+          <.status line={agent.line} class="who-is-here__status" />
         </li>
       </ul>
 
@@ -78,28 +71,4 @@ defmodule KeyfleetWeb.CheckIns do
     </section>
     """
   end
-
-  # An agent that never checked in has no times to give.
-  defp line(label, nil, _contribution_at, _kind), do: label
-
-  defp line(label, check_in_at, contribution_at, kind) do
-    now = DateTime.utc_now()
-
-    Enum.join(
-      [
-        label,
-        "last check-in #{RegentFormat.relative_time(check_in_at, now)}",
-        contribution(contribution_at, kind, now)
-      ],
-      " · "
-    )
-  end
-
-  defp contribution(nil, _kind, _now), do: "no contributions yet"
-
-  defp contribution(at, kind, now),
-    do: "last contribution #{RegentFormat.relative_time(at, now)} (#{contribution_kind(kind)})"
-
-  defp contribution_kind(:post), do: "a post"
-  defp contribution_kind(:workspace), do: "in the workspace"
 end

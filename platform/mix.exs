@@ -86,6 +86,7 @@ defmodule Keyfleet.MixProject do
       {:lazy_html, ">= 0.1.0", only: :test},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:telemetry_metrics, "~> 1.0"},
+      {:telemetry_poller, "~> 1.3"},
       {:telemetry_metrics_prometheus_core, "~> 1.2"},
       {:error_tracker, "~> 0.9"},
       {:jason, "~> 1.2"},

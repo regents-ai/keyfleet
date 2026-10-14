@@ -79,6 +79,7 @@ defmodule Keyfleet.Keys do
 
       define :active_shards_held_by, action: :active_held_by, args: [:wallet]
       define :active_shards_of_keys, action: :active_of_keys, args: [:fleet_id, :token_ids]
+      define :active_shards_in_fleet, action: :active_in_fleet, args: [:fleet_id]
       define :keys_with_shards, action: :keys_with_shards, args: [:fleet_id]
     end
 

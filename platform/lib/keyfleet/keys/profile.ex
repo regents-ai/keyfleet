@@ -15,7 +15,6 @@ defmodule Keyfleet.Keys.Profile do
 
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.Agents
-  alias Keyfleet.Agents.CheckInStatus
   alias Keyfleet.Chain
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
@@ -205,10 +204,11 @@ defmodule Keyfleet.Keys.Profile do
 
   @doc """
   The key's active shards, soonest to run out first and a hundred at most:
-  each wallet, when its shard runs out, and the agent behind it with what its
-  check-ins with the fleet say, its saved registry page and World ID mark, and
-  the other agents here the same person stands behind, or nil when the wallet
-  has not signed in as an agent yet.
+  each wallet, when its shard runs out, and the agent behind it with its saved
+  registry page and World ID mark and the other agents here the same person
+  stands behind, or nil when the wallet has not signed in as an agent yet.
+  What each agent's check-ins say is shared by every page
+  (`Keyfleet.Agents.Here`).
   """
   def shards(fleet_id, token_id) do
     shards =
@@ -216,11 +216,6 @@ defmodule Keyfleet.Keys.Profile do
         load: [:agent_profile],
         query: [limit: @listed]
       )
-
-    check_ins =
-      fleet_id
-      |> Agents.check_ins_in_fleet!(for(%{agent_profile: %{id: id}} <- shards, do: id))
-      |> Map.new(&{&1.agent_profile_id, &1})
 
     listings =
       for(%{agent_profile: %{id: id}} <- shards, do: id)
@@ -233,23 +228,18 @@ defmodule Keyfleet.Keys.Profile do
       |> Agents.agents_of_people!(actor: %System{})
       |> Enum.group_by(& &1.human_id)
 
-    now = DateTime.utc_now()
-
     Enum.map(shards, fn shard ->
       %{
         wallet: shard.wallet,
         expires_at: shard.expires_at,
         agent:
           shard.agent_profile &&
-            agent(shard.agent_profile, check_ins, listings[shard.agent_profile.id], people, now)
+            agent(shard.agent_profile, listings[shard.agent_profile.id], people)
       }
     end)
   end
 
-  defp agent(agent, check_ins, listing, people, now) do
-    check_in = Map.get(check_ins, agent.id)
-    {status, label} = CheckInStatus.derive(check_in, now)
-
+  defp agent(agent, listing, people) do
     %{
       name: agent.name,
       registry_url: listing.registry_url,
@@ -259,11 +249,7 @@ defmodule Keyfleet.Keys.Profile do
       avatar_src: agent.avatar_src,
       harness: agent.declared_harness,
       status: agent.current_status,
-      status_updated_at: agent.status_updated_at,
-      check_in: %{status: status, label: label},
-      last_check_in_at: check_in && check_in.last_check_in_at,
-      last_contribution_at: check_in && check_in.last_contribution_at,
-      last_contribution: check_in && check_in.last_contribution_kind
+      status_updated_at: agent.status_updated_at
     }
   end
 

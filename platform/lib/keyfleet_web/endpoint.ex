@@ -15,8 +15,14 @@ defmodule KeyfleetWeb.Endpoint do
     "referrer-policy" => "no-referrer"
   }
 
+  # fullsweep_after: 0 has each page's connection give back what it used to send
+  # the page: 1.67 MB down to 0.09 MB a page where it was measured
+  # (ash-frontend, references/public-figures.md).
   socket "/live", Phoenix.LiveView.Socket,
-    websocket: [connect_info: [:peer_data, :uri, session: @session_options]],
+    websocket: [
+      connect_info: [:peer_data, :uri, session: @session_options],
+      fullsweep_after: 0
+    ],
     longpoll: [connect_info: [:peer_data, :uri, session: @session_options]]
 
   # A fleet's notebook host is answered only by the gateway to that fleet's

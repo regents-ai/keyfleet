@@ -8,8 +8,6 @@ defmodule KeyfleetWeb.FleetPage do
   """
 
   alias Keyfleet.Activity
-  alias Keyfleet.Agents
-  alias Keyfleet.Agents.CheckInStatus
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
@@ -115,36 +113,31 @@ defmodule KeyfleetWeb.FleetPage do
     do: "#{Keyfleet.Fleets.path(fleet_id)}?#{URI.encode_query(position ++ kept)}"
 
   @doc """
-  Each key with its active shards: each shard's agent and what its check-ins
-  with the fleet say, or the shard's wallet while no agent has signed in
-  with it.
+  Each key with its active shards: each shard's agent with its status label
+  from `labels` (`%{token_id => [{wallet, label}]}`, the readings every page
+  shares, `Keyfleet.Agents.Here`), or the shard's wallet while no agent has
+  signed in with it.
   """
-  def fleet_keys(fleet_id, keys, actor) do
-    shards =
-      Keys.active_shards_of_keys!(fleet_id, Enum.map(keys, & &1.token_id),
+  def fleet_keys(fleet_id, keys, labels, actor) do
+    by_key =
+      fleet_id
+      |> Keys.active_shards_of_keys!(Enum.map(keys, & &1.token_id),
         actor: actor,
         load: [:agent_profile]
       )
-
-    check_ins =
-      Map.new(
-        Agents.check_ins_in_fleet!(
-          fleet_id,
-          for(%{agent_profile: %{id: id}} <- shards, do: id)
-        ),
-        &{&1.agent_profile_id, &1}
-      )
-
-    now = DateTime.utc_now()
-
-    by_key =
-      Enum.group_by(shards, & &1.token_id, fn
+      |> Enum.group_by(& &1.token_id, fn
         %{agent_profile: nil, wallet: wallet} ->
           %{wallet: wallet, name: nil, avatar_src: nil, status_label: nil}
 
-        %{agent_profile: agent, wallet: wallet} ->
-          {_status, label} = CheckInStatus.derive(check_ins[agent.id], now)
-          %{wallet: wallet, name: agent.name, avatar_src: agent.avatar_src, status_label: label}
+        %{agent_profile: agent, wallet: wallet, token_id: token_id} ->
+          label = labels |> Map.get(token_id, []) |> List.keyfind(wallet, 0)
+
+          %{
+            wallet: wallet,
+            name: agent.name,
+            avatar_src: agent.avatar_src,
+            status_label: label && elem(label, 1)
+          }
       end)
 
     for key <- keys do
