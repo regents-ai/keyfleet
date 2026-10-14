@@ -91,6 +91,38 @@
   align-items: start;
 }
 
+/* One continuous workstream, with code access beside it. */
+.workspace-main {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.workspace-tools-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  width: 100%;
+  margin: 0;
+}
+
+.workspace-tools-list > div {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  min-width: 0;
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.75rem;
+}
+
+.workspace-tools-list dt { font-weight: 600; }
+.workspace-tools-list dt span { display: block; font-weight: 400; }
+.workspace-tools-list dd { margin: 0; line-height: 1.5; }
+
+@media (max-width: 720px) {
+  .workspace-tools-list { grid-template-columns: minmax(0, 1fr); }
+}
+
 .workspace-item-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));

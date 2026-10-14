@@ -47,11 +47,12 @@ const requests: Record<string, Request> = {
   docs: (_input, signal) => read("/docs", signal),
   list_fleets: (_input, signal) => read("/fleets.md", signal),
   read_fleet: (input, signal) => read(`/fleets/${encodeURIComponent(input.fleet_id)}.md`, signal),
+  read_workspace_pulse: (input, signal) => read(`/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/workspace/pulse`, signal, "application/json"),
 }
 
-async function read(path: string, signal: AbortSignal | undefined): Promise<Reply> {
+async function read(path: string, signal: AbortSignal | undefined, accept = "text/markdown"): Promise<Reply> {
   const response = await fetch(path, {
-    headers: {Accept: "text/markdown"},
+    headers: {Accept: accept},
     credentials: "omit",
     cache: "no-store",
     redirect: "error",

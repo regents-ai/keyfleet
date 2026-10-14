@@ -391,6 +391,12 @@ defmodule KeyfleetWeb.ShellLive do
 
   # What anyone hears of the workspace: the fleet's activity has a new change
   # of it to show.
+  def handle_info(
+        {:graph_notable, fleet_id},
+        %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket
+      ),
+      do: {:noreply, WorkspaceLive.refresh_later(socket)}
+
   def handle_info({:graph_notable, fleet_id}, socket),
     do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
@@ -547,6 +553,18 @@ defmodule KeyfleetWeb.ShellLive do
             actor={actor(@access_context)}
             lease={@session_lease}
           />
+          <ProposalsLive.list
+            :if={@route_spec.route_id == :proposals}
+            page={@proposals}
+            actor={actor(@access_context)}
+            lease={@session_lease}
+          />
+          <ProposalsLive.detail
+            :if={@route_spec.route_id == :proposal}
+            page={@proposals}
+            actor={actor(@access_context)}
+            lease={@session_lease}
+          />
         </FleetLive.page>
 
         <KeysLive.page
@@ -574,18 +592,6 @@ defmodule KeyfleetWeb.ShellLive do
           notice={@room_notice}
         />
 
-        <ProposalsLive.list
-          :if={@route_spec.route_id == :proposals}
-          page={@proposals}
-          actor={actor(@access_context)}
-          lease={@session_lease}
-        />
-        <ProposalsLive.detail
-          :if={@route_spec.route_id == :proposal}
-          page={@proposals}
-          actor={actor(@access_context)}
-          lease={@session_lease}
-        />
         <PollsLive.list
           :if={@route_spec.route_id == :polls}
           page={@polls}
@@ -606,6 +612,7 @@ defmodule KeyfleetWeb.ShellLive do
   # views, its Treasury and its Workspace.
   defp fleet_place(:fleet), do: :fleet
   defp fleet_place(:treasury), do: :treasury
+  defp fleet_place(route_id) when route_id in [:proposals, :proposal], do: :proposals
   defp fleet_place(route_id) when route_id in [:workspace, :workspace_item], do: :workspace
   defp fleet_place(_route_id), do: nil
 
@@ -622,7 +629,7 @@ defmodule KeyfleetWeb.ShellLive do
   # that lands while it loads still reaches it. The map is told when the key
   # chosen changes under it: back or forward, or another fleet's page.
   defp load_fleet(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
-       when route_id in [:fleet, :treasury, :workspace, :workspace_item] do
+       when route_id in [:fleet, :treasury, :workspace, :workspace_item, :proposals, :proposal] do
     shown = socket.assigns.fleet
 
     socket

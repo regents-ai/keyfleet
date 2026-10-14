@@ -14,7 +14,8 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   Only the fleet's members read its workspace
   (`Keyfleet.Graph.Checks.KeyReader`): for anyone else either page answers
-  `members_only?: true` and nothing of the workspace.
+  `members_only?: true` with only the fixed public summaries from
+  `Keyfleet.WorkspacePulse`, never member text.
 
   A page name that is not one the tables can answer, such as an unknown type
   or a damaged page position, is a page that doesn't exist.
@@ -151,6 +152,12 @@ defmodule KeyfleetWeb.WorkspacePage do
       activity = Graph.latest_activity!(fleet_id, opts)
       titles = titles(fleet_id, Enum.flat_map(activity, &mentions/1), opts)
 
+      notes =
+        fleet_id
+        |> Graph.workspace_cards!(%{type: "note"}, Keyword.put(opts, :page, limit: 24))
+        |> Map.fetch!(:results)
+        |> Map.new(&{&1.changed_seq, &1.card["gist"]})
+
       %{
         fleet_id: fleet_id,
         fleet_name: fleet.name,
@@ -161,7 +168,7 @@ defmodule KeyfleetWeb.WorkspacePage do
         first_page?: not paged?(params),
         first_page: board_path(fleet_id, filter),
         pages: page_links(page, params, &board_path(fleet_id, filter, &1)),
-        activity: Enum.map(activity, &line(&1, titles)),
+        activity: Enum.map(activity, &Map.put(line(&1, titles), :note, notes[&1.seq])),
         code: %{
           clone_url: Code.clone_url(fleet_id),
           pushes: Enum.map(Code.recent_pushes!(fleet_id, opts), &push/1)
@@ -230,8 +237,16 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  defp members_only(fleet_id, name),
-    do: %{fleet_id: fleet_id, fleet_name: name, members_only?: true, seen: nil}
+  defp members_only(fleet_id, name) do
+    pulse =
+      case Keyfleet.WorkspacePulse.read(fleet_id) do
+        {:ok, pulse} -> pulse
+        :unknown -> %{activity: [], notebooks_configured: false}
+        {:error, error} -> raise error
+      end
+
+    %{fleet_id: fleet_id, fleet_name: name, members_only?: true, seen: nil, pulse: pulse}
+  end
 
   # The first read of the workspace a page makes is the one that finds out
   # whether the reader is one of the fleet's members.

@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.FleetLive do
   @moduledoc """
   One fleet's page, under a slim bar with the fleet's name, how many keys it
   has sold and how many agents are here, "Send your agent", and the fleet's
-  places: "Hall" (Chat, Treasury, Workspace) and "Map" (Fleet Grid, Member
+  places: "Hall" (Chat, Treasury, Proposals, Workspace) and "Map" (Fleet Grid, Member
   List), each group's buttons in one tight box under its name.
 
   Under the bar is one way in, whichever applies first: the reader's own Key
@@ -307,6 +307,14 @@ defmodule KeyfleetWeb.FleetLive do
                   Treasury
                 </.link>
                 <.link
+                  id="fleet-tab-proposals"
+                  class="rg-button rg-button--secondary"
+                  patch={ProposalsPage.list_path(@fleet.fleet_id)}
+                  aria-current={if @view == :proposals, do: "page"}
+                >
+                  Proposals
+                </.link>
+                <.link
                   id="fleet-tab-workspace"
                   class="rg-button rg-button--secondary"
                   patch={"#{Fleets.path(@fleet.fleet_id)}/workspace"}
@@ -341,6 +349,7 @@ defmodule KeyfleetWeb.FleetLive do
         </header>
 
         <.entry
+          :if={@view not in [:workspace, :proposals]}
           fleet={@fleet}
           actor={@actor}
           params={@params}

@@ -73,15 +73,8 @@ defmodule KeyfleetWeb.ProposalsLive do
     ~H"""
     <article id="proposals-page" class="proposals-page">
       <header class="proposals-heading">
-        <p class="proposals-kicker">
-          <.link patch={Keyfleet.Fleets.path(@page.fleet_id)}>{@page.fleet_name}</.link>
-        </p>
-        <h1 tabindex="-1">Proposals</h1>
-        <p>
-          <.link id="proposals-to-treasury" patch={ProposalsPage.treasury_path(@page.fleet_id)}>
-            Treasury
-          </.link>
-        </p>
+        <h2 tabindex="-1">Proposals</h2>
+        <p>Decisions and payments put to this fleet’s Key holders.</p>
       </header>
 
       <.catching_up :if={@page.catching_up?} />

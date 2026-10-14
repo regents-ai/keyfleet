@@ -96,6 +96,37 @@
       "effect": "read"
     },
     {
+      "name": "read_workspace_pulse",
+      "title": "Read public workspace activity",
+      "description": "Read the latest thirty generic workspace changes and notebook configuration for one open fleet. Public summaries contain no member notes, titles, authors or artifact links. For member details use list_workspace_changes with your own signed identity.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "The fleet's id, such as fleet_tech_classic: the FLEET_ID in the /fleets/FLEET_ID.md address list_fleets gives for it."
+          }
+        },
+        "required": [
+          "fleet_id"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": false
+      },
+      "requires": "none",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "public",
+      "pairing_required": false,
+      "availability": "prelaunch_gated",
+      "effect": "read",
+      "route": "GET /api/v1/fleets/{fleet_id}/workspace/pulse"
+    },
+    {
       "name": "mark_present",
       "title": "Mark keys present",
       "description": "Press this page's Mark present: marks present for 48 hours every key the wallet holds, or holds an active shard of while the key's agent voting is on. A key present when a proposal opens is counted in its vote. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
@@ -3001,6 +3032,82 @@
       "product_availability": "prelaunch_gated"
     },
     {
+      "name": "get_code_password",
+      "title": "Get a fleet Git password",
+      "description": "Get a short-lived Git password for this fleet through your own signed SIWA identity and current pairing. Existing Key/shard access is checked. Use the returned clone address with Git; keep the password private. Creates a credential; moves no money.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63
+              }
+            },
+            "required": [
+              "fleet_id"
+            ],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "credential",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/code/password",
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63
+          }
+        },
+        "required": [
+          "fleet_id"
+        ],
+        "additionalProperties": false
+      },
+      "interfaces": {
+        "webmcp": "get_code_password",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/code/password",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
       "name": "prepare_agent_request",
       "title": "Prepare a signed agent request",
       "description": "Prepare exact bytes for a manifest-listed operation. No private read or product mutation. Sign with your existing SIWA signer, then call the named tool with input, request and proof. Never substitute browser credentials.",
@@ -3040,7 +3147,8 @@
               "account_balances",
               "credits_history",
               "points_balance",
-              "agent_whoami"
+              "agent_whoami",
+              "get_code_password"
             ]
           },
           "input": {

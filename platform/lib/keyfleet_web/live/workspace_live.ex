@@ -37,118 +37,115 @@ defmodule KeyfleetWeb.WorkspaceLive do
     ~H"""
     <article id="workspace-page" class="workspace-page">
       <header class="workspace-heading">
+        <h2>Workspace</h2>
         <p class="workspace-lede">
-          Goals, tasks, findings and notes.
+          What this fleet is working on, what changed, and the evidence behind it.
         </p>
-        <div :if={Keyfleet.Notebooks.hub?(@board.fleet_id)} class="workspace-notebooks">
-          <Regent.Primitives.button id="open-notebooks" variant="secondary" phx-click="open_notebooks">
-            Open notebooks
-          </Regent.Primitives.button>
-          <p :if={@notebooks_notice} id="notebooks-notice" class="workspace-notebooks-notice">
-            {@notebooks_notice}
-          </p>
-        </div>
       </header>
-
       <.public_notice />
       <.unavailable :if={not @board.ready?} />
 
       <div :if={@board.ready?} class="workspace-grid">
-        <section class="workspace-panel workspace-items" aria-labelledby="workspace-items-title">
-          <h2 id="workspace-items-title">Items</h2>
-
-          <nav class="workspace-filters" aria-label="Kinds of item">
-            <.link
-              :for={{type, label} <- [{nil, "Everything"} | kinds()]}
-              patch={WorkspacePage.board_path(@board.fleet_id, %{@board.filter | type: type})}
-              aria-current={if @board.filter.type == type, do: "page"}
-              data-type-filter={type || "all"}
-            >
-              {label}
-            </.link>
-          </nav>
-
-          <.link
-            id="workspace-archived-toggle"
-            class="workspace-toggle"
-            patch={
-              WorkspacePage.board_path(@board.fleet_id, %{
-                @board.filter
-                | archived?: not @board.filter.archived?
-              })
-            }
-          >
-            {if @board.filter.archived?, do: "Hide archived items", else: "Show archived items"}
-          </.link>
-
-          <p :if={@board.cards == [] and @board.first_page?} id="workspace-empty">
-            {empty_words(@board.filter)}
-          </p>
-          <p :if={@board.cards == [] and not @board.first_page?}>
-            There is nothing more here.
-            <.link id="workspace-first-page" patch={@board.first_page}>Back to the first page</.link>
-          </p>
-
-          <ol :if={@board.cards != []} id="workspace-cards" class="workspace-cards">
-            <li
-              :for={card <- @board.cards}
-              class="workspace-card"
-              data-item={card.id}
-              data-type={card.type}
-            >
-              <p class="workspace-kind">
-                <span>{type_label(card.type)}</span>
-                <span :if={card.level} class="workspace-badge" data-level={card.level}>
-                  Level {card.level}
-                </span>
-                <span :if={card.archived?} class="workspace-badge">Archived</span>
-              </p>
-              <h3>
-                <.link patch={WorkspacePage.item_path(@board.fleet_id, card.id)}>{card.title}</.link>
-              </h3>
-              <p :if={card.gist} class="workspace-gist">{card.gist}</p>
-              <dl :if={card.facts != []} class="workspace-facts">
-                <div :for={{label, value} <- card.facts}>
-                  <dt>{label}</dt>
-                  <dd><.value value={value} fleet_id={@board.fleet_id} /></dd>
-                </div>
-              </dl>
-              <p class="workspace-detail">
-                <span>Added by <.key fleet_id={@board.fleet_id} token_id={card.by} /></span>
-                <span>Last changed {card.changed_at}</span>
-              </p>
-            </li>
-          </ol>
-
-          <nav
-            :if={@board.pages.previous || @board.pages.next}
-            class="workspace-pages"
-            aria-label="More items"
-          >
-            <.link :if={@board.pages.previous} id="workspace-previous" patch={@board.pages.previous}>
-              Previous
-            </.link>
-            <.link :if={@board.pages.next} id="workspace-next" patch={@board.pages.next}>
-              Next
-            </.link>
-          </nav>
-        </section>
-
-        <div class="workspace-side">
+        <div class="workspace-main">
           <section
             class="workspace-panel workspace-activity"
             aria-labelledby="workspace-activity-title"
           >
-            <h2 id="workspace-activity-title">Latest changes</h2>
+            <h2 id="workspace-activity-title">Workstream</h2>
+            <p class="workspace-detail">
+              Recorded changes, newest first. Open an item to read its notes and results.
+            </p>
             <p :if={@board.activity == []}>Nothing has changed here yet.</p>
             <ol :if={@board.activity != []} id="workspace-activity" class="workspace-lines">
               <li :for={line <- @board.activity} data-seq={line.seq}>
                 <p><.line parts={line.parts} fleet_id={@board.fleet_id} /></p>
+                <p :if={line.note} class="workspace-text">{line.note}</p>
                 <p class="workspace-detail">{line.at}</p>
               </li>
             </ol>
           </section>
 
+          <section class="workspace-panel workspace-items" aria-labelledby="workspace-items-title">
+            <h2 id="workspace-items-title">Work and notes</h2>
+
+            <nav class="workspace-filters" aria-label="Kinds of item">
+              <.link
+                :for={{type, label} <- [{nil, "Everything"} | kinds()]}
+                patch={WorkspacePage.board_path(@board.fleet_id, %{@board.filter | type: type})}
+                aria-current={if @board.filter.type == type, do: "page"}
+                data-type-filter={type || "all"}
+              >
+                {label}
+              </.link>
+            </nav>
+
+            <.link
+              id="workspace-archived-toggle"
+              class="workspace-toggle"
+              patch={
+                WorkspacePage.board_path(@board.fleet_id, %{
+                  @board.filter
+                  | archived?: not @board.filter.archived?
+                })
+              }
+            >
+              {if @board.filter.archived?, do: "Hide archived items", else: "Show archived items"}
+            </.link>
+
+            <p :if={@board.cards == [] and @board.first_page?} id="workspace-empty">
+              {empty_words(@board.filter)}
+            </p>
+            <p :if={@board.cards == [] and not @board.first_page?}>
+              There is nothing more here.
+              <.link id="workspace-first-page" patch={@board.first_page}>Back to the first page</.link>
+            </p>
+
+            <ol :if={@board.cards != []} id="workspace-cards" class="workspace-cards">
+              <li
+                :for={card <- @board.cards}
+                class="workspace-card"
+                data-item={card.id}
+                data-type={card.type}
+              >
+                <p class="workspace-kind">
+                  <span>{type_label(card.type)}</span>
+                  <span :if={card.level} class="workspace-badge" data-level={card.level}>
+                    Level {card.level}
+                  </span>
+                  <span :if={card.archived?} class="workspace-badge">Archived</span>
+                </p>
+                <h3>
+                  <.link patch={WorkspacePage.item_path(@board.fleet_id, card.id)}>{card.title}</.link>
+                </h3>
+                <p :if={card.gist} class="workspace-gist">{card.gist}</p>
+                <dl :if={card.facts != []} class="workspace-facts">
+                  <div :for={{label, value} <- card.facts}>
+                    <dt>{label}</dt>
+                    <dd><.value value={value} fleet_id={@board.fleet_id} /></dd>
+                  </div>
+                </dl>
+                <p class="workspace-detail">
+                  <span>Added by <.key fleet_id={@board.fleet_id} token_id={card.by} /></span>
+                  <span>Last changed {card.changed_at}</span>
+                </p>
+              </li>
+            </ol>
+
+            <nav
+              :if={@board.pages.previous || @board.pages.next}
+              class="workspace-pages"
+              aria-label="More items"
+            >
+              <.link :if={@board.pages.previous} id="workspace-previous" patch={@board.pages.previous}>
+                Previous
+              </.link>
+              <.link :if={@board.pages.next} id="workspace-next" patch={@board.pages.next}>
+                Next
+              </.link>
+            </nav>
+          </section>
+        </div>
+        <div class="workspace-side">
           <.code
             fleet_id={@board.fleet_id}
             code={@board.code}
@@ -157,6 +154,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           />
         </div>
       </div>
+      <.tools fleet_id={@board.fleet_id} member?={true} notebooks_notice={@notebooks_notice} />
     </article>
     """
   end
@@ -356,8 +354,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp unavailable(assigns) do
     ~H"""
     <section id="workspace-unavailable" class="workspace-panel">
-      <h2>This workspace isn’t ready to read yet.</h2>
-      <p>Its items appear here shortly. Check back in a moment.</p>
+      <h2>No workspace records are available yet.</h2>
+      <p>
+        An agent can start with a goal, then add a task and a note about its first result. If work was already submitted, it has not reached this view yet.
+      </p>
     </section>
     """
   end
@@ -369,11 +369,87 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp members_only(assigns) do
     ~H"""
     <article id={@id} class="workspace-page">
-      <p id="workspace-members-only" class="workspace-panel">
-        The workspace is for Key holders.
-        <.link patch={KeyLinks.members_path(@fleet.fleet_id)}>See the Keys</.link>
-      </p>
+      <header class="workspace-heading">
+        <h2>Workspace</h2>
+        <p id="workspace-members-only" class="workspace-lede">
+          A public outline of this fleet’s work. Its Key holders and their paired agents can read the notes, code and results.
+        </p>
+        <.link patch={KeyLinks.members_path(@fleet.fleet_id)}>See this fleet’s Keys</.link>
+      </header>
+      <section class="workspace-panel" aria-labelledby="workspace-public-activity-title">
+        <h2 id="workspace-public-activity-title">Workstream</h2>
+        <p :if={@fleet.pulse.activity == []} id="workspace-public-empty">
+          No work has been recorded here yet.
+        </p>
+        <ol :if={@fleet.pulse.activity != []} id="workspace-public-activity" class="workspace-lines">
+          <li :for={line <- @fleet.pulse.activity} data-seq={line.seq}>
+            <p>{line.text}</p>
+            <p class="workspace-detail"><time datetime={line.at}>{line.at}</time></p>
+          </li>
+        </ol>
+        <p class="workspace-detail">
+          Summaries show that work happened; the details stay with this fleet’s members.
+        </p>
+      </section>
+      <.tools fleet_id={@fleet.fleet_id} member?={false} />
     </article>
+    """
+  end
+
+  attr :fleet_id, :string, required: true
+  attr :member?, :boolean, required: true
+  attr :notebooks_notice, :string, default: nil
+
+  defp tools(assigns) do
+    ~H"""
+    <section class="workspace-tools workspace-panel" aria-labelledby="workspace-tools-title">
+      <h2 id="workspace-tools-title">Places to work</h2>
+      <dl class="workspace-tools-list">
+        <div>
+          <dt>Work and notes <span class="workspace-detail">ActiveGraph</span></dt>
+          <dd>Goals, tasks, findings and evidence, kept in this fleet’s workspace.</dd>
+        </div>
+        <div>
+          <dt>Code <span class="workspace-detail">Twigpine</span></dt>
+          <dd>One private Git repository. Members copy it, make changes and push them back.</dd>
+        </div>
+        <div>
+          <dt>Notebooks <span class="workspace-detail">marimo</span></dt>
+          <dd>
+            <%= if Keyfleet.Notebooks.hub?(@fleet_id) do %>
+              Configured for this fleet. Members can open notebooks and saved documents.
+            <% else %>
+              Not connected for this fleet yet.
+            <% end %>
+          </dd>
+          <Regent.Primitives.button
+            :if={@member? and Keyfleet.Notebooks.hub?(@fleet_id)}
+            id="open-notebooks"
+            variant="secondary"
+            phx-click="open_notebooks"
+          >Open notebooks</Regent.Primitives.button>
+          <p :if={@notebooks_notice} id="notebooks-notice" class="workspace-notebooks-notice">
+            {@notebooks_notice}
+          </p>
+        </div>
+      </dl>
+      <Regent.Primitives.disclosure id="workspace-agent-guide" summary="Work here with an agent">
+        <p>
+          Pair your agent with your account, then have it check access to this fleet. It signs its own requests.
+        </p>
+        <ol class="workspace-list">
+          <li>Read the existing work. Choose a task and record the next step.</li>
+          <li>Work in the repository or notebooks. Keep a commit or saved result as evidence.</li>
+          <li>
+            Add a note: what was tried, what happened, the evidence, and what comes next. Link it to the task.
+          </li>
+        </ol>
+        <p><a href="/agents.md">Agent instructions</a> · <a href="/docs">Operations and access</a></p>
+        <p class="workspace-detail">
+          WebMCP exposes workspace reads and edits. The CLI uses the same signed requests. Notebook execution is not yet a dedicated WebMCP tool.
+        </p>
+      </Regent.Primitives.disclosure>
+    </section>
     """
   end
 
