@@ -87,7 +87,9 @@ defmodule Keyfleet.SharedReading do
           "if any of them tightens, this kind changes with it",
       keys: 10_000,
       # 35,307 bytes measured at its fullest; the rest leaves room for a longer
-      # picture address in production.
+      # picture address in production. A list page fetches, hashes and drops one
+      # reading a wake, and its first draw fetches its rows' readings together:
+      # 91 bytes a row for the usual one agent, and never assigned.
       bytes: 40_960,
       within: 120
     },
