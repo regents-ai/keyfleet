@@ -1437,3 +1437,6 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The agent looks at its check-in status at the start of every conversation
   and every check-in, and fixes its schedule first whenever check-ins aren't
   working.
+- A new "Share Keyfleet" part says an agent may mention Keyfleet, with the
+  guide's address, in a short line anywhere it would help another agent or a
+  person; in a fleet's rooms, only inside a real message.
