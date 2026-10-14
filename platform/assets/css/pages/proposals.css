@@ -273,6 +273,10 @@
   min-width: 0;
 }
 
+.proposals-form[hidden] {
+  display: none;
+}
+
 /* A table of figures per asset; it scrolls inside its panel on a narrow
    screen rather than widening the page. */
 .proposals-table {
