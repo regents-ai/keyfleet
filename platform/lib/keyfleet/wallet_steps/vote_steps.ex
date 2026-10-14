@@ -46,15 +46,6 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
       now = DateTime.to_unix(Reads.now(reads))
       keys = for {key, at} <- Enum.zip(governed, maturity), at != nil and at <= now, do: key
 
-      blocked =
-        cond do
-          status not in [:open, :waiting] -> every_choice(:voting_closed)
-          governed == [] -> every_choice(:no_keys)
-          keys == [] -> every_choice(:too_new)
-          status == :waiting -> Map.delete(every_choice(:voting_closed), "no")
-          true -> %{}
-        end
-
       steps =
         for {name, choice} <- @choices do
           Review.step(
@@ -68,7 +59,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
           )
         end
 
-      {:ok, steps, %{keys: keys, status: status, blocked: blocked}}
+      {:ok, steps, %{keys: keys, status: status, blocked: ballot_blocked(status, governed, keys)}}
     else
       _unread -> {:problem, :unread, figures}
     end
@@ -179,6 +170,19 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
        ], figures}
     end
   end
+
+  # Why each choice of a ballot is certain to fail, if it is. `governed` is
+  # the keys the signer may vote and `keys` those of them old enough to.
+  defp ballot_blocked(status, _governed, _keys) when status not in [:open, :waiting],
+    do: every_choice(:voting_closed)
+
+  defp ballot_blocked(_status, [], _keys), do: every_choice(:no_keys)
+  defp ballot_blocked(_status, _governed, []), do: every_choice(:too_new)
+
+  defp ballot_blocked(:waiting, _governed, _keys),
+    do: Map.delete(every_choice(:voting_closed), "no")
+
+  defp ballot_blocked(:open, _governed, _keys), do: %{}
 
   defp every_choice(reason), do: Map.new(@choices, fn {name, _choice} -> {name, reason} end)
 

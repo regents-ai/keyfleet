@@ -11,7 +11,6 @@ defmodule KeyfleetWeb.Components.Shell do
   # header opens its page with its own "Get a Key" pressed
   # (`KeyfleetWeb.FleetLive`). Until then the header has no "Get a Key".
   @get_key_fleet "fleet_tech_classic"
-  @get_key_path Keyfleet.Fleets.path(@get_key_fleet) <> "?buy"
 
   @doc "The fleet the header's \"Get a Key\" opens, shown only while it is open."
   def get_key_fleet, do: @get_key_fleet
@@ -255,7 +254,8 @@ defmodule KeyfleetWeb.Components.Shell do
   is open: it opens Classic's page with its buying panel open.
   """
   def get_key(assigns) do
-    assigns = assign(assigns, :to, [{assigns.link, @get_key_path}])
+    assigns =
+      assign(assigns, :to, [{assigns.link, Keyfleet.Fleets.path(@get_key_fleet) <> "?buy"}])
 
     ~H"""
     <.link id={@id} class="rg-button rg-button--primary" {@to}>

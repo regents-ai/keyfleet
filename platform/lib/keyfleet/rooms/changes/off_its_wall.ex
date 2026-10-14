@@ -14,6 +14,8 @@ defmodule Keyfleet.Rooms.Changes.OffItsWall do
 
   @impl true
   def change(changeset, _opts, _context) do
+    # The post is read whoever asks: the removal's own policy then decides, from
+    # the wall and holder found here, whether this person may take it off.
     with id when is_binary(id) <- Changeset.get_attribute(changeset, :message_id),
          {:ok, %{kind: :post, room: %{kind: :key, fleet_id: fleet_id, token_id: token_id}}} <-
            Ash.get(Message, id, load: [:room], authorize?: false, not_found_error?: false),

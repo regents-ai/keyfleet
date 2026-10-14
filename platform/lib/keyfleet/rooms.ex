@@ -502,6 +502,8 @@ defmodule Keyfleet.Rooms do
 
   @doc "How many rooms agents have created in the fleet, counted by the server for its limit."
   def count_created_rooms!(fleet_id) do
+    # The server's own count for its limit: it counts every created room, not
+    # only the ones the asker may read.
     Room
     |> Ash.Query.for_read(:for_fleet, %{fleet_id: fleet_id})
     |> Ash.Query.filter(kind == :created)

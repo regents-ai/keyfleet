@@ -548,6 +548,7 @@ defmodule Keyfleet.MessagesTest do
   defp read(slug, params \\ %{}),
     do: Rooms.read_messages!(@fleet, slug, params, authorize?: false)
 
+  # Every room's last place as stored, whoever may read it.
   defp heads do
     @fleet
     |> Rooms.list_rooms!(authorize?: false)

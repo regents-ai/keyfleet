@@ -24,6 +24,19 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias KeyfleetWeb.Refusal
   alias KeyfleetWeb.RoomJSON
 
+  # The refusals with a name of their own, in the order one is chosen when a
+  # request is refused for more than one reason.
+  @named_refusals [
+    UnknownFleetError,
+    RoomUnknownError,
+    KeyUnknownError,
+    NoAgentProfileError,
+    SendConflictError,
+    ReplyOutsideRoomError,
+    QuoteUnknownError,
+    QuoteDiffersError
+  ]
+
   def rooms(conn, %{"fleet_id" => fleet_id}) do
     actor = conn.assigns.agent_actor
 
@@ -326,41 +339,36 @@ defmodule KeyfleetWeb.AgentRoomController do
 
   defp refuse(conn, %RoomUnknownError{}), do: not_found(conn)
 
-  defp refuse(conn, %Ash.Error.Invalid{errors: errors}) do
-    cond do
-      Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
-        Refusal.json(conn, 404, "fleet_unknown")
+  defp refuse(conn, %Ash.Error.Invalid{errors: errors} = error) do
+    named =
+      Enum.find_value(@named_refusals, fn kind -> Enum.find(errors, &is_struct(&1, kind)) end)
 
-      Enum.any?(errors, &match?(%RoomUnknownError{}, &1)) ->
-        not_found(conn)
-
-      unknown = Enum.find(errors, &match?(%KeyUnknownError{}, &1)) ->
-        Refusal.key_unknown(conn, unknown.fleet_id, unknown.token_id)
-
-      Enum.any?(errors, &match?(%NoAgentProfileError{}, &1)) ->
-        Refusal.json(conn, 404, "profile_not_found")
-
-      Enum.any?(errors, &match?(%SendConflictError{}, &1)) ->
-        invalid(conn, "idempotency_conflict")
-
-      Enum.any?(errors, &match?(%ReplyOutsideRoomError{}, &1)) ->
-        invalid(conn, "reply_not_here")
-
-      Enum.any?(errors, &match?(%QuoteUnknownError{}, &1)) ->
-        invalid(conn, "quote_unknown")
-
-      Enum.any?(errors, &match?(%QuoteDiffersError{}, &1)) ->
-        invalid(conn, "quote_differs")
-
-      Rooms.taken?(%Ash.Error.Invalid{errors: errors}, :quote_request_id) ->
-        Refusal.json(conn, 409, "already_quoted")
-
-      true ->
-        invalid(conn, "invalid_message")
-    end
+    refuse_named(conn, named, error)
   end
 
   defp refuse(conn, _error), do: invalid(conn, "invalid_message")
+
+  defp refuse_named(conn, %UnknownFleetError{}, _error),
+    do: Refusal.json(conn, 404, "fleet_unknown")
+
+  defp refuse_named(conn, %RoomUnknownError{}, _error), do: not_found(conn)
+
+  defp refuse_named(conn, %KeyUnknownError{fleet_id: fleet_id, token_id: token_id}, _error),
+    do: Refusal.key_unknown(conn, fleet_id, token_id)
+
+  defp refuse_named(conn, %NoAgentProfileError{}, _error),
+    do: Refusal.json(conn, 404, "profile_not_found")
+
+  defp refuse_named(conn, %SendConflictError{}, _error), do: invalid(conn, "idempotency_conflict")
+  defp refuse_named(conn, %ReplyOutsideRoomError{}, _error), do: invalid(conn, "reply_not_here")
+  defp refuse_named(conn, %QuoteUnknownError{}, _error), do: invalid(conn, "quote_unknown")
+  defp refuse_named(conn, %QuoteDiffersError{}, _error), do: invalid(conn, "quote_differs")
+
+  defp refuse_named(conn, nil, error) do
+    if Rooms.taken?(error, :quote_request_id),
+      do: Refusal.json(conn, 409, "already_quoted"),
+      else: invalid(conn, "invalid_message")
+  end
 
   defp refuse_room(conn, %Ash.Error.Invalid{errors: errors} = error) do
     cond do

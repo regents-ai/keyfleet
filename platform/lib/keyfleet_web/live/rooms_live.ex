@@ -19,8 +19,8 @@ defmodule KeyfleetWeb.RoomsLive do
   import KeyfleetWeb.Components.SentFrom
   import Phoenix.LiveView, only: [stream: 4]
 
-  alias Keyfleet.Actors.Human
   alias Keyfleet.Access
+  alias Keyfleet.Actors.Human
   alias Keyfleet.Chain
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Graph.Errors.UnknownFleetError

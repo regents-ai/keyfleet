@@ -185,7 +185,14 @@ defmodule Keyfleet.MixProject do
         # and Block records, and each record's KeyHolder check.
         # Workspace reads add four: the KeyReader check on the workspace and its
         # three read tables.
-        "xref graph --label compile-connected --fail-above 67",
+        # Names add two: the EnsIdentity and SharedProfile records, each with its domain.
+        # The table of who reads and writes what a fleet shares adds four: its
+        # Check on code pushes, messages and rooms, and rooms' InGeneral check.
+        # Quote requests add one: their domain.
+        # Wall removals add two: their domain and the KeyHolder check.
+        # The router adds two more: the saved-errors page is a plug it sets up as
+        # it compiles, and a fleet's own addresses are drawn from the route catalog.
+        "xref graph --label compile-connected --fail-above 78",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

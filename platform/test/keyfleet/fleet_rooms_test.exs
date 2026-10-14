@@ -590,6 +590,7 @@ defmodule Keyfleet.FleetRoomsTest do
     )
   end
 
+  # The room as stored, whoever may read it.
   defp unnamed?(slug) do
     room = Rooms.get_room!(@fleet, slug, authorize?: false)
     {room.topic, room.topic_set_by, room.topic_set_at, room.head_seq} == {nil, nil, nil, 0}

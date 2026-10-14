@@ -1469,12 +1469,7 @@ defmodule KeyfleetWeb.FleetLive do
     deployed? = fleet.manager_address != nil
     current? = deployed? and Chain.fresh?(fleet_id)
     progress = if deployed?, do: Chain.progress(fleet_id)
-    # The feed's lines leave the page with the hall, so coming back from the
-    # map draws them again.
-    feed =
-      if view(socket.assigns.fleet_params || %{}) != :hall and view(params) == :hall,
-        do: :redrawn,
-        else: :kept
+    feed = feed_on_return(socket.assigns.fleet_params || %{}, params)
 
     socket
     |> assign(:fleet, %{
@@ -1508,6 +1503,11 @@ defmodule KeyfleetWeb.FleetLive do
     |> read_activity(fleet_id, feed)
     |> read_quotes(fleet_id, actor)
   end
+
+  # The feed's lines leave the page with the hall, so coming back from the
+  # map draws them again.
+  defp feed_on_return(shown, params),
+    do: if(view(shown) != :hall and view(params) == :hall, do: :redrawn, else: :kept)
 
   @doc """
   What the signed-in person has sent their agent to quote in the fleet, with

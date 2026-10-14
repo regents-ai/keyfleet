@@ -1338,6 +1338,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Under the pointer a Key's hex rises and its picture draws nearer.
 - "Your Keys" on the fleet page shows the same close-ups, which load far
   faster than the full cards did.
-- Each card gets its close-up within about a minute of being drawn. Cards
-  drawn before today get theirs over the first hour or so after this release;
-  until then a Key shows its number.
+- Each card gets its close-up within about a minute of being drawn, and a
+  page shows it the next time it loads: a map already open keeps the Key's
+  number until then. Cards drawn before today get theirs over the first hour
+  or so after this release; until then a Key shows its number.
