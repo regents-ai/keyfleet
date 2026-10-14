@@ -10,12 +10,14 @@ defmodule Keyfleet.Keys.KeyPicture do
   whose seed an operator corrects after a reorg is shown by its new seed's
   picture, drawn afresh, and the old one is no longer asked for.
 
-  Each picture also gets a close-up, kept at `close_up_cid`: the small square
-  at the card's middle that the fleet's map and a holder's cards show
-  (`Keyfleet.Keys.KeyArt.close_up/1`). A job per picture without one makes it
-  (`MakeCloseUp`), found every minute, so new cards and the cards drawn before
-  close-ups existed are covered the same way. Until it is made, the Key is
-  shown by its number.
+  Each picture also gets two small pictures: a close-up, kept at
+  `close_up_cid`, the small square at the card's middle that the fleet's map
+  shows (`Keyfleet.Keys.KeyArt.close_up/1`), and a small card, kept at
+  `small_card_cid`, the whole card made small for a holder's cards
+  (`Keyfleet.Keys.KeyArt.small_card/1`). A job per picture without one makes
+  it (`MakeSmallPicture`), found every minute, so new cards and the cards
+  drawn before it existed are covered the same way. Until it is made, the Key
+  is shown by its number.
   """
   use Ash.Resource,
     domain: Keyfleet.Keys,
@@ -23,7 +25,7 @@ defmodule Keyfleet.Keys.KeyPicture do
     authorizers: [Ash.Policy.Authorizer],
     extensions: [AshOban]
 
-  alias Keyfleet.Keys.KeyPicture.MakeCloseUp
+  alias Keyfleet.Keys.KeyPicture.MakeSmallPicture
 
   postgres do
     table "key_pictures"
@@ -56,7 +58,7 @@ defmodule Keyfleet.Keys.KeyPicture do
       argument :fleet_id, :string, allow_nil?: false
       argument :token_ids, {:array, :integer}, allow_nil?: false, constraints: [max_length: 100]
       filter expr(fleet_id == ^arg(:fleet_id) and token_id in ^arg(:token_ids))
-      prepare build(select: [:token_id, :seed, :cid, :close_up_cid])
+      prepare build(select: [:token_id, :seed, :cid, :close_up_cid, :small_card_cid])
     end
 
     # The pictures the close-up job looks through, a page at a time.
@@ -65,20 +67,33 @@ defmodule Keyfleet.Keys.KeyPicture do
       filter expr(is_nil(close_up_cid))
     end
 
-    # Reads the card back, cuts its close-up and keeps it, outside any
-    # transaction. The same card always gives the same close-up at the same
-    # address, so running twice is safe.
+    # The pictures the small-card job looks through, a page at a time.
+    read :without_small_card do
+      pagination keyset?: true, required?: false
+      filter expr(is_nil(small_card_cid))
+    end
+
+    # Each reads the card back, makes its small picture and keeps it, outside
+    # any transaction. The same card always gives the same small picture at
+    # the same address, so running twice is safe.
     update :make_close_up do
       public? false
       transaction? false
       require_atomic? false
-      change MakeCloseUp
+      change {MakeSmallPicture, kind: :close_up}
+    end
+
+    update :make_small_card do
+      public? false
+      transaction? false
+      require_atomic? false
+      change {MakeSmallPicture, kind: :small_card}
     end
   end
 
   oban do
     triggers do
-      # Close-ups wait their turn behind new cards' drawings on the one queue.
+      # Small pictures wait their turn behind new cards' drawings on the one queue.
       trigger :close_up do
         action :make_close_up
         read_action :without_close_up
@@ -89,6 +104,18 @@ defmodule Keyfleet.Keys.KeyPicture do
         lock_for_update?(false)
         scheduler_module_name(Keyfleet.Keys.KeyPicture.Workers.CloseUpScheduler)
         worker_module_name(Keyfleet.Keys.KeyPicture.Workers.CloseUp)
+      end
+
+      trigger :small_card do
+        action :make_small_card
+        read_action :without_small_card
+        where expr(is_nil(small_card_cid))
+        queue(:key_art)
+        worker_priority(3)
+        max_attempts(5)
+        lock_for_update?(false)
+        scheduler_module_name(Keyfleet.Keys.KeyPicture.Workers.SmallCardScheduler)
+        worker_module_name(Keyfleet.Keys.KeyPicture.Workers.SmallCard)
       end
     end
   end
@@ -131,6 +158,11 @@ defmodule Keyfleet.Keys.KeyPicture do
     attribute :close_up_cid, :string do
       public? true
       description "The close-up's IPFS address, once it is made."
+    end
+
+    attribute :small_card_cid, :string do
+      public? true
+      description "The small card's IPFS address, once it is made."
     end
 
     create_timestamp :drawn_at, public?: true

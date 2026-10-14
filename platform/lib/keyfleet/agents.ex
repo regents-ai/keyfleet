@@ -184,6 +184,24 @@ defmodule Keyfleet.Agents do
   end
 
   @doc """
+  The keys the agents here act as (see `count_agents_here/1`), for each agent
+  that checked in with the fleet or contributed to it since `since`.
+  """
+  def keys_active_since!(fleet_id, since) do
+    Keyfleet.Agents.AgentProfile
+    |> Ash.Query.for_read(:here_in_fleet, %{fleet_id: fleet_id})
+    |> Ash.Query.filter(
+      exists(
+        check_ins,
+        fleet_id == ^fleet_id and
+          (last_check_in_at >= ^since or last_contribution_at >= ^since)
+      )
+    )
+    |> Ash.read!()
+    |> Enum.map(& &1.key)
+  end
+
+  @doc """
   How many agents are here in any of `fleet_ids`, as `count_agents_here/1`
   counts them, each once however many of those fleets it is in, as `{:ok,
   count}` or `{:error, failure}`.

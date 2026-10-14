@@ -6,8 +6,10 @@ defmodule Keyfleet.Agents.Here do
 
   Three readings come from each pass over a fleet:
 
-    * `fleet_key/1`: "Who's here", the bar's count of agents and as many of
-      them as the fleet's directory lists, each with its status line, the id
+    * `fleet_key/1`: "Who's here", the count of agents, the bar's count of
+      the addresses holding a Key and of those online now
+      (`Keyfleet.Keys.count_holders/2`, over the last hour), and as many of
+      the agents as the fleet's directory lists, each with its status line, the id
       that names its row and the address of its own picture, or nil when it
       set none: a picture made from its wallet is made where it is drawn
       (`Keyfleet.Agents.Avatar.shown/2`), and is ten times the size of the
@@ -124,7 +126,13 @@ defmodule Keyfleet.Agents.Here do
         {:error, _failure} -> nil
       end
 
-    {:ok, %{here: count, agents: agents}}
+    holders =
+      case Keys.count_holders(fleet_id, DateTime.add(now, -1, :hour)) do
+        {:ok, holders} -> holders
+        {:error, _failure} -> nil
+      end
+
+    {:ok, %{here: count, agents: agents, holders: holders}}
   rescue
     # The database not answering raises beneath Ash. It is a read not taken,
     # never a reason for this process, and the site with it, to stop.

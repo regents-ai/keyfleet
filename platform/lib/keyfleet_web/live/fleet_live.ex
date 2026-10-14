@@ -2,8 +2,8 @@ defmodule KeyfleetWeb.FleetLive do
   @moduledoc """
   One fleet's page, under a slim bar with the fleet's name, how many keys it
   has sold and how many agents are here, "Send your agent", and the fleet's
-  places: "Hall" (Chat, Workspace), "Map" (Fleet Grid, Member List) and
-  "Treasury".
+  places: "Hall" (Chat, Treasury, Workspace) and "Map" (Fleet Grid, Member
+  List), each group's buttons in one tight box under its name.
 
   Under the bar is one way in, whichever applies first: the reader's own Key
   to enter as, the Regents Club Pass a Club Key comes with, the Key on sale,
@@ -89,13 +89,35 @@ defmodule KeyfleetWeb.FleetLive do
     required: true,
     doc: "the agents here, or nil when they couldn't be counted"
 
+  attr :holders, :map,
+    required: true,
+    doc:
+      "how many addresses hold a Key and how many of them are online now, as `Keyfleet.Keys.count_holders/2` counts them, or nil when they couldn't be counted"
+
   @doc """
-  How many keys a fleet has sold, or given for the Regents Club, and how many
-  agents run them, in one line, as the homepage's card and the fleet's own
-  bar both say it. A fleet not yet
-  deployed, or one whose sales are still being read, shows no key count, and
-  agents that couldn't be counted are said to be so, never shown as none.
+  How many keys a fleet has sold and how many agents run them, in one line,
+  as the homepage's card and the fleet's own bar both say it. The Regents
+  Club, whose Keys are given, says instead how many Keys it has, how many
+  addresses hold them and how many of those holders are online now. A fleet
+  not yet deployed, or one whose sales are still being read, shows no key
+  count, and what couldn't be counted is said to be so, never shown as none.
   """
+  def headcount(%{sales: %{deployed?: true, given?: true}} = assigns) do
+    ~H"""
+    <.given id={"#{@id}-keys"} sales={@sales} holders={@holders} /> ·
+    <Count.count
+      :if={@holders}
+      id={"#{@id}-online"}
+      value={@holders.online}
+      one="online now"
+      many="online now"
+    />
+    <span :if={!@holders} id={"#{@id}-online"} data-count-failed>
+      Couldn't count who's online just now
+    </span>
+    """
+  end
+
   def headcount(assigns) do
     ~H"""
     <.sold id={"#{@id}-keys"} sales={@sales} /> ·
@@ -134,15 +156,24 @@ defmodule KeyfleetWeb.FleetLive do
   defp sold(%{sales: %{deployed?: false}} = assigns), do: ~H"Not on Base yet"
   defp sold(%{sales: %{current?: false}} = assigns), do: ~H"Figures are catching up"
 
-  defp sold(%{sales: %{given?: true}} = assigns) do
-    ~H"""
-    <Count.count id={@id} value={@sales.keys} one="Key" many="Keys" /> given
-    """
-  end
-
   defp sold(assigns) do
     ~H"""
     <Count.count id={@id} value={@sales.keys} one="Key" many="Keys" /> sold
+    """
+  end
+
+  defp given(%{sales: %{current?: false}} = assigns), do: ~H"Figures are catching up"
+
+  defp given(%{holders: nil} = assigns) do
+    ~H"""
+    <Count.count id={@id} value={@sales.keys} one="total Key" many="total Keys" />
+    """
+  end
+
+  defp given(assigns) do
+    ~H"""
+    <Count.count id={@id} value={@sales.keys} one="total Key" many="total Keys" /> for
+    <Count.count id={"#{@id}-holders"} value={@holders.holders} one="account" many="accounts" />
     """
   end
 
@@ -222,7 +253,12 @@ defmodule KeyfleetWeb.FleetLive do
           <div class="fleet-bar__title">
             <h1 tabindex="-1">{@fleet.name}</h1>
             <p id="fleet-sales" class="fleet-bar__sales">
-              <.headcount id="fleet-sales" sales={sold_so_far(@fleet)} agents={@fleet.agents_here} />
+              <.headcount
+                id="fleet-sales"
+                sales={sold_so_far(@fleet)}
+                agents={@fleet.agents_here}
+                holders={@fleet.holders}
+              />
             </p>
             <.next_key :if={not @fleet.given?} id="fleet-next-key" buy={@fleet.buy} />
           </div>
@@ -239,48 +275,52 @@ defmodule KeyfleetWeb.FleetLive do
           <nav class="fleet-bar__nav" aria-label="This fleet">
             <section class="fleet-bar__group" aria-labelledby="fleet-nav-hall">
               <h2 id="fleet-nav-hall">Hall</h2>
-              <.link
-                id="fleet-tab-hall"
-                class="rg-button rg-button--secondary"
-                patch={KeyLinks.hall_path(@fleet.fleet_id)}
-                aria-current={if @view == :hall, do: "page"}
-              >
-                Chat
-              </.link>
-              <.link
-                id="fleet-tab-workspace"
-                class="rg-button rg-button--secondary"
-                patch={"#{Fleets.path(@fleet.fleet_id)}/workspace"}
-              >
-                Workspace
-              </.link>
+              <div class="fleet-bar__places">
+                <.link
+                  id="fleet-tab-hall"
+                  class="rg-button rg-button--secondary"
+                  patch={KeyLinks.hall_path(@fleet.fleet_id)}
+                  aria-current={if @view == :hall, do: "page"}
+                >
+                  Chat
+                </.link>
+                <.link
+                  id="fleet-tab-treasury"
+                  class="rg-button rg-button--secondary"
+                  patch={ProposalsPage.treasury_path(@fleet.fleet_id)}
+                >
+                  Treasury
+                </.link>
+                <.link
+                  id="fleet-tab-workspace"
+                  class="rg-button rg-button--secondary"
+                  patch={"#{Fleets.path(@fleet.fleet_id)}/workspace"}
+                >
+                  Workspace
+                </.link>
+              </div>
             </section>
             <section class="fleet-bar__group" aria-labelledby="fleet-nav-map">
               <h2 id="fleet-nav-map">Map</h2>
-              <.link
-                id="fleet-tab-map"
-                class="rg-button rg-button--secondary"
-                patch={KeyLinks.map_path(@fleet.fleet_id)}
-                aria-current={if @view == :map, do: "page"}
-              >
-                Fleet Grid
-              </.link>
-              <.link
-                id="fleet-tab-members"
-                class="rg-button rg-button--secondary"
-                patch={KeyLinks.members_path(@fleet.fleet_id)}
-                aria-current={if @view == :members, do: "page"}
-              >
-                Member List
-              </.link>
+              <div class="fleet-bar__places">
+                <.link
+                  id="fleet-tab-map"
+                  class="rg-button rg-button--secondary"
+                  patch={KeyLinks.map_path(@fleet.fleet_id)}
+                  aria-current={if @view == :map, do: "page"}
+                >
+                  Fleet Grid
+                </.link>
+                <.link
+                  id="fleet-tab-members"
+                  class="rg-button rg-button--secondary"
+                  patch={KeyLinks.members_path(@fleet.fleet_id)}
+                  aria-current={if @view == :members, do: "page"}
+                >
+                  Member List
+                </.link>
+              </div>
             </section>
-            <.link
-              id="fleet-tab-treasury"
-              class="rg-button rg-button--secondary"
-              patch={ProposalsPage.treasury_path(@fleet.fleet_id)}
-            >
-              Treasury
-            </.link>
           </nav>
         </header>
 
@@ -467,7 +507,7 @@ defmodule KeyfleetWeb.FleetLive do
               src={card.image}
               alt=""
               width="48"
-              height="48"
+              height="60"
               loading="lazy"
               decoding="async"
             />
@@ -1722,18 +1762,21 @@ defmodule KeyfleetWeb.FleetLive do
     |> show_agents()
   end
 
-  # Before the fleet's first reading, the agents are said to be uncounted,
+  # Before the fleet's first reading, the agents and holders are said to be uncounted,
   # never shown as none. The agents go to the page as they are drawn and
   # aren't kept: each reading draws them all again.
   defp show_agents(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
-    {agents, here} =
+    {agents, here, holders} =
       case SharedFigures.reading(Here.fleet_key(fleet_id)) do
-        %{agents: agents, here: here} -> {agents, here}
-        nil -> {[], nil}
+        %{agents: agents, here: here, holders: holders} -> {agents, here, holders}
+        nil -> {[], nil, nil}
       end
 
     socket
-    |> assign(:fleet, Map.merge(fleet, %{agents_shown: length(agents), agents_here: here}))
+    |> assign(
+      :fleet,
+      Map.merge(fleet, %{agents_shown: length(agents), agents_here: here, holders: holders})
+    )
     |> stream(:fleet_who, agents, reset: true)
   end
 

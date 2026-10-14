@@ -7,10 +7,11 @@ defmodule Keyfleet.Keys.KeyArt do
   The same seed, table and top line always give the same picture, so a key
   revealed again with another seed gets another picture at another address.
 
-  A card also has a close-up, for places that show many Keys at once (the
-  fleet's map, a holder's cards): the square at the card's middle, small
-  enough to load by the hundred. It is cut from the card as it is kept, so it
-  is always that card's own picture.
+  A card also has two small pictures, made from the card as it is kept, so
+  each is always that card's own picture: its close-up, for the fleet's map,
+  the square at the card's middle, small enough to load by the hundred; and
+  its small card, the whole card at a fifth of its width, for a holder's
+  cards.
 
   The service is configured under `:keyfleet, Keyfleet.Keys.KeyArt`: its `url`
   and `req_options` (the tests' `Req.Test` stub). Each draw and each read of a
@@ -30,6 +31,9 @@ defmodule Keyfleet.Keys.KeyArt do
   # the medallion wherever the card's slot puts it, kept at `@close_up_side`.
   @cut_side 448
   @close_up_side 256
+
+  # The small card: the whole card at this width, its height in proportion.
+  @small_card_width 192
 
   @doc "Where every card picture is shown from."
   def origin, do: @origin
@@ -111,6 +115,18 @@ defmodule Keyfleet.Keys.KeyArt do
          :ok <- card_sized(card),
          {:ok, cut} <- Operation.extract_area(card, left, top, @cut_side, @cut_side),
          {:ok, small} <- Operation.resize(cut, @close_up_side / @cut_side) do
+      Image.write_to_buffer(small, ".webp[Q=82]")
+    end
+  end
+
+  @doc """
+  The whole card `png` made small, as a WebP: `{:ok, webp}`, or
+  `{:error, reason}` for a picture that is not a card.
+  """
+  def small_card(png) do
+    with {:ok, card} <- Image.new_from_buffer(png),
+         :ok <- card_sized(card),
+         {:ok, small} <- Operation.resize(card, @small_card_width / @card_width) do
       Image.write_to_buffer(small, ".webp[Q=82]")
     end
   end

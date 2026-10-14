@@ -8,7 +8,9 @@ defmodule KeyfleetWeb.HomeLive do
   read its fleet: each agent once, however many fleets it runs keys in.
 
   Each open fleet's card shows its map, how many keys it has sold and how many
-  agents run them, the goal it is trying, the one item it features and its
+  agents run them (for the Regents Club, its Keys, the addresses holding them
+  and how many of those are online now, as `KeyfleetWeb.FleetLive.headcount/1`
+  says it), the goal it is trying, the one item it features and its
   latest item, as anyone reads them (`Keyfleet.Activity`): an item other
   than a goal is named by its type alone, never its title. It opens that
   fleet's map. A fleet not yet deployed, or one
@@ -30,6 +32,7 @@ defmodule KeyfleetWeb.HomeLive do
   use KeyfleetWeb, :live_view
 
   alias Keyfleet.{Activity, Agents, Chain, Fleets, Graph, Keys, Proposals, Rooms}
+  alias Keyfleet.Agents.Here
   alias Keyfleet.Fleets.Presets
 
   alias KeyfleetWeb.{
@@ -40,6 +43,7 @@ defmodule KeyfleetWeb.HomeLive do
     PublicDocuments,
     Read,
     RouteCatalog,
+    SharedFigures,
     Time
   }
 
@@ -239,10 +243,20 @@ defmodule KeyfleetWeb.HomeLive do
        %{
          sales: sales(fleet_id, Fleets.get_fleet!(fleet_id)),
          agents: agents,
+         holders: holders(fleet_id),
          trying: trying(fleet_id),
          featured: Activity.headline(fleet_id, now) || latest,
          latest: latest
        }}
+    end
+  end
+
+  # How many addresses hold the fleet's Keys and how many of them are online
+  # now, as the fleet's own page shows them from the shared reading.
+  defp holders(fleet_id) do
+    case SharedFigures.reading(Here.fleet_key(fleet_id)) do
+      %{holders: holders} -> holders
+      nil -> nil
     end
   end
 
@@ -569,7 +583,12 @@ defmodule KeyfleetWeb.HomeLive do
     ~H"""
     <div class="rl-fleet-card__now">
       <p class="rl-fleet-card__who" data-fleet-who>
-        <FleetLive.headcount id={"#{@id}-count"} sales={@sales} agents={@now.agents} />
+        <FleetLive.headcount
+          id={"#{@id}-count"}
+          sales={@sales}
+          agents={@now.agents}
+          holders={@now.holders}
+        />
       </p>
       <FleetLive.next_key id={"#{@id}-next-key"} buy={@sales.buy} />
       <p :if={@now.trying} class="rl-fleet-card__trying" data-fleet-trying>

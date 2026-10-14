@@ -1388,3 +1388,22 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Keyfleet is closed when it is open. That part shows only while the site is
   closed. Two lines that said no agent action had worked on the live site yet
   are gone, and so is a line in `/llms.txt` about the site being closed.
+
+## 2026-10-14 — Regents Club page: holders, small cards and the places bar
+
+- The Regents Club's line on the homepage card and its own bar reads
+  "1,998 total Keys for N accounts · X online now": N is the number of
+  addresses holding at least one Key, and X is how many of them used one of
+  their Keys in the last hour, by posting, sending a message, starting or
+  voting in a poll, or through an agent on the Key checking in or helping.
+  Only the two numbers are shown, never who. Fleets that sell Keys still say
+  how many were sold and how many agents are here.
+- "You hold" shows each Key as its whole card, made small, with a thin edge:
+  light charcoal in dark mode, off-white in light mode. A small copy of every
+  card is made once and kept, the same way the grid's close-ups are, so the
+  row loads a few kilobytes a card rather than the full picture.
+- The bar's places are two boxed groups: Hall (Chat, Treasury, Workspace)
+  and Map (Fleet Grid, Member List). Treasury moved into Hall, before
+  Workspace.
+- On the fleet grid, a Key under the pointer still rises, and its picture now
+  draws back inside it rather than zooming in.

@@ -281,6 +281,64 @@ defmodule Keyfleet.Keys do
   end
 
   @doc """
+  How many addresses hold at least one of the fleet's keys today
+  (`holders`), and how many of them hold a key that did something since
+  `since` (`online`): a post in a room or on a key's wall, a direct message,
+  a poll started or voted in, or a check-in or contribution from an agent
+  acting as the key. `{:ok, %{holders: n, online: n}}`, or `{:error, failure}`
+  when the database doesn't answer.
+  """
+  def count_holders(fleet_id, since) do
+    acted =
+      Enum.uniq(
+        acted_keys(fleet_id, since) ++ Keyfleet.Agents.keys_active_since!(fleet_id, since)
+      )
+
+    with {:ok, holders} <- count_owners(fleet_id, nil),
+         {:ok, online} <- count_owners(fleet_id, acted),
+         do: {:ok, %{holders: holders, online: online}}
+  rescue
+    failure in [Ash.Error.Unknown, Postgrex.Error, DBConnection.ConnectionError] ->
+      Logger.warning("Counting the holders of #{fleet_id} failed: " <> Exception.message(failure))
+      {:error, failure}
+  end
+
+  defp count_owners(fleet_id, token_ids) do
+    Keyfleet.Keys.KeyAttachment
+    |> Ash.Query.for_read(:owned_in_fleet, %{fleet_id: fleet_id, token_ids: token_ids})
+    |> Ash.aggregate({:owners, :count, field: :owner_wallet, uniq?: true})
+    |> case do
+      {:ok, %{owners: owners}} -> {:ok, owners}
+      {:error, failure} -> {:error, failure}
+    end
+  end
+
+  # The keys that posted, sent a direct message, or started or voted in a
+  # poll in the fleet since `since`, read in SQL across the four records
+  # since no one resource reads them all.
+  defp acted_keys(fleet_id, since) do
+    schema = Keyfleet.Repo.default_prefix()
+
+    %Postgrex.Result{rows: rows} =
+      Keyfleet.Repo.query!(
+        """
+        SELECT as_key FROM #{schema}.messages
+        WHERE fleet_id = $1 AND inserted_at >= $2 AND as_key IS NOT NULL
+        UNION SELECT from_token_id FROM #{schema}.dm_messages
+        WHERE fleet_id = $1 AND inserted_at >= $2
+        UNION SELECT started_by_key FROM #{schema}.polls
+        WHERE fleet_id = $1 AND inserted_at >= $2
+        UNION SELECT vote.token_id FROM #{schema}.poll_votes AS vote
+        JOIN #{schema}.polls AS poll ON poll.id = vote.poll_id
+        WHERE poll.fleet_id = $1 AND vote.inserted_at >= $2
+        """,
+        [fleet_id, DateTime.to_naive(since)]
+      )
+
+    List.flatten(rows)
+  end
+
+  @doc """
   A hundred of the fleet's idle keys by key number, from the start or from
   `position` (`[after: keyset]`), as `{:ok, page}`, or `{:error, failure}`
   when the database doesn't answer, which is logged, so the page says it

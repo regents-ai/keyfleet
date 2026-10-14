@@ -72,7 +72,9 @@ defmodule Keyfleet.SharedReading do
       open:
         "the agents here and what their check-ins say are open to a signed-out read " <>
           "(Keyfleet.Agents.AgentProfile :here_in_fleet, Keyfleet.Agents.CheckIn read policy) " <>
-          "and in the open fleet directory; if either policy tightens, this kind changes with it",
+          "and in the open fleet directory; if either policy tightens, this kind changes with it. " <>
+          "Its two holder counts are numbers only: how many addresses hold a Key, which the " <>
+          "chain shows anyone, and how many of them acted in the last hour, naming nobody",
       # One for each fleet in Keyfleet.Fleets' catalog: a sixth fleet raises
       # it, or its Who's here is refused and shown as not counted.
       keys: 5,

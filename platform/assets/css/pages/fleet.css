@@ -108,15 +108,23 @@
   gap: 0.5rem 1.25rem;
 }
 
-/* "Hall" and "Map": a name over the places it holds. */
+/* "Hall" and "Map": a name over the places it holds, whose buttons sit
+   together in one tight box. */
 .fleet-bar__group {
   display: grid;
-  grid-template-columns: repeat(2, auto);
-  gap: 0.25rem 0.5rem;
+  justify-items: start;
+  gap: 0.25rem;
+}
+
+.fleet-bar__places {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--color-border);
 }
 
 .fleet-bar__group h2 {
-  grid-column: 1 / -1;
   color: var(--color-fg-muted);
   font-family: inherit;
   font-size: 0.8125rem;
@@ -203,18 +211,21 @@
   text-decoration: none;
 }
 
-/* A card's close-up, or its space while the close-up is still being made. */
+/* The whole card made small, or its space while it is still being made,
+   edged in light charcoal on the dark page and light off-white on the light
+   one. */
 .fleet-entry__card img,
 .fleet-entry__blank {
   display: block;
   inline-size: 3rem;
-  block-size: 3rem;
+  aspect-ratio: 767 / 959;
+  border: 1px solid
+    light-dark(
+      color-mix(in oklab, var(--palette-platinum) 80%, var(--palette-charcoal)),
+      color-mix(in oklab, var(--palette-platinum) 30%, var(--palette-charcoal))
+    );
   background: var(--color-surface);
   object-fit: cover;
-}
-
-.fleet-entry__blank {
-  border: 1px solid var(--color-border);
 }
 
 .fleet-entry__card:hover,

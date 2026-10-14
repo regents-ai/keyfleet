@@ -244,6 +244,18 @@ defmodule Keyfleet.Keys.KeyAttachment do
       get? true
     end
 
+    # The fleet's keys with their owners today, unpaged, for counting the
+    # addresses that hold them: all of them, or only those in `token_ids`.
+    read :owned_in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_ids, {:array, :integer}
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and ownership_epoch == current_ownership_epoch and
+                 (is_nil(^arg(:token_ids)) or token_id in ^arg(:token_ids))
+             )
+    end
+
     # Every key the fleet has issued, each with its owner today, a page at a
     # time by key number: a fleet can issue tens of thousands.
     read :current_in_fleet do

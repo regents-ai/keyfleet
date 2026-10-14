@@ -161,7 +161,8 @@
 /* The close-up stands in for the number; the agent dot stays. */
 .km-tile[data-pic] > span:first-of-type { font-size: 0; }
 
-/* Under the pointer a sold key's hex rises and its close-up draws nearer. */
+/* Under the pointer a sold key's hex rises and its close-up draws back
+   inside it, a zoom out. */
 @media (hover: hover) {
   .km-tile::before,
   .km-tile::after,
@@ -181,7 +182,7 @@
     transform: scale(1.18);
   }
 
-  .km-tile:hover > .km-pic > img { transform: scale(1.25); }
+  .km-tile:hover > .km-pic > img { transform: scale(0.8); }
 }
 
 @media (prefers-reduced-motion: reduce) {

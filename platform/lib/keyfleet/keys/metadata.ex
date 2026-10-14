@@ -78,12 +78,20 @@ defmodule Keyfleet.Keys.Metadata do
   many Keys are asked for, a hundred at most. A Key still waiting for its
   card or its close-up is left out.
   """
-  def close_ups(fleet, token_ids) do
+  def close_ups(fleet, token_ids), do: small_pictures(fleet, token_ids, :close_up_cid)
+
+  @doc """
+  Where the small card of each of the minted Keys `token_ids` of `fleet` is
+  shown, as `close_ups/2` answers for close-ups.
+  """
+  def small_cards(fleet, token_ids), do: small_pictures(fleet, token_ids, :small_card_cid)
+
+  defp small_pictures(fleet, token_ids, field) do
     seeds = Keys.card_seeds(fleet, token_ids)
 
-    for %{close_up_cid: cid} = kept when is_binary(cid) <-
-          Keys.pictures_of_keys!(fleet.id, Map.keys(seeds)),
-        seeds[kept.token_id] == kept.seed,
+    for kept <- Keys.pictures_of_keys!(fleet.id, Map.keys(seeds)),
+        cid = Map.fetch!(kept, field),
+        is_binary(cid) and seeds[kept.token_id] == kept.seed,
         into: %{},
         do: {kept.token_id, KeyArt.link(cid)}
   end
