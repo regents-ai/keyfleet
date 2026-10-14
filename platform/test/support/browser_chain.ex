@@ -253,8 +253,19 @@ defmodule Keyfleet.BrowserChain do
   a shard of the key for 30 days.
   """
   def shard!(fleet_id, token_id) do
-    Agents.ensure_profile!(%{name: "Browser agent", declared_harness: "test"}, actor: @agent)
+    Agents.ensure_profile!(%{name: "Browser agent", declared_harness: "test"},
+      actor: paired_agent()
+    )
+
     issue_shard!(fleet_id, token_id, @agent.wallet_address, 30)
+  end
+
+  # The browser's agent, paired with a person of its own the first time.
+  defp paired_agent do
+    case Agents.with_pairing(@agent) do
+      {:ok, paired} -> paired
+      {:error, :not_paired} -> Keyfleet.PairingHelpers.pair_wallet!(@agent.wallet_address)
+    end
   end
 
   @doc "Key `token_id`'s owner has issued `wallet` a shard of the key for `days`."
