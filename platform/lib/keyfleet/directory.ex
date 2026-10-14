@@ -185,7 +185,6 @@ defmodule Keyfleet.Directory do
       name: profile.name,
       avatar_src: profile.avatar_src,
       declared_harness: profile.declared_harness,
-      wallet_address: profile.wallet_address,
       key: profile.key,
       status: status,
       status_label: label,

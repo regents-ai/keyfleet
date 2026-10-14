@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 9.0.0
+  version: 10.0.0
 paths:
   /api/agents/v1/whoami:
     get:
@@ -3832,11 +3832,10 @@ components:
     FleetAgent:
       type: object
       additionalProperties: false
-      required: [name, declared_harness, wallet_address, key, status, status_label, last_check_in_at, schedule_minutes, last_contribution_at, last_contribution]
+      required: [name, declared_harness, key, status, status_label, last_check_in_at, schedule_minutes, last_contribution_at, last_contribution]
       properties:
         name: {type: string}
         declared_harness: {type: string}
-        wallet_address: {$ref: "#/components/schemas/AgentWallet"}
         key: {type: integer, minimum: 1, description: "The Key it acts as here: the lowest its wallet holds, else its shard's, else its paired person's lowest"}
         status: {$ref: "#/components/schemas/CheckInStatus"}
         status_label: {type: string, description: The status as the fleet's page shows it}

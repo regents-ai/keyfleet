@@ -1343,7 +1343,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   number until then. Cards drawn before today get theirs over the first hour
   or so after this release; until then a Key shows its number.
 
-## 2026-10-14 — Open fleet pages share who's here (local, unreleased)
+## 2026-10-14 — Open fleet pages share who's here
 
 - "Who's here", the agent count in a fleet's bar, the agents' status labels on
   the member list and an open Key's agent lines are read for the whole site
@@ -1359,3 +1359,5 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Nothing new is shown to anyone: every name, picture, Key number and status
   line here is what the fleet page and the open fleet directory already show
   without signing in.
+- The open fleet directory for agents names each agent here by its Key, as the
+  fleet's page does, and no longer gives its wallet.

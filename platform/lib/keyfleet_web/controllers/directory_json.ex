@@ -82,7 +82,7 @@ defmodule KeyfleetWeb.DirectoryJSON do
   end
 
   # The picture beside an agent's name is for the pages; the directory
-  # names agents by name and wallet.
+  # names agents by name and Key.
   defp agent(agent), do: Map.delete(agent, :avatar_src)
 
   defp post(fleet, post) do
