@@ -20,10 +20,10 @@ defmodule KeyfleetWeb.FleetLive do
   words from the right of the hall for it to quote there
   (`Keyfleet.Rooms.QuoteRequest`).
   "Fleet Grid", `?view=map`, is its map of keys, and "Member List",
-  `?view=members`, every key it has issued with who holds it. "Workspace" and
-  "Treasury" are pages of their own; the Treasury page
-  (`KeyfleetWeb.TreasuryLive`) has the fleet's pricing, sales figures and
-  contract.
+  `?view=members`, every key it has issued with who holds it. "Treasury"
+  (`KeyfleetWeb.TreasuryLive`, at `/treasury` under the fleet's address) and
+  "Workspace" (`KeyfleetWeb.WorkspaceLive`, at `/workspace`) open in the same
+  page, under the same bar, in place of the other views.
 
   A coming-soon fleet's page shows its name, its map faded and that it is
   coming soon, and nothing else: no price, no keys, no "Get a key", no "Send
@@ -195,6 +195,12 @@ defmodule KeyfleetWeb.FleetLive do
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
   attr :params, :map, required: true, doc: "the page's address"
+
+  attr :place, :atom,
+    default: :fleet,
+    doc:
+      "`:fleet` for the page's own views, or `:treasury` or `:workspace`, drawn by the inner block"
+
   attr :keys, :any, required: true, doc: "the fleet's issued keys, lowest number first"
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
   attr :thread, :any, required: true, doc: "the messages written to the open key"
@@ -207,6 +213,8 @@ defmodule KeyfleetWeb.FleetLive do
     default: nil,
     doc:
       "what the signed-in person has sent their agent to quote here, as `read_quotes/3` gives it"
+
+  slot :inner_block, doc: "the Treasury or Workspace page, for those places"
 
   attr :now, :map,
     required: true,
@@ -227,7 +235,10 @@ defmodule KeyfleetWeb.FleetLive do
 
   def page(assigns) do
     assigns =
-      assign(assigns, view: view(assigns.params), buying?: buying?(assigns.params, assigns.fleet))
+      assign(assigns,
+        view: view(assigns.place, assigns.params),
+        buying?: buying?(assigns.params, assigns.fleet)
+      )
 
     ~H"""
     <article id="fleet-page" class="fleet-page">
@@ -291,6 +302,7 @@ defmodule KeyfleetWeb.FleetLive do
                   id="fleet-tab-treasury"
                   class="rg-button rg-button--secondary"
                   patch={ProposalsPage.treasury_path(@fleet.fleet_id)}
+                  aria-current={if @view == :treasury, do: "page"}
                 >
                   Treasury
                 </.link>
@@ -298,6 +310,7 @@ defmodule KeyfleetWeb.FleetLive do
                   id="fleet-tab-workspace"
                   class="rg-button rg-button--secondary"
                   patch={"#{Fleets.path(@fleet.fleet_id)}/workspace"}
+                  aria-current={if @view == :workspace, do: "page"}
                 >
                   Workspace
                 </.link>
@@ -336,6 +349,7 @@ defmodule KeyfleetWeb.FleetLive do
         />
 
         <div class="fleet-stage">
+          {render_slot(@inner_block)}
           <.hall
             :if={@view == :hall}
             fleet={@fleet}
@@ -451,11 +465,13 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  # The view the address asks for: the map of Keys, the list of them, or
-  # otherwise the hall.
-  defp view(%{"view" => "map"}), do: :map
-  defp view(%{"view" => "members"}), do: :members
-  defp view(_params), do: :hall
+  # The view on show: the Treasury or the Workspace in their places, and on
+  # the fleet's own address the map of Keys, the list of them, or otherwise
+  # the hall.
+  defp view(:fleet, %{"view" => "map"}), do: :map
+  defp view(:fleet, %{"view" => "members"}), do: :members
+  defp view(:fleet, _params), do: :hall
+  defp view(place, _params), do: place
 
   # "Buy Key" opens "Get a Key" and takes the reader to the Key on offer. An
   # address ending in `?buy` is drawn that way; on arrival it then drops
@@ -1512,21 +1528,21 @@ defmodule KeyfleetWeb.FleetLive do
   The fleet named in the address, with a page of its keys and what's happening
   in it; or `:unreadable` when the database couldn't be read.
   """
-  def read_fleet(socket, params) do
-    case PageRead.run("fleet", fn -> show_fleet(socket, params) end) do
+  def read_fleet(socket, params, place) do
+    case PageRead.run("fleet", fn -> show_fleet(socket, params, place) end) do
       {:ok, socket} -> socket
-      {:error, _failure} -> show_without_keys(socket, :unreadable, params)
+      {:error, _failure} -> show_without_keys(socket, :unreadable, params, place)
     end
   end
 
-  defp show_fleet(socket, %{"fleet_id" => fleet_id} = params) do
+  defp show_fleet(socket, %{"fleet_id" => fleet_id} = params, place) do
     actor = ShellLive.human_actor(socket)
 
     fleet = Fleets.get_fleet!(fleet_id, actor: actor)
 
     cond do
       fleet == nil ->
-        show_without_keys(socket, %{fleet_id: fleet_id, name: nil}, params)
+        show_without_keys(socket, %{fleet_id: fleet_id, name: nil}, params, place)
 
       Fleets.coming_soon?(fleet_id, fleet) ->
         show_without_keys(
@@ -1537,22 +1553,25 @@ defmodule KeyfleetWeb.FleetLive do
             coming_soon?: true,
             layout: Presets.preset(fleet_id)
           },
-          params
+          params,
+          place
         )
 
       true ->
-        show_with_keys(socket, fleet_id, fleet, params, actor)
+        show_with_keys(socket, fleet_id, fleet, params, place, actor)
     end
   end
 
   # Any other fleet: its figures, a page of its keys and what's happening in it.
-  defp show_with_keys(socket, fleet_id, fleet, params, actor) do
-    page = FleetPage.key_page!(fleet_id, params, actor)
-    pages = FleetPage.page_links(fleet_id, page, params)
+  defp show_with_keys(socket, fleet_id, fleet, params, place, actor) do
+    key_params = key_params(place, params)
+    page = FleetPage.key_page!(fleet_id, key_params, actor)
+    pages = FleetPage.page_links(fleet_id, page, key_params)
     deployed? = fleet.manager_address != nil
     current? = deployed? and Chain.fresh?(fleet_id)
     progress = if deployed?, do: Chain.progress(fleet_id)
-    feed = feed_on_return(socket.assigns.fleet_params || %{}, params)
+    shown = view(socket.assigns.fleet_place, socket.assigns.fleet_params || %{})
+    feed = feed_on_return(shown, view(place, params))
 
     socket
     |> assign(:fleet, %{
@@ -1568,7 +1587,7 @@ defmodule KeyfleetWeb.FleetLive do
       progress: progress,
       buy: if(deployed?, do: FleetPage.next_sale(fleet_id, progress)),
       rooms: Rooms.list_rooms!(fleet_id, actor: actor),
-      no_keys?: page.results == [] and not FleetPage.paged?(params),
+      no_keys?: page.results == [] and not FleetPage.paged?(key_params),
       pages: pages,
       listed: FleetPage.listed(page, pages),
       layout: Presets.preset(fleet_id),
@@ -1580,17 +1599,32 @@ defmodule KeyfleetWeb.FleetLive do
       held: FleetPage.held(fleet, actor),
       drawn: %{}
     })
-    |> assign(fleet_params: params, pass_note: nil)
+    |> assign(fleet_params: params, fleet_place: place, pass_note: nil)
     |> follow_agents(fleet_id)
     |> list_keys(page.results, reset: true)
-    |> read_activity(fleet_id, feed)
+    |> follow_feed(fleet_id, place, feed)
     |> read_quotes(fleet_id, actor)
   end
 
-  # The feed's lines leave the page with the hall, so coming back from the
-  # map draws them again.
-  defp feed_on_return(shown, params),
-    do: if(view(shown) != :hall and view(params) == :hall, do: :redrawn, else: :kept)
+  # The Treasury and the Workspace page through their own lists with the same
+  # words in the address, so under them the list of Keys is at its first page.
+  defp key_params(:fleet, params), do: params
+  defp key_params(_place, params), do: Map.take(params, ["fleet_id"])
+
+  # The feed is read while the fleet's own views are on show. The Treasury
+  # and the Workspace leave it, and coming back to the hall reads it afresh.
+  defp follow_feed(socket, fleet_id, :fleet, feed), do: read_activity(socket, fleet_id, feed)
+
+  defp follow_feed(socket, _fleet_id, _place, _feed) do
+    socket
+    |> assign(activity: nil, activity_refresh: nil)
+    |> stream(:activity, [], reset: true)
+  end
+
+  # The feed's lines leave the page with the hall, so coming back from
+  # another view draws them again.
+  defp feed_on_return(shown, wanted),
+    do: if(shown != :hall and wanted == :hall, do: :redrawn, else: :kept)
 
   @doc """
   What the signed-in person has sent their agent to quote in the fleet, with
@@ -1635,13 +1669,14 @@ defmodule KeyfleetWeb.FleetLive do
 
   # A fleet there is not, or one coming soon: its name at most, and no keys
   # or activity to read.
-  defp show_without_keys(socket, fleet, params) do
+  defp show_without_keys(socket, fleet, params, place) do
     socket
     |> SharedFigures.follow(:fleet, [])
     |> SharedFigures.follow(:rows, [])
     |> assign(
       fleet: fleet,
       fleet_params: params,
+      fleet_place: place,
       pass_note: nil,
       quotes: nil,
       activity: nil,

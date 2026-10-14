@@ -45,16 +45,12 @@
   padding: var(--rg-panel-padding);
 }
 
-.workspace-heading h1 {
+.workspace-heading h2 {
   max-width: 24ch;
-  font-size: clamp(2rem, 5vw, 3.75rem);
-  line-height: 1;
-  letter-spacing: -0.03em;
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
   text-wrap: balance;
-}
-
-.workspace-heading h1:focus {
-  outline: none;
 }
 
 .workspace-notebooks {

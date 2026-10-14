@@ -29,22 +29,21 @@ defmodule KeyfleetWeb.TreasuryLive do
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
-  def page(%{page: :unreadable} = assigns),
-    do: ~H|<ProposalsLive.unreadable id="treasury-page" />|
-
-  def page(%{page: %{fleet_name: nil}} = assigns),
-    do: ~H|<ProposalsLive.missing_fleet id="treasury-page" />|
+  # Drawn inside the fleet's page, under its name and bar (`KeyfleetWeb.FleetLive`).
+  def page(%{page: :unreadable} = assigns) do
+    ~H"""
+    <article id="treasury-page" class="proposals-page">
+      <section id="treasury-unreadable" class="proposals-panel">
+        <h2>This page couldn’t be loaded.</h2>
+        <p>Refresh the page to try again.</p>
+      </section>
+    </article>
+    """
+  end
 
   def page(assigns) do
     ~H"""
     <article id="treasury-page" class="proposals-page">
-      <header class="proposals-heading">
-        <p class="proposals-kicker">
-          <.link patch={Keyfleet.Fleets.path(@page.fleet_id)}>{@page.fleet_name}</.link>
-        </p>
-        <h1 tabindex="-1">Treasury</h1>
-      </header>
-
       <ProposalsLive.catching_up :if={@page.catching_up?} />
 
       <section id="treasury-voters" class="proposals-panel" aria-labelledby="treasury-voters-title">

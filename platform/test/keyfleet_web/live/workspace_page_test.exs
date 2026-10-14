@@ -110,11 +110,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert html =~ @notice
 
-      assert has_element?(
-               view,
-               ~s(.workspace-kicker a[href="#{Keyfleet.Fleets.path(@fleet)}"]),
-               "Syndicate #1"
-             )
+      assert has_element?(view, "#fleet-view h1", "Syndicate #1")
+      assert has_element?(view, ~s(#fleet-tab-workspace[aria-current="page"]))
 
       assert cards(view) == [dead_end, note, service, evidence, finding, task, goal]
 
@@ -413,12 +410,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       {:ok, view, html} = live(conn, item_path(task))
 
       assert html =~ @notice
-      assert has_element?(view, "h1", "Draft the brief")
+      assert has_element?(view, ".workspace-heading h2", "Draft the brief")
 
       assert has_element?(
                view,
-               ~s(#workspace-item-page a[href="#{@board}"]),
-               "Syndicate #1 workspace"
+               ~s(#workspace-item-page .workspace-kicker a[href="#{@board}"]),
+               "Workspace"
              )
 
       fields =
@@ -524,7 +521,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, view, _html} = live(conn, item_path(dead_end))
 
-      assert has_element?(view, "h1", "Scraping the forum")
+      assert has_element?(view, ".workspace-heading h2", "Scraping the forum")
 
       fields =
         view
@@ -862,7 +859,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       refute render(board) =~ "Their"
 
       {:ok, item, _html} = live(conn, item_path(ours))
-      assert has_element?(item, "h1", "Ours")
+      assert has_element?(item, ".workspace-heading h2", "Ours")
       assert has_element?(item, "p", "Nothing is linked to this yet.")
       assert history(item) == ["Key 17 added the task “Ours”."]
       refute render(item) =~ "Their"
@@ -965,7 +962,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       page = workspace(item)
 
-      assert page |> LazyHTML.query("h1") |> LazyHTML.text() ==
+      assert page |> LazyHTML.query(".workspace-heading h2") |> LazyHTML.text() ==
                ~s{<script>alert("title")</script>}
 
       links = page |> LazyHTML.query("#workspace-fields a") |> LazyHTML.attribute("href")

@@ -150,25 +150,24 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   await walk.arrive(fleetPage)
   await walk.follow(page.locator("#fleet-workspace-link"), board)
 
-  // The workspace's heading leads back to the fleet, and a card's key to the
-  // key's profile over the fleet's page. Close is no link: it starts no page
-  // load and leaves the fleet's page.
-  await walk.follow(page.locator("#workspace-page .workspace-kicker a"), fleetPage)
+  // The workspace sits inside the fleet's page, whose Chat tab leads back to
+  // the hall, and a card's key to the key's profile over the fleet's page.
+  // Close is no link: it starts no page load and goes back to the workspace.
+  await walk.follow(page.locator("#fleet-tab-hall"), fleetPage)
   await walk.follow(page.locator("#fleet-workspace-link"), board)
   await walk.follow(page.locator(`#workspace-page a[href="${fleetPath}?key=${key}"]`).first(), {
     path: `${fleetPath}?key=${key}`,
     shows: "dialog#key-profile",
   })
   await page.locator("#key-profile-close").click()
-  await walk.arrive(fleetPage)
+  await walk.arrive(board)
 
   // A goal on the workspace opens on its own page. A proposal's heading leads
   // to every proposal, and that page's heading back to the fleet.
-  await walk.follow(page.locator("#fleet-workspace-link"), board)
   await walk.follow(page.locator("#workspace-page h3 a", {hasText: "Research plan"}), plan)
   await page.goBack()
   await walk.arrive(board)
-  await walk.follow(page.locator("#workspace-page .workspace-kicker a"), fleetPage)
+  await walk.follow(page.locator("#fleet-tab-hall"), fleetPage)
   await walk.follow(page.locator("#fleet-proposals-link"), proposals)
   await walk.follow(page.locator('#proposals-list [data-proposal="1"] h3 a'), proposal)
   await walk.follow(page.locator("#proposal-page .proposals-kicker a"), proposals)

@@ -646,9 +646,18 @@
   line-height: 1.1;
 }
 
-/* The list of Keys runs as long as its page of them, with the page. */
-.fleet-view[data-view="members"] .fleet-stage {
+/* The list of Keys, the Treasury and the Workspace run as long as they are,
+   with the page. */
+.fleet-view[data-view="members"] .fleet-stage,
+.fleet-view[data-view="treasury"] .fleet-stage,
+.fleet-view[data-view="workspace"] .fleet-stage {
   overflow: visible;
+}
+
+/* Their panels sit in the stage with the page's own margin round them. */
+.fleet-view[data-view="treasury"] .fleet-stage,
+.fleet-view[data-view="workspace"] .fleet-stage {
+  padding: var(--rg-panel-padding);
 }
 
 .fleet-keys {

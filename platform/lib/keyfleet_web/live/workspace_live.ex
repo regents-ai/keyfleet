@@ -26,10 +26,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :code_password, :map, default: nil, doc: "the git password just made, and until when"
   attr :code_notice, :string, default: nil
 
+  # The board and an item are drawn inside the fleet's page, under its name
+  # and bar (`KeyfleetWeb.FleetLive`).
   def board(%{board: :unreadable} = assigns), do: ~H|<.unreadable id="workspace-page" />|
-
-  def board(%{board: %{fleet_name: nil}} = assigns),
-    do: ~H|<.missing_fleet id="workspace-page" />|
 
   def board(%{board: %{members_only?: true}} = assigns),
     do: ~H|<.members_only id="workspace-page" fleet={@board} />|
@@ -38,10 +37,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
     ~H"""
     <article id="workspace-page" class="workspace-page">
       <header class="workspace-heading">
-        <p class="workspace-kicker">
-          <.link patch={Keyfleet.Fleets.path(@board.fleet_id)}>{@board.fleet_name}</.link>
-        </p>
-        <h1 tabindex="-1">Workspace</h1>
         <p class="workspace-lede">
           Goals, tasks, findings and notes.
         </p>
@@ -170,9 +165,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   def item(%{item: :unreadable} = assigns), do: ~H|<.unreadable id="workspace-item-page" />|
 
-  def item(%{item: %{fleet_name: nil}} = assigns),
-    do: ~H|<.missing_fleet id="workspace-item-page" />|
-
   def item(%{item: %{members_only?: true}} = assigns),
     do: ~H|<.members_only id="workspace-item-page" fleet={@item} />|
 
@@ -180,15 +172,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
     ~H"""
     <article id="workspace-item-page" class="workspace-page">
       <header class="workspace-heading">
-        <p class="workspace-kicker">
-          <.link :if={@item.ready?} patch={"#{Keyfleet.Fleets.path(@item.fleet_id)}/workspace"}>
-            {@item.fleet_name} workspace
-          </.link>
-          <.link :if={not @item.ready?} patch={Keyfleet.Fleets.path(@item.fleet_id)}>
-            {@item.fleet_name}
-          </.link>
+        <p :if={@item.ready?} class="workspace-kicker">
+          <.link patch={"#{Keyfleet.Fleets.path(@item.fleet_id)}/workspace"}>Workspace</.link>
         </p>
-        <h1 tabindex="-1">{item_heading(@item)}</h1>
+        <h2>{item_heading(@item)}</h2>
         <p :if={@item[:object]} class="workspace-lede">
           <span>{type_label(@item.object.type)}</span>
           <span :if={@item.object.level} class="workspace-badge" data-level={@item.object.level}>
@@ -382,13 +369,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp members_only(assigns) do
     ~H"""
     <article id={@id} class="workspace-page">
-      <header class="workspace-heading">
-        <p class="workspace-kicker">
-          <.link patch={Keyfleet.Fleets.path(@fleet.fleet_id)}>{@fleet.fleet_name}</.link>
-        </p>
-        <h1 tabindex="-1">Workspace</h1>
-      </header>
-
       <p id="workspace-members-only" class="workspace-panel">
         The workspace is for Key holders.
         <.link patch={KeyLinks.members_path(@fleet.fleet_id)}>See the Keys</.link>
@@ -403,32 +383,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp unreadable(assigns) do
     ~H"""
     <article id={@id} class="workspace-page">
-      <header class="workspace-heading">
-        <p class="workspace-kicker">Fleet</p>
-        <h1 tabindex="-1">Keyfleet</h1>
-      </header>
-
       <section id="workspace-unreadable" class="workspace-panel">
         <h2>This page couldn’t be loaded.</h2>
         <p>Refresh the page to try again.</p>
-      </section>
-    </article>
-    """
-  end
-
-  attr :id, :string, required: true
-
-  # Told the way the fleet's own page tells it.
-  defp missing_fleet(assigns) do
-    ~H"""
-    <article id={@id} class="workspace-page">
-      <header class="workspace-heading">
-        <p class="workspace-kicker">Fleet</p>
-        <h1 tabindex="-1">Keyfleet</h1>
-      </header>
-
-      <section id="workspace-unavailable" class="workspace-panel">
-        <h2>This fleet doesn’t exist.</h2>
       </section>
     </article>
     """

@@ -89,6 +89,7 @@ defmodule KeyfleetWeb.ShellLive do
        points_earning: [],
        fleet: nil,
        fleet_params: nil,
+       fleet_place: :fleet,
        fleet_class: nil,
        keys_topic: nil,
        activity: nil,
@@ -516,7 +517,8 @@ defmodule KeyfleetWeb.ShellLive do
         />
 
         <FleetLive.page
-          :if={@route_spec.route_id == :fleet}
+          :if={fleet_place(@route_spec.route_id)}
+          place={fleet_place(@route_spec.route_id)}
           fleet={@fleet}
           actor={actor(@access_context)}
           lease={@session_lease}
@@ -530,7 +532,22 @@ defmodule KeyfleetWeb.ShellLive do
           send_agent_open={@send_agent_open}
           pass_note={@pass_note}
           quotes={@quotes}
-        />
+        >
+          <WorkspaceLive.board
+            :if={@route_spec.route_id == :workspace}
+            board={@workspace}
+            notebooks_notice={@notebooks_notice}
+            code_password={@code_password}
+            code_notice={@code_notice}
+          />
+          <WorkspaceLive.item :if={@route_spec.route_id == :workspace_item} item={@workspace} />
+          <TreasuryLive.page
+            :if={@route_spec.route_id == :treasury}
+            page={@proposals}
+            actor={actor(@access_context)}
+            lease={@session_lease}
+          />
+        </FleetLive.page>
 
         <KeysLive.page
           :if={@route_spec.route_id == :keys}
@@ -557,14 +574,6 @@ defmodule KeyfleetWeb.ShellLive do
           notice={@room_notice}
         />
 
-        <WorkspaceLive.board
-          :if={@route_spec.route_id == :workspace}
-          board={@workspace}
-          notebooks_notice={@notebooks_notice}
-          code_password={@code_password}
-          code_notice={@code_notice}
-        />
-        <WorkspaceLive.item :if={@route_spec.route_id == :workspace_item} item={@workspace} />
         <ProposalsLive.list
           :if={@route_spec.route_id == :proposals}
           page={@proposals}
@@ -573,12 +582,6 @@ defmodule KeyfleetWeb.ShellLive do
         />
         <ProposalsLive.detail
           :if={@route_spec.route_id == :proposal}
-          page={@proposals}
-          actor={actor(@access_context)}
-          lease={@session_lease}
-        />
-        <TreasuryLive.page
-          :if={@route_spec.route_id == :treasury}
           page={@proposals}
           actor={actor(@access_context)}
           lease={@session_lease}
@@ -599,6 +602,13 @@ defmodule KeyfleetWeb.ShellLive do
     """
   end
 
+  # The fleet's places drawn inside its page, under its bar: the page's own
+  # views, its Treasury and its Workspace.
+  defp fleet_place(:fleet), do: :fleet
+  defp fleet_place(:treasury), do: :treasury
+  defp fleet_place(route_id) when route_id in [:workspace, :workspace_item], do: :workspace
+  defp fleet_place(_route_id), do: nil
+
   defp current_account(%{principal: {:human, account}}), do: account
   defp current_account(_access_context), do: nil
 
@@ -611,14 +621,15 @@ defmodule KeyfleetWeb.ShellLive do
   # The page starts listening for changed keys before it reads, so a change
   # that lands while it loads still reaches it. The map is told when the key
   # chosen changes under it: back or forward, or another fleet's page.
-  defp load_fleet(socket, %{route_id: :fleet}, %{"fleet_id" => fleet_id} = params) do
+  defp load_fleet(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
+       when route_id in [:fleet, :treasury, :workspace, :workspace_item] do
     shown = socket.assigns.fleet
 
     socket
     |> listen_to(fleet_id)
     |> follow_workspace(fleet_id)
     |> follow_proposals(fleet_id)
-    |> FleetLive.read_fleet(params)
+    |> FleetLive.read_fleet(params, fleet_place(route_id))
     |> FleetLive.tell_map_chosen(shown)
   end
 
@@ -627,7 +638,14 @@ defmodule KeyfleetWeb.ShellLive do
       socket
       |> SharedFigures.follow(:fleet, [])
       |> SharedFigures.follow(:rows, [])
-      |> assign(fleet: nil, fleet_params: nil, quotes: nil, activity: nil, activity_refresh: nil)
+      |> assign(
+        fleet: nil,
+        fleet_params: nil,
+        fleet_place: :fleet,
+        quotes: nil,
+        activity: nil,
+        activity_refresh: nil
+      )
       |> stream(:fleet_keys, [], reset: true)
       |> stream(:fleet_who, [], reset: true)
       |> stream(:activity, [], reset: true)
@@ -649,6 +667,7 @@ defmodule KeyfleetWeb.ShellLive do
       |> FleetLive.refresh_listed(token_ids)
       |> KeyProfileLive.refresh_key_profile(token_ids)
       |> FleetLive.refresh_activity_soon(fleet_id)
+      |> workspace_standing_changed(fleet_id)
 
     progress = socket.assigns.fleet.progress
 
@@ -685,6 +704,15 @@ defmodule KeyfleetWeb.ShellLive do
        socket
        |> KeysLive.refresh_key(fleet_id, token_ids)
        |> FleetLive.refresh_activity_soon(fleet_id)}
+
+  # Whether the reader may read the fleet's workspace on show is read afresh.
+  defp workspace_standing_changed(
+         %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket,
+         fleet_id
+       ),
+       do: WorkspaceLive.refresh_later(socket)
+
+  defp workspace_standing_changed(socket, _fleet_id), do: socket
 
   # What the reader may read of the fleet in the address
   # (`Keyfleet.Access.class/2`), read on every visit before the page listens

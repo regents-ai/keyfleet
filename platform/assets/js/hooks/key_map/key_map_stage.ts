@@ -61,6 +61,25 @@ export type KeyMapStageOptions = {
 const picturesAsked = 100
 const picturesWait = 150
 
+// The map lays out, and asks for the close-ups of, at least a fifth more keys
+// than the view and its cell of margin hold, so the keys just past each edge
+// are ready: the fewest whole columns and rows past each side that reach it.
+const moreKeys = 1.2
+
+// The columns and rows to add past each side of `cols` by `rows` cells.
+export function around(cols: number, rows: number): [number, number] {
+  const [most, mostDown] = [Math.ceil(cols / 10), Math.ceil(rows / 10)]
+  let best: [number, number] = [most, mostDown]
+  for (let across = 0; across <= most; across++) {
+    for (let down = 0; down <= mostDown; down++) {
+      const more = (cols + 2 * across) * (rows + 2 * down)
+      const fewest = (cols + 2 * best[0]) * (rows + 2 * best[1])
+      if (more >= moreKeys * cols * rows && more < fewest) best = [across, down]
+    }
+  }
+  return best
+}
+
 const recentreDistance = 100_000
 
 const arrows: Record<string, Direction> = {
@@ -165,7 +184,10 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
     const cell = `${Math.floor(camera.x / (SQRT3 * size))},${Math.floor(camera.y / (1.5 * size))}`
     if (cell === placedAt) return
     placedAt = cell
-    tiles.place(grid, size, camera.x - width / 2, camera.y - height / 2, camera.x + width / 2, camera.y + height / 2)
+    const [colPitch, rowPitch] = [SQRT3 * size, 1.5 * size]
+    const [across, down] = around(width / colPitch + 3, height / rowPitch + 3)
+    const [halfWidth, halfHeight] = [width / 2 + across * colPitch, height / 2 + down * rowPitch]
+    tiles.place(grid, size, camera.x - halfWidth, camera.y - halfHeight, camera.x + halfWidth, camera.y + halfHeight)
     seek()
   }
 
