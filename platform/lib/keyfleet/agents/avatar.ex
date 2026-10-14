@@ -82,10 +82,14 @@ defmodule Keyfleet.Agents.Avatar do
   The picture a page shows for an agent: its own when it set one, otherwise
   the picture made from its wallet, as people's accounts have.
   """
-  def src(%{avatar_key: nil, wallet_address: wallet}),
-    do: PublicIdentity.avatar_src(%{wallet_address: wallet})
+  def src(profile), do: shown(url(profile), profile.wallet_address)
 
-  def src(profile), do: url(profile)
+  @doc """
+  The picture a page shows from the address of the agent's own picture (nil
+  when it set none) and its wallet, for a page that holds only those two.
+  """
+  def shown(nil, wallet), do: PublicIdentity.avatar_src(%{wallet_address: wallet})
+  def shown(url, _wallet), do: url
 
   defp sha256(bytes), do: :crypto.hash(:sha256, bytes) |> Base.encode16(case: :lower)
 end

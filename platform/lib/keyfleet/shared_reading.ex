@@ -74,7 +74,9 @@ defmodule Keyfleet.SharedReading do
           "(Keyfleet.Agents.AgentProfile :here_in_fleet, Keyfleet.Agents.CheckIn read policy) " <>
           "and in the open fleet directory; if either policy tightens, this kind changes with it",
       keys: 5,
-      bytes: 106_496,
+      # 24,631 bytes measured at its fullest; the rest leaves room for a longer
+      # picture address in production.
+      bytes: 32_768,
       within: 120
     },
     key_labels: %{

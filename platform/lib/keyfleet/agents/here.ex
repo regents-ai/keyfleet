@@ -6,8 +6,11 @@ defmodule Keyfleet.Agents.Here do
 
   Three readings come from each pass over a fleet:
 
-    * `fleet_key/1`: "Who's here", the bar's count of agents and up to 50 of
-      them (`Keyfleet.Directory.agents/1`), each with its status line.
+    * `fleet_key/1`: "Who's here", the bar's count of agents and as many of
+      them as the fleet's directory lists, each with its status line and the
+      address of its own picture, or nil when it set none: a picture made from
+      its wallet is made where it is drawn (`Keyfleet.Agents.Avatar.shown/2`),
+      and is ten times the size of the address.
     * `labels_key/2`: one Key's agents and their status labels, for the rows of
       the key list.
     * `lines_key/2`: the same agents' full status lines, for the open Key.
@@ -34,7 +37,7 @@ defmodule Keyfleet.Agents.Here do
   use GenServer
 
   alias Keyfleet.{Agents, Directory, Fleets, Keys, SharedReading}
-  alias Keyfleet.Agents.CheckInStatus
+  alias Keyfleet.Agents.{Avatar, CheckInStatus}
 
   # As many of a Key's agents as its page lists (`Keyfleet.Keys.Profile`).
   @listed 100
@@ -99,20 +102,15 @@ defmodule Keyfleet.Agents.Here do
 
   defp here(fleet_id, now) do
     agents =
-      for agent <- Directory.agents(fleet_id) do
+      for profile <- Agents.agents_here!(fleet_id, query: [limit: Directory.agents_shown()]) do
+        %{line: line} = agent(profile.wallet_address, List.first(profile.check_ins), now)
+
         %{
-          name: agent.name,
-          avatar_src: agent.avatar_src,
-          key: agent.key,
-          wallet_address: agent.wallet_address,
-          line:
-            line(
-              agent.status_label,
-              agent.last_check_in_at,
-              agent.last_contribution_at,
-              agent.last_contribution,
-              now
-            )
+          name: profile.name,
+          avatar_url: Avatar.url(profile),
+          key: profile.key,
+          wallet_address: profile.wallet_address,
+          line: line
         }
       end
 

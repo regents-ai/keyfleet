@@ -1778,6 +1778,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     html =
       render_component(&KeyfleetWeb.CheckIns.who_is_here/1,
         agents: [],
+        shown: 0,
         agents_here: nil,
         on_close: %Phoenix.LiveView.JS{}
       )

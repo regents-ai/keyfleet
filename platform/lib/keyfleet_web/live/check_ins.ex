@@ -13,6 +13,8 @@ defmodule KeyfleetWeb.CheckIns do
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
   import KeyfleetWeb.Components.AgentPicture
 
+  alias Keyfleet.Agents.Avatar
+
   attr :line, :string,
     default: nil,
     doc:
@@ -32,9 +34,11 @@ defmodule KeyfleetWeb.CheckIns do
     """
   end
 
-  attr :agents, :list,
+  attr :agents, :any,
     required: true,
-    doc: "the agents shown, as `Keyfleet.Agents.Here` reads them"
+    doc: "the agents shown, a stream of `Keyfleet.Agents.Here`'s reading"
+
+  attr :shown, :integer, required: true, doc: "how many agents the stream shows"
 
   attr :agents_here, :integer,
     required: true,
@@ -50,14 +54,14 @@ defmodule KeyfleetWeb.CheckIns do
     <section id="fleet-who" class="who-is-here" aria-labelledby="fleet-who-title">
       <h2 id="fleet-who-title">Who’s here</h2>
 
-      <p :if={@agents == []} id="fleet-who-empty" class="who-is-here__note">
+      <p :if={@shown == 0} id="fleet-who-empty" class="who-is-here__note">
         No agents here yet.
       </p>
 
-      <ul :if={@agents != []} id="fleet-who-list" class="who-is-here__list">
-        <li :for={agent <- @agents} id={"fleet-who-#{agent.wallet_address}"}>
+      <ul id="fleet-who-list" class="who-is-here__list" phx-update="stream" hidden={@shown == 0}>
+        <li :for={{dom_id, agent} <- @agents} id={dom_id}>
           <p class="who-is-here__name">
-            <.agent_picture src={agent.avatar_src} />
+            <.agent_picture src={Avatar.shown(agent.avatar_url, agent.wallet_address)} />
             <strong>{agent.name}</strong>
             <span class="who-is-here__keys">Key {grouped(agent.key)}</span>
           </p>
@@ -65,8 +69,8 @@ defmodule KeyfleetWeb.CheckIns do
         </li>
       </ul>
 
-      <p :if={@agents_here && @agents_here > length(@agents)} class="who-is-here__note">
-        {grouped(@agents_here)} agents are here. These are the {length(@agents)} that checked in most recently.
+      <p :if={@agents_here && @agents_here > @shown} class="who-is-here__note">
+        {grouped(@agents_here)} agents are here. These are the {@shown} that checked in most recently.
       </p>
     </section>
     """

@@ -1348,8 +1348,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - "Who's here", the agent count in a fleet's bar, the agents' status labels on
   the member list and an open Key's agent lines are read for the whole site
   when they change and once a minute, and shared by every open page, instead
-  of every open page reading them each minute. They look the same and still say "last check-in 3 minutes
-  ago"; a page now only redraws when what it shows has changed.
+  of every open page reading them each minute. They look the same and still say
+  "last check-in 3 minutes ago"; a page now only redraws when what it shows has
+  changed, and a changed status redraws only that Key's line of the member list.
 - An open page also frees the memory it used to draw itself, so many open
   pages at once need far less memory.
 - Nothing new is shown to anyone: every name, picture, Key number and status

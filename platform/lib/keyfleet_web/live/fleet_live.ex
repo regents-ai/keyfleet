@@ -39,7 +39,7 @@ defmodule KeyfleetWeb.FleetLive do
   import KeyfleetWeb.Components.AgentPicture
 
   import Phoenix.LiveView,
-    only: [push_event: 3, push_patch: 2, stream: 3, stream: 4]
+    only: [push_event: 3, push_patch: 2, stream: 3, stream: 4, stream_insert: 3]
 
   alias Keyfleet.Activity
   alias Keyfleet.Agents
@@ -165,6 +165,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
   attr :thread, :any, required: true, doc: "the messages written to the open key"
   attr :activity, :any, required: true, doc: "the fleet's latest activity, newest first"
+  attr :who, :any, required: true, doc: "the agents \"Who's here\" shows"
   attr :send_agent_open, :boolean, required: true, doc: "whether \"Send your agent\" is showing"
   attr :pass_note, :string, default: nil, doc: "why the Pass number sent opened no Key"
 
@@ -297,6 +298,7 @@ defmodule KeyfleetWeb.FleetLive do
             fleet={@fleet}
             params={@params}
             activity={@activity}
+            who={@who}
             now={@now}
             quotes={@quotes}
           />
@@ -569,6 +571,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :fleet, :map, required: true
   attr :params, :map, required: true
   attr :activity, :any, required: true
+  attr :who, :any, required: true
   attr :now, :map, required: true
   attr :quotes, :map, required: true
 
@@ -628,7 +631,11 @@ defmodule KeyfleetWeb.FleetLive do
 
       <aside class="fleet-rail" aria-label="The fleet now">
         <.trying_now trying={@now.trying} fleet_id={@fleet.fleet_id} params={@params} />
-        <CheckIns.who_is_here agents={@fleet.agents} agents_here={@fleet.agents_here} />
+        <CheckIns.who_is_here
+          agents={@who}
+          shown={@fleet.agents_shown}
+          agents_here={@fleet.agents_here}
+        />
         <.quote_box :if={@quotes} quotes={@quotes} fleet_id={@fleet.fleet_id} />
       </aside>
     </div>
@@ -1493,7 +1500,7 @@ defmodule KeyfleetWeb.FleetLive do
       given?: Presets.given?(fleet_id),
       deck: Map.take(fleet, [:id, :deck_hash, :deck_size]),
       held: FleetPage.held(fleet, actor),
-      labels: %{}
+      drawn: %{}
     })
     |> assign(fleet_params: params, pass_note: nil)
     |> follow_agents(fleet_id)
@@ -1563,6 +1570,7 @@ defmodule KeyfleetWeb.FleetLive do
       activity_refresh: nil
     )
     |> stream(:fleet_keys, [], reset: true)
+    |> stream(:fleet_who, [], reset: true)
     |> stream(:activity, [], reset: true)
   end
 
@@ -1677,9 +1685,9 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   # The rows' status labels come from the readings every page shares
-  # (`Keyfleet.Agents.Here`), heard from before they are read; the page keeps
-  # the labels it drew, to tell a change in them from a change in words it
-  # doesn't show.
+  # (`Keyfleet.Agents.Here`), heard from before they are read. The page keeps
+  # each row's holder and the labels it drew, to tell a change in them from a
+  # change in words it doesn't show, and to draw that one row again.
   defp list_keys(%{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket, keys, actor, opts) do
     socket =
       SharedFigures.follow(
@@ -1689,10 +1697,26 @@ defmodule KeyfleetWeb.FleetLive do
       )
 
     labels = Map.new(keys, &{&1.token_id, labels(fleet_id, &1.token_id)})
+    drawn = Map.new(keys, &{&1.token_id, {&1.owner_wallet, labels[&1.token_id]}})
 
     socket
-    |> update(:fleet, &%{&1 | labels: labels})
+    |> update(:fleet, &%{&1 | drawn: drawn})
     |> stream(:fleet_keys, FleetPage.fleet_keys(fleet_id, keys, labels, actor), opts)
+  end
+
+  # One Key's row drawn again in its place, with its agents' new labels.
+  defp redraw_key(%{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket, key, labels) do
+    [row] =
+      FleetPage.fleet_keys(
+        fleet_id,
+        [key],
+        %{key.token_id => labels},
+        ShellLive.human_actor(socket)
+      )
+
+    socket
+    |> update(:fleet, &put_in(&1.drawn[key.token_id], {key.owner_wallet, labels}))
+    |> stream_insert(:fleet_keys, row)
   end
 
   defp labels(fleet_id, token_id),
@@ -1707,7 +1731,8 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   # Before the fleet's first reading, the agents are said to be uncounted,
-  # never shown as none.
+  # never shown as none. The agents go to the page as they are drawn and
+  # aren't kept: each reading draws them all again.
   defp show_agents(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
     {agents, here} =
       case SharedFigures.reading(Here.fleet_key(fleet_id)) do
@@ -1715,13 +1740,15 @@ defmodule KeyfleetWeb.FleetLive do
         nil -> {[], nil}
       end
 
-    assign(socket, :fleet, Map.merge(fleet, %{agents: agents, agents_here: here}))
+    socket
+    |> assign(:fleet, Map.merge(fleet, %{agents_shown: length(agents), agents_here: here}))
+    |> stream(:fleet_who, agents, reset: true)
   end
 
   @doc """
   A shared reading the page hears has changed: "Who's here" is drawn again,
-  and the key list read again when a row's labels changed, never for words
-  the rows don't show.
+  and a Key's row when its agents' labels changed, never for words the rows
+  don't show.
   """
   def shared_changed(
         %{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket,
@@ -1730,15 +1757,18 @@ defmodule KeyfleetWeb.FleetLive do
       do: show_agents(socket)
 
   def shared_changed(
-        %{assigns: %{fleet: %{fleet_id: fleet_id, labels: drawn}}} = socket,
+        %{assigns: %{fleet: %{fleet_id: fleet_id, drawn: drawn}}} = socket,
         {:key_labels, _id} = key
       ) do
-    case Enum.find(Map.keys(drawn), &(Here.labels_key(fleet_id, &1) == key)) do
+    case Enum.find(drawn, fn {token_id, _row} -> Here.labels_key(fleet_id, token_id) == key end) do
       nil ->
         socket
 
-      token_id ->
-        if labels(fleet_id, token_id) == drawn[token_id], do: socket, else: reread_listed(socket)
+      {token_id, {owner_wallet, shown}} ->
+        case labels(fleet_id, token_id) do
+          ^shown -> socket
+          labels -> redraw_key(socket, %{token_id: token_id, owner_wallet: owner_wallet}, labels)
+        end
     end
   end
 

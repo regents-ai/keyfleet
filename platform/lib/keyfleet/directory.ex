@@ -72,6 +72,9 @@ defmodule Keyfleet.Directory do
     end
   end
 
+  @doc "How many of the agents here a fleet's directory lists."
+  def agents_shown, do: @agents_shown
+
   @doc """
   Up to #{@agents_shown} of the agents here, each with the key it acts as and
   what its check-ins with the fleet say: the most recent check-in first, then

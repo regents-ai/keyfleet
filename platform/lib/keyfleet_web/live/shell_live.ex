@@ -60,6 +60,8 @@ defmodule KeyfleetWeb.ShellLive do
      |> stream(:posts, [])
      |> stream_configure(:fleet_keys, dom_id: &"fleet-key-#{&1.token_id}")
      |> stream(:fleet_keys, [])
+     |> stream_configure(:fleet_who, dom_id: &"fleet-who-#{&1.wallet_address}")
+     |> stream(:fleet_who, [])
      |> stream_configure(:dm_thread, dom_id: &"dm-#{&1.id}")
      |> stream(:dm_thread, [])
      |> stream_configure(:key_thread, dom_id: &"key-message-#{&1.id}")
@@ -523,6 +525,7 @@ defmodule KeyfleetWeb.ShellLive do
           profile={@key_profile}
           thread={@streams.key_thread}
           activity={@streams.activity}
+          who={@streams.fleet_who}
           now={FleetLive.now_shown(@activity)}
           send_agent_open={@send_agent_open}
           pass_note={@pass_note}
@@ -626,6 +629,7 @@ defmodule KeyfleetWeb.ShellLive do
       |> SharedFigures.follow(:rows, [])
       |> assign(fleet: nil, fleet_params: nil, quotes: nil, activity: nil, activity_refresh: nil)
       |> stream(:fleet_keys, [], reset: true)
+      |> stream(:fleet_who, [], reset: true)
       |> stream(:activity, [], reset: true)
 
   # Keys changed in the fleet on show: its sales figures and the key on offer
