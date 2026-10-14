@@ -7,9 +7,11 @@ defmodule KeyfleetWeb.FleetLive do
 
   Under the bar is one way in, whichever applies first: the reader's own Key
   to enter as, the Regents Club Pass a Club Key comes with, the Key on sale,
-  or signing in. "Buy Key" opens "Get a Key" over the page, with the Key on
-  offer and its Buy button at its top. Opened with `?buy`, the page is drawn
-  with it already pressed.
+  or signing in. A fleet that sells Keys offers the next one by its price,
+  as the way to join or, to a holder, as another Key; it opens "Get a Key"
+  over the page, with the Key on offer and its Buy button at its top. Opened
+  with `?buy`, the page is drawn with it already pressed. Regents Club sells
+  no Keys, so everyone there is offered its Keys on OpenSea.
 
   "Chat" is the hall, the page's first view: the fleet's channels down the left, everything
   happening in it as one live feed in the middle, which its channels narrow
@@ -48,6 +50,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Fleets.Rules
+  alias Keyfleet.Keys.Metadata
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.NoPairedAgentError
   alias Keyfleet.Rooms.Errors.QuoteLimitError
@@ -484,7 +487,7 @@ defmodule KeyfleetWeb.FleetLive do
   # The one way in, under the bar: the reader's own Keys, the Club Pass a Club
   # Key comes with, the Key on sale, or signing in, whichever applies first.
   # A holder's cards sit in a row that scrolls sideways, each opening its Key,
-  # and the Key on sale can still be bought beside them.
+  # and another Key can still be bought beside them.
   defp entry(%{fleet: %{held: %{first: token_id, count: count, cards: cards}}} = assigns) do
     assigns = assign(assigns, token_id: token_id, count: count, more: count - length(cards))
 
@@ -519,7 +522,8 @@ defmodule KeyfleetWeb.FleetLive do
           and {grouped(@more)} more
         </li>
       </ul>
-      <.buy_key_button :if={@fleet.buy && @fleet.buy.price} buy={@fleet.buy} variant="secondary" />
+      <.buy_key_button :if={@fleet.buy && @fleet.buy.price} buy={@fleet.buy} holder?={true} />
+      <.opensea_button :if={@fleet.given?} fleet_id={@fleet.fleet_id} />
     </section>
     """
   end
@@ -528,6 +532,7 @@ defmodule KeyfleetWeb.FleetLive do
     ~H"""
     <section id="fleet-entry" class="fleet-entry" data-entry="pass" aria-label="Club Keys">
       <p class="fleet-entry__line">Club Keys come with a Regents Club Pass.</p>
+      <.opensea_button fleet_id={@fleet.fleet_id} />
       <form id="fleet-entry-pass" class="fleet-entry__pass" phx-submit="open_pass_key">
         <label for="fleet-entry-pass-number">Your Pass number</label>
         <input
@@ -558,7 +563,7 @@ defmodule KeyfleetWeb.FleetLive do
     ~H"""
     <section id="fleet-entry" class="fleet-entry" data-entry="buy" aria-label="Get a Key">
       <p class="fleet-entry__line">Key {grouped(@fleet.buy.token_id)} · {usdc(@fleet.buy.price)}</p>
-      <.buy_key_button buy={@fleet.buy} variant="primary" />
+      <.buy_key_button buy={@fleet.buy} holder?={false} />
     </section>
     """
   end
@@ -583,7 +588,7 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   attr :buy, :map, required: true
-  attr :variant, :string, required: true
+  attr :holder?, :boolean, required: true, doc: "whether the reader holds a Key in the fleet"
 
   # Opens "Get a Key" at the Key on sale; the panel holds the wallet's button.
   defp buy_key_button(assigns) do
@@ -591,15 +596,45 @@ defmodule KeyfleetWeb.FleetLive do
     <Regent.Primitives.button
       id="fleet-get-key"
       type="button"
-      variant={@variant}
       aria-controls="fleet-about"
       aria-expanded="false"
       phx-mounted={JS.ignore_attributes(["aria-expanded"])}
       phx-click={get_key()}
     >
-      Buy Key {grouped(@buy.token_id)}
+      <%= if @holder? do %>
+        Add another Key to increase vote weight and treasury share: {usdc(@buy.price)}
+      <% else %>
+        Join this Keyfleet by purchasing the next Key: {usdc(@buy.price)}
+      <% end %>
     </Regent.Primitives.button>
     """
+  end
+
+  attr :fleet_id, :string, required: true
+
+  # The fleet's Keys on OpenSea, for a fleet that sells none here.
+  defp opensea_button(assigns) do
+    assigns = assign(assigns, href: opensea_set(assigns.fleet_id))
+
+    ~H"""
+    <a
+      id="fleet-opensea"
+      class="rg-button rg-button--primary"
+      href={@href}
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      Buy Key on OpenSea
+    </a>
+    """
+  end
+
+  # The Keyfleet collection on OpenSea with only this fleet's set chosen, by
+  # the `Set Type` trait its Keys' metadata carries, written as OpenSea writes it.
+  defp opensea_set(fleet_id) do
+    set = Jason.OrderedObject.new(traitType: "Set Type", values: [Metadata.set_type(fleet_id)])
+    traits = Jason.encode!([set])
+    "https://opensea.io/collection/keyfleet?" <> URI.encode_query(%{traits: traits}, :rfc3986)
   end
 
   # Where an agent starts reading, under "Send your agent".

@@ -1407,3 +1407,15 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Workspace.
 - On the fleet grid, a Key under the pointer still rises, and its picture now
   draws back inside it rather than zooming in.
+
+## 2026-10-14 — Buying a Key: OpenSea for the Club, the next Key's price elsewhere
+
+- Regents Club pages offer everyone, signed in or not, "Buy Key on OpenSea",
+  opening the Keyfleet collection on OpenSea with only Regents Club Keys
+  shown.
+- On a fleet that sells Keys, the button under the bar names the price: "Join
+  this Keyfleet by purchasing the next Key: N USDC" for someone without a Key
+  there, and "Add another Key to increase vote weight and treasury share: N
+  USDC" for a holder. Both open "Get a Key" as before.
+- The "online now" count reads the fleet's posts, direct messages, polls and
+  votes as one ordinary database query; the security scan is clean again.

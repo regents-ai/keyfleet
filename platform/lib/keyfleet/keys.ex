@@ -6,6 +6,8 @@ defmodule Keyfleet.Keys do
   """
   use Ash.Domain
 
+  import Ecto.Query, only: [from: 2, union: 2]
+
   require Logger
 
   alias Keyfleet.Actors.Agent
@@ -314,28 +316,42 @@ defmodule Keyfleet.Keys do
   end
 
   # The keys that posted, sent a direct message, or started or voted in a
-  # poll in the fleet since `since`, read in SQL across the four records
+  # poll in the fleet since `since`, read across the four tables at once
   # since no one resource reads them all.
   defp acted_keys(fleet_id, since) do
-    schema = Keyfleet.Repo.default_prefix()
+    since = DateTime.to_naive(since)
 
-    %Postgrex.Result{rows: rows} =
-      Keyfleet.Repo.query!(
-        """
-        SELECT as_key FROM #{schema}.messages
-        WHERE fleet_id = $1 AND inserted_at >= $2 AND as_key IS NOT NULL
-        UNION SELECT from_token_id FROM #{schema}.dm_messages
-        WHERE fleet_id = $1 AND inserted_at >= $2
-        UNION SELECT started_by_key FROM #{schema}.polls
-        WHERE fleet_id = $1 AND inserted_at >= $2
-        UNION SELECT vote.token_id FROM #{schema}.poll_votes AS vote
-        JOIN #{schema}.polls AS poll ON poll.id = vote.poll_id
-        WHERE poll.fleet_id = $1 AND vote.inserted_at >= $2
-        """,
-        [fleet_id, DateTime.to_naive(since)]
+    posted =
+      from(m in "messages",
+        where: m.fleet_id == ^fleet_id and m.inserted_at >= ^since and not is_nil(m.as_key),
+        select: m.as_key
       )
 
-    List.flatten(rows)
+    messaged =
+      from(d in "dm_messages",
+        where: d.fleet_id == ^fleet_id and d.inserted_at >= ^since,
+        select: d.from_token_id
+      )
+
+    started =
+      from(p in "polls",
+        where: p.fleet_id == ^fleet_id and p.inserted_at >= ^since,
+        select: p.started_by_key
+      )
+
+    voted =
+      from(v in "poll_votes",
+        join: p in "polls",
+        on: p.id == v.poll_id,
+        where: p.fleet_id == ^fleet_id and v.inserted_at >= ^since,
+        select: v.token_id
+      )
+
+    posted
+    |> union(^messaged)
+    |> union(^started)
+    |> union(^voted)
+    |> Keyfleet.Repo.all()
   end
 
   @doc """

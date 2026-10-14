@@ -1329,7 +1329,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, ~s(#fleet-entry-card-50[href="#{@path}?key=50"]), "Key 50")
       refute has_element?(view, "#fleet-entry-card-51")
       assert text(view, "#fleet-entry-more") == "and 100 more"
-      assert has_element?(view, "#fleet-entry #fleet-get-key", "Buy Key 151")
+
+      assert text(view, "#fleet-entry #fleet-get-key") ==
+               "Add another Key to increase vote weight and treasury share: 42.99817 USDC"
 
       view |> element("#fleet-entry-card-2") |> render_click()
       assert_patch(view, @path <> "?key=2")
@@ -1344,7 +1346,10 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert has_element?(view, ~s(#fleet-entry[data-entry="buy"]))
       assert text(view, "#fleet-entry .fleet-entry__line") == "Key 151 · 42.99817 USDC"
-      assert has_element?(view, "#fleet-entry #fleet-get-key", "Buy Key 151")
+
+      assert text(view, "#fleet-entry #fleet-get-key") ==
+               "Join this Keyfleet by purchasing the next Key: 42.99817 USDC"
+
       refute has_element?(view, "#fleet-entry-cards")
     end
 
@@ -1361,6 +1366,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert has_element?(view, ~s(#fleet-entry[data-entry="pass"]))
       refute has_element?(view, "#fleet-get-key")
+
+      assert has_element?(
+               view,
+               ~s(#fleet-opensea[href="https://opensea.io/collection/keyfleet?traits=%5B%7B%22traitType%22%3A%22Set%20Type%22%2C%22values%22%3A%5B%22Regents%20Club%22%5D%7D%5D"]),
+               "Buy Key on OpenSea"
+             )
+
       refute has_element?(view, "#fleet-next-key")
       refute has_element?(view, "#fleet-entry-sign-in")
 

@@ -145,16 +145,19 @@ defmodule Keyfleet.Keys.Metadata do
 
   defp name(%{fleet: fleet, token_id: token_id}), do: Fleets.key_name(fleet.id, token_id)
 
+  @doc "The fleet's `Set Type` trait, such as \"Regents Club\", as every one of its Keys shows it."
+  def set_type(fleet_id) do
+    %{card: type} = Enum.find(Fleets.catalog(), &(&1.id == fleet_id))
+    type |> String.split() |> Enum.map_join(" ", &String.capitalize/1)
+  end
+
   defp set(%{fleet: fleet}) do
-    %{card: type, type_number: number} = Enum.find(Fleets.catalog(), &(&1.id == fleet.id))
+    %{type_number: number} = Enum.find(Fleets.catalog(), &(&1.id == fleet.id))
 
     # The fixed catalog accepts only founding fleets (typeNumber 1), each the
     # first set of its own type. chain_fleet_id numbers all types together.
     [
-      %{
-        trait_type: "Set Type",
-        value: type |> String.split() |> Enum.map_join(" ", &String.capitalize/1)
-      },
+      %{trait_type: "Set Type", value: set_type(fleet.id)},
       %{trait_type: "Set ID", value: number |> Integer.to_string() |> String.pad_leading(3, "0")}
     ]
   end
