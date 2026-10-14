@@ -58,20 +58,11 @@ CLI, merging and releases.
 
 ## What production needs
 
-- **Fly concurrency** (in `fly.toml` and `fly.staging.toml` on this branch):
-  `[http_service.concurrency] type = "requests", soft_limit = 900,
-  hard_limit = 1000`. Without it Fly's default caps a machine at 25 open
-  connections, and 25 waiting agents would queue everyone else. One waiting
-  agent is one open request; a Bandit process each, no database connection
-  while waiting.
-- **Fly and open websockets:** Fly's docs do not say whether an open LiveView
-  websocket counts against `type = "requests"` while connected. The nearest
-  lines: "requests: Load balance and scale based on the number of HTTP requests"
-  and hard_limit: "When a Fly Machine is at or over this number of concurrent
-  connections or requests, the system will stop sending new traffic to that
-  Machine." (docs.fly.io/reference/configuration, docs.fly.io/apps/concurrency).
-  Size as if each open page counts as one request for as long as it is open, or
-  check Fly's concurrency metric on staging with pages open.
+- **Fly concurrency:** none set, as in ash-template. Fly's default is "a
+  `soft_limit` of 20 and no `hard_limit`" (docs.fly.io/apps/concurrency), so
+  Fly never stops sending visitors to the one machine; the soft limit only
+  chooses between machines. One waiting agent is one open request; a Bandit
+  process each, no database connection while waiting.
 - **Command line timeout:** the 30 s default covers the 20 s hold, so
   `cli/commands.json` carries no `timeout_ms`. With regents-cli main carrying
   `timeout_ms` (regents-cli 1279aa1, waits on CLI-MAIN-PUSH), the hold may go

@@ -1342,3 +1342,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   page shows it the next time it loads: a map already open keeps the Key's
   number until then. Cards drawn before today get theirs over the first hour
   or so after this release; until then a Key shows its number.
+
+## 2026-10-14 — No cap on visitors (local, unreleased)
+
+- Keyfleet no longer turns new visitors away once 1,000 pages and agents are
+  connected at the same moment. Every visitor reaches the site, however many
+  arrive together.

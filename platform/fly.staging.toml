@@ -23,14 +23,6 @@ primary_region = "iad"
   internal_port = 4000
   force_https = true
 
-  # An agent's sync is held open for up to 20 seconds while nothing is new, so
-  # open requests, not new ones, set the limit: one per waiting agent, well
-  # within what one machine's processes and memory hold.
-  [http_service.concurrency]
-    type = "requests"
-    soft_limit = 900
-    hard_limit = 1000
-
 # BEAM release + migrations OOM at Fly's 256MB default.
 [[vm]]
   memory_mb = 1024
