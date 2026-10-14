@@ -203,12 +203,18 @@
   text-decoration: none;
 }
 
-.fleet-entry__card img {
+/* A card's close-up, or its space while the close-up is still being made. */
+.fleet-entry__card img,
+.fleet-entry__blank {
   display: block;
   inline-size: 3rem;
-  block-size: 3.75rem;
+  block-size: 3rem;
   background: var(--color-surface);
   object-fit: cover;
+}
+
+.fleet-entry__blank {
+  border: 1px solid var(--color-border);
 }
 
 .fleet-entry__card:hover,

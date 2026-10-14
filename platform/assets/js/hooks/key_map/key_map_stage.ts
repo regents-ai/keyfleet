@@ -49,7 +49,17 @@ export type KeyMapStageOptions = {
   layout: LayoutKind
   /** A key was chosen by click, tap or Enter. */
   select(key: number): void
+  /**
+   * Asks the page where the card close-ups of `keys`, a hundred at most, are
+   * shown; `done` takes `[key, address]` for each key that has one.
+   */
+  pictures(keys: number[], done: (pictures: [number, string][]) => void): void
 }
+
+// How many keys' close-ups one ask names, and how long the map waits for the
+// view to settle before asking, in milliseconds.
+const picturesAsked = 100
+const picturesWait = 150
 
 const recentreDistance = 100_000
 
@@ -81,6 +91,12 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
   // The keys the last search found, as sent and as bits.
   let sought = ""
   let found = new Uint8Array()
+  // Where each key's card close-up is shown, the keys asked about since the
+  // last load, and the keys waiting to be asked about.
+  const pictures = new Map<number, string>()
+  const asked = new Set<number>()
+  let wanted: number[] = []
+  let asking = 0
   // Circumradius of a cell and the stage's size, in CSS pixels.
   let size = 0
   let width = 0
@@ -94,9 +110,35 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
   const tiles = createTiles(layer, {
     marks: key => keyMarks(state!, key, selected, cursorKey(), found),
     caption: key => (key === nextKey(state!) ? "Next" : ""),
+    picture: key => pictures.get(key) ?? "",
     sale: level => levelSale(onSaleLevel(grid!, state!), level),
     heading: level => levelHeading(level, levelSale(onSaleLevel(grid!, state!), level)),
   })
+
+  // Asks for the close-ups of the sold keys in view not asked about yet, once
+  // the view has stayed put for a moment. A key with no close-up is forgotten,
+  // so one whose card was drawn again is not left with its old picture.
+  const seek = () => {
+    for (const key of tiles.keys()) {
+      if (key > state!.minted || asked.has(key)) continue
+      asked.add(key)
+      wanted.push(key)
+    }
+    if (!wanted.length || asking) return
+    asking = window.setTimeout(() => {
+      asking = 0
+      const keys = wanted
+      wanted = []
+      for (let from = 0; from < keys.length; from += picturesAsked) {
+        const batch = keys.slice(from, from + picturesAsked)
+        options.pictures(batch, found => {
+          batch.forEach(key => pictures.delete(key))
+          found.forEach(([key, address]) => pictures.set(key, address))
+          tiles.refresh()
+        })
+      }
+    }, picturesWait)
+  }
 
   const periods = (): [Point, Point] => [axialToPixel(...grid!.periodA, size), axialToPixel(...grid!.periodB, size)]
 
@@ -124,6 +166,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
     if (cell === placedAt) return
     placedAt = cell
     tiles.place(grid, size, camera.x - width / 2, camera.y - height / 2, camera.x + width / 2, camera.y + height / 2)
+    seek()
   }
 
   const camera = createCamera(root, {
@@ -242,6 +285,10 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
     load(snapshot) {
       // The page, not the map, keeps the chosen key.
       selected = Number(root.dataset.selected) || 0
+      // Every key in view is asked about afresh; the close-ups already drawn
+      // stay until the answers come.
+      asked.clear()
+      wanted = []
       show(decodeSnapshot(snapshot))
       root.classList.add("key-map--ready")
     },
@@ -249,9 +296,12 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
     patch(patch) {
       if (!state) return
       const next = applyPatch(state, patch)
+      // A key that changed may have its card now, so it is asked about again.
+      patch.keys.forEach(([key]) => asked.delete(key))
       if (drawnKeys(next) !== drawnKeys(state)) return show(next)
       state = next
       tiles.refresh()
+      seek()
     },
 
     select(key) {
@@ -287,6 +337,7 @@ export function createKeyMapStage(root: HTMLElement, options: KeyMapStageOptions
     },
 
     destroy() {
+      window.clearTimeout(asking)
       camera.destroy()
       resize.disconnect()
       root.removeEventListener("keydown", keydown)

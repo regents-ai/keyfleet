@@ -73,20 +73,19 @@ defmodule Keyfleet.Keys.Metadata do
   end
 
   @doc """
-  The picture each of the minted Keys `token_ids` of `fleet` shows, by Key
-  number, as `image/2` gives it, in two reads however many Keys are asked
-  for, a hundred at most.
+  Where the close-up of each of the minted Keys `token_ids` of `fleet` is
+  shown, by Key number, for the Keys whose card has one, in two reads however
+  many Keys are asked for, a hundred at most. A Key still waiting for its
+  card or its close-up is left out.
   """
-  def images(fleet, token_ids) do
+  def close_ups(fleet, token_ids) do
     seeds = Keys.card_seeds(fleet, token_ids)
 
-    kept =
-      for kept <- Keys.pictures_of_keys!(fleet.id, Map.keys(seeds)),
-          seeds[kept.token_id] == kept.seed,
-          into: %{},
-          do: {kept.token_id, kept}
-
-    Map.new(token_ids, &{&1, picture(kept[&1])})
+    for %{close_up_cid: cid} = kept when is_binary(cid) <-
+          Keys.pictures_of_keys!(fleet.id, Map.keys(seeds)),
+        seeds[kept.token_id] == kept.seed,
+        into: %{},
+        do: {kept.token_id, KeyArt.link(cid)}
   end
 
   @doc "The picture a Key not minted yet shows: the pass."

@@ -24,13 +24,14 @@ defmodule KeyfleetWeb.FleetPage do
   @doc """
   The Keys of the fleet the signed-in person holds, for the way in: the
   lowest, how many, and the first fifty by number, each with its card's
-  picture, as `%{first: token_id, count: count, cards: cards}`, or `nil` for
-  someone holding none. `deck` is the fleet's `id`, `deck_hash` and
-  `deck_size`, which say which card each Key shows.
+  close-up (`nil` until it is made), as
+  `%{first: token_id, count: count, cards: cards}`, or `nil` for someone
+  holding none. `deck` is the fleet's `id`, `deck_hash` and `deck_size`, which
+  say which card each Key shows.
   """
   def held(deck, actor) do
     with %{token_ids: token_ids} = held <- Keys.held_summary(actor, deck.id, @cards_shown) do
-      images = Metadata.images(deck, token_ids)
+      images = Metadata.close_ups(deck, token_ids)
 
       %{
         first: held.first,

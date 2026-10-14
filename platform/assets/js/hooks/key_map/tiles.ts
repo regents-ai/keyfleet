@@ -7,6 +7,8 @@ export type TileFaces = {
   marks(key: number): string
   /** The small line under a key's number. */
   caption(key: number): string
+  /** Where a key's card close-up is shown, or "" for a key drawn by its number. */
+  picture(key: number): string
   /** How a level stands, for `data-level` on its keys, heading and outline. */
   sale(level: number): LevelSale
   /** A level heading's words. */
@@ -23,6 +25,8 @@ export type Tiles = {
   refresh(): void
   /** Frees every tile, so the next placement positions each one afresh. */
   clear(): void
+  /** The keys placed now, each once however many copies of it are in view. */
+  keys(): Set<number>
 }
 
 type Tile = {
@@ -31,6 +35,11 @@ type Tile = {
   level: number
   label: HTMLElement
   caption: HTMLElement
+  // The key's card close-up, and where it is shown ("" for none). The tile is
+  // marked `data-pic` only once the close-up has loaded, so a key keeps its
+  // number until then, and for good when the close-up can't be loaded.
+  picture: HTMLImageElement
+  shown: string
   // The outline along the tile's cell where its level ends, made the first
   // time the tile needs one.
   edge: SVGPathElement | null
@@ -125,11 +134,31 @@ export function createTiles(layer: HTMLElement, faces: TileFaces): Tiles {
 
   const make = (): Tile => {
     const el = document.createElement("div")
+    const frame = document.createElement("i")
+    frame.className = "km-pic"
+    const picture = document.createElement("img")
+    picture.alt = ""
+    picture.decoding = "async"
+    picture.draggable = false
+    frame.append(picture)
     const label = document.createElement("span")
     const caption = document.createElement("span")
-    el.append(label, caption)
+    el.append(frame, label, caption)
     layer.append(el)
-    return {el, value: 0, level: 0, label, caption, edge: null}
+    const tile: Tile = {el, value: 0, level: 0, label, caption, picture, shown: "", edge: null}
+    // A close-up asked for before the tile moved on to another key is ignored.
+    picture.addEventListener("load", () => {
+      if (tile.shown && picture.src === tile.shown) el.dataset.pic = ""
+    })
+    return tile
+  }
+
+  const show = (tile: Tile, address: string) => {
+    if (tile.shown === address) return
+    tile.shown = address
+    delete tile.el.dataset.pic
+    if (address) tile.picture.src = address
+    else tile.picture.removeAttribute("src")
   }
 
   const free = (tile: Tile) => {
@@ -148,8 +177,10 @@ export function createTiles(layer: HTMLElement, faces: TileFaces): Tiles {
     if (tile.value <= 0) {
       const heading = faces.heading(tile.level)
       if (tile.label.textContent !== heading) tile.label.textContent = heading
+      show(tile, "")
       return
     }
+    show(tile, faces.picture(tile.value))
     const marks = faces.marks(tile.value)
     const caption = faces.caption(tile.value)
     if (el.dataset.state !== marks) el.dataset.state = marks
@@ -218,6 +249,12 @@ export function createTiles(layer: HTMLElement, faces: TileFaces): Tiles {
     clear() {
       placed.forEach(free)
       placed = new Map()
+    },
+
+    keys() {
+      const keys = new Set<number>()
+      placed.forEach(tile => tile.value > 0 && keys.add(tile.value))
+      return keys
     },
   }
 }

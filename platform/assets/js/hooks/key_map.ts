@@ -1,7 +1,7 @@
 import type {Hook} from "../hook_composition"
 import type {KeyMapStage} from "./key_map/key_map_stage"
 import type {LayoutKind} from "./key_map/layouts"
-import type {KeyMapFound, KeyMapPatch, KeyMapSnapshot} from "./key_map/state"
+import type {KeyMapFound, KeyMapPatch, KeyMapPictures, KeyMapSnapshot} from "./key_map/state"
 
 type KeyMapHook = {
   el: HTMLElement
@@ -15,7 +15,8 @@ type KeyMapHook = {
  * A fleet's key map. The map itself loads as its own chunk; this hook asks the
  * page for the fleet's keys on mount, after every reconnect and whenever the
  * page says too much changed to send, applies the changes the page sends in
- * between, and reports the key a viewer chooses. Mount it on a
+ * between, asks for the card close-ups of the keys in view, and reports the
+ * key a viewer chooses. Mount it on a
  * `phx-update="ignore"` element carrying `data-layout`, and `data-selected`
  * while the page has a key chosen.
  *
@@ -36,6 +37,7 @@ export const KeyMap: Hook = {
         layout: this.el.dataset.layout as LayoutKind,
         // A reply callback keeps a press made while offline from raising an error.
         select: key => this.pushEvent("select_key", {token_id: key}, () => {}),
+        pictures: (keys, done) => this.pushEvent<KeyMapPictures>("keymap_pictures", {keys}, ({pictures}) => done(pictures)),
       })
       this.ready?.()
     })

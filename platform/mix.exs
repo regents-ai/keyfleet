@@ -94,6 +94,8 @@ defmodule Keyfleet.MixProject do
       {:req, "== 0.7.4"},
       # Reads an agent picture's format and size from its first bytes.
       {:ex_image_info, "~> 1.0"},
+      # Cuts each Key card's small close-up out of its picture (libvips).
+      {:vix, "~> 0.42.0"},
       {:bandit, "~> 1.12.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},

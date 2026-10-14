@@ -28,6 +28,11 @@ export type KeyMapFound = {
   words: string
 }
 
+/** The server's reply to `keymap_pictures`: where each key's card close-up is shown. */
+export type KeyMapPictures = {
+  pictures: [number, string][]
+}
+
 export type KeyMapState = {
   minted: number
   maxSupply: number | null

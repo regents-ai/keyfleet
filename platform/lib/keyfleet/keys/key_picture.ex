@@ -9,11 +9,21 @@ defmodule Keyfleet.Keys.KeyPicture do
   A picture is the Key's name and seed drawn, so it never changes: a Key
   whose seed an operator corrects after a reorg is shown by its new seed's
   picture, drawn afresh, and the old one is no longer asked for.
+
+  Each picture also gets a close-up, kept at `close_up_cid`: the small square
+  at the card's middle that the fleet's map and a holder's cards show
+  (`Keyfleet.Keys.KeyArt.close_up/1`). A job per picture without one makes it
+  (`MakeCloseUp`), found every minute, so new cards and the cards drawn before
+  close-ups existed are covered the same way. Until it is made, the Key is
+  shown by its number.
   """
   use Ash.Resource,
     domain: Keyfleet.Keys,
     data_layer: AshPostgres.DataLayer,
-    authorizers: [Ash.Policy.Authorizer]
+    authorizers: [Ash.Policy.Authorizer],
+    extensions: [AshOban]
+
+  alias Keyfleet.Keys.KeyPicture.MakeCloseUp
 
   postgres do
     table "key_pictures"
@@ -46,11 +56,48 @@ defmodule Keyfleet.Keys.KeyPicture do
       argument :fleet_id, :string, allow_nil?: false
       argument :token_ids, {:array, :integer}, allow_nil?: false, constraints: [max_length: 100]
       filter expr(fleet_id == ^arg(:fleet_id) and token_id in ^arg(:token_ids))
-      prepare build(select: [:token_id, :seed, :cid])
+      prepare build(select: [:token_id, :seed, :cid, :close_up_cid])
+    end
+
+    # The pictures the close-up job looks through, a page at a time.
+    read :without_close_up do
+      pagination keyset?: true, required?: false
+      filter expr(is_nil(close_up_cid))
+    end
+
+    # Reads the card back, cuts its close-up and keeps it, outside any
+    # transaction. The same card always gives the same close-up at the same
+    # address, so running twice is safe.
+    update :make_close_up do
+      public? false
+      transaction? false
+      require_atomic? false
+      change MakeCloseUp
+    end
+  end
+
+  oban do
+    triggers do
+      # Close-ups wait their turn behind new cards' drawings on the one queue.
+      trigger :close_up do
+        action :make_close_up
+        read_action :without_close_up
+        where expr(is_nil(close_up_cid))
+        queue(:key_art)
+        worker_priority(3)
+        max_attempts(5)
+        lock_for_update?(false)
+        scheduler_module_name(Keyfleet.Keys.KeyPicture.Workers.CloseUpScheduler)
+        worker_module_name(Keyfleet.Keys.KeyPicture.Workers.CloseUp)
+      end
     end
   end
 
   policies do
+    bypass AshOban.Checks.AshObanInteraction do
+      authorize_if always()
+    end
+
     policy action_type(:read) do
       authorize_if always()
     end
@@ -79,6 +126,11 @@ defmodule Keyfleet.Keys.KeyPicture do
       allow_nil? false
       public? true
       description "The card's IPFS address, as Lighthouse answered it."
+    end
+
+    attribute :close_up_cid, :string do
+      public? true
+      description "The close-up's IPFS address, once it is made."
     end
 
     create_timestamp :drawn_at, public?: true

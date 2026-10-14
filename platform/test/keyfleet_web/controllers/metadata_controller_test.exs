@@ -153,6 +153,61 @@ defmodule KeyfleetWeb.MetadataControllerTest do
              |> Map.put("image", "https://media.regents.sh/ipfs/#{cid}")
              |> put_in(["properties", "card"], "ipfs://#{cid}")
 
+    # The card's close-up, for the map and a holder's cards, is cut from the
+    # card as it is kept: read back, cut, kept on IPFS, and only then shown.
+    deck = "fibonacci_cascade" |> Fleets.get_fleet!() |> Map.take([:id, :deck_hash, :deck_size])
+    assert KeyfleetWeb.KeyMap.pictures(deck, %{total_minted: 3}, [3]) == %{pictures: []}
+
+    {:ok, card} =
+      Vix.Vips.Image.write_to_buffer(Vix.Vips.Operation.black!(767, 959, bands: 3), ".png")
+
+    {:ok, close_up} = KeyArt.close_up(card)
+    {:ok, small} = Vix.Vips.Image.new_from_buffer(close_up)
+    assert {Vix.Vips.Image.width(small), Vix.Vips.Image.height(small)} == {256, 256}
+
+    {:ok, not_a_card} =
+      Vix.Vips.Image.write_to_buffer(Vix.Vips.Operation.black!(959, 767, bands: 3), ".png")
+
+    assert KeyArt.close_up(not_a_card) == {:error, {:not_a_card, {959, 767}}}
+
+    Req.Test.stub(KeyArt, fn conn ->
+      send(test, {:kept, conn.method, conn.request_path})
+      conn |> Plug.Conn.put_resp_content_type("image/png") |> Plug.Conn.send_resp(200, card)
+    end)
+
+    close_up_cid = "b" <> String.duplicate("a", 58)
+
+    Req.Test.stub(Lighthouse, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      [_all, filename] = Regex.run(~r/filename="([^"]+)"/, body)
+      send(test, {:kept_on_ipfs, filename, body})
+
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.send_resp(200, JSON.encode!(%{Hash: close_up_cid}))
+    end)
+
+    # Every waiting job runs, the other fleet's card drawing among them.
+    assert %{failure: 0} =
+             AshOban.Test.schedule_and_run_triggers({Keyfleet.Keys.KeyPicture, :close_up})
+
+    kept_at = "/ipfs/" <> cid
+    assert_received {:kept, "GET", ^kept_at}
+    assert_received {:kept_on_ipfs, "cascade-3-close-up.webp", body}
+    assert body =~ "content-type: image/webp"
+    assert body =~ close_up
+
+    # Sold Keys with a close-up are answered, each once; the rest are left out.
+    assert KeyfleetWeb.KeyMap.pictures(deck, %{total_minted: 3}, [3, 2, 3, 4, "3"]) ==
+             %{pictures: [[3, "https://media.regents.sh/ipfs/#{close_up_cid}"]]}
+
+    assert KeyfleetWeb.KeyMap.pictures(deck, %{total_minted: 3}, Enum.to_list(1..101)) ==
+             %{pictures: []}
+
+    # Made once: another run finds no card without its close-up.
+    assert %{success: 1, failure: 0} =
+             AshOban.Test.schedule_and_run_triggers({Keyfleet.Keys.KeyPicture, :close_up})
+
     accelerant = get(conn, key_path("fleet_tech_accelerant", 1))
 
     assert Enum.map(json_response(accelerant, 200)["attributes"], & &1["trait_type"]) ==

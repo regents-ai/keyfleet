@@ -459,7 +459,16 @@ defmodule KeyfleetWeb.FleetLive do
             replace={@profile != nil}
             aria-current={card.token_id == @fleet.chosen_key && "true"}
           >
-            <img src={card.image} alt="" width="48" height="60" loading="lazy" decoding="async" />
+            <img
+              :if={card.image}
+              src={card.image}
+              alt=""
+              width="48"
+              height="48"
+              loading="lazy"
+              decoding="async"
+            />
+            <span :if={!card.image} class="fleet-entry__blank"></span>
             Key {grouped(card.token_id)}
           </.link>
         </li>
@@ -1331,6 +1340,18 @@ defmodule KeyfleetWeb.FleetLive do
     {:reply, KeyMap.snapshot(fleet_id, progress, ShellLive.human_actor(socket)), socket}
   end
 
+  def handle_event("keymap_ready", _params, socket), do: {:noreply, socket}
+
+  # The map asks for the close-ups of the keys it has in view.
+  def handle_event(
+        "keymap_pictures",
+        %{"keys" => token_ids},
+        %{assigns: %{fleet: %{deployed?: true} = fleet}} = socket
+      ),
+      do: {:reply, KeyMap.pictures(fleet.deck, fleet.progress, token_ids), socket}
+
+  def handle_event("keymap_pictures", _params, socket), do: {:noreply, socket}
+
   # A search of the map: the Keys found come back for the map to mark.
   def handle_event(
         "find_keys",
@@ -1338,6 +1359,8 @@ defmodule KeyfleetWeb.FleetLive do
         %{assigns: %{fleet: %{deployed?: true} = fleet}} = socket
       ),
       do: {:reply, KeyMap.find(fleet.fleet_id, fleet.progress, query), socket}
+
+  def handle_event("find_keys", _params, socket), do: {:noreply, socket}
 
   # A key chosen on the map goes into the address and its profile opens over
   # the page, so Back closes it. Chosen while a profile is open, it takes that
@@ -1357,6 +1380,8 @@ defmodule KeyfleetWeb.FleetLive do
       {:noreply, socket}
     end
   end
+
+  def handle_event("select_key", _params, socket), do: {:noreply, socket}
 
   # Why the words sent to the person's agent were not sent.
   defp quote_refusal(form) do

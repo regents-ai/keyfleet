@@ -1,8 +1,9 @@
 @layer regents-product {
 /* The key map: one stage, one moving layer and a pool of hex tiles. Tiles are
    pointy-top hexagons inset by the gap, with a rim drawn around an inner face.
-   A levelled fleet's keys take their level's tone, and each level is outlined
-   along its edge, in the gap between tiles. */
+   A sold key's face is its card's close-up once that has loaded, and its
+   number until then. A levelled fleet's keys take their level's tone, and
+   each level is outlined along its edge, in the gap between tiles. */
 
 /* The map's colours, shared with its still pictures. */
 .key-map,
@@ -30,6 +31,9 @@
   --km-tile-w: calc(var(--km-cell) - var(--km-gap));
   --km-tile-h: calc(var(--km-tile-w) * 2 / 1.7320508);
   --km-rim-width: 3px;
+  /* How far a key's close-up sits inside its hex: over the whole face, or
+     further in where the face's colour says something. */
+  --km-pic-inset: var(--km-rim-width);
   --km-hex: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
   position: relative;
   height: clamp(420px, 70svh, 820px);
@@ -128,6 +132,65 @@
   height: var(--km-tile-h);
   margin: calc(var(--km-tile-h) / -2) 0 0 calc(var(--km-tile-w) / -2);
   font-size: 13px;
+  /* The tile's box overlaps its neighbours at the corners, so only the hex
+     inside it takes the pointer. */
+  pointer-events: none;
+}
+
+/* The hex that takes the pointer, holding the key's close-up. */
+.km-pic {
+  position: absolute;
+  inset: calc(var(--km-pic-inset) * 2 / 1.7320508) var(--km-pic-inset);
+  overflow: hidden;
+  clip-path: var(--km-hex);
+  pointer-events: auto;
+}
+
+.km-level > .km-pic { display: none; }
+
+.km-pic > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  visibility: hidden;
+}
+
+.km-tile[data-pic] .km-pic > img { visibility: visible; }
+
+/* The close-up stands in for the number; the agent dot stays. */
+.km-tile[data-pic] > span:first-of-type { font-size: 0; }
+
+/* Under the pointer a sold key's hex rises and its close-up draws nearer. */
+@media (hover: hover) {
+  .km-tile::before,
+  .km-tile::after,
+  .km-pic,
+  .km-pic > img {
+    transition: transform 160ms ease-out;
+  }
+
+  .km-tile:hover:not([data-state~="unsold"]) {
+    z-index: 1;
+    filter: drop-shadow(0 6px 8px rgb(0 0 0 / 0.35));
+  }
+
+  .km-tile:hover:not([data-state~="unsold"])::before,
+  .km-tile:hover:not([data-state~="unsold"])::after,
+  .km-tile:hover:not([data-state~="unsold"]) > .km-pic {
+    transform: scale(1.18);
+  }
+
+  .km-tile:hover > .km-pic > img { transform: scale(1.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .km-tile::before,
+  .km-tile::after,
+  .km-pic,
+  .km-pic > img {
+    transition: none;
+  }
 }
 
 /* The rim, and the face inset evenly from all six edges so the rim shows
@@ -209,10 +272,12 @@
 
 .km-tile > span:last-child:empty { display: none; }
 
-/* A key the last search found is drawn dark, with light words. */
+/* A key the last search found is drawn dark, with light words; its close-up
+   sits further in, inside a dark band. */
 .km-tile[data-state~="found"] {
   --km-face: var(--color-fg);
   --km-rim: var(--color-fg);
+  --km-pic-inset: 9px;
   color: var(--color-bg);
 }
 
@@ -230,6 +295,7 @@
 
 .km-tile[data-state~="selected"] {
   --km-face: var(--palette-tangerine-tango);
+  --km-pic-inset: 9px;
   color: var(--palette-charcoal);
 }
 
@@ -237,7 +303,8 @@
 
 .km-tile[data-state~="cursor"] { --km-rim: var(--color-focus); }
 
-/* A key with an agent carries a powder-blue dot above its number. */
+/* A key with an agent carries a powder-blue dot above its number, ringed
+   where it lies over the key's close-up. */
 .km-tile[data-state~="agent"] > span:first-of-type::before {
   content: "";
   position: absolute;
@@ -248,6 +315,10 @@
   margin-left: -3.5px;
   border-radius: 50%;
   background: var(--palette-powder-blue);
+}
+
+.km-tile[data-pic][data-state~="agent"] > span:first-of-type::before {
+  box-shadow: 0 0 0 2px var(--color-bg);
 }
 
 .km-level {

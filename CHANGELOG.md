@@ -1330,3 +1330,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Signing in with another wallet while the first wallet's ENS name was being
   read could leave the account showing the first wallet's name for good. The
   read now finishes for the wallet the account has.
+
+## 2026-10-14 — The map shows each Key's card
+
+- A sold Key's hex on the Fleet Grid shows a close-up of the middle of its
+  card in place of its number. Unsold Keys keep their numbers.
+- Under the pointer a Key's hex rises and its picture draws nearer.
+- "Your Keys" on the fleet page shows the same close-ups, which load far
+  faster than the full cards did.
+- Each card gets its close-up within about a minute of being drawn. Cards
+  drawn before today get theirs over the first hour or so after this release;
+  until then a Key shows its number.

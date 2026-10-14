@@ -380,6 +380,13 @@ Keyfleet does not start without `KEY_ART_URL` and `LIGHTHOUSE_API_KEY`, so
 create the app and set both before the first release that carries the
 key-art job.
 
+Each card also gets a small close-up of its middle, for the map and a
+holder's cards. The site makes it itself, with no step for anyone to run: a
+job finds every card without one each minute, reads the card back from
+`https://media.regents.sh/ipfs/<cid>`, cuts the close-up and keeps it through
+the same Lighthouse account. The first release that carries this makes one
+for every card drawn so far, one at a time behind any new card's drawing.
+
 ## What was checked locally
 
 On 2026-09-26 the arm64 image was built from the context script at `e21b407`

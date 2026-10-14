@@ -710,6 +710,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert_reply(view, %{mine: mine})
       assert Base.decode64!(mine) == ""
 
+      # The map asks for the card close-ups of the Keys in view; none is made
+      # here, so every Key keeps its number.
+      render_hook(view, "keymap_pictures", %{"keys" => [1, 2, 152]})
+      assert_reply(view, %{pictures: []})
+
       # Anyone can search the map: a number finds that Key, an address every
       # Key it holds here, in either case of letters.
       assert has_element?(view, ~s(#key-map-find input[name="q"]))

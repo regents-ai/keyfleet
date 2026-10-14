@@ -11,6 +11,10 @@ defmodule KeyfleetWeb.KeyMap do
   A search marks the keys it finds: one key by its number, or every key a
   wallet address holds in the fleet now. Who holds each key is on its page and
   in the Member List for anyone to read, so a search tells nobody anything new.
+
+  A sold key is drawn as its card's close-up. The map asks for the close-ups
+  of the keys in view, a hundred at a time, and draws a key by its number
+  until its close-up is made.
   """
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
@@ -18,6 +22,7 @@ defmodule KeyfleetWeb.KeyMap do
   alias Keyfleet.Actors.Human
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
+  alias Keyfleet.Keys.Metadata
 
   # A change naming more keys than this is sent as a signal to load again,
   # which costs less than the change itself.
@@ -61,6 +66,23 @@ defmodule KeyfleetWeb.KeyMap do
        }}
     end
   end
+
+  # How many keys' close-ups one ask may name.
+  @pictures_asked 100
+
+  @doc """
+  Where the close-ups of the keys `token_ids` are shown, as
+  `[token_id, address]` for each sold key among them whose card has one.
+  `deck` is the fleet's `id`, `deck_hash` and `deck_size`. An ask naming more
+  than #{@pictures_asked} keys, or anything but a list, is answered with none.
+  """
+  def pictures(deck, %{total_minted: minted}, token_ids)
+      when is_list(token_ids) and length(token_ids) <= @pictures_asked do
+    sold = for id <- token_ids, is_integer(id), id in 1..minted//1, uniq: true, do: id
+    %{pictures: for({id, address} <- Metadata.close_ups(deck, sold), do: [id, address])}
+  end
+
+  def pictures(_deck, _progress, _token_ids), do: %{pictures: []}
 
   @doc """
   Whether key `token_id` can be chosen on the map: every key minted, and the
