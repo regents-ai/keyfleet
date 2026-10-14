@@ -1353,6 +1353,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   changed, and a changed status redraws only that Key's line of the member list.
 - An open page also frees the memory it used to draw itself, so many open
   pages at once need far less memory.
+- Finding and counting the agents in a fleet stays quick when most of them
+  join through the person holding the Key: a full Regents Club is read in a
+  fraction of a second, not 14 seconds.
 - Nothing new is shown to anyone: every name, picture, Key number and status
   line here is what the fleet page and the open fleet directory already show
   without signing in.

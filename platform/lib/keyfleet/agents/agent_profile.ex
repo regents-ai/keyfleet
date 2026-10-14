@@ -410,7 +410,9 @@ defmodule Keyfleet.Agents.AgentProfile do
     # person this agent is paired with
     # (`Keyfleet.Agents.Pairing`). Read in SQL because the pairing and the
     # person's wallets are for trusted code only (their policies admit the
-    # system actor alone); only the key's number leaves here.
+    # system actor alone); only the key's number leaves here. Each of the
+    # person's wallets is looked up on its own: matched as a set, every key in
+    # the fleet was read for every agent, 7 seconds for a full Regents Club.
     calculate :paired_key,
               :integer,
               expr(
@@ -420,12 +422,11 @@ defmodule Keyfleet.Agents.AgentProfile do
                    FROM regent_agents.paired_agents AS pairing
                    JOIN regent_names.platform_human_users AS account
                      ON account.privy_user_id = pairing.privy_user_id
+                   CROSS JOIN LATERAL
+                     unnest(account.wallet_address || account.wallet_addresses)
+                       AS linked(wallet)
                    JOIN keyfleet_app.key_attachments AS held
-                     ON held.owner_wallet IN (
-                       SELECT lower(linked.wallet)
-                       FROM unnest(account.wallet_address || account.wallet_addresses)
-                         AS linked(wallet)
-                     )
+                     ON held.owner_wallet = lower(linked.wallet)
                      AND held.ownership_epoch = (
                        SELECT max(epoch.ownership_epoch)
                        FROM keyfleet_app.key_attachments AS epoch
