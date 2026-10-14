@@ -67,6 +67,17 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
       prepare build(sort: [provider: :asc])
     end
 
+    # The connections of these accounts that anyone may see beside their
+    # addresses, on a fleet's Member List.
+    read :shown_for_accounts do
+      argument :human_account_ids, {:array, :integer},
+        allow_nil?: false,
+        constraints: [max_length: 100]
+
+      filter expr(human_account_id in ^arg(:human_account_ids))
+      prepare build(select: [:provider, :username, :human_account_id], sort: [provider: :asc])
+    end
+
     read :by_provider_subject do
       get? true
       argument :provider, :atom, allow_nil?: false
@@ -83,6 +94,10 @@ defmodule Keyfleet.Accounts.LinkedIdentity do
   policies do
     policy action([:upsert_verified, :for_account, :by_provider_subject, :remove_verified]) do
       authorize_if actor_attribute_equals(:role, :system)
+    end
+
+    policy action(:shown_for_accounts) do
+      authorize_if always()
     end
 
     policy action(:read_mine) do

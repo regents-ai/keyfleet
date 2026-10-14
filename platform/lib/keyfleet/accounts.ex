@@ -34,6 +34,10 @@ defmodule Keyfleet.Accounts do
       define :list_my_linked_identities, action: :read_mine
       define :list_linked_identities_for_account, action: :for_account, args: [:human_account_id]
 
+      define :list_shown_linked_identities,
+        action: :shown_for_accounts,
+        args: [:human_account_ids]
+
       define :get_linked_identity_by_subject,
         action: :by_provider_subject,
         args: [:provider, :subject],
