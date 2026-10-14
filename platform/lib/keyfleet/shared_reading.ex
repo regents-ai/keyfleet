@@ -81,11 +81,14 @@ defmodule Keyfleet.SharedReading do
     },
     key_labels: %{
       open:
-        "a Key's active shards and their agents are open to a signed-out read " <>
-          "(Keyfleet.Keys.ShardEvent and Keyfleet.Agents.CheckIn read policies); " <>
-          "if either policy tightens, this kind changes with it",
+        "a Key's active shards, their agents' names and pictures and what their check-ins " <>
+          "say are open to a signed-out read (Keyfleet.Keys.ShardEvent read policy, " <>
+          "Keyfleet.Agents.AgentProfile :public_profile, Keyfleet.Agents.CheckIn read policy); " <>
+          "if any of them tightens, this kind changes with it",
       keys: 10_000,
-      bytes: 10_240,
+      # 35,307 bytes measured at its fullest; the rest leaves room for a longer
+      # picture address in production.
+      bytes: 40_960,
       within: 120
     },
     key_agents: %{

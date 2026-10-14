@@ -8,6 +8,7 @@ defmodule KeyfleetWeb.FleetPage do
   """
 
   alias Keyfleet.Activity
+  alias Keyfleet.Agents.Avatar
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
@@ -113,40 +114,25 @@ defmodule KeyfleetWeb.FleetPage do
     do: "#{Keyfleet.Fleets.path(fleet_id)}?#{URI.encode_query(position ++ kept)}"
 
   @doc """
-  Each key with its active shards: each shard's agent with its status label
-  from `labels` (`%{token_id => [{wallet, label}]}`, the readings every page
-  shares, `Keyfleet.Agents.Here`), or the shard's wallet while no agent has
+  A key's row of the list: its holder and its active shards as every page
+  shares them (`Keyfleet.Agents.Here.labels_key/2`), each shard's agent with
+  its name, picture and status label, or the shard's wallet while no agent has
   signed in with it.
   """
-  def fleet_keys(fleet_id, keys, labels, actor) do
-    by_key =
-      fleet_id
-      |> Keys.active_shards_of_keys!(Enum.map(keys, & &1.token_id),
-        actor: actor,
-        load: [:agent_profile]
-      )
-      |> Enum.group_by(& &1.token_id, fn
-        %{agent_profile: nil, wallet: wallet} ->
-          %{wallet: wallet, name: nil, avatar_src: nil, status_label: nil}
-
-        %{agent_profile: agent, wallet: wallet, token_id: token_id} ->
-          label = labels |> Map.get(token_id, []) |> List.keyfind(wallet, 0)
-
+  def key_row(key, shards) do
+    %{
+      token_id: key.token_id,
+      owner_wallet: key.owner_wallet,
+      shards:
+        for {wallet, name, avatar_url, label} <- shards do
           %{
             wallet: wallet,
-            name: agent.name,
-            avatar_src: agent.avatar_src,
-            status_label: label && elem(label, 1)
+            name: name,
+            avatar_src: name && Avatar.shown(avatar_url, wallet),
+            status_label: label
           }
-      end)
-
-    for key <- keys do
-      %{
-        token_id: key.token_id,
-        owner_wallet: key.owner_wallet,
-        shards: Map.get(by_key, key.token_id, [])
-      }
-    end
+        end
+    }
   end
 
   @doc """

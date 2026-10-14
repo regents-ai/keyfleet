@@ -1504,7 +1504,7 @@ defmodule KeyfleetWeb.FleetLive do
     })
     |> assign(fleet_params: params, pass_note: nil)
     |> follow_agents(fleet_id)
-    |> list_keys(page.results, actor, reset: true)
+    |> list_keys(page.results, reset: true)
     |> read_activity(fleet_id, feed)
     |> read_quotes(fleet_id, actor)
   end
@@ -1681,14 +1681,15 @@ defmodule KeyfleetWeb.FleetLive do
         listed: FleetPage.listed(page, pages),
         no_keys?: page.results == [] and not FleetPage.paged?(params)
     })
-    |> list_keys(page.results, actor, [])
+    |> list_keys(page.results, [])
   end
 
-  # The rows' status labels come from the readings every page shares
+  # The rows' shards come from the readings every page shares
   # (`Keyfleet.Agents.Here`), heard from before they are read. The page keeps
-  # each row's holder and the labels it drew, to tell a change in them from a
-  # change in words it doesn't show, and to draw that one row again.
-  defp list_keys(%{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket, keys, actor, opts) do
+  # each row's holder and a fingerprint of the shards it drew, to tell a change
+  # in them from a change in words it doesn't show, and to draw that one row
+  # again with nothing more to read.
+  defp list_keys(%{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket, keys, opts) do
     socket =
       SharedFigures.follow(
         socket,
@@ -1696,30 +1697,18 @@ defmodule KeyfleetWeb.FleetLive do
         for(key <- keys, do: Here.labels_key(fleet_id, key.token_id))
       )
 
-    labels = Map.new(keys, &{&1.token_id, labels(fleet_id, &1.token_id)})
-    drawn = Map.new(keys, &{&1.token_id, {&1.owner_wallet, labels[&1.token_id]}})
+    rows = for key <- keys, do: {key, shards(fleet_id, key.token_id)}
 
     socket
-    |> update(:fleet, &%{&1 | drawn: drawn})
-    |> stream(:fleet_keys, FleetPage.fleet_keys(fleet_id, keys, labels, actor), opts)
+    |> update(:fleet, fn fleet ->
+      %{fleet | drawn: Map.new(rows, fn {key, shards} -> drawn(key, shards) end)}
+    end)
+    |> stream(:fleet_keys, for({key, shards} <- rows, do: FleetPage.key_row(key, shards)), opts)
   end
 
-  # One Key's row drawn again in its place, with its agents' new labels.
-  defp redraw_key(%{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket, key, labels) do
-    [row] =
-      FleetPage.fleet_keys(
-        fleet_id,
-        [key],
-        %{key.token_id => labels},
-        ShellLive.human_actor(socket)
-      )
+  defp drawn(key, shards), do: {key.token_id, {key.owner_wallet, :erlang.phash2(shards)}}
 
-    socket
-    |> update(:fleet, &put_in(&1.drawn[key.token_id], {key.owner_wallet, labels}))
-    |> stream_insert(:fleet_keys, row)
-  end
-
-  defp labels(fleet_id, token_id),
+  defp shards(fleet_id, token_id),
     do: SharedFigures.reading(Here.labels_key(fleet_id, token_id)) || []
 
   # "Who's here" and the bar's count of agents, as every page shares them,
@@ -1747,8 +1736,8 @@ defmodule KeyfleetWeb.FleetLive do
 
   @doc """
   A shared reading the page hears has changed: "Who's here" is drawn again,
-  and a Key's row when its agents' labels changed, never for words the rows
-  don't show.
+  and a Key's row when its shards changed, never for words the rows don't
+  show.
   """
   def shared_changed(
         %{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket,
@@ -1765,14 +1754,22 @@ defmodule KeyfleetWeb.FleetLive do
         socket
 
       {token_id, {owner_wallet, shown}} ->
-        case labels(fleet_id, token_id) do
-          ^shown -> socket
-          labels -> redraw_key(socket, %{token_id: token_id, owner_wallet: owner_wallet}, labels)
-        end
+        shards = shards(fleet_id, token_id)
+
+        if :erlang.phash2(shards) == shown,
+          do: socket,
+          else: redraw_key(socket, %{token_id: token_id, owner_wallet: owner_wallet}, shards)
     end
   end
 
   def shared_changed(socket, _key), do: socket
+
+  # One key's row drawn again in its place, from the shards just read.
+  defp redraw_key(socket, key, shards) do
+    socket
+    |> update(:fleet, &%{&1 | drawn: Enum.into([drawn(key, shards)], &1.drawn)})
+    |> stream_insert(:fleet_keys, FleetPage.key_row(key, shards))
+  end
 
   def tell_map_chosen(
         %{assigns: %{fleet: %{fleet_id: fleet_id, chosen_key: chosen}}} = socket,
