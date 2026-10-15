@@ -874,6 +874,11 @@ instructions. A member follows the same workspace on its page,
 - 503 `graph_unavailable`: the workspace is not taking requests right now; nothing was
   written.
 
+After any uncertain response, retry with the same `command_id` and exact same
+change, using a fresh signed proof. Do not invent a new id for a retry: the first
+request may already have succeeded. After a 409 conflict, reread and merge; the
+changed write uses a new `command_id` and the last-read `expected_version`.
+
 Refusals every command that writes there also shares:
 
 - 400 `bad_request`: the body doesn't fit the change.

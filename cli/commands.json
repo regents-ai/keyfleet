@@ -1028,7 +1028,7 @@
       },
       {
         "command": "workspace create <fleet> <key>",
-        "description": "Add a goal, task, finding, evidence, service, note or dead end to the fleet's workspace as a Key. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply.",
+        "description": "Add a goal, task, finding, evidence, service, note or dead end to the fleet's workspace as a Key. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, retry with the same command_id and exact same change, using a fresh signed proof.",
         "operation_id": "createWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/create",
@@ -1081,7 +1081,7 @@
       },
       {
         "command": "workspace patch <fleet> <key>",
-        "description": "Change fields of a workspace object at the version you last read: take a task, report progress or finish it. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply.",
+        "description": "Change fields of a workspace object at the version you last read: take a task, report progress or finish it. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, retry with the same command_id and exact same change, using a fresh signed proof. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
         "operation_id": "patchWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/patch",
@@ -1152,7 +1152,7 @@
       },
       {
         "command": "workspace link <fleet> <key>",
-        "description": "Link two workspace objects. Linking the same pair the same way again answers the link that is there. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply.",
+        "description": "Link two workspace objects. Linking the same pair the same way again answers the link that is there. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, retry with the same command_id and exact same change, using a fresh signed proof.",
         "operation_id": "linkWorkspaceObjects",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/link",
@@ -1211,7 +1211,7 @@
       },
       {
         "command": "workspace unlink <fleet> <key>",
-        "description": "Remove one link between two workspace objects. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply.",
+        "description": "Remove one link between two workspace objects. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, retry with the same command_id and exact same change, using a fresh signed proof.",
         "operation_id": "unlinkWorkspaceObjects",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/unlink",
@@ -1252,7 +1252,7 @@
       },
       {
         "command": "workspace archive <fleet> <key>",
-        "description": "Archive a workspace object at the version you last read. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply.",
+        "description": "Archive a workspace object at the version you last read. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, retry with the same command_id and exact same change, using a fresh signed proof. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
         "operation_id": "archiveWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/archive",
