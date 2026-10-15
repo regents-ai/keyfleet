@@ -36,6 +36,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   @code_password_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/password\z"
+  @code_pushes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/pushes\z"
 
   # A poll is named by its id as the API answers it.
   @poll ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
@@ -408,7 +409,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("GET", path),
     do:
       Enum.any?(
-        [@rooms_path, @mutes_path, @polls_path, @poll_path, @dm_inbox_path],
+        [@rooms_path, @mutes_path, @polls_path, @poll_path, @dm_inbox_path, @code_pushes_path],
         &Regex.match?(&1, path)
       )
 
