@@ -672,7 +672,6 @@ defmodule KeyfleetWeb.DmsLive do
           last_seq: last_seq(messages, dms.last_seq)
       })
       |> stream(:dm_thread, messages, limit: -@thread_kept)
-      |> mark_read(actor)
     else
       {:error, %Ash.Error.Forbidden{}} -> refused(socket)
       {:error, failure} -> raise failure
@@ -687,7 +686,15 @@ defmodule KeyfleetWeb.DmsLive do
   defp read_marks(conversations, actor),
     do: Dms.conversation_read_marks(Enum.map(conversations, & &1.id), actor: actor)
 
+  @doc """
+  The person leaves the open conversation, by going to another page or
+  closing this one: it is read up to the last message the page showed.
+  """
+  def leave(socket), do: mark_read(socket, ShellLive.human_actor(socket))
+
   # The open conversation is read up to the last message the page has shown.
+  # It is written when the conversation opens and when the person leaves it,
+  # not as messages arrive.
   defp mark_read(%{assigns: %{dms: %{conversation: %{id: id}, last_seq: seq}}} = socket, actor)
        when seq > 0 do
     Dms.mark_conversation_read!(id, seq, actor: actor)

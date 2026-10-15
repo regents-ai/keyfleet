@@ -117,6 +117,14 @@
   visibility: hidden;
 }
 
+/* The name, its tag and its dot sit in one row, so the underline ends with
+   the name. */
+.rooms-list li > a,
+.dms-list li > a {
+  display: inline-flex;
+  align-items: center;
+}
+
 .rooms-thread {
   width: 100%;
 }

@@ -134,9 +134,12 @@ defmodule KeyfleetWeb.ShellLive do
     if coming_soon_inside?(route_spec, params) do
       {:noreply, push_patch(socket, to: Fleets.path(route_spec.fleet_id), replace: true)}
     else
-      # Going anywhere, back and forward included, closes "Send your agent".
+      # Going anywhere, back and forward included, closes "Send your agent",
+      # and leaves the room or conversation on show read as far as it was shown.
       {:noreply,
        socket
+       |> RoomsLive.leave()
+       |> DmsLive.leave()
        |> assign(route_spec: route_spec, send_agent_open: false)
        |> assign(PublicDocuments.page(route_spec.route_id))
        |> load_verified_connections(route_spec)
@@ -153,6 +156,14 @@ defmodule KeyfleetWeb.ShellLive do
        |> load_proposals(route_spec, params)
        |> PollsLive.read_polls(route_spec.route_id, params)}
     end
+  end
+
+  # Closing the page leaves the room or conversation on show read as far as it
+  # was shown.
+  @impl true
+  def terminate(_reason, socket) do
+    socket |> RoomsLive.leave() |> DmsLive.leave()
+    :ok
   end
 
   # A fleet's page is asked for at the fleet's address, and read by its id.
