@@ -320,6 +320,7 @@ defmodule Keyfleet.Keys do
       limit: ^limit,
       select: %{wallet: key.owner_wallet, count: count()}
     )
+    # Ownership is public, and a count grouped by holder is no row of a resource.
     |> Keyfleet.Repo.all()
   end
 
@@ -343,6 +344,7 @@ defmodule Keyfleet.Keys do
       order_by: [key.wallet, key.token_id],
       select: {key.wallet, key.token_id}
     )
+    # Ownership is public; a window over each holder's Keys is read here directly.
     |> Keyfleet.Repo.all()
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
   end
@@ -417,6 +419,7 @@ defmodule Keyfleet.Keys do
       group_by: event.wallet,
       select: {event.wallet, max(event.at)}
     )
+    # Only each holder's latest time leaves the database, never what was said.
     |> Keyfleet.Repo.all()
     |> Map.new(fn {wallet, at} -> {wallet, DateTime.from_naive!(at, "Etc/UTC")} end)
   end

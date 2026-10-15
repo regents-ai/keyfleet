@@ -6,11 +6,16 @@ defmodule KeyfleetWeb.Components.MemberList do
   else the short address), how many Keys it holds with its lowest ones as
   small cards opening each Key, its connected X, GitHub and Farcaster
   accounts, and whether it is active: a Key of it can vote now, as the
-  Treasury counts presence. The address the Regents Club's Keys wait at for
-  their Pass holders is left out.
+  Treasury counts presence. `club_claims` is the address the Regents Club's
+  Keys wait at for their Pass holders, left out of the list; nil for a fleet
+  with none.
 
   The page is read when it opens and again whenever the fleet's Keys change
   hands (`refresh/1`).
+
+  Assigns: `id`, `fleet_id`, `club_claims`, `deck` (the fleet's `id`,
+  `deck_hash` and `deck_size`), `params` (the page's address query) and
+  `profile_open?`.
   """
   use KeyfleetWeb, :live_component
 
@@ -25,7 +30,7 @@ defmodule KeyfleetWeb.Components.MemberList do
   alias KeyfleetWeb.NotFoundError
 
   @per_page 20
-  @cards_shown 10
+  @cards_shown 50
   @online_for 3600
 
   @doc "The Member List on show is read again: Keys changed hands in its fleet."
@@ -55,8 +60,10 @@ defmodule KeyfleetWeb.Components.MemberList do
 
   defp page!(_params), do: 1
 
-  defp read(%{assigns: %{fleet_id: fleet_id, left_out: left_out, page: page}} = socket) do
-    found = Keys.holders(fleet_id, left_out, (page - 1) * @per_page, @per_page + 1)
+  defp read(%{assigns: %{fleet_id: fleet_id, club_claims: club_claims, page: page}} = socket) do
+    found =
+      Keys.holders(fleet_id, List.wrap(club_claims), (page - 1) * @per_page, @per_page + 1)
+
     if found == [] and page > 1, do: raise(NotFoundError)
 
     {shown, more} = Enum.split(found, @per_page)
@@ -110,6 +117,7 @@ defmodule KeyfleetWeb.Components.MemberList do
       |> Enum.map(& &1.id)
       |> Accounts.list_shown_linked_identities!()
       |> Enum.group_by(& &1.human_account_id, &connection/1)
+      |> Map.new(fn {account_id, links} -> {account_id, Enum.reject(links, &is_nil/1)} end)
 
     by_wallet =
       for account <- accounts,
@@ -125,12 +133,13 @@ defmodule KeyfleetWeb.Components.MemberList do
     end
   end
 
-  defp connection(identity),
-    do: %{
-      label: Providers.label(identity.provider),
-      handle: Providers.handle(identity),
-      url: Providers.profile_url(identity.provider, identity.username)
-    }
+  # A connection is shown only with the account name it links to.
+  defp connection(identity) do
+    with handle when is_binary(handle) <- Providers.handle(identity),
+         url when is_binary(url) <- Providers.profile_url(identity.provider, identity.username) do
+      %{label: Providers.label(identity.provider), handle: handle, url: url}
+    end
+  end
 
   @impl true
   def render(assigns) do
@@ -154,6 +163,8 @@ defmodule KeyfleetWeb.Components.MemberList do
             {if holder.present?, do: "Active", else: "Idle"} · {seen(holder.last_active, @now)}
           </p>
           <p class="member-card__connections">
+            <span class="member-card__label">Connections</span>
+            <span :if={holder.connections == []}>None</span>
             <a
               :for={link <- holder.connections}
               href={link.url}
@@ -163,7 +174,7 @@ defmodule KeyfleetWeb.Components.MemberList do
               {link.label} {link.handle}
             </a>
           </p>
-          <ul class="fleet-entry__cards" aria-label="Keys held" tabindex="0">
+          <ul class="fleet-entry__cards member-card__cards" aria-label="Keys held" tabindex="0">
             <li :for={card <- holder.cards}>
               <.link
                 id={"#{@id}-card-#{card.token_id}"}
