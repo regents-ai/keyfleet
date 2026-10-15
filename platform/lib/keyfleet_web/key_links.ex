@@ -37,6 +37,10 @@ defmodule KeyfleetWeb.KeyLinks do
   @doc "The fleet page's list of its Keys and who holds each."
   def members_path(fleet_id), do: fleet_path(fleet_id, [{"view", "members"}])
 
+  @doc "Page `page` of the fleet page's Member List."
+  def members_path(fleet_id, page),
+    do: fleet_path(fleet_id, [{"view", "members"}, {"page", page}])
+
   defp kept(params), do: for(name <- @kept, is_binary(params[name]), do: {name, params[name]})
 
   defp fleet_path(fleet_id, []), do: Keyfleet.Fleets.path(fleet_id)
