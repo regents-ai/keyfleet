@@ -66,6 +66,7 @@ defmodule Keyfleet.Chain.Scanner do
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
   alias Keyfleet.Chain.Logs
+  alias Keyfleet.Chain.ReadingStopped
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
@@ -364,12 +365,13 @@ defmodule Keyfleet.Chain.Scanner do
     %{rescan_from: stopped_at} =
       Chain.flag_divergence!(cursor, %{block: block}, actor: @system)
 
-    Logger.error(
+    message =
       "Fleet #{fleet.id} stopped: the chain disagrees with the record at block #{block}. " <>
         "It is stopped at block #{stopped_at}. " <>
         "Correct the record as docs/chain-reader.md describes, then run bin/clear-fleet-stop #{fleet.id}."
-    )
 
+    Logger.error(message)
+    ReadingStopped.report(message)
     {:stopped, stopped_at}
   end
 end
