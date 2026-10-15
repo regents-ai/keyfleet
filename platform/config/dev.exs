@@ -59,6 +59,8 @@ config :keyfleet, KeyfleetWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: port],
   check_origin: ["http://localhost:#{port}", "http://127.0.0.1:#{port}"],
   code_reloader: true,
+  # Signal listeners added while the server runs are picked up on reload.
+  reloadable_compilers: [:ash_signals, :phoenix_live_view, :elixir, :app],
   # `make readiness` sets this to off, so error pages answer as they do in a release.
   debug_errors: System.get_env("KEYFLEET_DEBUG_ERRORS", "on") == "on",
   secret_key_base: "6ihHqnWB0px5FXmoddiKg3V2NLeiM0k0UsFs5DwmIADSX35FFdeSs5VNICCc3iU5",
