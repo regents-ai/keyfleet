@@ -52,9 +52,10 @@ type IslandHook = {el: HTMLElement; controller?: CanvasIslandController}
 /**
  * The hex field. `data-field-cell` is the distance between neighbouring tiles
  * in CSS pixels; `data-field-across` instead fits that many tiles across the
- * field, so it lies under a map drawn that many keys wide. The pointer anywhere in the element marked `data-field-scope`
- * lights the tiles near it; in the hero, previewing the Key warms the tiles
- * around its card. Less motion keeps the picture and drops the pointer's light.
+ * field, so it lies under a map drawn that many keys wide. The pointer anywhere
+ * in the element marked `data-field-scope` lights the tiles near it; in the
+ * hero, previewing the Key warms the tiles around its card. Less motion keeps
+ * the picture and drops the pointer's light.
  */
 export const HexField = {
   mounted(this: IslandHook) {
