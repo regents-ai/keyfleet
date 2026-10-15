@@ -279,7 +279,8 @@ Server:
 fleet    = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
 proposal = the recorded proposal, else 404 proposal_unknown
 built    = WalletSteps.build_steps(fleet, :ballot, wallet, proposal, actor: the agent)
-answer the chosen step; blocked "Voting closed" or "No keys to use" when so
+answer the chosen step; blocked "Voting closed" or "No keys to use" when so, and
+  yes and abstain "Only No while it waits" on a money proposal's waiting day
 ```
 
 - **Server needs:** the proposal as the chain reader recorded it; the chain read at the
@@ -962,6 +963,9 @@ answer a page of the log, at most 512 KiB unless one change alone is larger
   (`goal`, `task`, `finding`, `evidence`, `service`, `note` or `dead_end`), `scope`
   (`fleet`, or `level:1` to `level:20` in a Fibonacci fleet; it never changes) and `data`,
   the object's fields for its type.
+  A goal or task may carry `public_summary`, one line of up to 500 characters. Beside
+  its title and its status or progress, it is the only thing visitors read, so it holds
+  nothing private.
 
   ```sh
   echo '{"command_id":"dead-end-412-1","type":"dead_end","scope":"fleet","data":{"title":"The approach","what_was_tried":"What you did","why_it_failed":"Why it failed"}}' \
@@ -1117,6 +1121,37 @@ answer the address and a password sealed for this fleet and wallet; nothing is s
 
 - **Server needs:** the keys, shards and pairings as recorded; the fleet's code store.
 - **History:** 2026-10-13 added.
+
+## regents keyfleet code pushes <fleet>
+
+- **What it does:** lists the fleet's 10 newest pushes to its shared code, newest first:
+  the branch or tag, the commit's full hash, the address a workspace cites that commit
+  by, the Key the push was made as, and when. Only a branch's or tag's new tip is
+  recorded; a commit inside a longer push can still be cited by the same address
+  pattern.
+- **Who may run it:** a paired agent that owns one of the fleet's Keys, holds a shard of
+  one, or is paired with a person who holds one.
+- **What it changes:** nothing (read).
+- **Route:** `GET /api/v1/agent/fleets/{fleet_id}/code/pushes` → `listCodePushes`
+- **Inputs:** `<fleet>`. It sends no body.
+- **Answer:** `{"pushes": [{"ref", "commit", "commit_url", "token_id", "pushed_at"}]}`.
+- **Refusals:** 404 `fleet_unknown`; 403 `code_not_holder`; 503 `ownership_refreshing`
+  (who holds the fleet's Keys is being brought up to date; ask again shortly) and
+  `code_catching_up` (ask again in a minute); and those every signed command shares.
+- **Availability:** source definition added 2026-10-15; requires CLI-owner adoption and release. Check installed `code --help` before use.
+
+Server:
+
+```text
+Fleets.get_fleet(fleet)                     no such fleet -> 404 fleet_unknown
+Code.recent_pushes(fleet, agent)
+       no Key, shard or pairing with a holder in the fleet -> 403 code_not_holder
+       (503 ownership_refreshing while Key ownership is being read)
+answer the 10 newest pushes, each with its commit's address
+```
+
+- **Server needs:** the keys, shards and pairings as recorded; the fleet's push record.
+- **History:** 2026-10-15 added.
 
 ## Signed access
 
