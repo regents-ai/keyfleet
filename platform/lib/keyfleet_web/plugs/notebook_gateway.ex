@@ -5,9 +5,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   else the site serves, and reaches the fleet's hub only once this site knows
   who sent it and that they hold one of the fleet's keys now:
 
-    * `/_keyfleet/enter?code=…` spends the one-time link "Open notebooks"
-      made and sets this host's own sign-in cookie, then sends the browser to
-      `/`. The cookie names the fleet, the person's account, the Keyfleet
+    * `/_keyfleet/enter?code=…&to=…` spends the one-time link Keyfleet made
+      and sets this host's own sign-in cookie, then sends the browser to `to`:
+      the start page or a saved output. The cookie names the fleet, the person's account, the Keyfleet
       sign-in it came from and when it ends; on another fleet's host it signs
       no one in, and once that Keyfleet sign-in ends (signed out, another
       account, run out) it signs no one in either, checked on every request.
@@ -20,6 +20,11 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       connection, when the browser says it came from another address
       (`from_elsewhere?/2`). The hub's own check of this reads headers that
       never reach it.
+
+  A saved output, `/results/<notebook id>/<version id>`
+  (`Keyfleet.Notebooks.result_url/3`), is that notebook version's saved page
+  in the hub. Someone without a notebook sign-in who opens one is sent to
+  Keyfleet to get one (`open_url/2`), and comes back to it.
 
   Each one's key ownership is read at most every `access_ttl_ms`
   (`Keyfleet.AccessCache`); the first time in that span, they are
@@ -163,7 +168,22 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp route(%Plug.Conn{method: "GET", request_path: @enter} = conn, fleet_id) do
     conn = fetch_query_params(conn)
+    to = conn.query_params["to"]
 
+    if Notebooks.destination?(to),
+      do: enter(conn, fleet_id, to),
+      else: Refusal.json(conn, 400, "invalid_request")
+  end
+
+  defp route(conn, fleet_id) do
+    case identify(conn, fleet_id) do
+      {:ok, conn, subject, actor} -> admit(conn, fleet_id, subject, actor)
+      {:refused, conn} -> conn
+    end
+  end
+
+  # The link lands where it was made for: the start page or a saved output.
+  defp enter(conn, fleet_id, to) do
     case Notebooks.redeem(fleet_id, conn.query_params["code"]) do
       {:ok, {account_id, session_authority_id}} ->
         max_age = Notebooks.config()[:session_max_age]
@@ -186,18 +206,11 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
           max_age: max_age
         )
         |> put_resp_header("referrer-policy", "no-referrer")
-        |> put_resp_header("location", "/")
+        |> put_resp_header("location", to)
         |> send_resp(303, "")
 
       :error ->
         Refusal.json(conn, 403, "notebooks_link_used")
-    end
-  end
-
-  defp route(conn, fleet_id) do
-    case identify(conn, fleet_id) do
-      {:ok, conn, subject, actor} -> admit(conn, fleet_id, subject, actor)
-      {:refused, conn} -> conn
     end
   end
 
@@ -297,9 +310,30 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
       {:ok, conn, Notebooks.subject(actor), actor}
     else
-      _ -> {:refused, Refusal.json(conn, 401, "notebooks_sign_in")}
+      _ -> {:refused, sign_in(conn, fleet_id)}
     end
   end
+
+  # A saved output's address is shared in the workspace, so someone without a
+  # notebook sign-in who opens one goes to Keyfleet, which signs them in to the
+  # fleet's notebooks if they hold one of its keys and brings them back here.
+  defp sign_in(%Plug.Conn{method: method, request_path: "/results/" <> _ = path} = conn, fleet_id)
+       when method in ["GET", "HEAD"] do
+    conn
+    |> put_resp_header("location", open_url(fleet_id, path))
+    |> send_resp(303, "")
+  end
+
+  defp sign_in(conn, _fleet_id), do: Refusal.json(conn, 401, "notebooks_sign_in")
+
+  @doc """
+  Keyfleet's address that signs a person in to the fleet's notebooks and
+  lands them on `to` (`KeyfleetWeb.NotebookOpenController`).
+  """
+  def open_url(fleet_id, to),
+    do:
+      KeyfleetWeb.Endpoint.url() <>
+        "/fleets/#{fleet_id}/notebooks/open?" <> URI.encode_query(to: to)
 
   # The shared plug has already refused a repeated signed header and a body it
   # did not capture whole; nothing else is checked before the sign-in server.
@@ -364,7 +398,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
     if websocket?(conn),
       do: forward_socket(conn, address, fleet_id, subject, headers),
-      else: forward_http(conn, address, headers)
+      else: forward_http(conn, address, fleet_id, headers)
   end
 
   defp upstream_headers(conn, fleet_id, subject) do
@@ -377,17 +411,20 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     [{"x-keyfleet-assertion", Pass.mint(fleet_id, subject)} | kept]
   end
 
-  defp forward_http(conn, address, headers) do
+  defp forward_http(conn, address, fleet_id, headers) do
     {body, conn} = request_body(conn)
 
-    case body do
-      :too_large ->
+    case {body, upstream_target(conn, fleet_id)} do
+      {:too_large, _target} ->
         Refusal.json(conn, 413, "request_too_large")
 
-      body ->
+      {_body, :error} ->
+        Refusal.json(conn, 502, "notebooks_unavailable")
+
+      {body, {:ok, target}} ->
         Req.request(
           method: conn.method,
-          url: address <> target(conn),
+          url: address <> target,
           headers: headers,
           body: body,
           into: :self,
@@ -396,7 +433,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
           retry: false,
           receive_timeout: http_timeout(conn)
         )
-        |> stream_back(conn)
+        |> stream_back(conn, fleet_id)
     end
   end
 
@@ -421,13 +458,31 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  defp stream_back({:ok, %Req.Response{} = response}, conn) do
+  # A saved output is one version's saved page in the hub.
+  defp upstream_target(%Plug.Conn{request_path: "/results/" <> _ = path}, fleet_id) do
+    {:ok, {notebook_id, version_id}} = Notebooks.result(path)
+
+    case Notebooks.project_id(fleet_id) do
+      {:ok, project_id} when is_binary(project_id) ->
+        {:ok,
+         "/api/v1/projects/#{project_id}/notebooks/#{notebook_id}/versions/#{version_id}/html"}
+
+      _no_project ->
+        :error
+    end
+  end
+
+  defp upstream_target(conn, _fleet_id), do: {:ok, target(conn)}
+
+  defp stream_back({:ok, %Req.Response{} = response}, conn, fleet_id) do
     conn =
-      Enum.reduce(response.headers, conn, fn {name, values}, conn ->
+      response.headers
+      |> Enum.reduce(conn, fn {name, values}, conn ->
         if name in @kept_response,
           do: Enum.reduce(values, conn, &prepend_resp_headers(&2, [{name, &1}])),
           else: conn
       end)
+      |> put_result_link(response, fleet_id)
 
     if conn.method == "HEAD" or response.status in [204, 304] do
       Req.cancel_async_response(response)
@@ -438,7 +493,46 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  defp stream_back({:error, _error}, conn), do: Refusal.json(conn, 502, "notebooks_unavailable")
+  defp stream_back({:error, _error}, conn, _fleet_id),
+    do: Refusal.json(conn, 502, "notebooks_unavailable")
+
+  # A notebook's saved page names the address it keeps under, so whoever read
+  # it can link the result from the workspace.
+  defp put_result_link(conn, %Req.Response{status: 200} = response, fleet_id) do
+    with {:ok, notebook_id} <- saved_page_notebook(conn.path_info),
+         [version_id] <- Req.Response.get_header(response, "x-marimohub-version-id"),
+         {:ok, _result} <- Notebooks.result(Notebooks.result_path(notebook_id, version_id)) do
+      put_resp_header(
+        conn,
+        "link",
+        "<#{Notebooks.result_url(fleet_id, notebook_id, version_id)}>; rel=\"canonical\""
+      )
+    else
+      _ -> conn
+    end
+  end
+
+  defp put_result_link(conn, _response, _fleet_id), do: conn
+
+  defp saved_page_notebook(["results", notebook_id, _version_id]), do: {:ok, notebook_id}
+
+  defp saved_page_notebook(["api", "v1", "projects", _project, "notebooks", notebook_id, "html"]),
+    do: {:ok, notebook_id}
+
+  defp saved_page_notebook([
+         "api",
+         "v1",
+         "projects",
+         _project,
+         "notebooks",
+         notebook_id,
+         "versions",
+         _version,
+         "html"
+       ]),
+       do: {:ok, notebook_id}
+
+  defp saved_page_notebook(_path_info), do: :error
 
   # A client that has gone stops the hub's answer too.
   defp send_part(response, conn, part) do
@@ -542,6 +636,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   defp allowed_route?("GET", "/manifest.webmanifest"), do: true
   defp allowed_route?("GET", "/assets/" <> _file), do: true
   defp allowed_route?("GET", "/projects/" <> _page), do: true
+  defp allowed_route?("GET", "/results/" <> _ = path), do: Notebooks.result(path) != :error
   defp allowed_route?("GET", "/proxy/" <> path), do: path != ""
   defp allowed_route?("POST", "/proxy/" <> path), do: path != ""
   defp allowed_route?("GET", "/surface-proxy/" <> path), do: path != ""

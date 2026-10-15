@@ -1,0 +1,48 @@
+defmodule KeyfleetWeb.NotebookOpenController do
+  @moduledoc """
+  Opens a fleet's notebooks for the person signed in here, landing on `to`:
+  the notebooks' start page or a saved output
+  (`Keyfleet.Notebooks.destination?/1`). A saved output's address sends
+  someone without a notebook sign-in here (`KeyfleetWeb.Plugs.NotebookGateway`);
+  a holder of one of the fleet's keys goes back to it with a link that works
+  once, and anyone else lands on the fleet's workspace with a note saying why.
+  """
+  use KeyfleetWeb, :controller
+
+  alias Keyfleet.Actors.Human
+  alias Keyfleet.{Fleets, Notebooks}
+
+  def open(conn, %{"fleet_id" => fleet_id} = params) do
+    case open_for(conn, fleet_id, params["to"]) do
+      {:ok, url} ->
+        conn
+        |> put_resp_header("referrer-policy", "no-referrer")
+        |> redirect(external: url)
+
+      {:error, :no_hub} ->
+        conn |> put_flash(:error, "This fleet has no notebooks yet.") |> redirect(to: "/")
+
+      {:error, reason} ->
+        conn
+        |> put_flash(:error, notice(reason))
+        |> redirect(to: Fleets.path(fleet_id) <> "/workspace")
+    end
+  end
+
+  defp open_for(%Plug.Conn{assigns: %{current_human_account: nil}}, fleet_id, _to),
+    do: if(Notebooks.hub?(fleet_id), do: {:error, :signed_out}, else: {:error, :no_hub})
+
+  defp open_for(conn, fleet_id, to) do
+    Notebooks.open(
+      Human.for_account(conn.assigns.current_human_account),
+      conn.assigns.current_lineage,
+      fleet_id,
+      to
+    )
+  end
+
+  defp notice(:signed_out), do: "Sign in to open this fleet’s notebooks."
+  defp notice(:not_holder), do: "Only holders of this fleet’s Keys can open its notebooks."
+  defp notice(:invalid_destination), do: "That notebook link isn’t complete. Ask for it again."
+  defp notice(_error), do: "The notebooks can’t be opened right now. Try again in a minute."
+end

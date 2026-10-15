@@ -79,6 +79,37 @@ defmodule Keyfleet.Notebooks do
     |> URI.to_string()
   end
 
+  # The hub's own id shapes (marimohub f103eb2, packages/core/src/ids.ts).
+  @notebook_id ~r/\Anb-[0-9a-z]{16}\z/
+  @version_id ~r/\Aver_[0-9A-Z]{26}\z/
+
+  @doc """
+  A saved notebook output's address: one notebook version's saved page on the
+  fleet's notebook host, `https://<fleet host>/results/<notebook id>/<version id>`.
+  Each saved run is a new version, so a new run has a new address and an old
+  address keeps showing what it showed. Only the fleet's members open it.
+  """
+  def result_url(fleet_id, notebook_id, version_id),
+    do: url(fleet_id, result_path(notebook_id, version_id))
+
+  @doc "The path of a saved output on its fleet's notebook host."
+  def result_path(notebook_id, version_id), do: "/results/#{notebook_id}/#{version_id}"
+
+  @doc "The notebook and version a saved output's path names, as `{:ok, {notebook_id, version_id}}`, or `:error`."
+  def result(path) do
+    with ["", "results", notebook_id, version_id] <- String.split(path, "/"),
+         true <- Regex.match?(@notebook_id, notebook_id) and Regex.match?(@version_id, version_id) do
+      {:ok, {notebook_id, version_id}}
+    else
+      _ -> :error
+    end
+  end
+
+  @doc "Where a link that opens the notebooks may land: their start page or a saved output."
+  def destination?("/"), do: true
+  def destination?(path) when is_binary(path), do: result(path) != :error
+  def destination?(_path), do: false
+
   @doc "How the hubs know a person: by their account here."
   def subject(%Human{human_account_id: id}) when is_integer(id), do: "u_#{id}"
 
@@ -117,13 +148,16 @@ defmodule Keyfleet.Notebooks do
   @doc """
   Opens the fleet's notebooks for a person signed in by the session `lineage`:
   `{:ok, url}`, the fleet's notebook address with a link that works once, for
-  `handoff_ttl_seconds`; `{:error, :signed_out}` when that sign-in is no longer
-  current; `{:error, :not_holder}` when they hold none of the fleet's keys;
-  `{:error, :no_hub}` when the fleet has no notebooks; or `{:error, error}`
+  `handoff_ttl_seconds`, landing on `to` (`destination?/1`: the start page or
+  a saved output); `{:error, :no_hub}` when the fleet has no notebooks;
+  `{:error, :invalid_destination}` for anywhere else to land;
+  `{:error, :signed_out}` when that sign-in is no longer current;
+  `{:error, :not_holder}` when they hold none of the fleet's keys; or `{:error, error}`
   when ownership can't be read right now.
   """
-  def open(%Human{human_account_id: account_id} = actor, lineage, fleet_id) do
+  def open(%Human{human_account_id: account_id} = actor, lineage, fleet_id, to \\ "/") do
     with true <- hub?(fleet_id) || {:error, :no_hub},
+         true <- destination?(to) || {:error, :invalid_destination},
          session_id when is_binary(session_id) <-
            SessionAuthority.current_id(lineage, account_id) || {:error, :signed_out},
          {:ok, true} <- member?(actor, fleet_id) do
@@ -144,7 +178,7 @@ defmodule Keyfleet.Notebooks do
       )
       |> Ash.create!()
 
-      {:ok, url(fleet_id, "/_keyfleet/enter", URI.encode_query(code: code))}
+      {:ok, url(fleet_id, "/_keyfleet/enter", URI.encode_query(code: code, to: to))}
     else
       {:ok, false} -> {:error, :not_holder}
       {:error, error} -> {:error, error}
