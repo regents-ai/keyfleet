@@ -47,6 +47,9 @@ defmodule KeyfleetWeb.WalletWords do
   defp says(:send_share, %{owed: owed}) when is_integer(owed) and owed > 0,
     do: "Owed: #{FleetLive.usdc(owed)}."
 
+  defp says(:convert, %{waiting: waiting}) when is_integer(waiting) and waiting > 0,
+    do: "Waiting to turn into REGENT: #{FleetLive.usdc(waiting)}."
+
   defp says(_flow, _figures), do: nil
 
   # What carrying out a proposal does, in one short sentence.
@@ -143,6 +146,7 @@ defmodule KeyfleetWeb.WalletWords do
   def blocked(:pass_burned), do: "Its Pass was burned"
   def blocked(:reveal_requested), do: "Draw on its way"
   def blocked(:voting_closed), do: "Voting closed"
+  def blocked(:only_no), do: "Only No while it waits"
   def blocked(:open), do: "Voting still open"
   def blocked(:rejected), do: "Not approved"
   def blocked(:executed), do: "Already carried out"
@@ -159,6 +163,7 @@ defmodule KeyfleetWeb.WalletWords do
   def blocked(:sales_not_open), do: "Sales aren’t open yet"
   def blocked(:too_new), do: "Too new: Keys wait 2 days"
   def blocked(:nothing_owed), do: "Nothing owed"
+  def blocked(:nothing_queued), do: "Nothing waiting to turn into REGENT"
   def blocked(:launch_settled), do: "Already settled"
   def blocked(:sale_running), do: "Sale still running"
   def blocked(:bound), do: "Already added"
@@ -186,7 +191,8 @@ defmodule KeyfleetWeb.WalletWords do
   def title(%{name: "carry_out"}), do: "Carry it out"
   def title(%{name: "run_split"}), do: "Release the Daily Treasury Slice to Keys"
   def title(%{name: "return"}), do: "Return"
-  def title(%{name: "send_share"}), do: "Send Regents its share"
+  def title(%{name: "send_share"}), do: "Send to REGENT staking"
+  def title(%{name: "convert"}), do: "Turn USDC into REGENT"
   def title(%{name: "settle"}), do: "Settle the sale"
   def title(%{name: "bind"}), do: "Add to the Daily Treasury Slice to Keys"
   def title(%{name: "release"}), do: "Release tokens"
@@ -208,7 +214,8 @@ defmodule KeyfleetWeb.WalletWords do
   defp confirmed("present"), do: "Done. Present for 48 hours."
   defp confirmed("propose"), do: "Done. It’s open to votes."
   defp confirmed("run_split"), do: "Done. Shared with every Key."
-  defp confirmed("send_share"), do: "Done. Sent to Regents."
+  defp confirmed("send_share"), do: "Done. Sent to REGENT staking."
+  defp confirmed("convert"), do: "Done. Turned into REGENT."
   defp confirmed(_step), do: "Done."
 
   defp reverted("approve"), do: "Not approved. Nothing moved."
@@ -227,6 +234,11 @@ defmodule KeyfleetWeb.WalletWords do
   defp reverted("carry_out"), do: "Not carried out. Nothing moved."
   defp reverted("run_split"), do: "Not released. It may have been released already today."
   defp reverted("return"), do: "Not returned. Nothing moved."
+
+  defp reverted("convert"),
+    do:
+      "Not turned. Nothing moved. The price would have moved too much, or someone turned it first."
+
   defp reverted(_step), do: "Didn’t go through. Nothing moved."
 
   @doc """

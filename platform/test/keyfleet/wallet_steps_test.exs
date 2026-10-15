@@ -538,8 +538,8 @@ defmodule Keyfleet.WalletStepsTest do
       ChainViews.put!(ballot_views(fleet, 1, true))
 
       assert build!(:ballot, proposal: 4).figures.blocked == %{
-               "yes" => :voting_closed,
-               "abstain" => :voting_closed
+               "yes" => :only_no,
+               "abstain" => :only_no
              }
     end
   end

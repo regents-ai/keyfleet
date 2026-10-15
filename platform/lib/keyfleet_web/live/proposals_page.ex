@@ -176,6 +176,7 @@ defmodule KeyfleetWeb.ProposalsPage do
       abstain: proposal.abstain_keys,
       counted: proposal.opening_count + proposal.late_keys,
       closes_at: proposal.closes_at,
+      carry_out_from: Proposals.carry_out_from(proposal),
       text: words(proposal.words)
     }
   end

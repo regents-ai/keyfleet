@@ -78,6 +78,9 @@ The reading is Oban work:
   minute.
 - `Keyfleet.Chain.ReadBalances` takes one balance reading per fleet.
 
+Seeing that these ran, running them again and stopping them is in
+`docs/recurring-jobs.md`.
+
 Each pass reads the head, reads again the last 30 blocks it already recorded
 (about a minute of Base), then records what happened after them up to the
 head, in stretches of at most 10,000 blocks. A stretch is one request for all
@@ -92,8 +95,10 @@ five contracts.
    fly secrets set KEYFLEET_RPC_URL=<Base JSON-RPC URL>
    ```
 
-   With no `KEYFLEET_RPC_URL` nothing is read. A node on any chain other than
-   the one a fleet was deployed on is refused and logged, and nothing is read.
+   With no `KEYFLEET_RPC_URL` nothing is read, and while fleets are deployed
+   the watch saves an error saying so every minute. A node on any chain other
+   than the one a fleet was deployed on is refused, logged and saved with the
+   site's errors, and nothing is read.
    The site also reads what a page's wallet buttons sent through this node
    (`:chain_nodes`); unset, it reads them from Base's public node.
 
@@ -137,7 +142,9 @@ A second reading of the last 30 blocks found an ownership change, reveal,
 proposal, ballot, cancellation, execution, presence, edit restriction, shard
 record, agent-voting setting or money event that reads differently from the
 record, or a recorded one gone from a block whose hash is no longer the
-recorded one. The app logs, at error level:
+recorded one. The app logs, at error level, and saves with the site's errors
+(/admin/errors; Fly Sentinel emails the first time this kind of stop appears,
+as `docs/recurring-jobs.md` describes):
 
 ```
 Fleet <fleet id> stopped: the chain disagrees with the record at block <N>. It is stopped at block <S>. ...

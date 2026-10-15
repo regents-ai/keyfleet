@@ -7,8 +7,9 @@ defmodule Keyfleet.Chain.ReadFleet do
   makes sure every deployed fleet has one.
 
   Each run first proves the node serves the fleet's chain, and otherwise
-  reads nothing and stops, with an error logged; the watch tries again a
-  minute later. A pass that fails is logged and retried after a wait that
+  reads nothing and stops, with an error logged and saved with the site's
+  errors (`Keyfleet.Chain.ReadingStopped`); the watch tries again a minute
+  later. A pass that fails is logged and retried after a wait that
   doubles up to a minute. A job that has failed 20 times is given up, and
   the watch starts a fresh one within a minute.
   """
@@ -20,6 +21,7 @@ defmodule Keyfleet.Chain.ReadFleet do
   require Logger
 
   alias Keyfleet.Chain.Client
+  alias Keyfleet.Chain.ReadingStopped
   alias Keyfleet.Chain.Scanner
   alias Keyfleet.Fleets
 
@@ -55,10 +57,11 @@ defmodule Keyfleet.Chain.ReadFleet do
   defp same_chain(%{chain_id: chain_id}, chain_id), do: :ok
 
   defp same_chain(fleet, chain_id) do
-    Logger.error(
+    message =
       "Fleet #{fleet.id} is deployed on chain #{fleet.chain_id} but the node serves chain #{chain_id}; not reading it."
-    )
 
+    Logger.error(message)
+    ReadingStopped.report(message)
     {:cancel, {:wrong_chain, chain_id}}
   end
 

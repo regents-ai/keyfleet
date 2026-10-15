@@ -1,8 +1,9 @@
 defmodule Keyfleet.WalletSteps.MoneySteps do
   @moduledoc """
   The steps of a fleet's money that anyone may press: running the daily
-  split, returning an advance, and sending the protocol share owed to REGENT
-  staking. `Keyfleet.WalletSteps.Build` describes what every builder answers.
+  split, returning an advance, sending the protocol share owed to REGENT
+  staking, and turning the USDC from Key sales into REGENT for the treasury.
+  `Keyfleet.WalletSteps.Build` describes what every builder answers.
 
   The daily split's figures are its preview, read at the latest block the
   way the treasury works it out: for each asset it splits, the balance, the
@@ -15,6 +16,9 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
 
   # The least ETH the treasury splits from, as the treasury fixes it.
   @eth_threshold 50_000_000_000_000_000
+  # The most USDC one conversion piece takes (the buyer's `PIECE_USDC`):
+  # 250 USDC, as the contracts' deploy-day checklist asks for.
+  @piece_usdc 250_000_000
 
   @doc false
   def steps(:run_split, %{fleet: fleet}) do
@@ -101,6 +105,39 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
        ], %{owed: owed, blocked: if(owed == 0, do: %{"send_share" => :nothing_owed}, else: %{})}}
     else
       _unread -> {:problem, :unread, figures}
+    end
+  end
+
+  # The USDC from Key sales the fleet's manager holds until the REGENT buyer
+  # turns it into REGENT for the treasury. The buyer serves every fleet in
+  # turn, one piece at a time, so a press converts the next piece in line,
+  # which may be another fleet's.
+  def steps(:convert, %{fleet: fleet}) do
+    manager = fleet.manager_address
+
+    with {:ok, reads} <- Reads.at_head(),
+         {:ok, waiting} <- Reads.one(reads, manager, "pendingConversion()", [], {:uint, 256}),
+         {:ok, buyer} <- Reads.one(reads, manager, "REGENT_BUYER()", [], :address),
+         {:ok, in_line} <- Reads.one(reads, buyer, "queueLength()", [], {:uint, 256}),
+         {:ok, next_piece_at} <- Reads.one(reads, buyer, "nextPieceAt()", [], {:uint, 64}) do
+      opens_at = if next_piece_at > 0, do: DateTime.from_unix!(next_piece_at)
+
+      blocked =
+        cond do
+          in_line == 0 ->
+            %{"convert" => :nothing_queued}
+
+          opens_at && DateTime.before?(Reads.now(reads), opens_at) ->
+            %{"convert" => {:opens_at, opens_at}}
+
+          true ->
+            %{}
+        end
+
+      {:ok, [Review.step("convert", buyer, Call.encode("convert(uint256)", [@piece_usdc]))],
+       %{waiting: waiting, in_line: in_line, opens_at: opens_at, blocked: blocked}}
+    else
+      _unread -> {:problem, :unread, %{blocked: %{}}}
     end
   end
 

@@ -179,8 +179,10 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   defp ballot_blocked(_status, [], _keys), do: every_choice(:no_keys)
   defp ballot_blocked(_status, _governed, []), do: every_choice(:too_new)
 
+  # A money proposal waiting its day takes only No ballots, which cancel it
+  # once Yes no longer reaches the bar.
   defp ballot_blocked(:waiting, _governed, _keys),
-    do: Map.delete(every_choice(:voting_closed), "no")
+    do: Map.delete(every_choice(:only_no), "no")
 
   defp ballot_blocked(:open, _governed, _keys), do: %{}
 

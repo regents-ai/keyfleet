@@ -8,7 +8,8 @@ defmodule KeyfleetWeb.ProposalsLive do
   Once the fleet is on chain, its wallet buttons sit beside what they act on:
   marking keys present and proposing on the list; voting, carrying out and
   cancelling on a proposal's own page; the treasury's daily split, returning
-  an advance and sending Regents its share with the treasury. Every press goes to the wallet,
+  an advance, sending the share owed to REGENT staking and turning waiting
+  USDC into REGENT with the treasury. Every press goes to the wallet,
   except one the chain's own state at the latest block makes certain to fail,
   whose button stays in view, disabled, with a few words saying why.
 
@@ -54,7 +55,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   @history_words %{
     forwarded: "Received",
-    protocol_share_sent: "Sent to Regents",
+    protocol_share_sent: "Sent to REGENT staking",
     paid: "Paid",
     advanced: "Advanced",
     split_allocated: "Shared with Key holders"
@@ -107,6 +108,9 @@ defmodule KeyfleetWeb.ProposalsLive do
             <p class="proposals-kind">
               <span class="proposals-badge" data-status={proposal.status}>
                 {status_word(proposal)}
+              </span>
+              <span :if={proposal.status == :waiting} class="proposals-detail">
+                from {at(proposal.carry_out_from)}
               </span>
             </p>
             <h3>
@@ -183,7 +187,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           <h2 id="proposal-vote-title">
             Vote
             <Regent.Primitives.tip id="proposal-vote-tip" label="About voting">
-              Every Key you hold votes together, and so does every Key you hold a shard of while its agent voting is on. Voting again changes the vote until voting closes.
+              Every Key you hold votes together, and so does every Key you hold a shard of while its agent voting is on. Voting again changes the vote until voting closes. A proposal that moves money then waits a day, when only No can be voted; enough No votes cancel it.
             </Regent.Primitives.tip>
           </h2>
           <.live_component
@@ -362,6 +366,11 @@ defmodule KeyfleetWeb.ProposalsLive do
     """
   end
 
+  # A proposal that can never be carried out any more, as the vote contract
+  # says: its carry-out dates no longer mean anything.
+  defp settled?(%{status: status}), do: status in [:rejected, :cancelled, :executed]
+  defp settled?(_unread), do: false
+
   attr :on_chain, :any, required: true, doc: "the proposal as the vote contract says now"
   attr :proposal, :map, required: true
 
@@ -416,11 +425,11 @@ defmodule KeyfleetWeb.ProposalsLive do
           <dt>Closes</dt>
           <dd id="proposal-closes">{at(@proposal.closes_at)}</dd>
         </div>
-        <div :if={@proposal.carry_out_from}>
+        <div :if={@proposal.carry_out_from && not settled?(@on_chain)}>
           <dt>Can be carried out from</dt>
           <dd id="proposal-carry-out-from">{at(@proposal.carry_out_from)}</dd>
         </div>
-        <div>
+        <div :if={not settled?(@on_chain)}>
           <dt>Carry out by</dt>
           <dd id="proposal-expiry">{at(@proposal.execution_expiry)}</dd>
         </div>
@@ -621,7 +630,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   The shared money: the treasury's address on Base, to check and to send to;
   each asset's balance and what is set aside for claims, the daily split's
   rate and when it next opens with its preview, the advances still out, and
-  the protocol share owed to Regents.
+  the share owed to REGENT staking.
   """
   def treasury(assigns) do
     ~H"""
@@ -753,8 +762,8 @@ defmodule KeyfleetWeb.ProposalsLive do
       </ol>
 
       <h3 id="proposals-share-title">
-        Regents share
-        <Regent.Primitives.tip id="proposals-share-tip" label="About the Regents share">
+        REGENT staking share
+        <Regent.Primitives.tip id="proposals-share-tip" label="About the REGENT staking share">
           10% of every key sale is set aside for REGENT staking. Anyone can send it.
         </Regent.Primitives.tip>
       </h3>
@@ -767,14 +776,31 @@ defmodule KeyfleetWeb.ProposalsLive do
         actor={@actor}
         lease={@lease}
       >
-        <:notes :let={panel}>
-          <p :if={is_integer(WalletPanel.figures(panel)[:owed])} class="proposals-detail">
-            {ProposalsPage.units(WalletPanel.figures(panel).owed, 6)} USDC owed to REGENT staking.
-          </p>
-        </:notes>
         <:buttons :let={panel}>
           <WalletPanel.step_button panel={panel} step="send_share" id="proposals-send-share">
             Send to REGENT staking
+          </WalletPanel.step_button>
+        </:buttons>
+      </.live_component>
+
+      <h3 id="proposals-convert-title">
+        USDC to REGENT
+        <Regent.Primitives.tip id="proposals-convert-tip" label="About turning USDC into REGENT">
+          Part of every Key sale is turned into REGENT for the treasury, up to 250 USDC at a time; after a full 250 the next waits 15 minutes. Every fleet shares one line, so a press turns the next amount in line, which may be another fleet’s. Anyone can press it.
+        </Regent.Primitives.tip>
+      </h3>
+      <.live_component
+        module={WalletPanel}
+        id="proposals-convert"
+        class="proposals-action"
+        flow={:convert}
+        fleet={fleet(@page)}
+        actor={@actor}
+        lease={@lease}
+      >
+        <:buttons :let={panel}>
+          <WalletPanel.step_button panel={panel} step="convert" id="proposals-convert-button">
+            Turn into REGENT
           </WalletPanel.step_button>
         </:buttons>
       </.live_component>
@@ -841,7 +867,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           }
           class="proposals-detail"
         >
-          Scheduled release: {at(@treasury.next_run_at)}. Live eligibility is checked before a wallet step is prepared.
+          Next release: {at(@treasury.next_run_at)}.
         </p>
         <table
           :if={split(panel)[:assets] not in [nil, []]}

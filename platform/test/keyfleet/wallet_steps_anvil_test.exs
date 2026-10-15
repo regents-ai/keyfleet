@@ -275,7 +275,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert pressed(url, build!(:ballot, @buyer, proposal: number), "yes") == {:ok, :confirmed}
       skip!(url, @day + 1)
       waiting = build!(:ballot, @buyer, proposal: number)
-      assert waiting.figures.blocked == %{"yes" => :voting_closed, "abstain" => :voting_closed}
+      assert waiting.figures.blocked == %{"yes" => :only_no, "abstain" => :only_no}
       assert pressed(url, waiting, "abstain") == {:ok, :reverted}
       assert pressed(url, waiting, "no") == {:ok, :confirmed}
 
