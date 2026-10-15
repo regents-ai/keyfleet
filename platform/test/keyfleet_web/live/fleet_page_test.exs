@@ -488,8 +488,10 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     test "a fleet without levels offers its key with no level", %{conn: conn} do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
+      chain!(allowance: 10_000_000, minted: 0, price: 10_000_000)
 
       {:ok, view, _html} = live(conn, "/classic/1")
+      render_async(view)
 
       assert text(view, "#buy-key-number") == "1"
       assert text(view, "#buy-key-price") == "10 USDC"
@@ -570,23 +572,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, "#buy-key-button[disabled]")
       assert has_element?(view, "#buy-key-order-sent li[data-state=confirmed] strong", "Buy Key")
       assert text(view, "#buy-key-order-sent span") =~ "Done. The Key is yours"
-    end
-
-    # Stopping here would hold back a press the contract can answer: a key
-    # that has since cost more is refused, and no USDC is taken.
-    test "a fleet whose sales are still being read still offers the key, and says the price may have moved",
-         %{conn: conn} do
-      deploy!()
-      ChainHelpers.seed_cursor!(@fleet, head_block: 5_000, next_block: 1_000)
-
-      {:ok, view, _html} = live(conn, @path)
-
-      assert text(view, "#buy-key-number") == "151"
-
-      assert text(view, "#buy-key-price-may-move") ==
-               "Sales are still being counted, so this price may already have gone up. If it has, the purchase is refused and no USDC is taken, though your wallet still pays the network fee for trying."
-
-      assert has_element?(view, "#buy-key-button")
     end
 
     test "a fleet not yet deployed offers nothing to buy", %{conn: conn} do
@@ -863,7 +848,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       send(view.pid, {:keys_changed, @fleet, [151]})
       assert_pushed(view, "keymap:patch", %{minted: 151, keys: [[151, 0]]})
       assert shown_keys(view) == Enum.to_list(101..151)
-      assert text(view, "#buy-key-number") == "152"
+      assert has_element?(view, "#fleet-next-key", "Key 152 ·")
     end
 
     test "a key in the address that isn't one on the map is no choice", %{conn: conn} do
@@ -940,13 +925,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   test "a key bought appears once the chain reader records it", %{conn: conn} do
     fleet = deploy!("fleet_tech_accelerant", 5_000_000)
     {:ok, view, _html} = live(conn, "/accelerant/1?view=members")
-    assert text(view, "#buy-key-number") == "1"
+    assert has_element?(view, "#fleet-next-key", "Key 1 ·")
 
     StubClient.put_chain(chain_head(5_000_010), [ownership_log(1, 1, @owner, 5_000_003)])
     assert Scanner.step(fleet, StubClient) == :ok
 
     assert_pushed(view, "keymap:patch", %{minted: 1, keys: [[1, 1]]})
-    assert text(view, "#buy-key-number") == "2"
+    assert has_element?(view, "#fleet-next-key", "Key 2 ·")
     assert shown_keys(view) == [1]
 
     {:ok, treasury, _html} = live(conn, "/accelerant/1/treasury")

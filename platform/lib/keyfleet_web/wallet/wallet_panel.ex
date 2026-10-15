@@ -35,8 +35,9 @@ defmodule KeyfleetWeb.WalletPanel do
       `tool`, the browser tool in
       `priv/tool_manifest.json` that presses these buttons for a browser's own
       agent (`assets/js/page_tools.ts`), if any; and `class`;
-    * the slots `fields`, `notes` and `buttons`, each given the panel's state
-      (`inputs`, `built`, `review`, `presses`, `signer`) to read.
+    * the slots `heading`, `fields`, `notes`, `buttons` and `details` (the
+      last under what was sent), each given the panel's state (`inputs`,
+      `built`, `review`, `presses`, `signer`) to read.
 
   Buttons name their step with `data-onchain-step` and sit outside the form;
   fields that feed the steps carry `data-onchain-input` with the name they
@@ -140,8 +141,10 @@ defmodule KeyfleetWeb.WalletPanel do
        tool: nil,
        names_sender: true,
        class: nil,
+       heading: [],
        fields: [],
        notes: [],
+       details: [],
        rebuild: nil,
        shown: nil
      )}
@@ -452,6 +455,8 @@ defmodule KeyfleetWeb.WalletPanel do
       phx-hook="OnchainSteps"
       data-webmcp-tool={@tool}
     >
+      {render_slot(@heading, @panel)}
+
       <form
         :if={@fields != []}
         id={"#{@id}-form"}
@@ -520,6 +525,8 @@ defmodule KeyfleetWeb.WalletPanel do
           </Regent.Primitives.button>
         </li>
       </ol>
+
+      {render_slot(@details, @panel)}
     </section>
     """
   end
