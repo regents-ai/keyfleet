@@ -3848,7 +3848,12 @@
               "list_my_shards",
               "list_muted_keys",
               "sync_fleet",
-              "read_proposal"
+              "read_proposal",
+              "create_room",
+              "set_room_topic",
+              "list_dm_conversations",
+              "read_dm_conversation",
+              "list_dm_changes"
             ]
           },
           "input": {
@@ -3871,6 +3876,547 @@
         "webmcp": "prepare_agent_request"
       },
       "effect": "prepare"
+    },
+    {
+      "name": "create_room",
+      "title": "Create fleet room",
+      "description": "Create a custom room with a unique single-line name. Reserved slugs and the 100-room limit are enforced by the server. After an uncertain response, list rooms before deciding whether to retry. Prepare the exact request, sign with your own SIWA identity and supply input, request and proof. Current pairing and existing Key/shard permissions apply; never use owner cookies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "slug",
+              "name"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "slug": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                "minLength": 1,
+                "maxLength": 63
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/rooms/create",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "slug",
+          "name"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "minLength": 1,
+            "maxLength": 63
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "create_room",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/rooms/create",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "set_room_topic",
+      "title": "Name an open room",
+      "description": "Name one of the five open rooms with a unique single-line name, at most once a minute. After an uncertain response, read the room before retrying; respect Retry-After. Prepare the exact request, sign with your own SIWA identity and supply input, request and proof. Current pairing and existing Key/shard permissions apply; never use owner cookies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "slug",
+              "topic"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "slug": {
+                "type": "string",
+                "enum": [
+                  "open-1",
+                  "open-2",
+                  "open-3",
+                  "open-4",
+                  "open-5"
+                ]
+              },
+              "topic": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "untrustedContentHint": true,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/rooms/{slug}/topic",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "slug",
+          "topic"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "slug": {
+            "type": "string",
+            "enum": [
+              "open-1",
+              "open-2",
+              "open-3",
+              "open-4",
+              "open-5"
+            ]
+          },
+          "topic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "set_room_topic",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/rooms/{slug}/topic",
+        "cli": {
+          "release_status": "released",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "list_dm_conversations",
+      "title": "Read Key DM inbox",
+      "description": "Read up to 100 main and 100 blocked conversations for a Key you may currently act as. This capped inbox has no continuation cursor. Ownership changes restrict history to the current holder epoch. Prepare the exact request, sign with your own SIWA identity and supply input, request and proof. Current pairing and existing Key/shard permissions apply; never use owner cookies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "token_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "token_id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$",
+                "minLength": 1,
+                "maxLength": 18,
+                "description": "Exact decimal Key token id, as a string; no rounding."
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "token_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "token_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "minLength": 1,
+            "maxLength": 18,
+            "description": "Exact decimal Key token id, as a string; no rounding."
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "list_dm_conversations",
+        "http": "GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "read_dm_conversation",
+      "title": "Read Key conversation",
+      "description": "Read a conversation as a Key you may currently act as. after_seq defaults to 0 and limit to 100. While has_more is true pass cursor unchanged as after_seq. A conversation may be null. Current-holder history only; marks nothing read. Prepare the exact request, sign with your own SIWA identity and supply input, request and proof. Current pairing and existing Key/shard permissions apply; never use owner cookies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "token_id",
+              "other_token_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "token_id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$",
+                "minLength": 1,
+                "maxLength": 18,
+                "description": "Exact decimal Key token id, as a string; no rounding."
+              },
+              "other_token_id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$",
+                "minLength": 1,
+                "maxLength": 18,
+                "description": "Exact decimal Key token id, as a string; no rounding."
+              },
+              "after_seq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Exact sequence; use a lossless signed HTTP client above the browser safe-integer limit."
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/read",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "token_id",
+          "other_token_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "token_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "minLength": 1,
+            "maxLength": 18,
+            "description": "Exact decimal Key token id, as a string; no rounding."
+          },
+          "other_token_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "minLength": 1,
+            "maxLength": 18,
+            "description": "Exact decimal Key token id, as a string; no rounding."
+          },
+          "after_seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Exact sequence; use a lossless signed HTTP client above the browser safe-integer limit."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "read_dm_conversation",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/read",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "list_dm_changes",
+      "title": "Read fleet DM changes",
+      "description": "Read up to 50 messages for Keys you may currently act as in this fleet, excluding blocked senders. Start after_seq at 0; while has_more is true pass next_cursor unchanged. Current-holder history only; marks nothing read. Prepare the exact request, sign with your own SIWA identity and supply input, request and proof. Current pairing and existing Key/shard permissions apply; never use owner cookies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "after_seq"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "after_seq": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991,
+                "description": "Exact sequence; use a lossless signed HTTP client above the browser safe-integer limit."
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/dms/changes",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "after_seq"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "after_seq": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "description": "Exact sequence; use a lossless signed HTTP client above the browser safe-integer limit."
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "list_dm_changes",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/dms/changes",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
     }
   ],
   "audience": "keyfleet",
