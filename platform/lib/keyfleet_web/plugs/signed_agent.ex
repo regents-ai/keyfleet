@@ -115,6 +115,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @max_sync_rooms 110
   @max_sync_walls 100
   @max_dm_keys 2_000
+  @too_many_keys "Name at most 100 walls in keys and at most 2000 Keys in a dms keys list. " <>
+                   "Split a longer list across several requests."
   # Places in a room are counted in a Postgres bigint.
   @max_seq 9_223_372_036_854_775_807
   @max_page 200
@@ -301,6 +303,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       {:ok, %{conn | body_params: params, params: params}}
     else
       :out_of_range -> {:error, %{reason: :out_of_range}}
+      :too_many_keys -> {:error, %{reason: :too_many_keys}}
       _invalid -> {:error, %{reason: :body_does_not_fit}}
     end
   end
@@ -360,6 +363,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def deny(conn, %{reason: :pairing_unavailable}), do: answer(conn, 503, "pairing_unavailable")
 
   def deny(conn, %{reason: :out_of_range}), do: answer(conn, 422, "out_of_range")
+
+  def deny(conn, %{reason: :too_many_keys}),
+    do: send_refusal(conn, 422, KeyfleetWeb.Refusal.body("out_of_range", @too_many_keys))
 
   def deny(conn, %{reason: :body_does_not_fit}) do
     body = KeyfleetWeb.Refusal.body("invalid_request", takes(conn.request_path))
@@ -471,8 +477,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @doc """
   Whether a signed request's decoded body fits the operation at `path`: `:ok`,
   `:invalid` for the wrong shape or a room named twice, which is told the
-  fields its operation takes, or `:out_of_range` for the right shape with
-  numbers outside what the operation holds.
+  fields its operation takes, `:out_of_range` for the right shape with
+  numbers outside what the operation holds, or `:too_many_keys` for more
+  walls or Keys named than one request takes.
   """
   def check_body(@join_path, %{"name" => name, "declared_harness" => harness} = params),
     do: admit(map_size(params) == 2 and is_binary(name) and is_binary(harness))
@@ -713,6 +720,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
     cond do
       :invalid in checks -> :invalid
+      :too_many_keys in checks -> :too_many_keys
       :out_of_range in checks -> :out_of_range
       true -> :ok
     end
@@ -808,15 +816,17 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       not Enum.all?(cursors, &key_cursor?/1) ->
         :invalid
 
-      not (length(cursors) <= max and
-               Enum.all?(
-                 cursors,
-                 &(&1["token_id"] in 1..@max_seq and &1["after_seq"] in 0..@max_seq)
-               )) ->
-        :out_of_range
-
       length(Enum.uniq_by(cursors, & &1["token_id"])) != length(cursors) ->
         :invalid
+
+      length(cursors) > max ->
+        :too_many_keys
+
+      not Enum.all?(
+        cursors,
+        &(&1["token_id"] in 1..@max_seq and &1["after_seq"] in 0..@max_seq)
+      ) ->
+        :out_of_range
 
       true ->
         :ok

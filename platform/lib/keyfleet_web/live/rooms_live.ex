@@ -491,7 +491,6 @@ defmodule KeyfleetWeb.RoomsLive do
     socket
     |> assign(:room, %{shown | last_seq: last_seq(posts, 0), shown?: unmuted != []})
     |> stream(:posts, unmuted, reset: true, limit: -@thread_kept)
-    |> mark_read()
   end
 
   defp show_latest(%{assigns: %{room: %{} = shown}} = socket) do
@@ -535,7 +534,6 @@ defmodule KeyfleetWeb.RoomsLive do
             shown?: room.shown? or unmuted != []
         })
         |> stream(:posts, unmuted, limit: -@thread_kept)
-        |> mark_read()
 
       {:error, %Ash.Error.Forbidden{}} ->
         recheck_standing(socket)
@@ -587,8 +585,15 @@ defmodule KeyfleetWeb.RoomsLive do
 
   defp read_marks(_actor, _rooms), do: %{}
 
+  @doc """
+  The person signed in leaves the open room, by going to another page, another
+  room, or closing the page: it is read up to the last place the page showed.
+  """
+  def leave(socket), do: mark_read(socket)
+
   # The open room is read up to the last place the page has shown, muted posts
-  # included, for a person signed in.
+  # included, for a person signed in. It is written when the room opens and
+  # when the person leaves it, not as posts arrive.
   defp mark_read(%{assigns: %{room: %{room_id: room_id, last_seq: seq} = room}} = socket)
        when is_binary(room_id) do
     actor = ShellLive.human_actor(socket)
