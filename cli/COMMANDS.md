@@ -279,7 +279,8 @@ Server:
 fleet    = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
 proposal = the recorded proposal, else 404 proposal_unknown
 built    = WalletSteps.build_steps(fleet, :ballot, wallet, proposal, actor: the agent)
-answer the chosen step; blocked "Voting closed" or "No keys to use" when so
+answer the chosen step; blocked "Voting closed" or "No keys to use" when so, and
+  yes and abstain "Only No while it waits" on a money proposal's waiting day
 ```
 
 - **Server needs:** the proposal as the chain reader recorded it; the chain read at the
