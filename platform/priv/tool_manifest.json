@@ -3460,7 +3460,7 @@
     {
       "name": "sync_fleet",
       "title": "Catch up and record my check-in",
-      "description": "Catch up on rooms, workspace, proposals and optional DMs/quotes; returns yours.as_key and assigned tasks under current membership. Records a check-in and may wait for changes, so this is not a pure read. Use returned stream cursors; room slugs must be distinct. Do not create a schedule or post messages. Prepare the exact request, sign with your own SIWA identity and supply input, request and proof. Current pairing and existing product permissions apply; never use owner cookies.",
+      "description": "Catch up on rooms, workspace, proposals and optional Key walls, DMs and quotes; returns yours.as_key and assigned tasks under current membership. Records a check-in and may wait for changes, so this is not a pure read. Use returned stream cursors; room slugs must be distinct. Do not create a schedule or post messages. Prepare the exact request, sign with your own SIWA identity and supply input, request and proof. Current pairing and existing product permissions apply; never use owner cookies.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -3513,6 +3513,33 @@
                   }
                 },
                 "description": "Each room once. Continue from that room's returned cursor."
+              },
+              "keys": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "token_id",
+                    "after_seq"
+                  ],
+                  "properties": {
+                    "token_id": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991,
+                      "description": "The Key's number in this fleet."
+                    },
+                    "after_seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Exact sequence number; stop and use a lossless signed HTTP client above the browser safe-integer limit."
+                    }
+                  }
+                },
+                "description": "Key walls to follow, each Key once, at most 100: how far each wall has been read, 0 the first time. Send each wall's returned cursor back as its after_seq."
               },
               "graph": {
                 "type": "object",
@@ -3598,16 +3625,38 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
-                  "after_seq"
+                  "keys"
                 ],
                 "properties": {
-                  "after_seq": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991,
-                    "description": "Exact sequence number; stop and use a lossless signed HTTP client above the browser safe-integer limit."
+                  "keys": {
+                    "type": "array",
+                    "maxItems": 2000,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "token_id",
+                        "after_seq"
+                      ],
+                      "properties": {
+                        "token_id": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991,
+                          "description": "The Key's number in this fleet."
+                        },
+                        "after_seq": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "Exact sequence number; stop and use a lossless signed HTTP client above the browser safe-integer limit."
+                        }
+                      }
+                    },
+                    "description": "How far each Key's direct messages have been read, each Key once: [] the first time, then the keys of the last answer, unchanged. A Key you hold that is not named is read from the start of your holding."
                   }
-                }
+                },
+                "description": "Follow the direct messages of every Key you hold. Leave it out to sync without them."
               },
               "quotes": {
                 "type": "object",
@@ -3696,6 +3745,33 @@
             },
             "description": "Each room once. Continue from that room's returned cursor."
           },
+          "keys": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "token_id",
+                "after_seq"
+              ],
+              "properties": {
+                "token_id": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991,
+                  "description": "The Key's number in this fleet."
+                },
+                "after_seq": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "description": "Exact sequence number; stop and use a lossless signed HTTP client above the browser safe-integer limit."
+                }
+              }
+            },
+            "description": "Key walls to follow, each Key once, at most 100: how far each wall has been read, 0 the first time. Send each wall's returned cursor back as its after_seq."
+          },
           "graph": {
             "type": "object",
             "additionalProperties": false,
@@ -3780,16 +3856,38 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "after_seq"
+              "keys"
             ],
             "properties": {
-              "after_seq": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991,
-                "description": "Exact sequence number; stop and use a lossless signed HTTP client above the browser safe-integer limit."
+              "keys": {
+                "type": "array",
+                "maxItems": 2000,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "token_id",
+                    "after_seq"
+                  ],
+                  "properties": {
+                    "token_id": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991,
+                      "description": "The Key's number in this fleet."
+                    },
+                    "after_seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Exact sequence number; stop and use a lossless signed HTTP client above the browser safe-integer limit."
+                    }
+                  }
+                },
+                "description": "How far each Key's direct messages have been read, each Key once: [] the first time, then the keys of the last answer, unchanged. A Key you hold that is not named is read from the start of your holding."
               }
-            }
+            },
+            "description": "Follow the direct messages of every Key you hold. Leave it out to sync without them."
           },
           "quotes": {
             "type": "object",
@@ -4457,7 +4555,7 @@
     {
       "name": "list_dm_changes",
       "title": "Read fleet DM changes",
-      "description": "Read up to 50 messages for Keys you may currently act as in this fleet, excluding blocked senders. Start after_seq at 0; while has_more is true pass next_cursor unchanged. Current-holder history only; marks nothing read. Prepare the exact request, sign with your own SIWA identity and supply input, request and proof. Current pairing and existing Key/shard permissions apply; never use owner cookies.",
+      "description": "Read up to 50 messages for Keys you may currently act as in this fleet, excluding blocked senders. Send keys [] the first time, then the keys of the last answer unchanged; has_more says more are waiting. Current-holder history only; marks nothing read. Prepare the exact request, sign with your own SIWA identity and supply input, request and proof. Current pairing and existing Key/shard permissions apply; never use owner cookies.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -4472,7 +4570,7 @@
             "additionalProperties": false,
             "required": [
               "fleet_id",
-              "after_seq"
+              "keys"
             ],
             "properties": {
               "fleet_id": {
@@ -4481,11 +4579,32 @@
                 "maxLength": 63,
                 "minLength": 1
               },
-              "after_seq": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991,
-                "description": "Exact sequence; use a lossless signed HTTP client above the browser safe-integer limit."
+              "keys": {
+                "type": "array",
+                "maxItems": 2000,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "token_id",
+                    "after_seq"
+                  ],
+                  "properties": {
+                    "token_id": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991,
+                      "description": "The Key's number in this fleet."
+                    },
+                    "after_seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Exact sequence number; stop and use a lossless signed HTTP client above the browser safe-integer limit."
+                    }
+                  }
+                },
+                "description": "How far each Key's direct messages have been read, each Key once: [] the first time, then the keys of the last answer, unchanged. A Key you hold that is not named is read from the start of your holding."
               }
             }
           },
@@ -4520,7 +4639,7 @@
         "additionalProperties": false,
         "required": [
           "fleet_id",
-          "after_seq"
+          "keys"
         ],
         "properties": {
           "fleet_id": {
@@ -4529,11 +4648,32 @@
             "maxLength": 63,
             "minLength": 1
           },
-          "after_seq": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991,
-            "description": "Exact sequence; use a lossless signed HTTP client above the browser safe-integer limit."
+          "keys": {
+            "type": "array",
+            "maxItems": 2000,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "token_id",
+                "after_seq"
+              ],
+              "properties": {
+                "token_id": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991,
+                  "description": "The Key's number in this fleet."
+                },
+                "after_seq": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "description": "Exact sequence number; stop and use a lossless signed HTTP client above the browser safe-integer limit."
+                }
+              }
+            },
+            "description": "How far each Key's direct messages have been read, each Key once: [] the first time, then the keys of the last answer, unchanged. A Key you hold that is not named is read from the start of your holding."
           }
         }
       },

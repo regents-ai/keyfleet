@@ -44,7 +44,8 @@ CLI, merging and releases.
   waiting sync instead of 15–30 s polling.
 - `:agent_wait_ms` has the same lines as on `kf/fast-polls`, so they merge cleanly.
 - **Direct messages** (`kf/live-sync-dms` on `kf/release-next` 3e660fb, chief
-  8 Oct): the sync body takes an optional `"dms":{"after_seq":N}`. With it, the
+  8 Oct): the sync body takes an optional `"dms":{"keys":[{"token_id","after_seq"}]}`,
+  one cursor per Key since 15 Oct (stream 4). With it, the
   answer carries `dms` as `/dms/changes` renders it, over every Key the caller
   holds (shards count), and the wait also listens on `Dms.inbox_topics/2`; a
   `dm_head` past the caller's cursor re-reads. Without it the answer has no
