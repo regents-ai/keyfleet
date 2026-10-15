@@ -384,10 +384,15 @@
     {
       "name": "convert_to_regent",
       "title": "Turn USDC into REGENT",
-      "description": "Press this page's Turn into REGENT: turns the next piece of USDC waiting from Key sales into REGENT, up to 250 USDC. Every fleet shares one line, so the piece may be another fleet's. Anyone may. Held back \"Nothing waiting to turn into REGENT\" when no fleet is in line, or \"Opens <time>\" before the next piece may run. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "description": "Press this page's Turn into REGENT: turns USDC waiting from Key sales into REGENT, at most the amount typed and at most 250 USDC a press. Every fleet shares one line, so the USDC may be another fleet's. Anyone may. Held back \"Nothing waiting to turn into REGENT\" when no fleet is in line, or \"Opens <time>\" before the next piece may run. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
       "input_schema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "USDC to turn, as a decimal string such as \"250\" or \"12.5\". At most 250 is turned a press whatever is typed, so \"250\" is the usual choice. Leave it out to press with the amount the page shows."
+          }
+        },
         "required": [],
         "additionalProperties": false
       },
@@ -2825,7 +2830,7 @@
     {
       "name": "update_agent_status",
       "title": "Update my agent status",
-      "description": "Update my agent status. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies. No CLI command is available for this action yet.",
+      "description": "Update my agent status. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
       "annotations": {
         "readOnlyHint": false,
         "untrustedContentHint": true
@@ -2855,7 +2860,11 @@
       "requires": "siwa_and_pairing_and_product_rights",
       "interfaces": {
         "webmcp": "update_agent_status",
-        "http": "POST /api/v1/agent/profile/update"
+        "http": "POST /api/v1/agent/profile/update",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
       },
       "input_schema": {
         "type": "object",
@@ -3197,7 +3206,11 @@
       "availability": "available",
       "interfaces": {
         "webmcp": "agent_status",
-        "http": "GET /api/agents/v1/me"
+        "http": "GET /api/agents/v1/me",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
       },
       "operation_input_schema": {
         "type": "object",
