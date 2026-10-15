@@ -105,7 +105,7 @@ test("the walk from home through every page, back, forward and the sidebar keeps
     [page.locator("#fleet-proposals-link"), proposals],
     [page.locator('#proposals-list [data-proposal="1"] h3 a'), proposal],
     [page.locator("#proposal-page .proposals-kicker a"), proposals],
-    [page.locator("#proposals-page .proposals-kicker a"), fleetPage],
+    [page.locator("#fleet-tab-hall"), fleetPage],
     [page.locator("#fleet-workspace-link"), board],
     [page.locator("#workspace-page h3 a", {hasText: "Research plan"}), plan],
     [page.locator("#workspace-discussion a"), general],
@@ -162,7 +162,7 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   await walk.arrive(board)
 
   // A goal on the workspace opens on its own page. A proposal's heading leads
-  // to every proposal, and that page's heading back to the fleet.
+  // to every proposal, and the Chat tab back to the hall.
   await walk.follow(page.locator("#workspace-page h3 a", {hasText: "Research plan"}), plan)
   await page.goBack()
   await walk.arrive(board)
@@ -170,7 +170,7 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   await walk.follow(page.locator("#fleet-proposals-link"), proposals)
   await walk.follow(page.locator('#proposals-list [data-proposal="1"] h3 a'), proposal)
   await walk.follow(page.locator("#proposal-page .proposals-kicker a"), proposals)
-  await walk.follow(page.locator("#proposals-page .proposals-kicker a"), fleetPage)
+  await walk.follow(page.locator("#fleet-tab-hall"), fleetPage)
   await walk.follow(page.locator("#fleet-proposals-link"), proposals)
 
   await walk.settled()
