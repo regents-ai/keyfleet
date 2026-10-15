@@ -457,7 +457,7 @@ defmodule KeyfleetWeb.HomeLive do
           <img
             src={~p"/images/home/next-key-pass.webp"}
             width="600"
-            height="765"
+            height="754"
             alt=""
             fetchpriority="high"
           />
