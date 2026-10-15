@@ -111,24 +111,165 @@ paths:
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/account/credits/history:
-    get:
-      operationId: getAgentCreditsHistory
-      description: Read shared Credits history; no writes.
+    post:
+      operationId: readAgentCreditsHistory
+      description: Read the paired person's Credits history, newest first, using an exact signed JSON body. Send {} for the newest entries, or after with the previous page's pagination.next_cursor, unchanged.
       security: [{siwaReceipt: []}]
       x-pairing-required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                after: {type: string, maxLength: 2048}
       responses:
         "200":
-          description: Authorized read result
+          description: A page of the paired person's own history; grouped events remain whole.
           content:
             application/json:
-              schema: {type: object}
+              schema:
+                type: object
+                required: [entries, pagination]
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - id
+                      - kind
+                      - at
+                      - amount
+                      - direction
+                      - site
+                      - purpose
+                      - reason
+                      - agent_address
+                      - pairing_id
+                      - key
+                      - tool
+                      - request
+                      - note
+                      - chain
+                      - tx_hash
+                      - refund_status
+                      - refund_sent_at
+                      properties:
+                        id:
+                          type: string
+                        kind:
+                          type: string
+                          enum:
+                          - bought
+                          - gift
+                          - refund
+                          - set_aside
+                          - returned
+                          - spent
+                          - received
+                        at:
+                          type: string
+                          format: date-time
+                        amount:
+                          type: string
+                          description: Positive decimal Credits amount, summed for this event.
+                        direction:
+                          type: string
+                          enum:
+                          - in
+                          - out
+                          - none
+                        site:
+                          type:
+                          - string
+                          - 'null'
+                        purpose:
+                          type:
+                          - string
+                          - 'null'
+                        reason:
+                          type:
+                          - string
+                          - 'null'
+                        agent_address:
+                          type:
+                          - string
+                          - 'null'
+                        pairing_id:
+                          type:
+                          - string
+                          - 'null'
+                        key:
+                          type:
+                          - string
+                          - 'null'
+                        tool:
+                          type:
+                          - string
+                          - 'null'
+                        request:
+                          type:
+                          - string
+                          - 'null'
+                          description: Present only when allowed for this reader; an agent receives request
+                            text only for its own hold.
+                        note:
+                          type:
+                          - string
+                          - 'null'
+                        chain:
+                          type:
+                          - string
+                          - 'null'
+                        tx_hash:
+                          type:
+                          - string
+                          - 'null'
+                        refund_status:
+                          type:
+                          - string
+                          - 'null'
+                          enum:
+                          - locked
+                          - sent
+                          - null
+                        refund_sent_at:
+                          type:
+                          - string
+                          - 'null'
+                          format: date-time
+                      description: Grouped history event. Inapplicable facts are null; received payments
+                        do not identify the payer.
+                  pagination:
+                    type: object
+                    required: [has_more, next_cursor]
+                    properties:
+                      has_more: {type: boolean}
+                      next_cursor: {type: [string, "null"]}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "422":
+          description: invalid_cursor for a non-string, overlong or invalid history cursor; invalid_request for an unsupported body shape.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: object
+                    required: [code, message, hint]
+                    properties:
+                      code: {type: string, enum: [invalid_cursor, invalid_request]}
+                      message: {type: string}
+                      hint: {type: string}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         "503":
-          description: "siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. account_unavailable: the shared account could not be read; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly."
+          description: Sign-in, pairing or account history is unavailable; retry later with fresh proof.
           headers:
             Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
           content:

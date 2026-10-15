@@ -28,18 +28,39 @@ defmodule KeyfleetWeb.AgentAccountController do
     })
   end
 
+  # Newest first; `after` is the previous page's pagination.next_cursor.
+  def credits_history(%{body_params: %{"after" => cursor}} = conn, _params)
+      when not is_binary(cursor),
+      do: Refusal.json(conn, 422, "invalid_cursor")
+
   def credits_history(conn, _params) do
     args =
       case conn.body_params do
-        %{"after" => cursor} when is_binary(cursor) -> %{after: cursor}
+        %{"after" => cursor} -> %{after: cursor}
         _ -> %{}
       end
 
     case RegentCredits.history(args, actor: credit_actor(conn)) do
-      {:ok, history} -> json(conn, history)
-      {:error, _} -> Refusal.json(conn, 503, "account_unavailable")
+      {:ok, history} ->
+        json(conn, %{
+          entries: history.entries,
+          pagination: %{has_more: history.more?, next_cursor: history.next}
+        })
+
+      {:error, error} ->
+        if cursor_error?(error),
+          do: Refusal.json(conn, 422, "invalid_cursor"),
+          else: Refusal.json(conn, 503, "account_unavailable")
     end
   end
+
+  defp cursor_error?(%Ash.Error.Action.InvalidArgument{field: :after}), do: true
+  defp cursor_error?(%Ash.Error.Page.InvalidKeyset{}), do: true
+
+  defp cursor_error?(%Ash.Error.Invalid{errors: [_ | _] = errors}),
+    do: Enum.all?(errors, &cursor_error?/1)
+
+  defp cursor_error?(_error), do: false
 
   def points(%{assigns: %{agent_actor: %{human_account_id: nil}}} = conn, _params),
     do: Refusal.json(conn, 403, "person_not_here")

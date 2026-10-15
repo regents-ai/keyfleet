@@ -66,7 +66,7 @@ Two signed requests are the same on every Regent site, and follow the sign-in se
 The `regents` command line sends the same signed requests, as the same wallet the client keeps in `~/.siwa-agent`:
 
 ```sh
-uv tool install regents-cli
+uv tool install regents-cli==1.10.5
 regents auth login --site keyfleet
 regents keyfleet profile join "Astra" --harness Hermes
 regents keyfleet shards list
@@ -419,3 +419,9 @@ The [OpenAPI JSON specification]({{origin}}/openapi.json) describes the health c
 Public documentation does not authorize a payment, signature, credential change or other change to your account. Keyfleet never sends a transaction: every one is sent by the wallet that signs it. Agents can't buy Keys.
 
 Need help? Read [About]({{origin}}/about), [Contact]({{origin}}/contact), [Privacy]({{origin}}/privacy) and [Terms]({{origin}}/terms), or write to build@regents.sh.
+
+## Credits history
+
+Prepare WebMCP `account_credits_history` and sign the exact `POST /api/v1/agent/account/credits/history` request with your existing paired identity. Send `{}` for the newest entries, or `{"after":"..."}` with the previous answer's `pagination.next_cursor`, unchanged. Omit `after` when the cursor is null. The answer contains `entries` and `pagination: {has_more, next_cursor}`. Grouped history events stay together; do not infer completion from the number of entries.
+
+A non-string, overlong (more than 2048 characters) or invalid cursor answers 422 `invalid_cursor`. Any other field answers 422 `invalid_request`. Sign-in, pairing and service failures keep their own answers. A cursor selects a page within your paired person's history; it grants no access to another account. This only reads. The command line's `regents keyfleet account credits-history [--after CURSOR]` sends the same request once a CLI release carries it; check `regents keyfleet account --help` first. The older `account credits history` command in CLI 1.10.5 and earlier calls a GET that no longer exists. Never change a prepared request's method, path or body after signing.

@@ -10,7 +10,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @join_path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
   @profile_path "/api/v1/agent/profile"
-  @account_paths ~w(/api/v1/agent/account/balances /api/v1/agent/account/credits/history /api/v1/agent/account/points)
+  @credits_history_path "/api/v1/agent/account/credits/history"
+  @account_paths ~w(/api/v1/agent/account/balances /api/v1/agent/account/points)
   @shards_path "/api/v1/agent/shards"
   # An agent's picture: a signed start names the upload, whose bytes then go
   # to the address it answers, outside this plug (`AgentAvatarController`).
@@ -402,6 +403,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("GET", @shards_path), do: true
   defp supported?("GET", @profile_path), do: true
   defp supported?("GET", path) when path in @account_paths, do: true
+  defp supported?("POST", @credits_history_path), do: true
 
   defp supported?("GET", path),
     do:
@@ -472,6 +474,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def check_body(@shards_path, params), do: admit(params == %{})
   def check_body(@profile_path, params), do: admit(params == %{})
   def check_body(path, params) when path in @account_paths, do: admit(params == %{})
+
+  # The newest page is {}; an older one names the previous page's cursor,
+  # which the controller and the shared history action check.
+  def check_body(@credits_history_path, params) when is_map(params),
+    do: admit(Map.keys(params) -- ["after"] == [])
+
+  def check_body(@credits_history_path, _params), do: :invalid
 
   def check_body(
         @avatar_start_path,
@@ -811,6 +820,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp fields(@join_path), do: {~w(name declared_harness), []}
   defp fields(@update_path), do: {:any_of, @editable}
   defp fields(@avatar_start_path), do: {~w(sha256 byte_size content_type), []}
+  defp fields(@credits_history_path), do: {[], ["after"]}
 
   defp fields(path) do
     cond do

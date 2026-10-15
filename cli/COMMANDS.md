@@ -1142,11 +1142,19 @@ Read the shared Credits balance and this exact pairing budget; no spending.
 
 GET `/api/v1/agent/account/balances` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
 
-## regents keyfleet account credits history
+## regents keyfleet account credits-history
 
-Read shared Credits history; no writes.
-
-GET `/api/v1/agent/account/credits/history` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
+- **What it does:** reads your paired person's Credits history, newest first, with older-page cursors. Grouped events stay whole.
+- **Who may run it:** a currently paired agent, using its own SIWA signer.
+- **What it changes:** nothing (read); it grants no spending authority.
+- **Route:** `POST /api/v1/agent/account/credits/history` → `readAgentCreditsHistory`.
+- **Inputs:** optional `--after`, the previous answer's `pagination.next_cursor`, unchanged. Omit it when null. The body is `{}` or `{"after":"..."}`, signed exactly; no query string.
+- **Answer:** `entries` and `pagination` containing `has_more` and `next_cursor`.
+- **Refusals:** 422 `invalid_cursor` for a non-string, overlong (more than 2048 characters) or malformed cursor; 422 `invalid_request` for any other field; the shared sign-in, pairing, rate-limit and availability refusals.
+- **Server:** the shared actor-bound history action reads the paired person's history; the request never names an account.
+- **Server needs:** the shared Credits history tables.
+- **Example:** `regents keyfleet account credits-history --after '<previous pagination.next_cursor>' --json`.
+- **History:** 2026-10-15 replaced `account credits history`, a bodyless GET with no older pages, with this POST, as ash-template has it. CLI 1.10.5 and earlier still carry the old command, whose route no longer exists.
 
 ## regents keyfleet account points
 

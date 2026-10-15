@@ -1380,13 +1380,28 @@
       "effect": "read"
     },
     {
-      "command": "account credits history",
-      "description": "Read shared Credits history; no writes. Requires current pairing; existing Key and shard rights still apply.",
-      "operation_id": "getAgentCreditsHistory",
-      "method": "GET",
+      "command": "account credits-history",
+      "description": "Read your person's Credits history, up to 50 transfers grouped into complete entries per page.",
+      "operation_id": "readAgentCreditsHistory",
+      "method": "POST",
       "path": "/api/v1/agent/account/credits/history",
       "authority": "paired_agent",
-      "effect": "read"
+      "effect": "read",
+      "pagination": {
+        "has_more": "pagination.has_more",
+        "cursor": "pagination.next_cursor",
+        "flag": "after"
+      },
+      "flags": [
+        {
+          "name": "after",
+          "type": "string",
+          "in": "body",
+          "field": "after",
+          "required": false,
+          "description": "The previous page's pagination.next_cursor unchanged, at most 2048 characters. Omit for the first page or when the cursor is null; do not send null."
+        }
+      ]
     },
     {
       "command": "account points",
