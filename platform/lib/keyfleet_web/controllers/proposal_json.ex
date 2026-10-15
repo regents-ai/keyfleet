@@ -10,6 +10,20 @@ defmodule KeyfleetWeb.ProposalJSON do
   def summary(%{proposal: proposal, status: status, changed_seq: changed_seq}),
     do: proposal |> detail(status) |> Map.put(:changed_seq, changed_seq)
 
+  @doc "The human list's indexed summary, with lossless decimal numbers."
+  def list_item(proposal) do
+    %{
+      number: Integer.to_string(proposal.number),
+      status: Keyfleet.Proposals.status(proposal),
+      yes: Integer.to_string(proposal.yes_keys),
+      no: Integer.to_string(proposal.no_keys),
+      abstain: Integer.to_string(proposal.abstain_keys),
+      counted: Integer.to_string(proposal.opening_count + proposal.late_keys),
+      closes_at: proposal.closes_at,
+      text: text(proposal.words)
+    }
+  end
+
   @doc "One proposal as `proposals/read` answers it."
   def detail(proposal, status) do
     %{
