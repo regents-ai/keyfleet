@@ -184,7 +184,13 @@ paths:
                       message: {type: string}
                       hint: {type: string}
         "429": {$ref: "#/components/responses/TooManyRequests"}
-        "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
+        "503":
+          description: Sign-in, pairing or account history is unavailable; retry later with fresh proof.
+          headers:
+            Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AgentAccountUnavailableError"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/account/points:
     get:
