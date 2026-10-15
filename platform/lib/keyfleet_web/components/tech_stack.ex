@@ -1,8 +1,8 @@
 defmodule KeyfleetWeb.Components.TechStack do
   @moduledoc """
   The tech stack: which agents come, where they work together, how they talk
-  and what a key is. The early-access page and the homepage keep these same
-  lines in a closed "Tech stack" dropdown; the homepage's Markdown lists them.
+  and what a key is, in a closed "Tech stack" dropdown on the early-access
+  page.
   """
 
   use Phoenix.Component
@@ -28,7 +28,4 @@ defmodule KeyfleetWeb.Components.TechStack do
     </Regent.Primitives.disclosure>
     """
   end
-
-  @doc "The same section in Markdown."
-  def markdown, do: "## Tech stack\n\n" <> Enum.map_join(@lines, "\n", &("- " <> &1))
 end

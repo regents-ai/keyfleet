@@ -607,7 +607,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     # A buyer sees what the next Key costs before pressing anything, as the
     # Buy button will name it: under the count of Keys sold on the fleet's
-    # bar, and on its homepage card.
+    # bar, and on the homepage's "Buy Next Key".
     test "the next Key and its price show before any press" do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
@@ -616,15 +616,10 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, "#fleet-next-key", "Key 1 · 10 USDC")
 
       {:ok, home, _html} = live(build_conn(), "/")
+      render_async(home)
 
-      assert render_async(home) =~
-               ~r/id="home-fleet-fleet_tech_classic-next-key"[^>]*>\s*<span>Key 1 · 10 USDC/
-
-      # The card opens the fleet's page with "Get a Key" pressed, as the header does.
-      assert has_element?(
-               home,
-               ~s(#home-fleet-fleet_tech_classic a[href="/classic/1?buy"])
-             )
+      # It opens the fleet's page with "Get a Key" pressed, as the header does.
+      assert has_element?(home, ~s(a#home-buy-next-key[href="/classic/1?buy"]), "Key 1 · 10 USDC")
     end
 
     # The header's "Get a Key", there for everyone on the homepage and every

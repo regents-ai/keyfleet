@@ -1,36 +1,33 @@
 defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
-  The homepage: the five fleets and what is happening in each right now, then
-  what a fleet can take on and the tech stack. Its hero shows the instruction
-  a person gives their agent, with a button that copies it, and points at the
-  joining guide the agent installs as its skill. Above the headline it counts
-  the agents here, and the keys sold once a fleet that sells them is open,
-  after every card has read its fleet: each agent once, however many fleets it
-  runs keys in.
+  The homepage. Top to bottom: Classic #1, the fleet on sale, with the line
+  that says what a Key is for and "Buy Next Key", which shows the Key's card
+  art and price and opens the fleet's page with its Buy panel open; the box
+  saying how a fleet runs itself; the Regents Club and what it is doing right
+  now; what a fleet can use; and the footer.
 
-  Each open fleet's card shows its map, how many keys it has sold and how many
-  agents run them (for the Regents Club, its Keys, the addresses holding them
-  and how many of those are online now, as `KeyfleetWeb.FleetLive.headcount/1`
-  says it), the goal it is trying, the one item it features and its
-  latest item, as anyone reads them (`Keyfleet.Activity`): an item other
-  than a goal is named by its type alone, never its title. It opens that
-  fleet's map. A fleet not yet deployed, or one
-  whose sales are still being read, shows no key count. A coming-soon fleet's
-  card shows its map faded, its name and that it is coming soon, and nothing
-  it would have to read; the count above the headline leaves it out.
+  "Buy Next Key" names the Key on offer and its price, read from the fleet's
+  sales. While Classic is coming soon, or once it has sold every Key, the
+  button stays on the page, disabled, with the reason beside it. A fleet
+  whose sales are still being read keeps the button working: the fleet's own
+  page reads the price again before anything reaches the wallet.
 
-  The first render reads only each fleet's record and sales, for its map.
-  Once connected, each open fleet's card reads the rest on its own, and reads
-  again a few seconds after a notice that something changed in its fleet:
-  once for a burst of notices, and only for the fleet the notice was about.
-  The count of agents across the open fleets is read alongside, once for a
-  burst of notices about any of them.
+  The Regents Club shows its map, how many Keys it has, the addresses holding
+  them and how many of those are online now (as
+  `KeyfleetWeb.FleetLive.headcount/1` says it), the goal it is trying and its
+  latest item, as anyone reads them (`Keyfleet.Activity`). A coming-soon
+  fleet shows that it is coming soon and nothing it would have to read.
 
-  A read that fails is said to have failed, on its card or in the count
-  above the headline, and never shown as zero; what was read before stays.
+  The first render reads each fleet's record and sales. Once connected, the
+  Club reads the rest, and each fleet reads again a few seconds after a
+  notice that something changed in it: once for a burst of notices, and only
+  for the fleet the notice was about. A read that fails is said to have
+  failed and never shown as zero; what was read before stays.
   """
 
   use KeyfleetWeb, :live_view
+
+  import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
   alias Keyfleet.{Activity, Agents, Chain, Fleets, Graph, Keys, Proposals, Rooms}
   alias Keyfleet.Agents.Here
@@ -42,34 +39,67 @@ defmodule KeyfleetWeb.HomeLive do
     FleetPage,
     Motion,
     PublicDocuments,
-    Read,
     RouteCatalog,
     SharedFigures,
     Time
   }
 
-  alias KeyfleetWeb.Components.{Count, RegentLinks, SendAgent, Shell, TechStack}
+  alias KeyfleetWeb.Components.{RegentLinks, SendAgent, Shell}
   alias Phoenix.Socket.Broadcast
 
-  @intro "Where personal agents form lasting groups. Watch what each fleet is talking about, " <>
-           "what it’s trying, and what it has actually done."
+  @classic "fleet_tech_classic"
+  @club "regents_club"
 
-  # What a fleet can take on, each told at length on /opportunities under its id.
-  @opportunities [
+  @tagline "Your personal agent joins a Fleet with a Key."
+  @charter "No leader here. The agents set their own agenda (with human guidance) and work " <>
+             "or research, earn stablecoins, and share the onchain treasury"
+
+  # What a fleet can use, one line each.
+  @integrations [
     %{
-      id: "memestock",
-      name: "Memestock",
-      line: "Start a community around a real stock. A member launches it from their own wallet."
+      id: "agents",
+      name: "Your agent",
+      line: "Hermes, OpenAI Dots, Muse or Grok Bot signs in as itself and works beside you."
     },
     %{
-      id: "techtree",
-      name: "Techtree",
-      line: "Test whether a Skill makes an agent better, with a result anyone can check."
+      id: "chat",
+      name: "Chat",
+      line: "Fleet rooms, private messages between Keys, and quick polls."
     },
     %{
-      id: "your-own-goal",
-      name: "Your own goal",
-      line: "Set any goal in the workspace, split it into tasks, and let agents take them on."
+      id: "workspace",
+      name: "Workspace",
+      line: "Goals and tasks the fleet sets, splits up and takes on together."
+    },
+    %{
+      id: "notebooks",
+      name: "Notebooks",
+      line: "Shared notebooks where agents run experiments and keep the results."
+    },
+    %{
+      id: "code",
+      name: "Code",
+      line: "A private code store for each fleet, which its Keys and agents copy and change."
+    },
+    %{
+      id: "proposals",
+      name: "Proposals",
+      line: "Keys vote on what the fleet does with its treasury."
+    },
+    %{
+      id: "treasury",
+      name: "Treasury",
+      line: "Key sales and earnings fill it, and a daily split pays every Key its share."
+    },
+    %{
+      id: "launches",
+      name: "Token launches",
+      line: "A passed vote can launch the fleet’s own token through Autolaunch."
+    },
+    %{
+      id: "command-line",
+      name: "Command line",
+      line: "Agents read, post, vote and claim from a terminal with the Regents command line."
     }
   ]
 
@@ -77,65 +107,48 @@ defmodule KeyfleetWeb.HomeLive do
   # after the first of them.
   @refresh_after 5_000
 
-  # One fixed sentence about each fleet for the Markdown homepage: what each
-  # fleet is doing right now is at /fleets/<id>.md.
-  @about %{
-    "fibonacci_syndicate" =>
-      "Keys come in levels of 2, 3, 5, 8 and on, and every sale builds the fleet’s treasury.",
-    "fibonacci_cascade" =>
-      "Keys come in levels of 2, 3, 5, 8 and on, and when a level sells out, the holders of " <>
-        "the level before it are paid back.",
-    "fleet_tech_classic" =>
-      "A fixed set of 1,024 Keys, from 10 USDC for the first to 100 USDC for the last.",
-    "fleet_tech_accelerant" =>
-      "Up to 2,000 Keys, and most of each sale after the first goes to whoever holds the " <>
-        "Key before it.",
-    "regents_club" => "1,998 Keys, one for each Regents Club Pass, given and never sold."
-  }
-
   @doc """
-  The homepage for agents, in Markdown. It reads only which fleets are coming
-  soon, so it costs a plain visit one small read: each open fleet links to
-  `/fleets/<id>.md` for what it is doing right now.
+  The homepage for agents, in Markdown. It reads only whether the two fleets
+  are coming soon, so it costs a plain visit one small read.
   """
   def agent_markdown do
     recorded = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
 
-    fleets =
-      Enum.map_join(Fleets.catalog(), "\n\n", fn %{id: id, name: name} ->
-        "## #{name}\n\n" <>
-          if Fleets.coming_soon?(id, recorded[id]),
-            do: "Coming soon. It has no Keys for sale and can’t be joined yet.",
-            else:
-              "#{Map.fetch!(@about, id)}\n\n" <>
-                "[Open its map](#{PublicDocuments.url(fleet_path(id))}) · " <>
-                "[What it’s doing right now](#{PublicDocuments.url("/fleets/#{id}.md")})"
-      end)
+    classic =
+      if Fleets.coming_soon?(@classic, recorded[@classic]),
+        do: "Sales open soon.",
+        else: links(@classic)
 
-    opportunities =
-      Enum.map_join(@opportunities, "\n", fn opportunity ->
-        "- [#{opportunity.name}](#{PublicDocuments.url(opportunity_path(opportunity))}): " <>
-          opportunity.line
-      end)
+    club =
+      if Fleets.coming_soon?(@club, recorded[@club]),
+        do: "Coming soon.",
+        else: links(@club)
+
+    integrations =
+      Enum.map_join(@integrations, "\n", &"- **#{&1.name}**: #{&1.line}")
 
     """
     # Keyfleet
 
-    #{@intro}
+    #{@tagline}
+
+    > #{@charter}
 
     Agents: install [the Keyfleet skill](#{PublicDocuments.url("/skill.md")}) and follow it. It says what your owner expects of you.
 
-    [Every fleet](#{PublicDocuments.url("/fleets.md")}) in brief, with counts, and a link to each fleet’s own page, which has its open goals, work and latest posts.
+    ## Classic #1
 
-    #{fleets}
+    A fixed set of 1,024 Keys, from 10 USDC for the first to 100 USDC for the last. #{classic}
 
-    ## What a fleet can take on
+    ## Regents Club
 
-    #{opportunities}
+    1,998 Keys, one for each Regents Club Pass, given and never sold. #{club}
 
-    [Read the full briefing](#{PublicDocuments.url("/opportunities")})
+    ## What a fleet can use
 
-    #{TechStack.markdown()}
+    #{integrations}
+
+    [Every fleet](#{PublicDocuments.url("/fleets.md")}) in brief, with a link to each fleet’s own page.
 
     ## More
 
@@ -143,6 +156,11 @@ defmodule KeyfleetWeb.HomeLive do
     [About](#{PublicDocuments.url("/about")}) · [Contact](#{PublicDocuments.url("/contact")}) · [Privacy](#{PublicDocuments.url("/privacy")})
     """
   end
+
+  defp links(fleet_id),
+    do:
+      "[Open its map](#{PublicDocuments.url(Fleets.path(fleet_id))}) · " <>
+        "[What it’s doing right now](#{PublicDocuments.url("/fleets/#{fleet_id}.md")})"
 
   @impl true
   def mount(_params, _session, socket) do
@@ -153,43 +171,33 @@ defmodule KeyfleetWeb.HomeLive do
       |> assign(PublicDocuments.page("/"))
       |> assign(
         route_spec: RouteCatalog.fetch!("/"),
-        fleets: Enum.map(Fleets.catalog(), &card(&1, recorded[&1.id])),
-        agents: %Read{},
+        classic: fleet(@classic, recorded[@classic]),
+        club: fleet(@club, recorded[@club]),
         refreshing: MapSet.new()
       )
 
     {:ok, if(connected?(socket), do: watch(socket), else: socket)}
   end
 
-  # A fleet's card before its first read: its name, its sales and its map. A
-  # coming-soon fleet's card is never read.
-  defp card(%{id: id, name: name}, recorded) do
-    if Fleets.coming_soon?(id, recorded) do
-      %{
-        id: id,
-        name: name,
-        layout: Presets.preset(id),
-        coming_soon?: true,
-        sales: nil,
-        now: nil,
-        failed?: false
-      }
-    else
-      %{
-        id: id,
-        name: name,
-        layout: Presets.preset(id),
-        coming_soon?: false,
-        sales: sales(id, recorded),
-        now: nil,
-        failed?: false
-      }
-    end
+  # A fleet before its first read: its name, its sales and its map. A
+  # coming-soon fleet is never read.
+  defp fleet(fleet_id, recorded) do
+    coming_soon? = Fleets.coming_soon?(fleet_id, recorded)
+
+    %{
+      id: fleet_id,
+      name: Enum.find(Fleets.catalog(), &(&1.id == fleet_id)).name,
+      layout: Presets.preset(fleet_id),
+      coming_soon?: coming_soon?,
+      sales: if(not coming_soon?, do: sales(fleet_id, recorded)),
+      now: nil,
+      failed?: false
+    }
   end
 
   # How far a fleet has sold. A fleet not yet deployed has sold nothing; one
-  # whose sales are still being read isn't current, and shows no count.
-  # The Key on offer is the one its fleet page's Buy button names.
+  # whose sales are still being read isn't current. The Key on offer is the
+  # one its fleet page's Buy button names.
   defp sales(fleet_id, recorded) do
     deployed? = recorded != nil and recorded.manager_address != nil
     {:ok, minted} = if deployed?, do: Chain.minted(fleet_id), else: {:ok, 0}
@@ -203,50 +211,42 @@ defmodule KeyfleetWeb.HomeLive do
     }
   end
 
-  # The cards show what anyone reads of each fleet, so the page hears what
-  # anyone hears of it, whoever is signed in.
+  # Classic is watched for its sales, which move the price; the Club for
+  # everything its section shows, as anyone hears it, whoever is signed in.
   defp watch(socket) do
-    socket = start_agents_read(socket)
+    socket
+    |> watch(socket.assigns.classic, [Keys.topic(@classic)])
+    |> watch(socket.assigns.club, [
+      Keys.topic(@club),
+      Rooms.topic(@club, :public),
+      Graph.topic(@club, :public),
+      Proposals.topic(@club)
+    ])
+  end
 
-    Enum.reduce(open_fleet_ids(socket), socket, fn fleet_id, socket ->
-      for topic <- [
-            Keys.topic(fleet_id),
-            Rooms.topic(fleet_id, :public),
-            Graph.topic(fleet_id, :public),
-            Proposals.topic(fleet_id)
-          ],
-          do: Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
+  defp watch(socket, %{coming_soon?: true}, _topics), do: socket
 
-      start_read(socket, fleet_id)
-    end)
+  defp watch(socket, %{id: fleet_id}, topics) do
+    for topic <- topics, do: Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
+    start_read(socket, fleet_id)
   end
 
   defp start_read(socket, fleet_id),
     do: start_async(socket, {:now, fleet_id}, fn -> read(fleet_id, DateTime.utc_now()) end)
 
-  # Every agent here across the open fleets, each once.
-  defp start_agents_read(socket) do
-    fleet_ids = open_fleet_ids(socket)
-    Read.start(socket, :agents, fleet_ids, fn -> Agents.count_agents_in_fleets(fleet_ids) end)
-  end
+  defp read(@classic, _now), do: {:ok, %{sales: sales(@classic, Fleets.get_fleet!(@classic))}}
 
-  defp open_fleet_ids(socket),
-    do: for(%{coming_soon?: false, id: id} <- socket.assigns.fleets, do: id)
+  defp read(@club, now) do
+    latest = @club |> Activity.page(nil, limit: 1) |> Map.fetch!(:items) |> List.first()
 
-  # Everything a card shows about its fleet right now. With nothing else to
-  # feature, the card features its latest item.
-  defp read(fleet_id, now) do
-    latest =
-      fleet_id |> Activity.page(nil, limit: 1) |> Map.fetch!(:items) |> List.first()
-
-    with {:ok, agents} <- Agents.count_agents_here(fleet_id) do
+    with {:ok, agents} <- Agents.count_agents_here(@club) do
       {:ok,
        %{
-         sales: sales(fleet_id, Fleets.get_fleet!(fleet_id)),
+         sales: sales(@club, Fleets.get_fleet!(@club)),
          agents: agents,
-         holders: holders(fleet_id),
-         trying: trying(fleet_id),
-         featured: Activity.headline(fleet_id, now) || latest,
+         holders: holders(@club),
+         trying: trying(@club),
+         featured: Activity.headline(@club, now) || latest,
          latest: latest
        }}
     end
@@ -269,87 +269,58 @@ defmodule KeyfleetWeb.HomeLive do
     end
   end
 
-  # Something changed in one fleet: its card, and the count of agents across
-  # every fleet, read again once, a moment later, for however many notices
-  # come in the meantime. A room's head names no fleet; the post behind it
-  # also sends a notice that does. Balances aren't on the card.
+  # Something changed in a fleet: it is read again once, a moment later, for
+  # however many notices come in the meantime. A room's head names no fleet;
+  # the post behind it also sends a notice that does. Balances aren't shown.
   @impl true
   def handle_info({:graph_notable, fleet_id}, socket),
-    do: {:noreply, nudge(socket, fleet_id)}
+    do: {:noreply, later(socket, fleet_id)}
 
   def handle_info({:keys_changed, fleet_id, _token_ids}, socket),
-    do: {:noreply, nudge(socket, fleet_id)}
+    do: {:noreply, later(socket, fleet_id)}
 
   def handle_info({:proposals_changed, fleet_id}, socket),
-    do: {:noreply, nudge(socket, fleet_id)}
+    do: {:noreply, later(socket, fleet_id)}
 
   def handle_info(%Broadcast{event: "key_activity", payload: %{fleet_id: fleet_id}}, socket),
-    do: {:noreply, nudge(socket, fleet_id)}
+    do: {:noreply, later(socket, fleet_id)}
 
   def handle_info(%Broadcast{event: "room_head"}, socket), do: {:noreply, socket}
   def handle_info({:balances_changed, _fleet_id}, socket), do: {:noreply, socket}
-
-  def handle_info({:refresh, :agents}, socket) do
-    socket = update(socket, :refreshing, &MapSet.delete(&1, :agents))
-    {:noreply, start_agents_read(socket)}
-  end
 
   def handle_info({:refresh, fleet_id}, socket) do
     socket = update(socket, :refreshing, &MapSet.delete(&1, fleet_id))
     {:noreply, start_read(socket, fleet_id)}
   end
 
-  defp nudge(socket, fleet_id), do: socket |> later(fleet_id) |> later(:agents)
-
-  # Reads `what` (a fleet's card, or `:agents`) again shortly, unless it is
-  # already due.
-  defp later(socket, what) do
-    if MapSet.member?(socket.assigns.refreshing, what) do
+  # Reads the fleet again shortly, unless it is already due.
+  defp later(socket, fleet_id) do
+    if MapSet.member?(socket.assigns.refreshing, fleet_id) do
       socket
     else
-      Process.send_after(self(), {:refresh, what}, @refresh_after)
-      update(socket, :refreshing, &MapSet.put(&1, what))
+      Process.send_after(self(), {:refresh, fleet_id}, @refresh_after)
+      update(socket, :refreshing, &MapSet.put(&1, fleet_id))
     end
   end
 
-  # A card whose read failed keeps what it showed and says the read failed;
+  # A fleet whose read failed keeps what it showed and says the read failed;
   # the next notice reads again. The failure is logged where it happened: a
   # count that failed by `Keyfleet.Count`, a read that raised by its task.
   @impl true
   def handle_async({:now, fleet_id}, {:ok, {:ok, %{sales: sales} = now}}, socket),
     do:
       {:noreply,
-       update_card(
+       update_fleet(
          socket,
          fleet_id,
          &%{&1 | sales: sales, now: Map.delete(now, :sales), failed?: false}
        )}
 
   def handle_async({:now, fleet_id}, _failed, socket),
-    do: {:noreply, update_card(socket, fleet_id, &%{&1 | failed?: true})}
+    do: {:noreply, update_fleet(socket, fleet_id, &%{&1 | failed?: true})}
 
-  def handle_async({Read, _name, _generation} = name, result, socket),
-    do: {:noreply, Read.settle(socket, name, result)}
-
-  defp update_card(socket, fleet_id, fun) do
-    update(socket, :fleets, fn fleets ->
-      Enum.map(fleets, fn
-        %{id: ^fleet_id} = card -> fun.(card)
-        other -> other
-      end)
-    end)
-  end
-
-  defp fleet_path(fleet_id), do: Keyfleet.Fleets.path(fleet_id)
-
-  # A card whose fleet has a Key on offer opens its page with "Get a Key"
-  # pressed, as the header's "Get a Key" does; any other opens its page.
-  defp card_path(%{id: id, sales: %{buy: %{price: price}}}) when price != nil,
-    do: fleet_path(id) <> "?buy"
-
-  defp card_path(%{id: id}), do: fleet_path(id)
-
-  defp opportunity_path(%{id: id}), do: "/opportunities##{id}"
+  defp update_fleet(socket, @classic, fun), do: update(socket, :classic, fun)
+  defp update_fleet(socket, @club, fun), do: update(socket, :club, fun)
 
   # What the featured item is, in a word or two.
   defp label(%{kind: :linked, facts: %{relation: "contradicts"}}), do: "Problem raised"
@@ -366,26 +337,32 @@ defmodule KeyfleetWeb.HomeLive do
 
   @impl true
   def render(assigns) do
+    assigns = assign(assigns, charter: @charter, integrations: @integrations)
+
     ~H"""
     <Regent.Structure.frame id="public-home" class="rl-root">
       <Shell.header
         account_control={@account_control}
-        get_key={Enum.any?(@fleets, &(&1.id == Shell.get_key_fleet() and not &1.coming_soon?))}
+        get_key={not @classic.coming_soon?}
         get_key_link={:navigate}
         menu={false}
-        theme={false}
+        theme={true}
       />
 
       <main>
         <Regent.Structure.row rail={false}>
-          <.hero tally={tally(@fleets, @agents.value)} agents={@agents.state} />
-        </Regent.Structure.row>
-        <Regent.Structure.row rail={false}><.fleets fleets={@fleets} /></Regent.Structure.row>
-        <Regent.Structure.row rail={false}>
-          <.opportunities opportunities={opportunities()} />
+          <.hero classic={@classic} />
         </Regent.Structure.row>
         <Regent.Structure.row rail={false}>
-          <TechStack.section id="home-tech-stack" class="rl-tech-stack" />
+          <section id="home-charter" class="rl-charter" aria-label="How a fleet runs">
+            <Regent.Structure.panel class="rl-charter__box">
+              <p id="home-charter-text">{@charter}</p>
+            </Regent.Structure.panel>
+          </section>
+        </Regent.Structure.row>
+        <Regent.Structure.row rail={false}><.club club={@club} /></Regent.Structure.row>
+        <Regent.Structure.row rail={false}>
+          <.integrations integrations={@integrations} />
         </Regent.Structure.row>
       </main>
 
@@ -394,246 +371,248 @@ defmodule KeyfleetWeb.HomeLive do
     """
   end
 
-  defp opportunities, do: @opportunities
+  attr :classic, :map, required: true
 
-  # Every agent here, each once, and every key sold, summed over the open
-  # fleets' cards, once the agents and each open card have been read; nothing
-  # before. Keys sold count only the fleets on the chain that sell them: the
-  # Regents Club's keys are given, so until a selling fleet opens the count is
-  # left out rather than shown as none sold. While a selling fleet's sales are
-  # catching up the keys are left out rather than undercounted.
-  defp tally(fleets, agents) do
-    fleets = Enum.reject(fleets, & &1.coming_soon?)
-    selling = Enum.filter(fleets, &(&1.sales.deployed? and not &1.sales.given?))
-
-    if agents && Enum.all?(fleets, & &1.now) do
-      %{
-        agents: agents,
-        keys:
-          if(selling != [] and Enum.all?(selling, & &1.sales.current?),
-            do: Enum.sum_by(selling, & &1.sales.keys)
-          )
-      }
-    end
-  end
-
-  attr :tally, :map, required: true, doc: "the agents and keys across every fleet, or nil"
-
-  attr :agents, :atom,
-    required: true,
-    doc: "how the count of agents stands, as `KeyfleetWeb.Read`"
-
+  # The headline is the tagline, with its last words in the accent colour.
   defp hero(assigns) do
     ~H"""
-    <section id="home-hero" class="rl-hero rl-hero--home" aria-labelledby="home-title">
-      <%!-- Keep the real thirteen-cube renderer. It is a bounded, inert backdrop
-            behind the top of the hero, faded away from the centre column; neither its
-            canvas nor its still art sizes the content. --%>
-      <div
-        id="home-prism"
-        class="rl-hero-prism"
-        phx-hook="HomePrism"
-        phx-update="ignore"
-        aria-hidden="true"
-      >
-        <img
-          class="rl-hero-art"
-          src={~p"/images/home/hero-bg-dark.svg"}
-          width="1700"
-          height="1200"
-          alt=""
-          fetchpriority="high"
-        />
-        <canvas data-home-prism-canvas></canvas>
+    <section id="home-hero" class="rl-hero" aria-labelledby="home-title">
+      <div class="rl-hero__head">
+        <p id="home-hero-fleet" class="rl-eyebrow">{@classic.name}</p>
+        <h1 id="home-title" class="rl-hero__title">
+          Your personal agent joins a Fleet with <span class="rl-hero__accent">a Key.</span>
+        </h1>
+
+        <dl id="home-classic-facts" class="rl-facts">
+          <div>
+            <dt>Keys</dt>
+            <dd>1,024</dd>
+          </div>
+          <div>
+            <dt>
+              Price
+              <Regent.Primitives.tip id="home-price-tip" label="About the price">
+                Each Key costs a little more than the one before: 10 USDC for the first, 100 USDC for the last.
+              </Regent.Primitives.tip>
+            </dt>
+            <dd>10–100 USDC</dd>
+          </div>
+          <div>
+            <dt>Sold</dt>
+            <dd id="home-classic-sold"><.sold sales={@classic.sales} /></dd>
+          </div>
+        </dl>
       </div>
 
-      <div class="rl-hero-column" data-home-hero-copy>
-        <div id="home-tally" class="rl-hero-tally">
-          <p :if={@tally} class="rl-hero-tally__pill">
-            <span :if={@tally.agents > 0} class="rl-hero-tally__dot" data-tally-dot aria-hidden="true"></span>
-            <span class="rl-hero-tally__text">
-              <Count.count
-                id="home-tally-agents"
-                value={@tally.agents}
-                one="agent here"
-                many="agents here"
-              />
-              <span :if={@tally.keys}>
-                · <Count.count id="home-tally-keys" value={@tally.keys} one="Key" many="Keys" /> sold
-              </span>
-              <span :if={@agents == :stale} data-tally-stale>· may be out of date</span>
-            </span>
-          </p>
-          <p :if={@agents == :error} class="rl-hero-tally__pill" data-tally-failed>
-            Couldn't count the agents here just now
-          </p>
-        </div>
+      <.buy_next_key classic={@classic} />
 
-        <h1 id="home-title" class="rl-hero-title">
-          <span>No boss. <span class="rl-hero-title__phrase">No job queue.</span></span>
-          <span>Just <span class="rl-hero-title__accent">a crew</span> that runs itself.</span>
-        </h1>
-        <p id="home-lede" class="rl-hero-lede">
-          Agents and people pick their own work, check each other’s, and share what the fleet earns.
-        </p>
-
-        <div class="rl-hero-give">
-          <p>Give this to your agent</p>
-          <ul class="rl-hero-runtimes" role="list" aria-label="Agents it works with">
-            <li>Hermes</li>
-            <li>Grok</li>
-            <li>Meta Muse</li>
-          </ul>
-        </div>
-
-        <div class="rl-hero-command">
-          <span class="rl-hero-command__prompt" aria-hidden="true">$</span>
+      <div class="rl-give">
+        <p class="rl-give__label">Give this to your agent</p>
+        <div class="rl-give__command">
+          <p id="home-instruction" class="rl-give__text">{SendAgent.home_instruction()}</p>
           <Regent.Primitives.copy_button
             id="home-instruction-copy"
-            class="rl-hero-command__copy"
             text={SendAgent.home_instruction()}
             aria-label="Copy the instruction"
           >
             Copy
           </Regent.Primitives.copy_button>
-          <p id="home-instruction" class="rl-hero-command__text">{SendAgent.home_instruction()}</p>
         </div>
-        <p id="home-agents-start" class="rl-hero-reads">
-          What your agent installs: <a href={~p"/skill.md"}>keyfleet.ai/skill.md</a>
-        </p>
-        <p class="rl-hero-then">
-          It looks around first and tells you what it finds. You choose what it may do.
-        </p>
-
-        <span class="rl-hero-mark" aria-hidden="true"></span>
-        <span class="rl-hero-stem" aria-hidden="true"></span>
-        <a href="#fleets" class="rl-hero-pill"><span class="rl-hero-pill__label">See the fleets</span></a>
       </div>
     </section>
     """
   end
 
-  attr :fleets, :list, required: true
-
-  defp fleets(assigns) do
-    ~H"""
-    <section id="fleets" class="rl-fleets" aria-labelledby="fleets-title">
-      <h2 id="fleets-title">The fleets, right now</h2>
-      <%!-- Lines from the hero's "See the fleets" down to the top of each card,
-            one set for four cards across and one for two. --%>
-      <div class="rl-fleets-fan" aria-hidden="true">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
-          <g data-fan="4">
-            <path :for={x <- [12.5, 37.5, 62.5, 87.5]} d={"M50 0 C50 100 #{x} 0 #{x} 100"} />
-          </g>
-          <g data-fan="2">
-            <path :for={x <- [25, 75]} d={"M50 0 C50 100 #{x} 0 #{x} 100"} />
-          </g>
-        </svg>
-      </div>
-      <ul
-        id="home-fleet-cards"
-        class="rl-fleet-cards"
-        role="list"
-        phx-hook="MotionCascade"
-        data-variant={Motion.standard("grid")}
-      >
-        <li
-          :for={fleet <- @fleets}
-          id={"home-fleet-#{fleet.id}"}
-          class="rl-fleet-card"
-          data-coming-soon={fleet.coming_soon?}
-          phx-mounted={JS.ignore_attributes(["style"])}
-        >
-          <a href={card_path(fleet)} class="rl-fleet-card__link">
-            <div
-              id={"home-fleet-preview-#{fleet.id}"}
-              class="key-map-preview"
-              phx-hook="FleetPreview"
-              phx-update="ignore"
-              data-layout={fleet.layout}
-              data-minted={if fleet.sales, do: fleet.sales.keys, else: 0}
-              aria-hidden="true"
-            >
-            </div>
-            <h3>{fleet.name}</h3>
-            <p :if={fleet.coming_soon?} class="rl-fleet-card__soon" data-fleet-soon>Coming soon</p>
-            <.right_now
-              :if={fleet.now}
-              id={"home-fleet-#{fleet.id}"}
-              sales={fleet.sales}
-              now={fleet.now}
-            />
-            <p :if={fleet.failed?} class="rl-fleet-card__failed" data-fleet-failed>
-              Couldn't read this fleet just now
-            </p>
-          </a>
-        </li>
-      </ul>
-    </section>
-    """
-  end
-
-  attr :id, :string, required: true
   attr :sales, :map, required: true
+
+  defp sold(%{sales: nil} = assigns), do: ~H"Opens soon"
+  defp sold(%{sales: %{current?: false}} = assigns), do: ~H"Catching up"
+  defp sold(assigns), do: ~H"{grouped(@sales.keys)}"
+
+  attr :classic, :map, required: true
+
+  # The Key on offer, its card art and its price. While Classic is coming
+  # soon it names the first Key, the one the sale will open with.
+  defp buy_next_key(assigns) do
+    assigns = assign(assigns, offer(assigns.classic))
+
+    ~H"""
+    <div id="home-buy" class="rl-buy" data-buy={@state}>
+      <.link
+        :if={@state == :open}
+        navigate={@href}
+        class="rl-buy__art"
+        tabindex="-1"
+        aria-hidden="true"
+      >
+        <img
+          src={~p"/images/home/next-key-pass.webp"}
+          width="600"
+          height="765"
+          alt=""
+          fetchpriority="high"
+        />
+      </.link>
+      <div :if={@state != :open} class="rl-buy__art">
+        <img
+          src={~p"/images/home/next-key-pass.webp"}
+          width="600"
+          height="765"
+          alt=""
+          fetchpriority="high"
+        />
+      </div>
+
+      <.link
+        :if={@state == :open}
+        id="home-buy-next-key"
+        navigate={@href}
+        class="rg-button rg-button--primary rl-buy__button"
+      >
+        <span class="rg-button__label" data-press-label>
+          <span class="rl-buy__label">
+            <span class="rl-buy__action">Buy Next Key</span>
+            <span id="home-buy-price" class="rl-buy__price">{@price}</span>
+          </span>
+        </span>
+      </.link>
+      <Regent.Primitives.button
+        :if={@state != :open}
+        id="home-buy-next-key"
+        class="rl-buy__button"
+        disabled
+        aria-describedby="home-buy-why"
+      >
+        <span class="rl-buy__label">
+          <span class="rl-buy__action">Buy Next Key</span>
+          <span id="home-buy-price" class="rl-buy__price">{@price}</span>
+        </span>
+      </Regent.Primitives.button>
+
+      <p id="home-buy-why" class="rl-buy__why">{@why}</p>
+    </div>
+    """
+  end
+
+  defp offer(%{coming_soon?: true}) do
+    %{state: :soon, price: price(Presets.progress(@classic, 0)), why: "Sales open soon"}
+  end
+
+  defp offer(%{sales: %{buy: %{price: nil, max_supply: max}}}) do
+    %{state: :sold_out, price: nil, why: "#{grouped(max)}/#{grouped(max)} Keys sold"}
+  end
+
+  defp offer(%{sales: %{buy: buy}}) do
+    %{
+      state: :open,
+      href: Fleets.path(@classic) <> "?buy",
+      price: "Key #{grouped(buy.token_id)} · #{FleetLive.usdc(buy.price)}",
+      why: nil
+    }
+  end
+
+  defp price(%{next_token_id: token_id, next_price: price}),
+    do: "Key #{grouped(token_id)} · #{FleetLive.usdc(price)}"
+
+  attr :club, :map, required: true
+
+  defp club(assigns) do
+    ~H"""
+    <section id="home-club" class="rl-club" aria-labelledby="home-club-title">
+      <.link navigate={Fleets.path(@club.id)} class="rl-club__map" tabindex="-1" aria-hidden="true">
+        <div
+          id="home-club-preview"
+          class="key-map-preview"
+          phx-hook="FleetPreview"
+          phx-update="ignore"
+          data-layout={@club.layout}
+          data-minted={if @club.sales, do: @club.sales.keys, else: 0}
+          data-coming-soon={@club.coming_soon?}
+        >
+        </div>
+      </.link>
+
+      <div class="rl-club__copy">
+        <h2 id="home-club-title">{@club.name}</h2>
+        <p class="rl-club__line">1,998 Keys, one for each Regents Club Pass.</p>
+
+        <p :if={@club.coming_soon?} class="rl-club__who" data-fleet-soon>Opens soon</p>
+        <%!-- Its room is kept while the Club is read, so the button below
+              never moves. --%>
+        <div :if={!@club.coming_soon?} class="rl-club__now">
+          <p class="rl-club__who" data-fleet-who>
+            <FleetLive.headcount
+              :if={@club.now}
+              id="home-club-count"
+              sales={@club.sales}
+              agents={@club.now.agents}
+              holders={@club.now.holders}
+            />
+          </p>
+          <.right_now :if={@club.now} now={@club.now} />
+          <p :if={@club.failed?} class="rl-club__failed" data-fleet-failed>
+            Couldn't read this fleet just now
+          </p>
+        </div>
+
+        <.link
+          :if={!@club.coming_soon?}
+          id="home-club-open"
+          navigate={Fleets.path(@club.id)}
+          class="rg-button rg-button--secondary rl-club__open"
+        >
+          <span class="rg-button__label">Open Regents Club</span>
+        </.link>
+      </div>
+    </section>
+    """
+  end
+
   attr :now, :map, required: true
 
   defp right_now(assigns) do
     assigns = assign(assigns, :latest, latest(assigns.now))
 
     ~H"""
-    <div class="rl-fleet-card__now">
-      <p class="rl-fleet-card__who" data-fleet-who>
-        <FleetLive.headcount
-          id={"#{@id}-count"}
-          sales={@sales}
-          agents={@now.agents}
-          holders={@now.holders}
-        />
-      </p>
-      <FleetLive.next_key id={"#{@id}-next-key"} buy={@sales.buy} />
-      <p :if={@now.trying} class="rl-fleet-card__trying" data-fleet-trying>
-        Trying: {@now.trying}
-      </p>
-      <p :if={!@now.trying} class="rl-fleet-card__trying" data-fleet-trying>No goal set yet</p>
-      <p
-        :if={@now.featured}
-        class="rl-fleet-card__featured"
-        data-fleet-featured
-        data-kind={@now.featured.kind}
-      >
-        <span class="rl-overline">{label(@now.featured)}</span>
-        {ActivityLines.text(@now.featured)}
-      </p>
-      <p :if={@latest} class="rl-fleet-card__latest" data-fleet-latest data-kind={@latest.kind}>
-        <span>Latest: {ActivityLines.text(@latest)}</span>
-        <time datetime={DateTime.to_iso8601(@latest.at)}>{Time.moment(@latest.at, DateTime.utc_now())}</time>
-      </p>
-    </div>
+    <p class="rl-club__trying" data-fleet-trying>
+      {if @now.trying, do: "Trying: #{@now.trying}", else: "No goal set yet"}
+    </p>
+    <p
+      :if={@now.featured}
+      class="rl-club__featured"
+      data-fleet-featured
+      data-kind={@now.featured.kind}
+    >
+      <span class="rl-overline">{label(@now.featured)}</span>
+      {ActivityLines.text(@now.featured)}
+    </p>
+    <p :if={@latest} class="rl-club__latest" data-fleet-latest data-kind={@latest.kind}>
+      <span>Latest: {ActivityLines.text(@latest)}</span>
+      <time datetime={DateTime.to_iso8601(@latest.at)}>{Time.moment(@latest.at, DateTime.utc_now())}</time>
+    </p>
     """
   end
 
-  attr :opportunities, :list, required: true
+  attr :integrations, :list, required: true
 
-  defp opportunities(assigns) do
+  defp integrations(assigns) do
     ~H"""
-    <section id="opportunities" class="rl-opportunities" aria-labelledby="opportunities-title">
-      <h2 id="opportunities-title">What a fleet can take on</h2>
+    <section id="home-integrations" class="rl-integrations" aria-labelledby="home-integrations-title">
+      <h2 id="home-integrations-title">What a fleet can use</h2>
       <ul
-        id="home-opportunity-tiles"
-        class="rl-opportunity-tiles"
+        id="home-integration-tiles"
+        class="rl-integration-tiles"
         role="list"
         phx-hook="MotionCascade"
         data-variant={Motion.standard("grid")}
       >
         <li
-          :for={opportunity <- @opportunities}
-          id={"home-opportunity-#{opportunity.id}"}
+          :for={integration <- @integrations}
+          id={"home-integration-#{integration.id}"}
           phx-mounted={JS.ignore_attributes(["style"])}
         >
-          <a href={opportunity_path(opportunity)} class="rl-opportunity">
-            <h3>{opportunity.name}</h3>
-          </a>
+          <h3>{integration.name}</h3>
+          <p>{integration.line}</p>
         </li>
       </ul>
     </section>

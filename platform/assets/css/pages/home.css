@@ -1,6 +1,6 @@
-/* Homepage-only composition: the header, a centred hero over the prism
-   artwork, the four fleet cards with what each is doing, what a fleet can take
-   on and the footer. */
+/* Homepage-only composition: Classic #1 with "Buy Next Key", the box saying
+   how a fleet runs itself, the Regents Club, what a fleet can use and the
+   footer. The legal pages share the .rl-root colours and spacing. */
 @layer regents-product {
   .rl-root {
     --rl-bg: var(--color-bg);
@@ -8,9 +8,6 @@
     --rl-ink: var(--color-fg);
     --rl-muted: var(--color-fg-muted);
     --rl-line: var(--hairline);
-    /* "See the fleets" sits on the rule between the hero and the fleets, half
-       in each, and the lines to the cards start under it. */
-    --rl-hero-pill-h: 2.75rem;
     background: var(--rl-bg);
     color: var(--rl-ink);
     min-height: 100vh;
@@ -21,192 +18,163 @@
   .rl-header-links > a:not(.rg-button), .rl-header-links svg { display: inline-flex; width: 1.5rem; height: 1.5rem; }
   .rl-footer-links a, .rl-footer-links svg { display: inline-flex; width: 1.25rem; height: 1.25rem; }
 
-  .rl-hero { min-width: 0; }
-
-  /* The hero: one centred column over the crown's backdrop. Top to bottom:
-     the agents and keys across every fleet, the headline and the line under
-     it, the instruction to give an agent, the mark, and a stem down to "See
-     the fleets". */
-  .rl-hero--home {
-    --rl-hero-mark-w: clamp(6rem, 8vw, 8rem);
-    position: relative; isolation: isolate;
-    padding: clamp(1.5rem, 4.5svh, 3rem) var(--rg-panel-padding) 0;
-  }
-  /* The renderer and its still art sit behind the top of the hero, no bigger
-     than the crown's old stage, showing at both sides and fading out toward
-     the centre column and downward. */
-  .rl-hero-prism {
-    position: absolute; inset: 0 0 auto; block-size: clamp(22rem, calc(60svh - 5rem), 32rem); z-index: -1; overflow: hidden; pointer-events: none; contain: strict;
-    mask-image: linear-gradient(90deg, #000, transparent 30% 70%, #000), linear-gradient(#000 55%, transparent);
-    mask-composite: intersect;
-  }
-  .rl-hero-prism canvas, .rl-hero-art { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; }
-  .rl-hero-art { object-fit: cover; }
-  .rl-hero-prism canvas { opacity: 0; }
-  .rl-hero-prism[data-prism-ready="true"] canvas { opacity: 1; }
-  .rl-hero-prism[data-prism-ready="true"] .rl-hero-art { visibility: hidden; }
-
-  .rl-hero-column { display: flex; flex-direction: column; align-items: center; max-width: 64rem; min-width: 0; margin-inline: auto; text-align: center; }
-
-  /* Its room is kept while the fleets are read, so nothing below it moves. */
-  .rl-hero-tally { display: flex; justify-content: center; min-block-size: 1.75rem; }
-  .rl-hero-tally__pill {
-    display: inline-flex; align-items: center; gap: .5rem; min-block-size: 1.75rem; padding: 0 .875rem;
-    border: 1px solid var(--ash-line-strong); border-radius: .875rem;
-    color: var(--rl-muted); font-family: var(--font-family-mono); font-size: .75rem; line-height: 1.2;
-    letter-spacing: .08em; text-transform: uppercase; font-variant-numeric: tabular-nums;
-  }
-  .rl-hero-tally__dot { width: .4375rem; height: .4375rem; background: var(--ash-accent-warm); }
-
-  /* Written against the column so they outrank the page's zeroed margins. */
-  .rl-hero-column > .rl-hero-title { margin-block-start: clamp(1rem, 3svh, 1.75rem); font-size: clamp(2.25rem, 1rem + 4.6vw, 5rem); line-height: 1.02; letter-spacing: -.035em; }
-  .rl-hero-title > span { display: block; text-wrap: balance; }
-  .rl-hero-title__accent { color: var(--ash-accent-warm); }
-  /* Kept on one line, so a narrow screen breaks the headline between its two sentences. */
-  .rl-hero-title__phrase { white-space: nowrap; }
-  .rl-hero-column > .rl-hero-lede { margin-block-start: var(--space-3); max-width: 40ch; color: var(--rl-muted); font-size: clamp(1.0625rem, .95rem + .45vw, 1.3125rem); line-height: 1.45; text-wrap: balance; }
-
-  .rl-hero-give { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .5rem .75rem; margin-block-start: clamp(1.25rem, 4svh, 2.25rem); color: var(--rl-muted); font-size: .9375rem; }
-  .rl-hero-runtimes { display: flex; flex-wrap: wrap; justify-content: center; gap: .375rem; margin: 0; padding: 0; list-style: none; }
-  .rl-hero-runtimes li { padding: .125rem .5rem; border: 1px solid var(--rl-line); color: var(--rl-ink); font-family: var(--font-family-mono); font-size: .75rem; letter-spacing: .04em; }
-
-  /* The instruction, whole, as a line typed at a prompt, with Copy beside it;
-     on a phone, the prompt mark and Copy sit on a row above it. */
-  .rl-hero-command {
-    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "prompt text copy";
-    align-items: center; gap: var(--space-2);
-    width: min(100%, 44rem); margin-block-start: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-    border: 1px solid var(--ash-line-strong); background: var(--rl-panel); text-align: start;
-  }
-  .rl-hero-command__prompt, .rl-hero-command__text { font-family: var(--font-family-mono); font-size: .9375rem; line-height: 1.6; }
-  .rl-hero-command__prompt { grid-area: prompt; color: var(--ash-accent-warm); }
-  .rl-hero-command__text { grid-area: text; color: var(--rl-ink); overflow-wrap: anywhere; }
-  .rl-hero-command__copy { grid-area: copy; }
-  .rl-hero-column > .rl-hero-reads { margin-block-start: .75rem; color: var(--rl-muted); font-size: .8125rem; }
-  .rl-hero-column > .rl-hero-then { margin-block-start: var(--space-3); max-width: 60ch; font-size: clamp(1rem, .9rem + .3vw, 1.125rem); line-height: 1.45; text-wrap: balance; }
-
-  /* The mark's file leaves empty room around its blocks (46 of 186 above, 34
-     below) and sets its middle column 6 of 252 left of centre. That room is
-     taken back so the stem leaves from the middle block. The file's near-black
-     ground still lets a trace through a brightness mask, so the mask is laid
-     over itself, which keeps the light blocks and drops the ground. */
-  .rl-hero-mark {
-    display: block; width: var(--rl-hero-mark-w); aspect-ratio: 252 / 186;
-    margin-block: calc(var(--space-4) - var(--rl-hero-mark-w) * 46 / 252) calc(var(--rl-hero-mark-w) * -34 / 252);
-    translate: calc(var(--rl-hero-mark-w) * 6 / 252) 0;
-    background: var(--ash-accent-warm);
-    mask: url("/images/brand/mark-flat-dark.svg") center / contain no-repeat luminance,
-      url("/images/brand/mark-flat-dark.svg") center / contain no-repeat luminance;
-    mask-composite: intersect;
-  }
-  .rl-hero-stem { width: 1px; height: clamp(1.5rem, 4svh, 2.5rem); background: var(--ash-line-strong); }
-  .rl-hero-pill {
-    position: relative; z-index: 1; display: inline-flex; align-items: center;
-    min-block-size: var(--rl-hero-pill-h); margin-block-end: calc(var(--rl-hero-pill-h) / -2); padding-inline: 1.5rem;
-    border-radius: 999px; background: var(--rl-ink);
-    font-family: var(--font-family-ui); font-weight: 500; text-decoration: none;
-    transition: background-color 150ms ease;
-  }
-  .rl-hero-pill__label { color: var(--rl-bg); }
-  .rl-hero-pill:hover { background: color-mix(in oklab, var(--rl-ink) 82%, var(--ash-accent-warm)); }
-
   .rl-overline { font-family: var(--font-family-ui); font-size: .6875rem; letter-spacing: .16em; text-transform: uppercase; }
+  .rl-eyebrow { color: var(--rl-muted); font-family: var(--font-family-ui); font-size: .8125rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; }
 
-  /* The fleets: one card each, four across on a wide screen. */
-  .rl-fleets { display: grid; gap: var(--space-3); padding: var(--rg-panel-padding); padding-block-start: max(var(--rg-panel-padding), calc(var(--rl-hero-pill-h) / 2 + var(--space-2))); }
-  .rl-fleets > h2 { grid-area: 1 / 1; justify-self: start; font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
-  .rl-fleet-cards { grid-area: 2 / 1; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-  /* The lines from "See the fleets" to the top of each card. They leave the
-     button straight down and bend out only below the heading, which they
-     never cross; four cards across take four lines, two take two, and a
-     single column takes none. */
-  .rl-fleets-fan { display: none; grid-area: 1 / 1; position: relative; pointer-events: none; }
-  .rl-fleets-fan svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-  .rl-fleets-fan path { fill: none; stroke: color-mix(in oklch, var(--rl-ink) 32%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
-  @media (min-width: 34rem) {
-    .rl-fleet-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* The hero. Wide: the headline, the facts and the instruction on the left,
+     "Buy Next Key" on the right. Narrow: the headline, then the button, then
+     the instruction. */
+  .rl-hero {
+    display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "buy" "give";
+    gap: var(--space-5) var(--space-6);
+    padding: clamp(2rem, 6svh, 4.5rem) var(--rg-panel-padding);
+  }
+  .rl-hero__head { grid-area: head; display: grid; align-content: start; gap: var(--space-3); min-width: 0; }
+  .rl-hero__head > .rl-hero__title {
+    max-inline-size: 13ch; font-size: clamp(2.5rem, 1.1rem + 4.6vw, 5.25rem); font-weight: 400;
+    line-height: 1.02; letter-spacing: -.035em; text-wrap: balance; overflow-wrap: anywhere;
+  }
+  .rl-hero__accent { color: var(--ash-accent-warm); }
+
+  /* Classic in three figures, side by side, each in a cell of its own height. */
+  .rl-facts {
+    display: grid; grid-template-columns: repeat(3, minmax(0, auto)); justify-content: start;
+    margin: var(--space-2) 0 0; border-block: 1px solid var(--rl-line);
+  }
+  .rl-facts > div { display: grid; gap: .25rem; min-width: 0; padding: var(--space-2) var(--space-4) var(--space-2) 0; }
+  .rl-facts > div + div { padding-inline-start: var(--space-4); border-inline-start: 1px solid var(--rl-line); }
+  .rl-facts dt { display: flex; align-items: center; gap: .25rem; min-block-size: 1.5rem; color: var(--rl-muted); font-size: .8125rem; }
+  .rl-facts dd { margin: 0; font-size: clamp(1.0625rem, 1rem + .3vw, 1.25rem); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* "Buy Next Key": the Key's card art over the button that names it and its
+     price, and under them a line kept for the reason it can't be pressed. */
+  .rl-buy { grid-area: buy; display: grid; gap: var(--space-2); justify-self: center; inline-size: min(100%, 22rem); }
+  .rl-buy__art {
+    display: block; aspect-ratio: 600 / 765;
+    clip-path: polygon(var(--rg-cut-panel) 0, 100% 0, 100% calc(100% - var(--rg-cut-panel)), calc(100% - var(--rg-cut-panel)) 100%, 0 100%, 0 var(--rg-cut-panel));
+    background: var(--palette-charcoal);
+  }
+  .rl-buy__art img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .rl-buy[data-buy="soon"] .rl-buy__art img, .rl-buy[data-buy="sold_out"] .rl-buy__art img { opacity: .72; }
+  /* While the Key is on sale, pointing at the card or the button, or tabbing
+     to the button, lifts the card a little. It only moves, so nothing around
+     it shifts. A closed sale stays still. */
+  .rl-buy__art, .rl-buy__art img { transition: transform 150ms cubic-bezier(.23, 1, .32, 1); }
+  .rl-buy[data-buy="open"]:has(.rl-buy__art:hover, .rl-buy__button:is(:hover, :focus-visible)) .rl-buy__art { transform: translateY(-.375rem); }
+  .rl-buy[data-buy="open"]:has(.rl-buy__art:hover, .rl-buy__button:is(:hover, :focus-visible)) .rl-buy__art img { transform: scale(1.03); }
+  .rl-buy__button { inline-size: 100%; }
+  .rl-buy__label { display: grid; justify-items: center; gap: .125rem; }
+  .rl-buy__action { font-size: 1.0625rem; }
+  .rl-buy__price { font-weight: 400; font-size: .875rem; font-variant-numeric: tabular-nums; }
+  .rl-buy__why { min-block-size: 1.5em; color: var(--rl-muted); font-size: .875rem; text-align: center; }
+
+  .rl-give { grid-area: give; display: grid; align-content: start; gap: var(--space-1); min-width: 0; max-inline-size: 38rem; }
+  .rl-give__label { color: var(--rl-muted); font-size: .875rem; }
+  .rl-give__command {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2);
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+    border: 1px solid var(--rl-line); background: var(--rl-panel);
+  }
+  .rl-give__text { font-family: var(--font-family-mono); font-size: .875rem; line-height: 1.5; overflow-wrap: anywhere; }
+
+  @media (min-width: 64rem) {
+    .rl-hero {
+      grid-template-columns: minmax(0, 1fr) 22rem; grid-template-rows: auto 1fr;
+      grid-template-areas: "head buy" "give buy"; align-items: start;
+    }
+    .rl-give { align-self: end; }
+  }
+
+  /* The hero settles in once as the page first paints: the headline, the
+     figures, the Key and the instruction, one after another. It plays from
+     the stylesheet, so it runs before the page connects and never replays
+     when the page updates. Less motion, and it is simply there. */
+  @keyframes rl-settle { from { opacity: 0; transform: translateY(.75rem); } }
+  @media (prefers-reduced-motion: no-preference) {
+    .rl-hero :is(.rl-hero__head > *, .rl-buy, .rl-give) { animation: rl-settle 280ms cubic-bezier(.23, 1, .32, 1) backwards; }
+    .rl-hero .rl-hero__title { animation-delay: 50ms; }
+    .rl-hero .rl-facts { animation-delay: 100ms; }
+    .rl-hero .rl-buy { animation-delay: 150ms; }
+    .rl-hero .rl-give { animation-delay: 200ms; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rl-buy__art, .rl-buy__art img { transition: none; }
+  }
+
+  /* How a fleet runs itself, in a box of its own. */
+  .rl-charter { padding: var(--rg-panel-padding); }
+  .rl-charter__box { padding: clamp(1.5rem, 4vw, 3rem); }
+  .rl-charter__box p {
+    max-inline-size: 42ch; font-size: clamp(1.25rem, 1rem + 1.1vw, 1.875rem); line-height: 1.35;
+    letter-spacing: -.01em; text-wrap: pretty;
+  }
+  .rl-charter__box p::before {
+    content: ""; display: block; inline-size: .625rem; block-size: .625rem; margin-block-end: var(--space-3);
+    background: var(--ash-accent-warm);
+  }
+
+  /* The Regents Club: its map beside what it is doing right now. */
+  .rl-club {
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4);
+    padding: var(--rg-panel-padding);
+  }
+  .rl-club__map { display: block; min-width: 0; }
+  .rl-club .key-map-preview { aspect-ratio: 16 / 10; border: 1px solid var(--rl-line); }
+  .rl-club .key-map-preview[data-coming-soon] { opacity: .4; }
+  .rl-club__copy { display: grid; align-content: start; gap: var(--space-2); min-width: 0; }
+  .rl-club__copy > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
+  .rl-club__line { color: var(--rl-muted); }
+  /* Room for its count, its goal, one featured item and its latest, each
+     clamped, so the button under them never moves. */
+  .rl-club__now {
+    display: grid; align-content: start; gap: var(--space-1); min-block-size: 10rem;
+    padding-block-start: var(--space-2); border-block-start: 1px solid var(--rl-line);
+  }
+  .rl-club__now p { font-size: .9375rem; line-height: 1.45; overflow-wrap: anywhere; }
+  .rl-club__who { min-block-size: 1.45em; color: var(--rl-muted); font-variant-numeric: tabular-nums; }
+  .rl-club__trying, .rl-club__featured, .rl-club__latest > span {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
+  }
+  .rl-club__featured { -webkit-line-clamp: 3; }
+  .rl-club__featured .rl-overline { display: block; margin-block-end: .125rem; color: var(--rl-muted); }
+  .rl-club__latest { display: grid; gap: .125rem; color: var(--rl-muted); }
+  .rl-club__latest time { font-size: .8125rem; font-variant-numeric: tabular-nums; }
+  .rl-club__failed { color: var(--rl-muted); }
+  .rl-club__open { justify-self: start; }
+  @media (min-width: 64rem) {
+    .rl-club { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+  }
+
+  /* What a fleet can use: three tiles across, two on a tablet, one on a
+     phone, ruled on a shared grid; a last tile alone keeps its width. */
+  .rl-integrations { display: grid; gap: var(--space-4); padding: var(--rg-panel-padding); }
+  .rl-integrations > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
+  .rl-integration-tiles {
+    display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none;
+    border-block-start: 1px solid var(--rl-line); border-inline-start: 1px solid var(--rl-line);
+  }
+  .rl-integration-tiles > li {
+    display: grid; align-content: start; gap: var(--space-1); min-width: 0; padding: var(--space-3);
+    border-block-end: 1px solid var(--rl-line); border-inline-end: 1px solid var(--rl-line);
+  }
+  .rl-integration-tiles h3 { font-size: 1.25rem; font-weight: 400; line-height: 1.2; }
+  .rl-integration-tiles p { color: var(--rl-muted); font-size: .9375rem; line-height: 1.45; }
+  @media (min-width: 40rem) {
+    .rl-integration-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (min-width: 64rem) {
-    .rl-fleets { row-gap: 6.5rem; }
-    .rl-fleets-fan {
-      display: block;
-      margin-block: calc(var(--rl-hero-pill-h) / 2 - max(var(--rg-panel-padding), calc(var(--rl-hero-pill-h) / 2 + var(--space-2)))) -6.5rem;
-    }
-    .rl-fleets-fan [data-fan="4"] { display: none; }
+    .rl-integration-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
-  @media (min-width: 75rem) {
-    .rl-fleet-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .rl-fleets-fan [data-fan="4"] { display: inline; }
-    .rl-fleets-fan [data-fan="2"] { display: none; }
-  }
-  .rl-fleet-card { min-width: 0; }
-  .rl-fleet-card__link {
-    display: grid; grid-template-rows: auto auto 1fr; align-content: start; gap: var(--space-2); height: 100%;
-    padding: var(--space-2); border: 1px solid var(--rl-line); background: var(--rl-panel); color: inherit; text-decoration: none;
-    transition: border-color 150ms ease;
-  }
-  .rl-fleet-card__link:hover { border-color: var(--ash-line-strong); }
-  .rl-fleet-card__link:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
-  .rl-fleet-card h3 { font-family: var(--font-family-title); font-size: 1.375rem; font-weight: 400; line-height: 1.15; }
-  .rl-fleet-card p { font-size: .9375rem; line-height: 1.45; }
-  /* What the fleet is doing: who is here, its goal, its featured item and
-     its latest one. Members' words are clamped so every card keeps its shape. */
-  .rl-fleet-card__now { display: grid; align-content: start; gap: var(--space-1); padding-block-start: var(--space-1); border-block-start: 1px solid var(--rl-line); min-width: 0; }
-  .rl-fleet-card__now p { overflow-wrap: anywhere; }
-  .rl-fleet-card__who { color: var(--rl-muted); font-variant-numeric: tabular-nums; }
-  .rl-fleet-card__trying, .rl-fleet-card__featured, .rl-fleet-card__latest > span {
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
-  }
-  .rl-fleet-card__featured .rl-overline { display: block; margin-block-end: .25rem; color: var(--rl-muted); }
-  .rl-fleet-card__featured { -webkit-line-clamp: 4; }
-  .rl-fleet-card__latest { display: grid; gap: .125rem; color: var(--rl-muted); font-size: .875rem; }
-  .rl-fleet-card__latest time { font-size: .8125rem; font-variant-numeric: tabular-nums; }
-  .rl-fleet-card .rl-fleet-card__failed { color: var(--rl-muted); font-size: .875rem; }
-
-  .rl-fleet-card .key-map-preview { aspect-ratio: 16 / 10; border: 1px solid var(--rl-line); }
-  /* A coming-soon fleet: its map faded, and the tag under its name. */
-  .rl-fleet-card[data-coming-soon] .key-map-preview { opacity: .4; }
-  .rl-fleet-card .rl-fleet-card__soon {
-    justify-self: start; align-self: start; padding: .125rem .5rem; border: 1px solid var(--rl-line); color: var(--rl-muted);
-    font-family: var(--font-family-ui); font-size: .6875rem; letter-spacing: .16em; text-transform: uppercase;
-  }
-
-  /* What a fleet can take on: five tiles, each opening its part of the briefing. */
-  .rl-opportunities { display: grid; gap: var(--space-3); padding: var(--rg-panel-padding); }
-  .rl-opportunities > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
-  .rl-opportunity-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-  .rl-opportunity-tiles > li { min-width: 0; }
-  .rl-opportunity {
-    display: grid; align-content: start; gap: var(--space-1); height: 100%;
-    padding: var(--space-2); border: 1px solid var(--rl-line); background: var(--rl-panel); color: inherit; text-decoration: none;
-    transition: border-color 150ms ease;
-  }
-  .rl-opportunity:hover { border-color: var(--ash-line-strong); }
-  .rl-opportunity:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
-  .rl-opportunity h3 { font-family: var(--font-family-title); font-size: 1.25rem; font-weight: 400; line-height: 1.15; }
-
-  .rl-tech-stack { margin: var(--rg-panel-padding); }
-  .rl-tech-stack ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
-  .rl-tech-stack li { padding: var(--space-2); border: 1px solid var(--rl-line); background: var(--rl-panel); font-size: .9375rem; line-height: 1.45; }
 
   .rl-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-3); padding: var(--rg-panel-padding); font-size: .8125rem; }
   .rl-document-links { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; }
   .rl-document-links a { display: inline-flex; align-items: center; min-height: 44px; font-family: var(--font-family-ui); }
 
   @media (max-width: 47.99rem) {
-    .rl-hero-copy { padding: 0; }
-    .rl-hero-copy h1 { font-size: clamp(2.5rem, 10vw, 4.5rem); }
-    .rl-hero-prism { inset-inline: var(--rg-panel-padding); block-size: 12rem; opacity: .6; }
-    .rl-hero-command { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "prompt copy" "text text"; padding: var(--space-2); }
-    .rl-hero-command__copy { justify-self: end; }
-    .rl-hero-command__prompt, .rl-hero-command__text { font-size: .8125rem; line-height: 1.5; }
-  }
-  @media (max-width: 24rem) {
-    .rl-hero-tally__pill { font-size: .6875rem; letter-spacing: .04em; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .rl-fleet-card__link, .rl-opportunity, .rl-hero-pill { transition: none; }
+    .rl-facts > div { padding-inline-end: var(--space-2); }
+    .rl-facts > div + div { padding-inline-start: var(--space-2); }
+    .rl-facts dd { font-size: 1rem; }
+    .rl-give__command { grid-template-columns: minmax(0, 1fr); justify-items: start; padding: var(--space-2); }
+    .rl-give__text { font-size: .8125rem; }
   }
 }
-
-html[data-home-theme-locked="true"] [data-theme-toggle] { display: none; }
