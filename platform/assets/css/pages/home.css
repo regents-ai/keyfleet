@@ -54,17 +54,17 @@
   /* "Buy Next Key": the next Key's card over the button that names it and its
      price, and under them a line kept for the reason it can't be pressed. */
   .rl-buy { grid-area: buy; display: grid; gap: var(--space-2); justify-self: center; inline-size: min(100%, 22rem); }
-  .rl-buy__card { position: relative; aspect-ratio: 600 / 765; perspective: 60rem; }
-  .rl-buy__tilt {
-    position: absolute; inset: 0;
-    clip-path: polygon(var(--rg-cut-panel) 0, 100% 0, 100% calc(100% - var(--rg-cut-panel)), calc(100% - var(--rg-cut-panel)) 100%, 0 100%, 0 var(--rg-cut-panel));
-    background: var(--palette-charcoal);
-  }
-  .rl-buy__tilt img { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; }
-  /* The price on the card itself, in its corner. The card's art is dark in
-     both themes, so the tag keeps light ink on charcoal in both. */
+  /* The card's picture is cut out of its backdrop, so the page shows around
+     its rounded corners and the Key's head on its left side. */
+  .rl-buy__card { position: relative; aspect-ratio: 600 / 754; perspective: 60rem; }
+  .rl-buy__tilt { position: absolute; inset: 0; }
+  .rl-buy__tilt img { display: block; inline-size: 100%; block-size: 100%; object-fit: contain; }
+  /* The price on the card itself, beside the crown in its lower corner (the
+     crown ends 197 of the picture's 716 columns in and 40 of its 900 rows up).
+     The card's art is dark in both themes, so the tag keeps light ink on
+     charcoal in both. */
   .rl-buy__tag {
-    position: absolute; inset-inline-start: var(--space-2); inset-block-end: var(--space-2);
+    position: absolute; inset-inline-start: calc(197 / 716 * 100% + var(--space-2)); inset-block-end: calc(40 / 900 * 100%);
     padding: .25rem .5rem; background: rgb(22 22 22 / .82); color: var(--palette-platinum);
     font-family: var(--font-family-mono); font-size: .75rem; font-variant-numeric: tabular-nums;
     border: 1px solid rgb(229 227 210 / .18);
