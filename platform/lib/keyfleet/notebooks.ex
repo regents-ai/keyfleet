@@ -33,6 +33,17 @@ defmodule Keyfleet.Notebooks do
     end
 
     resource Keyfleet.Notebooks.Handoff
+
+    resource Keyfleet.Notebooks.SavedOutput do
+      define :keep_saved_output,
+        action: :keep,
+        args: [:fleet_id, :notebook_id, :version_id, :saved_at, :page]
+
+      define :saved_output,
+        action: :at,
+        args: [:fleet_id, :notebook_id, :version_id, :saved_at],
+        not_found_error?: false
+    end
   end
 
   @email_domain "identity.keyfleet.invalid"
@@ -79,6 +90,60 @@ defmodule Keyfleet.Notebooks do
     |> URI.to_string()
   end
 
+  # The hub's own id shapes (marimohub f103eb2, packages/core/src/ids.ts), and
+  # when a saved page was made, in milliseconds since 1970.
+  @notebook_id ~r/\Anb-[0-9a-z]{16}\z/
+  @version_id ~r/\Aver_[0-9A-Z]{26}\z/
+  @saved_at ~r/\A[1-9][0-9]{0,15}\z/
+
+  @doc """
+  A saved notebook output's address: one saved page of a notebook version, on
+  the fleet's notebook host,
+  `https://<fleet host>/results/<notebook id>/<version id>/<saved at>`, where
+  `saved at` is when the hub made that page, in milliseconds since 1970. A hub
+  makes a new page for a version each time that version's code runs again, so
+  the time names exactly one page. The address shows Keyfleet's own copy of
+  that page (`Keyfleet.Notebooks.SavedOutput`) for good, whatever the hub
+  keeps. Only the fleet's members open it.
+  """
+  def result_url(fleet_id, notebook_id, version_id, saved_at),
+    do: url(fleet_id, result_path(notebook_id, version_id, saved_at))
+
+  @doc "The path of a saved output on its fleet's notebook host."
+  def result_path(notebook_id, version_id, saved_at),
+    do: "/results/#{notebook_id}/#{version_id}/#{saved_at}"
+
+  @doc """
+  The saved output a path names, as `{:ok, {notebook_id, version_id, saved_at}}`,
+  or `:error`. Only the address `result_path/3` spells is one.
+  """
+  def result(path) do
+    with ["", "results", notebook_id, version_id, saved_at] <- String.split(path, "/"),
+         true <-
+           Regex.match?(@notebook_id, notebook_id) and Regex.match?(@version_id, version_id) and
+             Regex.match?(@saved_at, saved_at) do
+      {:ok, {notebook_id, version_id, String.to_integer(saved_at)}}
+    else
+      _ -> :error
+    end
+  end
+
+  @doc """
+  When a hub made a saved page, from its `X-Marimohub-Captured-At` time, as
+  `{:ok, milliseconds since 1970}`, or `:error`.
+  """
+  def saved_at(captured_at) do
+    case DateTime.from_iso8601(captured_at) do
+      {:ok, at, _offset} -> {:ok, DateTime.to_unix(at, :millisecond)}
+      {:error, _reason} -> :error
+    end
+  end
+
+  @doc "Where a link that opens the notebooks may land: their start page or a saved output."
+  def destination?("/"), do: true
+  def destination?(path) when is_binary(path), do: result(path) != :error
+  def destination?(_path), do: false
+
   @doc "How the hubs know a person: by their account here."
   def subject(%Human{human_account_id: id}) when is_integer(id), do: "u_#{id}"
 
@@ -117,13 +182,16 @@ defmodule Keyfleet.Notebooks do
   @doc """
   Opens the fleet's notebooks for a person signed in by the session `lineage`:
   `{:ok, url}`, the fleet's notebook address with a link that works once, for
-  `handoff_ttl_seconds`; `{:error, :signed_out}` when that sign-in is no longer
-  current; `{:error, :not_holder}` when they hold none of the fleet's keys;
-  `{:error, :no_hub}` when the fleet has no notebooks; or `{:error, error}`
+  `handoff_ttl_seconds`, landing on `to` (`destination?/1`: the start page or
+  a saved output); `{:error, :no_hub}` when the fleet has no notebooks;
+  `{:error, :invalid_destination}` for anywhere else to land;
+  `{:error, :signed_out}` when that sign-in is no longer current;
+  `{:error, :not_holder}` when they hold none of the fleet's keys; or `{:error, error}`
   when ownership can't be read right now.
   """
-  def open(%Human{human_account_id: account_id} = actor, lineage, fleet_id) do
+  def open(%Human{human_account_id: account_id} = actor, lineage, fleet_id, to \\ "/") do
     with true <- hub?(fleet_id) || {:error, :no_hub},
+         true <- destination?(to) || {:error, :invalid_destination},
          session_id when is_binary(session_id) <-
            SessionAuthority.current_id(lineage, account_id) || {:error, :signed_out},
          {:ok, true} <- member?(actor, fleet_id) do
@@ -144,7 +212,7 @@ defmodule Keyfleet.Notebooks do
       )
       |> Ash.create!()
 
-      {:ok, url(fleet_id, "/_keyfleet/enter", URI.encode_query(code: code))}
+      {:ok, url(fleet_id, "/_keyfleet/enter", URI.encode_query(code: code, to: to))}
     else
       {:ok, false} -> {:error, :not_holder}
       {:error, error} -> {:error, error}
