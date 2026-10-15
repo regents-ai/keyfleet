@@ -94,7 +94,7 @@ paths:
   /api/v1/agent/account/balances:
     get:
       operationId: getAgentAccountBalances
-      description: Read the shared Credits balance and this exact pairing budget; no spending.
+      description: Read shared Credits and the current pairing budget. The budget is a snapshot, not permission to spend. Account and pairing identifiers are omitted.
       security: [{siwaReceipt: []}]
       x-pairing-required: true
       responses:
@@ -102,13 +102,19 @@ paths:
           description: Authorized read result
           content:
             application/json:
-              schema: {type: object}
+              schema: {$ref: "#/components/schemas/AgentAccountBalances"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
-        "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
+        "503":
+          description: The sign-in service, current pairing or account could not be read. Retry shortly; account reads use account_unavailable.
+          headers:
+            Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AgentAccountUnavailableError"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/account/credits/history:
     post:
@@ -279,7 +285,7 @@ paths:
   /api/v1/agent/account/points:
     get:
       operationId: getAgentPoints
-      description: Read shared Points and allowances; no rewards or activation.
+      description: Read shared Points as decimal strings, daily allowances and reduced history entries. Does not activate earning or award Points.
       security: [{siwaReceipt: []}]
       x-pairing-required: true
       responses:
@@ -287,7 +293,7 @@ paths:
           description: Authorized read result
           content:
             application/json:
-              schema: {type: object}
+              schema: {$ref: "#/components/schemas/AgentAccountPoints"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403":
           description: "agent_not_paired: the agent has no current pairing; its person pairs it from their account on regents.sh, then it signs the request again. person_not_here: the person it is paired with hasn't signed in to Keyfleet yet."
@@ -2688,6 +2694,65 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/AgentNotPairedError"}
   schemas:
+    AgentAccountBalances:
+      type: object
+      additionalProperties: false
+      required: [credits, spending_grant]
+      properties:
+        credits:
+          type: object
+          additionalProperties: false
+          required: [available, given, purchased, held]
+          properties:
+            available: {type: string, description: Decimal Credits available}
+            given: {type: string, description: Decimal gifted Credits available}
+            purchased: {type: string, description: Decimal purchased Credits available}
+            held: {type: string, description: Decimal Credits on hold}
+        spending_grant:
+          type: object
+          additionalProperties: false
+          description: Current pairing settings and shared owner usage. A display snapshot; spending still requires current authority. Disabling grant approvals does not revoke an existing grant.
+          required: [enabled, max_per_spend, daily_limit, sites, site_allowed, used_24h, remaining_24h, grant_approvals_available]
+          properties:
+            enabled: {type: boolean}
+            max_per_spend: {type: string, description: Decimal Credits per spend}
+            daily_limit: {type: string, description: Decimal Credits per 24 hours}
+            sites: {type: array, items: {type: string}}
+            site_allowed: {type: boolean}
+            used_24h: {type: string, description: Decimal Credits used in the rolling 24 hours}
+            remaining_24h: {type: string, description: Decimal Credits left in the rolling 24 hours}
+            grant_approvals_available: {type: boolean}
+        note: {type: string, description: Present when approving agent spending is off}
+    AgentAccountPoints:
+      type: object
+      additionalProperties: false
+      required: [points, earned_today, pending, daily_allowances, entries, more]
+      properties:
+        points: {type: string, description: Decimal Points balance truncated to at most two decimal places}
+        earned_today: {type: string, description: Decimal Points earned today truncated to at most two decimal places}
+        pending: {type: integer, minimum: 0}
+        daily_allowances:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [scope, remaining]
+            properties:
+              scope: {type: string}
+              remaining: {type: string, description: Decimal Points allowance remaining}
+        entries:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [points, source, by, earned_at]
+            properties:
+              points: {type: string, description: Signed decimal Points change truncated to at most two decimal places}
+              source: {type: string}
+              by: {type: string, enum: [human, agent]}
+              earned_at: {type: string, format: date-time}
+        more: {type: boolean, description: More entries exist beyond this summary}
+        note: {type: string, description: Present when no Points earning rules are active}
     CodePassword:
       type: object
       additionalProperties: false

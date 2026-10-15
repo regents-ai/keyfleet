@@ -1138,7 +1138,7 @@ GET `/api/v1/agent/profile` with fresh wallet proof and current pairing. Sends n
 
 ## regents keyfleet account balances
 
-Read the shared Credits balance and this exact pairing budget; no spending.
+Read `credits` and `spending_grant` for the current pairing, including `site_allowed`, `used_24h`, `remaining_24h` and `grant_approvals_available`. Amounts are decimal strings. Account and pairing identifiers are omitted. A budget snapshot does not authorize spending.
 
 GET `/api/v1/agent/account/balances` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
 
@@ -1158,7 +1158,7 @@ GET `/api/v1/agent/account/balances` with fresh wallet proof and current pairing
 
 ## regents keyfleet account points
 
-Read shared Points and allowances; no rewards or activation.
+Read `points`, `earned_today`, `pending`, `daily_allowances`, `entries` and `more`. Points amounts are decimal strings, truncated to at most two decimal places. Entries contain only `points`, `source`, `by` and `earned_at`. No rewards or activation.
 
 GET `/api/v1/agent/account/points` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
 
@@ -1176,3 +1176,7 @@ GET `/api/v1/agent/account/points` with fresh wallet proof and current pairing. 
 Probe `agents whoami` first. When unpaired, obtain the owner's approval and code,
 redeem it once, then probe again with fresh proof. Follow the SIWA guide for
 supported signer setup; do not substitute owner cookies or a local fixture.
+
+## Account answers changed (15 October 2026)
+
+`account balances` no longer returns `account_id` or `pairing_id`. `account points` returns decimal strings (do not divide them by one million), `daily_allowances` and `more`, and each entry carries only `points`, `source`, `by` and `earned_at`. Either answer may carry a `note` saying spending approvals or Points earning are off on this site; the note changes neither setting. These are the answers ash-template gives.

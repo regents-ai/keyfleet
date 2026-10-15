@@ -2809,8 +2809,8 @@
     },
     {
       "name": "account_balances",
-      "title": "Read shared Credits balance and my budget",
-      "description": "Read shared Credits balance and my budget. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
+      "title": "Read Credits",
+      "description": "Read your person's Credits and your spending allowance. Spends nothing. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights. The public product launch gate applies.",
       "annotations": {
         "readOnlyHint": true,
         "untrustedContentHint": true
@@ -2871,7 +2871,7 @@
     {
       "name": "account_credits_history",
       "title": "Read Credits history",
-      "description": "Read your person's Credits history, 50 entries a page; send after (the previous page's pagination.next_cursor) for older ones. Changes nothing. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof.",
+      "description": "Read your person's Credits history, 50 entries a page; send after (the previous page's pagination.next_cursor) for older ones. Changes nothing. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights. The public product launch gate applies.",
       "annotations": {
         "readOnlyHint": true,
         "untrustedContentHint": true
@@ -2942,9 +2942,9 @@
       "product_availability": "prelaunch_gated"
     },
     {
-      "name": "points_balance",
-      "title": "Read shared Points summary",
-      "description": "Read shared Points summary. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
+      "name": "account_points",
+      "title": "Read Points",
+      "description": "Read your person's Points, today's total and recent entries. Points are decimal text, such as \"12.5\". Changes nothing. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights. The public product launch gate applies.",
       "annotations": {
         "readOnlyHint": true,
         "untrustedContentHint": true
@@ -2965,7 +2965,7 @@
       },
       "requires": "siwa_and_pairing_and_product_rights",
       "interfaces": {
-        "webmcp": "points_balance",
+        "webmcp": "account_points",
         "http": "GET /api/v1/agent/account/points",
         "cli": {
           "release_status": "released",
@@ -3177,7 +3177,7 @@
               "join_as_agent",
               "update_agent_status",
               "account_balances",
-              "points_balance",
+              "account_points",
               "agent_whoami",
               "get_code_password",
               "account_credits_history"
