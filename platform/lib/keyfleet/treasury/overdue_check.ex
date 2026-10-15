@@ -1,0 +1,91 @@
+defmodule Keyfleet.Treasury.OverdueCheck do
+  @moduledoc """
+  Every hour (`config :keyfleet, Oban, cron:`): looks at each deployed
+  fleet's latest money reading (`Keyfleet.Treasury.Reading`) and, by the
+  chain's clock at that reading, saves with the site's errors
+  (`Keyfleet.Treasury.Overdue`) each kind of money nobody has moved in time:
+
+    * the Daily Treasury Slice to Keys, due for more than 6 hours;
+    * the protocol share, owed to REGENT staking for more than 24 hours;
+    * USDC from Key sales, waiting more than 3 hours with no piece of it
+      turned into REGENT (`Keyfleet.Treasury.last_piece_turned_at/1`).
+
+  Each kind is one error naming every fleet it holds for, saved again every
+  hour until someone moves the money. Anyone may move each of them, from the
+  fleet's Treasury tab or as an agent. A fleet is looked at from the first
+  reading after it is recorded on the site, and not before.
+  """
+  use Oban.Worker, queue: :default, max_attempts: 1
+
+  alias Keyfleet.Treasury
+  alias Keyfleet.Treasury.Overdue
+
+  @split_late 6 * 3600
+  @owed_late 24 * 3600
+  @waiting_late 3 * 3600
+
+  @impl Oban.Worker
+  def perform(%Oban.Job{}) do
+    readings =
+      for fleet <- Keyfleet.Fleets.list_deployed_fleets!(),
+          reading = Treasury.get_reading!(fleet.id),
+          reading != nil,
+          do: {fleet, reading}
+
+    with [_ | _] = late <-
+           late(readings, &split_due/1, @split_late) do
+      Overdue.report(
+        "The Daily Treasury Slice to Keys is more than 6 hours overdue: #{named(late)}. " <>
+          "Anyone may run it from the fleet's Treasury tab."
+      )
+    end
+
+    with [_ | _] = late <-
+           late(readings, &owed_since/1, @owed_late) do
+      Overdue.report(
+        "The protocol share has been owed to REGENT staking for more than a day: " <>
+          "#{named(late)}. Anyone may send it from the fleet's Treasury tab."
+      )
+    end
+
+    with [_ | _] = late <- late(readings, &waiting_since/1, @waiting_late) do
+      Overdue.report(
+        "USDC from Key sales has waited more than 3 hours with no piece turned into REGENT: " <>
+          "#{named(late)}. Anyone may press Turn into REGENT on the fleet's Treasury tab; " <>
+          "if every press fails, the price is moving too much for the buyer."
+      )
+    end
+
+    :ok
+  end
+
+  defp split_due({_fleet, reading}), do: reading.next_run_at
+
+  defp owed_since({_fleet, reading}), do: reading.protocol_share_owed_since
+
+  # USDC has waited since it was first read waiting, or since a piece of it
+  # last turned into REGENT, whichever is later.
+  defp waiting_since({_fleet, %{conversion_waiting_since: nil}}), do: nil
+
+  defp waiting_since({fleet, reading}) do
+    case Treasury.last_piece_turned_at(fleet.id) do
+      nil -> reading.conversion_waiting_since
+      turned_at -> Enum.max([reading.conversion_waiting_since, turned_at], DateTime)
+    end
+  end
+
+  # The fleets whose `since_of` time is more than `late` seconds before their
+  # reading's block, with that time.
+  defp late(readings, since_of, late) do
+    for {fleet, reading} = read <- readings,
+        since = since_of.(read),
+        since != nil and DateTime.diff(reading.block_time, since) > late,
+        do: {fleet.name, since}
+  end
+
+  defp named(late),
+    do:
+      Enum.map_join(late, ", ", fn {name, since} ->
+        "#{name} (since #{Calendar.strftime(since, "%-d %b %H:%M UTC")})"
+      end)
+end

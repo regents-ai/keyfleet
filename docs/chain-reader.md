@@ -30,6 +30,13 @@ records what happened in them, in the order the chain made it:
   revoked (`LitCreateWalletApproved`, `LitCreateWalletRevoked`).
 - **The reward ledger** (`KeyfleetRewards`): a key's rewards settled to its
   holder (`Settled`) and credit paid out (`Claimed`).
+- **The REGENT buyer** (`KeyfleetRegentBuyer`), one for every fleet, the one
+  the fleet's manager names (`REGENT_BUYER()`, read at the head each pass):
+  USDC from the fleet's Key sales turned into REGENT for its treasury
+  (`RegentBought`). Only logs whose payer is the fleet's manager are the
+  fleet's; one of those paying anywhere but the fleet's treasury is an
+  `:unreadable_log`. A pass that cannot read the buyer reads nothing and is
+  tried again: `{:regent_buyer_unread, reason}`.
 
 No other log of these contracts is read; the request for logs names only
 these events. The money events all go into one table, `treasury_events`, one
@@ -84,7 +91,7 @@ Seeing that these ran, running them again and stopping them is in
 Each pass reads the head, reads again the last 30 blocks it already recorded
 (about a minute of Base), then records what happened after them up to the
 head, in stretches of at most 10,000 blocks. A stretch is one request for all
-five contracts.
+the contracts above.
 
 ## Turning it on
 

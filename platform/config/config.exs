@@ -202,6 +202,7 @@ config :keyfleet, Oban,
       {"*/10 * * * *", Keyfleet.Notebooks.Reconcile},
       {"* * * * *", Keyfleet.Chain.Watch},
       {"17 4 * * *", Keyfleet.ErrorPruner},
+      {"23 * * * *", Keyfleet.Treasury.OverdueCheck},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_agents"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "key_labels"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "key_agents"}}

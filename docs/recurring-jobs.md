@@ -9,6 +9,8 @@ emails; SQL on `keyfleet_app.oban_jobs`; and the running app's `rpc`.
 The site sends no transaction of its own. The treasury's daily split, the
 REGENT staking share, turning USDC from Key sales into REGENT, and draws asked
 again are buttons anyone presses on the fleet's Treasury tab; no job runs them.
+`Keyfleet.Treasury.OverdueCheck` saves an error when the first three wait too
+long (see "Money nobody has moved" below).
 
 ## The jobs
 
@@ -20,6 +22,7 @@ again are buttons anyone presses on the fleet's Treasury tab; no job runs them.
 | `Keyfleet.Notebooks.Reconcile` | every 10 minutes | queues a notebook hub update for each fleet with a hub | default | saved error, 3 tries |
 | `Keyfleet.Notebooks.Roster` | queued by Reconcile and by Key changes | brings a hub's members in step with the Keys | notebook_hubs | saved error, 20 tries |
 | `Keyfleet.SharedReading.Heal` | every minute, three kinds | rereads fleet agents, Key labels and Key agents | default | saved error; the next minute replaces it |
+| `Keyfleet.Treasury.OverdueCheck` | :23 past every hour | saves an error for each kind of money nobody has moved in time, naming each fleet | default | saved error, 1 try; the next hour runs it again |
 | `Keyfleet.ErrorPruner` | 04:17 UTC daily | clears saved errors not seen for a week | default | saved error, 3 tries |
 | Direct messages `remove_expired` (AshOban) | hourly | deletes expired direct messages | default | saved error |
 | Key pictures `close_up` and `small_card` (AshOban triggers) | every minute | makes each revealed Key's close-up and small card where one is missing | key_art | saved error, 5 tries; the next minute queues it again |
@@ -33,6 +36,34 @@ look at `/admin/errors` after any email, and resolve what is fixed.
 
 A job that is stuck without failing raises nothing. Fleet pages then say the
 record is catching up; the SQL below shows when each job last ran.
+
+## Money nobody has moved
+
+Three money jobs run only when someone presses them. Anyone may press each,
+from the fleet's Treasury tab (`/<type>/<number>/treasury`, such as
+`/classic/1/treasury`) or as an agent (`run_split`; `send_share` and
+`convert` once their agent routes are added).
+
+| Job | Contract call | Saved as late when |
+| --- | --- | --- |
+| Daily Treasury Slice to Keys | treasury `runDailySplit()` | due (`nextRunAt`) for more than 6 hours |
+| Send to REGENT staking | manager `sendProtocolShare()` | something owed for more than 24 hours |
+| Turn into REGENT | REGENT buyer `convert(uint256)`, at most 250 USDC a press | USDC waiting more than 3 hours with no piece turned for that fleet |
+
+`Keyfleet.Treasury.OverdueCheck` reads each deployed fleet's latest balance
+reading every hour. Each kind is one error at `/admin/errors` listing every
+fleet it holds for and since when, so Sentinel emails once per kind; while
+the money still waits, each hour adds an occurrence. A fleet is looked at
+from its first balance reading after it is recorded on the site.
+
+Classic #1 (manager `0xc73D8774Dfc51bc11207DC04B0ff5117C30458B6`, predicted)
+is covered this way once it is recorded. After a sell-out its manager holds
+about 36,036 USDC to turn into REGENT: about 145 presses of Turn into REGENT,
+one each 15 minutes at the earliest, over about 36 hours. A press is refused
+when a full piece would move REGENT's price by more than 1%; a smaller amount
+typed in the field may still work. Then one press of Send to REGENT staking
+sends the 4,004.05 USDC owed. The conversion alert stays quiet while pieces
+keep turning at least every 3 hours.
 
 ## Seeing that a job ran
 
