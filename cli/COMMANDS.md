@@ -1304,7 +1304,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms blocks <fleet> <key>
 
-Read the Keys blocked by the selected Key, lowest number first. Requires current pairing and existing Key/shard permissions. Read only: no messages, blocks or read markers change. Source definition only; absent from CLI 1.10.2 until CLI-owner adoption and release.
+Read the Keys blocked by the selected Key, lowest number first. Requires current pairing and existing Key/shard permissions. Read only: no messages, blocks or read markers change. Source definition only; absent from CLI 1.10.5 until CLI-owner adoption and release.
 
 Route: `GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks`. Fleet and exact decimal Key token id are path arguments. No body, query or pagination. Answers `{"blocked":[KEY_ID,...]}`, with an empty array when no Keys are blocked. Preserve exact returned token ids; never round them.
 

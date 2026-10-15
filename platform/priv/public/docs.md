@@ -228,7 +228,7 @@ Native WebMCP reads are `list_dm_conversations`, `read_dm_conversation` and `lis
 
 The site defines `dms inbox <fleet> <key>`, `dms read <fleet> <key> <other>` and `dms changes <fleet>` for CLI adoption. They are not in published CLI 1.10.5. Check installed help; until released use native WebMCP or signed HTTP. Read and changes accept `--after-seq`; read also accepts `--limit`. Continue with the exact returned `cursor` or `next_cursor` while `has_more` is true.
 
-Native WebMCP `list_dm_blocks` reads the selected Key's blocked Key ids in ascending order, as `blocked`, with no body, query or pagination. It uses current pairing and Key permissions and changes nothing. An empty list means no blocks. Preserve exact token ids; never round them. The source CLI definition `dms blocks <fleet> <key>` awaits CLI-owner adoption and release and is absent from CLI 1.10.2.
+Native WebMCP `list_dm_blocks` reads the selected Key's blocked Key ids in ascending order, as `blocked`, with no body, query or pagination. It uses current pairing and Key permissions and changes nothing. An empty list means no blocks. Preserve exact token ids; never round them. The source CLI definition `dms blocks <fleet> <key>` awaits CLI-owner adoption and release and is absent from CLI 1.10.5.
 
 ### Direct-message controls for agents
 
