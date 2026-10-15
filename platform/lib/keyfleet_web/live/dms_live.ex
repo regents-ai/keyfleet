@@ -257,6 +257,12 @@ defmodule KeyfleetWeb.DmsLive do
       <li :for={conversation <- @conversations} id={"dms-conversation-#{conversation.id}"}>
         <.link patch={conversation_path(@dms, Dms.other_key(conversation, @dms.token_id))}>
           Key {Rules.grouped(Dms.other_key(conversation, @dms.token_id))}
+          <span
+            class="rooms-unread"
+            data-unread={to_string(unread?(@dms, conversation))}
+            aria-hidden="true"
+          ></span>
+          <span :if={unread?(@dms, conversation)} class="visually-hidden">New messages</span>
         </.link>
         <span class="dms-preview">{preview(conversation, @dms.token_id)}</span>
         <small class="rooms-detail">
@@ -307,6 +313,13 @@ defmodule KeyfleetWeb.DmsLive do
 
   defp conversation_path(%{fleet_id: fleet_id, token_id: token_id}, other_token_id),
     do: KeyLinks.dm_path(fleet_id, token_id, other_token_id)
+
+  # A conversation has something new when its last message came from the
+  # other Key and is past how far the person has read it.
+  defp unread?(%{token_id: token_id}, %{last_from_token_id: token_id}), do: false
+
+  defp unread?(%{read_to: read_to}, conversation),
+    do: conversation.last_seq > Map.get(read_to, conversation.id, 0)
 
   defp preview(%{last_from_token_id: token_id, last_body: body}, token_id), do: "You: #{body}"
   defp preview(%{last_body: body}, _token_id), do: body
@@ -426,14 +439,22 @@ defmodule KeyfleetWeb.DmsLive do
     )
     |> new_form()
     |> stream(:dm_thread, messages, reset: true, limit: -@thread_kept)
+    |> mark_read(actor)
   end
 
   defp read_inbox(%{fleet_name: nil}, _actor), do: :closed
 
   defp read_inbox(%{fleet_id: fleet_id, token_id: token_id}, actor) do
     with {:ok, conversations} <- Dms.inbox(fleet_id, token_id, actor: actor),
-         {:ok, blocked} <- Dms.inbox(fleet_id, token_id, %{blocked: true}, actor: actor) do
-      {:ok, %{holder?: true, conversations: conversations, blocked: blocked}}
+         {:ok, blocked} <- Dms.inbox(fleet_id, token_id, %{blocked: true}, actor: actor),
+         {:ok, marks} <- read_marks(conversations ++ blocked, actor) do
+      {:ok,
+       %{
+         holder?: true,
+         conversations: conversations,
+         blocked: blocked,
+         read_to: Map.new(marks, &{&1.conversation_id, &1.seq})
+       }}
     else
       {:error, %Ash.Error.Forbidden{}} -> :closed
       {:error, failure} -> raise failure
@@ -651,6 +672,7 @@ defmodule KeyfleetWeb.DmsLive do
           last_seq: last_seq(messages, dms.last_seq)
       })
       |> stream(:dm_thread, messages, limit: -@thread_kept)
+      |> mark_read(actor)
     else
       {:error, %Ash.Error.Forbidden{}} -> refused(socket)
       {:error, failure} -> raise failure
@@ -659,6 +681,20 @@ defmodule KeyfleetWeb.DmsLive do
 
   defp last_seq([], shown), do: shown
   defp last_seq(messages, _shown), do: List.last(messages).seq
+
+  defp read_marks([], _actor), do: {:ok, []}
+
+  defp read_marks(conversations, actor),
+    do: Dms.conversation_read_marks(Enum.map(conversations, & &1.id), actor: actor)
+
+  # The open conversation is read up to the last message the page has shown.
+  defp mark_read(%{assigns: %{dms: %{conversation: %{id: id}, last_seq: seq}}} = socket, actor)
+       when seq > 0 do
+    Dms.mark_conversation_read!(id, seq, actor: actor)
+    socket
+  end
+
+  defp mark_read(socket, _actor), do: socket
 
   # Why a message didn't go through, in the line kept for it under the box.
   defp send_refusal(refusal, dms) do

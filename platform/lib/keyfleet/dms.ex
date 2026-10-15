@@ -83,6 +83,11 @@ defmodule Keyfleet.Dms do
       define :read_changes, action: :changes, args: [:fleet_id, :token_ids, :after_seqs]
     end
 
+    resource Keyfleet.Dms.ReadMark do
+      define :mark_conversation_read, action: :mark, args: [:conversation_id, :seq]
+      define :conversation_read_marks, action: :in_conversations, args: [:conversation_ids]
+    end
+
     resource Keyfleet.Dms.Block do
       define :block_key, action: :block, args: [:fleet_id, :blocker_token_id, :blocked_token_id]
       define :unblock, action: :unblock

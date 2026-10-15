@@ -101,6 +101,22 @@
   font-weight: 400;
 }
 
+/* A room or conversation with something new shows a small dot after its
+   name. The dot keeps its place when there is nothing new. */
+.rooms-unread {
+  display: inline-block;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  margin-inline-start: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-fg);
+  vertical-align: middle;
+}
+
+.rooms-unread[data-unread="false"] {
+  visibility: hidden;
+}
+
 .rooms-thread {
   width: 100%;
 }

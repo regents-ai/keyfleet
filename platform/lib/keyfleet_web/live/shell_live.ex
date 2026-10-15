@@ -317,9 +317,12 @@ defmodule KeyfleetWeb.ShellLive do
       when seq > last_seq,
       do: {:noreply, RoomsLive.show_new_posts(socket)}
 
-  # The page only hears about the rooms of the fleet it shows.
-  def handle_info(%Broadcast{event: "room_head"}, socket),
-    do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_on_show(socket))}
+  # The page only hears about the rooms of the fleet it shows. The rooms page
+  # marks the room in its list as having something new.
+  def handle_info(%Broadcast{event: "room_head", payload: head}, socket) do
+    socket = RoomsLive.note_head(socket, head)
+    {:noreply, FleetLive.refresh_activity_soon(socket, fleet_on_show(socket))}
+  end
 
   # The person's agents changed on any Regent site: paired, checked in,
   # corrected or unpaired.

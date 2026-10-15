@@ -74,6 +74,11 @@ defmodule Keyfleet.Rooms do
       define :remove_from_wall, action: :remove, args: [:message_id]
     end
 
+    resource Keyfleet.Rooms.ReadMark do
+      define :mark_room_read, action: :mark, args: [:room_id, :seq]
+      define :room_read_marks, action: :in_rooms, args: [:room_ids]
+    end
+
     resource Keyfleet.Rooms.Mute do
       define :mute_key, action: :mute, args: [:fleet_id, :token_id]
       define :unmute, action: :unmute

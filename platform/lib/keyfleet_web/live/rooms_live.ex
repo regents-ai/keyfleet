@@ -100,6 +100,12 @@ defmodule KeyfleetWeb.RoomsLive do
                 >
                   {room_label(room)}
                   <small :if={room.public and @room.key?} class="rooms-access">Public</small>
+                  <span
+                    class="rooms-unread"
+                    data-unread={to_string(unread?(@room, room))}
+                    aria-hidden="true"
+                  ></span>
+                  <span :if={unread?(@room, room)} class="visually-hidden">New posts</span>
                 </.link>
               </li>
             </ul>
@@ -235,6 +241,15 @@ defmodule KeyfleetWeb.RoomsLive do
     </p>
     """
   end
+
+  @doc """
+  Whether a room in the list has posts the reader has not been shown: it is
+  one they can read, not the one open, and its latest place is past their mark.
+  """
+  def unread?(%{slug: slug}, %{slug: slug}), do: false
+
+  def unread?(%{key?: key?, read_to: read_to}, room),
+    do: (key? or room.public) and room.head_seq > Map.get(read_to, room.id, 0)
 
   @doc "What a room is called wherever it is shown: by its topic once it has one, and by its name otherwise."
   def room_label(%{topic: nil, name: name}), do: name
@@ -386,6 +401,7 @@ defmodule KeyfleetWeb.RoomsLive do
             fleet_name: fleet_name(rooms),
             last_seq: last_seq(posts, 0),
             shown?: unmuted != [],
+            read_to: read_marks(actor, rooms),
             muted: muted,
             muter?: Muter.of(actor) != nil,
             key?: key?,
@@ -396,6 +412,7 @@ defmodule KeyfleetWeb.RoomsLive do
       room_notice: nil
     )
     |> stream(:posts, unmuted, reset: true, limit: -@thread_kept)
+    |> mark_read()
   end
 
   defp change_mute("mute_key", fleet_id, token_id, actor),
@@ -474,6 +491,7 @@ defmodule KeyfleetWeb.RoomsLive do
     socket
     |> assign(:room, %{shown | last_seq: last_seq(posts, 0), shown?: unmuted != []})
     |> stream(:posts, unmuted, reset: true, limit: -@thread_kept)
+    |> mark_read()
   end
 
   defp show_latest(%{assigns: %{room: %{} = shown}} = socket) do
@@ -517,6 +535,8 @@ defmodule KeyfleetWeb.RoomsLive do
             shown?: room.shown? or unmuted != []
         })
         |> stream(:posts, unmuted, limit: -@thread_kept)
+        |> mark_read()
+
       {:error, %Ash.Error.Forbidden{}} ->
         recheck_standing(socket)
 
@@ -555,6 +575,52 @@ defmodule KeyfleetWeb.RoomsLive do
 
   defp last_seq([], shown), do: shown
   defp last_seq(posts, _shown), do: List.last(posts).seq
+
+  # How far a person signed in has read each of the fleet's rooms. Anyone else
+  # has read nothing, and is never shown what is new.
+  defp read_marks(%Human{} = actor, [_room | _rooms] = rooms) do
+    rooms
+    |> Enum.map(& &1.id)
+    |> Rooms.room_read_marks!(actor: actor)
+    |> Map.new(&{&1.room_id, &1.seq})
+  end
+
+  defp read_marks(_actor, _rooms), do: %{}
+
+  # The open room is read up to the last place the page has shown, muted posts
+  # included, for a person signed in.
+  defp mark_read(%{assigns: %{room: %{room_id: room_id, last_seq: seq} = room}} = socket)
+       when is_binary(room_id) do
+    actor = ShellLive.human_actor(socket)
+
+    if match?(%Human{}, actor) and seq > Map.get(room.read_to, room_id, 0) do
+      Rooms.mark_room_read!(room_id, seq, actor: actor)
+      assign(socket, :room, %{room | read_to: Map.put(room.read_to, room_id, seq)})
+    else
+      socket
+    end
+  end
+
+  defp mark_read(socket), do: socket
+
+  @doc """
+  A room of the fleet on show has moved on: the list of rooms learns its new
+  latest place, so it is shown as having something new.
+  """
+  def note_head(%{assigns: %{room: %{rooms: rooms} = shown}} = socket, %{
+        room_id: room_id,
+        seq: seq
+      }) do
+    rooms =
+      Enum.map(rooms, fn
+        %{id: ^room_id, head_seq: head} = room -> %{room | head_seq: Kernel.max(head, seq)}
+        room -> room
+      end)
+
+    assign(socket, :room, %{shown | rooms: rooms})
+  end
+
+  def note_head(socket, _head), do: socket
 
   @doc "What someone is told when a post to a key is turned down."
   def post_refusal(%Ash.Error.Forbidden{}, fleet_id) do
