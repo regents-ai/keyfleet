@@ -35,7 +35,8 @@ defmodule KeyfleetWeb.AgentChainController do
   def send_share(conn, %{"fleet_id" => fleet_id}),
     do: answer(conn, fleet_id, :send_share, %{})
 
-  def convert(conn, %{"fleet_id" => fleet_id}), do: answer(conn, fleet_id, :convert, %{})
+  def convert(conn, %{"fleet_id" => fleet_id, "inputs" => inputs}),
+    do: answer(conn, fleet_id, :convert, %{inputs: inputs})
 
   def propose(conn, %{"fleet_id" => fleet_id}) do
     inputs = conn.body_params
@@ -111,13 +112,17 @@ defmodule KeyfleetWeb.AgentChainController do
   defp refuse(conn, _flow, _built, :not_recorded, _inputs),
     do: Refusal.json(conn, 404, "proposal_unknown")
 
-  # Only a proposal's own fields can be written wrong.
-  defp refuse(conn, :propose, built, _problem, inputs) do
-    body = Refusal.body("invalid_proposal")
-    details = %{problem: WalletWords.line(:propose, built, inputs)}
+  # Only a proposal's own fields, and the amount to turn into REGENT, can be
+  # written wrong.
+  defp refuse(conn, :propose, built, _problem, inputs),
+    do: unreadable(conn, "invalid_proposal", WalletWords.line(:propose, built, inputs))
 
+  defp refuse(conn, :convert, built, _problem, inputs),
+    do: unreadable(conn, "invalid_amount", WalletWords.line(:convert, built, inputs))
+
+  defp unreadable(conn, code, problem) do
     conn
     |> put_status(422)
-    |> json(put_in(body, [:error, :details], details))
+    |> json(put_in(Refusal.body(code), [:error, :details], %{problem: problem}))
   end
 end
