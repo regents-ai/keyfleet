@@ -4,7 +4,7 @@ defmodule Keyfleet.Agents.Here do
   every open page and held in `Keyfleet.SharedReading`. One runs on each
   machine.
 
-  Three readings come from each pass over a fleet:
+  Two readings come from each pass over a fleet:
 
     * `fleet_key/1`: "Who's here", the count of agents, the bar's count of
       the addresses holding a Key and of those online now
@@ -14,13 +14,9 @@ defmodule Keyfleet.Agents.Here do
       set none: a picture made from its wallet is made where it is drawn
       (`Keyfleet.Agents.Avatar.shown/2`), and is ten times the size of the
       address. The wallet is never written into the page.
-    * `labels_key/2`: one Key's active shards, each with its agent's name, the
-      address of its own picture and its status label, or the shard's wallet
-      alone while no agent has signed in with it: everything a row of the key
-      list shows but the Key's holder.
     * `lines_key/2`: the agents' full status lines, for the open Key.
 
-  A Key holds the last two only while it has an active shard, and up to as
+  A Key holds the second only while it has an active shard, and up to as
   many shards as a Key's page lists.
 
   This is a reread on notice, the second of the two shapes the `elixir-stack`
@@ -47,13 +43,10 @@ defmodule Keyfleet.Agents.Here do
   # As many of a Key's agents as its page lists (`Keyfleet.Keys.Profile`).
   @listed 100
 
-  @kinds [:fleet_agents, :key_labels, :key_agents]
+  @kinds [:fleet_agents, :key_agents]
 
   @doc "Where \"Who's here\" for `fleet_id` is held."
   def fleet_key(fleet_id), do: {:fleet_agents, fleet_id}
-
-  @doc "Where the status labels of the agents on one Key are held."
-  def labels_key(fleet_id, token_id), do: {:key_labels, "#{fleet_id}:#{token_id}"}
 
   @doc "Where the full status lines of the agents on one Key are held."
   def lines_key(fleet_id, token_id), do: {:key_agents, "#{fleet_id}:#{token_id}"}
@@ -89,7 +82,7 @@ defmodule Keyfleet.Agents.Here do
   end
 
   @doc """
-  Reads `fleet_id`'s agents and puts its three kinds of reading, deleting the
+  Reads `fleet_id`'s agents and puts its two kinds of reading, deleting the
   Keys no agent works on any more. What the producer runs on each pass.
   """
   def read(fleet_id) do
@@ -145,36 +138,26 @@ defmodule Keyfleet.Agents.Here do
         Enum.each(by_key, fn {token_id, shards} -> put_key(fleet_id, token_id, shards) end)
         kept = MapSet.new(by_key, fn {token_id, _shards} -> "#{fleet_id}:#{token_id}" end)
 
-        for kind <- [:key_labels, :key_agents],
-            id <- held(kind, fleet_id),
+        for id <- held(fleet_id),
             id not in kept,
-            do: SharedReading.delete({kind, id})
+            do: SharedReading.delete({:key_agents, id})
 
       {:error, _not_read} ->
-        for kind <- [:key_labels, :key_agents],
-            id <- held(kind, fleet_id),
-            do: SharedReading.degraded({kind, id})
+        for id <- held(fleet_id),
+            do: SharedReading.degraded({:key_agents, id})
     end
   end
 
   defp put_key(fleet_id, token_id, shards) do
-    SharedReading.put(
-      labels_key(fleet_id, token_id),
-      for({wallet, agent} <- shards, do: row_shard(wallet, agent))
-    )
-
     SharedReading.put(
       lines_key(fleet_id, token_id),
       for({wallet, %{line: line}} <- shards, do: {wallet, line})
     )
   end
 
-  defp row_shard(wallet, nil), do: {wallet, nil, nil, nil}
-  defp row_shard(wallet, agent), do: {wallet, agent.name, agent.avatar_url, agent.label}
-
   # The trailing ":" keeps one fleet's ids from matching another's.
-  defp held(kind, fleet_id),
-    do: Enum.filter(SharedReading.ids(kind), &String.starts_with?(&1, fleet_id <> ":"))
+  defp held(fleet_id),
+    do: Enum.filter(SharedReading.ids(:key_agents), &String.starts_with?(&1, fleet_id <> ":"))
 
   # Every active shard in the fleet by Key, each with the agent that signed in
   # with it, if one has, and what its check-ins with the fleet say.
@@ -198,8 +181,8 @@ defmodule Keyfleet.Agents.Here do
   defp agent(nil, _check_ins, _now), do: nil
 
   defp agent(profile, check_ins, now) do
-    {label, line} = status(check_ins[profile.id], now)
-    %{name: profile.name, avatar_url: Avatar.url(profile), label: label, line: line}
+    {_label, line} = status(check_ins[profile.id], now)
+    %{line: line}
   end
 
   # The agent's status label and its full status line.

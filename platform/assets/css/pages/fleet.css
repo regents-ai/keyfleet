@@ -660,39 +660,6 @@
   padding: var(--rg-panel-padding);
 }
 
-.fleet-keys {
-  display: grid;
-  gap: 1rem;
-  padding: var(--rg-panel-padding);
-}
-
-.fleet-keys h2 {
-  font-size: 1.35rem;
-  line-height: 1.1;
-}
-
-.fleet-key-list {
-  display: grid;
-  gap: 0.5rem;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.fleet-key-list li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 1rem;
-  padding: 0.75rem;
-  border: 1px solid var(--color-border);
-}
-
-.fleet-key-list span {
-  color: var(--color-fg-muted);
-}
-
 .fleet-pages {
   display: flex;
   gap: 1rem;

@@ -19,7 +19,7 @@ again are buttons anyone presses on the fleet's Treasury tab; no job runs them.
 | `Keyfleet.Chain.ReadBalances` | every minute, per fleet | reads the treasury's balances and split figures | chain | saved error, 3 tries; the next minute's reading follows |
 | `Keyfleet.Notebooks.Reconcile` | every 10 minutes | queues a notebook hub update for each fleet with a hub | default | saved error, 3 tries |
 | `Keyfleet.Notebooks.Roster` | queued by Reconcile and by Key changes | brings a hub's members in step with the Keys | notebook_hubs | saved error, 20 tries |
-| `Keyfleet.SharedReading.Heal` | every minute, three kinds | rereads fleet agents, Key labels and Key agents | default | saved error; the next minute replaces it |
+| `Keyfleet.SharedReading.Heal` | every minute, two kinds | rereads fleet agents and Key agents | default | saved error; the next minute replaces it |
 | `Keyfleet.ErrorPruner` | 04:17 UTC daily | clears saved errors not seen for a week | default | saved error, 3 tries |
 | Direct messages `remove_expired` (AshOban) | hourly | deletes expired direct messages | default | saved error |
 | Key pictures `close_up` and `small_card` (AshOban triggers) | every minute | makes each revealed Key's close-up and small card where one is missing | key_art | saved error, 5 tries; the next minute queues it again |
@@ -66,8 +66,8 @@ Through the running app (untested on Fly):
 # Run the chain watch now, rather than at the next minute.
 fly ssh console -C "/app/bin/keyfleet rpc 'Oban.insert!(Keyfleet.Chain.Watch.new(%{}))'"
 
-# Run one kind of shared reading again (fleet_agents, key_labels or key_agents).
-fly ssh console -C "/app/bin/keyfleet rpc 'Oban.insert!(Keyfleet.SharedReading.Heal.new(%{kind: :key_labels}))'"
+# Run one kind of shared reading again (fleet_agents or key_agents).
+fly ssh console -C "/app/bin/keyfleet rpc 'Oban.insert!(Keyfleet.SharedReading.Heal.new(%{kind: :key_agents}))'"
 
 # Run again a job given up, cancelled or waiting to retry, by its id from the SQL above.
 fly ssh console -C "/app/bin/keyfleet rpc 'Oban.retry_job(12345)'"

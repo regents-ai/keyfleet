@@ -58,8 +58,6 @@ defmodule KeyfleetWeb.ShellLive do
      |> follow_mutes()
      |> stream_configure(:posts, dom_id: &"post-#{&1.id}")
      |> stream(:posts, [])
-     |> stream_configure(:fleet_keys, dom_id: &"fleet-key-#{&1.token_id}")
-     |> stream(:fleet_keys, [])
      |> stream_configure(:fleet_who, dom_id: &"fleet-who-#{&1.id}")
      |> stream(:fleet_who, [])
      |> stream_configure(:dm_thread, dom_id: &"dm-#{&1.id}")
@@ -530,7 +528,6 @@ defmodule KeyfleetWeb.ShellLive do
           actor={actor(@access_context)}
           lease={@session_lease}
           params={@fleet_params}
-          keys={@streams.fleet_keys}
           profile={@key_profile}
           thread={@streams.key_thread}
           activity={@streams.activity}
@@ -657,7 +654,6 @@ defmodule KeyfleetWeb.ShellLive do
     do:
       socket
       |> SharedFigures.follow(:fleet, [])
-      |> SharedFigures.follow(:rows, [])
       |> assign(
         fleet: nil,
         fleet_params: nil,
@@ -666,13 +662,12 @@ defmodule KeyfleetWeb.ShellLive do
         activity: nil,
         activity_refresh: nil
       )
-      |> stream(:fleet_keys, [], reset: true)
       |> stream(:fleet_who, [], reset: true)
       |> stream(:activity, [], reset: true)
 
   # Keys changed in the fleet on show: its sales figures and the key on offer
-  # are read again, the key list only when a changed key is on it (the agents
-  # here come from the readings every page shares, `Keyfleet.Agents.Here`), the
+  # are read again, and its Member List when it is on show (the agents here
+  # come from the readings every page shares, `Keyfleet.Agents.Here`), the
   # open key's profile when the key or one of its holder's changed, and the
   # map is told the changed keys' marks, or told to load again when too many
   # changed to list.
@@ -684,7 +679,7 @@ defmodule KeyfleetWeb.ShellLive do
     socket =
       socket
       |> FleetLive.refresh_sales()
-      |> FleetLive.refresh_listed(token_ids)
+      |> FleetLive.refresh_members()
       |> KeyProfileLive.refresh_key_profile(token_ids)
       |> FleetLive.refresh_activity_soon(fleet_id)
       |> workspace_standing_changed(fleet_id)

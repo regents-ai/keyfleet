@@ -53,28 +53,24 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
   end
 
-  # However many keys a fleet has issued, the member list reads one page of
-  # them; the count it shows comes from counting, not from reading every key.
-  test "keys are listed a hundred at a time while the count covers them all", %{conn: conn} do
+  # However many Keys an address holds, the Member List shows it once, with
+  # how many it holds and its lowest fifty as cards; the bar counts them all.
+  test "the Member List shows each holder once with the Keys it holds", %{conn: conn} do
     deploy!()
     ChainHelpers.seed_cursor!(@fleet)
     Here.read(@fleet)
+    move!(7, @stranger)
 
-    {rows, {:ok, view, _html}} = rows_read_during(fn -> live(conn, @members_path) end)
+    {:ok, view, _html} = live(conn, @members_path)
 
-    assert Enum.max(rows) <= 101
     assert text(view, "#fleet-sales") == "150 Keys sold · 0 agents here"
-    assert shown_keys(view) == Enum.to_list(1..100)
-    refute has_element?(view, "#fleet-keys-previous")
-
-    view |> element("#fleet-keys-next") |> render_click()
-    assert shown_keys(view) == Enum.to_list(101..150)
-    refute has_element?(view, "#fleet-keys-next")
-
-    view |> element("#fleet-keys-previous") |> render_click()
-    assert shown_keys(view) == Enum.to_list(1..100)
-    refute has_element?(view, "#fleet-keys-previous")
-    assert has_element?(view, "#fleet-keys-next")
+    assert holders(view) == [@owner, @stranger]
+    assert text(view, "#fleet-members-holder-#{@owner} .member-card__count") == "149 Keys"
+    assert shown_keys(view, @owner) == Enum.to_list(1..6) ++ Enum.to_list(8..51)
+    assert text(view, "#fleet-members-holder-#{@owner} .fleet-entry__more") == "and 99 more"
+    assert shown_keys(view, @stranger) == [7]
+    refute has_element?(view, "#fleet-members-next")
+    refute has_element?(view, "#fleet-members-previous")
   end
 
   test "a visitor is listed General alone, never another room's name", %{conn: conn} do
@@ -130,7 +126,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert has_element?(view, ~s(#fleet-tab-treasury[href="#{@treasury_path}"]), "Treasury")
     assert has_element?(view, "#fleet-hall")
-    refute has_element?(view, "#fleet-keys")
+    refute has_element?(view, "#fleet-members")
     assert has_element?(view, ~s(#fleet-workspace-link[href="#{@path}/workspace"]))
     assert has_element?(view, ~s(#fleet-proposals-link[href="#{@path}/proposals"]))
 
@@ -140,13 +136,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert has_element?(view, ~s(#fleet-tab-map[aria-current="page"]))
     assert has_element?(view, "#key-map-#{@fleet}")
     refute has_element?(view, "#fleet-hall")
-    refute has_element?(view, "#fleet-keys")
+    refute has_element?(view, "#fleet-members")
 
     view |> element("#fleet-tab-members") |> render_click()
     assert_patch(view, @members_path)
 
     assert has_element?(view, ~s(#fleet-tab-members[aria-current="page"]))
-    assert has_element?(view, "#fleet-keys h2", "Member List")
+    assert has_element?(view, "#fleet-members h2", "Member List")
     refute has_element?(view, "#key-map-#{@fleet}")
     refute has_element?(view, "#fleet-hall")
 
@@ -157,27 +153,35 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert text(view, "#treasury-rules") =~
              "When a level sells out, the holders of the level before it are paid back"
 
-    for row <- Keyfleet.Authority.rows() do
-      assert has_element?(view, "#fleet-authority dt", row.what)
+    for row <- Keyfleet.Authority.treasury_rows() do
+      assert has_element?(view, "#treasury-rules dt", row.what)
+      assert has_element?(view, "#treasury-rules dd", row.who)
 
       assert has_element?(
                view,
-               "#fleet-authority dd",
-               "#{row.who} · #{Keyfleet.Authority.needs(row)}"
+               "#treasury-rules dd .proposals-detail",
+               Keyfleet.Authority.needs(row)
              )
     end
 
     assert has_element?(
              view,
-             ~s(#treasury-rules a#fleet-contract-link[href="https://basescan.org/address/#{@contract}"][title="#{@contract}"])
+             ~s(#treasury-rules a#fleet-contract-link[href="https://basescan.org/address/#{@contract}"])
            )
+
+    assert has_element?(view, ~s(#treasury-rules code[title="#{@contract}"]))
   end
 
-  test "a page name that is not one of the fleet's keys is a page that doesn't exist", %{
+  test "a Member List page that is not one of its pages is a page that doesn't exist", %{
     conn: conn
   } do
     deploy!()
-    assert_raise KeyfleetWeb.NotFoundError, fn -> live(conn, @path <> "?after=nonsense") end
+
+    for page <- ["nonsense", "0", "2"] do
+      assert_raise KeyfleetWeb.NotFoundError, fn ->
+        live(conn, @members_path <> "&page=" <> page)
+      end
+    end
   end
 
   # An open fleet with no contract has sold nothing and has no price to show.
@@ -207,7 +211,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     {:ok, view, _html} = live(conn, @members_path)
 
     assert text(view, "#fleet-sales") == "Figures are catching up · 0 agents here"
-    assert shown_keys(view) == Enum.to_list(1..100)
+    assert holders(view) == [@owner]
 
     {:ok, treasury, html} = live(conn, @treasury_path)
 
@@ -228,7 +232,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, "#fleet-soon-title", "Coming soon")
       assert has_element?(view, ~s(#fleet-soon a[href="/#fleets"]), "See the fleets")
 
-      for id <- ~w(fleet-get-key fleet-send-agent fleet-channels fleet-keys fleet-workspace-link
+      for id <-
+            ~w(fleet-get-key fleet-send-agent fleet-channels fleet-members fleet-workspace-link
                    fleet-proposals-link fleet-tab-treasury fleet-feed-list fleet-entry) do
         refute has_element?(view, "##{id}")
       end
@@ -769,9 +774,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       render_patch(view, @map_path <> "&key=152")
       assert_push_event(view, "keymap:select", %{token_id: nil})
       assert text(view, "#key-map-selected .key-map-selected__chosen") == "No Key chosen yet."
-
-      render_patch(view, @members_path <> "&key=12")
-      assert has_element?(view, "#fleet-keys-next[href$='&key=12']")
     end
 
     # A key sold, moved or given a shard reaches an open page as that key's new marks.
@@ -830,34 +832,23 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute_push_event(view, "keymap:reset", _reset, 0)
     end
 
-    # The member list reads its page again only when a changed key is on it,
-    # and a key sold onto the last page joins it.
-    test "the key list shows a changed key's new holder when that key is on the page", %{
-      conn: conn
-    } do
+    # Keys changing hands reach an open Member List, and a Key sold joins it.
+    test "the Member List shows a Key's new holder once it changes hands", %{conn: conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       {:ok, view, _html} = live(conn, @members_path)
-      assert text(view, "#fleet-key-7") =~ "Held by 0xaaaa..aaaa"
+      assert holders(view) == [@owner]
 
       move!(7, @stranger)
-      send(view.pid, {:keys_changed, @fleet, [120]})
-      assert_pushed(view, "keymap:patch", %{keys: [[120, 1]]})
-      assert text(view, "#fleet-key-7") =~ "Held by 0xaaaa..aaaa"
-
       send(view.pid, {:keys_changed, @fleet, [7]})
       assert_pushed(view, "keymap:patch", %{keys: [[7, 0]]})
-      assert text(view, "#fleet-key-7") =~ "Held by 0xbbbb..bbbb"
-      assert shown_keys(view) == Enum.to_list(1..100)
-
-      second_page = view |> element("#fleet-keys-next") |> render() |> href()
-      view |> element("#fleet-keys-next") |> render_click()
-      assert_patch(view, second_page)
+      assert holders(view) == [@owner, @stranger]
+      assert shown_keys(view, @stranger) == [7]
 
       issue!(@fleet, 151, @stranger)
       send(view.pid, {:keys_changed, @fleet, [151]})
       assert_pushed(view, "keymap:patch", %{minted: 151, keys: [[151, 0]]})
-      assert shown_keys(view) == Enum.to_list(101..151)
+      assert shown_keys(view, @stranger) == [7, 151]
       assert text(view, "#buy-key-number") == "152"
     end
 
@@ -942,7 +933,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert_pushed(view, "keymap:patch", %{minted: 1, keys: [[1, 1]]})
     assert text(view, "#buy-key-number") == "2"
-    assert shown_keys(view) == [1]
+    assert shown_keys(view, @owner) == [1]
 
     {:ok, treasury, _html} = live(conn, "/accelerant/1/treasury")
     assert text(treasury, "#fleet-progress-title + dl") =~ "Keys issued 1 of 2,000"
@@ -1534,11 +1525,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     |> LazyHTML.attribute("value")
   end
 
-  defp href(link) do
-    [href] = link |> LazyHTML.from_fragment() |> LazyHTML.query("a") |> LazyHTML.attribute("href")
-    href
-  end
-
   # What the fleet page's buttons read for the owner: its USDC allowance to
   # the fleet, and the launch the treasury has bound (0 for none), as its
   # factory recorded it and its strategy says it stands at the latest block.
@@ -1654,46 +1640,24 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     |> Enum.join(" ")
   end
 
-  defp shown_keys(view) do
+  # The holders the Member List shows, in its order.
+  defp holders(view) do
     view
     |> render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query("#fleet-key-list > li")
+    |> LazyHTML.query("#fleet-members-holders > li")
     |> LazyHTML.attribute("id")
-    |> Enum.map(fn "fleet-key-" <> token_id -> String.to_integer(token_id) end)
+    |> Enum.map(fn "fleet-members-holder-" <> wallet -> wallet end)
   end
 
-  # How many rows each read of the key records returned while `fun` ran.
-  defp rows_read_during(fun) do
-    test_pid = self()
-
-    :telemetry.attach(
-      "fleet-page-key-rows",
-      [:keyfleet, :repo, :query],
-      fn _event, _measurements, meta, _config ->
-        with "key_attachments" <- meta.source,
-             {:ok, %{num_rows: rows}} <- meta.result,
-             do: send(test_pid, {:key_rows, rows})
-      end,
-      nil
-    )
-
-    result =
-      try do
-        fun.()
-      after
-        :telemetry.detach("fleet-page-key-rows")
-      end
-
-    {collect_rows([]), result}
-  end
-
-  defp collect_rows(rows) do
-    receive do
-      {:key_rows, count} -> collect_rows([count | rows])
-    after
-      0 -> rows
-    end
+  # The Keys shown as cards on one holder's line of the Member List.
+  defp shown_keys(view, wallet) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#fleet-members-holder-#{wallet} a.fleet-entry__card")
+    |> LazyHTML.attribute("id")
+    |> Enum.map(fn "fleet-members-card-" <> token_id -> String.to_integer(token_id) end)
   end
 
   # A post written as key 1 `seconds` before `now`, with no notice to anyone.

@@ -3,7 +3,8 @@ defmodule KeyfleetWeb.AccountLive do
   The signed-in person's account, one tab each: Profile (who the site knows
   them as, the keys their wallets hold, the agents paired with their account,
   their Credits and this browser's session), Wallets (the wallets their sign-in
-  verified) and Connections (the accounts they have connected). Points has its
+  verified) and Connections (the accounts they have connected, which each
+  fleet's Member List shows beside their address). Points has its
   own page (`KeyfleetWeb.PointsLive`).
 
   Everything here is read from the sign-in the shell already holds; nothing on
@@ -187,7 +188,10 @@ defmodule KeyfleetWeb.AccountLive do
       account={@account}
       signed_out_reason={@signed_out_reason}
     >
-      <:lede>The accounts you have connected, such as X, GitHub and Farcaster.</:lede>
+      <:lede>
+        The accounts you have connected, such as X, GitHub and Farcaster. They are shown
+        beside your address on each fleet's Member List.
+      </:lede>
       <.verified_connections
         id="account-verified-connections"
         class="account-panel"

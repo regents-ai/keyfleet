@@ -20,8 +20,9 @@ defmodule KeyfleetWeb.FleetLive do
   words from the right of the hall for it to quote there
   (`Keyfleet.Rooms.QuoteRequest`).
   "Fleet Grid", `?view=map`, is its map of keys, and "Member List",
-  `?view=members`, every key it has issued with who holds it. "Treasury"
-  (`KeyfleetWeb.TreasuryLive`, at `/treasury` under the fleet's address) and
+  `?view=members`, who holds its Keys (`KeyfleetWeb.Components.MemberList`).
+  "Treasury" (`KeyfleetWeb.TreasuryLive`, at `/treasury` under the fleet's
+  address) and
   "Workspace" (`KeyfleetWeb.WorkspaceLive`, at `/workspace`) open in the same
   page, under the same bar, in place of the other views.
 
@@ -32,16 +33,15 @@ defmodule KeyfleetWeb.FleetLive do
   Everything here is public and read from what the fleet's contract has
   recorded, except that the feed names an item other than a goal by its
   title only to the fleet's members, and to anyone else by its type
-  (`Keyfleet.Activity`). Keys are listed a hundred at a time.
+  (`Keyfleet.Activity`).
   """
 
   use KeyfleetWeb, :html
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
-  import KeyfleetWeb.Components.AgentPicture
 
   import Phoenix.LiveView,
-    only: [push_event: 3, push_patch: 2, stream: 3, stream: 4, stream_insert: 3]
+    only: [push_event: 3, push_patch: 2, stream: 3, stream: 4]
 
   alias Keyfleet.Activity
   alias Keyfleet.Agents
@@ -59,6 +59,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.FleetRisks
+  alias KeyfleetWeb.Components.MemberList
   alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.FleetPage
   alias KeyfleetWeb.KeyLinks
@@ -201,7 +202,6 @@ defmodule KeyfleetWeb.FleetLive do
     doc:
       "`:fleet` for the page's own views, or `:treasury` or `:workspace`, drawn by the inner block"
 
-  attr :keys, :any, required: true, doc: "the fleet's issued keys, lowest number first"
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
   attr :thread, :any, required: true, doc: "the messages written to the open key"
   attr :activity, :any, required: true, doc: "the fleet's latest activity, newest first"
@@ -370,12 +370,15 @@ defmodule KeyfleetWeb.FleetLive do
           />
           <.key_map :if={@view == :map and @fleet.deployed?} fleet={@fleet} />
           <.map_preview :if={@view == :map and not @fleet.deployed?} fleet={@fleet} />
-          <.members
+          <.live_component
             :if={@view == :members}
-            fleet={@fleet}
-            keys={@keys}
+            module={MemberList}
+            id="fleet-members"
+            fleet_id={@fleet.fleet_id}
+            club_claims={@fleet.club_claims}
+            deck={@fleet.deck}
             params={@params}
-            profile={@profile}
+            profile_open?={@profile != nil}
           />
           <.get_a_key :if={@fleet.buy} fleet={@fleet} actor={@actor} lease={@lease} buying={@buying?} />
         </div>
@@ -391,61 +394,6 @@ defmodule KeyfleetWeb.FleetLive do
         thread={@thread}
       />
     </article>
-    """
-  end
-
-  attr :fleet, :map, required: true
-  attr :keys, :any, required: true
-  attr :params, :map, required: true
-  attr :profile, :map, default: nil
-
-  # "Member List": every Key the fleet has issued, lowest number first, a
-  # hundred to a page, each opening its profile.
-  defp members(assigns) do
-    ~H"""
-    <section id="fleet-keys" class="fleet-keys" aria-labelledby="fleet-keys-title">
-      <h2 id="fleet-keys-title">Member List</h2>
-      <p :if={@fleet.no_keys?}>No Keys have been issued yet.</p>
-
-      <ol id="fleet-key-list" class="fleet-key-list" phx-update="stream">
-        <li :for={{dom_id, key} <- @keys} id={dom_id}>
-          <.link
-            id={"fleet-key-link-#{key.token_id}"}
-            patch={KeyLinks.key_path(@fleet.fleet_id, key.token_id, @params)}
-            replace={@profile != nil}
-            class="fleet-name"
-          >
-            Key {key.token_id}
-          </.link>
-          <span>Held by {RegentFormat.short_address(key.owner_wallet)}</span>
-          <span :if={key.shards == []}>No shards</span>
-          <span
-            :for={{shard, place} <- Enum.with_index(key.shards, 1)}
-            id={"fleet-key-shard-#{key.token_id}-#{place}"}
-          >
-            <%= if shard.name do %>
-              <.agent_picture src={shard.avatar_src} />
-              {shard.name}{shard.status_label && " · " <> shard.status_label}
-            <% else %>
-              Shard {RegentFormat.short_address(shard.wallet)}
-            <% end %>
-          </span>
-        </li>
-      </ol>
-
-      <nav
-        :if={@fleet.pages.previous || @fleet.pages.next}
-        class="fleet-pages"
-        aria-label="More Keys"
-      >
-        <.link :if={@fleet.pages.previous} id="fleet-keys-previous" patch={@fleet.pages.previous}>
-          Previous
-        </.link>
-        <.link :if={@fleet.pages.next} id="fleet-keys-next" patch={@fleet.pages.next}>
-          Next
-        </.link>
-      </nav>
-    </section>
     """
   end
 
@@ -1571,11 +1519,9 @@ defmodule KeyfleetWeb.FleetLive do
     end
   end
 
-  # Any other fleet: its figures, a page of its keys and what's happening in it.
+  # Any other fleet: its figures and what's happening in it. Its Member List
+  # reads its own page of holders.
   defp show_with_keys(socket, fleet_id, fleet, params, place, actor) do
-    key_params = key_params(place, params)
-    page = FleetPage.key_page!(fleet_id, key_params, actor)
-    pages = FleetPage.page_links(fleet_id, page, key_params)
     deployed? = fleet.manager_address != nil
     current? = deployed? and Chain.fresh?(fleet_id)
     progress = if deployed?, do: Chain.progress(fleet_id)
@@ -1596,29 +1542,20 @@ defmodule KeyfleetWeb.FleetLive do
       progress: progress,
       buy: if(deployed?, do: FleetPage.next_sale(fleet_id, progress)),
       rooms: Rooms.list_rooms!(fleet_id, actor: actor),
-      no_keys?: page.results == [] and not FleetPage.paged?(key_params),
-      pages: pages,
-      listed: FleetPage.listed(page, pages),
       layout: Presets.preset(fleet_id),
       chosen_key: if(deployed?, do: FleetPage.chosen_key(progress, params["key"])),
       levels: if(deployed?, do: KeyMap.levels(progress), else: []),
       signed_in?: actor != nil,
       given?: Presets.given?(fleet_id),
       deck: Map.take(fleet, [:id, :deck_hash, :deck_size]),
-      held: FleetPage.held(fleet, actor),
-      drawn: %{}
+      club_claims: fleet.club_claims_address,
+      held: FleetPage.held(fleet, actor)
     })
     |> assign(fleet_params: params, fleet_place: place, pass_note: nil)
     |> follow_agents(fleet_id)
-    |> list_keys(page.results, reset: true)
     |> follow_feed(fleet_id, place, feed)
     |> read_quotes(fleet_id, actor)
   end
-
-  # The Treasury and the Workspace page through their own lists with the same
-  # words in the address, so under them the list of Keys is at its first page.
-  defp key_params(:fleet, params), do: params
-  defp key_params(_place, params), do: Map.take(params, ["fleet_id"])
 
   # The feed is read while the fleet's own views are on show. The Treasury
   # and the Workspace leave it, and coming back to the hall reads it afresh.
@@ -1681,7 +1618,6 @@ defmodule KeyfleetWeb.FleetLive do
   defp show_without_keys(socket, fleet, params, place) do
     socket
     |> SharedFigures.follow(:fleet, [])
-    |> SharedFigures.follow(:rows, [])
     |> assign(
       fleet: fleet,
       fleet_params: params,
@@ -1691,7 +1627,6 @@ defmodule KeyfleetWeb.FleetLive do
       activity: nil,
       activity_refresh: nil
     )
-    |> stream(:fleet_keys, [], reset: true)
     |> stream(:fleet_who, [], reset: true)
     |> stream(:activity, [], reset: true)
   end
@@ -1779,59 +1714,11 @@ defmodule KeyfleetWeb.FleetLive do
     })
   end
 
-  @doc """
-  The key list's page is read again only when a changed key is on it. Its
-  rows change in place, and a key sold onto its end joins it.
-  """
-  def refresh_listed(%{assigns: %{fleet: %{listed: {from, to}}}} = socket, token_ids) do
-    if Enum.any?(token_ids, &(&1 >= from and (is_nil(to) or &1 <= to))),
-      do: reread_listed(socket),
-      else: socket
-  end
-
-  @doc "The key list's page, read again."
-  def reread_listed(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
-    params = socket.assigns.fleet_params
-    actor = ShellLive.human_actor(socket)
-    page = FleetPage.key_page!(fleet_id, params, actor)
-    pages = FleetPage.page_links(fleet_id, page, params)
-
+  @doc "Keys changed hands: the Member List, when it is on show, reads its page again."
+  def refresh_members(%{assigns: %{fleet_place: place, fleet_params: params}} = socket) do
+    if view(place, params) == :members, do: MemberList.refresh("fleet-members")
     socket
-    |> assign(:fleet, %{
-      fleet
-      | pages: pages,
-        listed: FleetPage.listed(page, pages),
-        no_keys?: page.results == [] and not FleetPage.paged?(params)
-    })
-    |> list_keys(page.results, [])
   end
-
-  # The rows' shards come from the readings every page shares
-  # (`Keyfleet.Agents.Here`), heard from before they are read. The page keeps
-  # each row's holder and a fingerprint of the shards it drew, to tell a change
-  # in them from a change in words it doesn't show, and to draw that one row
-  # again with nothing more to read.
-  defp list_keys(%{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket, keys, opts) do
-    socket =
-      SharedFigures.follow(
-        socket,
-        :rows,
-        for(key <- keys, do: Here.labels_key(fleet_id, key.token_id))
-      )
-
-    rows = for key <- keys, do: {key, shards(fleet_id, key.token_id)}
-
-    socket
-    |> update(:fleet, fn fleet ->
-      %{fleet | drawn: Map.new(rows, fn {key, shards} -> drawn(key, shards) end)}
-    end)
-    |> stream(:fleet_keys, for({key, shards} <- rows, do: FleetPage.key_row(key, shards)), opts)
-  end
-
-  defp drawn(key, shards), do: {key.token_id, {key.owner_wallet, :erlang.phash2(shards)}}
-
-  defp shards(fleet_id, token_id),
-    do: SharedFigures.reading(Here.labels_key(fleet_id, token_id)) || []
 
   # "Who's here" and the bar's count of agents, as every page shares them,
   # heard from before they are read.
@@ -1859,42 +1746,14 @@ defmodule KeyfleetWeb.FleetLive do
     |> stream(:fleet_who, agents, reset: true)
   end
 
-  @doc """
-  A shared reading the page hears has changed: "Who's here" is drawn again,
-  and a Key's row when its shards changed, never for words the rows don't
-  show.
-  """
+  @doc "A shared reading the page hears has changed: \"Who's here\" is drawn again."
   def shared_changed(
         %{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket,
         {:fleet_agents, fleet_id}
       ),
       do: show_agents(socket)
 
-  def shared_changed(
-        %{assigns: %{fleet: %{fleet_id: fleet_id, drawn: drawn}}} = socket,
-        {:key_labels, _id} = key
-      ) do
-    case Enum.find(drawn, fn {token_id, _row} -> Here.labels_key(fleet_id, token_id) == key end) do
-      nil ->
-        socket
-
-      {token_id, {owner_wallet, shown}} ->
-        shards = shards(fleet_id, token_id)
-
-        if :erlang.phash2(shards) == shown,
-          do: socket,
-          else: redraw_key(socket, %{token_id: token_id, owner_wallet: owner_wallet}, shards)
-    end
-  end
-
   def shared_changed(socket, _key), do: socket
-
-  # One key's row drawn again in its place, from the shards just read.
-  defp redraw_key(socket, key, shards) do
-    socket
-    |> update(:fleet, &%{&1 | drawn: Enum.into([drawn(key, shards)], &1.drawn)})
-    |> stream_insert(:fleet_keys, FleetPage.key_row(key, shards))
-  end
 
   def tell_map_chosen(
         %{assigns: %{fleet: %{fleet_id: fleet_id, chosen_key: chosen}}} = socket,

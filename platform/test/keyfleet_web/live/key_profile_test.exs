@@ -111,11 +111,11 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
   test "another key chosen while one is open takes its place in the address", %{conn: conn} do
     {:ok, view, _html} = live(conn, @members_path)
-    assert has_element?(view, "#fleet-key-link-12[data-phx-link-state='push']")
+    assert has_element?(view, "#fleet-members-card-12[data-phx-link-state='push']")
 
-    view |> element("#fleet-key-link-12") |> render_click()
+    view |> element("#fleet-members-card-12") |> render_click()
     assert_patch(view, @members_path <> "&key=12")
-    assert has_element?(view, "#fleet-key-link-5[data-phx-link-state='replace']")
+    assert has_element?(view, "#fleet-members-card-5[data-phx-link-state='replace']")
 
     render_hook(view, "select_key", %{"token_id" => 5})
     assert_receive {_ref, {:patch, _topic, %{to: @members_path <> "&key=5", kind: :replace}}}
@@ -128,7 +128,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     conn = signed_in_as(conn, wallet("e"))
     {:ok, view, _html} = live(conn, @members_path)
 
-    view |> element("#fleet-key-link-3") |> render_click()
+    view |> element("#fleet-members-card-3") |> render_click()
     assert_patch(view, @members_path <> "&key=3")
     assert text(view, "#key-profile-title") == "Key 3"
 
@@ -146,7 +146,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   test "a key opened from the list closes by going back", %{conn: conn} do
     {:ok, view, _html} = live(conn, @members_path)
 
-    view |> element("#fleet-key-link-12") |> render_click()
+    view |> element("#fleet-members-card-12") |> render_click()
 
     assert_patch(view, @members_path <> "&key=12")
     assert has_element?(view, "dialog#key-profile[data-close='back']")
