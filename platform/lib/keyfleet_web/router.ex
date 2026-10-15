@@ -255,7 +255,7 @@ defmodule KeyfleetWeb.Router do
     post "/profile/update", AgentProfileController, :update
     get "/profile", AgentProfileController, :show
     get "/account/balances", AgentAccountController, :balances
-    get "/account/credits/history", AgentAccountController, :credits_history
+    post "/account/credits/history", AgentAccountController, :credits_history
     get "/account/points", AgentAccountController, :points
     post "/avatar/start", AgentAvatarController, :start
     post "/avatar/remove", AgentAvatarController, :remove
@@ -329,6 +329,9 @@ defmodule KeyfleetWeb.Router do
     post "/auth/privy/session", PrivySessionController, :create
     get "/auth/session", PrivySessionController, :show
     delete "/auth/privy/session", PrivySessionController, :delete
+
+    # A Key holder's way into the fleet's notebooks, or to one saved output.
+    get "/fleets/:fleet_id/notebooks/open", NotebookOpenController, :open
 
     live_session :product_shell,
       session: {KeyfleetWeb.Live.Session, :render_context, []},
