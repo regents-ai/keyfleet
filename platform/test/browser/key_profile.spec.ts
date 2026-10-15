@@ -39,7 +39,7 @@ test.describe("a key's profile", () => {
     const errors = await signIn(page)
     await openFleet(page, "?view=members")
 
-    const link = page.locator(`#fleet-key-link-${key}`)
+    const link = page.locator(`#fleet-members-card-${key}`)
     await link.click()
     await expect(page).toHaveURL(new RegExp(`[?&]key=${key}$`))
     await expect(profile(page)).toBeVisible()
@@ -56,7 +56,7 @@ test.describe("a key's profile", () => {
     await page.keyboard.press("Escape")
     await expect(profile(page)).toHaveCount(0)
     await expect(page).toHaveURL(withoutKey)
-    await expect(page.locator(`#fleet-key-link-${key}`)).toBeFocused()
+    await expect(page.locator(`#fleet-members-card-${key}`)).toBeFocused()
     expect(errors).toEqual([])
   })
 
@@ -65,7 +65,7 @@ test.describe("a key's profile", () => {
     const errors = await signIn(page)
     await openFleet(page, "?view=members")
 
-    await page.locator(`#fleet-key-link-${key}`).click()
+    await page.locator(`#fleet-members-card-${key}`).click()
     await expect(profile(page)).toBeVisible()
 
     await page.goBack()
