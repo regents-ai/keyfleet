@@ -1841,6 +1841,34 @@
       "body": {
         "days": null
       }
+    },
+    {
+      "command": "dms blocks <fleet> <key>",
+      "description": "Read blocked Key ids for a Key you may currently act as, lowest first; no body, query or pagination. Changes nothing. Preserve exact token ids. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "listDmBlocks",
+      "method": "GET",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "in": "path",
+          "field": "token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        }
+      ]
     }
   ]
 }
