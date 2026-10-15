@@ -20,6 +20,26 @@ defmodule KeyfleetWeb.Components.SendAgent do
   @doc "The instruction a fleet's page offers: the guide, then the fleet named `name`."
   def fleet_instruction(name), do: "#{@lead} Then look at the #{name} fleet."
 
+  @doc "A public treasury review; copying this never authorizes a wallet action."
+  def treasury_instruction(fleet_id) do
+    "Read https://keyfleet.ai/agents.md, then review " <>
+      "https://keyfleet.ai/api/v1/fleets/#{fleet_id}/treasury. " <>
+      "Use read_treasury through native WebMCP if available; otherwise use that public HTTP read. " <>
+      "Report the indexed balances, their timestamp and any catching-up warning. " <>
+      "Separate treasury funds from Key rewards. Name which transport you used. " <>
+      "Do not sign or submit transactions, run money tests, or enable Points earning."
+  end
+
+  @doc "A workspace review using the agent's own access, with a draft before publication."
+  def workspace_instruction(fleet_id) do
+    "Read https://keyfleet.ai/agents.md, then review " <>
+      "https://keyfleet.ai#{Keyfleet.Fleets.path(fleet_id)}/workspace. " <>
+      "Use your existing paired signer for member details; never borrow my browser session. " <>
+      "If access is refused, report the error and stop. Summarize current work and suggest one next step. " <>
+      "Draft a member note with evidence links, and ask me before publishing it or starting a notebook session. " <>
+      "Do not submit wallet transactions, run money tests, or enable Points earning."
+  end
+
   attr :id, :string, required: true, doc: "the button's id; the dialog's parts are named after it"
   attr :instruction, :string, required: true, doc: "what the person pastes to their agent"
   attr :open, :boolean, required: true, doc: "whether the dialog is showing"

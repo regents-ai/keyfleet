@@ -12,6 +12,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   use KeyfleetWeb, :html
 
   alias Keyfleet.Fleets.Rules
+  alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ShellLive
@@ -434,16 +435,16 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </div>
       </dl>
       <Regent.Primitives.disclosure id="workspace-agent-guide" summary="Work here with an agent">
-        <p>
-          Pair your agent with your account, then have it check access to this fleet. It signs its own requests.
-        </p>
-        <ol class="workspace-list">
-          <li>Read the existing work. Choose a task and record the next step.</li>
-          <li>Work in the repository or notebooks. Keep a commit or saved result as evidence.</li>
-          <li>
-            Add a note: what was tried, what happened, the evidence, and what comes next. Link it to the task.
-          </li>
-        </ol>
+        <p>Copy this task into your agent’s chat or terminal.</p>
+        <blockquote id="workspace-agent-instruction" class="send-agent__instruction">
+          {SendAgent.workspace_instruction(@fleet_id)}
+        </blockquote>
+        <Regent.Primitives.copy_button
+          id="workspace-agent-copy"
+          target="workspace-agent-instruction"
+          variant="secondary"
+          aria-label="Copy workspace review task"
+        >Copy task</Regent.Primitives.copy_button>
         <p><a href="/agents.md">Agent instructions</a> · <a href="/docs">Operations and access</a></p>
         <p class="workspace-detail">
           WebMCP exposes workspace reads and edits. The CLI uses the same signed requests. Notebook execution is not yet a dedicated WebMCP tool.

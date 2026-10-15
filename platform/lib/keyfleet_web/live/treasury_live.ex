@@ -11,6 +11,7 @@ defmodule KeyfleetWeb.TreasuryLive do
   alias Keyfleet.Authority
   alias Keyfleet.Fleets.Rules
   alias KeyfleetWeb.Components.AddressLinks
+  alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.ProposalsLive
   alias KeyfleetWeb.ProposalsPage
   alias KeyfleetWeb.WalletPanel
@@ -45,6 +46,22 @@ defmodule KeyfleetWeb.TreasuryLive do
         actor={@actor}
         lease={@lease}
       />
+
+      <Regent.Primitives.disclosure
+        id="treasury-agent-guide"
+        summary="Ask an agent to review this treasury"
+      >
+        <p>Copy this task into your agent’s chat or terminal.</p>
+        <blockquote id="treasury-agent-instruction" class="send-agent__instruction">
+          {SendAgent.treasury_instruction(@page.fleet_id)}
+        </blockquote>
+        <Regent.Primitives.copy_button
+          id="treasury-agent-copy"
+          target="treasury-agent-instruction"
+          variant="secondary"
+          aria-label="Copy treasury review task"
+        >Copy task</Regent.Primitives.copy_button>
+      </Regent.Primitives.disclosure>
 
       <section
         :if={@page.carried != []}
