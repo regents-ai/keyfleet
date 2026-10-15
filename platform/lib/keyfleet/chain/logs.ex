@@ -8,7 +8,9 @@ defmodule Keyfleet.Chain.Logs do
   collection every fleet shares, `Keyfleet.Chain.ShardsLog`, for the shard
   record every fleet shares, `Keyfleet.Chain.VotesLog`, for the fleet's vote
   contract, or `Keyfleet.Chain.MoneyLog`, for its manager, treasury and
-  reward ledger, and carries its fleet and its place on the chain.
+  reward ledger and the REGENT buyer every fleet shares, and carries its fleet
+  and its place on the chain. The buyer is the one the fleet's manager names
+  (`REGENT_BUYER()`), which the reader reads with each pass.
 
   The chain names a Key by its token id in the collection; each record names
   it by its number in the fleet (`Keyfleet.Fleets.Fleet.key_number/2`). A log
@@ -29,15 +31,16 @@ defmodule Keyfleet.Chain.Logs do
   alias Keyfleet.Fleets.Fleet
   alias RegentChain.Abi
 
-  @doc "The contracts whose logs the reader asks for, for `fleet`."
-  def addresses(fleet),
+  @doc "The contracts whose logs the reader asks for, for `fleet` and its REGENT buyer `buyer`."
+  def addresses(fleet, buyer),
     do: [
       fleet.keys_address,
       fleet.manager_address,
       fleet.votes_address,
       fleet.shards_address,
       fleet.treasury_address,
-      fleet.rewards_address
+      fleet.rewards_address,
+      buyer
     ]
 
   @doc "The topic0 of every event the reader asks for."
@@ -49,11 +52,13 @@ defmodule Keyfleet.Chain.Logs do
         VotesLog.topics(),
         ShardsLog.topics(),
         MoneyLog.treasury_topics(),
-        MoneyLog.rewards_topics()
+        MoneyLog.rewards_topics(),
+        MoneyLog.buyer_topics()
       ])
 
   @doc """
-  The records in `logs`, read from blocks `from..to` of `fleet`, in (block,
+  The records in `logs`, read from blocks `from..to` of `fleet`, whose REGENT
+  buyer is `buyer`, in (block,
   log index) order. Otherwise `{:error, reason}`, where the reason names the
   transaction hash and log index of the log refused:
 
@@ -66,8 +71,8 @@ defmodule Keyfleet.Chain.Logs do
     * `{:opening_missing, transaction_hash, log_index}`: a proposal does not
       follow its author key's renewal in the same transaction.
   """
-  def decode(logs, fleet, from, to) do
-    with {:ok, records} <- decode_each(logs, fleet, from..to//1, []),
+  def decode(logs, fleet, buyer, from, to) do
+    with {:ok, records} <- decode_each(logs, {fleet, buyer}, from..to//1, []),
          {:ok, records} <- distinct(records),
          do: records |> Enum.sort_by(&position/1) |> join([])
   end
@@ -105,15 +110,15 @@ defmodule Keyfleet.Chain.Logs do
     end
   end
 
-  defp decode_each([], _fleet, _blocks, records), do: {:ok, Enum.reverse(records)}
+  defp decode_each([], _contracts, _blocks, records), do: {:ok, Enum.reverse(records)}
 
-  defp decode_each([log | logs], fleet, blocks, records) do
-    case decode_one(log, fleet, blocks) do
+  defp decode_each([log | logs], contracts, blocks, records) do
+    case decode_one(log, contracts, blocks) do
       {:ok, record} ->
-        decode_each(logs, fleet, blocks, [record | records])
+        decode_each(logs, contracts, blocks, [record | records])
 
       :other_fleet ->
-        decode_each(logs, fleet, blocks, records)
+        decode_each(logs, contracts, blocks, records)
 
       :error ->
         {:error, {:unreadable_log, as_given(log, "transactionHash"), as_given(log, "logIndex")}}
@@ -133,7 +138,7 @@ defmodule Keyfleet.Chain.Logs do
            "transactionHash" => transaction_hash,
            "logIndex" => log_index
          },
-         fleet,
+         {fleet, buyer},
          blocks
        )
        when is_binary(address) and is_binary(topic0) do
@@ -144,7 +149,8 @@ defmodule Keyfleet.Chain.Logs do
          {:ok, log_index} <- Abi.quantity(log_index),
          {:ok, words} <- words(topics, []),
          {:ok, data} <- Abi.bytes(data),
-         {:ok, {type, fields}} <- read(fleet, String.downcase(address), topic0, words, data) do
+         {:ok, {type, fields}} <-
+           read(fleet, buyer, String.downcase(address), topic0, words, data) do
       {:ok,
        {type,
         Map.merge(fields, %{
@@ -160,11 +166,15 @@ defmodule Keyfleet.Chain.Logs do
     end
   end
 
-  defp decode_one(_log, _fleet, _blocks), do: :error
+  defp decode_one(_log, _contracts, _blocks), do: :error
 
   # The log's record with its Keys named by their numbers in the fleet. A
-  # log of a shared contract about another fleet's Key is `:other_fleet`.
-  defp read(fleet, address, topic0, words, data) do
+  # log of a shared contract about another fleet's Key, or of the buyer about
+  # another fleet's piece, is `:other_fleet`.
+  defp read(fleet, buyer, buyer, topic0, words, data),
+    do: MoneyLog.decode_bought(fleet, String.downcase(topic0), words, data)
+
+  defp read(fleet, _buyer, address, topic0, words, data) do
     with {:ok, {owner, {type, fields}}} <-
            route(fleet, address, String.downcase(topic0), words, data) do
       case local(fields, fleet) do

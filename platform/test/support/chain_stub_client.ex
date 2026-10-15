@@ -19,6 +19,8 @@ defmodule Keyfleet.Chain.StubClient do
   # Every block's hash unless a test names another, and the hash the chain
   # tests give each log.
   @block_hash "0x" <> String.duplicate("b", 64)
+  @regent_buyer "0x" <> String.duplicate("b0", 20)
+  @regent_buyer_call RegentChain.Call.encode("REGENT_BUYER()", [])
 
   @doc """
   Sets the head and the logs the chain answers with. `opts` may name the
@@ -27,7 +29,8 @@ defmodule Keyfleet.Chain.StubClient do
   provider limits the size of an answer; a request for more fails, and
   `:observe`, a function called as each log request arrives, whose results
   `observations/0` returns, and `:calls`, a function answering each contract
-  read `call(to, data, block_hash)`, which by default answers none, and
+  read `call(to, data, block_hash)`, which by default answers only each
+  manager's `REGENT_BUYER()`, with `regent_buyer/0`, and
   `:balances`, the ETH each address holds, by lowercase address (none by
   default), and `:codes`, the chain's answer for the code at each address,
   by lowercase address, `{:ok, code}` or `{:error, reason}` (`{:ok, ""}` by
@@ -53,7 +56,7 @@ defmodule Keyfleet.Chain.StubClient do
       block_hashes: Keyword.get(opts, :block_hashes, %{}),
       max_logs: Keyword.get(opts, :max_logs),
       observe: Keyword.get(opts, :observe, fn -> nil end),
-      calls: Keyword.get(opts, :calls, fn _to, _data, _block_hash -> {:error, :no_answer} end),
+      calls: Keyword.get(opts, :calls, &buyer_only/3),
       balances: Keyword.get(opts, :balances, %{}),
       codes: Keyword.get(opts, :codes, %{}),
       log_requests: [],
@@ -61,6 +64,18 @@ defmodule Keyfleet.Chain.StubClient do
       observations: []
     }
   end
+
+  @doc "The REGENT buyer every fleet's manager names, unless a test's `:calls` says otherwise."
+  def regent_buyer, do: @regent_buyer
+
+  @doc "The answer to `REGENT_BUYER()`: `regent_buyer/0`, as a contract returns it."
+  def regent_buyer_answer,
+    do:
+      {:ok,
+       <<0::96, Base.decode16!(String.slice(@regent_buyer, 2..-1//1), case: :lower)::binary>>}
+
+  defp buyer_only(_manager, @regent_buyer_call, _block_hash), do: regent_buyer_answer()
+  defp buyer_only(_to, _data, _block_hash), do: {:error, :no_answer}
 
   @doc "Every `get_logs/4` request since `put_chain/3`, oldest first."
   def log_requests, do: Enum.reverse(chain().log_requests)

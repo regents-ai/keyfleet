@@ -23,6 +23,11 @@ defmodule Keyfleet.Chain.MoneyLog do
 
   From its reward ledger (`rewards_topics/0`): a key's rewards settled to its
   holder (`:settled`) and credit paid out (`:claimed`).
+
+  From the REGENT buyer every fleet shares (`buyer_topics/0`): a piece of the
+  fleet's USDC from Key sales turned into REGENT for its treasury
+  (`:regent_bought`), the USDC it took, the WETH it went through and the
+  REGENT the treasury got (`decode_bought/4`).
   """
 
   alias RegentChain.Abi
@@ -45,8 +50,15 @@ defmodule Keyfleet.Chain.MoneyLog do
     :threshold,
     :launch_id,
     :token_id,
-    :signed_hash
+    :signed_hash,
+    :usdc_in,
+    :weth_mid,
+    :regent_out
   ]
+
+  # The buyer's fields that name the fleet a piece was for, which pick the
+  # fleet and are not kept.
+  @fleet_named [:payer, :recipient]
 
   # Each event: its kind, its indexed fields after topic0 and its data
   # fields, as `{field, type}`.
@@ -90,6 +102,11 @@ defmodule Keyfleet.Chain.MoneyLog do
          [amount: {:uint, 256}]},
       "Claimed(address,address,address,uint256)" =>
         {:claimed, [asset: :address, account: :address, by: :address], [amount: {:uint, 256}]}
+    },
+    buyer: %{
+      "RegentBought(address,address,uint256,uint256,uint256)" =>
+        {:regent_bought, [payer: :address, recipient: :address],
+         [usdc_in: {:uint, 256}, weth_mid: {:uint, 256}, regent_out: {:uint, 256}]}
     }
   }
 
@@ -108,7 +125,7 @@ defmodule Keyfleet.Chain.MoneyLog do
         {_contract, events} <- @events,
         {_sig, {kind, indexed, data}} <- events,
         into: %{},
-        do: {kind, Keyword.keys(indexed ++ data)}
+        do: {kind, Keyword.keys(indexed ++ data) -- @fleet_named}
       )
 
   @doc "Every field any kind of record carries."
@@ -123,12 +140,37 @@ defmodule Keyfleet.Chain.MoneyLog do
   @doc "The topic0 of each event read from the reward ledger."
   def rewards_topics, do: Map.keys(@by_topic.rewards)
 
+  @doc "The topic0 of each event read from the REGENT buyer."
+  def buyer_topics, do: Map.keys(@by_topic.buyer)
+
+  @doc """
+  A log of the REGENT buyer, its indexed topics after topic0, as 32-byte
+  words, and its data, as one record of `fleet`: a piece its manager paid for,
+  with its treasury getting the REGENT. `:other_fleet` for another fleet's
+  piece, and `:error` for any other log, a malformed one, or a piece of this
+  fleet's manager whose REGENT went anywhere but its treasury.
+  """
+  def decode_bought(fleet, topic0, topics, data) do
+    with {:ok, {:treasury_event, fields}} <- read_log(:buyer, topic0, topics, data) do
+      %{manager_address: manager, treasury_address: treasury} = fleet
+
+      case Map.split(fields, @fleet_named) do
+        {%{payer: ^manager, recipient: ^treasury}, fields} -> {:ok, {:treasury_event, fields}}
+        {%{payer: ^manager}, _fields} -> :error
+        {_another_fleet, _fields} -> :other_fleet
+      end
+    end
+  end
+
   @doc """
   A log of `contract` (`:fleet`, `:treasury` or `:rewards`), its indexed
   topics after topic0, as 32-byte words, and its data, as one record;
   `:error` for any other log or a malformed one.
   """
-  def decode(contract, topic0, topics, data) do
+  def decode(contract, topic0, topics, data) when contract in [:fleet, :treasury, :rewards],
+    do: read_log(contract, topic0, topics, data)
+
+  defp read_log(contract, topic0, topics, data) do
     with {:ok, {kind, indexed, data_fields}} <- Map.fetch(@by_topic[contract], topic0),
          true <- length(topics) == length(indexed),
          {:ok, from_topics} <- words(topics, Keyword.values(indexed)),

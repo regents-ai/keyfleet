@@ -10,8 +10,12 @@ defmodule Keyfleet.Chain.TreasuryReader do
   never read or shown. Every figure of a reading comes from that one block:
   for each of those assets, what the treasury holds and what the reward
   ledger backs, beside the split's rate, when it last ran and when anyone
-  may next run it, the launch token, the Cascade reserve and the protocol
-  share owed to REGENT staking. A reading that fails in any part keeps
+  may next run it, the launch token, the Cascade reserve, the protocol
+  share owed to REGENT staking and the USDC from Key sales waiting to turn
+  into REGENT. Each of those last two keeps the block time it was first read
+  above nothing, carried from the reading kept, until a reading finds it at
+  nothing (`Keyfleet.Treasury.OverdueCheck` alerts on both). A reading that
+  fails in any part keeps
   nothing and is tried again at the next one. A reading of a later block
   than the one kept replaces it and is announced as `{:balances_changed,
   fleet_id}` on `Keyfleet.Proposals.topic/1`.
@@ -41,6 +45,7 @@ defmodule Keyfleet.Chain.TreasuryReader do
   @launch_token Call.encode("launchToken()", [])
   @cascade_reserve Call.encode("cascadeReserve()", [])
   @protocol_share_owed Call.encode("protocolShareOwed()", [])
+  @pending_conversion Call.encode("pendingConversion()", [])
   @decimals Call.encode("decimals()", [])
   @symbol Call.encode("symbol()", [])
   @system %System{}
@@ -66,6 +71,8 @@ defmodule Keyfleet.Chain.TreasuryReader do
          {:ok, [launch_token]} <- at.(treasury, {@launch_token, [:address]}),
          {:ok, [reserve]} <- at.(fleet.manager_address, {@cascade_reserve, [{:uint, 256}]}),
          {:ok, [owed]} <- at.(fleet.manager_address, {@protocol_share_owed, [{:uint, 256}]}),
+         {:ok, [waiting]} <- at.(fleet.manager_address, {@pending_conversion, [{:uint, 256}]}),
+         kept = Treasury.get_reading!(fleet.id),
          {:ok, reading} <-
            Treasury.record_reading(
              %{
@@ -79,7 +86,12 @@ defmodule Keyfleet.Chain.TreasuryReader do
                last_run_at: time(last_run_at),
                next_run_at: time(next_run_at),
                launch_token: if(launch_token != Treasury.native(), do: launch_token),
-               assets: balances
+               assets: balances,
+               conversion_waiting: Decimal.new(waiting),
+               protocol_share_owed_since:
+                 since(owed, kept && kept.protocol_share_owed_since, head),
+               conversion_waiting_since:
+                 since(waiting, kept && kept.conversion_waiting_since, head)
              },
              actor: @system
            ) do
@@ -87,6 +99,12 @@ defmodule Keyfleet.Chain.TreasuryReader do
       {:ok, reading}
     end
   end
+
+  # An amount above nothing has been there since the kept reading says, or
+  # since this block when that reading had none of it, or there is none.
+  defp since(0, _kept_since, _head), do: nil
+  defp since(_amount, %DateTime{} = kept_since, _head), do: kept_since
+  defp since(_amount, nil, head), do: head.timestamp
 
   # The contracts say zero for a time that has not come about yet.
   defp time(0), do: nil

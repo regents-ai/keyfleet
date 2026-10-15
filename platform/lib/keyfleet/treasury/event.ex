@@ -5,8 +5,9 @@ defmodule Keyfleet.Treasury.Event do
   to its treasury or sending the protocol share; the treasury paying,
   advancing, getting an advance back, running the daily split and splitting
   each bound asset, changing the split rate, admitting OUSD, binding the
-  launch token or approving or revoking a hash it signs; and the reward
-  ledger settling a key's rewards to its holder or paying out credit. Only
+  launch token or approving or revoking a hash it signs; the reward ledger
+  settling a key's rewards to its holder or paying out credit; and the REGENT
+  buyer every fleet shares turning a piece of its USDC into REGENT. Only
   the chain reader writes it, and nothing ever changes it.
 
   Each kind carries exactly its own fields and leaves the rest empty.
@@ -33,7 +34,10 @@ defmodule Keyfleet.Treasury.Event do
     :advance_id,
     :outstanding,
     :threshold,
-    :launch_id
+    :launch_id,
+    :usdc_in,
+    :weth_mid,
+    :regent_out
   ]
   @hashes [:purpose_hash, :signed_hash]
 

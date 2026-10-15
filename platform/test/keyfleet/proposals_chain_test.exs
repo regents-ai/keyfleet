@@ -62,6 +62,7 @@ defmodule Keyfleet.ProposalsChainTest do
   @signature_revoked "0x3777c7cd3a982e67c2f22eb607a5ac633d7463082b7819be343158ac9859bfe1"
   @settled "0xbfed4c9aef0cc82058a0d9ecf93fff780a20d63bb650b7fcde95bf639097b402"
   @claimed "0x913c992353dc81b7a8ba31496c484e9b6306bd2f6c509a649a38fdf5e1c953b2"
+  @regent_bought "0x8b4785a0113ae976ccc15001ce0df54d471ffaff1c37deea58d2d3ebc07048aa"
 
   @record_tables ~w(proposal_cancellations proposal_executions proposal_votes proposals
                     treasury_events edits_restrictions key_presences)
@@ -113,7 +114,17 @@ defmodule Keyfleet.ProposalsChainTest do
       assert Scanner.step(fleet, StubClient) == :ok
 
       assert [{addresses, topics, @deployed, to}] = StubClient.log_requests()
-      assert addresses == [@keys, @contract, @votes, @shards, @treasury, @rewards]
+
+      assert addresses == [
+               @keys,
+               @contract,
+               @votes,
+               @shards,
+               @treasury,
+               @rewards,
+               StubClient.regent_buyer()
+             ]
+
       assert to == @deployed + 10
 
       assert Enum.sort(topics) ==
@@ -146,7 +157,8 @@ defmodule Keyfleet.ProposalsChainTest do
                  @signature_approved,
                  @signature_revoked,
                  @settled,
-                 @claimed
+                 @claimed,
+                 @regent_bought
                ])
 
       first = Proposals.get_proposal!(@fleet, 1)
@@ -930,7 +942,8 @@ defmodule Keyfleet.ProposalsChainTest do
       claimed = claimed("a", "b", "c", @deployed + 4, 2, 10)
       valid = [renewal, created, vote, cancelled, executed, edits, cleared, mint, paid, claimed]
 
-      assert {:ok, records} = Logs.decode(valid, fleet, @deployed, @deployed + 10)
+      assert {:ok, records} =
+               Logs.decode(valid, fleet, StubClient.regent_buyer(), @deployed, @deployed + 10)
 
       assert Enum.map(records, &elem(&1, 0)) ==
                ~w(presence proposal ballot cancellation execution edits_restriction presence
@@ -1016,6 +1029,7 @@ defmodule Keyfleet.ProposalsChainTest do
         assert Logs.decode(
                  List.replace_at(valid, index, broken),
                  fleet,
+                 StubClient.regent_buyer(),
                  @deployed,
                  @deployed + 10
                ) ==
