@@ -53,6 +53,11 @@ defmodule KeyfleetWeb.Refusal do
        "It has no rooms, workspace, proposals or Keys until it opens. GET /api/v1/fleets says when it has."},
     "treasury_unavailable" =>
       {"The treasury figures cannot be read right now.", "Try again in a moment."},
+    "proposals_unavailable" =>
+      {"The proposal list cannot be read right now.", "Try again in a moment."},
+    "invalid_proposal_cursor" =>
+      {"The proposal list takes only an optional before cursor.",
+       "Omit it for the newest proposals, or pass next_before from the previous page unchanged."},
     "directory_unavailable" =>
       {"The fleet directory can't be read right now.", "Try again in a moment."},
     "key_not_found" =>

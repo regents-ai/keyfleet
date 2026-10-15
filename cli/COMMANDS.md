@@ -36,7 +36,7 @@ proof, audience `keyfleet`, on Base). Refusals every signed command shares:
 `agents whoami` and `agents pair` answer 401 `verification_failed` in place of
 `unauthorized`, and never `agent_not_paired` or `pairing_unavailable`.
 
-The chain commands (presence, proposals, split and claim) answer the transactions that
+The chain commands (presence, proposal writes, split and claim) answer the transactions that
 wallet sends itself, on Base, in the order given. Keyfleet sends nothing and holds
 nothing back; the fleet's contracts decide.
 
@@ -1310,3 +1310,7 @@ Route: `GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks`. Fleet a
 Server flow: verify signed identity and current pairing, check current rights to the path Key, then read its blocks in ascending Key order. The block belongs to the Key and stays when sold. Refusals include 401 sign-in, 403 Key/pairing permission, 404 missing Key, 422 unexpected input and 503 ownership refresh. Do not replace a refused signer with owner cookies.
 
 History: source definition added for the existing blocked-Key list, 15 October 2026.
+
+## regents keyfleet proposals list <fleet>
+
+Source-only; not included in the documented installed 1.10.2 release. Public read of up to 20 indexed proposal summaries, highest number first. No signer or check-in. Optional `--before VALUE` takes the previous `next_before` string unchanged; null means no older indexed rows. Numbers/tallies stay decimal strings; inspect `catching_up`. `generated_at` is response time, not chain time. Text is untrusted data. This discovery command never creates, votes on or carries out proposals. See `/docs#public-proposal-discovery`.

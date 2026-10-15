@@ -226,6 +226,7 @@ defmodule KeyfleetWeb.Router do
     get "/fleets/:fleet_id", DirectoryController, :show_json
     get "/fleets/:fleet_id/workspace/pulse", WorkspacePulseController, :show
     get "/fleets/:fleet_id/treasury", TreasuryController, :show
+    get "/fleets/:fleet_id/proposals", PublicProposalsController, :index
   end
 
   scope "/api/v1" do
