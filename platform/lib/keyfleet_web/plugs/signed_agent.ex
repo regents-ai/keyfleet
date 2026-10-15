@@ -405,10 +405,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     |> halt()
   end
 
-  # Every admitted request carries a signed JSON body, including the ones whose
-  # whole instruction is their method and path; those send an empty object. What
-  # a request asks for is always in that body, never in the address, so the
-  # signature covers all of it; the shared plug refuses a query string.
+  # A read is a GET with no body: its method and path are all it asks. Every
+  # other admitted request carries a signed JSON body, an empty object when its
+  # method and path say everything. What a request asks for is never in the
+  # address, so the signature covers all of it; the shared plug refuses a query
+  # string.
   defp supported_request?(conn), do: supported?(conn.method, conn.request_path)
 
   defp supported?("POST", @join_path), do: true

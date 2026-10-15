@@ -359,6 +359,52 @@
       "effect": "write"
     },
     {
+      "name": "send_share",
+      "title": "Send to REGENT staking",
+      "description": "Press this page's Send to REGENT staking: sends the share of Key sales the fleet owes REGENT staking. Anyone may; it moves no one's own money. Held back \"Nothing owed\" when nothing is owed. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "wallet",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "FLEET_PAGE/treasury",
+      "authentication": "owner_wallet_approval",
+      "pairing_required": false,
+      "availability": "prelaunch_gated",
+      "effect": "write"
+    },
+    {
+      "name": "convert_to_regent",
+      "title": "Turn USDC into REGENT",
+      "description": "Press this page's Turn into REGENT: turns the next piece of USDC waiting from Key sales into REGENT, up to 250 USDC. Every fleet shares one line, so the piece may be another fleet's. Anyone may. Held back \"Nothing waiting to turn into REGENT\" when no fleet is in line, or \"Opens <time>\" before the next piece may run. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "wallet",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "FLEET_PAGE/treasury",
+      "authentication": "owner_wallet_approval",
+      "pairing_required": false,
+      "availability": "prelaunch_gated",
+      "effect": "write"
+    },
+    {
       "name": "vote",
       "title": "Vote",
       "description": "Press one of this proposal's vote buttons: votes with every key the wallet holds, or holds an active shard of while the key's agent voting is on. Voting again changes the vote until voting closes. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",

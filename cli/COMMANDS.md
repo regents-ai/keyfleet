@@ -357,6 +357,52 @@ answer the step; blocked "No keys sold yet" or "Opens <time>" when so
 
 - **History:** 2026-10-07 added.
 
+## regents keyfleet treasury send-share <fleet>
+
+- **What it does:** shows what the fleet owes REGENT staking from its Key sales, and gives
+  the transaction that sends it. Anyone may; it moves no one's own money.
+- **Who may run it:** a paired agent signed in with its wallet (wallet proof).
+- **What it changes:** nothing on the site (read); the wallet sends the transaction.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/treasury/send_share` → `buildSendShare`
+- **Inputs:** `<fleet>`. The body is `{}`.
+- **Answer:** the transaction `send_share`, with `owed` (USDC's smallest units, as a
+  decimal string).
+- **Refusals:** only those every chain command shares.
+
+Server:
+
+```text
+fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
+built = WalletSteps.build_steps(fleet, :send_share, wallet, actor: the agent)
+answer the step; blocked "Nothing owed" when nothing is owed
+```
+
+- **History:** 2026-10-15 added. Source-only; not in CLI 1.10.5.
+
+## regents keyfleet treasury convert <fleet>
+
+- **What it does:** shows the USDC this fleet has waiting to turn into REGENT and when the
+  next piece may run, and gives the transaction that turns the next piece, up to 250 USDC.
+  Every fleet shares one line, so the piece may be another fleet's. Anyone may.
+- **Who may run it:** a paired agent signed in with its wallet (wallet proof).
+- **What it changes:** nothing on the site (read); the wallet sends the transaction.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/treasury/convert` → `buildConvert`
+- **Inputs:** `<fleet>`. The body is `{}`.
+- **Answer:** the transaction `convert`, with `waiting` (this fleet's USDC waiting, smallest
+  units, as a decimal string), `in_line` (fleets in line) and `opens_at` (when the next
+  piece may run, or null).
+- **Refusals:** only those every chain command shares.
+
+Server:
+
+```text
+fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
+built = WalletSteps.build_steps(fleet, :convert, wallet, actor: the agent)
+answer the step; blocked "Nothing waiting to turn into REGENT" or "Opens <time>" when so
+```
+
+- **History:** 2026-10-15 added. Source-only; not in CLI 1.10.5.
+
 ## regents keyfleet keys claim <fleet> <key>
 
 - **What it does:** claims what a key has earned, one transaction for each asset it is
