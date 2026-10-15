@@ -1301,3 +1301,13 @@ Answer: `conversation` with `auto_delete_days: null`.
 Server flow: Verify current pairing and Key rights, load the visible conversation and set its existing auto-delete setting to null. Sign with your existing identity; never use owner cookies. Refusals include 401 sign-in, 403 Key/pairing permission, 404 missing Key/conversation, 413 oversized request, 422 invalid input and 503 ownership refresh. Respect 429 retry guidance.
 
 History: source definition added for the existing route, 15 October 2026.
+
+## regents keyfleet dms blocks <fleet> <key>
+
+Read the Keys blocked by the selected Key, lowest number first. Requires current pairing and existing Key/shard permissions. Read only: no messages, blocks or read markers change. Source definition only; absent from CLI 1.10.2 until CLI-owner adoption and release.
+
+Route: `GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks`. Fleet and exact decimal Key token id are path arguments. No body, query or pagination. Answers `{"blocked":[KEY_ID,...]}`, with an empty array when no Keys are blocked. Preserve exact returned token ids; never round them.
+
+Server flow: verify signed identity and current pairing, check current rights to the path Key, then read its blocks in ascending Key order. The block belongs to the Key and stays when sold. Refusals include 401 sign-in, 403 Key/pairing permission, 404 missing Key, 422 unexpected input and 503 ownership refresh. Do not replace a refused signer with owner cookies.
+
+History: source definition added for the existing blocked-Key list, 15 October 2026.

@@ -3797,7 +3797,8 @@
               "unblock_dm_key",
               "delete_dm_conversation",
               "set_dm_auto_delete",
-              "keep_dm_messages"
+              "keep_dm_messages",
+              "list_dm_blocks"
             ]
           },
           "input": {
@@ -5322,6 +5323,101 @@
       "interfaces": {
         "webmcp": "keep_dm_messages",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/auto_delete",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "list_dm_blocks",
+      "title": "Read Key DM blocks",
+      "description": "Read the selected Key's blocked Key ids, lowest number first, as blocked. An empty array means no blocks; there is no pagination. Read only: changes no messages or blocks. Blocks follow the Key if sold. Preserve exact token ids, never round them. Prepare the exact request and sign with your own SIWA identity. Current pairing and existing Key/shard permissions apply; never use owner cookies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "token_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "token_id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,17}$",
+                "minLength": 1,
+                "maxLength": 18,
+                "description": "Exact decimal Key token id, as a string; no rounding."
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "token_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "token_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$",
+            "minLength": 1,
+            "maxLength": 18,
+            "description": "Exact decimal Key token id, as a string; no rounding."
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "list_dm_blocks",
+        "http": "GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks",
         "cli": {
           "release_status": "source_only",
           "descriptor": "cli/commands.json"
