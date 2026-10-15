@@ -220,7 +220,8 @@ config :keyfleet, Oban,
 # A person is checked again at most every `access_ttl_ms`; a key changing
 # hands ends their access at once. An "Open notebooks" link works once, for
 # `handoff_ttl_seconds`, and the notebook sign-in it sets lasts
-# `session_max_age` seconds.
+# `session_max_age` seconds. Keyfleet keeps its own copy of each saved page
+# it hands out an address for, up to `saved_page_max_bytes`.
 config :keyfleet, :notebooks,
   issuer: "https://keyfleet.ai",
   host_suffix: "notebooks.keyfleet.ai",
@@ -232,6 +233,7 @@ config :keyfleet, :notebooks,
   handoff_ttl_seconds: 60,
   session_max_age: 12 * 60 * 60,
   max_request_bytes: 32 * 1024 * 1024,
+  saved_page_max_bytes: 16 * 1024 * 1024,
   hub_timeout_ms: 30_000,
   # The Fly runner allows 120 seconds to boot, plus creation and notebook setup.
   session_start_timeout_ms: 180_000

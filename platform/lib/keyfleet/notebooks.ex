@@ -33,6 +33,17 @@ defmodule Keyfleet.Notebooks do
     end
 
     resource Keyfleet.Notebooks.Handoff
+
+    resource Keyfleet.Notebooks.SavedOutput do
+      define :keep_saved_output,
+        action: :keep,
+        args: [:fleet_id, :notebook_id, :version_id, :saved_at, :page]
+
+      define :saved_output,
+        action: :at,
+        args: [:fleet_id, :notebook_id, :version_id, :saved_at],
+        not_found_error?: false
+    end
   end
 
   @email_domain "identity.keyfleet.invalid"
@@ -79,29 +90,52 @@ defmodule Keyfleet.Notebooks do
     |> URI.to_string()
   end
 
-  # The hub's own id shapes (marimohub f103eb2, packages/core/src/ids.ts).
+  # The hub's own id shapes (marimohub f103eb2, packages/core/src/ids.ts), and
+  # when a saved page was made, in milliseconds since 1970.
   @notebook_id ~r/\Anb-[0-9a-z]{16}\z/
   @version_id ~r/\Aver_[0-9A-Z]{26}\z/
+  @saved_at ~r/\A[1-9][0-9]{0,15}\z/
 
   @doc """
-  A saved notebook output's address: one notebook version's saved page on the
-  fleet's notebook host, `https://<fleet host>/results/<notebook id>/<version id>`.
-  Each saved run is a new version, so a new run has a new address and an old
-  address keeps showing what it showed. Only the fleet's members open it.
+  A saved notebook output's address: one saved page of a notebook version, on
+  the fleet's notebook host,
+  `https://<fleet host>/results/<notebook id>/<version id>/<saved at>`, where
+  `saved at` is when the hub made that page, in milliseconds since 1970. A hub
+  makes a new page for a version each time that version's code runs again, so
+  the time names exactly one page. The address shows Keyfleet's own copy of
+  that page (`Keyfleet.Notebooks.SavedOutput`) for good, whatever the hub
+  keeps. Only the fleet's members open it.
   """
-  def result_url(fleet_id, notebook_id, version_id),
-    do: url(fleet_id, result_path(notebook_id, version_id))
+  def result_url(fleet_id, notebook_id, version_id, saved_at),
+    do: url(fleet_id, result_path(notebook_id, version_id, saved_at))
 
   @doc "The path of a saved output on its fleet's notebook host."
-  def result_path(notebook_id, version_id), do: "/results/#{notebook_id}/#{version_id}"
+  def result_path(notebook_id, version_id, saved_at),
+    do: "/results/#{notebook_id}/#{version_id}/#{saved_at}"
 
-  @doc "The notebook and version a saved output's path names, as `{:ok, {notebook_id, version_id}}`, or `:error`."
+  @doc """
+  The saved output a path names, as `{:ok, {notebook_id, version_id, saved_at}}`,
+  or `:error`. Only the address `result_path/3` spells is one.
+  """
   def result(path) do
-    with ["", "results", notebook_id, version_id] <- String.split(path, "/"),
-         true <- Regex.match?(@notebook_id, notebook_id) and Regex.match?(@version_id, version_id) do
-      {:ok, {notebook_id, version_id}}
+    with ["", "results", notebook_id, version_id, saved_at] <- String.split(path, "/"),
+         true <-
+           Regex.match?(@notebook_id, notebook_id) and Regex.match?(@version_id, version_id) and
+             Regex.match?(@saved_at, saved_at) do
+      {:ok, {notebook_id, version_id, String.to_integer(saved_at)}}
     else
       _ -> :error
+    end
+  end
+
+  @doc """
+  When a hub made a saved page, from its `X-Marimohub-Captured-At` time, as
+  `{:ok, milliseconds since 1970}`, or `:error`.
+  """
+  def saved_at(captured_at) do
+    case DateTime.from_iso8601(captured_at) do
+      {:ok, at, _offset} -> {:ok, DateTime.to_unix(at, :millisecond)}
+      {:error, _reason} -> :error
     end
   end
 

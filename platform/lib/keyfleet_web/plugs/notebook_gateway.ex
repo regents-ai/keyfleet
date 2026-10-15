@@ -21,10 +21,13 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       (`from_elsewhere?/2`). The hub's own check of this reads headers that
       never reach it.
 
-  A saved output, `/results/<notebook id>/<version id>`
-  (`Keyfleet.Notebooks.result_url/3`), is that notebook version's saved page
-  in the hub. Someone without a notebook sign-in who opens one is sent to
-  Keyfleet to get one (`open_url/2`), and comes back to it.
+  A saved output, `/results/<notebook id>/<version id>/<saved at>`
+  (`Keyfleet.Notebooks.result_url/4`), is one saved notebook page. When the
+  hub hands back a saved page, this site keeps its own copy
+  (`Keyfleet.Notebooks.SavedOutput`) and only then names the page's address in
+  a `Link` header; the address shows that copy for good, whatever the hub
+  keeps. Someone without a notebook sign-in who opens one is sent to Keyfleet
+  to get one (`open_url/2`), and comes back to it.
 
   Each one's key ownership is read at most every `access_ttl_ms`
   (`Keyfleet.AccessCache`); the first time in that span, they are
@@ -46,7 +49,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   import Plug.Conn
 
   alias Keyfleet.{AccessCache, Notebooks}
-  alias Keyfleet.Notebooks.{HubClient, Pass}
+  alias Keyfleet.Notebooks.{HubClient, Pass, SavedOutput}
   alias KeyfleetWeb.{NotebookSocket, Refusal}
   alias KeyfleetWeb.Plugs.SignedAgent
 
@@ -392,6 +395,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   ## Forwarding
 
+  defp forward(%Plug.Conn{request_path: "/results/" <> _ = path} = conn, fleet_id, _subject),
+    do: send_saved_output(conn, fleet_id, path)
+
   defp forward(conn, fleet_id, subject) do
     {:ok, address} = Notebooks.hub_address(fleet_id)
     headers = upstream_headers(conn, fleet_id, subject)
@@ -401,11 +407,19 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       else: forward_http(conn, address, fleet_id, headers)
   end
 
+  # A saved page is asked for unencoded, so the copy kept of it is the page.
   defp upstream_headers(conn, fleet_id, subject) do
     allowed =
-      if String.starts_with?(conn.request_path, ["/proxy/", "/surface-proxy/"]),
-        do: @kept_request ++ @runtime_request,
-        else: @kept_request
+      cond do
+        String.starts_with?(conn.request_path, ["/proxy/", "/surface-proxy/"]) ->
+          @kept_request ++ @runtime_request
+
+        saved_page_notebook(conn.path_info) != :error ->
+          @kept_request -- ["accept-encoding"]
+
+        true ->
+          @kept_request
+      end
 
     kept = Enum.filter(conn.req_headers, fn {name, _value} -> name in allowed end)
     [{"x-keyfleet-assertion", Pass.mint(fleet_id, subject)} | kept]
@@ -414,17 +428,14 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   defp forward_http(conn, address, fleet_id, headers) do
     {body, conn} = request_body(conn)
 
-    case {body, upstream_target(conn, fleet_id)} do
-      {:too_large, _target} ->
+    case body do
+      :too_large ->
         Refusal.json(conn, 413, "request_too_large")
 
-      {_body, :error} ->
-        Refusal.json(conn, 502, "notebooks_unavailable")
-
-      {body, {:ok, target}} ->
+      body ->
         Req.request(
           method: conn.method,
-          url: address <> target,
+          url: address <> target(conn),
           headers: headers,
           body: body,
           into: :self,
@@ -458,63 +469,127 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  # A saved output is one version's saved page in the hub.
-  defp upstream_target(%Plug.Conn{request_path: "/results/" <> _ = path}, fleet_id) do
-    {:ok, {notebook_id, version_id}} = Notebooks.result(path)
-
-    case Notebooks.project_id(fleet_id) do
-      {:ok, project_id} when is_binary(project_id) ->
-        {:ok,
-         "/api/v1/projects/#{project_id}/notebooks/#{notebook_id}/versions/#{version_id}/html"}
-
-      _no_project ->
-        :error
-    end
-  end
-
-  defp upstream_target(conn, _fleet_id), do: {:ok, target(conn)}
+  defp stream_back({:error, _error}, conn, _fleet_id),
+    do: Refusal.json(conn, 502, "notebooks_unavailable")
 
   defp stream_back({:ok, %Req.Response{} = response}, conn, fleet_id) do
     conn =
-      response.headers
-      |> Enum.reduce(conn, fn {name, values}, conn ->
+      Enum.reduce(response.headers, conn, fn {name, values}, conn ->
         if name in @kept_response,
           do: Enum.reduce(values, conn, &prepend_resp_headers(&2, [{name, &1}])),
           else: conn
       end)
-      |> put_result_link(response, fleet_id)
 
-    if conn.method == "HEAD" or response.status in [204, 304] do
-      Req.cancel_async_response(response)
-      send_resp(conn, response.status, "")
-    else
-      conn = send_chunked(conn, response.status)
-      Enum.reduce_while(response.body, conn, &send_part(response, &2, &1))
+    cond do
+      conn.method == "HEAD" or response.status in [204, 304] ->
+        Req.cancel_async_response(response)
+        send_resp(conn, response.status, "")
+
+      address = saved_page_address(conn, response) ->
+        keep_page(response, conn, fleet_id, address)
+
+      true ->
+        conn = send_chunked(conn, response.status)
+        Enum.reduce_while(response.body, conn, &send_part(response, &2, &1))
     end
   end
 
-  defp stream_back({:error, _error}, conn, _fleet_id),
-    do: Refusal.json(conn, 502, "notebooks_unavailable")
-
-  # A notebook's saved page names the address it keeps under, so whoever read
-  # it can link the result from the workspace.
-  defp put_result_link(conn, %Req.Response{status: 200} = response, fleet_id) do
-    with {:ok, notebook_id} <- saved_page_notebook(conn.path_info),
+  # The saved page a notebook's page routes hand back, as `{notebook id,
+  # version id, saved at}`, or nil for any other answer.
+  defp saved_page_address(conn, response) do
+    with 200 <- response.status,
+         {:ok, notebook_id} <- saved_page_notebook(conn.path_info),
+         [] <- Req.Response.get_header(response, "content-encoding"),
          [version_id] <- Req.Response.get_header(response, "x-marimohub-version-id"),
-         {:ok, _result} <- Notebooks.result(Notebooks.result_path(notebook_id, version_id)) do
-      put_resp_header(
-        conn,
-        "link",
-        "<#{Notebooks.result_url(fleet_id, notebook_id, version_id)}>; rel=\"canonical\""
-      )
+         [captured_at] <- Req.Response.get_header(response, "x-marimohub-captured-at"),
+         {:ok, saved_at} <- Notebooks.saved_at(captured_at),
+         {:ok, address} <-
+           Notebooks.result(Notebooks.result_path(notebook_id, version_id, saved_at)) do
+      address
     else
-      _ -> conn
+      _ -> nil
     end
   end
 
-  defp put_result_link(conn, _response, _fleet_id), do: conn
+  # A saved page is read whole, kept, and only then sent with its address, so
+  # an address is never handed out for a page Keyfleet hasn't kept. A page past
+  # `saved_page_max_bytes` goes on streaming as it came, with no address.
+  defp keep_page(response, conn, fleet_id, address) do
+    cap = Notebooks.config()[:saved_page_max_bytes]
 
-  defp saved_page_notebook(["results", notebook_id, _version_id]), do: {:ok, notebook_id}
+    response.body
+    |> Enum.reduce_while({:reading, conn, [], 0}, fn
+      part, {:reading, conn, parts, size} when size + byte_size(part) <= cap ->
+        {:cont, {:reading, conn, [parts | part], size + byte_size(part)}}
+
+      part, {:reading, conn, parts, _size} ->
+        conn = send_chunked(conn, response.status)
+
+        case chunk(conn, [parts | part]) do
+          {:ok, conn} -> {:cont, {:streaming, conn}}
+          {:error, _closed} -> {:halt, {:streaming, conn}}
+        end
+
+      part, {:streaming, conn} ->
+        case send_part(response, conn, part) do
+          {:cont, conn} -> {:cont, {:streaming, conn}}
+          {:halt, conn} -> {:halt, {:streaming, conn}}
+        end
+    end)
+    |> case do
+      {:reading, conn, parts, _size} -> send_kept(conn, fleet_id, address, parts)
+      {:streaming, conn} -> conn
+    end
+  end
+
+  defp send_kept(conn, fleet_id, {notebook_id, version_id, saved_at}, parts) do
+    page = IO.iodata_to_binary(parts)
+
+    case Notebooks.keep_saved_output(fleet_id, notebook_id, version_id, saved_at, page,
+           actor: %Keyfleet.Actors.System{}
+         ) do
+      {:ok, _kept} ->
+        conn
+        |> put_result_link(fleet_id, notebook_id, version_id, saved_at)
+        |> send_resp(200, page)
+
+      {:error, _error} ->
+        send_resp(conn, 200, page)
+    end
+  end
+
+  # A saved output's address shows Keyfleet's copy, whatever the hub keeps now.
+  defp send_saved_output(conn, fleet_id, path) do
+    {:ok, {notebook_id, version_id, saved_at}} = Notebooks.result(path)
+
+    case Notebooks.saved_output(fleet_id, notebook_id, version_id, saved_at,
+           actor: %Keyfleet.Actors.System{}
+         ) do
+      {:ok, %SavedOutput{page: page}} ->
+        conn
+        |> put_resp_content_type("text/html")
+        |> put_resp_header("content-security-policy", "sandbox allow-scripts")
+        |> put_resp_header("x-content-type-options", "nosniff")
+        |> put_result_link(fleet_id, notebook_id, version_id, saved_at)
+        |> send_resp(200, if(conn.method == "HEAD", do: "", else: page))
+
+      {:ok, nil} ->
+        Refusal.json(conn, 404, "notebooks_not_found")
+
+      {:error, _error} ->
+        Refusal.json(conn, 503, "notebooks_unavailable")
+    end
+  end
+
+  # A kept page names its address, so whoever read it can link the result
+  # from the workspace.
+  defp put_result_link(conn, fleet_id, notebook_id, version_id, saved_at) do
+    put_resp_header(
+      conn,
+      "link",
+      "<#{Notebooks.result_url(fleet_id, notebook_id, version_id, saved_at)}>; rel=\"canonical\""
+    )
+  end
 
   defp saved_page_notebook(["api", "v1", "projects", _project, "notebooks", notebook_id, "html"]),
     do: {:ok, notebook_id}
@@ -604,6 +679,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # A hub reads a path the way a browser does: `.` and `..` segments, in any
   # spelling, move up, and a backslash is a slash. None of those reach a hub,
   # so the path compared below is the one the hub routes.
+  # A saved output's address has one spelling, which needs no decoding.
+  defp check_path(method, "/results/" <> _ = path) when method in ["GET", "HEAD"],
+    do: if(Notebooks.result(path) == :error, do: :invalid, else: :ok)
+
   defp check_path(method, path) do
     case decode(path) do
       {:ok, decoded} ->
@@ -636,7 +715,6 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   defp allowed_route?("GET", "/manifest.webmanifest"), do: true
   defp allowed_route?("GET", "/assets/" <> _file), do: true
   defp allowed_route?("GET", "/projects/" <> _page), do: true
-  defp allowed_route?("GET", "/results/" <> _ = path), do: Notebooks.result(path) != :error
   defp allowed_route?("GET", "/proxy/" <> path), do: path != ""
   defp allowed_route?("POST", "/proxy/" <> path), do: path != ""
   defp allowed_route?("GET", "/surface-proxy/" <> path), do: path != ""
