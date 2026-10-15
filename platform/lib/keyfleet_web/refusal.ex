@@ -38,6 +38,9 @@ defmodule KeyfleetWeb.Refusal do
     "invalid_request" =>
       {"The request doesn't fit this operation.",
        "Check the body against the docs, then send it again."},
+    "invalid_cursor" =>
+      {"That history cursor is invalid.",
+       "Send after as the previous page's pagination.next_cursor, unchanged, or omit it for the newest entries."},
 
     # The site before it opens, and the fleets.
     "not_open_yet" =>

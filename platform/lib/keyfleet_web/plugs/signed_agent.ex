@@ -10,6 +10,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @join_path "/api/v1/agent/join/status"
   @update_path "/api/v1/agent/profile/update"
   @profile_path "/api/v1/agent/profile"
+  @credits_history_path "/api/v1/agent/account/credits/history"
   @account_paths ~w(/api/v1/agent/account/balances /api/v1/agent/account/credits/history /api/v1/agent/account/points)
   @shards_path "/api/v1/agent/shards"
   # An agent's picture: a signed start names the upload, whose bytes then go
@@ -290,13 +291,21 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp take_body(%{assigns: %{raw_body: raw}} = conn) do
     with {:ok, params} <- Jason.decode(raw),
-         :ok <- check_body(conn.request_path, params) do
+         :ok <- check_request_body(conn, params) do
       {:ok, %{conn | body_params: params, params: params}}
     else
       :out_of_range -> {:error, %{reason: :out_of_range}}
       _invalid -> {:error, %{reason: :body_does_not_fit}}
     end
   end
+
+  # The published GET remains bodyless (or {}). Only the new POST accepts a
+  # cursor; its controller and the shared Ash action validate that value.
+  defp check_request_body(%{method: "POST", request_path: @credits_history_path}, params)
+       when is_map(params),
+       do: admit(Enum.all?(Map.keys(params), &(&1 == "after")))
+
+  defp check_request_body(conn, params), do: check_body(conn.request_path, params)
 
   defp registry_url(nil), do: {:ok, nil}
   defp registry_url(%{"registryUrl" => "https://" <> _rest = url}), do: {:ok, url}
@@ -354,6 +363,18 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   def deny(conn, %{reason: :out_of_range}), do: answer(conn, 422, "out_of_range")
 
+  def deny(%{method: "POST", request_path: @credits_history_path} = conn, %{
+        reason: :body_does_not_fit
+      }) do
+    body =
+      KeyfleetWeb.Refusal.body(
+        "invalid_request",
+        "Send an empty JSON object or only after, the previous page's pagination.next_cursor."
+      )
+
+    send_refusal(conn, 422, body)
+  end
+
   def deny(conn, %{reason: :body_does_not_fit}) do
     body = KeyfleetWeb.Refusal.body("invalid_request", takes(conn.request_path))
     send_refusal(conn, 422, body)
@@ -402,6 +423,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("GET", @shards_path), do: true
   defp supported?("GET", @profile_path), do: true
   defp supported?("GET", path) when path in @account_paths, do: true
+  defp supported?("POST", @credits_history_path), do: true
 
   defp supported?("GET", path),
     do:

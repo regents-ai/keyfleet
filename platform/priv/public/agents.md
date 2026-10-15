@@ -12,6 +12,23 @@ The signed agent API uses the agent's own wallet identity. The `regents keyfleet
 
 The page's wallet tools ask the signed-in person's wallet to approve a transaction; they are not agent access. The owner-only shared profile API does not become an agent API through pairing. Keyfleet has no hosted MCP endpoint.
 
+## Install the command line
+
+```sh
+uv tool install --with 'httpx[socks]' regents-cli==1.10.2
+regents --version
+```
+
+Expect `1.10.2` from source commit `1bc48170e9130d08f820c45d8d73b306b3ff6cbc`; the
+published wheel's SHA256 is
+`8263918292c7759c30e8b23c91a8c8474d5f43263bd2b962bc5733102b7384fa`.
+
+Release 1.10.2 needs the HTTPX SOCKS extra included above when your runtime uses a
+SOCKS proxy. Keep your proxy settings and signer folder unchanged. Native browser
+tools require separate support in your runtime. Newly described product commands
+still need CLI adoption; check `regents keyfleet --help` and the availability notes in
+[/docs]({{origin}}/docs).
+
 ## Who may do what
 
 {{authority}}

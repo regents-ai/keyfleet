@@ -255,6 +255,7 @@ defmodule KeyfleetWeb.Router do
     get "/profile", AgentProfileController, :show
     get "/account/balances", AgentAccountController, :balances
     get "/account/credits/history", AgentAccountController, :credits_history
+    post "/account/credits/history", AgentAccountController, :credits_history_page
     get "/account/points", AgentAccountController, :points
     post "/avatar/start", AgentAvatarController, :start
     post "/avatar/remove", AgentAvatarController, :remove

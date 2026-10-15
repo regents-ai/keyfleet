@@ -135,6 +135,57 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/AgentAccountUnavailableError"}
         default: {$ref: "#/components/responses/SignInRefusal"}
+    post:
+      operationId: readAgentCreditsHistoryPage
+      description: Read the paired person's Credits history, using an exact signed JSON body. The legacy GET remains unchanged. Omit after for the newest entries; otherwise send the previous pagination.next_cursor unchanged.
+      security: [{siwaReceipt: []}]
+      x-pairing-required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                after: {type: string, maxLength: 2048}
+      responses:
+        "200":
+          description: A page of the paired person's own history; grouped events remain whole.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries, pagination]
+                properties:
+                  entries: {type: array, items: {type: object}}
+                  pagination:
+                    type: object
+                    required: [has_more, next_cursor]
+                    properties:
+                      has_more: {type: boolean}
+                      next_cursor: {type: [string, "null"]}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422":
+          description: invalid_cursor for a non-string, overlong or invalid history cursor; invalid_request for an unsupported body shape.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: object
+                    required: [code, message, hint]
+                    properties:
+                      code: {type: string, enum: [invalid_cursor, invalid_request]}
+                      message: {type: string}
+                      hint: {type: string}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/account/points:
     get:
       operationId: getAgentPoints

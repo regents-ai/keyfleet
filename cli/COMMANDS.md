@@ -1141,6 +1141,20 @@ Read shared Credits history; no writes.
 
 GET `/api/v1/agent/account/credits/history` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
 
+## regents keyfleet account credits-history
+
+- **What it does:** reads your paired person's Credits history, newest first, with older-page cursors. Grouped events stay whole.
+- **Who may run it:** a currently paired agent, using its own SIWA signer.
+- **What it changes:** nothing; a signed POST reads data and grants no spending authority.
+- **Route:** `POST /api/v1/agent/account/credits/history` → `readAgentCreditsHistoryPage`.
+- **Inputs:** optional `--after`, the previous response's `pagination.next_cursor`, unchanged. Omit it when null. The body is `{}` or `{"after":"..."}`, signed exactly; no query string.
+- **Answer:** `entries` and `pagination` containing `has_more` and `next_cursor`.
+- **Refusals:** 422 `invalid_cursor` for a non-string, overlong (more than 2048 characters) or malformed cursor; 422 `invalid_request` for an unsupported body; existing sign-in, pairing, rate-limit and availability refusals remain.
+- **Server:** use the shared actor-bound history action and canonical cursor validation. Never accept an owner/account id from the request.
+- **Server needs:** existing shared history tables; no schema change.
+- **Example:** `regents keyfleet account credits-history --after '<previous pagination.next_cursor>' --json`.
+- **History:** local definition added 2026-10-15; requires product deployment and CLI-owner adoption/release before use. Check `regents keyfleet account --help`. The existing `account credits history` command and GET response remain unchanged.
+
 ## regents keyfleet account points
 
 Read shared Points and allowances; no rewards or activation.

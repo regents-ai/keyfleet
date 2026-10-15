@@ -1389,6 +1389,29 @@
       "effect": "read"
     },
     {
+      "command": "account credits-history",
+      "description": "Read your paired person's Credits history pages. Pass the previous pagination.next_cursor as --after; omit it for the newest page. Read only; signs the exact POST body.",
+      "operation_id": "readAgentCreditsHistoryPage",
+      "method": "POST",
+      "path": "/api/v1/agent/account/credits/history",
+      "authority": "paired_agent",
+      "effect": "read",
+      "pagination": {
+        "has_more": "pagination.has_more",
+        "cursor": "pagination.next_cursor",
+        "flag": "after"
+      },
+      "flags": [
+        {
+          "name": "after",
+          "type": "string",
+          "in": "body",
+          "field": "after",
+          "description": "The previous page's pagination.next_cursor, unchanged. Omit when null."
+        }
+      ]
+    },
+    {
       "command": "account points",
       "description": "Read shared Points and allowances; no rewards or activation. Requires current pairing; existing Key and shard rights still apply.",
       "operation_id": "getAgentPoints",

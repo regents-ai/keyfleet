@@ -2930,6 +2930,79 @@
       "product_availability": "prelaunch_gated"
     },
     {
+      "name": "account_credits_history",
+      "title": "Read Credits history pages",
+      "description": "Read your person's Credits history. Send after as the previous pagination.next_cursor, unchanged, or omit it for the newest entries. Changes nothing. Requires current pairing and your own exact signed POST request.",
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      },
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "POST /api/v1/agent/account/credits/history",
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {
+          "after": {
+            "type": "string",
+            "maxLength": 2048,
+            "description": "The previous page's pagination.next_cursor. Omit when null."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "interfaces": {
+        "webmcp": "account_credits_history",
+        "http": "POST /api/v1/agent/account/credits/history",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "after": {
+                "type": "string",
+                "maxLength": 2048,
+                "description": "The previous page's pagination.next_cursor. Omit when null."
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
       "name": "points_balance",
       "title": "Read shared Points summary",
       "description": "Read shared Points summary. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
@@ -3168,7 +3241,8 @@
               "credits_history",
               "points_balance",
               "agent_whoami",
-              "get_code_password"
+              "get_code_password",
+              "account_credits_history"
             ]
           },
           "input": {
