@@ -122,8 +122,9 @@ defmodule KeyfleetWeb.WorkspacePage do
   # Only these kinds of address are ever made into links.
   @link_schemes ["https://", "ipfs://", "ar://", "git+https://"]
   @room_slug ~r/\A[a-z0-9][a-z0-9-]{0,62}\z/
-  # One saved version of a notebook, after the notebooks' `/results/`.
-  @saved_result ~r/\Anb-[a-z0-9]{16}\/ver_[0-9A-Z]{26}\z/
+  # One saved page of a notebook version, after the notebooks' `/results/`:
+  # notebook id, version id, and when the page was saved in milliseconds since 1970.
+  @saved_result ~r/\Anb-[a-z0-9]{16}\/ver_[0-9A-Z]{26}\/[1-9][0-9]{0,15}\z/
   @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(?:human|agent):0x[0-9a-f]{40}\z/
   @level ~r/\Alevel:([1-9][0-9]{0,8})\z/
 
