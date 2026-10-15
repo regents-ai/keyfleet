@@ -49,6 +49,8 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   # How many of the latest votes carried out the Treasury page lists.
   @carried 5
+  # The most USDC the REGENT buyer turns in one piece (its `PIECE_USDC`).
+  @piece_usdc 250_000_000
 
   @doc """
   The fleet's Treasury page: indexed balances, money history and contract details.
@@ -333,9 +335,21 @@ defmodule KeyfleetWeb.ProposalsPage do
       address: fleet.treasury_address,
       history: Enum.map(shown, &event(&1, fleet, assets)),
       earlier?: earlier?,
-      advances: Enum.map(Treasury.open_advances(fleet.id), &advance(&1, assets))
+      advances: Enum.map(Treasury.open_advances(fleet.id), &advance(&1, assets)),
+      convert_typed: convert_typed(reading)
     }
     |> Map.merge(figures(fleet, reading, assets))
+  end
+
+  # What a press of Turn into REGENT starts with: what is waiting, at most
+  # one piece of 250 USDC, as typed. Typed in by hand until a reading says.
+  defp convert_typed(nil), do: ""
+
+  defp convert_typed(reading) do
+    case Decimal.to_integer(reading.conversion_waiting) do
+      0 -> ""
+      waiting -> waiting |> min(@piece_usdc) |> units(6) |> String.replace(",", "")
+    end
   end
 
   defp figures(_fleet, nil, _assets), do: %{read?: false}
@@ -360,8 +374,8 @@ defmodule KeyfleetWeb.ProposalsPage do
     }
   end
 
-  # One line of the money history: what happened, how much and, for money
-  # paid or advanced, to whom.
+  # One line of the money history: what happened, how much, for money paid
+  # or advanced to whom, and for REGENT bought the USDC it cost.
   defp event(%{kind: :split_allocated} = event, _fleet, assets) do
     shared = Decimal.to_integer(event.per_key) * Decimal.to_integer(event.keys)
 
@@ -369,7 +383,8 @@ defmodule KeyfleetWeb.ProposalsPage do
       id: event.id,
       kind: event.kind,
       amount: amount(shared, event.asset, assets),
-      account: nil
+      account: nil,
+      spent: nil
     }
   end
 
@@ -378,7 +393,17 @@ defmodule KeyfleetWeb.ProposalsPage do
       id: event.id,
       kind: event.kind,
       amount: amount(Decimal.to_integer(event.amount), fleet.usdc_address, assets),
-      account: nil
+      account: nil,
+      spent: nil
+    }
+
+  defp event(%{kind: :regent_bought} = event, fleet, assets),
+    do: %{
+      id: event.id,
+      kind: event.kind,
+      amount: amount(Decimal.to_integer(event.regent_out), fleet.regent_address, assets),
+      account: nil,
+      spent: amount(Decimal.to_integer(event.usdc_in), fleet.usdc_address, assets)
     }
 
   defp event(event, _fleet, assets),
@@ -386,7 +411,8 @@ defmodule KeyfleetWeb.ProposalsPage do
       id: event.id,
       kind: event.kind,
       amount: amount(Decimal.to_integer(event.amount), event.asset, assets),
-      account: if(event.kind in [:paid, :advanced], do: event.account)
+      account: if(event.kind in [:paid, :advanced], do: event.account),
+      spent: nil
     }
 
   # An advance still out, with what is left in whole tokens as a return of

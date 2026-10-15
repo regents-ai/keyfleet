@@ -129,6 +129,7 @@ defmodule Keyfleet.ProposalHelpers do
       block_time: DateTime.utc_now(),
       cascade_reserve: Decimal.new(0),
       protocol_share_owed: Decimal.new(0),
+      conversion_waiting: Decimal.new(0),
       daily_split_bps: 100,
       assets: assets
     }

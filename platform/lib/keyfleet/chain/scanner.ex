@@ -7,13 +7,17 @@ defmodule Keyfleet.Chain.Scanner do
   edits a proposal restricted, and each Key's presence, from its vote
   contract; the shards its Keys' owners issued and ended and whether those
   shards may vote, from the shard record every fleet shares; what its
-  treasury paid, advanced, got back and split, from its treasury; and rewards
-  settled and paid out, from its reward ledger.
+  treasury paid, advanced, got back and split, from its treasury; rewards
+  settled and paid out, from its reward ledger; and its USDC from Key sales
+  turned into REGENT, from the REGENT buyer every fleet shares, the one its
+  manager names at the head the pass reads.
 
-  Each pass reads the head, reads again the last 30 blocks it already
+  Each pass reads the head and the buyer the manager names there, and a pass
+  that cannot read the buyer reads nothing and fails. It then reads again the
+  last 30 blocks it already
   recorded (about a minute of Base), then records what
   happened after them up to the head. Each stretch of blocks is one request
-  for all six contracts, and its records are made in the order the chain made
+  for all seven contracts, and its records are made in the order the chain made
   them. A stretch the node will not answer
   whole, such as one whose logs are more than it sends at once, is asked for
   again in halves, down to single blocks, and each answered piece is recorded
@@ -71,8 +75,11 @@ defmodule Keyfleet.Chain.Scanner do
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
   alias Keyfleet.Treasury
+  alias RegentChain.Abi
+  alias RegentChain.Call
 
   @rescan_blocks 30
+  @regent_buyer Call.encode("REGENT_BUYER()", [])
   @max_range 10_000
   @system %System{}
 
@@ -106,8 +113,10 @@ defmodule Keyfleet.Chain.Scanner do
   defp scan(fleet, cursor, client) do
     result =
       with {:ok, head} <- client.head(),
-           {:ok, cursor} <- reread(fleet, cursor, head, client),
-           {:ok, _cursor} <- read_forward(fleet, cursor, head, client) do
+           {:ok, buyer} <- regent_buyer(fleet, head, client),
+           contracts = {fleet, buyer},
+           {:ok, cursor} <- reread(contracts, cursor, head, client),
+           {:ok, _cursor} <- read_forward(contracts, cursor, head, client) do
         :ok
       else
         {:diverged, block} -> stop(fleet, cursor, block)
@@ -128,13 +137,31 @@ defmodule Keyfleet.Chain.Scanner do
     }
   end
 
+  # The REGENT buyer the fleet's manager names, which never changes.
+  defp regent_buyer(fleet, head, client) do
+    with {:ok, returned} <- client.call(fleet.manager_address, @regent_buyer, head.hash),
+         {:ok, [buyer]} <- Abi.decode(returned, [:address]) do
+      {:ok, buyer}
+    else
+      {:error, reason} -> {:error, {:regent_buyer_unread, reason}}
+      :error -> {:error, {:regent_buyer_unread, :unreadable_answer}}
+    end
+  end
+
   # Each piece is checked against what is recorded before anything new in it
   # is recorded.
-  defp reread(fleet, cursor, head, client) do
+  defp reread({fleet, _buyer} = contracts, cursor, head, client) do
     from = max(fleet.deployed_block, cursor.next_block - @rescan_blocks)
     to = min(cursor.next_block - 1, head.number)
 
-    each_piece(fleet, from, to, client, cursor, &check_and_record(fleet, client, &1, &2, &3, &4))
+    each_piece(
+      contracts,
+      from,
+      to,
+      client,
+      cursor,
+      &check_and_record(fleet, client, &1, &2, &3, &4)
+    )
   end
 
   defp check_and_record(fleet, client, from, to, records, cursor) do
@@ -143,14 +170,21 @@ defmodule Keyfleet.Chain.Scanner do
   end
 
   # Each piece moves the cursor past itself as it is recorded.
-  defp read_forward(fleet, cursor, head, client) do
+  defp read_forward({fleet, _buyer} = contracts, cursor, head, client) do
     from = cursor.next_block
     to = min(head.number, from + @max_range - 1)
 
     if to < from do
       write_piece(fleet, [], cursor, &Chain.advance_cursor(&1, advance(from, head)))
     else
-      each_piece(fleet, from, to, client, cursor, &record_and_move(fleet, head, &1, &2, &3, &4))
+      each_piece(
+        contracts,
+        from,
+        to,
+        client,
+        cursor,
+        &record_and_move(fleet, head, &1, &2, &3, &4)
+      )
     end
   end
 
@@ -162,19 +196,19 @@ defmodule Keyfleet.Chain.Scanner do
   # is asked for again in halves, and each answered piece goes to `handle`
   # before the next is asked for, so a pass holds one answer at most. The
   # first piece that fails ends the reading.
-  defp each_piece(_fleet, from, to, _client, acc, _handle) when to < from, do: {:ok, acc}
+  defp each_piece(_contracts, from, to, _client, acc, _handle) when to < from, do: {:ok, acc}
 
-  defp each_piece(fleet, from, to, client, acc, handle) do
-    case client.get_logs(Logs.addresses(fleet), Logs.topics(), from, to) do
+  defp each_piece({fleet, buyer} = contracts, from, to, client, acc, handle) do
+    case client.get_logs(Logs.addresses(fleet, buyer), Logs.topics(), from, to) do
       {:ok, logs} ->
-        with {:ok, records} <- Logs.decode(logs, fleet, from, to),
+        with {:ok, records} <- Logs.decode(logs, fleet, buyer, from, to),
              do: handle.(from, to, records, acc)
 
       {:error, _reason} when from < to ->
         middle = div(from + to, 2)
 
-        with {:ok, acc} <- each_piece(fleet, from, middle, client, acc, handle),
-             do: each_piece(fleet, middle + 1, to, client, acc, handle)
+        with {:ok, acc} <- each_piece(contracts, from, middle, client, acc, handle),
+             do: each_piece(contracts, middle + 1, to, client, acc, handle)
 
       {:error, reason} ->
         {:error, {:block_unanswered, from, reason}}

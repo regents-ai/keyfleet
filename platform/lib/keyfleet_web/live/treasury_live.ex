@@ -34,7 +34,12 @@ defmodule KeyfleetWeb.TreasuryLive do
   def page(assigns) do
     ~H"""
     <article id="treasury-page" class="proposals-page">
-      <p :if={@page.catching_up?} class="proposals-notice" role="status">
+      <p
+        :if={@page.catching_up?}
+        id="treasury-catching-up"
+        class="proposals-notice"
+        role="status"
+      >
         Treasury figures are catching up. Check the timestamp below before acting.
       </p>
 

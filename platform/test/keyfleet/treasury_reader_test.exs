@@ -29,6 +29,7 @@ defmodule Keyfleet.TreasuryReaderTest do
   @launch_token "0xa28a4d86"
   @cascade_reserve "0xfc4e8964"
   @protocol_share_owed "0xc490b9c7"
+  @pending_conversion "0xff122cea"
   @backed "0x595b7f21"
   @balance_of "0x70a08231"
   @decimals "0x313ce567"
@@ -66,7 +67,7 @@ defmodule Keyfleet.TreasuryReaderTest do
     assert Enum.uniq(for {to, _data, _hash} <- requests, do: to) ==
              [@treasury, @rewards, @regent, @usdc, @contract]
 
-    assert List.last(requests) == {@contract, @protocol_share_owed, @head_hash}
+    assert List.last(requests) == {@contract, @pending_conversion, @head_hash}
     refute Enum.any?(requests, fn {_to, data, _hash} -> data in [@symbol, @decimals] end)
 
     reading = Treasury.get_reading!(@fleet)
@@ -78,6 +79,9 @@ defmodule Keyfleet.TreasuryReaderTest do
     assert reading.launch_token == nil
     assert Decimal.equal?(reading.cascade_reserve, 700)
     assert Decimal.equal?(reading.protocol_share_owed, 800)
+    assert Decimal.equal?(reading.conversion_waiting, 900)
+    assert DateTime.compare(reading.protocol_share_owed_since, head(40).timestamp) == :eq
+    assert DateTime.compare(reading.conversion_waiting_since, head(40).timestamp) == :eq
 
     assert [
              %{asset: @eth, held: 5_000, backed: 1_000},
@@ -98,7 +102,7 @@ defmodule Keyfleet.TreasuryReaderTest do
     assert %{asset: @launch, held: 2_000, backed: 300} = List.last(reading.assets)
 
     {money, details} = Enum.split(StubClient.call_requests(), -2)
-    assert List.last(money) == {@contract, @protocol_share_owed, @head_hash}
+    assert List.last(money) == {@contract, @pending_conversion, @head_hash}
     assert details == [{@launch, @symbol, @head_hash}, {@launch, @decimals, @head_hash}]
     assert details() == %{@launch => {"LAUNCH", 18}}
   end
@@ -249,7 +253,9 @@ defmodule Keyfleet.TreasuryReaderTest do
 
   # The treasury splits ETH, REGENT and USDC at 0.75% a day, last run at
   # 1,700,000,000 with no launch token bound; it holds 5,000 wei, every
-  # unit of REGENT a uint256 can count and 100 USDC.
+  # unit of REGENT a uint256 can count and 100 USDC. The manager holds back
+  # 700 for the Cascade, owes 800 to REGENT staking and has 900 waiting to
+  # turn into REGENT.
   defp chain do
     %{
       {@treasury, @split_assets} => {:ok, addresses([@eth, @regent, @usdc])},
@@ -259,7 +265,8 @@ defmodule Keyfleet.TreasuryReaderTest do
       {@treasury, @launch_token} => {:ok, <<0::256>>},
       {@rewards, @backed <> arg(@eth)} => {:ok, <<1_000::256>>},
       {@contract, @cascade_reserve} => {:ok, <<700::256>>},
-      {@contract, @protocol_share_owed} => {:ok, <<800::256>>}
+      {@contract, @protocol_share_owed} => {:ok, <<800::256>>},
+      {@contract, @pending_conversion} => {:ok, <<900::256>>}
     }
     |> Map.merge(token(@regent, "REGENT", @max_uint256, 0))
     |> Map.merge(token(@usdc, "USDC", 100_000_000, 30_000_000))

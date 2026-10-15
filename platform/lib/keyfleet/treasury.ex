@@ -1,7 +1,7 @@
 defmodule Keyfleet.Treasury do
   @moduledoc """
   A fleet's money as its contracts report it: every money event of its fleet
-  contract, treasury and reward ledger, the latest reading of its balances,
+  contract, treasury and reward ledger and of the REGENT buyer for it, the latest reading of its balances,
   and the symbol and decimals of each token they name. Recorded from the
   fleet's contracts by the chain reader and by nothing else. The chain is the
   authority; these records only mirror it.
@@ -20,9 +20,16 @@ defmodule Keyfleet.Treasury do
   # it has six decimals.
   @usdc_decimals 6
   @regent_decimals 18
-  # What the history shows: money into the treasury, out of it, and shared
-  # with the keys by the daily split.
-  @history_kinds [:forwarded, :protocol_share_sent, :paid, :advanced, :split_allocated]
+  # What the history shows: money into the treasury, out of it, shared with
+  # the keys by the daily split, and REGENT bought with USDC from Key sales.
+  @history_kinds [
+    :forwarded,
+    :protocol_share_sent,
+    :paid,
+    :advanced,
+    :split_allocated,
+    :regent_bought
+  ]
 
   resources do
     resource Keyfleet.Treasury.Reading do
@@ -128,6 +135,17 @@ defmodule Keyfleet.Treasury do
       |> Enum.split(@latest)
 
     %{shown: shown, earlier?: earlier != []}
+  end
+
+  @doc """
+  When the fleet's latest piece of USDC from Key sales turned into REGENT was
+  recorded, or nil when none has.
+  """
+  def last_piece_turned_at(fleet_id) do
+    case latest_events!(fleet_id, [:regent_bought], 1) do
+      [bought] -> bought.observed_at
+      [] -> nil
+    end
   end
 
   @doc """

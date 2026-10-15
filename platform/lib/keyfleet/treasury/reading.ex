@@ -3,8 +3,9 @@ defmodule Keyfleet.Treasury.Reading do
   A fleet's money as its contracts held it at one block: what its treasury
   holds and its reward ledger backs of each asset the daily split shares,
   the split's rate, when it last ran and when anyone may next run it, the
-  launch token once bound, the Cascade completion reserve and the protocol
-  share owed.
+  launch token once bound, the Cascade completion reserve, the protocol
+  share owed, the USDC from Key sales waiting to turn into REGENT, and since
+  when each of those two has been waiting.
 
   `Keyfleet.Chain.TreasuryReader` reads them every minute at the
   head's block and keeps only the latest reading of each fleet: a reading of
@@ -21,13 +22,14 @@ defmodule Keyfleet.Treasury.Reading do
   postgres do
     table "treasury_readings"
     repo(Keyfleet.Repo)
+    migration_defaults(conversion_waiting: "0")
 
     check_constraints do
       check_constraint(:block_hash, "treasury_readings_block_hash_shape",
         check: "block_hash ~ '^0x[0-9a-f]{64}$'"
       )
 
-      for field <- [:block_number, :cascade_reserve, :protocol_share_owed] do
+      for field <- [:block_number, :cascade_reserve, :protocol_share_owed, :conversion_waiting] do
         check_constraint(field, "treasury_readings_nonnegative_#{field}", check: "#{field} >= 0")
       end
 
@@ -58,7 +60,10 @@ defmodule Keyfleet.Treasury.Reading do
         :last_run_at,
         :next_run_at,
         :launch_token,
-        :assets
+        :assets,
+        :protocol_share_owed_since,
+        :conversion_waiting,
+        :conversion_waiting_since
       ]
 
       upsert? true
@@ -74,7 +79,10 @@ defmodule Keyfleet.Treasury.Reading do
         :last_run_at,
         :next_run_at,
         :launch_token,
-        :assets
+        :assets,
+        :protocol_share_owed_since,
+        :conversion_waiting,
+        :conversion_waiting_since
       ]
 
       upsert_condition expr(upsert_conflict(:block_number) > block_number)
@@ -113,6 +121,18 @@ defmodule Keyfleet.Treasury.Reading do
     for field <- [:cascade_reserve, :protocol_share_owed] do
       attribute field, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
     end
+
+    # USDC from Key sales waiting to turn into REGENT, in atomic units.
+    attribute :conversion_waiting, :decimal,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 0]
+
+    # By the chain's clock: since when the protocol share has been owed, and
+    # since when USDC has been waiting to turn into REGENT, each without
+    # dropping to nothing at any block read; nil while nothing is.
+    attribute :protocol_share_owed_since, :utc_datetime_usec, public?: true
+    attribute :conversion_waiting_since, :utc_datetime_usec, public?: true
 
     # The daily split's rate, in basis points of each asset's balance; when
     # it last ran, nil before its first run; and when anyone may next run it,

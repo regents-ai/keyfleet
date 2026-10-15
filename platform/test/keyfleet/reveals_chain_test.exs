@@ -164,7 +164,7 @@ defmodule Keyfleet.RevealsChainTest do
       reveal = revealed(1, 7, @seed, @deployed + 1, 0)
 
       assert {:ok, [{:reveal, %{token_id: 1, seed: @seed, request_id: request_id}}]} =
-               Logs.decode([reveal], fleet, @deployed, @deployed + 10)
+               Logs.decode([reveal], fleet, StubClient.regent_buyer(), @deployed, @deployed + 10)
 
       assert Decimal.equal?(request_id, 7)
 
@@ -180,7 +180,7 @@ defmodule Keyfleet.RevealsChainTest do
             %{reveal | "data" => hex(<<0::768>>)},
             %{reveal | "data" => "0x"}
           ] do
-        assert Logs.decode([broken], fleet, @deployed, @deployed + 10) ==
+        assert Logs.decode([broken], fleet, StubClient.regent_buyer(), @deployed, @deployed + 10) ==
                  {:error, {:unreadable_log, broken["transactionHash"], broken["logIndex"]}},
                inspect(broken)
       end
