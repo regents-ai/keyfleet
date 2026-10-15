@@ -45,7 +45,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @poll_start_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/start\z"
   @poll_vote_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@poll}/vote\z"
   @poll_end_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@poll}/end\z"
-  @empty_body_paths [@mutes_path, @mute_path, @code_password_path, @poll_end_path]
+  @empty_body_paths [@mute_path, @code_password_path, @poll_end_path]
   @poll_post_paths [@poll_start_path, @poll_vote_path, @poll_end_path]
 
   # Direct messages: a Key's conversations and blocks, what it does in one
@@ -285,10 +285,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp actor(_conn, _data), do: invalid_principal()
 
   # Only a request whose signature verified is told what is wrong with its
-  # body, and nothing it asks for is acted on until the body fits.
+  # body, and nothing it asks for is acted on until the body fits. A read
+  # carries no body.
   defp take_body(%{method: "GET", assigns: assigns} = conn)
        when not is_map_key(assigns, :raw_body),
        do: {:ok, %{conn | body_params: %{}, params: %{}}}
+
+  defp take_body(%{method: "GET"}), do: {:error, %{reason: :body_does_not_fit}}
 
   defp take_body(%{assigns: %{raw_body: raw}} = conn) do
     with {:ok, params} <- Jason.decode(raw),
@@ -472,10 +475,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def check_body(@update_path, params) when is_map(params),
     do: admit(map_size(params) > 0 and Enum.all?(Map.keys(params), &(&1 in @editable)))
 
-  def check_body(@shards_path, params), do: admit(params == %{})
-  def check_body(@profile_path, params), do: admit(params == %{})
-  def check_body(path, params) when path in @account_paths, do: admit(params == %{})
-
   # The newest page is {}; an older one names the previous page's cursor,
   # which the controller and the shared history action check.
   def check_body(@credits_history_path, params) when is_map(params),
@@ -503,16 +502,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       op = dm_op(path) -> check_dm_body(op, params)
       op = chain_op(path) -> check_chain_body(op, params)
       op = graph_op(path) -> check_graph_body(op, params)
-      poll_path?(path) -> check_poll_body(path, params)
+      poll_write?(path) -> check_poll_body(path, params)
       true -> check_room_body(path, params)
     end
   end
 
   defp check_room_body(path, params) do
     cond do
-      Regex.match?(@rooms_path, path) ->
-        admit(params == %{})
-
       Regex.match?(@create_room_path, path) ->
         admit(valid_room_body?(params))
 
@@ -564,20 +560,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_chain_body("keys/" <> _claim, params), do: admit(params == %{})
   defp check_chain_body(_op, _params), do: :invalid
 
-  # "inbox" for a Key's conversations and blocks, "changes" for catching up,
-  # or what is done in one conversation.
+  # "changes" for catching up, or what is done in one conversation.
   defp dm_op(path) do
     case Regex.run(@dm_path, path, capture: :all_but_first) do
       [op] -> op
-      nil -> dm_key_op(path)
-    end
-  end
-
-  defp dm_key_op(path) do
-    cond do
-      Regex.match?(@dm_inbox_path, path) -> "inbox"
-      Regex.match?(@dm_changes_path, path) -> "changes"
-      true -> nil
+      nil -> if Regex.match?(@dm_changes_path, path), do: "changes"
     end
   end
 
@@ -605,7 +592,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        when map_size(params) == 1 and (is_nil(days) or is_integer(days)),
        do: in_range(days in @auto_delete_days)
 
-  defp check_dm_body(op, params) when op in ~w(inbox delete block unblock),
+  defp check_dm_body(op, params) when op in ~w(delete block unblock),
     do: admit(params == %{})
 
   defp check_dm_body(_op, _params), do: :invalid
@@ -726,16 +713,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_proposal_read_body(_params), do: :invalid
 
-  defp poll_path?(path),
-    do: Enum.any?([@polls_path, @poll_path | @poll_post_paths], &Regex.match?(&1, path))
+  defp poll_write?(path),
+    do: Regex.match?(@poll_start_path, path) or Regex.match?(@poll_vote_path, path)
 
-  # Listing polls and reading one say nothing more than their path.
   defp check_poll_body(path, params) do
-    cond do
-      Regex.match?(@poll_start_path, path) -> check_poll_start_body(params)
-      Regex.match?(@poll_vote_path, path) -> check_vote_body(params)
-      true -> admit(params == %{})
-    end
+    if Regex.match?(@poll_start_path, path),
+      do: check_poll_start_body(params),
+      else: check_vote_body(params)
   end
 
   # A poll asks one question, offers its choices, stays open for the minutes
@@ -796,9 +780,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   @doc """
   What a body that doesn't fit the operation at `path` is told: the fields it
-  must name, then the ones it may add.
+  must name, then the ones it may add. A read is told it takes no body.
   """
   def takes(path) do
+    if supported?("GET", path),
+      do: "This operation takes no body; it is a read. Send it again without one.",
+      else: body_takes(path)
+  end
+
+  defp body_takes(path) do
     case fields(path) do
       {[], []} ->
         "This operation takes an empty JSON object, {}."

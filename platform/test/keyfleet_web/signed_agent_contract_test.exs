@@ -83,7 +83,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
   # One valid value for every field each body documents, at each object the
   # body holds: the top of the body, or a place inside it. `{:one_of, n}` picks
-  # the nth of the shapes a place may take.
+  # the nth of the shapes a place may take. A read has no body.
   @bodies [
     {"POST", @join, [], %{"name" => "Probe", "declared_harness" => "local"}},
     {"POST", @update, [],
@@ -95,13 +95,13 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "service_ideas" => ["briefs"],
        "current_status" => "probing"
      }},
-    {"GET", @shards, [], %{}},
+    {"GET", @shards, [], nil},
     {"POST", @avatar_start, [], @picture},
     {"POST", @avatar_remove, [], %{}},
-    {"GET", @mutes, [], %{}},
+    {"GET", @mutes, [], nil},
     {"POST", @mute, [], %{}},
     {"POST", @unmute, [], %{}},
-    {"GET", @rooms, [], %{}},
+    {"GET", @rooms, [], nil},
     {"POST", @create, [], %{"slug" => "probe-room", "name" => "Probe"}},
     {"POST", @topic, [], %{"topic" => "Probe"}},
     {"POST", @read, [], %{"after_seq" => 0, "limit" => 1}},
@@ -158,8 +158,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @split, [], %{}},
     {"POST", @claim, [], %{}},
     {"POST", @code_password, [], %{}},
-    {"GET", @dm_inbox, [], %{}},
-    {"GET", @dm_blocks, [], %{}},
+    {"GET", @dm_inbox, [], nil},
+    {"GET", @dm_blocks, [], nil},
     {"POST", @dm <> "read", [], %{"after_seq" => 0, "limit" => 1}},
     {"POST", @dm <> "send", [],
      %{
@@ -212,9 +212,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "expected_version" => 1,
        "reason" => "r"
      }},
-    {"GET", @polls, [], %{}},
+    {"GET", @polls, [], nil},
     {"POST", @poll_start, [], @poll_question},
-    {"GET", @poll, [], %{}},
+    {"GET", @poll, [], nil},
     {"POST", @poll_vote, [], %{"choice" => "Left door", "reason" => "r"}},
     {"POST", @poll_end, [], %{}}
   ]
@@ -274,7 +274,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     contract = YamlElixir.read_from_file!(@contract)
     words = candidate_fields(contract)
 
-    for {method, template, at, sample} <- @bodies do
+    for {"POST" = method, template, at, sample} <- @bodies do
       schema = request_schema(contract, method, template, at)
       documented = Map.keys(Map.get(schema, "properties", %{}))
       required = Map.get(schema, "required", [])
@@ -393,7 +393,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     holder = new_signer()
 
     assert %{"shards" => [], "hint" => "Ask a Key's owner to issue a shard to your wallet" <> _} =
-             answer(c, holder, "GET", @shards, @address, %{}, 200).body
+             answer(c, holder, "GET", @shards, @address, nil, 200).body
 
     ChainHelpers.issue_shard!(@fleet, 1, holder.address)
 
@@ -402,7 +402,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
                %{"fleet_id" => @fleet, "token_id" => 1, "edits_restricted" => false} = shard
              ],
              "hint" => nil
-           } = answer(c, holder, "GET", @shards, @address, %{}, 200).body
+           } = answer(c, holder, "GET", @shards, @address, nil, 200).body
 
     assert shard["step_down"]["to"] == shard["shards_contract"]
 
@@ -455,7 +455,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     quote_routes(c)
 
     # Reading rooms.
-    answer(c, c.signer, "GET", @rooms, @address, %{}, 200)
+    answer(c, c.signer, "GET", @rooms, @address, nil, 200)
     read = answer(c, c.signer, "POST", @read, @address, %{}, 200).body["messages"]
     # The last is the person's words their agent quoted.
     assert Enum.map(read, & &1["author_kind"]) == ["human", "agent", "agent", "human"]
@@ -464,7 +464,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     # Muting key 1 hides its owner's post from this agent alone; the cursor
     # still passes it. Muting twice keeps one mute, and unmuting shows it again.
-    assert answer(c, c.signer, "GET", @mutes, @address, %{}, 200).body["mutes"] == []
+    assert answer(c, c.signer, "GET", @mutes, @address, nil, 200).body["mutes"] == []
     assert [%{"token_id" => 1}] = answer(c, c.signer, "POST", @mute, one, %{}, 200).body["mutes"]
     assert [%{"token_id" => 1}] = answer(c, c.signer, "POST", @mute, one, %{}, 200).body["mutes"]
     muted = answer(c, c.signer, "POST", @read, @address, %{}, 200).body
@@ -664,14 +664,14 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     unpaired = unpaired_signer()
 
     for {method, template} <- routes() do
-      refused = answer(c, unpaired, method, template, @address, empty_or_minimal(template), 403)
+      refused = answer(c, unpaired, method, template, @address, minimal(method, template), 403)
       assert refused.body == refused("agent_not_paired")
     end
 
     Application.put_env(:keyfleet, :siwa_broker_url, nil)
 
     for {method, template} <- routes(),
-        do: answer(c, c.signer, method, template, @address, empty_or_minimal(template), 503)
+        do: answer(c, c.signer, method, template, @address, minimal(method, template), 503)
 
     # Every route past the client's budget: one request an hour, spent first
     # on the health check.
@@ -775,12 +775,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @dm <> "read", own, %{"limit" => 201}, 422)
 
     assert [%{"other_token_id" => 1}] =
-             answer(c, c.signer, "GET", @dm_inbox, own, %{}, 200).body["conversations"]
+             answer(c, c.signer, "GET", @dm_inbox, own, nil, 200).body["conversations"]
 
     answer(c, c.signer, "POST", @dm <> "auto_delete", own, %{"days" => 7}, 200)
     answer(c, c.signer, "POST", @dm <> "auto_delete", own, %{"days" => 2}, 422)
     assert answer(c, c.signer, "POST", @dm <> "block", own, %{}, 200).body == %{"blocked" => [1]}
-    assert answer(c, c.signer, "GET", @dm_blocks, own, %{}, 200).body == %{"blocked" => [1]}
+    assert answer(c, c.signer, "GET", @dm_blocks, own, nil, 200).body == %{"blocked" => [1]}
     assert answer(c, c.signer, "POST", @dm <> "unblock", own, %{}, 200).body == %{"blocked" => []}
 
     assert answer(c, c.signer, "POST", @dm <> "block", itself, %{}, 422).body ==
@@ -798,7 +798,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              refused("conversation_unknown")
 
     for {method, template} <- routes(), String.contains?(template, "/dms") do
-      body = if template == @dm <> "send", do: another, else: empty_or_minimal(template)
+      body = if template == @dm <> "send", do: another, else: minimal(method, template)
 
       assert answer(c, stranger, method, template, own, body, 403).body == refused("not_your_key"),
              "#{method} #{template}"
@@ -922,7 +922,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     start = @poll_question
 
     # Listing and starting polls.
-    assert answer(c, stranger, "GET", @polls, @address, %{}, 200).body == %{"polls" => []}
+    assert answer(c, stranger, "GET", @polls, @address, nil, 200).body == %{"polls" => []}
     answer(c, c.signer, "POST", @poll_start, @address, %{start | "minutes" => 0}, 422)
     answer(c, c.signer, "POST", @poll_start, @address, %{start | "minutes" => 61}, 422)
     twice = %{start | "choices" => ["Left door", "Left door"]}
@@ -951,14 +951,14 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     # Anyone reads a poll; only the fleet's Key holders read its notes.
     assert [%{"id" => id} = listed] =
-             answer(c, stranger, "GET", @polls, @address, %{}, 200).body["polls"]
+             answer(c, stranger, "GET", @polls, @address, nil, 200).body["polls"]
 
     assert id == poll["id"]
     refute Map.has_key?(listed, "notes")
     at = Map.put(@address, "poll_id", id)
     elsewhere = Map.put(@address, "poll_id", Ecto.UUID.generate())
-    assert answer(c, stranger, "GET", @poll, at, %{}, 200).body |> Map.keys() == ["poll"]
-    answer(c, stranger, "GET", @poll, elsewhere, %{}, 404)
+    assert answer(c, stranger, "GET", @poll, at, nil, 200).body |> Map.keys() == ["poll"]
+    answer(c, stranger, "GET", @poll, elsewhere, nil, 404)
 
     # Voting: once for each Key, for one of the poll's choices. The first vote
     # sent for Key 2 counts; its other agent sending the same vote is answered
@@ -992,7 +992,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, second, "POST", @poll_vote, at, %{"choice" => "Right door"}, 201)
 
     # Votes stay hidden until the poll closes.
-    open = answer(c, second, "GET", @poll, at, %{}, 200).body
+    open = answer(c, second, "GET", @poll, at, nil, 200).body
     assert %{"poll" => %{"votes_cast" => 2, "totals" => nil}, "votes" => []} = open
     assert %{"key" => 3, "choice" => "Right door"} = open["my_vote"]
 
@@ -1009,7 +1009,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert answer(c, third_signer(), "POST", @poll_vote, at, vote, 409).body ==
              refused("poll_closed")
 
-    assert [_left, _right] = answer(c, second, "GET", @poll, at, %{}, 200).body["votes"]
+    assert [_left, _right] = answer(c, second, "GET", @poll, at, nil, 200).body["votes"]
   end
 
   # An agent holding Key 4, which took no part.
@@ -1046,7 +1046,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
   # Signs and sends one request, and holds its answer to the contract.
   defp answer(c, signer, method, template, address, body, status) do
-    response = send_signed(c, signer, method, fill(template, address), Jason.encode!(body))
+    response =
+      send_signed(c, signer, method, fill(template, address), body && Jason.encode!(body))
+
     documented!(response, method, template, status)
   end
 
@@ -1137,6 +1139,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp body_cap(@poll_start), do: (200 + 10 * 100 + 2_000) * 12 + 2 * 1024
   defp body_cap(@poll_vote), do: 500 * 12 + 2 * 1024
   defp body_cap(_template), do: 4096
+
+  # The least each route takes: a read takes no body.
+  defp minimal("GET", _template), do: nil
+  defp minimal(_method, template), do: empty_or_minimal(template)
 
   defp empty_or_minimal(@join), do: %{"name" => "Probe", "declared_harness" => "local"}
   defp empty_or_minimal(@update), do: %{"current_status" => "away"}

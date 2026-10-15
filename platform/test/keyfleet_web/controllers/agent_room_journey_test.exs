@@ -153,7 +153,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     key = "/api/v1/agent/keys/{fleet_id}/{token_id}"
 
     for {method, template, body} <- [
-          {"GET", "#{fleet}/rooms", "{}"},
+          {"GET", "#{fleet}/rooms", nil},
           {"POST", "#{fleet}/rooms/create", ~s({"slug":"hull","name":"Hull"})},
           {"POST", "#{fleet}/rooms/{slug}/topic", ~s({"topic":"Hull"})},
           {"POST", "#{fleet}/rooms/{slug}/messages/read", "{}"},
@@ -163,7 +163,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
           {"POST", "#{fleet}/graph/changes", "{}"},
           {"POST", "#{fleet}/graph/create",
            ~s({"as_key":1,"command_id":"c-1","type":"note","scope":"fleet","data":{}})},
-          {"GET", "#{fleet}/mutes", "{}"},
+          {"GET", "#{fleet}/mutes", nil},
           {"POST", "#{fleet}/keys/{token_id}/mute", "{}"},
           {"POST", "#{fleet}/keys/{token_id}/unmute", "{}"},
           {"POST", "#{key}/messages/read", "{}"},
@@ -514,7 +514,11 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
            run: run
          })
 
-  defp send_signed(c, method, path, body \\ "{}"),
+  # A read carries no body; anything else sends {} unless it says more.
+  defp send_signed(c, "GET", path), do: send_signed(c, "GET", path, nil)
+  defp send_signed(c, method, path), do: send_signed(c, method, path, "{}")
+
+  defp send_signed(c, method, path, body),
     do: c |> signed(method, path, body) |> then(&deliver(c, &1))
 
   defp signed(c, method, path, body) do
