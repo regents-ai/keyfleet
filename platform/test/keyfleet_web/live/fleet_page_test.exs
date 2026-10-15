@@ -501,6 +501,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
       for token_id <- 1..1_024, do: issue!("fleet_tech_classic", token_id)
+      chain!(allowance: 0, minted: 1_024, price: :sold_out)
 
       {:ok, view, _html} = live(conn, "/classic/1")
       active!(view, @owner)
@@ -537,7 +538,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
       for token_id <- 1..1_023, do: issue!("fleet_tech_classic", token_id)
-      chain!(allowance: 100_000_000)
+      chain!(allowance: 100_000_000, minted: 1_023, price: 100_000_000)
       {:ok, view, _html} = live(conn, "/classic/1")
       assert text(view, "#buy-key-number") == "1,024"
       assert text(view, "#buy-key-price") == "100 USDC"
@@ -545,7 +546,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       active!(view, @owner)
       assert_push_event(view, "onchain-steps:review", %{review: %{steps: [buy]} = review})
       hash = "0x" <> String.duplicate("3", 64)
-      chain!(allowance: 100_000_000)
+      chain!(allowance: 100_000_000, minted: 1_024, price: :sold_out)
       TestChainNode.land!(hash, review, buy, "0x1")
 
       view
@@ -1625,22 +1626,42 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     render_async(view)
   end
 
-  # The chain the buy steps read: sales open, and the wallet's USDC
+  # The chain the buy steps read: the Keys sold (150 unless `:minted` says),
+  # the next Key's price (Key 151's unless `:price` says; `:sold_out` when the
+  # manager refuses to price one), sales open, and the wallet's USDC
   # allowance to the fleet.
   defp chain!(opts) do
-    allowance = Call.selector("allowance(address,address)")
-    sales_open = Call.selector("salesOpen(uint256)")
+    selectors = %{
+      allowance: Call.selector("allowance(address,address)"),
+      sales_open: Call.selector("salesOpen(uint256)"),
+      minted: Call.selector("totalMinted()"),
+      price: Call.selector("nextPrice()")
+    }
 
     StubClient.put_chain(chain_head(1_000), [],
-      calls: fn _to, data, _hash -> answer(data, allowance, sales_open, opts) end
+      calls: fn _to, data, _hash -> answer(data, selectors, opts) end
     )
   end
 
-  defp answer(data, allowance, sales_open, opts) do
+  defp answer(data, selectors, opts) do
     cond do
-      String.starts_with?(data, allowance) -> {:ok, <<Keyword.fetch!(opts, :allowance)::256>>}
-      String.starts_with?(data, sales_open) -> {:ok, <<1::256>>}
-      true -> {:error, :no_answer}
+      String.starts_with?(data, selectors.allowance) ->
+        {:ok, <<Keyword.fetch!(opts, :allowance)::256>>}
+
+      String.starts_with?(data, selectors.sales_open) ->
+        {:ok, <<1::256>>}
+
+      data == selectors.minted ->
+        {:ok, <<Keyword.get(opts, :minted, 150)::256>>}
+
+      data == selectors.price ->
+        case Keyword.get(opts, :price, 42_998_170) do
+          :sold_out -> {:error, :reverted}
+          price -> {:ok, <<price::256>>}
+        end
+
+      true ->
+        {:error, :no_answer}
     end
   end
 
