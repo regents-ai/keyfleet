@@ -306,6 +306,8 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/proposals/cancel", AgentChainController, :cancel
     post "/fleets/:fleet_id/proposals/carry_out", AgentChainController, :carry_out
     post "/fleets/:fleet_id/split", AgentChainController, :split
+    post "/fleets/:fleet_id/treasury/send_share", AgentChainController, :send_share
+    post "/fleets/:fleet_id/treasury/convert", AgentChainController, :convert
     post "/fleets/:fleet_id/keys/:token_id/claim", AgentChainController, :claim
     post "/fleets/:fleet_id/graph/get", AgentGraphController, :get_object
     post "/fleets/:fleet_id/graph/changes", AgentGraphController, :changes

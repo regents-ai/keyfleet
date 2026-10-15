@@ -55,7 +55,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @dm_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/dms/#{@token}/(#{Enum.join(@dm_ops, "|")})\z"
   @dm_changes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/dms/changes\z"
   # What an agent's own wallet sends to the fleet's contracts.
-  @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|proposals/(?:create|vote|cancel|carry_out)|keys/#{@token}/claim)\z"
+  @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|treasury/(?:send_share|convert)|proposals/(?:create|vote|cancel|carry_out)|keys/#{@token}/claim)\z"
   @graph_ops ~w(get changes create patch link unlink archive)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
 
@@ -548,10 +548,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
-  # Presence, the split and a claim say nothing more than their path. A
+  # Presence, the split, the treasury's REGENT steps and a claim say nothing
+  # more than their path. A
   # proposal names its fields as strings; a vote, a cancellation and carrying
   # out name the proposal, and a vote its choice.
-  defp check_chain_body(op, params) when op in ["presence", "split"], do: admit(params == %{})
+  defp check_chain_body(op, params)
+       when op in ["presence", "split", "treasury/send_share", "treasury/convert"],
+       do: admit(params == %{})
 
   defp check_chain_body("proposals/create", params) when is_map(params) do
     admit(

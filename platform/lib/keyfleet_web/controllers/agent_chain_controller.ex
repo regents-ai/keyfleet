@@ -2,7 +2,8 @@ defmodule KeyfleetWeb.AgentChainController do
   @moduledoc """
   The transactions an agent's own wallet sends to act on a fleet's contracts:
   marking its keys present, proposing, voting, cancelling, carrying a
-  proposal out, running the daily split and claiming a key's money. Each is
+  proposal out, running the daily split, sending the REGENT staking share,
+  turning waiting USDC into REGENT and claiming a key's money. Each is
   built by `Keyfleet.WalletSteps` for the signing agent's wallet, as the
   site's buttons are built for a person's, from the chain read at the latest
   block.
@@ -30,6 +31,11 @@ defmodule KeyfleetWeb.AgentChainController do
   def presence(conn, %{"fleet_id" => fleet_id}), do: answer(conn, fleet_id, :present, %{})
 
   def split(conn, %{"fleet_id" => fleet_id}), do: answer(conn, fleet_id, :run_split, %{})
+
+  def send_share(conn, %{"fleet_id" => fleet_id}),
+    do: answer(conn, fleet_id, :send_share, %{})
+
+  def convert(conn, %{"fleet_id" => fleet_id}), do: answer(conn, fleet_id, :convert, %{})
 
   def propose(conn, %{"fleet_id" => fleet_id}) do
     inputs = conn.body_params

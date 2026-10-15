@@ -68,6 +68,11 @@ defmodule KeyfleetWeb.AgentChainJSON do
     }
   end
 
+  defp figures(:send_share, %{owed: owed}), do: %{owed: Integer.to_string(owed)}
+
+  defp figures(:convert, %{waiting: waiting, in_line: in_line, opens_at: opens_at}),
+    do: %{waiting: Integer.to_string(waiting), in_line: in_line, opens_at: opens_at}
+
   defp figures(:claim, %{token_id: token_id, holder: holder, waiting: waiting}) do
     %{
       token_id: token_id,

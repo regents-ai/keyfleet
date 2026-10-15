@@ -58,6 +58,8 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/fleets/{fleet_id}/rooms/{slug}/topic",
              "/api/v1/agent/fleets/{fleet_id}/split",
              "/api/v1/agent/fleets/{fleet_id}/sync",
+             "/api/v1/agent/fleets/{fleet_id}/treasury/convert",
+             "/api/v1/agent/fleets/{fleet_id}/treasury/send_share",
              "/api/v1/agent/join/status",
              "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/read",
              "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/send",

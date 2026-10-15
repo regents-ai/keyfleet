@@ -76,7 +76,8 @@ defmodule Keyfleet.Authority do
       conditions: [:member]
     },
     %{
-      what: "Carry out an approved proposal, release the Daily Treasury Slice to Keys",
+      what:
+        "Carry out an approved proposal, release the Daily Treasury Slice to Keys, return an advance, send the REGENT staking share, turn waiting USDC into REGENT",
       who: "Anyone",
       authority: :wallet,
       conditions: []

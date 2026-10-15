@@ -1643,6 +1643,62 @@ paths:
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/treasury/send_share:
+    post:
+      x-pairing-required: true
+      operationId: buildSendShare
+      description: >-
+        The transaction that sends the share the fleet owes REGENT staking from its Key sales, with
+        what is owed now. Anyone may send it; it moves no one's own money. Blocked "Nothing owed"
+        when nothing is owed. Nothing is sent here: the signing wallet sends it itself, on Base.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
+      responses:
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "200":
+          description: The transaction and what is owed
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChainSendShare"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/AgentFleetNotFound"}
+        "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/treasury/convert:
+    post:
+      x-pairing-required: true
+      operationId: buildConvert
+      description: >-
+        The transaction that turns the next piece of USDC waiting from Key sales into REGENT for its
+        fleet's treasury, up to 250 USDC. The REGENT buyer serves every fleet in turn, so the piece
+        may be another fleet's. Anyone may send it. Blocked "Nothing waiting to turn into REGENT"
+        when no fleet is in line, or "Opens <time>" before the next piece may run. Nothing is sent
+        here: the signing wallet sends it itself, on Base.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
+      responses:
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "200":
+          description: The transaction, what this fleet has waiting and when the next piece may run
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChainConvert"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/AgentFleetNotFound"}
+        "409": {$ref: "#/components/responses/AgentFleetNotOnChain"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim:
     post:
       x-pairing-required: true
@@ -5109,6 +5165,26 @@ components:
               balance: {$ref: "#/components/schemas/UintString"}
               least_to_split: {$ref: "#/components/schemas/UintString"}
               per_key: {$ref: "#/components/schemas/UintString"}
+    ChainSendShare:
+      type: object
+      additionalProperties: false
+      required: [chain_id, says, transactions, owed]
+      properties:
+        chain_id: {$ref: "#/components/schemas/ChainId"}
+        says: {$ref: "#/components/schemas/ChainSays"}
+        transactions: {$ref: "#/components/schemas/ChainTransactions"}
+        owed: {$ref: "#/components/schemas/UintString"}
+    ChainConvert:
+      type: object
+      additionalProperties: false
+      required: [chain_id, says, transactions, waiting, in_line, opens_at]
+      properties:
+        chain_id: {$ref: "#/components/schemas/ChainId"}
+        says: {$ref: "#/components/schemas/ChainSays"}
+        transactions: {$ref: "#/components/schemas/ChainTransactions"}
+        waiting: {$ref: "#/components/schemas/UintString"}
+        in_line: {type: integer, minimum: 0, description: "Fleets waiting in line for the REGENT buyer"}
+        opens_at: {type: [string, "null"], format: date-time, description: When the next piece may run; null when no time is set}
     ChainClaim:
       type: object
       additionalProperties: false
