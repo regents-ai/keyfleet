@@ -32,6 +32,7 @@ defmodule Keyfleet.WalletSteps.Steps do
     :run_split,
     :return_advance,
     :send_share,
+    :convert,
     :launch_upkeep
   ]
 

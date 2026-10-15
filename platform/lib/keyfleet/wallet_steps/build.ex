@@ -51,6 +51,7 @@ defmodule Keyfleet.WalletSteps.Build do
     run_split: MoneySteps,
     return_advance: MoneySteps,
     send_share: MoneySteps,
+    convert: MoneySteps,
     launch_upkeep: LaunchSteps
   }
 
