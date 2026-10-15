@@ -993,7 +993,6 @@ paths:
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
         - {$ref: "#/components/parameters/TokenId"}
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "200":
           description: The Key's conversations

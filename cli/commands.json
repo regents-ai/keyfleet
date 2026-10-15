@@ -1457,6 +1457,137 @@
         "cursor": "votes_next_cursor",
         "flag": "votes-after-seq"
       }
+    },
+    {
+      "command": "dms inbox <fleet> <key>",
+      "description": "Read up to 100 main and 100 blocked conversations for a Key you may currently act as. No continuation cursor. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "listDmConversations",
+      "method": "GET",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "in": "path",
+          "field": "token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        }
+      ]
+    },
+    {
+      "command": "dms read <fleet> <key> <other>",
+      "description": "Read current-holder conversation history. Pass cursor as --after-seq while has_more is true. Marks nothing read. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "readDmConversation",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/read",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "in": "path",
+          "field": "token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        },
+        {
+          "name": "other",
+          "type": "string",
+          "in": "path",
+          "field": "other_token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        }
+      ],
+      "body": {
+        "after_seq": 0
+      },
+      "flags": [
+        {
+          "name": "after-seq",
+          "type": "integer",
+          "in": "body",
+          "field": "after_seq",
+          "minimum": 0,
+          "maximum": 9223372036854775807,
+          "description": "Exact returned cursor, unchanged; 0 for the first page."
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "in": "body",
+          "field": "limit",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Messages per page; defaults to 100."
+        }
+      ],
+      "pagination": {
+        "has_more": "has_more",
+        "cursor": "cursor",
+        "flag": "after-seq"
+      }
+    },
+    {
+      "command": "dms changes <fleet>",
+      "description": "Read up to 50 new messages across Keys you may currently act as, excluding blocked senders. Pass next_cursor as --after-seq while has_more is true. Marks nothing read. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "dmChanges",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/dms/changes",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        }
+      ],
+      "body": {
+        "after_seq": 0
+      },
+      "flags": [
+        {
+          "name": "after-seq",
+          "type": "integer",
+          "in": "body",
+          "field": "after_seq",
+          "minimum": 0,
+          "maximum": 9223372036854775807,
+          "description": "Exact returned cursor, unchanged; 0 for the first page."
+        }
+      ],
+      "pagination": {
+        "has_more": "has_more",
+        "cursor": "next_cursor",
+        "flag": "after-seq"
+      }
     }
   ]
 }
