@@ -15,6 +15,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias Keyfleet.Code
   alias Keyfleet.Dms
   alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Presets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.Notebooks
@@ -41,6 +42,7 @@ defmodule KeyfleetWeb.ShellLive do
   }
 
   alias KeyfleetWeb.Components.Reading
+  alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.{PublicDocuments, RouteCatalog}
   alias Phoenix.Socket.Broadcast
 
@@ -128,6 +130,7 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_params(params, uri, socket) do
     route_spec = route_spec(uri, params)
     params = name_fleet(params, route_spec)
+    if beyond_supply?(params), do: raise(NotFoundError)
 
     if coming_soon_inside?(route_spec, params) do
       {:noreply, push_patch(socket, to: Fleets.path(route_spec.fleet_id), replace: true)}
@@ -172,6 +175,20 @@ defmodule KeyfleetWeb.ShellLive do
     %{route: route} = Phoenix.Router.route_info(KeyfleetWeb.Router, "GET", path, host)
     RouteCatalog.fetch!(route, params)
   end
+
+  # A Key past its fleet's supply can never exist, so no page of it is found:
+  # its own page, its messages, or a conversation with it.
+  defp beyond_supply?(%{"fleet_id" => fleet_id} = params) do
+    supply = Presets.max_supply(fleet_id)
+
+    supply != nil and
+      Enum.any?(
+        [params["token_id"], params["other_token_id"]],
+        &(&1 != nil and String.to_integer(&1) > supply)
+      )
+  end
+
+  defp beyond_supply?(_params), do: false
 
   defp name_fleet(params, %{fleet_id: nil}), do: params
   defp name_fleet(params, %{fleet_id: fleet_id}), do: Map.put(params, "fleet_id", fleet_id)
