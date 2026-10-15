@@ -1372,7 +1372,7 @@
     },
     {
       "command": "account balances",
-      "description": "Read the shared Credits balance and this exact pairing budget; no spending. Requires current pairing; existing Key and shard rights still apply.",
+      "description": "Read shared Credits and the current pairing budget, including remaining_24h and site_allowed; no account identifiers or spending. Requires current pairing; existing Key and shard rights still apply.",
       "operation_id": "getAgentAccountBalances",
       "method": "GET",
       "path": "/api/v1/agent/account/balances",
@@ -1413,7 +1413,7 @@
     },
     {
       "command": "account points",
-      "description": "Read shared Points and allowances; no rewards or activation. Requires current pairing; existing Key and shard rights still apply.",
+      "description": "Read Points as decimal strings with daily_allowances and reduced entries; no micro-unit fields, rewards or activation. Requires current pairing; existing Key and shard rights still apply.",
       "operation_id": "getAgentPoints",
       "method": "GET",
       "path": "/api/v1/agent/account/points",

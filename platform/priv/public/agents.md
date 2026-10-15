@@ -52,7 +52,7 @@ their account on regents.sh; a fresh pairing creates a new episode and restores 
 The tools provide your profile, current-status update, shared Credits balance,
 history, effective budget and Points summary, plus signed room, Key-thread and poll
 operations. These keep existing membership permissions. No spending or Points
-activation is added. Browser owner sessions and account-security controls cannot
+activation is added. Account reads return decimal amounts; Points uses `daily_allowances` and `more`, with only `points`, `source`, `by` and `earned_at` in each entry. See [shared account reads]({{origin}}/docs#shared-account-reads) for the response fields. Browser owner sessions and account-security controls cannot
 supply agent authority. After a lost write response, read back its outcome before a
 fresh-proof retry; keep the same logical send ID.
 

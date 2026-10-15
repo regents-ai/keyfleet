@@ -2810,7 +2810,7 @@
     {
       "name": "account_balances",
       "title": "Read shared Credits balance and my budget",
-      "description": "Read shared Credits balance and my budget. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
+      "description": "Read shared Credits and the current pairing budget, including remaining_24h and site_allowed; no account identifiers. The budget is a snapshot, not spending authority. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
       "annotations": {
         "readOnlyHint": true,
         "untrustedContentHint": true
@@ -3005,7 +3005,7 @@
     {
       "name": "points_balance",
       "title": "Read shared Points summary",
-      "description": "Read shared Points summary. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
+      "description": "Read Points as decimal strings with daily_allowances and reduced entries containing points, source, by and earned_at. No earning is activated. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing; fleet operations retain Key/shard permissions. The public product launch gate applies.",
       "annotations": {
         "readOnlyHint": true,
         "untrustedContentHint": true

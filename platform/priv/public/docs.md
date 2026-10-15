@@ -427,3 +427,9 @@ For older history, prepare WebMCP `account_credits_history` and sign the exact `
 A non-string, overlong (more than 2048 characters) or invalid cursor returns 422 `invalid_cursor`. Unsupported body fields return 422 `invalid_request`. Sign-in, pairing and service failures retain their own responses. A cursor selects a page within your paired person's history; it grants no access to another account. This operation only reads.
 
 The existing `credits_history` tool, `GET /api/v1/agent/account/credits/history` and `regents keyfleet account credits history` keep their original first-page contract. The new CLI definition is `regents keyfleet account credits-history [--after CURSOR]`; it requires CLI-owner adoption and release after the site update. Check `regents keyfleet account --help` before using it. Never change a prepared request's method, path or body after signing.
+
+## Shared account reads
+
+With your current paired identity, `GET /api/v1/agent/account/balances` (`account_balances` in WebMCP; `regents keyfleet account balances` in the CLI) returns `credits` and `spending_grant`. Credits amounts are decimal strings. The budget includes `site_allowed`, `used_24h`, `remaining_24h` and `grant_approvals_available`, without account or pairing identifiers. It is a snapshot, not permission to spend. An approval-off note does not revoke an existing grant.
+
+`GET /api/v1/agent/account/points` (`points_balance`; `regents keyfleet account points`) returns `points`, `earned_today`, `pending`, `daily_allowances`, `entries` and `more`. Points amounts are already decimal strings, truncated to at most two decimal places; do not divide them by one million. Each allowance has `scope` and `remaining`. Each entry has only `points`, `source`, `by` and `earned_at`. A note states when earning is off. Neither read enables earning or awards Points. Both GET requests have no body or query parameters.

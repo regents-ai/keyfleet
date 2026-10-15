@@ -1131,7 +1131,7 @@ GET `/api/v1/agent/profile` with fresh wallet proof and current pairing. Sends n
 
 ## regents keyfleet account balances
 
-Read the shared Credits balance and this exact pairing budget; no spending.
+Read `credits` and `spending_grant` for the current pairing, including `site_allowed`, `used_24h`, `remaining_24h` and `grant_approvals_available`. Amounts are decimal strings. Account and pairing identifiers are omitted. A budget snapshot does not authorize spending.
 
 GET `/api/v1/agent/account/balances` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
 
@@ -1157,7 +1157,7 @@ GET `/api/v1/agent/account/credits/history` with fresh wallet proof and current 
 
 ## regents keyfleet account points
 
-Read shared Points and allowances; no rewards or activation.
+Read `points`, `earned_today`, `pending`, `daily_allowances`, `entries` and `more`. Points amounts are decimal strings, truncated to at most two decimal places. Entries contain only `points`, `source`, `by` and `earned_at`. No rewards or activation.
 
 GET `/api/v1/agent/account/points` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
 
@@ -1175,3 +1175,7 @@ GET `/api/v1/agent/account/points` with fresh wallet proof and current pairing. 
 Probe `agents whoami` first. When unpaired, obtain the owner's approval and code,
 redeem it once, then probe again with fresh proof. Follow the SIWA guide for
 supported signer setup; do not substitute owner cookies or a local fixture.
+
+## Account response adoption (2026-10-15)
+
+The local balance and Points response changes require coordinated site deployment and CLI/client guidance adoption. The existing commands and GET routes remain, but these responses are not backward-compatible: balances omit `account_id` and `pairing_id`; Points replaces raw micro-unit fields and internal entry identifiers with the decimal projection above. Clients must stop dividing the displayed Points strings by one million and use `daily_allowances` and `more`. A conditional `note` explains when grant approvals or Points earning are off; it changes neither setting. These source definitions do not establish deployed or packaged availability.
