@@ -41,13 +41,14 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     # other address answers 503.
     assert for({:get, path, :to_early} <- answers, do: path) ==
              ~w(/admin/errors /admin/errors/:id /admin/errors/:id/:occurrence_id /app) ++
-               ~w(/help /docs /fleets/:file /fleets/:fleet_id/rooms / /account) ++
+               ~w(/help /docs /fleets/:file /fleets/:fleet_id/rooms / /fleets/:fleet_id/notebooks/open /account) ++
                ~w(/account/points /account/wallets /account/connections /about /opportunities) ++
                for(
                  fleet <-
                    ~w(/classic/1 /syndicate/1 /cascade/1 /accelerant/1 /app/fleets/regents_club),
                  page <-
-                   ["", "/rooms/:slug", "/workspace", "/workspace/:object_id", "/proposals"] ++
+                   ["", "/rooms/:slug", "/workspace", "/workspace/:object_id"] ++
+                     ["/code/:repository/commits/:commit", "/proposals"] ++
                      ["/proposals/:number", "/treasury", "/polls", "/polls/:poll_id"] ++
                      ["/keys/:token_id"] ++
                      ["/keys/:token_id/dms", "/keys/:token_id/dms/:other_token_id"],

@@ -10,6 +10,7 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     "/rooms/:slug",
     "/workspace",
     "/workspace/:object_id",
+    "/code/:repository/commits/:commit",
     "/proposals",
     "/proposals/:number",
     "/treasury",
@@ -207,13 +208,13 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert first == second
     assert {:ok, decoded} = Jason.decode(first.json)
-    assert length(decoded["routes"]) == 67
+    assert length(decoded["routes"]) == 72
 
     assert Enum.map(decoded["routes"], & &1["route_id"]) ==
              ~w(home account points wallets connections about opportunities) ++
                List.flatten(
                  List.duplicate(
-                   ~w(fleet rooms workspace workspace_item proposals proposal treasury polls poll keys dms dm),
+                   ~w(fleet rooms workspace workspace_item code_commit proposals proposal treasury polls poll keys dms dm),
                    5
                  )
                )
@@ -255,6 +256,8 @@ defmodule KeyfleetWeb.RouteCatalogTest do
       {:object_id, _type} -> {"object_id", "task#12"}
       {:number, _type} -> {"number", "3"}
       {:poll_id, _type} -> {"poll_id", "3f1c6c2e-8a4b-4d2a-9b1e-0c5d7e9f1a2b"}
+      {:repository, _type} -> {"repository", "fibonacci_syndicate"}
+      {:commit, _type} -> {"commit", String.duplicate("a", 40)}
     end)
   end
 end
