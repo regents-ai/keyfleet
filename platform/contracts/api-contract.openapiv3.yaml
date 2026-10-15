@@ -3364,13 +3364,17 @@ components:
         data:
           type: object
           additionalProperties: false
-          required: [name, harness, wallet, paired_at, last_contact_at, account]
+          required: [id, name, harness, wallet, paired_at, last_contact_at, registry_listing, human_backed, same_person_agent_count, account]
           properties:
+            id: {type: string, format: uuid}
             name: {type: string}
             harness: {$ref: "#/components/schemas/SharedAgentHarness"}
             wallet: {$ref: "#/components/schemas/AgentWallet"}
             paired_at: {type: string, format: date-time}
             last_contact_at: {type: string, format: date-time}
+            registry_listing: {type: [string, "null"], format: uri}
+            human_backed: {type: boolean}
+            same_person_agent_count: {type: [integer, "null"]}
             account:
               type: object
               additionalProperties: false
