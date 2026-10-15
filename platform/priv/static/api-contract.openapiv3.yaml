@@ -158,7 +158,115 @@ paths:
                 type: object
                 required: [entries, pagination]
                 properties:
-                  entries: {type: array, items: {type: object}}
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - id
+                      - kind
+                      - at
+                      - amount
+                      - direction
+                      - site
+                      - purpose
+                      - reason
+                      - agent_address
+                      - pairing_id
+                      - key
+                      - tool
+                      - request
+                      - note
+                      - chain
+                      - tx_hash
+                      - refund_status
+                      - refund_sent_at
+                      properties:
+                        id:
+                          type: string
+                        kind:
+                          type: string
+                          enum:
+                          - bought
+                          - gift
+                          - refund
+                          - set_aside
+                          - returned
+                          - spent
+                          - received
+                        at:
+                          type: string
+                          format: date-time
+                        amount:
+                          type: string
+                          description: Positive decimal Credits amount, summed for this event.
+                        direction:
+                          type: string
+                          enum:
+                          - in
+                          - out
+                          - none
+                        site:
+                          type:
+                          - string
+                          - 'null'
+                        purpose:
+                          type:
+                          - string
+                          - 'null'
+                        reason:
+                          type:
+                          - string
+                          - 'null'
+                        agent_address:
+                          type:
+                          - string
+                          - 'null'
+                        pairing_id:
+                          type:
+                          - string
+                          - 'null'
+                        key:
+                          type:
+                          - string
+                          - 'null'
+                        tool:
+                          type:
+                          - string
+                          - 'null'
+                        request:
+                          type:
+                          - string
+                          - 'null'
+                          description: Present only when allowed for this reader; an agent receives request
+                            text only for its own hold.
+                        note:
+                          type:
+                          - string
+                          - 'null'
+                        chain:
+                          type:
+                          - string
+                          - 'null'
+                        tx_hash:
+                          type:
+                          - string
+                          - 'null'
+                        refund_status:
+                          type:
+                          - string
+                          - 'null'
+                          enum:
+                          - locked
+                          - sent
+                          - null
+                        refund_sent_at:
+                          type:
+                          - string
+                          - 'null'
+                          format: date-time
+                      description: Grouped history event. Inapplicable facts are null; received payments
+                        do not identify the payer.
                   pagination:
                     type: object
                     required: [has_more, next_cursor]
