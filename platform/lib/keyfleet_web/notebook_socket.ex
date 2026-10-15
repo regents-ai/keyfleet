@@ -37,7 +37,12 @@ defmodule KeyfleetWeb.NotebookSocket do
     {http, ws} = if uri.scheme == "https", do: {:https, :wss}, else: {:http, :ws}
     timeout = Notebooks.config()[:hub_timeout_ms]
 
-    with {:ok, conn} <- Mint.HTTP.connect(http, uri.host, uri.port, mode: :passive),
+    # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
+    with {:ok, conn} <-
+           Mint.HTTP.connect(http, uri.host, uri.port,
+             mode: :passive,
+             transport_opts: [inet6: true]
+           ),
          {:ok, conn, ref} <- Mint.WebSocket.upgrade(ws, conn, target, headers),
          {:ok, conn, status, response_headers, early} <- handshake(conn, ref, timeout, []),
          {:ok, conn, websocket} <- Mint.WebSocket.new(conn, ref, status, response_headers) do
