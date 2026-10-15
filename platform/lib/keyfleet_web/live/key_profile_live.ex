@@ -189,7 +189,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <FleetLive.buy_order
         id="key-profile-buy"
         fleet={@fleet}
-        buy={@fleet.buy}
         actor={@actor}
         lease={@lease}
       />

@@ -10,8 +10,9 @@ defmodule KeyfleetWeb.WalletPanel do
   links it. The page receives them before anyone presses. With another wallet
   active, the figures are built for the account's own wallet, a note names
   both, and a press sends nothing and says why. Signed out, nothing is built;
-  the daily split's preview, presence and the launch still show their
-  figures, read from the chain the same way, without their buttons.
+  the Key on sale, the daily split's preview, presence and the launch still
+  show their figures, read from the chain the same way, and all but Buy
+  without their buttons.
 
   Nothing here disables, hides or holds back a button while anything is
   pending: every press reaches the wallet, and the contract decides. The one
@@ -34,8 +35,9 @@ defmodule KeyfleetWeb.WalletPanel do
       `tool`, the browser tool in
       `priv/tool_manifest.json` that presses these buttons for a browser's own
       agent (`assets/js/page_tools.ts`), if any; and `class`;
-    * the slots `fields`, `notes` and `buttons`, each given the panel's state
-      (`inputs`, `built`, `review`, `presses`, `signer`) to read.
+    * the slots `heading`, `fields`, `notes`, `buttons` and `details` (the
+      last under what was sent), each given the panel's state (`inputs`,
+      `built`, `review`, `presses`, `signer`) to read.
 
   Buttons name their step with `data-onchain-step` and sit outside the form;
   fields that feed the steps carry `data-onchain-input` with the name they
@@ -58,8 +60,11 @@ defmodule KeyfleetWeb.WalletPanel do
   @reread_ms 10_000
   # How soon a group with a button the chain's state holds back reads it again.
   @blocked_ms 15_000
-  # The groups whose figures a visitor sees, read-only.
-  @shown_to_visitors [:run_split, :present, :launch_upkeep]
+  # The groups whose figures a visitor sees.
+  @shown_to_visitors [:buy, :run_split, :present, :launch_upkeep]
+  # The groups a visitor sees without their buttons: Buy stays, and a press
+  # asks for sign-in.
+  @read_only_for_visitors [:run_split, :present, :launch_upkeep]
 
   @doc "Whether the steps built for the group name `step`."
   def has_step?(%{built: %{review: review}}, step), do: Review.find(review, step) != nil
@@ -136,8 +141,10 @@ defmodule KeyfleetWeb.WalletPanel do
        tool: nil,
        names_sender: true,
        class: nil,
+       heading: [],
        fields: [],
        notes: [],
+       details: [],
        rebuild: nil,
        shown: nil
      )}
@@ -438,7 +445,7 @@ defmodule KeyfleetWeb.WalletPanel do
         panel: Map.take(assigns, [:inputs, :built, :review, :presses, :signer]),
         line: WalletWords.line(assigns.flow, assigns.built, assigns.inputs),
         chain: chain_name(%{assigns: assigns}),
-        read_only: assigns.actor == nil and assigns.flow in @shown_to_visitors
+        read_only: assigns.actor == nil and assigns.flow in @read_only_for_visitors
       )
 
     ~H"""
@@ -448,6 +455,8 @@ defmodule KeyfleetWeb.WalletPanel do
       phx-hook="OnchainSteps"
       data-webmcp-tool={@tool}
     >
+      {render_slot(@heading, @panel)}
+
       <form
         :if={@fields != []}
         id={"#{@id}-form"}
@@ -516,6 +525,8 @@ defmodule KeyfleetWeb.WalletPanel do
           </Regent.Primitives.button>
         </li>
       </ol>
+
+      {render_slot(@details, @panel)}
     </section>
     """
   end

@@ -1030,7 +1030,7 @@ defmodule KeyfleetWeb.FleetLive do
         </Regent.Primitives.button>
       </div>
 
-      <.buy_key fleet={@fleet} buy={@fleet.buy} actor={@actor} lease={@lease} />
+      <.buy_key fleet={@fleet} actor={@actor} lease={@lease} />
 
       <p>{Rules.pricing(@fleet.fleet_id)}</p>
     </aside>
@@ -1167,73 +1167,89 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   attr :fleet, :map, required: true
-  attr :buy, :map, required: true
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
-  # The top of the panel: the Key on offer and its price, as the bar names
-  # them, with Approve and Buy straight under it, then what a buyer should know.
+  # The top of the panel: the Key on offer and its price, with Approve and Buy
+  # straight under it, then what a buyer should know. The heading and the lines
+  # under the buttons read the same figures as the buttons, so all of them name
+  # the Key and price a press sends.
   defp buy_key(assigns) do
     ~H"""
     <section id="buy-key" aria-labelledby="buy-key-title">
-      <h3 id="buy-key-title" class="fleet-buy-title" tabindex="-1">
-        <span id="buy-key-offer" class="fleet-buy-offer" hidden={is_nil(@buy.price)}>
-          Key
-          <span id="buy-key-number" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
-            <span data-count>{@buy.token_id && grouped(@buy.token_id)}</span>
-          </span>
-          ·
-          <span id="buy-key-price" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
-            <span data-count>{@buy.price && usdc(@buy.price)}</span>
-          </span>
-          <span :if={@buy.level} id="buy-key-level"> · Level {@buy.level}</span>
-        </span>
-        <span :if={is_nil(@buy.price)}>Buying a Key</span>
-        <Regent.Primitives.tip :if={@buy.price} id="buy-key-tip" label="About paying">
-          Paid in USDC on Base from your wallet. If your wallet hasn’t already allowed this
-          much USDC, press Approve first: it approves exactly {usdc(@buy.price)}.
-        </Regent.Primitives.tip>
-      </h3>
+      <.buy_order id="buy-key" fleet={@fleet} actor={@actor} lease={@lease}>
+        <:heading :let={panel}>
+          <h3 id="buy-key-title" class="fleet-buy-title" tabindex="-1">
+            <span id="buy-key-offer" class="fleet-buy-offer" hidden={!on_sale(panel, :price)}>
+              Key
+              <span
+                id="buy-key-number"
+                phx-hook="MotionCount"
+                data-variant={Motion.standard("count")}
+              >
+                <span data-count>
+                  {on_sale(panel, :token_id) && grouped(on_sale(panel, :token_id))}
+                </span>
+              </span>
+              ·
+              <span id="buy-key-price" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
+                <span data-count>{on_sale(panel, :price) && usdc(on_sale(panel, :price))}</span>
+              </span>
+              <span :if={level(@fleet, panel)} id="buy-key-level">
+                · Level {level(@fleet, panel)}
+              </span>
+            </span>
+            <span :if={!on_sale(panel, :price)}>Buying a Key</span>
+            <Regent.Primitives.tip :if={on_sale(panel, :price)} id="buy-key-tip" label="About paying">
+              Paid in USDC on Base from your wallet. If your wallet hasn’t already allowed this
+              much USDC, press Approve first: it approves exactly {usdc(on_sale(panel, :price))}.
+            </Regent.Primitives.tip>
+          </h3>
+        </:heading>
+        <:details :let={panel}>
+          <FleetRisks.disclosure :if={buy_blocked(panel) != :sold_out} id="buy-key-risks" />
 
-      <.buy_order id="buy-key" fleet={@fleet} buy={@buy} actor={@actor} lease={@lease} />
-
-      <p
-        id="buy-key-price-may-move"
-        class="fleet-detail"
-        hidden={is_nil(@buy.price) or @fleet.current?}
-      >
-        Sales are still being counted, so this price may already have gone up. If it has,
-        the purchase is refused and no USDC is taken, though your wallet still pays the
-        network fee for trying.
-      </p>
-
-      <FleetRisks.disclosure :if={@buy.price} id="buy-key-risks" />
-
-      <p :if={is_nil(@buy.price)} id="buy-key-elsewhere" class="fleet-detail">
-        You can still get a Key from someone who holds one: it moves like any other token on
-        Base.
-      </p>
+          <p :if={buy_blocked(panel) == :sold_out} id="buy-key-elsewhere" class="fleet-detail">
+            You can still get a Key from someone who holds one: it moves like any other token on
+            Base.
+          </p>
+        </:details>
+      </.buy_order>
     </section>
     """
   end
 
+  # The level the Key on sale opens, on a fleet whose Keys come in levels.
+  defp level(fleet, panel) do
+    token_id = on_sale(panel, :token_id)
+    if token_id && Presets.levelled?(fleet.fleet_id), do: Presets.fibonacci_level_of(token_id)
+  end
+
   attr :id, :string, required: true, doc: "names the group and prefixes its buttons' ids"
-  attr :fleet, :map, required: true
-  attr :buy, :map, required: true, doc: "the Key on sale, `FleetPage.next_sale/2`"
+
+  attr :fleet, :map,
+    required: true,
+    doc: "the fleet, with its `progress`: a new sale reads the chain"
+
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
+  slot :heading, doc: "above the buttons, given the panel's state"
+  slot :details, doc: "under the buttons and what was sent, given the panel's state"
 
   @doc """
   Approve and Buy for the Key on sale, with the steps built on the server, in
   "Buying a Key" and in the window of the Key on sale.
 
-  Every press of Buy goes to the wallet, pending purchases or not. The one
-  exception is a sold-out fleet, read from the chain by the server: a
-  purchase is then certain to fail, so Buy stays in view but can't be
-  pressed, with the count of Keys sold beside it saying why.
-  Approve shows when the wallet's USDC allowance to the fleet is below the
-  price. The buttons stay in the page when the fleet sells out, so the buyer
-  keeps the outcome of every purchase they sent.
+  The Key's number, its price and whether the fleet is sold out come from
+  the figures the steps were built from, read from the chain at the latest
+  block, so the buttons and the line above them always name what a press
+  sends. Every press of Buy goes to the wallet, pending purchases or not.
+  The exceptions are presses the chain's own state makes certain to fail: a
+  sold-out fleet, sales not open yet, or an approval not made yet. Buy then
+  stays in view but can't be pressed, with why beside it. Approve shows when
+  the wallet's USDC allowance to the fleet is below the price. The buttons
+  stay in the page when the fleet sells out, so the buyer keeps the outcome
+  of every purchase they sent.
   """
   def buy_order(assigns) do
     ~H"""
@@ -1245,7 +1261,9 @@ defmodule KeyfleetWeb.FleetLive do
       fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
       actor={@actor}
       lease={@lease}
-      refresh={{@buy.token_id, @buy.price}}
+      refresh={@fleet.progress.total_minted}
+      heading={@heading}
+      details={@details}
     >
       <:buttons :let={panel}>
         <%!-- Only the network fee ever holds Approve back, and it holds Buy
@@ -1258,37 +1276,34 @@ defmodule KeyfleetWeb.FleetLive do
           aria-describedby={WalletPanel.blocked(panel, "approve") && "#{@id}-button-why"}
         >
           <span class="fleet-step-mark" aria-hidden="true">1</span>
-          <span data-press-label>Approve {@buy.price && usdc(@buy.price)}</span>
+          <span data-press-label>Approve {on_sale(panel, :price) && usdc(on_sale(panel, :price))}</span>
         </Regent.Primitives.button>
         <Regent.Primitives.button
           id={"#{@id}-button"}
           data-onchain-step="buy"
-          disabled={is_nil(@buy.price) or WalletPanel.blocked(panel, "buy") != nil}
-          aria-describedby={
-            cond do
-              is_nil(@buy.price) -> "#{@id}-sold-out"
-              WalletPanel.blocked(panel, "buy") -> "#{@id}-button-why"
-              true -> nil
-            end
-          }
+          disabled={buy_blocked(panel) != nil}
+          aria-describedby={buy_blocked(panel) && "#{@id}-button-why"}
         >
           <span :if={approve_shown?(panel)} class="fleet-step-mark" aria-hidden="true">2</span>
-          <span data-press-label>Buy Key {@buy.token_id && grouped(@buy.token_id)}</span>
+          <span data-press-label>
+            Buy Key {on_sale(panel, :token_id) && grouped(on_sale(panel, :token_id))}
+          </span>
         </Regent.Primitives.button>
-        <span :if={is_nil(@buy.price)} id={"#{@id}-sold-out"} class="wallet-panel-note">
-          {grouped(@buy.max_supply)}/{grouped(@buy.max_supply)} Keys sold
-        </span>
-        <span
-          :if={@buy.price && WalletPanel.blocked(panel, "buy")}
-          id={"#{@id}-button-why"}
-          class="wallet-panel-why"
-        >
-          {WalletWords.blocked(WalletPanel.blocked(panel, "buy"))}
+        <span :if={buy_blocked(panel)} id={"#{@id}-button-why"} class="wallet-panel-why">
+          {WalletWords.blocked(buy_blocked(panel))}
         </span>
       </:buttons>
     </.live_component>
     """
   end
+
+  # Why Buy is certain to fail now, as the chain read at the latest block
+  # says, or nil.
+  defp buy_blocked(%{built: %{problem: :sold_out}}), do: :sold_out
+  defp buy_blocked(panel), do: WalletPanel.blocked(panel, "buy")
+
+  # The Key on sale's number or price, as the steps were built from them.
+  defp on_sale(panel, figure), do: panel |> WalletPanel.figures() |> Map.get(figure)
 
   # Approve shows while the wallet the figures are for needs an approval.
   defp approve_shown?(%{built: %{figures: %{approve?: true}}}), do: true

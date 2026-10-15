@@ -9,8 +9,9 @@ defmodule Keyfleet.WalletSteps.Steps do
   trust.
 
   Anyone may read the figures some groups show, which are public on the
-  chain: the daily split's preview, whether keys are present, and the
-  fleet's launch. They are read the same way, and nothing is built to send.
+  chain: the Key on sale, the daily split's preview, whether keys are
+  present, and the fleet's launch. They are read the same way, and nothing
+  is built to send.
   """
   use Ash.Resource,
     domain: Keyfleet.WalletSteps,
@@ -73,7 +74,7 @@ defmodule Keyfleet.WalletSteps.Steps do
 
       argument :flow, :atom,
         allow_nil?: false,
-        constraints: [one_of: [:run_split, :present, :launch_upkeep]]
+        constraints: [one_of: [:buy, :run_split, :present, :launch_upkeep]]
 
       argument :token_id, :integer, constraints: [min: 1]
 

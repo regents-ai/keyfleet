@@ -400,6 +400,12 @@
   min-width: 0;
 }
 
+/* What a buyer should know, under the buttons, spans the panel. */
+#buy-key-order > .fleet-risks,
+#buy-key-order > .fleet-detail {
+  justify-self: stretch;
+}
+
 .fleet-buy-title {
   display: flex;
   flex-wrap: wrap;
