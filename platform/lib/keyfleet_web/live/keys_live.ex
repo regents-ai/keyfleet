@@ -20,12 +20,14 @@ defmodule KeyfleetWeb.KeysLive do
 
   alias Keyfleet.Actors.Human
   alias Keyfleet.Chain
+  alias Keyfleet.Fleets.Presets
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Keys
   alias Keyfleet.Keys.Profile
   alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.PresenceCard
   alias KeyfleetWeb.DmsLive
+  alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WalletPanel
 
@@ -323,8 +325,13 @@ defmodule KeyfleetWeb.KeysLive do
   """
   def refreshing, do: @refreshing
 
-  @doc "What the key's page shows of the key, as the visitor may see it."
+  @doc """
+  What the key's page shows of the key, as the visitor may see it. A Key past
+  the fleet's supply can never exist, so its page is not found.
+  """
   def key_view(socket, fleet_id, token_id) do
+    if beyond_supply?(fleet_id, token_id), do: raise(NotFoundError)
+
     actor = ShellLive.human_actor(socket)
     key = Keys.current_key!(fleet_id, token_id, actor: actor, load: [:fleet])
 
@@ -356,6 +363,13 @@ defmodule KeyfleetWeb.KeysLive do
   end
 
   def refresh_key(socket, _fleet_id, _token_ids), do: socket
+
+  defp beyond_supply?(fleet_id, token_id) do
+    case Presets.max_supply(fleet_id) do
+      nil -> false
+      supply -> token_id > supply
+    end
+  end
 
   defp owns_key?(%Human{wallet_addresses: wallets}, %{owner_wallet: owner}),
     do: owner in wallets

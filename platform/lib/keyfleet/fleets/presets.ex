@@ -56,7 +56,7 @@ defmodule Keyfleet.Fleets.Presets do
   """
   def progress(fleet_id, total_minted) when is_integer(total_minted) and total_minted >= 0 do
     preset = Map.fetch!(@presets, fleet_id)
-    max_supply = max_supply(preset)
+    max_supply = preset_supply(preset)
 
     sold_out? =
       preset == :regents_club or (max_supply != nil and total_minted >= max_supply)
@@ -84,6 +84,9 @@ defmodule Keyfleet.Fleets.Presets do
 
   @doc "A fleet's preset: `:fibonacci`, `:classic`, `:accelerant` or `:regents_club`."
   def preset(fleet_id), do: Map.fetch!(@presets, fleet_id)
+
+  @doc "How many Keys a fleet can ever have: `nil` for the two Fibonacci fleets, which have no limit."
+  def max_supply(fleet_id), do: fleet_id |> preset() |> preset_supply()
 
   @doc "Whether a fleet's Keys are given, one per Regents Club Pass, rather than sold."
   def given?(fleet_id), do: preset(fleet_id) == :regents_club
@@ -126,10 +129,10 @@ defmodule Keyfleet.Fleets.Presets do
   defp next_price(:classic, minted), do: elem(@classic_prices, minted)
   defp next_price(:accelerant, minted), do: accelerant_price(minted)
 
-  defp max_supply(:fibonacci), do: nil
-  defp max_supply(:classic), do: @classic_supply
-  defp max_supply(:accelerant), do: @accelerant_max_keys
-  defp max_supply(:regents_club), do: @club_supply
+  defp preset_supply(:fibonacci), do: nil
+  defp preset_supply(:classic), do: @classic_supply
+  defp preset_supply(:accelerant), do: @accelerant_max_keys
+  defp preset_supply(:regents_club), do: @club_supply
 
   # Token ids are contiguous, so every level before the next key's is complete.
   defp completed_levels(:fibonacci, minted), do: fibonacci_level_of(minted + 1) - 1
