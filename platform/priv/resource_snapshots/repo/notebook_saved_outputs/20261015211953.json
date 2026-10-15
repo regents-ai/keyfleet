@@ -45,7 +45,7 @@
       "references": null,
       "scale": null,
       "size": null,
-      "source": "version_id",
+      "source": "source_id",
       "type": "text"
     },
     {
@@ -91,7 +91,7 @@
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true,
-  "hash": "974E0A2A19CB6A53ED39C65748CD7E9C064233FCF98129BA0F83BF8191984792",
+  "hash": "F8DD1AA129EC2A9DD2ACDDD970396EE56B6C05E2D89A3CC5E02DD80279DC9CDD",
   "identities": [
     {
       "all_tenants?": false,
@@ -108,7 +108,7 @@
         },
         {
           "type": "atom",
-          "value": "version_id"
+          "value": "source_id"
         },
         {
           "type": "atom",

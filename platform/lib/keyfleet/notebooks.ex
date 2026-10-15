@@ -37,12 +37,14 @@ defmodule Keyfleet.Notebooks do
     resource Keyfleet.Notebooks.SavedOutput do
       define :keep_saved_output,
         action: :keep,
-        args: [:fleet_id, :notebook_id, :version_id, :saved_at, :page]
+        args: [:fleet_id, :notebook_id, :source_id, :saved_at, :page]
 
       define :saved_output,
         action: :at,
-        args: [:fleet_id, :notebook_id, :version_id, :saved_at],
+        args: [:fleet_id, :notebook_id, :source_id, :saved_at],
         not_found_error?: false
+
+      define :remove_saved_output, action: :remove
     end
   end
 
@@ -90,39 +92,42 @@ defmodule Keyfleet.Notebooks do
     |> URI.to_string()
   end
 
-  # The hub's own id shapes (marimohub f103eb2, packages/core/src/ids.ts), and
+  # The hub's own id shapes (marimohub f103eb2, packages/core/src/ids.ts): a
+  # saved page comes from a notebook version or from a background run. And
   # when a saved page was made, in milliseconds since 1970.
   @notebook_id ~r/\Anb-[0-9a-z]{16}\z/
-  @version_id ~r/\Aver_[0-9A-Z]{26}\z/
+  @source_id ~r/\A(ver_[0-9A-Z]{26}|run_[0-9A-HJKMNP-TV-Z]{26})\z/
   @saved_at ~r/\A[1-9][0-9]{0,15}\z/
 
   @doc """
-  A saved notebook output's address: one saved page of a notebook version, on
-  the fleet's notebook host,
-  `https://<fleet host>/results/<notebook id>/<version id>/<saved at>`, where
-  `saved at` is when the hub made that page, in milliseconds since 1970. A hub
-  makes a new page for a version each time that version's code runs again, so
-  the time names exactly one page. The address shows Keyfleet's own copy of
-  that page (`Keyfleet.Notebooks.SavedOutput`) for good, whatever the hub
-  keeps. Only the fleet's members open it.
+  A saved notebook output's address: one saved page of a notebook, on the
+  fleet's notebook host,
+  `https://<fleet host>/results/<notebook id>/<source id>/<saved at>`. The
+  source is the notebook version (`ver_…`) a session saved the page with, or
+  the background run (`run_…`) that made it; `saved at` is when the hub made
+  that page, in milliseconds since 1970. A hub makes a new page for a version
+  each time that version's code runs again, so the time names exactly one
+  page. The address shows Keyfleet's own copy of that page
+  (`Keyfleet.Notebooks.SavedOutput`) until a member removes it, whatever the
+  hub keeps. Only the fleet's members open it.
   """
-  def result_url(fleet_id, notebook_id, version_id, saved_at),
-    do: url(fleet_id, result_path(notebook_id, version_id, saved_at))
+  def result_url(fleet_id, notebook_id, source_id, saved_at),
+    do: url(fleet_id, result_path(notebook_id, source_id, saved_at))
 
   @doc "The path of a saved output on its fleet's notebook host."
-  def result_path(notebook_id, version_id, saved_at),
-    do: "/results/#{notebook_id}/#{version_id}/#{saved_at}"
+  def result_path(notebook_id, source_id, saved_at),
+    do: "/results/#{notebook_id}/#{source_id}/#{saved_at}"
 
   @doc """
-  The saved output a path names, as `{:ok, {notebook_id, version_id, saved_at}}`,
+  The saved output a path names, as `{:ok, {notebook_id, source_id, saved_at}}`,
   or `:error`. Only the address `result_path/3` spells is one.
   """
   def result(path) do
-    with ["", "results", notebook_id, version_id, saved_at] <- String.split(path, "/"),
+    with ["", "results", notebook_id, source_id, saved_at] <- String.split(path, "/"),
          true <-
-           Regex.match?(@notebook_id, notebook_id) and Regex.match?(@version_id, version_id) and
+           Regex.match?(@notebook_id, notebook_id) and Regex.match?(@source_id, source_id) and
              Regex.match?(@saved_at, saved_at) do
-      {:ok, {notebook_id, version_id, String.to_integer(saved_at)}}
+      {:ok, {notebook_id, source_id, String.to_integer(saved_at)}}
     else
       _ -> :error
     end
