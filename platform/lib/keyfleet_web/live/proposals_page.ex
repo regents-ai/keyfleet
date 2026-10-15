@@ -345,13 +345,12 @@ defmodule KeyfleetWeb.ProposalsPage do
   # one piece of 250 USDC, as typed. Typed in by hand until a reading says.
   defp convert_typed(nil), do: ""
 
-  defp convert_typed(reading),
-    do:
-      reading.conversion_waiting
-      |> Decimal.to_integer()
-      |> min(@piece_usdc)
-      |> units(6)
-      |> String.replace(",", "")
+  defp convert_typed(reading) do
+    case Decimal.to_integer(reading.conversion_waiting) do
+      0 -> ""
+      waiting -> waiting |> min(@piece_usdc) |> units(6) |> String.replace(",", "")
+    end
+  end
 
   defp figures(_fleet, nil, _assets), do: %{read?: false}
 

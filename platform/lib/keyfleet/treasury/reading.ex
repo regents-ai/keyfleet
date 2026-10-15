@@ -22,6 +22,7 @@ defmodule Keyfleet.Treasury.Reading do
   postgres do
     table "treasury_readings"
     repo(Keyfleet.Repo)
+    migration_defaults(conversion_waiting: "0")
 
     check_constraints do
       check_constraint(:block_hash, "treasury_readings_block_hash_shape",

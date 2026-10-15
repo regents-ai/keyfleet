@@ -3,23 +3,18 @@ defmodule Keyfleet.Repo.Migrations.RegentBoughtAndMoneyWaiting do
   REGENT bought for a fleet in its money history, and since when its
   protocol share and its USDC waiting to turn into REGENT have waited.
 
-  Generated with `mix ash.codegen`; the kept readings' new amount starts at
-  nothing.
+  Generated with `mix ash.codegen`. The waiting amount defaults to nothing in
+  the database, so a machine still running the previous release keeps saving
+  readings while the release rolls out.
   """
 
   use Ecto.Migration
 
   def up do
-    # A fleet's kept reading is replaced within a minute; until then it says
-    # nothing is waiting, and the new reading starts the clock.
     alter table(:treasury_readings) do
       add(:conversion_waiting, :decimal, null: false, default: 0)
       add(:protocol_share_owed_since, :utc_datetime_usec)
       add(:conversion_waiting_since, :utc_datetime_usec)
-    end
-
-    alter table(:treasury_readings) do
-      modify(:conversion_waiting, :decimal, default: nil)
     end
 
     create constraint(:treasury_readings, :treasury_readings_nonnegative_conversion_waiting,
