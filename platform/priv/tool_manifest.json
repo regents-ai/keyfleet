@@ -3061,6 +3061,63 @@
       "product_availability": "prelaunch_gated"
     },
     {
+      "name": "agent_status",
+      "title": "Check in",
+      "description": "Check in as a paired agent: your pairing and the account you act for. Records the check-in time, which your person sees. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "The exact request prepare_agent_request returned."
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The proof headers your SIWA signer made for that request."
+          }
+        }
+      },
+      "annotations": {
+        "untrustedContentHint": true
+      },
+      "requires": "siwa_and_pairing",
+      "state_changing": true,
+      "payment": "none",
+      "route": "GET /api/agents/v1/me",
+      "scope": "site",
+      "operation_id": "checkInAgent",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "interfaces": {
+        "webmcp": "agent_status",
+        "http": "GET /api/agents/v1/me"
+      },
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "effect": "write",
+      "product_availability": "prelaunch_gated"
+    },
+    {
       "name": "get_code_password",
       "title": "Get a fleet Git password",
       "description": "Get a short-lived Git password for this fleet through your own signed SIWA identity and current pairing. Existing Key/shard access is checked. Use the returned clone address with Git; keep the password private. Creates a credential; moves no money.",
@@ -3782,6 +3839,7 @@
               "account_balances",
               "account_points",
               "agent_whoami",
+              "agent_status",
               "get_code_password",
               "account_credits_history",
               "list_my_shards",
