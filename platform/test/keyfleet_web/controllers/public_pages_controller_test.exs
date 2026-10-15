@@ -67,47 +67,39 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
         |> html_response(200)
         |> LazyHTML.from_document()
 
-      expected = if path == "/", do: "dark", else: theme
-
       assert document |> LazyHTML.query("html") |> LazyHTML.attribute("data-brand") == [
                "platform"
              ]
 
-      assert document |> LazyHTML.query("html") |> LazyHTML.attribute("data-theme") == [expected]
+      assert document |> LazyHTML.query("html") |> LazyHTML.attribute("data-theme") == [theme]
 
       assert document
              |> LazyHTML.query("meta[name=color-scheme]")
-             |> LazyHTML.attribute("content") == [expected]
+             |> LazyHTML.attribute("content") == [theme]
     end
   end
 
-  test "before any choice a reading page carries no theme and follows the device" do
-    document =
-      build_conn()
-      |> get("/privacy")
-      |> html_response(200)
-      |> LazyHTML.from_document()
+  test "before any choice a reading page and home carry no theme and follow the device" do
+    for path <- ["/privacy", "/"] do
+      document =
+        build_conn()
+        |> get(path)
+        |> html_response(200)
+        |> LazyHTML.from_document()
 
-    assert document |> LazyHTML.query("html[data-theme]") |> Enum.count() == 0
+      assert document |> LazyHTML.query("html[data-theme]") |> Enum.count() == 0
 
-    assert document
-           |> LazyHTML.query("meta[name=color-scheme]")
-           |> LazyHTML.attribute("content") == ["dark light"]
+      assert document
+             |> LazyHTML.query("meta[name=color-scheme]")
+             |> LazyHTML.attribute("content") == ["dark light"]
 
-    assert document
-           |> LazyHTML.query("meta[name=theme-color]")
-           |> LazyHTML.attribute("media") == [
-             "(prefers-color-scheme: light)",
-             "(prefers-color-scheme: dark)"
-           ]
-
-    home =
-      build_conn()
-      |> get("/")
-      |> html_response(200)
-      |> LazyHTML.from_document()
-
-    assert home |> LazyHTML.query("html") |> LazyHTML.attribute("data-theme") == ["dark"]
+      assert document
+             |> LazyHTML.query("meta[name=theme-color]")
+             |> LazyHTML.attribute("media") == [
+               "(prefers-color-scheme: light)",
+               "(prefers-color-scheme: dark)"
+             ]
+    end
   end
 
   test "every answer lets only this site's pages offer browser tools" do
