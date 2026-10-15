@@ -109,7 +109,7 @@ defmodule Keyfleet.Treasury.Reading do
     attribute :block_time, :utc_datetime_usec, allow_nil?: false, public?: true
 
     # USDC, in atomic units: held back for the next Cascade level, and owed to
-    # the Regents Safe.
+    # REGENT staking.
     for field <- [:cascade_reserve, :protocol_share_owed] do
       attribute field, :decimal, allow_nil?: false, public?: true, constraints: [min: 0]
     end
