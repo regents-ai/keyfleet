@@ -1517,3 +1517,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   REGENT staking share has been owed for a day, or USDC has waited 3 hours
   with nothing turned into REGENT, it is saved with the site's errors,
   naming each fleet, so Sentinel emails it.
+
+## 2026-10-15 — Fewer details in error logs
+
+- A notebook hub answer of the wrong shape is logged by its kind alone, no
+  longer with the hub's whole answer, which could list the fleet's members.
+- A failed save of an agent's listing names the agent's pairing, no longer
+  its wallet address.

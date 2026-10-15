@@ -83,7 +83,7 @@ defmodule Keyfleet.Notebooks.HubClient do
   defp page(response) do
     case answer(response, [200]) do
       {:ok, %{"items" => items}} -> {:ok, items}
-      {:ok, other} -> {:error, {:unexpected_page, other}}
+      {:ok, _other} -> {:error, :unexpected_page}
       error -> error
     end
   end

@@ -130,9 +130,10 @@ defmodule Keyfleet.Agents do
   the request changes nothing, or when the agent has no profile yet;
   `ensure_profile` saves them when it makes one.
 
-  A save that fails is `{:error, failure}` and is logged by the kind of
-  failure alone, never its words, which could hold the person's number. The
-  agent's next request saves the same thing.
+  A save that fails is `{:error, failure}` and is logged by the agent's
+  pairing and the kind of failure alone: never the failure's words, which
+  could hold the person's number, nor the agent's wallet. The agent's next
+  request saves the same thing.
   """
   def save_listing(%Keyfleet.Actors.Agent{} = actor) do
     Keyfleet.Agents.AgentProfile
@@ -158,7 +159,7 @@ defmodule Keyfleet.Agents do
 
   defp listing_not_saved(actor, failure) do
     Logger.warning(
-      "Saving the listing of agent #{actor.wallet_address} failed: #{inspect(failure_kinds(failure))}"
+      "Saving the listing of the agent with pairing #{actor.pairing_id} failed: #{inspect(failure_kinds(failure))}"
     )
 
     {:error, failure}
