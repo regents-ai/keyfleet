@@ -1052,9 +1052,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         assert why(view, "#proposal-carry-out-button") == carry_out, "proposal #{number}"
         assert why(view, "#proposal-cancel-button") == cancel, "proposal #{number}"
 
+        closed = if number == 2, do: "Only No while it waits", else: "Voting closed"
+
         if number != 1 do
-          assert why(view, "#proposal-vote-yes") == "Voting closed", "proposal #{number}"
-          assert why(view, "#proposal-vote-abstain") == "Voting closed", "proposal #{number}"
+          assert why(view, "#proposal-vote-yes") == closed, "proposal #{number}"
+          assert why(view, "#proposal-vote-abstain") == closed, "proposal #{number}"
         end
       end
     end

@@ -187,7 +187,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           <h2 id="proposal-vote-title">
             Vote
             <Regent.Primitives.tip id="proposal-vote-tip" label="About voting">
-              Every Key you hold votes together, and so does every Key you hold a shard of while its agent voting is on. Voting again changes the vote until voting closes.
+              Every Key you hold votes together, and so does every Key you hold a shard of while its agent voting is on. Voting again changes the vote until voting closes. A proposal that moves money then waits a day, when only No can be voted; enough No votes cancel it.
             </Regent.Primitives.tip>
           </h2>
           <.live_component
