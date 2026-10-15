@@ -56,6 +56,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # Cookies and all caller identity headers are replaced by our signed pass.
   @kept_request ~w(accept accept-encoding accept-language content-type content-encoding
     if-none-match if-modified-since range user-agent sec-websocket-protocol)
+  # Marimo's runtime API needs its page's server token and kernel session id.
+  # These select an already-admitted runtime; they never establish hub identity.
+  @runtime_request ~w(marimo-server-token marimo-session-id)
   # Only what a notebook page reads from the hub's answers comes back: the
   # content and how it is encoded, what makes caching, ranges, downloads and
   # redirects work, the two headers the notebook app reads on a snapshot, and
@@ -365,7 +368,12 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   defp upstream_headers(conn, fleet_id, subject) do
-    kept = Enum.filter(conn.req_headers, fn {name, _value} -> name in @kept_request end)
+    allowed =
+      if String.starts_with?(conn.request_path, ["/proxy/", "/surface-proxy/"]),
+        do: @kept_request ++ @runtime_request,
+        else: @kept_request
+
+    kept = Enum.filter(conn.req_headers, fn {name, _value} -> name in allowed end)
     [{"x-keyfleet-assertion", Pass.mint(fleet_id, subject)} | kept]
   end
 
