@@ -92,13 +92,12 @@ test("the walk from home through every page, back, forward and the sidebar keeps
   const sidebar = page.locator("#shell-sidebar")
   const keyProfile: Stop = {path: `${fleetPath}?key=${key}`, shows: "dialog#key-profile"}
 
-  // Home is its own page; its fleet card is the one full load into the shell.
-  // Home's reads land first: leaving mid-read stops the read, which ends the
-  // server's one held transaction and every spec after this one.
+  // Home is its own page and links to no Syndicate page, so the walk enters
+  // the shell with one full load of the fleet's page.
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
   await page.goto("/")
-  await expect(page.locator("#home-tally-agents")).toBeVisible()
-  await page.locator(`#home-fleet-${fleet} a.rl-fleet-card__link`).click()
+  await expect(page.locator("#public-home")).toBeVisible()
+  await page.goto(fleetPath)
   const walk = await enterShell(page)
   await walk.arrive(fleetPage)
 

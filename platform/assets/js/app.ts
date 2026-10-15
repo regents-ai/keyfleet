@@ -25,7 +25,6 @@ import {installCopyButtons} from "./copy_buttons"
 import {installPublicTools} from "./public_tools"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {HolographicCard} from "./hooks/holographic_card"
-import {HomePrism} from "./hooks/home_prism"
 import {KeyMap} from "./hooks/key_map"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
@@ -69,15 +68,11 @@ function showingTheme(): Theme {
   return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"
 }
 
-// The public crown is a dark-only composition, not a change to visitor preference.
-const homeThemeLocked = () => window.location.pathname === "/"
-
-// Live navigation keeps the document, so each page restates its theme: dark on
-// the homepage, the visitor's choice elsewhere, or none so the device decides.
+// Live navigation keeps the document, so each page restates its theme: the
+// visitor's choice, or none so the device decides.
 function syncTheme() {
   const root = document.documentElement
-  const theme = homeThemeLocked() ? "dark" : chosenTheme()
-  root.dataset.homeThemeLocked = String(homeThemeLocked())
+  const theme = chosenTheme()
   if (theme) root.dataset.theme = theme
   else delete root.dataset.theme
   document.querySelector('meta[name="color-scheme"]')?.setAttribute("content", theme ?? "dark light")
@@ -297,7 +292,6 @@ const hooks = {
   ...colocatedHooks,
   FleetPreview,
   HolographicCard,
-  HomePrism,
   KeyMap,
   ModalDialog,
   MotionCascade,

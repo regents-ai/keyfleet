@@ -49,19 +49,19 @@ async function refuseStyleAttributes(page: Page, path: string) {
   return refusals
 }
 
-test("the homepage's fleet cards settle in once, when first scrolled to, and end clean", async ({page}) => {
+test("the homepage's tiles settle in once, when first scrolled to, and end clean", async ({page}) => {
   await openHomepage(page)
 
-  await page.locator("#home-fleet-cards").scrollIntoViewIfNeeded()
-  await expect.poll(() => moved(page, "#home-fleet-cards > li")).toBe(true)
+  await page.locator("#home-integration-tiles").scrollIntoViewIfNeeded()
+  await expect.poll(() => moved(page, "#home-integration-tiles > li")).toBe(true)
   await expect.poll(() => leftovers(page)).toEqual([])
 
   await page.evaluate(() => scrollTo(0, 0))
   await page.waitForTimeout(300)
   await forget(page)
-  await page.locator("#home-fleet-cards").scrollIntoViewIfNeeded()
+  await page.locator("#home-integration-tiles").scrollIntoViewIfNeeded()
   await page.waitForTimeout(600)
-  expect(await moved(page, "#home-fleet-cards > li")).toBe(false)
+  expect(await moved(page, "#home-integration-tiles > li")).toBe(false)
 })
 
 test("a page's headline rises in and is left exactly as the server drew it", async ({page, request}) => {
@@ -126,7 +126,7 @@ test("a reader who asked for less motion sees refusals and cards without movemen
 
   await page.goto("/")
   await expect(page.locator(".phx-connected").first()).toBeAttached()
-  await page.locator("#home-fleet-cards").scrollIntoViewIfNeeded()
+  await page.locator("#home-integration-tiles").scrollIntoViewIfNeeded()
   await page.waitForTimeout(600)
   expect(await anythingMoved(page), "the homepage").toBe(false)
 

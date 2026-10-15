@@ -10,32 +10,25 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   # Invariants covered:
   # - smoke: 200 mount and the public-home landmark, outside the signed-in shell
-  # - the five fleets in catalog order, Classic first, each opening its own map
-  # - a fleet coming soon is a card with its name and that it is coming soon,
-  #   and nothing it has sold or is doing
-  # - a card shows its fleet's newest open goal and featured item once connected,
-  #   and the first render reads neither
-  # - a card counts sold keys only once its fleet is on sale and read up to now
-  # - a notice about one fleet refreshes that fleet's card alone, and only
-  #   after the pause
-  # - a burst of notices is answered by one refresh of each fleet it names and
-  #   one count of the agents across every fleet
-  # - the hero counts the agents here, each once however many fleets it runs
-  #   keys in, and keys sold across every fleet once every card has read its
-  #   fleet, leaves keys out while a fleet's sales are catching up, follows a
-  #   change, and marks the count only with agents here
-  # - the hero's command box shows the homepage instruction whole and copies
-  #   exactly what it shows
-  # - the Markdown homepage links each open fleet to its own page for what it
-  #   is doing, says the others are coming soon, and links every fleet's page,
-  #   and those pages exist
-  # - the tech stack's four lines, on the page and in the Markdown homepage
+  # - while Classic is coming soon, "Buy Next Key" names Key 1 and its price
+  #   but is a disabled button with "Sales open soon" beside it, links nowhere,
+  #   and the header offers no Get a Key
+  # - once Classic is on sale, "Buy Next Key" opens its page with Get a Key
+  #   pressed, naming the Key on offer and its price after the Keys sold
+  # - once every Classic Key is sold, the button is disabled and says so
+  # - the Club shows its newest open goal and featured item once connected,
+  #   and the first render reads neither; a coming-soon Club reads nothing
+  # - a Club read that fails is said to have failed and never shown as zero
+  # - a burst of notices is answered by one refresh of each fleet it names
+  # - the command box shows the homepage instruction whole and copies exactly
+  #   what it shows
+  # - the Markdown homepage carries the tagline and the box's words as Sean
+  #   wrote them, says Classic opens soon until it does, then links its page
   # - launch-gate: internal links stay on the fleets' maps, the account page,
   #   the public documents, or anchors that exist
 
   @classic "fleet_tech_classic"
-  @syndicate "fibonacci_syndicate"
-  @cascade "fibonacci_cascade"
+  @club "regents_club"
   @owner "0x" <> String.duplicate("a", 40)
 
   setup context do
@@ -44,6 +37,11 @@ defmodule KeyfleetWeb.HomeLiveTest do
     unless context[:classic_undeployed] do
       ChainHelpers.deploy!(@classic)
       ChainHelpers.seed_cursor!(@classic)
+    end
+
+    unless context[:club_undeployed] do
+      ChainHelpers.deploy!(@club)
+      ChainHelpers.seed_cursor!(@club)
     end
 
     Enum.each(Fleets.catalog_ids(), &Workspace.open_log/1)
@@ -58,49 +56,49 @@ defmodule KeyfleetWeb.HomeLiveTest do
   end
 
   @tag :classic_undeployed
-  test "the five fleets are cards, Classic first, each opening its map", %{conn: conn} do
+  test "while Classic is coming soon, Buy Next Key is disabled with the reason beside it",
+       %{conn: conn} do
     {:ok, view, html} = live(conn, "/")
 
-    ids = Fleets.catalog_ids()
-    assert attribute(html, ".rl-fleet-card", "id") == Enum.map(ids, &"home-fleet-#{&1}")
+    assert has_element?(
+             view,
+             ~s(button#home-buy-next-key[disabled][aria-describedby="home-buy-why"]),
+             "Buy Next Key"
+           )
 
-    for %{id: id, name: name} <- Fleets.catalog() do
-      assert has_element?(
-               view,
-               ~s(#home-fleet-#{id} a[href="#{Keyfleet.Fleets.path(id)}"] h3),
-               name
-             )
-    end
-
-    assert attribute(html, ".key-map-preview", "data-layout") ==
-             ~w(classic fibonacci fibonacci accelerant regents_club)
+    assert text(view, "#home-buy-price") == "Key 1 · 10 USDC"
+    assert text(view, "#home-buy-why") == "Sales open soon"
+    refute html =~ "?buy"
+    refute has_element?(view, "#shell-get-key")
   end
 
-  @tag :classic_undeployed
-  test "a fleet coming soon is a card with its name and that it is coming soon, and nothing more",
+  test "once Classic is on sale, Buy Next Key opens its page at the Key on offer",
        %{conn: conn} do
-    Workspace.create(@cascade, "goal", %{"title" => "Map the cascade", "outcome" => "O"})
+    for token_id <- 1..3, do: issue!(@classic, token_id)
 
-    {:ok, view, html} = live(conn, "/")
-    render_async(view, 3_000)
+    {:ok, view, _html} = live(conn, "/")
 
-    assert attribute(html, "[data-coming-soon]", "id") ==
-             ~w(home-fleet-fleet_tech_classic home-fleet-fibonacci_syndicate home-fleet-fibonacci_cascade
-                home-fleet-fleet_tech_accelerant home-fleet-regents_club)
+    price = Keyfleet.Fleets.Presets.progress(@classic, 3).next_price
 
-    assert has_element?(view, "#home-fleet-#{@cascade} h3", "Cascade #1")
-    assert text(view, "#home-fleet-#{@cascade} [data-fleet-soon]") == "Coming soon"
-    assert attribute(html, "#home-fleet-preview-#{@cascade}", "data-minted") == ["0"]
-    refute has_element?(view, "#home-fleet-#{@cascade} .rl-fleet-card__now")
-    assert has_element?(view, "#home-fleet-#{@classic} [data-fleet-soon]")
-    refute has_element?(view, "#home-fleet-#{@classic} [data-fleet-who]")
+    assert has_element?(view, ~s(a#home-buy-next-key[href="/classic/1?buy"]), "Buy Next Key")
+    assert text(view, "#home-buy-price") == "Key 4 · #{KeyfleetWeb.FleetLive.usdc(price)}"
+    assert text(view, "#home-buy-why") == ""
+    assert text(view, "#home-classic-sold") == "3"
   end
 
-  test "a card shows its fleet's newest open goal and what it features, once connected",
+  test "once every Classic Key is sold, Buy Next Key is disabled and says so", %{conn: conn} do
+    issue!(@classic, 1024)
+
+    {:ok, view, _html} = live(conn, "/")
+
+    assert has_element?(view, "button#home-buy-next-key[disabled]")
+    assert text(view, "#home-buy-why") == "1,024/1,024 Keys sold"
+  end
+
+  test "the Club shows its newest open goal and what it features, once connected",
        %{conn: conn} do
-    ChainHelpers.deploy!(@cascade)
     goal("Sell the first audit", %{"open_questions" => ["Who pays for it?"]})
-    Workspace.edit(@classic, goal("Ship the site"), %{"status" => "dropped"})
+    Workspace.edit(@club, goal("Ship the site"), %{"status" => "dropped"})
 
     static = conn |> get("/") |> html_response(200)
     assert attribute(static, "[data-fleet-trying]", "class") == []
@@ -108,90 +106,34 @@ defmodule KeyfleetWeb.HomeLiveTest do
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
 
-    assert text(view, "#home-fleet-#{@classic} [data-fleet-trying]") ==
-             "Trying: Sell the first audit"
-
-    assert text(view, "#home-fleet-#{@cascade} [data-fleet-trying]") == "No goal set yet"
+    assert text(view, "#home-club [data-fleet-trying]") == "Trying: Sell the first audit"
 
     assert has_element?(
              view,
-             ~s(#home-fleet-#{@classic} [data-fleet-featured][data-kind="open_question"]),
+             ~s(#home-club [data-fleet-featured][data-kind="open_question"]),
              "Who pays for it?"
            )
 
     assert has_element?(
              view,
-             ~s(#home-fleet-#{@classic} [data-fleet-latest][data-kind="status"]),
+             ~s(#home-club [data-fleet-latest][data-kind="status"]),
              "Ship the site"
            )
+
+    assert has_element?(view, ~s(#home-club-open[href="/app/fleets/regents_club"]))
   end
 
-  test "a notice about one fleet refreshes that fleet's card alone, after a pause",
-       %{conn: conn} do
-    ChainHelpers.deploy!(@cascade)
+  @tag :club_undeployed
+  test "a coming-soon Club says so and reads nothing", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
 
-    goal("Sell the first audit")
-    Workspace.create(@cascade, "goal", %{"title" => "Map the cascade", "outcome" => "O"})
-
-    send(view.pid, {:graph_notable, @classic})
-    render(view)
-    render_async(view, 3_000)
-    assert text(view, "#home-fleet-#{@classic} [data-fleet-trying]") == "No goal set yet"
-
-    send(view.pid, {:refresh, @classic})
-    render(view)
-    render_async(view, 3_000)
-
-    assert text(view, "#home-fleet-#{@classic} [data-fleet-trying]") ==
-             "Trying: Sell the first audit"
-
-    assert text(view, "#home-fleet-#{@cascade} [data-fleet-trying]") == "No goal set yet"
+    assert text(view, "#home-club [data-fleet-soon]") == "Opens soon"
+    refute has_element?(view, "#home-club [data-fleet-who]")
+    refute has_element?(view, "#home-club-open")
   end
 
-  @tag :classic_undeployed
-  test "a card counts sold keys only once its fleet is on sale and read up to now",
-       %{conn: conn} do
-    classic = "fleet_tech_classic"
-
-    for fleet <- [@syndicate, @cascade],
-        do: ChainHelpers.deploy!(fleet)
-
-    ChainHelpers.seed_cursor!(@syndicate)
-    ChainHelpers.seed_cursor!(@cascade, head_block: 5_000, next_block: 1_000)
-    for token_id <- 1..3, do: issue!(@syndicate, token_id)
-
-    {:ok, view, html} = live(conn, "/")
-
-    assert attribute(html, "#home-fleet-preview-#{@syndicate}", "data-minted") == ["3"]
-    assert attribute(html, "#home-fleet-preview-#{classic}", "data-minted") == ["0"]
-
-    render_async(view, 3_000)
-
-    assert text(view, "#home-fleet-#{@syndicate} [data-fleet-who]") ==
-             "3 Keys sold · 0 agents here"
-
-    assert text(view, "#home-fleet-#{@cascade} [data-fleet-who]") ==
-             "Figures are catching up · 0 agents here"
-
-    assert text(view, "#home-fleet-#{classic} [data-fleet-soon]") == "Coming soon"
-    refute has_element?(view, "#home-fleet-#{classic} [data-fleet-who]")
-  end
-
-  test "the hero leaves keys out of its count while a fleet's sales are catching up",
-       %{conn: conn} do
-    ChainHelpers.deploy!(@syndicate)
-    ChainHelpers.seed_cursor!(@syndicate, head_block: 5_000, next_block: 1_000)
-    for token_id <- 1..3, do: issue!(@syndicate, token_id)
-
-    {:ok, view, _html} = live(conn, "/")
-    render_async(view, 3_000)
-
-    assert text(view, "#home-tally") == "0 agents here"
-  end
-
-  test "a read that fails is said to have failed, on the card and in the count, and the page stays up",
+  test "a Club read that fails is said to have failed, never zero, and the page stays up",
        %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
@@ -205,22 +147,17 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     log =
       capture_log(fn ->
-        send(view.pid, {:refresh, @classic})
-        send(view.pid, {:refresh, :agents})
+        send(view.pid, {:refresh, @club})
         render(view)
         render_async(view, 3_000)
       end)
 
-    assert text(view, "#home-fleet-#{@classic} [data-fleet-failed]") ==
-             "Couldn't read this fleet just now"
-
-    assert has_element?(view, "#home-fleet-#{@classic} [data-fleet-who]")
-    assert text(view, "#home-tally") == "0 agents here · 0 Keys sold · may be out of date"
+    assert text(view, "#home-club [data-fleet-failed]") == "Couldn't read this fleet just now"
     assert log =~ "failed"
     assert Process.alive?(view.pid)
   end
 
-  test "a first read that fails shows the failure, never zero", %{conn: conn} do
+  test "a first Club read that fails shows the failure, never zero", %{conn: conn} do
     Keyfleet.Repo.query!(
       "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.agent_profiles RENAME TO agent_profiles_away"
     )
@@ -229,9 +166,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
       {:ok, view, _html} = live(conn, "/")
       render_async(view, 3_000)
 
-      assert text(view, "#home-tally") == "Couldn't count the agents here just now"
-      assert has_element?(view, "#home-fleet-#{@classic} [data-fleet-failed]")
-      refute has_element?(view, "#home-fleet-#{@classic} [data-fleet-who]")
+      assert has_element?(view, "#home-club [data-fleet-failed]")
+      assert text(view, "#home-club [data-fleet-who]") == ""
     end)
   end
 
@@ -245,9 +181,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-instruction") == SendAgent.home_instruction()
   end
 
-  test "a burst of notices is answered by one refresh of each fleet and one count of agents",
-       %{conn: conn} do
-    ChainHelpers.deploy!(@cascade)
+  test "a burst of notices is answered by one refresh of each fleet", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
     render_async(view, 3_000)
 
@@ -256,77 +190,64 @@ defmodule KeyfleetWeb.HomeLiveTest do
     :erlang.trace(view.pid, true, [:call])
     on_exit(fn -> :erlang.trace_pattern({:erlang, :send_after, 3}, false, [:global]) end)
 
-    send(view.pid, {:graph_notable, @classic})
-    send(view.pid, {:graph_notable, @classic})
-    send(view.pid, {:proposals_changed, @classic})
+    send(view.pid, {:graph_notable, @club})
+    send(view.pid, {:graph_notable, @club})
+    send(view.pid, {:proposals_changed, @club})
+    send(view.pid, {:keys_changed, @classic, [1]})
 
     send(view.pid, %Broadcast{
       event: "key_activity",
-      payload: %{fleet_id: @cascade, token_ids: [1]}
+      payload: %{fleet_id: @classic, token_ids: [1]}
     })
 
     render(view)
 
+    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @club}]}}
     assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @classic}]}}
-    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, :agents}]}}
-    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @cascade}]}}
     refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
 
-    # Once the fleet has read again, its next notice sets a pause of its own;
-    # the agents are still due their read.
-    send(view.pid, {:refresh, @classic})
-    send(view.pid, {:graph_notable, @classic})
+    # Once the fleet has read again, its next notice sets a pause of its own.
+    send(view.pid, {:refresh, @club})
+    send(view.pid, {:graph_notable, @club})
     render(view)
 
-    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @classic}]}}
+    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @club}]}}
     refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
   end
 
-  test "the Markdown homepage sends agents to each open fleet's own page for what it is doing",
+  @charter "No leader here. The agents set their own agenda (with human guidance) and work " <>
+             "or research, earn stablecoins, and share the onchain treasury"
+
+  test "the page and the Markdown homepage carry the tagline and the box's words as written",
        %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+    assert text(view, "#home-title") == "Your personal agent joins a Fleet with a Key."
+    assert text(view, "#home-charter-text") == @charter
+
     markdown =
       conn |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
+
+    assert markdown =~ "\nYour personal agent joins a Fleet with a Key.\n"
+    assert markdown =~ "\n> #{@charter}\n"
 
     [_, section] = String.split(markdown, "\n## Classic #1\n", parts: 2)
     [_, path] = Regex.run(~r{\[What it’s doing right now\]\(https?://[^/]+(/[^)]+)\)}, section)
     assert path == "/fleets/fleet_tech_classic.md"
     assert build_conn() |> get(path) |> response(200) =~ "Classic #1"
-
-    for name <- ["Syndicate #1", "Cascade #1", "Accelerant #1"] do
-      [_, section] = String.split(markdown, "\n## #{name}\n", parts: 2)
-
-      [section | _] = String.split(section, "\n## ", parts: 2)
-      assert section == "\nComing soon. It has no Keys for sale and can’t be joined yet.\n"
-      refute section =~ "What it’s doing right now"
-    end
-
-    [_, all] = Regex.run(~r{\[Every fleet\]\(https?://[^/]+(/[^)]+)\)}, markdown)
-    assert build_conn() |> get(all) |> response(200) =~ "Syndicate #1"
   end
 
-  @stack [
-    "Bring your own agent: Hermes, OpenAI Dots, Muse, Grok Bot.",
-    "The agents collaborate between marimo notebooks, Activegraph.ai, and Twigpine.",
-    "Private chat rooms, and direct messages to other agents in their fleet.",
-    "Keys are owned and transferable on Base, and give treasury rights."
-  ]
-
-  test "the tech stack shows its four lines on the page and in the Markdown homepage",
-       %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/")
-    assert has_element?(view, "details#home-tech-stack:not([open]) summary", "Tech stack")
-
-    for {line, index} <- Enum.with_index(@stack, 1) do
-      assert has_element?(view, "#home-tech-stack li:nth-child(#{index})", line)
-    end
-
+  @tag :classic_undeployed
+  test "the Markdown homepage says Classic opens soon until it does", %{conn: conn} do
     markdown =
-      build_conn() |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
+      conn |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
-    assert markdown =~ "## Tech stack\n\n" <> Enum.map_join(@stack, "\n", &("- " <> &1))
+    [_, section] = String.split(markdown, "\n## Classic #1\n", parts: 2)
+    [section | _] = String.split(section, "\n## ", parts: 2)
+    assert section =~ "Sales open soon."
+    refute section =~ "What it’s doing right now"
   end
 
-  @open_paths ~w(/account /llms.txt /skill.md /docs /about /contact /opportunities /privacy /terms)
+  @open_paths ~w(/account /llms.txt /skill.md /docs /about /contact /privacy /terms)
 
   test "the public homepage links only to known pages and to anchors that exist",
        %{conn: conn} do
@@ -334,14 +255,12 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     anchors = attribute(html, "[id]", "id")
     fleet_paths = Enum.map(Fleets.catalog_ids(), &"#{Keyfleet.Fleets.path(&1)}")
-    briefing = conn |> get("/opportunities") |> html_response(200) |> attribute("[id]", "id")
 
     for href <- attribute(html, "a", "href"),
         href != "/",
         not String.starts_with?(href, "https://") do
       case String.split(href, "#", parts: 2) do
         ["", anchor] -> assert anchor in anchors
-        ["/opportunities", anchor] -> assert anchor in briefing
         [path] -> assert URI.parse(path).path in (@open_paths ++ fleet_paths)
       end
     end
@@ -365,7 +284,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   end
 
   defp goal(title, data \\ %{}),
-    do: Workspace.create(@classic, "goal", Map.merge(%{"title" => title, "outcome" => "O"}, data))
+    do: Workspace.create(@club, "goal", Map.merge(%{"title" => title, "outcome" => "O"}, data))
 
   defp text(view, selector) do
     view
