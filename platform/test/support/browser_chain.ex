@@ -58,6 +58,8 @@ defmodule Keyfleet.BrowserChain do
   @reveal_requested_at Call.selector("revealRequestedAt(uint256)")
   @owner_of Call.selector("ownerOf(uint256)")
   @sales_open Call.selector("salesOpen(uint256)")
+  @total_minted Call.selector("totalMinted()")
+  @next_price Call.selector("nextPrice()")
   @credits Call.selector("credits(address,address)")
   @shard_is_active Call.selector("isActive(uint256,address)")
   @shard_issued Event.topic0("ShardIssued(uint256,address,uint64,uint64)")
@@ -95,7 +97,10 @@ defmodule Keyfleet.BrowserChain do
     end
   end
 
-  @doc "Deploys the fleet the first time and reads it; returns how many keys it has sold."
+  @doc """
+  Deploys the fleet the first time, puts its Keys on sale through the manager
+  every fleet shares, and reads it; returns how many keys it has sold.
+  """
   def prepare!(fleet_id) do
     Fleets.bootstrap_catalog!()
     fleet = Fleets.get_fleet!(fleet_id)
@@ -116,6 +121,7 @@ defmodule Keyfleet.BrowserChain do
     end
 
     pass!(fleet_id, [])
+    remember(:on_sale, fleet_id)
 
     StubClient.share_chain(
       %{
@@ -217,6 +223,19 @@ defmodule Keyfleet.BrowserChain do
   defp answer(keys, @reveal_requested_at <> token_id, _block_hash) do
     refused? = Map.get(answers(), {:draw_refused, keys, String.to_integer(token_id, 16)}, false)
     {:ok, <<if(refused?, do: 0, else: 1)::256>>}
+  end
+
+  # Every fleet shares one manager, which sells the Keys of the fleet last
+  # prepared: as many as were sold here, and the next at its price until the
+  # last is sold, when the manager refuses to price one.
+  defp answer(@contract, @total_minted, _block_hash),
+    do: {:ok, <<minted(answers().on_sale)::256>>}
+
+  defp answer(@contract, @next_price, _block_hash) do
+    case Chain.progress(answers().on_sale).next_price do
+      nil -> {:error, :reverted}
+      price -> {:ok, <<price::256>>}
+    end
   end
 
   defp answer(_to, _data, _block_hash), do: {:error, :chain_unavailable}

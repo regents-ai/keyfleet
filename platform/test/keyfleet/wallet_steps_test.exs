@@ -106,6 +106,8 @@ defmodule Keyfleet.WalletStepsTest do
   describe "buying a key" do
     defp sale(fleet, amount, open? \\ true),
       do: [
+        uint(fleet.manager_address, "totalMinted()", 0),
+        uint(fleet.manager_address, "nextPrice()", 10_000_000),
         {fleet.keys_address, "salesOpen(uint256)", [fleet.chain_fleet_id], {"bool", [open?]}},
         {@usdc, "allowance(address,address)", [@signer, fleet.manager_address],
          {"uint256", [amount]}}
@@ -189,8 +191,13 @@ defmodule Keyfleet.WalletStepsTest do
       assert %{problem: :unread, review: %{steps: []}} = build!(:buy)
     end
 
-    test "a sold-out fleet has nothing to buy" do
-      ProposalHelpers.keys_sold!(@fleet, [1_024])
+    test "a sold-out fleet has nothing to buy", %{fleet: fleet} do
+      # The manager refuses to price a Key once every Key is sold.
+      ChainViews.put!([
+        uint(fleet.manager_address, "totalMinted()", 1_024),
+        {fleet.manager_address, "nextPrice()", [], :revert}
+      ])
+
       assert %{problem: :sold_out, review: %{steps: []}} = build!(:buy)
     end
   end

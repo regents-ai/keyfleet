@@ -10,7 +10,6 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   their id in the one Key collection, `Fleet.onchain_token_id/2`.
   """
 
-  alias Keyfleet.Chain
   alias Keyfleet.Fleets.{Fleet, Presets}
   alias Keyfleet.Keys
   alias Keyfleet.Treasury
@@ -32,13 +31,9 @@ defmodule Keyfleet.WalletSteps.KeySteps do
 
   @doc false
   def steps(:buy, request) do
-    progress = Chain.progress(request.fleet.id)
-
-    cond do
-      Presets.given?(request.fleet.id) -> {:problem, :not_for_sale, %{}}
-      progress.next_price -> buy(request, progress)
-      true -> {:problem, :sold_out, %{max_supply: progress.max_supply}}
-    end
+    if Presets.given?(request.fleet.id),
+      do: {:problem, :not_for_sale, %{}},
+      else: buy(request)
   end
 
   # Asking again for a key's random draw, which anyone may do while its
@@ -309,19 +304,35 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   defp present_blocked(_keys, [], _token_id), do: %{"present" => :too_new}
   defp present_blocked(_keys, _ready, _token_id), do: %{}
 
-  # The Key on offer at the price the page shows, bought from the fleet's
-  # manager, which takes the USDC. The wallet approves exactly that price when
-  # its USDC allowance to the manager is below it, and until it does the
-  # purchase is certain to fail, as it is before the fleet's sales open; the
-  # purchase names the price as its most, so a Key that has since cost more is
-  # refused and no USDC is taken. Founding fleets ask nothing of buyers, so the
-  # purchase carries no proof.
-  defp buy(%{fleet: fleet, signer: signer}, progress) do
-    price = progress.next_price
-    figures = %{token_id: progress.next_token_id, price: price, max_supply: progress.max_supply}
+  # The next Key, at its price, bought from the fleet's manager, which takes
+  # the USDC. How many Keys are sold, the next one's price and whether the
+  # fleet's sales are open are all read from the chain at the latest block,
+  # so a Key sold since the page last heard is already counted. The manager
+  # refuses to price the next Key only once every Key is sold (Regents Club
+  # Keys, never priced, are turned away before this), so a refusal means
+  # there is nothing left to buy. The wallet approves exactly the price when its USDC allowance to the
+  # manager is below it, and until it does the purchase is certain to fail,
+  # as it is before the fleet's sales open; the purchase names the price as
+  # its most, so a Key that has since cost more is refused and no USDC is
+  # taken. Founding fleets ask nothing of buyers, so the purchase carries no
+  # proof.
+  defp buy(%{fleet: fleet, signer: signer}) do
+    manager = &Reads.one(&1, fleet.manager_address, &2, [], {:uint, 256})
 
     with {:ok, reads} <- Reads.at_head(),
-         {:ok, open?} <-
+         {:ok, minted} <- manager.(reads, "totalMinted()") do
+      case manager.(reads, "nextPrice()") do
+        {:ok, price} -> offer(reads, fleet, signer, %{token_id: minted + 1, price: price})
+        {:error, :reverted} -> {:problem, :sold_out, %{max_supply: minted}}
+        {:error, _unread} -> {:problem, :unread, %{approve?: nil}}
+      end
+    else
+      _unread -> {:problem, :unread, %{approve?: nil}}
+    end
+  end
+
+  defp offer(reads, fleet, signer, %{price: price} = figures) do
+    with {:ok, open?} <-
            Reads.one(
              reads,
              fleet.keys_address,
