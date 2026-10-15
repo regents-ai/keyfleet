@@ -24,6 +24,7 @@ import {
 import {installCopyButtons} from "./copy_buttons"
 import {installPublicTools} from "./public_tools"
 import {FleetPreview} from "./hooks/fleet_preview"
+import {HexField, NextKeyCard} from "./hooks/home_hero"
 import {HolographicCard} from "./hooks/holographic_card"
 import {KeyMap} from "./hooks/key_map"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
@@ -291,6 +292,7 @@ const hooks = {
   ...labHooks,
   ...colocatedHooks,
   FleetPreview,
+  HexField,
   HolographicCard,
   KeyMap,
   ModalDialog,
@@ -298,6 +300,7 @@ const hooks = {
   MotionCount,
   MotionList,
   MotionRefusal,
+  NextKeyCard,
   OnchainSteps,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
   VerifiedConnections,

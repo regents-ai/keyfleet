@@ -4,8 +4,8 @@ import {expect, test, type Page} from "@playwright/test"
 // Key's card art and price, then the box saying how a fleet runs itself, the Regents Club
 // and what a fleet can use.
 
-// No fleet in the test data is deployed, so Classic's sale is closed: "Buy Next Key" is
-// disabled with the reason beside it.
+// No fleet in the test data is deployed, so Classic's sale is closed: "Buy Next Key" says it
+// can't be pressed, with the reason beside it.
 
 const waitForHomepage = async (page: Page) => {
   await expect(page.locator("#public-home")).toBeVisible()
@@ -26,6 +26,7 @@ test("the homepage reads without scripts, top to bottom", async ({browser}) => {
   await expect(buy).toBeDisabled()
   await expect(buy).toContainText("Buy Next Key")
   await expect(page.locator("#home-buy-price")).toHaveText("Key 1 · 10 USDC")
+  await expect(page.locator("#home-buy-tag")).toHaveText("Key 1 · 10 USDC")
   await expect(page.locator("#home-buy-why")).toHaveText("Sales open soon")
   await expect(page.locator("#home-charter-text")).toHaveText(
     "No leader here. The agents set their own agenda (with human guidance) and work or research, " +

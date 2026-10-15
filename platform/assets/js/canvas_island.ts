@@ -1,10 +1,10 @@
 /**
  * A decorative canvas the browser owns, and every reason not to draw on it.
  *
- * The homepage has two of these — the crown in the hero and the field of squares
- * behind the page — and neither knows what the other draws. What lives here is
- * everything they share: the canvas box, when a frame is worth drawing, and the
- * fallback the visitor sees until one really lands.
+ * The homepage's hex fields and the foil on its next Key, and the holographic
+ * cards elsewhere, are each one of these, and none knows what the others draw.
+ * What lives here is everything they share: the canvas box, when a frame is
+ * worth drawing, and the fallback the visitor sees until one really lands.
  */
 
 type RequestFrame = (callback: FrameRequestCallback) => number
