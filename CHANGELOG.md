@@ -1506,3 +1506,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   latest block.
 - The messages of a Key past a fleet's supply, and a conversation with one,
   are not found, the same as that Key's page.
+
+## 2026-10-15 — Turn into REGENT takes an amount; REGENT bought in the history
+
+- The Treasury tab's Turn into REGENT has an amount, filled with what waits,
+  up to 250 USDC, and left empty when nothing waits.
+- REGENT bought for the treasury shows in its money history, with the USDC
+  it cost.
+- When the Daily Treasury Slice to Keys is more than 6 hours overdue, the
+  REGENT staking share has been owed for a day, or USDC has waited 3 hours
+  with nothing turned into REGENT, it is saved with the site's errors,
+  naming each fleet, so Sentinel emails it.
