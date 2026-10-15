@@ -21,6 +21,10 @@ proof, audience `keyfleet`, on Base). Refusals every signed command shares:
 - 401 `unauthorized`: the signed request was not accepted.
 - 401 `duplicate_proof`, `unsupported_query` or `missing_signed_body`: a signature header
   was sent twice, the request carried a query string, or its body was not signed whole.
+- 401 `http_headers_missing`: a request signed by hand left out one of SIWA's own headers,
+  `x-siwa-signature`, `x-siwa-signature-input`, `x-siwa-receipt`, `x-key-id`, `x-timestamp`,
+  `x-agent-wallet-address` and `x-agent-chain-id`; the standard `Signature` headers don't count.
+  The CLI sends all of them.
 - The sign-in server's own refusal or failure, with its status, code, message and hint, such as
   409 `request_replayed`.
 - 422 `invalid_request`: the body doesn't fit the command; the hint names the fields it
