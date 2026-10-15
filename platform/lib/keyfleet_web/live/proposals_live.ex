@@ -58,7 +58,8 @@ defmodule KeyfleetWeb.ProposalsLive do
     protocol_share_sent: "Sent to REGENT staking",
     paid: "Paid",
     advanced: "Advanced",
-    split_allocated: "Shared with Key holders"
+    split_allocated: "Shared with Key holders",
+    regent_bought: "Bought"
   }
 
   attr :page, :any, required: true, doc: "the proposals as read, or `:unreadable`"
@@ -797,7 +798,17 @@ defmodule KeyfleetWeb.ProposalsLive do
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
+        inputs={%{"amount" => @treasury.convert_typed}}
       >
+        <:fields :let={panel}>
+          <.text_field
+            id="proposals-convert-amount"
+            name="amount"
+            label="USDC to turn"
+            inputmode="decimal"
+            value={panel.inputs["amount"]}
+          />
+        </:fields>
         <:buttons :let={panel}>
           <WalletPanel.step_button panel={panel} step="convert" id="proposals-convert-button">
             Turn into REGENT
@@ -819,6 +830,9 @@ defmodule KeyfleetWeb.ProposalsLive do
             <span>{history_word(line.kind)} <.amount value={line.amount} /></span>
             <span :if={line.account} class="proposals-detail">
               to <.wallet address={line.account} />
+            </span>
+            <span :if={line.spent} class="proposals-detail">
+              with <.amount value={line.spent} />
             </span>
           </li>
         </ol>
@@ -858,13 +872,14 @@ defmodule KeyfleetWeb.ProposalsLive do
             Once a day anyone can release it. Each asset at or above its minimum shares its balance times the rate, divided equally across every Key sold.
           </Regent.Primitives.tip>
         </h3>
-        <p :if={@treasury.read?} class="proposals-detail">
+        <p :if={@treasury.read?} id="proposals-split-rate" class="proposals-detail">
           {@treasury.split_rate} of eligible balances, shared equally across issued Keys.
         </p>
         <p
           :if={
             @treasury.read? and not is_nil(@treasury.next_run_at) and is_nil(split(panel)[:assets])
           }
+          id="proposals-split-next"
           class="proposals-detail"
         >
           Next release: {at(@treasury.next_run_at)}.

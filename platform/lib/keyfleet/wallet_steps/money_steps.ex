@@ -16,9 +16,9 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
 
   # The least ETH the treasury splits from, as the treasury fixes it.
   @eth_threshold 50_000_000_000_000_000
-  # The most USDC one conversion piece takes (the buyer's `PIECE_USDC`):
-  # 250 USDC, as the contracts' deploy-day checklist asks for.
-  @piece_usdc 250_000_000
+  # The USDC token's decimals, which the manager refuses to be deployed
+  # without.
+  @usdc_decimals 6
 
   @doc false
   def steps(:run_split, %{fleet: fleet}) do
@@ -111,34 +111,45 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
   # The USDC from Key sales the fleet's manager holds until the REGENT buyer
   # turns it into REGENT for the treasury. The buyer serves every fleet in
   # turn, one piece at a time, so a press converts the next piece in line,
-  # which may be another fleet's.
-  def steps(:convert, %{fleet: fleet}) do
+  # which may be another fleet's: at most the USDC typed, and at most 250
+  # USDC, as the buyer limits it.
+  def steps(:convert, %{fleet: fleet, inputs: inputs}) do
     manager = fleet.manager_address
 
     with {:ok, reads} <- Reads.at_head(),
          {:ok, waiting} <- Reads.one(reads, manager, "pendingConversion()", [], {:uint, 256}),
          {:ok, buyer} <- Reads.one(reads, manager, "REGENT_BUYER()", [], :address),
          {:ok, in_line} <- Reads.one(reads, buyer, "queueLength()", [], {:uint, 256}),
-         {:ok, next_piece_at} <- Reads.one(reads, buyer, "nextPieceAt()", [], {:uint, 64}) do
-      opens_at = if next_piece_at > 0, do: DateTime.from_unix!(next_piece_at)
-
-      blocked =
-        cond do
-          in_line == 0 ->
-            %{"convert" => :nothing_queued}
-
-          opens_at && DateTime.before?(Reads.now(reads), opens_at) ->
-            %{"convert" => {:opens_at, opens_at}}
-
-          true ->
-            %{}
-        end
-
-      {:ok, [Review.step("convert", buyer, Call.encode("convert(uint256)", [@piece_usdc]))],
-       %{waiting: waiting, in_line: in_line, opens_at: opens_at, blocked: blocked}}
+         {:ok, next_piece_at} <- Reads.one(reads, buyer, "nextPieceAt()", [], {:uint, 64}),
+         opens_at = if(next_piece_at > 0, do: DateTime.from_unix!(next_piece_at)),
+         figures = %{
+           waiting: waiting,
+           in_line: in_line,
+           opens_at: opens_at,
+           blocked: convert_blocked(reads, in_line, opens_at)
+         },
+         {:ok, amount} <-
+           Build.typed(
+             inputs,
+             "amount",
+             &Typed.amount(&1, @usdc_decimals, Typed.largest_uint256()),
+             figures
+           ) do
+      {:ok, [Review.step("convert", buyer, Call.encode("convert(uint256)", [amount]))],
+       Map.put(figures, :amount, amount)}
     else
+      {:problem, problem, figures} -> {:problem, problem, figures}
       _unread -> {:problem, :unread, %{blocked: %{}}}
     end
+  end
+
+  # Only an empty line, or a piece not open yet, is sure to fail.
+  defp convert_blocked(_reads, 0, _opens_at), do: %{"convert" => :nothing_queued}
+
+  defp convert_blocked(reads, _in_line, opens_at) do
+    if opens_at && DateTime.before?(Reads.now(reads), opens_at),
+      do: %{"convert" => {:opens_at, opens_at}},
+      else: %{}
   end
 
   defp approve(fleet, asset, amount),
