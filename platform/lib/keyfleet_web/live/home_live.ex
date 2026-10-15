@@ -498,8 +498,9 @@ defmodule KeyfleetWeb.HomeLive do
     %{state: :soon, price: price(Presets.progress(@classic, 0)), why: "Sales open soon"}
   end
 
-  defp offer(%{sales: %{buy: %{price: nil, max_supply: max}}}) do
-    %{state: :sold_out, price: nil, why: "#{grouped(max)}/#{grouped(max)} Keys sold"}
+  defp offer(%{sales: %{buy: %{price: nil}}}) do
+    max = grouped(Presets.max_supply(@classic))
+    %{state: :sold_out, price: nil, why: "#{max}/#{max} Keys sold"}
   end
 
   defp offer(%{sales: %{buy: buy}}) do
