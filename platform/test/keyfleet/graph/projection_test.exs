@@ -792,5 +792,5 @@ defmodule Keyfleet.Graph.ProjectionTest do
   end
 
   defp places(graph_after_seq),
-    do: %{graph: graph_after_seq, proposals: 0, dms: nil, quotes: nil}
+    do: %{graph: graph_after_seq, proposals: 0, keys: [], dms: nil, quotes: nil}
 end

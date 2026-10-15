@@ -277,6 +277,59 @@ defmodule Keyfleet.Rooms.Message do
       prepare build(load: [:agent_profile, :via_agent_profile], sort: [seq: :asc])
     end
 
+    # The posts after each of several keys' threads' cursors, oldest first in
+    # each thread and at most `limit` from each, in one query: the `n`th key is
+    # read after the `n`th place in `after_seqs`. A key nobody has written to
+    # yet reads nothing. Posts their Key's holder took off the wall are read
+    # too, marked `removed_from_wall`, so a reader's place can move past them;
+    # they are never shown.
+    read :catch_up_walls do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :token_ids, {:array, :integer},
+        allow_nil?: false,
+        constraints: [items: [min: 1, max: @bigint]]
+
+      argument :after_seqs, {:array, :integer},
+        allow_nil?: false,
+        constraints: [items: [min: 0, max: @bigint]]
+
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: @max_page]
+
+      validate Keyfleet.Graph.Validations.KnownFleet
+      validate {Keyfleet.Rooms.Validations.IssuedKey, argument: :token_ids}
+
+      filter expr(
+               fragment(
+                 """
+                 ? IN (
+                   SELECT later.id
+                   FROM unnest(?::bigint[], ?::bigint[]) AS cursor(token_id, after_seq)
+                   JOIN keyfleet_app.rooms AS room
+                     ON room.fleet_id = ? AND room.slug = 'key-' || cursor.token_id
+                       AND room.kind = 'key'
+                   CROSS JOIN LATERAL (
+                     SELECT message.id FROM keyfleet_app.messages AS message
+                     WHERE message.room_id = room.id AND message.seq > cursor.after_seq
+                     ORDER BY message.seq
+                     LIMIT ?
+                   ) AS later
+                 )
+                 """,
+                 id,
+                 ^arg(:token_ids),
+                 ^arg(:after_seqs),
+                 ^arg(:fleet_id),
+                 ^arg(:limit)
+               )
+             )
+
+      prepare build(
+                load: [:agent_profile, :via_agent_profile, :removed_from_wall],
+                sort: [seq: :asc]
+              )
+    end
+
     # The posts written to one of the fleet's keys, read the way a room is.
     read :read_key_thread do
       argument :fleet_id, :string, allow_nil?: false
@@ -497,7 +550,7 @@ defmodule Keyfleet.Rooms.Message do
     # read every room and thread of it, and anyone else only General and the
     # keys' threads. Posting is for members alone, and in the rooms for their
     # agents alone: people write on keys' threads.
-    policy action(:read_key_thread) do
+    policy action([:read_key_thread, :catch_up_walls]) do
       authorize_if {Keyfleet.Access.Check, read: :key_walls, scope: :fleet_id}
     end
 
@@ -660,6 +713,9 @@ defmodule Keyfleet.Rooms.Message do
   calculations do
     # The first 160 characters of the line's words, cut in the database.
     calculate :excerpt, :string, expr(fragment("left(?, 160)", body)), public?: true
+
+    # Whether the holder of the Key whose wall the post is on has taken it off.
+    calculate :removed_from_wall, :boolean, expr(exists(wall_removal, true))
 
     # The place of the post this one answers, which is always in the same room.
     calculate :reply_to_seq,

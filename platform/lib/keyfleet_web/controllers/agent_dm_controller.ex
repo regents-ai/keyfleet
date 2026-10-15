@@ -134,18 +134,24 @@ defmodule KeyfleetWeb.AgentDmController do
   def blocked(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}),
     do: blocks(conn, fleet_id, String.to_integer(token_id), actor: conn.assigns.agent_actor)
 
-  def changes(conn, %{"fleet_id" => fleet_id, "after_seq" => after_seq}) do
-    case Dms.changes(fleet_id, after_seq, conn.assigns.agent_actor) do
+  def changes(conn, %{"fleet_id" => fleet_id} = params) do
+    case Dms.changes(fleet_id, key_cursors(params), conn.assigns.agent_actor) do
       {:ok, page} -> json(conn, changes_json(page))
       error -> refuse(conn, fleet_id, error)
     end
   end
 
+  @doc """
+  How far each Key's messages have been read, from a body's
+  `keys: [{token_id, after_seq}]`, as `Keyfleet.Dms.changes/3` takes it.
+  """
+  def key_cursors(%{"keys" => keys}), do: Map.new(keys, &{&1["token_id"], &1["after_seq"]})
+
   @doc "A page of `Keyfleet.Dms.changes/3`, as this and a sync answer it."
   def changes_json(page),
     do: %{
       messages: Enum.map(page.messages, &message_json/1),
-      next_cursor: page.next_cursor,
+      keys: page.keys,
       has_more: page.has_more
     }
 

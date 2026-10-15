@@ -177,7 +177,11 @@ defmodule KeyfleetWeb.AgentRoomController do
     places = %{
       graph: graph["after_seq"],
       proposals: proposals["after_seq"],
-      dms: get_in(params, ["dms", "after_seq"]),
+      keys:
+        params
+        |> Map.get("keys", [])
+        |> Enum.map(&%{token_id: &1["token_id"], after_seq: &1["after_seq"]}),
+      dms: dm_cursors(params["dms"]),
       quotes: get_in(params, ["quotes", "after_seq"])
     }
 
@@ -242,6 +246,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   defp sync_json(synced, check_in, yours, muted, refused_code) do
     %{
       rooms: Enum.map(synced.rooms, &synced_room_json(&1, muted, refused_code)),
+      keys: Enum.map(synced.keys, &synced_wall_json(&1, muted)),
       graph: synced.graph,
       proposals: %{
         synced.proposals
@@ -251,6 +256,10 @@ defmodule KeyfleetWeb.AgentRoomController do
       yours: %{yours | tasks: Enum.map(yours.tasks, &task_json/1)}
     }
   end
+
+  # Direct messages are followed only when asked for.
+  defp dm_cursors(nil), do: nil
+  defp dm_cursors(dms), do: AgentDmController.key_cursors(dms)
 
   # Direct messages answer only when asked for.
   defp put_dms(answer, nil), do: answer
@@ -279,6 +288,14 @@ defmodule KeyfleetWeb.AgentRoomController do
       head_seq: room.head_seq,
       cursor: room.cursor,
       messages: room.messages |> Rooms.unmuted(muted) |> Enum.map(&RoomJSON.message/1)
+    }
+
+  defp synced_wall_json(wall, muted),
+    do: %{
+      token_id: wall.token_id,
+      head_seq: wall.head_seq,
+      cursor: wall.cursor,
+      messages: wall.messages |> Rooms.unmuted(muted) |> Enum.map(&RoomJSON.message/1)
     }
 
   # The key the agent writes as here (its own lowest key, or its shard's),

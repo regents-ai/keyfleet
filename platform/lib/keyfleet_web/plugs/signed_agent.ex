@@ -60,7 +60,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # The fields each room, sync, proposal read and poll body holds: the ones it
   # must name, then the ones it may add.
   @body_fields [
-    {@sync_path, {~w(rooms graph proposals run), ~w(dms quotes)}},
+    {@sync_path, {~w(rooms graph proposals run), ~w(keys dms quotes)}},
     {@proposal_read_path, {~w(number votes_after_seq), []}},
     {@create_room_path, {~w(slug name), []}},
     {@topic_path, {~w(topic), []}},
@@ -104,10 +104,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @max_dm_parts 8
   @auto_delete_days [nil, 1, 7, 30, 90]
   # One catch-up names up to 110 rooms, as many as a fleet holds (five fixed
-  # rooms, five open rooms and a hundred created ones), and how far the
-  # workspace and the proposals were read.
-  @sync_max_body 32 * 1024
+  # rooms, five open rooms and a hundred created ones), up to 100 keys' walls,
+  # how far the workspace and the proposals were read, and a place in each of
+  # up to 2,000 Keys' direct messages: every Key of the largest fleet with a
+  # supply limit (the Regents Club's 1,998). Catching up on direct messages
+  # alone fits the same body.
+  @sync_max_body 128 * 1024
   @max_sync_rooms 110
+  @max_sync_walls 100
+  @max_dm_keys 2_000
   # Places in a room are counted in a Postgres bigint.
   @max_seq 9_223_372_036_854_775_807
   @max_page 200
@@ -441,13 +446,16 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     cond do
       Regex.match?(@send_path, path) or Regex.match?(@key_send_path, path) -> @send_max_body
       dm_op(path) == "send" -> @send_max_body
-      Regex.match?(@sync_path, path) -> @sync_max_body
+      catch_up?(path) -> @sync_max_body
       limit = poll_body_limit(path) -> limit
       chain_op(path) == "proposals/create" -> @propose_max_body
       graph_op(path) in ~w(create patch link unlink archive) -> @graph_write_max_body
       true -> 4096
     end
   end
+
+  # A sync, and catching up on direct messages alone.
+  defp catch_up?(path), do: Regex.match?(@sync_path, path) or dm_op(path) == "changes"
 
   defp poll_body_limit(path) do
     cond do
@@ -573,13 +581,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   # A message names its words, the send key it is filed under and its parts;
   # auto-delete names its days, null to keep messages; catching up names only
-  # where to start; the rest say nothing more than their path. The Key a
-  # message is from is always the path's.
+  # where to start in each Key's messages; the rest say nothing more than
+  # their path. The Key a message is from is always the path's.
   defp check_dm_body("read", params), do: check_read_body(params)
-
-  defp check_dm_body("changes", %{"after_seq" => after_seq} = params)
-       when map_size(params) == 1 and is_integer(after_seq),
-       do: in_range(after_seq in 0..@max_seq)
+  defp check_dm_body("changes", params), do: check_dm_cursors(params)
 
   defp check_dm_body("send", %{"body" => body, "idempotency_key" => key} = params) do
     parts = Map.get(params, "parts", [])
@@ -681,16 +686,33 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp valid_topic_body?(_params), do: false
 
-  # Direct messages are followed only when `dms` names a place in them, and
-  # the person's requests to quote them only when `quotes` does.
-  defp check_sync_body(
+  # Keys' walls are followed only when `keys` names them, direct messages
+  # only when `dms` names a place in each Key's, and the person's requests to
+  # quote them only when `quotes` does.
+  # A body that doesn't fit is refused as that before one with a place out of
+  # range.
+  defp check_sync_body(params) do
+    checks = [
+      check_sync_rooms(params),
+      check_key_cursors(Map.get(params, "keys", []), @max_sync_walls),
+      check_sync_dms(params)
+    ]
+
+    cond do
+      :invalid in checks -> :invalid
+      :out_of_range in checks -> :out_of_range
+      true -> :ok
+    end
+  end
+
+  defp check_sync_rooms(
          %{"rooms" => rooms, "graph" => graph, "proposals" => proposals, "run" => run} = params
        )
        when is_list(rooms) do
-    logs = [graph, proposals | params |> Map.take(["dms", "quotes"]) |> Map.values()]
+    logs = [graph, proposals | params |> Map.take(["quotes"]) |> Map.values()]
 
     cond do
-      map_size(Map.drop(params, ["dms", "quotes"])) != 4 ->
+      map_size(Map.drop(params, ["keys", "dms", "quotes"])) != 4 ->
         :invalid
 
       not (Enum.all?(rooms, &cursor?/1) and Enum.all?(logs, &log_cursor?/1) and run?(run)) ->
@@ -707,7 +729,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
-  defp check_sync_body(_params), do: :invalid
+  defp check_sync_rooms(_params), do: :invalid
+
+  defp check_sync_dms(%{"dms" => dms}), do: check_dm_cursors(dms)
+  defp check_sync_dms(_params), do: :ok
 
   # A proposal is named by its number, and its votes are read on from a place.
   defp check_proposal_read_body(%{"number" => number, "votes_after_seq" => after_seq} = params)
@@ -756,6 +781,41 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: map_size(room) == 2 and is_binary(slug) and is_integer(after_seq)
 
   defp cursor?(_room), do: false
+
+  # How far each Key's messages have been read, one place per Key.
+  defp check_dm_cursors(%{"keys" => keys} = dms) when map_size(dms) == 1,
+    do: check_key_cursors(keys, @max_dm_keys)
+
+  defp check_dm_cursors(_dms), do: :invalid
+
+  # One place per key, each saying how far along that key's wall or messages
+  # the caller has read.
+  defp check_key_cursors(cursors, max) when is_list(cursors) do
+    cond do
+      not Enum.all?(cursors, &key_cursor?/1) ->
+        :invalid
+
+      not (length(cursors) <= max and
+               Enum.all?(
+                 cursors,
+                 &(&1["token_id"] in 1..@max_seq and &1["after_seq"] in 0..@max_seq)
+               )) ->
+        :out_of_range
+
+      length(Enum.uniq_by(cursors, & &1["token_id"])) != length(cursors) ->
+        :invalid
+
+      true ->
+        :ok
+    end
+  end
+
+  defp check_key_cursors(_cursors, _max), do: :invalid
+
+  defp key_cursor?(%{"token_id" => token_id, "after_seq" => after_seq} = cursor),
+    do: map_size(cursor) == 2 and is_integer(token_id) and is_integer(after_seq)
+
+  defp key_cursor?(_cursor), do: false
 
   defp log_cursor?(%{"after_seq" => after_seq} = log),
     do: map_size(log) == 1 and is_integer(after_seq)
@@ -843,7 +903,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp dm_fields("read"), do: {[], ~w(after_seq limit)}
   defp dm_fields("send"), do: {~w(body idempotency_key), ~w(parts)}
   defp dm_fields("auto_delete"), do: {~w(days), []}
-  defp dm_fields("changes"), do: {~w(after_seq), []}
+  defp dm_fields("changes"), do: {~w(keys), []}
   defp dm_fields(_op), do: {[], []}
 
   defp graph_fields(op) do

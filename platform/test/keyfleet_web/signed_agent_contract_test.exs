@@ -120,7 +120,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "rooms" => [%{"slug" => "general", "after_seq" => 0}],
        "graph" => %{"after_seq" => 0},
        "proposals" => %{"after_seq" => 0},
-       "dms" => %{"after_seq" => 0},
+       "keys" => [%{"token_id" => 1, "after_seq" => 0}],
+       "dms" => %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]},
        "quotes" => %{"after_seq" => 0},
        "run" => %{"kind" => "session"}
      }},
@@ -129,7 +130,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @sync, ["run", {:one_of, 1}], %{"kind" => "scheduled", "every_minutes" => 60}},
     {"POST", @sync, ["graph"], %{"after_seq" => 0}},
     {"POST", @sync, ["proposals"], %{"after_seq" => 0}},
-    {"POST", @sync, ["dms"], %{"after_seq" => 0}},
+    {"POST", @sync, ["dms"], %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]}},
     {"POST", @sync, ["quotes"], %{"after_seq" => 0}},
     {"POST", @proposal, [], %{"number" => 1, "votes_after_seq" => 0}},
     {"POST", @presence, [], %{}},
@@ -171,7 +172,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @dm <> "delete", [], %{}},
     {"POST", @dm <> "block", [], %{}},
     {"POST", @dm <> "unblock", [], %{}},
-    {"POST", @dm_changes, [], %{"after_seq" => 0}},
+    {"POST", @dm_changes, [], %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]}},
     {"POST", @graph <> "get", [], %{"id" => "goal#1"}},
     {"POST", @graph <> "changes", [], %{"after_seq" => 0, "limit" => 1}},
     {"POST", @graph <> "create", [],
@@ -540,6 +541,24 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     # A sync reads the workspace, which only a Key or a shard of one may.
     sync.(stranger, @address, [general], 403)
 
+    # Following a Key's wall, and naming one not sold yet.
+    wall = fn token_id, status ->
+      body = %{
+        "rooms" => [],
+        "graph" => %{"after_seq" => 0},
+        "proposals" => %{"after_seq" => 0},
+        "keys" => [%{"token_id" => token_id, "after_seq" => 0}],
+        "run" => %{"kind" => "session"}
+      }
+
+      answer(c, c.signer, "POST", @sync, @address, body, status)
+    end
+
+    assert [%{"token_id" => 2, "messages" => [%{"id" => ^opening_id} | _]}] =
+             wall.(2, 200).body["keys"]
+
+    assert wall.(minted + 1, 404).body["error"]["code"] == "key_unknown"
+
     # Reading a proposal: recorded, not yet made, and no proposal at all.
     ProposalHelpers.proposal!(@fleet, 1)
     ProposalHelpers.vote!(@fleet, 1, @owner, :no, [1])
@@ -787,11 +806,20 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              refused("same_key")
 
     assert [%{"id" => ^id}] =
-             answer(c, c.signer, "POST", @dm_changes, own, %{"after_seq" => 0}, 200).body[
+             answer(c, c.signer, "POST", @dm_changes, own, %{"keys" => []}, 200).body[
                "messages"
              ]
 
-    answer(c, c.signer, "POST", @dm_changes, own, %{"after_seq" => -1}, 422)
+    answer(
+      c,
+      c.signer,
+      "POST",
+      @dm_changes,
+      own,
+      %{"keys" => [%{"token_id" => 2, "after_seq" => -1}]},
+      422
+    )
+
     answer(c, c.signer, "POST", @dm <> "delete", own, %{}, 200)
 
     assert answer(c, c.signer, "POST", @dm <> "delete", own, %{}, 404).body ==
@@ -1132,7 +1160,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp body_cap(@send), do: 4_000 * 12 + 2 * 1024
   defp body_cap(@key_send), do: 4_000 * 12 + 2 * 1024
   defp body_cap(@dm <> "send"), do: 4_000 * 12 + 2 * 1024
-  defp body_cap(@sync), do: 32 * 1024
+  defp body_cap(@sync), do: 128 * 1024
+  defp body_cap(@dm_changes), do: 128 * 1024
   defp body_cap(@propose), do: 4_000 * 12 + 8 * 1024
   defp body_cap(@poll_start), do: (200 + 10 * 100 + 2_000) * 12 + 2 * 1024
   defp body_cap(@poll_vote), do: 500 * 12 + 2 * 1024
@@ -1146,7 +1175,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp empty_or_minimal(@key_send), do: %{"body" => "away", "idempotency_key" => "a-1"}
   defp empty_or_minimal(@dm <> "send"), do: %{"body" => "away", "idempotency_key" => "a-1"}
   defp empty_or_minimal(@dm <> "auto_delete"), do: %{"days" => nil}
-  defp empty_or_minimal(@dm_changes), do: %{"after_seq" => 0}
+  defp empty_or_minimal(@dm_changes), do: %{"keys" => []}
   defp empty_or_minimal(@avatar_start), do: @picture
 
   defp empty_or_minimal(@sync),

@@ -16,6 +16,8 @@ defmodule Keyfleet.Rooms do
   # As many rooms as a fleet holds: five fixed rooms, five open rooms and a
   # hundred created ones.
   @max_sync_rooms 110
+  # Keys' walls one catch-up follows.
+  @max_sync_walls 100
   @sync_page 50
   @graph_sync_page 100
   @quotes_page 20
@@ -35,6 +37,7 @@ defmodule Keyfleet.Rooms do
         not_found_error?: false
 
       define :open_key_thread, action: :open_key_thread, args: [:fleet_id, :token_id]
+      define :list_key_threads, action: :key_threads, args: [:fleet_id, :token_ids]
     end
 
     resource Keyfleet.Rooms.Message do
@@ -44,6 +47,11 @@ defmodule Keyfleet.Rooms do
       define :catch_up, action: :catch_up, args: [:fleet_id, :slugs, :after_seqs, :limit]
       define :send_to_key, action: :send_to_key
       define :read_key_thread, action: :read_key_thread, args: [:fleet_id, :token_id]
+
+      define :catch_up_walls,
+        action: :catch_up_walls,
+        args: [:fleet_id, :token_ids, :after_seqs, :limit]
+
       define :posts_as_key, action: :posts_as_key, args: [:fleet_id, :token_id]
       define :recent_posts, action: :recent_in_fleet, args: [:fleet_id]
 
@@ -149,7 +157,7 @@ defmodule Keyfleet.Rooms do
   rooms and may read none of them is refused (`Ash.Error.Forbidden`).
 
   `places` says how far the caller has read the rest, as
-  `%{graph: seq, proposals: seq, dms: seq | nil, quotes: seq | nil}`.
+  `%{graph: seq, proposals: seq, keys: walls, dms: cursors | nil, quotes: seq | nil}`.
 
   `graph` is the place in the workspace's log. The workspace answers with at
   most 100 of its changes after that point, as `Keyfleet.Graph.list_changes/3`
@@ -161,10 +169,18 @@ defmodule Keyfleet.Rooms do
   with the ones changed after that point, as `Keyfleet.Proposals.changes/2`
   does.
 
-  `dms`, when it is not nil, is the place in the caller's Keys' direct
-  messages, which then answer as `Keyfleet.Dms.changes/3` does: the messages to
-  or from every Key the caller holds now. With nil, `dms` is nil and direct
-  messages are not followed.
+  `keys` lists the keys' walls the caller follows, each a
+  `%{token_id: key, after_seq: seq}` saying how far it has read that wall, up
+  to #{@max_sync_walls} keys. Each wall answers as a room does, with
+  `token_id` in place of the slug: the posts after that point, the cursor they
+  reach and the wall's head. A key nobody has written to yet has a head of 0.
+  Posts its holder took off the wall are never answered, and the cursor moves
+  past them. A key the fleet has not issued is `KeyUnknownError`.
+
+  `dms`, when it is not nil, maps each Key to how far its direct messages have
+  been read, and they answer as `Keyfleet.Dms.changes/3` does: the messages to
+  or from every Key the caller holds now, each Key after its own place. With
+  nil, `dms` is nil and direct messages are not followed.
 
   `quotes`, when it is not nil, is the place in what the agent's person has
   asked it to quote in the fleet, which then answers as `quote_changes/3` does.
@@ -173,8 +189,8 @@ defmodule Keyfleet.Rooms do
   Something new, or more waiting, is answered at once, and so is everything
   when `wait?` is false. Otherwise the caller is answered as soon as the fleet
   announces a workspace change, a proposal change, a post past the caller's
-  place in a room it follows, a direct message past its place or a request
-  past its place, or after `:agent_wait_ms` with nothing, and asks again
+  place in a room it follows, something said by or to a key whose wall it
+  follows, a direct message past its Key's place or a request past its place, or after `:agent_wait_ms` with nothing, and asks again
   straight away. The announcements only say when to read again: everything
   the caller gets is read as the caller. Nothing is marked as read, and asking
   again is always safe.
@@ -204,6 +220,7 @@ defmodule Keyfleet.Rooms do
   defp read_sync(fleet_id, cursors, places, actor) do
     # The workspace is read first, since it answers for a fleet outside the catalog.
     with :ok <- validate_cursors(cursors),
+         :ok <- validate_walls(places.keys),
          :ok <- in_log(places.graph),
          :ok <- in_log(places.proposals),
          {:ok, graph} <-
@@ -213,16 +230,26 @@ defmodule Keyfleet.Rooms do
              actor: actor
            ),
          {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor),
+         {:ok, walls} <- sync_walls(fleet_id, places.keys, actor),
          {:ok, dms} <- sync_dms(fleet_id, places.dms, actor),
          {:ok, quotes} <- sync_quotes(fleet_id, places.quotes, actor) do
       proposals = Keyfleet.Proposals.changes(fleet_id, places.proposals)
-      {:ok, %{rooms: rooms, graph: graph, proposals: proposals, dms: dms, quotes: quotes}}
+
+      {:ok,
+       %{
+         rooms: rooms,
+         keys: walls,
+         graph: graph,
+         proposals: proposals,
+         dms: dms,
+         quotes: quotes
+       }}
     end
   end
 
   # Direct messages and the person's requests are followed only when asked for.
   defp sync_dms(_fleet_id, nil, _actor), do: {:ok, nil}
-  defp sync_dms(fleet_id, after_seq, actor), do: Keyfleet.Dms.changes(fleet_id, after_seq, actor)
+  defp sync_dms(fleet_id, cursors, actor), do: Keyfleet.Dms.changes(fleet_id, cursors, actor)
 
   defp sync_quotes(_fleet_id, nil, _actor), do: {:ok, nil}
   defp sync_quotes(fleet_id, after_seq, actor), do: quote_changes(fleet_id, after_seq, actor)
@@ -231,7 +258,7 @@ defmodule Keyfleet.Rooms do
     do: dm_topics(fleet_id, places.dms, actor) ++ quote_topics(fleet_id, places.quotes, actor)
 
   defp dm_topics(_fleet_id, nil, _actor), do: []
-  defp dm_topics(fleet_id, _after_seq, actor), do: Keyfleet.Dms.inbox_topics(fleet_id, actor)
+  defp dm_topics(fleet_id, _cursors, actor), do: Keyfleet.Dms.inbox_topics(fleet_id, actor)
 
   defp quote_topics(fleet_id, after_seq, %Keyfleet.Actors.Agent{human_account_id: account})
        when not is_nil(after_seq) and not is_nil(account),
@@ -261,12 +288,14 @@ defmodule Keyfleet.Rooms do
     end
   end
 
-  defp news?(%{rooms: rooms, graph: graph, proposals: proposals, dms: dms, quotes: quotes}),
+  defp news?(%{rooms: rooms, keys: walls, graph: graph, proposals: proposals} = synced),
     do:
       graph.events != [] or graph.has_more or proposals.items != [] or proposals.has_more or
-        Enum.any?(rooms, &room_news?/1) or dm_news?(dms) or quote_news?(quotes)
+        Enum.any?(rooms ++ walls, &room_news?/1) or dm_news?(synced.dms) or
+        quote_news?(synced.quotes)
 
-  # A refused room answers with its slug alone, so it never brings news.
+  # A refused room answers with its slug alone, so it never brings news. A
+  # wall is behind the way a room is.
   defp room_news?(%{refused: true}), do: false
   defp room_news?(room), do: room.messages != [] or room.cursor < room.head_seq
 
@@ -298,8 +327,9 @@ defmodule Keyfleet.Rooms do
   # A new run or watermark of the workspace is answered whatever it brings, as
   # the caller tells a log that started over by its `run_id`. A post is read
   # only when it is past the caller's place in a room it follows, and a direct
-  # message only when it is past the caller's place in them; either is answered
-  # once that read has something new. Keys changing in the fleet end the wait
+  # message only when it is past its Key's place; either is answered once that
+  # read has something new. Anything said by or to a key whose wall the caller
+  # follows is read too, since a wall nobody has written to has no place yet. Keys changing in the fleet end the wait
   # with what there is, so the caller asks again and hears what its class
   # hears now. The fleet's other announcements bring the caller nothing.
   # A steady run of other announcements must not hold the caller past its
@@ -331,8 +361,13 @@ defmodule Keyfleet.Rooms do
                do: read_again(fleet_id, read, until),
                else: await_news(fleet_id, read, synced, until)
 
-          %Phoenix.Socket.Broadcast{event: "dm_head", payload: %{seq: seq}} ->
-            if match?(%{next_cursor: cursor} when seq > cursor, synced.dms),
+          %Phoenix.Socket.Broadcast{event: "key_activity", payload: %{token_ids: token_ids}} ->
+            if Enum.any?(synced.keys, &(&1.token_id in token_ids)),
+              do: read_again(fleet_id, read, until),
+              else: await_news(fleet_id, read, synced, until)
+
+          %Phoenix.Socket.Broadcast{event: "dm_head", topic: topic, payload: %{seq: seq}} ->
+            if seq > dm_cursor(fleet_id, synced.dms, topic),
               do: read_again(fleet_id, read, until),
               else: await_news(fleet_id, read, synced, until)
 
@@ -347,6 +382,14 @@ defmodule Keyfleet.Rooms do
           left -> {:ok, synced}
         end
     end
+  end
+
+  # Where the caller has read the messages of the Key whose inbox `topic` is.
+  # A Key held now and not answered for is read from the start of its holding.
+  defp dm_cursor(fleet_id, dms, topic) do
+    Enum.find_value(dms.keys, 0, fn %{token_id: token_id, cursor: cursor} ->
+      Keyfleet.Dms.inbox_topic(fleet_id, token_id) == topic and cursor
+    end)
   end
 
   defp read_again(fleet_id, read, until) do
@@ -424,22 +467,51 @@ defmodule Keyfleet.Rooms do
          do: {:ok, Enum.group_by(posts, & &1.room_id)}
   end
 
+  # The posts of every wall named are read together, in one query, before the
+  # walls' heads, as the rooms' are. A post taken off a wall moves the cursor
+  # and is not answered.
+  defp sync_walls(_fleet_id, [], _actor), do: {:ok, []}
+
+  defp sync_walls(fleet_id, walls, actor) do
+    token_ids = Enum.map(walls, & &1.token_id)
+    after_seqs = Enum.map(walls, & &1.after_seq)
+
+    with {:ok, posts} <-
+           catch_up_walls(fleet_id, token_ids, after_seqs, @sync_page, actor: actor),
+         {:ok, threads} <- list_key_threads(fleet_id, token_ids, actor: actor) do
+      posts = Enum.group_by(posts, & &1.room_id)
+      threads = Map.new(threads, &{&1.token_id, &1})
+      {:ok, Enum.map(walls, &synced_wall(&1, threads[&1.token_id], posts))}
+    end
+  end
+
+  defp synced_wall(%{token_id: token_id, after_seq: after_seq}, nil, _posts),
+    do: %{token_id: token_id, head_seq: 0, cursor: after_seq, messages: []}
+
+  defp synced_wall(%{token_id: token_id, after_seq: after_seq}, thread, posts) do
+    read = Map.get(posts, thread.id, [])
+
+    %{
+      token_id: token_id,
+      head_seq: thread.head_seq,
+      cursor: cursor(read, after_seq),
+      messages: Enum.reject(read, & &1.removed_from_wall)
+    }
+  end
+
+  defp cursor([], after_seq), do: after_seq
+  defp cursor(posts, _after_seq), do: List.last(posts).seq
+
   defp synced(%{slug: slug, after_seq: after_seq}, room, posts) do
     %{id: room_id, kind: kind, head_seq: head_seq} = room
     messages = Map.get(posts, room_id, [])
-
-    cursor =
-      case List.last(messages) do
-        nil -> after_seq
-        last -> last.seq
-      end
 
     %{
       room_id: room_id,
       slug: slug,
       kind: kind,
       head_seq: head_seq,
-      cursor: cursor,
+      cursor: cursor(messages, after_seq),
       messages: messages
     }
   end
@@ -458,6 +530,24 @@ defmodule Keyfleet.Rooms do
   end
 
   defp validate_cursors(_cursors), do: {:error, :invalid_request}
+
+  # One entry per wall, each saying how far along that wall the caller has read.
+  defp validate_walls(walls) when is_list(walls) do
+    valid? =
+      length(walls) <= @max_sync_walls and
+        Enum.all?(walls, fn
+          %{token_id: token_id, after_seq: after_seq} ->
+            token_id in 1..@max_seq and after_seq in 0..@max_seq
+
+          _wall ->
+            false
+        end) and
+        walls |> Enum.uniq_by(& &1.token_id) |> length() == length(walls)
+
+    if valid?, do: :ok, else: {:error, :invalid_request}
+  end
+
+  defp validate_walls(_walls), do: {:error, :invalid_request}
 
   defp in_log(after_seq) when after_seq in 0..@max_seq, do: :ok
   defp in_log(_after_seq), do: {:error, :invalid_request}

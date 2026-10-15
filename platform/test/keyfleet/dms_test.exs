@@ -33,8 +33,8 @@ defmodule Keyfleet.DmsTest do
              Dms.read_conversation(@fleet, 1, 2, actor: human("e"))
 
     assert {:error, %Ash.Error.Forbidden{}} = Dms.inbox(@fleet, 2, actor: human("a"))
-    assert {:ok, %{messages: []}} = Dms.changes(@fleet, 0, human("e"))
-    assert {:error, %Ash.Error.Forbidden{}} = Dms.changes(@fleet, 0, human("f"))
+    assert {:ok, %{messages: []}} = Dms.changes(@fleet, %{}, human("e"))
+    assert {:error, %Ash.Error.Forbidden{}} = Dms.changes(@fleet, %{}, human("f"))
     assert Dms.inbox_topics(@fleet, human("e")) == ["dms:#{@fleet}:5"]
     assert Dms.inbox_topics(@fleet, human("f")) == []
 
@@ -52,7 +52,7 @@ defmodule Keyfleet.DmsTest do
              Dms.inbox!(@fleet, 2, %{blocked: true}, actor: human("b"))
 
     assert {:ok, %{messages: [%{body: "From a friend"}]}} =
-             Dms.changes(@fleet, 0, human("b"))
+             Dms.changes(@fleet, %{}, human("b"))
   end
 
   test "deleting a conversation removes its messages for both sides" do
@@ -97,7 +97,7 @@ defmodule Keyfleet.DmsTest do
     assert Dms.latest_in_conversation!(@fleet, 1, 2, actor: buyer) == []
     assert Dms.inbox!(@fleet, 1, actor: buyer) == []
     assert Dms.get_conversation!(@fleet, 1, 2, actor: buyer) == nil
-    assert {:ok, %{messages: [], next_cursor: 0, has_more: false}} = Dms.changes(@fleet, 0, buyer)
+    assert {:ok, %{messages: [], keys: [], has_more: false}} = Dms.changes(@fleet, %{}, buyer)
 
     %{seq: seq} = send!(human("b"), 2, 1, "To the buyer")
     shard = shard_agent("7", 1, 30)
@@ -108,8 +108,12 @@ defmodule Keyfleet.DmsTest do
       assert [%{last_body: "To the buyer", last_seq: ^seq}] = Dms.inbox!(@fleet, 1, actor: reader)
       assert %{last_body: "To the buyer"} = Dms.get_conversation!(@fleet, 1, 2, actor: reader)
 
-      assert {:ok, %{messages: [%{body: "To the buyer"}], next_cursor: ^seq, has_more: false}} =
-               Dms.changes(@fleet, 0, reader)
+      assert {:ok,
+              %{
+                messages: [%{body: "To the buyer"}],
+                keys: [%{token_id: 1, cursor: ^seq}],
+                has_more: false
+              }} = Dms.changes(@fleet, %{}, reader)
     end
 
     assert ["From the seller", "To the seller", "To the buyer"] =
@@ -123,7 +127,7 @@ defmodule Keyfleet.DmsTest do
     assert {:error, %Ash.Error.Forbidden{}} = send_dm(seller, 1, 2, "Still mine?")
 
     epoch!(5, "a", 2)
-    assert {:ok, %{messages: []}} = Dms.changes(@fleet, 0, seller)
+    assert {:ok, %{messages: []}} = Dms.changes(@fleet, %{}, seller)
   end
 
   test "a Key's new holder starts with fresh send keys" do
@@ -156,11 +160,32 @@ defmodule Keyfleet.DmsTest do
 
     assert Dms.inbox_topics(@fleet, human("b")) == ["dms:#{@fleet}:2", "dms:#{@fleet}:3"]
 
-    assert {:ok, %{messages: messages, has_more: false}} = Dms.changes(@fleet, 0, human("b"))
+    assert {:ok, %{messages: messages, has_more: false}} = Dms.changes(@fleet, %{}, human("b"))
     assert Enum.map(messages, & &1.body) == ["To b", "To Key 3's new holder"]
 
-    assert {:error, %Ash.Error.Forbidden{}} = Dms.changes(@fleet, 0, human("c"))
+    assert {:error, %Ash.Error.Forbidden{}} = Dms.changes(@fleet, %{}, human("c"))
     assert Dms.inbox_topics(@fleet, human("c")) == []
+  end
+
+  # A Key the reader gets later, here by a second shard, is read from the start
+  # of its holding, so its messages below another Key's place are not lost.
+  test "each Key is caught up from its own place" do
+    %{seq: first} = send!(human("a"), 1, 3, "To Key 3")
+    %{seq: second} = send!(human("a"), 1, 2, "To Key 2")
+    runner = shard_agent("7", 2, 30)
+
+    assert {:ok, %{messages: [%{body: "To Key 2"}], keys: [%{token_id: 2, cursor: ^second}]}} =
+             Dms.changes(@fleet, %{}, runner)
+
+    ChainHelpers.issue_shard!(@fleet, 3, runner.wallet_address, 30)
+
+    assert {:ok, %{messages: [%{body: "To Key 3"}], keys: keys, has_more: false}} =
+             Dms.changes(@fleet, %{2 => second}, runner)
+
+    assert keys == [%{token_id: 2, cursor: second}, %{token_id: 3, cursor: first}]
+
+    assert {:ok, %{messages: []}} =
+             Dms.changes(@fleet, Map.new(keys, &{&1.token_id, &1.cursor}), runner)
   end
 
   test "the hourly job removes messages past their conversation's auto-delete days" do
