@@ -232,7 +232,9 @@ config :keyfleet, :notebooks,
   handoff_ttl_seconds: 60,
   session_max_age: 12 * 60 * 60,
   max_request_bytes: 32 * 1024 * 1024,
-  hub_timeout_ms: 30_000
+  hub_timeout_ms: 30_000,
+  # The Fly runner allows 120 seconds to boot, plus creation and notebook setup.
+  session_start_timeout_ms: 180_000
 
 # Each fleet's code lives in one private repository in Keyfleet's own code
 # store, a Twigpine node at the private address `node` (runtime.exs reads

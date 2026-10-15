@@ -23,6 +23,10 @@ primary_region = "iad"
   internal_port = 4000
   force_https = true
 
+# Session creation can wait three minutes for a cold notebook runner.
+[http_service.http_options]
+  idle_timeout = 240
+
 # Keep one web instance until cross-instance long-poll resumption is fixed.
 # Machine count is managed by `fly scale count 1`; deploy with `--ha=false`.
 # Two dedicated processors and 4 GB, on the same one machine and volume. When

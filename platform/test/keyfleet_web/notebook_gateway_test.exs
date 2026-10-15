@@ -22,7 +22,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   @holder_wallet "0x" <> String.duplicate("a", 40)
   @buyer_wallet "0x" <> String.duplicate("b", 40)
 
-  setup do
+  setup context do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(owner) end)
 
@@ -40,6 +40,11 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
         {:ok, body, conn} = read_body(conn)
         [pass] = get_req_header(conn, "x-keyfleet-assertion")
         send(test, {:hub, conn.method, conn.request_path, subject(pass), body})
+
+        if delay = context[:hub_delay_ms][{conn.method, conn.request_path}] do
+          Process.sleep(delay)
+        end
+
         hub_answer(conn, holder)
       end)
 
@@ -393,6 +398,41 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       assert conn.status == status
       assert_receive {:hub, ^method, ^path, ^subject, ^body}
     end
+  end
+
+  # Costly failure: the gateway abandons a cold start while the hub keeps
+  # provisioning, leading the caller to create a second paid runner.
+  @tag hub_delay_ms: %{
+         {"POST", "/api/v1/projects/proj-fleet/notebooks/nb-cold/sessions"} => 300,
+         {"POST", "/api/v1/projects/proj-fleet/notebooks/nb-stuck/sessions"} => 2_500,
+         {"GET", "/api/v1/projects/proj-fleet/notebooks/nb-cold"} => 300
+       }
+  test "a cold session start outlasts the ordinary timeout and is forwarded only once", c do
+    cookie = enter!(c.holder)
+    assert get_notebook(@host, "/", cookie).status == 200
+
+    Application.put_env(
+      :keyfleet,
+      :notebooks,
+      Keyword.merge(Notebooks.config(), hub_timeout_ms: 100, session_start_timeout_ms: 2_000)
+    )
+
+    path = "/api/v1/projects/proj-fleet/notebooks/nb-cold/sessions"
+    assert post_notebook(@host, path, cookie).status == 201
+    assert_receive {:hub, "POST", ^path, "u_" <> _, _body}
+    refute_received {:hub, "POST", ^path, _, _}
+
+    read_path = "/api/v1/projects/proj-fleet/notebooks/nb-cold"
+    refused = get_notebook(@host, read_path, cookie)
+    assert json_response(refused, 502)["error"]["code"] == "notebooks_unavailable"
+    assert_receive {:hub, "GET", ^read_path, "u_" <> _, _body}
+    refute_received {:hub, "GET", ^read_path, _, _}
+
+    stuck_path = "/api/v1/projects/proj-fleet/notebooks/nb-stuck/sessions"
+    refused = post_notebook(@host, stuck_path, cookie)
+    assert json_response(refused, 502)["error"]["code"] == "notebooks_unavailable"
+    assert_receive {:hub, "POST", ^stuck_path, "u_" <> _, _body}
+    refute_received {:hub, "POST", ^stuck_path, _, _}
   end
 
   ## The fleet and its people

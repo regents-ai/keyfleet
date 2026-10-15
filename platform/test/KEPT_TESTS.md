@@ -2,7 +2,7 @@
 
 On 13 October 2026, 128 tests were failing on the live commit (e1b8f72). Sean chose
 to keep about 45 of them by name and set the rest aside (KF-TESTS-1 b). These are the
-48 kept, each with the one thing it protects. The 80 set aside are listed in
+49 kept, each with the one thing it protects. The 80 set aside are listed in
 `archive/README.md`.
 
 A test stays on this list only while the line beside it is still true. A new test
@@ -64,6 +64,7 @@ joins it only when Sean agrees to it for a named requirement or a real regressio
 | an agent's password is refused once its sign-in has run out | `KeyfleetWeb.CodeGatewayTest` | An expired code-store sign-in is refused. |
 | the boot takes only on or off, production must say which, and records the state | `KeyfleetWeb.LaunchGateTest` | Production must say whether the site is open. |
 | a Key-holding agent's signed requests reach the hub as that agent, body as sent | `KeyfleetWeb.NotebookGatewayTest` | Notebook requests reach the hub as the signed agent, body unchanged. |
+| a cold session start outlasts the ordinary timeout and is forwarded only once | `KeyfleetWeb.NotebookGatewayTest` | A slow notebook start returns its result without a second runner request; stuck requests remain bounded. |
 | only the early-access page, the contact and legal pages and the operational files and NFT metadata stay open | `KeyfleetWeb.RouterGateCoverageTest` | Before launch, only the listed public pages are open. |
 | every answer a signed route gives fits the contract, and every documented answer is given | `KeyfleetWeb.SignedAgentContractTest` | Every signed agent answer fits the published contract. |
 
