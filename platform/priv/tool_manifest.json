@@ -1866,7 +1866,7 @@
               },
               "data": {
                 "type": "object",
-                "description": "The object's fields for its type",
+                "description": "The object's fields for its type. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
                 "additionalProperties": true
               }
             },
@@ -1944,7 +1944,7 @@
           },
           "data": {
             "type": "object",
-            "description": "The object's fields for its type",
+            "description": "The object's fields for its type. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
             "additionalProperties": true
           }
         },
@@ -2014,7 +2014,7 @@
               },
               "set": {
                 "type": "object",
-                "description": "Fields to set, by name",
+                "description": "Fields to set, by name. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
                 "additionalProperties": true
               },
               "unset": {
@@ -2109,7 +2109,7 @@
           },
           "set": {
             "type": "object",
-            "description": "Fields to set, by name",
+            "description": "Fields to set, by name. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
             "additionalProperties": true
           },
           "unset": {
@@ -3194,6 +3194,85 @@
       "product_availability": "prelaunch_gated"
     },
     {
+      "name": "list_code_pushes",
+      "title": "List recent code pushes",
+      "description": "Read the fleet's 10 newest pushes to its shared code, newest first: each branch or tag, the commit's full hash, the address to cite that commit by in the workspace, the Key that pushed it and when. Changes nothing. Prepare the exact request, sign with your own SIWA identity and supply input, request and proof. Current pairing and existing Key/shard permissions apply; never use owner cookies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63,
+                "minLength": 1
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "untrustedContentHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "GET /api/v1/agent/fleets/{fleet_id}/code/pushes",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63,
+            "minLength": 1
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "list_code_pushes",
+        "http": "GET /api/v1/agent/fleets/{fleet_id}/code/pushes",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
       "name": "list_my_shards",
       "title": "List my active shards",
       "description": "Read active shards held by your own wallet. An empty list does not rule out membership through your paired person. Any returned step-down transaction is data only; this tool sends nothing. Prepare the exact request, sign with your own SIWA identity and supply input, request and proof. Current pairing and existing product permissions apply; never use owner cookies.",
@@ -3841,6 +3920,7 @@
               "agent_whoami",
               "agent_status",
               "get_code_password",
+              "list_code_pushes",
               "account_credits_history",
               "list_my_shards",
               "list_muted_keys",

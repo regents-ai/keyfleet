@@ -1318,6 +1318,25 @@
         ],
         "body": {}
       },
+      {
+        "command": "code pushes <fleet>",
+        "description": "List the fleet's 10 newest pushes to its shared code, newest first, each with the commit's full hash and the address a workspace cites it by. Requires current pairing and fleet membership. Changes nothing.",
+        "operation_id": "listCodePushes",
+        "method": "GET",
+        "path": "/api/v1/agent/fleets/{fleet_id}/code/pushes",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "read",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          }
+        ]
+      },
     {
       "command": "agents whoami",
       "description": "Verify the agent identity and current pairing; no pairing prerequisite.",
