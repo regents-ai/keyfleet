@@ -182,9 +182,11 @@ defmodule Keyfleet.Dms.Message do
       prepare {Keyfleet.Preparations.NewestFirst, sort: [seq: :desc], before: []}
     end
 
-    # The messages to or from any of the Keys after a place, oldest first, in
-    # each Key's current ownership epoch, without those sent to one of them by
-    # a Key it has blocked.
+    # The messages to or from any of the Keys, each Key read after its own
+    # place (the `n`th Key after the `n`th place in `after_seqs`), oldest first,
+    # in each Key's current ownership epoch, without those sent to one of them
+    # by a Key it has blocked. The lowest place bounds the whole read, so the
+    # read starts there.
     read :changes do
       argument :fleet_id, :string, allow_nil?: false
 
@@ -192,16 +194,38 @@ defmodule Keyfleet.Dms.Message do
         allow_nil?: false,
         constraints: [items: [min: 1, max: @bigint]]
 
-      argument :after_seq, :integer, default: 0, constraints: [min: 0, max: @bigint]
+      argument :after_seqs, {:array, :integer},
+        allow_nil?: false,
+        constraints: [items: [min: 0, max: @bigint]]
+
       argument :limit, :integer, default: 50, constraints: [min: 1, max: @max_page]
 
       validate Keyfleet.Graph.Validations.KnownFleet
 
       filter expr(
-               fleet_id == ^arg(:fleet_id) and seq > ^arg(:after_seq) and
-                 ((from_token_id in ^arg(:token_ids) and sent_in_current_epoch) or
+               fleet_id == ^arg(:fleet_id) and
+                 seq >
+                   fragment(
+                     "(SELECT min(place) FROM unnest(?::bigint[]) AS place)",
+                     ^arg(:after_seqs)
+                   ) and
+                 ((from_token_id in ^arg(:token_ids) and sent_in_current_epoch and
+                     seq >
+                       fragment(
+                         "(?::bigint[])[array_position(?::bigint[], ?::bigint)]",
+                         ^arg(:after_seqs),
+                         ^arg(:token_ids),
+                         from_token_id
+                       )) or
                     (to_token_id in ^arg(:token_ids) and received_in_current_epoch and
-                       not sender_blocked))
+                       not sender_blocked and
+                       seq >
+                         fragment(
+                           "(?::bigint[])[array_position(?::bigint[], ?::bigint)]",
+                           ^arg(:after_seqs),
+                           ^arg(:token_ids),
+                           to_token_id
+                         )))
              )
 
       prepare Keyfleet.Dms.Preparations.InOrder

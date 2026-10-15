@@ -78,7 +78,7 @@ defmodule Keyfleet.KeyThreadsTest do
              Rooms.sync(
                @fleet,
                [%{slug: "key-5", after_seq: 0}],
-               %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+               %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
                first,
                false
              )
@@ -87,6 +87,31 @@ defmodule Keyfleet.KeyThreadsTest do
              Rooms.send_message(
                %{fleet_id: @fleet, slug: "key-5", body: "Hello", idempotency_key: "k-2"},
                actor: first_agent
+             )
+  end
+
+  test "a sync follows keys' walls, and moves past posts taken off them",
+       %{first: first, fifth: fifth} do
+    opening = to_key!(first, 5, "Welcome aboard")
+    taken = to_key!(first, 5, "Taken off")
+    Rooms.remove_from_wall!(taken.id, actor: fifth)
+    walls = [%{token_id: 5, after_seq: 0}, %{token_id: 7, after_seq: 0}]
+    places = %{graph: 0, proposals: 0, keys: walls, dms: nil, quotes: nil}
+
+    assert {:ok, %{keys: [five, seven]}} = Rooms.sync(@fleet, [], places, first, false)
+    assert {five.token_id, five.head_seq, five.cursor} == {5, 2, 2}
+    assert Enum.map(five.messages, & &1.id) == [opening.id]
+    assert seven == %{token_id: 7, head_seq: 0, cursor: 0, messages: []}
+
+    token_id = unsold_key()
+
+    assert {:error, %Ash.Error.Invalid{errors: [%KeyUnknownError{token_id: ^token_id}]}} =
+             Rooms.sync(
+               @fleet,
+               [],
+               %{places | keys: [%{token_id: token_id, after_seq: 0}]},
+               first,
+               false
              )
   end
 

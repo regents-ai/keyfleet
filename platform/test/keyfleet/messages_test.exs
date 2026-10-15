@@ -205,7 +205,7 @@ defmodule Keyfleet.MessagesTest do
       Rooms.sync(
         @fleet,
         [%{slug: "general", after_seq: 0}],
-        %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+        %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
         writer,
         false
       )
@@ -220,7 +220,7 @@ defmodule Keyfleet.MessagesTest do
       Rooms.sync(
         @fleet,
         [%{slug: "general", after_seq: 3}, %{slug: "coding", after_seq: 1}],
-        %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+        %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
         writer,
         false
       )
@@ -234,7 +234,7 @@ defmodule Keyfleet.MessagesTest do
              Rooms.sync(
                @fleet,
                [%{slug: "hull-survey", after_seq: 0}],
-               %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+               %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
                writer,
                false
              )
@@ -245,7 +245,7 @@ defmodule Keyfleet.MessagesTest do
              Rooms.sync(
                @fleet,
                too_many,
-               %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+               %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
                writer,
                false
              )
@@ -256,7 +256,7 @@ defmodule Keyfleet.MessagesTest do
              Rooms.sync(
                @fleet,
                beyond,
-               %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+               %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
                writer,
                false
              )
@@ -267,7 +267,7 @@ defmodule Keyfleet.MessagesTest do
              Rooms.sync(
                @fleet,
                twice,
-               %{graph: 0, proposals: 0, dms: nil, quotes: nil},
+               %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
                writer,
                false
              )
@@ -277,7 +277,7 @@ defmodule Keyfleet.MessagesTest do
                Rooms.sync(
                  @fleet,
                  [%{slug: "general", after_seq: 0}],
-                 %{graph: after_seq, proposals: 0, dms: nil, quotes: nil},
+                 %{graph: after_seq, proposals: 0, keys: [], dms: nil, quotes: nil},
                  writer,
                  false
                )
@@ -286,7 +286,7 @@ defmodule Keyfleet.MessagesTest do
                Rooms.sync(
                  @fleet,
                  [%{slug: "general", after_seq: 0}],
-                 %{graph: 0, proposals: after_seq, dms: nil, quotes: nil},
+                 %{graph: 0, proposals: after_seq, keys: [], dms: nil, quotes: nil},
                  writer,
                  false
                )
@@ -302,7 +302,13 @@ defmodule Keyfleet.MessagesTest do
     cursors = [%{slug: "general", after_seq: 0}, %{slug: "coding", after_seq: 0}]
 
     {:ok, synced} =
-      Rooms.sync(@fleet, cursors, %{graph: 0, proposals: 0, dms: nil, quotes: nil}, writer, false)
+      Rooms.sync(
+        @fleet,
+        cursors,
+        %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+        writer,
+        false
+      )
 
     assert [%{cursor: 50, head_seq: 51}, %{cursor: 1, head_seq: 1}] = synced.rooms
     assert synced.graph.has_more == false

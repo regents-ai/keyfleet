@@ -166,18 +166,36 @@ defmodule Keyfleet.ProposalsTest do
       owner_of_key!(1)
 
       {:ok, first} =
-        Rooms.sync(@fleet, [], %{graph: 0, proposals: 0, dms: nil, quotes: nil}, owner, false)
+        Rooms.sync(
+          @fleet,
+          [],
+          %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+          owner,
+          false
+        )
 
       assert Enum.map(first.proposals.items, & &1.proposal.number) == Enum.to_list(1..50)
       assert {first.proposals.next_cursor, first.proposals.has_more} == {50, true}
 
       {:ok, again} =
-        Rooms.sync(@fleet, [], %{graph: 0, proposals: 0, dms: nil, quotes: nil}, owner, false)
+        Rooms.sync(
+          @fleet,
+          [],
+          %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+          owner,
+          false
+        )
 
       assert again.proposals == first.proposals
 
       {:ok, rest} =
-        Rooms.sync(@fleet, [], %{graph: 0, proposals: 50, dms: nil, quotes: nil}, owner, false)
+        Rooms.sync(
+          @fleet,
+          [],
+          %{graph: 0, proposals: 50, keys: [], dms: nil, quotes: nil},
+          owner,
+          false
+        )
 
       assert Enum.map(rest.proposals.items, & &1.proposal.number) == Enum.to_list(51..55)
       assert {rest.proposals.next_cursor, rest.proposals.has_more} == {55, false}

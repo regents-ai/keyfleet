@@ -80,7 +80,12 @@ defmodule Keyfleet.Dms do
         action: :latest,
         args: [:fleet_id, :token_id, :other_token_id]
 
-      define :read_changes, action: :changes, args: [:fleet_id, :token_ids]
+      define :read_changes, action: :changes, args: [:fleet_id, :token_ids, :after_seqs]
+    end
+
+    resource Keyfleet.Dms.ReadMark do
+      define :mark_conversation_read, action: :mark, args: [:conversation_id, :seq]
+      define :conversation_read_marks, action: :in_conversations, args: [:conversation_ids]
     end
 
     resource Keyfleet.Dms.Block do
@@ -114,28 +119,49 @@ defmodule Keyfleet.Dms do
   @doc """
   What `actor` has not read yet of its Keys' messages in a fleet: the messages
   to or from any Key it holds now (`inbox_topics/2`'s Keys) since it got that
-  Key, after `after_seq`, oldest first, at most #{@changes_page} at a time, without those a Key it
-  reads for has blocked. `{:ok, %{messages, next_cursor, has_more}}`; send
-  `next_cursor` as `after_seq` next time. An actor holding no Key of the fleet
-  now is forbidden. Nothing is marked as read, and asking again is always safe.
+  Key, oldest first, at most #{@changes_page} at a time, without those a Key it
+  reads for has blocked.
+
+  `cursors` maps a Key's number to how far its messages have been read. Each
+  Key is read after its own place, and a Key held now that `cursors` leaves out
+  is read from the start of its holding, so a Key the actor gets later loses
+  nothing. A Key named and not held now is left out.
+
+  `{:ok, %{messages, keys, has_more}}`. `keys` gives, for each Key held now
+  that was named or has a message on the page, the `%{token_id, cursor}` to
+  send next time. The page is in order of the fleet's message places, so every
+  message of a Key up to the page's last place is on it, and its cursor moves
+  there. An actor holding no Key of the fleet now is forbidden. Nothing is
+  marked as read, and asking again is always safe.
   """
-  def changes(fleet_id, after_seq, actor) do
+  def changes(fleet_id, cursors, actor) do
+    held = KeyHolder.held(actor, fleet_id)
+
     with {:ok, messages} <-
            read_changes(
              fleet_id,
-             KeyHolder.held(actor, fleet_id),
-             %{after_seq: after_seq, limit: @changes_page},
+             held,
+             Enum.map(held, &Map.get(cursors, &1, 0)),
+             %{limit: @changes_page},
              actor: actor,
              load: [:via_agent]
            ) do
-      next_cursor =
-        case List.last(messages) do
-          nil -> after_seq
-          last -> last.seq
-        end
-
-      {:ok, %{messages: messages, next_cursor: next_cursor, has_more: more_after?(messages)}}
+      {:ok,
+       %{
+         messages: messages,
+         keys: key_cursors(held, cursors, messages),
+         has_more: more_after?(messages)
+       }}
     end
+  end
+
+  defp key_cursors(held, cursors, messages) do
+    last = if messages == [], do: 0, else: List.last(messages).seq
+    on_page = MapSet.new(Enum.flat_map(messages, &[&1.from_token_id, &1.to_token_id]))
+
+    for token_id <- held,
+        Map.has_key?(cursors, token_id) or token_id in on_page,
+        do: %{token_id: token_id, cursor: Kernel.max(Map.get(cursors, token_id, 0), last)}
   end
 
   @doc """

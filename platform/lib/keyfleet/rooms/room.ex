@@ -168,6 +168,22 @@ defmodule Keyfleet.Rooms.Room do
       get? true
     end
 
+    # The threads of several keys, the ones their first posts have opened,
+    # found at their addresses.
+    read :key_threads do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :token_ids, {:array, :integer},
+        allow_nil?: false,
+        constraints: [items: [min: 1, max: @bigint]]
+
+      prepare fn query, _context ->
+        fleet_id = Ash.Query.get_argument(query, :fleet_id)
+        slugs = query |> Ash.Query.get_argument(:token_ids) |> Enum.map(&key_slug/1)
+        Ash.Query.filter(query, kind == :key and fleet_id == ^fleet_id and slug in ^slugs)
+      end
+    end
+
     create :bootstrap do
       public? false
       accept [:fleet_id, :slug, :name]
@@ -276,7 +292,7 @@ defmodule Keyfleet.Rooms.Room do
       authorize_if Keyfleet.Rooms.Checks.InGeneral
     end
 
-    policy action(:key_thread) do
+    policy action([:key_thread, :key_threads]) do
       authorize_if {Keyfleet.Access.Check, read: :key_walls, scope: :fleet_id}
     end
 
