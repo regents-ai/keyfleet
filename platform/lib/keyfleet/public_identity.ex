@@ -9,10 +9,11 @@ defmodule Keyfleet.PublicIdentity do
 
   @wallet ~r/\A0x[0-9a-fA-F]{40}\z/
 
-  def label(account),
-    do:
-      present(Map.get(account, :display_name)) || present(Map.get(account, :ens_name)) ||
-        short_wallet(Map.get(account, :wallet_address))
+  def label(account), do: name(account) || short_wallet(Map.get(account, :wallet_address))
+
+  @doc "The account's display name, else its wallet's ENS name, else nil."
+  def name(account),
+    do: present(Map.get(account, :display_name)) || present(Map.get(account, :ens_name))
 
   def avatar_src(account),
     do:

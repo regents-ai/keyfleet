@@ -6,8 +6,9 @@ defmodule Keyfleet.Keys do
   """
   use Ash.Domain
 
-  import Ecto.Query, only: [from: 2, union: 2]
+  import Ecto.Query, only: [from: 2, subquery: 1, union: 2, union_all: 2]
 
+  require Ash.Query
   require Logger
 
   alias Keyfleet.Actors.Agent
@@ -303,6 +304,134 @@ defmodule Keyfleet.Keys do
     failure in [Ash.Error.Unknown, Postgrex.Error, DBConnection.ConnectionError] ->
       Logger.warning("Counting the holders of #{fleet_id} failed: " <> Exception.message(failure))
       {:error, failure}
+  end
+
+  @doc """
+  The addresses holding the fleet's keys today, most keys first and then by
+  address, leaving out the addresses in `left_out`: `limit` of them from
+  `offset`, each as `%{wallet: wallet, count: count}`.
+  """
+  def holders(fleet_id, left_out, offset, limit) do
+    from(key in subquery(owned(fleet_id)),
+      where: key.owner_wallet not in ^left_out,
+      group_by: key.owner_wallet,
+      order_by: [desc: count(), asc: key.owner_wallet],
+      offset: ^offset,
+      limit: ^limit,
+      select: %{wallet: key.owner_wallet, count: count()}
+    )
+    # Ownership is public, and a count grouped by holder is no row of a resource.
+    |> Keyfleet.Repo.all()
+  end
+
+  @doc """
+  The lowest `shown` key numbers each of `wallets` holds in the fleet today,
+  as `%{wallet => token_ids}`, lowest first.
+  """
+  def lowest_held(fleet_id, wallets, shown) do
+    ranked =
+      from(key in subquery(owned(fleet_id)),
+        where: key.owner_wallet in ^wallets,
+        select: %{
+          wallet: key.owner_wallet,
+          token_id: key.token_id,
+          place: over(row_number(), partition_by: key.owner_wallet, order_by: key.token_id)
+        }
+      )
+
+    from(key in subquery(ranked),
+      where: key.place <= ^shown,
+      order_by: [key.wallet, key.token_id],
+      select: {key.wallet, key.token_id}
+    )
+    # Ownership is public; a window over each holder's Keys is read here directly.
+    |> Keyfleet.Repo.all()
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+  end
+
+  @doc """
+  Which of `wallets` hold a key of the fleet with a vote now (see the
+  `present` calculation of `Keyfleet.Keys.KeyAttachment`).
+  """
+  def present_holders(fleet_id, wallets) do
+    Keyfleet.Keys.KeyAttachment
+    |> Ash.Query.for_read(:present_in_fleet, %{fleet_id: fleet_id})
+    |> Ash.Query.filter(owner_wallet in ^wallets)
+    |> Ash.Query.select([:owner_wallet])
+    |> Ash.read!()
+    |> MapSet.new(& &1.owner_wallet)
+  end
+
+  @doc """
+  When each of `wallets` last did something in the fleet with a key it holds
+  today, since it came to hold it: a check-in, a post, a direct message, or a
+  poll started or voted in. `%{wallet => at}`, leaving out the wallets that
+  have done none of these.
+  """
+  def last_active(fleet_id, wallets) do
+    held = from(key in subquery(owned(fleet_id)), where: key.owner_wallet in ^wallets)
+
+    renewed =
+      from(p in "key_presences",
+        join: key in subquery(held),
+        on: p.token_id == key.token_id and p.ownership_epoch == key.ownership_epoch,
+        where: p.fleet_id == ^fleet_id and p.kind == "present",
+        select: %{wallet: key.owner_wallet, at: type(p.at, :naive_datetime_usec)}
+      )
+
+    posted =
+      from(m in "messages",
+        join: key in subquery(held),
+        on: m.as_key == key.token_id and m.inserted_at >= key.observed_at,
+        where: m.fleet_id == ^fleet_id,
+        select: %{wallet: key.owner_wallet, at: m.inserted_at}
+      )
+
+    messaged =
+      from(d in "dm_messages",
+        join: key in subquery(held),
+        on: d.from_token_id == key.token_id and d.inserted_at >= key.observed_at,
+        where: d.fleet_id == ^fleet_id,
+        select: %{wallet: key.owner_wallet, at: d.inserted_at}
+      )
+
+    started =
+      from(p in "polls",
+        join: key in subquery(held),
+        on: p.started_by_key == key.token_id and p.inserted_at >= key.observed_at,
+        where: p.fleet_id == ^fleet_id,
+        select: %{wallet: key.owner_wallet, at: p.inserted_at}
+      )
+
+    voted =
+      from(v in "poll_votes",
+        join: p in "polls",
+        on: p.id == v.poll_id,
+        join: key in subquery(held),
+        on: v.token_id == key.token_id and v.inserted_at >= key.observed_at,
+        where: p.fleet_id == ^fleet_id,
+        select: %{wallet: key.owner_wallet, at: v.inserted_at}
+      )
+
+    events = renewed |> union_all(^posted) |> union_all(^messaged) |> union_all(^started)
+
+    from(event in subquery(union_all(events, ^voted)),
+      group_by: event.wallet,
+      select: {event.wallet, max(event.at)}
+    )
+    # Only each holder's latest time leaves the database, never what was said.
+    |> Keyfleet.Repo.all()
+    |> Map.new(fn {wallet, at} -> {wallet, DateTime.from_naive!(at, "Etc/UTC")} end)
+  end
+
+  # The fleet's keys with their owners today, as `:owned_in_fleet` reads them.
+  defp owned(fleet_id) do
+    {:ok, query} =
+      Keyfleet.Keys.KeyAttachment
+      |> Ash.Query.for_read(:owned_in_fleet, %{fleet_id: fleet_id})
+      |> Ash.Query.data_layer_query()
+
+    query
   end
 
   defp count_owners(fleet_id, token_ids) do
