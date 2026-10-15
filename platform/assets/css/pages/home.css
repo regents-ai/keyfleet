@@ -6,7 +6,6 @@
     /* The colours the GPU pictures read, per theme. */
     --rl-field-line: var(--color-fg);
     --rl-field-light: var(--ash-accent-warm);
-    --rl-foil-light: var(--palette-platinum);
     --rl-ease: cubic-bezier(.23, 1, .32, 1);
     --rl-bg: var(--color-bg);
     --rl-panel: var(--color-surface);
@@ -62,7 +61,6 @@
     background: var(--palette-charcoal);
   }
   .rl-buy__tilt img { display: block; inline-size: 100%; block-size: 100%; object-fit: cover; }
-  .rl-buy__foil { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; pointer-events: none; }
   /* The price on the card itself, in its corner. The card's art is dark in
      both themes, so the tag keeps light ink on charcoal in both. */
   .rl-buy__tag {

@@ -1,9 +1,8 @@
 /**
- * Draws the homepage's two pictures with WebGPU through vgpu, both only
- * when something changed: the hex field behind the hero and the Club's map, and
- * the foil over the next Key's card. There is no clock and no idle loop. A
- * pointer or a preview sets a target, the picture eases toward it for a few
- * frames and stops. Loaded only once a picture is really going to be shown.
+ * Draws the homepage's hex field with WebGPU through vgpu, behind the hero and
+ * the Club's map, only when something changed. There is no clock and no idle
+ * loop. A pointer or a preview sets a target, the picture eases toward it for a
+ * few frames and stops. Loaded only once a picture is really going to be shown.
  *
  * Each value reaches the shader when it changes: the size when the canvas is
  * resized, the colours when the theme changes, the pointer on each frame.
@@ -12,7 +11,7 @@ import {prepareShader} from "@vgpu/wgsl/prepare"
 import {effect, frame, init, surface} from "vgpu"
 
 import type {IslandRenderer} from "../canvas_island"
-import {fieldWgsl, foilWgsl} from "./shader"
+import {fieldWgsl} from "./shader"
 
 export type Rgb = readonly [number, number, number]
 type Vec4 = [number, number, number, number]
@@ -41,10 +40,9 @@ type Params = Record<string, Vec4>
 type Shader = ReturnType<typeof effect>
 
 /**
- * One premultiplied effect on one canvas, with the GPU housekeeping both
- * pictures share. `params` is the complete uniform struct the shader starts
- * from; `sized` hears every size, the first one included, and writes what
- * depends on it.
+ * One premultiplied effect on one canvas, with its GPU housekeeping.
+ * `params` is the complete uniform struct the shader starts from; `sized` hears
+ * every size, the first one included, and writes what depends on it.
  */
 async function paint(
   canvas: HTMLCanvasElement,
@@ -171,56 +169,6 @@ export async function createFieldRenderer(
     step: snap => advance([x, y, presence, glow], snap),
     present() {
       gpu.shader.set({params: {pointer: [x.value, y.value, presence.value, glow.value]}})
-      gpu.draw()
-    },
-    settled: gpu.settled,
-    dispose: gpu.dispose,
-  }
-}
-
-export type FoilRenderer = IslandRenderer & {
-  /** The sheen's colour, from the page's theme. */
-  tone(light: Rgb): void
-  /** Where the pointer stands, 0..1 across the card. */
-  point(x: number, y: number): void
-  /** The pointer left. */
-  rest(): void
-}
-
-export async function createFoilRenderer(
-  canvas: HTMLCanvasElement,
-  size: readonly [number, number],
-  onDeviceLost: () => void,
-): Promise<FoilRenderer> {
-  const gpu = await paint(
-    canvas,
-    size,
-    onDeviceLost,
-    "home-foil",
-    foilWgsl,
-    {size: [size[0], size[1], 0, 0], light: [1, 1, 1, 1], pointer: [0.5, 0.5, 0, 0]},
-    (shader, width, height) => shader.set({params: {size: [width, height, 0, 0]}}),
-  )
-  const x = eased(0.5)
-  const y = eased(0.5)
-  const presence = eased()
-
-  return {
-    tone(light) {
-      gpu.shader.set({params: {light: [...light, 1]}})
-    },
-    point(px, py) {
-      x.target = px
-      y.target = py
-      presence.target = 1
-    },
-    rest() {
-      presence.target = 0
-    },
-    resize: gpu.resize,
-    step: snap => advance([x, y, presence], snap),
-    present() {
-      gpu.shader.set({params: {pointer: [x.value, y.value, presence.value, 0]}})
       gpu.draw()
     },
     settled: gpu.settled,
