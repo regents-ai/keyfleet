@@ -940,6 +940,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                  hrefs,
                  &String.starts_with?(&1, [
                    "/syndicate/1",
+                   "/agents.md",
+                   "/docs",
                    "https://",
                    "ipfs://",
                    "ar://",
@@ -997,7 +999,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(
                view,
                "#workspace-unavailable h2",
-               "This workspace isn’t ready to read yet."
+               "No workspace records are available yet."
              )
 
       refute has_element?(view, "#workspace-cards")
@@ -1007,7 +1009,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(
                item,
                "#workspace-unavailable h2",
-               "This workspace isn’t ready to read yet."
+               "No workspace records are available yet."
              )
     end
 
@@ -1028,23 +1030,70 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
   end
 
-  test "a visitor who holds none of the fleet's Keys is shown only that the workspace is for Key holders",
+  test "a visitor who holds none of the fleet's Keys reads each goal and task by title, standing and public summary alone",
        %{visitor: visitor} do
     open_log(@fleet)
-    task = create(@fleet, "task", %{"title" => "Draft the brief", "progress" => "todo"})
+
+    goal =
+      create(@fleet, "goal", %{
+        "title" => "Revenue",
+        "outcome" => "One paying customer.",
+        "status" => "open",
+        "public_summary" => "Finding a first customer."
+      })
+
+    task =
+      create(@fleet, "task", %{
+        "title" => "Draft the brief",
+        "progress" => "doing",
+        "next_step" => "Call the fund on Tuesday.",
+        "public_summary" => "Writing the first brief."
+      })
+
+    create(@fleet, "note", %{"title" => "Standup", "body" => "Ship it."})
 
     for conn <- [visitor, signed_in_as(visitor, "0x" <> String.duplicate("e", 40))],
         path <- [@board, item_path(task)] do
       {:ok, view, html} = live(conn, path)
 
-      assert has_element?(view, "#workspace-members-only", "The workspace is for Key holders.")
+      assert has_element?(
+               view,
+               "#workspace-members-only",
+               "A public outline of this fleet’s work."
+             )
 
       assert has_element?(
                view,
-               ~s(#workspace-members-only a[href="#{Keyfleet.Fleets.path(@fleet)}?view=members"])
+               ~s(#workspace-members-only + a[href="#{Keyfleet.Fleets.path(@fleet)}?view=members"])
              )
 
-      refute html =~ "Draft the brief"
+      assert has_element?(view, ~s(#workspace-public-goals [data-item="#{goal}"]), "Revenue")
+      assert has_element?(view, ~s(#workspace-public-goals [data-item="#{goal}"]), "Open")
+
+      assert has_element?(
+               view,
+               ~s(#workspace-public-goals [data-item="#{goal}"]),
+               "Finding a first customer."
+             )
+
+      assert has_element?(
+               view,
+               ~s(#workspace-public-tasks [data-item="#{task}"]),
+               "Draft the brief"
+             )
+
+      assert has_element?(view, ~s(#workspace-public-tasks [data-item="#{task}"]), "In progress")
+
+      assert has_element?(
+               view,
+               ~s(#workspace-public-tasks [data-item="#{task}"]),
+               "Writing the first brief."
+             )
+
+      refute html =~ "One paying customer."
+      refute html =~ "Call the fund on Tuesday."
+      refute html =~ "Standup"
+      refute html =~ "Ship it."
       refute html =~ @notice
     end
   end

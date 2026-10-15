@@ -1,4 +1,4 @@
-"""The pinned `keyfleet_work@0.2.0` work pack.
+"""The pinned `keyfleet_work@0.3.0` work pack.
 
 Two models per object type: the member model is what a member may write, and
 the record model adds the server-owned `sys` block and is what the graph
@@ -14,7 +14,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, Scope, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.2.0"
+PACK_VERSION = "0.3.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -47,6 +47,9 @@ Uri = Annotated[str, StringConstraints(min_length=1), single_line, AfterValidato
 DecimalString = Annotated[str, StringConstraints(pattern=r"^(0|[1-9][0-9]{0,77})(\.[0-9]{1,18})?$")]
 Digest = Annotated[str, StringConstraints(pattern=r"^sha256:[0-9a-f]{64}$")]
 Title = _text(200, required=True)
+# What anyone may read of a goal or task beside its title and standing; every
+# other field is for the fleet's members only.
+PublicSummary = Optional[_text(500)]
 
 
 def _items():
@@ -71,6 +74,7 @@ class Goal(WorkObject):
     # A question is never empty, so a goal's first one is always one to ask.
     open_questions: list[_text(500, required=True)] = _items()
     status: Literal["open", "achieved", "dropped"] = "open"
+    public_summary: PublicSummary = None
 
 
 class Task(WorkObject):
@@ -79,6 +83,7 @@ class Task(WorkObject):
     progress: Literal["todo", "doing", "blocked", "done"] = "todo"
     next_step: Optional[_text(1000, multiline=True)] = None
     result_ref: Optional[Uri] = None
+    public_summary: PublicSummary = None
 
 
 class Finding(WorkObject):

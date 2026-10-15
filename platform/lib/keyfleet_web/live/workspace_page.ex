@@ -12,18 +12,25 @@ defmodule KeyfleetWeb.WorkspacePage do
   (`{:key, token_id}`) or an item (`{:item, id, title}`, with a `nil` title
   when the item is not in the workspace).
 
+  `commit/4` is one commit in the fleet's code, at the address a workspace
+  cites it by (`commit_url/2`): who sent it, and the evidence that cites it
+  with the tasks that produced that evidence.
+
   Only the fleet's members read its workspace
-  (`Keyfleet.Graph.Checks.KeyReader`): for anyone else either page answers
-  `members_only?: true` with only the fixed public summaries from
-  `Keyfleet.WorkspacePulse`, never member text.
+  (`Keyfleet.Graph.Checks.KeyReader`) and its code: for anyone else every page
+  answers `members_only?: true`. The board then shows the fleet's outline,
+  each goal and task by title, standing and the public summary its members
+  wrote, beside the fixed public summaries from `Keyfleet.WorkspacePulse`;
+  nothing else members write.
 
   A page name that is not one the tables can answer, such as an unknown type
   or a damaged page position, is a page that doesn't exist.
   """
 
-  alias Keyfleet.{Code, Fleets}
+  alias Keyfleet.{Code, Fleets, Notebooks}
   alias Keyfleet.Graph
   alias Keyfleet.Rooms
+  alias KeyfleetWeb.Endpoint
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.RoomsLive
 
@@ -45,6 +52,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     "goal" => [
       {"outcome", "Outcome"},
       {"status", "Status"},
+      {"public_summary", "Public summary"},
       {"success_criteria", "Success criteria"},
       {"open_questions", "Open questions"}
     ],
@@ -53,7 +61,8 @@ defmodule KeyfleetWeb.WorkspacePage do
       {"assignee_key", "Taken by"},
       {"deliverable", "Deliverable"},
       {"next_step", "Next step"},
-      {"result_ref", "Result"}
+      {"result_ref", "Result"},
+      {"public_summary", "Public summary"}
     ],
     "finding" => [
       {"statement", "Statement"},
@@ -107,9 +116,14 @@ defmodule KeyfleetWeb.WorkspacePage do
     "references" => "mentions"
   }
 
+  # How many goals and tasks a fleet's outline shows anyone.
+  @outlined %{"goal" => 12, "task" => 24}
+
   # Only these kinds of address are ever made into links.
   @link_schemes ["https://", "ipfs://", "ar://", "git+https://"]
   @room_slug ~r/\A[a-z0-9][a-z0-9-]{0,62}\z/
+  # One saved version of a notebook, after the notebooks' `/results/`.
+  @saved_result ~r/\Anb-[a-z0-9]{16}\/ver_[0-9A-Z]{26}\z/
   @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(?:human|agent):0x[0-9a-f]{40}\z/
   @level ~r/\Alevel:([1-9][0-9]{0,8})\z/
 
@@ -138,6 +152,9 @@ defmodule KeyfleetWeb.WorkspacePage do
     with_query("#{Keyfleet.Fleets.path(fleet_id)}/workspace", query)
   end
 
+  @doc "The address a workspace cites one commit of the fleet's code by."
+  def commit_url(fleet_id, hash), do: Endpoint.url() <> Code.commit_path(fleet_id, hash)
+
   defp with_query(path, []), do: path
   defp with_query(path, query), do: path <> "?" <> URI.encode_query(query)
 
@@ -164,14 +181,14 @@ defmodule KeyfleetWeb.WorkspacePage do
         ready?: true,
         seen: seen(cursor),
         filter: filter,
-        cards: Enum.map(page.results, &card/1),
+        cards: Enum.map(page.results, &card(&1, fleet_id)),
         first_page?: not paged?(params),
         first_page: board_path(fleet_id, filter),
         pages: page_links(page, params, &board_path(fleet_id, filter, &1)),
         activity: Enum.map(activity, &Map.put(line(&1, titles), :note, notes[&1.seq])),
         code: %{
           clone_url: Code.clone_url(fleet_id),
-          pushes: Enum.map(Code.recent_pushes!(fleet_id, opts), &push/1)
+          pushes: Enum.map(Code.recent_pushes!(fleet_id, opts), &push(&1, fleet_id))
         }
       }
     else
@@ -245,7 +262,79 @@ defmodule KeyfleetWeb.WorkspacePage do
         {:error, error} -> raise error
       end
 
-    %{fleet_id: fleet_id, fleet_name: name, members_only?: true, seen: nil, pulse: pulse}
+    %{
+      fleet_id: fleet_id,
+      fleet_name: name,
+      members_only?: true,
+      seen: nil,
+      pulse: pulse,
+      outline: Map.new(@outlined, fn {type, limit} -> {type, outline(fleet_id, type, limit)} end)
+    }
+  end
+
+  defp outline(fleet_id, type, limit) do
+    for object <- Graph.outline!(fleet_id, type, query: [limit: limit]) do
+      %{
+        id: object.id,
+        title: object.title,
+        standing: standing(type, object.standing),
+        summary: object.public_summary
+      }
+    end
+  end
+
+  defp standing("goal", status), do: choice("status", status)
+  defp standing("task", progress), do: choice("progress", progress)
+
+  @doc """
+  One commit of the fleet's code, named by its repository and full hash:
+  the pushes that left a branch or tag at it, and the evidence that cites it
+  with the tasks that produced that evidence. An address naming another
+  repository, or less than a full hash, is a page that doesn't exist.
+  """
+  def commit(fleet_id, repository, hash, actor) do
+    if repository != fleet_id or not Code.full_hash?(hash), do: raise(NotFoundError)
+    opts = [actor: actor]
+    url = commit_url(fleet_id, hash)
+
+    with {:ok, fleet} <- fleet(fleet_id, opts),
+         {:ok, pushes} <- members_read(fleet, Code.pushes_of_commit(fleet_id, hash, opts)),
+         {:ok, evidence} <- members_read(fleet, Graph.evidence_citing(fleet_id, url, opts)) do
+      producers = producers(fleet_id, evidence, opts)
+      titles = titles(fleet_id, producers |> Map.values() |> List.flatten(), opts)
+
+      %{
+        fleet_id: fleet_id,
+        fleet_name: fleet.name,
+        hash: hash,
+        url: url,
+        clone_url: Code.clone_url(fleet_id),
+        pushes: Enum.map(pushes, &push(&1, fleet_id)),
+        evidence:
+          for object <- evidence do
+            %{
+              id: object.id,
+              title: object.title,
+              excerpt: object.card["gist"],
+              archived?: archived?(object.sys),
+              by: created_by(object.sys),
+              tasks: Enum.map(Map.get(producers, object.id, []), &item_part(&1, titles))
+            }
+          end
+      }
+    else
+      {:missing, _name} -> raise NotFoundError
+      {:members_only, name} -> %{fleet_id: fleet_id, fleet_name: name, members_only?: true}
+    end
+  end
+
+  # The tasks that produced each piece of evidence, by the evidence's id.
+  defp producers(_fleet_id, [], _opts), do: %{}
+
+  defp producers(fleet_id, evidence, opts) do
+    fleet_id
+    |> Graph.producers_of!(Enum.map(evidence, & &1.id), opts)
+    |> Enum.group_by(& &1.target, & &1.source)
   end
 
   # The first read of the workspace a page makes is the one that finds out
@@ -371,7 +460,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     |> Map.new(&{&1.id, &1})
   end
 
-  defp card(object) do
+  defp card(object, fleet_id) do
     %{
       id: object.id,
       type: object.type,
@@ -380,26 +469,28 @@ defmodule KeyfleetWeb.WorkspacePage do
       level: level(object.sys),
       by: created_by(object.sys),
       changed_at: at(object.changed_at),
-      facts: facts(object.type, object.card),
+      facts: facts(object.type, object.card, fleet_id),
       gist: object.card["gist"]
     }
   end
 
-  defp facts("goal", card), do: present([{"Status", choice("status", card["status"])}])
+  defp facts("goal", card, _fleet_id),
+    do: present([{"Status", choice("status", card["status"])}])
 
-  defp facts("task", card) do
+  defp facts("task", card, _fleet_id) do
     present([
       {"Progress", choice("progress", card["progress"])},
       {"Taken by", key_or(card["assignee_key"], "No one yet")}
     ])
   end
 
-  defp facts("finding", card),
+  defp facts("finding", card, _fleet_id),
     do: present([{"Confidence", choice("confidence", card["confidence"])}])
 
-  defp facts("evidence", card), do: present([{"Source", value(card["source_uri"])}])
+  defp facts("evidence", card, fleet_id),
+    do: present([{"Source", source(card["source_uri"], fleet_id)}])
 
-  defp facts("service", card) do
+  defp facts("service", card, _fleet_id) do
     price =
       case {card["price_proposal"], card["payment_asset"]} do
         {nil, _asset} -> nil
@@ -411,7 +502,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     present([{"Customer", card["customer"]}, {"Proposed price", price}])
   end
 
-  defp facts(_type, _card), do: []
+  defp facts(_type, _card, _fleet_id), do: []
 
   defp present(facts), do: Enum.reject(facts, &is_nil(elem(&1, 1)))
 
@@ -437,7 +528,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       changed_at: at(object.changed_at),
       fields:
         Enum.flat_map(known ++ others, fn {field, label} ->
-          case field_value(field, object.data[field]) do
+          case field_value(field, object.data[field], fleet_id) do
             nil -> []
             shown -> [{label, shown}]
           end
@@ -446,11 +537,33 @@ defmodule KeyfleetWeb.WorkspacePage do
     }
   end
 
-  defp field_value(_field, nil), do: nil
-  defp field_value(_field, []), do: nil
-  defp field_value("assignee_key", token_id), do: key_or(token_id, nil)
-  defp field_value(field, value) when is_map_key(@choices, field), do: choice(field, value)
-  defp field_value(_field, value), do: value(value)
+  defp field_value(_field, nil, _fleet_id), do: nil
+  defp field_value(_field, [], _fleet_id), do: nil
+  defp field_value("assignee_key", token_id, _fleet_id), do: key_or(token_id, nil)
+
+  defp field_value(field, uri, fleet_id) when field in ["source_uri", "result_ref"],
+    do: source(uri, fleet_id)
+
+  defp field_value(field, value, _fleet_id) when is_map_key(@choices, field),
+    do: choice(field, value)
+
+  defp field_value(_field, value, _fleet_id), do: value(value)
+
+  # A commit of the fleet's own code is shown as that commit, opened on this
+  # site; a saved result of one of the fleet's notebooks as that result; any
+  # other address as `value/1` shows it.
+  defp source(nil, _fleet_id), do: nil
+
+  defp source(uri, fleet_id) do
+    hash = String.replace_prefix(uri, commit_url(fleet_id, ""), "")
+    saved = String.replace_prefix(uri, Notebooks.url(fleet_id, "/results/"), "")
+
+    cond do
+      hash != uri and Code.full_hash?(hash) -> {:commit, hash, Code.commit_path(fleet_id, hash)}
+      saved != uri and Regex.match?(@saved_result, saved) -> {:notebook_result, uri}
+      true -> value(uri)
+    end
+  end
 
   # Text as written; an address with a scheme allowed for links is a link.
   defp value(value) when is_binary(value) do
@@ -632,11 +745,12 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   # The log stamps every event in UTC.
-  defp push(push) do
+  defp push(push, fleet_id) do
     %{
       id: push.id,
       token_id: push.token_id,
       what: moved(push.ref),
+      commit: {:commit, push.head, Code.commit_path(fleet_id, push.head)},
       at: Calendar.strftime(push.pushed_at, "%-d %B %Y at %H:%M UTC")
     }
   end

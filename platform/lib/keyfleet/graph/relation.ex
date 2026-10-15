@@ -62,6 +62,18 @@ defmodule Keyfleet.Graph.Relation do
       pagination keyset?: true, required?: true, default_limit: 50, max_page_size: 50
     end
 
+    # The `produces` links to any of `targets`: the tasks that produced them.
+    read :producing do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :targets, {:array, :string},
+        allow_nil?: false,
+        constraints: [items: @text, max_length: 20]
+
+      filter expr(fleet_id == ^arg(:fleet_id) and type == "produces" and target in ^arg(:targets))
+      prepare build(sort: [created_seq: :asc], limit: 100)
+    end
+
     read :with_ids do
       public? false
       argument :fleet_id, :string, allow_nil?: false
@@ -82,7 +94,7 @@ defmodule Keyfleet.Graph.Relation do
   end
 
   policies do
-    policy action([:touching, :linked]) do
+    policy action([:touching, :linked, :producing]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
