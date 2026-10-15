@@ -93,7 +93,16 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       refute has_element?(view, "#key-profile")
     end
 
+    # The chain says Keys 1 to 20 are sold, so the Key on sale is 21.
+    minted = Call.encode("totalMinted()", [])
+
+    rewards_answer(fn
+      _to, ^minted, _hash -> {:ok, <<20::256>>}
+      _to, _data, _hash -> {:ok, <<0::256>>}
+    end)
+
     {:ok, view, _html} = live(conn, @path <> "?key=21")
+    render_async(view)
     assert has_element?(view, "#key-profile-buy-order #key-profile-buy-button", "Buy Key 21")
     refute has_element?(view, "#key-profile-composer")
   end

@@ -305,17 +305,18 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   defp present_blocked(_keys, _ready, _token_id), do: %{}
 
   # The next Key, at its price, bought from the fleet's manager, which takes
-  # the USDC. How many Keys are sold, the next one's price and whether the
-  # fleet's sales are open are all read from the chain at the latest block,
-  # so a Key sold since the page last heard is already counted. The manager
-  # refuses to price the next Key only once every Key is sold (Regents Club
-  # Keys, never priced, are turned away before this), so a refusal means
-  # there is nothing left to buy. The wallet approves exactly the price when its USDC allowance to the
-  # manager is below it, and until it does the purchase is certain to fail,
-  # as it is before the fleet's sales open; the purchase names the price as
-  # its most, so a Key that has since cost more is refused and no USDC is
-  # taken. Founding fleets ask nothing of buyers, so the purchase carries no
-  # proof.
+  # the USDC. How many Keys are sold, the next one's price and when the
+  # fleet's sales open are all read from the chain at the latest block, so a
+  # Key sold since the page last heard is already counted, and the page names
+  # the Key and price from these same figures. The manager refuses to price
+  # the next Key only once every Key is sold (Regents Club Keys, never priced,
+  # are turned away before this), so a refusal means there is nothing left to
+  # buy. The wallet approves exactly the price when its USDC allowance to the
+  # manager is below it, and until it does the purchase is certain to fail, as
+  # it is before the fleet's sales open; the purchase names the price as its
+  # most, so a Key that has since cost more is refused and no USDC is taken.
+  # Founding fleets ask nothing of buyers, so the purchase carries no proof.
+  # A visitor sees the same figures, with no allowance and nothing to send.
   defp buy(%{fleet: fleet, signer: signer}) do
     manager = &Reads.one(&1, fleet.manager_address, &2, [], {:uint, 256})
 
@@ -332,52 +333,73 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   end
 
   defp offer(reads, fleet, signer, %{price: price} = figures) do
-    with {:ok, open?} <-
+    with {:ok, opens_at} <-
            Reads.one(
              reads,
              fleet.keys_address,
-             "salesOpen(uint256)",
+             "salesOpenAt(uint256)",
              [fleet.chain_fleet_id],
-             :bool
+             {:uint, 64}
            ),
-         {:ok, allowance} <-
-           Reads.one(
-             reads,
-             fleet.usdc_address,
-             "allowance(address,address)",
-             [signer, fleet.manager_address],
-             {:uint, 256}
-           ) do
-      deadline = DateTime.to_unix(Reads.now(reads)) + @purchase_seconds
-      approve? = allowance < price
-
-      approve =
-        Review.step(
-          "approve",
-          fleet.usdc_address,
-          Call.encode("approve(address,uint256)", [fleet.manager_address, price])
-        )
-
-      buy =
-        Review.step(
-          "buy",
-          fleet.manager_address,
-          Call.encode("purchase(address,uint256,uint256,bytes32[])", [signer, price, deadline, []])
-        )
+         {:ok, allowance} <- allowance(reads, fleet, signer) do
+      now = DateTime.to_unix(Reads.now(reads))
+      approve? = allowance != nil and allowance < price
 
       blocked =
         cond do
-          not open? -> %{"buy" => :sales_not_open}
-          approve? -> %{"buy" => :approve_usdc_first}
-          true -> %{}
+          opens_at == 0 or now < opens_at ->
+            %{"buy" => opening(opens_at)}
+
+          approve? ->
+            %{"buy" => :approve_usdc_first}
+
+          true ->
+            %{}
         end
 
-      {:ok, if(approve?, do: [approve, buy], else: [buy]),
+      {:ok, purchase(fleet, signer, price, now + @purchase_seconds, approve?),
        Map.merge(figures, %{approve?: approve?, blocked: blocked})}
     else
       _unread -> {:problem, :unread, Map.put(figures, :approve?, nil)}
     end
   end
+
+  # The wallet's USDC allowance to the manager; a visitor has none to read.
+  defp allowance(_reads, _fleet, nil), do: {:ok, nil}
+
+  defp allowance(reads, fleet, signer),
+    do:
+      Reads.one(
+        reads,
+        fleet.usdc_address,
+        "allowance(address,address)",
+        [signer, fleet.manager_address],
+        {:uint, 256}
+      )
+
+  defp purchase(_fleet, nil, _price, _deadline, _approve?), do: []
+
+  defp purchase(fleet, signer, price, deadline, approve?) do
+    approve =
+      Review.step(
+        "approve",
+        fleet.usdc_address,
+        Call.encode("approve(address,uint256)", [fleet.manager_address, price])
+      )
+
+    buy =
+      Review.step(
+        "buy",
+        fleet.manager_address,
+        Call.encode("purchase(address,uint256,uint256,bytes32[])", [signer, price, deadline, []])
+      )
+
+    if approve?, do: [approve, buy], else: [buy]
+  end
+
+  # Before a fleet's sales open, its opening time when one is set.
+  defp opening(0), do: :sales_not_open
+  defp opening(opens_at), do: {:opens_at, DateTime.from_unix!(opens_at)}
 
   # What a claim of one asset would pay: what the key has accrued, which
   # settles to its holder, the holder's credit, and the signer's own when the

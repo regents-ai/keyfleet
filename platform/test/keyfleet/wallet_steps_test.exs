@@ -108,7 +108,8 @@ defmodule Keyfleet.WalletStepsTest do
       do: [
         uint(fleet.manager_address, "totalMinted()", 0),
         uint(fleet.manager_address, "nextPrice()", 10_000_000),
-        {fleet.keys_address, "salesOpen(uint256)", [fleet.chain_fleet_id], {"bool", [open?]}},
+        {fleet.keys_address, "salesOpenAt(uint256)", [fleet.chain_fleet_id],
+         {"uint64", [if(open?, do: @now, else: 0)]}},
         {@usdc, "allowance(address,address)", [@signer, fleet.manager_address],
          {"uint256", [amount]}}
       ]

@@ -57,7 +57,7 @@ defmodule Keyfleet.BrowserChain do
   @reveal_seed Call.selector("revealSeed(uint256)")
   @reveal_requested_at Call.selector("revealRequestedAt(uint256)")
   @owner_of Call.selector("ownerOf(uint256)")
-  @sales_open Call.selector("salesOpen(uint256)")
+  @sales_open_at Call.selector("salesOpenAt(uint256)")
   @total_minted Call.selector("totalMinted()")
   @next_price Call.selector("nextPrice()")
   @credits Call.selector("credits(address,address)")
@@ -198,8 +198,8 @@ defmodule Keyfleet.BrowserChain do
 
   defp answer(_rewards, @credits <> _asset_and_account, _block_hash), do: {:ok, <<0::256>>}
 
-  # Every fleet's Keys are on sale.
-  defp answer(_keys, @sales_open <> _fleet, _block_hash), do: {:ok, <<1::256>>}
+  # Every fleet's Keys have been on sale since the first second of 1970.
+  defp answer(_keys, @sales_open_at <> _fleet, _block_hash), do: {:ok, <<1::256>>}
 
   # A key never sold has no owner, and the collection refuses to name one.
   defp answer(keys, @owner_of <> token_id, _block_hash) do

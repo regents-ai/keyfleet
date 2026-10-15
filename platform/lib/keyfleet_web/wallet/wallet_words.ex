@@ -26,6 +26,8 @@ defmodule KeyfleetWeb.WalletWords do
       else: "That wallet isn’t a full address. #{@address_words}"
   end
 
+  # A sold-out fleet says so beside its Buy button, so nothing is said above.
+  def line(:buy, %{problem: :sold_out}, _inputs), do: nil
   def line(_flow, %{problem: problem}, _inputs) when problem != nil, do: problem(problem)
   def line(flow, %{figures: figures}, _inputs), do: says(flow, figures)
 
@@ -119,7 +121,6 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:not_recorded), do: "This proposal isn’t on this page yet."
   defp problem(:no_launch), do: "No launch yet."
   defp problem(:unread), do: "Can’t reach the network right now. Trying again."
-  defp problem(:sold_out), do: "Sold out."
   defp problem(:not_for_sale), do: "Regents Club Keys are given, never sold."
   defp problem(:not_club), do: "Only a Regents Club Key is claimed with its Pass."
 
@@ -157,6 +158,7 @@ defmodule KeyfleetWeb.WalletWords do
   def blocked(:approve_first), do: "Approve first"
   def blocked(:approve_usdc_first), do: "Approve USDC first"
   def blocked(:sales_not_open), do: "Sales aren’t open yet"
+  def blocked(:sold_out), do: "Sold out"
   def blocked(:too_new), do: "Too new: Keys wait 2 days"
   def blocked(:nothing_owed), do: "Nothing owed"
   def blocked(:launch_settled), do: "Already settled"
