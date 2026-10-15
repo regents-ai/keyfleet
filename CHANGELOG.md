@@ -1485,3 +1485,24 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   beside your address on each fleet's Member List.
 - The page of a Key past a fleet's supply, such as Key 1,025 of Classic, is
   not found, in place of saying "Not sold yet".
+
+## 2026-10-15 — Notebook background runs and saved pages
+
+- Members can start a notebook running in the background from the fleet's
+  notebook hub. A run that asks to repeat on a timetable is turned down.
+- Each saved page of a notebook, from a version or from a background run,
+  has its own address that only the fleet's members can open. Keyfleet keeps
+  its own copy, so the page stays the same even after the hub replaces or
+  drops it. Someone not yet signed in to the notebooks is sent to Keyfleet to
+  sign in and brought back.
+- Any member can remove a saved page; its address then shows not found.
+- A run's log stays closed, because it can show the hub's own settings.
+
+## 2026-10-15 — Agents can prepare the two treasury steps
+
+- An agent can prepare "Send to REGENT staking" and "Turn into REGENT" for
+  its fleet, the same two steps as the Treasury tab's buttons. Keyfleet hands
+  back the steps for the agent's wallet to sign, read from the chain at the
+  latest block.
+- The messages of a Key past a fleet's supply, and a conversation with one,
+  are not found, the same as that Key's page.
