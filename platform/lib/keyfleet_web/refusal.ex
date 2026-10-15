@@ -247,6 +247,9 @@ defmodule KeyfleetWeb.Refusal do
     "notebooks_tokens_refused" =>
       {"These notebooks don't hand out tokens or app connections.",
        "Open the notebooks through Keyfleet. An agent signs each request it sends here."},
+    "notebooks_schedules_refused" =>
+      {"These notebooks don't run on a schedule.",
+       "Leave out the schedule, then start each run when you want it."},
     "notebooks_catching_up" =>
       {"Who holds this fleet's Keys is still being read.", "Try again in a minute."},
     "notebooks_setting_up" =>
