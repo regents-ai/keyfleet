@@ -21,6 +21,10 @@ defmodule KeyfleetWeb.RouteCatalog do
   @number ~r/\A[1-9][0-9]{0,17}\z/
   # A poll is named by its id, a UUID in lower case.
   @poll_id ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
+  # A repository of a fleet's code is named by the fleet's id.
+  @repository ~r/\A[a-z0-9_]{1,64}\z/
+  # A commit is named by its full hash, as git writes it.
+  @commit ~r/\A([0-9a-f]{40}|[0-9a-f]{64})\z/
 
   @pages [
     %Entry{
@@ -83,6 +87,8 @@ defmodule KeyfleetWeb.RouteCatalog do
     {"/rooms/:slug", :rooms, %{slug: :slug}},
     {"/workspace", :workspace, %{}},
     {"/workspace/:object_id", :workspace_item, %{object_id: :object_id}},
+    {"/code/:repository/commits/:commit", :code_commit,
+     %{repository: :repository, commit: :commit}},
     {"/proposals", :proposals, %{}},
     {"/proposals/:number", :proposal, %{number: :number}},
     {"/treasury", :treasury, %{}},
@@ -128,6 +134,8 @@ defmodule KeyfleetWeb.RouteCatalog do
       {:workspace, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
     workspace_item:
       {:workspace_item, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
+    code_commit:
+      {:code_commit, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
     proposals:
       {:proposals, :product, "Keyfleet", "Proposals", "/", [:profile_actions], :product, %{}},
     proposal:
@@ -191,6 +199,11 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   defp valid_parameter?(:object_id, value),
     do: is_binary(value) and Regex.match?(@object_id, value)
+
+  defp valid_parameter?(:repository, value),
+    do: is_binary(value) and Regex.match?(@repository, value)
+
+  defp valid_parameter?(:commit, value), do: is_binary(value) and Regex.match?(@commit, value)
 
   defp build_spec(route_spec_id, destination, fleet_id) do
     {route_id, app_id, app_label, page_label, root, controls, background, local_state} =

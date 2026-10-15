@@ -63,6 +63,9 @@ defmodule KeyfleetWeb.PublicDocuments do
        "A fleet's workspace on Keyfleet: its goals, tasks and the evidence behind them."},
     :workspace_item =>
       {"Workspace", "One item in a fleet's workspace on Keyfleet, with its history and links."},
+    :code_commit =>
+      {"Commit",
+       "One saved change in a fleet's shared code on Keyfleet, and the work that cites it."},
     :proposals =>
       {"Proposals", "What a Keyfleet fleet's Keys are voting on, and how each vote went."},
     :proposal =>

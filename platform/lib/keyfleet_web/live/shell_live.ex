@@ -174,6 +174,7 @@ defmodule KeyfleetWeb.ShellLive do
               :rooms,
               :workspace,
               :workspace_item,
+              :code_commit,
               :proposals,
               :proposal,
               :treasury,
@@ -547,6 +548,7 @@ defmodule KeyfleetWeb.ShellLive do
             code_notice={@code_notice}
           />
           <WorkspaceLive.item :if={@route_spec.route_id == :workspace_item} item={@workspace} />
+          <WorkspaceLive.commit :if={@route_spec.route_id == :code_commit} commit={@workspace} />
           <TreasuryLive.page
             :if={@route_spec.route_id == :treasury}
             page={@proposals}
@@ -613,7 +615,10 @@ defmodule KeyfleetWeb.ShellLive do
   defp fleet_place(:fleet), do: :fleet
   defp fleet_place(:treasury), do: :treasury
   defp fleet_place(route_id) when route_id in [:proposals, :proposal], do: :proposals
-  defp fleet_place(route_id) when route_id in [:workspace, :workspace_item], do: :workspace
+
+  defp fleet_place(route_id) when route_id in [:workspace, :workspace_item, :code_commit],
+    do: :workspace
+
   defp fleet_place(_route_id), do: nil
 
   defp current_account(%{principal: {:human, account}}), do: account
@@ -629,7 +634,15 @@ defmodule KeyfleetWeb.ShellLive do
   # that lands while it loads still reaches it. The map is told when the key
   # chosen changes under it: back or forward, or another fleet's page.
   defp load_fleet(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
-       when route_id in [:fleet, :treasury, :workspace, :workspace_item, :proposals, :proposal] do
+       when route_id in [
+              :fleet,
+              :treasury,
+              :workspace,
+              :workspace_item,
+              :code_commit,
+              :proposals,
+              :proposal
+            ] do
     shown = socket.assigns.fleet
 
     socket
@@ -756,7 +769,16 @@ defmodule KeyfleetWeb.ShellLive do
   # The fleet whose keys the page on show follows: the fleet's own page, one
   # of its keys' pages, one of its rooms, its workspace, or its polls.
   defp keys_fleet(%{route_id: route_id}, %{"fleet_id" => fleet_id})
-       when route_id in [:fleet, :keys, :rooms, :workspace, :workspace_item, :polls, :poll],
+       when route_id in [
+              :fleet,
+              :keys,
+              :rooms,
+              :workspace,
+              :workspace_item,
+              :code_commit,
+              :polls,
+              :poll
+            ],
        do: fleet_id
 
   defp keys_fleet(_route_spec, _params), do: nil
@@ -881,7 +903,7 @@ defmodule KeyfleetWeb.ShellLive do
   # The page starts listening before it reads, so a change that lands while it
   # loads still reaches it. Each visit, reconnection included, reads afresh.
   defp load_workspace(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
-       when route_id in [:workspace, :workspace_item] do
+       when route_id in [:workspace, :workspace_item, :code_commit] do
     socket
     |> follow_workspace(fleet_id)
     |> assign(

@@ -273,6 +273,7 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/polls/:poll_id/vote", AgentPollController, :vote
     post "/fleets/:fleet_id/polls/:poll_id/end", AgentPollController, :end_poll
     post "/fleets/:fleet_id/code/password", AgentCodeController, :password
+    get "/fleets/:fleet_id/code/pushes", AgentCodeController, :pushes
     get "/fleets/:fleet_id/mutes", AgentMuteController, :index
     post "/fleets/:fleet_id/keys/:token_id/mute", AgentMuteController, :create
     post "/fleets/:fleet_id/keys/:token_id/unmute", AgentMuteController, :delete
