@@ -386,11 +386,19 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
           raw: true,
           redirect: false,
           retry: false,
-          receive_timeout: Notebooks.config()[:hub_timeout_ms]
+          receive_timeout: http_timeout(conn)
         )
         |> stream_back(conn)
     end
   end
+
+  defp http_timeout(%{
+         method: "POST",
+         path_info: ["api", "v1", "projects", _project, "notebooks", _notebook, "sessions"]
+       }),
+       do: Notebooks.config()[:session_start_timeout_ms]
+
+  defp http_timeout(_conn), do: Notebooks.config()[:hub_timeout_ms]
 
   # An agent's body was read to check its signature.
   defp request_body(%Plug.Conn{assigns: %{raw_body: raw}} = conn), do: {raw, conn}
