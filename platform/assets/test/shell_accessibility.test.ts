@@ -20,6 +20,7 @@ vi.mock("../js/hooks/motion/press", () => ({deny: vi.fn()}))
 vi.mock("../js/hooks/motion/moments", () => ({MotionCount: {}, MotionList: {}, MotionRefusal: {}}))
 vi.mock("../js/hooks/motion/reveals", () => ({MotionCascade: {}, ShellViews: {}}))
 vi.mock("../js/hooks/motion/slides", () => ({MotionPanels: {}}))
+vi.mock("../js/hooks/home_hero", () => ({HexField: {}, NextKeyCard: {}}))
 vi.mock("phoenix_live_view", () => ({
   LiveSocket: class LiveSocket {
     constructor(
