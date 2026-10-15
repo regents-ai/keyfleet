@@ -445,7 +445,6 @@ defmodule KeyfleetWeb.HomeLive do
         id="home-buy-card"
         class="rl-buy__card"
         phx-hook="NextKeyCard"
-        phx-mounted={JS.ignore_attributes(["data-foil-ready"])}
         aria-hidden="true"
         data-key-card
       >
@@ -462,7 +461,6 @@ defmodule KeyfleetWeb.HomeLive do
             alt=""
             fetchpriority="high"
           />
-          <canvas id="home-buy-foil" class="rl-buy__foil" phx-update="ignore" data-foil-canvas></canvas>
           <span :if={@price} id="home-buy-tag" class="rl-buy__tag">{@price}</span>
         </div>
       </div>

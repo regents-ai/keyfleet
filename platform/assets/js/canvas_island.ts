@@ -1,8 +1,8 @@
 /**
  * A decorative canvas the browser owns, and every reason not to draw on it.
  *
- * The homepage's hex fields and the foil on its next Key, and the holographic
- * cards elsewhere, are each one of these, and none knows what the others draw.
+ * The homepage's hex fields and the holographic cards elsewhere are each one
+ * of these, and none knows what the others draw.
  * What lives here is everything they share: the canvas box, when a frame is
  * worth drawing, and the fallback the visitor sees until one really lands.
  */
