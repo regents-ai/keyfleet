@@ -9,16 +9,13 @@ defmodule KeyfleetWeb.PublicProposalsController do
     conn = conn |> fetch_query_params() |> put_resp_header("cache-control", "no-store")
     fleet_id = conn.path_params["fleet_id"]
 
-    case cursor(conn.query_params) do
-      {:ok, before} ->
-        case PageRead.run("proposals", fn -> listing(fleet_id, before) end) do
-          {:ok, :unknown} -> Refusal.json(conn, 404, "fleet_unknown")
-          {:ok, result} -> json(conn, result)
-          {:error, _} -> Refusal.json(conn, 503, "proposals_unavailable")
-        end
-
-      :error ->
-        Refusal.json(conn, 400, "invalid_proposal_cursor")
+    with {:ok, before} <- cursor(conn.query_params),
+         {:ok, %{} = result} <- PageRead.run("proposals", fn -> listing(fleet_id, before) end) do
+      json(conn, result)
+    else
+      :error -> Refusal.json(conn, 400, "invalid_proposal_cursor")
+      {:ok, :unknown} -> Refusal.json(conn, 404, "fleet_unknown")
+      {:error, _failure} -> Refusal.json(conn, 503, "proposals_unavailable")
     end
   end
 
