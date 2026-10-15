@@ -119,6 +119,15 @@
   cursor: default;
 }
 
+#shell-header > .account-control {
+  align-self: center;
+}
+
+#app-shell #shell-header .account-chip {
+  height: auto;
+  min-height: 2.75rem;
+}
+
 /* The shared prism control draws its own box and hover; the header only centres it.
    Its prism sits .5rem inside the press target, so this margin leaves the same space
    before the X icon as between the icons themselves. */
@@ -309,8 +318,12 @@
 /* The header's Credits balance, which opens Buy Credits. It sits here, outside
    the product layer, so it wins over the site's plain button rules. */
 #app-shell .shell-credits {
+  min-width: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
   align-self: center;
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   margin-inline-end: var(--space-1);
   padding: 0.35rem 0.7rem;
   border: 1px solid var(--color-border);
