@@ -1,12 +1,12 @@
 defmodule Keyfleet.MixProject do
   use Mix.Project
 
-  # Shared Regent libraries, each pinned to one published commit. To move a pin,
-  # change its ref and run `mix deps.update <name>`.
+  # Shared Regent libraries, each pinned to one commit. Publish shared commits
+  # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "a844a8363d76420410f1dece69e2c7b0ebec895a"
+  @elixir_utils_ref "b5824049d55012f2e8b1e4d7e3e2fcc549d93360"
   @design_system "https://github.com/regents-ai/design-system.git"
-  @design_system_ref "d3408b5757732e05aaf208d829f65f1bb12147c0"
+  @design_system_ref "fb0542f656f68b30e56f370c8806639ac9067c07"
 
   def project do
     [
@@ -18,7 +18,7 @@ defmodule Keyfleet.MixProject do
       aliases: aliases(),
       deps: deps(),
       usage_rules: usage_rules(),
-      compilers: [:phoenix_live_view] ++ Mix.compilers(),
+      compilers: [:ash_signals, :phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader]
     ]
   end
@@ -51,7 +51,7 @@ defmodule Keyfleet.MixProject do
       {:phoenix, "~> 1.8.9"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.6", override: true},
-      {:ash, "~> 3.34 and >= 3.34.3"},
+      {:ash, "~> 3.36"},
       {:ash_phoenix, "~> 2.3.25"},
       {:ash_postgres, "== 2.13.0"},
       {:oban, "~> 2.24"},
@@ -59,9 +59,9 @@ defmodule Keyfleet.MixProject do
       {:mint_web_socket, "~> 1.0"},
       # The code gateway streams git's request to the fleets' code store.
       {:mint, "~> 1.11"},
-      {:ash_oban, "~> 0.9.0"},
+      {:ash_oban, "~> 0.10.0"},
       {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
-      {:mdex, "== 0.13.3"},
+      {:mdex, "== 0.14.2"},
       {:regent_privy,
        git: @elixir_utils, ref: @elixir_utils_ref, sparse: "privy", override: true},
       {:regent_identity,
@@ -92,7 +92,7 @@ defmodule Keyfleet.MixProject do
       {:jason, "~> 1.2"},
       {:yaml_elixir, "~> 2.12"},
       {:ex_keccak, "~> 0.7.8"},
-      {:req, "== 0.7.4"},
+      {:req, "== 0.7.5"},
       # Reads an agent picture's format and size from its first bytes.
       {:ex_image_info, "~> 1.0"},
       # Cuts each Key card's small close-up out of its picture (libvips).
@@ -110,7 +110,7 @@ defmodule Keyfleet.MixProject do
        sparse: "credo_ash",
        only: [:dev, :test],
        runtime: false},
-      {:sobelow, "~> 0.14", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
       {:usage_rules, "~> 1.2.8", only: [:dev, :test], runtime: false}
     ]
   end

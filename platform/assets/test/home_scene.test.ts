@@ -31,10 +31,6 @@ vi.mock("vgpu", () => ({
   })),
 }))
 
-vi.mock("vgpu/scene", () => ({
-  perspectiveCamera: vi.fn(() => ({viewProjection: new Float32Array(16)})),
-}))
-
 import {HERO_PALETTES, setHeroPalette, type HeroPaletteName} from "../js/home_field/palette"
 import {createScene, destroyScene, prepareScene, presentScene} from "../js/home_prism/scene"
 

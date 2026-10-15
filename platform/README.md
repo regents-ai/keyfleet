@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)](../LICENSE)
 [![Elixir 1.19](https://img.shields.io/badge/elixir-1.19-lightgrey)](https://elixir-lang.org)
 [![Phoenix 1.8](https://img.shields.io/badge/phoenix-1.8-lightgrey)](https://www.phoenixframework.org)
-[![Ash 3.33](https://img.shields.io/badge/ash-3.33-lightgrey)](https://ash-hq.org)
+[![Ash 3.36](https://img.shields.io/badge/ash-3.36-lightgrey)](https://ash-hq.org)
 
 The Phoenix/Ash web application of Keyfleet. It serves the public home
 page, where a visitor chooses one of the four fleets, and each fleet's page
@@ -19,10 +19,23 @@ transaction itself.
 ## Shared dependencies
 
 The shared Regent libraries are pinned by git in `mix.exs`, one commit per
-repository: elixir-utils `f30b2f2` (`privy`, `agent_access`, `siwa`, `format`,
-`chain`, `credo_ash`), design-system `42a439b` (`regent_ui`) and regents
-`d1216640` (`identity`, `agents`). `mix deps.get` fetches them with everything
-else, and the release image is built from the same commits.
+repository: elixir-utils holds sign-in, identity, agents, Credits, Points and
+supporting libraries; design-system holds `regent_ui`. `mix.lock` records the
+exact commits used to build the release. A new shared commit must be published
+before a site release can fetch it.
+
+Common Mix and direct npm packages match ash-template's tested dependency
+baseline. Compare the candidate checkouts with the template's
+`scripts/check-dependency-parity.py` before release. Keep the AshPostgres 2.13.0
+schema-prefix hold and Bandit's fixed Git source until the template verifies
+their replacements.
+
+The release checks the separate Agents, Credits and Points migration ledgers
+before applying site migrations. Missing shared migrations require separate
+approval; the check never applies them. This includes the Agents picture
+migration `20261014150000` and Credits hold-cause migration `20261013202732`.
+Updating dependencies does not open Points earning: `starts_at` stays unset,
+with no approved rules or adapters.
 
 To move a pin, change its ref in `mix.exs`, run `mix deps.update <name>` for each
 library from that repository, then the checks. `make check-required-fixes` (from the repository root, needs

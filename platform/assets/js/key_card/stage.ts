@@ -6,6 +6,8 @@
 
 import {effect, frame, init, sampler, surface, target, texture, type Effect, type Gpu, type Surface, type Texture} from "vgpu"
 
+import {prepareShader} from "@vgpu/wgsl/prepare"
+
 import {CARD_WGSL} from "./shader"
 import type {CardJob, Layers} from "./paint"
 
@@ -42,6 +44,7 @@ export type Stage = {
 export async function startStage(canvas: HTMLCanvasElement): Promise<Stage | null> {
   const gpu = await start()
   if (!gpu) return null
+  const shader = prepareShader(CARD_WGSL)
   const out: Surface = surface(gpu, canvas, {dpr: [1, 1.75]})
   const samp = linear(gpu)
   let fx: Effect | null = null
@@ -65,7 +68,7 @@ export async function startStage(canvas: HTMLCanvasElement): Promise<Stage | nul
       if (fx) {
         fx.set({u: params, ...next})
       } else {
-        const made = effect(gpu, CARD_WGSL, {label: "key-card", set: {u: params, ...next, samp}})
+        const made = effect(gpu, shader, {label: "key-card", set: {u: params, ...next, samp}})
         await made.compile({colors: [out.format]})
         out.onResize(() => made.set({u: {res: out.size}}))
         fx = made
@@ -84,6 +87,7 @@ export async function startStage(canvas: HTMLCanvasElement): Promise<Stage | nul
 export async function startStills(size: readonly [number, number]): Promise<((job: CardJob) => Promise<Uint8Array>) | null> {
   const gpu = await start()
   if (!gpu) return null
+  const shader = prepareShader(CARD_WGSL)
   const out = target(gpu, {size, format: "rgba8unorm"})
   const samp = linear(gpu)
   let fx: Effect | null = null
@@ -94,7 +98,7 @@ export async function startStills(size: readonly [number, number]): Promise<((jo
     if (fx) {
       fx.set(params)
     } else {
-      const made = effect(gpu, CARD_WGSL, {label: "key-card", set: {...params, samp}})
+      const made = effect(gpu, shader, {label: "key-card", set: {...params, samp}})
       await made.compile({colors: [out.format]})
       fx = made
     }

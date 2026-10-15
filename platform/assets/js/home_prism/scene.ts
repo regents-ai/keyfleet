@@ -10,6 +10,7 @@
  */
 
 import {draw, effect, frame, sampler, target} from "vgpu"
+import {prepareShader} from "@vgpu/wgsl/prepare"
 import type {Draw, Effect, Geometry, Gpu, Surface, Target} from "vgpu"
 
 import {FIELD_PALETTE, heroPalette, type Rgba} from "../home_field/palette"
@@ -74,9 +75,17 @@ export interface PrismScene {
 
 export function createScene(gpu: Gpu, output: readonly [number, number], label: string): PrismScene {
   const aspect = output[0] / Math.max(1, output[1])
-  const bloomEffect = (name: string) => effect(gpu, bloomWgsl, {label: `${label}.bloom-${name}`})
+  const bloomWgslPrepared = prepareShader(bloomWgsl)
+  const bloomUpsampleWgslPrepared = prepareShader(bloomUpsampleWgsl)
+  const copyLinearWgslPrepared = prepareShader(copyLinearWgsl)
+  const presentWgslPrepared = prepareShader(presentWgsl)
+  const fieldWgslPrepared = prepareShader(fieldWgsl)
+  const crownLightWgslPrepared = prepareShader(crownLightWgsl)
+  const crownGlassBackWgslPrepared = prepareShader(crownGlassBackWgsl)
+  const crownGlassFrontWgslPrepared = prepareShader(crownGlassFrontWgsl)
+  const bloomEffect = (name: string) => effect(gpu, bloomWgslPrepared, {label: `${label}.bloom-${name}`})
   const bloomUpsampleEffect = (name: string) =>
-    effect(gpu, bloomUpsampleWgsl, {label: `${label}.bloom-upsample-${name}`, blend: "additive"})
+    effect(gpu, bloomUpsampleWgslPrepared, {label: `${label}.bloom-upsample-${name}`, blend: "additive"})
   const crown = crownGeometry(gpu, `${label}.crown`)
   const beam = heroPalette().beam
   const lightSheet = crownLightGeometry(gpu, [0, 0], aspect, beam, `${label}.light-sheet`)
@@ -84,8 +93,8 @@ export function createScene(gpu: Gpu, output: readonly [number, number], label: 
   return {
     gpu,
     outputSize: output,
-    copyToBack: effect(gpu, copyLinearWgsl, {label: `${label}.copy-to-back`}),
-    copyToFront: effect(gpu, copyLinearWgsl, {label: `${label}.copy-to-front`}),
+    copyToBack: effect(gpu, copyLinearWgslPrepared, {label: `${label}.copy-to-back`}),
+    copyToFront: effect(gpu, copyLinearWgslPrepared, {label: `${label}.copy-to-front`}),
     bloomDownsample: [
       bloomEffect("half"),
       bloomEffect("quarter"),
@@ -97,10 +106,10 @@ export function createScene(gpu: Gpu, output: readonly [number, number], label: 
       bloomUpsampleEffect("quarter"),
       bloomUpsampleEffect("half"),
     ],
-    present: effect(gpu, presentWgsl, {label: `${label}.present`}),
-    field: effect(gpu, fieldWgsl, {label: `${label}.field`}),
+    present: effect(gpu, presentWgslPrepared, {label: `${label}.present`}),
+    field: effect(gpu, fieldWgslPrepared, {label: `${label}.field`}),
     light: draw(gpu, {
-      shader: crownLightWgsl,
+      shader: crownLightWgslPrepared,
       geometry: lightSheet,
       blend: "additive",
       cull: "none",
@@ -108,14 +117,14 @@ export function createScene(gpu: Gpu, output: readonly [number, number], label: 
       label: `${label}.light`,
     }),
     glassBack: draw(gpu, {
-      shader: crownGlassBackWgsl,
+      shader: crownGlassBackWgslPrepared,
       geometry: crown,
       cull: "front",
       depth: false,
       label: `${label}.glass-back`,
     }),
     glassFront: draw(gpu, {
-      shader: crownGlassFrontWgsl,
+      shader: crownGlassFrontWgslPrepared,
       geometry: crown,
       cull: "back",
       depth: false,

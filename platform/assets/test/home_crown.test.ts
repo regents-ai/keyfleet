@@ -24,10 +24,6 @@ vi.mock("vgpu", () => ({
   target: vi.fn(),
 }))
 
-vi.mock("vgpu/scene", () => ({
-  perspectiveCamera: vi.fn(() => ({viewProjection: new Float32Array(16)})),
-}))
-
 import {
   CROWN_FRAME_MARGIN,
   cameraView,

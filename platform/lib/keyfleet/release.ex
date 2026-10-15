@@ -214,12 +214,16 @@ defmodule Keyfleet.Release do
         do: version
   end
 
-  # The Credits and Points code this release carries reads tables and indexes
+  # The Agents, Credits and Points code this release carries reads tables and indexes
   # from every migration its pinned library ships, so each must already be in
   # that schema's own ledger. Every missing version is named at once.
   defp require_shared_migrations!(repo) do
     unapplied =
-      for {app, schema} <- [regent_credits: "regent_credits", regent_points: "regent_points"],
+      for {app, schema} <- [
+            regent_agents: "regent_agents",
+            regent_credits: "regent_credits",
+            regent_points: "regent_points"
+          ],
           {:down, version, _name} <-
             Ecto.Migrator.migrations(repo, [Application.app_dir(app, "priv/repo/migrations")],
               prefix: schema,
