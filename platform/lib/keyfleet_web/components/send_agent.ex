@@ -27,7 +27,7 @@ defmodule KeyfleetWeb.Components.SendAgent do
       "Use read_treasury through native WebMCP if available; otherwise use that public HTTP read. " <>
       "Report the indexed balances, their timestamp and any catching-up warning. " <>
       "Separate treasury funds from Key rewards. Name which transport you used. " <>
-      "Do not sign or submit transactions, run money tests, or enable Points earning."
+      "Do not sign or submit wallet transactions."
   end
 
   @doc "A workspace review using the agent's own access, with a draft before publication."
@@ -37,7 +37,7 @@ defmodule KeyfleetWeb.Components.SendAgent do
       "Use your existing paired signer for member details; never borrow my browser session. " <>
       "If access is refused, report the error and stop. Summarize current work and suggest one next step. " <>
       "Draft a member note with evidence links, and ask me before publishing it or starting a notebook session. " <>
-      "Do not submit wallet transactions, run money tests, or enable Points earning."
+      "Do not submit wallet transactions."
   end
 
   attr :id, :string, required: true, doc: "the button's id; the dialog's parts are named after it"
