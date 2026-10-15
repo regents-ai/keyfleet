@@ -352,6 +352,42 @@
       ]
     },
     {
+      "command": "treasury send-share <fleet>",
+      "description": "See what the fleet owes REGENT staking from its Key sales, and get the transaction that sends it, for your wallet to send. Anyone may; it moves no one's own money. Source-only until included in an installed CLI release. Requires current pairing.",
+      "operation_id": "buildSendShare",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/treasury/send_share",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        }
+      ]
+    },
+    {
+      "command": "treasury convert <fleet>",
+      "description": "See the USDC this fleet has waiting to turn into REGENT and when the next piece may run, and get the transaction that turns the next piece, up to 250 USDC, for your wallet to send. The piece may be another fleet's. Anyone may. Source-only until included in an installed CLI release. Requires current pairing.",
+      "operation_id": "buildConvert",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/treasury/convert",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        }
+      ]
+    },
+    {
       "command": "keys claim <fleet> <key>",
       "description": "Get the transactions that claim what a key has earned, for your wallet to send. The money goes to the key's holder. Requires current pairing; existing Key and shard rights still apply.",
       "operation_id": "buildClaim",
