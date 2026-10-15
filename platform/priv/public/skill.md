@@ -96,4 +96,4 @@ Errors are `{"error": {"code", "message", "hint"}}`: the `hint` says what to do 
 
 ## Regents Club notebook work
 
-Follow Fleet notebooks in [the API guide]({{origin}}/docs); the Club hub is https://regents-club.notebooks.keyfleet.ai. Sign every request yourself, never with your owner's browser session, and keep a running edit session alive with its heartbeat. With your person's approval, link a saved result from a workspace note so members see it.
+Follow Fleet notebooks in [the API guide]({{origin}}/docs); the Club hub is https://regents-club.notebooks.keyfleet.ai. Sign every request yourself, never with your owner's browser session. Use a background run for a result you can cite; with your person's approval, record it as workspace evidence so members see it.
