@@ -376,7 +376,8 @@ defmodule KeyfleetWeb.HomeLive do
   # The headline is the tagline, with its last words in the accent colour.
   defp hero(assigns) do
     ~H"""
-    <section id="home-hero" class="rl-hero" aria-labelledby="home-title">
+    <section id="home-hero" class="rl-hero" aria-labelledby="home-title" data-field-scope>
+      <.hex_field id="home-hero-field" class="rl-hero__field" cell={40} />
       <div class="rl-hero__head">
         <p id="home-hero-fleet" class="rl-eyebrow">{@classic.name}</p>
         <h1 id="home-title" class="rl-hero__title">
@@ -432,35 +433,38 @@ defmodule KeyfleetWeb.HomeLive do
   attr :classic, :map, required: true
 
   # The Key on offer, its card art and its price. While Classic is coming
-  # soon it names the first Key, the one the sale will open with.
+  # soon it names the first Key, the one the sale will open with, and the
+  # button says it can't be pressed yet: a press shakes it and sends nothing.
+  # The card and its price tag are the same in every state.
   defp buy_next_key(assigns) do
     assigns = assign(assigns, offer(assigns.classic))
 
     ~H"""
-    <div id="home-buy" class="rl-buy" data-buy={@state}>
-      <.link
-        :if={@state == :open}
-        navigate={@href}
-        class="rl-buy__art"
-        tabindex="-1"
+    <div id="home-buy" class="rl-buy" data-buy={@state} data-key-preview>
+      <div
+        id="home-buy-card"
+        class="rl-buy__card"
+        phx-hook="NextKeyCard"
+        phx-mounted={JS.ignore_attributes(["data-foil-ready"])}
         aria-hidden="true"
+        data-key-card
       >
-        <img
-          src={~p"/images/home/next-key-pass.webp"}
-          width="600"
-          height="765"
-          alt=""
-          fetchpriority="high"
-        />
-      </.link>
-      <div :if={@state != :open} class="rl-buy__art">
-        <img
-          src={~p"/images/home/next-key-pass.webp"}
-          width="600"
-          height="765"
-          alt=""
-          fetchpriority="high"
-        />
+        <div
+          id="home-buy-tilt"
+          class="rl-buy__tilt"
+          phx-mounted={JS.ignore_attributes(["style"])}
+          data-key-tilt
+        >
+          <img
+            src={~p"/images/home/next-key-pass.webp"}
+            width="600"
+            height="765"
+            alt=""
+            fetchpriority="high"
+          />
+          <canvas id="home-buy-foil" class="rl-buy__foil" phx-update="ignore" data-foil-canvas></canvas>
+          <span :if={@price} id="home-buy-tag" class="rl-buy__tag">{@price}</span>
+        </div>
       </div>
 
       <.link
@@ -480,7 +484,7 @@ defmodule KeyfleetWeb.HomeLive do
         :if={@state != :open}
         id="home-buy-next-key"
         class="rl-buy__button"
-        disabled
+        aria-disabled="true"
         aria-describedby="home-buy-why"
       >
         <span class="rl-buy__label">
@@ -490,6 +494,39 @@ defmodule KeyfleetWeb.HomeLive do
       </Regent.Primitives.button>
 
       <p id="home-buy-why" class="rl-buy__why">{@why}</p>
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :class, :string, required: true
+
+  attr :cell, :integer,
+    default: nil,
+    doc: "The distance between neighbouring tiles, in CSS pixels."
+
+  attr :across, :integer,
+    default: nil,
+    doc: "Instead of `cell`, how many tiles fit across the field."
+
+  # A field of hex tiles behind a section: the stylesheet draws them still,
+  # and the GPU draws them over that once its first frame has landed. A tile
+  # sits on the field's centre, so a field `across` a map's width of keys lies
+  # under the map's own tiles.
+  defp hex_field(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class={["rl-field", @class]}
+      phx-hook="HexField"
+      phx-mounted={JS.ignore_attributes(["data-field-ready"])}
+      data-field-cell={@cell}
+      data-field-across={@across}
+      style={if @cell, do: "--rl-cell: #{@cell}px", else: "--rl-cell: calc(100cqi / #{@across})"}
+      aria-hidden="true"
+    >
+      <div class="rl-field__still"></div>
+      <canvas id={"#{@id}-canvas"} class="rl-field__canvas" phx-update="ignore" data-field-canvas></canvas>
     </div>
     """
   end
@@ -519,8 +556,10 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp club(assigns) do
     ~H"""
-    <section id="home-club" class="rl-club" aria-labelledby="home-club-title">
+    <section id="home-club" class="rl-club" aria-labelledby="home-club-title" data-field-scope>
       <.link navigate={Fleets.path(@club.id)} class="rl-club__map" tabindex="-1" aria-hidden="true">
+        <%!-- The map is drawn twelve keys wide. --%>
+        <.hex_field id="home-club-field" class="rl-club__field" across={12} />
         <div
           id="home-club-preview"
           class="key-map-preview"

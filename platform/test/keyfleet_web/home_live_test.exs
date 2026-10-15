@@ -10,12 +10,13 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   # Invariants covered:
   # - smoke: 200 mount and the public-home landmark, outside the signed-in shell
-  # - while Classic is coming soon, "Buy Next Key" names Key 1 and its price
-  #   but is a disabled button with "Sales open soon" beside it, links nowhere,
-  #   and the header offers no Get a Key
+  # - while Classic is coming soon, "Buy Next Key" and the card's tag name Key 1
+  #   and its price, but the button says it can't be pressed, with "Sales open
+  #   soon" beside it, links nowhere, and the header offers no Get a Key
   # - once Classic is on sale, "Buy Next Key" opens its page with Get a Key
-  #   pressed, naming the Key on offer and its price after the Keys sold
-  # - once every Classic Key is sold, the button is disabled and says so
+  #   pressed, and it and the card's tag name the Key on offer and its price
+  #   after the Keys sold
+  # - once every Classic Key is sold, the button can't be pressed and says so
   # - the Club shows its newest open goal and featured item once connected,
   #   and the first render reads neither; a coming-soon Club reads nothing
   # - a Club read that fails is said to have failed and never shown as zero
@@ -56,17 +57,18 @@ defmodule KeyfleetWeb.HomeLiveTest do
   end
 
   @tag :classic_undeployed
-  test "while Classic is coming soon, Buy Next Key is disabled with the reason beside it",
+  test "while Classic is coming soon, Buy Next Key can't be pressed and says why",
        %{conn: conn} do
     {:ok, view, html} = live(conn, "/")
 
     assert has_element?(
              view,
-             ~s(button#home-buy-next-key[disabled][aria-describedby="home-buy-why"]),
+             ~s(button#home-buy-next-key[aria-disabled="true"][aria-describedby="home-buy-why"]),
              "Buy Next Key"
            )
 
     assert text(view, "#home-buy-price") == "Key 1 · 10 USDC"
+    assert text(view, "#home-buy-tag") == "Key 1 · 10 USDC"
     assert text(view, "#home-buy-why") == "Sales open soon"
     refute html =~ "?buy"
     refute has_element?(view, "#shell-get-key")
@@ -82,16 +84,18 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert has_element?(view, ~s(a#home-buy-next-key[href="/classic/1?buy"]), "Buy Next Key")
     assert text(view, "#home-buy-price") == "Key 4 · #{KeyfleetWeb.FleetLive.usdc(price)}"
+    assert text(view, "#home-buy-tag") == "Key 4 · #{KeyfleetWeb.FleetLive.usdc(price)}"
     assert text(view, "#home-buy-why") == ""
     assert text(view, "#home-classic-sold") == "3"
   end
 
-  test "once every Classic Key is sold, Buy Next Key is disabled and says so", %{conn: conn} do
+  test "once every Classic Key is sold, Buy Next Key can't be pressed and says so",
+       %{conn: conn} do
     issue!(@classic, 1024)
 
     {:ok, view, _html} = live(conn, "/")
 
-    assert has_element?(view, "button#home-buy-next-key[disabled]")
+    assert has_element?(view, ~s(button#home-buy-next-key[aria-disabled="true"]))
     assert text(view, "#home-buy-why") == "1,024/1,024 Keys sold"
   end
 
