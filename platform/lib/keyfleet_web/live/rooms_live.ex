@@ -164,7 +164,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
           <.notice notice={@notice} />
 
-          <p :if={@room.last_seq == 0}>Nothing has been said here yet.</p>
+          <p :if={not @room.shown?}>Nothing has been said here yet.</p>
 
           <ol
             id="rooms-thread-list"
@@ -374,6 +374,7 @@ defmodule KeyfleetWeb.RoomsLive do
       end
 
     posts = read_latest(Enum.find(rooms, &(&1.slug == slug)), opts)
+    unmuted = Rooms.unmuted(posts, muted)
 
     socket
     |> assign(
@@ -384,6 +385,7 @@ defmodule KeyfleetWeb.RoomsLive do
             slug: slug,
             fleet_name: fleet_name(rooms),
             last_seq: last_seq(posts, 0),
+            shown?: unmuted != [],
             muted: muted,
             muter?: Muter.of(actor) != nil,
             key?: key?,
@@ -393,7 +395,7 @@ defmodule KeyfleetWeb.RoomsLive do
         ),
       room_notice: nil
     )
-    |> stream(:posts, Rooms.unmuted(posts, muted), reset: true, limit: -@thread_kept)
+    |> stream(:posts, unmuted, reset: true, limit: -@thread_kept)
   end
 
   defp change_mute("mute_key", fleet_id, token_id, actor),
@@ -467,13 +469,18 @@ defmodule KeyfleetWeb.RoomsLive do
        when is_binary(room_id) do
     {_key?, opts} = standing(ShellLive.human_actor(socket), shown.fleet_id)
     posts = read_latest(Rooms.get_room!(shown.fleet_id, shown.slug, opts), opts)
+    unmuted = Rooms.unmuted(posts, shown.muted)
 
     socket
-    |> assign(:room, %{shown | last_seq: last_seq(posts, 0)})
-    |> stream(:posts, Rooms.unmuted(posts, shown.muted), reset: true, limit: -@thread_kept)
+    |> assign(:room, %{shown | last_seq: last_seq(posts, 0), shown?: unmuted != []})
+    |> stream(:posts, unmuted, reset: true, limit: -@thread_kept)
   end
 
-  defp show_latest(socket), do: stream(socket, :posts, [], reset: true)
+  defp show_latest(%{assigns: %{room: %{} = shown}} = socket) do
+    socket
+    |> assign(:room, %{shown | shown?: false})
+    |> stream(:posts, [], reset: true)
+  end
 
   # The latest posts of a room the reader is shown. Places in a room's order
   # run unbroken, so the newest hundred posts start one hundred places back
@@ -501,10 +508,15 @@ defmodule KeyfleetWeb.RoomsLive do
            [actor: ShellLive.human_actor(socket), load: [:reply_to_seq]] ++ opts
          ) do
       {:ok, posts} ->
-        socket
-        |> assign(:room, %{room | last_seq: last_seq(posts, room.last_seq)})
-        |> stream(:posts, Rooms.unmuted(posts, room.muted), limit: -@thread_kept)
+        unmuted = Rooms.unmuted(posts, room.muted)
 
+        socket
+        |> assign(:room, %{
+          room
+          | last_seq: last_seq(posts, room.last_seq),
+            shown?: room.shown? or unmuted != []
+        })
+        |> stream(:posts, unmuted, limit: -@thread_kept)
       {:error, %Ash.Error.Forbidden{}} ->
         recheck_standing(socket)
 
