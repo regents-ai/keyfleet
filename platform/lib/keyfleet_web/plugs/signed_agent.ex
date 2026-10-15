@@ -552,13 +552,19 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
-  # Presence, the split, the treasury's REGENT steps and a claim say nothing
-  # more than their path. A
-  # proposal names its fields as strings; a vote, a cancellation and carrying
-  # out name the proposal, and a vote its choice.
-  defp check_chain_body(op, params)
-       when op in ["presence", "split", "treasury/send_share", "treasury/convert"],
-       do: admit(params == %{})
+  # Presence, the split, sending the staking share and a claim say nothing
+  # more than their path. Turning USDC into REGENT names its amount as a
+  # string. A proposal names its fields as strings; a vote, a cancellation and
+  # carrying out name the proposal, and a vote its choice.
+  defp check_chain_body(op, params) when op in ["presence", "split", "treasury/send_share"],
+    do: admit(params == %{})
+
+  defp check_chain_body(
+         "treasury/convert",
+         %{"inputs" => %{"amount" => amount} = inputs} = params
+       )
+       when map_size(params) == 1 and map_size(inputs) == 1 and is_binary(amount),
+       do: :ok
 
   defp check_chain_body("proposals/create", params) when is_map(params) do
     admit(
@@ -909,6 +915,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: {@propose_required, @propose_fields -- @propose_required}
 
   defp chain_fields("proposals/vote"), do: {~w(number choice), []}
+  defp chain_fields("treasury/convert"), do: {~w(inputs), []}
 
   defp chain_fields(op) when op in ["proposals/cancel", "proposals/carry_out"],
     do: {~w(number), []}

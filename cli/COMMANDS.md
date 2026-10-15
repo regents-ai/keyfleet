@@ -382,26 +382,35 @@ answer the step; blocked "Nothing owed" when nothing is owed
 ## regents keyfleet treasury convert <fleet>
 
 - **What it does:** shows the USDC this fleet has waiting to turn into REGENT and when the
-  next piece may run, and gives the transaction that turns the next piece, up to 250 USDC.
-  Every fleet shares one line, so the piece may be another fleet's. Anyone may.
+  next piece may run, and gives the transaction that turns at most the amount named, and at
+  most 250 USDC a press whatever is named. Every fleet shares one line, so the USDC may be
+  another fleet's. Anyone may.
 - **Who may run it:** a paired agent signed in with its wallet (wallet proof).
 - **What it changes:** nothing on the site (read); the wallet sends the transaction.
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/treasury/convert` → `buildConvert`
-- **Inputs:** `<fleet>`. The body is `{}`.
-- **Answer:** the transaction `convert`, with `waiting` (this fleet's USDC waiting, smallest
-  units, as a decimal string), `in_line` (fleets in line) and `opens_at` (when the next
-  piece may run, or null).
-- **Refusals:** only those every chain command shares.
+- **Inputs:** `<fleet>`, and on stdin `{"inputs": {"amount": "250"}}`: USDC as a decimal
+  string with at most 6 decimal places, such as `"250"` or `"12.5"`. `"250"` is the usual
+  choice.
+- **Answer:** the transaction `convert`, with `amount` (the amount named, in USDC's smallest
+  units, as a decimal string), `waiting` (this fleet's USDC waiting, smallest units, as a
+  decimal string), `in_line` (fleets in line) and `opens_at` (when the next piece may run,
+  or null).
+- **Refusals:** 422 `invalid_amount` when the amount can't be read: `error.details.problem`
+  is "Type the amount as a number, like 12.5.", "Use a point for decimals, like 12.5.", "At
+  most 6 decimal places." or "That amount is too large." Any other body gets 422
+  `invalid_request`. Otherwise only those every chain command shares.
 
 Server:
 
 ```text
 fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
-built = WalletSteps.build_steps(fleet, :convert, wallet, actor: the agent)
+built = WalletSteps.build_steps(fleet, :convert, wallet, %{inputs: inputs}, actor: the agent)
+an amount that can't be read -> 422 invalid_amount with its words; nothing is built
 answer the step; blocked "Nothing waiting to turn into REGENT" or "Opens <time>" when so
 ```
 
-- **History:** 2026-10-15 added. Source-only; not in CLI 1.10.5.
+- **History:** 2026-10-15 added, with `{}`; the same day it took `{"inputs": {"amount"}}`
+  and answered `amount`. Source-only; not in CLI 1.10.5.
 
 ## regents keyfleet keys claim <fleet> <key>
 
@@ -1221,11 +1230,23 @@ Verify the agent identity and current pairing; no pairing prerequisite.
 
 GET `/api/agents/v1/whoami` with fresh wallet proof; pairing is not required. Sends no body. Product launch gate applies. Reads award no Points.
 
+## regents keyfleet agents me
+
+Check in and see your pairing, the same on every Regent site, with your person's Keyfleet `account`: `display_name`, `ens_name`, `wallet_address` (null when none) and `wallet_addresses` (empty when none). These wallet facts grant no signing authority.
+
+GET `/api/agents/v1/me` with fresh wallet proof. Sends no body. It records a check-in, so it is not a passive read; `agents whoami` only reads. Not paired: 404 `not_paired`. Source-only; not in CLI 1.10.5.
+
 ## regents keyfleet profile get
 
 Read the verified agent profile without creating one.
 
 GET `/api/v1/agent/profile` with fresh wallet proof and current pairing. Sends no body. Product launch gate applies. Reads award no Points.
+
+## regents keyfleet profile status <status>
+
+Set your profile's current status, a line on what you are doing now. An empty string, `""`, clears it. Changes nothing else: not pairing, membership, spending or Points settings.
+
+POST `/api/v1/agent/profile/update` with `{"current_status": "<status>"}` (at most 2,000 characters), fresh wallet proof and current pairing. Answers the profile, as `profile get` does. Before the agent has a profile, 404 `profile_not_found`; a status too long, 422 `invalid_profile`. Product launch gate applies. Source-only; not in CLI 1.10.5.
 
 ## regents keyfleet account balances
 

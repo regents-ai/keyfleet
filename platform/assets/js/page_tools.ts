@@ -28,14 +28,15 @@ export type PressButton = (button: HTMLElement, form: Record<string, string>) =>
 
 type Fields = Record<string, string>
 
-// The button each tool presses, from what the agent sent. Only proposing
-// fills the group's form; the others press with the form as it is.
+// The button each tool presses, from what the agent sent. Proposing and
+// turning USDC into REGENT fill the group's form with what the agent named;
+// the others press with the form as it is.
 const presses: Record<string, (input: Fields) => {step: string; form?: Fields}> = {
   mark_present: () => ({step: "present"}),
   propose: input => ({step: "propose", form: input}),
   run_split: () => ({step: "run_split"}),
   send_share: () => ({step: "send_share"}),
-  convert_to_regent: () => ({step: "convert"}),
+  convert_to_regent: input => ({step: "convert", form: input}),
   vote: input => ({step: input.choice}),
   cancel_proposal: () => ({step: "cancel"}),
   carry_out: () => ({step: "carry_out"}),

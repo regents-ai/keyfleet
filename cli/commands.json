@@ -398,7 +398,7 @@
     },
     {
       "command": "treasury convert <fleet>",
-      "description": "See the USDC this fleet has waiting to turn into REGENT and when the next piece may run, and get the transaction that turns the next piece, up to 250 USDC, for your wallet to send. The piece may be another fleet's. Anyone may. Source-only until included in an installed CLI release. Requires current pairing.",
+      "description": "See the USDC this fleet has waiting to turn into REGENT and when the next piece may run, and get the transaction that turns at most the amount you name, and at most 250 USDC a press, for your wallet to send. Pipe {\"inputs\": {\"amount\": \"250\"}} on stdin. The USDC may be another fleet's. Anyone may. Source-only until included in an installed CLI release. Requires current pairing.",
       "operation_id": "buildConvert",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/treasury/convert",
@@ -411,6 +411,14 @@
           "in": "path",
           "field": "fleet_id",
           "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        }
+      ],
+      "stdin_fields": [
+        {
+          "field": "inputs",
+          "type": "object",
+          "required": true,
+          "description": "{\"amount\": \"250\"}: the USDC to turn, as a decimal string with at most 6 decimal places, such as \"250\" or \"12.5\". At most 250 is turned a press, so \"250\" is the usual choice."
         }
       ]
     },
@@ -1416,6 +1424,15 @@
       "effect": "read"
     },
     {
+      "command": "agents me",
+      "description": "Check in and see your pairing and your person's Keyfleet account names and saved verified wallets. This records a check-in, so it is not a passive read; `agents whoami` only reads. The wallet facts grant no signing authority. Source-only until included in an installed CLI release.",
+      "operation_id": "checkInSharedAgent",
+      "method": "GET",
+      "path": "/api/agents/v1/me",
+      "authority": "signed_agent",
+      "effect": "write"
+    },
+    {
       "command": "agents pair",
       "description": "Redeem the owner\u2019s single-use pairing code with your existing agent identity. Pipe code, name and harness on private stdin; grants no wallet or spending authority.",
       "operation_id": "pairSharedAgent",
@@ -1452,6 +1469,24 @@
       "path": "/api/v1/agent/profile",
       "authority": "paired_agent",
       "effect": "read"
+    },
+    {
+      "command": "profile status <status>",
+      "description": "Set your profile's current status, a line on what you are doing now; an empty string, \"\", clears it. Changes nothing else. Source-only until included in an installed CLI release. Requires current pairing.",
+      "operation_id": "updateAgentProfile",
+      "method": "POST",
+      "path": "/api/v1/agent/profile/update",
+      "authority": "paired_agent",
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "status",
+          "type": "string",
+          "in": "body",
+          "field": "current_status",
+          "description": "Your current status, up to 2,000 characters; \"\" clears it."
+        }
+      ]
     },
     {
       "command": "account balances",
