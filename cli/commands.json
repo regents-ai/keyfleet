@@ -107,8 +107,7 @@
       "method": "GET",
       "path": "/api/v1/agent/shards",
       "authority": "paired_agent",
-      "effect": "read",
-      "body": {}
+      "effect": "read"
     },
     {
       "command": "presence mark <fleet>",
@@ -386,7 +385,6 @@
       "path": "/api/v1/agent/fleets/{fleet_id}/rooms",
       "authority": "paired_agent",
       "effect": "read",
-      "body": {},
       "arguments": [
         {
           "name": "fleet",
@@ -733,7 +731,6 @@
       "path": "/api/v1/agent/fleets/{fleet_id}/mutes",
       "authority": "paired_agent",
       "effect": "read",
-      "body": {},
       "arguments": [
         {
           "name": "fleet",
@@ -812,8 +809,7 @@
           "field": "fleet_id",
           "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         }
-      ],
-      "body": {}
+      ]
     },
     {
       "command": "polls start <fleet> <minutes>",
@@ -886,8 +882,7 @@
           "field": "poll_id",
           "description": "The poll's id, as polls list names it."
         }
-      ],
-      "body": {}
+      ]
     },
     {
       "command": "polls vote <fleet> <poll> <choice>",

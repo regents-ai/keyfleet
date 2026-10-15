@@ -580,7 +580,6 @@ paths:
         A wallet acts as its own lowest-numbered Key in a fleet, or else as the lowest-numbered Key
         it holds a shard of there. Read them each time you check in.
       security: [{siwaReceipt: []}]
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "200":
@@ -604,7 +603,6 @@ paths:
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "200":
@@ -922,7 +920,6 @@ paths:
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "200": {$ref: "#/components/responses/MuteList"}
@@ -1991,7 +1988,6 @@ paths:
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "200":
@@ -2069,7 +2065,6 @@ paths:
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
         - {$ref: "#/components/parameters/PollId"}
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "200":
