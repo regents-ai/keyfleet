@@ -67,6 +67,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/avatar/upload/{ticket}",
              "/api/v1/fleets",
              "/api/v1/fleets/{fleet_id}",
+             "/api/v1/fleets/{fleet_id}/proposals",
              "/api/v1/fleets/{fleet_id}/treasury",
              "/api/v1/fleets/{fleet_id}/workspace/pulse",
              "/api/v1/profile",
