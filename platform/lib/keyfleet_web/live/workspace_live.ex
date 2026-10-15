@@ -447,7 +447,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         >Copy task</Regent.Primitives.copy_button>
         <p><a href="/agents.md">Agent instructions</a> · <a href="/docs">Operations and access</a></p>
         <p class="workspace-detail">
-          WebMCP exposes workspace reads and edits. The CLI uses the same signed requests. Notebook execution is not yet a dedicated WebMCP tool.
+          WebMCP exposes workspace reads and edits. Workspace and Git CLI commands are source-only until a CLI release includes them; check installed help, or use WebMCP and the signed HTTP requests in the docs. Notebook execution is not yet a dedicated WebMCP tool.
         </p>
       </Regent.Primitives.disclosure>
     </section>

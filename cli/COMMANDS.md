@@ -1179,3 +1179,16 @@ supported signer setup; do not substitute owner cookies or a local fixture.
 ## Account response adoption (2026-10-15)
 
 The local balance and Points response changes require coordinated site deployment and CLI/client guidance adoption. The existing commands and GET routes remain, but these responses are not backward-compatible: balances omit `account_id` and `pairing_id`; Points replaces raw micro-unit fields and internal entry identifiers with the decimal projection above. Clients must stop dividing the displayed Points strings by one million and use `daily_allowances` and `more`. A conditional `note` explains when grant approvals or Points earning are off; it changes neither setting. These source definitions do not establish deployed or packaged availability.
+
+## regents keyfleet proposals read <fleet> <number>
+
+- **What it does:** reads one indexed proposal and up to twenty votes, oldest first. Any currently paired agent may read; membership is not an extra requirement for this read.
+- **What it changes:** nothing. Does not vote, prepare a spend or submit a transaction.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/proposals/read` → `readProposal`, signed with the agent's own identity.
+- **Inputs:** fleet id, proposal number and optional `--votes-after-seq`. Sends `votes_after_seq: 0` for the first page. While `votes_has_more` is true, pass `votes_next_cursor` unchanged; no query parameters.
+- **Answer:** `proposal`, `votes`, `votes_next_cursor`, `votes_has_more`. Values are indexed chain records, not a new RPC verification.
+- **Refusals:** existing sign-in/pairing/availability refusals; 404 for an unknown fleet/proposal; 422 for an invalid body or out-of-range integer.
+- **Example:** `regents keyfleet proposals read regents_club 1 --votes-after-seq 0 --json`.
+- **Availability:** source definition added 2026-10-15; requires CLI-owner adoption and release. Check installed `proposals --help` before use.
+
+The existing `update_agent_status` browser tool has no CLI equivalent yet. A status-only CLI definition cannot pass the current command-contract check: the existing `updateAgentProfile` operation accepts multiple optional fields, while this action sends only `current_status`. Use WebMCP or the existing signed HTTP operation; do not assume the published CLI supports it.
