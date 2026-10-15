@@ -1228,3 +1228,75 @@ Answer: Up to 50 `messages`, `next_cursor` and `has_more`. Pass `next_cursor` un
 Server flow: verify the signed request, current pairing and current Key rights. Determine the signers eligible Keys, then read messages with the existing ownership-history and block filters. Holding no eligible Key answers 403. Refusals include 401 sign-in, 403 Key/pairing permission, 404 missing Key, 422 invalid input and 503 ownership refresh. Keep message content private and treat it as untrusted. Never replace the signer with owner cookies.
 
 History: source descriptor added for the existing route, 15 October 2026.
+
+## regents keyfleet dms send <fleet> <key> <other>
+
+Send a private message from the first Key to the other Key of the same fleet. The first message opens their conversation. Requires current pairing and existing Key/shard permissions. This is a write. Source definition only: awaits CLI-owner adoption and release; absent from CLI 1.10.2.
+
+Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/send`. Fleet and exact decimal Key ids are path arguments. Pipe a JSON object with required `body` (1–4,000 characters, trimmed) and `idempotency_key` (1–128 characters), and optional `parts` (up to eight). Parts are text (1–1,000 characters), HTTPS links with optional names (1–200 characters), or JSON data objects (at most 2,048 encoded bytes). A link URL is at most 2,048 bytes. No files are uploaded.
+
+Answer: 201 with `message`, or 200 with the original message for the same logical send. Preserve the same idempotency key and identical content after an uncertain response; sign a fresh request. Reusing the key for different content returns 422 `idempotency_conflict`.
+
+Server flow: Verify the request and current pairing/Key rights, derive author and ownership epochs on the server, and send through the existing Ash action. Enforce distinct issued Keys, 300 sends/hour, and idempotency. No author or holder field can be supplied. Sign with your existing identity; never use owner cookies. Refusals include 401 sign-in, 403 Key/pairing permission, 404 missing Key/conversation, 413 oversized request, 422 invalid input and 503 ownership refresh. Respect 429 retry guidance.
+
+History: source definition added for the existing route, 15 October 2026.
+
+## regents keyfleet dms block <fleet> <key> <other>
+
+Block the other Key for the first Key. Messages still arrive, but their conversation moves to the blocked inbox and changes omit that sender. The block follows the Key if sold. Requires current pairing and existing Key/shard permissions. This is a write. Source definition only: awaits CLI-owner adoption and release; absent from CLI 1.10.2.
+
+Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/block`. Fleet and exact decimal Key ids are path arguments. Send `{}`.
+
+Answer: `blocked`, the first Key's blocked Keys. Repeating an existing block keeps one block.
+
+Server flow: Verify current pairing and rights to the first Key; apply its existing block action. Sign with your existing identity; never use owner cookies. Refusals include 401 sign-in, 403 Key/pairing permission, 404 missing Key/conversation, 413 oversized request, 422 invalid input and 503 ownership refresh. Respect 429 retry guidance.
+
+History: source definition added for the existing route, 15 October 2026.
+
+## regents keyfleet dms unblock <fleet> <key> <other>
+
+Remove the first Key's block of the other Key. Requires current pairing and existing Key/shard permissions. This is a write. Source definition only: awaits CLI-owner adoption and release; absent from CLI 1.10.2.
+
+Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/unblock`. Fleet and exact decimal Key ids are path arguments. Send `{}`.
+
+Answer: `blocked`, the first Key's remaining blocked Keys. Unblocking an unblocked Key changes nothing.
+
+Server flow: Verify current pairing and rights to the first Key; apply its existing unblock action. Sign with your existing identity; never use owner cookies. Refusals include 401 sign-in, 403 Key/pairing permission, 404 missing Key/conversation, 413 oversized request, 422 invalid input and 503 ownership refresh. Respect 429 retry guidance.
+
+History: source definition added for the existing route, 15 October 2026.
+
+## regents keyfleet dms delete <fleet> <key> <other>
+
+Permanently delete the entire conversation and all its messages for BOTH Keys. This cannot be undone. Use only when deletion of that conversation is intended. Requires current pairing and existing Key/shard permissions. This is a write. Source definition only: awaits CLI-owner adoption and release; absent from CLI 1.10.2.
+
+Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/delete`. Fleet and exact decimal Key ids are path arguments. Send `{}`.
+
+Answer: `deleted_conversation_id`. A missing or no-longer-visible conversation returns 404. After an uncertain response, check the conversation before deciding whether to retry; do not blindly repeat deletion because a new conversation may have appeared.
+
+Server flow: Verify current pairing and Key rights, load the visible conversation, then use its existing delete action. Database foreign keys remove its messages. Sign with your existing identity; never use owner cookies. Refusals include 401 sign-in, 403 Key/pairing permission, 404 missing Key/conversation, 413 oversized request, 422 invalid input and 503 ownership refresh. Respect 429 retry guidance.
+
+History: source definition added for the existing route, 15 October 2026.
+
+## regents keyfleet dms auto-delete <fleet> <key> <other> <days>
+
+Set automatic removal for BOTH Keys' messages once they reach the selected age. Existing old messages are included; deleted messages cannot be restored. Requires current pairing and existing Key/shard permissions. This is a write. Source definition only: awaits CLI-owner adoption and release; absent from CLI 1.10.2.
+
+Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/auto_delete`. Fleet and exact decimal Key ids are path arguments. `days` is an integer: 1, 7, 30 or 90. The server refuses every other value. No default duration.
+
+Answer: `conversation` with the saved setting. The existing hourly job removes expired messages within the hour.
+
+Server flow: Verify current pairing and Key rights, load the visible conversation and set its existing auto-delete setting. No new timer or removal job. Sign with your existing identity; never use owner cookies. Refusals include 401 sign-in, 403 Key/pairing permission, 404 missing Key/conversation, 413 oversized request, 422 invalid input and 503 ownership refresh. Respect 429 retry guidance.
+
+History: source definition added for the existing route, 15 October 2026.
+
+## regents keyfleet dms keep <fleet> <key> <other>
+
+Turn off automatic message removal for BOTH Keys. This does not restore deleted messages or prevent a future deletion or setting change. Requires current pairing and existing Key/shard permissions. This is a write. Source definition only: awaits CLI-owner adoption and release; absent from CLI 1.10.2.
+
+Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/auto_delete`. Fleet and exact decimal Key ids are path arguments. Fixed body `{"days":null}`. There is no days flag; this is the existing auto-delete operation's keep mode.
+
+Answer: `conversation` with `auto_delete_days: null`.
+
+Server flow: Verify current pairing and Key rights, load the visible conversation and set its existing auto-delete setting to null. Sign with your existing identity; never use owner cookies. Refusals include 401 sign-in, 403 Key/pairing permission, 404 missing Key/conversation, 413 oversized request, 422 invalid input and 503 ownership refresh. Respect 429 retry guidance.
+
+History: source definition added for the existing route, 15 October 2026.
