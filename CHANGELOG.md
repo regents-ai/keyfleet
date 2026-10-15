@@ -1459,3 +1459,29 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The Fleet Grid lays out, and loads the pictures of, at least a fifth more
   Keys round the view: whole columns or rows past each side, the fewest that
   reach a fifth.
+
+## 2026-10-15 — Treasury words, Turn into REGENT, and chain reading alerts
+
+- The share owed from every Key sale is sent to REGENT staking, and every
+  word on the Treasury tab and in wallet messages now says so.
+- A "Turn into REGENT" button turns the USDC waiting from Key sales into
+  REGENT for the treasury, up to 250 USDC at a time. Anyone can press it;
+  it is off, with the reason, when nothing waits or the next turn's time has
+  not come.
+- Proposals waiting their day say when they can be carried out. Settled
+  proposals no longer show carry-out dates. During the waiting day, Yes and
+  Abstain say "Only No while it waits".
+- A fleet the chain reader stops reading, a node on another chain, and
+  deployed fleets with no node named are saved with the site's errors, so
+  Sentinel emails them. docs/recurring-jobs.md says how to see each
+  recurring job ran, run it again and stop it.
+
+## 2026-10-15 — The Member List shows each holder once
+
+- A fleet's Member List shows each holder once, with the Keys they hold and
+  the X, GitHub and Farcaster accounts they connected, in place of the old
+  list of Keys. It reads again when Keys change hands.
+- The account page's Connections section says connected accounts are shown
+  beside your address on each fleet's Member List.
+- The page of a Key past a fleet's supply, such as Key 1,025 of Classic, is
+  not found, in place of saying "Not sold yet".
