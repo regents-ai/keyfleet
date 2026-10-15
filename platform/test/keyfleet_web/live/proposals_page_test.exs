@@ -13,6 +13,9 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   alias KeyfleetWeb.WalletWords
   alias RegentChain.Call
 
+  # A page's first wallet build in a run also loads the code it runs, which
+  # can take longer than ExUnit's 100 ms receive wait on a busy machine.
+  @async_wait 3_000
   @fleet "fibonacci_syndicate"
   @list "/syndicate/1/proposals"
   @treasury_page "/syndicate/1/treasury"
@@ -72,7 +75,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       refute has_element?(view, "#proposals-empty")
 
       # The fleet's money and the votes carried out are on its Treasury page.
-      assert has_element?(view, ~s(#proposals-to-treasury[href="#{@treasury_page}"]), "Treasury")
+      assert has_element?(view, ~s(#fleet-tab-treasury[href="#{@treasury_page}"]), "Treasury")
       refute has_element?(view, "#proposals-budget")
 
       {:ok, treasury, _html} = live(conn, @treasury_page)
@@ -304,10 +307,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ProposalHelpers.proposal!(@fleet, 1)
       ChainViews.put!(on_chain(1, :open))
 
-      for path <- [@list, "#{@list}/1", @treasury_page] do
+      for path <- [@list, "#{@list}/1"] do
         {:ok, view, _html} = live(conn, path)
         assert has_element?(view, "#proposals-catching-up", "Vote counts are catching up.")
       end
+
+      {:ok, view, _html} = live(conn, @treasury_page)
+      assert has_element?(view, "#treasury-catching-up", "Treasury figures are catching up.")
     end
 
     test "a proposal that isn't there says so, and an address no fleet's proposals are at is not found",
@@ -383,14 +389,16 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     test "a notice that balances were read has an open page show them", %{conn: conn} do
       {:ok, view, _html} = live(conn, @treasury_page)
-      assert has_element?(view, "#proposals-budget-pending", "Reading…")
+      assert has_element?(view, "#proposals-budget-pending", "Balances are not available yet.")
 
       # The treasury's whole address is there before any balance is read.
       assert has_element?(
                view,
-               ~s(#proposals-treasury-link[href="https://basescan.org/address/#{@treasury}"]),
-               @treasury
+               ~s(#proposals-treasury-link[href="https://basescan.org/address/#{@treasury}"])
              )
+
+      assert has_element?(view, ~s(#proposals-treasury-address code[title="#{@treasury}"]))
+      assert has_element?(view, ~s(#proposals-treasury-copy[data-copy-text="#{@treasury}"]))
 
       ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 3_000_000)])
       assert has_element?(view, "#proposals-budget-pending")
@@ -460,13 +468,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert has_element?(
                view,
                "#proposals-backed-tip",
-               "Already shared with Keys and waiting to be claimed."
+               "Held separately by the rewards contract, waiting for Key holders to claim."
              )
 
-      assert fields(view, "#proposals-split div") == [
-               {"Daily Treasury Slice to Keys", "0.75%"},
-               {"Next release", "21 September 2026 at 12:00 UTC"}
-             ]
+      assert text(view, "#proposals-split-rate") ==
+               "0.75% of eligible balances, shared equally across issued Keys."
+
+      assert text(view, "#proposals-split-next") ==
+               "Next release: 21 September 2026 at 12:00 UTC."
 
       assert text(view, "#proposals-advances li > span") ==
                "Advance 1: 3 USDC of 4 USDC, 0xdddd..dddd"
@@ -477,7 +486,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       # Newest first; an advance coming back changes only what is still out.
       assert lines(view, "#proposals-history li") == [
                "Advanced 4 USDC to 0xdddd..dddd",
-               "Sent to Regents 1 USDC",
+               "Sent to REGENT staking 1 USDC",
                "Paid 0.5 WETH 0xcccc..cccc to 0xbbbb..bbbb",
                "Shared with Key holders 1 USDC",
                "Received 10 USDC"
@@ -487,8 +496,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     test "the treasury says what it doesn't know yet", %{conn: conn} do
       {:ok, view, _html} = live(conn, @treasury_page)
 
-      assert has_element?(view, "#proposals-budget-pending", "Reading…")
-      assert has_element?(view, "#proposals-no-advances", "None.")
+      assert has_element?(view, "#proposals-budget-pending", "Balances are not available yet.")
+      refute has_element?(view, "#proposals-advances-title")
       assert has_element?(view, "#proposals-no-history", "Nothing yet.")
 
       ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 50_000_000)])
@@ -504,7 +513,10 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       {:ok, view, _html} = live(conn, @treasury_page)
 
-      assert fields(view, "#proposals-split div") == [{"Daily Treasury Slice to Keys", "1%"}]
+      assert text(view, "#proposals-split-rate") ==
+               "1% of eligible balances, shared equally across issued Keys."
+
+      refute has_element?(view, "#proposals-split-next")
       assert length(lines(view, "#proposals-history li")) == 20
       assert has_element?(view, "#proposals-history-more", "Earlier ones aren’t shown.")
     end
@@ -585,11 +597,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                {@votes, Call.encode("present(uint256[])", [[id(1), id(2), id(3)]])}
 
       assert {sweep.to, sweep.data} == {@votes, Call.encode("sweepExpired(uint256)", [256])}
-
-      # The Treasury page counts the same Keys: one with a vote, two idle.
-      {:ok, treasury, _html} = live(conn, @treasury_page)
-      assert has_element?(treasury, "#treasury-active-voters", "1")
-      assert has_element?(treasury, "#treasury-idle-count", "2")
     end
 
     test "a wallet with no keys can't mark any present, but may still press Continue", %{
@@ -598,7 +605,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ChainViews.put!(list_views())
 
       {:ok, view, _html} = live(signed_in_as(conn, @holder), @list)
-      render_async(view)
+      render_async(view, @async_wait)
 
       assert has_element?(view, "#proposals-present-mark[disabled]")
       assert has_element?(view, "#proposals-present-mark-why", "No Keys to use")
@@ -629,7 +636,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         text = typed[:text] || "Hire a designer"
         typed = Keyword.merge([key: "7", text: text], typed)
         view |> form("#propose-action-form", typed) |> render_change()
-        render_async(view)
+        render_async(view, @async_wait)
 
         assert_push_event(view, "onchain-steps:review", %{
           component_id: "propose-action",
@@ -703,7 +710,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       # Typed as it can't be sent, the line says what to fix.
       view |> form("#propose-action-form", kind: "rate", rate: "5") |> render_change()
-      render_async(view)
+      render_async(view, @async_wait)
       assert text(view, "#propose-action-line") == "From 0.1% to 2%."
     end
 
@@ -724,7 +731,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       form = %{"kind" => "decision", "key" => "7", "text" => "  #{words} "}
 
       view |> form("#propose-action-form", form) |> render_change()
-      render_async(view)
+      render_async(view, @async_wait)
 
       press = fn ->
         view
@@ -776,7 +783,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       |> form("#propose-action-form", kind: "decision", key: "7", text: "Hire a designer")
       |> render_change()
 
-      render_async(view)
+      render_async(view, @async_wait)
 
       assert has_element?(view, "#propose-button[disabled]")
       assert has_element?(view, "#propose-button-why", "Not your Key")
@@ -841,7 +848,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ChainViews.put!(list_views(minted: 0, next_run_at: 0))
 
       {:ok, view, _html} = live(signed_in_as(conn, @holder), @treasury_page)
-      render_async(view)
+      render_async(view, @async_wait)
 
       assert has_element?(view, "#proposals-run-split-why", "No Keys sold yet")
       refute has_element?(view, "#proposals-split-opens")
@@ -910,13 +917,13 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       # More than is still out is certain to fail.
       view |> form("#proposals-return-1-form", amount: "4") |> render_change()
-      render_async(view)
+      render_async(view, @async_wait)
       assert has_element?(view, "#proposals-return-1-button-why", "More than is owed")
 
       # With the approval on chain, the return may be pressed.
       ChainViews.put!(views.(3_000_000))
       view |> form("#proposals-return-1-form", amount: "3") |> render_change()
-      render_async(view)
+      render_async(view, @async_wait)
       assert pressable?(view, "return", ["#proposals-return-1-button"])
     end
 
@@ -926,7 +933,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ChainViews.put!(list_views(owed: 0))
 
       {:ok, view, _html} = live(signed_in_as(conn, @holder), @treasury_page)
-      render_async(view)
+      render_async(view, @async_wait)
 
       assert has_element?(view, "#proposals-send-share[disabled]")
       assert has_element?(view, "#proposals-send-share-why", "Nothing owed")
@@ -957,14 +964,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       )
 
       {:ok, view, _html} = live(conn, @list)
-      render_async(view)
+      render_async(view, @async_wait)
 
       assert has_element?(view, "#proposals-present-idle-count", "0")
       refute has_element?(view, "#proposals-present-action [data-onchain-step]")
       assert pressable?(view, "propose", ["#propose-button"])
 
       {:ok, treasury, _html} = live(conn, @treasury_page)
-      render_async(treasury)
+      render_async(treasury, @async_wait)
 
       assert preview(treasury, @usdc) == ["USDC", "250 USDC", "100 USDC", "0.625 USDC"]
       refute has_element?(treasury, "#proposals-split-action [data-onchain-step]")
@@ -1046,7 +1053,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
             {7, "Expired", "Expired", "Expired"}
           ] do
         {:ok, view, _html} = live(holder, "#{@list}/#{number}")
-        render_async(view)
+        render_async(view, @async_wait)
 
         assert has_element?(view, "#proposal-status", word), "proposal #{number}"
         assert why(view, "#proposal-carry-out-button") == carry_out, "proposal #{number}"
@@ -1092,7 +1099,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       )
 
       {:ok, view, _html} = live(signed_in_as(conn, @holder), "#{@list}/1")
-      render_async(view)
+      render_async(view, @async_wait)
 
       assert why(view, "#proposal-cancel-button") == "Not your Key"
       assert why(view, "#proposal-vote-yes") == "No Keys to use"
@@ -1124,7 +1131,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         "transaction_hash" => hash
       })
 
-      render_async(view)
+      render_async(view, @async_wait)
 
       assert has_element?(
                view,
@@ -1327,16 +1334,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     end)
   end
 
-  defp fields(view, selector) do
-    view
-    |> render()
-    |> LazyHTML.from_fragment()
-    |> LazyHTML.query(selector)
-    |> Enum.map(fn field ->
-      {field |> LazyHTML.query("dt") |> text(), field |> LazyHTML.query("dd") |> text()}
-    end)
-  end
-
   defp text(node), do: node |> LazyHTML.text() |> String.split() |> Enum.join(" ")
 
   defp text(view, selector) do
@@ -1377,9 +1374,9 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
   # Privy's active wallet, as the wallet hook of the group `panel` reports it.
   defp active!(view, panel, wallet) do
-    render_async(view)
+    render_async(view, @async_wait)
     view |> with_target(panel) |> render_hook("onchain_active_wallet", %{"address" => wallet})
-    render_async(view)
+    render_async(view, @async_wait)
   end
 
   defp signed_in_as(conn, wallet) do
