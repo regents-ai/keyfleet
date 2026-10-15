@@ -768,28 +768,6 @@
     font-size: 0.875rem;
   }
 
-  .fleet-bar__nav {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    width: 100%;
-    container: fleet-navigation / inline-size;
-  }
-
-  /* Keep labels above the links when narrow space or enlarged text would
-     squeeze the controls. The threshold follows the navigation's font size. */
-  @container fleet-navigation (min-width: 20em) {
-    .fleet-bar__group {
-      grid-template-columns: 2.5rem minmax(0, 1fr);
-      column-gap: 0.375rem;
-      align-items: start;
-      justify-items: stretch;
-    }
-
-    .fleet-bar__group h2 {
-      padding-block-start: 1rem;
-    }
-  }
-
   .fleet-view[data-view="workspace"] .fleet-stage {
     padding-inline: 0;
   }
