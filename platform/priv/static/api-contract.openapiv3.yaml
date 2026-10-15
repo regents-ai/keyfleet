@@ -1890,9 +1890,11 @@ paths:
       operationId: checkInSharedAgent
       description: >-
         Checks the signing agent in and answers with its pairing, the same on every Regent site,
-        and the display name of its person's Keyfleet account, null when they have none here. It
-        is sent without a body and without a query string. A refusal from the sign-in server
-        itself comes back with that server's own status and code.
+        and its person's Keyfleet account names and saved verified wallet fields. Missing names
+        and primary wallet are null; wallet_addresses defaults to an empty array. This updates
+        check-in metadata; it is not a passive read. Wallet facts grant no signing authority.
+        Send no body or query string. A refusal from the sign-in server itself comes back with
+        that server's own status and code.
       security: [{siwaReceipt: []}]
       responses:
         "200":
@@ -3372,10 +3374,18 @@ components:
             account:
               type: object
               additionalProperties: false
-              required: [display_name, ens_name]
+              required: [display_name, ens_name, wallet_address, wallet_addresses]
               properties:
                 display_name: {type: [string, "null"]}
                 ens_name: {type: [string, "null"]}
+                wallet_address:
+                  type: [string, "null"]
+                  description: Saved verified primary wallet; null when absent. Grants no signing authority.
+                wallet_addresses:
+                  type: array
+                  items: {type: string}
+                  default: []
+                  description: Saved verified wallet addresses; empty when absent. Grants no signing authority.
     SharedAgentError:
       type: object
       additionalProperties: false
