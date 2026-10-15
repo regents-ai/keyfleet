@@ -1712,7 +1712,7 @@
         "webmcp": "get_workspace_object",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/get",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -1809,7 +1809,7 @@
         "webmcp": "list_workspace_changes",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/changes",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -1962,7 +1962,7 @@
         "webmcp": "create_workspace_object",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/create",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -2150,7 +2150,7 @@
         "webmcp": "patch_workspace_object",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/patch",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -2316,7 +2316,7 @@
         "webmcp": "link_workspace_objects",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/link",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -2434,7 +2434,7 @@
         "webmcp": "unlink_workspace_objects",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/unlink",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -2574,7 +2574,7 @@
         "webmcp": "archive_workspace_object",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/archive",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
@@ -3130,7 +3130,7 @@
         "webmcp": "get_code_password",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/code/password",
         "cli": {
-          "release_status": "source_only",
+          "release_status": "released",
           "descriptor": "cli/commands.json"
         }
       },
