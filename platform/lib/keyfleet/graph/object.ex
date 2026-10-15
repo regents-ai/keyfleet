@@ -9,9 +9,10 @@ defmodule Keyfleet.Graph.Object do
   unlinking it, or a notice that it needs attention leaves them as they were.
 
   Only the projector writes here. Only the fleet's members read its objects
-  (`Keyfleet.Graph.Checks.KeyReader`), except through the two reads a fleet
-  shows anyone: its open work, by title, and the titles of the items its
-  latest activity names, where anyone else reads only the goals'.
+  (`Keyfleet.Graph.Checks.KeyReader`), except through the three reads a fleet
+  shows anyone: its open work, by title; the titles of the items its latest
+  activity names, where anyone else reads only the goals'; and its outline,
+  each goal and task by title, standing and public summary alone.
   """
   use Ash.Resource,
     domain: Keyfleet.Graph,
@@ -95,6 +96,49 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
+    # The fleet's goals or tasks, as `type` says, the most recently changed
+    # first, archived ones left out. Anyone may read it, so each comes with
+    # its title, its standing (a goal's status, a task's progress) and the
+    # public summary its members wrote, and nothing else. Callers bound it
+    # with a limit.
+    read :outline do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :type, :string,
+        allow_nil?: false,
+        constraints: [match: ~r/\A(goal|task)\z/, trim?: false]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and type == ^arg(:type) and
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys)
+             )
+
+      prepare build(
+                sort: [changed_seq: :desc],
+                select: [:fleet_id, :id, :type, :changed_seq, :changed_at],
+                load: [:title, :standing, :public_summary]
+              )
+    end
+
+    # The evidence that cites `uri` as its source, the most recently changed
+    # first, archived evidence included.
+    read :citing do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :uri, :string, allow_nil?: false, constraints: @text
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and type == "evidence" and
+                 fragment("? ->> 'source_uri'", data) == ^arg(:uri)
+             )
+
+      prepare build(
+                sort: [changed_seq: :desc],
+                limit: 20,
+                select: [:fleet_id, :id, :type, :sys, :changed_seq, :changed_at],
+                load: [:title, :card]
+              )
+    end
+
     # The unfinished tasks taken by these keys of the fleet, newest change
     # first, each with what its card shows.
     read :assigned_to_keys do
@@ -149,7 +193,7 @@ defmodule Keyfleet.Graph.Object do
 
   policies do
     # The summary a fleet shows anyone.
-    policy action(:open_work) do
+    policy action([:open_work, :outline]) do
       authorize_if always()
     end
 
@@ -160,7 +204,7 @@ defmodule Keyfleet.Graph.Object do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:in_fleet, :cards, :assigned_to_keys]) do
+    policy action([:in_fleet, :cards, :assigned_to_keys, :citing]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
@@ -193,6 +237,25 @@ defmodule Keyfleet.Graph.Object do
 
     # A task's next step as its author wrote it; nothing for any other object.
     calculate :next_step, :string, expr(fragment("? ->> 'next_step'", data)), public?: true
+
+    # A goal's status or a task's progress; nothing for any other object.
+    calculate :standing,
+              :string,
+              expr(
+                fragment(
+                  "left(CASE ? WHEN 'goal' THEN ? ->> 'status' WHEN 'task' THEN ? ->> 'progress' END, 32)",
+                  type,
+                  data,
+                  data
+                )
+              ),
+              public?: true
+
+    # What a goal's or task's members wrote for anyone to read.
+    calculate :public_summary,
+              :string,
+              expr(fragment("left(? ->> 'public_summary', 500)", data)),
+              public?: true
 
     # A goal's first open question, the one it most needs answered.
     calculate :first_open_question,

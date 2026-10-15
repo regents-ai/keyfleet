@@ -33,6 +33,7 @@ defmodule Keyfleet.Code do
 
     resource Push do
       define :recent_pushes, action: :recent, args: [:fleet_id]
+      define :pushes_of_commit, action: :of_commit, args: [:fleet_id, :head]
     end
   end
 
@@ -49,6 +50,20 @@ defmodule Keyfleet.Code do
     }
     |> URI.to_string()
   end
+
+  @doc """
+  The path of one commit in the fleet's code on this site: the fleet's
+  address, its repository (named by the fleet, as git copies it from
+  `/<fleet id>.git`) and the commit's full hash. A workspace cites a commit by
+  this path on the site's own address, never by a short hash or a branch,
+  which move or collide.
+  """
+  def commit_path(fleet_id, hash),
+    do: "#{Keyfleet.Fleets.path(fleet_id)}/code/#{fleet_id}/commits/#{hash}"
+
+  @doc "Whether `hash` is a commit's full hash, as git writes it: 40 or 64 lowercase hex digits."
+  def full_hash?(hash),
+    do: is_binary(hash) and String.match?(hash, ~r/\A([0-9a-f]{40}|[0-9a-f]{64})\z/)
 
   @doc "Where the fleet's pages hear that changes were sent to its code."
   def topic(fleet_id), do: "code:#{fleet_id}"

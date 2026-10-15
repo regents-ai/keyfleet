@@ -54,6 +54,8 @@ defmodule Keyfleet.Graph do
       define :workspace_cards, action: :cards, args: [:fleet_id]
       define :object_titles, action: :titled, args: [:fleet_id, :ids]
       define :open_work, action: :open_work, args: [:fleet_id, :kind]
+      define :outline, action: :outline, args: [:fleet_id, :type]
+      define :evidence_citing, action: :citing, args: [:fleet_id, :uri]
       define :tasks_assigned_to, action: :assigned_to_keys, args: [:fleet_id, :token_ids]
       define :project_objects, action: :project
     end
@@ -61,6 +63,7 @@ defmodule Keyfleet.Graph do
     resource Keyfleet.Graph.Relation do
       define :read_relations_touching, action: :touching, args: [:fleet_id, :object_id, :limit]
       define :object_links, action: :linked, args: [:fleet_id, :object_id]
+      define :producers_of, action: :producing, args: [:fleet_id, :targets]
       define :project_relations, action: :project
       define :remove_relations, action: :remove
     end

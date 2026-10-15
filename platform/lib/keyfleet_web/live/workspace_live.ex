@@ -285,6 +285,108 @@ defmodule KeyfleetWeb.WorkspaceLive do
     """
   end
 
+  attr :commit, :any, required: true, doc: "the commit as read, or `:unreadable`"
+
+  def commit(%{commit: :unreadable} = assigns), do: ~H|<.unreadable id="workspace-commit-page" />|
+
+  def commit(%{commit: %{members_only?: true}} = assigns) do
+    ~H"""
+    <article id="workspace-commit-page" class="workspace-page">
+      <header class="workspace-heading">
+        <h2>Commit</h2>
+        <p id="workspace-commit-members-only" class="workspace-lede">
+          This commit is in {@commit.fleet_name}’s shared code. Its Key holders and their paired agents can read it.
+        </p>
+        <.link patch={KeyLinks.members_path(@commit.fleet_id)}>See this fleet’s Keys</.link>
+      </header>
+    </article>
+    """
+  end
+
+  def commit(assigns) do
+    ~H"""
+    <article id="workspace-commit-page" class="workspace-page">
+      <header class="workspace-heading">
+        <p class="workspace-kicker">
+          <.link patch={"#{Keyfleet.Fleets.path(@commit.fleet_id)}/workspace"}>Workspace</.link>
+        </p>
+        <h2>Commit {String.slice(@commit.hash, 0, 12)}</h2>
+        <p class="workspace-lede">One saved change in this fleet’s shared code.</p>
+      </header>
+
+      <div class="workspace-item-grid">
+        <section class="workspace-panel" aria-labelledby="workspace-commit-title">
+          <h2 id="workspace-commit-title">Details</h2>
+          <dl class="workspace-fields">
+            <div>
+              <dt>Full commit</dt>
+              <dd><code id="workspace-commit-hash">{@commit.hash}</code></dd>
+            </div>
+            <div>
+              <dt>
+                Link to cite
+                <Regent.Primitives.tip id="workspace-commit-link-tip" label="About this link">
+                  Use this link as the source of evidence in the workspace. It always points at this exact change.
+                </Regent.Primitives.tip>
+              </dt>
+              <dd class="workspace-code-line">
+                <code id="workspace-commit-url">{@commit.url}</code>
+                <Regent.Primitives.copy_button id="workspace-commit-url-copy" text={@commit.url}>
+                  Copy
+                </Regent.Primitives.copy_button>
+              </dd>
+            </div>
+            <div>
+              <dt>Get it</dt>
+              <dd id="workspace-commit-fetch">
+                <p><code>git fetch {@commit.clone_url}</code></p>
+                <p><code>git checkout {@commit.hash}</code></p>
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="workspace-panel" aria-labelledby="workspace-commit-pushes-title">
+          <h2 id="workspace-commit-pushes-title">Sent by</h2>
+          <p :if={@commit.pushes == []} id="workspace-commit-no-pushes">
+            No branch or tag was sent ending at this commit. It may sit inside a longer set of changes.
+          </p>
+          <ol :if={@commit.pushes != []} id="workspace-commit-pushes" class="workspace-lines">
+            <li :for={push <- @commit.pushes} data-push={push.id}>
+              <p><.key fleet_id={@commit.fleet_id} token_id={push.token_id} /> sent {push.what}</p>
+              <p class="workspace-detail">{push.at}</p>
+            </li>
+          </ol>
+        </section>
+
+        <section class="workspace-panel" aria-labelledby="workspace-commit-evidence-title">
+          <h2 id="workspace-commit-evidence-title">Evidence that cites it</h2>
+          <p :if={@commit.evidence == []} id="workspace-commit-no-evidence">
+            No evidence in the workspace cites this commit yet.
+          </p>
+          <ul :if={@commit.evidence != []} id="workspace-commit-evidence" class="workspace-lines">
+            <li :for={evidence <- @commit.evidence} data-item={evidence.id}>
+              <p>
+                <.link patch={WorkspacePage.item_path(@commit.fleet_id, evidence.id)}>
+                  {evidence.title}
+                </.link>
+                <span :if={evidence.archived?} class="workspace-badge">Archived</span>
+              </p>
+              <p :if={evidence.excerpt} class="workspace-text">{evidence.excerpt}</p>
+              <p :for={task <- evidence.tasks} class="workspace-detail">
+                Produced by <.item_link part={task} fleet_id={@commit.fleet_id} />
+              </p>
+              <p class="workspace-detail">
+                Added by <.key fleet_id={@commit.fleet_id} token_id={evidence.by} />
+              </p>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </article>
+    """
+  end
+
   attr :fleet_id, :string, required: true
   attr :code, :map, required: true
   attr :password, :map, default: nil
@@ -335,7 +437,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <p :if={@code.pushes == []} id="code-pushes-empty">No changes have been sent yet.</p>
       <ol :if={@code.pushes != []} id="code-pushes" class="workspace-lines">
         <li :for={push <- @code.pushes} data-push={push.id}>
-          <p><.key fleet_id={@fleet_id} token_id={push.token_id} /> sent {push.what}</p>
+          <p>
+            <.key fleet_id={@fleet_id} token_id={push.token_id} /> sent {push.what}, ending at
+            <.value
+              value={push.commit}
+              fleet_id={@fleet_id}
+            />
+          </p>
           <p class="workspace-detail">{push.at}</p>
         </li>
       </ol>
@@ -376,6 +484,18 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </p>
         <.link patch={KeyLinks.members_path(@fleet.fleet_id)}>See this fleet’s Keys</.link>
       </header>
+      <.outline
+        id="workspace-public-goals"
+        title="Goals"
+        empty="No goals have been set here yet."
+        items={@fleet.outline["goal"]}
+      />
+      <.outline
+        id="workspace-public-tasks"
+        title="Tasks"
+        empty="No tasks have been added here yet."
+        items={@fleet.outline["task"]}
+      />
       <section class="workspace-panel" aria-labelledby="workspace-public-activity-title">
         <h2 id="workspace-public-activity-title">Workstream</h2>
         <p :if={@fleet.pulse.activity == []} id="workspace-public-empty">
@@ -393,6 +513,33 @@ defmodule KeyfleetWeb.WorkspaceLive do
       </section>
       <.tools fleet_id={@fleet.fleet_id} member?={false} />
     </article>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :title, :string, required: true
+  attr :empty, :string, required: true
+
+  attr :items, :list,
+    required: true,
+    doc: "each goal or task with its title, standing and summary"
+
+  # What anyone may read of the fleet's goals or tasks.
+  defp outline(assigns) do
+    ~H"""
+    <section class="workspace-panel" aria-labelledby={@id <> "-title"}>
+      <h2 id={@id <> "-title"}>{@title}</h2>
+      <p :if={@items == []} id={@id <> "-empty"}>{@empty}</p>
+      <ol :if={@items != []} id={@id} class="workspace-lines">
+        <li :for={item <- @items} data-item={item.id}>
+          <p>
+            <strong>{item.title}</strong>
+            <span class="workspace-badge">{item.standing}</span>
+          </p>
+          <p :if={item.summary} class="workspace-text">{item.summary}</p>
+        </li>
+      </ol>
+    </section>
     """
   end
 
@@ -514,6 +661,18 @@ defmodule KeyfleetWeb.WorkspaceLive do
     ~H|<a class="workspace-uri" href={@uri} rel="noopener noreferrer nofollow ugc">{@uri}</a>|
   end
 
+  defp value(%{value: {:commit, hash, path}} = assigns) do
+    assigns = assign(assigns, hash: hash, path: path)
+
+    ~H|<.link class="workspace-uri" patch={@path} data-commit={@hash}>commit {String.slice(@hash, 0, 12)}</.link>|
+  end
+
+  defp value(%{value: {:notebook_result, uri}} = assigns) do
+    assigns = assign(assigns, :uri, uri)
+
+    ~H|<a class="workspace-uri" href={@uri} rel="noopener noreferrer" data-notebook-result>Saved notebook result</a>|
+  end
+
   defp value(%{value: {:key, _token_id}} = assigns),
     do: ~H"<.key fleet_id={@fleet_id} token_id={elem(@value, 1)} />"
 
@@ -591,6 +750,17 @@ defmodule KeyfleetWeb.WorkspaceLive do
       params["fleet_id"],
       params["object_id"],
       params,
+      ShellLive.human_actor(socket)
+    )
+  end
+
+  defp workspace(%{assigns: %{route_spec: %{route_id: :code_commit}}} = socket) do
+    params = socket.assigns.workspace_params
+
+    WorkspacePage.commit(
+      params["fleet_id"],
+      params["repository"],
+      params["commit"],
       ShellLive.human_actor(socket)
     )
   end

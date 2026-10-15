@@ -38,10 +38,19 @@ defmodule Keyfleet.Code.Push do
       filter expr(fleet_id == ^arg(:fleet_id))
       prepare build(sort: [pushed_at: :desc], limit: 10)
     end
+
+    # The pushes that left a branch or tag at `head`, oldest first: who sent
+    # that commit to the fleet's code, where and when.
+    read :of_commit do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :head, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id) and head == ^arg(:head))
+      prepare build(sort: [pushed_at: :asc], limit: 20)
+    end
   end
 
   policies do
-    policy action(:recent) do
+    policy action([:recent, :of_commit]) do
       authorize_if {Keyfleet.Access.Check, read: :code, scope: :fleet_id}
     end
 

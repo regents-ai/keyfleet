@@ -25,6 +25,7 @@ defmodule Keyfleet.WorkspaceFixtures do
       "status" => "open",
       "success_criteria" => [],
       "open_questions" => [],
+      "public_summary" => nil,
       "discussion" => []
     },
     "task" => %{
@@ -33,6 +34,7 @@ defmodule Keyfleet.WorkspaceFixtures do
       "progress" => "todo",
       "next_step" => nil,
       "result_ref" => nil,
+      "public_summary" => nil,
       "discussion" => []
     },
     "finding" => %{"confidence" => "low", "uncertainty" => nil, "discussion" => []},
