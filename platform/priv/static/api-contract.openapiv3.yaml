@@ -711,7 +711,8 @@ paths:
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422":
           description: >-
-            out_of_range: more than 110 rooms, 100 walls in keys or 2000 Keys in dms.keys are named,
+            out_of_range: more than 110 rooms, 100 walls in keys or 2000 Keys in dms.keys are named
+            (for too many walls or Keys, the hint says to split the list across several requests),
             a place (a room's, a wall's, a Key's in dms.keys, graph.after_seq, proposals.after_seq or
             quotes.after_seq) is outside 0 to 9223372036854775807, a token_id is outside 1 to
             9223372036854775807, or run.every_minutes is outside 10 to 1440. invalid_request: a room
@@ -3651,7 +3652,8 @@ components:
           description: >-
             How far each Key's messages have been read, each Key named once: the keys of the last
             answer. Empty the first time. A Key held now and not named is read from the start of its
-            holding; a Key named and not held now is left out.
+            holding; a Key named and not held now is left out. More than 2000 Keys is refused 422
+            out_of_range, and the hint says to split the list across several requests.
           items: {$ref: "#/components/schemas/DmKeyCursor"}
     DmChanges:
       type: object
