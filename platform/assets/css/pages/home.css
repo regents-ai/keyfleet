@@ -114,7 +114,9 @@
 
   /* The fleets: one card each, four across on a wide screen. */
   .rl-fleets { display: grid; gap: var(--space-3); padding: var(--rg-panel-padding); padding-block-start: max(var(--rg-panel-padding), calc(var(--rl-hero-pill-h) / 2 + var(--space-2))); }
-  .rl-fleets > h2 { grid-area: 1 / 1; justify-self: start; font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
+  .rl-fleets-heading { grid-area: 1 / 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; position: relative; z-index: 1; }
+  .rl-fleets-heading h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
+  .rl-fleets-heading .rg-button { min-block-size: 44px; }
   .rl-fleet-cards { grid-area: 2 / 1; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
   /* The lines from "See the fleets" to the top of each card. They leave the
      button straight down and bend out only below the heading, which they

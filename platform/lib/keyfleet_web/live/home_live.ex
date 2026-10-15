@@ -516,9 +516,24 @@ defmodule KeyfleetWeb.HomeLive do
   attr :fleets, :list, required: true
 
   defp fleets(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :club_open?,
+        Enum.any?(assigns.fleets, &(&1.id == "regents_club" and not &1.coming_soon?))
+      )
+
     ~H"""
     <section id="fleets" class="rl-fleets" aria-labelledby="fleets-title">
-      <h2 id="fleets-title">The fleets, right now</h2>
+      <div class="rl-fleets-heading">
+        <h2 id="fleets-title">The fleets, right now</h2>
+        <a
+          :if={@club_open?}
+          id="home-open-regents-club"
+          class="rg-button rg-button--secondary"
+          href={Fleets.path("regents_club")}
+        >Open Regents Club</a>
+      </div>
       <%!-- Lines from the hero's "See the fleets" down to the top of each card,
             one set for four cards across and one for two. --%>
       <div class="rl-fleets-fan" aria-hidden="true">
