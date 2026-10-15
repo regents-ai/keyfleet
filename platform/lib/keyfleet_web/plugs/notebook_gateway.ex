@@ -21,13 +21,17 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       (`from_elsewhere?/2`). The hub's own check of this reads headers that
       never reach it.
 
-  A saved output, `/results/<notebook id>/<version id>/<saved at>`
-  (`Keyfleet.Notebooks.result_url/4`), is one saved notebook page. When the
-  hub hands back a saved page, this site keeps its own copy
-  (`Keyfleet.Notebooks.SavedOutput`) and only then names the page's address in
-  a `Link` header; the address shows that copy for good, whatever the hub
-  keeps. Someone without a notebook sign-in who opens one is sent to Keyfleet
-  to get one (`open_url/2`), and comes back to it.
+  A saved output, `/results/<notebook id>/<source id>/<saved at>`
+  (`Keyfleet.Notebooks.result_url/4`), is one saved notebook page: a
+  version's, or a background run's. When the hub hands back a saved page,
+  this site keeps its own copy (`Keyfleet.Notebooks.SavedOutput`) and only
+  then names the page's address in a `Link` header; the address shows that
+  copy whatever the hub keeps, until one of the fleet's members removes it
+  (`DELETE` on the address). Someone without a notebook sign-in who opens one
+  is sent to Keyfleet to get one (`open_url/2`), and comes back to it.
+
+  Background runs (the hub's jobs) start only when a member asks: a job that
+  names a schedule is refused.
 
   Each one's key ownership is read at most every `access_ttl_ms`
   (`Keyfleet.AccessCache`); the first time in that span, they are
@@ -135,7 +139,17 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     "DELETE /api/v1/projects/:pid/notebooks/:nid/sessions/:sid/surfaces/:surface",
     "GET /api/v1/projects/:pid/notebooks/:nid/editor-session",
     "POST /api/v1/projects/:pid/notebooks/:nid/editor-session/takeover",
-    "POST /api/v1/projects/:pid/notebooks/:nid/sessions/:sid/change-requests"
+    "POST /api/v1/projects/:pid/notebooks/:nid/sessions/:sid/change-requests",
+    "GET /api/v1/projects/:pid/notebooks/:nid/jobs",
+    "POST /api/v1/projects/:pid/notebooks/:nid/jobs",
+    "GET /api/v1/projects/:pid/notebooks/:nid/jobs/:jid",
+    "PATCH /api/v1/projects/:pid/notebooks/:nid/jobs/:jid",
+    "DELETE /api/v1/projects/:pid/notebooks/:nid/jobs/:jid",
+    "POST /api/v1/projects/:pid/notebooks/:nid/jobs/:jid/runs",
+    "GET /api/v1/projects/:pid/notebooks/:nid/jobs/:jid/runs",
+    "GET /api/v1/projects/:pid/notebooks/:nid/jobs/:jid/runs/:rid",
+    "POST /api/v1/projects/:pid/notebooks/:nid/jobs/:jid/runs/:rid/cancel",
+    "GET /api/v1/projects/:pid/notebooks/:nid/jobs/:jid/runs/:rid/html"
   ]
   @impl Plug
   def init(opts), do: opts
@@ -395,6 +409,13 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   ## Forwarding
 
+  defp forward(
+         %Plug.Conn{method: "DELETE", request_path: "/results/" <> _ = path} = conn,
+         fleet_id,
+         _subject
+       ),
+       do: remove_saved_output(conn, fleet_id, path)
+
   defp forward(%Plug.Conn{request_path: "/results/" <> _ = path} = conn, fleet_id, _subject),
     do: send_saved_output(conn, fleet_id, path)
 
@@ -428,11 +449,14 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   defp forward_http(conn, address, fleet_id, headers) do
     {body, conn} = request_body(conn)
 
-    case body do
-      :too_large ->
+    cond do
+      body == :too_large ->
         Refusal.json(conn, 413, "request_too_large")
 
-      body ->
+      not job_unscheduled?(conn, body) ->
+        Refusal.json(conn, 403, "notebooks_schedules_refused")
+
+      true ->
         Req.request(
           method: conn.method,
           url: address <> target(conn),
@@ -455,6 +479,37 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
        do: Notebooks.config()[:session_start_timeout_ms]
 
   defp http_timeout(_conn), do: Notebooks.config()[:hub_timeout_ms]
+
+  # A job runs only when a member starts it: one that names a schedule is
+  # refused (clearing a schedule with `null` is not naming one).
+  defp job_unscheduled?(
+         %Plug.Conn{
+           method: "POST",
+           path_info: ["api", "v1", "projects", _, "notebooks", _, "jobs"]
+         } = conn,
+         body
+       ),
+       do: no_schedule?(conn, body)
+
+  defp job_unscheduled?(
+         %Plug.Conn{
+           method: "PATCH",
+           path_info: ["api", "v1", "projects", _, "notebooks", _, "jobs", _]
+         } = conn,
+         body
+       ),
+       do: no_schedule?(conn, body)
+
+  defp job_unscheduled?(_conn, _body), do: true
+
+  defp no_schedule?(conn, body) do
+    with [] <- get_req_header(conn, "content-encoding"),
+         {:ok, %{} = job} <- Jason.decode(body) do
+      is_nil(job["schedule"])
+    else
+      _ -> false
+    end
+  end
 
   # An agent's body was read to check its signature.
   defp request_body(%Plug.Conn{assigns: %{raw_body: raw}} = conn), do: {raw, conn}
@@ -495,16 +550,17 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   # The saved page a notebook's page routes hand back, as `{notebook id,
-  # version id, saved at}`, or nil for any other answer.
+  # source id, saved at}`, or nil for any other answer. A version's page names
+  # its version, a background run's page its run.
   defp saved_page_address(conn, response) do
     with 200 <- response.status,
-         {:ok, notebook_id} <- saved_page_notebook(conn.path_info),
+         {:ok, notebook_id, source_header} <- saved_page_notebook(conn.path_info),
          [] <- Req.Response.get_header(response, "content-encoding"),
-         [version_id] <- Req.Response.get_header(response, "x-marimohub-version-id"),
+         [source_id] <- Req.Response.get_header(response, source_header),
          [captured_at] <- Req.Response.get_header(response, "x-marimohub-captured-at"),
          {:ok, saved_at} <- Notebooks.saved_at(captured_at),
          {:ok, address} <-
-           Notebooks.result(Notebooks.result_path(notebook_id, version_id, saved_at)) do
+           Notebooks.result(Notebooks.result_path(notebook_id, source_id, saved_at)) do
       address
     else
       _ -> nil
@@ -542,15 +598,15 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  defp send_kept(conn, fleet_id, {notebook_id, version_id, saved_at}, parts) do
+  defp send_kept(conn, fleet_id, {notebook_id, source_id, saved_at}, parts) do
     page = IO.iodata_to_binary(parts)
 
-    case Notebooks.keep_saved_output(fleet_id, notebook_id, version_id, saved_at, page,
+    case Notebooks.keep_saved_output(fleet_id, notebook_id, source_id, saved_at, page,
            actor: %Keyfleet.Actors.System{}
          ) do
       {:ok, _kept} ->
         conn
-        |> put_result_link(fleet_id, notebook_id, version_id, saved_at)
+        |> put_result_link(fleet_id, notebook_id, source_id, saved_at)
         |> send_resp(200, page)
 
       {:error, _error} ->
@@ -558,11 +614,27 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
+  # Any of the fleet's members may remove a saved output: its copy is deleted
+  # and the address is gone.
+  defp remove_saved_output(conn, fleet_id, path) do
+    {:ok, {notebook_id, source_id, saved_at}} = Notebooks.result(path)
+    system = %Keyfleet.Actors.System{}
+
+    with {:ok, %SavedOutput{} = kept} <-
+           Notebooks.saved_output(fleet_id, notebook_id, source_id, saved_at, actor: system),
+         :ok <- Notebooks.remove_saved_output(kept, actor: system) do
+      send_resp(conn, 204, "")
+    else
+      {:ok, nil} -> Refusal.json(conn, 404, "notebooks_not_found")
+      {:error, _error} -> Refusal.json(conn, 503, "notebooks_unavailable")
+    end
+  end
+
   # A saved output's address shows Keyfleet's copy, whatever the hub keeps now.
   defp send_saved_output(conn, fleet_id, path) do
-    {:ok, {notebook_id, version_id, saved_at}} = Notebooks.result(path)
+    {:ok, {notebook_id, source_id, saved_at}} = Notebooks.result(path)
 
-    case Notebooks.saved_output(fleet_id, notebook_id, version_id, saved_at,
+    case Notebooks.saved_output(fleet_id, notebook_id, source_id, saved_at,
            actor: %Keyfleet.Actors.System{}
          ) do
       {:ok, %SavedOutput{page: page}} ->
@@ -570,7 +642,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         |> put_resp_content_type("text/html")
         |> put_resp_header("content-security-policy", "sandbox allow-scripts")
         |> put_resp_header("x-content-type-options", "nosniff")
-        |> put_result_link(fleet_id, notebook_id, version_id, saved_at)
+        |> put_result_link(fleet_id, notebook_id, source_id, saved_at)
         |> send_resp(200, if(conn.method == "HEAD", do: "", else: page))
 
       {:ok, nil} ->
@@ -583,16 +655,31 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   # A kept page names its address, so whoever read it can link the result
   # from the workspace.
-  defp put_result_link(conn, fleet_id, notebook_id, version_id, saved_at) do
+  defp put_result_link(conn, fleet_id, notebook_id, source_id, saved_at) do
     put_resp_header(
       conn,
       "link",
-      "<#{Notebooks.result_url(fleet_id, notebook_id, version_id, saved_at)}>; rel=\"canonical\""
+      "<#{Notebooks.result_url(fleet_id, notebook_id, source_id, saved_at)}>; rel=\"canonical\""
     )
   end
 
   defp saved_page_notebook(["api", "v1", "projects", _project, "notebooks", notebook_id, "html"]),
-    do: {:ok, notebook_id}
+    do: {:ok, notebook_id, "x-marimohub-version-id"}
+
+  defp saved_page_notebook([
+         "api",
+         "v1",
+         "projects",
+         _project,
+         "notebooks",
+         notebook_id,
+         "jobs",
+         _job,
+         "runs",
+         _run,
+         "html"
+       ]),
+       do: {:ok, notebook_id, "x-marimohub-run-id"}
 
   defp saved_page_notebook([
          "api",
@@ -605,7 +692,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
          _version,
          "html"
        ]),
-       do: {:ok, notebook_id}
+       do: {:ok, notebook_id, "x-marimohub-version-id"}
 
   defp saved_page_notebook(_path_info), do: :error
 
@@ -680,7 +767,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # spelling, move up, and a backslash is a slash. None of those reach a hub,
   # so the path compared below is the one the hub routes.
   # A saved output's address has one spelling, which needs no decoding.
-  defp check_path(method, "/results/" <> _ = path) when method in ["GET", "HEAD"],
+  defp check_path(method, "/results/" <> _ = path) when method in ["GET", "HEAD", "DELETE"],
     do: if(Notebooks.result(path) == :error, do: :invalid, else: :ok)
 
   defp check_path(method, path) do

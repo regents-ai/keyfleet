@@ -12,6 +12,7 @@ primary_region = "<region>"
 
 [env]
   MARIMOHUB_RUN_MAINTENANCE = "true"
+  MARIMOHUB_JOBS = "on"
   MARIMOHUB_AUTH_BACKEND = "proxy-header"
   MARIMOHUB_AUTH_PROXY_HEADER = "<header name>"
   MARIMOHUB_AUTH_PROXY_JWT_ISSUER = "<issuer URL>"

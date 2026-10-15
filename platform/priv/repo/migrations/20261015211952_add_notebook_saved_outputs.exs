@@ -12,7 +12,7 @@ defmodule Keyfleet.Repo.Migrations.AddNotebookSavedOutputs do
       add(:id, :uuid, null: false, default: fragment("gen_random_uuid()"), primary_key: true)
       add(:fleet_id, :text, null: false)
       add(:notebook_id, :text, null: false)
-      add(:version_id, :text, null: false)
+      add(:source_id, :text, null: false)
       add(:saved_at, :bigint, null: false)
       add(:page, :binary, null: false)
 
@@ -22,16 +22,14 @@ defmodule Keyfleet.Repo.Migrations.AddNotebookSavedOutputs do
       )
     end
 
-    create unique_index(
-             :notebook_saved_outputs,
-             [:fleet_id, :notebook_id, :version_id, :saved_at],
+    create unique_index(:notebook_saved_outputs, [:fleet_id, :notebook_id, :source_id, :saved_at],
              name: "notebook_saved_outputs_unique_address_index"
            )
   end
 
   def down do
     drop_if_exists(
-      unique_index(:notebook_saved_outputs, [:fleet_id, :notebook_id, :version_id, :saved_at],
+      unique_index(:notebook_saved_outputs, [:fleet_id, :notebook_id, :source_id, :saved_at],
         name: "notebook_saved_outputs_unique_address_index"
       )
     )
