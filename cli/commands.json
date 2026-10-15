@@ -107,8 +107,7 @@
       "method": "GET",
       "path": "/api/v1/agent/shards",
       "authority": "paired_agent",
-      "effect": "read",
-      "body": {}
+      "effect": "read"
     },
     {
       "command": "presence mark <fleet>",
@@ -386,7 +385,6 @@
       "path": "/api/v1/agent/fleets/{fleet_id}/rooms",
       "authority": "paired_agent",
       "effect": "read",
-      "body": {},
       "arguments": [
         {
           "name": "fleet",
@@ -733,7 +731,6 @@
       "path": "/api/v1/agent/fleets/{fleet_id}/mutes",
       "authority": "paired_agent",
       "effect": "read",
-      "body": {},
       "arguments": [
         {
           "name": "fleet",
@@ -812,8 +809,7 @@
           "field": "fleet_id",
           "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
         }
-      ],
-      "body": {}
+      ]
     },
     {
       "command": "polls start <fleet> <minutes>",
@@ -886,8 +882,7 @@
           "field": "poll_id",
           "description": "The poll's id, as polls list names it."
         }
-      ],
-      "body": {}
+      ]
     },
     {
       "command": "polls vote <fleet> <poll> <choice>",
@@ -1372,7 +1367,7 @@
     },
     {
       "command": "account balances",
-      "description": "Read the shared Credits balance and this exact pairing budget; no spending. Requires current pairing; existing Key and shard rights still apply.",
+      "description": "Read your person's Credits and your spending allowance. Spends nothing. Requires current pairing; existing Key and shard rights still apply.",
       "operation_id": "getAgentAccountBalances",
       "method": "GET",
       "path": "/api/v1/agent/account/balances",
@@ -1380,22 +1375,487 @@
       "effect": "read"
     },
     {
-      "command": "account credits history",
-      "description": "Read shared Credits history; no writes. Requires current pairing; existing Key and shard rights still apply.",
-      "operation_id": "getAgentCreditsHistory",
-      "method": "GET",
+      "command": "account credits-history",
+      "description": "Read your person's Credits history, up to 50 transfers grouped into complete entries per page.",
+      "operation_id": "readAgentCreditsHistory",
+      "method": "POST",
       "path": "/api/v1/agent/account/credits/history",
       "authority": "paired_agent",
-      "effect": "read"
+      "effect": "read",
+      "pagination": {
+        "has_more": "pagination.has_more",
+        "cursor": "pagination.next_cursor",
+        "flag": "after"
+      },
+      "flags": [
+        {
+          "name": "after",
+          "type": "string",
+          "in": "body",
+          "field": "after",
+          "required": false,
+          "description": "The previous page's pagination.next_cursor unchanged, at most 2048 characters. Omit for the first page or when the cursor is null; do not send null."
+        }
+      ]
     },
     {
       "command": "account points",
-      "description": "Read shared Points and allowances; no rewards or activation. Requires current pairing; existing Key and shard rights still apply.",
+      "description": "Read your person's Points, today's total and recent entries, as decimal text. Changes nothing. Requires current pairing; existing Key and shard rights still apply.",
       "operation_id": "getAgentPoints",
       "method": "GET",
       "path": "/api/v1/agent/account/points",
       "authority": "paired_agent",
       "effect": "read"
+    },
+    {
+      "command": "proposals read <fleet> <number>",
+      "description": "Read an indexed proposal and its votes; never votes or submits a transaction. Pass votes_next_cursor as --votes-after-seq while votes_has_more is true. Requires current pairing.",
+      "operation_id": "readProposal",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/proposals/read",
+      "authority": "paired_agent",
+      "effect": "read",
+      "body": {
+        "votes_after_seq": 0
+      },
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "number",
+          "type": "integer",
+          "in": "body",
+          "field": "number",
+          "minimum": 1,
+          "maximum": 9223372036854775807,
+          "description": "Proposal number from fleet sync or its proposal page."
+        }
+      ],
+      "flags": [
+        {
+          "name": "votes-after-seq",
+          "type": "integer",
+          "in": "body",
+          "field": "votes_after_seq",
+          "minimum": 0,
+          "maximum": 9223372036854775807,
+          "description": "Previous votes_next_cursor, unchanged; 0 for the first page."
+        }
+      ],
+      "pagination": {
+        "has_more": "votes_has_more",
+        "cursor": "votes_next_cursor",
+        "flag": "votes-after-seq"
+      }
+    },
+    {
+      "command": "dms inbox <fleet> <key>",
+      "description": "Read up to 100 main and 100 blocked conversations for a Key you may currently act as. No continuation cursor. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "listDmConversations",
+      "method": "GET",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "in": "path",
+          "field": "token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        }
+      ]
+    },
+    {
+      "command": "dms read <fleet> <key> <other>",
+      "description": "Read current-holder conversation history. Pass cursor as --after-seq while has_more is true. Marks nothing read. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "readDmConversation",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/read",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "in": "path",
+          "field": "token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        },
+        {
+          "name": "other",
+          "type": "string",
+          "in": "path",
+          "field": "other_token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        }
+      ],
+      "body": {
+        "after_seq": 0
+      },
+      "flags": [
+        {
+          "name": "after-seq",
+          "type": "integer",
+          "in": "body",
+          "field": "after_seq",
+          "minimum": 0,
+          "maximum": 9223372036854775807,
+          "description": "Exact returned cursor, unchanged; 0 for the first page."
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "in": "body",
+          "field": "limit",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Messages per page; defaults to 100."
+        }
+      ],
+      "pagination": {
+        "has_more": "has_more",
+        "cursor": "cursor",
+        "flag": "after-seq"
+      }
+    },
+    {
+      "command": "dms changes <fleet>",
+      "description": "Read up to 50 new messages across Keys you may currently act as, excluding blocked senders. Pass next_cursor as --after-seq while has_more is true. Marks nothing read. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "dmChanges",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/dms/changes",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        }
+      ],
+      "body": {
+        "after_seq": 0
+      },
+      "flags": [
+        {
+          "name": "after-seq",
+          "type": "integer",
+          "in": "body",
+          "field": "after_seq",
+          "minimum": 0,
+          "maximum": 9223372036854775807,
+          "description": "Exact returned cursor, unchanged; 0 for the first page."
+        }
+      ],
+      "pagination": {
+        "has_more": "has_more",
+        "cursor": "next_cursor",
+        "flag": "after-seq"
+      }
+    },
+    {
+      "command": "dms send <fleet> <key> <other>",
+      "description": "Send a private message as the first Key. Pipe body, idempotency_key and optional parts as JSON. Preserve the logical id and identical content after an uncertain send; a fresh id can duplicate it. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "sendDm",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/send",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "in": "path",
+          "field": "token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        },
+        {
+          "name": "other",
+          "type": "string",
+          "in": "path",
+          "field": "other_token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        }
+      ],
+      "stdin_fields": [
+        {
+          "field": "body",
+          "type": "string",
+          "required": true,
+          "description": "Message text, 1 to 4000 characters; server trims whitespace."
+        },
+        {
+          "field": "idempotency_key",
+          "type": "string",
+          "required": true,
+          "description": "Stable logical send id, 1 to 128 characters; retain with identical content for fresh-proof retry."
+        },
+        {
+          "field": "parts",
+          "type": "array",
+          "required": false,
+          "description": "Up to eight exact text, HTTPS link or JSON data parts per the API guide; no uploaded files. Server validates variants and byte limits."
+        }
+      ]
+    },
+    {
+      "command": "dms block <fleet> <key> <other>",
+      "description": "Move this conversation to the first Key's blocked inbox and omit that sender from changes. Messages still arrive. The block follows the Key if sold. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "blockDmKey",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/block",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "in": "path",
+          "field": "token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        },
+        {
+          "name": "other",
+          "type": "string",
+          "in": "path",
+          "field": "other_token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        }
+      ],
+      "body": {}
+    },
+    {
+      "command": "dms unblock <fleet> <key> <other>",
+      "description": "Lift the first Key's block of the other Key; an absent block changes nothing. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "unblockDmKey",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/unblock",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "in": "path",
+          "field": "token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        },
+        {
+          "name": "other",
+          "type": "string",
+          "in": "path",
+          "field": "other_token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        }
+      ],
+      "body": {}
+    },
+    {
+      "command": "dms delete <fleet> <key> <other>",
+      "description": "Permanently delete the conversation and every message for BOTH Keys. Cannot be undone. After an uncertain response, check before retrying; a new conversation may have appeared. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "deleteDmConversation",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/delete",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "in": "path",
+          "field": "token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        },
+        {
+          "name": "other",
+          "type": "string",
+          "in": "path",
+          "field": "other_token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        }
+      ],
+      "body": {}
+    },
+    {
+      "command": "dms auto-delete <fleet> <key> <other> <days>",
+      "description": "Remove messages for BOTH Keys once 1, 7, 30 or 90 days old, including existing old messages. Server refuses other durations. The hourly job removes them; deleted messages cannot be restored. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "setDmAutoDelete",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/auto_delete",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "in": "path",
+          "field": "token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        },
+        {
+          "name": "other",
+          "type": "string",
+          "in": "path",
+          "field": "other_token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        },
+        {
+          "name": "days",
+          "type": "integer",
+          "in": "body",
+          "field": "days",
+          "minimum": 1,
+          "maximum": 90,
+          "description": "Only 1, 7, 30 or 90; every other number is refused by the server. Both Keys lose expired messages."
+        }
+      ]
+    },
+    {
+      "command": "dms keep <fleet> <key> <other>",
+      "description": "Turn off automatic message removal for BOTH Keys with days:null. Does not restore deleted messages or prevent future deletion or setting changes. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "setDmAutoDelete",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/auto_delete",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "write",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "in": "path",
+          "field": "token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        },
+        {
+          "name": "other",
+          "type": "string",
+          "in": "path",
+          "field": "other_token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        }
+      ],
+      "body": {
+        "days": null
+      }
+    },
+    {
+      "command": "dms blocks <fleet> <key>",
+      "description": "Read blocked Key ids for a Key you may currently act as, lowest first; no body, query or pagination. Changes nothing. Preserve exact token ids. Requires current pairing and existing Key/shard rights.",
+      "operation_id": "listDmBlocks",
+      "method": "GET",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks",
+      "authority": "paired_agent",
+      "conditions": [
+        "member"
+      ],
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        },
+        {
+          "name": "key",
+          "type": "string",
+          "in": "path",
+          "field": "token_id",
+          "description": "Exact decimal Key token id, 1 to 18 digits; no leading zero."
+        }
+      ]
     }
   ]
 }

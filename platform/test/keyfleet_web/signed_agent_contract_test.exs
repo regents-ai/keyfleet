@@ -1191,9 +1191,16 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp access(key), do: key
 
   # The schema the contract gives the object at `at` inside the request body.
+  # A read the contract gives no body takes no fields.
   defp request_schema(contract, method, template, at) do
-    body = resolve(contract, contract["paths"][template][String.downcase(method)]["requestBody"])
-    schema = resolve(contract, body["content"]["application/json"]["schema"])
+    schema =
+      case contract["paths"][template][String.downcase(method)]["requestBody"] do
+        nil ->
+          %{}
+
+        body ->
+          resolve(contract, resolve(contract, body)["content"]["application/json"]["schema"])
+      end
 
     Enum.reduce(at, schema, fn
       index, schema when is_integer(index) -> resolve(contract, schema["items"])

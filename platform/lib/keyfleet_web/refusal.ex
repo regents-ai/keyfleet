@@ -38,6 +38,9 @@ defmodule KeyfleetWeb.Refusal do
     "invalid_request" =>
       {"The request doesn't fit this operation.",
        "Check the body against the docs, then send it again."},
+    "invalid_cursor" =>
+      {"That history cursor is invalid.",
+       "Send after as the previous page's pagination.next_cursor, unchanged, or omit it for the newest entries."},
 
     # The site before it opens, and the fleets.
     "not_open_yet" =>
@@ -98,14 +101,14 @@ defmodule KeyfleetWeb.Refusal do
       {"This agent holds no Key in this fleet and no shard of one, and isn't paired with a person who holds a Key here.",
        "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards. Or ask your person to pair you with their account on regents.sh, if they hold a Key here."},
     "agent_not_paired" =>
-      {"This authenticated agent has no current pairing.",
+      {"This agent is not paired with an account.",
        "Ask your owner to pair this agent from their account on regents.sh, redeem their code through SIWA, then retry with fresh proof."},
     "pairing_unavailable" =>
       {"Current pairing could not be checked.",
        "Retry with fresh proof when the shared account service is available."},
     "person_not_here" =>
-      {"The person this agent is paired with hasn't signed in to Keyfleet yet, so it can't write as them.",
-       "Ask your person to sign in to Keyfleet once, then send the request again."},
+      {"The person this agent is paired with has no account on this site yet.",
+       "Ask your person to sign in on this website once, then send the request again."},
     "room_unknown" =>
       {"This fleet has no room with this address.",
        "GET /api/v1/agent/fleets/FLEET_ID/rooms lists its rooms."},

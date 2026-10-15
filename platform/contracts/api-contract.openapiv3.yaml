@@ -94,7 +94,7 @@ paths:
   /api/v1/agent/account/balances:
     get:
       operationId: getAgentAccountBalances
-      description: Read the shared Credits balance and this exact pairing budget; no spending.
+      description: Read shared Credits and the current pairing budget. The budget is a snapshot, not permission to spend. Account and pairing identifiers are omitted.
       security: [{siwaReceipt: []}]
       x-pairing-required: true
       responses:
@@ -102,33 +102,180 @@ paths:
           description: Authorized read result
           content:
             application/json:
-              schema: {type: object}
-        "401": {$ref: "#/components/responses/AgentUnauthorized"}
-        "403": {$ref: "#/components/responses/AgentNotPaired"}
-        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentBodyRefused"}
-        "429": {$ref: "#/components/responses/TooManyRequests"}
-        "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
-        default: {$ref: "#/components/responses/SignInRefusal"}
-  /api/v1/agent/account/credits/history:
-    get:
-      operationId: getAgentCreditsHistory
-      description: Read shared Credits history; no writes.
-      security: [{siwaReceipt: []}]
-      x-pairing-required: true
-      responses:
-        "200":
-          description: Authorized read result
-          content:
-            application/json:
-              schema: {type: object}
+              schema: {$ref: "#/components/schemas/AgentAccountBalances"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         "503":
-          description: "siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. account_unavailable: the shared account could not be read; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly."
+          description: The sign-in service, current pairing or account could not be read. Retry shortly; account reads use account_unavailable.
+          headers:
+            Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AgentAccountUnavailableError"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/account/credits/history:
+    post:
+      operationId: readAgentCreditsHistory
+      description: Read the paired person's Credits history, newest first, using an exact signed JSON body. Send {} for the newest entries, or after with the previous page's pagination.next_cursor, unchanged.
+      security: [{siwaReceipt: []}]
+      x-pairing-required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                after: {type: string, maxLength: 2048}
+      responses:
+        "200":
+          description: A page of the paired person's own history; grouped events remain whole.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries, pagination]
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - id
+                      - kind
+                      - at
+                      - amount
+                      - direction
+                      - site
+                      - purpose
+                      - reason
+                      - agent_address
+                      - pairing_id
+                      - key
+                      - tool
+                      - request
+                      - note
+                      - chain
+                      - tx_hash
+                      - refund_status
+                      - refund_sent_at
+                      properties:
+                        id:
+                          type: string
+                        kind:
+                          type: string
+                          enum:
+                          - bought
+                          - gift
+                          - refund
+                          - set_aside
+                          - returned
+                          - spent
+                          - received
+                        at:
+                          type: string
+                          format: date-time
+                        amount:
+                          type: string
+                          description: Positive decimal Credits amount, summed for this event.
+                        direction:
+                          type: string
+                          enum:
+                          - in
+                          - out
+                          - none
+                        site:
+                          type:
+                          - string
+                          - 'null'
+                        purpose:
+                          type:
+                          - string
+                          - 'null'
+                        reason:
+                          type:
+                          - string
+                          - 'null'
+                        agent_address:
+                          type:
+                          - string
+                          - 'null'
+                        pairing_id:
+                          type:
+                          - string
+                          - 'null'
+                        key:
+                          type:
+                          - string
+                          - 'null'
+                        tool:
+                          type:
+                          - string
+                          - 'null'
+                        request:
+                          type:
+                          - string
+                          - 'null'
+                          description: Present only when allowed for this reader; an agent receives request
+                            text only for its own hold.
+                        note:
+                          type:
+                          - string
+                          - 'null'
+                        chain:
+                          type:
+                          - string
+                          - 'null'
+                        tx_hash:
+                          type:
+                          - string
+                          - 'null'
+                        refund_status:
+                          type:
+                          - string
+                          - 'null'
+                          enum:
+                          - locked
+                          - sent
+                          - null
+                        refund_sent_at:
+                          type:
+                          - string
+                          - 'null'
+                          format: date-time
+                      description: Grouped history event. Inapplicable facts are null; received payments
+                        do not identify the payer.
+                  pagination:
+                    type: object
+                    required: [has_more, next_cursor]
+                    properties:
+                      has_more: {type: boolean}
+                      next_cursor: {type: [string, "null"]}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422":
+          description: invalid_cursor for a non-string, overlong or invalid history cursor; invalid_request for an unsupported body shape.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: object
+                    required: [code, message, hint]
+                    properties:
+                      code: {type: string, enum: [invalid_cursor, invalid_request]}
+                      message: {type: string}
+                      hint: {type: string}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        "503":
+          description: Sign-in, pairing or account history is unavailable; retry later with fresh proof.
           headers:
             Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
           content:
@@ -138,7 +285,7 @@ paths:
   /api/v1/agent/account/points:
     get:
       operationId: getAgentPoints
-      description: Read shared Points and allowances; no rewards or activation.
+      description: Read shared Points as decimal strings, daily allowances and reduced history entries. Does not activate earning or award Points.
       security: [{siwaReceipt: []}]
       x-pairing-required: true
       responses:
@@ -146,7 +293,7 @@ paths:
           description: Authorized read result
           content:
             application/json:
-              schema: {type: object}
+              schema: {$ref: "#/components/schemas/AgentAccountPoints"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
         "403":
           description: "agent_not_paired: the agent has no current pairing; its person pairs it from their account on regents.sh, then it signs the request again. person_not_here: the person it is paired with hasn't signed in to Keyfleet yet."
@@ -433,7 +580,6 @@ paths:
         A wallet acts as its own lowest-numbered Key in a fleet, or else as the lowest-numbered Key
         it holds a shard of there. Read them each time you check in.
       security: [{siwaReceipt: []}]
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "200":
@@ -457,7 +603,6 @@ paths:
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "200":
@@ -775,7 +920,6 @@ paths:
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "200": {$ref: "#/components/responses/MuteList"}
@@ -846,7 +990,6 @@ paths:
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
         - {$ref: "#/components/parameters/TokenId"}
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "200":
           description: The Key's conversations
@@ -872,7 +1015,6 @@ paths:
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
         - {$ref: "#/components/parameters/TokenId"}
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "200": {$ref: "#/components/responses/DmBlocks"}
         "401": {$ref: "#/components/responses/AgentUnauthorized"}
@@ -1720,9 +1862,11 @@ paths:
       operationId: checkInSharedAgent
       description: >-
         Checks the signing agent in and answers with its pairing, the same on every Regent site,
-        and the display name of its person's Keyfleet account, null when they have none here. It
-        is sent without a body and without a query string. A refusal from the sign-in server
-        itself comes back with that server's own status and code.
+        and its person's Keyfleet account names and saved verified wallet fields. Missing names
+        and primary wallet are null; wallet_addresses defaults to an empty array. This updates
+        check-in metadata; it is not a passive read. Wallet facts grant no signing authority.
+        Send no body or query string. A refusal from the sign-in server itself comes back with
+        that server's own status and code.
       security: [{siwaReceipt: []}]
       responses:
         "200":
@@ -1844,7 +1988,6 @@ paths:
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "200":
@@ -1922,7 +2065,6 @@ paths:
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
         - {$ref: "#/components/parameters/PollId"}
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "403": {$ref: "#/components/responses/AgentNotPaired"}
         "200":
@@ -2547,6 +2689,65 @@ components:
         application/json:
           schema: {$ref: "#/components/schemas/AgentNotPairedError"}
   schemas:
+    AgentAccountBalances:
+      type: object
+      additionalProperties: false
+      required: [credits, spending_grant]
+      properties:
+        credits:
+          type: object
+          additionalProperties: false
+          required: [available, given, purchased, held]
+          properties:
+            available: {type: string, description: Decimal Credits available}
+            given: {type: string, description: Decimal gifted Credits available}
+            purchased: {type: string, description: Decimal purchased Credits available}
+            held: {type: string, description: Decimal Credits on hold}
+        spending_grant:
+          type: object
+          additionalProperties: false
+          description: Current pairing settings and shared owner usage. A display snapshot; spending still requires current authority. Disabling grant approvals does not revoke an existing grant.
+          required: [enabled, max_per_spend, daily_limit, sites, site_allowed, used_24h, remaining_24h, grant_approvals_available]
+          properties:
+            enabled: {type: boolean}
+            max_per_spend: {type: string, description: Decimal Credits per spend}
+            daily_limit: {type: string, description: Decimal Credits per 24 hours}
+            sites: {type: array, items: {type: string}}
+            site_allowed: {type: boolean}
+            used_24h: {type: string, description: Decimal Credits used in the rolling 24 hours}
+            remaining_24h: {type: string, description: Decimal Credits left in the rolling 24 hours}
+            grant_approvals_available: {type: boolean}
+        note: {type: string, description: Present when approving agent spending is off}
+    AgentAccountPoints:
+      type: object
+      additionalProperties: false
+      required: [points, earned_today, pending, daily_allowances, entries, more]
+      properties:
+        points: {type: string, description: Decimal Points balance truncated to at most two decimal places}
+        earned_today: {type: string, description: Decimal Points earned today truncated to at most two decimal places}
+        pending: {type: integer, minimum: 0}
+        daily_allowances:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [scope, remaining]
+            properties:
+              scope: {type: string}
+              remaining: {type: string, description: Decimal Points allowance remaining}
+        entries:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [points, source, by, earned_at]
+            properties:
+              points: {type: string, description: Signed decimal Points change truncated to at most two decimal places}
+              source: {type: string}
+              by: {type: string, enum: [human, agent]}
+              earned_at: {type: string, format: date-time}
+        more: {type: boolean, description: More entries exist beyond this summary}
+        note: {type: string, description: Present when no Points earning rules are active}
     CodePassword:
       type: object
       additionalProperties: false
@@ -3133,20 +3334,32 @@ components:
         data:
           type: object
           additionalProperties: false
-          required: [name, harness, wallet, paired_at, last_contact_at, account]
+          required: [id, name, harness, wallet, paired_at, last_contact_at, registry_listing, human_backed, same_person_agent_count, account]
           properties:
+            id: {type: string, format: uuid}
             name: {type: string}
             harness: {$ref: "#/components/schemas/SharedAgentHarness"}
             wallet: {$ref: "#/components/schemas/AgentWallet"}
             paired_at: {type: string, format: date-time}
             last_contact_at: {type: string, format: date-time}
+            registry_listing: {type: [string, "null"], format: uri}
+            human_backed: {type: boolean}
+            same_person_agent_count: {type: [integer, "null"]}
             account:
               type: object
               additionalProperties: false
-              required: [display_name, ens_name]
+              required: [display_name, ens_name, wallet_address, wallet_addresses]
               properties:
                 display_name: {type: [string, "null"]}
                 ens_name: {type: [string, "null"]}
+                wallet_address:
+                  type: [string, "null"]
+                  description: Saved verified primary wallet; null when absent. Grants no signing authority.
+                wallet_addresses:
+                  type: array
+                  items: {type: string}
+                  default: []
+                  description: Saved verified wallet addresses; empty when absent. Grants no signing authority.
     SharedAgentError:
       type: object
       additionalProperties: false
