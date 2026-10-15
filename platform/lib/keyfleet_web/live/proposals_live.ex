@@ -773,6 +773,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         id="proposals-regents-share"
         class="proposals-action"
         flow={:send_share}
+        tool="send_share"
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
@@ -795,6 +796,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         id="proposals-convert"
         class="proposals-action"
         flow={:convert}
+        tool="convert_to_regent"
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
