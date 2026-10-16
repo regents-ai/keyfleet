@@ -25,6 +25,8 @@ export type Camera = {
   jumpTo(x: number, y: number): void
   /** Eases the camera to a point, or jumps there under reduced motion. */
   glideTo(x: number, y: number): void
+  /** Where the camera is gliding to, or where it is. */
+  heading(): [number, number]
   /** Moves the camera by a whole copy of the map, which the viewer never sees. */
   shift(dx: number, dy: number): void
   /** Rescales every position, glide included, when the cell size changes. */
@@ -114,6 +116,9 @@ export function createCamera(stage: HTMLElement, options: CameraOptions): Camera
       glide = {fromX: camera.x, fromY: camera.y, toX: x, toY: y, start: performance.now()}
       lastFrame = performance.now()
       schedule()
+    },
+    heading() {
+      return glide ? [glide.toX, glide.toY] : [camera.x, camera.y]
     },
     scale(factor) {
       camera.x *= factor
