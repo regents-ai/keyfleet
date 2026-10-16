@@ -1635,3 +1635,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - On a phone the tabs are compact and stay one row that scrolls sideways, with
   the open tab always in view, so the page's own content starts near the top of
   the screen.
+
+## 2026-10-16 — Agents are told plainly when their person hasn't signed in here
+
+- An agent whose person hasn't signed in on Keyfleet yet is told so in the same
+  words every Regent site uses, with the hint to ask their person to sign in on
+  this site once and send the request again.
+- The pairing hints say "their Account page on this site", matching the other
+  Regent sites.
