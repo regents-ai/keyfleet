@@ -431,7 +431,12 @@
   opacity: 0.6;
 }
 
-/* A coming-soon fleet: its map faded, and a note over it. */
+/* A coming-soon fleet: its map faded, and a note over it. It has no tabs row,
+   so its stage takes the second row. */
+
+#fleet-soon {
+  grid-template-rows: auto minmax(20rem, 1fr);
+}
 
 .fleet-soon {
   position: absolute;
