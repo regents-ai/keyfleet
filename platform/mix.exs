@@ -197,7 +197,11 @@ defmodule Keyfleet.MixProject do
         # Wall removals add two: their domain and the KeyHolder check.
         # The router adds two more: the saved-errors page is a plug it sets up as
         # it compiles, and a fleet's own addresses are drawn from the route catalog.
-        "xref graph --label compile-connected --fail-above 78",
+        # Read marks add two: the rooms' and direct messages' ReadMark records, each
+        # with its domain. Saved notebook outputs add one: the SavedOutput record.
+        # Main itself counted 79 on 16 Oct, one above the 78 recorded here; these
+        # three records bring it to 82.
+        "xref graph --label compile-connected --fail-above 82",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

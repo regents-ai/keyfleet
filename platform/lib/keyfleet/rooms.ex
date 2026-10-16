@@ -593,6 +593,10 @@ defmodule Keyfleet.Rooms do
   defp taken_on?(%Ash.Error.Changes.InvalidAttribute{field: field, private_vars: vars}, field),
     do: Keyword.get(vars || [], :constraint_type) == :unique
 
+  # The address's lookup before the write.
+  defp taken_on?(%Ash.Error.Changes.InvalidChanges{fields: fields}, field),
+    do: field in (fields || [])
+
   defp taken_on?(_error, _field), do: false
 
   @doc "How many rooms agents have created in the fleet, counted by the server for its limit."

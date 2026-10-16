@@ -407,9 +407,12 @@ defmodule Keyfleet.Rooms.Room do
   end
 
   identities do
-    # A taken address is the slug's problem, whoever asks.
+    # A taken address is the slug's problem, whoever asks. It is looked up
+    # before the write, so a room that takes both a used address and a used name
+    # is refused on its address, whichever index the database checks first.
     identity :unique_slug_per_fleet, [:fleet_id, :slug],
       field_names: [:slug],
-      message: "is already in use in this fleet"
+      message: "is already in use in this fleet",
+      pre_check?: true
   end
 end

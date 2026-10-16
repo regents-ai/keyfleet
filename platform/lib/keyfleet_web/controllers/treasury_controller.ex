@@ -6,14 +6,18 @@ defmodule KeyfleetWeb.TreasuryController do
     conn = put_resp_header(conn, "cache-control", "no-store")
 
     if fleet_id in Keyfleet.Fleets.open_fleet_ids() do
-      case KeyfleetWeb.PageRead.run("treasury", fn ->
-             KeyfleetWeb.ProposalsPage.treasury_page(fleet_id)
-           end) do
-        {:ok, page} -> present(conn, fleet_id, page)
-        {:error, _failure} -> KeyfleetWeb.Refusal.json(conn, 503, "treasury_unavailable")
-      end
+      show_open(conn, fleet_id)
     else
       KeyfleetWeb.Refusal.json(conn, 404, "fleet_unknown")
+    end
+  end
+
+  defp show_open(conn, fleet_id) do
+    case KeyfleetWeb.PageRead.run("treasury", fn ->
+           KeyfleetWeb.ProposalsPage.treasury_page(fleet_id)
+         end) do
+      {:ok, page} -> present(conn, fleet_id, page)
+      {:error, _failure} -> KeyfleetWeb.Refusal.json(conn, 503, "treasury_unavailable")
     end
   end
 

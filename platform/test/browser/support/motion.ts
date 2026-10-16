@@ -72,12 +72,6 @@ export const moved = (page: Page, selector: string) =>
     selector,
   )
 
-export const movedCount = (page: Page, selector: string) =>
-  page.evaluate(
-    selector => [...document.querySelectorAll(selector)].filter(el => (window as unknown as Recorded).__moves.has(el)).length,
-    selector,
-  )
-
 export const anythingMoved = (page: Page) =>
   page.evaluate(() => (window as unknown as Recorded).__moves.size + (window as unknown as Recorded).__rolled.size > 0)
 

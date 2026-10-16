@@ -6,7 +6,6 @@ import {
   forget,
   leftovers,
   moved,
-  movedCount,
   pressRapidly,
   rolled,
   watchMotion,
@@ -96,6 +95,20 @@ test("Buy pressed again and again squishes only its label, which ends at rest, a
 test("a sale rolls the count, each digit clipped by class, and its line joins the feed without moving the lines below, ending as plain text", async ({page}) => {
   await openFleet(page)
   const sold = Number(await plainNumber(page, "fleet-sales-keys"))
+  // The list's layout motion styles every line while it runs, so what counts is
+  // where each line already there is drawn, frame by frame.
+  await page.evaluate(() => {
+    const list = document.querySelector("#fleet-feed-list")!
+    const top = (line: Element) => line.getBoundingClientRect().top - list.getBoundingClientRect().top
+    const lines = new Map([...list.children].map(line => [line, top(line)]))
+    const drift = {most: 0}
+    Object.assign(window, {__feedDrift: drift})
+    const sample = () => {
+      for (const [line, start] of lines) if (line.isConnected) drift.most = Math.max(drift.most, Math.abs(top(line) - start))
+      requestAnimationFrame(sample)
+    }
+    requestAnimationFrame(sample)
+  })
 
   sellKey(fleet, buyer)
 
@@ -106,7 +119,7 @@ test("a sale rolls the count, each digit clipped by class, and its line joins th
   // The feed hears of the sale a moment after the count does.
   await expect(page.locator(`#fleet-feed-sale-${sold + 1}`)).toBeAttached({timeout: 10_000})
   await page.waitForTimeout(600)
-  expect(await movedCount(page, `#fleet-feed-list > li:not(#fleet-feed-sale-${sold + 1})`)).toBe(0)
+  expect(await page.evaluate(() => (window as unknown as {__feedDrift: {most: number}}).__feedDrift.most)).toBeLessThan(0.5)
   await expect.poll(() => leftovers(page)).toEqual([])
 })
 
