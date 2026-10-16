@@ -421,8 +421,8 @@
   inset: 0;
 }
 
-/* The map's tools sit in a row above it, never over a Key, and the map keeps
-   its full height under them. */
+/* The map's tools sit in a row above it and its notes in a row under it,
+   never over a Key, and the map takes the height between them. */
 .fleet-map {
   display: flex;
   flex-direction: column;
@@ -474,14 +474,6 @@
   opacity: 0.35;
 }
 
-.fleet-map-notes {
-  position: absolute;
-  z-index: 1;
-  max-width: calc(100% - 1.5rem);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-}
-
 .fleet-map-controls {
   border-block-end: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -526,22 +518,27 @@
   flex: none;
 }
 
+.fleet-map-notes > .rg-tip {
+  grid-row: span 2;
+}
+
 /* What the last search found; the line keeps its space while empty. */
 .key-map-found {
   display: block;
   min-block-size: 1lh;
 }
 
+/* The tip sits beside the chosen Key's line and what the last search found. */
 .fleet-map-notes {
-  inset-block-end: 0.75rem;
-  inset-inline-start: 0.75rem;
   display: grid;
-  gap: 0.25rem;
-  width: 34rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.25rem 0.5rem;
   padding: 0.5rem 0.75rem;
+  border-block-start: 1px solid var(--color-border);
+  background: var(--color-surface);
   color: var(--color-fg-muted);
   font-size: 0.875rem;
-  pointer-events: none;
 }
 
 /* Get a Key */
@@ -733,10 +730,33 @@
     border-inline-start: 0;
   }
 
-  /* The map's controls and notes sit over it and take three rows on a
-     phone, so the map is given the height to show Keys between them. */
+  /* The map is given the height to show rows of Keys between its tools and
+     its notes. */
   .fleet-view[data-view="map"] {
     grid-template-rows: auto auto minmax(34rem, 1fr);
+  }
+
+  /* On a phone the tools are one compact row that scrolls sideways. */
+  .fleet-map-controls {
+    flex-wrap: nowrap;
+    gap: 0.375rem;
+    overflow-x: auto;
+    padding: 0.375rem 0.5rem;
+    scrollbar-width: none;
+  }
+
+  .fleet-map-controls > * {
+    flex: none;
+  }
+
+  .fleet-map-controls :is(select, input) {
+    min-height: 2.25rem;
+    font-size: 0.875rem;
+  }
+
+  .fleet-map-find input {
+    flex: none;
+    inline-size: 10rem;
   }
 
   /* The directions stay for screen readers; on a phone the map is the page. */
@@ -750,6 +770,16 @@
   }
 }
 
+}
+
+/* On a phone the map's tool buttons are compact, so they fit one row. This
+   sits outside the product layer, so it wins over the site's button sizes. */
+@media (max-width: 48rem) {
+  .fleet-map-controls .rg-button {
+    min-height: 2.25rem;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+  }
 }
 
 /* The feed's channels are buttons drawn as a chat app's sidebar rows. This

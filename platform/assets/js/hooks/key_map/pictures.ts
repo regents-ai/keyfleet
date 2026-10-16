@@ -35,6 +35,8 @@ export function createPictures(): Pictures {
   const preloads = new Set<HTMLImageElement>()
   let fx = 0
   let fy = 0
+  // Set once the map is gone, so an answer arriving after it starts nothing.
+  let destroyed = false
 
   const finish = (img: HTMLImageElement) => {
     if (!loading.delete(img)) return
@@ -69,6 +71,7 @@ export function createPictures(): Pictures {
 
   const pictures: Pictures = {
     want(img, address, x, y) {
+      if (destroyed) return
       pictures.drop(img)
       listen(img)
       waiting.set(img, {img, address, x, y})
@@ -85,6 +88,7 @@ export function createPictures(): Pictures {
 
     // A new destination replaces the last one's pictures not yet started.
     ahead(list) {
+      if (destroyed) return
       for (const img of preloads) {
         if (waiting.delete(img)) preloads.delete(img)
       }
@@ -113,6 +117,7 @@ export function createPictures(): Pictures {
     },
 
     destroy() {
+      destroyed = true
       waiting.clear()
       loading.forEach((_, img) => img.removeAttribute("src"))
       loading.clear()
