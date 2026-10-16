@@ -1588,3 +1588,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - Main buttons cut two corners and carry Powder Blue and Tangerine marks, from
   design-system `9e93f14`; the hover arrow and the press motion stay.
+
+## 2026-10-16 — Map pictures load where you are heading
+
+- The map loads its Key pictures a few at a time, nearest the place it is
+  heading for first, so a jump to Your Keys, a search or a level starts on the
+  pictures where the map will land before it gets there.
+- Pictures that scroll out of view before they load give up their turn, so a
+  fast pan no longer leaves a backlog of pictures nobody will see.
+- A Key's own card, opened over the map, loads ahead of the map's pictures.

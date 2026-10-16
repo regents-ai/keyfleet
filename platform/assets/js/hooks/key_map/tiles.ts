@@ -1,5 +1,6 @@
 import {axialToPixel, SQRT3} from "./lattice"
 import type {KeyMapGrid} from "./layouts"
+import type {Pictures} from "./pictures"
 import {grouped, levelTone, type LevelSale} from "./state"
 
 export type TileFaces = {
@@ -40,6 +41,10 @@ type Tile = {
   // number until then, and for good when the close-up can't be loaded.
   picture: HTMLImageElement
   shown: string
+  // Where the tile is drawn, in world pixels, so its close-up loads in turn by
+  // how near it is to where the viewer is heading.
+  x: number
+  y: number
   // The outline along the tile's cell where its level ends, made the first
   // time the tile needs one.
   edge: SVGPathElement | null
@@ -95,7 +100,7 @@ function edgePath(edges: number, size: number) {
  * wider than about 2,300 px would pass 400; the browser tests hold both
  * measured counts to their budgets.
  */
-export function createTiles(layer: HTMLElement, faces: TileFaces): Tiles {
+export function createTiles(layer: HTMLElement, faces: TileFaces, pictures: Pictures): Tiles {
   let placed = new Map<number, Tile>()
   const spare: Tile[] = []
   // Edge paths by edge bits, for the cell size they were drawn at.
@@ -145,7 +150,7 @@ export function createTiles(layer: HTMLElement, faces: TileFaces): Tiles {
     const caption = document.createElement("span")
     el.append(frame, label, caption)
     layer.append(el)
-    const tile: Tile = {el, value: 0, level: 0, label, caption, picture, shown: "", edge: null}
+    const tile: Tile = {el, value: 0, level: 0, label, caption, picture, shown: "", x: 0, y: 0, edge: null}
     // A close-up asked for before the tile moved on to another key is ignored.
     picture.addEventListener("load", () => {
       if (tile.shown && picture.src === tile.shown) el.dataset.pic = ""
@@ -157,12 +162,17 @@ export function createTiles(layer: HTMLElement, faces: TileFaces): Tiles {
     if (tile.shown === address) return
     tile.shown = address
     delete tile.el.dataset.pic
-    if (address) tile.picture.src = address
-    else tile.picture.removeAttribute("src")
+    if (address) pictures.want(tile.picture, address, tile.x, tile.y)
+    else {
+      pictures.drop(tile.picture)
+      tile.picture.removeAttribute("src")
+    }
   }
 
+  // A hidden tile gives up a close-up still to come, and asks again when shown.
   const free = (tile: Tile) => {
     tile.el.hidden = true
+    if (!("pic" in tile.el.dataset)) show(tile, "")
     tile.edge?.removeAttribute("d")
     spare.push(tile)
   }
@@ -233,8 +243,10 @@ export function createTiles(layer: HTMLElement, faces: TileFaces): Tiles {
       for (let index = 0; index < needed.length; index += 3) {
         const [q, r, value] = [needed[index], needed[index + 1], needed[index + 2]]
         const tile = spare.pop() ?? make()
-        paint(tile, value, grid)
         const [x, y] = axialToPixel(q, r, size)
+        tile.x = x
+        tile.y = y
+        paint(tile, value, grid)
         tile.el.style.transform = `translate3d(${x}px, ${y}px, 0)`
         outline(tile, value > 0 && tile.level ? levelEdges(grid, q, r, tile.level) : 0, size)
         next.set(cellId(q, r), tile)
