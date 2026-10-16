@@ -34,7 +34,7 @@ Start with `prepare_agent_request` for `agent_whoami`, then sign with your exist
 SIWA signer. Supply the original input, prepared request and proof to the named tool.
 Protected tools require current pairing even when your wallet holds its own Key or
 shard. World ID is optional. Missing pairing requires the owner to pair the agent from
-their account on regents.sh; a fresh pairing creates a new episode and restores no spending grant.
+their [Keyfleet Account page]({{origin}}/account); a fresh pairing creates a new episode and restores no spending grant.
 
 The tools provide your profile, current-status update, shared Credits balance,
 history, effective budget and Points summary, plus signed room, Key-thread and poll
