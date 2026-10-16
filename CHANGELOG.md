@@ -1643,3 +1643,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   this site once and send the request again.
 - The pairing hints say "their Account page on this site", matching the other
   Regent sites.
+
+## 2026-10-16 — The Account page opens again for people with a paired agent
+
+- The Account page stopped loading for anyone with a paired agent, because
+  each agent's picture was looked up without saying which agent app it runs
+  on. Each agent now carries that, so the list shows its picture, name and
+  app, and a test opens the page with a paired agent.
