@@ -439,7 +439,8 @@ defmodule Keyfleet.Activity do
     do: %{token_id: line.as_key, agent: line.agent_profile && line.agent_profile.name}
 
   # Keys: consecutive first owners are one item, fifty at most, of `kind`:
-  # `:sale`, or `:given` where the fleet's Keys are given.
+  # `:sale`, or `:given` where the fleet's Keys are given. The item is named
+  # for its earliest Key, so a Key bought after it joins the same line.
   defp group_epochs([], _kind), do: []
 
   defp group_epochs([%{ownership_epoch: 1} = first | _] = epochs, kind) do
@@ -450,7 +451,7 @@ defmodule Keyfleet.Activity do
     last = List.last(sold)
 
     item =
-      entry("#{kind}:#{first.record_seq}", first.observed_at, kind, last.record_seq, %{
+      entry("#{kind}:#{last.record_seq}", first.observed_at, kind, last.record_seq, %{
         token_ids: sold |> Enum.map(& &1.token_id) |> Enum.sort()
       })
 

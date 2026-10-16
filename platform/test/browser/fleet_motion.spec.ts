@@ -117,7 +117,10 @@ test("a sale rolls the count, each digit clipped by class, and its line joins th
   // Each digit rolls in a box its stylesheet clips, not one styled in markup.
   expect(await clippedByClass(page, "fleet-sales-keys")).toBe(true)
   // The feed hears of the sale a moment after the count does.
-  await expect(page.locator(`#fleet-feed-sale-${sold + 1}`)).toBeAttached({timeout: 10_000})
+  await expect(page.locator("#fleet-feed-list > li[data-kind=sale]").first()).toContainText(
+    new RegExp(`\\b${sold + 1} w[a-z]+ bought`),
+    {timeout: 10_000},
+  )
   await page.waitForTimeout(600)
   expect(await page.evaluate(() => (window as unknown as {__feedDrift: {most: number}}).__feedDrift.most)).toBeLessThan(0.5)
   await expect.poll(() => leftovers(page)).toEqual([])

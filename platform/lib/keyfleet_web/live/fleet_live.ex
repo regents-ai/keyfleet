@@ -41,7 +41,15 @@ defmodule KeyfleetWeb.FleetLive do
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
   import Phoenix.LiveView,
-    only: [push_event: 3, push_patch: 2, stream: 3, stream: 4]
+    only: [
+      push_event: 3,
+      push_patch: 2,
+      stream: 3,
+      stream: 4,
+      stream_delete_by_dom_id: 3,
+      stream_insert: 3,
+      stream_insert: 4
+    ]
 
   alias Keyfleet.Activity
   alias Keyfleet.Agents
@@ -1344,7 +1352,12 @@ defmodule KeyfleetWeb.FleetLive do
 
     {:noreply,
      socket
-     |> assign(:activity, %{activity | cursor: next, pages: pages + 1})
+     |> assign(:activity, %{
+       activity
+       | cursor: next,
+         pages: pages + 1,
+         ids: MapSet.union(activity.ids, MapSet.new(items, & &1.id))
+     })
      |> stream(:activity, items)}
   end
 
@@ -1657,24 +1670,48 @@ defmodule KeyfleetWeb.FleetLive do
     do: reread_activity(socket)
 
   defp read_activity(socket, fleet_id, _feed) do
-    socket
-    |> assign(activity: %{fleet_id: fleet_id, cursor: nil, pages: 1}, activity_refresh: nil)
-    |> reread_activity()
+    {items, socket} =
+      socket
+      |> assign(activity: %{fleet_id: fleet_id, pages: 1}, activity_refresh: nil)
+      |> read_activity_pages()
+
+    stream(socket, :activity, items, reset: true)
   end
 
-  defp reread_activity(%{assigns: %{activity: %{fleet_id: fleet_id, pages: pages}}} = socket) do
+  # Lines already on the page stay where they are drawn: the gone ones leave
+  # and the new ones go in at their place, so the list's motion moves only
+  # what changed. A reset would empty the list before its motion records it.
+  defp reread_activity(%{assigns: %{activity: %{ids: shown}}} = socket) do
+    {items, socket} = read_activity_pages(socket)
+    kept = MapSet.new(items, & &1.id)
+
+    socket =
+      shown
+      |> MapSet.difference(kept)
+      |> Enum.reduce(socket, &stream_delete_by_dom_id(&2, :activity, activity_dom_id(%{id: &1})))
+
+    items
+    |> Enum.with_index()
+    |> Enum.reduce(socket, fn {item, at}, socket ->
+      if MapSet.member?(shown, item.id),
+        do: stream_insert(socket, :activity, item),
+        else: stream_insert(socket, :activity, item, at: at)
+    end)
+  end
+
+  defp read_activity_pages(%{assigns: %{activity: %{fleet_id: fleet_id, pages: pages}}} = socket) do
     {items, cursor, read} =
       FleetPage.activity_pages(fleet_id, pages, ShellLive.human_actor(socket))
 
-    socket
-    |> assign(:activity, %{
-      fleet_id: fleet_id,
-      cursor: cursor,
-      pages: read,
-      empty?: items == [],
-      trying: FleetPage.read_trying_now(fleet_id)
-    })
-    |> stream(:activity, items, reset: true)
+    {items,
+     assign(socket, :activity, %{
+       fleet_id: fleet_id,
+       cursor: cursor,
+       pages: read,
+       ids: MapSet.new(items, & &1.id),
+       empty?: items == [],
+       trying: FleetPage.read_trying_now(fleet_id)
+     })}
   end
 
   @doc """
