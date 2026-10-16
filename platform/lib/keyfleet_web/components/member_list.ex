@@ -4,8 +4,8 @@ defmodule KeyfleetWeb.Components.MemberList do
   first, twenty to a page (`?view=members&page=N`). A person is a Regent
   account, with the Keys at every address it links counted together; Keys at
   an address no account links make a card of their own. Each card names the
-  person (their chosen name, else their ENS name, else their short main
-  address), how many Keys they hold with the lowest as small cards opening
+  person (their chosen name over their short main address, else their ENS
+  name, else their short main address), how many Keys they hold with the lowest as small cards opening
   each Key, their connected X, GitHub and Farcaster accounts, and whether they
   are active: a Key of theirs can vote now, as the Treasury counts presence.
   `club_claims` is the address the Regents Club's Keys wait at for their Pass
@@ -85,6 +85,7 @@ defmodule KeyfleetWeb.Components.MemberList do
 
     for %{account_id: account_id, wallets: own, count: count} <- holders do
       account = accounts[account_id]
+      {name, address} = who(account, own)
 
       shown =
         own |> Enum.flat_map(&Map.get(held, &1, [])) |> Enum.sort() |> Enum.take(@cards_shown)
@@ -92,7 +93,8 @@ defmodule KeyfleetWeb.Components.MemberList do
       %{
         id: card_id(account, own),
         count: count,
-        name: name(account, own),
+        name: name,
+        address: address,
         connections: Map.get(connections, account_id, []),
         present?: Enum.any?(own, &MapSet.member?(present, &1)),
         last_active:
@@ -143,8 +145,22 @@ defmodule KeyfleetWeb.Components.MemberList do
 
   defp card_id(_account, [wallet | _rest]), do: wallet
 
-  defp name(nil, [wallet]), do: RegentFormat.short_address(wallet)
-  defp name(account, own), do: PublicIdentity.name(account) || name(nil, [card_id(account, own)])
+  # A name the person typed is shown over their short main address, so it never
+  # passes for an ENS name; an ENS name, or a bare address, is shown alone.
+  defp who(account, own) do
+    address = RegentFormat.short_address(card_id(account, own))
+
+    cond do
+      chosen = account && PublicIdentity.name(%{display_name: account.display_name}) ->
+        {chosen, address}
+
+      ens = account && PublicIdentity.name(%{ens_name: account.ens_name}) ->
+        {ens, nil}
+
+      true ->
+        {address, nil}
+    end
+  end
 
   # A connection is shown only with the account name it links to.
   defp connection(identity) do
@@ -169,6 +185,7 @@ defmodule KeyfleetWeb.Components.MemberList do
         >
           <p class="member-card__who">
             <strong>{holder.name}</strong>
+            <span :if={holder.address}>{holder.address}</span>
             <span class="member-card__count">{Rules.keys(holder.count)}</span>
           </p>
           <p class="member-card__status" data-present={holder.present? && "true"}>

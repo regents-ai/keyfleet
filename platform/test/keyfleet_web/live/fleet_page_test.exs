@@ -103,6 +103,54 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert shown_keys(view, loose) == [8]
   end
 
+  # A typed name could read like an ENS name, so the short main address sits
+  # under it; an ENS name read from the chain stands alone.
+  test "the Member List shows a typed name over its address and an ENS name alone", %{
+    conn: conn
+  } do
+    deploy!()
+    ChainHelpers.seed_cursor!(@fleet)
+    [typed, ens] = for _ <- 1..2, do: unclaimed_wallet()
+    move!(7, typed)
+    move!(8, ens)
+
+    Accounts.register_verified!("did:privy:typed-name", typed, [typed],
+      actor: %Keyfleet.Actors.System{}
+    )
+
+    ens_account =
+      Accounts.register_verified!("did:privy:ens-name", ens, [ens],
+        actor: %Keyfleet.Actors.System{}
+      )
+
+    Keyfleet.Repo.query!(
+      "INSERT INTO regent_identity.profiles (id, app_id, privy_user_id, display_name, " <>
+        "proof_issued_at, inserted_at, updated_at) " <>
+        "VALUES (gen_random_uuid(), 'keyfleet-test', 'did:privy:typed-name', 'vitalik.eth', 0, now(), now())"
+    )
+
+    Keyfleet.Repo.query!(
+      "INSERT INTO keyfleet_app.account_ens_identities (id, human_account_id, wallet_address, " <>
+        "ens_name, lookup_state, inserted_at, updated_at) " <>
+        "VALUES (gen_random_uuid(), $1, $2, 'crew.eth', 'done', now(), now())",
+      [ens_account.id, ens]
+    )
+
+    {:ok, view, _html} = live(conn, @members_path)
+
+    assert text(view, "#fleet-members-holder-#{typed} strong") == "vitalik.eth"
+
+    assert text(view, "#fleet-members-holder-#{typed} strong + span") ==
+             RegentFormat.short_address(typed)
+
+    assert text(view, "#fleet-members-holder-#{ens} strong") == "crew.eth"
+
+    refute has_element?(
+             view,
+             "#fleet-members-holder-#{ens} strong + span:not(.member-card__count)"
+           )
+  end
+
   test "a visitor is listed General alone, never another room's name", %{conn: conn} do
     deploy!()
     Keyfleet.Rooms.bootstrap_rooms!(Fleets.catalog_ids())
