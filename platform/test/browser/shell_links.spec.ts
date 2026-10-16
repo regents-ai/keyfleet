@@ -102,11 +102,11 @@ test("the walk from home through every page, back, forward and the sidebar keeps
   await walk.arrive(fleetPage)
 
   const stops: [Locator, Stop][] = [
-    [page.locator("#fleet-proposals-link"), proposals],
+    [page.locator("#fleet-tab-proposals"), proposals],
     [page.locator('#proposals-list [data-proposal="1"] h3 a'), proposal],
     [page.locator("#proposal-page .proposals-kicker a"), proposals],
     [page.locator("#fleet-tab-hall"), fleetPage],
-    [page.locator("#fleet-workspace-link"), board],
+    [page.locator("#fleet-tab-workspace"), board],
     [page.locator("#workspace-page h3 a", {hasText: "Research plan"}), plan],
     [page.locator("#workspace-discussion a"), general],
     // Other specs may have posted in General too; this one's Key is the one to open.
@@ -147,13 +147,13 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   await walk.follow(page.locator("#fleet-channels").getByRole("link", {name: "General"}), general)
   await page.goBack()
   await walk.arrive(fleetPage)
-  await walk.follow(page.locator("#fleet-workspace-link"), board)
+  await walk.follow(page.locator("#fleet-tab-workspace"), board)
 
   // The workspace sits inside the fleet's page, whose Chat tab leads back to
   // the hall, and a card's key to the key's profile over the fleet's page.
   // Close is no link: it starts no page load and goes back to the workspace.
   await walk.follow(page.locator("#fleet-tab-hall"), fleetPage)
-  await walk.follow(page.locator("#fleet-workspace-link"), board)
+  await walk.follow(page.locator("#fleet-tab-workspace"), board)
   await walk.follow(page.locator(`#workspace-page a[href="${fleetPath}?key=${key}"]`).first(), {
     path: `${fleetPath}?key=${key}`,
     shows: "dialog#key-profile",
@@ -167,11 +167,11 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   await page.goBack()
   await walk.arrive(board)
   await walk.follow(page.locator("#fleet-tab-hall"), fleetPage)
-  await walk.follow(page.locator("#fleet-proposals-link"), proposals)
+  await walk.follow(page.locator("#fleet-tab-proposals"), proposals)
   await walk.follow(page.locator('#proposals-list [data-proposal="1"] h3 a'), proposal)
   await walk.follow(page.locator("#proposal-page .proposals-kicker a"), proposals)
   await walk.follow(page.locator("#fleet-tab-hall"), fleetPage)
-  await walk.follow(page.locator("#fleet-proposals-link"), proposals)
+  await walk.follow(page.locator("#fleet-tab-proposals"), proposals)
 
   await walk.settled()
 })

@@ -101,50 +101,49 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     refute has_element?(view, ~s(#fleet-channels a[href*="/rooms/"]))
   end
 
-  test "the bar leads to the hall, the map, the member list and the treasury", %{conn: conn} do
+  test "the bar's one row of tabs leads to the hall, the Keys and the treasury", %{conn: conn} do
     deploy!()
     ChainHelpers.seed_cursor!(@fleet)
 
     {:ok, view, _html} = live(conn, @path)
 
-    assert has_element?(view, "#fleet-nav-hall", "Hall")
-    assert has_element?(view, "#fleet-nav-map", "Map")
+    assert text(view, ".fleet-bar__nav") == "Chat Treasury Proposals Workspace Keys"
     assert has_element?(view, ~s(#fleet-tab-hall[href="#{@path}"][aria-current="page"]), "Chat")
     assert has_element?(view, ~s(#fleet-tab-workspace[href="#{@path}/workspace"]), "Workspace")
 
     assert has_element?(
              view,
-             ~s{#fleet-tab-map[href="#{@map_path}"]:not([aria-current])},
-             "Fleet Grid"
-           )
-
-    assert has_element?(
-             view,
-             ~s{#fleet-tab-members[href="#{@members_path}"]:not([aria-current])},
-             "Member List"
+             ~s{#fleet-tab-keys[href="#{@map_path}"]:not([aria-current])},
+             "Keys"
            )
 
     assert has_element?(view, ~s(#fleet-tab-treasury[href="#{@treasury_path}"]), "Treasury")
     assert has_element?(view, "#fleet-hall")
     refute has_element?(view, "#fleet-members")
-    assert has_element?(view, ~s(#fleet-workspace-link[href="#{@path}/workspace"]))
-    assert has_element?(view, ~s(#fleet-proposals-link[href="#{@path}/proposals"]))
+    # The hall's sidebar leaves the tabs to the bar.
+    refute has_element?(view, ~s(#fleet-channels a[href="#{@path}/workspace"]))
+    refute has_element?(view, ~s(#fleet-channels a[href="#{@path}/proposals"]))
 
-    view |> element("#fleet-tab-map") |> render_click()
+    view |> element("#fleet-tab-keys") |> render_click()
     assert_patch(view, @map_path)
 
-    assert has_element?(view, ~s(#fleet-tab-map[aria-current="page"]))
+    assert has_element?(view, ~s(#fleet-tab-keys[aria-current="page"]))
+    assert has_element?(view, ~s(#fleet-keys-map-grid[aria-current="page"]), "Grid")
     assert has_element?(view, "#key-map-#{@fleet}")
     refute has_element?(view, "#fleet-hall")
     refute has_element?(view, "#fleet-members")
 
-    view |> element("#fleet-tab-members") |> render_click()
+    view |> element("#fleet-keys-map-list") |> render_click()
     assert_patch(view, @members_path)
 
-    assert has_element?(view, ~s(#fleet-tab-members[aria-current="page"]))
+    assert has_element?(view, ~s(#fleet-tab-keys[aria-current="page"]))
+    assert has_element?(view, ~s(#fleet-keys-members-list[aria-current="page"]), "List")
     assert has_element?(view, "#fleet-members h2", "Member List")
     refute has_element?(view, "#key-map-#{@fleet}")
     refute has_element?(view, "#fleet-hall")
+
+    view |> element("#fleet-keys-members-grid") |> render_click()
+    assert_patch(view, @map_path)
 
     # How the fleet works is on its Treasury page.
     view |> element("#fleet-tab-treasury") |> render_click()
@@ -233,8 +232,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, ~s(#fleet-soon a[href="/#fleets"]), "See the fleets")
 
       for id <-
-            ~w(fleet-get-key fleet-send-agent fleet-channels fleet-members fleet-workspace-link
-                   fleet-proposals-link fleet-tab-treasury fleet-feed-list fleet-entry) do
+            ~w(fleet-get-key fleet-send-agent fleet-channels fleet-members fleet-tab-workspace
+                   fleet-tab-proposals fleet-tab-treasury fleet-tab-keys fleet-feed-list fleet-entry) do
         refute has_element?(view, "##{id}")
       end
 
@@ -601,14 +600,14 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
 
     # A buyer sees what the next Key costs before pressing anything, as the
-    # Buy button will name it: under the count of Keys sold on the fleet's
-    # bar, and on the homepage's "Buy Next Key".
+    # Buy button will name it: over the fleet's Buy button, and on the
+    # homepage's "Buy Next Key".
     test "the next Key and its price show before any press" do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
 
       {:ok, view, _html} = live(build_conn(), "/classic/1")
-      assert has_element?(view, "#fleet-next-key", "Key 1 · 10 USDC")
+      assert has_element?(view, "#fleet-entry .fleet-entry__line", "Key 1 · 10 USDC")
 
       {:ok, home, _html} = live(build_conn(), "/")
       render_async(home)
@@ -834,7 +833,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       send(view.pid, {:keys_changed, @fleet, [151]})
       assert_pushed(view, "keymap:patch", %{minted: 151, keys: [[151, 0]]})
       assert shown_keys(view, @stranger) == [7, 151]
-      assert has_element?(view, "#fleet-next-key", "Key 152 ·")
     end
 
     test "a key in the address that isn't one on the map is no choice", %{conn: conn} do
@@ -911,13 +909,19 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   test "a key bought appears once the chain reader records it", %{conn: conn} do
     fleet = deploy!("fleet_tech_accelerant", 5_000_000)
     {:ok, view, _html} = live(conn, "/accelerant/1?view=members")
-    assert has_element?(view, "#fleet-next-key", "Key 1 ·")
+    assert has_element?(view, "#fleet-entry .fleet-entry__line", "Key 1 ·")
 
     StubClient.put_chain(chain_head(5_000_010), [ownership_log(1, 1, @owner, 5_000_003)])
     assert Scanner.step(fleet, StubClient) == :ok
 
     assert_pushed(view, "keymap:patch", %{minted: 1, keys: [[1, 1]]})
-    assert has_element?(view, "#fleet-next-key", "Key 2 ·")
+
+    assert has_element?(
+             view,
+             "#fleet-get-key",
+             "Add another Key to increase vote weight and treasury share: 10.5 USDC"
+           )
+
     assert shown_keys(view, @owner) == [1]
 
     {:ok, treasury, _html} = live(conn, "/accelerant/1/treasury")
@@ -1280,7 +1284,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       shown = now_items(view)
       assert shown != []
 
-      view |> element("#fleet-tab-map") |> render_click()
+      view |> element("#fleet-tab-keys") |> render_click()
       assert_patch(view, @map_path)
       assert now_items(view) == []
 
@@ -1349,7 +1353,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
                "Buy Key on OpenSea"
              )
 
-      refute has_element?(view, "#fleet-next-key")
+      refute has_element?(view, "#buy-key-offer")
       refute has_element?(view, "#fleet-entry-sign-in")
 
       assert text(view, "#fleet-entry-pass-note") == ""

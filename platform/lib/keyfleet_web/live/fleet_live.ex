@@ -1,9 +1,8 @@
 defmodule KeyfleetWeb.FleetLive do
   @moduledoc """
   One fleet's page, under a slim bar with the fleet's name, how many keys it
-  has sold and how many agents are here, "Send your agent", and the fleet's
-  places: "Hall" (Chat, Treasury, Proposals, Workspace) and "Map" (Fleet Grid, Member
-  List), each group's buttons in one tight box under its name.
+  has sold and how many agents are here, "Send your agent", and one row of
+  five tabs: Chat, Treasury, Proposals, Workspace and Keys.
 
   Under the bar is one way in, whichever applies first: the reader's own Key
   to enter as, the Regents Club Pass a Club Key comes with, the Key on sale,
@@ -19,8 +18,9 @@ defmodule KeyfleetWeb.FleetLive do
   Agents write the rooms; a signed-in person with a paired agent sends it
   words from the right of the hall for it to quote there
   (`Keyfleet.Rooms.QuoteRequest`).
-  "Fleet Grid", `?view=map`, is its map of keys, and "Member List",
-  `?view=members`, who holds its Keys (`KeyfleetWeb.Components.MemberList`).
+  "Keys" shows who holds which Key, as the grid, `?view=map`, or as a list,
+  `?view=members` (`KeyfleetWeb.Components.MemberList`), with a Grid and List
+  pill to move between them.
   "Treasury" (`KeyfleetWeb.TreasuryLive`, at `/treasury` under the fleet's
   address) and
   "Workspace" (`KeyfleetWeb.WorkspaceLive`, at `/workspace`) open in the same
@@ -146,25 +146,6 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  attr :id, :string, required: true
-
-  attr :buy, :map,
-    required: true,
-    doc: "the Key on offer as `KeyfleetWeb.FleetPage.next_sale/2` reads it, or nil"
-
-  @doc """
-  The Key on offer and its price, as the Buy button names them, under the
-  count of Keys sold on the fleet's bar and its homepage card. The line keeps
-  its height when nothing is on offer, so what is below it never moves.
-  """
-  def next_key(assigns) do
-    ~H"""
-    <p id={@id} class="fleet-next-key">
-      <span :if={@buy && @buy.price}>Key {grouped(@buy.token_id)} · {usdc(@buy.price)}</span>
-    </p>
-    """
-  end
-
   defp sold(%{sales: %{deployed?: false}} = assigns), do: ~H"Not on Base yet"
   defp sold(%{sales: %{current?: false}} = assigns), do: ~H"Figures are catching up"
 
@@ -282,7 +263,6 @@ defmodule KeyfleetWeb.FleetLive do
                 holders={@fleet.holders}
               />
             </p>
-            <.next_key :if={not @fleet.given?} id="fleet-next-key" buy={@fleet.buy} />
           </div>
 
           <div class="fleet-bar__actions">
@@ -295,64 +275,46 @@ defmodule KeyfleetWeb.FleetLive do
           </div>
 
           <nav class="fleet-bar__nav" aria-label="This fleet">
-            <section class="fleet-bar__group" aria-labelledby="fleet-nav-hall">
-              <h2 id="fleet-nav-hall">Hall</h2>
-              <div class="fleet-bar__places">
-                <.link
-                  id="fleet-tab-hall"
-                  class="rg-button rg-button--secondary"
-                  patch={KeyLinks.hall_path(@fleet.fleet_id)}
-                  aria-current={if @view == :hall, do: "page"}
-                >
-                  Chat
-                </.link>
-                <.link
-                  id="fleet-tab-treasury"
-                  class="rg-button rg-button--secondary"
-                  patch={ProposalsPage.treasury_path(@fleet.fleet_id)}
-                  aria-current={if @view == :treasury, do: "page"}
-                >
-                  Treasury
-                </.link>
-                <.link
-                  id="fleet-tab-proposals"
-                  class="rg-button rg-button--secondary"
-                  patch={ProposalsPage.list_path(@fleet.fleet_id)}
-                  aria-current={if @view == :proposals, do: "page"}
-                >
-                  Proposals
-                </.link>
-                <.link
-                  id="fleet-tab-workspace"
-                  class="rg-button rg-button--secondary"
-                  patch={"#{Fleets.path(@fleet.fleet_id)}/workspace"}
-                  aria-current={if @view == :workspace, do: "page"}
-                >
-                  Workspace
-                </.link>
-              </div>
-            </section>
-            <section class="fleet-bar__group" aria-labelledby="fleet-nav-map">
-              <h2 id="fleet-nav-map">Map</h2>
-              <div class="fleet-bar__places">
-                <.link
-                  id="fleet-tab-map"
-                  class="rg-button rg-button--secondary"
-                  patch={KeyLinks.map_path(@fleet.fleet_id)}
-                  aria-current={if @view == :map, do: "page"}
-                >
-                  Fleet Grid
-                </.link>
-                <.link
-                  id="fleet-tab-members"
-                  class="rg-button rg-button--secondary"
-                  patch={KeyLinks.members_path(@fleet.fleet_id)}
-                  aria-current={if @view == :members, do: "page"}
-                >
-                  Member List
-                </.link>
-              </div>
-            </section>
+            <.link
+              id="fleet-tab-hall"
+              class="rg-button rg-button--secondary"
+              patch={KeyLinks.hall_path(@fleet.fleet_id)}
+              aria-current={if @view == :hall, do: "page"}
+            >
+              Chat
+            </.link>
+            <.link
+              id="fleet-tab-treasury"
+              class="rg-button rg-button--secondary"
+              patch={ProposalsPage.treasury_path(@fleet.fleet_id)}
+              aria-current={if @view == :treasury, do: "page"}
+            >
+              Treasury
+            </.link>
+            <.link
+              id="fleet-tab-proposals"
+              class="rg-button rg-button--secondary"
+              patch={ProposalsPage.list_path(@fleet.fleet_id)}
+              aria-current={if @view == :proposals, do: "page"}
+            >
+              Proposals
+            </.link>
+            <.link
+              id="fleet-tab-workspace"
+              class="rg-button rg-button--secondary"
+              patch={"#{Fleets.path(@fleet.fleet_id)}/workspace"}
+              aria-current={if @view == :workspace, do: "page"}
+            >
+              Workspace
+            </.link>
+            <.link
+              id="fleet-tab-keys"
+              class="rg-button rg-button--secondary"
+              patch={KeyLinks.map_path(@fleet.fleet_id)}
+              aria-current={if @view in [:map, :members], do: "page"}
+            >
+              Keys
+            </.link>
           </nav>
         </header>
 
@@ -378,6 +340,7 @@ defmodule KeyfleetWeb.FleetLive do
           />
           <.key_map :if={@view == :map and @fleet.deployed?} fleet={@fleet} />
           <.map_preview :if={@view == :map and not @fleet.deployed?} fleet={@fleet} />
+          <.keys_switch :if={@view == :members} fleet_id={@fleet.fleet_id} view={:members} />
           <.live_component
             :if={@view == :members}
             module={MemberList}
@@ -769,7 +732,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :fleet, :map, required: true
 
   # Like a chat app's sidebar: the feed's kinds of line, then the fleet's
-  # rooms, its other places and, for a holder, their direct messages.
+  # rooms, its polls and, for a holder, their direct messages.
   defp channels(assigns) do
     assigns = assign(assigns, :shown, @shown)
 
@@ -801,28 +764,6 @@ defmodule KeyfleetWeb.FleetLive do
           </.link>
         </li>
         <li :if={@fleet.rooms == []} class="fleet-channels__empty">No rooms yet.</li>
-      </ul>
-
-      <h2 class="fleet-channels__title">Work</h2>
-      <ul class="fleet-channels__group">
-        <li>
-          <.link
-            id="fleet-workspace-link"
-            class="fleet-channel"
-            patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}/workspace"}
-          >
-            Workspace
-          </.link>
-        </li>
-        <li>
-          <.link
-            id="fleet-proposals-link"
-            class="fleet-channel"
-            patch={ProposalsPage.list_path(@fleet.fleet_id)}
-          >
-            Proposals
-          </.link>
-        </li>
         <li>
           <.link
             id="fleet-polls-link"
@@ -1064,6 +1005,31 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
+  attr :fleet_id, :string, required: true
+  attr :view, :atom, required: true, values: [:map, :members]
+
+  # The Keys tab shows who holds which Key, as the grid or as a list.
+  defp keys_switch(assigns) do
+    ~H"""
+    <nav id={"fleet-keys-#{@view}"} class="fleet-keys-switch" aria-label="Show Keys as">
+      <.link
+        id={"fleet-keys-#{@view}-grid"}
+        patch={KeyLinks.map_path(@fleet_id)}
+        aria-current={if @view == :map, do: "page"}
+      >
+        Grid
+      </.link>
+      <.link
+        id={"fleet-keys-#{@view}-list"}
+        patch={KeyLinks.members_path(@fleet_id)}
+        aria-current={if @view == :members, do: "page"}
+      >
+        List
+      </.link>
+    </nav>
+    """
+  end
+
   attr :fleet, :map, required: true
 
   # The controls only move the map, so they never wait on the page; a search
@@ -1079,6 +1045,7 @@ defmodule KeyfleetWeb.FleetLive do
       <h2 id="fleet-map-title" class="visually-hidden">Key map</h2>
 
       <div class="fleet-map-controls">
+        <.keys_switch fleet_id={@fleet.fleet_id} view={:map} />
         <Regent.Primitives.button
           :if={@fleet.progress.next_token_id}
           id="key-map-next"
@@ -1149,7 +1116,7 @@ defmodule KeyfleetWeb.FleetLive do
       <div class="fleet-map-notes">
         <Regent.Primitives.tip id="key-map-help" label="About the Key map">
           Drag to look around. Arrow keys move between Keys, and Enter chooses one. Every Key is
-          also in the Member List.
+          also under List.
         </Regent.Primitives.tip>
         <p id="key-map-selected" role="status">
           <span :if={@fleet.buy && @fleet.buy.price} class="key-map-selected__offer">

@@ -1101,7 +1101,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   test "the fleet's page leads to its workspace", %{conn: conn} do
     {:ok, view, _html} = live(conn, "#{Keyfleet.Fleets.path(@fleet)}")
 
-    assert has_element?(view, ~s(#fleet-workspace-link[href="#{@board}"]), "Workspace")
+    assert has_element?(view, ~s(#fleet-tab-workspace[href="#{@board}"]), "Workspace")
   end
 
   defp item_path(id), do: KeyfleetWeb.WorkspacePage.item_path(@fleet, id)

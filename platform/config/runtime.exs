@@ -34,7 +34,7 @@ if config_env() == :test and System.get_env("KEYFLEET_BROWSER_TEST") == "1" do
   # connection until it exits: the site's background workers for good, and each
   # page for as long as it is open. One homepage load alone takes seven (the
   # request, the page and its five reads), so ten runs out between pages.
-  config :keyfleet, Keyfleet.Repo, pool_size: 40
+  config :keyfleet, Keyfleet.Repo, pool_size: 20
 end
 
 # Whether the product surfaces are open: KEYFLEET_APP_SURFACES says exactly

@@ -533,7 +533,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     test "the fleet's page leads to its proposals", %{conn: conn} do
       {:ok, view, _html} = live(conn, "#{Keyfleet.Fleets.path(@fleet)}")
-      assert has_element?(view, "#fleet-proposals-link[href='#{@list}']", "Proposals")
+      assert has_element?(view, "#fleet-tab-proposals[href='#{@list}']", "Proposals")
     end
   end
 

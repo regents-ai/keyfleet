@@ -80,13 +80,6 @@
   color: var(--color-fg-muted);
 }
 
-/* The Key on offer keeps its line when there is none, so nothing below moves. */
-.fleet-next-key {
-  min-block-size: 1lh;
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-}
-
 /* "Send your agent", with where an agent starts reading under it. */
 .fleet-bar__actions {
   display: grid;
@@ -100,35 +93,12 @@
   font-size: 0.875rem;
 }
 
+/* The fleet's five tabs, in one row of their own. */
 .fleet-bar__nav {
   display: flex;
   flex: 1 1 100%;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.5rem 1.25rem;
-}
-
-/* "Hall" and "Map": a name over the places it holds, whose buttons sit
-   together in one tight box. */
-.fleet-bar__group {
-  display: grid;
-  justify-items: start;
   gap: 0.25rem;
-}
-
-.fleet-bar__places {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  padding: 0.25rem;
-  border: 1px solid var(--color-border);
-}
-
-.fleet-bar__group h2 {
-  color: var(--color-fg-muted);
-  font-family: inherit;
-  font-size: 0.8125rem;
-  line-height: 1.2;
 }
 
 /* The view on show is marked under its button. */
@@ -783,4 +753,31 @@
 #fleet-channels button.fleet-channel:hover,
 #fleet-channels button.fleet-channel[aria-pressed="true"] {
   background: var(--ash-panel-strong);
+}
+
+/* The Keys tab's Grid and List, as one pill with the one on show filled. */
+.fleet-keys-switch {
+  display: inline-flex;
+  padding: 0.1875rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg);
+}
+
+.fleet-keys-switch a {
+  padding: 0.375rem 0.875rem;
+  border-radius: 999px;
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.fleet-keys-switch a[aria-current="page"] {
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+.fleet-stage > .fleet-keys-switch {
+  margin: var(--rg-panel-padding) var(--rg-panel-padding) 0;
 }

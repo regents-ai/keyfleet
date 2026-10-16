@@ -2,8 +2,8 @@ defmodule KeyfleetWeb.Components.MemberList do
   @moduledoc """
   A fleet's Member List: one card for each address holding its Keys, most
   Keys first, twenty to a page (`?view=members&page=N`). Each card names the
-  holder (the name of the Regent account whose main address it is, else the
-  short address), how many Keys it holds with its lowest ones as
+  holder (the name of the Regent account that signed in with the address,
+  else the short address), how many Keys it holds with its lowest ones as
   small cards opening each Key, its connected X, GitHub and Farcaster
   accounts, and whether it is active: a Key of it can vote now, as the
   Treasury counts presence. `club_claims` is the address the Regents Club's
@@ -103,9 +103,8 @@ defmodule KeyfleetWeb.Components.MemberList do
       |> Enum.chunk_every(100)
       |> Enum.reduce(%{}, &Map.merge(&2, Metadata.small_cards(deck, &1)))
 
-  # The name and connections of the account each address is the main address
-  # of, by address. An account's other addresses have neither, so a Key held
-  # in one of them is never tied to the person.
+  # The name and connections of the account each address signed in with, by
+  # address; an address no account has signed in with has neither.
   defp people(wallets) do
     accounts =
       Accounts.accounts_holding_wallets!(wallets,
@@ -121,7 +120,8 @@ defmodule KeyfleetWeb.Components.MemberList do
       |> Map.new(fn {account_id, links} -> {account_id, Enum.reject(links, &is_nil/1)} end)
 
     by_wallet =
-      for %{wallet_address: wallet} = account <- accounts,
+      for account <- accounts,
+          wallet <- [account.wallet_address | account.wallet_addresses],
           is_binary(wallet),
           into: %{},
           do: {String.downcase(wallet), account}
