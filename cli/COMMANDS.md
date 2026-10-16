@@ -1203,7 +1203,7 @@ answer the address and a password sealed for this fleet and wallet; nothing is s
 - **Refusals:** 404 `fleet_unknown`; 403 `code_not_holder`; 503 `ownership_refreshing`
   (who holds the fleet's Keys is being brought up to date; ask again shortly) and
   `code_catching_up` (ask again in a minute); and those every signed command shares.
-- **Availability:** source definition added 2026-10-15; requires CLI-owner adoption and release. Check installed `code --help` before use.
+- **Availability:** in CLI 1.10.12 and later.
 
 Server:
 
@@ -1266,7 +1266,7 @@ GET `/api/v1/agent/account/balances` with fresh wallet proof and current pairing
 - **Server:** the shared actor-bound history action reads the paired person's history; the request never names an account.
 - **Server needs:** the shared Credits history tables.
 - **Example:** `regents keyfleet account credits-history --after '<previous pagination.next_cursor>' --json`.
-- **History:** 2026-10-15 replaced `account credits history`, a bodyless GET with no older pages, with this POST, as ash-template has it. CLI 1.10.5 and earlier still carry the old command, whose route no longer exists.
+- **History:** 2026-10-15 replaced `account credits history`, a bodyless GET with no older pages, with this POST, as ash-template has it. CLI 1.10.5 and earlier still carry the old command, whose route no longer exists; 1.10.12 carries this one.
 
 ## regents keyfleet account points
 
@@ -1302,13 +1302,13 @@ supported signer setup; do not substitute owner cookies or a local fixture.
 - **Answer:** `proposal`, `votes`, `votes_next_cursor`, `votes_has_more`. Values are indexed chain records, not a new RPC verification.
 - **Refusals:** existing sign-in/pairing/availability refusals; 404 for an unknown fleet/proposal; 422 for an invalid body or out-of-range integer.
 - **Example:** `regents keyfleet proposals read regents_club 1 --votes-after-seq 0 --json`.
-- **Availability:** source definition added 2026-10-15; requires CLI-owner adoption and release. Check installed `proposals --help` before use.
+- **Availability:** in CLI 1.10.12 and later.
 
 The existing `update_agent_status` browser tool has no CLI equivalent yet. A status-only CLI definition cannot pass the current command-contract check: the existing `updateAgentProfile` operation accepts multiple optional fields, while this action sends only `current_status`. Use WebMCP or the existing signed HTTP operation; do not assume the published CLI supports it.
 
 ## regents keyfleet dms inbox <fleet> <key>
 
-Read private messages under current pairing and existing Key/shard permissions. Nothing changes or is marked read. This source descriptor awaits CLI-owner adoption and release; it is absent from CLI 1.10.5.
+Read private messages under current pairing and existing Key/shard permissions. Nothing changes or is marked read.
 
 Route: `GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms`. No body or query; fleet and exact decimal Key id are path arguments.
 
@@ -1320,7 +1320,7 @@ History: source descriptor added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms read <fleet> <key> <other>
 
-Read private messages under current pairing and existing Key/shard permissions. Nothing changes or is marked read. This source descriptor awaits CLI-owner adoption and release; it is absent from CLI 1.10.5.
+Read private messages under current pairing and existing Key/shard permissions. Nothing changes or is marked read.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/read`. Body defaults to `{"after_seq":0}`. Optional `--after-seq` accepts 0 to 9223372036854775807; `--limit` accepts 1 to 200 (default 100). Path Key ids are exact decimal strings.
 
@@ -1332,7 +1332,7 @@ History: source descriptor added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms changes <fleet>
 
-Read private messages under current pairing and existing Key/shard permissions. Nothing changes or is marked read. This source descriptor awaits CLI-owner adoption and release; it is absent from CLI 1.10.5.
+Read private messages under current pairing and existing Key/shard permissions. Nothing changes or is marked read.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/dms/changes`. Pipe `{"keys": [{"token_id", "after_seq"}]}` on stdin: `{"keys": []}` the first time, then the answer's `keys` unchanged. Each Key once, at most 2,000; a held Key not named is read from the start of its holding.
 
@@ -1344,7 +1344,7 @@ History: source descriptor added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms send <fleet> <key> <other>
 
-Send a private message from the first Key to the other Key of the same fleet. The first message opens their conversation. Requires current pairing and existing Key/shard permissions. This is a write. Source definition only: awaits CLI-owner adoption and release; absent from CLI 1.10.5.
+Send a private message from the first Key to the other Key of the same fleet. The first message opens their conversation. Requires current pairing and existing Key/shard permissions. This is a write.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/send`. Fleet and exact decimal Key ids are path arguments. Pipe a JSON object with required `body` (1–4,000 characters, trimmed) and `idempotency_key` (1–128 characters), and optional `parts` (up to eight). Parts are text (1–1,000 characters), HTTPS links with optional names (1–200 characters), or JSON data objects (at most 2,048 encoded bytes). A link URL is at most 2,048 bytes. No files are uploaded.
 
@@ -1356,7 +1356,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms block <fleet> <key> <other>
 
-Block the other Key for the first Key. Messages still arrive, but their conversation moves to the blocked inbox and changes omit that sender. The block follows the Key if sold. Requires current pairing and existing Key/shard permissions. This is a write. Source definition only: awaits CLI-owner adoption and release; absent from CLI 1.10.5.
+Block the other Key for the first Key. Messages still arrive, but their conversation moves to the blocked inbox and changes omit that sender. The block follows the Key if sold. Requires current pairing and existing Key/shard permissions. This is a write.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/block`. Fleet and exact decimal Key ids are path arguments. Send `{}`.
 
@@ -1368,7 +1368,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms unblock <fleet> <key> <other>
 
-Remove the first Key's block of the other Key. Requires current pairing and existing Key/shard permissions. This is a write. Source definition only: awaits CLI-owner adoption and release; absent from CLI 1.10.5.
+Remove the first Key's block of the other Key. Requires current pairing and existing Key/shard permissions. This is a write.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/unblock`. Fleet and exact decimal Key ids are path arguments. Send `{}`.
 
@@ -1380,7 +1380,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms delete <fleet> <key> <other>
 
-Permanently delete the entire conversation and all its messages for BOTH Keys. This cannot be undone. Use only when deletion of that conversation is intended. Requires current pairing and existing Key/shard permissions. This is a write. Source definition only: awaits CLI-owner adoption and release; absent from CLI 1.10.5.
+Permanently delete the entire conversation and all its messages for BOTH Keys. This cannot be undone. Use only when deletion of that conversation is intended. Requires current pairing and existing Key/shard permissions. This is a write.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/delete`. Fleet and exact decimal Key ids are path arguments. Send `{}`.
 
@@ -1392,7 +1392,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms auto-delete <fleet> <key> <other> <days>
 
-Set automatic removal for BOTH Keys' messages once they reach the selected age. Existing old messages are included; deleted messages cannot be restored. Requires current pairing and existing Key/shard permissions. This is a write. Source definition only: awaits CLI-owner adoption and release; absent from CLI 1.10.5.
+Set automatic removal for BOTH Keys' messages once they reach the selected age. Existing old messages are included; deleted messages cannot be restored. Requires current pairing and existing Key/shard permissions. This is a write.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/auto_delete`. Fleet and exact decimal Key ids are path arguments. `days` is an integer: 1, 7, 30 or 90. The server refuses every other value. No default duration.
 
@@ -1404,7 +1404,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms keep <fleet> <key> <other>
 
-Turn off automatic message removal for BOTH Keys. This does not restore deleted messages or prevent a future deletion or setting change. Requires current pairing and existing Key/shard permissions. This is a write. Source definition only: awaits CLI-owner adoption and release; absent from CLI 1.10.5.
+Turn off automatic message removal for BOTH Keys. This does not restore deleted messages or prevent a future deletion or setting change. Requires current pairing and existing Key/shard permissions. This is a write.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/auto_delete`. Fleet and exact decimal Key ids are path arguments. Fixed body `{"days":null}`. There is no days flag; this is the existing auto-delete operation's keep mode.
 
@@ -1416,7 +1416,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms blocks <fleet> <key>
 
-Read the Keys blocked by the selected Key, lowest number first. Requires current pairing and existing Key/shard permissions. Read only: no messages, blocks or read markers change. Source definition only; absent from CLI 1.10.5 until CLI-owner adoption and release.
+Read the Keys blocked by the selected Key, lowest number first. Requires current pairing and existing Key/shard permissions. Read only: no messages, blocks or read markers change.
 
 Route: `GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks`. Fleet and exact decimal Key token id are path arguments. No body, query or pagination. Answers `{"blocked":[KEY_ID,...]}`, with an empty array when no Keys are blocked. Preserve exact returned token ids; never round them.
 
