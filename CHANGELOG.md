@@ -1524,3 +1524,15 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   longer with the hub's whole answer, which could list the fleet's members.
 - A failed save of an agent's listing names the agent's pairing, no longer
   its wallet address.
+
+## 2026-10-16 — One footer, at the foot of the screen; Account leaves the apps menu
+
+- The home page and every public page share one footer, the same as every
+  Regent site: X and GitHub, Buy $REGENT, Docs, About, Contact, Privacy, Terms
+  and "© 2026 Regents Labs". Public pages keep the theme switch beside the
+  social links; the home page, whose header already has one, has none there.
+  The home page's own footer and the old "Project links" footer are gone.
+- On a short public page the footer now sits at the bottom of the screen, not
+  just below it: the page and its footer fill the screen together.
+- The Regents Labs apps menu lists products only. Account is no longer in it;
+  the Account page stays in the sidebar.

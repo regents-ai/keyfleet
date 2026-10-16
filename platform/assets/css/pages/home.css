@@ -1,6 +1,6 @@
 /* Homepage-only composition: Classic #1 with "Buy Next Key", the box saying
-   how a fleet runs itself, the Regents Club, what a fleet can use and the
-   footer. The legal pages share the .rl-root colours and spacing. */
+   how a fleet runs itself, the Regents Club and what a fleet can use. The
+   legal pages share the .rl-root colours and spacing. */
 @layer regents-product {
   .rl-root {
     /* The colours the GPU pictures read, per theme. */
@@ -14,13 +14,11 @@
     --rl-line: var(--hairline);
     background: var(--rl-bg);
     color: var(--rl-ink);
-    min-height: 100vh;
   }
   .rl-root :is(h1, h2, h3, p) { margin-block: 0; }
   .rl-root [id] { scroll-margin-block-start: 2rem; }
-  .rl-header-links, .rl-footer-links { display: flex; align-items: center; gap: var(--space-2); }
+  .rl-header-links { display: flex; align-items: center; gap: var(--space-2); }
   .rl-header-links > a:not(.rg-button), .rl-header-links svg { display: inline-flex; width: 1.5rem; height: 1.5rem; }
-  .rl-footer-links a, .rl-footer-links svg { display: inline-flex; width: 1.25rem; height: 1.25rem; }
 
   .rl-overline { font-family: var(--font-family-ui); font-size: .6875rem; letter-spacing: .16em; text-transform: uppercase; }
   .rl-eyebrow { color: var(--rl-muted); font-family: var(--font-family-ui); font-size: .8125rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; }
@@ -229,10 +227,6 @@
   @media (min-width: 64rem) {
     .rl-integration-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
-
-  .rl-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-3); padding: var(--rg-panel-padding); font-size: .8125rem; }
-  .rl-document-links { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; }
-  .rl-document-links a { display: inline-flex; align-items: center; min-height: 44px; font-family: var(--font-family-ui); }
 
   /* On a phone the card stays small enough that its button shows with it. */
   @media (max-width: 39.99rem) {

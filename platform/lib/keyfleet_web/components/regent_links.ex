@@ -42,8 +42,7 @@ defmodule KeyfleetWeb.Components.RegentLinks do
         {"Autolaunch", "https://autolaunch.sh"},
         {"Keyfleet", "https://keyfleet.ai"},
         {"Techtree", "https://techtree.sh"},
-        {"Protocol", "https://regents.sh/stake"},
-        {"Account", "https://regents.sh/account"}
+        {"Protocol", "https://regents.sh/stake"}
       ])
 
     ~H"""
