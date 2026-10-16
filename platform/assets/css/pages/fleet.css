@@ -416,14 +416,22 @@
   overflow: hidden;
 }
 
-.fleet-map,
 .fleet-unsold {
   position: absolute;
   inset: 0;
 }
 
-.fleet-stage .key-map {
+/* The map's tools sit in a row above it, never over a Key, and the map keeps
+   its full height under them. */
+.fleet-map {
+  display: flex;
+  flex-direction: column;
   height: 100%;
+}
+
+.fleet-stage .key-map {
+  flex: 1;
+  min-height: 20rem;
   border: 0;
 }
 
@@ -466,7 +474,6 @@
   opacity: 0.35;
 }
 
-.fleet-map-controls,
 .fleet-map-notes {
   position: absolute;
   z-index: 1;
@@ -476,8 +483,8 @@
 }
 
 .fleet-map-controls {
-  inset-block-start: 0.75rem;
-  inset-inline-start: 0.75rem;
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface);
   display: flex;
   flex-wrap: wrap;
   align-items: center;

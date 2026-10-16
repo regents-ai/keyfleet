@@ -81,15 +81,9 @@ const tileAt = (page: Page, key: number) =>
     const stage = document.querySelector(".key-map")!.getBoundingClientRect()
     const middle = {x: stage.left + stage.width / 2, y: stage.top + stage.height / 2}
     const [nearest] = [...document.querySelectorAll<HTMLElement>(`.km-tile[data-key="${key}"]:not([hidden])`)]
-      // The map's tools float over its top edge, so each tile is clicked at the
-      // first point down its middle that a click reaches.
-      .flatMap(tile => {
+      .map(tile => {
         const rect = tile.getBoundingClientRect()
-        const x = rect.left + rect.width / 2
-        const y = [0.5, 0.65, 0.8]
-          .map(share => rect.top + rect.height * share)
-          .find(y => tile.contains(document.elementFromPoint(x, y)))
-        return y === undefined ? [] : [{x, y}]
+        return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2}
       })
       .filter(({x, y}) => x > stage.left + 50 && x < stage.right - 50 && y > stage.top + 50 && y < stage.bottom - 50)
       .sort((a, b) => Math.hypot(a.x - middle.x, a.y - middle.y) - Math.hypot(b.x - middle.x, b.y - middle.y))
