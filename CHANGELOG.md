@@ -1544,3 +1544,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   cancel and carry-out, split run, treasury send-share and convert, and keys
   claim.
 - Five command descriptions no longer say they wait for a CLI release.
+
+## 2026-10-16 — Dependency wave 1: Bandit from Hex, shared libraries at 5235a54
+
+- Bandit comes from Hex, `{:bandit, "~> 1.13"}` at 1.13.1, which carries the
+  HTTP/2 fix (EEF-CVE-2026-105659) that was pinned from upstream Git. Bandit now
+  refuses an HTTP/1.1 request with no Host header; the health check sends one.
+- ash 3.36.1, ash_oban 0.10.1, thousand_island 1.6.0, spitfire 0.4.3,
+  @privy-io/react-auth 3.49.1 and vitest 5.0.5, as the template. Spark stays at 2.7.6.
+- The elixir-utils packages are pinned to `5235a54`: the pair request accepts only
+  the agents a site offers, and Keyfleet leaves `chatgpt_pairing` off, so an agent
+  pairing as ChatGPT is refused with the list of agents it can pair as.
