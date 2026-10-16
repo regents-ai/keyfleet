@@ -112,7 +112,7 @@ defmodule KeyfleetWeb.Refusal do
       {"Current pairing could not be checked.",
        "Retry with fresh proof when the shared account service is available."},
     "person_not_here" =>
-      {"The person this agent is paired with has no account on this site yet.",
+      {"The person this agent is paired with hasn't signed in on this site yet.",
        "Ask your person to sign in on this website once, then send the request again."},
     "room_unknown" =>
       {"This fleet has no room with this address.",
