@@ -280,6 +280,7 @@ defmodule KeyfleetWeb.AccountLive do
       &%{
         id: &1.id,
         name: &1.name,
+        kind: to_string(&1.harness),
         harness: RegentAgents.Harness.label(&1.harness),
         backed: not is_nil(&1.human_id),
         last_contact_iso: DateTime.to_iso8601(&1.last_contact_at),

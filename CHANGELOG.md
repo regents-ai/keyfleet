@@ -1660,3 +1660,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - In that window, the reason a closed "Buy Key" can't be pressed sits right
   under it, so a small phone that scrolls the window sees both together, and
   Close no longer carries an arrow.
+
+## 2026-10-16 — The Account page opens again for people with a paired agent
+
+- The Account page stopped loading for anyone with a paired agent, because
+  each agent's picture was looked up without saying which agent app it runs
+  on. Each agent now carries that, so the list shows its picture, name and
+  app, and a test opens the page with a paired agent.

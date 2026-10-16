@@ -124,6 +124,28 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#{box} input[name=harness][value=hermes][checked]")
   end
 
+  test "the Account page lists a paired agent with its picture and harness", %{conn: conn} do
+    account = register_account("paired-agent", "0x3333333333333333333333333333333333333333")
+
+    %{code: code} =
+      RegentAgents.issue_pairing_code!(
+        actor: %RegentAgents.Person{privy_user_id: "did:privy:paired-agent"}
+      )
+
+    RegentAgents.pair_agent!(code, "Astra", :hermes,
+      actor: %RegentAgents.Agent{wallet: "0x4444444444444444444444444444444444444444"}
+    )
+
+    {view, _html} = open_account(conn, account)
+
+    assert has_element?(view, "#account-agents li", "Astra")
+
+    assert has_element?(
+             view,
+             ~s(#account-agents li img[src="/images/regent-ui/agents/hermes.png"])
+           )
+  end
+
   test "stale wallet evidence cannot retain protected human shell access", %{conn: conn} do
     account =
       register_account("stale-wallet-control", "0x9999999999999999999999999999999999999999")
