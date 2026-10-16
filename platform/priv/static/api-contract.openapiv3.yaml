@@ -2128,6 +2128,11 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/SharedAgentCheckInEnvelope"}
         "401": {$ref: "#/components/responses/SharedAgentUnverified"}
+        "403":
+          description: person_not_here, the person the agent is paired with hasn't signed in to Keyfleet yet
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SharedAgentError"}
         "404":
           description: not_paired, the agent is not paired with anyone
           content:

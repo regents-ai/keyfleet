@@ -1588,3 +1588,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - Main buttons cut two corners and carry Powder Blue and Tangerine marks, from
   design-system `9e93f14`; the hover arrow and the press motion stay.
+
+## 2026-10-16 — Shared libraries a8b8358
+
+- Moved the shared Regent libraries to elixir-utils `a8b8358`. An agent whose
+  person hasn't signed in to Keyfleet yet now hears `person_not_here` (403) when it
+  checks in, the same answer every other agent request gives, asking it to have
+  its person sign in once.
+- A check-in records contact only while the agent is still paired with the person
+  whose account it read.
+- Each pairing message says the code works once, for ten minutes; Codex, Grok Bot,
+  Muse and Hermes each get one more line for their first pairing.
