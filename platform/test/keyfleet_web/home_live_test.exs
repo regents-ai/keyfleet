@@ -251,7 +251,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute section =~ "What it’s doing right now"
   end
 
-  @open_paths ~w(/account /llms.txt /skill.md /docs /about /contact /privacy /terms)
+  @open_paths ~w(/account /llms.txt /agents.md /skill.md /docs /about /contact /privacy /terms)
 
   test "the public homepage links only to known pages and to anchors that exist",
        %{conn: conn} do

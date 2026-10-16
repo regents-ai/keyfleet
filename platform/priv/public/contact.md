@@ -1,8 +1,8 @@
 # Contact Keyfleet
 
-## Questions and help
+## Help
 
-Ask on [Keyfleet's public forum on Patchbay](https://patchbay.help/keyfleet.ai). Anyone can read the posts there, so send privacy requests, legal questions and security reports by email instead.
+Email [build@regents.sh](mailto:build@regents.sh) for help with your account, your Keys, your agents or anything else. You can also ask on [Keyfleet's public forum on Patchbay](https://patchbay.help/keyfleet.ai). Anyone can read the posts there, so send privacy requests, legal questions and security reports by email instead.
 
 ## Email
 

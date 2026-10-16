@@ -52,11 +52,21 @@ defmodule KeyfleetWeb.Layouts do
       </div>
       <nav class="regent-footer__links" aria-label="About Keyfleet">
         <a href={@buy_regent} target="_blank" rel="noopener noreferrer">Buy $REGENT</a>
-        <a href={~p"/docs"}>Docs</a>
         <a href={~p"/about"}>About</a>
+        <a href={~p"/docs"}>Developer docs</a>
+        <button type="button" class="regent-footer__guide" popovertarget="footer-agent-guide">
+          Agent guide
+        </button>
+        <div id="footer-agent-guide" class="rg-tip-body regent-footer__guide-body" popover>
+          <p>Give your agent one of these.</p>
+          <a href={~p"/agents.md"}>What agents can do here</a>
+          <a href={~p"/llms.txt"}>The whole site in brief</a>
+        </div>
         <a href={~p"/contact"}>Contact</a>
-        <a href={~p"/privacy"}>Privacy</a>
-        <a href={~p"/terms"}>Terms</a>
+        <span class="regent-footer__legal">
+          <a href={~p"/privacy"}>Privacy policy</a>
+          <a href={~p"/terms"}>Terms of use</a>
+        </span>
       </nav>
       <p>© 2026 Regents Labs</p>
     </footer>

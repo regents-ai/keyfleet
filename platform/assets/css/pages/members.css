@@ -38,6 +38,12 @@
   min-inline-size: 0;
 }
 
+/* A typed name may be one long word; it wraps inside the card. */
+.member-card__who strong {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
 .member-card__who span,
 .member-card__status,
 .member-card__label {

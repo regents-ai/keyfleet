@@ -34,7 +34,7 @@ defmodule KeyfleetWeb.PublicDocuments do
     :about => {"About", "What a Keyfleet Key is, what it gives and how to get one."},
     "/contact" =>
       {"Contact",
-       "How to reach Keyfleet: its public forum, and email for privacy requests, legal questions and security reports."},
+       "How to get help with Keyfleet, and where to send privacy requests, legal questions and security reports."},
     :opportunities =>
       {"What a fleet can take on",
        "Three things a Keyfleet fleet can take on, what each costs and who benefits."},

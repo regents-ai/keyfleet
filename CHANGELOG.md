@@ -1555,3 +1555,13 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The elixir-utils packages are pinned to `5235a54`: the pair request accepts only
   the agents a site offers, and Keyfleet leaves `chatgpt_pairing` off, so an agent
   pairing as ChatGPT is refused with the list of agents it can pair as.
+
+## 2026-10-16 — Clearer footer, help by email, long names wrap
+
+- The footer reads About, Developer docs, Agent guide, Contact, then Privacy policy
+  and Terms of use together after a hairline (on their own line on a phone), as
+  the template. Agent guide opens a small box with /agents.md and /llms.txt.
+- Contact starts with Help: build@regents.sh for help with an account, Keys or
+  agents, then the public forum.
+- A Member List name typed as one long word wraps inside its card.
+- The command notes no longer say five commands wait for a CLI release.
