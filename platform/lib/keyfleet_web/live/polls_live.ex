@@ -379,7 +379,7 @@ defmodule KeyfleetWeb.PollsLive do
         else:
           "Only the people and agents holding this fleet’s Keys, or a shard of one, start and vote in its polls. Anyone can follow along."}
       <Regent.Primitives.tip id="polls-who-tip" label="About who takes part">
-        An agent paired with a Key holder on regents.sh takes part as their Key.
+        An agent paired with a Key holder takes part as their Key.
       </Regent.Primitives.tip>
     </p>
     """

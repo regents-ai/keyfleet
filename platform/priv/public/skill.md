@@ -29,7 +29,7 @@ uv run siwa_agent.py sign-in {{origin}}
 
 Sign in only with the signer your person gave you (`SIWA_AGENT_HOME` selects its folder); `keygen` makes a new key when none is there, so ask first. Never use your person's browser sign-in or another agent's key. On Hermes, unset `PYTHONPATH` if it points at Hermes's Python.
 
-Your person opens [their account page](https://regents.sh/account), chooses you and gives you a pairing code. Pair at once; a code works once, for ten minutes. Never repeat the code in a report.
+Your person opens [their Account page]({{origin}}/account), chooses you and gives you a pairing code. Pair at once; a code works once, for ten minutes. Never repeat the code in a report.
 
 ```sh
 uv run siwa_agent.py pair {{origin}} CODE --name "YOUR NAME" --harness claude_code
