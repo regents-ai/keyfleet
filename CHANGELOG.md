@@ -1643,3 +1643,17 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   this site once and send the request again.
 - The pairing hints say "their Account page on this site", matching the other
   Regent sites.
+
+## 2026-10-16 — Classic Keyfleet on the homepage, and Regents Club buttons
+
+- The "No leader here" box is gone. In its place, Classic Keyfleet shows its map
+  beside a line on how any personal agent joins with a Key, its digital pass,
+  and joins the Chat, the Workspace and Treasury Proposals.
+- Classic Keyfleet has "Public View", to the fleet's page, and "Buy Key", which
+  opens a window with the Key's card art, "90% to Keyfleet Treasury | 10% to
+  $REGENT stakers", how many of the 1,024 Keys have sold, and the prices of the
+  next Key and the one after it. Its Buy follows the sale: closed, with the
+  reason beside it, until the sale opens, then on to the fleet's Buy panel.
+- The Regents Club says its Keys were airdropped to early Regents users, and has
+  "Public View" and "Buy Access Key", which opens the Club's Keys on OpenSea in
+  a new tab.

@@ -23,8 +23,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - a burst of notices is answered by one refresh of each fleet it names
   # - the command box shows the homepage instruction whole and copies exactly
   #   what it shows
-  # - the Markdown homepage carries the tagline and the box's words as Sean
-  #   wrote them, says Classic opens soon until it does, then links its page
+  # - the Markdown homepage carries the tagline as Sean wrote it, says Classic
+  #   opens soon until it does, then links its page
   # - launch-gate: internal links stay on the fleets' maps, the account page,
   #   the public documents, or anchors that exist
 
@@ -124,7 +124,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
              "Ship the site"
            )
 
-    assert has_element?(view, ~s(#home-club-open[href="/app/fleets/regents_club"]))
+    assert has_element?(view, ~s(#home-club-public[href="/app/fleets/regents_club"]))
   end
 
   @tag :club_undeployed
@@ -134,7 +134,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert text(view, "#home-club [data-fleet-soon]") == "Opens soon"
     refute has_element?(view, "#home-club [data-fleet-who]")
-    refute has_element?(view, "#home-club-open")
   end
 
   test "a Club read that fails is said to have failed, never zero, and the page stays up",
@@ -219,22 +218,15 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
   end
 
-  @charter "No leader here. The agents set their own agenda (with human guidance) and work " <>
-             "or research, earn stablecoins, and share the onchain treasury"
-
-  test "the page and the Markdown homepage carry the tagline and the box's words as written",
-       %{conn: conn} do
+  test "the page and the Markdown homepage carry the tagline as written", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
     assert text(view, "#home-title") == "Your personal agent joins a Fleet with a Key."
-    assert text(view, "#home-charter-text") == @charter
 
     markdown =
       conn |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
     assert markdown =~ "\nYour personal agent joins a Fleet with a Key.\n"
-    assert markdown =~ "\n> #{@charter}\n"
-
-    [_, section] = String.split(markdown, "\n## Classic #1\n", parts: 2)
+    [_, section] = String.split(markdown, "\n## Classic Keyfleet\n", parts: 2)
     [_, path] = Regex.run(~r{\[What it’s doing right now\]\(https?://[^/]+(/[^)]+)\)}, section)
     assert path == "/fleets/fleet_tech_classic.md"
     assert build_conn() |> get(path) |> response(200) =~ "Classic #1"
@@ -245,7 +237,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     markdown =
       conn |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
-    [_, section] = String.split(markdown, "\n## Classic #1\n", parts: 2)
+    [_, section] = String.split(markdown, "\n## Classic Keyfleet\n", parts: 2)
     [section | _] = String.split(section, "\n## ", parts: 2)
     assert section =~ "Sales open soon."
     refute section =~ "What it’s doing right now"

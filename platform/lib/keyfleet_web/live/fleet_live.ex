@@ -573,9 +573,11 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  # The Keyfleet collection on OpenSea with only this fleet's set chosen, by
-  # the `Set Type` trait its Keys' metadata carries, written as OpenSea writes it.
-  defp opensea_set(fleet_id) do
+  @doc """
+  The Keyfleet collection on OpenSea with only this fleet's set chosen, by
+  the `Set Type` trait its Keys' metadata carries, written as OpenSea writes it.
+  """
+  def opensea_set(fleet_id) do
     set = Jason.OrderedObject.new(traitType: "Set Type", values: [Metadata.set_type(fleet_id)])
     traits = Jason.encode!([set])
     "https://opensea.io/collection/keyfleet?" <> URI.encode_query(%{traits: traits}, :rfc3986)

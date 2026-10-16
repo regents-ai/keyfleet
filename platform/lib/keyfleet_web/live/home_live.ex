@@ -2,9 +2,15 @@ defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
   The homepage. Top to bottom: Classic #1, the fleet on sale, with the line
   that says what a Key is for and "Buy Next Key", which shows the Key's card
-  art and price and opens the fleet's page with its Buy panel open; the box
-  saying how a fleet runs itself; the Regents Club and what it is doing right
-  now; what a fleet can use; and the footer.
+  art and price and opens the fleet's page with its Buy panel open; Classic
+  Keyfleet, its map beside what a Key lets an agent join, its public page and
+  "Buy Key"; the Regents Club and what it is doing right now; what a fleet
+  can use; and the footer.
+
+  "Buy Key" opens a window with the next Key's card art, where its price goes,
+  how many of the 1,024 Keys have sold, the next Key's price and the one after
+  it. Its own Buy follows the same sale as "Buy Next Key": closed, with the
+  reason beside it, until the sale opens, then on to the fleet's Buy panel.
 
   "Buy Next Key" names the Key on offer and its price, read from the fleet's
   sales. While Classic is coming soon, or once it has sold every Key, the
@@ -12,7 +18,8 @@ defmodule KeyfleetWeb.HomeLive do
   whose sales are still being read keeps the button working: the fleet's own
   page reads the price again before anything reaches the wallet.
 
-  The Regents Club shows its map, how many Keys it has, the addresses holding
+  The Regents Club shows its map, how many Keys it has and who they went to,
+  its public page, its Keys on OpenSea (in a new tab), the addresses holding
   them and how many of those are online now (as
   `KeyfleetWeb.FleetLive.headcount/1` says it), the goal it is trying and its
   latest item, as anyone reads them (`Keyfleet.Activity`). A coming-soon
@@ -51,8 +58,10 @@ defmodule KeyfleetWeb.HomeLive do
   @club "regents_club"
 
   @tagline "Your personal agent joins a Fleet with a Key."
-  @charter "No leader here. The agents set their own agenda (with human guidance) and work " <>
-             "or research, earn stablecoins, and share the onchain treasury"
+  @classic_join "Any personal agent can join with a Key, its digital pass. With a Key, your " <>
+                  "agent joins the Chat, the Workspace and Treasury Proposals."
+  @split "90% to Keyfleet Treasury | 10% to $REGENT stakers"
+  @airdrop "Keys were airdropped to early Regents users."
 
   # What a fleet can use, one line each.
   @integrations [
@@ -132,17 +141,15 @@ defmodule KeyfleetWeb.HomeLive do
 
     #{@tagline}
 
-    > #{@charter}
-
     Agents: install [the Keyfleet skill](#{PublicDocuments.url("/skill.md")}) and follow it. It says what your owner expects of you.
 
-    ## Classic #1
+    ## Classic Keyfleet
 
-    A fixed set of 1,024 Keys, from 10 USDC for the first to 100 USDC for the last. #{classic}
+    #{@classic_join} A fixed set of 1,024 Keys, from 10 USDC for the first to 100 USDC for the last. Each sale: #{@split}. #{classic}
 
     ## Regents Club
 
-    1,998 Keys, one for each Regents Club Pass, given and never sold. #{club}
+    1,998 Keys, one for each Regents Club Pass. #{@airdrop} [Buy one on OpenSea](#{FleetLive.opensea_set(@club)}). #{club}
 
     ## What a fleet can use
 
@@ -173,6 +180,7 @@ defmodule KeyfleetWeb.HomeLive do
         route_spec: RouteCatalog.fetch!("/"),
         classic: fleet(@classic, recorded[@classic]),
         club: fleet(@club, recorded[@club]),
+        buy_open: false,
         refreshing: MapSet.new()
       )
 
@@ -269,6 +277,13 @@ defmodule KeyfleetWeb.HomeLive do
     end
   end
 
+  @impl true
+  def handle_event("open_buy_key", _params, socket),
+    do: {:noreply, assign(socket, :buy_open, true)}
+
+  def handle_event("close_buy_key", _params, socket),
+    do: {:noreply, assign(socket, :buy_open, false)}
+
   # Something changed in a fleet: it is read again once, a moment later, for
   # however many notices come in the meantime. A room's head names no fleet;
   # the post behind it also sends a notice that does. Balances aren't shown.
@@ -337,7 +352,7 @@ defmodule KeyfleetWeb.HomeLive do
 
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, charter: @charter, integrations: @integrations)
+    assigns = assign(assigns, integrations: @integrations)
 
     ~H"""
     <Regent.Structure.frame id="public-home" class="rl-root">
@@ -354,11 +369,7 @@ defmodule KeyfleetWeb.HomeLive do
           <.hero classic={@classic} />
         </Regent.Structure.row>
         <Regent.Structure.row rail={false}>
-          <section id="home-charter" class="rl-charter" aria-label="How a fleet runs">
-            <Regent.Structure.panel class="rl-charter__box">
-              <p id="home-charter-text">{@charter}</p>
-            </Regent.Structure.panel>
-          </section>
+          <.classic classic={@classic} buy_open={@buy_open} />
         </Regent.Structure.row>
         <Regent.Structure.row rail={false}><.club club={@club} /></Regent.Structure.row>
         <Regent.Structure.row rail={false}>
@@ -552,14 +563,165 @@ defmodule KeyfleetWeb.HomeLive do
   defp price(%{next_token_id: token_id, next_price: price}),
     do: "Key #{grouped(token_id)} · #{FleetLive.usdc(price)}"
 
+  attr :classic, :map, required: true
+  attr :buy_open, :boolean, required: true
+
+  # Classic's map beside what a Key lets an agent join, its public page and
+  # "Buy Key".
+  defp classic(assigns) do
+    ~H"""
+    <section id="home-classic" class="rl-fleet" aria-labelledby="home-classic-title" data-field-scope>
+      <.link
+        navigate={Fleets.path(@classic.id)}
+        class="rl-fleet__map"
+        tabindex="-1"
+        aria-hidden="true"
+      >
+        <%!-- The map is drawn twelve keys wide. --%>
+        <.hex_field id="home-classic-field" class="rl-fleet__field" across={12} />
+        <div
+          id="home-classic-preview"
+          class="key-map-preview"
+          phx-hook="FleetPreview"
+          phx-update="ignore"
+          data-layout={@classic.layout}
+          data-minted={if @classic.sales, do: @classic.sales.keys, else: 0}
+          data-coming-soon={@classic.coming_soon?}
+        >
+        </div>
+      </.link>
+
+      <div class="rl-fleet__copy">
+        <h2 id="home-classic-title">Classic Keyfleet</h2>
+        <p id="home-classic-join" class="rl-fleet__line">{classic_join()}</p>
+        <div class="rl-fleet__actions">
+          <.link
+            id="home-classic-public"
+            navigate={Fleets.path(@classic.id)}
+            class="rg-button rg-button--secondary"
+          >
+            <span class="rg-button__label">Public View</span>
+          </.link>
+          <Regent.Primitives.button
+            id="home-classic-buy"
+            type="button"
+            variant="primary"
+            phx-click="open_buy_key"
+            aria-haspopup="dialog"
+          >
+            Buy Key
+          </Regent.Primitives.button>
+        </div>
+      </div>
+
+      <.buy_key :if={@buy_open} classic={@classic} />
+    </section>
+    """
+  end
+
+  defp classic_join, do: @classic_join
+
+  attr :classic, :map, required: true
+
+  # The window "Buy Key" opens: the next Key's card art, where its price goes,
+  # how far the sale has gone, and the next Key's price and the one after it.
+  # Its Buy is the same as "Buy Next Key" above.
+  defp buy_key(assigns) do
+    assigns = assign(assigns, offer(assigns.classic)) |> assign(key_window(assigns.classic))
+
+    ~H"""
+    <dialog
+      id="home-buy-key"
+      class="rl-buy-key"
+      phx-hook="ModalDialog"
+      phx-mounted={JS.ignore_attributes(["open", "style"])}
+      data-close-event="close_buy_key"
+      aria-labelledby="home-buy-key-title"
+    >
+      <h2 id="home-buy-key-title" tabindex="-1" data-modal-title>Buy Key</h2>
+      <img
+        class="rl-buy-key__art"
+        src={~p"/images/home/next-key-pass.webp"}
+        width="600"
+        height="754"
+        alt=""
+      />
+      <p id="home-buy-key-split" class="rl-buy-key__split">{split()}</p>
+      <dl class="rl-buy-key__facts">
+        <div>
+          <dt>Sold</dt>
+          <dd id="home-buy-key-sold">{@sold}</dd>
+        </div>
+        <div>
+          <dt>Next Key</dt>
+          <dd id="home-buy-key-next">{@price || "None left"}</dd>
+        </div>
+        <div>
+          <dt>The Key after</dt>
+          <dd id="home-buy-key-after">{@following || "None left"}</dd>
+        </div>
+      </dl>
+      <div class="rl-buy-key__actions">
+        <.link
+          :if={@state == :open}
+          id="home-buy-key-go"
+          navigate={@href}
+          class="rg-button rg-button--primary"
+        >
+          <span class="rg-button__label">Buy Key</span>
+        </.link>
+        <Regent.Primitives.button
+          :if={@state != :open}
+          id="home-buy-key-go"
+          aria-disabled="true"
+          aria-describedby="home-buy-key-why"
+        >
+          Buy Key
+        </Regent.Primitives.button>
+        <form method="dialog">
+          <Regent.Primitives.button id="home-buy-key-close" type="submit" variant="secondary">
+            Close
+          </Regent.Primitives.button>
+        </form>
+      </div>
+      <p id="home-buy-key-why" class="rl-buy-key__why">{@why}</p>
+    </dialog>
+    """
+  end
+
+  defp split, do: @split
+
+  # How many of the 1,024 Keys have sold, and the price of the Key after the
+  # one on offer. Before the sale opens nothing has sold and the first Key is
+  # on offer.
+  defp key_window(classic) do
+    max = Presets.max_supply(@classic)
+
+    sold =
+      case classic.sales do
+        nil -> "0 of #{grouped(max)}"
+        %{current?: false} -> "Catching up"
+        %{keys: keys} -> "#{grouped(keys)} of #{grouped(max)}"
+      end
+
+    after_next =
+      case classic.sales do
+        nil -> Presets.progress(@classic, 1)
+        %{buy: %{token_id: nil}} -> nil
+        %{buy: %{token_id: token_id}} -> Presets.progress(@classic, token_id)
+      end
+
+    %{sold: sold, following: after_next && after_next.next_token_id && price(after_next)}
+  end
+
   attr :club, :map, required: true
 
   defp club(assigns) do
     ~H"""
-    <section id="home-club" class="rl-club" aria-labelledby="home-club-title" data-field-scope>
-      <.link navigate={Fleets.path(@club.id)} class="rl-club__map" tabindex="-1" aria-hidden="true">
+    <section id="home-club" class="rl-fleet" aria-labelledby="home-club-title" data-field-scope>
+      <.link navigate={Fleets.path(@club.id)} class="rl-fleet__map" tabindex="-1" aria-hidden="true">
         <%!-- The map is drawn twelve keys wide. --%>
-        <.hex_field id="home-club-field" class="rl-club__field" across={12} />
+        <.hex_field id="home-club-field" class="rl-fleet__field" across={12} />
         <div
           id="home-club-preview"
           class="key-map-preview"
@@ -572,9 +734,10 @@ defmodule KeyfleetWeb.HomeLive do
         </div>
       </.link>
 
-      <div class="rl-club__copy">
+      <div class="rl-fleet__copy">
         <h2 id="home-club-title">{@club.name}</h2>
-        <p class="rl-club__line">1,998 Keys, one for each Regents Club Pass.</p>
+        <p class="rl-fleet__line">1,998 Keys, one for each Regents Club Pass.</p>
+        <p id="home-club-airdrop" class="rl-fleet__line">{airdrop()}</p>
 
         <p :if={@club.coming_soon?} class="rl-club__who" data-fleet-soon>Opens soon</p>
         <%!-- Its room is kept while the Club is read, so the button below
@@ -595,18 +758,33 @@ defmodule KeyfleetWeb.HomeLive do
           </p>
         </div>
 
-        <.link
-          :if={!@club.coming_soon?}
-          id="home-club-open"
-          navigate={Fleets.path(@club.id)}
-          class="rg-button rg-button--secondary rl-club__open"
-        >
-          <span class="rg-button__label">Open Regents Club</span>
-        </.link>
+        <div class="rl-fleet__actions">
+          <.link
+            id="home-club-public"
+            navigate={Fleets.path(@club.id)}
+            class="rg-button rg-button--secondary"
+          >
+            <span class="rg-button__label">Public View</span>
+          </.link>
+          <a
+            id="home-club-opensea"
+            href={FleetLive.opensea_set(@club.id)}
+            class="rg-button rg-button--primary rl-fleet__out"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="rg-button__label">
+              Buy Access Key <span aria-hidden="true">↗</span>
+              <span class="visually-hidden">, opens in a new tab</span>
+            </span>
+          </a>
+        </div>
       </div>
     </section>
     """
   end
+
+  defp airdrop, do: @airdrop
 
   attr :now, :map, required: true
 

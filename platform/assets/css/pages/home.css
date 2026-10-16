@@ -157,35 +157,48 @@
     .rl-hero .rl-give { animation-delay: 240ms; }
   }
 
-  /* How a fleet runs itself, in a box of its own. */
-  .rl-charter { padding: var(--rg-panel-padding); }
-  .rl-charter__box { padding: clamp(1.5rem, 4vw, 3rem); }
-  .rl-charter__box p {
-    max-inline-size: 42ch; font-size: clamp(1.25rem, 1rem + 1.1vw, 1.875rem); line-height: 1.35;
-    letter-spacing: -.01em; text-wrap: pretty;
-  }
-  .rl-charter__box p::before {
-    content: ""; display: block; inline-size: .625rem; block-size: .625rem; margin-block-end: var(--space-3);
-    background: var(--ash-accent-warm);
-  }
-
-  /* The Regents Club: its map, over a hex field of its own, beside what it
-     is doing right now. */
-  .rl-club {
+  /* Classic Keyfleet and the Regents Club: each fleet's map, over a hex
+     field of its own, beside what it is and its buttons. */
+  .rl-fleet {
     display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4);
     padding: var(--rg-panel-padding);
   }
-  .rl-club__map {
+  .rl-fleet__map {
     position: relative; isolation: isolate; overflow: hidden; display: block; min-width: 0;
     container-type: inline-size;
     border: 1px solid var(--hairline-strong); background: var(--rl-panel);
   }
-  .rl-club__field { mask-image: radial-gradient(ellipse 75% 75% at 50% 50%, #000 35%, transparent 90%); }
-  .rl-club .key-map-preview { aspect-ratio: 16 / 10; background: none; }
-  .rl-club .key-map-preview[data-coming-soon] { opacity: .4; }
-  .rl-club__copy { display: grid; align-content: start; gap: var(--space-2); min-width: 0; }
-  .rl-club__copy > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
-  .rl-club__line { color: var(--rl-muted); }
+  .rl-fleet__field { mask-image: radial-gradient(ellipse 75% 75% at 50% 50%, #000 35%, transparent 90%); }
+  .rl-fleet .key-map-preview { aspect-ratio: 16 / 10; background: none; }
+  .rl-fleet .key-map-preview[data-coming-soon] { opacity: .4; }
+  .rl-fleet__copy { display: grid; align-content: start; gap: var(--space-2); min-width: 0; }
+  .rl-fleet__copy > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
+  .rl-fleet__line { max-inline-size: 42ch; color: var(--rl-muted); text-wrap: pretty; }
+  .rl-fleet__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-block-start: var(--space-2); }
+
+  /* The window "Buy Key" opens: the card art, the split, and the sale's
+     figures in a ruled list. Phones see it across the whole width. */
+  .rl-buy-key {
+    inline-size: min(26rem, calc(100vw - 2rem)); max-inline-size: none; max-block-size: calc(100dvh - 2rem);
+    padding: clamp(1rem, 4vw, 1.5rem); font-size: 1rem;
+    border: 1px solid var(--ash-line-strong); background: var(--color-surface); color: var(--color-fg);
+  }
+  .rl-buy-key[open] { display: grid; gap: var(--space-3); }
+  .rl-buy-key::backdrop { background: var(--ash-scrim); }
+  .rl-buy-key h2 { margin: 0; font-size: 1.5rem; line-height: 1.1; }
+  .rl-buy-key h2:focus { outline: none; }
+  .rl-buy-key__art { display: block; justify-self: center; inline-size: min(100%, 12rem); block-size: auto; }
+  .rl-buy-key__split { margin: 0; font-size: .875rem; text-align: center; color: var(--rl-muted); }
+  .rl-buy-key__facts { display: grid; margin: 0; border-block-start: 1px solid var(--rl-line); }
+  .rl-buy-key__facts > div {
+    display: flex; justify-content: space-between; gap: var(--space-2); padding-block: var(--space-1);
+    border-block-end: 1px solid var(--rl-line);
+  }
+  .rl-buy-key__facts dt { color: var(--rl-muted); }
+  .rl-buy-key__facts dd { margin: 0; font-variant-numeric: tabular-nums; text-align: end; }
+  .rl-buy-key__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  .rl-buy-key__actions form { margin: 0; }
+  .rl-buy-key__why { min-block-size: 1.5em; margin: 0; color: var(--rl-muted); font-size: .875rem; }
   /* Room for its count, its goal, one featured item and its latest, each
      clamped, so the button under them never moves. */
   .rl-club__now {
@@ -202,9 +215,8 @@
   .rl-club__latest { display: grid; gap: .125rem; color: var(--rl-muted); }
   .rl-club__latest time { font-size: .8125rem; font-variant-numeric: tabular-nums; }
   .rl-club__failed { color: var(--rl-muted); }
-  .rl-club__open { justify-self: start; }
   @media (min-width: 64rem) {
-    .rl-club { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+    .rl-fleet { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
   }
 
   /* What a fleet can use: three tiles across, two on a tablet, one on a
@@ -250,7 +262,12 @@
 /* Outside the layer, because the button's edge ink is drawn by an unlayered
    rule: while the sale is closed the edge takes the same inert grey as the
    fill, in both themes. */
-:root .rl-buy .rl-buy__button[aria-disabled="true"]::after {
+:root .rl-buy .rl-buy__button[aria-disabled="true"]::after,
+:root .rl-buy-key [aria-disabled="true"]::after {
   --rg-button-edge-ink: color-mix(in srgb, var(--color-fg) 22%, var(--color-surface));
   --rg-button-cut-ink: transparent;
 }
+
+/* A button that leaves for another site carries the arrow in its words, so
+   it drops the chevron, which an unlayered rule draws. */
+.rl-fleet .rl-fleet__out::after { content: none; }
