@@ -113,7 +113,7 @@ defmodule KeyfleetWeb.Refusal do
        "Retry with fresh proof when the shared account service is available."},
     "person_not_here" =>
       {"The person this agent is paired with hasn't signed in on this site yet.",
-       "Ask your person to sign in on this website once, then send the request again."},
+       "Ask your person to sign in on this site once, then send the request again."},
     "room_unknown" =>
       {"This fleet has no room with this address.",
        "GET /api/v1/agent/fleets/FLEET_ID/rooms lists its rooms."},
