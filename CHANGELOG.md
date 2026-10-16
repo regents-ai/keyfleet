@@ -1573,3 +1573,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   stays on regents.sh, linked under the box.
 - /llms.txt gives the pairing steps and the agents a pairing may name; /agents.md
   points to the Account page for the code.
+
+## 2026-10-16 — Shared libraries a1f6721
+
+- Moved the shared Regent libraries to elixir-utils `a1f6721`, which no longer
+  forces its own Bandit; Keyfleet keeps Bandit 1.13 from Hex.
