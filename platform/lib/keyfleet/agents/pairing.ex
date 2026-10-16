@@ -2,9 +2,9 @@ defmodule Keyfleet.Agents.Pairing do
   @moduledoc """
   Which person an agent's wallet is paired with, read from the table the agent
   pairing every Regent site shares keeps (`RegentAgents.PairedAgent`). Pairing
-  and unpairing happen only through `RegentAgents`, with a code made on
-  regents.sh; this site only looks a wallet up, as the system, when that agent
-  signs a request.
+  and unpairing happen only through `RegentAgents`, with a code the person makes
+  on their Account page here or on regents.sh; this module only looks a wallet
+  up, as the system, when that agent signs a request.
   """
 
   use Ash.Resource,

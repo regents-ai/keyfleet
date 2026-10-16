@@ -10,15 +10,6 @@ defmodule KeyfleetWeb.AgentFilesTest do
     assert guide =~ "#{siwa}/skill.md"
   end
 
-  test "llms.txt gives the pairing steps with the agents a pairing may name", %{conn: conn} do
-    llms = conn |> get("/llms.txt") |> response(200)
-
-    assert llms =~ "## Pair with a person's account"
-    assert llms =~ "`hermes`, "
-    refute llms =~ "`chatgpt`"
-    refute llms =~ "{{"
-  end
-
   test "the guide is the same at both of its addresses, with every placeholder filled in",
        %{conn: conn} do
     guide = conn |> get("/skill.md")

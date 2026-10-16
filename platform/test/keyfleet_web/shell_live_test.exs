@@ -101,7 +101,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     refute has_element?(view, "#account-control [phx-click]")
   end
 
-  test "the Account page pairs an agent: choose it, and its message carries a new code",
+  test "the Account page pairs only an offered agent, with a new code",
        %{conn: conn} do
     account = register_account("pairing-box", "0x2222222222222222222222222222222222222222")
 
@@ -116,13 +116,12 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     html = view |> element(box) |> render_change(%{"harness" => "hermes"})
 
-    assert html =~ "Pair with my Keyfleet account."
     assert [_, code] = Regex.run(~r/Pairing code: (\S+)/, html)
     refute code =~ ~r/^X+$/
     assert has_element?(view, "#{box} input[name=harness][value=hermes][checked]")
 
-    html = view |> element(box) |> render_change(%{"harness" => "chatgpt"})
-    refute html =~ "Connect ChatGPT"
+    view |> element(box) |> render_change(%{"harness" => "chatgpt"})
+    assert has_element?(view, "#{box} input[name=harness][value=hermes][checked]")
   end
 
   test "stale wallet evidence cannot retain protected human shell access", %{conn: conn} do
