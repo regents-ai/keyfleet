@@ -1612,3 +1612,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   hide a Key, and the tip beside them opens again.
 - A map closed while its pictures were still being looked up starts no loads
   afterwards.
+
+## 2026-10-16 — Agents are pointed to the Keyfleet Account page
+
+- An agent told to get paired, and the agents guide, now point its person to
+  their Account page on this site instead of regents.sh.
