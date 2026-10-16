@@ -1565,3 +1565,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   agents, then the public forum.
 - A Member List name typed as one long word wraps inside its card.
 - The command notes no longer say five commands wait for a CLI release.
+
+## 2026-10-16 — Pair an agent on the Account page
+
+- The Account page's Agents box pairs an agent: choose it, copy the message with a
+  fresh code, and paste it to the agent. The agent appears once it pairs. Unpairing
+  stays on regents.sh, linked under the box.
+- /llms.txt gives the pairing steps and the agents a pairing may name; /agents.md
+  points to the Account page for the code.

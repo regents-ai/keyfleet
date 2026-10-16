@@ -252,13 +252,18 @@ defmodule KeyfleetWeb.PublicDocuments do
   end
 
   # `{{key_facts}}` is the About page's Key facts section; `{{tools}}` is the
-  # browser tools table, from the one tool manifest.
+  # browser tools table, from the one tool manifest; `{{harnesses}}` the agents
+  # a pairing may name, as the pair request accepts them.
   defp source(name) do
     @sources[name]
     |> String.replace("{{key_facts}}", @key_facts)
     |> String.replace("{{origin}}", url(""))
     |> String.replace("{{tools}}", Keyfleet.Capabilities.markdown_table())
+    |> String.replace("{{harnesses}}", harnesses())
   end
+
+  defp harnesses,
+    do: Enum.map_join(RegentAgents.Harness.offered(), ", ", &"`#{&1}`")
 
   def recovery_links do
     [

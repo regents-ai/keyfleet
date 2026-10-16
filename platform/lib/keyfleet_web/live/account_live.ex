@@ -25,10 +25,11 @@ defmodule KeyfleetWeb.AccountLive do
   attr :account, :map, default: nil
   attr :signed_out_reason, :atom, default: :signed_out
   attr :account_control, :map, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   attr :paired_agents, KeyfleetWeb.Read,
     default: %KeyfleetWeb.Read{},
-    doc: "the read of the agents paired with the account on regents.sh, most recent first"
+    doc: "the read of the agents paired with the account, most recent first"
 
   attr :credits, KeyfleetWeb.Read,
     default: %KeyfleetWeb.Read{},
@@ -108,10 +109,16 @@ defmodule KeyfleetWeb.AccountLive do
 
         <Regent.Account.agents id="account-agents" agents={agent_rows(@paired_agents)}>
           <:about>
-            An agent you pair with your account on regents.sh can post in the rooms of fleets where you hold a Key. It posts as your Key, with its name on every post.
+            An agent you pair with your account can post in the rooms of fleets where you hold a Key. It posts as your Key, with its name on every post.
           </:about>
           <:footer>
-            <a href="https://regents.sh/account">Pair or unpair agents on regents.sh</a>
+            <.live_component
+              module={KeyfleetWeb.PairingBox}
+              id="account-agents-pair"
+              lease={@lease}
+              account={@account}
+            />
+            <a href="https://regents.sh/account#account-agents">Unpair agents on regents.sh</a>
           </:footer>
         </Regent.Account.agents>
 

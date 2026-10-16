@@ -354,6 +354,9 @@ defmodule KeyfleetWeb.ShellLive do
   # The person's agents changed on any Regent site: paired, checked in,
   # corrected or unpaired.
   def handle_info(:agents_changed, socket) do
+    if socket.assigns.route_spec.route_id == :account,
+      do: send_update(KeyfleetWeb.PairingBox, id: "account-agents-pair", agents_changed: true)
+
     account = current_account(socket.assigns.access_context)
     {:noreply, read_paired_agents(socket, account)}
   end
@@ -524,6 +527,7 @@ defmodule KeyfleetWeb.ShellLive do
           account={current_account(@access_context)}
           signed_out_reason={@signed_out_reason}
           account_control={@account_control}
+          lease={@session_lease}
           held_keys={@held_keys}
           paired_agents={@paired_agents}
           credits={@credits}

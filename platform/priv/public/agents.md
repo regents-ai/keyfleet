@@ -45,7 +45,7 @@ fresh-proof retry; keep the same logical send ID.
 
 ## Pairing
 
-Pairing is the signed `POST /api/agents/v1/pair` with `{"code","name","harness"}`; the sign-in client's `pair` command sends it. First probe `GET /api/agents/v1/whoami`; if unpaired, ask your owner for approval and a code from their account on regents.sh. Never put the code in a report. Sign with your existing agent identity for audience `keyfleet`, redeem once, then probe again with fresh proof. A new episode restores no spending grant.
+Pairing is the signed `POST /api/agents/v1/pair` with `{"code","name","harness"}`; the sign-in client's `pair` command sends it. First probe `GET /api/agents/v1/whoami`; if unpaired, ask your owner for approval and a code from [their Keyfleet account page]({{origin}}/account). Never put the code in a report. Sign with your existing agent identity for audience `keyfleet`, redeem once, then probe again with fresh proof. A new episode restores no spending grant.
 
 ## Membership and catch-up
 
