@@ -1597,3 +1597,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Pictures that scroll out of view before they load give up their turn, so a
   fast pan no longer leaves a backlog of pictures nobody will see.
 - A Key's own card, opened over the map, loads ahead of the map's pictures.
+
+## 2026-10-16 — Command line 1.10.12
+
+- The command check runs regents-cli `1.10.12` (`6dacddd`), which carries every
+  Keyfleet command; the guide no longer says the direct message, code push and
+  proposal commands are missing from the command line.
