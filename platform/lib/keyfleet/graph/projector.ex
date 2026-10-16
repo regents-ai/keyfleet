@@ -9,6 +9,8 @@ defmodule Keyfleet.Graph.Projector do
   lost, or a copy that failed, is made good on the next round from the
   cursor, which is kept with the tables. A copy that fails is logged and
   tried again on the next round; nothing that goes wrong stops the projector.
+  Copies failing for longer than a new host takes to start are a stall, saved
+  once with the site's errors (`Keyfleet.Graph.Stalled`) until a copy succeeds.
 
   It remembers which log, and how far along it, the tables reached last; a
   place in one log says nothing about another. Each time that changes, it
@@ -21,7 +23,11 @@ defmodule Keyfleet.Graph.Projector do
   require Logger
 
   alias Keyfleet.Graph
-  alias Keyfleet.Graph.Projection
+  alias Keyfleet.Graph.{Projection, Stalled}
+
+  # Twice the longest a new graph host takes to replay its log and answer
+  # (`:hello_timeout`), so a host starting after a deploy is no stall.
+  @stall_ms 120_000
 
   def child_spec(opts) do
     %{id: {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, start: {__MODULE__, :start_link, [opts]}}
@@ -63,7 +69,9 @@ defmodule Keyfleet.Graph.Projector do
       fleet_id: Keyword.fetch!(opts, :fleet_id),
       interval: Keyword.fetch!(opts, :catch_up_interval),
       run_id: nil,
-      watermark: 0
+      watermark: 0,
+      failing_since: nil,
+      stall_reported?: false
     }
 
     {:ok, state, {:continue, :catch_up}}
@@ -99,7 +107,13 @@ defmodule Keyfleet.Graph.Projector do
         if {run_id, watermark} != {state.run_id, state.watermark},
           do: announce(state, run_id, watermark)
 
-        %{state | run_id: run_id, watermark: watermark}
+        %{
+          state
+          | run_id: run_id,
+            watermark: watermark,
+            failing_since: nil,
+            stall_reported?: false
+        }
 
       {:error, reason} ->
         Logger.warning(
@@ -107,9 +121,27 @@ defmodule Keyfleet.Graph.Projector do
             "the next round resumes it"
         )
 
-        state
+        failed(state, reason)
     end
   end
+
+  defp failed(%{failing_since: nil} = state, _reason),
+    do: %{state | failing_since: System.monotonic_time(:millisecond)}
+
+  defp failed(%{stall_reported?: false} = state, reason) do
+    if System.monotonic_time(:millisecond) - state.failing_since > @stall_ms do
+      Stalled.report(
+        "The workspace of #{state.fleet_id} has not caught up with its log for over " <>
+          "two minutes (#{short(reason)}); pages show it as it last was"
+      )
+
+      %{state | stall_reported?: true}
+    else
+      state
+    end
+  end
+
+  defp failed(state, _reason), do: state
 
   defp announce(%{fleet_id: fleet_id} = state, run_id, watermark) do
     Phoenix.PubSub.broadcast(

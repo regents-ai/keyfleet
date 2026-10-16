@@ -90,7 +90,7 @@ defmodule KeyfleetWeb.AgentFilesTest do
     paths = for [_, url] <- Regex.scan(~r/\]\(([^)]+)\)/, body), do: URI.parse(url).path
 
     assert paths ==
-             ~w(/skill.md /docs /fleets.md /api-contract.openapiv3.yaml /commands.json)
+             ~w(/skill.md /agents /docs /fleets.md /api-contract.openapiv3.yaml /commands.json)
 
     for path <- paths do
       assert build_conn()

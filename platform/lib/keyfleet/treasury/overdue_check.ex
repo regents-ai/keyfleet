@@ -5,10 +5,15 @@ defmodule Keyfleet.Treasury.OverdueCheck do
   chain's clock at that reading, saves with the site's errors
   (`Keyfleet.Treasury.Overdue`) each kind of money nobody has moved in time:
 
-    * the Daily Treasury Slice to Keys, due for more than 6 hours;
+    * the Daily Treasury Slice to Keys, due for more than 6 hours while the
+      treasury holds at least what it splits from of some asset (0.05 ETH, or
+      100 of a token); below that a run shares nothing, so nothing is late;
     * the protocol share, owed to REGENT staking for more than 24 hours;
     * USDC from Key sales, waiting more than 3 hours with no piece of it
       turned into REGENT (`Keyfleet.Treasury.last_piece_turned_at/1`).
+
+  The last two are only read as waiting while there is some of them, so an
+  empty treasury is never overdue.
 
   Each kind is one error naming every fleet it holds for, saved again every
   hour until someone moves the money. Anyone may move each of them, from the
@@ -23,6 +28,9 @@ defmodule Keyfleet.Treasury.OverdueCheck do
   @split_late 6 * 3600
   @owed_late 24 * 3600
   @waiting_late 3 * 3600
+
+  # The least ETH the treasury splits from, as the treasury fixes it.
+  @eth_floor 50_000_000_000_000_000
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
@@ -59,7 +67,29 @@ defmodule Keyfleet.Treasury.OverdueCheck do
     :ok
   end
 
-  defp split_due({_fleet, reading}), do: reading.next_run_at
+  defp split_due({_fleet, %{next_run_at: nil}}), do: nil
+
+  defp split_due({fleet, reading}),
+    do: if(splits_any?(fleet, reading), do: reading.next_run_at)
+
+  # Whether the treasury holds at least what it splits from of some asset. A
+  # token that has not said its decimals has no floor known here.
+  defp splits_any?(fleet, reading) do
+    %{details: details} = Treasury.assets(fleet)
+
+    Enum.any?(reading.assets, fn %{asset: asset, held: held} ->
+      floor = split_floor(asset, details)
+      floor != nil and held >= floor
+    end)
+  end
+
+  defp split_floor(asset, details) do
+    case {asset == Treasury.native(), details[asset]} do
+      {true, _eth} -> @eth_floor
+      {false, {_symbol, decimals}} when is_integer(decimals) -> 100 * 10 ** decimals
+      {false, _unknown} -> nil
+    end
+  end
 
   defp owed_since({_fleet, reading}), do: reading.protocol_share_owed_since
 

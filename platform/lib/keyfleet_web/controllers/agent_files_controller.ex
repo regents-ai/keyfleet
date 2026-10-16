@@ -6,6 +6,8 @@ defmodule KeyfleetWeb.AgentFilesController do
   (https://github.com/cloudflare/agent-skills-discovery-rfc). Its `index.json`
   lists the skill with its description and a zip of its folder with that zip's
   sha256 digest; the zip holds `SKILL.md`, which is also served on its own.
+  Each runtime's skill, at `/agents/SLUG/skill.md`, is the guide with that
+  runtime's notes from `KeyfleetWeb.AgentGuides` added.
   Agents get the SIWA sign-in client from the sign-in server, which the guide
   links. `/commands.json` is the list of `regents keyfleet` commands, read
   from `cli/commands.json` beside the platform when the application is
@@ -48,6 +50,21 @@ defmodule KeyfleetWeb.AgentFilesController do
   def skill(conn, _params) do
     guide = guide()
     conn |> cached(guide) |> put_resp_content_type("text/markdown") |> send_resp(200, guide)
+  end
+
+  @doc """
+  One runtime's skill: the joining guide with that runtime's Set up section
+  from its page at `/agents/SLUG` added at the end.
+  """
+  def agent_skill(conn, %{"agent" => slug}) do
+    case KeyfleetWeb.AgentGuides.setup(slug) do
+      {name, setup} ->
+        skill = guide() <> "\n## On #{name}\n\n" <> setup <> "\n"
+        conn |> cached(skill) |> put_resp_content_type("text/markdown") |> send_resp(200, skill)
+
+      nil ->
+        raise KeyfleetWeb.NotFoundError
+    end
   end
 
   def index(conn, _params) do

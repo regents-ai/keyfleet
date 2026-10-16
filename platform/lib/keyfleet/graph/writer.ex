@@ -6,7 +6,8 @@ defmodule Keyfleet.Graph.Writer do
   length-prefixed JSON, and sends it one request at a time. The writer outlives
   its host: a host that cannot start, exits, or misses a deadline is replaced
   after a delay that doubles with each failure in a row, and requests made
-  while no host is ready return `{:error, :unavailable}`.
+  while no host is ready return `{:error, :unavailable}`. The first failure in
+  a row is saved with the site's errors (`Keyfleet.Graph.Stalled`).
 
   A reply that does not arrive within the deadline, or a host that exits while
   a request is in flight, leaves the outcome unknown: the caller gets
@@ -24,6 +25,7 @@ defmodule Keyfleet.Graph.Writer do
   require Logger
 
   alias Keyfleet.Graph.Registry, as: GraphRegistry
+  alias Keyfleet.Graph.Stalled
 
   @read_ops ~w(hello changes)
   @write_ops ~w(create patch link unlink archive)
@@ -342,6 +344,9 @@ defmodule Keyfleet.Graph.Writer do
 
   defp host_failed(state, reason) do
     Logger.warning("graph host for #{state.fleet_id} stopped: #{inspect(reason)}")
+
+    if state.restart_delay == state.restart_min,
+      do: Stalled.report("The graph host of #{state.fleet_id} stopped: #{inspect(reason)}")
 
     if state.host && state.host.hello, do: Process.cancel_timer(elem(state.host.hello, 1))
 

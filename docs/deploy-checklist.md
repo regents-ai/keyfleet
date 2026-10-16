@@ -1,8 +1,11 @@
 # Putting the Keyfleet site on Fly
 
-The steps, in order, for the first launch of the website at keyfleet.ai. Key
-sales stay off throughout: they need the founder's word, and not before the
-contracts are complete and deployed on Base (see "Before any key is sold").
+The steps, in order, for the first launch of the website at keyfleet.ai. The
+site has been live since: the app `keyfleet` on one machine in `iad`, with the
+volume `keyfleet_graph` at `/data`, released from `main` by step 6. This list
+stays as the way to set it up again. Key sales stay off throughout: they need
+the founder's word, and not before the contracts are complete and deployed on
+Base (see "Before any key is sold").
 Commands run from `platform/` unless a step says otherwise. Anything marked
 **not verified** was not tried before this list was written.
 
@@ -276,13 +279,12 @@ refuses anything but staging.
    second machine would get its own empty volume and the fleets' graphs would
    split without any error. The migration step runs before the site starts:
    it brings the database up to date and then puts the five fleets on the
-   site, opening Keyfleet Classic's rooms. Classic is open, and Syndicate,
-   Cascade, Accelerant and the Regents Club are coming soon, shown by name
-   with no price, no keys, no rooms and no way to join. It records no contracts, and every
-   later deploy runs it again without changing anything that is already there.
-   **Not verified**: these flags are the ones `fly deploy --help` lists
-   (flyctl 0.4.107), but no remote build has been run, so it is not known
-   whether Fly's builder reads the ignore file exactly as Docker does here.
+   site, opening the Regents Club's rooms. The Regents Club is open, and
+   Classic #1, Syndicate #1, Cascade #1 and Accelerant #1 are coming soon,
+   shown by name with no price, no keys, no rooms and no way to join. It
+   records no contracts, and every later deploy runs it again without changing
+   anything that is already there. Every release since the first has been
+   built by Fly's remote builder with these flags.
 2. The site starts, and every fleet's graph shows as unavailable because the
    new volume belongs to root: `fly ssh console --config fly.toml -C "chown 1001:1001 /data"`.
    The graphs come back within 30 seconds with no restart.
@@ -292,7 +294,10 @@ refuses anything but staging.
 ## Key sales stay off
 
 Nothing above records a deployment, so no fleet is linked to the contracts and
-no page offers a key for sale. Only `/app/bin/seed-deployment` links the site to
+no page offers a key for sale. Since the launch, the Regents Club has been
+deployed on Base and recorded; its Keys were airdropped to early Regents users
+and none is sold. Classic #1 and the other founding fleets are not deployed,
+and Classic's sales stay closed until the founder says so. Only `/app/bin/seed-deployment` links the site to
 the deployed contracts, and running it is a separate decision for the founder.
 Do not run it, or deploy the contracts, as part of this launch.
 
@@ -364,11 +369,10 @@ succeed before any hub or runner image is pushed; it is not part of
 
 ## Fleet code store
 
-The fleets' git repositories live on the private `keyfleet-code` app, set up
-as [code-store.md](code-store.md) says ("Going live"). Nothing for it goes on
-Fly without the founder's go. Keyfleet does not start without
-`KEYFLEET_CODE_NODE` and `KEYFLEET_HUB_SIGNING_KEY`, so set both before the
-first release that carries the code store.
+The fleets' git repositories live on the private `keyfleet-code` app, which
+is live, set up as [code-store.md](code-store.md) says ("On Fly"). No change
+to it goes on Fly without the founder's go. Keyfleet does not start without
+`KEYFLEET_CODE_NODE` and `KEYFLEET_HUB_SIGNING_KEY`.
 
 ## Key-art service
 

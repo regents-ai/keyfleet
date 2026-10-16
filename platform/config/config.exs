@@ -203,6 +203,7 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.Chain.Watch},
       {"17 4 * * *", Keyfleet.ErrorPruner},
       {"23 * * * *", Keyfleet.Treasury.OverdueCheck},
+      {"41 * * * *", Keyfleet.Keys.DeckEndCheck},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_agents"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "key_agents"}}
     ]

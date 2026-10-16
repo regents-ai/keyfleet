@@ -37,6 +37,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   @code_password_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/password\z"
   @code_pushes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/pushes\z"
+  # A fleet's notebook runs: a notebook and a run named as the hub names them.
+  @notebook ~S"nb-[0-9a-z]{16}"
+  @run ~S"run_[0-9A-HJKMNP-TV-Z]{26}"
+  @run_start_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/runs/start\z"
+  @run_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/runs/#{@run}\z"
 
   # A poll is named by its id as the API answers it.
   @poll ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
@@ -65,6 +70,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@sync_path, {~w(rooms graph proposals run), ~w(keys dms quotes)}},
     {@proposal_read_path, {~w(number votes_after_seq), []}},
     {@create_room_path, {~w(slug name), []}},
+    {@run_start_path, {~w(idempotency_key), []}},
     {@topic_path, {~w(topic), []}},
     {@read_path, {[], ~w(after_seq limit)}},
     {@key_read_path, {[], ~w(after_seq limit)}},
@@ -424,7 +430,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("GET", path),
     do:
       Enum.any?(
-        [@rooms_path, @mutes_path, @polls_path, @poll_path, @dm_inbox_path, @code_pushes_path],
+        [
+          @rooms_path,
+          @mutes_path,
+          @polls_path,
+          @poll_path,
+          @dm_inbox_path,
+          @code_pushes_path,
+          @run_path
+        ],
         &Regex.match?(&1, path)
       )
 
@@ -441,6 +455,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @sync_path,
         @proposal_read_path,
         @code_password_path,
+        @run_start_path,
         @chain_path,
         @graph_path,
         @dm_path,
@@ -513,8 +528,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   def check_body(path, params) do
     cond do
       Enum.any?(@empty_body_paths, &Regex.match?(&1, path)) -> admit(params == %{})
-      Regex.match?(@sync_path, path) -> check_sync_body(params)
-      Regex.match?(@proposal_read_path, path) -> check_proposal_read_body(params)
+      op = fleet_op(path) -> check_fleet_body(op, params)
       op = dm_op(path) -> check_dm_body(op, params)
       op = chain_op(path) -> check_chain_body(op, params)
       op = graph_op(path) -> check_graph_body(op, params)
@@ -544,6 +558,19 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         :invalid
     end
   end
+
+  # Catching up, reading a proposal and starting a notebook run each name
+  # fields of their own.
+  defp fleet_op(path) do
+    Enum.find_value(
+      [sync: @sync_path, proposal_read: @proposal_read_path, run_start: @run_start_path],
+      fn {op, pattern} -> if Regex.match?(pattern, path), do: op end
+    )
+  end
+
+  defp check_fleet_body(:sync, params), do: check_sync_body(params)
+  defp check_fleet_body(:proposal_read, params), do: check_proposal_read_body(params)
+  defp check_fleet_body(:run_start, params), do: check_run_start_body(params)
 
   defp chain_op(path) do
     case Regex.run(@chain_path, path, capture: :all_but_first) do
@@ -755,6 +782,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        do: in_range(number in 1..@max_seq and after_seq in 0..@max_seq)
 
   defp check_proposal_read_body(_params), do: :invalid
+
+  # A run names only the key that keeps a retry from starting it twice, which
+  # the hub is sent as a header.
+  defp check_run_start_body(%{"idempotency_key" => key} = params)
+       when map_size(params) == 1 and is_binary(key),
+       do: admit(Regex.match?(~r/\A[!-~]{1,128}\z/, key))
+
+  defp check_run_start_body(_params), do: :invalid
 
   defp poll_write?(path),
     do: Regex.match?(@poll_start_path, path) or Regex.match?(@poll_vote_path, path)

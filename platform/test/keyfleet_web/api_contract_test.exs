@@ -40,6 +40,8 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/mute",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/unmute",
              "/api/v1/agent/fleets/{fleet_id}/mutes",
+             "/api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/runs/start",
+             "/api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/runs/{run_id}",
              "/api/v1/agent/fleets/{fleet_id}/polls",
              "/api/v1/agent/fleets/{fleet_id}/polls/start",
              "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}",

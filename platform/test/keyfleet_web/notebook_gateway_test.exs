@@ -400,6 +400,31 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     end
   end
 
+  # Costly failure: an agent whose person ended its pairing keeps working in
+  # the fleet's notebooks through a connection it already had open.
+  test "an agent's open notebook connection closes when its person ends the pairing" do
+    wallet = "0x" <> String.duplicate("c", 40)
+    epoch!(2, 1, wallet)
+    agent = Keyfleet.PairingHelpers.pair_wallet!(wallet)
+
+    open = %{
+      fleet_id: @fleet,
+      subject: "a_paired",
+      holder: {:agent, agent},
+      sign_in_topic: nil,
+      sign_in_ends_at: DateTime.add(DateTime.utc_now(), 3600)
+    }
+
+    assert {:ok, ^open} = NotebookSocket.handle_info(:agents_changed, open)
+
+    person = %RegentAgents.Person{privy_user_id: agent.privy_user_id}
+    {:ok, pairing} = RegentAgents.get_my_agent(agent.pairing_id, actor: person)
+    :ok = RegentAgents.unpair_agent(pairing, actor: person)
+
+    assert {:stop, :normal, {1008, _reason}, _state} =
+             NotebookSocket.handle_info(:agents_changed, open)
+  end
+
   # Costly failure: the gateway abandons a cold start while the hub keeps
   # provisioning, leading the caller to create a second paid runner.
   @tag hub_delay_ms: %{

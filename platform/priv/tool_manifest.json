@@ -3377,6 +3377,211 @@
       "product_availability": "prelaunch_gated"
     },
     {
+      "name": "start_notebook_run",
+      "title": "Start a notebook run",
+      "description": "Start a background run of one of this fleet's notebooks, as you: it works through the notebook's saved code, top to bottom, in a fresh sandbox, and never changes the notebook. Answers run_id with status queued; read it with read_notebook_result until it has finished and has a result_url. The same idempotency_key never starts a second run. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing and membership of the fleet; never use owner cookies. Moves no money.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "notebook_id",
+              "idempotency_key"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "notebook_id": {
+                "type": "string",
+                "description": "The notebook's id, nb- then 16 lowercase letters or digits, as the fleet's notebook host lists it (see docs: Fleet notebooks)",
+                "minLength": 19,
+                "maxLength": 19
+              },
+              "idempotency_key": {
+                "type": "string",
+                "description": "Stable id for this one run, in visible ASCII characters, kept for a fresh-proof retry: the same key never starts a second run",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/runs/start",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "notebook_id",
+          "idempotency_key"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "notebook_id": {
+            "type": "string",
+            "description": "The notebook's id, nb- then 16 lowercase letters or digits, as the fleet's notebook host lists it (see docs: Fleet notebooks)",
+            "minLength": 19,
+            "maxLength": 19
+          },
+          "idempotency_key": {
+            "type": "string",
+            "description": "Stable id for this one run, in visible ASCII characters, kept for a fresh-proof retry: the same key never starts a second run",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "start_notebook_run",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/runs/start"
+      },
+      "operation_id_field": "idempotency_key",
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "read_notebook_result",
+      "title": "Read a notebook run",
+      "description": "Read one background run of this fleet's notebooks: its status (queued, provisioning, running, then succeeded, failed, timed_out, cancelled or skipped) and, once it has finished with a page, result_url, the saved result's address. Keyfleet keeps its own copy of that page, so the address shows the same page to the fleet's members until one removes it. Record it in the workspace as evidence whose source_uri is result_url, link it from your task with produces, and set the task's result_ref to it. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Current pairing and membership of the fleet apply; never use owner cookies.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "notebook_id",
+              "run_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "notebook_id": {
+                "type": "string",
+                "description": "The notebook's id, nb- then 16 lowercase letters or digits, as the fleet's notebook host lists it (see docs: Fleet notebooks)",
+                "minLength": 19,
+                "maxLength": 19
+              },
+              "run_id": {
+                "type": "string",
+                "description": "The run_id start_notebook_run answered, run_ then 26 letters or digits; a saved result's address names it too",
+                "minLength": 30,
+                "maxLength": 30
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": false,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "read",
+      "route": "GET /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/runs/{run_id}",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "notebook_id",
+          "run_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "notebook_id": {
+            "type": "string",
+            "description": "The notebook's id, nb- then 16 lowercase letters or digits, as the fleet's notebook host lists it (see docs: Fleet notebooks)",
+            "minLength": 19,
+            "maxLength": 19
+          },
+          "run_id": {
+            "type": "string",
+            "description": "The run_id start_notebook_run answered, run_ then 26 letters or digits; a saved result's address names it too",
+            "minLength": 30,
+            "maxLength": 30
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "read_notebook_result",
+        "http": "GET /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/runs/{run_id}"
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
       "name": "list_my_shards",
       "title": "List my active shards",
       "description": "Read active shards held by your own wallet. An empty list does not rule out membership through your paired person. Any returned step-down transaction is data only; this tool sends nothing. Prepare the exact request, sign with your own SIWA identity and supply input, request and proof. Current pairing and existing product permissions apply; never use owner cookies.",
@@ -4123,6 +4328,8 @@
               "agent_status",
               "get_code_password",
               "list_code_pushes",
+              "start_notebook_run",
+              "read_notebook_result",
               "account_credits_history",
               "list_my_shards",
               "list_muted_keys",

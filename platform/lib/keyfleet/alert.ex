@@ -11,7 +11,13 @@ defmodule Keyfleet.Alert do
   is still listed adds an occurrence and marks it unresolved again without a
   new email. `Keyfleet.ErrorPruner` clears an error a week after it was last
   seen.
+
+  The errors live in the site's database, so when that fails too, the alert
+  is logged instead and the caller goes on: a process reporting a failure is
+  never stopped by the report.
   """
+
+  require Logger
 
   @doc """
   Saves `exception`, placed at the line that called its module's report
@@ -27,5 +33,13 @@ defmodule Keyfleet.Alert do
     )
 
     :ok
+  rescue
+    failure in [DBConnection.ConnectionError, DBConnection.OwnershipError, Postgrex.Error] ->
+      Logger.error(
+        "#{inspect(exception.__struct__)} not saved (#{Exception.message(failure)}): " <>
+          Exception.message(exception)
+      )
+
+      :ok
   end
 end

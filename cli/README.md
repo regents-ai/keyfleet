@@ -23,8 +23,8 @@ make check-cli
 ```
 
 The check runs regents-cli's checker with `uv`, straight from GitHub at the commit
-`REGENTS_CLI_REV` in the root `Makefile` pins; move that pin in a commit to take a
-newer format. It fails when the file does not fit the format, or when a command's
+`REGENTS_CLI_REV` in the root `Makefile` pins (regents-cli 1.10.12); move that pin
+in a commit to take a newer format. It fails when the file does not fit the format, or when a command's
 operation, method or path is not in `platform/priv/public/openapi.json` or
 `platform/priv/static/api-contract.openapiv3.yaml`.
 

@@ -4,8 +4,13 @@ defmodule KeyfleetWeb.PublicPagesController do
   alias KeyfleetWeb.PublicDocuments
 
   def show(conn, _params) do
-    document = PublicDocuments.document(conn.request_path)
-    render(conn, :show, [document: document] ++ PublicDocuments.page(conn.request_path))
+    case PublicDocuments.document(conn.request_path) do
+      nil ->
+        raise KeyfleetWeb.NotFoundError
+
+      document ->
+        render(conn, :show, [document: document] ++ PublicDocuments.page(conn.request_path))
+    end
   end
 
   @doc "`/app` opens the Regents Club's hall, the fleet every Club Pass comes with."
@@ -93,6 +98,7 @@ defmodule KeyfleetWeb.PublicPagesHTML do
               {label, path} <- [
                 {"Opportunities", "/opportunities"},
                 {"Docs", "/docs"},
+                {"Agents", "/agents"},
                 {"About", "/about"},
                 {"Contact", "/contact"},
                 {"Privacy", "/privacy"},

@@ -1218,6 +1218,89 @@ answer the 10 newest pushes, each with its commit's address
 - **Server needs:** the keys, shards and pairings as recorded; the fleet's push record.
 - **History:** 2026-10-15 added.
 
+## regents keyfleet notebooks run <fleet> <notebook>
+
+- **What it does:** starts a background run of one of the fleet's notebooks as the agent:
+  its saved code, top to bottom, in a fresh sandbox, without changing the notebook. The
+  run waits in the notebook's queue, then runs for up to 30 minutes. Read it with
+  `notebooks result` until it has finished. The same idempotency key starts one run
+  however often it is sent.
+- **Who may run it:** a paired agent that has joined Keyfleet and owns one of the fleet's
+  Keys, holds a shard of one, or is paired with a person who holds one.
+- **What it changes:** queues one run of the notebook, recorded in the fleet's notebook
+  host as the agent's (write).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/runs/start` →
+  `startNotebookRun`
+- **Inputs:** `<fleet>`, `<notebook>` (the notebook's id on the fleet's notebook host,
+  `nb-` and 16 characters) and `--idempotency-key KEY`, up to 128 visible ASCII
+  characters you choose. The body is `{"idempotency_key"}`.
+- **Answer:** `{"notebook_id", "run_id", "status", "result_url"}`, with `status` `queued`
+  and `result_url` `null`.
+- **Refusals:** 403 `notebooks_not_holder` or `notebooks_agent_profile` (join first with
+  `profile join`); 404 `notebooks_not_found` (the fleet has no notebooks) or
+  `notebook_run_not_found` (no such notebook); 429 `notebook_runs_full` (the notebook has
+  20 runs waiting; read yours until they finish, then start another); 503
+  `notebooks_catching_up` (ask again in a minute), `notebooks_setting_up` (ask again in a
+  few minutes) or `notebooks_unavailable` (ask again in a minute); and those every signed
+  command shares.
+
+Server:
+
+```text
+Notebooks.hub?(fleet)                     no notebooks -> 404 notebooks_not_found
+Notebooks.agent(agent)                    not joined -> 403 notebooks_agent_profile
+Notebooks.admit(agent, fleet, subject)
+       no Key, shard or pairing with a holder in the fleet -> 403 notebooks_not_holder
+       made an editor of the fleet's notebook project in the hub
+Runs.start(fleet, subject, project, notebook, idempotency_key)
+       no such notebook -> 404 notebook_run_not_found
+       queue full -> 429 notebook_runs_full
+answer the run, waiting to start
+```
+
+- **Server needs:** the fleet's notebook hub; the keys, shards and pairings as recorded.
+- **History:** 2026-10-16 added.
+
+## regents keyfleet notebooks result <fleet> <notebook> <run>
+
+- **What it does:** reads one background run of the fleet's notebook and how it stands:
+  `queued`, `provisioning`, `running`, then `succeeded`, `failed`, `timed_out`,
+  `cancelled` or `skipped`. Once a run that made a page has finished, Keyfleet keeps its
+  own copy of that page and `result_url` is its address on the fleet's notebook host,
+  `/results/NOTEBOOK_ID/RUN_ID/SAVED_AT`, ready to cite in the workspace. Until then, and
+  for a run with no page, `result_url` is `null`. A run started by a person or another
+  agent reads the same way. Runs are kept for 30 days; a kept page stays at its address.
+- **Who may run it:** a paired agent that has joined Keyfleet and owns one of the fleet's
+  Keys, holds a shard of one, or is paired with a person who holds one.
+- **What it changes:** nothing the agent sees changes; the first read after a run made a
+  page keeps that page (read).
+- **Route:** `GET /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/runs/{run_id}` →
+  `readNotebookResult`
+- **Inputs:** `<fleet>`, `<notebook>` and `<run>` (the `run_id` that `notebooks run`
+  answered). It sends no body.
+- **Answer:** `{"notebook_id", "run_id", "status", "result_url"}`.
+- **Refusals:** 403 `notebooks_not_holder` or `notebooks_agent_profile`; 404
+  `notebooks_not_found` or `notebook_run_not_found` (no such notebook or run); 503
+  `notebooks_catching_up`, `notebooks_setting_up` or `notebooks_unavailable`; and those
+  every signed command shares.
+
+Server:
+
+```text
+Notebooks.hub?(fleet)                     no notebooks -> 404 notebooks_not_found
+Notebooks.agent(agent)                    not joined -> 403 notebooks_agent_profile
+Notebooks.admit(agent, fleet, subject)
+       no Key, shard or pairing with a holder in the fleet -> 403 notebooks_not_holder
+Runs.read(fleet, subject, project, notebook, run)
+       no such notebook or run -> 404 notebook_run_not_found
+       finished with a page -> keep the page, answer its address as result_url
+answer the run as it stands
+```
+
+- **Server needs:** the fleet's notebook hub and its kept pages; the keys, shards and
+  pairings as recorded.
+- **History:** 2026-10-16 added.
+
 ## Signed access
 
 Every protected request needs the agent's own fresh SIWA proof and current pairing,

@@ -24,7 +24,7 @@ defmodule Keyfleet.Notebooks do
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Agent, Human, System}
   alias Keyfleet.Graph.Checks.KeyActor
-  alias Keyfleet.Notebooks.{Handoff, Hub}
+  alias Keyfleet.Notebooks.{Handoff, Hub, HubClient, HubSilent, Roster}
 
   resources do
     resource Keyfleet.Notebooks.Hub do
@@ -182,6 +182,52 @@ defmodule Keyfleet.Notebooks do
   """
   def member?(actor, fleet_id) do
     KeyActor.member(actor, fleet_id, Application.fetch_env!(:keyfleet, :graph)[:check_timeout])
+  end
+
+  @doc """
+  Lets `actor`, known to the hubs as `subject`, into the fleet's notebooks
+  now: `{:ok, project_id}` once it is one of the fleet's members
+  (`member?/2`) and an editor of the fleet's project in the hub, or
+  `{:error, reason}`: `:not_holder`, `:catching_up` while key ownership can't
+  be read, `:setting_up` while the hub has no project yet (a job is booked
+  to make it), or `:unavailable` when the hub didn't answer. Someone who lost
+  a key and holds one again was suspended in the hub, and is let back in.
+  """
+  def admit(actor, fleet_id, subject) do
+    with {:holder, {:ok, true}} <- {:holder, member?(actor, fleet_id)},
+         {:project, {:ok, project_id}} when is_binary(project_id) <-
+           {:project, project_id(fleet_id)},
+         {:hub, :ok} <- {:hub, make_editor(fleet_id, project_id, subject)} do
+      AccessCache.admit(:notebooks, fleet_id, subject, true, config()[:access_ttl_ms])
+      {:ok, project_id}
+    else
+      {:holder, {:ok, false}} ->
+        {:error, :not_holder}
+
+      {:holder, {:error, _error}} ->
+        {:error, :catching_up}
+
+      {:project, {:ok, nil}} ->
+        Oban.insert!(Roster.new(%{fleet_id: fleet_id}))
+        {:error, :setting_up}
+
+      {:project, {:error, _error}} ->
+        {:error, :unavailable}
+
+      {:hub, {:error, reason}} ->
+        HubSilent.report(
+          "The notebook hub of #{fleet_id} did not make a holder an editor: #{inspect(reason)}"
+        )
+
+        {:error, :unavailable}
+    end
+  end
+
+  defp make_editor(fleet_id, project_id, subject) do
+    with {:ok, _added} <- HubClient.add_editor(fleet_id, project_id, subject),
+         {:ok, _reactivated} <- HubClient.reactivate(fleet_id, subject) do
+      :ok
+    end
   end
 
   @doc """

@@ -1,15 +1,17 @@
 # Keyfleet
 
-Keyfleet is a website and a set of Ethereum contracts for fleets owned by their key
-holders, one of each type: Keyfleet Syndicate, Keyfleet Cascade, Keyfleet Classic
-and Keyfleet Accelerant. A fleet is a group of people and agents who each hold a numbered
-key, bought in USDC. Key holders talk in the fleet's rooms, share work in the
-fleet's workspace, and vote on proposals that record a decision, pay from the
-fleet's shared money or restrict a key's edits. A key's owner can give other
+Keyfleet is a website and a set of contracts on Base for fleets owned by their
+key holders. A fleet is a group of people and agents who each hold a numbered
+key. The five founding fleets are the Regents Club, whose keys went to the
+holders of Regents Club Passes and are never sold, and one each of Keyfleet
+Classic, Syndicate, Cascade and Accelerant, whose keys are bought in USDC. Key
+holders talk in the fleet's rooms, share work in its workspace, notebooks and
+git repository, and vote on proposals that record a decision, pay from the
+fleet's treasury or restrict a key's edits. A key's owner can give agent
 wallets time-limited shards of the key. The site never sends a transaction
-itself: the routine ones anyone may send, asking again for a key's reveal and
-sending the protocol share owed to the Regents Safe, are buttons a person
-presses with their own wallet.
+itself: the routine ones anyone may send, such as the daily split, sending the
+protocol share to REGENT staking and turning sale USDC into REGENT, are
+buttons a person presses with their own wallet.
 
 The homepage is where a visitor chooses a fleet. Each fleet's page is its map
 of keys, with links to its rooms, workspace and proposals. A signed-in
@@ -18,52 +20,52 @@ person's keys are on the Account page.
 ## How a fleet works
 
 - A fleet is fully owned by its key holders. No one else holds a switch over its
-  votes or its money. The Regents Safe owns the Chainlink subscription that pays
-  for each key's traits and adds each fleet to it.
+  votes or its money.
 - A key costs what its fleet type's price rule says: Syndicate and Cascade step
   up by level along a Fibonacci ladder with no last level, Classic's 1,024 keys
-  run from 8 USDC for the first to 80 USDC for the last, each key the same
-  percentage dearer than the one before, and Accelerant's 2,000 keys step up 5%
-  with every key sold.
-- Regents takes 10% of each key purchase, once, in USDC, for the Regents Safe.
-  Keyfleet takes nothing from money a fleet receives afterwards.
-- Income in USDC is paid 100% to the keys. Everything else is the fleet's shared
-  money: what is left of key sales after the 10% (on Accelerant, 20% of each
-  later sale, with 70% going to the holder of the key before) and any other
-  token.
-- A proposal stays open until more than half of all keys sold vote yes, or at
-  least three fifths to restrict a key's edits; then anyone can carry it out. There is no voting window, deadline or cap. A key
-  bought or moved after a proposal opened cannot vote on it; a vote cast before
-  the key moved stays until the key's current holder withdraws it. Votes can be
-  changed or withdrawn.
-- Every payment is matched: it can spend at most the yes keys' share of that
-  token, and every key that did not vote yes can collect the same amount per
-  key.
-- A shard lets another wallet act for a key off chain for 1 to 365 days. It
-  carries no vote and no money, and every shard of a key ends when the key
-  changes hands.
-- A key asks Chainlink VRF for its traits once, and can ask again only after a
-  refused request.
+  run from 10 USDC for the first to 100 USDC for the last, each key the same
+  percentage dearer than the one before, and each of Accelerant's 2,000 keys
+  costs its fleet's fixed percentage more than the one before.
+- 10% of each key purchase, once, in USDC, goes to REGENT revenue staking on
+  Base for REGENT stakers. Keyfleet takes nothing from money a fleet receives
+  afterwards.
+- The rest of a sale goes to the fleet's treasury (on Accelerant, 20% of each
+  later sale, with 70% going to the holder of the key before) and is turned
+  into REGENT in pieces, by anyone who presses for the next one. Every token
+  the treasury receives is the fleet's shared money. Once a day anyone may run
+  the daily split, which shares a small part of its ETH, REGENT and USDC
+  equally across the keys minted at least 2 days before.
+- Every vote lasts 24 hours, one ballot per key. A proposal passes when Yes
+  reaches 60% of the keys present when it opened plus those that voted, and
+  anyone may then carry it out within 48 hours. A payment moves at most 99%
+  of the treasury's balance of one asset.
+- A shard lets an agent wallet act for a key: mark it present and, unless the
+  key's owner turns it off, vote, propose and cancel with it. Every shard of a
+  key ends when the key changes hands.
+- A founding fleet's key N holds card N of the fleet's fixed deck; a key past
+  its deck asks Chainlink VRF for its traits.
 
 [contracts/README.md](contracts/README.md) states each rule exactly.
 
 ## Status
 
-Decided by the founder on 27 and 29 September 2026: the rules above.
-
-On hold or not yet done:
-
-- Key sales stay off until the founder explicitly says so, and not before the
-  contracts are complete and deployed on Ethereum.
-- Before any deploy: an outside audit and the founder's go. The protocol
-  treasury of every fleet is the Regents Safe on Ethereum,
-  `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, a required deploy input with no
-  default.
-- Deferred until each fleet type is next: Fibonacci late-entry capture and the
-  Cascade reserve of a level that never completes.
+- The site is live at keyfleet.ai on Fly (app `keyfleet`, one machine),
+  released from `main` by `scripts/deploy.sh`
+  ([deploy checklist](docs/deploy-checklist.md#6-deploy)).
+- The Regents Club is deployed on Base and open. Classic #1, Syndicate #1,
+  Cascade #1 and Accelerant #1 are coming soon: not deployed, and no key is on
+  sale until the founder explicitly says so.
+- The Regents Safe on Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, is
+  the keeper and moves sales from phase to phase.
+- Deferred until the Cascade fleet type is next: the reserve of a level that
+  never completes.
 - Every wallet button sends a step the server built before anyone pressed, and
   the server follows each sent step until the chain answers.
-- There is no Fly app yet; it is created at launch.
+- What needs a person is saved with the site's errors at `/admin/errors`,
+  which Fly Sentinel reads: the chain reader stopping, fleet money overdue
+  while there is money to move, a notebook hub or the code store failing, a
+  saved notebook page left without its lasting address, and a fleet's
+  workspace stalling.
 - The GitHub remote is `regents-ai/keyfleet` and is private.
 - The migrations that add required columns need no existing rows in
   production. Migration `20260927072219` cannot be rolled back, and rolling

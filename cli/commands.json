@@ -1425,6 +1425,77 @@
           }
         ]
       },
+      {
+        "command": "notebooks run <fleet> <notebook>",
+        "description": "Start a background run of one of the fleet's notebooks as the agent: its saved code, top to bottom, in a fresh sandbox, without changing the notebook. Read it with notebooks result until it has finished. The same idempotency key starts one run however often it is sent. Requires current pairing and fleet membership. Refusals include 404 notebook_run_not_found (no such notebook) and 429 notebook_runs_full (the notebook has 20 runs waiting).",
+        "operation_id": "startNotebookRun",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/runs/start",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "webmcp": "start_notebook_run",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "notebook",
+            "type": "string",
+            "in": "path",
+            "field": "notebook_id",
+            "description": "The notebook's id on the fleet's notebook host, nb- and 16 characters."
+          }
+        ],
+        "flags": [
+          {
+            "name": "idempotency-key",
+            "type": "string",
+            "in": "body",
+            "field": "idempotency_key",
+            "required": true,
+            "description": "Up to 128 visible ASCII characters you choose. Sending the same key again answers the run it already started instead of starting another."
+          }
+        ]
+      },
+      {
+        "command": "notebooks result <fleet> <notebook> <run>",
+        "description": "Read one background run of the fleet's notebook and how it stands: queued, provisioning, running, then succeeded, failed, timed_out, cancelled or skipped. Once a run that made a page has finished, result_url is the kept page's address, ready to cite in the workspace; until then it is null. Requires current pairing and fleet membership. Refusals include 404 notebook_run_not_found (no such notebook or run).",
+        "operation_id": "readNotebookResult",
+        "method": "GET",
+        "path": "/api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/runs/{run_id}",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "read",
+        "webmcp": "read_notebook_result",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "notebook",
+            "type": "string",
+            "in": "path",
+            "field": "notebook_id",
+            "description": "The notebook's id on the fleet's notebook host, nb- and 16 characters."
+          },
+          {
+            "name": "run",
+            "type": "string",
+            "in": "path",
+            "field": "run_id",
+            "description": "The run's id, as notebooks run answered it."
+          }
+        ]
+      },
     {
       "command": "agents whoami",
       "description": "Verify the agent identity and current pairing; no pairing prerequisite.",

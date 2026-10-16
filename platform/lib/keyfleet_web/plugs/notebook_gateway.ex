@@ -46,6 +46,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   headers a notebook page needs (`@kept_response`). A WebSocket
   is carried by `KeyfleetWeb.NotebookSocket`, which closes when the key's
   holder loses it.
+
+  A hub that does not answer (`Keyfleet.Notebooks.HubSilent`), and a saved
+  page shown without its copy kept (`Keyfleet.Notebooks.ResultNotKept`), are
+  saved with the site's errors for someone to act on.
   """
   @behaviour Plug
   @behaviour Siwa.AgentAuthPlug.Hooks
@@ -53,7 +57,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   import Plug.Conn
 
   alias Keyfleet.{AccessCache, Notebooks}
-  alias Keyfleet.Notebooks.{HubClient, Pass, SavedOutput}
+  alias Keyfleet.Notebooks.{HubSilent, Pass, ResultNotKept, SavedOutput}
   alias KeyfleetWeb.{NotebookSocket, Refusal}
   alias KeyfleetWeb.Plugs.SignedAgent
 
@@ -377,35 +381,16 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   defp check(conn, fleet_id, subject, actor) do
-    with {:holder, {:ok, true}} <- {:holder, Notebooks.member?(actor, fleet_id)},
-         {:project, {:ok, project_id}} when is_binary(project_id) <-
-           {:project, Notebooks.project_id(fleet_id)},
-         {:hub, :ok} <- {:hub, make_editor(fleet_id, project_id, subject)} do
-      AccessCache.admit(:notebooks, fleet_id, subject, true, Notebooks.config()[:access_ttl_ms])
-      forward(conn, fleet_id, subject)
-    else
-      {:holder, {:ok, false}} ->
-        Refusal.json(conn, 403, "notebooks_not_holder")
-
-      {:holder, {:error, _error}} ->
-        Refusal.json(conn, 503, "notebooks_catching_up")
-
-      {:project, {:ok, nil}} ->
-        Oban.insert!(Notebooks.Roster.new(%{fleet_id: fleet_id}))
-        Refusal.json(conn, 503, "notebooks_setting_up")
-
-      {_step, _error} ->
-        Refusal.json(conn, 502, "notebooks_unavailable")
+    case Notebooks.admit(actor, fleet_id, subject) do
+      {:ok, _project_id} -> forward(conn, fleet_id, subject)
+      {:error, reason} -> refuse(conn, reason)
     end
   end
 
-  # Someone who lost a key and holds one again was suspended in the hub.
-  defp make_editor(fleet_id, project_id, subject) do
-    with {:ok, _added} <- HubClient.add_editor(fleet_id, project_id, subject),
-         {:ok, _reactivated} <- HubClient.reactivate(fleet_id, subject) do
-      :ok
-    end
-  end
+  defp refuse(conn, :not_holder), do: Refusal.json(conn, 403, "notebooks_not_holder")
+  defp refuse(conn, :catching_up), do: Refusal.json(conn, 503, "notebooks_catching_up")
+  defp refuse(conn, :setting_up), do: Refusal.json(conn, 503, "notebooks_setting_up")
+  defp refuse(conn, :unavailable), do: Refusal.json(conn, 502, "notebooks_unavailable")
 
   ## Forwarding
 
@@ -524,8 +509,13 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  defp stream_back({:error, _error}, conn, _fleet_id),
-    do: Refusal.json(conn, 502, "notebooks_unavailable")
+  defp stream_back({:error, error}, conn, fleet_id) do
+    HubSilent.report(
+      "The notebook hub of #{fleet_id} did not answer a request: #{inspect(error)}"
+    )
+
+    Refusal.json(conn, 502, "notebooks_unavailable")
+  end
 
   defp stream_back({:ok, %Req.Response{} = response}, conn, fleet_id) do
     conn =
@@ -609,7 +599,12 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         |> put_result_link(fleet_id, notebook_id, source_id, saved_at)
         |> send_resp(200, page)
 
-      {:error, _error} ->
+      {:error, error} ->
+        ResultNotKept.report(
+          "A saved page of notebook #{notebook_id} in #{fleet_id} was shown without its " <>
+            "lasting address: " <> Exception.message(error)
+        )
+
         send_resp(conn, 200, page)
     end
   end
@@ -733,7 +728,11 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
           compress: false
         )
 
-      {:error, _error} ->
+      {:error, reason} ->
+        HubSilent.report(
+          "The notebook hub of #{fleet_id} refused a live connection: #{inspect(reason)}"
+        )
+
         Refusal.json(conn, 502, "notebooks_unavailable")
     end
   end

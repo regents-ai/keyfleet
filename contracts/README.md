@@ -164,9 +164,12 @@ and what the code on this branch does:
 
 On hold or not yet done:
 
-- Nothing is deployed. Before any deploy: the internal audit of every Keyfleet
-  contract the founder chose on 9 Oct in place of an outside one, its findings
-  resolved subject to the founder's accepted risks above, and the founder's go.
+- The Regents Club is deployed on Base; its deployment record is not yet
+  committed here as `deployments/base.deployed.json`. Classic #1 and the other
+  founding fleets are not deployed. Before each further deploy: the internal
+  audit of every Keyfleet contract the founder chose on 9 Oct in place of an
+  outside one, its findings resolved subject to the founder's accepted risks
+  above, and the founder's go.
 - Key sales stay off until the founder explicitly says so. On chain no key of
   any fleet can be minted before the Safe's phase step that opens it.
 - `deployments/base.json` carries the trait table's hash

@@ -8,8 +8,9 @@ defmodule KeyfleetWeb.NotebookSocket do
   passed along as it is. The connection registers under its fleet and holder
   (`Keyfleet.Notebooks.access_topic/2`) and, for a person, under the Keyfleet
   sign-in it came from: when the holder loses their key, the person signs out
-  of Keyfleet, or the sign-in it was opened with runs out (the person's
-  notebook cookie or the Keyfleet sign-in it came from, whichever ends first,
+  of Keyfleet, an agent's person ends its pairing (announced on
+  `RegentAgents.topic/1`), or the sign-in it was opened with runs out (the
+  person's notebook cookie or the Keyfleet sign-in it came from, whichever ends first,
   or the receipt an agent's request was signed with), it closes with 1008 and
   says why. What the gateway checked may change before the connection is
   listening for it, so once it is, it reads the sign-in and the Key once more
@@ -23,6 +24,7 @@ defmodule KeyfleetWeb.NotebookSocket do
 
   @closed_reason "Your Key no longer opens these notebooks."
   @signed_out_reason "You signed out of Keyfleet."
+  @unpaired_reason "Your pairing ended, so this notebook connection closed."
   @sign_in_ended_reason "Your sign-in ran out. Sign in again to reopen the notebooks."
   @longest_reason "This connection was open for a day. Connect again to carry on."
   @longest_ms 24 * 60 * 60 * 1000
@@ -108,13 +110,16 @@ defmodule KeyfleetWeb.NotebookSocket do
       :ok
     else
       :signed_out -> {:closed, @signed_out_reason}
+      :unpaired -> {:closed, @unpaired_reason}
       {:ok, false} -> {:closed, @closed_reason}
       {:error, _error} -> :unreadable
     end
   end
 
+  # An agent stays in while the pairing it connected under is current; its
+  # sign-in running out is `sign_in_ends_at`'s.
   defp signed_in({:agent, agent}),
-    do: if(Keyfleet.Actors.Agent.valid?(agent), do: {:ok, agent}, else: :signed_out)
+    do: if(Keyfleet.Actors.Agent.valid?(agent), do: {:ok, agent}, else: :unpaired)
 
   defp signed_in({:person, session_authority_id, account_id}) do
     case Notebooks.person(session_authority_id, account_id) do

@@ -190,6 +190,7 @@ defmodule KeyfleetWeb.Router do
     get "/.well-known/agent-skills/index.json", AgentFilesController, :index
     get "/.well-known/agent-skills/keyfleet.zip", AgentFilesController, :archive
     get "/.well-known/agent-skills/keyfleet/SKILL.md", AgentFilesController, :skill
+    get "/agents/:agent/skill.md", AgentFilesController, :agent_skill
     get "/metadata/collection.json", MetadataController, :collection
     get "/metadata/keys/:token_id", MetadataController, :show
   end
@@ -197,6 +198,8 @@ defmodule KeyfleetWeb.Router do
   scope "/", KeyfleetWeb do
     pipe_through :public_documents
     get "/docs", PublicPagesController, :show
+    get "/agents", PublicPagesController, :show
+    get "/agents/:agent", PublicPagesController, :show
     get "/contact", PublicPagesController, :show
     get "/privacy", PublicPagesController, :show
     get "/terms", PublicPagesController, :show
@@ -275,6 +278,8 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/polls/:poll_id/end", AgentPollController, :end_poll
     post "/fleets/:fleet_id/code/password", AgentCodeController, :password
     get "/fleets/:fleet_id/code/pushes", AgentCodeController, :pushes
+    post "/fleets/:fleet_id/notebooks/:notebook_id/runs/start", AgentNotebookController, :start
+    get "/fleets/:fleet_id/notebooks/:notebook_id/runs/:run_id", AgentNotebookController, :show
     get "/fleets/:fleet_id/mutes", AgentMuteController, :index
     post "/fleets/:fleet_id/keys/:token_id/mute", AgentMuteController, :create
     post "/fleets/:fleet_id/keys/:token_id/unmute", AgentMuteController, :delete

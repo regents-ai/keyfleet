@@ -101,6 +101,8 @@ defmodule KeyfleetWeb.PublicDocuments do
   def document(path) when path in @reading,
     do: %{markdown: source(String.trim_leading(path, "/"))}
 
+  def document("/agents" <> _rest = path), do: KeyfleetWeb.AgentGuides.document(path)
+
   def document(_path), do: nil
 
   def llms, do: source("llms")
@@ -147,7 +149,12 @@ defmodule KeyfleetWeb.PublicDocuments do
   its path, a page inside the app by its route.
   """
   def page(key) do
-    {title, description} = Map.fetch!(@pages, key)
+    {title, description} =
+      case key do
+        "/agents" <> _rest -> KeyfleetWeb.AgentGuides.page(key)
+        _other -> Map.fetch!(@pages, key)
+      end
+
     [page_title: title, page_description: description]
   end
 
@@ -161,7 +168,7 @@ defmodule KeyfleetWeb.PublicDocuments do
       description: description,
       canonical: url(path),
       image: url(KeyfleetWeb.Endpoint.static_path("/images/keyfleet-share.png")),
-      markdown?: path in @documents,
+      markdown?: path in @documents or path in KeyfleetWeb.AgentGuides.paths(),
       site_type: @site_type
     }
   end
@@ -184,7 +191,7 @@ defmodule KeyfleetWeb.PublicDocuments do
 
     paths =
       if KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?(),
-        do: @documents,
+        do: @documents ++ KeyfleetWeb.AgentGuides.paths(),
         else: KeyfleetWeb.Plugs.LaunchGate.open_pages()
 
     locations =

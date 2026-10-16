@@ -144,6 +144,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
              view,
              ~s(#account-agents li img[src="/images/regent-ui/agents/hermes.png"])
            )
+
+    assert has_element?(view, "#account-agents li", "Hermes")
   end
 
   test "stale wallet evidence cannot retain protected human shell access", %{conn: conn} do

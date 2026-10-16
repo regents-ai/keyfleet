@@ -66,9 +66,17 @@ time live in `config :keyfleet, :code` (`platform/config/config.exs`).
 
    Git asks for a user name (anything) and the password.
 
-## Going live
+## On Fly
 
-Nothing here is on Fly yet, and each step needs the founder's go:
+The code store is live: `keyfleet-code` runs at its private Flycast address,
+`keyfleet` reaches it through `KEYFLEET_CODE_NODE` (a release without it does
+not start), and git reaches the fleets' code at `code.keyfleet.ai`. When the
+store cannot be reached, stops mid-exchange or answers with a fault of its
+own, the site saves it with its errors at `/admin/errors`
+(`Keyfleet.Code.StoreDown`), which Fly Sentinel reads.
+
+These are the steps it was set up with, for setting it up again; each needs
+the founder's go:
 
 1. Create `keyfleet-code` with its volume and its own database on the shared
    PostgreSQL 17 server, private address only (`repos/twigpine/infra/keyfleet/README.md`,
