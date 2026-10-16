@@ -1660,3 +1660,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - In that window, the reason a closed "Buy Key" can't be pressed sits right
   under it, so a small phone that scrolls the window sees both together, and
   Close no longer carries an arrow.
+
+## 2026-10-16 — Classic checks before sales open
+
+- `mix keyfleet.check_classic <deployed record>` checks Classic #1 against its
+  deployed record: the shipped deck's hash, fleet, size and trait table, the
+  site's binding, and Key 1's Set Type Classic, Set ID 001, traits and
+  published card, stopping with the first thing that is off.

@@ -135,6 +135,15 @@ the contracts above.
    with a server error and changes nothing recorded; the format is in
    `docs/deployment.md`.
 
+   Once Classic #1's Key 1 is bought and recorded, on a fork or on Base,
+   `mix keyfleet.check_classic <deployed record>` checks Classic against the
+   record and stops with the first thing that is off: the shipped deck hashes
+   to the record's `deckHash`, was made for `CLASSIC #1` with the record's
+   `deckSize` cards and the record's trait table; the site's Classic #1 is
+   bound to that record; and Key 1's metadata shows Set Type `Classic`, Set ID
+   `001` and every trait of the table, with its card published at the address
+   its `image` names.
+
 3. Nothing to restart: the watch starts reading a newly bound fleet within a
    minute.
 
