@@ -526,7 +526,9 @@
   /* With nothing left to show, the chip takes no room. */
   #shell-header:has(.shell-credits) .account-chip:not(:has(.account-avatar)) { padding-inline: 0; border-inline-start: 0; }
   .account-control > .rg-button { font-size: .75rem; margin: 4px; padding-inline: .75rem; white-space: nowrap; }
-  .shell-get-key > .rg-button { font-size: .75rem; margin: 4px 0; padding-inline: .5rem; }
+  .shell-get-key > .rg-button { font-size: .75rem; margin: 4px 0; padding-inline: .5rem; gap: .375rem; }
+  /* The crown keeps its size; only the name beside it gives way. */
+  #shell-header .shell-brand__mark { flex: none; }
   /* Signed in, the Credits balance joins the row without its unit: the
      controls keep their size and the brand's name gives way first. */
   #app-shell .shell-credits {
@@ -537,11 +539,16 @@
   }
   #app-shell .shell-credits__unit { display: none; }
   #shell-header .theme-control,
+  #shell-header .shell-get-key,
   #shell-header .account-control,
   #shell-header .account-chip { flex: 0 0 auto; }
+  /* Beside the balance there is no room for Sign out as well; it stays on the
+     Account page, one tap away in the Menu. */
+  #shell-header:has(.shell-credits) .account-control [data-account-target="sign-out"] { display: none; }
 }
 @media (max-width: 22.49rem) {
-  /* A 320px phone has no room for the theme switch beside the balance; the
-     device's own light or dark setting applies until the screen is wider. */
-  #shell-header:has(.shell-credits) .theme-control { display: none; }
+  /* A 320px phone has no room for the theme switch beside Get a Key or the
+     balance; the device's own light or dark setting applies until the screen
+     is wider. */
+  #shell-header:has(.shell-get-key, .shell-credits) .theme-control { display: none; }
 }

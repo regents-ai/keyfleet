@@ -1617,3 +1617,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - An agent told to get paired, and the agents guide, now point its person to
   their Account page on this site instead of regents.sh.
+
+## 2026-10-16 — Get a Key keeps its size on a phone
+
+- On a phone the header's Get a Key button keeps its full width beside the
+  Credits balance instead of being squeezed under it; the Keyfleet name beside
+  the crown gives way first, and the crown keeps its size.
+- Beside the balance on a phone, Sign out moves to the Account page, one tap away
+  in the Menu.
+- On a 320px phone the theme switch steps aside for Get a Key too.
