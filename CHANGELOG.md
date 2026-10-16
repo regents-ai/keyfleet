@@ -1670,3 +1670,6 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Every hour, a fleet within 100 Keys of the end of its deck that can sell
   past it is saved at /admin/errors (Classic #1 from its 900th Key to its
   1,000th), so the randomness subscription is ready before Key 1,001 sells.
+- The anvil proposal lifecycle now reloads the proposal pages once a decision
+  is carried out and another cancelled, and checks each shows where it stands,
+  with both Keys' latest ballots counted.

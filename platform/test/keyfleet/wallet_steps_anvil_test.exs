@@ -14,12 +14,17 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   # their wallet's warning, or past a button turned off, would see it.
   use ExUnit.Case, async: false
 
+  import Phoenix.LiveViewTest
+
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{AnvilLab, ChainClient, Fleets, Repo, Traits, WalletSteps}
   alias Keyfleet.Chain.{RpcClient, Scanner}
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.WalletSteps.{Reads, VoteSteps}
+  alias KeyfleetWeb.ProposalsPage
   alias RegentChain.{Abi, Call, Event, Outcome, Review}
+
+  @endpoint KeyfleetWeb.Endpoint
 
   @moduletag :external
   @moduletag timeout: 900_000
@@ -69,7 +74,10 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   end
 
   setup %{url: url, lab: lab} do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    # Shared at repeatable read, as `KeyfleetWeb.ConnCase` does, so a page
+    # opened here reads the test's own record.
+    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true, isolation: "REPEATABLE READ")
+    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
 
     @fleet_id
@@ -227,6 +235,29 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert pressed(url, cancel, "cancel") == {:ok, :confirmed}
       assert build!(:cancel, @buyer, proposal: 2).figures.blocked == %{"cancel" => :cancelled}
       assert pressed(url, cancel, "cancel") == {:ok, :reverted}
+
+      # Reloaded once the reader has recorded it all, the pages show where
+      # each stands, from the record and from the chain alike: the first
+      # carried out with both Keys' latest ballots, the second cancelled.
+      scan!()
+      conn = KeyfleetWeb.SessionAuthorityHelpers.build_conn()
+
+      {:ok, list, _html} = live(conn, ProposalsPage.list_path(@fleet_id))
+
+      assert cards(list) == [
+               {"2", "Cancelled", "0 yes, 0 no, 0 abstain, of 2 Keys counted"},
+               {"1", "Carried out", "2 yes, 0 no, 0 abstain, of 2 Keys counted"}
+             ]
+
+      {:ok, carried, _html} = live(conn, ProposalsPage.detail_path(@fleet_id, 1))
+      assert has_element?(carried, "#proposal-status", "Carried out")
+      assert has_element?(carried, "#proposal-yes", "2 Keys")
+      assert has_element?(carried, "#proposal-no", "0 Keys")
+      assert has_element?(carried, "#proposal-executor")
+
+      {:ok, cancelled, _html} = live(conn, ProposalsPage.detail_path(@fleet_id, 2))
+      assert has_element?(cancelled, "#proposal-status", "Cancelled")
+      assert has_element?(cancelled, "#proposal-canceller")
     end
   end
 
@@ -705,6 +736,21 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   end
 
   defp names(%{review: review}), do: Enum.map(review.steps, & &1.step)
+
+  # Each proposal on a list page: its number, its status and its tally.
+  defp cards(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("[data-proposal]")
+    |> Enum.map(fn card ->
+      {card |> LazyHTML.attribute("data-proposal") |> hd(),
+       card |> LazyHTML.query(".proposals-badge") |> words(),
+       card |> LazyHTML.query(".proposals-detail") |> words()}
+    end)
+  end
+
+  defp words(node), do: node |> LazyHTML.text() |> String.split() |> Enum.join(" ")
 
   # A press of `name`, sent from the wallet the steps were built for, and
   # how it landed as the page reads it.
