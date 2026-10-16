@@ -1603,3 +1603,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The command check runs regents-cli `1.10.12` (`6dacddd`), which carries every
   Keyfleet command; the guide no longer says the direct message, code push and
   proposal commands are missing from the command line.
+
+## 2026-10-16 — The phone map keeps its room
+
+- On a phone the map's tools are one compact row that scrolls sideways, so the
+  map shows several rows of Keys under them.
+- The map's notes sit in a row under the map instead of over it, so they never
+  hide a Key, and the tip beside them opens again.
+- A map closed while its pictures were still being looked up starts no loads
+  afterwards.
