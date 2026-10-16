@@ -1,6 +1,7 @@
 defmodule KeyfleetWeb.SharedAgentPairingTest do
   use KeyfleetWeb.ConnCase, async: false
 
+  import Ecto.Query
   import KeyfleetWeb.RefusalHelpers
 
   alias Keyfleet.Accounts
@@ -64,6 +65,15 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
     end)
   end
 
+  defp last_contact_at do
+    Keyfleet.Repo.one!(
+      from a in "paired_agents",
+        prefix: "regent_agents",
+        where: a.wallet == @wallet,
+        select: a.last_contact_at
+    )
+  end
+
   defp code! do
     RegentAgents.issue_pairing_code!(actor: %RegentAgents.Person{privy_user_id: @owner}).code
   end
@@ -99,6 +109,25 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
            } = json_response(checked_in, 200)
 
     assert_received {:verified, ["keyfleet"], %{"method" => "GET", "path" => "/api/agents/v1/me"}}
+  end
+
+  test "an agent paired by a person with no Keyfleet account checks in to account_missing",
+       %{conn: conn} do
+    siwa_verifies()
+    stranger = %RegentAgents.Person{privy_user_id: "did:privy:keyfleet-no-account"}
+    code = RegentAgents.issue_pairing_code!(actor: stranger).code
+
+    paired =
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/agents/v1/pair", Jason.encode!(%{code: code, name: "Sol", harness: "codex"}))
+
+    assert json_response(paired, 201)
+    contact = last_contact_at()
+
+    checked_in = get(build_conn(), "/api/agents/v1/me")
+    assert json_response(checked_in, 404)["error"]["code"] == "account_missing"
+    assert last_contact_at() == contact
   end
 
   test "while the site is closed, both requests answer not_open_yet", %{conn: conn} do

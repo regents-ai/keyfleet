@@ -1578,3 +1578,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - Moved the shared Regent libraries to elixir-utils `a1f6721`, which no longer
   forces its own Bandit; Keyfleet keeps Bandit 1.13 from Hex.
+
+## 2026-10-16 — Shared libraries 695a824
+
+- Moved the shared Regent libraries to elixir-utils `695a824`. An agent paired by a
+  person who has no Keyfleet account now hears `account_missing` when it checks in.

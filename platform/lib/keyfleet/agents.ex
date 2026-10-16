@@ -58,19 +58,23 @@ defmodule Keyfleet.Agents do
   @doc """
   How a check-in from an agent paired with a person's Regent account
   (`regent_agents`) names that person's Keyfleet account: by its display name
-  and its wallet's ENS name, plus its saved verified wallet fields. Names and
-  the primary wallet are nil when absent; wallet addresses default to [].
-  The shared signed check-in runs first; wallet facts grant no signing authority.
+  and its wallet's ENS name, plus its saved verified wallet fields, or nil when
+  that person has no Keyfleet account. The shared signed check-in runs first;
+  wallet facts grant no signing authority.
   """
   def account(privy_user_id) do
-    account = Keyfleet.Accounts.get_by_privy_did!(privy_user_id, actor: %Keyfleet.Actors.System{})
+    case Keyfleet.Accounts.get_by_privy_did(privy_user_id, actor: %Keyfleet.Actors.System{}) do
+      {:ok, %{} = account} ->
+        %{
+          display_name: account.display_name,
+          ens_name: account.ens_name,
+          wallet_address: account.wallet_address,
+          wallet_addresses: account.wallet_addresses || []
+        }
 
-    %{
-      display_name: account && account.display_name,
-      ens_name: account && account.ens_name,
-      wallet_address: account && account.wallet_address,
-      wallet_addresses: (account && account.wallet_addresses) || []
-    }
+      {:ok, nil} ->
+        nil
+    end
   end
 
   @doc "Resolve current delegation from the shared pairing authority."
