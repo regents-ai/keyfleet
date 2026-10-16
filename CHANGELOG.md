@@ -1626,3 +1626,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Beside the balance on a phone, Sign out moves to the Account page, one tap away
   in the Menu.
 - On a 320px phone the theme switch steps aside for Get a Key too.
+
+## 2026-10-16 — A fleet's tabs stay on one row
+
+- Chat, Treasury, Proposals, Workspace and Keys no longer carry an arrow; they
+  are places on the page, not actions, and they fit one row on a tablet and a
+  laptop.
+- On a phone the tabs are compact and stay one row that scrolls sideways, with
+  the open tab always in view, so the page's own content starts near the top of
+  the screen.

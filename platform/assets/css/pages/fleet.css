@@ -772,13 +772,30 @@
 
 }
 
-/* On a phone the map's tool buttons are compact, so they fit one row. This
+/* The fleet's tabs are places, not actions, so they carry no arrow. This sits
+   outside the product layer, so it wins over the site's button rules. */
+.fleet-bar__nav .rg-button::after {
+  content: none;
+}
+
+/* On a phone the map's tool buttons and the fleet's tabs are compact, so each
+   fits one row; the tabs scroll sideways if the screen is narrower still. This
    sits outside the product layer, so it wins over the site's button sizes. */
 @media (max-width: 48rem) {
-  .fleet-map-controls .rg-button {
+  .fleet-map-controls .rg-button,
+  .fleet-bar__nav .rg-button {
     min-height: 2.25rem;
     padding: 0.25rem 0.75rem;
     font-size: 0.875rem;
+  }
+
+  .fleet-bar__nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .fleet-bar__nav .rg-button {
+    flex: none;
   }
 }
 
