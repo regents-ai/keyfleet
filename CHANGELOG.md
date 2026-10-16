@@ -1536,3 +1536,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   just below it: the page and its footer fill the screen together.
 - The Regents Labs apps menu lists products only. Account is no longer in it;
   the Account page stays in the sidebar.
+
+## 2026-10-16 — Each regents command names the agent tool that does the same job
+
+- Eleven Keyfleet commands now name the agent tool on the page that does the
+  same thing: fleets list and get, presence mark, proposals create, vote,
+  cancel and carry-out, split run, treasury send-share and convert, and keys
+  claim.
+- Five command descriptions no longer say they wait for a CLI release.
