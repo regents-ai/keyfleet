@@ -17,7 +17,7 @@ import {defineConfig, devices} from "@playwright/test"
 // transaction it never commits, so the keys and shards a run records are
 // gone when the server stops, and every run starts from the same unsold
 // fleets.
-const port = process.env.PORT || "4002"
+const port = process.env.PORT || "4502"
 const partition = `${process.env.MIX_TEST_PARTITION ?? ""}_fleet_map`
 const baseURL = `https://localhost:${port}`
 

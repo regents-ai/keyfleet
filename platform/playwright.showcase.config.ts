@@ -11,7 +11,7 @@ export default defineConfig({
   reporter: "line",
   // The test server answers over https, with a certificate it made for itself.
   use: {
-    baseURL: `https://localhost:${process.env.PORT || "4002"}`,
+    baseURL: `https://localhost:${process.env.PORT || "4502"}`,
     ignoreHTTPSErrors: true,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

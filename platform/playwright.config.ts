@@ -1,6 +1,6 @@
 import {defineConfig, devices} from "@playwright/test"
 
-const baseURL = `https://localhost:${process.env.PORT || "4002"}`
+const baseURL = `https://localhost:${process.env.PORT || "4502"}`
 
 export default defineConfig({
   testDir: "./test/browser",
