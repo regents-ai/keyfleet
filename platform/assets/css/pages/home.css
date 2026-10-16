@@ -196,7 +196,7 @@
   }
   .rl-buy-key__facts dt { color: var(--rl-muted); }
   .rl-buy-key__facts dd { margin: 0; font-variant-numeric: tabular-nums; text-align: end; }
-  .rl-buy-key__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  .rl-buy-key__actions { display: grid; justify-items: start; gap: var(--space-2); }
   .rl-buy-key__actions form { margin: 0; }
   .rl-buy-key__why { min-block-size: 1.5em; margin: 0; color: var(--rl-muted); font-size: .875rem; }
   /* Room for its count, its goal, one featured item and its latest, each
@@ -271,3 +271,6 @@
 /* A button that leaves for another site carries the arrow in its words, so
    it drops the chevron, which an unlayered rule draws. */
 .rl-fleet .rl-fleet__out::after { content: none; }
+
+/* Close goes nowhere, so it carries no chevron either. */
+.rl-buy-key .rl-buy-key__close::after { content: none; }

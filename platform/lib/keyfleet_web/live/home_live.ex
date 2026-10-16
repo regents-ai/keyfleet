@@ -625,7 +625,8 @@ defmodule KeyfleetWeb.HomeLive do
 
   # The window "Buy Key" opens: the next Key's card art, where its price goes,
   # how far the sale has gone, and the next Key's price and the one after it.
-  # Its Buy is the same as "Buy Next Key" above.
+  # Its Buy is the same as "Buy Next Key" above, with the reason it is closed
+  # right under it, so a phone that scrolls the window sees both together.
   defp buy_key(assigns) do
     assigns = assign(assigns, offer(assigns.classic)) |> assign(key_window(assigns.classic))
 
@@ -678,13 +679,18 @@ defmodule KeyfleetWeb.HomeLive do
         >
           Buy Key
         </Regent.Primitives.button>
+        <p id="home-buy-key-why" class="rl-buy-key__why">{@why}</p>
         <form method="dialog">
-          <Regent.Primitives.button id="home-buy-key-close" type="submit" variant="secondary">
+          <Regent.Primitives.button
+            id="home-buy-key-close"
+            class="rl-buy-key__close"
+            type="submit"
+            variant="secondary"
+          >
             Close
           </Regent.Primitives.button>
         </form>
       </div>
-      <p id="home-buy-key-why" class="rl-buy-key__why">{@why}</p>
     </dialog>
     """
   end

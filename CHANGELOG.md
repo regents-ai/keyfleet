@@ -1657,3 +1657,6 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The Regents Club says its Keys were airdropped to early Regents users, and has
   "Public View" and "Buy Access Key", which opens the Club's Keys on OpenSea in
   a new tab.
+- In that window, the reason a closed "Buy Key" can't be pressed sits right
+  under it, so a small phone that scrolls the window sees both together, and
+  Close no longer carries an arrow.
