@@ -1660,3 +1660,24 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - In that window, the reason a closed "Buy Key" can't be pressed sits right
   under it, so a small phone that scrolls the window sees both together, and
   Close no longer carries an arrow.
+
+## 2026-10-16 — The side panel: account, agents and Pair New Agent
+
+- On every app page, the signed-in person's name in the header opens a side
+  panel, and closes it again. It holds Sign out, Manage Account (regents.sh, in
+  a new tab), the agents paired with the account with the Regent site each was
+  last active on and how long ago, and Pair New Agent. On a wide screen it sits
+  beside the page and stays open from page to page; on a smaller one it covers
+  the page and opens only when pressed. The homepage keeps the name beside Sign
+  out, with no panel.
+- Pair New Agent moved from the Account page into the panel, where the ten
+  featured agents are chosen by their pictures. The Account page's "Pair New
+  Agent" button opens the panel, and "Unpair agents on regents.sh" stays.
+- Agents and the pairing hints now point people to "Pair New Agent in the side
+  panel" on this site, replacing "their Account page on this site".
+- A check-in from an agent whose person hasn't signed in here is refused with
+  `person_not_here`, as on every Regent site.
+- Where each agent was last active is read only while the panel is open, at
+  most once every five minutes per agent, with `SIWA_ACTIVITY_READ_TOKEN`.
+- The shared Regent libraries move to elixir-utils `03433b80` and the design
+  system `28888839`.

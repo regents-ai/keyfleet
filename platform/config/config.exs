@@ -57,6 +57,12 @@ config :keyfleet, :avatar_bucket, req_options: []
 # The key-art service that draws revealed keys' cards (`key-art/`).
 config :keyfleet, Keyfleet.Keys.KeyArt, req_options: []
 
+# Each paired agent's reading from the sign-in service, kept five minutes. Older
+# readings leave with the generation the collector drops every ten minutes.
+config :keyfleet, Keyfleet.Agents.ActivityReading,
+  gc_interval: :timer.minutes(10),
+  max_size: 10_000
+
 # Regent's Lighthouse account, which keeps revealed keys' cards on IPFS for
 # good (`Keyfleet.Lighthouse`). Production sets its `api_key`.
 config :keyfleet, Keyfleet.Lighthouse, url: "https://upload.lighthouse.storage", req_options: []

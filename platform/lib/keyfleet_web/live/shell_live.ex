@@ -352,10 +352,10 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # The person's agents changed on any Regent site: paired, checked in,
-  # corrected or unpaired.
+  # corrected or unpaired. The side panel's list and pairing box read again.
   def handle_info(:agents_changed, socket) do
-    if socket.assigns.route_spec.route_id == :account,
-      do: send_update(KeyfleetWeb.PairingBox, id: "account-agents-pair", agents_changed: true)
+    send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
+    send_update(KeyfleetWeb.PanelAgents, id: "shell-agents", agents_changed: true)
 
     account = current_account(socket.assigns.access_context)
     {:noreply, read_paired_agents(socket, account)}
@@ -507,6 +507,22 @@ defmodule KeyfleetWeb.ShellLive do
       get_key={@get_key}
       credits={signed_in_credits(@access_context, @credits)}
     >
+      <:agents :if={current_account(@access_context)}>
+        <.live_component
+          module={KeyfleetWeb.PanelAgents}
+          id="shell-agents"
+          lease={@session_lease}
+          account={current_account(@access_context)}
+        />
+      </:agents>
+      <:pairing :if={current_account(@access_context)}>
+        <.live_component
+          module={KeyfleetWeb.PairingBox}
+          id="shell-pairing-box"
+          lease={@session_lease}
+          account={current_account(@access_context)}
+        />
+      </:pairing>
       <:credits_panel :if={signed_in_credits(@access_context, @credits)}>
         <.live_component
           module={KeyfleetWeb.CreditsPanel}
@@ -527,7 +543,6 @@ defmodule KeyfleetWeb.ShellLive do
           account={current_account(@access_context)}
           signed_out_reason={@signed_out_reason}
           account_control={@account_control}
-          lease={@session_lease}
           held_keys={@held_keys}
           paired_agents={@paired_agents}
           credits={@credits}

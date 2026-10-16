@@ -362,6 +362,7 @@ defmodule KeyfleetWeb.HomeLive do
         get_key_link={:navigate}
         menu={false}
         theme={true}
+        panel={false}
       />
 
       <main>

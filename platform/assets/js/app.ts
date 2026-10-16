@@ -1,4 +1,5 @@
 import "../css/app.css"
+import "../vendor/regent_ui/pill_select.mjs"
 
 // Asks before any element carrying data-confirm acts, such as ending a poll.
 import "phoenix_html"
@@ -22,6 +23,7 @@ import {
   type ShellState,
 } from "./shell_state"
 import {installCopyButtons} from "./copy_buttons"
+import {installShellAside} from "./shell_aside"
 import {installPublicTools} from "./public_tools"
 import {CurrentTab} from "./hooks/current_tab"
 import {FleetPreview} from "./hooks/fleet_preview"
@@ -30,6 +32,7 @@ import {HolographicCard} from "./hooks/holographic_card"
 import {KeyMap} from "./hooks/key_map"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
+import {PanelAgents} from "./hooks/panel_agents"
 import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
 import {MotionCascade, ShellViews} from "./hooks/motion/reveals"
 import {VerifiedConnections} from "./hooks/verified_connections"
@@ -38,6 +41,7 @@ import {mountMotion} from "./motion"
 type ShellHook = Hook & {
   el: HTMLElement
   cleanup?: () => void
+  syncAside?: () => void
   shellState?: ShellState
   restoreState?: () => void
 }
@@ -239,6 +243,8 @@ const shellBehavior: Hook = {
     shell.addEventListener("click", onClick)
     shell.addEventListener("keydown", onKeydown)
     window.addEventListener("popstate", onHistoryNavigation)
+    const shellAside = installShellAside(shell)
+    this.syncAside = shellAside.sync
     this.restoreState()
     scroller()?.scrollTo({top: 0})
     shell.dataset.behaviorReady = "true"
@@ -248,6 +254,7 @@ const shellBehavior: Hook = {
       shell.removeEventListener("click", onClick)
       shell.removeEventListener("keydown", onKeydown)
       window.removeEventListener("popstate", onHistoryNavigation)
+      shellAside.cleanup()
     }
   },
 
@@ -266,6 +273,7 @@ const shellBehavior: Hook = {
       this.shellState = reconcileShellState(this.shellState, incoming)
     }
     this.restoreState?.()
+    this.syncAside?.()
     if (menuWasOpen && this.shellState?.menuOpen === false) {
       this.el.querySelector<HTMLButtonElement>("#mobile-menu-button")?.focus()
     }
@@ -304,6 +312,7 @@ const hooks = {
   MotionRefusal,
   NextKeyCard,
   OnchainSteps,
+  PanelAgents,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
   VerifiedConnections,
 }

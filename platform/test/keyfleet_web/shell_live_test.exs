@@ -76,7 +76,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
   end
 
-  test "signed-in account control renders its address avatar and Sign out", %{conn: conn} do
+  test "signed-in account control renders its address avatar and opens the side panel",
+       %{conn: conn} do
     account = register_account("signed-in-control", "0x1111111111111111111111111111111111111111")
 
     {:ok, view, _html} =
@@ -93,15 +94,26 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(
              view,
-             "#account-control button[type=button][data-account-target=sign-out]",
+             "#account-control button#account-chip[aria-controls=shell-aside][data-aside-toggle]"
+           )
+
+    assert has_element?(
+             view,
+             "#shell-aside button[type=button][data-account-target=sign-out]",
              "Sign out"
+           )
+
+    assert has_element?(
+             view,
+             "#shell-aside a[href='https://regents.sh/account'][target=_blank]",
+             "Manage Account"
            )
 
     assert has_element?(view, "#theme-control button.theme-toggle[data-theme-toggle]")
     refute has_element?(view, "#account-control [phx-click]")
   end
 
-  test "the Account page pairs only an offered agent, with a new code",
+  test "the side panel pairs only a featured agent, with a new code",
        %{conn: conn} do
     account = register_account("pairing-box", "0x2222222222222222222222222222222222222222")
 
@@ -110,7 +122,9 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> init_test_session(%{human_account_id: account.id})
       |> live("/account")
 
-    box = "#account-agents-pair"
+    assert has_element?(view, "#account-agents-pair[data-aside-open]", "Pair New Agent")
+
+    box = "#shell-pairing-box"
     assert has_element?(view, "#{box} input[name=harness][value=hermes]")
     refute has_element?(view, "#{box} input[name=harness][value=chatgpt]")
 
@@ -158,7 +172,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert view.pid == pid
     assert render(view) =~ ~s(data-shell-instance="#{instance}")
     assert has_element?(view, "#account-control [data-account-target=profile]", "0x2222..2222")
-    assert has_element?(view, "#account-control [data-account-target=sign-out]", "Sign out")
+    assert has_element?(view, "#shell-aside [data-account-target=sign-out]", "Sign out")
   end
 
   test "the signed-in account chip shows the picture, the name and Sign out" do

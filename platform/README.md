@@ -11,7 +11,10 @@ page, where a visitor chooses one of the four fleets, and each fleet's page
 first; the other three show as coming soon, with no keys, rooms or way to join,
 until each one's deployment is recorded (`Keyfleet.Fleets.coming_soon?/2`). From a fleet's page, key
 holders reach its rooms, its shared workspace and its proposals. A signed-in
-person's keys are on the Account page (`/account`). The site also serves Privy
+person's keys are on the Account page (`/account`). On every app page, the
+signed-in person's name opens a side panel with Sign out, Manage Account (on
+regents.sh), their paired agents and where each was last active, and Pair New
+Agent; the homepage shows the name beside Sign out instead. The site also serves Privy
 wallet sign-in, the public pages, the agent API, health and metrics. Inside it,
 the chain reader follows the fleets on Ethereum. The site never sends a
 transaction itself.
@@ -85,6 +88,7 @@ production.
 | `PHX_HOST` | Yes in production | Public hostname the endpoint builds URLs from. |
 | `SECRET_KEY_BASE` | Yes in production | Session signing secret; at least 64 bytes. |
 | `KEYFLEET_SIWA_URL` | Yes in production | The SIWA sign-in server that checks signed agent requests and that the joining guide names; `fly.toml` sets it. Development and tests default to a local siwa-server on port 4100. |
+| `SIWA_ACTIVITY_READ_TOKEN` | No | This site's key for reading where paired agents were last active from the SIWA server (`RegentAgents.Activity`), shown in the side panel. Unset, the agents are listed without that line. |
 | `KEYFLEET_RPC_URL` | For the fleet reader | The Ethereum node the site reads the fleets through, and what a page's wallet buttons sent (`:chain_nodes`); see [the chain reader](../docs/chain-reader.md). Wallets are still given Ethereum's public address. Unset, the fleet reader does not run and sent steps are read from Ethereum's public node. |
 | `PORT` | No | HTTP port. Defaults to `4000`. |
 | `REGENT_CREDITS_ADMINS` | No | The Privy accounts, comma separated, that may give Credits, handle refunds and read the saved errors at `/admin/errors`. Unset, nobody can, and `/admin/errors` answers not found. |

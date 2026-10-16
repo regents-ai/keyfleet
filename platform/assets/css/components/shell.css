@@ -1,8 +1,17 @@
+/* The side panel's width slides, so the page beside it gives way smoothly. */
+@property --shell-aside {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
 #app-shell {
+  --shell-aside-open: 20rem;
+  --shell-aside: var(--shell-aside-open);
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template: auto minmax(0, 1fr) / var(--rg-rail-width) minmax(0, 1fr);
+  grid-template: auto minmax(0, 1fr) / var(--rg-rail-width) minmax(0, 1fr) var(--shell-aside);
   min-width: 0;
   height: 100dvh;
   overflow: visible;
@@ -10,6 +19,13 @@
   color: var(--color-fg);
   font-family: var(--font-family-ui);
   line-height: 1.55;
+  transition: --shell-aside var(--duration-slow) var(--ease-out);
+}
+
+/* Closed, or signed out with no side panel at all, it keeps no room. */
+:root:not([data-aside="open"]) #app-shell,
+#app-shell:not(:has(#shell-aside)) {
+  --shell-aside: 0px;
 }
 
 /* The first stop for a keyboard: out of sight until it has focus. */
@@ -113,10 +129,37 @@
   align-items: center;
 }
 
-/* The name only shows who is signed in; it is not a control. */
+/* Beside Sign out (the homepage) the name only shows who is signed in; on the
+   app's pages it opens the side panel. */
 .account-chip {
   min-width: 0;
   cursor: default;
+}
+
+button.account-chip {
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  button.account-chip:hover {
+    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
+  }
+}
+
+button.account-chip[aria-expanded="true"] {
+  background: var(--ash-panel-strong);
+}
+
+/* Shown only where the name gives way and there is no picture (a phone beside
+   the Credits balance), so the panel always has something to open it. */
+.account-chip__panel {
+  display: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
 }
 
 #shell-header > .account-control {
@@ -523,8 +566,7 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  /* With nothing left to show, the chip takes no room. */
-  #shell-header:has(.shell-credits) .account-chip:not(:has(.account-avatar)) { padding-inline: 0; border-inline-start: 0; }
+  #shell-header:has(.shell-credits) .account-chip:not(:has(.account-avatar)) .account-chip__panel { display: block; }
   .account-control > .rg-button { font-size: .75rem; margin: 4px; padding-inline: .75rem; white-space: nowrap; }
   .shell-get-key > .rg-button { font-size: .75rem; margin: 4px 0; padding-inline: .5rem; gap: .375rem; }
   /* The crown keeps its size; only the name beside it gives way. */
@@ -542,13 +584,121 @@
   #shell-header .shell-get-key,
   #shell-header .account-control,
   #shell-header .account-chip { flex: 0 0 auto; }
-  /* Beside the balance there is no room for Sign out as well; it stays on the
-     Account page, one tap away in the Menu. */
-  #shell-header:has(.shell-credits) .account-control [data-account-target="sign-out"] { display: none; }
 }
 @media (max-width: 22.49rem) {
   /* A 320px phone has no room for the theme switch beside Get a Key or the
      balance; the device's own light or dark setting applies until the screen
      is wider. */
   #shell-header:has(.shell-get-key, .shell-credits) .theme-control { display: none; }
+}
+
+/* ---- Side panel: the account, its agents and Pair New Agent ---- */
+
+/* A wide screen gives it its own column beside the page. */
+#shell-aside {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  grid-row: 2;
+  grid-column: 3;
+  align-content: start;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden auto;
+  border-inline-start: 1px solid var(--color-border);
+  background: var(--color-bg);
+  /* Hidden only once it has slid shut. */
+  transition: visibility var(--duration-slow);
+}
+
+/* Shown at once on opening, so focus can move into it. */
+:root[data-aside="open"] #shell-aside {
+  transition: none;
+}
+
+/* Its parts keep their width while it slides, so nothing inside rewraps. */
+#shell-aside > * {
+  min-inline-size: calc(var(--shell-aside-open) - 1px);
+}
+
+:root:not([data-aside="open"]) #shell-aside {
+  visibility: hidden;
+}
+
+#shell-aside:focus {
+  outline: none;
+}
+
+/* Sign out and Manage Account share one short row; the account's name in the
+   header closes the panel. */
+.shell-aside__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding-inline: 1rem;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.shell-aside__head .rg-button {
+  min-height: 2rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+#shell-aside section {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-block-end: 1px solid var(--color-border);
+}
+
+#shell-aside h2 {
+  margin: 0;
+  font-family: var(--font-family-ui);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+#shell-aside p {
+  margin: 0;
+}
+
+/* Below a wide screen it covers the page under the header, and opens only when
+   opened on this page, never on arrival. The page and the sidebar strip keep
+   their own rows beneath it. */
+@media (max-width: 63.99rem) {
+  #app-shell-scroller {
+    grid-row: -2;
+    grid-column: 1 / -1;
+  }
+
+  #shell-sidebar {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+
+  #shell-aside {
+    z-index: 6;
+    grid-row: 2 / -1;
+    grid-column: 1 / -1;
+    border-inline-start: 0;
+  }
+
+  #shell-aside > * {
+    min-inline-size: 0;
+  }
+
+  :root:not([data-aside="open"]) #shell-aside,
+  :root:not([data-aside-here]) #shell-aside {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app-shell,
+  #shell-aside {
+    transition: none;
+  }
 }

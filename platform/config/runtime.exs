@@ -156,6 +156,10 @@ if config_env() == :prod do
     config :keyfleet, :siwa_broker_url, siwa_url
     config :regent_agents, siwa: [url: siwa_url, audience: "keyfleet"]
 
+    # Where each paired agent was last active, for the side panel; without it
+    # the agents are listed with no last-active line.
+    config :regent_agents, :activity_read_token, System.get_env("SIWA_ACTIVITY_READ_TOKEN")
+
     # The fleets' code store, at its private Flycast address
     # (`http://keyfleet-code.flycast`), takes only passes signed with
     # KEYFLEET_HUB_SIGNING_KEY.

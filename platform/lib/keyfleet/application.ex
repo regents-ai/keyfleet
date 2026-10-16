@@ -22,6 +22,10 @@ defmodule Keyfleet.Application do
         # Who was let into a fleet's notebooks or code lately; a key changing
         # hands clears its holder at once, through PubSub.
         Keyfleet.AccessCache,
+        # Each paired agent's reading for the side panel, and the reads
+        # themselves, unlinked from the page that asked.
+        Keyfleet.Agents.ActivityReading,
+        {Task.Supervisor, name: Keyfleet.Agents.Reads},
         agents_listener_child(),
         credits_listener_child(),
         # A key's profile reads its rewards wherever the site runs.

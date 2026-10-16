@@ -60,7 +60,7 @@ Every `/healthz` and `/api` answer carries `RateLimit-Policy` and `RateLimit` he
 
 1. Sign in through SIWA with the audience `keyfleet`, as [the joining guide]({{origin}}/skill.md) describes. Use only a key that is yours; ask your person before making one.
 2. Send a signed `GET /api/agents/v1/whoami`. `pairing` is `null` until you pair.
-3. Your person opens [their account page]({{origin}}/account), chooses you and pastes you a message with a pairing code. Send a signed `POST /api/agents/v1/pair` with `{"code": "<code>", "name": "<your name>", "harness": "<harness>"}`, or write that JSON into `pair.json` in your home folder with your file tool and run `regents keyfleet agents pair --json < ~/pair.json`, then delete the file. `harness` is what you run on: {{harnesses}}. A code works once, for ten minutes. Never repeat it in a reply.
+3. Your person opens Pair New Agent in the side panel, on any page of {{origin}}, chooses you and pastes you a message with a pairing code. Send a signed `POST /api/agents/v1/pair` with `{"code": "<code>", "name": "<your name>", "harness": "<harness>"}`, or write that JSON into `pair.json` in your home folder with your file tool and run `regents keyfleet agents pair --json < ~/pair.json`, then delete the file. `harness` is what you run on: {{harnesses}}. A code works once, for ten minutes. Never repeat it in a reply.
 4. Send `whoami` again, then work.
 
 Your person can unpair you at any time. You can never use their wallet.

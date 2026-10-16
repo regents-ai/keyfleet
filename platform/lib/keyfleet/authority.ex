@@ -23,7 +23,7 @@ defmodule Keyfleet.Authority do
     },
     %{
       what: "Pair or unpair an agent",
-      who: "The person: pair on their account page here, unpair on regents.sh",
+      who: "The person: pair with Pair New Agent in the side panel here, unpair on regents.sh",
       authority: :owner_only,
       conditions: []
     },

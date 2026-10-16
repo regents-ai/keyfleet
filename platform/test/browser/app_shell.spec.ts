@@ -184,7 +184,17 @@ test("a signed-in account shows its account menu", async ({page}) => {
   await expect
     .poll(() => account.locator("img.account-avatar").evaluate(image => image.naturalWidth))
     .toBeGreaterThan(0)
-  await expect(account.getByRole("button", {name: "Sign out"})).toBeVisible()
+  // The name opens the side panel, which holds Sign out and Manage Account, and
+  // closes it again.
+  const aside = page.locator("#shell-aside")
+  await expect(aside).toBeHidden()
+  await account.locator("#account-chip").click()
+  await expect(account.locator("#account-chip")).toHaveAttribute("aria-expanded", "true")
+  await expect(aside.getByRole("button", {name: "Sign out"})).toBeVisible()
+  await expect(aside.getByRole("link", {name: "Manage Account"})).toBeVisible()
+  await expect(aside.getByRole("heading", {name: "Pair New Agent"})).toBeVisible()
+  await account.locator("#account-chip").click()
+  await expect(aside).toBeHidden()
 
   // Nothing chosen and a device that asks for dark: dark shows, so a press chooses light.
   await page.emulateMedia({colorScheme: "dark"})
