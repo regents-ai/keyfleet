@@ -9,6 +9,7 @@ defmodule Keyfleet.Accounts do
       define :points_account, action: :points_account, args: [:id]
       define :get_human_account, action: :read_self, args: [:id]
       define :accounts_holding_wallets, action: :holding_wallets, args: [:wallets]
+      define :accounts_by_ids, action: :by_ids, args: [:ids]
 
       define :register_verified,
         action: :register_verified,

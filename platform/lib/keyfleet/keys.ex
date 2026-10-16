@@ -307,21 +307,46 @@ defmodule Keyfleet.Keys do
   end
 
   @doc """
-  The addresses holding the fleet's keys today, most keys first and then by
-  address, leaving out the addresses in `left_out`: `limit` of them from
-  `offset`, each as `%{wallet: wallet, count: count}`.
+  The people holding the fleet's keys today, most keys first, leaving out the
+  addresses in `left_out`: `limit` of them from `offset`. A person is a Regent
+  account with every address it links counted together; an address no account
+  links is a holder of its own. Each is `%{account_id: id_or_nil, wallets:
+  wallets, count: count}`, its wallets lowest first; holders with as many keys
+  are ordered by their lowest wallet.
   """
   def holders(fleet_id, left_out, offset, limit) do
     from(key in subquery(owned(fleet_id)),
+      left_join: linked in subquery(linked_wallets()),
+      on: linked.wallet == key.owner_wallet,
       where: key.owner_wallet not in ^left_out,
-      group_by: key.owner_wallet,
-      order_by: [desc: count(), asc: key.owner_wallet],
+      group_by: fragment("coalesce(?::text, ?)", linked.account_id, key.owner_wallet),
+      order_by: [desc: count(), asc: min(key.owner_wallet)],
       offset: ^offset,
       limit: ^limit,
-      select: %{wallet: key.owner_wallet, count: count()}
+      select: %{
+        account_id: max(linked.account_id),
+        wallets: fragment("array_agg(DISTINCT ? ORDER BY ?)", key.owner_wallet, key.owner_wallet),
+        count: count()
+      }
     )
-    # Ownership is public, and a count grouped by holder is no row of a resource.
+    # Ownership is public, and so is every address a Regent account links, so
+    # keys are counted by person here directly.
     |> Keyfleet.Repo.all()
+  end
+
+  # Every address a Regent account links, lowercase, with the account it
+  # belongs to; an address two accounts claim goes to the older one.
+  defp linked_wallets do
+    from(
+      linked in fragment("""
+      SELECT lower(wallet) AS wallet, min(account.id) AS account_id
+      FROM regent_names.platform_human_users AS account
+      CROSS JOIN LATERAL unnest(account.wallet_addresses || account.wallet_address) AS wallet
+      WHERE wallet IS NOT NULL
+      GROUP BY lower(wallet)
+      """),
+      select: %{wallet: linked.wallet, account_id: linked.account_id}
+    )
   end
 
   @doc """

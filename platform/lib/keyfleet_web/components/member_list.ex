@@ -1,14 +1,15 @@
 defmodule KeyfleetWeb.Components.MemberList do
   @moduledoc """
-  A fleet's Member List: one card for each address holding its Keys, most
-  Keys first, twenty to a page (`?view=members&page=N`). Each card names the
-  holder (the name of the Regent account that signed in with the address,
-  else the short address), how many Keys it holds with its lowest ones as
-  small cards opening each Key, its connected X, GitHub and Farcaster
-  accounts, and whether it is active: a Key of it can vote now, as the
-  Treasury counts presence. `club_claims` is the address the Regents Club's
-  Keys wait at for their Pass holders, left out of the list; nil for a fleet
-  with none.
+  A fleet's Member List: one card for each person holding its Keys, most Keys
+  first, twenty to a page (`?view=members&page=N`). A person is a Regent
+  account, with the Keys at every address it links counted together; Keys at
+  an address no account links make a card of their own. Each card names the
+  person (their chosen name, else their ENS name, else their short main
+  address), how many Keys they hold with the lowest as small cards opening
+  each Key, their connected X, GitHub and Farcaster accounts, and whether they
+  are active: a Key of theirs can vote now, as the Treasury counts presence.
+  `club_claims` is the address the Regents Club's Keys wait at for their Pass
+  holders, left out of the list; nil for a fleet with none.
 
   The page is read when it opens and again whenever the fleet's Keys change
   hands (`refresh/1`).
@@ -74,24 +75,33 @@ defmodule KeyfleetWeb.Components.MemberList do
   defp cards(_fleet_id, _deck, []), do: []
 
   defp cards(fleet_id, deck, holders) do
-    wallets = Enum.map(holders, & &1.wallet)
+    wallets = Enum.flat_map(holders, & &1.wallets)
     held = Keys.lowest_held(fleet_id, wallets, @cards_shown)
     pictures = pictures(deck, held |> Map.values() |> List.flatten())
     present = Keys.present_holders(fleet_id, wallets)
     last_active = Keys.last_active(fleet_id, wallets)
-    {names, connections} = people(wallets)
+    accounts = accounts(holders)
+    connections = connections(Map.keys(accounts))
 
-    for %{wallet: wallet, count: count} <- holders do
+    for %{account_id: account_id, wallets: own, count: count} <- holders do
+      account = accounts[account_id]
+
+      shown =
+        own |> Enum.flat_map(&Map.get(held, &1, [])) |> Enum.sort() |> Enum.take(@cards_shown)
+
       %{
-        wallet: wallet,
+        id: card_id(account, own),
         count: count,
-        name: names[wallet],
-        connections: Map.get(connections, wallet, []),
-        present?: MapSet.member?(present, wallet),
-        last_active: last_active[wallet],
-        cards:
-          for(token_id <- held[wallet], do: %{token_id: token_id, image: pictures[token_id]}),
-        more: count - length(held[wallet])
+        name: name(account, own),
+        connections: Map.get(connections, account_id, []),
+        present?: Enum.any?(own, &MapSet.member?(present, &1)),
+        last_active:
+          own
+          |> Enum.map(&last_active[&1])
+          |> Enum.reject(&is_nil/1)
+          |> Enum.max(DateTime, fn -> nil end),
+        cards: for(token_id <- shown, do: %{token_id: token_id, image: pictures[token_id]}),
+        more: count - length(shown)
       }
     end
   end
@@ -103,35 +113,38 @@ defmodule KeyfleetWeb.Components.MemberList do
       |> Enum.chunk_every(100)
       |> Enum.reduce(%{}, &Map.merge(&2, Metadata.small_cards(deck, &1)))
 
-  # The name and connections of the account each address signed in with, by
-  # address; an address no account has signed in with has neither.
-  defp people(wallets) do
-    accounts =
-      Accounts.accounts_holding_wallets!(wallets,
-        actor: %System{},
-        load: [:display_name, :ens_name]
-      )
+  # The accounts of the people on the page, by id.
+  defp accounts(holders) do
+    case for(%{account_id: id} <- holders, id, do: id) do
+      [] ->
+        %{}
 
-    shown =
-      accounts
-      |> Enum.map(& &1.id)
-      |> Accounts.list_shown_linked_identities!()
-      |> Enum.group_by(& &1.human_account_id, &connection/1)
-      |> Map.new(fn {account_id, links} -> {account_id, Enum.reject(links, &is_nil/1)} end)
-
-    by_wallet =
-      for account <- accounts,
-          wallet <- [account.wallet_address | account.wallet_addresses],
-          is_binary(wallet),
-          into: %{},
-          do: {String.downcase(wallet), account}
-
-    for wallet <- wallets, account = by_wallet[wallet], reduce: {%{}, %{}} do
-      {names, connections} ->
-        {Map.put(names, wallet, PublicIdentity.name(account)),
-         Map.put(connections, wallet, Map.get(shown, account.id, []))}
+      ids ->
+        ids
+        |> Accounts.accounts_by_ids!(actor: %System{}, load: [:display_name, :ens_name])
+        |> Map.new(&{&1.id, &1})
     end
   end
+
+  # The connections each account shows, by account id.
+  defp connections([]), do: %{}
+
+  defp connections(account_ids) do
+    account_ids
+    |> Accounts.list_shown_linked_identities!()
+    |> Enum.group_by(& &1.human_account_id, &connection/1)
+    |> Map.new(fn {account_id, links} -> {account_id, Enum.reject(links, &is_nil/1)} end)
+  end
+
+  # A person's card is known by their main address, an unlinked address's by
+  # itself.
+  defp card_id(%{wallet_address: wallet}, _own) when is_binary(wallet),
+    do: String.downcase(wallet)
+
+  defp card_id(_account, [wallet | _rest]), do: wallet
+
+  defp name(nil, [wallet]), do: RegentFormat.short_address(wallet)
+  defp name(account, own), do: PublicIdentity.name(account) || name(nil, [card_id(account, own)])
 
   # A connection is shown only with the account name it links to.
   defp connection(identity) do
@@ -151,12 +164,11 @@ defmodule KeyfleetWeb.Components.MemberList do
       <ol id={"#{@id}-holders"} class="member-list__holders">
         <li
           :for={holder <- @holders}
-          id={"#{@id}-holder-#{holder.wallet}"}
+          id={"#{@id}-holder-#{holder.id}"}
           class="member-card"
         >
           <p class="member-card__who">
-            <strong>{holder.name || RegentFormat.short_address(holder.wallet)}</strong>
-            <span :if={holder.name}>{RegentFormat.short_address(holder.wallet)}</span>
+            <strong>{holder.name}</strong>
             <span class="member-card__count">{Rules.keys(holder.count)}</span>
           </p>
           <p class="member-card__status" data-present={holder.present? && "true"}>

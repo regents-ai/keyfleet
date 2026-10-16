@@ -73,6 +73,36 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     refute has_element?(view, "#fleet-members-previous")
   end
 
+  # Every address a person's account links is counted as one card under their
+  # main address; an address no account links keeps a card of its own.
+  test "the Member List shows each person once with the Keys of all their addresses", %{
+    conn: conn
+  } do
+    deploy!()
+    ChainHelpers.seed_cursor!(@fleet)
+    [main, first, second, loose] = for _ <- 1..4, do: unclaimed_wallet()
+    move!(7, first)
+    move!(9, second)
+    move!(10, second)
+    move!(8, loose)
+
+    Accounts.register_verified!(
+      "did:privy:member-list",
+      String.upcase(main),
+      [main, first, String.replace_prefix(String.upcase(second), "0X", "0x")],
+      actor: %Keyfleet.Actors.System{}
+    )
+
+    {:ok, view, _html} = live(conn, @members_path)
+
+    assert Enum.drop(holders(view), 1) == [main, loose]
+    assert text(view, "#fleet-members-holder-#{main} .member-card__count") == "3 Keys"
+    assert text(view, "#fleet-members-holder-#{main} strong") == RegentFormat.short_address(main)
+    assert shown_keys(view, main) == [7, 9, 10]
+    refute render(view) =~ RegentFormat.short_address(first)
+    assert shown_keys(view, loose) == [8]
+  end
+
   test "a visitor is listed General alone, never another room's name", %{conn: conn} do
     deploy!()
     Keyfleet.Rooms.bootstrap_rooms!(Fleets.catalog_ids())
@@ -1648,6 +1678,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     |> String.split()
     |> Enum.join(" ")
   end
+
+  # An address no account in the shared accounts table links.
+  defp unclaimed_wallet, do: "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
 
   # The holders the Member List shows, in its order.
   defp holders(view) do

@@ -83,6 +83,11 @@ defmodule Keyfleet.Accounts.HumanAccount do
       prepare build(load: [:display_name, :ens_name, :ens_avatar_url])
     end
 
+    read :by_ids do
+      argument :ids, {:array, :integer}, allow_nil?: false, constraints: [max_length: 100]
+      filter expr(id in ^arg(:ids))
+    end
+
     # The accounts linking any of these wallets, which are lowercase; the
     # accounts may keep theirs in any case.
     read :holding_wallets do
@@ -120,6 +125,7 @@ defmodule Keyfleet.Accounts.HumanAccount do
              :read,
              :by_privy_did,
              :holding_wallets,
+             :by_ids,
              :register_verified,
              :refresh_verified,
              :points_account
