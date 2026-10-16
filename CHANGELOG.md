@@ -1583,3 +1583,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - Moved the shared Regent libraries to elixir-utils `695a824`. An agent paired by a
   person who has no Keyfleet account now hears `account_missing` when it checks in.
+
+## 2026-10-16 — Buttons with cut corners
+
+- Main buttons cut two corners and carry Powder Blue and Tangerine marks, from
+  design-system `9e93f14`; the hover arrow and the press motion stay.
