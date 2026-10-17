@@ -1,0 +1,247 @@
+# Authorized security red-team check catalog (2026-10-17).
+#
+# The machine-readable source of truth for the red-team proof table. Each check
+# names the attack, the control that stops it, the regression probe that asserts
+# the safe outcome, the local toggle that disables the control (so the probe can
+# be shown to fail with the guard off), a static verdict, and whether a live run
+# is still needed to close it.
+#
+# Verdicts:
+#   safe_by_code     — the control is present and the cited code enforces it.
+#   safe_by_design   — safe by an architectural property (e.g. origin isolation).
+#   needs_dynamic    — static analysis cannot settle it; the live/fork run must.
+#   na               — the pattern does not exist in this codebase.
+#
+# Render and validate with: mix run scripts/security_proof_table.exs
+#
+# Nothing here is a code fix: the static review found no exploitable in-repo
+# vulnerability. The probes lock the controls in; the dynamic items are handed
+# to the Mac. Residual risk lives in dependencies (siwa, RegentPrivy,
+# RegentCredits) and on-chain, named per check.
+
+meta:
+  date: "2026-10-17"
+  base_commit: "8edec518"
+  scope: "local/staging checkout only; three throwaway personas; seeded data; never live, never the shared production DB"
+  run_suite: "mix test test/keyfleet_web/security"
+  run_with_dynamic: "mix test test/keyfleet_web/security --include dynamic"
+
+checks:
+  # ---- Access control & tenancy ----
+  - id: RT-IDOR-DM
+    category: access_control
+    attack: "An agent acts as a Key it does not hold — send/read/block DMs as a foreign token_id."
+    control: "dms/message.ex (KeyHolder on from_token_id/token_id/token_ids); dms/conversation.ex:144-150; agent_dm_controller.ex:257 -> 403 not_your_key"
+    probe: "test/keyfleet_web/security/access_control_probes_test.exs — RT-IDOR-DM"
+    disable_toggle: "Remove the KeyHolder `keys:` check from the DM action policy in dms/message.ex / dms/conversation.ex."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-IDOR-GRAPH
+    category: access_control
+    attack: "An agent writes the workspace as_key for a Key it does not hold."
+    control: "graph/workspace.ex:130-131 (KeyActor on as_key); re-checked in graph/writer.ex:159-176; agent_graph_controller.ex:94 -> 403 not_a_key_holder"
+    probe: "test/keyfleet_web/security/access_control_probes_test.exs — RT-IDOR-GRAPH"
+    disable_toggle: "Remove the KeyActor check keyed on as_key from the graph create/patch policy."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-IDOR-ROOM
+    category: access_control
+    attack: "An agent posts to a room / key wall as a Key it does not hold."
+    control: "rooms/changes/post_message.ex:88-112 derives as_key from Keys.identity (never input); rooms/message.ex:583-591 policies"
+    probe: "covered end-to-end by test/keyfleet_web/controllers/agent_room_journey_test.exs; red-team cross-check in access_control_probes_test.exs"
+    disable_toggle: "Make post_message take as_key from the request body instead of Keys.identity."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-MASS-ASSIGN
+    category: access_control
+    attack: "A profile update sets a protected field (role, human_account_id, pairing_id, credits_admin, standing)."
+    control: "signed_agent.ex:83,506-507 (@editable allow-list); agents/agent_profile.ex:44-51 accept; wallet_address/human_id set from actor, not input"
+    probe: "test/keyfleet_web/security/access_control_probes_test.exs — RT-MASS-ASSIGN"
+    disable_toggle: "Add a field (e.g. \"role\") to @editable in signed_agent.ex or to the agent_profile :update accept list."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-ROLE-CREDITS-ADMIN
+    category: access_control
+    attack: "Gain Credits-admin (/admin/errors, treasury switch) via a client-reachable action."
+    control: "errors_admin.ex:63-82 — membership is the REGENT_CREDITS_ADMINS deploy env matched to privy_user_id; no stored role, no client write path (access.ex:133-141)"
+    probe: "no runnable client attack exists (env-config membership); asserted by absence — see analysis doc"
+    disable_toggle: "n/a (would require inventing a client-writable admin attribute)"
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-TENANT
+    category: access_control
+    attack: "A member of fleet Y reads fleet X's member-only workspace/rooms."
+    control: "access/check.ex:24-39 resolves the class for the path fleet_id against membership of that fleet; access.ex:133-137 member?/2"
+    probe: "test/keyfleet_web/security/access_control_probes_test.exs — RT-TENANT"
+    disable_toggle: "In access/check.ex resolve against a fixed fleet instead of the path fleet_id."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-SESSION
+    category: access_control
+    attack: "Reuse/replay a session cookie or re-point a lineage to another account; abuse a reset/magic link."
+    control: "accounts/session_authority.ex (random lineage, generation advanced under FOR UPDATE, account never named in cookie); privy_session_controller.ex (token pair in headers only). No reset/magic-link flow exists (Privy is the IdP)."
+    probe: "existing: test/keyfleet/accounts/session_authority_test.exs, test/keyfleet/authority_test.exs"
+    disable_toggle: "Make SessionAuthority.advance accept an account id, or skip the generation bump."
+    verdict: safe_by_code
+    needs_dynamic: true
+    dynamic_note: "Privy token audience/expiry/issuer binding is enforced in RegentPrivy.Session (dependency) — confirm live."
+
+  # ---- Limit & flow bypass ----
+  - id: RT-GATE-CLOSED
+    category: limit_flow
+    attack: "Call the agent API while the site is closed (KEYFLEET_APP_SURFACES=off)."
+    control: "launch_gate.ex:62-103 in the endpoint, before SignedAgent and the router -> 503 not_open_yet"
+    probe: "test/keyfleet_web/security/limit_flow_probes_test.exs — RT-GATE-CLOSED"
+    disable_toggle: "Set :app_surfaces true (control off = request passes); false (control on = 503)."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-GATE-COMING-SOON
+    category: limit_flow
+    attack: "Call chain/treasury/claim endpoints on a coming-soon fleet (behind disabled UI)."
+    control: "fleet_coming_soon.ex:20-22 on the :agent pipeline -> 404 fleet_coming_soon (router.ex :agent scope)"
+    probe: "test/keyfleet_web/security/limit_flow_probes_test.exs — RT-GATE-COMING-SOON (fills the coverage gap: money endpoints were unproven)"
+    disable_toggle: "Remove plug KeyfleetWeb.Plugs.FleetComingSoon from the :agent pipeline (prove locally; do not ship)."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-PAIRING
+    category: limit_flow
+    attack: "A correctly-signed but unpaired wallet performs an agent action."
+    control: "signed_agent.ex:324-347 admit/2 requires Keyfleet.Agents.with_pairing -> 403 agent_not_paired"
+    probe: "test/keyfleet_web/security/limit_flow_probes_test.exs — RT-PAIRING"
+    disable_toggle: "In admit/2 return {:ok, ...} without requiring with_pairing."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-INPUT-BOUNDS
+    category: limit_flow
+    attack: "Smuggle an undocumented field, or send a body over the route cap."
+    control: "signed_agent.ex check_body/2 (exact field allow-lists) and body_limit/1 (per-route byte cap, enforced before Jason.decode)"
+    probe: "test/keyfleet_web/security/limit_flow_probes_test.exs — RT-INPUT-BOUNDS"
+    disable_toggle: "Loosen check_body/2 to accept extra keys, or raise a route's body cap."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-RATE-LIMIT
+    category: limit_flow
+    attack: "Exceed a request/flow limit (session bootstrap, early signup, privy-failure report)."
+    control: "accounts/request_rate_limiter.ex:24-38 (atomic :ets.update_counter then compare); early_controller.ex:53-65; privy_session_controller.ex:101-114"
+    probe: "existing limiter unit tests; dynamic for the real ceiling under burst"
+    disable_toggle: "Raise the configured limit or bypass RequestRateLimiter.admit."
+    verdict: safe_by_code
+    needs_dynamic: true
+    dynamic_note: "Limiter is per-instance by design (request_rate_limiter.ex:5-7); N instances allow N×limit. Multi-instance ceiling is a dynamic/horizontal-scaling check, not a code bug today."
+
+  - id: RT-QUOTA-POSTS
+    category: limit_flow
+    attack: "Exceed the per-person page-post quota (300/hr) from the client."
+    control: "rooms/changes/limit_page_posts.ex:44-67 counts from the DB in a before_action"
+    probe: "existing room tests; documented minor race (limit_page_posts.ex:12-16)"
+    disable_toggle: "Remove the LimitPagePosts change from the action."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-IDEMPOTENCY
+    category: limit_flow
+    attack: "Two concurrent identical sends create two rows (near-'double' write)."
+    control: "dms/rooms message.ex unique identity :unique_send_key on [fleet_id, author_wallet, idempotency_key]; :send_message upsert?; room seq under advisory lock (post_message.ex:85)"
+    probe: "test/keyfleet_web/security/limit_flow_probes_test.exs — RT-IDEMPOTENCY (@tag :dynamic)"
+    disable_toggle: "Drop upsert_identity :unique_send_key (or upsert?) from :send_message -> two rows."
+    verdict: safe_by_code
+    needs_dynamic: true
+    dynamic_note: "Under the sandbox all callers share one connection and serialize; true parallel timing needs a non-sandboxed DB on the Mac."
+
+  - id: RT-CREDIT-SPEND
+    category: limit_flow
+    attack: "Double-spend credits/points at near-zero balance via a concurrency burst."
+    control: "OUT OF REPO — all credit/point debit lives in RegentCredits / RegentPoints (git pins). The in-repo agent API only reads balances and builds unsigned transactions."
+    probe: "no in-repo probe possible; Mac: seed a 1-credit balance, race the RegentCredits spend action on a non-sandboxed DB, assert exactly one succeeds"
+    disable_toggle: "n/a in repo"
+    verdict: needs_dynamic
+    needs_dynamic: true
+    dynamic_note: "Debit atomicity (transaction/locking/unique constraint) is a dependency concern — confirm against RegentCredits live."
+
+  - id: RT-GRAPH-NEST
+    category: limit_flow
+    attack: "A deeply-nested graph data/set object exhausts the parser (DoS)."
+    control: "signed_agent.ex:92-95,473-483 — body cap (~50 KB) read and size-checked before Jason.decode; one request process, isolated crash"
+    probe: "bounded, non-amplifiable; dynamic only to confirm Jason has no pathological deep-nest behavior"
+    disable_toggle: "Raise @graph_write_max_body substantially."
+    verdict: safe_by_code
+    needs_dynamic: true
+    dynamic_note: "Confirm Jason deep-nest stack behavior within the 50 KB cap; not exploitable for DoS given the byte cap."
+
+  # ---- External injection ----
+  - id: RT-XSS-ROOMS
+    category: injection
+    attack: "Stored XSS via a room/DM post body (script, img onerror, javascript: link, data: URL)."
+    control: "rooms_live.ex:45-56 @markdown render:[escape:true] + ammonia sanitize allow-list (tags p a br, a[href], generic_attributes [], url_schemes http/https/mailto); reused dms_live.ex:188"
+    probe: "test/keyfleet_web/security/injection_probes_test.exs — RT-XSS-ROOMS (extends existing room_page_test.exs:155-172 to js:/onerror/img/data: payloads)"
+    disable_toggle: "In rooms_live.ex @markdown set sanitize: [] or render: [unsafe_: true]."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-XSS-DOCS
+    category: injection
+    attack: "Stored/served XSS via public/agent Markdown documents."
+    control: "public_documents.ex:88-95,140-144 MDEx sanitize allow-list; source is committed markdown + server-interpolated fields only"
+    probe: "test/keyfleet_web/security/injection_probes_test.exs — RT-XSS-DOCS"
+    disable_toggle: "Drop the sanitize: option from MDEx.to_html! in public_documents.ex."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-CSP
+    category: injection
+    attack: "Inline/eval script execution or clickjacking via a weak CSP."
+    control: "content_security_policy.ex — default-src 'none', script-src 'self' (no unsafe-inline/eval), base-uri 'none', frame-ancestors 'none'; sign_in adds only Cloudflare Turnstile + documented Privy/WalletConnect origins"
+    probe: "test/keyfleet_web/security/injection_probes_test.exs — RT-CSP (complements existing content_security_policy_test.exs)"
+    disable_toggle: "Add 'unsafe-inline'/'unsafe-eval' to script-src, or widen default-src/frame-ancestors."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-SSRF
+    category: injection
+    attack: "Coerce an outbound fetch to loopback / link-local / cloud-metadata / internal host."
+    control: "no outbound fetch uses a client-controlled host — siwa_broker.ex origin/1 (https, no userinfo), code node_client (Code.config[:node]), notebook_gateway.ex:445 hub_address + check_path traversal block, avatar_bucket server bucket; registryUrl is stored and rendered as a link, never fetched"
+    probe: "registryUrl stored-not-fetched invariant (see analysis doc); no client-host sink exists, so cloud-metadata probes are N/A"
+    disable_toggle: "n/a (would require adding a fetch of a client-supplied URL)"
+    verdict: safe_by_code
+    needs_dynamic: true
+    dynamic_note: "Only candidate: confirm the configured notebook-hub host cannot resolve/redirect to an internal address (redirect:false already set). Skip cloud-metadata probes — no client-host fetch path (per brief: skip if none)."
+
+  - id: RT-REDIRECT
+    category: injection
+    attack: "Open redirect to an attacker origin via a post-login or notebook-open destination."
+    control: "notebooks.ex:148-150 destination?/1 (only '/' or a strict saved-output path) + server-built fleet host; notebook_open_controller.ex:20 / shell_live.ex:261; Privy sign-in returns JSON with no reflected return_to"
+    probe: "test/keyfleet_web/security/injection_probes_test.exs — RT-REDIRECT (destination? guard)"
+    disable_toggle: "Make destination?/1 return true for arbitrary strings."
+    verdict: safe_by_code
+    needs_dynamic: true
+    dynamic_note: "Confirm live that PrivySessionController honors no same-origin-violating redirect parameter."
+
+  - id: RT-NOTEBOOK-ORIGIN
+    category: injection
+    attack: "Notebook-author HTML (served by the gateway) steals the main-app session (stored XSS across origin)."
+    control: "notebook_gateway.ex — gateway only on notebook hosts (separate origin); __Host-keyfleet / __Host-kf_notebooks cookies (host-bound, not sent to subdomains); caller cookies/identity stripped and replaced with a minted Pass; /results replay served under sandbox CSP (notebook_gateway.ex:637-639)"
+    probe: "config invariant — live assertion on the Mac"
+    disable_toggle: "n/a (depends on deployment host layout)"
+    verdict: safe_by_design
+    needs_dynamic: true
+    dynamic_note: "Assert the notebook host is a different registrable origin than the app host, and that no app cookie is returned on a notebook-host request. Consider sending the sandbox CSP on first render too, not only on /results replay."
+
+  - id: RT-PROMPT-INJECTION
+    category: injection
+    attack: "User/agent-authored text steers an AI feature or another agent (prompt injection)."
+    control: "directory_md.ex:16-19,127-147 structural delimiting (strips control/format incl. bidi + zero-width, escapes markdown/HTML, curly-quote wraps, truncates) so member text cannot open its own block; attribution via writer/1, sent_from.ex, arrival/1"
+    probe: "structural delimiting is SAFE-BY-CODE and must be preserved; semantic steering is inherent to A2A messaging"
+    disable_toggle: "Remove the @invisible strip / @special escape in directory_md.ex inline/2."
+    verdict: needs_dynamic
+    needs_dynamic: true
+    dynamic_note: "Primary semantic-injection surface is agent-to-agent JSON (room_json.ex, agent_dm_controller.ex, graph) — raw text delivered to other agents by design, mitigated only by attribution. Drive a real agent live to assess steering; preserve the structural mitigation."

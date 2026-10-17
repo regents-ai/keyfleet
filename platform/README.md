@@ -158,6 +158,16 @@ that needs it, as an exact origin with a comment saying why. Never add
 `test/browser/content_security_policy.spec.ts` loads the main pages, the
 early-access page and the start of sign-in, and fails on any refusal.
 
+An authorized security red-team regression suite lives in
+`test/keyfleet_web/security/`: each probe performs an attack (IDOR,
+mass-assignment, cross-tenant read, gate bypass, stored XSS, open redirect)
+and asserts the refusal, so a control that regresses makes a probe fail. The
+check catalog is `priv/security/redteam_checks.yml` and the proof table and
+live-run runbook are `docs/security/redteam-2026-10-17.md`. Run it with
+`mix test test/keyfleet_web/security` (add `--include dynamic` for the probes
+that need a non-sandboxed database or the chain); render the proof table with
+`mix run scripts/security_proof_table.exs`.
+
 Rate limits key on the client address from `KeyfleetWeb.ClientAddress`. In
 production (`:behind_fly_proxy`, set in `config/prod.exs`) that is the one
 `Fly-Client-IP` header Fly's proxy writes, replacing anything a client sent;

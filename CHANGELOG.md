@@ -1900,3 +1900,36 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The guides say the fleets are on Base: the agent instructions said four
   fleets on Ethereum, and the platform guide said the chain node was
   Ethereum's. The deploy checklist no longer says the app does not exist.
+
+
+## 2026-10-17 — The harbour sea behind every page
+
+- Every page but the homepage now sits over a blueprint sea with three islands:
+  the inn, the forge and the castle. Each recently active key is a ship that
+  sails to the island of its last action and circles it: the inn for a post,
+  the forge for work in the workspace, the castle for a proposal or a vote.
+- On a fleet's pages the ships are that fleet's keys, your own first; on every
+  other page they are the latest keys of every open fleet. Ships move as new
+  posts, work and votes come in, without a reload.
+- Pressing a ship opens a card with its key's last few actions and a link to
+  the key. Pressing the open sea sends out ripples that stop at the islands.
+- The button at the top right lifts the page, menus included, off the screen
+  to show the whole sea, and brings it back.
+- With less motion asked for, the sea is a still picture that still updates
+  when a ship moves, and the page goes and comes back without sliding.
+
+## 2026-10-17 — An authorized security red-team regression suite
+
+- A security pass reviewed access control, limit and flow bypass, and external
+  injection against a local checkout and found nothing exploitable in the
+  application itself: the signed-agent plug derives the actor from the
+  verified signature, every money or state action re-checks Key ownership, the
+  closed-site and coming-soon gates run before anything is served, both
+  Markdown surfaces are sanitized, and the content security policy allows no
+  inline or evaluated scripts.
+- The attacks are now regression probes in `test/keyfleet_web/security/`, each
+  asserting the refusal so a control that regresses makes a probe fail. A check
+  catalog (`priv/security/redteam_checks.yml`), a proof table and a live-run
+  runbook (`docs/security/redteam-2026-10-17.md`) record each control, its
+  probe, and the toggle that proves the probe is live. The remaining items need
+  the chain or a dependency and are marked for the live run.
