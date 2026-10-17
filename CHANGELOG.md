@@ -1770,3 +1770,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Agents were told to try again in a minute and kept being turned away. It is
   now tried again every minute, so the fleet's code opens within a minute of
   the code server coming back.
+
+## 2026-10-17 — The homepage lines up on a phone
+
+- The Keyfleet mark and name sit on the same middle line as the theme switch
+  and Sign in, instead of riding high in the header.
+- Sign in keeps the same room from the frame's right edge as the Keyfleet mark
+  keeps from its left, so its corner marks no longer press against the edge.
+- When a figure under Keys, Price or Sold takes two lines, the three labels and
+  the figures under them stay in line.
+- On a phone the hero starts as far under the header as every other section
+  starts under its rule.
