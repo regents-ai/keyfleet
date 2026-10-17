@@ -9,8 +9,10 @@ defmodule KeyfleetWeb.WorkspacePage do
   links a page at a time and its history a page at a time. Each answers
   `seen`, the log and the place in it the read tables had reached when the
   page was read. Every change is told as one plain line: a list of parts, each a piece of text, a key
-  (`{:key, token_id}`) or an item (`{:item, id, title}`, with a `nil` title
-  when the item is not in the workspace).
+  (`{:key, token_id, agent}`, with the name of the agent that wrote as it, or
+  nil) or an item (`{:item, id, title}`, with a `nil` title when the item is
+  not in the workspace). Who added an item is a key told the same way, so two
+  agents writing as one person's key are told apart.
 
   `commit/4` is one commit in the fleet's code, at the address a workspace
   cites it by (`commit_url/2`): who sent it, and the evidence that cites it
@@ -27,7 +29,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   or a damaged page position, is a page that doesn't exist.
   """
 
-  alias Keyfleet.{Code, Fleets, Notebooks}
+  alias Keyfleet.{Agents, Code, Fleets, Notebooks}
   alias Keyfleet.Graph
   alias Keyfleet.Rooms
   alias KeyfleetWeb.Endpoint
@@ -125,7 +127,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   # One saved page of a notebook version, after the notebooks' `/results/`:
   # notebook id, version id, and when the page was saved in milliseconds since 1970.
   @saved_result ~r/\Anb-[a-z0-9]{16}\/ver_[0-9A-Z]{26}\/[1-9][0-9]{0,15}\z/
-  @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(?:human|agent):0x[0-9a-f]{40}\z/
+  @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(human|agent):(0x[0-9a-f]{40})\z/
   @level ~r/\Alevel:([1-9][0-9]{0,8})\z/
 
   @doc "The types of item a workspace holds."
@@ -170,6 +172,11 @@ defmodule KeyfleetWeb.WorkspacePage do
       activity = Graph.latest_activity!(fleet_id, opts)
       titles = titles(fleet_id, Enum.flat_map(activity, &mentions/1), opts)
 
+      agents =
+        agent_names(
+          Enum.map(page.results, &creator_wallet(&1.sys)) ++ Enum.map(activity, &actor_wallet/1)
+        )
+
       notes =
         fleet_id
         |> Graph.workspace_cards!(%{type: "note"}, Keyword.put(opts, :page, limit: 24))
@@ -182,11 +189,11 @@ defmodule KeyfleetWeb.WorkspacePage do
         ready?: true,
         seen: seen(cursor),
         filter: filter,
-        cards: Enum.map(page.results, &card(&1, fleet_id)),
+        cards: Enum.map(page.results, &card(&1, fleet_id, agents)),
         first_page?: not paged?(params),
         first_page: board_path(fleet_id, filter),
         pages: page_links(page, params, &board_path(fleet_id, filter, &1)),
-        activity: Enum.map(activity, &Map.put(line(&1, titles), :note, notes[&1.seq])),
+        activity: Enum.map(activity, &Map.put(line(&1, titles, agents), :note, notes[&1.seq])),
         code: %{
           clone_url: Code.clone_url(fleet_id),
           pushes: Enum.map(Code.recent_pushes!(fleet_id, opts), &push(&1, fleet_id))
@@ -230,10 +237,11 @@ defmodule KeyfleetWeb.WorkspacePage do
 
           others = Enum.map(links.results, &other_end(&1, object_id))
           titles = titles(fleet_id, others ++ Enum.flat_map(history, &mentions/1), opts)
+          agents = agent_names([creator_wallet(object.sys) | Enum.map(history, &actor_wallet/1)])
           path = &item_path(fleet_id, object_id, item_query(params, &1, &2))
 
           Map.merge(base, %{
-            object: detail(object, fleet_id, opts),
+            object: detail(object, fleet_id, agents, opts),
             links: %{
               rows: Enum.map(links.results, &link_row(&1, object, titles)),
               more:
@@ -243,7 +251,7 @@ defmodule KeyfleetWeb.WorkspacePage do
               first: if(links_at != [], do: path.("links", nil))
             },
             history: %{
-              lines: Enum.map(history, &line(&1, titles)),
+              lines: Enum.map(history, &line(&1, titles, agents)),
               more: if(earlier != [], do: path.("history", List.last(history).seq - 1)),
               first: if(history_through != %{}, do: path.("history", nil))
             }
@@ -303,6 +311,7 @@ defmodule KeyfleetWeb.WorkspacePage do
          {:ok, evidence} <- members_read(fleet, Graph.evidence_citing(fleet_id, url, opts)) do
       producers = producers(fleet_id, evidence, opts)
       titles = titles(fleet_id, producers |> Map.values() |> List.flatten(), opts)
+      agents = agent_names(Enum.map(evidence, &creator_wallet(&1.sys)))
 
       %{
         fleet_id: fleet_id,
@@ -318,7 +327,7 @@ defmodule KeyfleetWeb.WorkspacePage do
               title: object.title,
               excerpt: object.card["gist"],
               archived?: archived?(object.sys),
-              by: created_by(object.sys),
+              by: created_by(object.sys, agents),
               tasks: Enum.map(Map.get(producers, object.id, []), &item_part(&1, titles))
             }
           end
@@ -461,14 +470,14 @@ defmodule KeyfleetWeb.WorkspacePage do
     |> Map.new(&{&1.id, &1})
   end
 
-  defp card(object, fleet_id) do
+  defp card(object, fleet_id, agents) do
     %{
       id: object.id,
       type: object.type,
       title: object.title,
       archived?: archived?(object.sys),
       level: level(object.sys),
-      by: created_by(object.sys),
+      by: created_by(object.sys, agents),
       changed_at: at(object.changed_at),
       facts: facts(object.type, object.card, fleet_id),
       gist: object.card["gist"]
@@ -507,7 +516,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp present(facts), do: Enum.reject(facts, &is_nil(elem(&1, 1)))
 
-  defp detail(object, fleet_id, opts) do
+  defp detail(object, fleet_id, agents, opts) do
     known = Map.get(@fields, object.type, [])
     shown = MapSet.new(["title", "discussion" | Enum.map(known, &elem(&1, 0))])
 
@@ -524,7 +533,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       title: object.data["title"],
       archived?: archived?(object.sys),
       level: level(object.sys),
-      by: created_by(object.sys),
+      by: created_by(object.sys, agents),
       version: object.version,
       changed_at: at(object.changed_at),
       fields:
@@ -581,7 +590,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   @doc ~S|What a page calls one of a field's choices: `choice("progress", "doing")` is "In progress".|
   def choice(field, value), do: @choices |> Map.fetch!(field) |> Map.fetch!(value)
 
-  defp key_or(token_id, _none) when is_integer(token_id), do: {:key, token_id}
+  defp key_or(token_id, _none) when is_integer(token_id), do: {:key, token_id, nil}
   defp key_or(nil, none), do: none
 
   defp discussion(links, fleet_id, opts) when is_list(links) and links != [] do
@@ -625,8 +634,9 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp mentions(%{brief: brief}),
     do: Enum.filter([brief["object"], brief["source"], brief["target"]], &is_binary/1)
 
-  defp line(event, titles) do
-    %{seq: event.seq, at: at(event.timestamp), parts: parts(event, titles)}
+  defp line(event, titles, agents) do
+    parts = event |> parts(titles) |> Enum.map(&named(&1, agents))
+    %{seq: event.seq, at: at(event.timestamp), parts: parts}
   end
 
   defp parts(%{type: "object.created", brief: %{"object" => id} = brief} = event, titles)
@@ -700,7 +710,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   defp change("assignee_key", _label, %{"new" => token_id}) when is_integer(token_id),
-    do: ["now taken by ", {:key, token_id}]
+    do: ["now taken by ", {:key, token_id, nil}]
 
   # A field set to nothing has no new value.
   defp change("assignee_key", _label, %{} = value) when not is_map_key(value, "new"),
@@ -725,16 +735,43 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  # A member's change names the key it was made as; anything else was the
-  # workspace's own doing.
+  # A member's change names the key it was made as, with the agent's wallet
+  # when an agent wrote as it (`named/2` puts its name in); anything else was
+  # the workspace's own doing.
   defp who(actor) do
     case Regex.run(@member, actor, capture: :all_but_first) do
-      [token_id] -> {:key, String.to_integer(token_id)}
+      [token_id, kind, wallet] -> {:by, String.to_integer(token_id), agent_wallet(kind, wallet)}
       nil -> "Keyfleet"
     end
   end
 
-  defp created_by(%{"created_by" => %{"key" => %{"token_id" => token_id}}}), do: token_id
+  defp named({:by, token_id, wallet}, agents), do: {:key, token_id, agents[wallet]}
+  defp named(part, _agents), do: part
+
+  # The key an item was added as, with the name of the agent that added it.
+  defp created_by(%{"created_by" => %{"key" => %{"token_id" => token_id}}} = sys, agents),
+    do: {:key, token_id, agents[creator_wallet(sys)]}
+
+  defp creator_wallet(%{"created_by" => by}), do: agent_wallet(by["kind"], by["wallet"])
+
+  defp actor_wallet(event) do
+    case who(event.actor) do
+      {:by, _token_id, wallet} -> wallet
+      "Keyfleet" -> nil
+    end
+  end
+
+  defp agent_wallet("agent", wallet), do: wallet
+  defp agent_wallet(_kind, _wallet), do: nil
+
+  # The names agents gave themselves, by wallet, looked up together for the
+  # page. A person, or an agent that has no profile here, has no name.
+  defp agent_names(wallets) do
+    case wallets |> Enum.reject(&is_nil/1) |> Enum.uniq() do
+      [] -> %{}
+      wallets -> wallets |> Agents.agents_by_wallets!() |> Map.new(&{&1.wallet_address, &1.name})
+    end
+  end
 
   defp archived?(sys), do: sys["archived"] == true
 
