@@ -260,7 +260,10 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   defp start_read(socket, fleet_id),
-    do: start_async(socket, {:now, fleet_id}, fn -> read(fleet_id, DateTime.utc_now()) end)
+    do:
+      start_async(socket, {:now, fleet_id}, fn ->
+        PageRead.run("home", fn -> read(fleet_id, DateTime.utc_now()) end)
+      end)
 
   defp read(@classic, _now), do: %{sales: sales(@classic, Fleets.get_fleet!(@classic))}
 
@@ -339,9 +342,10 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   # A fleet whose read failed keeps what it showed and says the read failed;
-  # the next notice reads again. A read that raised is logged by its task.
+  # the next notice reads again. A failed database read is logged and saved by
+  # `KeyfleetWeb.PageRead`; any other read that raised is logged by its task.
   @impl true
-  def handle_async({:now, fleet_id}, {:ok, %{sales: sales} = now}, socket),
+  def handle_async({:now, fleet_id}, {:ok, {:ok, %{sales: sales} = now}}, socket),
     do:
       {:noreply,
        update_fleet(
@@ -350,7 +354,7 @@ defmodule KeyfleetWeb.HomeLive do
          &%{&1 | sales: sales, now: Map.delete(now, :sales), failed?: false}
        )}
 
-  def handle_async({:now, fleet_id}, {:exit, _reason}, socket),
+  def handle_async({:now, fleet_id}, _failed, socket),
     do: {:noreply, update_fleet(socket, fleet_id, &%{&1 | failed?: true})}
 
   defp update_fleet(socket, @classic, fun), do: update(socket, :classic, fun)

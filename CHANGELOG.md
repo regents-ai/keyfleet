@@ -2109,3 +2109,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   visitor. It takes the Club's figures from the same reading its fleet page
   already uses, so each read of the Club runs one database query fewer, and the one
   dropped was the slowest: it read every agent profile.
+
+## 2026-10-17 — A homepage fleet that can't be read is saved with the site's errors
+
+- When the homepage's live read of Classic or the Regents Club fails at the
+  database, the failure is logged in short and saved at /admin/errors, the
+  same way as the page's first read, and the fleet still says it couldn't be
+  read.
