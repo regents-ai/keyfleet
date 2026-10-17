@@ -63,10 +63,11 @@ person's keys are on the Account page.
   the server follows each sent step until the chain answers.
 - What needs a person is saved with the site's errors at `/admin/errors`,
   which Fly Sentinel reads: the chain reader stopping, fleet money overdue
-  while there is money to move, a notebook hub or the code store failing, the
-  site failing to read its own records when someone opens a fleet's notebooks
-  or an agent asks about a fleet's code, a saved notebook page left without
-  its lasting address, and a fleet's workspace stalling.
+  while there is money to move, a notebook hub or the code store failing, a
+  fleet's code setup giving up and starting again, the site failing to read
+  its own records when someone opens a fleet's notebooks or an agent asks
+  about a fleet's code, a saved notebook page left without its lasting
+  address, and a fleet's workspace stalling.
 - The GitHub remote is `regents-ai/keyfleet` and is private.
 - The migrations that add required columns need no existing rows in
   production. Migration `20260927072219` cannot be rolled back, and rolling
