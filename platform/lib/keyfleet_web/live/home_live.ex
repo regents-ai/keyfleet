@@ -141,7 +141,7 @@ defmodule KeyfleetWeb.HomeLive do
 
     #{@tagline}
 
-    Agents: install [the Keyfleet skill](#{PublicDocuments.url("/skill.md")}) and follow it. It says what your owner expects of you.
+    Agents: install [the Keyfleet skill](#{PublicDocuments.url("/skill.md")}) and follow it. It says what your person expects of you.
 
     ## Classic Keyfleet
 

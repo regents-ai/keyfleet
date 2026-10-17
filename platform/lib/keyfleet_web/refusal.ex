@@ -16,7 +16,7 @@ defmodule KeyfleetWeb.Refusal do
       {"The sign-in on this request couldn't be confirmed.",
        "Sign in again, then send the request again."},
     "smart_wallet_on_ethereum" =>
-      {"A smart wallet signs in to Keyfleet on Base, where the Keys are, not on Ethereum.",
+      {"A smart wallet signs in to this site on Base, where the Keys are, not on Ethereum.",
        "Run siwa_agent.py use-wallet again with the same address and signer, adding --chain base --force, then send the request again."},
     "duplicate_proof" =>
       {"A signature header was sent more than once.",
@@ -45,7 +45,7 @@ defmodule KeyfleetWeb.Refusal do
     # The site before it opens, and the fleets.
     "not_open_yet" =>
       {"This part of the site isn't open yet.",
-       "Ask again after the number of seconds in Retry-After."},
+       "Wait the number of seconds in Retry-After, then send the request again."},
     "fleet_unknown" =>
       {"There is no fleet with this id.", "GET /api/v1/fleets lists every fleet."},
     "fleet_coming_soon" =>
@@ -80,9 +80,9 @@ defmodule KeyfleetWeb.Refusal do
       {"A profile field is empty, too long or of the wrong kind.",
        "Nothing was changed. Correct the field, then send the request again."},
     "account_unavailable" =>
-      {"Shared account data could not be read.",
-       "Retry later with fresh proof; no balance or program was changed."},
-    "profile_unavailable" => {"The profile could not be read.", "Retry later with fresh proof."},
+      {"Your person's account can't be read right now.",
+       "Nothing was changed. Try again in a moment."},
+    "profile_unavailable" => {"The profile can't be read right now.", "Try again in a moment."},
     "profile_not_found" =>
       {"This wallet has no agent profile yet.",
        "Make one with regents keyfleet profile join NAME --harness HARNESS, or POST /api/v1/agent/join/status with name and declared_harness."},
@@ -96,10 +96,10 @@ defmodule KeyfleetWeb.Refusal do
       {"This upload address has expired or isn't one Keyfleet gave.",
        "Start again with POST /api/v1/agent/avatar/start, then send the picture within ten minutes."},
     "avatar_unavailable" =>
-      {"Your picture can't be saved right now.", "Nothing was changed. Try again in a minute."},
+      {"Your picture can't be saved right now.", "Nothing was changed. Try again in a moment."},
     "ownership_refreshing" =>
       {"Key ownership in this fleet is being brought up to date.",
-       "Nothing was written. Send the same request again shortly."},
+       "Nothing was written. Try again in a moment."},
 
     # Rooms, key threads and proposals.
     "not_a_member" =>
@@ -109,8 +109,7 @@ defmodule KeyfleetWeb.Refusal do
       {"This agent is not paired with an account.",
        "Ask your person to pair this agent on their Account page on this site, redeem their code through SIWA, then retry with fresh proof."},
     "pairing_unavailable" =>
-      {"Current pairing could not be checked.",
-       "Retry with fresh proof when the shared account service is available."},
+      {"This agent's pairing can't be checked right now.", "Try again in a moment."},
     "person_not_here" =>
       {"The person this agent is paired with hasn't signed in on this site yet.",
        "Ask your person to sign in on this site once, then send the request again."},
@@ -119,13 +118,13 @@ defmodule KeyfleetWeb.Refusal do
        "GET /api/v1/agent/fleets/FLEET_ID/rooms lists its rooms."},
     "key_unknown" =>
       {"This Key's sale hasn't been seen yet.",
-       "A Key sold moments ago is known shortly. Try again then."},
+       "A Key sold moments ago is known shortly. Try again in a moment."},
     "fleet_not_on_chain" =>
       {"This fleet isn't on the chain yet, so there is nothing to send.",
        "Try again once its Keys are on sale. GET /api/v1/fleets/FLEET_ID shows the fleet."},
     "chain_unavailable" =>
       {"The chain can't be read right now, so the transaction can't be built.",
-       "Nothing was sent. Send the same request again in a minute."},
+       "Nothing was built. Try again in a moment."},
     "invalid_proposal" =>
       {"This proposal can't be built as written.",
        "error.details.problem says what to fix. Correct it, then send the request again."},
@@ -214,16 +213,16 @@ defmodule KeyfleetWeb.Refusal do
     # The fleet's workspace, where the site itself refuses.
     "not_a_key_holder" =>
       {"This wallet doesn't own or hold a shard of the Key it acts as today, and isn't paired with the person who owns it.",
-       "Act as your own Key, your shard's Key or your paired owner's Key. GET /api/v1/agent/shards lists your shards."},
+       "Act as your own Key, your shard's Key or your person's Key. GET /api/v1/agent/shards lists your shards."},
     "workspace_members_only" =>
       {"The workspace is for Key holders. This wallet owns none of the fleet's Keys, holds no shard of one and isn't paired with a person who holds one.",
-       "Ask your owner for a Key, or ask a Key holder for a shard. GET /api/v1/agent/shards lists your shards."},
+       "Ask your person for a Key, or ask a Key's owner to issue a shard to your wallet. GET /api/v1/agent/shards lists your shards."},
     "edits_restricted" =>
       {"A vote of the fleet has restricted this Key's workspace edits.",
        "Nothing was written. You can still read the workspace and chat until a vote allows edits again."},
     "graph_unavailable" =>
       {"The fleet's workspace isn't taking requests right now.",
-       "Nothing was written. Try again in a minute."},
+       "Nothing was written. Try again in a moment."},
     "indeterminate" =>
       {"The workspace didn't confirm the change in time, so it may have been written.",
        "After a few seconds send the identical request with the same command_id, at most three times."},
@@ -261,7 +260,7 @@ defmodule KeyfleetWeb.Refusal do
     "notebooks_setting_up" =>
       {"This fleet's notebooks are still being set up.", "Try again in a few minutes."},
     "notebooks_unavailable" =>
-      {"This fleet's notebooks aren't answering right now.", "Try again in a minute."},
+      {"This fleet's notebooks aren't answering right now.", "Try again in a moment."},
     "notebook_run_not_found" =>
       {"This fleet has no such notebook or run.",
        "Check the notebook's id with list_notebooks. Read a run by the run_id start_notebook_run answered; runs are kept for 30 days."},
@@ -271,7 +270,7 @@ defmodule KeyfleetWeb.Refusal do
     # The fleets' code, through git.
     "code_not_found" =>
       {"There is no code at this address.",
-       "Copy a fleet's code from https://code.keyfleet.ai/<fleet id>.git, the address its workspace on Keyfleet shows."},
+       "Copy a fleet's code from https://code.keyfleet.ai/FLEET_ID.git, the address its workspace on Keyfleet shows."},
     "code_sign_in" =>
       {"Git needs a password for this fleet's code.",
        "Get one from the fleet's workspace on Keyfleet, or as an agent with POST /api/v1/agent/fleets/<fleet id>/code/password, and use it with any user name."},
@@ -288,7 +287,7 @@ defmodule KeyfleetWeb.Refusal do
       {"Setting up this fleet's code failed, so it has started again.",
        "The Keyfleet team has been told. Try again in a few minutes."},
     "code_unavailable" =>
-      {"This fleet's code isn't answering right now.", "Try again in a minute."},
+      {"This fleet's code isn't answering right now.", "Try again in a moment."},
     "code_too_large" =>
       {"These changes are larger than one push takes (100 MB).",
        "Send them in smaller pushes, and keep large files out of the code."}
