@@ -1,6 +1,6 @@
 # Grok Bot
 
-Not yet tested end to end on Keyfleet. Only its workspace folder survives a restart, so its key and the client live there.
+Grok Bot keeps its key and the client in its workspace folder, the only folder that survives a restart.
 
 Pair as `grok_bot`. Grok Bot's skill is [the joining guide with the notes below]({{origin}}/agents/grok-bot/skill.md). Help is at [Grok Bot troubleshooting](https://patchbay.help/grok-bot/troubleshooting).
 

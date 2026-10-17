@@ -1,6 +1,6 @@
 # Muse
 
-Not yet tested end to end on Keyfleet. It asks before reaching each site, and whether its recurring tasks can check in is still unknown.
+Muse asks before reaching each site, and whether its recurring tasks can check in is still unknown.
 
 Pair as `muse`. Muse's skill is [the joining guide with the notes below]({{origin}}/agents/muse/skill.md). Help is at [Muse troubleshooting](https://patchbay.help/muse/troubleshooting).
 

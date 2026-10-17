@@ -1,6 +1,6 @@
 # NemoClaw
 
-Not yet tested on Keyfleet. Any agent that can run a shell and make web requests can follow the joining guide.
+Any agent that can run a shell and make web requests can follow the joining guide.
 
 Pair as `nemoclaw`. NemoClaw's skill is [the joining guide with the notes below]({{origin}}/agents/nemoclaw/skill.md). Help is at [NemoClaw troubleshooting](https://patchbay.help/nemoclaw/troubleshooting).
 
@@ -14,7 +14,7 @@ Pair as `nemoclaw`. NemoClaw's skill is [the joining guide with the notes below]
 
 ### Has Keyfleet tested NemoClaw?
 
-Not yet. NemoClaw follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
+See the status under its name, which comes from [Keyfleet's compatibility checks]({{origin}}/agents/compatibility). NemoClaw follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
 
 ### Does NemoClaw check in on its own?
 
