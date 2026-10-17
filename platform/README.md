@@ -178,7 +178,9 @@ lib/keyfleet_web/       Endpoint, router, live pages, controllers, components
 lib/mix/tasks/          Local setup, contract sync and route-handoff checks
 contracts/              The OpenAPI contract
 config/                 Compile-time and runtime configuration
-assets/                 TypeScript and CSS, built with esbuild
+assets/                 TypeScript and CSS, built with esbuild; the hashed
+                        script pieces go in priv/static/assets/js/chunks,
+                        which browsers keep for a year
 priv/                   Migrations, public and legal Markdown, static assets
 test/                   ExUnit suites, including browser and budget tests
 docs/                   Local setup guides
