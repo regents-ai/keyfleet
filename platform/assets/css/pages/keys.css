@@ -170,4 +170,11 @@
   gap: 0.5rem;
 }
 
+@media (max-width: 47.99rem) {
+  /* What a fleet decides spans the panel, as the fields under it do. */
+  .key-panel > .fleet-risks {
+    justify-self: stretch;
+  }
+}
+
 }

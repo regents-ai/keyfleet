@@ -248,4 +248,16 @@
     font-size: 2.25rem;
   }
 }
+
+/* On the narrowest phones each press stacks: the button across the panel,
+   then what it does, so the words are not squeezed into a sliver beside it. */
+@media (max-width: 22.49rem) {
+  .credits-panel__steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .credits-panel__step > .credits-panel__again {
+    grid-column: auto;
+  }
+}
 }

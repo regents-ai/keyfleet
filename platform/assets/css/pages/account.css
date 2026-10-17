@@ -375,3 +375,72 @@ div.verified-connections__notice p {
   gap: 0.75rem;
   align-content: start;
 }
+
+/* A phone-width points table sets its figures closer to the action, and,
+   where the panel has the room, keeps them wide enough that a limit such as
+   "100 a day" breaks once, not after every word. */
+@container (max-width: 29.99rem) {
+  .points-table td,
+  .points-table thead th + th {
+    padding-inline-start: var(--space-1);
+  }
+}
+
+@container (min-width: 16rem) and (max-width: 29.99rem) {
+  .points-table td {
+    min-inline-size: 4.5rem;
+  }
+}
+
+/* On a phone the account's sections stack in one column, so every section is
+   a panel with the same inner edge, as on the site's other pages. These rules
+   sit outside the product layer, so they win over the shared account
+   sections' own padding. */
+@media (max-width: 47.99rem) {
+  .account-grid > .rg-account,
+  .account-page > .rg-account--signed-out {
+    padding: var(--space-2);
+  }
+
+  .account-grid > .rg-account,
+  .account-page > .rg-account--signed-out {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+
+  /* Signed out, "Sign in" is the page's one action and spans the panel. */
+  .rg-account--signed-out > .rg-button {
+    flex: 1 1 auto;
+  }
+
+  /* Figures sit two to a row instead of one long column. */
+  .account-grid .rg-account__metrics {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
+  }
+
+  /* The link under the Credits figures stands apart from the last figure. */
+  #account-credits .rg-account__metrics {
+    margin-block-end: var(--space-2);
+  }
+
+  /* An agent's name keeps the row's width; "World ID Connected" moves under
+     it when both don't fit, instead of squeezing the name to nothing. */
+  .rg-account__agent {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+
+  /* "Copy message" and "Make a new code" fill the row they wrap onto. */
+  .rg-account__pair-actions > .rg-button {
+    flex: 1 1 auto;
+  }
+
+  /* Recent points activity: one entry after another, numbered at the panel's
+     inner edge rather than indented past it. */
+  .account-panel > ol {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding-inline-start: 1.25rem;
+  }
+}

@@ -130,4 +130,12 @@
   font-weight: 600;
 }
 
+/* Inside the app on a phone, About and Opportunities start at the page's own
+   gutter like every other page, instead of adding a second gutter inside it. */
+@media (max-width: 47.99rem) {
+  #route-content .legal-page {
+    padding: 0 0 var(--space-4);
+  }
+}
+
 }

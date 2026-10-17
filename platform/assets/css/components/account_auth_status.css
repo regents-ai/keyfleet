@@ -54,4 +54,12 @@
   opacity: 0.7;
 }
 
+/* On a phone the note keeps inside the page's frame, the same small inset
+   from its left edge as from its right. */
+@media (max-width: 47.99rem) {
+  .account-auth-status {
+    width: min(20rem, calc(100vw - 2 * (var(--space-2) + 0.125rem)));
+  }
+}
+
 }

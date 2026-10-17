@@ -300,4 +300,20 @@
   }
 }
 
+@media (max-width: 47.99rem) {
+  /* The kinds of item, archived items and the page links are a full
+     finger's height. */
+  .workspace-filters {
+    row-gap: 0;
+  }
+
+  .workspace-filters a,
+  .workspace-toggle,
+  .workspace-pages a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
+}
+
 }
