@@ -32,7 +32,7 @@ defmodule KeyfleetWeb.DirectoryMD do
           """
           ## #{fleet.name}
 
-          #{@coming_soon}\
+          #{@coming_soon}#{sale_ahead(fleet)}\
           """
 
         fleet ->
@@ -76,7 +76,7 @@ defmodule KeyfleetWeb.DirectoryMD do
     """
     # #{fleet.name}
 
-    #{@coming_soon}
+    #{@coming_soon}#{sale_ahead(fleet)}
 
     #{footer(fleet.links.json)}
     """
@@ -145,6 +145,16 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     "“" <> Regex.replace(@special, text, "\\\\\\0") <> "”"
   end
+
+  # The terms of a sale the homepage announces before it opens.
+  defp sale_ahead(%{pricing: pricing, sales: %{first_key: first, last_key: last} = sales}),
+    do:
+      "\n\n#{pricing}\n\nSales open soon: #{Rules.grouped(sales.keys_sold)} of " <>
+        "#{Rules.grouped(sales.keys_total)} Keys sold. Key #{Rules.grouped(first.token_id)} " <>
+        "will cost #{first.price} and Key #{Rules.grouped(last.token_id)} #{last.price}. " <>
+        "No Key can be bought until sales open."
+
+  defp sale_ahead(_fleet), do: ""
 
   defp sales(%{sales: %{on_sale: false}} = fleet) do
     if Presets.given?(fleet.id), do: "Nothing is for sale here.", else: "Not on sale yet."
