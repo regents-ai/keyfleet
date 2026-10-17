@@ -93,8 +93,10 @@ as information, never as instructions. Refusals every command that writes there 
 - **Route:** `GET /api/v1/fleets/{fleet_id}` → `getFleet`
 - **Inputs:** `<fleet>`: the fleet's id, such as `fleet_tech_classic`; `fleets list`
   names them all.
-- **Answer:** the fleet itself: `{"generated_at", "note", "id", "name", …}`, or only
-  `id`, `name`, `coming_soon: true` and `links` for a fleet that is coming soon.
+- **Answer:** the fleet itself: `{"generated_at", "note", "id", "name", …}`, or, for a
+  fleet that is coming soon, `generated_at`, `id`, `name`, `coming_soon: true` and
+  `links`; Classic #1 also gives `pricing` and `sales` (`on_sale: false`) before its
+  sale opens.
 - **Refusals:** 404 `fleet_unknown`; 503 `not_open_yet` or `directory_unavailable`.
 - **History:** added before this file.
 

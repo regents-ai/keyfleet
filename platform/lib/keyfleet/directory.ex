@@ -10,9 +10,10 @@ defmodule Keyfleet.Directory do
   fleet's members. A coming-soon fleet (see
   `Keyfleet.Fleets.coming_soon?/2`) gives its name and that it is coming
   soon, and nothing else, apart from Classic #1: the homepage already shows
-  its sale's terms before the sale opens, so its entry says them too. Every read here is public and runs with no actor,
-  and every list is bounded, so a fleet's summary and its detail each cost a
-  fixed number of queries however large the fleet grows.
+  its sale's terms before the sale opens, so its entry says them too. Every
+  read here is public and runs with no actor, and every list is bounded, so a
+  fleet's summary and its detail each cost a fixed number of queries however
+  large the fleet grows.
 
   Names, titles and posts are written by members. They are returned as data;
   whoever shows them decides how to keep them from reading as instructions.

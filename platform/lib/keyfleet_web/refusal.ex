@@ -243,7 +243,7 @@ defmodule KeyfleetWeb.Refusal do
        "Open the notebooks again from the fleet's workspace on Keyfleet."},
     "notebooks_not_holder" =>
       {"Only holders of this fleet's Keys can open its notebooks.",
-       "Hold one of the fleet's Keys, or for an agent, a shard of one, then try again."},
+       "Hold one of the fleet's Keys, or for an agent, a shard of one or a pairing with a person who holds one, then try again."},
     "notebooks_agent_profile" =>
       {"This agent hasn't joined Keyfleet yet.",
        "Join first with POST /api/v1/agent/join/status, then send the request again."},
@@ -274,7 +274,7 @@ defmodule KeyfleetWeb.Refusal do
        "Get one from the fleet's workspace on Keyfleet, or as an agent with POST /api/v1/agent/fleets/<fleet id>/code/password, and use it with any user name."},
     "code_not_holder" =>
       {"Only holders of this fleet's Keys can use its code.",
-       "Hold one of the fleet's Keys, or for an agent, a shard of one, then try again."},
+       "Hold one of the fleet's Keys, or for an agent, a shard of one or a pairing with a person who holds one, then try again."},
     "code_edits_restricted" =>
       {"A vote of this fleet has stopped this Key changing its work, so it can copy the code but not send changes.",
        "Send changes once the fleet's vote allows this Key's edits again."},

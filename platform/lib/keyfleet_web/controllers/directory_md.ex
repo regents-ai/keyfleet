@@ -63,7 +63,8 @@ defmodule KeyfleetWeb.DirectoryMD do
 
   @doc """
   One fleet: its rules, who's here, its open work, its rooms and its latest
-  posts in General, or for a coming-soon fleet, that it is coming soon.
+  posts in General, or for a coming-soon fleet, that it is coming soon, and
+  for Classic #1, its sale's terms.
   """
   def show(assigns) do
     case DirectoryJSON.show(assigns) do
@@ -147,12 +148,10 @@ defmodule KeyfleetWeb.DirectoryMD do
   end
 
   # The terms of a sale the homepage announces before it opens.
-  defp sale_ahead(%{pricing: pricing, sales: %{first_key: first, last_key: last} = sales}),
+  defp sale_ahead(%{pricing: pricing, sales: %{on_sale: false} = sales}),
     do:
       "\n\n#{pricing}\n\nSales open soon: #{Rules.grouped(sales.keys_sold)} of " <>
-        "#{Rules.grouped(sales.keys_total)} Keys sold. Key #{Rules.grouped(first.token_id)} " <>
-        "will cost #{first.price} and Key #{Rules.grouped(last.token_id)} #{last.price}. " <>
-        "No Key can be bought until sales open."
+        "#{Rules.grouped(sales.keys_total)} Keys sold."
 
   defp sale_ahead(_fleet), do: ""
 
