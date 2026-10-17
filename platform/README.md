@@ -228,6 +228,24 @@ Never run the ExUnit suite and `npm run test:browser` on the same partition at
 the same time: tests that need real concurrency commit catalog fleets and remove
 them when they end, which can take away fleets the browser server relies on.
 
+### Membership check
+
+`mix keyfleet.check_membership` moves a Key from one person to another, ends an
+agent's pairing, and tries an agent whose person holds another fleet's Key, and
+checks after each that the fleet's rooms, workspace, notebooks and code let in
+and refuse whom they should, open notebook connections included. It prints
+`pass` or `fail` for each check, with the reason when one fails.
+
+```sh
+MIX_ENV=test MIX_TEST_PARTITION=_membership mix keyfleet.check_membership
+```
+
+It runs on its own database, `keyfleet_membership_test`, which it empties at
+the start of every run, and serves the site at https://localhost:4502; set
+`PORT` when 4502 is taken. The sign-in server, notebook hubs and code store
+are stand-ins it serves itself, so it never reaches the network beyond
+localhost.
+
 ## Deployment
 
 Deploying runs `/app/bin/migrate` as its release command, so a deploy writes
