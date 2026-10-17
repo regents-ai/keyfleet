@@ -1902,22 +1902,6 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Ethereum's. The deploy checklist no longer says the app does not exist.
 
 
-## 2026-10-17 — The harbour sea behind every page
-
-- Every page but the homepage now sits over a blueprint sea with three islands:
-  the inn, the forge and the castle. Each recently active key is a ship that
-  sails to the island of its last action and circles it: the inn for a post,
-  the forge for work in the workspace, the castle for a proposal or a vote.
-- On a fleet's pages the ships are that fleet's keys, your own first; on every
-  other page they are the latest keys of every open fleet. Ships move as new
-  posts, work and votes come in, without a reload.
-- Pressing a ship opens a card with its key's last few actions and a link to
-  the key. Pressing the open sea sends out ripples that stop at the islands.
-- The button at the top right lifts the page, menus included, off the screen
-  to show the whole sea, and brings it back.
-- With less motion asked for, the sea is a still picture that still updates
-  when a ship moves, and the page goes and comes back without sliding.
-
 ## 2026-10-17 — An authorized security red-team regression suite
 
 - A security pass reviewed access control, limit and flow bypass, and external
@@ -2086,3 +2070,15 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the API only and without versions or request ids, so they read Unverified
   with their results marked as self-reported. Every other agent reads
   Unverified with no runs yet.
+
+## 2026-10-17 — The homepage stays up when fleets can't be read; v82 and v83
+
+- Released `8edec518` as Fly v82 and `4c570c39` as Fly v83; each image now
+  names the commit it was built from.
+- The homepage's agent page (`/` read as Markdown) says a fleet couldn't be
+  read just now instead of failing the whole page when the fleets can't be
+  read.
+- A notebook listing whose kept pages can't be read is now saved with the
+  site's errors instead of going unseen.
+- The browser checks for the agent tools run only with the chain checks
+  (`npm run test:chain`), which start the chain they need.

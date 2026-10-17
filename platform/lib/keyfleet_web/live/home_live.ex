@@ -119,20 +119,19 @@ defmodule KeyfleetWeb.HomeLive do
 
   @doc """
   The homepage for agents, in Markdown. It reads only whether the two fleets
-  are coming soon, so it costs a plain visit one small read.
+  are coming soon, so it costs a plain visit one small read. Every visit to the
+  homepage builds it, so when the fleets can't be read it says so rather than
+  failing the page.
   """
   def agent_markdown do
-    recorded = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
+    {classic, club} =
+      case PageRead.run("home", fn -> Map.new(Fleets.list_fleets!(), &{&1.id, &1}) end) do
+        {:ok, recorded} ->
+          {state(@classic, recorded, "Sales open soon."), state(@club, recorded, "Coming soon.")}
 
-    classic =
-      if Fleets.coming_soon?(@classic, recorded[@classic]),
-        do: "Sales open soon.",
-        else: links(@classic)
-
-    club =
-      if Fleets.coming_soon?(@club, recorded[@club]),
-        do: "Coming soon.",
-        else: links(@club)
+        {:error, _failure} ->
+          {"Couldn’t read this fleet just now.", "Couldn’t read this fleet just now."}
+      end
 
     integrations =
       Enum.map_join(@integrations, "\n", &"- **#{&1.name}**: #{&1.line}")
@@ -164,6 +163,9 @@ defmodule KeyfleetWeb.HomeLive do
     [About](#{PublicDocuments.url("/about")}) · [Contact](#{PublicDocuments.url("/contact")}) · [Privacy](#{PublicDocuments.url("/privacy")})
     """
   end
+
+  defp state(fleet_id, recorded, soon),
+    do: if(Fleets.coming_soon?(fleet_id, recorded[fleet_id]), do: soon, else: links(fleet_id))
 
   defp links(fleet_id),
     do:

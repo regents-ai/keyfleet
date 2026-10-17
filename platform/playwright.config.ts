@@ -21,6 +21,7 @@ export default defineConfig({
     "content_security_policy.spec.ts",
     "shell_links.spec.ts",
     "early_page.spec.ts",
+    "agent_tools.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,
