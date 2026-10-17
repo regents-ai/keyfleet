@@ -1781,3 +1781,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the figures under them stay in line.
 - On a phone the hero starts as far under the header as every other section
   starts under its rule.
+
+## 2026-10-17 — Sentinel's follow-ups: the phone header, signed-out Buy, quiet failures
+
+- On a phone, the Keyfleet name in the header shows whole or not at all; it no
+  longer shrinks to a "K." beside the crown when someone is signed in.
+- A signed-out visitor's Buy no longer checks the sale every 15 seconds while
+  sales haven't opened; it refreshes every few minutes, and signing in brings
+  it up to date at once.
+- When someone opens a fleet's notebooks, or an agent asks for a fleet's code
+  or its recent changes, and the site can't read its own records, the failure
+  is saved for the operator at `/admin/errors`. What the person or agent sees
+  is unchanged.
+- A page that can't be loaded logs what kind of failure it was and a short
+  reason, without the database query.
+- While the Regents Club is coming soon, its homepage section says "Opens
+  soon" without the Public View and Buy Access Key buttons.
