@@ -5,6 +5,10 @@
   .rl-root {
     /* The colours the GPU pictures read, per theme. */
     --rl-field-line: var(--color-fg);
+    --rl-field-deep: light-dark(
+      color-mix(in oklab, var(--color-bg) 78%, var(--palette-charcoal)),
+      color-mix(in oklab, var(--palette-charcoal) 45%, #000)
+    );
     --rl-field-light: var(--ash-accent-warm);
     --rl-ease: cubic-bezier(.23, 1, .32, 1);
     --rl-bg: var(--color-bg);
@@ -118,13 +122,24 @@
   .rl-give__text { font-family: var(--font-family-mono); font-size: .875rem; line-height: 1.5; overflow-wrap: anywhere; }
 
   /* The hex field: the stylesheet's still drawing of the tiles, and the GPU's
-     over it once its first frame has landed. In the hero it fades out toward
-     the headline, so the words always sit on the plain ground. */
+     over it once its first frame has landed. The field fades out toward its
+     edges, and in the hero away from the headline, so the words always sit on
+     the plain ground. The fade is stated once, as numbers 0..1 across the
+     field: its centre, its radii, and where along them it starts and ends.
+     The still drawing is masked with it; the GPU's picture reads the same
+     numbers and fades itself the same way. */
   .rl-field { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
   .rl-field__still, .rl-field__canvas { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; }
   .rl-field__still {
     background: var(--rl-field-line); opacity: .16;
-    mask: url("/images/home/hex.svg") 50% 50% / var(--rl-cell) calc(var(--rl-cell) * 1.7320508) repeat;
+    mask:
+      url("/images/home/hex.svg") 50% 50% / var(--rl-cell) calc(var(--rl-cell) * 1.7320508) repeat,
+      radial-gradient(
+        ellipse calc(var(--rl-fade-width) * 100%) calc(var(--rl-fade-height) * 100%)
+          at calc(var(--rl-fade-x) * 100%) calc(var(--rl-fade-y) * 100%),
+        #000 calc(var(--rl-fade-from) * 100%), transparent calc(var(--rl-fade-to) * 100%)
+      );
+    mask-composite: intersect;
   }
   .rl-field__canvas { opacity: 0; }
   .rl-field[data-field-ready] .rl-field__still { opacity: 0; }
@@ -132,7 +147,11 @@
   @media (prefers-reduced-motion: no-preference) {
     .rl-field__still, .rl-field__canvas { transition: opacity 240ms ease; }
   }
-  .rl-hero__field { mask-image: linear-gradient(transparent 34%, #000 46%, #000 70%, transparent 86%); }
+  /* Narrow: a band across the middle, between the headline and the instruction. */
+  .rl-hero__field {
+    --rl-fade-x: .5; --rl-fade-y: .58; --rl-fade-width: 10; --rl-fade-height: .28;
+    --rl-fade-from: .43; --rl-fade-to: 1;
+  }
 
   @media (min-width: 64rem) {
     .rl-hero {
@@ -140,7 +159,10 @@
       grid-template-areas: "head buy" "give buy"; align-items: start;
     }
     .rl-give { align-self: end; }
-    .rl-hero__field { mask-image: radial-gradient(ellipse 55% 95% at 82% 50%, #000 25%, transparent 80%); }
+    .rl-hero__field {
+      --rl-fade-x: .82; --rl-fade-y: .5; --rl-fade-width: .55; --rl-fade-height: .95;
+      --rl-fade-from: .25; --rl-fade-to: .8;
+    }
   }
 
   /* The hero settles in once as the page first paints: the field, the
@@ -170,7 +192,10 @@
     container-type: inline-size;
     border: 1px solid var(--hairline-strong); background: var(--rl-panel);
   }
-  .rl-fleet__field { mask-image: radial-gradient(ellipse 75% 75% at 50% 50%, #000 35%, transparent 90%); }
+  .rl-fleet__field {
+    --rl-fade-x: .5; --rl-fade-y: .5; --rl-fade-width: .75; --rl-fade-height: .75;
+    --rl-fade-from: .35; --rl-fade-to: .9;
+  }
   .rl-fleet .key-map-preview { aspect-ratio: 16 / 10; background: none; }
   .rl-fleet .key-map-preview[data-coming-soon] { opacity: .4; }
   .rl-fleet__copy { display: grid; align-content: start; gap: var(--space-2); min-width: 0; }
