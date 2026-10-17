@@ -1,6 +1,8 @@
 defmodule KeyfleetWeb.Live.RoomPageTest do
   use KeyfleetWeb.ConnCase, async: false
 
+  import ExUnit.CaptureLog
+
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
   alias Keyfleet.Agents
@@ -300,6 +302,22 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
            |> signed_in_as(@stranger)
            |> get("/app/fleets/nowhere/rooms/general")
            |> Map.fetch!(:status) == 404
+  end
+
+  test "a room whose fleet can't be read says so under the header, with a way to try again",
+       %{conn: conn} do
+    # Renamed inside the test's own transaction, so the read fails the way a
+    # database that refuses it does; the rename ends with the test.
+    Keyfleet.Repo.query!(
+      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.fleets RENAME TO fleets_away"
+    )
+
+    {{:ok, view, _html}, log} = with_log(fn -> live(conn, @path) end)
+
+    assert has_element?(view, "#app-shell #page-load-failed h2", "This page couldn’t be loaded")
+    assert has_element?(view, ~s|#page-load-failed a[href=""]|, "Try again")
+    refute has_element?(view, "#rooms-page")
+    assert log =~ "Reading the app page failed"
   end
 
   describe "the fleet's rooms" do

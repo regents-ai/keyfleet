@@ -67,7 +67,10 @@ person's keys are on the Account page.
   fleet's code setup giving up and starting again, the site failing to read
   its own records when someone opens a fleet's notebooks or an agent asks
   about a fleet's code, a saved notebook page left without its lasting
-  address, and a fleet's workspace stalling.
+  address, a fleet's workspace stalling, and a page that couldn't read what it
+  shows. Errors keep being saved through and after a database outage.
+- A page that can't read what it shows keeps the site's header and says so,
+  with Try again, instead of failing whole.
 - Recovery: the [restore drill](docs/restore-drill.md) restores the graph and
   code store volumes from Fly snapshots and the database to a point in time,
   all onto scratch copies. It has not been run yet.

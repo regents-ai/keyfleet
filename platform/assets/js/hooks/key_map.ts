@@ -30,7 +30,10 @@ export const KeyMap: Hook = {
   mounted(this: KeyMapHook) {
     let stage: KeyMapStage | undefined
     let alive = true
-    this.ready = () => this.pushEvent<KeyMapSnapshot>("keymap_ready", {}, snapshot => stage?.load(snapshot))
+    // Left unanswered when the keys can't be read, the map stays as drawn
+    // until it asks again.
+    this.ready = () =>
+      this.pushEvent<KeyMapSnapshot | undefined>("keymap_ready", {}, snapshot => snapshot && stage?.load(snapshot))
     void import("./key_map/key_map_stage").then(({createKeyMapStage}) => {
       if (!alive) return
       stage = createKeyMapStage(this.el, {

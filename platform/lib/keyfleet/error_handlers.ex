@@ -30,10 +30,8 @@ defmodule Keyfleet.ErrorHandlers do
   @doc false
   def handle_event(event, measurements, metadata, {function, config}) do
     function.(event, measurements, metadata, config)
-  rescue
-    failure -> unsaved(Exception.message(failure))
   catch
-    :exit, reason -> unsaved(inspect(reason))
+    kind, reason -> unsaved(Exception.format_banner(kind, reason))
   end
 
   defp unsaved(why),

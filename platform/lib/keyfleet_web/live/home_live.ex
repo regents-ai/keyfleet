@@ -182,7 +182,8 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   # The two fleets as recorded. When they can't be read the page still draws:
-  # each fleet as the catalog has it, saying it couldn't be read.
+  # each fleet as the catalog has it, saying it couldn't be read. The page's
+  # connection reads them again as it mounts.
   defp fleets do
     read = fn ->
       recorded = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
@@ -218,12 +219,7 @@ defmodule KeyfleetWeb.HomeLive do
   # one its fleet page's Buy button names.
   defp sales(fleet_id, recorded) do
     deployed? = recorded != nil and recorded.manager_address != nil
-
-    minted =
-      case if(deployed?, do: Chain.minted(fleet_id), else: {:ok, 0}) do
-        {:ok, minted} -> minted
-        {:error, failure} -> raise failure
-      end
+    minted = if deployed?, do: minted!(fleet_id), else: 0
 
     %{
       deployed?: deployed?,
@@ -232,6 +228,13 @@ defmodule KeyfleetWeb.HomeLive do
       given?: Presets.given?(fleet_id),
       buy: if(deployed?, do: FleetPage.next_sale(fleet_id, Presets.progress(fleet_id, minted)))
     }
+  end
+
+  defp minted!(fleet_id) do
+    case Chain.minted(fleet_id) do
+      {:ok, minted} -> minted
+      {:error, failure} -> raise failure
+    end
   end
 
   # Classic is watched for its sales, which move the price; the Club for
@@ -428,7 +431,9 @@ defmodule KeyfleetWeb.HomeLive do
           </div>
           <div>
             <dt>Sold</dt>
-            <dd id="home-classic-sold"><.sold sales={@classic.sales} /></dd>
+            <dd id="home-classic-sold">
+              <.sold sales={@classic.sales} failed={@classic.failed?} />
+            </dd>
           </div>
         </dl>
       </div>
@@ -453,7 +458,9 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   attr :sales, :map, required: true
+  attr :failed, :boolean, required: true
 
+  defp sold(%{sales: nil, failed: true} = assigns), do: ~H"—"
   defp sold(%{sales: nil} = assigns), do: ~H"Opens soon"
   defp sold(%{sales: %{current?: false}} = assigns), do: ~H"Catching up"
   defp sold(assigns), do: ~H"{grouped(@sales.keys)}"
@@ -556,6 +563,10 @@ defmodule KeyfleetWeb.HomeLive do
     </div>
     """
   end
+
+  # Classic as the catalog has it, when its record couldn't be read.
+  defp offer(%{failed?: true, sales: nil} = classic),
+    do: %{offer(%{classic | failed?: false}) | why: "Couldn’t read sales just now"}
 
   defp offer(%{coming_soon?: true}) do
     %{state: :soon, price: price(Presets.progress(@classic, 0)), why: "Sales open soon"}
@@ -719,10 +730,11 @@ defmodule KeyfleetWeb.HomeLive do
     max = Presets.max_supply(@classic)
 
     sold =
-      case classic.sales do
-        nil -> "0 of #{grouped(max)}"
-        %{current?: false} -> "Catching up"
-        %{keys: keys} -> "#{grouped(keys)} of #{grouped(max)}"
+      case classic do
+        %{failed?: true, sales: nil} -> "—"
+        %{sales: nil} -> "0 of #{grouped(max)}"
+        %{sales: %{current?: false}} -> "Catching up"
+        %{sales: %{keys: keys}} -> "#{grouped(keys)} of #{grouped(max)}"
       end
 
     after_next =

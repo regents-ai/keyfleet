@@ -94,8 +94,8 @@ defmodule KeyfleetWeb.KeyMap do
   @doc """
   What a search of the map found: the keys to mark, as a `bitset/1`, and a
   few words saying so. A number finds that key once it can be chosen; a wallet
-  address finds every key it holds in the fleet now; nothing typed clears the
-  marks.
+  address finds every key it holds in the fleet now, or says the search
+  couldn't be run; nothing typed clears the marks.
   """
   def find(fleet_id, progress, query) when is_binary(query) do
     case sought(String.trim(query)) do
@@ -108,12 +108,20 @@ defmodule KeyfleetWeb.KeyMap do
           else: found([], "No Key #{grouped(token_id)} yet.")
 
       {:wallet, wallet} ->
-        token_ids = fleet_id |> Keys.keys_held_in_fleet!([wallet]) |> Enum.map(& &1.token_id)
+        case KeyfleetWeb.PageRead.run("map search", fn ->
+               Keys.keys_held_in_fleet!(fleet_id, [wallet])
+             end) do
+          {:ok, keys} ->
+            token_ids = Enum.map(keys, & &1.token_id)
 
-        found(
-          token_ids,
-          "#{RegentFormat.short_address(wallet)} holds #{keys_held(token_ids)} here."
-        )
+            found(
+              token_ids,
+              "#{RegentFormat.short_address(wallet)} holds #{keys_held(token_ids)} here."
+            )
+
+          {:error, _failure} ->
+            found([], "That search couldn’t be run. Try again in a moment.")
+        end
 
       :unreadable ->
         found([], "Enter a Key number or a 0x address.")

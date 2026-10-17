@@ -99,12 +99,8 @@ defmodule KeyfleetWeb.DirectoryController do
 
   # A read that fails outright is unavailable too, like a count that can't be
   # read.
-  defp read(directory) do
-    case PageRead.run("directory", directory) do
-      {:ok, answer} -> answer
-      {:error, failure} -> {:error, failure}
-    end
-  end
+  defp read(directory),
+    do: with({:ok, answer} <- PageRead.run("directory", directory), do: answer)
 
   defp unavailable_md(conn) do
     conn

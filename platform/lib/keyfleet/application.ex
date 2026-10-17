@@ -15,6 +15,9 @@ defmodule Keyfleet.Application do
         {Keyfleet.Accounts.RequestRateLimiter, []},
         database_child(),
         {Phoenix.PubSub, name: Keyfleet.PubSub},
+        # Failures a page read rescued, saved beside the page; past this many at
+        # once, a failure is only logged.
+        {Task.Supervisor, name: Keyfleet.ErrorSaves, max_children: 20},
         # Figures every visitor sees alike, read once for every open page; its
         # producers start after it.
         Keyfleet.SharedReading,

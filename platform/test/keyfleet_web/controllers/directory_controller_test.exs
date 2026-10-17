@@ -199,6 +199,32 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     end
   end
 
+  describe "a directory read that fails outright" do
+    setup do
+      Keyfleet.Repo.query!(
+        "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.fleets RENAME TO fleets_away"
+      )
+
+      :ok
+    end
+
+    test "answers the whole directory and one fleet in Markdown with 503", %{conn: conn} do
+      unavailable = "The fleet directory can't be read right now. Try again in a moment.\n"
+
+      {whole, _log} = with_log(fn -> get(conn, "/fleets.md") end)
+      {one, _log} = with_log(fn -> get(build_conn(), "/fleets/#{@fleet}.md") end)
+
+      assert response(whole, 503) == unavailable
+      assert response(one, 503) == unavailable
+    end
+
+    test "answers a fleet's treasury with 503 and says so", %{conn: conn} do
+      {conn, _log} = with_log(fn -> get(conn, "/api/v1/fleets/#{@fleet}/treasury") end)
+
+      assert json_response(conn, 503) == refused("treasury_unavailable")
+    end
+  end
+
   defp post!(body) do
     Rooms.send_message!(
       %{fleet_id: @fleet, slug: "general", body: body, idempotency_key: Ash.UUID.generate()},
