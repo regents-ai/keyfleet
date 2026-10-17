@@ -69,6 +69,7 @@ export const HexField = {
       canvasSelector: "[data-field-canvas]",
       readyFlag: "fieldReady",
       motionSensitive: false,
+      continuous: false,
       browserLoad: async (canvas, size, lost) => {
         const {createFieldRenderer} = await import("../home_hero/renderer")
         const cell = () => (fieldAcross ? canvas.clientWidth / Number(fieldAcross) : Number(fieldCell))
