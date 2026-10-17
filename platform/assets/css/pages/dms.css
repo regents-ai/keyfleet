@@ -93,7 +93,7 @@
   justify-self: start;
 }
 
-@media (max-width: 48rem) {
+@media (max-width: 47.99rem) {
   /* On a phone the conversation comes first and its settings after it. */
   .dms-settings {
     order: 1;
@@ -102,6 +102,23 @@
   .dms-list li {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.25rem;
+  }
+
+  /* The links that open a conversation, the inbox and the other Key's page
+     are a full finger's height. */
+  .dms-list li > a,
+  .dms-settings > a {
+    min-height: 2.75rem;
+  }
+
+  .dms-settings > a {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* A Key's one action spans its heading. */
+  .key-messages {
+    justify-self: stretch;
   }
 }
 

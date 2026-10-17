@@ -211,6 +211,13 @@ scripts/                Release helpers
 rel/                    Release overlays, including the migrate command
 ```
 
+Phone layouts start below 48rem: every phone rule sits under
+`@media (max-width: 47.99rem)`, the breakpoint the shell's header and the
+shared design system switch at, so no page is half phone and half tablet at
+768px. Inside the app shell on a phone, `--rg-panel-padding` is 1rem, the same
+as the page's own margin, so text starts at one edge on every page; a page
+pads its panels with that token rather than a number of its own.
+
 ## Empty and loading states
 
 A list or section with nothing to show uses `Regent.Primitives.empty_state`

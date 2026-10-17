@@ -380,14 +380,20 @@
   padding: var(--rg-panel-padding);
 }
 
-@media (max-width: 48rem) {
+@media (max-width: 47.99rem) {
+  /* The header row is 3.5rem and its rule, signed in or out; the menu's drawer
+     and the dimmed page behind it open under that rule and the frame's top line.
+     Every panel keeps the page's own 1rem margin inside it on every phone, so
+     text starts at one edge from page to page. */
   #app-shell {
+    --shell-header-bottom: calc(3.5rem + 2px);
+    --rg-panel-padding: var(--space-2);
     grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
   }
 
   #shell-header {
     grid-column: 1;
-    min-height: 3.5rem;
+    min-height: calc(3.5rem + 1px);
   }
 
   #shell-header > * {
@@ -443,7 +449,7 @@
 
   #shell-sidebar {
     position: fixed;
-    inset: 3.5rem auto 0 0;
+    inset: var(--shell-header-bottom) auto 0 0;
     z-index: 5;
     display: none;
     width: min(20rem, calc(100% - 3rem));
@@ -472,7 +478,7 @@
 
   .shell-menu-scrim {
     position: fixed;
-    inset: 3.5rem 0 0;
+    inset: var(--shell-header-bottom) 0 0;
     z-index: 4;
     display: block;
     min-width: 0;
@@ -536,15 +542,17 @@
   }
   /* With nothing left to show, the chip takes no room. */
   #shell-header:has(.shell-credits) .account-chip:not(:has(.account-avatar)) { padding-inline: 0; border-inline-start: 0; }
-  .account-control > .rg-button { font-size: .75rem; margin: 4px; padding-inline: .75rem; white-space: nowrap; }
-  .shell-get-key > .rg-button { font-size: .75rem; margin: 4px 0; padding-inline: .5rem; gap: .375rem; }
+  /* Header buttons stand 3rem tall in the 3.5rem row, 0.5rem apart, and the last
+     keeps the same 0.5rem from the frame's right edge as the crown keeps from its
+     left. */
+  .account-control > .rg-button { font-size: .75rem; margin: 4px var(--space-1) 4px 0; padding: var(--space-1) .75rem; white-space: nowrap; }
+  .shell-get-key > .rg-button { font-size: .75rem; margin: 4px var(--space-1) 4px 0; padding: var(--space-1) .5rem; gap: .375rem; }
   /* The crown keeps its size; only the name beside it gives way. */
   #shell-header .shell-brand__mark { flex: none; }
   /* Signed in, the Credits balance joins the row without its unit: the
      controls keep their size and the brand's name gives way first. */
   #app-shell .shell-credits {
     flex: 0 0 auto;
-    margin-inline-end: 0;
     padding-inline: 0.5rem;
     font-size: 0.8rem;
   }
