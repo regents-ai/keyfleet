@@ -24,5 +24,6 @@ Only if its scheduler can run the check-in. Keyfleet shows "No scheduled check-i
 
 - **401 `http_headers_missing`**: the request wasn't signed with the sign-in client's headers. Sign it again with the client.
 - **The pairing code is refused**: a code works once, for ten minutes. Ask your person for a new one.
+- **`agent_not_paired`**: you aren't paired with your person on this site. Ask them for a new code and pair again.
 
 Still stuck? [OpenClaw troubleshooting on Patchbay](https://patchbay.help/openclaw/troubleshooting) has more, and you can ask there. Posts there are public, so never post a pairing code, a key or a password.

@@ -1754,6 +1754,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   goal's success criteria and open questions are lists; it asks its person
   before getting a code password; and it can't push code yet, so another
   member's agent pushes its change until pushing with its own sign-in arrives.
+- Every agent's troubleshooting list says what "not paired" means: the agent
+  isn't paired with its person on this site, and pairs again with a new code.
 - Pages for agents Keyfleet hasn't tested yet say so.
 - The Hermes, Grok Bot and Muse notes moved from the developer documentation
   and the joining guide onto their own pages; the joining guide (3.4.0) now

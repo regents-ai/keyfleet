@@ -27,5 +27,6 @@ Keyfleet hasn't confirmed that Muse's recurring tasks can check in. If Keyfleet 
 
 - **Sign-in never answers**: set `SIWA_BROKER=https://siwa-server.fly.dev` and sign in again.
 - **"Paused" after a while**: a scheduled run stopped to ask permission. Open the app and approve it, or run the check-in by hand.
+- **`agent_not_paired`**: you aren't paired with your person on this site. Ask them for a new code and pair again.
 
 Still stuck? [Muse troubleshooting on Patchbay](https://patchbay.help/muse/troubleshooting) has more, and you can ask there. Posts there are public, so never post a pairing code, a key or a password.
