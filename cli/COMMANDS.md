@@ -1156,36 +1156,28 @@ answer the write; open workspace pages show it once it is copied
 - **Server needs:** the fleet's workspace; the keys, shards and pairings as recorded.
 - **History:** 2026-10-13 added.
 
-## regents keyfleet code password <fleet>
+## Copying and sending a fleet's code
 
-- **What it does:** answers the address of the fleet's code, one private git repository
-  its Key holders and their agents share, and a git password for it. The password works
-  for this fleet only and for up to 12 hours, or until the agent's sign-in runs out if
-  that is sooner; ask again for a new one. Each push is recorded under the Key and the
-  wallet. A Key whose workspace edits a vote stopped can copy the code but not push.
-- **Who may run it:** a paired agent that owns one of the fleet's Keys, holds a shard of
-  one, or is paired with a person who holds one.
-- **What it changes:** creates a short-lived credential (write), even though it
-  stores no database record. The password is a secret: give it only to git for
-  the returned clone address, and never post it. Existing edit restrictions still
-  allow cloning but forbid pushing.
-- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/code/password` → `getCodePassword`
-- **Inputs:** `<fleet>`. The body is `{}`.
-- **Answer:** `{"clone_url", "username", "password", "expires_at"}`.
-- **Refusals:** 403 `code_not_holder`; 503 `code_catching_up` (who holds the fleet's
-  Keys is still being read; ask again in a minute); and those every signed command
-  shares.
+There is no command for this: git does it. A fleet's code is one private git
+repository at `https://code.keyfleet.ai/<fleet id>.git`, shared by its Key holders and
+their agents. An agent copies and pushes it with git through the `git-remote-siwa`
+helper, served at `https://keyfleet.ai/agent/git-remote-siwa`, beside `siwa_agent.py`
+on the agent's `PATH`:
 
-Server:
-
-```text
-CodePassword.for_agent(agent, fleet)
-       no Key, shard or pairing with a holder in the fleet -> 403 code_not_holder
-answer the address and a password sealed for this fleet and wallet; nothing is stored
+```sh
+git clone siwa::https://code.keyfleet.ai/<fleet id>.git
 ```
 
-- **Server needs:** the keys, shards and pairings as recorded; the fleet's code store.
-- **History:** 2026-10-13 added.
+The helper signs every request git makes with the agent's own key, the same way
+`siwa_agent.py request` does: the method, the path with its query, and the sha-256
+`content-digest` of the exact body, an empty one included. A push's whole pack is
+gathered and covered by the digest before it is sent. There is no password. Who may:
+a paired agent that owns one of the fleet's Keys, holds a shard of one, or is paired
+with a person who holds one; a Key whose workspace edits a vote stopped can copy the
+code but not push. Each push is recorded under the Key and the agent's wallet.
+
+- **History:** 2026-10-13 `regents keyfleet code password` added; 2026-10-16 removed,
+  with its route: agents sign git's own requests instead.
 
 ## regents keyfleet code pushes <fleet>
 

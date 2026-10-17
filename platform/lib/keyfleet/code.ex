@@ -6,11 +6,13 @@ defmodule Keyfleet.Code do
   (`KeyfleetWeb.Plugs.CodeGateway`).
 
   Whoever holds one of the fleet's keys, or an agent with an active shard of
-  one, may copy it and send changes; a key whose workspace edits a vote has
-  restricted may only copy it. Git signs in with a password this site hands
-  out (`KeyfleetWeb.CodePassword`). Each request is checked again at most every
-  `access_ttl_ms`, and a key changing hands ends everyone's admission to that
-  fleet's code at once (`end_access/1`, from `Keyfleet.Chain.Scanner`).
+  one or a pairing with a holder, may copy it and send changes; a key whose
+  workspace edits a vote has restricted may only copy it. An agent signs each
+  of git's requests with its own sign-in and is checked on every one; a
+  person's git signs in with a password this site hands out
+  (`KeyfleetWeb.CodePassword`), checked again at most every `access_ttl_ms`.
+  A key changing hands ends everyone's admission to that fleet's code at once
+  (`end_access/1`, from `Keyfleet.Chain.Scanner`).
 
   The store records every change under the wallet that holds the key, and
   this site keeps a line for each (`Keyfleet.Code.Push`) for the fleet's

@@ -7,25 +7,37 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   Git asks at `/<fleet id>.git` for the three things it needs, and nothing
   else is answered: what the repository holds (`info/refs`), a copy
-  (`git-upload-pack`) and changes sent (`git-receive-pack`). It signs in with
-  a password from `KeyfleetWeb.CodePassword`, under any user name. Each holder
-  is checked at most every `access_ttl_ms`; a key changing hands clears the
-  fleet's admissions at once.
+  (`git-upload-pack`) and changes sent (`git-receive-pack`). Who sent it:
 
-  What reaches the store carries a pass (`Keyfleet.Code.Pass`) in place of the
-  password, with only the headers git's exchange needs. Bodies stream both
-  ways, a request's up to `max_pack_bytes`. When the store reports changes
-  done, each branch or tag moved is recorded for the fleet's workspace. A
-  store that cannot be reached, stops mid-exchange or answers with a fault of
-  its own is saved with the site's errors (`Keyfleet.Code.StoreDown`).
+    * An agent signs every request with its own sign-in (SIWA, as on
+      `/api/v1/agent`): its method, its path with the query, and the digest
+      of its exact body, an empty one included. The whole body, a pack
+      included, is read first, up to `max_pack_bytes`, so the sign-in server
+      checks the digest of the very bytes the store is then sent; nothing
+      reaches the store before that. The agent is then let in by what its own
+      wallet holds or by its pairing with a holder, checked on every request.
+    * A person signs in with a password from `KeyfleetWeb.CodePassword`, under
+      any user name, checked at most every `access_ttl_ms`.
+
+  A key changing hands clears the fleet's admissions at once.
+
+  What reaches the store carries a pass (`Keyfleet.Code.Pass`) in place of
+  any sign-in, with only the headers git's exchange needs. The store's answer
+  streams back. When the store reports changes done, each branch or tag moved
+  is recorded for the fleet's workspace, under the key and, for an agent,
+  the agent too. A store that cannot be reached, stops mid-exchange or answers
+  with a fault of its own is saved with the site's errors
+  (`Keyfleet.Code.StoreDown`).
   """
   @behaviour Plug
+  @behaviour Siwa.AgentAuthPlug.Hooks
 
   import Plug.Conn
 
   alias Keyfleet.Code
   alias Keyfleet.Code.{Pass, ReceivePack, StoreDown}
   alias KeyfleetWeb.{CodePassword, Refusal}
+  alias KeyfleetWeb.Plugs.SignedAgent
 
   @services ~w(git-upload-pack git-receive-pack)
   @fleet_id ~r/\A[a-z0-9_]{1,64}\z/
@@ -34,7 +46,6 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   @kept_request ~w(accept accept-encoding content-encoding content-type git-protocol user-agent)
   @kept_response ~w(cache-control content-encoding content-type expires pragma)
 
-  @chunk 1_000_000
   # Enough of each side of a push to read its commands and the store's report.
   @captured 65_536
 
@@ -61,7 +72,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
     conn = put_resp_header(conn, "cache-control", "no-store")
 
     with {:route, {:ok, fleet_id, need, target}} <- {:route, route(conn)},
-         {:password, {:ok, subject, actor}} <- {:password, signed_in(conn, fleet_id)},
+         {:signed_in, {:ok, conn, subject, actor}} <- {:signed_in, identify(conn, fleet_id)},
          {:holder, {:ok, %{} = holder}} <-
            {:holder, current_holder(fleet_id, subject, actor)},
          {:allowed, {:ok, pass}} <- {:allowed, pass(fleet_id, holder, need)},
@@ -77,10 +88,8 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
       {:route, :error} ->
         refuse(conn, 404, "code_not_found")
 
-      {:password, :error} ->
+      {:signed_in, {:refused, conn}} ->
         conn
-        |> put_resp_header("www-authenticate", ~s(Basic realm="Keyfleet code"))
-        |> refuse(401, "code_sign_in")
 
       {:holder, {:ok, nil}} ->
         refuse(conn, 403, "code_not_holder")
@@ -150,12 +159,83 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   ## Who sent it
 
-  defp signed_in(conn, fleet_id) do
-    case Plug.BasicAuth.parse_basic_auth(conn) do
-      {_user, password} -> CodePassword.read(password, fleet_id)
-      :error -> :error
+  defp identify(conn, fleet_id) do
+    if Siwa.AgentAuthPlug.signed_request?(conn),
+      do: identify_agent(conn),
+      else: identify_person(conn, fleet_id)
+  end
+
+  # A signed request spends the sender's address's API budget before its body
+  # is read.
+  defp identify_agent(conn) do
+    conn = RegentAgentAccess.RateLimit.call(conn, KeyfleetWeb.Endpoint.api_rate_limit())
+    if conn.halted, do: {:refused, conn}, else: read_signed(conn)
+  end
+
+  defp read_signed(conn) do
+    with {:ok, conn} <- read_whole(conn) do
+      conn
+      |> Siwa.AgentAuthPlug.call(
+        client: Keyfleet.SiwaBroker,
+        hooks: __MODULE__,
+        audience: "keyfleet",
+        query: :signed,
+        body: :always
+      )
+      |> agent()
     end
   end
+
+  defp agent(%Plug.Conn{halted: true} = conn), do: {:refused, conn}
+  defp agent(%Plug.Conn{assigns: %{agent_actor: actor}} = conn), do: {:ok, conn, nil, actor}
+
+  # A person's body is read only once their password stands.
+  defp identify_person(conn, fleet_id) do
+    with {_user, password} <- Plug.BasicAuth.parse_basic_auth(conn),
+         {:ok, subject, actor} <- CodePassword.read(password, fleet_id),
+         {:ok, conn} <- read_whole(conn) do
+      {:ok, conn, subject, actor}
+    else
+      {:refused, conn} ->
+        {:refused, conn}
+
+      :error ->
+        {:refused,
+         conn
+         |> put_resp_header("www-authenticate", ~s(Basic realm="Keyfleet code"))
+         |> refuse(401, "code_sign_in")}
+    end
+  end
+
+  # The whole body is kept as it came (`conn.assigns.raw_body`), a read's
+  # empty one included: a signature covers these exact bytes, and the store
+  # is sent them. The shared reader asks for it in one read, so the read is
+  # given as long as a large push takes to arrive.
+  defp read_whole(conn) do
+    case Siwa.AgentAuthPlug.read_body(
+           conn,
+           [read_timeout: Code.config()[:body_timeout_ms]],
+           Code.config()[:max_pack_bytes]
+         ) do
+      {:ok, _body, conn} -> {:ok, conn}
+      {:more, _partial, conn} -> {:refused, refuse(conn, 413, "code_too_large")}
+      {:error, _reason} -> {:refused, refuse(conn, 400, "invalid_request")}
+    end
+  rescue
+    Plug.Parsers.RequestTooLargeError -> {:refused, refuse(conn, 413, "code_too_large")}
+  end
+
+  # The shared plug has already refused a repeated signed header and a body it
+  # did not capture whole; nothing else is checked before the sign-in server.
+  @impl Siwa.AgentAuthPlug.Hooks
+  def before_verify(_conn, _headers), do: {:ok, nil}
+
+  # Only who sent it is checked here; whether they may use the code comes next.
+  @impl Siwa.AgentAuthPlug.Hooks
+  def accept(conn, data, _context), do: SignedAgent.accept_agent(conn, data)
+
+  @impl Siwa.AgentAuthPlug.Hooks
+  defdelegate deny(conn, metadata), to: SignedAgent
 
   # A key whose edits a vote restricted may still copy the code.
   defp pass(fleet_id, %{restricted?: true}, :read), do: {:ok, Pass.read(fleet_id)}
@@ -183,7 +263,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
       | for({name, value} <- conn.req_headers, name in @kept_request, do: {name, value})
     ]
 
-    body = if conn.method == "POST", do: :stream
+    body = if conn.method == "POST", do: conn.assigns.raw_body
 
     with {:ok, node} <-
            Mint.HTTP.connect(String.to_existing_atom(scheme), host, port,
@@ -191,7 +271,22 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
              protocols: [:http1]
            ),
          {:ok, node, ref} <- Mint.HTTP.request(node, conn.method, path, headers, body) do
-      exchange(conn, fleet_id, node, ref, body, done)
+      case answer(conn, node, ref, %{status: nil, response: ""}) do
+        {:done, conn, %{status: 200, response: response}} ->
+          done.(capture("", body || ""), response)
+          conn
+
+        {:done, conn, %{status: status}} when status in 500..599 ->
+          StoreDown.report("The code store answered #{status} for #{fleet_id}")
+          conn
+
+        {:failed, conn, _answer} ->
+          StoreDown.report("The code store stopped answering for #{fleet_id}")
+          conn
+
+        {_ended, conn, _answer} ->
+          conn
+      end
     else
       unreachable ->
         StoreDown.report(
@@ -199,74 +294,6 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
         )
 
         refuse(conn, 502, "code_unavailable")
-    end
-  end
-
-  defp exchange(conn, fleet_id, node, ref, body, done) do
-    case send_body(conn, node, ref, body) do
-      {:ok, conn, node, request} ->
-        case answer(conn, node, ref, %{status: nil, response: ""}) do
-          {:done, conn, %{status: 200, response: response}} ->
-            done.(request, response)
-            conn
-
-          {:done, conn, %{status: status}} when status in 500..599 ->
-            StoreDown.report("The code store answered #{status} for #{fleet_id}")
-            conn
-
-          {:failed, conn, _answer} ->
-            StoreDown.report("The code store stopped answering for #{fleet_id}")
-            conn
-
-          {_ended, conn, _answer} ->
-            conn
-        end
-
-      # Only a 502 is the store's doing; the others are the request's.
-      {:refused, conn, node, 502, code} ->
-        StoreDown.report("The code store stopped taking a request for #{fleet_id}")
-        Mint.HTTP.close(node)
-        refuse(conn, 502, code)
-
-      {:refused, conn, node, status, code} ->
-        Mint.HTTP.close(node)
-        refuse(conn, status, code)
-    end
-  end
-
-  defp send_body(conn, node, _ref, nil), do: {:ok, conn, node, ""}
-  defp send_body(conn, node, ref, :stream), do: send_body(conn, node, ref, 0, "")
-
-  defp send_body(conn, node, ref, sent, request) do
-    case read_body(conn, length: @chunk, read_length: @chunk) do
-      {read, data, conn} ->
-        sent = sent + byte_size(data)
-        request = capture(request, data)
-
-        cond do
-          sent > Code.config()[:max_pack_bytes] -> {:refused, conn, node, 413, "code_too_large"}
-          read == :more -> stream(conn, node, ref, data, &send_body(&1, &2, ref, sent, request))
-          true -> stream(conn, node, ref, data, &finish(&1, &2, ref, request))
-        end
-
-      {:error, _reason} ->
-        {:refused, conn, node, 400, "invalid_request"}
-    end
-  end
-
-  defp finish(conn, node, ref, request) do
-    case Mint.HTTP.stream_request_body(node, ref, :eof) do
-      {:ok, node} -> {:ok, conn, node, request}
-      {:error, node, _reason} -> {:refused, conn, node, 502, "code_unavailable"}
-    end
-  end
-
-  defp stream(conn, node, _ref, "", next), do: next.(conn, node)
-
-  defp stream(conn, node, ref, data, next) do
-    case Mint.HTTP.stream_request_body(node, ref, data) do
-      {:ok, node} -> next.(conn, node)
-      {:error, node, _reason} -> {:refused, conn, node, 502, "code_unavailable"}
     end
   end
 

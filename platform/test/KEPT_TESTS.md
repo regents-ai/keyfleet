@@ -61,7 +61,6 @@ joins it only when Sean agrees to it for a named requirement or a real regressio
 | only the canonical signed room path and body reach the room actions | `KeyfleetWeb.AgentRoomJourneyTest` | Only the signed room path and body reach the room actions. |
 | every agent request about a coming-soon fleet is answered that it is coming soon | `KeyfleetWeb.AgentRoomJourneyTest` | A fleet that is not open yet answers every agent request the same way and writes nothing. |
 | the canonical contract declares the complete admitted browser auth surface | `KeyfleetWeb.ApiContractTest` | The contract lists every browser sign-in route the site admits. |
-| an agent's password is refused once its sign-in has run out | `KeyfleetWeb.CodeGatewayTest` | An expired code-store sign-in is refused. |
 | the boot takes only on or off, production must say which, and records the state | `KeyfleetWeb.LaunchGateTest` | Production must say whether the site is open. |
 | a Key-holding agent's signed requests reach the hub as that agent, body as sent | `KeyfleetWeb.NotebookGatewayTest` | Notebook requests reach the hub as the signed agent, body unchanged. |
 | a cold session start outlasts the ordinary timeout and is forwarded only once | `KeyfleetWeb.NotebookGatewayTest` | A slow notebook start returns its result without a second runner request; stuck requests remain bounded. |

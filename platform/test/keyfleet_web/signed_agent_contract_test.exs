@@ -51,7 +51,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @carry_out "/api/v1/agent/fleets/{fleet_id}/proposals/carry_out"
   @split "/api/v1/agent/fleets/{fleet_id}/split"
   @claim "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim"
-  @code_password "/api/v1/agent/fleets/{fleet_id}/code/password"
   @polls "/api/v1/agent/fleets/{fleet_id}/polls"
   @poll_start "/api/v1/agent/fleets/{fleet_id}/polls/start"
   @poll "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}"
@@ -158,7 +157,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @carry_out, [], %{"number" => 1}},
     {"POST", @split, [], %{}},
     {"POST", @claim, [], %{}},
-    {"POST", @code_password, [], %{}},
     {"GET", @dm_inbox, [], nil},
     {"GET", @dm_blocks, [], nil},
     {"POST", @dm <> "read", [], %{"after_seq" => 0, "limit" => 1}},
@@ -642,13 +640,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     dm_routes(c, stranger)
 
-    # The fleet's code opens only to a wallet holding one of its Keys.
-    assert %{"username" => "agent", "password" => _password} =
-             answer(c, c.signer, "POST", @code_password, @address, %{}, 200).body
-
-    assert answer(c, stranger, "POST", @code_password, @address, %{}, 403).body ==
-             refused("code_not_holder")
-
     # A fleet outside the catalog is not found on every route that names one,
     # with the answer the workspace gives.
     nowhere = Map.put(@address, "fleet_id", "hull_survey")
@@ -666,9 +657,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @create, @address, %{room | "slug" => "late"}, 503)
     answer(c, c.signer, "POST", @topic, open, %{"topic" => "Late"}, 503)
     answer(c, c.signer, "POST", @poll_start, @address, @poll_question, 503)
-
-    assert answer(c, c.signer, "POST", @code_password, @address, %{}, 503).body ==
-             refused("code_catching_up")
 
     # Every route: unsigned, too large, signed with a body that fits none of
     # them, signed by an unpaired agent, and with the sign-in check away.
@@ -1146,7 +1134,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {"POST", @carry_out},
       {"POST", @split},
       {"POST", @claim},
-      {"POST", @code_password},
       {"GET", @polls},
       {"POST", @poll_start},
       {"GET", @poll},

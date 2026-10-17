@@ -35,7 +35,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
-  @code_password_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/password\z"
   @code_pushes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/pushes\z"
   # A fleet's notebook runs: a notebook and a run named as the hub names them.
   @notebook ~S"nb-[0-9a-z]{16}"
@@ -50,7 +49,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @poll_start_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/start\z"
   @poll_vote_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@poll}/vote\z"
   @poll_end_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@poll}/end\z"
-  @empty_body_paths [@mute_path, @code_password_path, @poll_end_path]
+  @empty_body_paths [@mute_path, @poll_end_path]
   @poll_post_paths [@poll_start_path, @poll_vote_path, @poll_end_path]
 
   # Direct messages: a Key's conversations and blocks, what it does in one
@@ -454,7 +453,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @key_send_path,
         @sync_path,
         @proposal_read_path,
-        @code_password_path,
         @run_start_path,
         @chain_path,
         @graph_path,

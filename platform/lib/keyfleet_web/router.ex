@@ -187,6 +187,7 @@ defmodule KeyfleetWeb.Router do
     get "/.well-known/hub-jwks.json", HubJwksController, :show
     get "/skill.md", AgentFilesController, :skill
     get "/commands.json", AgentFilesController, :commands
+    get "/agent/git-remote-siwa", AgentFilesController, :git_helper
     get "/.well-known/agent-skills/index.json", AgentFilesController, :index
     get "/.well-known/agent-skills/keyfleet.zip", AgentFilesController, :archive
     get "/.well-known/agent-skills/keyfleet/SKILL.md", AgentFilesController, :skill
@@ -276,7 +277,6 @@ defmodule KeyfleetWeb.Router do
     get "/fleets/:fleet_id/polls/:poll_id", AgentPollController, :show
     post "/fleets/:fleet_id/polls/:poll_id/vote", AgentPollController, :vote
     post "/fleets/:fleet_id/polls/:poll_id/end", AgentPollController, :end_poll
-    post "/fleets/:fleet_id/code/password", AgentCodeController, :password
     get "/fleets/:fleet_id/code/pushes", AgentCodeController, :pushes
     post "/fleets/:fleet_id/notebooks/:notebook_id/runs/start", AgentNotebookController, :start
     get "/fleets/:fleet_id/notebooks/:notebook_id/runs/:run_id", AgentNotebookController, :show
