@@ -31,7 +31,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   is sent to Keyfleet to get one (`open_url/2`), and comes back to it.
 
   Background runs (the hub's jobs) start only when a member asks: a job that
-  names a schedule is refused.
+  names a schedule is refused. A fleet has at most `max_sessions` notebook
+  sessions open at once, whoever started them: while they are full, starting
+  one for a notebook with none open is refused
+  (`Keyfleet.Notebooks.session_room?/2`).
 
   Each one's key ownership is read at most every `access_ttl_ms`
   (`Keyfleet.AccessCache`); the first time in that span, they are
@@ -404,7 +407,25 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   defp forward(%Plug.Conn{request_path: "/results/" <> _ = path} = conn, fleet_id, _subject),
     do: send_saved_output(conn, fleet_id, path)
 
-  defp forward(conn, fleet_id, subject) do
+  # A fleet has at most `max_sessions` notebook sessions open at once.
+  defp forward(
+         %Plug.Conn{
+           method: "POST",
+           path_info: ["api", "v1", "projects", _project, "notebooks", notebook_id, "sessions"]
+         } = conn,
+         fleet_id,
+         subject
+       ) do
+    case Notebooks.session_room?(fleet_id, notebook_id) do
+      {:ok, true} -> to_hub(conn, fleet_id, subject)
+      {:ok, false} -> Refusal.json(conn, 429, "notebook_sessions_full")
+      {:error, :unavailable} -> refuse(conn, :unavailable)
+    end
+  end
+
+  defp forward(conn, fleet_id, subject), do: to_hub(conn, fleet_id, subject)
+
+  defp to_hub(conn, fleet_id, subject) do
     {:ok, address} = Notebooks.hub_address(fleet_id)
     headers = upstream_headers(conn, fleet_id, subject)
 
