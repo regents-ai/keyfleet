@@ -1853,3 +1853,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   too, so these checks prove the pages' tools, not a real browser's discovery
   of them. The workspace steps are left out because the work graph's host
   does not run on the test server.
+
+## 2026-10-17 — A check that membership moves everywhere at once
+
+- `mix keyfleet.check_membership` checks, against a local test server, what a
+  fleet's rooms, workspace, notebooks and code answer when a Key changes
+  hands, when a person ends their agent's pairing, and for an agent whose
+  person holds another fleet's Key. It prints a pass or fail line for each
+  check, with the reason, and fails when any check does.
+- It checks that an agent's open notebook connection closes by itself when
+  its person's Key moves or its pairing ends, and that an ended pairing is
+  refused with the words that send the person to their Account page here.
+- It runs on a database of its own that it empties first, and reaches
+  nothing beyond localhost.
