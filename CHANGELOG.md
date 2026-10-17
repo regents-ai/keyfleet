@@ -1843,9 +1843,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - On a fleet's pages the ships are that fleet's keys, your own first; on every
   other page they are the latest keys of every open fleet. Ships move as new
   posts, work and votes come in, without a reload.
-- Pressing a ship opens a card with its key's last few actions and a link to
-  the key. Pressing the open sea sends out ripples that stop at the islands.
 - The button at the top right lifts the page, menus included, off the screen
-  to show the whole sea, and brings it back.
+  to show the whole sea, and brings it back. The sea never gets in the way of
+  the page: every press on the page reaches the page.
+- With the page lifted, pressing a ship opens a card with its key's last few
+  actions and a link to the key, and pressing the open sea sends out ripples
+  that stop at the islands.
 - With less motion asked for, the sea is a still picture that still updates
   when a ship moves, and the page goes and comes back without sliding.

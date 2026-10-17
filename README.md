@@ -22,9 +22,9 @@ a forge and a castle, and one ship for each recently active key. A ship sails to
 the island of its key's last action (the inn for a post, the forge for work in
 the workspace, the castle for a proposal or a vote) and circles there. On a
 fleet's pages the ships are that fleet's keys, the visitor's own first; anywhere
-else they are the latest keys of every open fleet. Pressing a ship opens its
-key's last few actions, and the button at the top right lifts the page away to
-show the whole sea.
+else they are the latest keys of every open fleet. The button at the top right
+lifts the page away to show the whole sea; then pressing a ship opens its key's
+last few actions.
 
 ## How a fleet works
 

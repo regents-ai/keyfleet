@@ -131,18 +131,14 @@ body:has(> .harbour-sea) > .regent-footer {
     visibility 0s;
 }
 
-/* A press on the open margin reaches the sea; a press on anything solid stays
-   with the page. Only for a mouse: on a touch screen a swipe anywhere keeps
-   scrolling the page, and the sea takes taps once the page is lifted. */
-@media (hover: hover) and (pointer: fine) {
-  body:has(> .harbour-sea) :is(#app-shell, #app-shell-scroller, #route-content, #route-content > *) {
-    pointer-events: none;
-  }
+/* The sea never takes a press meant for the page: it lies behind it and lets
+   every press through. Once the page is lifted away, the sea takes them. */
+.harbour-sea__harbour {
+  pointer-events: none;
+}
 
-  body:has(> .harbour-sea)
-    :is(#app-shell > :not(#app-shell-scroller), #app-shell-scroller > :not(#route-content), #route-content > * > *) {
-    pointer-events: auto;
-  }
+body.sea-lifted .harbour-sea__harbour {
+  pointer-events: auto;
 }
 
 /* ---- The lift button ---- */
@@ -155,8 +151,10 @@ body:has(> .harbour-sea) #shell-header {
   padding-inline-end: calc(2.75rem + 2 * var(--space-1));
 }
 
+/* It rides with the header, so once the page scrolls it never covers what
+   comes up under it; with the page lifted it stays on the screen. */
 .harbour-sea .harbour-sea__lift {
-  position: fixed;
+  position: absolute;
   top: calc(1px + (4.75rem - 2.75rem) / 2);
   right: calc(max(var(--sea-gutter), (100% - var(--rg-frame-max)) / 2) + 1px + var(--space-1));
   z-index: 2;
@@ -171,6 +169,10 @@ body:has(> .harbour-sea) #shell-header {
   background: var(--color-bg);
   color: var(--color-fg);
   cursor: pointer;
+}
+
+body.sea-lifted .harbour-sea .harbour-sea__lift {
+  position: fixed;
 }
 
 @media (hover: hover) {
@@ -228,6 +230,14 @@ body:has(> .harbour-sea) #shell-header {
   .harbour-sea .harbour-sea__lift {
     top: calc(1px + (3.875rem - 2.75rem) / 2);
     right: calc(var(--sea-gutter) + 1px + 4px);
+  }
+}
+
+/* Just past the shell's phone row, the header's links give their place to the
+   slot; the footer carries the same links. */
+@media (min-width: 48rem) and (max-width: 48.49rem) {
+  body:has(> .harbour-sea) #shell-header .rl-header-links {
+    display: none;
   }
 }
 

@@ -7,8 +7,9 @@ defmodule KeyfleetWeb.HarbourSeaLive do
 
   On a fleet's pages the ships are that fleet's Keys; anywhere else they are
   the latest Keys of every open fleet. The visitor's own Keys come first, then
-  the most recent, sixteen at most. Pressing a ship opens its card: the Key's
-  last few actions and a link to its profile.
+  the most recent, sixteen at most. The sea takes no presses until its button
+  lifts the page away; then pressing a ship opens its card: the Key's last few
+  actions and a link to its profile.
 
   The root layout renders it beside the page's own LiveView
   (`KeyfleetWeb.Router` marks the pages that have it), so it keeps running
