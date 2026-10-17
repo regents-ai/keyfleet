@@ -13,6 +13,7 @@
 @import "./components/presence_card.css";
 @import "./components/fleet_risks.css";
 @import "./components/motion.css";
+@import "./components/placeholder.css";
 @import "./pages/home.css";
 @import "./pages/legal.css";
 @import "./pages/early.css";

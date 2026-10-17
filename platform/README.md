@@ -211,6 +211,16 @@ scripts/                Release helpers
 rel/                    Release overlays, including the migrate command
 ```
 
+## Empty and loading states
+
+A list or section with nothing to show uses `Regent.Primitives.empty_state`
+with `class="kf-empty"`: one sentence saying what will fill it, at most one
+supporting sentence, and one next step when there is one. A section waiting
+on figures shows `KeyfleetWeb.Components.Placeholder.placeholder/1` in the
+shape of what replaces it, and figures that didn’t arrive say "aren’t showing
+right now" with Try again where the page can fetch them again. The audit
+behind this is in `docs/audits/2026-10-17-empty-states.md`.
+
 ## Checks
 
 From the monorepo root, `make check-platform` runs this component's gate and

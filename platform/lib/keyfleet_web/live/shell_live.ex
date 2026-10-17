@@ -578,8 +578,13 @@ defmodule KeyfleetWeb.ShellLive do
             notebooks_notice={@notebooks_notice}
             code_password={@code_password}
             code_notice={@code_notice}
+            signed_out?={is_nil(actor(@access_context))}
           />
-          <WorkspaceLive.item :if={@route_spec.route_id == :workspace_item} item={@workspace} />
+          <WorkspaceLive.item
+            :if={@route_spec.route_id == :workspace_item}
+            item={@workspace}
+            signed_out?={is_nil(actor(@access_context))}
+          />
           <WorkspaceLive.commit :if={@route_spec.route_id == :code_commit} commit={@workspace} />
           <TreasuryLive.page
             :if={@route_spec.route_id == :treasury}

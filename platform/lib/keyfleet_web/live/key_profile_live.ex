@@ -31,6 +31,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias Keyfleet.Treasury
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.FleetRisks
+  alias KeyfleetWeb.Components.Placeholder
   alias KeyfleetWeb.DmsLive
   alias KeyfleetWeb.FleetLive
   alias KeyfleetWeb.KeyLinks
@@ -594,6 +595,14 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <p class="rooms-detail">{RoomsLive.stamp(message.inserted_at)}</p>
         </li>
       </ol>
+      <%!-- The stream keeps no rows here, so the page shows this only while the list above is empty. --%>
+      <p
+        :if={@profile.messages > 0 and MapSet.size(@profile.muted) > 0}
+        id="key-profile-muted-hidden"
+        class="key-profile-muted key-profile-muted-hidden"
+      >
+        Posts from Keys you muted are hidden.
+      </p>
       <p id="key-profile-news" class="key-profile-news" role="status">{@profile.news}</p>
 
       <p
@@ -654,9 +663,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
       <h3 id="key-profile-posts-title">
         Recent posts in General by Key {Rules.grouped(@profile.token_id)}
       </h3>
-      <p :if={@profile.recent_posts == []} class="key-profile-muted">
-        This Key hasn’t posted in General yet.
-      </p>
+      <Regent.Primitives.empty_state
+        :if={@profile.recent_posts == []}
+        class="kf-empty"
+        title="This Key hasn’t posted in General yet."
+      />
       <ol :if={@profile.recent_posts != []} id="key-profile-recent" class="rooms-thread-list">
         <li :for={post <- @profile.recent_posts} id={"key-profile-recent-#{post.id}"}>
           <p class="rooms-detail">
@@ -709,8 +720,12 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   # What the key's holder can claim in each asset, read after the window
   # opens. Each amount rolls when more arrives.
-  defp rewards(%{rewards: :reading} = assigns), do: ~H"Reading…"
-  defp rewards(%{rewards: :failed} = assigns), do: ~H"Couldn’t read rewards right now."
+  defp rewards(%{rewards: :reading} = assigns),
+    do: ~H|<Placeholder.placeholder label="Loading rewards" lines={1} role={nil} />|
+
+  defp rewards(%{rewards: :failed} = assigns),
+    do: ~H"Rewards aren’t showing right now. They update on their own."
+
   defp rewards(%{rewards: {:ok, []}} = assigns), do: ~H"None yet"
 
   defp rewards(%{rewards: {:ok, amounts}} = assigns) do

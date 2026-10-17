@@ -17,7 +17,11 @@ defmodule KeyfleetWeb.Components.IdleKeys do
 
   @impl true
   def mount(socket),
-    do: {:ok, socket |> assign(open?: false, next: nil, unlisted?: false) |> stream(:keys, [])}
+    do:
+      {:ok,
+       socket
+       |> assign(open?: false, next: nil, unlisted?: false, listed?: false)
+       |> stream(:keys, [])}
 
   @impl true
   def update(assigns, socket) do
@@ -51,13 +55,18 @@ defmodule KeyfleetWeb.Components.IdleKeys do
 
   # The next hundred idle Keys, and where the hundred after them begin. When
   # they couldn't be read the list stays as it was and says so; pressing
-  # again tries again.
+  # again tries again. The stream keeps no rows here, so whether it holds any
+  # is remembered beside it.
   defp page(%{assigns: %{fleet_id: fleet_id}} = socket, position, stream_opts) do
     case Keys.idle_keys_page(fleet_id, position) do
       {:ok, %Ash.Page.Keyset{results: keys, more?: more?}} ->
         socket
         |> stream(:keys, keys, stream_opts)
-        |> assign(unlisted?: false, next: if(more?, do: List.last(keys).__metadata__.keyset))
+        |> assign(
+          unlisted?: false,
+          listed?: keys != [] or (socket.assigns.listed? and stream_opts[:reset] != true),
+          next: if(more?, do: List.last(keys).__metadata__.keyset)
+        )
 
       {:error, _failure} ->
         assign(socket, unlisted?: true)
@@ -90,7 +99,10 @@ defmodule KeyfleetWeb.Components.IdleKeys do
         aria-labelledby={"#{@id}-title"}
       >
         <h2 id={"#{@id}-title"} tabindex="-1" data-modal-title>Idle Keys</h2>
-        <p :if={@count == 0} id={"#{@id}-none"}>No Keys are idle.</p>
+        <%!-- Said from the list itself, so a count that failed never leaves it blank. --%>
+        <p :if={not @listed? and not @unlisted?} id={"#{@id}-none"}>
+          No Keys are idle.
+        </p>
         <p :if={@unlisted?} id={"#{@id}-unlisted"} role="status">
           The list couldn’t be read. Close it and try again.
         </p>
@@ -127,6 +139,6 @@ defmodule KeyfleetWeb.Components.IdleKeys do
     """
   end
 
-  defp figure(nil), do: "–"
+  defp figure(nil), do: "—"
   defp figure(count), do: Rules.grouped(count)
 end

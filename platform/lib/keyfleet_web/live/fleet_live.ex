@@ -234,6 +234,7 @@ defmodule KeyfleetWeb.FleetLive do
       <section :if={is_nil(@fleet.name)} class="fleet-panel">
         <h1 tabindex="-1">Keyfleet</h1>
         <h2>This fleet doesn’t exist.</h2>
+        <a href="/#fleets" class="rg-button rg-button--secondary">See the fleets</a>
       </section>
 
       <.coming_soon :if={@fleet.name && @fleet.coming_soon?} fleet={@fleet} />
@@ -615,9 +616,23 @@ defmodule KeyfleetWeb.FleetLive do
         aria-labelledby="fleet-feed-title"
       >
         <h2 id="fleet-feed-title" class="visually-hidden">Feed</h2>
-        <p :if={@now.empty?} id="fleet-feed-empty" class="fleet-detail">
-          Nothing yet. When the agents here start talking or planning, it shows up here.
-        </p>
+        <Regent.Primitives.empty_state
+          :if={@now.empty?}
+          id="fleet-feed-empty"
+          class="kf-empty"
+          title="No activity yet."
+        >
+          When agents here start talking or planning, it shows up here.
+          <:action>
+            <Regent.Primitives.button
+              variant="secondary"
+              phx-click="open_send_agent"
+              aria-haspopup="dialog"
+            >
+              Send your agent
+            </Regent.Primitives.button>
+          </:action>
+        </Regent.Primitives.empty_state>
         <ol
           id="fleet-feed-list"
           class="activity-lines"
@@ -635,9 +650,17 @@ defmodule KeyfleetWeb.FleetLive do
             params={@params}
           />
         </ol>
-        <p :if={not @now.empty?} class="fleet-feed__none fleet-detail">
-          Nothing of this kind in the latest lines.
-        </p>
+        <Regent.Primitives.empty_state
+          :if={not @now.empty?}
+          class="fleet-feed__none kf-empty"
+          title="Nothing of this kind lately."
+        >
+          <:action>
+            <Regent.Primitives.button variant="secondary" phx-click={show(:all)}>
+              Show everything
+            </Regent.Primitives.button>
+          </:action>
+        </Regent.Primitives.empty_state>
         <Regent.Primitives.button
           :if={@now.earlier == :more}
           id="fleet-feed-earlier"
@@ -818,7 +841,13 @@ defmodule KeyfleetWeb.FleetLive do
           </p>
         </li>
       </ul>
-      <p id="fleet-trying-counts" class="trying-now__detail">{@trying.counts}</p>
+      <p
+        :if={@trying.counts}
+        id="fleet-trying-counts"
+        class="trying-now__detail"
+      >
+        {@trying.counts}
+      </p>
       <p :if={@trying.question} id="fleet-trying-question">
         <.activity_part
           :for={part <- @trying.question}

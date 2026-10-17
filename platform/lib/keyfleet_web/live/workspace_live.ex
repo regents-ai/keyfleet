@@ -26,12 +26,16 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :code_password, :map, default: nil, doc: "the git password just made, and until when"
   attr :code_notice, :string, default: nil
 
+  attr :signed_out?, :boolean,
+    default: false,
+    doc: "whether nobody is signed in, so the members-only outline offers Sign in"
+
   # The board and an item are drawn inside the fleet's page, under its name
   # and bar (`KeyfleetWeb.FleetLive`).
   def board(%{board: :unreadable} = assigns), do: ~H|<.unreadable id="workspace-page" />|
 
   def board(%{board: %{members_only?: true}} = assigns),
-    do: ~H|<.members_only id="workspace-page" fleet={@board} />|
+    do: ~H|<.members_only id="workspace-page" fleet={@board} signed_out?={@signed_out?} />|
 
   def board(assigns) do
     ~H"""
@@ -55,7 +59,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
             <p class="workspace-detail">
               Recorded changes, newest first. Open an item to read its notes and results.
             </p>
-            <p :if={@board.activity == []}>Nothing has changed here yet.</p>
+            <Regent.Primitives.empty_state
+              :if={@board.activity == []}
+              id="workspace-activity-empty"
+              class="kf-empty"
+              title="No changes yet."
+            >
+              They show up here as agents work.
+            </Regent.Primitives.empty_state>
             <ol :if={@board.activity != []} id="workspace-activity" class="workspace-lines">
               <li :for={line <- @board.activity} data-seq={line.seq}>
                 <p><.line parts={line.parts} fleet_id={@board.fleet_id} /></p>
@@ -92,9 +103,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
               {if @board.filter.archived?, do: "Hide archived items", else: "Show archived items"}
             </.link>
 
-            <p :if={@board.cards == [] and @board.first_page?} id="workspace-empty">
-              {empty_words(@board.filter)}
-            </p>
+            <.no_cards :if={@board.cards == [] and @board.first_page?} board={@board} />
             <p :if={@board.cards == [] and not @board.first_page?}>
               There is nothing more here.
               <.link id="workspace-first-page" patch={@board.first_page}>Back to the first page</.link>
@@ -161,10 +170,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :item, :any, required: true, doc: "the item as read, or `:unreadable`"
 
+  attr :signed_out?, :boolean,
+    default: false,
+    doc: "whether nobody is signed in, so the members-only outline offers Sign in"
+
   def item(%{item: :unreadable} = assigns), do: ~H|<.unreadable id="workspace-item-page" />|
 
   def item(%{item: %{members_only?: true}} = assigns),
-    do: ~H|<.members_only id="workspace-item-page" fleet={@item} />|
+    do: ~H|<.members_only id="workspace-item-page" fleet={@item} signed_out?={@signed_out?} />|
 
   def item(assigns) do
     ~H"""
@@ -244,7 +257,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
         <section class="workspace-panel" aria-labelledby="workspace-discussion-title">
           <h2 id="workspace-discussion-title">Discussed in</h2>
-          <p :if={@item.object.discussion == []}>No room messages point here yet.</p>
+          <p :if={@item.object.discussion == []}>No one has mentioned this in the rooms yet.</p>
           <ul :if={@item.object.discussion != []} id="workspace-discussion" class="workspace-lines">
             <li :for={message <- @item.object.discussion}>
               <.link :if={message.path} patch={message.path}>
@@ -459,21 +472,87 @@ defmodule KeyfleetWeb.WorkspaceLive do
     """
   end
 
+  # Drawn inside the fleet's page, whose "Send your agent" dialog the button opens.
   defp unavailable(assigns) do
     ~H"""
     <section id="workspace-unavailable" class="workspace-panel">
-      <h2>No workspace records are available yet.</h2>
-      <p>
-        An agent can start with a goal, then add a task and a note about its first result. If work was already submitted, it has not reached this view yet.
-      </p>
+      <Regent.Primitives.empty_state class="kf-empty" title="Nothing in this workspace yet.">
+        Work shows up here once an agent sets the first goal.
+        <:action>
+          <Regent.Primitives.button
+            variant="secondary"
+            phx-click="open_send_agent"
+            aria-haspopup="dialog"
+          >
+            Send your agent
+          </Regent.Primitives.button>
+        </:action>
+      </Regent.Primitives.empty_state>
     </section>
+    """
+  end
+
+  attr :board, :map, required: true
+
+  # The first page with no items: a kind with none of its own, a workspace whose
+  # every item is archived, or one nothing has been added to yet.
+  defp no_cards(%{board: %{filter: %{type: type} = filter}} = assigns) when is_binary(type) do
+    assigns =
+      assign(assigns,
+        title: empty_words(filter),
+        everything: WorkspacePage.board_path(assigns.board.fleet_id, %{filter | type: nil})
+      )
+
+    ~H"""
+    <Regent.Primitives.empty_state id="workspace-empty" class="kf-empty" title={@title}>
+      <:action>
+        <.link class="rg-button rg-button--secondary" patch={@everything}>
+          <span class="rg-button__label">Show everything</span>
+        </.link>
+      </:action>
+    </Regent.Primitives.empty_state>
+    """
+  end
+
+  # Items are archived, never removed, so changes with no item left to show
+  # mean every one is archived.
+  defp no_cards(%{board: %{filter: %{archived?: false} = filter, activity: [_ | _]}} = assigns) do
+    assigns =
+      assign(assigns,
+        archived: WorkspacePage.board_path(assigns.board.fleet_id, %{filter | archived?: true})
+      )
+
+    ~H"""
+    <Regent.Primitives.empty_state
+      id="workspace-empty"
+      class="kf-empty"
+      title="Everything here is archived."
+    >
+      <:action>
+        <.link class="rg-button rg-button--secondary" patch={@archived}>
+          <span class="rg-button__label">Show archived items</span>
+        </.link>
+      </:action>
+    </Regent.Primitives.empty_state>
+    """
+  end
+
+  defp no_cards(assigns) do
+    ~H"""
+    <Regent.Primitives.empty_state
+      id="workspace-empty"
+      class="kf-empty"
+      title="Nothing has been added to this workspace yet."
+    />
     """
   end
 
   attr :id, :string, required: true
   attr :fleet, :map, required: true, doc: "the fleet's id and name"
+  attr :signed_out?, :boolean, required: true
 
-  # Anyone who holds none of the fleet's Keys and no shard of one.
+  # Anyone who holds none of the fleet's Keys and no shard of one. Someone
+  # signed out may hold one, so they are offered Sign in.
   defp members_only(assigns) do
     ~H"""
     <article id={@id} class="workspace-page">
@@ -483,6 +562,15 @@ defmodule KeyfleetWeb.WorkspaceLive do
           A public outline of this fleet’s work. Its Key holders and their paired agents can read the notes, code and results.
         </p>
         <.link patch={KeyLinks.members_path(@fleet.fleet_id)}>See this fleet’s Keys</.link>
+        <Regent.Primitives.button
+          :if={@signed_out?}
+          id="workspace-sign-in"
+          type="button"
+          variant="secondary"
+          data-account-target="sign-in"
+        >
+          Sign in
+        </Regent.Primitives.button>
       </header>
       <.outline
         id="workspace-public-goals"
@@ -699,8 +787,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   defp item_heading(%{object: %{title: title}}) when is_binary(title), do: title
   defp item_heading(_item), do: "Workspace"
-
-  defp empty_words(%{type: nil}), do: "Nothing has been added to this workspace yet."
 
   defp empty_words(%{type: type}) do
     {_singular, plural} = WorkspacePage.type_name(type)

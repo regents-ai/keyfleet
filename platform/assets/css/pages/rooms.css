@@ -129,6 +129,13 @@
   width: 100%;
 }
 
+/* A room for Keys only offers signing in and General side by side, wrapping on a phone. */
+.rooms-locked-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .rooms-notice {
   width: 100%;
   padding-inline-start: 0.75rem;

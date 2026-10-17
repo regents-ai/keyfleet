@@ -532,12 +532,12 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
           {:ok, <<0::256>>}
       end)
 
-      assert conn |> get(@path <> "?key=12") |> html_response(200) =~ "Reading…"
+      assert conn |> get(@path <> "?key=12") |> html_response(200) =~ "Loading rewards"
       refute_received {:reading, _reader}
 
       {:ok, view, _html} = live(conn, @path <> "?key=12")
       assert_receive {:reading, reader}
-      assert text(view, "#key-profile-rewards") == "Reading…"
+      assert text(view, "#key-profile-rewards") == "Loading rewards"
       assert text(view, "#key-profile-holder") == "0xeeee..eeee"
 
       send(reader, :answer)
@@ -572,7 +572,10 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       {:ok, view, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
 
       render_async(view)
-      assert text(view, "#key-profile-rewards") == "Couldn’t read rewards right now."
+
+      assert text(view, "#key-profile-rewards") ==
+               "Rewards aren’t showing right now. They update on their own."
+
       assert text(view, "#key-profile-holder") == "0xeeee..eeee"
 
       view
@@ -606,7 +609,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       finished = Process.monitor(key_12)
       send(key_12, :answer)
       assert_receive {:DOWN, ^finished, :process, _pid, _reason}
-      assert text(view, "#key-profile-rewards") == "Reading…"
+      assert text(view, "#key-profile-rewards") == "Loading rewards"
 
       send(key_3, :answer)
       render_async(view)

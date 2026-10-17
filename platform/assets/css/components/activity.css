@@ -119,7 +119,7 @@
 .fleet-feed[data-show="work"]:not(:has(.activity-line[data-channel="work"])) .fleet-feed__none,
 .fleet-feed[data-show="keys"]:not(:has(.activity-line[data-channel="keys"])) .fleet-feed__none,
 .fleet-feed[data-show="votes"]:not(:has(.activity-line[data-channel="votes"])) .fleet-feed__none {
-  display: block;
+  display: grid;
 }
 
 @media (max-width: 48rem) {

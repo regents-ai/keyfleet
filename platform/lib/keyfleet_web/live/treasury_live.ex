@@ -51,14 +51,46 @@ defmodule KeyfleetWeb.TreasuryLive do
         lease={@lease}
       />
 
+      <%!-- A fleet not yet on chain has no treasury to show. --%>
+      <section :if={!@page.treasury} id="treasury-not-live" class="proposals-panel">
+        <Regent.Primitives.empty_state
+          class="kf-empty"
+          title="This fleet’s treasury opens once the fleet is live."
+        >
+          <:action>
+            <.link
+              class="rg-button rg-button--secondary"
+              patch={Keyfleet.Fleets.path(@page.fleet_id)}
+            >
+              <span class="rg-button__label">Back to the fleet</span>
+            </.link>
+          </:action>
+        </Regent.Primitives.empty_state>
+      </section>
+
       <section
-        :if={@page.carried != []}
+        :if={@page.carried != [] or @page.treasury}
         id="treasury-carried"
         class="proposals-panel"
         aria-labelledby="treasury-carried-title"
       >
         <h2 id="treasury-carried-title">Votes carried out</h2>
-        <ol id="treasury-carried-list" class="proposals-lines">
+        <Regent.Primitives.empty_state
+          :if={@page.carried == []}
+          id="treasury-carried-empty"
+          class="kf-empty"
+          title="No votes have been carried out yet."
+        >
+          <:action>
+            <.link
+              class="rg-button rg-button--secondary"
+              patch={ProposalsPage.list_path(@page.fleet_id)}
+            >
+              <span class="rg-button__label">See proposals</span>
+            </.link>
+          </:action>
+        </Regent.Primitives.empty_state>
+        <ol :if={@page.carried != []} id="treasury-carried-list" class="proposals-lines">
           <li :for={proposal <- @page.carried} data-proposal={proposal.number}>
             <.link patch={ProposalsPage.detail_path(@page.fleet_id, proposal.number)}>
               Proposal {proposal.number}

@@ -8,6 +8,7 @@ defmodule KeyfleetWeb.PointsLive do
   use KeyfleetWeb, :html
 
   alias Keyfleet.Actors.Human
+  alias KeyfleetWeb.Components.Placeholder
   alias RegentPoints.{Amount, Rules}
 
   attr :account, :map, default: nil
@@ -44,22 +45,41 @@ defmodule KeyfleetWeb.PointsLive do
           </Regent.Primitives.button>
         </:sign_in>
       </Regent.Account.signed_out>
-      <p :if={@account && is_nil(@points.value) && @points.state in [:idle, :loading]} role="status">
-        Reading your points…
-      </p>
-      <Regent.Primitives.notice :if={@points.state == :error} tone="error">
-        Points could not be read. Try refreshing this page.
+      <Placeholder.placeholder
+        :if={@account && is_nil(@points.value) && @points.state in [:idle, :loading]}
+        label="Loading your points"
+        shape="figures"
+        lines={3}
+      />
+      <Regent.Primitives.notice :if={@points.state == :error} tone="error" class="points-retry">
+        <p>Your points aren’t showing right now.</p>
+        <.link class="rg-button rg-button--secondary" patch={~p"/account/points"}>
+          <span class="rg-button__label">Try again</span>
+        </.link>
       </Regent.Primitives.notice>
+      <%!-- An answer with no figures in it would otherwise leave the page blank. --%>
+      <Regent.Primitives.empty_state
+        :if={@account && @points.state == :empty}
+        class="kf-empty"
+        title="No points yet."
+      >
+        Points come in as your agents work in a fleet.
+        <:action>
+          <a class="rg-button rg-button--secondary" href="#points-earn">
+            <span class="rg-button__label">See what earns points</span>
+          </a>
+        </:action>
+      </Regent.Primitives.empty_state>
       <%!-- Keeps its space while unseen, so a failed refresh never moves the panels. --%>
       <Regent.Primitives.notice
-        :if={@account && @points.value}
+        :if={@account && @points.value && @points.state != :empty}
         tone="warning"
         class="points-stale"
         data-unseen={@points.state != :stale}
       >
         These are your last saved figures. The latest refresh failed.
       </Regent.Primitives.notice>
-      <div :if={@account && @points.value} class="account-grid">
+      <div :if={@account && @points.value && @points.state != :empty} class="account-grid">
         <Regent.Account.points_summary
           id="account-points-summary"
           confirmed={Amount.format(@points.value.balance_micro)}
@@ -82,12 +102,18 @@ defmodule KeyfleetWeb.PointsLive do
               bonus to the points you earned in that period, one-time awards included.
             </Regent.Primitives.tip>
           </h2>
-          <p :if={@bonus.state in [:idle, :loading]} role="status">Checking your NFTs…</p>
-          <p :if={@bonus.state in [:error, :stale]}>
-            Your NFTs could not be checked. Try refreshing this page.
-          </p>
-          <p :if={@bonus.state == :ready}>
+          <Placeholder.placeholder
+            :if={@bonus.state in [:idle, :loading]}
+            label="Checking your NFTs"
+            lines={1}
+          />
+          <p :if={@bonus.state in [:error, :stale]}>Your NFTs aren’t showing right now.</p>
+          <p :if={@bonus.state == :ready and @bonus.value.nft_count > 0}>
             {@bonus.value.nft_count} NFTs now · +{@bonus.value.percent}% at the end of this period
+          </p>
+          <p :if={no_nfts?(@bonus)}>
+            No Animata or Regents Club NFTs in your linked wallets yet.
+            <.link patch={~p"/account/wallets"}>Check your wallets</.link>
           </p>
           <dl :if={@points.value.period_bonuses != []}>
             <div :for={period <- @points.value.period_bonuses}>
@@ -100,7 +126,18 @@ defmodule KeyfleetWeb.PointsLive do
         </section>
         <section class="account-panel">
           <h2>Recent points activity</h2>
-          <p :if={@points.value.entries == []}>No confirmed points activity yet.</p>
+          <Regent.Primitives.empty_state
+            :if={@points.value.entries == []}
+            class="kf-empty"
+            title="No points yet."
+          >
+            Points come in as your agents work in a fleet.
+            <:action>
+              <a class="rg-button rg-button--secondary" href="#points-earn">
+                <span class="rg-button__label">See what earns points</span>
+              </a>
+            </:action>
+          </Regent.Primitives.empty_state>
           <ol>
             <li :for={entry <- @points.value.entries}>
               <p>
@@ -253,6 +290,11 @@ defmodule KeyfleetWeb.PointsLive do
   defp entry_status(%{reversal_of_entry_id: id}) when not is_nil(id), do: "Correction"
   defp entry_status(%{points_micro_delta: 0}), do: "Allowance reached"
   defp entry_status(_), do: "Confirmed"
+
+  # A wallet check that came back with nothing counts as holding none.
+  defp no_nfts?(%{state: :empty}), do: true
+  defp no_nfts?(%{state: :ready, value: %{nft_count: 0}}), do: true
+  defp no_nfts?(_bonus), do: false
 
   defp summary_state(state) when state in [:idle, :loading], do: :loading
   defp summary_state(:empty), do: :ready

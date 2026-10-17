@@ -175,7 +175,14 @@ defmodule KeyfleetWeb.Components.MemberList do
     ~H"""
     <section id={@id} class="member-list" aria-labelledby={"#{@id}-title"}>
       <h2 id={"#{@id}-title"}>Member List</h2>
-      <p :if={@holders == []} id={"#{@id}-none"}>No Keys have been issued yet.</p>
+      <Regent.Primitives.empty_state
+        :if={@holders == []}
+        id={"#{@id}-none"}
+        class="kf-empty"
+        title="No members yet."
+      >
+        Whoever holds the first Key shows up here.
+      </Regent.Primitives.empty_state>
 
       <ol id={"#{@id}-holders"} class="member-list__holders">
         <li
