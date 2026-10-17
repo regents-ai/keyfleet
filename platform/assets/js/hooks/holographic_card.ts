@@ -71,6 +71,7 @@ export const createHolographicCardController = (
     readyFlag: "holoReady",
     browserLoad: browserLoadCard(root),
     motionSensitive: true,
+    continuous: false,
     interact({root: card, canvas, renderer, nudge, onReady}) {
       // Every frame the island draws is followed by the tilt the renderer settled
       // on, so the card keeps turning for exactly as long as the foil eases.
