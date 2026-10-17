@@ -215,7 +215,7 @@ warnings as errors, and verifies the Ash codegen and route handoff are current.
 | `npm run typecheck` | Type-checks the TypeScript assets. |
 | `npm test` | Runs the Vitest unit suite. |
 | `npm run test:browser` | Builds the assets, then runs the browser suite against a test server. |
-| `npm run test:chain` | Runs the browser checks that sell, move and pair keys while a fleet page is open, and press its wallet and copy buttons with a stand-in wallet, and that load the main pages, the early-access page and the start of sign-in with nothing refused by their security policy, against a test server and database of their own. Every run starts from the same unsold fleets. |
+| `npm run test:chain` | Runs the browser checks that sell, move and pair keys while a fleet page is open, and press its wallet and copy buttons with a stand-in wallet, that load the main pages, the early-access page and the start of sign-in with nothing refused by their security policy, and that use the agent tools the pages register as a signed agent would, against a test server and database of their own. Every run starts from the same unsold fleets. |
 | `npm run test:budgets` | Enforces the asset size budgets. |
 | `mix test.external` | Runs the tests that need tools outside the hermetic suite: the rewards and wallet-button labs on a local anvil (Foundry's `anvil` and `forge` on the path), and the release package's Docker build-context test. |
 

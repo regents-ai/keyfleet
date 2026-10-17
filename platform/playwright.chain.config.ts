@@ -5,11 +5,13 @@ import {defineConfig, devices} from "@playwright/test"
 // server while a page watches, and land the steps a page's wallet buttons
 // send. A key's profile is checked in Chromium, Firefox and WebKit; the map,
 // the fleet page's motion, the wallet buttons, a key's shards, muting a key
-// in a room, the copy buttons, the pages' security policy and the links
-// between the in-app pages in Chromium.
-// They call `Keyfleet.BrowserChain` on the server over Erlang distribution, so
-// the server runs as a named node on the loopback address, with a secret
-// cookie and a fixed distribution port instead of epmd.
+// in a room, the copy buttons, the pages' security policy, the links
+// between the in-app pages and the agent tools the pages register in Chromium.
+// They call `Keyfleet.BrowserChain` and `Keyfleet.BrowserAgents` on the server
+// over Erlang distribution, so the server runs as a named node on the loopback
+// address, with a secret cookie and a fixed distribution port instead of epmd.
+// The server checks agents' signed requests through a stand-in sign-in server
+// that `Keyfleet.BrowserAgents` starts.
 //
 // The server gets a database of its own, the partition's name with
 // `_fleet_map` after it, created and brought up to date before the server
@@ -30,7 +32,7 @@ const distribution = `-start_epmd false -erl_epmd_port ${process.env.KEYFLEET_BR
 
 export default defineConfig({
   testDir: "./test/browser",
-  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "wallet_buttons.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts"],
+  testMatch: ["fleet_map.spec.ts", "key_profile.spec.ts", "fleet_motion.spec.ts", "wallet_buttons.spec.ts", "key_shards.spec.ts", "room_mutes.spec.ts", "copy_buttons.spec.ts", "content_security_policy.spec.ts", "shell_links.spec.ts", "early_page.spec.ts", "agent_tools.spec.ts"],
   fullyParallel: false,
   workers: 1,
   forbidOnly: true,
@@ -49,7 +51,7 @@ export default defineConfig({
       "(test -f tmp/cert/localhost.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=localhost -addext subjectAltName=DNS:localhost -keyout tmp/cert/localhost_key.pem -out tmp/cert/localhost.pem)",
       `${env} mix ecto.create --quiet`,
       `${env} mix keyfleet.setup_local_auth`,
-      `${env} KEYFLEET_BROWSER_TEST=1 elixir --name keyfleet_browser@127.0.0.1 --cookie "$KEYFLEET_BROWSER_COOKIE" --erl '${distribution}' -S mix run --no-halt -e 'Keyfleet.BrowserChain.hold_database!(); Keyfleet.TestChainNode.start!()'`,
+      `${env} KEYFLEET_BROWSER_TEST=1 elixir --name keyfleet_browser@127.0.0.1 --cookie "$KEYFLEET_BROWSER_COOKIE" --erl '${distribution}' -S mix run --no-halt -e 'Keyfleet.BrowserChain.hold_database!(); Keyfleet.TestChainNode.start!(); Keyfleet.BrowserAgents.start!()'`,
     ].join(" && "),
     url: `${baseURL}/`,
     ignoreHTTPSErrors: true,

@@ -1781,3 +1781,23 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the figures under them stay in line.
 - On a phone the hero starts as far under the header as every other section
   starts under its rule.
+
+## 2026-10-17 — Browser checks for the agent tools
+
+- `npm run test:chain` now drives the tools Keyfleet's pages register for a
+  browser's agent the way an agent does: it finds them, prepares each signed
+  request on the page, signs it with the agent's own key and sends it with that
+  proof. It checks that the homepage and a fleet's pages offer every site tool
+  once, that the public reads answer with nobody signed in, that a paired agent
+  learns who it is and reads its Credits without spending any, that an unpaired
+  agent is refused with `agent_not_paired` until it is paired, and that a post
+  in General shows once and catching up after a reconnect repeats nothing and
+  misses nothing.
+- Why: the browser tools had no automated test, so a regression showed only
+  when an agent hit it (the home-stretch plan's risk 11). Sean asked for these
+  checks on 17 October 2026.
+- The test server checks each signature through a stand-in sign-in server
+  (`Keyfleet.BrowserAgents`), and the browser's side of WebMCP is a stand-in
+  too, so these checks prove the pages' tools, not a real browser's discovery
+  of them. The workspace steps are left out because the work graph's host
+  does not run on the test server.

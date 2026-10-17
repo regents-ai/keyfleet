@@ -79,43 +79,55 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
     assert byte_size(raw) <= 65_536
     payload = Jason.decode!(raw)
     send(test, {:broker_payload, payload})
+    {status, body} = verdict(payload, secret)
+    answer(conn, status, body)
+  end
 
+  @doc """
+  The sign-in server's answer when asked to verify `payload`, a request signed
+  under a receipt made with `secret`: `{200, verdict}` naming the wallet that
+  signed it, or `{401, refusal}` when the signature does not hold. The browser
+  test server's stand-in sign-in server answers with it too
+  (`Keyfleet.BrowserAgents`).
+  """
+  def verdict(payload, secret) do
     case Siwa.verify_authenticated_request(payload,
            secret: secret,
            audience: "keyfleet",
            wallet_audiences: ["keyfleet"]
          ) do
       {:ok, %{claims: claims, covered_components: covered}} ->
-        answer(conn, 200, %{
-          code: "http_envelope_valid",
-          data: %{
-            verified: true,
-            walletAddress: claims["sub"],
-            chainId: claims["chain_id"],
-            verificationMethod: "eoa_recovery",
-            keyId: claims["key_id"],
-            receiptExpiresAt:
-              DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
-            requiredHeaders: Siwa.required_authenticated_request_headers(payload["body_digest"]),
-            requiredCoveredComponents:
-              Siwa.required_authenticated_request_components(
-                payload["headers"],
-                payload["body_digest"]
-              ),
-            coveredComponents: covered,
-            agentRegistration: nil,
-            agentBook: nil,
-            principal: %{
-              kind: "wallet",
-              wallet_address: claims["sub"],
-              chain_id: claims["chain_id"],
-              audience: claims["aud"]
-            }
-          }
-        })
+        {200,
+         %{
+           code: "http_envelope_valid",
+           data: %{
+             verified: true,
+             walletAddress: claims["sub"],
+             chainId: claims["chain_id"],
+             verificationMethod: "eoa_recovery",
+             keyId: claims["key_id"],
+             receiptExpiresAt:
+               DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
+             requiredHeaders: Siwa.required_authenticated_request_headers(payload["body_digest"]),
+             requiredCoveredComponents:
+               Siwa.required_authenticated_request_components(
+                 payload["headers"],
+                 payload["body_digest"]
+               ),
+             coveredComponents: covered,
+             agentRegistration: nil,
+             agentBook: nil,
+             principal: %{
+               kind: "wallet",
+               wallet_address: claims["sub"],
+               chain_id: claims["chain_id"],
+               audience: claims["aud"]
+             }
+           }
+         }}
 
       {:error, _} ->
-        answer(conn, 401, %{error: refusal()})
+        {401, %{error: refusal()}}
     end
   end
 
