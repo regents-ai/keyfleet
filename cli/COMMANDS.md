@@ -1359,18 +1359,18 @@ GET `/api/v1/agent/account/points` with fresh wallet proof and current pairing. 
 
 ## regents keyfleet agents pair
 
-- **What it does:** redeems the owner's single-use code with the agent's existing identity.
-- **Who may run it:** the agent the owner has authorized to pair, using fresh SIWA proof for audience `keyfleet`. No current pairing is required.
-- **What it changes:** creates a current pairing episode through the existing shared action. It enables no spending grant and provides no owner wallet authority.
+- **What it does:** redeems your person's single-use pairing code with the agent's existing identity.
+- **Who may run it:** the agent your person has asked to pair, signing the request with SIWA for audience `keyfleet`. No current pairing is required.
+- **What it changes:** creates a current pairing episode through the existing shared action. It enables no spending grant and gives no authority over your person's wallets.
 - **Route:** `POST /api/agents/v1/pair` → `pairSharedAgent`.
 - **Inputs:** private stdin JSON with required string fields `code`, `name` and `harness`. Keep the code out of command arguments, shell history and saved reports. The server validates the supported harness and the name's 1 to 80 characters.
 - **Answer:** 201 with the existing `{data: …}` paired-agent envelope.
 - **Refusals:** 400 `pairing_failed` or `harness_unknown`; 401 rejected proof; 409 `agent_limit` or a sign-in refusal; 429 rate limit; 503 `not_open_yet` or `siwa_request_failed`.
 - **History:** 2026-10-09 added.
 
-Probe `agents whoami` first. When unpaired, obtain the owner's approval and code,
-redeem it once, then probe again with fresh proof. Follow the SIWA guide for
-supported signer setup; do not substitute owner cookies or a local fixture.
+Probe `agents whoami` first. When unpaired, ask your person for their approval and a
+code, redeem it once, then run `agents whoami` again. Follow the SIWA guide to set up
+your signer; never use your person's browser sign-in or a local fixture instead.
 
 ## Account answers changed (15 October 2026)
 

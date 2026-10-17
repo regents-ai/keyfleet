@@ -80,7 +80,7 @@ const tools: ModelContextTool[] = entries.filter(entry => entry.scope === "site"
         const args = input as {operation: string; input: Record<string, unknown>}
         return {ok: true, request: signedTransport().prepare(args.operation, args.input)}
       } catch (error) {
-        return {ok: false, error: {code: "invalid_preparation", message: String(error)}}
+        return {ok: false, error: {code: "invalid_preparation", message: String(error), hint: "Fix the operation or its input, then call again."}}
       }
     }
     if (entry.authentication === "siwa_per_request") {
@@ -90,18 +90,18 @@ const tools: ModelContextTool[] = entries.filter(entry => entry.scope === "site"
         return response.ok ? {ok: true, status: response.status, data} : {ok: false, status: response.status, error: data.error}
       } catch (error) {
         return {ok: false, error: {code: "signed_request_failed", message: String(error),
-          hint: entry.state_changing ? "Check the outcome before retrying. Keep the logical operation ID and sign fresh proof."
-            : "Prepare and sign this exact request with your own SIWA signer. Report a missing signer as a blocker."}}
+          hint: entry.state_changing ? "Check what happened before you send it again. Keep the same idempotency_key or command_id, and sign the request again."
+            : "Prepare this exact request with prepare_agent_request and sign it with your SIWA signer, then call again. If you have no signer, report that as a blocker."}}
       }
     }
     const problem = inputProblem(input, entry.input_schema)
-    if (problem) return {ok: false, error: {code: "invalid_input", message: problem}}
+    if (problem) return {ok: false, error: {code: "invalid_input", message: problem, hint: "Fix the call, then call again."}}
     try {
       return await requests[entry.name](input as Record<string, string>, signal)
     } catch (_error) {
       return signal?.aborted
         ? {ok: false, error: {code: "cancelled", message: "The read was cancelled; nothing changed."}}
-        : {ok: false, error: {code: "unreachable", message: "The page could not be read. Try again."}}
+        : {ok: false, error: {code: "unreachable", message: "The page could not be read. Try again in a moment."}}
     }
   },
 }))

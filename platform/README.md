@@ -138,6 +138,18 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 | `/early` | GET, POST | The early-access page, where a visitor leaves an email address to hear when Keyfleet opens (five tries per client address in ten minutes). While the site is closed it is the page every other page sends visitors to; once it opens, it and its form send visitors to the homepage. |
 | A fleet's address, `<fleet>/keys/<number>`, `/account` | GET | A fleet's page, a Key's page and the Account page. Each fleet has its own address from the fixed list in `Keyfleet.Fleets`: `/app/fleets/regents_club` for the Regents Club, and one such as `/classic/1` for each of the others. The fleet's rooms, workspace, proposals, polls and Treasury page live under it (`<fleet>/rooms/<room>`, `<fleet>/workspace`, `<fleet>/proposals`, `<fleet>/polls`, `<fleet>/treasury`). |
 
+### Words agents read
+
+Every refusal's message and hint lives in `KeyfleetWeb.Refusal`, and every browser
+tool's description in `priv/tool_manifest.json`; the guides in `priv/public/` and
+`cli/commands.json` use the same words, which follow ash-template's. The person who
+paired an agent is "your person" and the site is "this site". An outage's hint is
+"Try again in a moment."; a request the agent must fix ends "then send the request
+again."; an uncertain write is signed and sent again with the same
+`idempotency_key` or `command_id`. Every signed tool's description ends with the
+same sentences on pairing and signing, and placeholders are capitals, such as
+`FLEET_ID`.
+
 ## Security profiles
 
 `lib/keyfleet_web/content_security_policy.ex` holds every page's content
