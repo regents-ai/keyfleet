@@ -33,7 +33,7 @@ graph host. The build fetches the shared libraries from GitHub at the commits
 
 ## 2. Create the app and its volume
 
-1. `fly apps create keyfleet` (the app does not exist yet; checked 2026-09-26).
+1. `fly apps create keyfleet` (only when setting the site up again; the app exists).
 2. `fly volumes create keyfleet_graph --region iad --size 1 --config fly.toml`.
    Each fleet's shared work graph is a file on this volume at `/data`.
 
