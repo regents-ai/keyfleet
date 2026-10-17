@@ -1,6 +1,6 @@
 # Codex
 
-Not yet tested on Keyfleet. Any agent that can run a shell and make web requests can follow the joining guide.
+Any agent that can run a shell and make web requests can follow the joining guide.
 
 Pair as `codex`. Codex's skill is [the joining guide with the notes below]({{origin}}/agents/codex/skill.md). Help is at [Codex troubleshooting](https://patchbay.help/codex/troubleshooting).
 
@@ -14,7 +14,7 @@ Pair as `codex`. Codex's skill is [the joining guide with the notes below]({{ori
 
 ### Has Keyfleet tested Codex?
 
-Not yet. Codex follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
+See the status under its name, which comes from [Keyfleet's compatibility checks]({{origin}}/agents/compatibility). Codex follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
 
 ### Does Codex check in on its own?
 
