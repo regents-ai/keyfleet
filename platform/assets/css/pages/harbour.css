@@ -1,0 +1,447 @@
+/* The sea behind the app's pages (`KeyfleetWeb.HarbourSeaLive`): the harbour
+   fills the screen behind everything, seen from low down so the water runs out
+   to the horizon. The header, sidebar, side panel, cards and reading column
+   stay solid over it; the open margins between them show the sea. Every rule
+   here applies only while the sea is on the page, so a page without it (the
+   homepage, /early) is drawn as before. Unlayered, so it wins over the shell's
+   own rules. */
+
+/* The far sea fades into `--harbour-haze`, the page's ground in each theme; the
+   harbour reads it as a hex colour, so it is written out, not taken from a
+   variable. */
+.harbour-sea__harbour {
+  --harbour-haze: #0b0b0b;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: var(--harbour-haze);
+}
+
+:root[data-theme="light"] .harbour-sea__harbour {
+  --harbour-haze: #f6f4ea;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .harbour-sea__harbour {
+    --harbour-haze: #f6f4ea;
+  }
+}
+
+.harbour-sea__stage {
+  position: absolute;
+  inset: 0;
+  color: var(--color-fg);
+}
+
+.harbour-sea__stage canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+
+.harbour-sea__harbour[data-harbour-ready="true"] canvas {
+  opacity: 1;
+}
+
+/* The name of the ship under the mouse, standing on its masthead. The hook
+   moves it with `translate`. */
+.harbour-sea__tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: 0.4em;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  transform: translate(-50%, calc(-100% - 0.2rem));
+  border: 1px solid var(--ash-line-strong);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font: 0.68rem/1.2 var(--font-family-mono);
+  letter-spacing: var(--tracking-microlabel);
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.harbour-sea__tag[hidden] {
+  display: none;
+}
+
+.harbour-sea__tag::before,
+.harbour-card__sail {
+  border-radius: 50%;
+  background: var(--sail);
+}
+
+.harbour-sea__tag::before {
+  width: 0.55rem;
+  height: 0.55rem;
+  content: "";
+}
+
+/* ---- The page over the sea ---- */
+
+/* The html element keeps the ground, which shows while the sea loads and where
+   there is no WebGPU; everything above it lets the sea through. */
+body:has(> .harbour-sea) {
+  --sea-lift: 560ms;
+  --sea-gutter: var(--space-4);
+  background: transparent;
+}
+
+/* The root view only holds fixed parts, so it takes no room. The footer rule
+   in app.css would otherwise let it grow as the body's first child, and the
+   html in front outweighs that rule. */
+html body:has(> .harbour-sea) > .harbour-sea {
+  flex: none;
+}
+
+body:has(> .harbour-sea) #app-shell {
+  z-index: 1;
+  background: transparent;
+  transition:
+    translate var(--sea-lift) cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity var(--sea-lift) ease,
+    visibility 0s;
+}
+
+/* The account tabs and the reading column (/about, /opportunities) carry text
+   straight on the ground, so they keep it. Cards already paint their own. */
+body:has(> .harbour-sea) #shell-tabs {
+  background: var(--color-bg);
+}
+
+body:has(> .harbour-sea) #route-content .legal-page {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+/* The footer is drawn above the sea, on the same ground as the header. */
+body:has(> .harbour-sea) > .regent-footer {
+  position: relative;
+  z-index: 1;
+  background: var(--color-bg);
+  transition:
+    opacity var(--sea-lift) ease,
+    visibility 0s;
+}
+
+/* A press on the open margin reaches the sea; a press on anything solid stays
+   with the page. Only for a mouse: on a touch screen a swipe anywhere keeps
+   scrolling the page, and the sea takes taps once the page is lifted. */
+@media (hover: hover) and (pointer: fine) {
+  body:has(> .harbour-sea) :is(#app-shell, #app-shell-scroller, #route-content, #route-content > *) {
+    pointer-events: none;
+  }
+
+  body:has(> .harbour-sea)
+    :is(#app-shell > :not(#app-shell-scroller), #app-shell-scroller > :not(#route-content), #route-content > * > *) {
+    pointer-events: auto;
+  }
+}
+
+/* ---- The lift button ---- */
+
+/* It stands at the header's top right, inside the frame, in a slot the header
+   leaves empty for it, so it never covers a header control. It is centred on
+   the header's row, which its buttons make 4.75rem high (3.875rem on a
+   phone). */
+body:has(> .harbour-sea) #shell-header {
+  padding-inline-end: calc(2.75rem + 2 * var(--space-1));
+}
+
+.harbour-sea .harbour-sea__lift {
+  position: fixed;
+  top: calc(1px + (4.75rem - 2.75rem) / 2);
+  right: calc(max(var(--sea-gutter), (100% - var(--rg-frame-max)) / 2) + 1px + var(--space-1));
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--ash-line-strong);
+  border-radius: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .harbour-sea .harbour-sea__lift:hover {
+    background: color-mix(in oklab, var(--color-fg) 6%, var(--color-bg));
+  }
+}
+
+.harbour-sea .harbour-sea__lift:focus-visible {
+  outline: 2px solid var(--ash-accent);
+  outline-offset: 2px;
+}
+
+.harbour-sea .harbour-sea__lift svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  transition: rotate 300ms ease;
+}
+
+.harbour-sea .harbour-sea__lift[aria-pressed="true"] svg {
+  rotate: 180deg;
+}
+
+/* The frame's gutter, as `.rg-sheet` sets it at each width. */
+@media (max-width: 74.99rem) {
+  body:has(> .harbour-sea) {
+    --sea-gutter: var(--space-3);
+  }
+}
+
+/* A phone's header is one short row; the slot is the button and a hair more. */
+@media (max-width: 47.99rem) {
+  body:has(> .harbour-sea) {
+    --sea-gutter: var(--space-2);
+  }
+
+  body:has(> .harbour-sea) #shell-header {
+    padding-inline-end: calc(2.75rem + 2 * 4px);
+  }
+
+  /* The row's controls draw a little tighter to make that room. */
+  body:has(> .harbour-sea) #shell-header .mobile-menu-button {
+    padding-inline: 0.5rem;
+  }
+
+  body:has(> .harbour-sea) #shell-header .rg-button:not(.rg-button--quiet) {
+    gap: 0.25rem;
+    padding-inline: 0.5rem;
+  }
+
+  body:has(> .harbour-sea) #shell-header .rg-button:not(.rg-button--quiet)::after {
+    margin-inline: 0;
+  }
+
+  .harbour-sea .harbour-sea__lift {
+    top: calc(1px + (3.875rem - 2.75rem) / 2);
+    right: calc(var(--sea-gutter) + 1px + 4px);
+  }
+}
+
+/* Under 480px the brand is its mark alone, as the shell's row leaves it, so the
+   name never shows cut short. */
+@media (max-width: 29.99rem) {
+  body:has(> .harbour-sea) #shell-header .shell-brand__name {
+    display: none;
+  }
+}
+
+/* Below 392px the theme switch gives way sooner than the shell's own 360px,
+   as the shell does: the device's setting applies until the screen is wider. */
+@media (max-width: 24.49rem) {
+  body:has(> .harbour-sea) #shell-header:has(.shell-get-key, .shell-credits) .theme-control {
+    display: none;
+  }
+}
+
+/* On a 320px phone, signed in beside the Credits balance, the buttons drop
+   their arrows and the balance and name tighten. */
+@media (max-width: 22.49rem) {
+  body:has(> .harbour-sea) #shell-header .rg-button:not(.rg-button--quiet)::after {
+    display: none;
+  }
+
+  body:has(> .harbour-sea) #app-shell #shell-header :is(.shell-credits, .account-chip) {
+    padding-inline: 0.35rem;
+  }
+}
+
+/* Lifted: the page, menus and footer included, rises off the top and only the
+   sea is left. Hidden once it has gone, so the keyboard and screen readers
+   skip it and land on the button and the sea. */
+body.sea-lifted:has(> .harbour-sea) {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.sea-lifted:has(> .harbour-sea) #app-shell {
+  translate: 0 -100%;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    translate var(--sea-lift) cubic-bezier(0.5, 0, 0.75, 0),
+    opacity var(--sea-lift) ease,
+    visibility 0s var(--sea-lift);
+}
+
+body.sea-lifted:has(> .harbour-sea) > .regent-footer {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--sea-lift) ease,
+    visibility 0s var(--sea-lift);
+}
+
+/* ---- An agent's card: who it is, its Key and its last few actions ---- */
+
+.harbour-card {
+  width: min(24rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  border: 1px solid var(--ash-line-strong);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  overflow-y: auto;
+}
+
+/* The sea stays in sight behind it. */
+.harbour-card::backdrop {
+  background: color-mix(in oklch, var(--palette-charcoal) 30%, transparent);
+}
+
+.harbour-card__head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.harbour-card__sail {
+  flex: none;
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.harbour-card__head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.harbour-card h2 {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-family-title);
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The title takes focus when the card opens so it is read out first; it is not
+   something to press. */
+.harbour-card h2:focus {
+  outline: none;
+}
+
+.harbour-card__head p,
+.harbour-card time {
+  margin: 0;
+  color: var(--color-fg-muted);
+  font: 0.72rem/1.4 var(--font-family-mono);
+  letter-spacing: var(--tracking-microlabel);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.harbour-card__head form {
+  display: contents;
+}
+
+.harbour-card .harbour-card__close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-fg);
+}
+
+@media (hover: hover) {
+  .harbour-card .harbour-card__close:hover {
+    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
+  }
+}
+
+.harbour-card__close svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.harbour-card__actions {
+  display: grid;
+  margin: 0;
+  padding: var(--space-1) var(--space-3) var(--space-2);
+  list-style: none;
+}
+
+.harbour-card__actions li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+  padding: var(--space-1) 0;
+  color: var(--color-fg-muted);
+}
+
+.harbour-card__actions li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+/* The last action leads. */
+.harbour-card__actions li:first-child {
+  color: var(--color-fg);
+  font-size: 1.1rem;
+}
+
+.harbour-card__key {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 var(--space-3);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-fg);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.harbour-card__key::after {
+  margin-inline-start: 0.4em;
+  content: "\2192";
+}
+
+@media (hover: hover) {
+  .harbour-card__key:hover {
+    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .harbour-sea__stage canvas,
+  .harbour-sea .harbour-sea__lift svg,
+  body:has(> .harbour-sea) #app-shell,
+  body:has(> .harbour-sea) > .regent-footer,
+  body.sea-lifted:has(> .harbour-sea) #app-shell,
+  body.sea-lifted:has(> .harbour-sea) > .regent-footer {
+    transition: none;
+  }
+
+  .harbour-sea .harbour-sea__lift[aria-pressed="true"] svg {
+    rotate: none;
+  }
+
+  /* No slide: the page simply goes. */
+  body.sea-lifted:has(> .harbour-sea) #app-shell {
+    translate: none;
+  }
+}

@@ -24,6 +24,14 @@ defmodule KeyfleetWeb.Router do
     plug :accepts, ["json"]
   end
 
+  # The root layout draws the harbour's sea (`KeyfleetWeb.HarbourSeaLive`)
+  # behind these pages.
+  pipeline :harbour_sea do
+    plug :put_harbour_sea
+  end
+
+  def put_harbour_sea(conn, _opts), do: assign(conn, :harbour_sea, true)
+
   pipeline :agent do
     plug KeyfleetWeb.Plugs.FleetComingSoon
   end
@@ -340,6 +348,11 @@ defmodule KeyfleetWeb.Router do
 
     # A Key holder's way into the fleet's notebooks, or to one saved output.
     get "/fleets/:fleet_id/notebooks/open", NotebookOpenController, :open
+  end
+
+  # The pages drawn in the product shell, with the harbour's sea behind them.
+  scope "/", KeyfleetWeb do
+    pipe_through [:browser, :harbour_sea]
 
     live_session :product_shell,
       session: {KeyfleetWeb.Live.Session, :render_context, []},

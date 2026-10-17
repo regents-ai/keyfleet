@@ -57,6 +57,7 @@
     </script>
   </head>
   <body>
+    {if assigns[:harbour_sea], do: KeyfleetWeb.HarbourSeaLive.sea(@conn)}
     {@inner_content}
     <.product_links :if={!home?} />
   </body>
