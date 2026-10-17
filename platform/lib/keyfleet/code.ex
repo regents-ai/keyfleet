@@ -130,7 +130,8 @@ defmodule Keyfleet.Code do
 
   @doc """
   The owner the store keeps the fleet's repository under, as `{:ok, owner}`;
-  `:setting_up` while it is being made, which the first ask queues; or
+  while it is being made, which the first ask queues, `{:setting_up,
+  seconds}` until the next try or `:setup_restarted` (`Setup.queue/1`); or
   `{:error, error}` when it can't be read.
   """
   def owner(fleet_id) do
@@ -139,8 +140,7 @@ defmodule Keyfleet.Code do
         {:ok, owner}
 
       {:ok, nil} ->
-        Oban.insert!(Setup.new(%{fleet_id: fleet_id}))
-        :setting_up
+        Setup.queue(fleet_id)
 
       {:error, error} ->
         {:error, error}

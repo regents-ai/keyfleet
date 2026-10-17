@@ -91,8 +91,18 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
       {:allowed, :restricted} ->
         refuse(conn, 403, "code_edits_restricted")
 
-      {:owner, :setting_up} ->
-        refuse(conn, 503, "code_setting_up")
+      {:owner, {:setting_up, seconds}} ->
+        # The next try, and a minute for it to finish.
+        wait = seconds + 60
+
+        conn
+        |> put_resp_header("retry-after", Integer.to_string(wait))
+        |> refuse(503, Refusal.code_setting_up(wait))
+
+      {:owner, :setup_restarted} ->
+        conn
+        |> put_resp_header("retry-after", "180")
+        |> refuse(503, "code_setup_restarted")
 
       {:owner, {:error, _error}} ->
         refuse(conn, 503, "code_unavailable")
@@ -163,9 +173,10 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   defp pass(fleet_id, %{wallet: wallet}, _need), do: {:ok, Pass.push(fleet_id, wallet)}
 
   # Git shows a plain-text answer to the person running it.
-  defp refuse(conn, status, code) do
-    %{error: %{message: message, hint: hint}} = Refusal.body(code)
+  defp refuse(conn, status, code) when is_binary(code),
+    do: refuse(conn, status, Refusal.body(code))
 
+  defp refuse(conn, status, %{error: %{message: message, hint: hint}}) do
     conn
     |> put_resp_content_type("text/plain")
     |> send_resp(status, message <> "\n" <> hint <> "\n")

@@ -64,6 +64,7 @@ person's keys are on the Account page.
 - What needs a person is saved with the site's errors at `/admin/errors`,
   which Fly Sentinel reads: the chain reader stopping, fleet money overdue
   while there is money to move, a notebook hub or the code store failing, a
+  fleet's code setup giving up and starting again, a
   saved notebook page left without its lasting address, and a fleet's
   workspace stalling.
 - The GitHub remote is `regents-ai/keyfleet` and is private.

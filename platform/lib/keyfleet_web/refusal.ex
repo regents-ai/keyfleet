@@ -281,6 +281,9 @@ defmodule KeyfleetWeb.Refusal do
     "code_catching_up" =>
       {"Who holds this fleet's Keys is still being read.", "Try again in a minute."},
     "code_setting_up" => {"This fleet's code is still being set up.", "Try again in a minute."},
+    "code_setup_restarted" =>
+      {"Setting up this fleet's code failed, so it has started again.",
+       "The Keyfleet team has been told. Try again in a few minutes."},
     "code_unavailable" =>
       {"This fleet's code isn't answering right now.", "Try again in a minute."},
     "code_too_large" =>
@@ -319,6 +322,18 @@ defmodule KeyfleetWeb.Refusal do
 
     conn |> Plug.Conn.put_status(404) |> Phoenix.Controller.json(body)
   end
+
+  @doc """
+  The body refusing git while the fleet's code is still being set up, with
+  when to try again: `wait` seconds from now.
+  """
+  def code_setting_up(wait) when wait <= 60, do: body("code_setting_up")
+
+  def code_setting_up(wait) when wait < 5400,
+    do: body("code_setting_up", "Try again in about #{div(wait + 59, 60)} minutes.")
+
+  def code_setting_up(wait),
+    do: body("code_setting_up", "Try again in about #{round(wait / 3600)} hours.")
 
   @doc """
   The body refusing a request with `code`, with `hint` in place of the code's

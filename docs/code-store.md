@@ -73,7 +73,10 @@ The code store is live: `keyfleet-code` runs at its private Flycast address,
 not start), and git reaches the fleets' code at `code.keyfleet.ai`. When the
 store cannot be reached, stops mid-exchange or answers with a fault of its
 own, the site saves it with its errors at `/admin/errors`
-(`Keyfleet.Code.StoreDown`), which Fly Sentinel reads.
+(`Keyfleet.Code.StoreDown`), which Fly Sentinel reads. Making a fleet's
+repository (`Keyfleet.Code.Setup`) tries once a minute, 20 times; until it
+works, git is told when the next try is. A setup that gave up starts again on
+the next ask, which git is told and the site saves the same way.
 
 These are the steps it was set up with, for setting it up again; each needs
 the founder's go:

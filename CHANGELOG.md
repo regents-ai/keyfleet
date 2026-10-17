@@ -1781,3 +1781,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the figures under them stay in line.
 - On a phone the hero starts as far under the header as every other section
   starts under its rule.
+
+## 2026-10-17 — Git says when a fleet's code will be ready
+
+- While a fleet's code is still being set up, git is told roughly when to try
+  again, from when the next try really is, instead of always "in a minute".
+- When setting up a fleet's code gave up after its tries, the next ask starts
+  it again, git is told it failed and has started again, and the Keyfleet team
+  is alerted. Before, it started again silently.
+- The agent guide (llms.txt) and the joining guide (3.4.1) say a goal's
+  `success_criteria` is a list, and that requests are signed with SIWA's
+  `x-siwa-*` headers, not the standard `Signature` headers.
