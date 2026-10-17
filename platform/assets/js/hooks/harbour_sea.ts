@@ -16,9 +16,6 @@ const crewOf = (root: HTMLElement): CrewMember[] => JSON.parse(root.dataset.harb
 /** Space kept between a ship's name and the sides of the screen, in pixels. */
 const TAG_MARGIN = 4
 
-/** Pixels in one line of a wheel that counts in lines. */
-const WHEEL_LINE = 16
-
 /** Dark unless the page or the device asks for light, the same reading as the theme switch. */
 const lookOf = (root: HTMLElement, light: MediaQueryList): HarbourLook => {
   const theme = document.documentElement.dataset.theme
@@ -42,9 +39,10 @@ type HarbourSeaController = CanvasIslandController & {
  * agent moves on or the theme changes. Without WebGPU nothing is drawn and the
  * page's own ground shows.
  *
- * A mouse over a ship shows its agent's name. Pressing a ship hands its agent to
- * `open`, pressing the open sea starts a ripple, and pressing an island does
- * nothing.
+ * The sea lies behind the page and takes no presses until the page is lifted
+ * away (pages/harbour.css). Then a mouse over a ship shows its agent's name,
+ * pressing a ship hands its agent to `open`, pressing the open sea starts a
+ * ripple, and pressing an island does nothing.
  */
 const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) => void): HarbourSeaController => {
   let sync = () => {}
@@ -110,19 +108,6 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
         }
         if (!harbour.onIsland(u, v)) harbour.ripple(u, v)
       }
-      // A mouse over the open margin is over the sea, not the page's scroller,
-      // so its wheel is handed to the scroller while that can still move.
-      const onWheel = (event: WheelEvent) => {
-        const scroller = document.getElementById("app-shell-scroller")
-        if (!scroller || document.body.classList.contains("sea-lifted")) return
-        const scale = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? WHEEL_LINE : 1
-        const top = event.deltaY * scale
-        const room = top < 0 ? scroller.scrollTop : scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop
-        if (room < 1) return
-        event.preventDefault()
-        scroller.scrollBy({top, left: event.deltaX * scale})
-      }
-
       onReady(() => {
         const harbour = renderer()!
         harbour.setCalm(calm.matches)
@@ -140,7 +125,6 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
       stage.addEventListener("pointermove", onPointerMove)
       stage.addEventListener("pointerleave", hideTag)
       canvas.addEventListener("click", onClick)
-      stage.addEventListener("wheel", onWheel, {passive: false})
 
       return () => {
         sync = () => {}
@@ -151,7 +135,6 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
         stage.removeEventListener("pointermove", onPointerMove)
         stage.removeEventListener("pointerleave", hideTag)
         canvas.removeEventListener("click", onClick)
-        stage.removeEventListener("wheel", onWheel)
       }
     },
   })
@@ -163,18 +146,33 @@ type HarbourSeaHook = {
   el: HTMLElement
   controller?: HarbourSeaController
   shownPath?: string
+  shownPage?: string
   onPageLoaded?: () => void
   pushEvent(event: string, payload: object): void
+  liveSocket: {js(): {exec(el: HTMLElement, encodedJS: string): void}}
 }
 
 /**
  * The backdrop's hook. The sea lives in a sticky LiveView that never sees the
  * page's params, so it tells the backdrop which page is on screen, on mount and
  * after every live navigation, and the backdrop picks the crew for it.
+ *
+ * A new page, the card's link to a Key included, brings the page back down if
+ * it was lifted and closes the card, so nobody is left on a page they can't see.
+ * The lift button's own commands bring it down, so its pressed state and label
+ * follow.
  */
 export const HarbourSea = {
   mounted(this: HarbourSeaHook) {
     this.onPageLoaded = () => {
+      const page = window.location.pathname + window.location.search
+      if (this.shownPage !== undefined && page !== this.shownPage) {
+        const lift = document.getElementById("sea-lift")
+        if (lift && document.body.classList.contains("sea-lifted"))
+          this.liveSocket.js().exec(lift, lift.getAttribute("phx-click")!)
+        if (document.getElementById("harbour-agent")) this.pushEvent("close_agent", {})
+      }
+      this.shownPage = page
       const path = window.location.pathname
       if (path === this.shownPath) return
       this.shownPath = path
