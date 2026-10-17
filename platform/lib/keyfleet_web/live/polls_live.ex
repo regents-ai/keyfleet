@@ -19,6 +19,7 @@ defmodule KeyfleetWeb.PollsLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.LoadFailed
   import Phoenix.LiveView, only: [connected?: 1, push_patch: 2]
 
   alias Keyfleet.Chain
@@ -455,8 +456,7 @@ defmodule KeyfleetWeb.PollsLive do
         <h1 tabindex="-1">Polls</h1>
       </header>
       <section class="polls-panel">
-        <h2>This page couldn’t be loaded.</h2>
-        <p>Refresh the page to try again.</p>
+        <.load_failed />
       </section>
     </article>
     """

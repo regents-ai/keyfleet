@@ -45,6 +45,7 @@ defmodule KeyfleetWeb.HomeLive do
     FleetLive,
     FleetPage,
     Motion,
+    PageRead,
     PublicDocuments,
     RouteCatalog,
     SharedFigures,
@@ -171,21 +172,30 @@ defmodule KeyfleetWeb.HomeLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    recorded = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
-
     socket =
       socket
       |> assign(PublicDocuments.page("/"))
-      |> assign(
-        route_spec: RouteCatalog.fetch!("/"),
-        classic: fleet(@classic, recorded[@classic]),
-        club: fleet(@club, recorded[@club]),
-        buy_open: false,
-        refreshing: MapSet.new()
-      )
+      |> assign(route_spec: RouteCatalog.fetch!("/"), buy_open: false, refreshing: MapSet.new())
+      |> assign(fleets())
 
     {:ok, if(connected?(socket), do: watch(socket), else: socket)}
   end
+
+  # The two fleets as recorded. When they can't be read the page still draws:
+  # each fleet as the catalog has it, saying it couldn't be read.
+  defp fleets do
+    read = fn ->
+      recorded = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
+      [classic: fleet(@classic, recorded[@classic]), club: fleet(@club, recorded[@club])]
+    end
+
+    case PageRead.run("home", read) do
+      {:ok, fleets} -> fleets
+      {:error, _failure} -> [classic: unread(@classic), club: unread(@club)]
+    end
+  end
+
+  defp unread(fleet_id), do: %{fleet(fleet_id, nil) | failed?: true}
 
   # A fleet before its first read: its name, its sales and its map. A
   # coming-soon fleet is never read.
@@ -208,7 +218,12 @@ defmodule KeyfleetWeb.HomeLive do
   # one its fleet page's Buy button names.
   defp sales(fleet_id, recorded) do
     deployed? = recorded != nil and recorded.manager_address != nil
-    {:ok, minted} = if deployed?, do: Chain.minted(fleet_id), else: {:ok, 0}
+
+    minted =
+      case if(deployed?, do: Chain.minted(fleet_id), else: {:ok, 0}) do
+        {:ok, minted} -> minted
+        {:error, failure} -> raise failure
+      end
 
     %{
       deployed?: deployed?,
@@ -745,10 +760,12 @@ defmodule KeyfleetWeb.HomeLive do
         <p class="rl-fleet__line">1,998 Keys, one for each Regents Club Pass.</p>
         <p id="home-club-airdrop" class="rl-fleet__line">{airdrop()}</p>
 
-        <p :if={@club.coming_soon?} class="rl-club__who" data-fleet-soon>Opens soon</p>
+        <p :if={@club.coming_soon? and !@club.failed?} class="rl-club__who" data-fleet-soon>
+          Opens soon
+        </p>
         <%!-- Its room is kept while the Club is read, so the button below
               never moves. --%>
-        <div :if={!@club.coming_soon?} class="rl-club__now">
+        <div :if={!@club.coming_soon? or @club.failed?} class="rl-club__now">
           <p class="rl-club__who" data-fleet-who>
             <FleetLive.headcount
               :if={@club.now}

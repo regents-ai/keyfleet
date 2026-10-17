@@ -4,10 +4,12 @@ defmodule KeyfleetWeb.PageRead do
   inside the callback in the ash-template repository's
   `skills/ash-frontend/references/async-state.md`. A failed database read
   (`Postgrex.Error`, `DBConnection.ConnectionError`, or the `Ash.Error.Unknown`
-  an Ash read wraps either in) comes back as `{:error, failure}` and is logged
-  as an error with its kind and a short reason, never the query or the values
-  in it, so the page says it couldn't be loaded rather than crashing. An
-  address that names nothing still raises `KeyfleetWeb.NotFoundError`.
+  an Ash read wraps either in) comes back as `{:error, failure}`, so the page
+  says it couldn't be loaded rather than crashing. The failure is logged as an
+  error with its kind and a short reason, never the query or the values in it,
+  and saved with the site's errors (`Keyfleet.Alert.save/2`), so a read that
+  keeps failing is seen at /admin/errors. An address that names nothing still
+  raises `KeyfleetWeb.NotFoundError`.
   """
 
   require Logger
@@ -18,6 +20,7 @@ defmodule KeyfleetWeb.PageRead do
   rescue
     failure in [Postgrex.Error, DBConnection.ConnectionError, Ash.Error.Unknown] ->
       Logger.error("Reading the #{page} page failed: " <> summary(failure))
+      Keyfleet.Alert.save(failure, __STACKTRACE__)
       {:error, failure}
   end
 

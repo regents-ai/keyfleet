@@ -18,6 +18,8 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.LoadFailed
+
   alias Keyfleet.Fleets.Rules
   alias KeyfleetWeb.Components.AddressLinks
   alias KeyfleetWeb.Components.Count
@@ -1120,8 +1122,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       </header>
 
       <section id="proposals-unreadable" class="proposals-panel">
-        <h2>This page couldn’t be loaded.</h2>
-        <p>Refresh the page to try again.</p>
+        <.load_failed />
       </section>
     </article>
     """

@@ -16,6 +16,7 @@ defmodule KeyfleetWeb.EarlyController do
   @joined "You're on the list. We'll email you when Keyfleet opens."
   @unreadable "That doesn't look like an email address."
   @too_many "Too many tries from here. Wait a few minutes and try again."
+  @not_saved "We couldn't save that just now. Try again in a moment."
 
   def show(conn, _params), do: page(conn, [])
 
@@ -33,7 +34,17 @@ defmodule KeyfleetWeb.EarlyController do
     case Keyfleet.Early.sign_up(email) do
       {:ok, _signup} -> joined(conn)
       {:error, %Ash.Error.Invalid{}} -> unreadable(conn, email)
+      {:error, failure} -> not_saved(conn, email, failure)
     end
+  end
+
+  # The address stays in the box, so trying again is one press.
+  defp not_saved(conn, email, failure) do
+    Keyfleet.Alert.report(failure)
+
+    conn
+    |> put_status(:service_unavailable)
+    |> page(email: email, refused: @not_saved)
   end
 
   defp sign_up(conn, _params), do: unreadable(conn, "")

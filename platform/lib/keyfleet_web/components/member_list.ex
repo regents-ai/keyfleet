@@ -20,6 +20,8 @@ defmodule KeyfleetWeb.Components.MemberList do
   """
   use KeyfleetWeb, :live_component
 
+  import KeyfleetWeb.Components.LoadFailed
+
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.LinkedIdentity.Providers
   alias Keyfleet.Actors.System
@@ -29,6 +31,7 @@ defmodule KeyfleetWeb.Components.MemberList do
   alias Keyfleet.PublicIdentity
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.NotFoundError
+  alias KeyfleetWeb.PageRead
 
   @per_page 20
   @cards_shown 50
@@ -61,15 +64,26 @@ defmodule KeyfleetWeb.Components.MemberList do
 
   defp page!(_params), do: 1
 
-  defp read(%{assigns: %{fleet_id: fleet_id, club_claims: club_claims, page: page}} = socket) do
+  # A list that can't be read says so in its place; the rest of the fleet's
+  # page stays.
+  defp read(socket) do
+    case PageRead.run("member list", fn -> holders(socket.assigns) end) do
+      {:ok, {holders, next?}} ->
+        assign(socket, holders: holders, next?: next?, now: DateTime.utc_now())
+
+      {:error, _failure} ->
+        assign(socket, holders: :unreadable, next?: false, now: DateTime.utc_now())
+    end
+  end
+
+  defp holders(%{fleet_id: fleet_id, club_claims: club_claims, page: page, deck: deck}) do
     found =
       Keys.holders(fleet_id, List.wrap(club_claims), (page - 1) * @per_page, @per_page + 1)
 
     if found == [] and page > 1, do: raise(NotFoundError)
 
     {shown, more} = Enum.split(found, @per_page)
-    holders = cards(fleet_id, socket.assigns.deck, shown)
-    assign(socket, holders: holders, next?: more != [], now: DateTime.utc_now())
+    {cards(fleet_id, deck, shown), more != []}
   end
 
   defp cards(_fleet_id, _deck, []), do: []
@@ -175,6 +189,9 @@ defmodule KeyfleetWeb.Components.MemberList do
     ~H"""
     <section id={@id} class="member-list" aria-labelledby={"#{@id}-title"}>
       <h2 id={"#{@id}-title"}>Member List</h2>
+      <div :if={@holders == :unreadable} id={"#{@id}-failed"}>
+        <.load_failed title="The Member List couldn’t be loaded" />
+      </div>
       <Regent.Primitives.empty_state
         :if={@holders == []}
         id={"#{@id}-none"}
@@ -184,7 +201,7 @@ defmodule KeyfleetWeb.Components.MemberList do
         Whoever holds the first Key shows up here.
       </Regent.Primitives.empty_state>
 
-      <ol id={"#{@id}-holders"} class="member-list__holders">
+      <ol :if={is_list(@holders)} id={"#{@id}-holders"} class="member-list__holders">
         <li
           :for={holder <- @holders}
           id={"#{@id}-holder-#{holder.id}"}

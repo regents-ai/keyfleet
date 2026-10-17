@@ -12,6 +12,7 @@ defmodule KeyfleetWeb.DmsLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.LoadFailed
   import KeyfleetWeb.Components.SentFrom
   import Phoenix.LiveView, only: [stream: 4, push_patch: 2]
 
@@ -264,8 +265,8 @@ defmodule KeyfleetWeb.DmsLive do
   defp closed(assigns) do
     ~H"""
     <section id="dms-closed" class="rooms-panel">
-      <h2>{closed_reason(@dms)}</h2>
-      <p :if={@dms == :unreadable}>Refresh the page to try again.</p>
+      <.load_failed :if={@dms == :unreadable} />
+      <h2 :if={@dms != :unreadable}>{closed_reason(@dms)}</h2>
       <Regent.Primitives.button
         :if={sign_in?(@dms)}
         id="dms-sign-in"
@@ -334,7 +335,6 @@ defmodule KeyfleetWeb.DmsLive do
 
   defp kicker(_dms), do: "Keyfleet"
 
-  defp closed_reason(:unreadable), do: "This page couldn’t be loaded."
   defp closed_reason(%{fleet_name: nil}), do: "This fleet doesn’t exist."
   defp closed_reason(%{refreshing?: true}), do: KeysLive.refreshing()
   defp closed_reason(_dms), do: "Only this Key’s holder can read its messages."

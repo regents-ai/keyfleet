@@ -6,6 +6,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   use KeyfleetWeb, :live_view
 
+  import KeyfleetWeb.Components.LoadFailed
   import KeyfleetWeb.Components.Shell
 
   alias Keyfleet.Access
@@ -31,6 +32,7 @@ defmodule KeyfleetWeb.ShellLive do
     KeyMap,
     KeyProfileLive,
     KeysLive,
+    PageRead,
     PointsLive,
     PollsLive,
     ProposalsLive,
@@ -71,7 +73,8 @@ defmodule KeyfleetWeb.ShellLive do
      |> assign(
        route_spec: nil,
        shell_instance: System.unique_integer([:positive, :monotonic]),
-       get_key: get_key_fleet() in Fleets.open_fleet_ids(),
+       get_key: get_key?(),
+       load_failed?: false,
        verified_connections: %Read{},
        verified_connections_notice: nil,
        notebooks_notice: nil,
@@ -126,12 +129,34 @@ defmodule KeyfleetWeb.ShellLive do
      |> follow_credits(current_account(socket.assigns.access_context))}
   end
 
+  # A page that couldn't be loaded may have started listening to what it was
+  # loading before the read failed, so the next page is a whole new load.
   @impl true
+  def handle_params(_params, uri, %{assigns: %{load_failed?: true}} = socket) do
+    %URI{path: path, query: query} = URI.parse(uri)
+    {:noreply, redirect(socket, to: if(query, do: path <> "?" <> query, else: path))}
+  end
+
+  # A read the page can't do leaves the frame standing, with the page's place
+  # saying it couldn't be loaded.
   def handle_params(params, uri, socket) do
     route_spec = route_spec(uri, params)
     params = name_fleet(params, route_spec)
     if beyond_supply?(params), do: raise(NotFoundError)
 
+    case PageRead.run("app", fn -> load(socket, route_spec, params) end) do
+      {:ok, loaded} ->
+        loaded
+
+      {:error, _failure} ->
+        {:noreply,
+         socket
+         |> assign(route_spec: route_spec, load_failed?: true, send_agent_open: false)
+         |> assign(PublicDocuments.page(route_spec.route_id))}
+    end
+  end
+
+  defp load(socket, route_spec, params) do
     if coming_soon_inside?(route_spec, params) do
       {:noreply, push_patch(socket, to: Fleets.path(route_spec.fleet_id), replace: true)}
     else
@@ -332,11 +357,14 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_event(event, params, socket) when event in @poll_events,
     do: PollsLive.handle_event(event, params, socket)
 
+  # A page that couldn't be loaded shows nothing that a notice could change.
+  @impl true
+  def handle_info(_message, %{assigns: %{load_failed?: true}} = socket), do: {:noreply, socket}
+
   # A notice that the open room has taken a post it is not showing yet is only a
   # nudge to look again. The new posts are read back from the room itself, and
   # a room shown as for keys only looks again at whether the reader may read
   # it; the place the notice names is never shown.
-  @impl true
   def handle_info(
         %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}},
         %{assigns: %{room: %{room_id: room_id, last_seq: last_seq}}} = socket
@@ -516,7 +544,15 @@ defmodule KeyfleetWeb.ShellLive do
           credits={@credits}
         />
       </:credits_panel>
-      <:content>
+      <:content :if={@load_failed?}>
+        <article id="page-load-failed" class="fleet-page">
+          <section class="fleet-panel">
+            <h1 tabindex="-1">Keyfleet</h1>
+            <.load_failed />
+          </section>
+        </article>
+      </:content>
+      <:content :if={!@load_failed?}>
         <Reading.page
           :if={@route_spec.route_id in [:about, :opportunities]}
           path={@route_spec.destination}
@@ -660,6 +696,15 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp current_account(%{principal: {:human, account}}), do: account
   defp current_account(_access_context), do: nil
+
+  # The header offers a Key while the fleet it is got from is open. A failed
+  # read leaves the offer out rather than the page.
+  defp get_key? do
+    case PageRead.run("header", fn -> get_key_fleet() in Fleets.open_fleet_ids() end) do
+      {:ok, open?} -> open?
+      {:error, _failure} -> false
+    end
+  end
 
   # A sign-in that ends while the page is open withdraws the account, and its
   # balance and the Buy Credits panel go with it. While signed in, the panel and

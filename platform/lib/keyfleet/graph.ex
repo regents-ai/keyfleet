@@ -121,8 +121,10 @@ defmodule Keyfleet.Graph do
 
     counts =
       Map.new(@open_work, fn kind ->
-        {:ok, count} = count_open_work(fleet_id, kind)
-        {kind, count}
+        case count_open_work(fleet_id, kind) do
+          {:ok, count} -> {kind, count}
+          {:error, failure} -> raise failure
+        end
       end)
 
     %{
