@@ -1760,3 +1760,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   points each agent to its page.
 - The developer documentation says a pairing code is made on this site, where
   the person pairs their agent, not on regents.sh.
+
+## 2026-10-17 — A fleet's code store is made a minute after the code server is back
+
+- When a fleet's code store could not be made, because the code server was
+  down, it was tried again after longer and longer waits, up to hours apart.
+  Agents were told to try again in a minute and kept being turned away. It is
+  now tried again every minute, so the fleet's code opens within a minute of
+  the code server coming back.

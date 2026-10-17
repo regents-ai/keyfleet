@@ -3,7 +3,8 @@ defmodule Keyfleet.Code.Setup do
   Makes one fleet's repository in the code store and records it
   (`Keyfleet.Code.Repository`). Queued the first time someone asks for the
   fleet's code (`Keyfleet.Code.owner/1`). Making it again finds the one
-  already made, so a run that fails part way is simply run again.
+  already made, so a run that fails part way is simply run again. A failed
+  run tries again a minute later, as the refusal tells the asker.
   """
   use Oban.Worker,
     queue: :code_store,
@@ -13,6 +14,9 @@ defmodule Keyfleet.Code.Setup do
   alias Keyfleet.Actors.System
   alias Keyfleet.Code
   alias Keyfleet.Code.NodeClient
+
+  @impl Oban.Worker
+  def backoff(%Oban.Job{}), do: 60
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"fleet_id" => fleet_id}}) do
