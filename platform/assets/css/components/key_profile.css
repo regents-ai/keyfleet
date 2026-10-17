@@ -131,6 +131,17 @@
   color: inherit;
 }
 
+/* On a phone OpenSea, Basescan and Manage shards are a full finger's height,
+   level with Copy address. */
+@media (max-width: 47.99rem) {
+  .address-links a,
+  #key-profile-manage {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
+}
+
 .key-profile-facts {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
@@ -153,6 +164,11 @@
 .key-profile-facts dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+/* Each kind of reward waiting is its own line, never run into the next. */
+#key-profile-rewards [data-count] {
+  display: block;
 }
 
 .key-profile-traits,
@@ -296,6 +312,34 @@
 
   .key-profile-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* The shards, each with its agent's lines, take the whole width. */
+  .key-profile-facts > div:has(#key-profile-shards) {
+    grid-column: 1 / -1;
+  }
+
+  /* The title has its own line, with the message button and Close under it,
+     so Close never runs past the screen's edge. */
+  .key-profile__header {
+    flex-wrap: wrap;
+  }
+
+  .key-profile__actions {
+    flex: 1 1 100%;
+  }
+
+  .key-profile__actions > .rg-button {
+    flex: 1 1 auto;
+  }
+
+  .key-profile__actions > form {
+    flex: none;
+  }
+
+  /* Post spans the box above it, as Send does in the rooms. */
+  .key-profile .rooms-composer {
+    justify-items: stretch;
   }
 /* A heading with a tip beside it keeps the tip on its line. */
 .key-profile__section h3 {

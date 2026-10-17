@@ -274,9 +274,23 @@
   resize: vertical;
 }
 
-@media (max-width: 48rem) {
+@media (max-width: 47.99rem) {
   .rooms-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Each room is a full finger's height, one under the other. */
+  .rooms-list ul {
+    gap: 0;
+  }
+
+  .rooms-list li > a {
+    min-height: 2.75rem;
+  }
+
+  /* Send spans the box above it. */
+  .rooms-composer {
+    justify-items: stretch;
   }
 }
 
