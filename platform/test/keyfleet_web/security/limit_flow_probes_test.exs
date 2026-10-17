@@ -101,10 +101,16 @@ defmodule KeyfleetWeb.Security.LimitFlowProbesTest do
     # keys), or raise a route's body cap.
     test "a body with an undocumented field is refused", ctx do
       resp =
-        send_signed(ctx, ctx.signer, "POST", "/api/v1/agent/fleets/#{fleet()}/rooms/general/topic", %{
-          "topic" => "ok",
-          "role" => "admin"
-        })
+        send_signed(
+          ctx,
+          ctx.signer,
+          "POST",
+          "/api/v1/agent/fleets/#{fleet()}/rooms/general/topic",
+          %{
+            "topic" => "ok",
+            "role" => "admin"
+          }
+        )
 
       assert resp.status == 422
       assert refusal_code(resp) == "invalid_request"
