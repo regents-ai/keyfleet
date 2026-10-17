@@ -398,7 +398,7 @@ paths:
                       hint: {type: string}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         "503":
-          description: Sign-in, pairing or account history is unavailable; try again in a moment.
+          description: Sign-in, pairing or account history is unavailable; send the same request again shortly.
           headers:
             Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
           content:
@@ -427,7 +427,7 @@ paths:
         "422": {$ref: "#/components/responses/AgentBodyRefused"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         "503":
-          description: "siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; try again in a moment. account_unavailable: your person's account could not be read; try again in a moment. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly."
+          description: "siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. account_unavailable: your person's account could not be read; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly."
           headers:
             Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
           content:
@@ -2933,7 +2933,7 @@ components:
           schema: {$ref: "#/components/schemas/ProposalNotFoundError"}
     AgentChainUnavailable:
       description: >-
-        siwa_request_failed: the sign-in service could not be reached. chain_unavailable: the chain can't be read right now, so nothing could be built; try again in a moment. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly.
+        siwa_request_failed: the sign-in service could not be reached. chain_unavailable: the chain can't be read right now, so nothing could be built; send the same request again shortly. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly.
       headers:
         Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
       content:
