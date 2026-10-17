@@ -11,7 +11,14 @@ defmodule Keyfleet.Alert do
   is still listed adds an occurrence and marks it unresolved again without a
   new email. `Keyfleet.ErrorPruner` clears an error a week after it was last
   seen.
+
+  The errors are kept in the site's own database, so a save fails while the
+  database can't be reached. A failed save is logged and never raises: the
+  caller carries on, a gateway still answers, a reader keeps reading, and
+  `/healthz` already says the database is down.
   """
+
+  require Logger
 
   @doc """
   Saves `exception`, placed at the line that called its module's report
@@ -21,9 +28,23 @@ defmodule Keyfleet.Alert do
   def report(%module{} = exception) do
     {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
 
-    ErrorTracker.report(
-      exception,
-      Enum.drop_while(stacktrace, &(elem(&1, 0) in [Process, __MODULE__, module]))
+    save(exception, Enum.drop_while(stacktrace, &(elem(&1, 0) in [Process, __MODULE__, module])))
+  end
+
+  @doc "Saves an exception that was rescued, placed where it was raised."
+  def save(exception, stacktrace) do
+    ErrorTracker.report(exception, stacktrace)
+    :ok
+  rescue
+    failure -> unsaved(exception, Exception.message(failure))
+  catch
+    :exit, reason -> unsaved(exception, inspect(reason))
+  end
+
+  defp unsaved(exception, why) do
+    Logger.error(
+      "An error couldn't be saved with the site's errors (#{why}): " <>
+        Exception.message(exception)
     )
 
     :ok

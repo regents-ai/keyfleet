@@ -39,6 +39,7 @@ defmodule KeyfleetWeb.FleetLive do
   use KeyfleetWeb, :html
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
+  import KeyfleetWeb.Components.LoadFailed
 
   import Phoenix.LiveView,
     only: [
@@ -215,8 +216,7 @@ defmodule KeyfleetWeb.FleetLive do
     <article id="fleet-page" class="fleet-page">
       <section id="fleet-unreadable" class="fleet-panel">
         <h1 tabindex="-1">Keyfleet</h1>
-        <h2>This page couldn’t be loaded.</h2>
-        <p>Refresh the page to try again.</p>
+        <.load_failed />
       </section>
     </article>
     """
@@ -1416,10 +1416,15 @@ defmodule KeyfleetWeb.FleetLive do
   def handle_event("send_quote", _params, socket), do: {:noreply, socket}
 
   # The map on a deployed fleet's page asks for its keys when it loads and
-  # every time it reconnects.
+  # every time it reconnects. Unanswered, it stays as drawn until it asks again.
   def handle_event("keymap_ready", _params, %{assigns: %{fleet: %{deployed?: true}}} = socket) do
     %{fleet_id: fleet_id, progress: progress} = socket.assigns.fleet
-    {:reply, KeyMap.snapshot(fleet_id, progress, ShellLive.human_actor(socket)), socket}
+    actor = ShellLive.human_actor(socket)
+
+    case PageRead.run("map", fn -> KeyMap.snapshot(fleet_id, progress, actor) end) do
+      {:ok, snapshot} -> {:reply, snapshot, socket}
+      {:error, _failure} -> {:noreply, socket}
+    end
   end
 
   def handle_event("keymap_ready", _params, socket), do: {:noreply, socket}

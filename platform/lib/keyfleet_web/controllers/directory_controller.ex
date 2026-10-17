@@ -4,8 +4,8 @@ defmodule KeyfleetWeb.DirectoryController do
   in: `/fleets.md` and `/fleets/<id>.md` as Markdown, `/api/v1/fleets` and
   `/api/v1/fleets/<id>` as JSON, all read from `Keyfleet.Directory`.
 
-  Answers may be kept for 30 seconds; nothing is kept on the server. When a
-  count the directory gives can't be read, it answers 503 and says so.
+  Answers may be kept for 30 seconds; nothing is kept on the server. When
+  anything the directory gives can't be read, it answers 503 and says so.
 
   A browser that opens `/fleets/<id>` or `/fleets/<id>/rooms` is sent to the
   fleet's page or its General room; any other request there is sent to the
@@ -15,12 +15,12 @@ defmodule KeyfleetWeb.DirectoryController do
   use KeyfleetWeb, :controller
 
   alias Keyfleet.{Directory, Fleets}
-  alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorHTML, Refusal}
+  alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorHTML, PageRead, Refusal}
 
   @unavailable "The fleet directory can't be read right now. Try again in a moment."
 
   def index_md(conn, _params) do
-    case Directory.list() do
+    case read(&Directory.list/0) do
       {:ok, fleets} -> markdown(conn, DirectoryMD.index(%{fleets: fleets, generated_at: now()}))
       {:error, _failure} -> unavailable_md(conn)
     end
@@ -39,7 +39,7 @@ defmodule KeyfleetWeb.DirectoryController do
     do: open_fleet(conn, fleet_id, "/rooms/general")
 
   defp fleet_md(conn, fleet_id) do
-    case Directory.fleet(fleet_id) do
+    case read(fn -> Directory.fleet(fleet_id) end) do
       {:ok, fleet} -> markdown(conn, DirectoryMD.show(%{fleet: fleet, generated_at: now()}))
       :unknown -> Refusal.json(conn, 404, "fleet_unknown")
       {:error, _failure} -> unavailable_md(conn)
@@ -47,7 +47,7 @@ defmodule KeyfleetWeb.DirectoryController do
   end
 
   def index_json(conn, _params) do
-    case Directory.list() do
+    case read(&Directory.list/0) do
       {:ok, fleets} ->
         conn |> cached() |> json(DirectoryJSON.index(%{fleets: fleets, generated_at: now()}))
 
@@ -57,7 +57,7 @@ defmodule KeyfleetWeb.DirectoryController do
   end
 
   def show_json(conn, %{"fleet_id" => fleet_id}) do
-    case Directory.fleet(fleet_id) do
+    case read(fn -> Directory.fleet(fleet_id) end) do
       {:ok, fleet} ->
         conn |> cached() |> json(DirectoryJSON.show(%{fleet: fleet, generated_at: now()}))
 
@@ -95,6 +95,15 @@ defmodule KeyfleetWeb.DirectoryController do
     |> put_format("html")
     |> put_view(html: ErrorHTML)
     |> render(:"404")
+  end
+
+  # A read that fails outright is unavailable too, like a count that can't be
+  # read.
+  defp read(directory) do
+    case PageRead.run("directory", directory) do
+      {:ok, answer} -> answer
+      {:error, failure} -> {:error, failure}
+    end
   end
 
   defp unavailable_md(conn) do

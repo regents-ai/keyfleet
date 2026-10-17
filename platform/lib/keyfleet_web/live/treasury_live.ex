@@ -7,6 +7,7 @@ defmodule KeyfleetWeb.TreasuryLive do
   use KeyfleetWeb, :html
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
+  import KeyfleetWeb.Components.LoadFailed
 
   alias Keyfleet.Authority
   alias Keyfleet.Fleets.Rules
@@ -24,8 +25,7 @@ defmodule KeyfleetWeb.TreasuryLive do
     ~H"""
     <article id="treasury-page" class="proposals-page">
       <section id="treasury-unreadable" class="proposals-panel">
-        <h2>This page couldn’t be loaded.</h2>
-        <p>Refresh the page to try again.</p>
+        <.load_failed />
       </section>
     </article>
     """

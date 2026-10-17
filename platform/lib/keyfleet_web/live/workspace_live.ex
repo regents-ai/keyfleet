@@ -11,6 +11,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.LoadFailed
+
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.PageRead
@@ -695,8 +697,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
     ~H"""
     <article id={@id} class="workspace-page">
       <section id="workspace-unreadable" class="workspace-panel">
-        <h2>This page couldn’t be loaded.</h2>
-        <p>Refresh the page to try again.</p>
+        <.load_failed />
       </section>
     </article>
     """

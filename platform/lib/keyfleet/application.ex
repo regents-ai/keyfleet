@@ -7,6 +7,8 @@ defmodule Keyfleet.Application do
 
   @impl true
   def start(_type, _args) do
+    Keyfleet.ErrorHandlers.attach()
+
     children =
       [
         KeyfleetWeb.Telemetry,
