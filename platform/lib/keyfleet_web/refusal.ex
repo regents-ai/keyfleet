@@ -253,6 +253,9 @@ defmodule KeyfleetWeb.Refusal do
     "notebooks_schedules_refused" =>
       {"These notebooks don't run on a schedule.",
        "Leave out the schedule, then start each run when you want it."},
+    "notebook_sessions_full" =>
+      {"This fleet already has ten notebooks open.",
+       "End a session you no longer need, or wait for an idle one to close after 15 minutes, then try again. A background run (start_notebook_run) doesn't count."},
     "notebooks_catching_up" =>
       {"Who holds this fleet's Keys is still being read.", "Try again in a minute."},
     "notebooks_setting_up" =>

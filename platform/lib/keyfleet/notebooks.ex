@@ -232,6 +232,35 @@ defmodule Keyfleet.Notebooks do
   end
 
   @doc """
+  Whether the fleet's notebooks have room for a session of `notebook_id` now,
+  whoever starts it: `{:ok, true}` while fewer than `max_sessions` are open in
+  the fleet's project, or when one of them is already that notebook's, which
+  starting it again joins; `{:ok, false}` when they are full; or
+  `{:error, :unavailable}` when the open sessions can't be read. A background
+  run is the hub's job, not a session, so it takes no room. Two sessions
+  started at the same moment may both find the last place.
+  """
+  def session_room?(fleet_id, notebook_id) do
+    with {:project, {:ok, project_id}} when is_binary(project_id) <-
+           {:project, project_id(fleet_id)},
+         {:hub, {:ok, sessions}} <- {:hub, HubClient.sessions(fleet_id, project_id)} do
+      {:ok,
+       length(sessions) < config()[:max_sessions] or
+         Enum.any?(sessions, &(&1["notebook_id"] == notebook_id))}
+    else
+      {:project, _none} ->
+        {:error, :unavailable}
+
+      {:hub, {:error, reason}} ->
+        HubSilent.report(
+          "The notebook hub of #{fleet_id} did not list its open sessions: #{inspect(reason)}"
+        )
+
+        {:error, :unavailable}
+    end
+  end
+
+  @doc """
   Opens the fleet's notebooks for a person signed in by the session `lineage`:
   `{:ok, url}`, the fleet's notebook address with a link that works once, for
   `handoff_ttl_seconds`, landing on `to` (`destination?/1`: the start page or

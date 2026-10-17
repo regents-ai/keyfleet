@@ -1,7 +1,8 @@
 defmodule Keyfleet.Notebooks.HubSilent do
   @moduledoc """
   A fleet's notebook hub did not answer what it was asked: making a holder an
-  editor (`Keyfleet.Notebooks.admit/3`), or a request passed on or a live
+  editor (`Keyfleet.Notebooks.admit/3`), listing the sessions open in it
+  (`Keyfleet.Notebooks.session_room?/2`), or a request passed on or a live
   connection opened by its gateway (`KeyfleetWeb.Plugs.NotebookGateway`). Whoever asked was told the notebooks
   are unavailable, so until someone looks at the hub its members cannot work
   in it.

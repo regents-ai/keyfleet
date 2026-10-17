@@ -237,7 +237,9 @@ config :keyfleet, :notebooks,
   saved_page_max_bytes: 16 * 1024 * 1024,
   hub_timeout_ms: 30_000,
   # The Fly runner allows 120 seconds to boot, plus creation and notebook setup.
-  session_start_timeout_ms: 180_000
+  session_start_timeout_ms: 180_000,
+  # Notebook sessions a fleet may have open at once; its refusal and the docs say ten.
+  max_sessions: 10
 
 # Each fleet's code lives in one private repository in Keyfleet's own code
 # store, a Twigpine node at the private address `node` (runtime.exs reads

@@ -547,6 +547,12 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   end
 
   defp hub_answer(
+         %Plug.Conn{method: "GET", request_path: "/api/v1/projects/proj-fleet/sessions"} = conn,
+         _holder
+       ),
+       do: json(conn, 200, %{success: true, data: %{items: [], next_cursor: nil}})
+
+  defp hub_answer(
          %Plug.Conn{method: "POST", request_path: "/api/v1/projects/" <> _} = conn,
          _holder
        ),
