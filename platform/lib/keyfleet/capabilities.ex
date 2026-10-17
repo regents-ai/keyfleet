@@ -16,7 +16,7 @@ defmodule Keyfleet.Capabilities do
     "siwa" => "Your signed request; works before pairing",
     "siwa_and_pairing" => "Your signed request and a pairing",
     "siwa_and_pairing_and_product_rights" =>
-      "Your signed request and a pairing, with a Key, a shard or a person who holds one",
+      "Your signed request and a pairing; fleet tools also need a Key, a shard or a person who holds one",
     "session" => "Sign-in",
     "wallet" => "Sign-in and a wallet on your account"
   }
