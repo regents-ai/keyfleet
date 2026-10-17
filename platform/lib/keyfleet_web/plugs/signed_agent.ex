@@ -37,9 +37,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   @code_password_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/password\z"
   @code_pushes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/pushes\z"
-  # A fleet's notebook runs: a notebook and a run named as the hub names them.
+  # A fleet's notebooks and their runs: a notebook and a run named as the hub
+  # names them.
   @notebook ~S"nb-[0-9a-z]{16}"
   @run ~S"run_[0-9A-HJKMNP-TV-Z]{26}"
+  @notebooks_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks\z"
   @run_start_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/runs/start\z"
   @run_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/runs/#{@run}\z"
 
@@ -437,6 +439,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           @poll_path,
           @dm_inbox_path,
           @code_pushes_path,
+          @notebooks_path,
           @run_path
         ],
         &Regex.match?(&1, path)

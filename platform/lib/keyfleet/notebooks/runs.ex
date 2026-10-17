@@ -1,7 +1,7 @@
 defmodule Keyfleet.Notebooks.Runs do
   @moduledoc """
-  Background runs of a fleet's notebooks that an agent starts and reads
-  through its own signed requests to this site
+  A fleet's notebooks, and background runs of them, that an agent lists,
+  starts and reads through its own signed requests to this site
   (`KeyfleetWeb.AgentNotebookController`), so it never signs a request for
   the notebook host itself.
 
@@ -14,12 +14,15 @@ defmodule Keyfleet.Notebooks.Runs do
   Reading a finished run keeps its page and answers the saved result's
   address (`Keyfleet.Notebooks.result_url/4`), as reading that page on the
   notebook host does (`KeyfleetWeb.Plugs.NotebookGateway`): an address is
-  never handed out for a page Keyfleet hasn't kept.
+  never handed out for a page Keyfleet hasn't kept. Listing the notebooks
+  keeps no page: it answers each one's newest run in "Agent runs" with
+  `result_url` once that run's page has been kept.
 
   Each answer is `{:ok, run}`, with the notebook, the run and its status and,
-  once its page is kept, `result_url`; or `{:error, reason}`: `:not_found` for
-  a notebook or run the hub doesn't have, `:runs_full` when the notebook takes
-  no more runs for now, or `:unavailable` when the hub didn't answer.
+  once its page is kept, `result_url`, or `{:ok, notebooks}` for a listing;
+  or `{:error, reason}`: `:not_found` for a notebook or run the hub doesn't
+  have, `:runs_full` when the notebook takes no more runs for now, or
+  `:unavailable` when the hub didn't answer.
   """
 
   alias Keyfleet.Actors.System
@@ -29,6 +32,26 @@ defmodule Keyfleet.Notebooks.Runs do
   @job "Agent runs"
   # A finished run has made its page, unless it was cancelled or skipped.
   @with_page ~w(succeeded failed timed_out)
+  # A listing asks after this many notebooks' runs at once.
+  @lookups 4
+
+  @doc """
+  The fleet's 50 newest notebooks, newest first, as `subject`: each with its
+  title and the newest run in its job for agents' runs, or nil when no agent
+  has started one there.
+  """
+  def list(fleet_id, subject, project_id) do
+    with {:ok, %{"items" => notebooks}} <-
+           fleet_id
+           |> request(subject, :get, "/api/v1/projects/#{segment(project_id)}/notebooks",
+             params: [limit: 50]
+           )
+           |> answer(200),
+         {:ok, runs} <- last_runs(fleet_id, subject, project_id, notebooks) do
+      result_urls = result_urls(fleet_id, runs)
+      {:ok, Enum.zip_with(notebooks, runs, &listing(&1, &2, result_urls))}
+    end
+  end
 
   @doc """
   Starts a run of `notebook_id`'s saved code as `subject`. The same
@@ -91,6 +114,72 @@ defmodule Keyfleet.Notebooks.Runs do
            |> answer(201) do
       {:ok, id}
     end
+  end
+
+  # Each notebook's newest agent run, in the notebooks' order. A notebook the
+  # hub doesn't answer for leaves the whole listing unanswered.
+  defp last_runs(fleet_id, subject, project_id, notebooks) do
+    answers =
+      Task.async_stream(
+        notebooks,
+        &last_run(fleet_id, subject, notebook_path(project_id, &1["id"])),
+        max_concurrency: @lookups,
+        # Each asks the hub at most twice.
+        timeout: 2 * Notebooks.config()[:hub_timeout_ms],
+        on_timeout: :kill_task
+      )
+
+    with {:ok, runs} <- Enum.reduce_while(answers, {:ok, []}, &gather/2),
+         do: {:ok, Enum.reverse(runs)}
+  end
+
+  defp gather({:ok, {:ok, run}}, {:ok, runs}), do: {:cont, {:ok, [run | runs]}}
+  defp gather(_unanswered, _runs), do: {:halt, {:error, :unavailable}}
+
+  defp last_run(fleet_id, subject, notebook) do
+    with {:ok, %{"items" => jobs}} <-
+           fleet_id |> request(subject, :get, notebook <> "/jobs") |> answer(200) do
+      case Enum.find(jobs, &(&1["name"] == @job)) do
+        %{"id" => id} -> newest_run(fleet_id, subject, "#{notebook}/jobs/#{segment(id)}/runs")
+        nil -> {:ok, nil}
+      end
+    end
+  end
+
+  # The hub lists a job's runs newest first.
+  defp newest_run(fleet_id, subject, runs) do
+    with {:ok, %{"items" => items}} <-
+           fleet_id |> request(subject, :get, runs, params: [limit: 1]) |> answer(200),
+         do: {:ok, List.first(items)}
+  end
+
+  # The listed runs' kept pages, read at once, by notebook and run. Of two
+  # copies of one run's page, the newer is its saved result.
+  defp result_urls(fleet_id, runs) do
+    run_ids = for %{"run_id" => run_id} <- runs, do: run_id
+
+    fleet_id
+    |> Notebooks.saved_outputs!(run_ids, actor: %System{})
+    |> Enum.sort_by(& &1.saved_at)
+    |> Map.new(fn kept ->
+      {{kept.notebook_id, kept.source_id},
+       Notebooks.result_url(fleet_id, kept.notebook_id, kept.source_id, kept.saved_at)}
+    end)
+  end
+
+  defp listing(notebook, run, result_urls) do
+    %{
+      notebook_id: notebook["id"],
+      title: notebook["title"],
+      last_run:
+        if run do
+          %{
+            run_id: run["run_id"],
+            status: run["status"],
+            result_url: result_urls[{notebook["id"], run["run_id"]}]
+          }
+        end
+    }
   end
 
   # A notebook has at most a handful of jobs, so each is asked in turn.

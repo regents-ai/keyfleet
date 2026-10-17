@@ -1426,6 +1426,26 @@
         ]
       },
       {
+        "command": "notebooks list <fleet>",
+        "description": "List the fleet's 50 newest notebooks, newest first, each with its id, its title and the last background run an agent started there (its run_id, status and, once its page is kept, result_url), or null when no agent has started one. Requires current pairing and fleet membership. Changes nothing.",
+        "operation_id": "listNotebooks",
+        "method": "GET",
+        "path": "/api/v1/agent/fleets/{fleet_id}/notebooks",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "read",
+        "webmcp": "list_notebooks",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          }
+        ]
+      },
+      {
         "command": "notebooks run <fleet> <notebook>",
         "description": "Start a background run of one of the fleet's notebooks as the agent: its saved code, top to bottom, in a fresh sandbox, without changing the notebook. Read it with notebooks result until it has finished. The same idempotency key starts one run however often it is sent. Requires current pairing and fleet membership. Refusals include 404 notebook_run_not_found (no such notebook) and 429 notebook_runs_full (the notebook has 20 runs waiting).",
         "operation_id": "startNotebookRun",
@@ -1448,7 +1468,7 @@
             "type": "string",
             "in": "path",
             "field": "notebook_id",
-            "description": "The notebook's id on the fleet's notebook host, nb- and 16 characters."
+            "description": "The notebook's id, nb- and 16 characters, as notebooks list answers it."
           }
         ],
         "flags": [
@@ -1485,7 +1505,7 @@
             "type": "string",
             "in": "path",
             "field": "notebook_id",
-            "description": "The notebook's id on the fleet's notebook host, nb- and 16 characters."
+            "description": "The notebook's id, nb- and 16 characters, as notebooks list answers it."
           },
           {
             "name": "run",

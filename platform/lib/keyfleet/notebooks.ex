@@ -44,6 +44,7 @@ defmodule Keyfleet.Notebooks do
         args: [:fleet_id, :notebook_id, :source_id, :saved_at],
         not_found_error?: false
 
+      define :saved_outputs, action: :of_sources, args: [:fleet_id, :source_ids]
       define :remove_saved_output, action: :remove
     end
   end

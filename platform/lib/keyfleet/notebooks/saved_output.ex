@@ -44,6 +44,16 @@ defmodule Keyfleet.Notebooks.SavedOutput do
                  source_id == ^arg(:source_id) and saved_at == ^arg(:saved_at)
              )
     end
+
+    # Where the fleet's copies made by any of `source_ids` are kept, without
+    # their pages.
+    read :of_sources do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :source_ids, {:array, :string}, allow_nil?: false
+
+      filter expr(fleet_id == ^arg(:fleet_id) and source_id in ^arg(:source_ids))
+      prepare build(select: [:notebook_id, :source_id, :saved_at])
+    end
   end
 
   policies do
