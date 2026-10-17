@@ -18,7 +18,6 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/account/points",
              "/api/v1/agent/avatar/remove",
              "/api/v1/agent/avatar/start",
-             "/api/v1/agent/fleets/{fleet_id}/code/password",
              "/api/v1/agent/fleets/{fleet_id}/code/pushes",
              "/api/v1/agent/fleets/{fleet_id}/dms/changes",
              @graph <> "archive",

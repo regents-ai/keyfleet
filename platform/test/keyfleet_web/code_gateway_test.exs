@@ -21,7 +21,6 @@ defmodule KeyfleetWeb.CodeGatewayTest do
   @owner "did:key:z6MkfleetOwner"
   @holder_wallet "0x" <> String.duplicate("a", 40)
   @buyer_wallet "0x" <> String.duplicate("b", 40)
-  @agent_wallet "0x" <> String.duplicate("c", 40)
 
   setup do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
@@ -157,23 +156,6 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     refute_received {:store, "POST", _path, _claims, _body}
 
     assert git(:get, "/#{@fleet}.git/info/refs?service=git-receive-pack", password).status == 200
-  end
-
-  # Costly failure: an agent's password keeps opening the code after the
-  # sign-in it was made under has run out.
-  test "an agent's password is refused once its sign-in has run out" do
-    ChainHelpers.issue_shard!(@fleet, 1, @agent_wallet, 2)
-
-    agent = %{
-      Keyfleet.PairingHelpers.pair_wallet!(@agent_wallet)
-      | receipt_expires_at: DateTime.add(DateTime.utc_now(), -1, :second)
-    }
-
-    {:ok, %{password: password}} = CodePassword.for_agent(agent, @fleet)
-
-    refused = git(:get, "/#{@fleet}.git/info/refs?service=git-upload-pack", password)
-    assert refused.status == 401
-    refute_received {:store, _method, _path, _claims, _body}
   end
 
   # Costly failure: a fleet's code is never set up, or set up twice.

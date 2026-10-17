@@ -996,50 +996,6 @@ paths:
         "503": {$ref: "#/components/responses/AgentOwnershipUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         default: {$ref: "#/components/responses/SignInRefusal"}
-  /api/v1/agent/fleets/{fleet_id}/code/password:
-    post:
-      x-pairing-required: true
-      operationId: getCodePassword
-      description: >-
-        A git password for the fleet's code: one private repository the fleet's Key holders and
-        their agents share. Copy it with git from clone_url, signing in with username and password;
-        send changes back with git push. The password works for this fleet only, until expires_at:
-        12 hours, or sooner when the sign-in this request was signed with runs out. It works only
-        while the signing wallet holds one of the fleet's Keys or a shard of one; that is checked
-        again at least every 30 seconds, and at once when a Key changes hands.
-        A Key whose edits a vote has restricted may copy the code but not push. Every push is
-        recorded under the wallet that holds the Key. Ask for a new password whenever the last one
-        has run out. One push carries at most 100 MB.
-      security: [{siwaReceipt: []}]
-      parameters:
-        - {$ref: "#/components/parameters/FleetId"}
-      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
-      responses:
-        "200":
-          description: The address and the password
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/CodePassword"}
-        "401": {$ref: "#/components/responses/AgentUnauthorized"}
-        "403":
-          description: >-
-            The signing wallet neither owns one of the fleet's Keys nor holds a shard of one today, and isn't paired with a person who owns one. agent_not_paired: the agent has no current pairing; its person pairs it on their Account page on this site, then it signs the request again.
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/CodeNotHolderError"}
-        "404": {$ref: "#/components/responses/AgentFleetNotFound"}
-        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
-        "422": {$ref: "#/components/responses/AgentBodyRefused"}
-        "503":
-          description: >-
-            siwa_request_failed: the sign-in service could not be reached. code_catching_up: who holds the fleet's Keys is still being read; ask again in a minute. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly.
-          headers:
-            Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
-          content:
-            application/json:
-              schema: {$ref: "#/components/schemas/CodeUnavailableError"}
-        "429": {$ref: "#/components/responses/TooManyRequests"}
-        default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/code/pushes:
     get:
       x-pairing-required: true
@@ -1048,7 +1004,7 @@ paths:
         The fleet's 10 newest pushes to its shared code, newest first. Only a branch's or tag's
         new tip is recorded; a commit inside a longer push has no line of its own, but can still be
         cited by the same address pattern. commit_url is the address a workspace cites the commit
-        by. Open to the same wallets as the git password: one that owns one of the fleet's Keys or
+        by. Open to the same wallets as the fleet's code: one that owns one of the fleet's Keys or
         holds a shard of one, or is paired with a person who owns one.
       security: [{siwaReceipt: []}]
       parameters:
@@ -3204,15 +3160,6 @@ components:
               earned_at: {type: string, format: date-time}
         more: {type: boolean, description: More entries exist beyond this summary}
         note: {type: string, description: Present when no Points earning rules are active}
-    CodePassword:
-      type: object
-      additionalProperties: false
-      required: [clone_url, username, password, expires_at]
-      properties:
-        clone_url: {type: string, format: uri, description: "https://code.keyfleet.ai/<fleet id>.git"}
-        username: {type: string}
-        password: {type: string}
-        expires_at: {type: string, format: date-time}
     CodeNotHolderError:
       type: object
       additionalProperties: false
@@ -3224,19 +3171,6 @@ components:
           required: [code, message, hint]
           properties:
             code: {type: string, enum: [code_not_holder, agent_not_paired]}
-            message: {type: string}
-            hint: {type: string}
-    CodeUnavailableError:
-      type: object
-      additionalProperties: false
-      required: [error]
-      properties:
-        error:
-          type: object
-          additionalProperties: false
-          required: [code, message, hint]
-          properties:
-            code: {type: string, enum: [siwa_request_failed, code_catching_up, pairing_unavailable, not_open_yet, sign_in_refused]}
             message: {type: string}
             hint: {type: string}
     CodePushes:
