@@ -8,5 +8,7 @@ broadcast/**/dry-run/
 /broadcast/*/31337/
 /deployments/anvil.deployed.json
 /deployments/base-fork-lab.json
+# The Classic #1 fork run's record of a local fork of Base, never of Base itself.
+/deployments/base-fork-run.json
 .env
 .env.*

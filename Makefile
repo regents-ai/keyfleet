@@ -1,10 +1,11 @@
 .DEFAULT_GOAL := help
-.PHONY: help check check-platform check-required-fixes check-cli check-contracts check-audit-fork check-notebook-hub release readiness
+.PHONY: help check check-platform check-required-fixes check-cli check-contracts check-audit-fork classic-fork-run check-notebook-hub release readiness
 help:
 	@echo "Run make check for every gate, or check-platform, check-required-fixes, check-cli or check-contracts for one component."
 	@echo "Run make check-notebook-hub for the fleet notebook hub; it is not part of make check and must succeed before any hub image is pushed."
 	@echo "Run make release to run every gate, then build the committed tree into an image and start it against a throwaway database."
 	@echo "Run make readiness to start the local server and check what the agent-readiness scorer looks for."
+	@echo "Run make classic-fork-run to take Classic #1 from the Safe's two steps to a bought, voted and converted Key on a local fork of Base."
 check: check-platform check-required-fixes check-cli check-contracts
 check-platform:
 	cd platform && mix precommit && npm run typecheck && npm test
@@ -29,6 +30,14 @@ check-contracts:
 # Needs BASE_RPC_URL and fails without it.
 check-audit-fork:
 	cd contracts && forge test --match-path 'test/audit/KeyfleetAuditFork.t.sol' -vv
+# Classic #1 on a local anvil fork of Base's latest block: the Safe's two Classic files written and
+# carried out through the real Safe, Keys 1 and 2 bought through the site's own steps, read by the
+# site, an agent and a person, then a proposal and the routine treasury presses. Needs anvil,
+# BASE_RPC_URL, the test database and the Base deployment's broadcast in
+# contracts/broadcast/DeployKeyfleets.s.sol/8453/. Nothing is sent to Base. It is not part of make
+# check; docs/deployment.md describes it.
+classic-fork-run:
+	cd platform && mix test --only base_fork test/keyfleet/classic_fork_run_test.exs
 # The fleet notebook hub: compute-fly in the pinned marimohub workspace, the hub
 # and runner images, and the runner helper's tests. Needs Node 24 and Docker. It
 # is not part of make check because it builds a 3 GB image; run it before any hub

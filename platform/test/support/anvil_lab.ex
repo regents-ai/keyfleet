@@ -9,6 +9,9 @@ defmodule Keyfleet.AnvilLab do
   The lab is sent from an account anvil has unlocked, so no key is handed
   to Forge, one transaction at a time: sent all at once, anvil has been
   seen to drop one and leave the rest queued behind the gap.
+
+  `start_fork!/1` starts an anvil forked from Base instead, for the Classic
+  #1 fork run (`test/keyfleet/classic_fork_run_test.exs`), with no lab on it.
   """
 
   import ExUnit.Assertions
@@ -34,20 +37,38 @@ defmodule Keyfleet.AnvilLab do
   # AnvilLab.OPENING: how long after the lab's first step Classic #1's sales open.
   @opening 60
 
+  # Base's chain id, which a fork of Base keeps.
+  @base_chain_id 8453
+
   @doc """
   Starts an anvil, waits until it answers, and points the fleet reader's node
   and the site's node for the lab chain (`:chain_nodes`) at it. Returns its URL.
   """
-  def start! do
+  def start!,
+    do:
+      start_anvil!(
+        ["--prune-history", "--block-base-fee-per-gas", @base_fee],
+        @chain_id,
+        150
+      )
+
+  @doc """
+  Starts an anvil forked from the node at `fork_url`, keeping Base's chain
+  id, waits until it answers, and points the fleet reader's node and the
+  site's node for Base (`:chain_nodes`) at it. Returns its URL. A fork's first
+  answer waits for the fork's block, which can take tens of seconds.
+  """
+  def start_fork!(fork_url),
+    do: start_anvil!(["--fork-url", fork_url], @base_chain_id, 1_200)
+
+  defp start_anvil!(args, chain_id, tries) do
     port = free_port()
     url = "http://127.0.0.1:#{port}"
 
     anvil =
       Port.open({:spawn_executable, System.find_executable("anvil")}, [
         :binary,
-        args:
-          ["--port", "#{port}", "--silent", "--prune-history"] ++
-            ["--block-base-fee-per-gas", @base_fee]
+        args: ["--port", "#{port}", "--silent" | args]
       ])
 
     {:os_pid, os_pid} = Port.info(anvil, :os_pid)
@@ -60,9 +81,9 @@ defmodule Keyfleet.AnvilLab do
       Application.put_env(:keyfleet, :chain_nodes, nodes)
     end)
 
-    answering!(url, 150)
+    answering!(url, tries)
     Application.put_env(:keyfleet, Keyfleet.Chain, Keyword.put(chain, :rpc_url, url))
-    Application.put_env(:keyfleet, :chain_nodes, Map.put(nodes, @chain_id, url))
+    Application.put_env(:keyfleet, :chain_nodes, Map.put(nodes, chain_id, url))
     url
   end
 

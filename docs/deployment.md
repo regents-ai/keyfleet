@@ -628,6 +628,46 @@ a plain address with no code on Base: anvil's third default account
 (`0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC`) has code on Base that passes on
 any key it receives, so a purchase to it reverts.
 
+**The Classic #1 fork run.** `make classic-fork-run` runs
+`platform/test/keyfleet/classic_fork_run_test.exs`, which is no part of a
+release and is left out of every other test run. It forks Base's latest block
+on a local anvil that keeps Base's chain id, so the live system is the one
+used: the Regents Club as it stands, the Regents Safe, Base's USDC, the REGENT
+pools and REGENT staking. It needs anvil, `BASE_RPC_URL`, the test database and
+the Base deployment's broadcast at
+`contracts/broadcast/DeployKeyfleets.s.sol/8453/run-latest.json`. Every
+transaction is sent unsigned from an address the fork lets it act as, never
+from a key, and the run checks first that every chain the site reads is the
+local fork. Each step prints PASS or FAIL with what it read on the fork:
+
+1. the live system read back through the record step against `base.json`, at
+   phase 1 with no Classic #1;
+2. Step 4 above writes `deployments/safe/base.founding-fleet-1.json`, and the
+   Safe carries it out on the fork with its owners' approvals;
+3. Step 6 above writes `deployments/safe/base.phase-2.json`, opening at
+   `KEYFLEET_OPENS_AT` when it is set and 10 minutes after the fork's latest
+   block otherwise, and the Safe carries it out; the fork's clock then moves
+   past the opening;
+4. `script/ClassicForkRun.s.sol` writes `deployments/base-fork-run.json`, the
+   record in `base.deployed.json`'s shape (ignored by git), and the site is
+   seeded from it;
+5. a customer approves USDC and buys Key 1 for 10 USDC and Key 2 for
+   10.02 USDC through the site's own buy steps; each holds its card by number
+   and asks for no draw, 10% is owed to REGENT staking and 90% waits to become
+   REGENT;
+6. the site's chain reader records both Keys, the customer's agent reads a
+   members-only room while an agent without a Key is refused, and the
+   customer sees both Keys on the fleet, Key and Account pages;
+7. a proposal is made, voted with both Keys and carried out, and the proposal
+   pages show it carried out after a reload;
+8. the treasury's part is turned into REGENT once, and the protocol share and
+   the daily split are pressed.
+
+The run writes its transcript to `docs/runs/classic-fork-run.md` and leaves
+the two Safe files for review; `contracts/deployments/safe/README.md` says what
+to check before signing them. Nothing reaches Base, and keyfleet.ai's sales stay
+closed.
+
 ## What the Safe does
 
 The Regents Safe on Base, `0x9fa152B0EAdbFe9A7c5C0a8e1D11784f22669a3e`, owns the

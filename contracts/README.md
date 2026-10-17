@@ -1652,6 +1652,14 @@ without six decimals, a zero keeper and a zero trait table hash.
   (Classic #1's keys 1 to 1,000 hold their cards by number and draw nothing).
   The shell script also gives each buyer named 100 ETH and exactly 1,000 USDC.
   Every step refuses any chain but 31337 (`WrongChain`).
+- `script/ClassicForkRun.s.sol` is no part of a release. It writes the record
+  of the live Base system as a local fork of Base holds it, through
+  `RecordKeyfleets` against `deployments/base.json`, to
+  `deployments/base-fork-run.json` instead of `deployments/base.deployed.json`,
+  so a fork's state never stands in for what is on Base. The Classic #1 fork
+  run (`make classic-fork-run`, described in `docs/deployment.md`) runs it
+  before the Safe creates Classic #1 and again once its sales are open, to
+  seed the site before Keys 1 and 2 are bought.
 
 The scripts' cores take and return values, so the suite runs the real
 deployment, the real Safe steps and the real record against local stand-ins

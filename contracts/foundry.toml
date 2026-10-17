@@ -9,6 +9,7 @@ fs_permissions = [
   { access = "write", path = "./deployments/anvil.deployed.json" },
   { access = "write", path = "./deployments/base.deployed.json" },
   { access = "read-write", path = "./deployments/base-fork-lab.json" },
+  { access = "write", path = "./deployments/base-fork-run.json" },
   { access = "write", path = "./deployments/safe" },
   { access = "read", path = "./broadcast/DeployKeyfleets.s.sol" },
   { access = "read", path = "./broadcast/BaseForkLab.s.sol" },

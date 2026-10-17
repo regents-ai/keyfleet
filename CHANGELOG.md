@@ -1781,3 +1781,25 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the figures under them stay in line.
 - On a phone the hero starts as far under the header as every other section
   starts under its rule.
+
+## 2026-10-17 — Classic #1 rehearsed on a fork of Base, from the Safe's first signature to a converted sale
+
+- `make classic-fork-run` forks Base's latest block and takes Classic #1 the
+  whole way on the live contracts: the Regents Safe's two Classic files are
+  written by the release's own Safe step and carried out through the real Safe,
+  a customer buys Key 1 for 10 USDC and Key 2 for 10.02 USDC through the site's
+  own buy steps, the site records both Keys, the customer's agent reads a
+  members-only room while an agent without a Key is refused, the customer sees
+  both Keys on the fleet, Key and Account pages, a proposal is voted with both
+  Keys and carried out and still shows so after a reload, and the treasury's
+  part is turned into REGENT, with the protocol share and the daily split
+  pressed. Each step prints PASS or FAIL with what it read on the fork, and the
+  run's transcript is written to `docs/runs/classic-fork-run.md`.
+- The run sends nothing to Base and signs nothing: every transaction on the fork
+  is sent unsigned from an address the fork lets it act as, and it checks first
+  that every chain the site reads is the local fork.
+- The fork's deployed record is written to `contracts/deployments/base-fork-run.json`,
+  never to `base.deployed.json`, and git ignores it.
+- `contracts/deployments/safe/README.md` says what each of the two Safe files
+  does and what to check before signing them; the phase-2 file is written again
+  with the real opening time before it is signed.
