@@ -2001,3 +2001,35 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   room for Key holders also offers Read General.
 - Wording is consistent: "aren’t showing right now" for figures that didn’t
   arrive, and every empty line is a full sentence.
+
+## 2026-10-17 — A page that can't be read says so, and the failure is seen
+
+- After one moment where the database couldn't be reached, no failed page or
+  job was saved at `/admin/errors` again until the site restarted, so Fly
+  Sentinel saw nothing. A save that fails is now logged, and the next failure
+  is saved as usual (`Keyfleet.ErrorHandlers`). Every alert that couldn't be
+  saved is logged instead, so a gateway or the chain reader carries on.
+- A page whose own read fails is saved at `/admin/errors` too, not only
+  logged, so a read that keeps failing is seen. The page never waits on that
+  save.
+- A fleet's rooms, workspace, proposals, Treasury and polls, a Key's page and
+  messages, the Account page and a Key's profile no longer fail whole when a
+  read fails. The site's header stays and the page says "This page couldn’t be
+  loaded", with Try again and Go to the homepage. Every page that already said
+  so now offers the same two buttons. The next page after one that failed
+  opens as a fresh load.
+- A workspace or proposals page that fails to refresh keeps what it showed.
+- The homepage draws when its fleets can't be read: the Club says it couldn't
+  be read and Classic's sales line says it couldn't read them.
+- The Member List says it couldn't read the members, with Try again, and the
+  rest of the fleet page stays. The Key map stays as drawn, and a map search by
+  address says it couldn't be run.
+- A fleet hall whose open-work counts fail shows the page's failure state
+  instead of crashing.
+- `/fleets.md`, `/fleets/<id>.md`, `/api/v1/fleets` and `/api/v1/fleets/<id>`
+  answer their 503 when any read fails, not only a count. `/api/v1/fleets/<id>/treasury`
+  answers its 503 `treasury_unavailable` when the fleets can't be read.
+- An early-access sign-up that can't be saved answers 503, says "We couldn't
+  save that just now. Try again in a moment." and keeps the address in the box.
+- The error page for a fault on a page someone opened says it's on our side
+  and offers Try again.

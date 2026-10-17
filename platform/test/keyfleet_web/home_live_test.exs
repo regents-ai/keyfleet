@@ -174,6 +174,23 @@ defmodule KeyfleetWeb.HomeLiveTest do
     end)
   end
 
+  test "fleets that can't be read leave the homepage drawn, saying so for each",
+       %{conn: conn} do
+    Keyfleet.Repo.query!(
+      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.fleets RENAME TO fleets_away"
+    )
+
+    capture_log(fn ->
+      {:ok, view, _html} = live(conn, "/")
+
+      assert has_element?(view, "#public-home")
+      assert has_element?(view, "#home-club [data-fleet-failed]")
+      refute has_element?(view, "#home-club [data-fleet-soon]")
+      assert text(view, "#home-classic-sold") == "—"
+      assert text(view, "#home-buy-why") == "Couldn’t read sales just now"
+    end)
+  end
+
   test "the command box shows the homepage instruction and copies what it shows",
        %{conn: conn} do
     {:ok, view, html} = live(conn, "/")

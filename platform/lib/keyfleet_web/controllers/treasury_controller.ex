@@ -2,23 +2,21 @@ defmodule KeyfleetWeb.TreasuryController do
   @moduledoc "Public treasury figures shared with the fleet page; no wallet authority."
   use KeyfleetWeb, :controller
 
+  # A fleet that isn't open has no treasury to show; one that can't be read
+  # is unavailable for now.
   def show(conn, %{"fleet_id" => fleet_id}) do
     conn = put_resp_header(conn, "cache-control", "no-store")
 
-    if fleet_id in Keyfleet.Fleets.open_fleet_ids() do
-      show_open(conn, fleet_id)
-    else
-      KeyfleetWeb.Refusal.json(conn, 404, "fleet_unknown")
-    end
-  end
-
-  defp show_open(conn, fleet_id) do
-    case KeyfleetWeb.PageRead.run("treasury", fn ->
-           KeyfleetWeb.ProposalsPage.treasury_page(fleet_id)
-         end) do
+    case KeyfleetWeb.PageRead.run("treasury", fn -> treasury(fleet_id) end) do
+      {:ok, nil} -> KeyfleetWeb.Refusal.json(conn, 404, "fleet_unknown")
       {:ok, page} -> present(conn, fleet_id, page)
       {:error, _failure} -> KeyfleetWeb.Refusal.json(conn, 503, "treasury_unavailable")
     end
+  end
+
+  defp treasury(fleet_id) do
+    if fleet_id in Keyfleet.Fleets.open_fleet_ids(),
+      do: KeyfleetWeb.ProposalsPage.treasury_page(fleet_id)
   end
 
   defp present(conn, fleet_id, page) do

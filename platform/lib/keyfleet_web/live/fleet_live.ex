@@ -1416,7 +1416,7 @@ defmodule KeyfleetWeb.FleetLive do
   def handle_event("send_quote", _params, socket), do: {:noreply, socket}
 
   # The map on a deployed fleet's page asks for its keys when it loads and
-  # every time it reconnects. Unanswered, it stays as drawn until it asks again.
+  # every time it reconnects; it is left unanswered when they can't be read.
   def handle_event("keymap_ready", _params, %{assigns: %{fleet: %{deployed?: true}}} = socket) do
     %{fleet_id: fleet_id, progress: progress} = socket.assigns.fleet
     actor = ShellLive.human_actor(socket)

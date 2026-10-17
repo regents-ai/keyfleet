@@ -1175,9 +1175,18 @@ abstain, of {keys(@proposal.counted)} counted</span>|
 
   defp at(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M UTC")
 
-  @doc "A wait begun for a proposals page the page has since left reads nothing."
-  def handle_info(:refresh_proposals, %{assigns: %{proposals: %{}}} = socket),
-    do: {:noreply, socket |> assign(:proposals_refresh?, false) |> read_proposals()}
+  @doc """
+  A wait begun for a proposals page the page has since left reads nothing. A
+  read again that fails keeps what the page shows; the next notice reads again.
+  """
+  def handle_info(:refresh_proposals, %{assigns: %{proposals: %{}}} = socket) do
+    socket = assign(socket, :proposals_refresh?, false)
+
+    case PageRead.run("proposals", fn -> proposals(socket) end) do
+      {:ok, page} -> {:noreply, assign(socket, proposals: page)}
+      {:error, _failure} -> {:noreply, socket}
+    end
+  end
 
   def handle_info(:refresh_proposals, socket),
     do: {:noreply, assign(socket, :proposals_refresh?, false)}

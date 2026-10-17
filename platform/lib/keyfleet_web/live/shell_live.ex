@@ -357,8 +357,16 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_event(event, params, socket) when event in @poll_events,
     do: PollsLive.handle_event(event, params, socket)
 
-  # A page that couldn't be loaded shows nothing that a notice could change.
+  # The person's Credits balance changed on any Regent site: a purchase, a
+  # gift, a hold or its close.
   @impl true
+  def handle_info(:credits_changed, socket) do
+    account = current_account(socket.assigns.access_context)
+    {:noreply, read_credits(socket, account)}
+  end
+
+  # A page that couldn't be loaded shows nothing else that a notice could
+  # change; the header's balance still follows.
   def handle_info(_message, %{assigns: %{load_failed?: true}} = socket), do: {:noreply, socket}
 
   # A notice that the open room has taken a post it is not showing yet is only a
@@ -387,13 +395,6 @@ defmodule KeyfleetWeb.ShellLive do
 
     account = current_account(socket.assigns.access_context)
     {:noreply, read_paired_agents(socket, account)}
-  end
-
-  # The person's Credits balance changed on any Regent site: a purchase, a
-  # gift, a hold or its close.
-  def handle_info(:credits_changed, socket) do
-    account = current_account(socket.assigns.access_context)
-    {:noreply, read_credits(socket, account)}
   end
 
   # A Points award or correction landed for this account; the Points page follows.

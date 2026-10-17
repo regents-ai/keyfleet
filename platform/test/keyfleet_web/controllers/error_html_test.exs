@@ -13,4 +13,14 @@ defmodule KeyfleetWeb.ErrorHTMLTest do
     assert render_to_string(KeyfleetWeb.ErrorHTML, "500", "html", []) =~
              "Something went wrong</h1>"
   end
+
+  test "a server fault on a page offers to load it again, never to send a form again" do
+    opened = build_conn(:get, "/classic/1?view=members")
+    sent = build_conn(:post, "/early")
+
+    assert render_to_string(KeyfleetWeb.ErrorHTML, "500", "html", conn: opened) =~
+             ~s(<a class="rg-button rg-button--primary" href="">Try again</a>)
+
+    refute render_to_string(KeyfleetWeb.ErrorHTML, "500", "html", conn: sent) =~ "Try again"
+  end
 end

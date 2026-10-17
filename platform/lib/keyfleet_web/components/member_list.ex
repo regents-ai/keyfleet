@@ -20,8 +20,6 @@ defmodule KeyfleetWeb.Components.MemberList do
   """
   use KeyfleetWeb, :live_component
 
-  import KeyfleetWeb.Components.LoadFailed
-
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.LinkedIdentity.Providers
   alias Keyfleet.Actors.System
@@ -189,9 +187,9 @@ defmodule KeyfleetWeb.Components.MemberList do
     ~H"""
     <section id={@id} class="member-list" aria-labelledby={"#{@id}-title"}>
       <h2 id={"#{@id}-title"}>Member List</h2>
-      <div :if={@holders == :unreadable} id={"#{@id}-failed"}>
-        <.load_failed title="The Member List couldn’t be loaded" />
-      </div>
+      <p :if={@holders == :unreadable} id={"#{@id}-failed"}>
+        Couldn’t read the members just now. <a href="">Try again</a>
+      </p>
       <Regent.Primitives.empty_state
         :if={@holders == []}
         id={"#{@id}-none"}

@@ -7,9 +7,12 @@ defmodule KeyfleetWeb.PageRead do
   an Ash read wraps either in) comes back as `{:error, failure}`, so the page
   says it couldn't be loaded rather than crashing. The failure is logged as an
   error with its kind and a short reason, never the query or the values in it,
-  and saved with the site's errors (`Keyfleet.Alert.save/2`), so a read that
-  keeps failing is seen at /admin/errors. An address that names nothing still
-  raises `KeyfleetWeb.NotFoundError`.
+  and saved with the site's errors (`Keyfleet.Alert.save/3`), so a read that
+  keeps failing is seen at /admin/errors. The save runs beside the page, which
+  never waits on it, and only so many run at once (`Keyfleet.ErrorSaves`):
+  while the database can't be reached the saves fail too, and `/healthz`
+  already says so. An address that names nothing still raises
+  `KeyfleetWeb.NotFoundError`.
   """
 
   require Logger
@@ -20,7 +23,13 @@ defmodule KeyfleetWeb.PageRead do
   rescue
     failure in [Postgrex.Error, DBConnection.ConnectionError, Ash.Error.Unknown] ->
       Logger.error("Reading the #{page} page failed: " <> summary(failure))
-      Keyfleet.Alert.save(failure, __STACKTRACE__)
+      stacktrace = __STACKTRACE__
+      context = ErrorTracker.get_context()
+
+      Task.Supervisor.start_child(Keyfleet.ErrorSaves, fn ->
+        Keyfleet.Alert.save(failure, stacktrace, context)
+      end)
+
       {:error, failure}
   end
 

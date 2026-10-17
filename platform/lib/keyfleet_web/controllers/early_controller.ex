@@ -38,6 +38,8 @@ defmodule KeyfleetWeb.EarlyController do
     end
   end
 
+  defp sign_up(conn, _params), do: unreadable(conn, "")
+
   # The address stays in the box, so trying again is one press.
   defp not_saved(conn, email, failure) do
     Keyfleet.Alert.report(failure)
@@ -46,8 +48,6 @@ defmodule KeyfleetWeb.EarlyController do
     |> put_status(:service_unavailable)
     |> page(email: email, refused: @not_saved)
   end
-
-  defp sign_up(conn, _params), do: unreadable(conn, "")
 
   defp joined(conn), do: conn |> put_flash(:info, @joined) |> redirect(to: ~p"/early")
 

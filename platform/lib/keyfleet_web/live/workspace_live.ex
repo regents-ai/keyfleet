@@ -794,9 +794,18 @@ defmodule KeyfleetWeb.WorkspaceLive do
     "No #{String.downcase(plural)} yet."
   end
 
-  @doc "A wait begun for a workspace the page has since left reads nothing."
-  def handle_info(:refresh_workspace, %{assigns: %{workspace: %{}}} = socket),
-    do: {:noreply, socket |> assign(:workspace_refresh?, false) |> read_workspace()}
+  @doc """
+  A wait begun for a workspace the page has since left reads nothing. A read
+  again that fails keeps what the page shows; the next notice reads again.
+  """
+  def handle_info(:refresh_workspace, %{assigns: %{workspace: %{}}} = socket) do
+    socket = assign(socket, :workspace_refresh?, false)
+
+    case PageRead.run("workspace", fn -> workspace(socket) end) do
+      {:ok, workspace} -> {:noreply, assign(socket, :workspace, workspace)}
+      {:error, _failure} -> {:noreply, socket}
+    end
+  end
 
   def handle_info(:refresh_workspace, socket),
     do: {:noreply, assign(socket, :workspace_refresh?, false)}

@@ -31,14 +31,16 @@ defmodule Keyfleet.Alert do
     save(exception, Enum.drop_while(stacktrace, &(elem(&1, 0) in [Process, __MODULE__, module])))
   end
 
-  @doc "Saves an exception that was rescued, placed where it was raised."
-  def save(exception, stacktrace) do
-    ErrorTracker.report(exception, stacktrace)
+  @doc """
+  Saves an exception that was rescued, placed where it was raised, with the
+  `context` of the request or page it happened in when another process saves
+  it.
+  """
+  def save(exception, stacktrace, context \\ %{}) do
+    ErrorTracker.report(exception, stacktrace, context)
     :ok
-  rescue
-    failure -> unsaved(exception, Exception.message(failure))
   catch
-    :exit, reason -> unsaved(exception, inspect(reason))
+    kind, reason -> unsaved(exception, Exception.format_banner(kind, reason))
   end
 
   defp unsaved(exception, why) do

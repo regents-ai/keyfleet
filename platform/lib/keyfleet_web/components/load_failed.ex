@@ -7,11 +7,9 @@ defmodule KeyfleetWeb.Components.LoadFailed do
   """
   use KeyfleetWeb, :html
 
-  attr :title, :string, default: "This page couldn’t be loaded"
-
   def load_failed(assigns) do
     ~H"""
-    <h2>{@title}</h2>
+    <h2>This page couldn’t be loaded</h2>
     <p>Something went wrong on our side. Try again in a moment.</p>
     <p class="load-failed__actions">
       <a href="" class="rg-button rg-button--primary">Try again</a>
