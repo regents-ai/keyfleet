@@ -6,11 +6,15 @@ defmodule KeyfleetWeb.NotebookOpenController do
   someone without a notebook sign-in here (`KeyfleetWeb.Plugs.NotebookGateway`);
   a holder of one of the fleet's keys goes back to it with a link that works
   once, and anyone else lands on the fleet's workspace with a note saying why.
+  Key ownership that can't be read, other than while it is being brought up
+  to date, is saved with the site's errors (`Keyfleet.Notebooks.RecordsDown`).
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Actors.Human
   alias Keyfleet.{Fleets, Notebooks}
+  alias Keyfleet.Keys.Errors.OwnershipRefreshingError
+  alias Keyfleet.Notebooks.RecordsDown
 
   def open(conn, %{"fleet_id" => fleet_id} = params) do
     case open_for(conn, fleet_id, params["to"]) do
@@ -22,11 +26,23 @@ defmodule KeyfleetWeb.NotebookOpenController do
       {:error, :no_hub} ->
         conn |> put_flash(:error, "This fleet has no notebooks yet.") |> redirect(to: "/")
 
-      {:error, reason} ->
-        conn
-        |> put_flash(:error, notice(reason))
-        |> redirect(to: Fleets.path(fleet_id) <> "/workspace")
+      {:error, reason} when is_atom(reason) or is_struct(reason, OwnershipRefreshingError) ->
+        to_workspace(conn, fleet_id, reason)
+
+      {:error, error} ->
+        RecordsDown.report(
+          "Key ownership in #{fleet_id} could not be read to open its notebooks: " <>
+            inspect(error.__struct__)
+        )
+
+        to_workspace(conn, fleet_id, error)
     end
+  end
+
+  defp to_workspace(conn, fleet_id, reason) do
+    conn
+    |> put_flash(:error, notice(reason))
+    |> redirect(to: Fleets.path(fleet_id) <> "/workspace")
   end
 
   defp open_for(%Plug.Conn{assigns: %{current_human_account: nil}}, fleet_id, _to),

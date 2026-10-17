@@ -47,9 +47,11 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   is carried by `KeyfleetWeb.NotebookSocket`, which closes when the key's
   holder loses it.
 
-  A hub that does not answer (`Keyfleet.Notebooks.HubSilent`), and a saved
-  page shown without its copy kept (`Keyfleet.Notebooks.ResultNotKept`), are
-  saved with the site's errors for someone to act on.
+  A hub that does not answer (`Keyfleet.Notebooks.HubSilent`), an agent's
+  profile or a kept saved output that Keyfleet can't read or remove
+  (`Keyfleet.Notebooks.RecordsDown`), and a saved page shown without its copy
+  kept (`Keyfleet.Notebooks.ResultNotKept`), are saved with the site's errors
+  for someone to act on.
   """
   @behaviour Plug
   @behaviour Siwa.AgentAuthPlug.Hooks
@@ -57,7 +59,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   import Plug.Conn
 
   alias Keyfleet.{AccessCache, Notebooks}
-  alias Keyfleet.Notebooks.{HubSilent, Pass, ResultNotKept, SavedOutput}
+  alias Keyfleet.Notebooks.{HubSilent, Pass, RecordsDown, ResultNotKept, SavedOutput}
   alias KeyfleetWeb.{NotebookSocket, Refusal}
   alias KeyfleetWeb.Plugs.SignedAgent
 
@@ -239,18 +241,18 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp identify(conn, fleet_id) do
     if Siwa.AgentAuthPlug.signed_request?(conn),
-      do: identify_agent(conn),
+      do: identify_agent(conn, fleet_id),
       else: identify_person(conn, fleet_id)
   end
 
   # A signed request spends the sender's address's API budget before anything
   # of it is read, and only as much body is read as a signature can cover.
-  defp identify_agent(conn) do
+  defp identify_agent(conn, fleet_id) do
     conn = RegentAgentAccess.RateLimit.call(conn, KeyfleetWeb.Endpoint.api_rate_limit())
-    if conn.halted, do: {:refused, conn}, else: read_signed(conn)
+    if conn.halted, do: {:refused, conn}, else: read_signed(conn, fleet_id)
   end
 
-  defp read_signed(conn) do
+  defp read_signed(conn, fleet_id) do
     case read_body_signed(conn) do
       {:ok, _raw, conn} ->
         conn =
@@ -262,7 +264,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
             body: :always
           )
 
-        agent_subject(conn)
+        agent_subject(conn, fleet_id)
 
       {:more, _partial, conn} ->
         {:refused, Refusal.json(conn, 413, "request_too_large")}
@@ -281,13 +283,23 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     Plug.Parsers.RequestTooLargeError -> :too_large
   end
 
-  defp agent_subject(%Plug.Conn{halted: true} = conn), do: {:refused, conn}
+  defp agent_subject(%Plug.Conn{halted: true} = conn, _fleet_id), do: {:refused, conn}
 
-  defp agent_subject(%Plug.Conn{assigns: %{agent_actor: actor}} = conn) do
+  defp agent_subject(%Plug.Conn{assigns: %{agent_actor: actor}} = conn, fleet_id) do
     case Notebooks.agent(actor) do
-      {:ok, nil} -> {:refused, Refusal.json(conn, 403, "notebooks_agent_profile")}
-      {:ok, subject} -> {:ok, conn, subject, actor}
-      {:error, _error} -> {:refused, Refusal.json(conn, 503, "notebooks_unavailable")}
+      {:ok, nil} ->
+        {:refused, Refusal.json(conn, 403, "notebooks_agent_profile")}
+
+      {:ok, subject} ->
+        {:ok, conn, subject, actor}
+
+      {:error, error} ->
+        RecordsDown.report(
+          "The profile of an agent opening the notebooks of #{fleet_id} could not be read: " <>
+            inspect(error.__struct__)
+        )
+
+        {:refused, Refusal.json(conn, 503, "notebooks_unavailable")}
     end
   end
 
@@ -620,8 +632,16 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
          :ok <- Notebooks.remove_saved_output(kept, actor: system) do
       send_resp(conn, 204, "")
     else
-      {:ok, nil} -> Refusal.json(conn, 404, "notebooks_not_found")
-      {:error, _error} -> Refusal.json(conn, 503, "notebooks_unavailable")
+      {:ok, nil} ->
+        Refusal.json(conn, 404, "notebooks_not_found")
+
+      {:error, error} ->
+        RecordsDown.report(
+          "A saved output of notebook #{notebook_id} in #{fleet_id} could not be removed: " <>
+            inspect(error.__struct__)
+        )
+
+        Refusal.json(conn, 503, "notebooks_unavailable")
     end
   end
 
@@ -643,7 +663,12 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       {:ok, nil} ->
         Refusal.json(conn, 404, "notebooks_not_found")
 
-      {:error, _error} ->
+      {:error, error} ->
+        RecordsDown.report(
+          "A saved output of notebook #{notebook_id} in #{fleet_id} could not be read: " <>
+            inspect(error.__struct__)
+        )
+
         Refusal.json(conn, 503, "notebooks_unavailable")
     end
   end
