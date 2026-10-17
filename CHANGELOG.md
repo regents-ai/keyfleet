@@ -1916,3 +1916,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   to show the whole sea, and brings it back.
 - With less motion asked for, the sea is a still picture that still updates
   when a ship moves, and the page goes and comes back without sliding.
+
+## 2026-10-17 — An authorized security red-team regression suite
+
+- A security pass reviewed access control, limit and flow bypass, and external
+  injection against a local checkout and found nothing exploitable in the
+  application itself: the signed-agent plug derives the actor from the
+  verified signature, every money or state action re-checks Key ownership, the
+  closed-site and coming-soon gates run before anything is served, both
+  Markdown surfaces are sanitized, and the content security policy allows no
+  inline or evaluated scripts.
+- The attacks are now regression probes in `test/keyfleet_web/security/`, each
+  asserting the refusal so a control that regresses makes a probe fail. A check
+  catalog (`priv/security/redteam_checks.yml`), a proof table and a live-run
+  runbook (`docs/security/redteam-2026-10-17.md`) record each control, its
+  probe, and the toggle that proves the probe is live. The remaining items need
+  the chain or a dependency and are marked for the live run.
