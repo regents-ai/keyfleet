@@ -47,8 +47,8 @@ defmodule Keyfleet.Notebooks.Runs do
              params: [limit: 50]
            )
            |> answer(200),
-         {:ok, runs} <- last_runs(fleet_id, subject, project_id, notebooks) do
-      result_urls = result_urls(fleet_id, runs)
+         {:ok, runs} <- last_runs(fleet_id, subject, project_id, notebooks),
+         {:ok, result_urls} <- result_urls(fleet_id, runs) do
       {:ok, Enum.zip_with(notebooks, runs, &listing(&1, &2, result_urls))}
     end
   end
@@ -158,13 +158,19 @@ defmodule Keyfleet.Notebooks.Runs do
   defp result_urls(fleet_id, runs) do
     run_ids = for %{"run_id" => run_id} <- runs, do: run_id
 
-    fleet_id
-    |> Notebooks.saved_outputs!(run_ids, actor: %System{})
-    |> Enum.sort_by(& &1.saved_at)
-    |> Map.new(fn kept ->
-      {{kept.notebook_id, kept.source_id},
-       Notebooks.result_url(fleet_id, kept.notebook_id, kept.source_id, kept.saved_at)}
-    end)
+    case Notebooks.saved_outputs(fleet_id, run_ids, actor: %System{}) do
+      {:ok, kept} ->
+        {:ok,
+         kept
+         |> Enum.sort_by(& &1.saved_at)
+         |> Map.new(fn copy ->
+           {{copy.notebook_id, copy.source_id},
+            Notebooks.result_url(fleet_id, copy.notebook_id, copy.source_id, copy.saved_at)}
+         end)}
+
+      {:error, _error} ->
+        {:error, :unavailable}
+    end
   end
 
   defp listing(notebook, run, result_urls) do
