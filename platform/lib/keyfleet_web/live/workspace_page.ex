@@ -32,6 +32,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   alias Keyfleet.{Agents, Code, Fleets, Notebooks}
   alias Keyfleet.Graph
   alias Keyfleet.Rooms
+  alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.Endpoint
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.RoomsLive
@@ -766,10 +767,16 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # The names agents gave themselves, by wallet, looked up together for the
   # page. A person, or an agent that has no profile here, has no name.
+  # Agents choose their own names, so none can hide or reverse the Key beside it.
   defp agent_names(wallets) do
     case wallets |> Enum.reject(&is_nil/1) |> Enum.uniq() do
-      [] -> %{}
-      wallets -> wallets |> Agents.agents_by_wallets!() |> Map.new(&{&1.wallet_address, &1.name})
+      [] ->
+        %{}
+
+      wallets ->
+        wallets
+        |> Agents.agents_by_wallets!()
+        |> Map.new(&{&1.wallet_address, DirectoryMD.visible(&1.name)})
     end
   end
 
