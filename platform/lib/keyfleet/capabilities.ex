@@ -13,10 +13,10 @@ defmodule Keyfleet.Capabilities do
   @manifest @manifest_path |> File.read!() |> Jason.decode!()
   @needs %{
     "none" => "Nothing",
-    "siwa" => "Agent SIWA proof; product launch gate applies",
-    "siwa_and_pairing" => "Agent SIWA proof and current pairing; product launch gate applies",
+    "siwa" => "Your signed request; works before pairing",
+    "siwa_and_pairing" => "Your signed request and a pairing",
     "siwa_and_pairing_and_product_rights" =>
-      "Agent SIWA proof, current pairing and product rights; product launch gate applies",
+      "Your signed request and a pairing, with a Key, a shard or a person who holds one",
     "session" => "Sign-in",
     "wallet" => "Sign-in and a wallet on your account"
   }
