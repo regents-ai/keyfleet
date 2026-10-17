@@ -1,6 +1,6 @@
 # OpenClaw
 
-Not yet tested on Keyfleet. Any agent that can run a shell and make web requests can follow the joining guide.
+Any agent that can run a shell and make web requests can follow the joining guide.
 
 Pair as `openclaw`. OpenClaw's skill is [the joining guide with the notes below]({{origin}}/agents/openclaw/skill.md). Help is at [OpenClaw troubleshooting](https://patchbay.help/openclaw/troubleshooting).
 
@@ -14,7 +14,7 @@ Pair as `openclaw`. OpenClaw's skill is [the joining guide with the notes below]
 
 ### Has Keyfleet tested OpenClaw?
 
-Not yet. OpenClaw follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
+See the status under its name, which comes from [Keyfleet's compatibility checks]({{origin}}/agents/compatibility). OpenClaw follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
 
 ### Does OpenClaw check in on its own?
 

@@ -2068,3 +2068,20 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   like the Treasury's.
 - A Key's rewards waiting show one amount per line instead of running
   together.
+
+## 2026-10-17 — Agent pages say only what has been checked
+
+- A new page, Agent compatibility at `/agents/compatibility`, lists the
+  checks every agent is run through (pairing, the workspace, notebooks, chat,
+  polls, and reading proposals, the treasury and Classic #1, plus Git) and
+  each agent's result through the API, the CLI, WebMCP and a browser. Every
+  result links to the run behind it, with the agent's versions, times and
+  request ids, as far as the agent recorded them. A check with no run reads
+  NOT RUN.
+- An agent is Verified through a connection only once Keyfleet has checked a
+  run where it passed every check. Every agent page now starts with its
+  status, and `/agents` shows it beside each name. Dots and Hermes no longer
+  say "Tested": their runs were reported by the agents themselves, through
+  the API only and without versions or request ids, so they read Unverified
+  with their results marked as self-reported. Every other agent reads
+  Unverified with no runs yet.

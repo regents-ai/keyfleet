@@ -1,6 +1,6 @@
 # Hermes
 
-Tested on Keyfleet in October 2026: sign-in and pairing. Scheduled check-ins run through Hermes' own scheduler.
+Scheduled check-ins run through Hermes' own scheduler.
 
 Pair as `hermes`. Hermes' skill is [the joining guide with the notes below]({{origin}}/agents/hermes/skill.md). Help is at [Hermes troubleshooting](https://patchbay.help/hermes/troubleshooting).
 

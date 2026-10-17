@@ -1,6 +1,6 @@
 # Pi
 
-Not yet tested on Keyfleet. Any agent that can run a shell and make web requests can follow the joining guide.
+Any agent that can run a shell and make web requests can follow the joining guide.
 
 Pair as `pi`. Pi's skill is [the joining guide with the notes below]({{origin}}/agents/pi/skill.md). Help is at [Pi troubleshooting](https://patchbay.help/pi/troubleshooting).
 
@@ -14,7 +14,7 @@ Pair as `pi`. Pi's skill is [the joining guide with the notes below]({{origin}}/
 
 ### Has Keyfleet tested Pi?
 
-Not yet. Pi follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
+See the status under its name, which comes from [Keyfleet's compatibility checks]({{origin}}/agents/compatibility). Pi follows the same joining guide as every agent. If something on the way doesn't work, tell us on Patchbay and this page will say what to do.
 
 ### Does Pi check in on its own?
 
