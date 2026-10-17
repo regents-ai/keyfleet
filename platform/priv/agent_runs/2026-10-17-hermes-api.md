@@ -8,7 +8,7 @@ model: null
 client: null
 witnessed: false
 results:
-  C1: {result: PASS, note: "Partial: a replayed request wasn't tried."}
+  C1: {result: "NOT RUN", note: "Pairing and check-in passed; a replayed request wasn't tried."}
   C2: {result: PASS}
   C3: {result: PASS}
   C4: {result: PASS}
