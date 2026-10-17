@@ -2134,3 +2134,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   that stop at the islands.
 - With less motion asked for, the sea is a still picture that still updates
   when a ship moves, and the page goes and comes back without sliding.
+
+## 2026-10-17 — Pre-commit runs clean with the harbour sea
+
+- The sea's page module is formatted and its aliases are in order, and the
+  security scan's accepted router findings follow the router's moved lines
+  (the sea's pipeline added eight); the six outdated entries are gone.

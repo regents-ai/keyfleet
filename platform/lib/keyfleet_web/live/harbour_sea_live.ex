@@ -27,8 +27,18 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
   alias Keyfleet.Rooms
-  alias KeyfleetWeb.{ActivityLines, DirectoryMD, Endpoint, KeyLinks, Read, RouteCatalog, Router}
-  alias KeyfleetWeb.ShellLive
+
+  alias KeyfleetWeb.{
+    ActivityLines,
+    DirectoryMD,
+    Endpoint,
+    KeyLinks,
+    Read,
+    RouteCatalog,
+    Router,
+    ShellLive
+  }
+
   alias KeyfleetWeb.Live.Session
   alias KeyfleetWeb.Plugs.LaunchGate
   alias Phoenix.Socket.Broadcast
@@ -110,8 +120,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     else
       case Session.on_mount(:load_human, params, session, %{socket | router: Router}) do
         {:cont, socket} ->
-          {:cont,
-           %{detach_hook(socket, :session_authority_params, :handle_params) | router: nil}}
+          {:cont, %{detach_hook(socket, :session_authority_params, :handle_params) | router: nil}}
 
         {:halt, socket} ->
           {:halt, %{socket | router: nil}}
