@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
   use Phoenix.Component
 
   alias Keyfleet.Accounts.LinkedIdentity.Providers
+  alias KeyfleetWeb.Components.Placeholder
   alias Regent.Primitives, as: P
 
   attr :id, :string, required: true
@@ -45,19 +46,24 @@ defmodule KeyfleetWeb.Components.VerifiedConnections do
         >
           {@notice.message}
         </p>
-        <p :if={@read_state in [:idle, :loading] and is_nil(@identities)} role="status">
-          Loading your connections…
-        </p>
+        <Placeholder.placeholder
+          :if={@read_state in [:idle, :loading] and is_nil(@identities)}
+          label="Loading your connections"
+          lines={length(Providers.all())}
+        />
         <p :if={@read_state == :stale} class="verified-connections__notice" role="status">
           Your connections couldn’t be refreshed. This is what they were last time.
         </p>
-        <p
+        <div
           :if={@read_state == :error}
           class="verified-connections__notice verified-connections__notice--error"
           role="alert"
         >
-          Your connections couldn’t be loaded. Refresh the page to try again.
-        </p>
+          <p>Your connections aren’t showing right now.</p>
+          <P.button type="button" variant="secondary" phx-click="refresh_verified_connections">
+            Try again
+          </P.button>
+        </div>
       </div>
 
       <ul :if={@rows} class="verified-connections__list">

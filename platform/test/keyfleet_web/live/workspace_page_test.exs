@@ -321,7 +321,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "Nothing has been added to this workspace yet."
              )
 
-      assert html =~ "Nothing has changed here yet."
+      assert html =~ "No changes yet."
       refute has_element?(view, "#workspace-cards")
     end
 
@@ -502,7 +502,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "delivers on this goal"
              )
 
-      assert has_element?(goal_view, "p", "No room messages point here yet.")
+      assert has_element?(goal_view, "p", "No one has mentioned this in the rooms yet.")
     end
 
     test "a dead end says what was tried and why it didn't work, and the task it came from",
@@ -996,21 +996,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert html =~ @notice
 
-      assert has_element?(
-               view,
-               "#workspace-unavailable h2",
-               "No workspace records are available yet."
-             )
+      assert has_element?(view, "#workspace-unavailable", "Nothing in this workspace yet.")
 
       refute has_element?(view, "#workspace-cards")
 
       {:ok, item, _html} = live(conn, "#{Keyfleet.Fleets.path(@fleet)}/workspace/task%231")
 
-      assert has_element?(
-               item,
-               "#workspace-unavailable h2",
-               "No workspace records are available yet."
-             )
+      assert has_element?(item, "#workspace-unavailable", "Nothing in this workspace yet.")
     end
 
     test "at an address no fleet's pages are at is not found, as the fleet's own page is",

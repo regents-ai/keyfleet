@@ -251,6 +251,17 @@
   border-inline-start-color: var(--ash-accent-warm);
 }
 
+/* The failure line carries its Try again button beneath it. */
+div.verified-connections__notice {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+}
+
+div.verified-connections__notice p {
+  margin: 0;
+}
+
 /* Session */
 
 .account-session {
@@ -270,6 +281,17 @@
    refresh never moves the panels below it. */
 .points-stale[data-unseen] {
   visibility: hidden;
+}
+
+/* A failed first read of the figures carries its Try again link beneath it. */
+.points-retry {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+}
+
+.points-retry p {
+  margin: 0;
 }
 
 /* What earns points: the catalog as plain tables, then limits and bonus tiers. */

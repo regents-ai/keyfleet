@@ -155,7 +155,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
         render_async(view, 3_000)
       end)
 
-    assert text(view, "#home-club [data-fleet-failed]") == "Couldn't read this fleet just now"
+    assert text(view, "#home-club [data-fleet-failed]") == "Couldn’t load this fleet just now."
     assert log =~ "failed"
     assert Process.alive?(view.pid)
   end

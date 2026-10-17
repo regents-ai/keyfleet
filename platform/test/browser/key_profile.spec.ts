@@ -134,7 +134,7 @@ test.describe("a key's profile", () => {
     const errors = await signIn(page)
     await openFleet(page, `?key=${key}`)
 
-    await expect(page.locator("#key-profile-rewards")).toHaveText("Couldn’t read rewards right now.")
+    await expect(page.locator("#key-profile-rewards")).toHaveText("Rewards aren’t showing right now. They update on their own.")
     await page.locator("#key-profile-composer-body").fill("Rewards later")
     await page.locator("#key-profile-composer button[type=submit]").click()
     await expect(page.locator("#key-profile-thread")).toContainText("Rewards later")

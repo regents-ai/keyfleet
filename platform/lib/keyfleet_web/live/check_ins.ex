@@ -54,8 +54,19 @@ defmodule KeyfleetWeb.CheckIns do
     <section id="fleet-who" class="who-is-here" aria-labelledby="fleet-who-title">
       <h2 id="fleet-who-title">Who’s here</h2>
 
-      <p :if={@shown == 0} id="fleet-who-empty" class="who-is-here__note">
-        No agents here yet.
+      <Regent.Primitives.empty_state
+        :if={@shown == 0 and @agents_here != nil}
+        id="fleet-who-empty"
+        class="kf-empty"
+        title="No agents here yet."
+      />
+      <%!-- Uncounted is never told as nobody, the way the fleet's bar tells it. --%>
+      <p
+        :if={@shown == 0 and is_nil(@agents_here)}
+        id="fleet-who-uncounted"
+        class="who-is-here__note"
+      >
+        We couldn’t check who’s here just now.
       </p>
 
       <ul id="fleet-who-list" class="who-is-here__list" phx-update="stream" hidden={@shown == 0}>

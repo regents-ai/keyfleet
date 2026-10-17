@@ -58,14 +58,15 @@ defmodule KeyfleetWeb.ReadTest do
     test "waits for the first read without showing an empty list" do
       html = panel(nil, :loading)
 
-      assert html =~ "Loading your connections…"
+      assert html =~ "Loading your connections"
       refute html =~ "Not connected"
     end
 
     test "says a failed first read failed rather than showing no connections" do
       html = panel(nil, :error)
 
-      assert html =~ "Your connections couldn’t be loaded."
+      assert html =~ "Your connections aren’t showing right now."
+      assert html =~ ~s(phx-click="refresh_verified_connections")
       refute html =~ "Not connected"
     end
 

@@ -58,7 +58,22 @@ defmodule KeyfleetWeb.DmsLive do
         aria-labelledby="dms-inbox-title"
       >
         <h2 id="dms-inbox-title">Inbox</h2>
-        <p :if={@dms.conversations == []} class="rooms-detail">No messages yet</p>
+        <Regent.Primitives.empty_state
+          :if={@dms.conversations == []}
+          id="dms-empty"
+          class="kf-empty"
+          title="No messages yet."
+        >
+          Open another Key’s page to start a conversation.
+          <:action>
+            <.link
+              class="rg-button rg-button--secondary"
+              patch={KeyLinks.members_path(@dms.fleet_id)}
+            >
+              <span class="rg-button__label">Find a Key</span>
+            </.link>
+          </:action>
+        </Regent.Primitives.empty_state>
         <.conversation_list dms={@dms} conversations={@dms.conversations} />
       </section>
 
@@ -173,7 +188,14 @@ defmodule KeyfleetWeb.DmsLive do
             Key {Rules.grouped(@dms.token_id)} and Key {Rules.grouped(@dms.other_token_id)}
           </h2>
           <p :if={@dms.blocked?} id="dms-blocked-note" class="rooms-detail">Blocked</p>
-          <p :if={@dms.last_seq == 0} class="rooms-detail">No messages yet</p>
+          <Regent.Primitives.empty_state
+            :if={@dms.last_seq == 0}
+            id="dms-thread-empty"
+            class="kf-empty"
+            title="No messages yet."
+          >
+            Say hello below.
+          </Regent.Primitives.empty_state>
 
           <ol id="dms-thread-list" class="rooms-thread-list" phx-update="stream">
             <li :for={{dom_id, message} <- @messages} id={dom_id}>
@@ -244,6 +266,15 @@ defmodule KeyfleetWeb.DmsLive do
     <section id="dms-closed" class="rooms-panel">
       <h2>{closed_reason(@dms)}</h2>
       <p :if={@dms == :unreadable}>Refresh the page to try again.</p>
+      <Regent.Primitives.button
+        :if={sign_in?(@dms)}
+        id="dms-sign-in"
+        type="button"
+        variant="secondary"
+        data-account-target="sign-in"
+      >
+        Sign in
+      </Regent.Primitives.button>
     </section>
     """
   end
@@ -307,6 +338,12 @@ defmodule KeyfleetWeb.DmsLive do
   defp closed_reason(%{fleet_name: nil}), do: "This fleet doesn’t exist."
   defp closed_reason(%{refreshing?: true}), do: KeysLive.refreshing()
   defp closed_reason(_dms), do: "Only this Key’s holder can read its messages."
+
+  # Signing in is the way in only for someone signed out of a fleet that exists.
+  defp sign_in?(%{signed_in?: false, fleet_name: name, refreshing?: false}) when is_binary(name),
+    do: true
+
+  defp sign_in?(_dms), do: false
 
   defp inbox_path(%{fleet_id: fleet_id, token_id: token_id}),
     do: KeyLinks.dms_path(fleet_id, token_id)
@@ -379,18 +416,21 @@ defmodule KeyfleetWeb.DmsLive do
   end
 
   defp show(socket, route_id, fleet_id, token_id, other_token_id) do
+    actor = ShellLive.human_actor(socket)
+
     shown = %{
       fleet_id: fleet_id,
       token_id: token_id,
       other_token_id: other_token_id,
       fleet_name: fleet_name(fleet_id),
       refreshing?: not Chain.fresh?(fleet_id),
+      signed_in?: actor != nil,
       holder?: false
     }
 
     socket
     |> assign(dm_notice: nil, dm_confirm_delete: false)
-    |> show_view(route_id, shown, ShellLive.human_actor(socket))
+    |> show_view(route_id, shown, actor)
   end
 
   defp show_view(socket, :dms, shown, actor) do
