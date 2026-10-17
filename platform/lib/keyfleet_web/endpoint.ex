@@ -45,6 +45,16 @@ defmodule KeyfleetWeb.Endpoint do
   # operational files and the static files get past this.
   plug KeyfleetWeb.Plugs.LaunchGate
 
+  # esbuild names every file in assets/js/chunks after its contents, so a
+  # changed file has a new name: a browser keeps them for a year without asking
+  # again. Each page's own entry script is cached by its digest.
+  plug Plug.Static,
+    at: "/assets/js/chunks",
+    from: {:keyfleet, "priv/static/assets/js/chunks"},
+    gzip: not code_reloading?,
+    cache_control_for_etags: "public, max-age=31536000, immutable",
+    headers: @static_headers
+
   # Serve at "/" the static files from "priv/static" directory.
   #
   # When code reloading is disabled (e.g., in production),
