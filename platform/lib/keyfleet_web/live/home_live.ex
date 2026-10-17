@@ -36,7 +36,7 @@ defmodule KeyfleetWeb.HomeLive do
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
-  alias Keyfleet.{Activity, Agents, Chain, Fleets, Graph, Keys, Proposals, Rooms}
+  alias Keyfleet.{Activity, Chain, Fleets, Graph, Keys, Proposals, Rooms}
   alias Keyfleet.Agents.Here
   alias Keyfleet.Fleets.Presets
 
@@ -262,30 +262,30 @@ defmodule KeyfleetWeb.HomeLive do
   defp start_read(socket, fleet_id),
     do: start_async(socket, {:now, fleet_id}, fn -> read(fleet_id, DateTime.utc_now()) end)
 
-  defp read(@classic, _now), do: {:ok, %{sales: sales(@classic, Fleets.get_fleet!(@classic))}}
+  defp read(@classic, _now), do: %{sales: sales(@classic, Fleets.get_fleet!(@classic))}
 
   defp read(@club, now) do
     latest = @club |> Activity.page(nil, limit: 1) |> Map.fetch!(:items) |> List.first()
 
-    with {:ok, agents} <- Agents.count_agents_here(@club) do
-      {:ok,
-       %{
-         sales: sales(@club, Fleets.get_fleet!(@club)),
-         agents: agents,
-         holders: holders(@club),
-         trying: trying(@club),
-         featured: Activity.headline(@club, now) || latest,
-         latest: latest
-       }}
-    end
+    {agents, holders} = here(@club)
+
+    %{
+      sales: sales(@club, Fleets.get_fleet!(@club)),
+      agents: agents,
+      holders: holders,
+      trying: trying(@club),
+      featured: Activity.headline(@club, now) || latest,
+      latest: latest
+    }
   end
 
-  # How many addresses hold the fleet's Keys and how many of them are online
-  # now, as the fleet's own page shows them from the shared reading.
-  defp holders(fleet_id) do
+  # How many agents are here, how many addresses hold the fleet's Keys and how
+  # many of them are online now, as the fleet's own page shows them from the
+  # one shared reading every open page uses.
+  defp here(fleet_id) do
     case SharedFigures.reading(Here.fleet_key(fleet_id)) do
-      %{holders: holders} -> holders
-      nil -> nil
+      %{here: here, holders: holders} -> {here, holders}
+      nil -> {nil, nil}
     end
   end
 
@@ -339,10 +339,9 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   # A fleet whose read failed keeps what it showed and says the read failed;
-  # the next notice reads again. The failure is logged where it happened: a
-  # count that failed by `Keyfleet.Count`, a read that raised by its task.
+  # the next notice reads again. A read that raised is logged by its task.
   @impl true
-  def handle_async({:now, fleet_id}, {:ok, {:ok, %{sales: sales} = now}}, socket),
+  def handle_async({:now, fleet_id}, {:ok, %{sales: sales} = now}, socket),
     do:
       {:noreply,
        update_fleet(
@@ -351,7 +350,7 @@ defmodule KeyfleetWeb.HomeLive do
          &%{&1 | sales: sales, now: Map.delete(now, :sales), failed?: false}
        )}
 
-  def handle_async({:now, fleet_id}, _failed, socket),
+  def handle_async({:now, fleet_id}, {:exit, _reason}, socket),
     do: {:noreply, update_fleet(socket, fleet_id, &%{&1 | failed?: true})}
 
   defp update_fleet(socket, @classic, fun), do: update(socket, :classic, fun)

@@ -145,7 +145,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     # Renamed inside the test's own transaction, so the next reads fail the way
     # a database that refuses them does; the rename ends with the test.
     Keyfleet.Repo.query!(
-      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.agent_profiles RENAME TO agent_profiles_away"
+      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.graph_events RENAME TO graph_events_away"
     )
 
     log =
@@ -162,7 +162,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   test "a first Club read that fails shows the failure, never zero", %{conn: conn} do
     Keyfleet.Repo.query!(
-      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.agent_profiles RENAME TO agent_profiles_away"
+      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.graph_events RENAME TO graph_events_away"
     )
 
     capture_log(fn ->
