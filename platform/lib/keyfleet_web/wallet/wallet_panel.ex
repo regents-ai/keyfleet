@@ -18,8 +18,10 @@ defmodule KeyfleetWeb.WalletPanel do
   pending: every press reaches the wallet, and the contract decides. The one
   exception is a step the chain's own state, read at the latest block, makes
   certain to fail (`figures.blocked`): `step_button/1` keeps it in view,
-  disabled, with a few words saying why, and the steps are built again every
-  few seconds while any is blocked, so it comes back when that state changes.
+  disabled, with a few words saying why, and for a signed-in person the steps
+  are built again every few seconds while any is blocked, so it comes back
+  when that state changes. A visitor's Buy follows the sale as a purchase
+  does, every few minutes.
 
   The page renders it with `live_component`, giving:
 
@@ -413,6 +415,14 @@ defmodule KeyfleetWeb.WalletPanel do
   end
 
   defp rebuild_later(socket, %{problem: :unread}), do: rebuild_in(socket, @reread_ms)
+
+  # A visitor's press sends none of these steps, so a held-back button is no
+  # reason to read the chain again; Buy's figures follow the sale as they do
+  # for anyone.
+  defp rebuild_later(%{assigns: %{actor: nil, flow: :buy}} = socket, _built),
+    do: rebuild_in(socket, @rebuild_buy_ms)
+
+  defp rebuild_later(%{assigns: %{actor: nil}} = socket, _built), do: socket
 
   defp rebuild_later(socket, %{figures: %{blocked: blocked}}) when blocked != %{},
     do: rebuild_in(socket, @blocked_ms)
