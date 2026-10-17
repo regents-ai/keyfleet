@@ -103,8 +103,8 @@ const tools: ModelContextTool[] = entries.filter(entry => entry.scope === "site"
       return await requests[entry.name](input as Record<string, string>, signal)
     } catch (_error) {
       return signal?.aborted
-        ? {ok: false, error: {code: "cancelled", message: "The read was cancelled; nothing changed."}}
-        : {ok: false, error: {code: "unreachable", message: "The page could not be read. Try again in a moment."}}
+        ? {ok: false, error: {code: "cancelled", message: "The read was cancelled; nothing changed.", hint: "Call again when you want it."}}
+        : {ok: false, error: {code: "unreachable", message: "The page could not be read.", hint: "Try again in a moment."}}
     }
   },
 }))
