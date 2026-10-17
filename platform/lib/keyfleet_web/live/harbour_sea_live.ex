@@ -109,8 +109,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     else
       case Session.on_mount(:load_human, params, session, %{socket | router: Router}) do
         {:cont, socket} ->
-          {:cont,
-           %{detach_hook(socket, :session_authority_params, :handle_params) | router: nil}}
+          {:cont, %{detach_hook(socket, :session_authority_params, :handle_params) | router: nil}}
 
         {:halt, socket} ->
           {:halt, %{socket | router: nil}}

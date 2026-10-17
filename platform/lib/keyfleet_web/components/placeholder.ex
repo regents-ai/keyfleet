@@ -16,7 +16,7 @@ defmodule KeyfleetWeb.Components.Placeholder do
   attr :shape, :string, default: "lines", values: ~w(lines figures)
   attr :class, :any, default: nil
 
-  attr :role, :string,
+  attr :role, :any,
     default: "status",
     doc: "nil inside a region that already announces its changes"
 
