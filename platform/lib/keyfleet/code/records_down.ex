@@ -1,0 +1,19 @@
+defmodule Keyfleet.Code.RecordsDown do
+  @moduledoc """
+  Keyfleet could not read its own records when an agent asked about a fleet's
+  code (`KeyfleetWeb.AgentCodeController`): the fleet, who holds its keys, or
+  the changes sent to the code lately. The agent was told to ask again in a
+  minute (`code_catching_up`), so until someone looks it gets nothing.
+
+  `report/1` saves it with the site's errors (`Keyfleet.Alert`), each place
+  that reports its own error listing every occurrence with its own message.
+  """
+  defexception [:message]
+
+  @doc """
+  Saves the failure, with `message` saying which fleet and what could not be
+  read. The caller's line places the error, so it must not be the caller's
+  last call.
+  """
+  def report(message), do: Keyfleet.Alert.report(%__MODULE__{message: message})
+end

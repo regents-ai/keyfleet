@@ -27,7 +27,17 @@ defmodule KeyfleetWeb.AgentCodeController do
       {:error, :not_holder} ->
         Refusal.json(conn, 403, "code_not_holder")
 
-      {:error, _error} ->
+      # Key ownership being brought up to date passes by itself; any other
+      # failure to read it, or the fleet, is saved for someone to act on.
+      {:error, %Keyfleet.Keys.Errors.OwnershipRefreshingError{}} ->
+        Refusal.json(conn, 503, "code_catching_up")
+
+      {:error, error} ->
+        Keyfleet.Code.RecordsDown.report(
+          "The fleet or key ownership of #{fleet_id} could not be read for a code " <>
+            "password: " <> inspect(error.__struct__)
+        )
+
         Refusal.json(conn, 503, "code_catching_up")
     end
   end
@@ -56,7 +66,12 @@ defmodule KeyfleetWeb.AgentCodeController do
           do: Refusal.json(conn, 403, "code_not_holder"),
           else: Refusal.json(conn, 503, "ownership_refreshing")
 
-      {:error, _error} ->
+      {:error, error} ->
+        Keyfleet.Code.RecordsDown.report(
+          "The changes sent to the code of #{fleet_id} could not be read: " <>
+            inspect(error.__struct__)
+        )
+
         Refusal.json(conn, 503, "code_catching_up")
     end
   end
