@@ -1882,3 +1882,5 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - When the fleet directory can't be read, a browser's own agent reading it is
   told so in the site's words, instead of being told the page couldn't be
   reached.
+- When an agent is turned away from a fleet's notebooks or code, the hint now
+  says it can also get in through a pairing with a person who holds a Key.
