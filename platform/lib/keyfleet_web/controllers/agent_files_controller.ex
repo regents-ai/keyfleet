@@ -9,7 +9,9 @@ defmodule KeyfleetWeb.AgentFilesController do
   Each runtime's skill, at `/agents/SLUG/skill.md`, is the guide with that
   runtime's notes from `KeyfleetWeb.AgentGuides` added.
   Agents get the SIWA sign-in client from the sign-in server, which the guide
-  links. `/commands.json` is the list of `regents keyfleet` commands, read
+  links; `/agent/git-remote-siwa` is the git helper that signs each of git's
+  requests to a fleet's code with that client (`KeyfleetWeb.Plugs.CodeGateway`).
+  `/commands.json` is the list of `regents keyfleet` commands, read
   from `cli/commands.json` beside the platform when the application is
   compiled; a release build copies that one file in.
 
@@ -28,6 +30,10 @@ defmodule KeyfleetWeb.AgentFilesController do
   @external_resource @guide_path
 
   @guide File.read!(@guide_path)
+
+  @git_helper_path Application.app_dir(:keyfleet, "priv/public/git-remote-siwa")
+  @external_resource @git_helper_path
+  @git_helper File.read!(@git_helper_path)
 
   @commands_path Path.expand("../../../../cli/commands.json", __DIR__)
   @external_resource @commands_path
@@ -86,6 +92,13 @@ defmodule KeyfleetWeb.AgentFilesController do
       )
 
     conn |> cached(index) |> put_resp_content_type("application/json") |> send_resp(200, index)
+  end
+
+  def git_helper(conn, _params) do
+    conn
+    |> cached(@git_helper)
+    |> put_resp_content_type("text/x-python")
+    |> send_resp(200, @git_helper)
   end
 
   def commands(conn, _params) do

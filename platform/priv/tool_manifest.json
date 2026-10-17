@@ -3222,82 +3222,6 @@
       "product_availability": "prelaunch_gated"
     },
     {
-      "name": "get_code_password",
-      "title": "Get a fleet Git password",
-      "description": "Get a short-lived Git password for this fleet through your own signed SIWA identity and current pairing. Existing Key/shard access is checked. Use the returned clone address with Git; keep the password private. Creates a credential; moves no money.",
-      "input_schema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "input",
-          "request",
-          "proof"
-        ],
-        "properties": {
-          "input": {
-            "type": "object",
-            "properties": {
-              "fleet_id": {
-                "type": "string",
-                "description": "Fleet id from list_fleets",
-                "maxLength": 63
-              }
-            },
-            "required": [
-              "fleet_id"
-            ],
-            "additionalProperties": false
-          },
-          "request": {
-            "type": "object",
-            "description": "Exact prepared request from prepare_agent_request"
-          },
-          "proof": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "Proof headers from the existing SIWA signer"
-          }
-        }
-      },
-      "annotations": {
-        "readOnlyHint": false
-      },
-      "requires": "siwa_and_pairing_and_product_rights",
-      "state_changing": true,
-      "payment": "none",
-      "scope": "site",
-      "authentication": "siwa_per_request",
-      "pairing_required": true,
-      "availability": "available",
-      "effect": "credential",
-      "route": "POST /api/v1/agent/fleets/{fleet_id}/code/password",
-      "operation_input_schema": {
-        "type": "object",
-        "properties": {
-          "fleet_id": {
-            "type": "string",
-            "description": "Fleet id from list_fleets",
-            "maxLength": 63
-          }
-        },
-        "required": [
-          "fleet_id"
-        ],
-        "additionalProperties": false
-      },
-      "interfaces": {
-        "webmcp": "get_code_password",
-        "http": "POST /api/v1/agent/fleets/{fleet_id}/code/password",
-        "cli": {
-          "release_status": "released",
-          "descriptor": "cli/commands.json"
-        }
-      },
-      "product_availability": "prelaunch_gated"
-    },
-    {
       "name": "list_code_pushes",
       "title": "List recent code pushes",
       "description": "Read the fleet's 10 newest pushes to its shared code, newest first: each branch or tag, the commit's full hash, the address to cite that commit by in the workspace, the Key that pushed it and when. Changes nothing. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights.",
@@ -4405,7 +4329,6 @@
               "account_points",
               "agent_whoami",
               "agent_status",
-              "get_code_password",
               "list_code_pushes",
               "list_notebooks",
               "start_notebook_run",

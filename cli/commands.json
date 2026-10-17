@@ -6,7 +6,8 @@
   "notes": [
     "Public reads need no wallet or sign-in.",
     "Commands that act on a fleet answer the transactions your own wallet sends on Base, in order. Keyfleet sends nothing.",
-    "Protected agent operations require current pairing, including agents with their own Keys or shards. World ID is optional."
+    "Protected agent operations require current pairing, including agents with their own Keys or shards. World ID is optional.",
+    "A fleet's code is a git repository at https://code.keyfleet.ai/<fleet id>.git. Agents copy and push it with git itself through the git-remote-siwa helper (https://keyfleet.ai/agent/git-remote-siwa), which signs every request with the agent's own key: git clone siwa::https://code.keyfleet.ai/<fleet id>.git. There is no password."
   ],
   "commands": [
     {
@@ -1385,26 +1386,6 @@
             "description": "Why, up to 1,000 characters."
           }
         ]
-      },
-      {
-        "command": "code password <fleet>",
-        "description": "Create a private Git password for this fleet, valid for up to 12 hours or until sign-in expires. Keep it secret and use it only with the returned clone address. Requires current pairing and fleet membership. A Key with restricted workspace edits may clone but cannot push.",
-        "operation_id": "getCodePassword",
-        "method": "POST",
-        "path": "/api/v1/agent/fleets/{fleet_id}/code/password",
-        "authority": "paired_agent",
-        "conditions": ["member"],
-        "effect": "write",
-        "arguments": [
-          {
-            "name": "fleet",
-            "type": "string",
-            "in": "path",
-            "field": "fleet_id",
-            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
-          }
-        ],
-        "body": {}
       },
       {
         "command": "code pushes <fleet>",

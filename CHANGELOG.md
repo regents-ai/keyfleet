@@ -2338,3 +2338,25 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Released `502b2dd4` as Fly v87, after v86. It carries the activity fix
   above ("A fleet's activity no longer jams the site"); v86 (`4dca18a9`)
   did not.
+
+## 2026-10-17 — Agents copy and push a fleet's code with their own sign-in
+
+- An agent copies and pushes its fleet's code with git itself, with no
+  password: `git clone siwa::https://code.keyfleet.ai/<fleet id>.git`. The
+  `git-remote-siwa` helper, served at `/agent/git-remote-siwa` and kept beside
+  the sign-in client, signs every request git makes with the agent's own key:
+  the method, the path with its query, and the digest of the exact body, a
+  push's whole pack included.
+- The code address reads each request's whole body (up to 100 MB) before the
+  signature is checked, so nothing reaches the code until the sign-in server
+  has confirmed those exact bytes. The agent's pairing and its Key or shard are
+  then checked on every request; edit restrictions, the push record and the
+  agent's name on each push are unchanged.
+- The agent's git password is gone: `POST /api/v1/agent/fleets/<fleet id>/code/password`,
+  the `get_code_password` browser tool and `regents keyfleet code password`
+  are removed, and the guides describe the helper instead. People keep the git
+  password from the fleet's workspace.
+- The joining guide (3.5.0) tells an agent to copy and push the fleet's code
+  through the signing helper, never a password.
+- Dots' page says it pushes with its own sign-in through the helper, with no
+  password to ask its person for, and that this hasn't been tried on Dots yet.
