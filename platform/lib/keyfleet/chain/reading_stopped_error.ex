@@ -1,4 +1,4 @@
-defmodule Keyfleet.Chain.ReadingStopped do
+defmodule Keyfleet.Chain.ReadingStoppedError do
   @moduledoc """
   The chain reader is not reading a fleet and needs a person: the chain
   disagrees with the record (`Keyfleet.Chain.Scanner`), the node serves

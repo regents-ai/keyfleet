@@ -33,7 +33,7 @@ defmodule KeyfleetWeb.AgentCodeController do
         Refusal.json(conn, 503, "code_catching_up")
 
       {:error, error} ->
-        Keyfleet.Code.RecordsDown.report(
+        Keyfleet.Code.RecordsDownError.report(
           "The fleet or key ownership of #{fleet_id} could not be read for a code " <>
             "password: " <> inspect(error.__struct__)
         )
@@ -67,7 +67,7 @@ defmodule KeyfleetWeb.AgentCodeController do
           else: Refusal.json(conn, 503, "ownership_refreshing")
 
       {:error, error} ->
-        Keyfleet.Code.RecordsDown.report(
+        Keyfleet.Code.RecordsDownError.report(
           "The changes sent to the code of #{fleet_id} could not be read: " <>
             inspect(error.__struct__)
         )

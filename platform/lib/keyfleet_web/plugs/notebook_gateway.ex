@@ -50,10 +50,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   is carried by `KeyfleetWeb.NotebookSocket`, which closes when the key's
   holder loses it.
 
-  A hub that does not answer (`Keyfleet.Notebooks.HubSilent`), an agent's
+  A hub that does not answer (`Keyfleet.Notebooks.HubSilentError`), an agent's
   profile or a kept saved output that Keyfleet can't read or remove
-  (`Keyfleet.Notebooks.RecordsDown`), and a saved page shown without its copy
-  kept (`Keyfleet.Notebooks.ResultNotKept`), are saved with the site's errors
+  (`Keyfleet.Notebooks.RecordsDownError`), and a saved page shown without its copy
+  kept (`Keyfleet.Notebooks.ResultNotKeptError`), are saved with the site's errors
   for someone to act on.
   """
   @behaviour Plug
@@ -62,7 +62,15 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   import Plug.Conn
 
   alias Keyfleet.{AccessCache, Notebooks}
-  alias Keyfleet.Notebooks.{HubSilent, Pass, RecordsDown, ResultNotKept, SavedOutput}
+
+  alias Keyfleet.Notebooks.{
+    HubSilentError,
+    Pass,
+    RecordsDownError,
+    ResultNotKeptError,
+    SavedOutput
+  }
+
   alias KeyfleetWeb.{NotebookSocket, Refusal}
   alias KeyfleetWeb.Plugs.SignedAgent
 
@@ -297,7 +305,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         {:ok, conn, subject, actor}
 
       {:error, error} ->
-        RecordsDown.report(
+        RecordsDownError.report(
           "The profile of an agent opening the notebooks of #{fleet_id} could not be read: " <>
             inspect(error.__struct__)
         )
@@ -543,7 +551,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   defp stream_back({:error, error}, conn, fleet_id) do
-    HubSilent.report(
+    HubSilentError.report(
       "The notebook hub of #{fleet_id} did not answer a request: #{inspect(error)}"
     )
 
@@ -633,7 +641,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         |> send_resp(200, page)
 
       {:error, error} ->
-        ResultNotKept.report(
+        ResultNotKeptError.report(
           "A saved page of notebook #{notebook_id} in #{fleet_id} was shown without its " <>
             "lasting address: " <> Exception.message(error)
         )
@@ -657,7 +665,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         Refusal.json(conn, 404, "notebooks_not_found")
 
       {:error, error} ->
-        RecordsDown.report(
+        RecordsDownError.report(
           "A saved output of notebook #{notebook_id} in #{fleet_id} could not be removed: " <>
             inspect(error.__struct__)
         )
@@ -685,7 +693,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         Refusal.json(conn, 404, "notebooks_not_found")
 
       {:error, error} ->
-        RecordsDown.report(
+        RecordsDownError.report(
           "A saved output of notebook #{notebook_id} in #{fleet_id} could not be read: " <>
             inspect(error.__struct__)
         )
@@ -775,7 +783,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         )
 
       {:error, reason} ->
-        HubSilent.report(
+        HubSilentError.report(
           "The notebook hub of #{fleet_id} refused a live connection: #{inspect(reason)}"
         )
 

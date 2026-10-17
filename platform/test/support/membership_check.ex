@@ -656,14 +656,16 @@ defmodule Keyfleet.MembershipCheck do
          %URI{path: path, query: query} = URI.parse(link),
          %{status: 303, headers: %{"set-cookie" => set}} <-
            send_request(c, "GET", Notebooks.host(@fleet), path <> "?" <> query, [], nil) do
-      Enum.find_value(set, fn cookie ->
-        case String.split(hd(String.split(cookie, ";")), "=", parts: 2) do
-          [@cookie, value] -> value
-          _other -> nil
-        end
-      end)
+      Enum.find_value(set, &notebook_cookie_value/1)
     else
       _refused -> nil
+    end
+  end
+
+  defp notebook_cookie_value(set_cookie) do
+    case String.split(hd(String.split(set_cookie, ";")), "=", parts: 2) do
+      [@cookie, value] -> value
+      _other -> nil
     end
   end
 
@@ -774,19 +776,19 @@ defmodule Keyfleet.MembershipCheck do
          {:ok, conn, more} <- Mint.WebSocket.stream(conn, message) do
       parts = parts ++ more
 
-      if Enum.any?(parts, &match?({:done, ^ref}, &1)) do
-        {:status, ^ref, status} = List.keyfind(parts, :status, 0)
-        {:headers, ^ref, headers} = List.keyfind(parts, :headers, 0)
-
-        {:ok, conn, status, headers,
-         IO.iodata_to_binary(for {:data, ^ref, data} <- parts, do: data)}
-      else
-        upgraded(conn, ref, parts)
-      end
+      if Enum.any?(parts, &match?({:done, ^ref}, &1)),
+        do: upgrade_answer(conn, ref, parts),
+        else: upgraded(conn, ref, parts)
     else
       :timeout -> {:error, "no answer to the upgrade in #{div(@answer_within_ms, 1000)} s"}
       {:error, _conn, error, _parts} -> {:error, Exception.message(error)}
     end
+  end
+
+  defp upgrade_answer(conn, ref, parts) do
+    {:status, ^ref, status} = List.keyfind(parts, :status, 0)
+    {:headers, ^ref, headers} = List.keyfind(parts, :headers, 0)
+    {:ok, conn, status, headers, IO.iodata_to_binary(for {:data, ^ref, data} <- parts, do: data)}
   end
 
   # What the site does with the open connection by `deadline`: closes it, as

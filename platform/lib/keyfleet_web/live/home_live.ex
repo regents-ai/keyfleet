@@ -729,16 +729,6 @@ defmodule KeyfleetWeb.HomeLive do
   # one on offer. Before the sale opens nothing has sold and the first Key is
   # on offer.
   defp key_window(classic) do
-    max = Presets.max_supply(@classic)
-
-    sold =
-      case classic do
-        %{failed?: true, sales: nil} -> "—"
-        %{sales: nil} -> "0 of #{grouped(max)}"
-        %{sales: %{current?: false}} -> "Catching up"
-        %{sales: %{keys: keys}} -> "#{grouped(keys)} of #{grouped(max)}"
-      end
-
     after_next =
       case classic.sales do
         nil -> Presets.progress(@classic, 1)
@@ -746,7 +736,21 @@ defmodule KeyfleetWeb.HomeLive do
         %{buy: %{token_id: token_id}} -> Presets.progress(@classic, token_id)
       end
 
-    %{sold: sold, following: after_next && after_next.next_token_id && price(after_next)}
+    %{
+      sold: sold_count(classic),
+      following: after_next && after_next.next_token_id && price(after_next)
+    }
+  end
+
+  defp sold_count(classic) do
+    max = Presets.max_supply(@classic)
+
+    case classic do
+      %{failed?: true, sales: nil} -> "—"
+      %{sales: nil} -> "0 of #{grouped(max)}"
+      %{sales: %{current?: false}} -> "Catching up"
+      %{sales: %{keys: keys}} -> "#{grouped(keys)} of #{grouped(max)}"
+    end
   end
 
   attr :club, :map, required: true

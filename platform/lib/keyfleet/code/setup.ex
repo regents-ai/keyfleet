@@ -6,7 +6,7 @@ defmodule Keyfleet.Code.Setup do
   finds the one already made, so a run that fails part way is simply run
   again. A failed run tries again a minute later, up to `max_attempts` runs.
   A setup that gave up is queued again by the next ask, and that is saved
-  with the site's errors (`Keyfleet.Code.StoreDown`).
+  with the site's errors (`Keyfleet.Code.StoreDownError`).
   """
   use Oban.Worker,
     queue: :code_store,
@@ -15,7 +15,7 @@ defmodule Keyfleet.Code.Setup do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Code
-  alias Keyfleet.Code.{NodeClient, StoreDown}
+  alias Keyfleet.Code.{NodeClient, StoreDownError}
 
   @impl Oban.Worker
   def backoff(%Oban.Job{}), do: 60
@@ -52,7 +52,7 @@ defmodule Keyfleet.Code.Setup do
         :setup_restarted
 
       true ->
-        StoreDown.report(
+        StoreDownError.report(
           "Setting up #{fleet_id}'s code gave up after #{job.max_attempts} tries; it starts again"
         )
 

@@ -7,13 +7,13 @@ defmodule Keyfleet.Chain.Watch do
   while the site runs is read from the next minute on.
 
   With fleets deployed and no node named, nothing reads them; each minute
-  says so with the site's errors (`Keyfleet.Chain.ReadingStopped`).
+  says so with the site's errors (`Keyfleet.Chain.ReadingStoppedError`).
   """
   use Oban.Worker, queue: :default, max_attempts: 1
 
   alias Keyfleet.Chain.ReadBalances
   alias Keyfleet.Chain.ReadFleet
-  alias Keyfleet.Chain.ReadingStopped
+  alias Keyfleet.Chain.ReadingStoppedError
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
@@ -25,7 +25,7 @@ defmodule Keyfleet.Chain.Watch do
   defp read([], _rpc_url), do: :ok
 
   defp read(fleets, nil) do
-    ReadingStopped.report(
+    ReadingStoppedError.report(
       "No fleet is being read: KEYFLEET_RPC_URL names no node. Deployed fleets waiting: " <>
         "#{length(fleets)}. Set it to a Base node; the watch starts reading within a minute."
     )

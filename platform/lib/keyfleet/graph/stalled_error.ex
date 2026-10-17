@@ -1,4 +1,4 @@
-defmodule Keyfleet.Graph.Stalled do
+defmodule Keyfleet.Graph.StalledError do
   @moduledoc """
   A fleet's workspace stopped taking or showing changes: its graph host
   stopped (`Keyfleet.Graph.Writer`), or its read tables have not caught up

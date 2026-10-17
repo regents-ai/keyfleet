@@ -1,4 +1,4 @@
-defmodule Keyfleet.Keys.DeckEnding do
+defmodule Keyfleet.Keys.DeckEndingError do
   @moduledoc """
   A fleet is within 100 Keys of the end of its deck while later Keys draw
   their cards with Chainlink randomness (`Keyfleet.Keys.DeckEndCheck`): the

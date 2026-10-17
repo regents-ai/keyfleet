@@ -24,7 +24,7 @@ defmodule Keyfleet.Notebooks do
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Agent, Human, System}
   alias Keyfleet.Graph.Checks.KeyActor
-  alias Keyfleet.Notebooks.{Handoff, Hub, HubClient, HubSilent, Roster}
+  alias Keyfleet.Notebooks.{Handoff, Hub, HubClient, HubSilentError, Roster}
 
   resources do
     resource Keyfleet.Notebooks.Hub do
@@ -216,7 +216,7 @@ defmodule Keyfleet.Notebooks do
         {:error, :unavailable}
 
       {:hub, {:error, reason}} ->
-        HubSilent.report(
+        HubSilentError.report(
           "The notebook hub of #{fleet_id} did not make a holder an editor: #{inspect(reason)}"
         )
 
@@ -252,7 +252,7 @@ defmodule Keyfleet.Notebooks do
         {:error, :unavailable}
 
       {:hub, {:error, reason}} ->
-        HubSilent.report(
+        HubSilentError.report(
           "The notebook hub of #{fleet_id} did not list its open sessions: #{inspect(reason)}"
         )
 

@@ -10,7 +10,7 @@ defmodule Keyfleet.Graph.Projector do
   cursor, which is kept with the tables. A copy that fails is logged and
   tried again on the next round; nothing that goes wrong stops the projector.
   Copies failing for longer than a new host takes to start are a stall, saved
-  once with the site's errors (`Keyfleet.Graph.Stalled`) until a copy succeeds.
+  once with the site's errors (`Keyfleet.Graph.StalledError`) until a copy succeeds.
 
   It remembers which log, and how far along it, the tables reached last; a
   place in one log says nothing about another. Each time that changes, it
@@ -23,7 +23,7 @@ defmodule Keyfleet.Graph.Projector do
   require Logger
 
   alias Keyfleet.Graph
-  alias Keyfleet.Graph.{Projection, Stalled}
+  alias Keyfleet.Graph.{Projection, StalledError}
 
   # Twice the longest a new graph host takes to replay its log and answer
   # (`:hello_timeout`), so a host starting after a deploy is no stall.
@@ -130,7 +130,7 @@ defmodule Keyfleet.Graph.Projector do
 
   defp failed(%{stall_reported?: false} = state, reason) do
     if System.monotonic_time(:millisecond) - state.failing_since > @stall_ms do
-      Stalled.report(
+      StalledError.report(
         "The workspace of #{state.fleet_id} has not caught up with its log for over " <>
           "two minutes (#{short(reason)}); pages show it as it last was"
       )

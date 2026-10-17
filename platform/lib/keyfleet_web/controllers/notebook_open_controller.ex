@@ -7,14 +7,14 @@ defmodule KeyfleetWeb.NotebookOpenController do
   a holder of one of the fleet's keys goes back to it with a link that works
   once, and anyone else lands on the fleet's workspace with a note saying why.
   Key ownership that can't be read, other than while it is being brought up
-  to date, is saved with the site's errors (`Keyfleet.Notebooks.RecordsDown`).
+  to date, is saved with the site's errors (`Keyfleet.Notebooks.RecordsDownError`).
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Actors.Human
   alias Keyfleet.{Fleets, Notebooks}
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
-  alias Keyfleet.Notebooks.RecordsDown
+  alias Keyfleet.Notebooks.RecordsDownError
 
   def open(conn, %{"fleet_id" => fleet_id} = params) do
     case open_for(conn, fleet_id, params["to"]) do
@@ -30,7 +30,7 @@ defmodule KeyfleetWeb.NotebookOpenController do
         to_workspace(conn, fleet_id, reason)
 
       {:error, error} ->
-        RecordsDown.report(
+        RecordsDownError.report(
           "Key ownership in #{fleet_id} could not be read to open its notebooks: " <>
             inspect(error.__struct__)
         )

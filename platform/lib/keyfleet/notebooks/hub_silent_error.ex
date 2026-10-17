@@ -1,4 +1,4 @@
-defmodule Keyfleet.Notebooks.HubSilent do
+defmodule Keyfleet.Notebooks.HubSilentError do
   @moduledoc """
   A fleet's notebook hub did not answer what it was asked: making a holder an
   editor (`Keyfleet.Notebooks.admit/3`), listing the sessions open in it

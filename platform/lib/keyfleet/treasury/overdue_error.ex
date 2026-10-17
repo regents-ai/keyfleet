@@ -1,4 +1,4 @@
-defmodule Keyfleet.Treasury.Overdue do
+defmodule Keyfleet.Treasury.OverdueError do
   @moduledoc """
   Money a fleet's contracts hold for someone has waited too long for anyone
   to move it (`Keyfleet.Treasury.OverdueCheck`): the Daily Treasury Slice to

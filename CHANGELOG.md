@@ -2082,3 +2082,15 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   site's errors instead of going unseen.
 - The browser checks for the agent tools run only with the chain checks
   (`npm run test:chain`), which start the chain they need.
+
+## 2026-10-17 — Pre-commit runs clean again
+
+- The site's error types all end in `Error` (for example
+  `Keyfleet.Code.StoreDownError`, `Keyfleet.Treasury.OverdueError`), so the
+  style check finds one naming convention. Their entries in /admin/errors
+  start new groups under the new names.
+- Three functions past the nesting or branch limit are split without changing
+  what they answer: the homepage's Keys-sold count, the map's wallet search
+  and the membership check's notebook cookie and upgrade answer.
+- The security scan's accepted findings for the sitemap and the notebook
+  pages follow those files' moved lines; the four outdated entries are gone.

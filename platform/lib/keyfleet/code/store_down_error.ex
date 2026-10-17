@@ -1,4 +1,4 @@
-defmodule Keyfleet.Code.StoreDown do
+defmodule Keyfleet.Code.StoreDownError do
   @moduledoc """
   The code store did not take or answer a git exchange the code gateway passed
   on (`KeyfleetWeb.Plugs.CodeGateway`): it could not be reached, stopped

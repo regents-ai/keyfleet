@@ -1,4 +1,4 @@
-defmodule Keyfleet.Notebooks.ResultNotKept do
+defmodule Keyfleet.Notebooks.ResultNotKeptError do
   @moduledoc """
   A notebook's saved page reached its gateway but Keyfleet could not keep its
   copy (`KeyfleetWeb.Plugs.NotebookGateway`), so the page was shown without

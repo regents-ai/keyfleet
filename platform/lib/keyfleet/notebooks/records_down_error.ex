@@ -1,4 +1,4 @@
-defmodule Keyfleet.Notebooks.RecordsDown do
+defmodule Keyfleet.Notebooks.RecordsDownError do
   @moduledoc """
   Keyfleet could not read or change its own records for a fleet's notebooks,
   though the hub may be answering: who holds the fleet's keys when a person

@@ -27,7 +27,7 @@ defmodule Keyfleet.Notebooks.Runs do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Notebooks
-  alias Keyfleet.Notebooks.{Pass, RecordsDown}
+  alias Keyfleet.Notebooks.{Pass, RecordsDownError}
 
   @job "Agent runs"
   # A finished run has made its page, unless it was cancelled or skipped.
@@ -155,7 +155,7 @@ defmodule Keyfleet.Notebooks.Runs do
 
   # The listed runs' kept pages, read at once, by notebook and run. Of two
   # copies of one run's page, the newer is its saved result. A failed read is
-  # saved with the site's errors (`Keyfleet.Notebooks.RecordsDown`).
+  # saved with the site's errors (`Keyfleet.Notebooks.RecordsDownError`).
   defp result_urls(fleet_id, runs) do
     run_ids = for %{"run_id" => run_id} <- runs, do: run_id
 
@@ -170,7 +170,7 @@ defmodule Keyfleet.Notebooks.Runs do
          end)}
 
       {:error, error} ->
-        RecordsDown.report(
+        RecordsDownError.report(
           "The kept pages of #{fleet_id}'s notebook listing could not be read: " <>
             inspect(error.__struct__)
         )

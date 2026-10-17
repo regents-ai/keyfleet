@@ -70,7 +70,7 @@ defmodule Keyfleet.Chain.Scanner do
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
   alias Keyfleet.Chain.Logs
-  alias Keyfleet.Chain.ReadingStopped
+  alias Keyfleet.Chain.ReadingStoppedError
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
@@ -405,7 +405,7 @@ defmodule Keyfleet.Chain.Scanner do
         "Correct the record as docs/chain-reader.md describes, then run bin/clear-fleet-stop #{fleet.id}."
 
     Logger.error(message)
-    ReadingStopped.report(message)
+    ReadingStoppedError.report(message)
     {:stopped, stopped_at}
   end
 end

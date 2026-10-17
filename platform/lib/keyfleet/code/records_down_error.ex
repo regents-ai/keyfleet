@@ -1,4 +1,4 @@
-defmodule Keyfleet.Code.RecordsDown do
+defmodule Keyfleet.Code.RecordsDownError do
   @moduledoc """
   Keyfleet could not read its own records when an agent asked about a fleet's
   code (`KeyfleetWeb.AgentCodeController`): the fleet, who holds its keys, or

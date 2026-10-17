@@ -17,14 +17,14 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   ways, a request's up to `max_pack_bytes`. When the store reports changes
   done, each branch or tag moved is recorded for the fleet's workspace. A
   store that cannot be reached, stops mid-exchange or answers with a fault of
-  its own is saved with the site's errors (`Keyfleet.Code.StoreDown`).
+  its own is saved with the site's errors (`Keyfleet.Code.StoreDownError`).
   """
   @behaviour Plug
 
   import Plug.Conn
 
   alias Keyfleet.Code
-  alias Keyfleet.Code.{Pass, ReceivePack, StoreDown}
+  alias Keyfleet.Code.{Pass, ReceivePack, StoreDownError}
   alias KeyfleetWeb.{CodePassword, Refusal}
 
   @services ~w(git-upload-pack git-receive-pack)
@@ -205,7 +205,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
       exchange(conn, fleet_id, node, ref, body, done)
     else
       unreachable ->
-        StoreDown.report(
+        StoreDownError.report(
           "The code store could not be reached for #{fleet_id}: #{inspect(unreachable)}"
         )
 
@@ -222,11 +222,11 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
             conn
 
           {:done, conn, %{status: status}} when status in 500..599 ->
-            StoreDown.report("The code store answered #{status} for #{fleet_id}")
+            StoreDownError.report("The code store answered #{status} for #{fleet_id}")
             conn
 
           {:failed, conn, _answer} ->
-            StoreDown.report("The code store stopped answering for #{fleet_id}")
+            StoreDownError.report("The code store stopped answering for #{fleet_id}")
             conn
 
           {_ended, conn, _answer} ->
@@ -235,7 +235,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
       # Only a 502 is the store's doing; the others are the request's.
       {:refused, conn, node, 502, code} ->
-        StoreDown.report("The code store stopped taking a request for #{fleet_id}")
+        StoreDownError.report("The code store stopped taking a request for #{fleet_id}")
         Mint.HTTP.close(node)
         refuse(conn, 502, code)
 

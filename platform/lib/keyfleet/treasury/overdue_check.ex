@@ -3,7 +3,7 @@ defmodule Keyfleet.Treasury.OverdueCheck do
   Every hour (`config :keyfleet, Oban, cron:`): looks at each deployed
   fleet's latest money reading (`Keyfleet.Treasury.Reading`) and, by the
   chain's clock at that reading, saves with the site's errors
-  (`Keyfleet.Treasury.Overdue`) each kind of money nobody has moved in time:
+  (`Keyfleet.Treasury.OverdueError`) each kind of money nobody has moved in time:
 
     * the Daily Treasury Slice to Keys, due for more than 6 hours while the
       treasury holds at least what it splits from of some asset (0.05 ETH, or
@@ -23,7 +23,7 @@ defmodule Keyfleet.Treasury.OverdueCheck do
   use Oban.Worker, queue: :default, max_attempts: 1
 
   alias Keyfleet.Treasury
-  alias Keyfleet.Treasury.Overdue
+  alias Keyfleet.Treasury.OverdueError
 
   @split_late 6 * 3600
   @owed_late 24 * 3600
@@ -42,7 +42,7 @@ defmodule Keyfleet.Treasury.OverdueCheck do
 
     with [_ | _] = late <-
            late(readings, &split_due/1, @split_late) do
-      Overdue.report(
+      OverdueError.report(
         "The Daily Treasury Slice to Keys is more than 6 hours overdue: #{named(late)}. " <>
           "Anyone may run it from the fleet's Treasury tab."
       )
@@ -50,14 +50,14 @@ defmodule Keyfleet.Treasury.OverdueCheck do
 
     with [_ | _] = late <-
            late(readings, &owed_since/1, @owed_late) do
-      Overdue.report(
+      OverdueError.report(
         "The protocol share has been owed to REGENT staking for more than a day: " <>
           "#{named(late)}. Anyone may send it from the fleet's Treasury tab."
       )
     end
 
     with [_ | _] = late <- late(readings, &waiting_since/1, @waiting_late) do
-      Overdue.report(
+      OverdueError.report(
         "USDC from Key sales has waited more than 3 hours with no piece turned into REGENT: " <>
           "#{named(late)}. Anyone may press Turn into REGENT on the fleet's Treasury tab; " <>
           "if every press fails, the price is moving too much for the buyer."
