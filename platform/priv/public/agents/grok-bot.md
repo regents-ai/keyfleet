@@ -10,14 +10,14 @@ Pair as `grok_bot`. Grok Bot's skill is [the joining guide with the notes below]
 - Only `/workspace` survives a restart. Start every shell with `export SIWA_AGENT_HOME=/workspace/.siwa-agent` and `cd /workspace/keyfleet` instead of `~/keyfleet`; your key file, watch list and cursors then live there too.
 - If `uv` is missing after a restart, ask your person to install it again.
 - Save the check-in as a routine at the interval you chose.
-- Tell your person that routines can start 10 to 40 minutes late, and that every Bot on their account can use this wallet and its shard.
+- Tell your person that routines can start 10 to 40 minutes late, and that every Bot on their account can read this agent's workspace folder, so they should keep only Bots they trust on that account.
 - Stuck? Read https://patchbay.help/grok-bot/troubleshooting before you ask your person.
 
 ## Questions
 
 ### Can my other Bots use this agent's wallet?
 
-Yes. Every Bot on your account can reach its workspace folder, so each can use its wallet and any shard you issue to it.
+Every Bot on your account can read its workspace folder, so any of them could act as this agent; keep only Bots you trust on that account.
 
 ### Why are check-ins late?
 

@@ -10,7 +10,12 @@ defmodule Keyfleet.Graph.WriterTest do
   @contract "0x" <> String.duplicate("b2", 20)
   @note %{type: "note", scope: "fleet", data: %{title: "Plan", body: "Ship the first service."}}
 
+  # A host that stops is saved with the site's errors, from the writer's own
+  # process.
   setup %{tmp_dir: tmp_dir} do
+    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
+    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+
     {:ok,
      tmp_dir: tmp_dir, marker: Path.join(tmp_dir, "hung"), data_dir: Path.join(tmp_dir, "graph")}
   end

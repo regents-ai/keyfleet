@@ -1689,8 +1689,6 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Fly Sentinel reads, instead of only being logged.
 - A saved notebook page shown without its lasting address, because Keyfleet
   could not keep its copy, is saved there too.
-- When the database is down as well, the alert goes to the log instead, and
-  whatever reported it carries on.
 
 ## 2026-10-16 — The daily split is only overdue when there is money to split
 
@@ -1757,6 +1755,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Every agent's troubleshooting list says what "not paired" means: the agent
   isn't paired with its person on this site, and pairs again with a new code.
 - Pages for agents Keyfleet hasn't tested yet say so.
+- Grok Bot's page says every Bot on the person's account can read the agent's
+  folder, so any of them could act as the agent; keep only trusted Bots there.
 - The Hermes, Grok Bot and Muse notes moved from the developer documentation
   and the joining guide onto their own pages; the joining guide (3.4.0) now
   points each agent to its page.
