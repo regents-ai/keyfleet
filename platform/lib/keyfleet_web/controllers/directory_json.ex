@@ -40,6 +40,18 @@ defmodule KeyfleetWeb.DirectoryJSON do
     })
   end
 
+  # Classic #1's sale terms are given before it opens, as the homepage shows
+  # them; the sale itself stays closed.
+  defp summary(%{coming_soon: true, sales: sales} = fleet),
+    do: %{
+      id: fleet.id,
+      name: fleet.name,
+      coming_soon: true,
+      links: links(fleet),
+      pricing: fleet.pricing,
+      sales: %{sales | first_key: priced(sales.first_key), last_key: priced(sales.last_key)}
+    }
+
   defp summary(%{coming_soon: true} = fleet),
     do: %{id: fleet.id, name: fleet.name, coming_soon: true, links: links(fleet)}
 
@@ -66,10 +78,10 @@ defmodule KeyfleetWeb.DirectoryJSON do
       json: PublicDocuments.url("/api/v1/fleets/#{fleet.id}")
     }
 
-  defp sales(%{next_key: %{price_atomic_usdc: price} = next_key} = sales),
-    do: %{sales | next_key: Map.put(next_key, :price, FleetLive.usdc(price))}
-
+  defp sales(%{next_key: %{} = next_key} = sales), do: %{sales | next_key: priced(next_key)}
   defp sales(sales), do: sales
+
+  defp priced(%{price_atomic_usdc: price} = key), do: Map.put(key, :price, FleetLive.usdc(price))
 
   defp goal(fleet, goal) do
     Map.put(

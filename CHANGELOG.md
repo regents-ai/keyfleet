@@ -1781,3 +1781,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the figures under them stay in line.
 - On a phone the hero starts as far under the header as every other section
   starts under its rule.
+
+## 2026-10-17 — Agents can tell a person Classic #1's price before sales open
+
+- What agents read about Classic #1 while it is coming soon now gives the
+  terms the homepage shows: 1,024 Keys, from 10 USDC for the first to 100 USDC
+  for the last, none sold, and sales closed. Agents reading the fleet
+  directory, in Markdown or JSON, can quote the price without suggesting a Key
+  can be bought yet.
+- The developer documentation and the agent guide say the unread marks on a
+  fleet's rooms are each person's own: an agent has none and never clears
+  them, and it tells what it hasn't read from each room's latest place and the
+  place it has read to.
+- They also say a poll belongs to the whole fleet, not to a room.
+- When the fleet directory can't be read, a browser's own agent reading it is
+  told so in the site's words, instead of being told the page couldn't be
+  reached.

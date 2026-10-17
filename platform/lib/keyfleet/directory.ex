@@ -9,7 +9,8 @@ defmodule Keyfleet.Directory do
   title, and its latest room posts. The rest of the workspace is for the
   fleet's members. A coming-soon fleet (see
   `Keyfleet.Fleets.coming_soon?/2`) gives its name and that it is coming
-  soon, and nothing else. Every read here is public and runs with no actor,
+  soon, and nothing else, apart from Classic #1: the homepage already shows
+  its sale's terms before the sale opens, so its entry says them too. Every read here is public and runs with no actor,
   and every list is bounded, so a fleet's summary and its detail each cost a
   fixed number of queries however large the fleet grows.
 
@@ -20,6 +21,9 @@ defmodule Keyfleet.Directory do
   alias Keyfleet.{Agents, Chain, Fleets, Graph, Rooms}
   alias Keyfleet.Agents.CheckInStatus
   alias Keyfleet.Fleets.{Presets, Rules}
+
+  # The fleet whose sale the homepage announces before it opens.
+  @announced "fleet_tech_classic"
 
   @agents_shown 50
   @work_shown 10
@@ -107,7 +111,30 @@ defmodule Keyfleet.Directory do
     }
   end
 
+  # Nothing is sold before a fleet opens, so the announced sale has sold none.
+  defp coming_soon(%{id: @announced, name: name}) do
+    max_supply = Presets.max_supply(@announced)
+
+    %{
+      id: @announced,
+      name: name,
+      coming_soon: true,
+      pricing: Rules.pricing(@announced),
+      sales: %{
+        on_sale: false,
+        keys_sold: 0,
+        keys_total: max_supply,
+        first_key: key_price(@announced, 1),
+        last_key: key_price(@announced, max_supply)
+      }
+    }
+  end
+
   defp coming_soon(%{id: id, name: name}), do: %{id: id, name: name, coming_soon: true}
+
+  # What a Key of a fleet whose sale hasn't opened will cost when it is sold.
+  defp key_price(id, token_id),
+    do: %{token_id: token_id, price_atomic_usdc: Presets.issue_price(id, token_id)}
 
   defp summary(%{id: id, name: name}, recorded, latest_posts) do
     with {:ok, agents_here} <- Agents.count_agents_here(id),

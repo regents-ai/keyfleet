@@ -35,13 +35,15 @@ type Refusal = {code: string; message: string; hint: string}
 type Reply =
   | {ok: true; status: number; data: string}
   | {ok: false; status: number; error: Refusal}
+  | {ok: false; status: number; data: string}
 
 type Request = (input: Record<string, string>, signal: AbortSignal | undefined) => Promise<Reply>
 
 // Each tool reads the site's own public document, in the Markdown an agent
 // gets when it asks for that page: the About page, the docs, or the open
 // fleet directory. A refusal, such as 404 fleet_unknown, is passed on as the
-// site gives it.
+// site gives it: its error when it answers in JSON, and otherwise its words,
+// as the directory says it can't be read right now.
 const requests: Record<string, Request> = {
   about: (_input, signal) => read("/about", signal),
   docs: (_input, signal) => read("/docs", signal),
@@ -61,6 +63,7 @@ async function read(path: string, signal: AbortSignal | undefined, accept = "tex
     signal,
   })
   if (response.ok) return {ok: true, status: response.status, data: await response.text()}
+  if (!response.headers.get("content-type")?.includes("json")) return {ok: false, status: response.status, data: await response.text()}
   const {error} = (await response.json()) as {error: Refusal}
   return {ok: false, status: response.status, error}
 }
