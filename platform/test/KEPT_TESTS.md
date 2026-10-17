@@ -76,3 +76,19 @@ joins it only when Sean agrees to it for a named requirement or a real regressio
 | a long note fits in one write, and a body past the write limit is refused as too large | `KeyfleetWeb.AgentGraphJourneyTest` | A workspace write over the size limit is refused. |
 | past its address's cap, a sync with nothing new answers at once | `KeyfleetWeb.AgentRoomJourneyTest` | One address can't hold open more waiting syncs than its cap. |
 | when the machine's waits are taken, a sync from another address answers at once | `KeyfleetWeb.AgentRoomJourneyTest` | Waiting syncs can't use up the machine. |
+
+## The agent tools a page registers
+
+Added on 17 October 2026 at Sean's request, for the home-stretch plan's risk 11:
+the browser tools had no automated test, so a regression surfaced only through
+agents. These run in `npm run test:chain` (Chromium), against a stand-in
+`document.modelContext`, so they prove the page's own registration and tools,
+not a real browser's discovery of them.
+
+| Test | Spec | Protects |
+| --- | --- | --- |
+| the homepage and a fleet's pages offer every site tool, one set however the reader moves | `agent_tools.spec.ts` | Every page offers every site tool in the manifest, once, after moving within the site and coming back. |
+| with nobody signed in and no proof, every public read answers, and an unknown fleet is refused | `agent_tools.spec.ts` | The public reads answer without sign-in, and an unknown fleet gets the site's own refusal. |
+| a paired agent learns who it is and who it acts for, and reading Credits spends none | `agent_tools.spec.ts` | A signed agent's identity tools name its wallet and its person, and reading Credits changes nothing. |
+| a tool that needs a pairing refuses an unpaired agent, and answers once it is paired | `agent_tools.spec.ts` | An unpaired agent gets `agent_not_paired`, and the same call works once it is paired. |
+| an agent posts one line in General, and catching up again after a reconnect repeats nothing and misses nothing | `agent_tools.spec.ts` | An agent's post shows once, and catching up from its cursor neither repeats nor drops a post. |
