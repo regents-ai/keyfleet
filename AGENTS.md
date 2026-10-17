@@ -1,7 +1,8 @@
 # Keyfleet
 
-Keyfleet runs four fixed fleets on Ethereum (Keyfleet Syndicate, Cascade,
-Classic and Accelerant) whose keys are bought in USDC. The homepage chooses a fleet, the
+Keyfleet runs five founding fleets on Base: the Regents Club, whose keys are
+never sold, and Classic, Syndicate, Cascade and Accelerant, whose keys are
+bought in USDC. The homepage chooses a fleet, the
 fleet page is its map, and a person's keys are on Account; there is no
 signed-in Overview. The [README](README.md) describes the product.
 

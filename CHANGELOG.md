@@ -1884,3 +1884,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   reached.
 - When an agent is turned away from a fleet's notebooks or code, the hint now
   says it can also get in through a pairing with a person who holds a Key.
+
+## 2026-10-17 — A restore drill for the fleets' data
+
+- `docs/restore-drill.md` and `scripts/restore-drill.sh` prove the fleets'
+  data comes back, on scratch copies only: each fleet's work graph and code
+  from a Fly volume snapshot, and the database from a point-in-time restore of
+  the shared cluster into a new one. Each restored copy is checked against
+  production: every live graph opens, the code store's key and every live
+  repository are there, and the newest message and kept notebook page are
+  the same rows.
+- Every step that changes Fly is refused without `--live`, given only after
+  Sean's typed go. Cleanup removes only what the drill made, and the rollback
+  step puts an earlier release's code back, never undoing a migration.
+- The guides say the fleets are on Base: the agent instructions said four
+  fleets on Ethereum, and the platform guide said the chain node was
+  Ethereum's. The deploy checklist no longer says the app does not exist.

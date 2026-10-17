@@ -68,6 +68,9 @@ person's keys are on the Account page.
   its own records when someone opens a fleet's notebooks or an agent asks
   about a fleet's code, a saved notebook page left without its lasting
   address, and a fleet's workspace stalling.
+- Recovery: the [restore drill](docs/restore-drill.md) restores the graph and
+  code store volumes from Fly snapshots and the database to a point in time,
+  all onto scratch copies. It has not been run yet.
 - The GitHub remote is `regents-ai/keyfleet` and is private.
 - The migrations that add required columns need no existing rows in
   production. Migration `20260927072219` cannot be rolled back, and rolling
