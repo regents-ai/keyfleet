@@ -124,7 +124,7 @@ defmodule KeyfleetWeb.Refusal do
        "Try again once its Keys are on sale. GET /api/v1/fleets/FLEET_ID shows the fleet."},
     "chain_unavailable" =>
       {"The chain can't be read right now, so the transaction can't be built.",
-       "Nothing was built. Try again in a moment."},
+       "Try again in a moment."},
     "invalid_proposal" =>
       {"This proposal can't be built as written.",
        "error.details.problem says what to fix. Correct it, then send the request again."},
@@ -168,7 +168,7 @@ defmodule KeyfleetWeb.Refusal do
       {"This topic isn't allowed.", "The docs give the rules for a room's topic."},
     "rename_too_soon" =>
       {"This room's topic changed less than a minute ago.",
-       "Wait the number of seconds in Retry-After, then try again."},
+       "Wait the number of seconds in Retry-After, then send the request again."},
 
     # Polls.
     "poll_needs_key" =>

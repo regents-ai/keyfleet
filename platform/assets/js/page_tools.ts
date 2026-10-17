@@ -58,7 +58,7 @@ const failures: Record<Failure, {message: string; hint: string}> = {
   },
   wallet_declined: {
     message: "The wallet declined this. Nothing was sent.",
-    hint: "Ask your person before calling again.",
+    hint: "Ask the person signed in before calling again.",
   },
   insufficient_funds: {
     message: "The wallet can't pay the network fee. Nothing was sent.",
