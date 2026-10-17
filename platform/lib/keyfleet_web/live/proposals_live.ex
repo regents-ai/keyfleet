@@ -96,9 +96,31 @@ defmodule KeyfleetWeb.ProposalsLive do
           Every proposal <.approval_rule id="proposals-rule" />
         </h2>
 
-        <p :if={@page.proposals == [] and @page.first_page?} id="proposals-empty">
-          No proposals yet.
-        </p>
+        <Regent.Primitives.empty_state
+          :if={@page.proposals == [] and @page.first_page? and @page.deployed?}
+          id="proposals-empty"
+          class="kf-empty"
+          title="No proposals yet."
+        >
+          <:action>
+            <a class="rg-button rg-button--secondary" href="#propose">
+              <span class="rg-button__label">Make a proposal</span>
+            </a>
+          </:action>
+        </Regent.Primitives.empty_state>
+        <%!-- Until the fleet is on chain there is nothing to vote with. --%>
+        <Regent.Primitives.empty_state
+          :if={@page.proposals == [] and @page.first_page? and not @page.deployed?}
+          id="proposals-empty"
+          class="kf-empty"
+          title="Voting opens once this fleet is live."
+        />
+        <Regent.Primitives.empty_state
+          :if={@page.proposals == [] and not @page.first_page?}
+          id="proposals-none-older"
+          class="kf-empty"
+          title="No older proposals."
+        />
 
         <ol :if={@page.proposals != []} id="proposals-list" class="proposals-list">
           <li
@@ -342,6 +364,9 @@ defmodule KeyfleetWeb.ProposalsLive do
           <h2 id="proposal-votes-title">Votes</h2>
           <p :if={@page.votes == [] and is_nil(@page.first_votes)} id="proposal-no-votes">
             No votes yet.
+          </p>
+          <p :if={@page.votes == [] and @page.first_votes} id="proposal-no-later-votes">
+            No later votes.
           </p>
           <ol :if={@page.votes != []} id="proposal-votes" class="proposals-lines">
             <li :for={vote <- @page.votes} data-vote={vote.id}>
@@ -676,7 +701,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         ><path d="M6 18 18 6M6 6h12v12" /></svg></a>
       </div>
       <p :if={not @treasury.read?} id="proposals-budget-pending" class="proposals-detail">
-        Balances are not available yet.
+        Balances usually show up within a minute.
       </p>
 
       <div
@@ -825,7 +850,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       >
         <h3 id="treasury-history-title">Money in and out</h3>
         <p :if={@treasury.history == []} id="proposals-no-history" class="proposals-detail">
-          Nothing yet.
+          No money has moved in or out yet.
         </p>
         <ol :if={@treasury.history != []} id="proposals-history" class="proposals-lines">
           <li :for={line <- @treasury.history} data-history={line.id}>

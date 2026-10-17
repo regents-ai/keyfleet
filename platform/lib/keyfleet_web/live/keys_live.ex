@@ -56,6 +56,7 @@ defmodule KeyfleetWeb.KeysLive do
 
       <section :if={is_nil(@key.owner_wallet)} id="key-not-sold" class="key-panel">
         <h2>Not sold yet</h2>
+        <p>Its holder and shards show up here once it’s sold.</p>
       </section>
 
       <div :if={@key.owner_wallet} class="key-grid">
@@ -94,7 +95,21 @@ defmodule KeyfleetWeb.KeysLive do
             </Regent.Primitives.tip>
           </h2>
 
-          <p :if={@key.shards == []} id="key-no-shards">No agents yet</p>
+          <%!-- Only the holder can issue one, in the panel just below. --%>
+          <Regent.Primitives.empty_state
+            :if={@key.shards == [] and @key.owner?}
+            id="key-no-shards"
+            class="kf-empty"
+            title="No shards yet."
+          >
+            Issue one below to let an agent act for this Key.
+          </Regent.Primitives.empty_state>
+          <Regent.Primitives.empty_state
+            :if={@key.shards == [] and not @key.owner?}
+            id="key-no-shards"
+            class="kf-empty"
+            title="No shards yet."
+          />
 
           <.live_component
             :if={@key.owner? and @key.shards != []}

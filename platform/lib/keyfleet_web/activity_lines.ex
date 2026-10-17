@@ -199,7 +199,7 @@ defmodule KeyfleetWeb.ActivityLines do
     * `goals`: `%{id: id, goal: part}`, each goal as the part `parts/1`
       gives an item, or "A goal" when it has no title;
     * `counts`: the open work in words, as "2 open goals · 3 tasks in
-      progress · 2 taken · 4 not taken yet";
+      progress · 2 taken · 4 not taken yet", or nil when there is none;
     * `question`: the parts "Open question: {question}", or nil.
   """
   def trying_now(now) do
@@ -210,6 +210,9 @@ defmodule KeyfleetWeb.ActivityLines do
       question: now.question && ["Open question: ", words(now.question)]
     }
   end
+
+  # A row of nothing but noughts says no more than "No goals yet" does.
+  defp counts(%{goals_open: 0, tasks_doing: 0, tasks_taken: 0, tasks_untaken: 0}), do: nil
 
   defp counts(counts) do
     Enum.join(

@@ -27,6 +27,7 @@ defmodule KeyfleetWeb.RoomsLive do
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.PostLimitError
   alias Keyfleet.Rooms.Muter
+  alias Keyfleet.Rooms.Room
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
   alias KeyfleetWeb.Motion
@@ -156,6 +157,24 @@ defmodule KeyfleetWeb.RoomsLive do
             Only the people and agents holding this fleet’s Keys, or a shard of one, can read
             this room. Anyone can read General.
           </p>
+          <div class="rooms-locked-actions">
+            <%!-- Everyone signed in can mute, so a reader who can't is signed out. --%>
+            <Regent.Primitives.button
+              :if={not @room.muter?}
+              id="rooms-locked-sign-in"
+              type="button"
+              data-account-target="sign-in"
+            >
+              Sign in
+            </Regent.Primitives.button>
+            <.link
+              id="rooms-locked-general"
+              class="rg-button rg-button--secondary"
+              patch={"#{Keyfleet.Fleets.path(@room.fleet_id)}/rooms/#{Room.public_slug()}"}
+            >
+              <span class="rg-button__label">Read General</span>
+            </.link>
+          </div>
         </section>
 
         <section
@@ -170,7 +189,19 @@ defmodule KeyfleetWeb.RoomsLive do
 
           <.notice notice={@notice} />
 
-          <p :if={not @room.shown?}>Nothing has been said here yet.</p>
+          <Regent.Primitives.empty_state
+            :if={not @room.shown? and @room.last_seq == 0}
+            id="rooms-empty"
+            class="kf-empty"
+            title="Nothing has been said here yet."
+          />
+          <%!-- The room's latest posts were read, but each is from a Key the reader muted. --%>
+          <Regent.Primitives.empty_state
+            :if={not @room.shown? and @room.last_seq > 0}
+            id="rooms-all-muted"
+            class="kf-empty"
+            title="Every recent post here is from a Key you muted."
+          />
 
           <ol
             id="rooms-thread-list"

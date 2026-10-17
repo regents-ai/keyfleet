@@ -190,6 +190,15 @@
   display: block;
 }
 
+/* Said only while every post on the wall is from a Key the visitor muted. */
+.key-profile-muted-hidden {
+  display: none;
+}
+
+#key-profile-thread:not(:has([data-post])) ~ .key-profile-muted-hidden {
+  display: block;
+}
+
 .key-profile .rooms-composer {
   display: grid;
   gap: 0.5rem;

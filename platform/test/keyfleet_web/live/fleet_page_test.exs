@@ -1849,7 +1849,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         on_close: %Phoenix.LiveView.JS{}
       )
 
-    assert html =~ "No agents here yet."
+    assert html =~ "We couldn’t check who’s here just now."
+    refute html =~ "No agents here yet."
     refute html =~ "agents are here. These are"
   end
 

@@ -760,7 +760,7 @@ defmodule KeyfleetWeb.HomeLive do
           </p>
           <.right_now :if={@club.now} now={@club.now} />
           <p :if={@club.failed?} class="rl-club__failed" data-fleet-failed>
-            Couldn't read this fleet just now
+            Couldn’t load this fleet just now.
           </p>
         </div>
 

@@ -389,7 +389,12 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
     test "a notice that balances were read has an open page show them", %{conn: conn} do
       {:ok, view, _html} = live(conn, @treasury_page)
-      assert has_element?(view, "#proposals-budget-pending", "Balances are not available yet.")
+
+      assert has_element?(
+               view,
+               "#proposals-budget-pending",
+               "Balances usually show up within a minute."
+             )
 
       # The treasury's whole address is there before any balance is read.
       assert has_element?(view, ~s(#proposals-treasury-address code[title="#{@treasury}"]))
@@ -498,9 +503,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     test "the treasury says what it doesn't know yet", %{conn: conn} do
       {:ok, view, _html} = live(conn, @treasury_page)
 
-      assert has_element?(view, "#proposals-budget-pending", "Balances are not available yet.")
+      assert has_element?(
+               view,
+               "#proposals-budget-pending",
+               "Balances usually show up within a minute."
+             )
+
       refute has_element?(view, "#proposals-advances-title")
-      assert has_element?(view, "#proposals-no-history", "Nothing yet.")
+      assert has_element?(view, "#proposals-no-history", "No money has moved in or out yet.")
 
       ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 50_000_000)])
 

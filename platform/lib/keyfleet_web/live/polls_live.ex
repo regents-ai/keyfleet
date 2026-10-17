@@ -168,7 +168,31 @@ defmodule KeyfleetWeb.PollsLive do
 
       <section id="polls-active" class="polls-panel" aria-labelledby="polls-active-title">
         <h2 id="polls-active-title">Active</h2>
-        <p :if={@active == []} id="polls-active-empty">No active polls.</p>
+        <Regent.Primitives.empty_state
+          :if={@active == [] and can_ask?(@page)}
+          id="polls-active-empty"
+          class="kf-empty"
+          title="No active polls."
+        >
+          Ask the fleet a question above.
+        </Regent.Primitives.empty_state>
+        <Regent.Primitives.empty_state
+          :if={@active == [] and not can_ask?(@page)}
+          id="polls-active-empty"
+          class="kf-empty"
+          title="No active polls."
+        >
+          <:action :if={not @page.signed_in?}>
+            <Regent.Primitives.button
+              id="polls-sign-in"
+              type="button"
+              variant="secondary"
+              data-account-target="sign-in"
+            >
+              Sign in
+            </Regent.Primitives.button>
+          </:action>
+        </Regent.Primitives.empty_state>
         <ol :if={@active != []} class="polls-list">
           <.list_item :for={poll <- @active} poll={poll} page={@page} active />
         </ol>
@@ -385,6 +409,11 @@ defmodule KeyfleetWeb.PollsLive do
     """
   end
 
+  # Someone holding a Key who hasn't started a poll in the last day has the
+  # form above the list.
+  defp can_ask?(%{voter: voter, last_started: nil}), do: voter != nil
+  defp can_ask?(_page), do: false
+
   attr :page, :map, required: true
   attr :title, :string, required: true
 
@@ -540,6 +569,7 @@ defmodule KeyfleetWeb.PollsLive do
             fleet_name: fleet.name,
             voter: if(fresh?, do: Polls.voter(actor, fleet_id)),
             refreshing?: actor != nil and fleet.manager_address != nil and not fresh?,
+            signed_in?: actor != nil,
             now: DateTime.utc_now()
           },
           actor
