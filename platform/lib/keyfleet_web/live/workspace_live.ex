@@ -11,7 +11,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   use KeyfleetWeb, :html
 
-  alias Keyfleet.Fleets.Rules
+  alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ShellLive
@@ -125,7 +125,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
                   </div>
                 </dl>
                 <p class="workspace-detail">
-                  <span>Added by <.key fleet_id={@board.fleet_id} token_id={card.by} /></span>
+                  <span>Added by <.part part={card.by} fleet_id={@board.fleet_id} /></span>
                   <span>Last changed {card.changed_at}</span>
                 </p>
               </li>
@@ -202,7 +202,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </dl>
           <p class="workspace-detail">
             <span>
-              Added by <.key fleet_id={@item.fleet_id} token_id={@item.object.by} />
+              Added by <.part part={@item.object.by} fleet_id={@item.fleet_id} />
             </span>
             <span>Last changed {@item.object.changed_at}</span>
           </p>
@@ -377,7 +377,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 Produced by <.item_link part={task} fleet_id={@commit.fleet_id} />
               </p>
               <p class="workspace-detail">
-                Added by <.key fleet_id={@commit.fleet_id} token_id={evidence.by} />
+                Added by <.part part={evidence.by} fleet_id={@commit.fleet_id} />
               </p>
             </li>
           </ul>
@@ -623,8 +623,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :part, :any, required: true
   attr :fleet_id, :string, required: true
 
-  defp part(%{part: {:key, _token_id}} = assigns),
-    do: ~H"<.key fleet_id={@fleet_id} token_id={elem(@part, 1)} />"
+  defp part(%{part: {:key, _token_id, _agent}} = assigns),
+    do: ~H"<.key fleet_id={@fleet_id} token_id={elem(@part, 1)} agent={elem(@part, 2)} />"
 
   defp part(%{part: {:item, _id, _title}} = assigns),
     do: ~H"<.item_link part={@part} fleet_id={@fleet_id} />"
@@ -644,13 +644,15 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :fleet_id, :string, required: true
   attr :token_id, :integer, required: true
+  attr :agent, :string, default: nil
 
-  # A key's profile is named by its number, eighteen digits at most.
+  # A key's profile is named by its number, eighteen digits at most. A key an
+  # agent wrote as carries the agent's name: "Ada (Key 1,234)".
   defp key(%{token_id: token_id} = assigns) when token_id in 1..999_999_999_999_999_999,
     do:
-      ~H|<.link patch={KeyLinks.key_path(@fleet_id, @token_id)}>Key {Rules.grouped(@token_id)}</.link>|
+      ~H|<.link patch={KeyLinks.key_path(@fleet_id, @token_id)}>{ActivityLines.key_name(@token_id, @agent)}</.link>|
 
-  defp key(assigns), do: ~H|<span>Key {@token_id}</span>|
+  defp key(assigns), do: ~H|<span>{ActivityLines.key_name(@token_id, @agent)}</span>|
 
   attr :value, :any, required: true
   attr :fleet_id, :string, required: true
@@ -673,8 +675,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
     ~H|<a class="workspace-uri" href={@uri} rel="noopener noreferrer" data-notebook-result>Saved notebook result</a>|
   end
 
-  defp value(%{value: {:key, _token_id}} = assigns),
-    do: ~H"<.key fleet_id={@fleet_id} token_id={elem(@value, 1)} />"
+  defp value(%{value: {:key, _token_id, _agent}} = assigns),
+    do: ~H"<.part part={@value} fleet_id={@fleet_id} />"
 
   defp value(%{value: {:list, _values}} = assigns) do
     ~H"""
