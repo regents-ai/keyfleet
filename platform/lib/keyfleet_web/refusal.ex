@@ -261,7 +261,7 @@ defmodule KeyfleetWeb.Refusal do
       {"This fleet's notebooks aren't answering right now.", "Try again in a minute."},
     "notebook_run_not_found" =>
       {"This fleet has no such notebook or run.",
-       "Check the notebook's id on the fleet's notebook host. Read a run by the run_id start_notebook_run answered; runs are kept for 30 days."},
+       "Check the notebook's id with list_notebooks. Read a run by the run_id start_notebook_run answered; runs are kept for 30 days."},
     "notebook_runs_full" =>
       {"This notebook can't take another run right now.",
        "Read the runs you started with read_notebook_result until they finish, then start another."},

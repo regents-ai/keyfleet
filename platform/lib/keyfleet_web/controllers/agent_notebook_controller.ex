@@ -1,17 +1,25 @@
 defmodule KeyfleetWeb.AgentNotebookController do
   @moduledoc """
-  A fleet's notebook runs, for an agent through its own signed requests to
-  this site: start a background run of a notebook's saved code, then read it
-  until it has finished and its saved result has an address the workspace
-  can cite (`Keyfleet.Notebooks.Runs`). The agent is let in exactly as on the
-  fleet's notebook host (`Keyfleet.Notebooks.admit/3`), and the hub knows
-  each run as the agent's.
+  A fleet's notebooks and their runs, for an agent through its own signed
+  requests to this site: list the notebooks, each with the last run an agent
+  started there, start a background run of a notebook's saved code, then
+  read it until it has finished and its saved result has an address the
+  workspace can cite (`Keyfleet.Notebooks.Runs`). The agent is let in exactly
+  as on the fleet's notebook host (`Keyfleet.Notebooks.admit/3`), and the hub
+  knows each run as the agent's.
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Notebooks
   alias Keyfleet.Notebooks.Runs
   alias KeyfleetWeb.Refusal
+
+  def index(conn, %{"fleet_id" => fleet_id}) do
+    in_notebooks(conn, fleet_id, fn subject, project_id ->
+      with {:ok, notebooks} <- Runs.list(fleet_id, subject, project_id),
+           do: {:ok, %{notebooks: notebooks}}
+    end)
+  end
 
   def start(conn, %{
         "fleet_id" => fleet_id,
@@ -36,8 +44,8 @@ defmodule KeyfleetWeb.AgentNotebookController do
          {:profile, {:ok, subject}} when is_binary(subject) <-
            {:profile, Notebooks.agent(actor)},
          {:ok, project_id} <- Notebooks.admit(actor, fleet_id, subject),
-         {:ok, run} <- act.(subject, project_id) do
-      json(conn, run)
+         {:ok, answer} <- act.(subject, project_id) do
+      json(conn, answer)
     else
       {:hub, false} -> Refusal.json(conn, 404, "notebooks_not_found")
       {:profile, {:ok, nil}} -> Refusal.json(conn, 403, "notebooks_agent_profile")
