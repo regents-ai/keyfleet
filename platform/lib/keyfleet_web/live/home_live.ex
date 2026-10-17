@@ -764,7 +764,8 @@ defmodule KeyfleetWeb.HomeLive do
           </p>
         </div>
 
-        <div class="rl-fleet__actions">
+        <%!-- Until the Club opens there is nothing to view or buy. --%>
+        <div :if={!@club.coming_soon?} class="rl-fleet__actions">
           <.link
             id="home-club-public"
             navigate={Fleets.path(@club.id)}
