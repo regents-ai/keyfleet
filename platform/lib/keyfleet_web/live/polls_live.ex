@@ -27,6 +27,7 @@ defmodule KeyfleetWeb.PollsLive do
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Polls
   alias Keyfleet.Polls.Poll
+  alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
   alias KeyfleetWeb.PageRead
@@ -325,7 +326,8 @@ defmodule KeyfleetWeb.PollsLive do
           </ul>
 
           <p :if={@open?} id="poll-votes-so-far" class="polls-detail">
-            {count(@poll.votes_cast, "vote", "votes")} so far. The count for each choice shows when the poll closes.
+            <Count.count id="poll-votes-count" value={@poll.votes_cast} one="vote" many="votes" />
+            so far. The count for each choice shows when the poll closes.
           </p>
 
           <div :if={not @open?} id="poll-results">
