@@ -1,4 +1,5 @@
-import {getAddress, type Address, type Hash, type Hex} from "viem"
+import type {Address, Hash, Hex} from "viem"
+import {getAddress} from "viem/utils"
 
 import type {EthereumProvider, SelectedWallet} from "./connected_wallet"
 

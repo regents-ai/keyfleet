@@ -2147,3 +2147,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   code.keyfleet.ai, reached nothing: the store's private address has only an
   IPv6 record, and the site looked for an IPv4 one. Both now look for IPv6,
   so the Regents Club's store can be made.
+
+## 2026-10-18 — Pages load less script before they're ready
+
+- The script every page loads first is 15% smaller (221 KB down to 186 KB,
+  compressed). The wallet buttons' send step takes only the one address check
+  it uses from its chain library, and the tools a page offers a browser's own
+  agent load only in a browser that has one.

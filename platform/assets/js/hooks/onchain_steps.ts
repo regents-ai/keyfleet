@@ -1,7 +1,7 @@
 import type {Address, Hash, Hex} from "viem"
 
 import type {Hook} from "../hook_composition"
-import {offerPageTool, type PressButton} from "../page_tools"
+import type {PressButton} from "../page_tools"
 import {activeEthereumWallet} from "../wallet_actions/connected_wallet"
 import {
   failure,
@@ -39,7 +39,7 @@ type OnchainStepsHook = Hook & {
   review?: Review
   clicked?: (event: Event) => void
   pressButton?: PressButton
-  tool?: AbortController
+  tool?: Promise<AbortController | undefined>
   refresh?: () => void
   walletChanged?: () => void
 }
@@ -129,11 +129,16 @@ export const OnchainSteps: Hook = {
     }
     window.dispatchEvent(new CustomEvent("ash:wallet-sync"))
 
-    this.tool = offerPageTool(this.el, (button, form) => this.pressButton!(button, {...formInputs(this.el), ...form}))
+    // Only a browser with its own agent loads the tools.
+    if ("modelContext" in document) {
+      this.tool = import("../page_tools").then(({offerPageTool}) =>
+        offerPageTool(this.el, (button, form) => this.pressButton!(button, {...formInputs(this.el), ...form})),
+      )
+    }
   },
 
   destroyed(this: OnchainStepsHook) {
-    this.tool?.abort()
+    void this.tool?.then(registration => registration?.abort())
     if (this.clicked) this.el.removeEventListener("click", this.clicked)
     if (this.walletChanged) window.removeEventListener("ash:wallet-state", this.walletChanged)
     if (this.refresh) {

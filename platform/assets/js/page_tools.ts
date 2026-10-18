@@ -138,7 +138,7 @@ function tool(entry: Entry, root: HTMLElement, pressButton: PressButton): ModelC
  */
 export function offerPageTool(root: HTMLElement, pressButton: PressButton): AbortController | undefined {
   const entry = entries.find(candidate => candidate.name === root.dataset.webmcpTool && candidate.scope !== "site")
-  if (!entry || !("modelContext" in document)) return undefined
+  if (!entry) return undefined
 
   const registration = new AbortController()
   document.modelContext
