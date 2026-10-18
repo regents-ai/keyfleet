@@ -35,7 +35,7 @@ defmodule KeyfleetWeb.NotebookOpenController do
         )
         |> put_root_layout(false)
         |> put_view(html: KeyfleetWeb.NotebookOpenHTML)
-        |> render(:entry, entry: entry, nonce: nonce)
+        |> render(:entry, entry: entry, nonce: nonce, by_itself?: params["again"] != "1")
 
       {:error, :no_hub} ->
         conn |> put_flash(:error, "This fleet has no notebooks yet.") |> redirect(to: "/")

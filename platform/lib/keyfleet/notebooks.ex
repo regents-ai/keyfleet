@@ -302,7 +302,7 @@ defmodule Keyfleet.Notebooks do
   end
 
   @doc """
-  Spends a link `open/3` made for the fleet: `{:ok, {human_account_id,
+  Spends a code `open/4` made for the fleet: `{:ok, {human_account_id,
   session_authority_id}}` the first time, within its time, and `:error` after that, for another fleet, or
   for a code it never made. One statement checks and spends it, so two
   requests with the same code can't both get in.
