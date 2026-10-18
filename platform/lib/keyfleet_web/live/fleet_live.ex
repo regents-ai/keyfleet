@@ -491,7 +491,15 @@ defmodule KeyfleetWeb.FleetLive do
           required
         />
         <Regent.Primitives.button type="submit" variant="secondary">Open its Key</Regent.Primitives.button>
-        <p id="fleet-entry-pass-note" class="fleet-entry__note" role="status">{@pass_note}</p>
+        <p
+          id="fleet-entry-pass-note"
+          class="fleet-entry__note"
+          role="status"
+          phx-hook="MotionRefusal"
+          data-refused={@pass_note != nil}
+        >
+          {@pass_note}
+        </p>
       </form>
       <Regent.Primitives.button
         :if={is_nil(@actor)}
@@ -732,10 +740,31 @@ defmodule KeyfleetWeb.FleetLive do
         <Regent.Primitives.button type="submit" variant="secondary">
           Send to my agent
         </Regent.Primitives.button>
-        <p id="fleet-quote-note" class="fleet-quote__note" role="status">{@quotes.note}</p>
+        <p
+          id="fleet-quote-note"
+          class="fleet-quote__note"
+          role="status"
+          phx-hook="MotionRefusal"
+          data-refused={@quotes.note not in [nil, "Sent"]}
+        >
+          {@quotes.note}
+        </p>
       </.form>
-      <ol :if={@quotes.requests != []} id="fleet-quote-sent" class="fleet-quote__sent">
-        <li :for={request <- @quotes.requests} id={"fleet-quote-#{request.id}"}>
+      <ol
+        :if={@quotes.requests != []}
+        id="fleet-quote-sent"
+        class="fleet-quote__sent"
+        phx-hook="MotionList"
+        data-variant={Motion.standard("list")}
+        data-layout-id="fleet-quote-sent"
+        data-children="[data-quote]"
+      >
+        <li
+          :for={request <- @quotes.requests}
+          id={"fleet-quote-#{request.id}"}
+          data-quote
+          data-layout-id={"fleet-quote-#{request.id}"}
+        >
           <q>{request.body}</q>
           <.link
             :if={request.quoted_in_slug}
