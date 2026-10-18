@@ -34,7 +34,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   names a schedule is refused. A fleet has at most `max_sessions` notebook
   sessions open at once, whoever started them: while they are full, starting
   one for a notebook with none open is refused
-  (`Keyfleet.Notebooks.session_room?/2`).
+  (`Keyfleet.Notebooks.session_room?/2`). A person's requests spend their own
+  allowance, `:notebook_requests`, and starting a run spends
+  `:notebook_run_starts`, whoever asks (`Keyfleet.Limits`).
 
   Each one's key ownership is read at most every `access_ttl_ms`
   (`Keyfleet.AccessCache`); the first time in that span, they are
@@ -61,7 +63,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   import Plug.Conn
 
-  alias Keyfleet.{AccessCache, Notebooks}
+  alias Keyfleet.{AccessCache, Limits, Notebooks}
 
   alias Keyfleet.Notebooks.{
     HubSilentError,
@@ -211,7 +213,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp route(conn, fleet_id) do
     case identify(conn, fleet_id) do
-      {:ok, conn, subject, actor} -> admit(conn, fleet_id, subject, actor)
+      {:ok, conn, subject, actor} -> within_allowances(conn, fleet_id, subject, actor)
       {:refused, conn} -> conn
     end
   end
@@ -390,6 +392,45 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   @impl Siwa.AgentAuthPlug.Hooks
   defdelegate deny(conn, metadata), to: SignedAgent
+
+  ## How often
+
+  # A person's requests spend an allowance of their own, as an agent's spend
+  # its address's API budget, and starting a background run, whoever asks,
+  # spends a smaller one too.
+  defp within_allowances(conn, fleet_id, subject, actor) do
+    allowances(conn, actor)
+    |> Enum.find(fn {name, _code} -> Limits.spend(name, subject) == :limited end)
+    |> case do
+      nil ->
+        admit(conn, fleet_id, subject, actor)
+
+      {name, code} ->
+        window = Application.fetch_env!(:keyfleet, :limits)[name][:window_seconds]
+
+        conn
+        |> put_resp_header("retry-after", Integer.to_string(window))
+        |> Refusal.json(429, code)
+    end
+  end
+
+  defp allowances(conn, actor) do
+    for {name, code, spent?} <- [
+          {:notebook_requests, "notebook_requests_limit_reached",
+           not is_struct(actor, Keyfleet.Actors.Agent)},
+          {:notebook_run_starts, "notebook_runs_limit_reached", run_start?(conn)}
+        ],
+        spent?,
+        do: {name, code}
+  end
+
+  defp run_start?(%Plug.Conn{
+         method: "POST",
+         path_info: ["api", "v1", "projects", _, "notebooks", _, "jobs", _, "runs"]
+       }),
+       do: true
+
+  defp run_start?(_conn), do: false
 
   ## Whether they hold a key now
 
