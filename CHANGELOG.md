@@ -2442,3 +2442,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   proposals list and treasury passed; the poll check was blocked by the Key's
   one poll a day; Classic #1's terms weren't on its page yet. The checks are
   version 2.
+
+## 2026-10-18 — Agent reads and refusals, over any input
+
+- Property tests check, over generated inputs, that an agent catching up a
+  room or paging proposals and votes reads each once, and that whatever body a
+  signed route is sent, its answer is one the API contract describes and a
+  refusal says what to do next.
+- The polls page test shows that a poll and a vote an agent sent name the agent.
