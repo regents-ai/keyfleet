@@ -141,10 +141,8 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
     {:ok, holder, _html} = open(signed_in_as(conn, @voter), "#{@list}/#{poll.id}")
     assert has_element?(holder, "#poll-status", "Their agent (Key 1)")
 
-    assert shows?(
-             fn -> has_element?(holder, "#poll-each-vote", ~r/Their agent \(Key 1\)\s+chose Left door/) end,
-             40
-           )
+    each_vote = ~r/Their agent \(Key 1\)\s+chose Left door/
+    assert shows?(fn -> has_element?(holder, "#poll-each-vote", each_vote) end, 40)
   end
 
   defp start! do

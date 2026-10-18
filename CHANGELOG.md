@@ -2460,3 +2460,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   signed route is sent, its answer is one the API contract describes and a
   refusal says what to do next.
 - The polls page test shows that a poll and a vote an agent sent name the agent.
+
+## 2026-10-18 — What the agent property tests cover
+
+- The body check covers the 39 signed routes the contract test drives, not
+  every signed route: the workspace, notebook, code-push, treasury, profile-read
+  and account routes aren't in it. It now also tries the fields each route documents.
+- The room tests clear the post counts they leave, so later tests' agents can
+  still post; the proposal tests now reach a third page.

@@ -30,7 +30,11 @@ defmodule Keyfleet.ProposalPagingPropertyTest do
   end
 
   property "PP-LIST: following next_before lists every proposal once, newest first" do
-    check all numbers <- uniq_list_of(integer(1..90), max_length: 3 * @page + 2), max_runs: 30 do
+    # Sized so a run can reach a third page and land on a page's edge.
+    most = 3 * @page + 2
+    proposal_numbers = resize(uniq_list_of(integer(1..90), max_length: most), most)
+
+    check all numbers <- proposal_numbers, max_runs: 30 do
       each_run(fn ->
         for number <- numbers, do: ProposalHelpers.proposal!(@fleet, number)
 
@@ -48,7 +52,7 @@ defmodule Keyfleet.ProposalPagingPropertyTest do
   end
 
   property "PP-VOTES: following votes_after reads every vote once, in the order it was recorded" do
-    check all ballots <- list_of(ballot(), max_length: 45),
+    check all ballots <- resize(list_of(ballot(), max_length: 45), 45),
               limit <- integer(1..25),
               max_runs: 30 do
       each_run(fn ->
@@ -56,8 +60,9 @@ defmodule Keyfleet.ProposalPagingPropertyTest do
 
         # Each Key votes once, so every vote stays a record of its own.
         recorded =
-          for {{voter, choice}, token_id} <- Enum.with_index(ballots, 1),
-              do: ProposalHelpers.vote!(@fleet, 1, ProposalHelpers.wallet(voter), choice, [token_id])
+          for {{voter, choice}, token_id} <- Enum.with_index(ballots, 1) do
+            ProposalHelpers.vote!(@fleet, 1, ProposalHelpers.wallet(voter), choice, [token_id])
+          end
 
         [proposal] = Proposals.list_page(@fleet) |> elem(0)
         pages = votes(proposal.id, 0, limit, [])

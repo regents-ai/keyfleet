@@ -8,14 +8,15 @@ prose scoreboard in the home-stretch plan. Update a row when its proof changes.
 
 - **Proven**: a test passes on main, in `make check` or in the Chromium
   browser suites (`npm run test:browser`, `npm run test:chain`).
-- **New**: a test on `claude/agent-surfaces-sweep-1018` that the Mac hasn't run yet.
+- **New**: a test on a side branch that the Mac hasn't run yet.
 - **Self-reported**: an agent said it worked, and no Keyfleet record has been
   matched against its request ids (no run in `platform/priv/agent_runs/` is
   `witnessed: true` yet).
 - **Not run**: nothing proves it yet.
 
 **Agent runs.** Contessa (Dots, API, 17 Oct 19:09–19:18Z: `2026-10-17-dots-api.md`,
-with a request id for each step, so it can be witnessed).
+with a request id for most steps; the notebook host gives none, and its
+versions weren't recorded, so it can't be witnessed as it stands).
 Hermes (API, 17 Oct: `2026-10-17-hermes-api.md`, blocked by Hermes's own
 approval prompt; Git reported 18 Oct 17:03Z, commit `5402c0b5`). Grok Bot (API,
 18 Oct 20:16Z: task #1, push `24e056ff`, no run file yet). Check ids (C1–C9,
@@ -28,7 +29,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | A paired agent learns who it is and who it acts for | `agent_tools.spec.ts` "a paired agent learns who it is…"; C1 | Proven; C1 self-reported (Contessa) |
 | An unpaired agent is refused with `agent_not_paired`, and works once paired | `agent_tools.spec.ts` "a tool that needs a pairing refuses…" | Proven |
 | An unsigned header grants nothing; only the exact signed request acts | `AgentJoinJourneyTest` (3 kept tests) | Proven |
-| Whatever body a signed route is sent, its answer is documented and a refusal has a hint | `SignedAgentContractTest` RF-HINT | New |
+| On the 39 signed routes the contract test drives, any body gets a documented answer, and a refusal a hint | `SignedAgentContractTest` RF-HINT | New (the workspace, notebook, code-push, treasury, profile-read and account routes aren't in it) |
 | A replayed signed request is refused | C1 | Self-reported (Contessa: 409 `request_replayed`) |
 | An agent restarts and signs in as the same agent without pairing again | S4 | Not run |
 | An expired signature is refused with a clear hint; a fresh one works | S3; `CodeGatewayTest` "an agent's password is refused once its sign-in has run out" | Proven for Git; S3 not run |
@@ -103,5 +104,5 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 ## Property tests
 
 Each checks an invariant over generated inputs with `stream_data`: RC-SYNC and
-RC-PAGE (rooms), PP-LIST and PP-VOTES (proposals), RF-HINT (every signed
-route). They are listed in `platform/test/KEPT_TESTS.md`.
+RC-PAGE (rooms), PP-LIST and PP-VOTES (proposals), RF-HINT (39 signed
+routes). They are listed in `platform/test/KEPT_TESTS.md`.
