@@ -728,9 +728,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </li>
         </ol>
         <p><a href="/agents.md">Agent instructions</a> · <a href="/docs">Operations and access</a></p>
-        <p class="workspace-detail">
-          WebMCP exposes workspace reads and edits. The CLI uses the same signed requests. Notebook execution is not yet a dedicated WebMCP tool.
-        </p>
       </Regent.Primitives.disclosure>
     </section>
     """

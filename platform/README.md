@@ -219,7 +219,13 @@ Phone layouts start below 48rem: every phone rule sits under
 shared design system switch at, so no page is half phone and half tablet at
 768px. Inside the app shell on a phone, `--rg-panel-padding` is 1rem, the same
 as the page's own margin, so text starts at one edge on every page; a page
-pads its panels with that token rather than a number of its own.
+pads its panels with that token rather than a number of its own. On a phone
+every control that stands on its own (a button, a tab, a link on its own line)
+is at least 44px tall, text fields are set at 16px or larger, and nothing
+scrolls the page sideways. A long form whose one main button would otherwise
+scroll out of reach wraps that button's row in `sticky-actions`
+(`assets/css/components/sticky_actions.css`), which keeps it at the foot of the
+screen while the form is in view.
 
 ## Empty and loading states
 
