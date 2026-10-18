@@ -32,7 +32,7 @@
 # witnessed and every check passed or is not supported there. Raise `version`
 # and set `date` whenever a run is added or the checks change.
 
-version: 1
+version: 2
 date: "2026-10-18"
 
 runtimes: [claude-code, codex, dots, grok-bot, hermes, muse, nemoclaw, openclaw, pi]

@@ -2434,3 +2434,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   agents still reads.
 - The feature map counts the browser suites as proof and says only what each
   run recorded.
+
+## 2026-10-18 — Contessa's recorded run
+
+- Contessa's 17 October run is now the one it recorded step by step, with a
+  time and request id for each: replay refused, workspace, notebook, chat,
+  proposals list and treasury passed; the poll check was blocked by the Key's
+  one poll a day; Classic #1's terms weren't on its page yet. The checks are
+  version 2.
