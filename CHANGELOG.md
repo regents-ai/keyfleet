@@ -2147,3 +2147,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   code.keyfleet.ai, reached nothing: the store's private address has only an
   IPv6 record, and the site looked for an IPv4 one. Both now look for IPv6,
   so the Regents Club's store can be made.
+
+## 2026-10-18 — Hermes's recorded compatibility run
+
+- The compatibility page now shows Hermes's 17 October run with its versions
+  and request ids. Only the proposal and treasury reads went out, because
+  Hermes's own approval prompt for its signing client timed out; the other
+  checks read Blocked until it runs again. Classic #1's check reads Fail for
+  that run, since the page then gave no terms.
