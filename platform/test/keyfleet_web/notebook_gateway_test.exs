@@ -260,6 +260,30 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refute_received {:hub, _method, _path, "u_" <> _, _body}
   end
 
+  # Costly failure: another spelling of a route this site checks reaches the
+  # hub as that route unchecked, so a fleet opens more sessions than it may or
+  # a job runs on a schedule.
+  test "an API route spelled with escapes never reaches the hub", c do
+    cookie = enter!(c.holder)
+    base = "/api/v1/projects/proj-fleet/notebooks/nb-1"
+
+    for {method, path} <- [
+          {:post, base <> "/session%73"},
+          {:post, base <> "/job%73"},
+          {:patch, base <> "/jobs%2Fjob-1"},
+          {:get, "/%61pi/v1/projects"}
+        ] do
+      assert notebook(@host, method, path, cookie).status == 400, path
+    end
+
+    refute_received {:hub, _method, _path, "u_" <> _, _body}
+
+    # A notebook page's own address may carry escapes.
+    page = "/projects/proj-fleet/notebooks/nb%201"
+    assert get_notebook(@host, page, cookie).status == 200
+    assert_receive {:hub, "GET", ^page, "u_" <> _, _body}
+  end
+
   # Costly failure: a hub accepts a pass meant for another fleet, another person
   # or one that never runs out; or can't check passes while the site is closed.
   test "a pass names the fleet's hub and the holder, runs out soon, and checks against the published keys",
