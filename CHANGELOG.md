@@ -2166,3 +2166,14 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   to the first page is now a button.
 - An address naming a fleet that doesn’t exist offers See the fleets on its
   rooms, polls and messages pages, as the fleet page already did.
+
+## 2026-10-18 — The harbour sea rests on phones saving power
+
+- The harbour sea watches how often the browser gives it a frame. When three
+  in four of a stretch of 90 frames come slower than 40 a second, as in
+  Safari's Low Power Mode, Chrome's Energy Saver or on a device that can't
+  keep up, the sea fades into the still picture a visitor who asked for less
+  motion sees, and stops drawing until a ship moves or the theme changes. A
+  busy moment on a healthy device doesn't count, and full-speed devices are
+  unchanged.
+- A browser saving data gets the still sea from the start.

@@ -1,11 +1,17 @@
 import {createCanvasIsland, type CanvasIslandController, type LoadRenderer} from "../canvas_island"
 import type {HarbourLook, HarbourRenderer} from "../harbour/renderer"
 import type {Agent} from "../harbour/sim"
+import {SLOW} from "./motion/shared"
 
 const browserLoadHarbour: LoadRenderer<HarbourRenderer> = async (canvas, size, onDeviceLost) => {
   const {createHarbourRenderer} = await import("../harbour/renderer")
   return createHarbourRenderer(canvas, size, onDeviceLost)
 }
+
+/** The browser is saving data, by its own setting or the system's. */
+const savingData = () =>
+  matchMedia("(prefers-reduced-data: reduce)").matches ||
+  (navigator as Navigator & {connection?: {saveData: boolean}}).connection?.saveData === true
 
 /** One agent as the server wrote it, with the name its ship shows under the mouse. */
 type CrewMember = Agent & {readonly name: string}
@@ -36,8 +42,9 @@ type HarbourSeaController = CanvasIslandController & {
  *
  * The sea always moves, so it draws every frame while the tab is showing. A
  * visitor who asked for less motion gets one still picture, redrawn only when an
- * agent moves on or the theme changes. Without WebGPU nothing is drawn and the
- * page's own ground shows.
+ * agent moves on or the theme changes, and so does a browser saving data or a
+ * device that can't give the sea its frames, such as a phone saving power.
+ * Without WebGPU nothing is drawn and the page's own ground shows.
  *
  * The sea lies behind the page and takes no presses until the page is lifted
  * away (pages/harbour.css). Then a mouse over a ship shows its agent's name,
@@ -53,15 +60,18 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
     browserLoad: browserLoadHarbour,
     motionSensitive: false,
     continuous: true,
-    interact({renderer, nudge, onReady}) {
+    interact({renderer, nudge, onReady, onStrain}) {
       const calm = window.matchMedia("(prefers-reduced-motion: reduce)")
       const light = window.matchMedia("(prefers-color-scheme: light)")
+      const saving = savingData()
+      let strained = false
+      const holding = () => calm.matches || saving || strained
       const restyle = () => {
         renderer()?.setLook(lookOf(root, light))
         nudge()
       }
       const onCalmChange = () => {
-        renderer()?.setCalm(calm.matches)
+        renderer()?.setCalm(holding())
         nudge()
       }
       const themeObserver = new MutationObserver(restyle)
@@ -108,9 +118,18 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
         }
         if (!harbour.onIsland(u, v)) harbour.ripple(u, v)
       }
+      // The sea fades out and comes back as the still picture, rather than
+      // stopping mid-wave.
+      onStrain(() => {
+        strained = true
+        void canvas.animate({opacity: [1, 0]}, {duration: SLOW, easing: "ease-in"}).finished.then(() => {
+          onCalmChange()
+          canvas.animate({opacity: [0, 1]}, {duration: SLOW, easing: "ease-out"})
+        })
+      })
       onReady(() => {
         const harbour = renderer()!
-        harbour.setCalm(calm.matches)
+        harbour.setCalm(holding())
         harbour.setLook(lookOf(root, light))
         harbour.setAgents(crew)
       })

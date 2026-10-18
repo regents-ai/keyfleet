@@ -24,7 +24,9 @@ the workspace, the castle for a proposal or a vote) and circles there. On a
 fleet's pages the ships are that fleet's keys, the visitor's own first; anywhere
 else they are the latest keys of every open fleet. The button at the top right
 lifts the page away to show the whole sea; then pressing a ship opens its key's
-last few actions.
+last few actions. With less motion asked for, on a browser saving data, or on a
+device saving power or falling behind, the sea is a still picture that still
+updates when a ship moves.
 
 ## How a fleet works
 
