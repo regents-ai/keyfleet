@@ -166,7 +166,11 @@ defmodule KeyfleetWeb.PointsLive do
       </div>
       <section id="points-earn" class="account-panel points-earn">
         <h2>What earns points</h2>
-        <p :if={@earning == []} role="status">Earning hasn’t opened yet.</p>
+        <Regent.Primitives.empty_state
+          :if={@earning == []}
+          class="kf-empty"
+          title="Earning hasn’t opened yet."
+        />
         <h3 :if={@daily != []}>Every day</h3>
         <table :if={@daily != []} class="points-table">
           <thead>

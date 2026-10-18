@@ -2147,3 +2147,15 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   code.keyfleet.ai, reached nothing: the store's private address has only an
   IPv6 record, and the site looked for an IPv4 one. Both now look for IPv6,
   so the Regents Club's store can be made.
+
+## 2026-10-18 — Every empty list looks the same
+
+- The remaining lists that said they were empty in a plain line now use the
+  same empty-state style as the rest: your Keys on Account, what earns
+  points before earning opens, Trying now, a Key’s wall, past polls, a
+  proposal’s votes, money in and out, and in the workspace an item’s links,
+  mentions and history, a commit’s pushes and evidence, code sent lately,
+  the public outline and workstream, and the last page of items, whose Back
+  to the first page is now a button.
+- An address naming a fleet that doesn’t exist offers See the fleets on its
+  rooms, polls and messages pages, as the fleet page already did.

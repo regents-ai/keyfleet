@@ -87,6 +87,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
       <section :if={@room.rooms == []} class="rooms-panel">
         <h2>This fleet doesn’t exist.</h2>
+        <a href="/#fleets" class="rg-button rg-button--secondary">See the fleets</a>
       </section>
 
       <div :if={@room.rooms != []} class="rooms-grid">

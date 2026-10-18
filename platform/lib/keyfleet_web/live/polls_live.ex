@@ -201,7 +201,12 @@ defmodule KeyfleetWeb.PollsLive do
 
       <section id="polls-past" class="polls-panel" aria-labelledby="polls-past-title">
         <h2 id="polls-past-title">Past</h2>
-        <p :if={@past == []} id="polls-past-empty">No past polls yet.</p>
+        <Regent.Primitives.empty_state
+          :if={@past == []}
+          id="polls-past-empty"
+          class="kf-empty"
+          title="No past polls yet."
+        />
         <ol :if={@past != []} class="polls-list">
           <.list_item :for={poll <- @past} poll={poll} page={@page} active={false} />
         </ol>
@@ -473,6 +478,7 @@ defmodule KeyfleetWeb.PollsLive do
       </header>
       <section class="polls-panel">
         <h2>This fleet doesn’t exist.</h2>
+        <a href="/#fleets" class="rg-button rg-button--secondary">See the fleets</a>
       </section>
     </article>
     """
