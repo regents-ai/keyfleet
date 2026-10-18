@@ -43,7 +43,7 @@ test("a key muted on one page is hidden on every page of the same person, and co
   await expect(loudPost(page)).toBeVisible()
   await expect(page.locator("#rooms-muted")).toHaveCount(0)
 
-  await page.getByRole("button", {name: `Mute Key #${loudKey}`}).first().click()
+  await page.getByRole("button", {name: `Mute Key ${loudKey}`}).first().click()
 
   for (const on of [page, other]) {
     await expect(loudPost(on)).toHaveCount(0)

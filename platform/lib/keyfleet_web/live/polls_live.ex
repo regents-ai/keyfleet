@@ -32,6 +32,7 @@ defmodule KeyfleetWeb.PollsLive do
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Polls
   alias Keyfleet.Polls.Poll
+  alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.FleetPolls
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
@@ -40,6 +41,7 @@ defmodule KeyfleetWeb.PollsLive do
   alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.SharedFigures
   alias KeyfleetWeb.ShellLive
+  alias KeyfleetWeb.WorkspacePage
   alias Phoenix.Socket.Broadcast
 
   @lengths [1, 5, 10, 15, 30, 45, 60]
@@ -79,12 +81,12 @@ defmodule KeyfleetWeb.PollsLive do
         <h2 id="polls-start-title">
           Start a poll
           <Regent.Primitives.tip id="polls-start-tip" label="About starting a poll">
-            You ask as Key #{Rules.grouped(@page.voter.key)}. A poll asks one question and stays open from 1 minute to an hour; you can end it early. Each Key starts one poll a day.
+            You ask as Key {Rules.grouped(@page.voter.key)}. A poll asks one question and stays open from 1 minute to an hour; you can end it early. Each Key starts one poll a day.
           </Regent.Primitives.tip>
         </h2>
 
         <p :if={@page.last_started} id="polls-start-limit" class="polls-detail">
-          Key #{Rules.grouped(@page.voter.key)} started a poll in the last day. It can start another after {RoomsLive.stamp(
+          Key {Rules.grouped(@page.voter.key)} started a poll in the last day. It can start another after {RoomsLive.stamp(
             DateTime.add(@page.last_started.inserted_at, 1, :day)
           )}.
         </p>
@@ -236,7 +238,7 @@ defmodule KeyfleetWeb.PollsLive do
         <.link patch={poll_path(@page.fleet_id, @poll.id)}>{@poll.question}</.link>
       </h3>
       <p class="polls-detail">
-        Started by Key #{Rules.grouped(@poll.started_by_key)} · {count(
+        Started by {ActivityLines.key_name(@poll.started_by_key, @poll.agent)} · {count(
           @poll.votes_cast,
           "vote",
           "votes"
@@ -299,7 +301,7 @@ defmodule KeyfleetWeb.PollsLive do
         </span>
         Started by
         <.link patch={KeyLinks.key_path(@page.fleet_id, @poll.started_by_key)}>
-          Key #{Rules.grouped(@poll.started_by_key)}
+          {ActivityLines.key_name(@poll.started_by_key, @poll.agent)}
         </.link>
         ·
         <.countdown
@@ -415,7 +417,7 @@ defmodule KeyfleetWeb.PollsLive do
             <ul class="polls-votes">
               <li :for={vote <- @page.votes}>
                 <.link patch={KeyLinks.key_path(@page.fleet_id, vote.token_id)}>
-                  Key #{Rules.grouped(vote.token_id)}
+                  {ActivityLines.key_name(vote.token_id, vote.agent)}
                 </.link>
                 chose {vote.choice}
                 <span :if={vote.reason} class="polls-reason">“{vote.reason}”</span>
@@ -551,13 +553,16 @@ defmodule KeyfleetWeb.PollsLive do
   is open at `now` and, once closed, each choice's count. Never its notes,
   which only the fleet's Key holders read. `now` is taken before the poll is
   read, so a poll open at `now` has no result yet and one closed has it.
+  `agents` holds agents' names by wallet, as `KeyfleetWeb.WorkspacePage.agent_names/1`
+  reads them, so a poll an agent started names the agent beside its Key.
   """
-  def public(%Poll{} = poll, now) do
+  def public(%Poll{} = poll, now, agents) do
     %{
       id: poll.id,
       question: poll.question,
       choices: poll.choices,
       started_by_key: poll.started_by_key,
+      agent: agents[poll.acting_agent_wallet],
       votes_cast: poll.votes_cast,
       totals: poll.totals,
       closes_at: poll.closes_at,
@@ -783,7 +788,11 @@ defmodule KeyfleetWeb.PollsLive do
 
       poll ->
         page
-        |> Map.merge(%{kind: :poll, poll_id: poll_id, poll: public(poll, page.now)})
+        |> Map.merge(%{
+          kind: :poll,
+          poll_id: poll_id,
+          poll: public(poll, page.now, WorkspacePage.agent_names([poll.acting_agent_wallet]))
+        })
         |> Map.merge(%{notes: notes(poll)})
         |> Map.merge(holders(page.voter, actor, fleet_id, poll_id))
     end
@@ -870,8 +879,20 @@ defmodule KeyfleetWeb.PollsLive do
   defp my_vote(nil), do: nil
   defp my_vote(vote), do: %{choice: vote.choice}
 
-  defp votes(votes),
-    do: Enum.map(votes, &%{token_id: &1.token_id, choice: &1.choice, reason: &1.reason})
+  # Each Key's vote, naming the agent that cast it.
+  defp votes(votes) do
+    agents = WorkspacePage.agent_names(Enum.map(votes, & &1.acting_agent_wallet))
+
+    Enum.map(
+      votes,
+      &%{
+        token_id: &1.token_id,
+        agent: agents[&1.acting_agent_wallet],
+        choice: &1.choice,
+        reason: &1.reason
+      }
+    )
+  end
 
   defp followed(socket), do: Map.get(socket.assigns.shared, :polls, MapSet.new())
 

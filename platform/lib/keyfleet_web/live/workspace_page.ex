@@ -125,9 +125,10 @@ defmodule KeyfleetWeb.WorkspacePage do
   # Only these kinds of address are ever made into links.
   @link_schemes ["https://", "ipfs://", "ar://", "git+https://"]
   @room_slug ~r/\A[a-z0-9][a-z0-9-]{0,62}\z/
-  # One saved page of a notebook version, after the notebooks' `/results/`:
-  # notebook id, version id, and when the page was saved in milliseconds since 1970.
-  @saved_result ~r/\Anb-[a-z0-9]{16}\/ver_[0-9A-Z]{26}\/[1-9][0-9]{0,15}\z/
+  # One saved page of a notebook version or background run, after the
+  # notebooks' `/results/`: notebook id, version or run id, and when the page
+  # was saved in milliseconds since 1970.
+  @saved_result ~r/\Anb-[a-z0-9]{16}\/(ver_[0-9A-Z]{26}|run_[0-9A-HJKMNP-TV-Z]{26})\/[1-9][0-9]{0,15}\z/
   @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(human|agent):(0x[0-9a-f]{40})\z/
   @level ~r/\Alevel:([1-9][0-9]{0,8})\z/
 
@@ -197,7 +198,7 @@ defmodule KeyfleetWeb.WorkspacePage do
         activity: Enum.map(activity, &Map.put(line(&1, titles, agents), :note, notes[&1.seq])),
         code: %{
           clone_url: Code.clone_url(fleet_id),
-          pushes: Enum.map(Code.recent_pushes!(fleet_id, opts), &push(&1, fleet_id))
+          pushes: pushes(Code.recent_pushes!(fleet_id, opts), fleet_id)
         }
       }
     else
@@ -320,7 +321,7 @@ defmodule KeyfleetWeb.WorkspacePage do
         hash: hash,
         url: url,
         clone_url: Code.clone_url(fleet_id),
-        pushes: Enum.map(pushes, &push(&1, fleet_id)),
+        pushes: pushes(pushes, fleet_id),
         evidence:
           for object <- evidence do
             %{
@@ -334,8 +335,11 @@ defmodule KeyfleetWeb.WorkspacePage do
           end
       }
     else
-      {:missing, _name} -> raise NotFoundError
-      {:members_only, name} -> %{fleet_id: fleet_id, fleet_name: name, members_only?: true}
+      {:missing, _name} ->
+        raise NotFoundError
+
+      {:members_only, name} ->
+        %{fleet_id: fleet_id, fleet_name: name, hash: hash, members_only?: true}
     end
   end
 
@@ -765,10 +769,12 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp agent_wallet("agent", wallet), do: wallet
   defp agent_wallet(_kind, _wallet), do: nil
 
-  # The names agents gave themselves, by wallet, looked up together for the
-  # page. A person, or an agent that has no profile here, has no name.
-  # Agents choose their own names, so none can hide or reverse the Key beside it.
-  defp agent_names(wallets) do
+  @doc """
+  The names agents gave themselves, by wallet, looked up together for a
+  page. A person, or an agent that has no profile here, has no name.
+  Agents choose their own names, so none can hide or reverse the Key beside it.
+  """
+  def agent_names(wallets) do
     case wallets |> Enum.reject(&is_nil/1) |> Enum.uniq() do
       [] ->
         %{}
@@ -789,11 +795,18 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
+  # A push an agent sent names the agent beside its Key.
+  defp pushes(pushes, fleet_id) do
+    agents = agent_names(Enum.map(pushes, & &1.acting_agent_wallet))
+    Enum.map(pushes, &push(&1, fleet_id, agents))
+  end
+
   # The log stamps every event in UTC.
-  defp push(push, fleet_id) do
+  defp push(push, fleet_id, agents) do
     %{
       id: push.id,
       token_id: push.token_id,
+      agent: agents[push.acting_agent_wallet],
       what: moved(push.ref),
       commit: {:commit, push.head, Code.commit_path(fleet_id, push.head)},
       at: Calendar.strftime(push.pushed_at, "%-d %B %Y at %H:%M UTC")

@@ -11,10 +11,10 @@ defmodule KeyfleetWeb.FleetPolls do
     * `poll_key/2`: each of those polls as its own page shows it, with its
       choices.
 
-  Each poll is what `KeyfleetWeb.PollsLive.public/2` keeps of it: its
-  question, choices, starter's Key, times, how many votes it has drawn,
-  whether it is still open and, once closed, each choice's count. Anyone may
-  read all of it (`Keyfleet.Polls.Poll`'s read policies). A poll's notes and
+  Each poll is what `KeyfleetWeb.PollsLive.public/3` keeps of it: its
+  question, choices, starter's Key and the name of the agent that started it,
+  times, how many votes it has drawn, whether it is still open and, once
+  closed, each choice's count. Anyone may read all of it (`Keyfleet.Polls.Poll`'s read policies). A poll's notes and
   each Key's vote are for the fleet's Key holders only, so they are never
   here: a holder's page reads them as that holder.
 
@@ -42,7 +42,7 @@ defmodule KeyfleetWeb.FleetPolls do
   use GenServer
 
   alias Keyfleet.{Fleets, Polls, SharedReading}
-  alias KeyfleetWeb.{PageRead, PollsLive}
+  alias KeyfleetWeb.{PageRead, PollsLive, WorkspacePage}
   alias Phoenix.Socket.Broadcast
 
   # The longest the first read of every fleet may take as the site starts.
@@ -212,7 +212,9 @@ defmodule KeyfleetWeb.FleetPolls do
         # Taken before the read, so a poll counted open here has no result
         # yet, and one counted closed has its result.
         now = DateTime.utc_now()
-        polls = fleet_id |> Polls.list_polls!(actor: nil) |> Enum.map(&PollsLive.public(&1, now))
+        listed = Polls.list_polls!(fleet_id, actor: nil)
+        agents = WorkspacePage.agent_names(Enum.map(listed, & &1.acting_agent_wallet))
+        polls = Enum.map(listed, &PollsLive.public(&1, now, agents))
 
         {%{
            fleet_name: fleet.name,

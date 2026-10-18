@@ -89,7 +89,12 @@ defmodule KeyfleetWeb.RoomsLive do
     ~H"""
     <article id="rooms-page" class="rooms-page">
       <header class="rooms-heading">
-        <p class="rooms-kicker">{@room.fleet_name || "Keyfleet"}</p>
+        <p class="rooms-kicker">
+          <.link :if={@room.fleet_name} patch={Keyfleet.Fleets.path(@room.fleet_id)}>
+            {@room.fleet_name}
+          </.link>
+          <span :if={!@room.fleet_name}>Keyfleet</span>
+        </p>
         <h1 tabindex="-1">{@room.name || "Rooms"}</h1>
         <p :if={@room.rooms != []} class="rooms-lede">What this fleet is working on together.</p>
       </header>
@@ -194,7 +199,7 @@ defmodule KeyfleetWeb.RoomsLive do
         >
           <h2 id="rooms-thread-title">{@room.name}</h2>
           <p :if={@room.topic} class="rooms-detail">
-            Named by {RegentFormat.short_address(@room.topic_set_by)} on {stamp(@room.topic_set_at)}
+            Named on {stamp(@room.topic_set_at)}
           </p>
 
           <.notice notice={@notice} />
@@ -244,7 +249,7 @@ defmodule KeyfleetWeb.RoomsLive do
                   phx-click="mute_key"
                   phx-value-key={message.as_key}
                 >
-                  Mute Key #{Rules.grouped(message.as_key)}
+                  Mute Key {Rules.grouped(message.as_key)}
                 </Regent.Primitives.button>
               </p>
               <p :if={message.kind == :post and message.reply_to_seq} class="rooms-detail">
