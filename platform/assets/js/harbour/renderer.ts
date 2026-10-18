@@ -27,7 +27,7 @@ import {
 import {instanceGeometry} from "vgpu/scene/gpu"
 
 import type {IslandRenderer} from "../canvas_island"
-import {FORGE_SMOKE, INN_SMOKE, harbourMesh, puffMesh, shipMesh, VERTEX_FLOATS} from "./meshes"
+import {harbourMesh, puffMesh, shipMesh, smokeFrom, VERTEX_FLOATS} from "./meshes"
 import {
   MAX_DROPS,
   RIPPLE_CELLS,
@@ -43,16 +43,17 @@ import {
 } from "./shaders"
 import {
   CRUISE_SPEED,
-  ISLANDS,
-  ISLETS,
+  LAYOUTS,
   MAX_SHIPS,
-  PLACES,
+  islandsOf,
   parkFleet,
   stepFleet,
   syncFleet,
   waveHeight,
   type Agent,
   type Island,
+  type Layout,
+  type LayoutName,
   type Ship,
 } from "./sim"
 
@@ -125,10 +126,12 @@ const NIGHT_SUN = normalize([-0.35, 0.85, -0.45])
 const DAY_INK = [0.12, 0.3, 0.62]
 const NIGHT_INK = [0.66, 0.84, 1.0]
 
+/** `layout` names the harbour drawn: its islands and where its buildings stand. */
 export async function createHarbourRenderer(
   canvas: HTMLCanvasElement,
   size: readonly [number, number],
   onDeviceLost: () => void,
+  layout: LayoutName,
 ): Promise<HarbourRenderer> {
   const gpu = await init()
   let disposed = false
@@ -138,7 +141,7 @@ export async function createHarbourRenderer(
     if (!disposed) onDeviceLost()
   })
   try {
-    return await build(gpu, canvas, size, () => disposed, () => void (disposed = true))
+    return await build(gpu, canvas, size, LAYOUTS[layout], () => disposed, () => void (disposed = true))
   } catch (error) {
     disposed = true
     gpu.dispose()
@@ -150,6 +153,7 @@ async function build(
   gpu: Gpu,
   canvas: HTMLCanvasElement,
   size: readonly [number, number],
+  layout: Layout,
   isDisposed: () => boolean,
   markDisposed: () => void,
 ): Promise<HarbourRenderer> {
@@ -174,7 +178,7 @@ async function build(
   const puffIds = Array.from({length: PUFFS.forge + PUFFS.inn}, (_, index) => smoke.add({style: [0, 0, 0, index]}))
 
   const bridges = [
-    instanceGeometry(gpu, land, {mesh: meshGeometry(gpu, harbourMesh(), "harbour.land")}),
+    instanceGeometry(gpu, land, {mesh: meshGeometry(gpu, harbourMesh(layout), "harbour.land")}),
     instanceGeometry(gpu, fleet, {mesh: meshGeometry(gpu, shipMesh(), "harbour.ship")}),
     instanceGeometry(gpu, smoke, {mesh: meshGeometry(gpu, puffMesh(), "harbour.smoke")}),
   ]
@@ -193,8 +197,9 @@ async function build(
   const unview = new Float32Array(16)
   const cameraUniforms = uniforms(gpu, cameraValues)
 
-  const islandRows = new Float32Array(ISLANDS.length * 4)
-  ISLANDS.forEach((island, index) => islandRows.set([island.x, island.z, island.radius, 0], index * 4))
+  const islands = islandsOf(layout)
+  const islandRows = new Float32Array(islands.length * 4)
+  islands.forEach((island, index) => islandRows.set([island.x, island.z, island.radius, 0], index * 4))
   const shipRows = new Float32Array(MAX_SHIPS * 4)
   const sceneValues = {
     lightViewProjection: new Float32Array(16),
@@ -318,14 +323,14 @@ async function build(
 
   /** The points a frame must hold: each island's buildings and the rings its ships sail. */
   const framed = (): [number, number, number][] => [
-    ...Object.values(PLACES).flatMap(island => [
+    ...Object.values(layout.places).flatMap(island => [
       [island.x, 2.4, island.z] as [number, number, number],
       ...Array.from({length: 16}, (_, i): [number, number, number] => {
         const angle = (i / 16) * Math.PI * 2
         return [island.x + Math.cos(angle) * (island.radius + 1.9), 0, island.z + Math.sin(angle) * (island.radius + 1.9)]
       }),
     ]),
-    ...ISLETS.map((islet): [number, number, number] => [islet.x, 0, islet.z]),
+    ...layout.islets.map((islet): [number, number, number] => [islet.x, 0, islet.z]),
   ]
 
   const fitCamera = () => {
@@ -380,12 +385,13 @@ async function build(
     sceneValues.shipCount = row
   }
 
+  const chimneys = smokeFrom(layout)
   const placeSmoke = () => {
     puffIds.forEach((id, index) => {
       const fromForge = index < PUFFS.forge
       const count = fromForge ? PUFFS.forge : PUFFS.inn
       const slot = fromForge ? index : index - PUFFS.forge
-      const [x, y, z] = fromForge ? FORGE_SMOKE : INN_SMOKE
+      const [x, y, z] = fromForge ? chimneys.forge : chimneys.inn
       const age = fract(time * (fromForge ? 0.16 : 0.12) + slot / count)
       const size = (fromForge ? 0.07 + 0.2 * age : 0.05 + 0.12 * age) * (1 - smoothstep(0.7, 1, age))
       const drift = Math.sin(time * 0.7 + slot * 2.1) * 0.06 * age
@@ -428,7 +434,7 @@ async function build(
 
   const renderer: HarbourRenderer = {
     setAgents(agents) {
-      const next = syncFleet(ships, agents)
+      const next = syncFleet(layout, ships, agents)
       for (const ship of ships) {
         if (next.includes(ship)) continue
         fleet.remove(shipIds.get(ship.id)!)
@@ -441,7 +447,7 @@ async function build(
         else fleet.set(id, {style: colour})
       })
       ships = next
-      if (calm) parkFleet(ships)
+      if (calm) parkFleet(layout, ships)
     },
     setLook(look) {
       nightGoal = look.night ? 1 : 0
@@ -459,7 +465,7 @@ async function build(
       time = STILL_TIME
       night = nightGoal
       light()
-      parkFleet(ships)
+      parkFleet(layout, ships)
       stillRipples()
     },
     shipAt(u, v) {
@@ -485,7 +491,7 @@ async function build(
         const hit = onLevel(u, v, y)
         return hit !== null && Math.hypot(hit[0] - island.x, hit[1] - island.z) < reach
       }
-      return Object.values(PLACES).some(
+      return Object.values(layout.places).some(
         island => near(island, 0, island.radius) || BUILDING_LEVELS.some(y => near(island, y, BUILDING_REACH)),
       )
     },
@@ -513,7 +519,7 @@ async function build(
       lastStep = now
       time += dt
       rippleClock += dt
-      stepFleet(ships, dt)
+      stepFleet(layout, ships, dt)
       if (night !== nightGoal) {
         night += (nightGoal - night) * Math.min(1, dt * 2.5)
         if (Math.abs(night - nightGoal) < 0.002) night = nightGoal

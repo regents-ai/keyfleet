@@ -3,7 +3,7 @@
  * the shader takes each face's slope from the screen, so a vertex is only where
  * it is, what it is made of, and how far the wind may move it.
  */
-import {ISLETS, PLACES, type Island} from "./sim"
+import type {Island, Layout, Place} from "./sim"
 
 /** position xyz, material, sway */
 export const VERTEX_FLOATS = 5
@@ -181,9 +181,41 @@ const INN_TOP = 0.42
 const FORGE_TOP = 0.4
 const CASTLE_TOP = 0.62
 
-const inn = (mesh: Mesh) => {
-  const {x, z} = PLACES.inn
-  mesh.at(x - 0.15, INN_TOP, z - 0.1, 0.35)
+/** Where a point `dx, dz` from a place's middle lands once the place is turned by its spin. */
+const onPlace = (layout: Layout, place: Place, dx: number, dz: number): [number, number] => {
+  const {x, z} = layout.places[place]
+  const spin = layout.spins[place]
+  return [x + dx * Math.cos(spin) - dz * Math.sin(spin), z + dx * Math.sin(spin) + dz * Math.cos(spin)]
+}
+
+/** A building's footing on its island: how far from the middle it stands, and its turn before the place's spin. */
+type Footing = {readonly dx: number; readonly dz: number; readonly turn: number}
+
+const INN: Footing = {dx: -0.15, dz: -0.1, turn: 0.35}
+const FORGE: Footing = {dx: 0, dz: 0, turn: -0.25}
+const CASTLE: Footing = {dx: 0, dz: 0, turn: 0.12}
+
+/** Puts the mesh on a building's footing, `y` above the water. */
+const stand = (mesh: Mesh, layout: Layout, place: Place, footing: Footing, y: number) => {
+  const [x, z] = onPlace(layout, place, footing.dx, footing.dz)
+  mesh.at(x, y, z, footing.turn + layout.spins[place])
+}
+
+/** A point `lx, ly, lz` in a building's own frame, in the world. */
+const fromFooting = (layout: Layout, place: Place, footing: Footing, lx: number, y: number, lz: number) => {
+  const [x, z] = onPlace(layout, place, footing.dx, footing.dz)
+  const turn = footing.turn + layout.spins[place]
+  return [x + lx * Math.cos(turn) - lz * Math.sin(turn), y, z + lx * Math.sin(turn) + lz * Math.cos(turn)] as const
+}
+
+/** A tree `dx, dz` from a place's middle, turned with the place. */
+const treeOn = (mesh: Mesh, layout: Layout, place: Place, dx: number, dz: number, y: number, size: number) => {
+  const [x, z] = onPlace(layout, place, dx, dz)
+  mesh.tree(x, z, y, size)
+}
+
+const inn = (mesh: Mesh, layout: Layout) => {
+  stand(mesh, layout, "inn", INN, INN_TOP)
   // Whitewashed walls between dark timbers, a red roof and a stone chimney.
   mesh.box(0, 0, 0, 1.2, 0.62, 0.8, MATERIAL.plaster)
   for (const [px, pz] of [[-0.6, -0.4], [0.6, -0.4], [0.6, 0.4], [-0.6, 0.4], [0, 0.4], [0, -0.4]] as const) {
@@ -201,20 +233,19 @@ const inn = (mesh: Mesh) => {
   mesh.box(0.7, 0, 0.62, 0.04, 0.55, 0.04, MATERIAL.wood)
   mesh.box(0.7, 0.3, 0.62, 0.04, 0.2, 0.22, MATERIAL.roof)
   // A small dock out into the water, on its posts.
-  mesh.at(x, 0, z, 0.35)
+  stand(mesh, layout, "inn", {dx: 0, dz: 0, turn: INN.turn}, 0)
   mesh.box(1.75, 0.12, 0.35, 0.9, 0.05, 0.36, MATERIAL.wood)
   for (const [px, pz] of [[1.45, 0.2], [1.45, 0.5], [2.1, 0.2], [2.1, 0.5]] as const) {
     mesh.box(px, -0.3, pz, 0.06, 0.48, 0.06, MATERIAL.wood)
   }
   mesh.at(0, 0, 0)
-  mesh.tree(x - 1.0, z + 0.5, INN_TOP - 0.05, 1)
-  mesh.tree(x + 0.15, z - 1.1, INN_TOP - 0.06, 0.8)
-  mesh.tree(x - 0.75, z - 0.75, INN_TOP - 0.04, 0.9)
+  treeOn(mesh, layout, "inn", -1.0, 0.5, INN_TOP - 0.05, 1)
+  treeOn(mesh, layout, "inn", 0.15, -1.1, INN_TOP - 0.06, 0.8)
+  treeOn(mesh, layout, "inn", -0.75, -0.75, INN_TOP - 0.04, 0.9)
 }
 
-const forge = (mesh: Mesh) => {
-  const {x, z} = PLACES.forge
-  mesh.at(x, FORGE_TOP, z, -0.25)
+const forge = (mesh: Mesh, layout: Layout) => {
+  stand(mesh, layout, "forge", FORGE, FORGE_TOP)
   // A stone smithy with an open lean-to, the hearth glowing under it.
   mesh.box(-0.2, 0, -0.1, 0.8, 0.5, 0.8, MATERIAL.stone)
   mesh.gable(-0.2, 0.5, -0.1, 0.92, 0.32, 0.92, MATERIAL.slate, MATERIAL.stone)
@@ -235,26 +266,17 @@ const forge = (mesh: Mesh) => {
   // Wood stacked for the fire.
   for (let i = 0; i < 3; i++) mesh.box(-0.05 + i * 0.04, 0.0 + i * 0.07, 0.48, 0.55 - i * 0.12, 0.07, 0.12, MATERIAL.trunk)
   mesh.at(0, 0, 0)
-  mesh.tree(x + 0.85, z - 0.85, FORGE_TOP - 0.05, 0.85)
-  mesh.tree(x - 0.95, z + 0.55, FORGE_TOP - 0.06, 0.75)
-  mesh.blob(x - 0.9, FORGE_TOP - 0.08, z - 0.75, 0.22, 0.8, MATERIAL.rock)
+  treeOn(mesh, layout, "forge", 0.85, -0.85, FORGE_TOP - 0.05, 0.85)
+  treeOn(mesh, layout, "forge", -0.95, 0.55, FORGE_TOP - 0.06, 0.75)
+  const [rockX, rockZ] = onPlace(layout, "forge", -0.9, -0.75)
+  mesh.blob(rockX, FORGE_TOP - 0.08, rockZ, 0.22, 0.8, MATERIAL.rock)
 }
 
-/** The forge chimney's mouth, where the smoke starts. */
-export const FORGE_SMOKE: readonly [number, number, number] = (() => {
-  const {x, z} = PLACES.forge
-  const turn = -0.25
-  const [lx, lz] = [-0.42, -0.38]
-  return [x + lx * Math.cos(turn) - lz * Math.sin(turn), FORGE_TOP + 1.42, z + lx * Math.sin(turn) + lz * Math.cos(turn)]
-})()
-
-/** The inn chimney's mouth. */
-export const INN_SMOKE: readonly [number, number, number] = (() => {
-  const {x, z} = PLACES.inn
-  const turn = 0.35
-  const [lx, lz] = [0.38, -0.18]
-  return [x - 0.15 + lx * Math.cos(turn) - lz * Math.sin(turn), INN_TOP + 1.28, z - 0.1 + lx * Math.sin(turn) + lz * Math.cos(turn)]
-})()
+/** Where the smoke starts: the mouths of the forge's and the inn's chimneys. */
+export const smokeFrom = (layout: Layout) => ({
+  forge: fromFooting(layout, "forge", FORGE, -0.42, FORGE_TOP + 1.42, -0.38),
+  inn: fromFooting(layout, "inn", INN, 0.38, INN_TOP + 1.28, -0.18),
+})
 
 const crenels = (mesh: Mesh, x0: number, x1: number, z0: number, z1: number, y: number) => {
   const step = 0.16
@@ -266,9 +288,8 @@ const crenels = (mesh: Mesh, x0: number, x1: number, z0: number, z1: number, y: 
 }
 
 /** A walled castle: four towers, a keep, and a flag that waves in the shader. */
-const castle = (mesh: Mesh) => {
-  const {x, z} = PLACES.castle
-  mesh.at(x, CASTLE_TOP, z, 0.12)
+const castle = (mesh: Mesh, layout: Layout) => {
+  stand(mesh, layout, "castle", CASTLE, CASTLE_TOP)
   const half = 0.8
   const wall = 0.16
   const height = 0.5
@@ -313,18 +334,19 @@ const castle = (mesh: Mesh) => {
     mesh.triangle([-0.12 + a, flagTop, -0.12], [-0.12 + b, flagTop - 0.28, -0.12], [-0.12 + b, flagTop, -0.12], MATERIAL.flag, [sa, sb, sb])
   }
   mesh.at(0, 0, 0)
-  mesh.tree(x + 1.25, z - 0.55, CASTLE_TOP - 0.05, 0.95)
-  mesh.tree(x - 1.15, z + 0.75, CASTLE_TOP - 0.06, 0.85)
-  mesh.tree(x - 0.6, z - 1.25, CASTLE_TOP - 0.04, 1.05)
+  treeOn(mesh, layout, "castle", 1.25, -0.55, CASTLE_TOP - 0.05, 0.95)
+  treeOn(mesh, layout, "castle", -1.15, 0.75, CASTLE_TOP - 0.06, 0.85)
+  treeOn(mesh, layout, "castle", -0.6, -1.25, CASTLE_TOP - 0.04, 1.05)
 }
 
 /** Every island and building: one mesh, drawn as one instance. */
-export const harbourMesh = (): Float32Array<ArrayBuffer> => {
+export const harbourMesh = (layout: Layout): Float32Array<ArrayBuffer> => {
   const mesh = new Mesh()
-  shore(mesh, PLACES.inn, 1, lowIsland(INN_TOP), INN_TOP)
-  shore(mesh, PLACES.forge, 2, lowIsland(FORGE_TOP), FORGE_TOP)
-  shore(mesh, PLACES.castle, 3, cliffIsland(CASTLE_TOP), CASTLE_TOP)
-  ISLETS.forEach((islet, index) => {
+  const {places, islets} = layout
+  shore(mesh, places.inn, 1, lowIsland(INN_TOP), INN_TOP)
+  shore(mesh, places.forge, 2, lowIsland(FORGE_TOP), FORGE_TOP)
+  shore(mesh, places.castle, 3, cliffIsland(CASTLE_TOP), CASTLE_TOP)
+  islets.forEach((islet, index) => {
     shore(mesh, islet, 7 + index, [
       {at: 1.4, y: -0.6, material: MATERIAL.sand},
       {at: 1.0, y: -0.03, material: MATERIAL.sand},
@@ -333,10 +355,10 @@ export const harbourMesh = (): Float32Array<ArrayBuffer> => {
     mesh.blob(islet.x + 0.1, 0.08, islet.z - 0.1, islet.radius * 0.55, 0.9, MATERIAL.rock)
     mesh.blob(islet.x - 0.25, 0.06, islet.z + 0.15, islet.radius * 0.35, 0.8, MATERIAL.rock)
   })
-  mesh.tree(ISLETS[0]!.x - 0.2, ISLETS[0]!.z + 0.25, 0.12, 0.7)
-  inn(mesh)
-  forge(mesh)
-  castle(mesh)
+  mesh.tree(islets[0]!.x - 0.2, islets[0]!.z + 0.25, 0.12, 0.7)
+  inn(mesh, layout)
+  forge(mesh, layout)
+  castle(mesh, layout)
   return mesh.floats()
 }
 

@@ -25,7 +25,7 @@ import {installCopyButtons} from "./copy_buttons"
 import {installPublicTools} from "./public_tools"
 import {CurrentTab} from "./hooks/current_tab"
 import {FleetPreview} from "./hooks/fleet_preview"
-import {HarbourSea} from "./hooks/harbour_sea"
+import {FleetSea, HarbourSea} from "./hooks/harbour_sea"
 import {HexField, NextKeyCard} from "./hooks/home_hero"
 import {HolographicCard} from "./hooks/holographic_card"
 import {KeyMap} from "./hooks/key_map"
@@ -295,6 +295,7 @@ const hooks = {
   ...colocatedHooks,
   CurrentTab,
   FleetPreview,
+  FleetSea,
   HarbourSea,
   HexField,
   HolographicCard,
