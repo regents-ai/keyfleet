@@ -38,6 +38,8 @@ defmodule KeyfleetWeb.PollsLive do
   @lengths [1, 5, 10, 15, 30, 45, 60]
   # A list with no poll closing sooner looks at the clock this often.
   @list_tick_ms 30_000
+  # A poll page that couldn't be read again looks again after this long.
+  @look_again_ms 5_000
 
   attr :page, :any, required: true, doc: "the polls as read, or `:unreadable`"
   attr :form, Phoenix.HTML.Form, default: nil, doc: "the form starting a poll"
@@ -519,29 +521,35 @@ defmodule KeyfleetWeb.PollsLive do
   notice reads again.
   """
   def refresh(%{assigns: %{polls: %{kind: :list, fleet_id: fleet_id} = page}} = socket),
-    do: show(socket, [Polls.fleet_topic(fleet_id)], fn -> read_list(socket, fleet_id) end, page)
+    do: reread(socket, page, [Polls.fleet_topic(fleet_id)], fn -> read_list(socket, fleet_id) end)
 
   def refresh(
         %{assigns: %{polls: %{kind: :poll, fleet_id: fleet_id, poll_id: id} = page}} = socket
       ),
-      do: show(socket, [Polls.topic(id)], fn -> read_detail(socket, fleet_id, id) end, page)
+      do: reread(socket, page, [Polls.topic(id)], fn -> read_detail(socket, fleet_id, id) end)
 
   def refresh(socket), do: socket
 
   # The page listens to the address's own topic before it reads, so a change
   # made between the read and the listening is still heard.
-  defp show(socket, topics, read, shown \\ nil) do
+  defp show(socket, topics, read) do
     socket = listen(socket, Enum.uniq(socket.assigns.polls_topics ++ topics))
 
-    case {PageRead.run("polls", read), shown} do
-      {{:ok, page}, _shown} ->
-        socket |> assign(:polls, page) |> listen(topics(page)) |> start_clock()
+    case PageRead.run("polls", read) do
+      {:ok, page} -> socket |> assign(:polls, page) |> listen(topics(page)) |> start_clock()
+      {:error, _failure} -> socket |> assign(:polls, :unreadable) |> listen([]) |> stop_clock()
+    end
+  end
 
-      {{:error, _failure}, nil} ->
-        socket |> assign(:polls, :unreadable) |> listen([]) |> stop_clock()
+  # Read again, the page on show stays when the read fails, and the clock
+  # looks again a moment later, so a poll that closed meanwhile still comes to
+  # show its result.
+  defp reread(socket, shown, topics, read) do
+    socket = listen(socket, Enum.uniq(socket.assigns.polls_topics ++ topics))
 
-      {{:error, _failure}, shown} ->
-        listen(socket, topics(shown))
+    case PageRead.run("polls", read) do
+      {:ok, page} -> socket |> assign(:polls, page) |> listen(topics(page)) |> start_clock()
+      {:error, _failure} -> socket |> listen(topics(shown)) |> look_again()
     end
   end
 
@@ -642,6 +650,14 @@ defmodule KeyfleetWeb.PollsLive do
   end
 
   defp stop_clock(socket), do: socket
+
+  defp look_again(socket) do
+    socket = stop_clock(socket)
+
+    if connected?(socket),
+      do: assign(socket, :polls_clock, Process.send_after(self(), :polls_tick, @look_again_ms)),
+      else: socket
+  end
 
   defp next_tick(%{kind: :poll, poll: %Poll{} = poll, now: now}),
     do: if(Polls.open?(poll, now), do: 1_000)

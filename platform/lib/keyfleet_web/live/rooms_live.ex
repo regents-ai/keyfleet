@@ -620,27 +620,23 @@ defmodule KeyfleetWeb.RoomsLive do
   @doc """
   The person signed in leaves the open room, by going to another page, another
   room, or closing the page: it is read up to the last place the page showed.
-  When that can't be saved, the person still leaves.
   """
-  def leave(socket) do
-    case PageRead.run("rooms", fn -> mark_read(socket) end) do
-      {:ok, left} -> left
-      {:error, _failure} -> socket
-    end
-  end
+  def leave(socket), do: mark_read(socket)
 
   # The open room is read up to the last place the page has shown, muted posts
   # included, for a person signed in. It is written when the room opens and
-  # when the person leaves it, not as posts arrive.
+  # when the person leaves it, not as posts arrive. When it can't be saved the
+  # room still opens, and the person still leaves.
   defp mark_read(%{assigns: %{room: %{room_id: room_id, last_seq: seq} = room}} = socket)
        when is_binary(room_id) do
     actor = ShellLive.human_actor(socket)
 
-    if match?(%Human{}, actor) and seq > Map.get(room.read_to, room_id, 0) do
-      Rooms.mark_room_read!(room_id, seq, actor: actor)
+    with true <- match?(%Human{}, actor) and seq > Map.get(room.read_to, room_id, 0),
+         {:ok, _mark} <-
+           PageRead.run("rooms", fn -> Rooms.mark_room_read!(room_id, seq, actor: actor) end) do
       assign(socket, :room, %{room | read_to: Map.put(room.read_to, room_id, seq)})
     else
-      socket
+      _unsaved -> socket
     end
   end
 
