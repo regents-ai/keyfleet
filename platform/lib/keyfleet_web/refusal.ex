@@ -223,6 +223,9 @@ defmodule KeyfleetWeb.Refusal do
     "edits_restricted" =>
       {"A vote of the fleet has restricted this Key's workspace edits.",
        "Nothing was written. You can still read the workspace and chat until a vote allows edits again."},
+    "workspace_limit_reached" =>
+      {"This wallet has written to the fleet's workspace 120 times this minute.",
+       "Nothing was written. Wait the number of seconds in Retry-After, then send it again."},
     "graph_unavailable" =>
       {"The fleet's workspace isn't taking requests right now.",
        "Nothing was written. Try again in a moment."},

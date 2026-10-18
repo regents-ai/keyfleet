@@ -185,6 +185,44 @@ defmodule KeyfleetWeb.Security.LimitFlowProbesTest do
     end
   end
 
+  describe "workspace writes spend each wallet's allowance (RT-QUOTA-WRITES)" do
+    # Toggle to break: drop the `Limits.admit(:graph_writes, ...)` step from
+    # `write/4` in agent_graph_controller.ex; the second write then reaches the
+    # workspace's own checks.
+    test "a write past the allowance is 429 workspace_limit_reached", ctx do
+      allow!(:graph_writes, 1)
+
+      write = fn ->
+        send_signed(
+          ctx,
+          ctx.signer,
+          "POST",
+          "/api/v1/agent/fleets/#{fleet()}/graph/create",
+          %{
+            "as_key" => 2,
+            "command_id" => Ecto.UUID.generate(),
+            "type" => "note",
+            "scope" => "fleet",
+            "data" => %{"title" => "x"}
+          }
+        )
+      end
+
+      assert_refused(write.(), 403, "not_a_key_holder")
+      limited = assert_refused(write.(), 429, "workspace_limit_reached")
+      assert [_seconds] = Req.Response.get_header(limited, "retry-after")
+    end
+  end
+
+  # Gives `name` an allowance of `limit` for this test alone.
+  defp allow!(name, limit) do
+    limits = Application.fetch_env!(:keyfleet, :limits)
+    window = limits |> Keyword.fetch!(name) |> Keyword.fetch!(:window_seconds)
+    allowance = [limit: limit, window_seconds: window]
+    Application.put_env(:keyfleet, :limits, Keyword.put(limits, name, allowance))
+    on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
+  end
+
   # The signer's agent, as a signed request finds it.
   defp agent!(signer) do
     {:ok, agent} =

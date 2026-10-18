@@ -142,7 +142,9 @@ config :keyfleet, :proposal_words_rate_limit, limit: 20, window_seconds: 3600
 # and report a sent purchase, each window (Keyfleet.Limits).
 config :keyfleet, :limits,
   wallet_read: [limit: 30, window_seconds: 60],
-  credits_report: [limit: 120, window_seconds: 60]
+  credits_report: [limit: 120, window_seconds: 60],
+  # Workspace writes per wallet in each fleet: two a second, more than real agent work needs.
+  graph_writes: [limit: 120, window_seconds: 60]
 
 # Rate limits key on the direct peer. Production turns on Fly's client header.
 config :keyfleet, :behind_fly_proxy, false

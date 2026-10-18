@@ -1949,7 +1949,7 @@ paths:
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/WorkspaceInvalid"}
         "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
-        "429": {$ref: "#/components/responses/TooManyRequests"}
+        "429": {$ref: "#/components/responses/WorkspaceLimit"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/graph/patch:
     post:
@@ -1974,7 +1974,7 @@ paths:
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/WorkspaceInvalid"}
         "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
-        "429": {$ref: "#/components/responses/TooManyRequests"}
+        "429": {$ref: "#/components/responses/WorkspaceLimit"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/graph/link:
     post:
@@ -1999,7 +1999,7 @@ paths:
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/WorkspaceInvalid"}
         "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
-        "429": {$ref: "#/components/responses/TooManyRequests"}
+        "429": {$ref: "#/components/responses/WorkspaceLimit"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/graph/unlink:
     post:
@@ -2024,7 +2024,7 @@ paths:
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/WorkspaceInvalid"}
         "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
-        "429": {$ref: "#/components/responses/TooManyRequests"}
+        "429": {$ref: "#/components/responses/WorkspaceLimit"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/graph/archive:
     post:
@@ -2049,7 +2049,7 @@ paths:
         "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
         "422": {$ref: "#/components/responses/WorkspaceInvalid"}
         "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
-        "429": {$ref: "#/components/responses/TooManyRequests"}
+        "429": {$ref: "#/components/responses/WorkspaceLimit"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/rooms/create:
     post:
@@ -3089,6 +3089,19 @@ components:
             oneOf:
               - {$ref: "#/components/schemas/WorkspaceError"}
               - {$ref: "#/components/schemas/AgentError"}
+    WorkspaceLimit:
+      description: >-
+        workspace_limit_reached: this wallet has written to the fleet's workspace 120 times this
+        minute; nothing was written. too_many_requests: too many requests came from this client
+        address. Wait the number of seconds in Retry-After.
+      headers:
+        Retry-After: {$ref: "#/components/headers/RetryAfter"}
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/WorkspaceError"}
+              - {$ref: "#/components/schemas/RecoveryError"}
     WorkspaceWriteUnavailable:
       description: >-
         ownership_refreshing: Key ownership is being brought up to date and writes wait until it is; nothing was written. graph_unavailable: the fleet's workspace is not taking requests right now; nothing was written. indeterminate: the workspace did not confirm the write in time and it may have been applied; retry with the same command id and the same body, which answers the original result if it was. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly.
@@ -3311,7 +3324,7 @@ components:
           properties:
             code:
               type: string
-              enum: [bad_request, forbidden_scope, not_found, conflict, invalid, forbidden_field, duplicate_mismatch, fleet_unknown, not_a_key_holder, workspace_members_only, edits_restricted, ownership_refreshing, graph_unavailable, indeterminate, invalid_request]
+              enum: [bad_request, forbidden_scope, not_found, conflict, invalid, forbidden_field, duplicate_mismatch, fleet_unknown, not_a_key_holder, workspace_members_only, edits_restricted, ownership_refreshing, graph_unavailable, indeterminate, invalid_request, workspace_limit_reached]
             message: {type: string}
             hint: {type: string}
             details: {type: object}

@@ -9,6 +9,7 @@ defmodule KeyfleetWeb.AgentGraphController do
   alias Keyfleet.Graph.Errors.UnavailableError
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
+  alias Keyfleet.Limits
   alias KeyfleetWeb.Refusal
 
   # The workspace's own refusals: the status each is answered with, and what
@@ -71,10 +72,25 @@ defmodule KeyfleetWeb.AgentGraphController do
 
   defp read({:error, error}, conn, _fleet_id), do: refuse(conn, error)
 
+  # Each wallet has its own allowance of writes in each fleet, spent before
+  # the write takes the fleet's one writer. It is kept by wallet, not by the
+  # Key a write names: that Key is checked only later, so anyone could spend
+  # another Key's allowance by naming it.
   defp write(conn, action, %{"fleet_id" => fleet_id} = params, fields) do
-    case action.(fleet_id, Map.take(params, @command ++ fields), actor: conn.assigns.agent_actor) do
-      {:ok, written} -> json(conn, written)
-      {:error, error} -> refuse(conn, error)
+    actor = conn.assigns.agent_actor
+    input = Map.take(params, @command ++ fields)
+
+    with :ok <- Limits.admit(:graph_writes, {fleet_id, actor.wallet_address}),
+         {:ok, written} <- action.(fleet_id, input, actor: actor) do
+      json(conn, written)
+    else
+      {:limited, seconds} ->
+        conn
+        |> put_resp_header("retry-after", Integer.to_string(seconds))
+        |> answer(refusal(429, "workspace_limit_reached"))
+
+      {:error, error} ->
+        refuse(conn, error)
     end
   end
 
