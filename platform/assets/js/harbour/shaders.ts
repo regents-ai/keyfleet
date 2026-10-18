@@ -52,7 +52,7 @@ fn riding(p: vec3f, origin: vec3f) -> vec3f {
 }
 `
 
-/** Keep in step with MAX_SHIPS and the five islands in ISLANDS in sim.ts. */
+/** Keep in step with MAX_SHIPS and the five islands of every layout in sim.ts (islandsOf). */
 const shared = /* wgsl */ `
 struct Camera {
   viewProjection: mat4x4f,

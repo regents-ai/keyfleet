@@ -2408,3 +2408,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Nothing moves unless someone does, and the field is still again shortly
   after. On phones and tablets, and with less motion asked for, the field stays
   the still picture.
+
+## 2026-10-18 — Classic and the Club show their seas and a deck of cards
+
+- On the homepage, Classic's and the Club's sections each show their fleet's
+  sea in place of the map: the fleet's most recently active Keys sail to the
+  inn, the forge or the castle as they chat, work or vote, and a ship opens its
+  Key. The two seas are laid out differently, with the islands, buildings and
+  smaller isles in other places.
+- Beside each section's buy button, a card shows thirty Keys that belong to no
+  fleet, each for a fifth of a second. Both sections use the same cards, the
+  Club's starting halfway through, so the two never match. The cards are cut
+  out of their dark backdrop, so the page shows around them.
+- Before a sea draws, or on a device that can't draw it, a still picture of
+  that sea shows, by night or by day with the page. With less motion asked for,
+  the cards rest on the first one.
+- The hex field now sits behind the hero only.

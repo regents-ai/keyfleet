@@ -1,7 +1,6 @@
 /**
- * Draws the homepage's hex field with WebGPU through vgpu, behind the hero and
- * the fleets' maps, only when something changed. There is no clock and no
- * idle loop. A pointer or a preview sets a target, the picture eases toward it
+ * Draws the homepage's hex field with WebGPU through vgpu, behind the hero,
+ * only when something changed. There is no clock and no idle loop. A pointer or a preview sets a target, the picture eases toward it
  * for a few frames and stops; a wake or a ring fades within the island's
  * easing frames, so the field is always still again shortly after the last
  * touch. Loaded only once a field is really going to be shown.
@@ -87,12 +86,12 @@ export type FieldRenderer = IslandRenderer & {
   ring(x: number, y: number): void
 }
 
-/** `cell` is the distance between neighbouring tiles in CSS pixels, read at each new size. */
+/** `cell` is the distance between neighbouring tiles in CSS pixels. */
 export async function createFieldRenderer(
   canvas: HTMLCanvasElement,
   size: readonly [number, number],
   onDeviceLost: () => void,
-  cell: () => number,
+  cell: number,
 ): Promise<FieldRenderer> {
   // Device pixels per CSS pixel, so the tiles and the Key's reach keep their
   // CSS size at any screen density.
@@ -124,7 +123,7 @@ export async function createFieldRenderer(
       label: "home-field.pass",
       set: {
         params: {
-          size: [size[0], size[1], cell(), 0],
+          size: [size[0], size[1], cell, 0],
           line: [1, 1, 1, 1],
           light: [1, 1, 1, 1],
           pointer: [0.5, 0.5, 0, 0],
@@ -142,7 +141,7 @@ export async function createFieldRenderer(
     await shader.compile({colors: [stage.format]})
     const unsubscribe = stage.onResize(({width, height}) => {
       ratio = width / Math.max(1, canvas.clientWidth)
-      shader.set({params: {size: [width, height, cell() * ratio, 0], key: placed(), lift: lifting(), tiles: standing()}})
+      shader.set({params: {size: [width, height, cell * ratio, 0], key: placed(), lift: lifting(), tiles: standing()}})
     })
 
     const x = eased(0.5)
