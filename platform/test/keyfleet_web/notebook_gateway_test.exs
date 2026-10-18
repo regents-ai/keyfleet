@@ -193,6 +193,39 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refute_received {:hub, _method, _path, _subject, _body}
   end
 
+  # Costly failure: one person's cookie sends the hub as much as a script
+  # likes, or starts background runs in a loop.
+  test "a person's requests and each run started spend allowances of their own", c do
+    limits = Application.fetch_env!(:keyfleet, :limits)
+    on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
+
+    Application.put_env(
+      :keyfleet,
+      :limits,
+      Keyword.merge(limits,
+        notebook_requests: [limit: 3, window_seconds: 3600],
+        notebook_run_starts: [limit: 1, window_seconds: 3600]
+      )
+    )
+
+    cookie = enter!(c.holder)
+    runs = "/api/v1/projects/proj-fleet/notebooks/nb-1/jobs/job-1/runs"
+
+    assert post_notebook(@host, runs, cookie).status == 201
+    assert_receive {:hub, "POST", ^runs, "u_" <> _, _body}
+
+    again = post_notebook(@host, runs, cookie)
+    assert json_response(again, 429)["error"]["code"] == "notebook_runs_limit_reached"
+    assert get_resp_header(again, "retry-after") == ["3600"]
+
+    assert get_notebook(@host, "/", cookie).status == 200
+    assert_receive {:hub, "GET", "/", "u_" <> _, _body}
+
+    past = get_notebook(@host, "/", cookie)
+    assert json_response(past, 429)["error"]["code"] == "notebook_requests_limit_reached"
+    refute_received {:hub, _method, _path, "u_" <> _, _body}
+  end
+
   # Costly failure: one fleet's notebook sign-in opens another fleet's hub, or
   # a notebook page of one fleet, which runs whatever its authors wrote, changes
   # another fleet's notebooks as a person who holds Keys in both.

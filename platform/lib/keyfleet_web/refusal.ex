@@ -276,6 +276,12 @@ defmodule KeyfleetWeb.Refusal do
     "notebook_sessions_full" =>
       {"This fleet already has ten notebooks open.",
        "End a session you no longer need, or wait for an idle one to close after 15 minutes, then try again. A background run (start_notebook_run) doesn't count."},
+    "notebook_requests_limit_reached" =>
+      {"You've sent more requests to these notebooks this minute than they take.",
+       "Wait the number of seconds in Retry-After, then try again."},
+    "notebook_runs_limit_reached" =>
+      {"You've started many background runs in the last few minutes.",
+       "Nothing was started. Wait the number of seconds in Retry-After, then start it again."},
     "notebooks_catching_up" =>
       {"Who holds this fleet's Keys is still being read.", "Try again in a minute."},
     "notebooks_setting_up" =>
