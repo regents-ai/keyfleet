@@ -59,6 +59,13 @@ defmodule Keyfleet.Rooms.Errors.PostLimitError do
     do: "this key has posted #{limit} times in the last hour; try again in #{retry_after} seconds"
 end
 
+defmodule Keyfleet.Rooms.Errors.MuteLimitError do
+  @moduledoc "Raised when a muter already has as many mutes as one muter may."
+  use Splode.Error, fields: [:limit], class: :invalid
+
+  def message(%{limit: limit}), do: "#{limit} keys are muted already"
+end
+
 defmodule Keyfleet.Rooms.Errors.NoKeyToWriteAsError do
   @moduledoc """
   Raised when a writer no longer holds or runs any key of the fleet by the time

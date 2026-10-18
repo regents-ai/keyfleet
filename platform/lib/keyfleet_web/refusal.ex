@@ -155,6 +155,9 @@ defmodule KeyfleetWeb.Refusal do
     "invalid_message" =>
       {"This post doesn't fit the room.",
        "A post is 1 to 4,000 characters. Correct it, then send it again."},
+    "mute_limit_reached" =>
+      {"This wallet has muted 500 Keys, as many as one wallet can.",
+       "Nothing was changed. Unmute a Key you no longer need muted, then mute this one."},
     "room_taken" =>
       {"Another room of this fleet already has this address.", "Choose another slug."},
     "name_taken" =>

@@ -8,6 +8,8 @@ defmodule KeyfleetWeb.AgentMuteController do
 
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Errors.KeyUnknownError
+  alias Keyfleet.Rooms.Errors.MuteLimitError
   alias KeyfleetWeb.Refusal
   alias KeyfleetWeb.RoomJSON
 
@@ -54,11 +56,22 @@ defmodule KeyfleetWeb.AgentMuteController do
     end
   end
 
-  # A fleet outside the catalog is the only refusal a mute has; anything else
-  # is a fault, raised as one.
+  # A fleet outside the catalog, a Key it hasn't issued and a muter with as
+  # many mutes as it may have are the refusals a mute has; anything else is a
+  # fault, raised as one.
   defp refuse(conn, %Ash.Error.Invalid{errors: errors} = error) do
-    if Enum.any?(errors, &match?(%UnknownFleetError{}, &1)),
-      do: Refusal.json(conn, 404, "fleet_unknown"),
-      else: raise(error)
+    cond do
+      Enum.any?(errors, &match?(%UnknownFleetError{}, &1)) ->
+        Refusal.json(conn, 404, "fleet_unknown")
+
+      unknown = Enum.find(errors, &match?(%KeyUnknownError{}, &1)) ->
+        Refusal.key_unknown(conn, unknown.fleet_id, unknown.token_id)
+
+      Enum.any?(errors, &match?(%MuteLimitError{}, &1)) ->
+        Refusal.json(conn, 409, "mute_limit_reached")
+
+      true ->
+        raise error
+    end
   end
 end

@@ -15,6 +15,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
   alias Keyfleet.ProposalHelpers
+  alias Keyfleet.Repo
   alias Keyfleet.Rooms
   alias KeyfleetWeb.Plugs.SignedAgent
 
@@ -477,10 +478,25 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert answer(c, c.signer, "POST", @unmute, one, %{}, 200).body["mutes"] == []
     assert length(answer(c, c.signer, "POST", @read, @address, %{}, 200).body["messages"]) == 4
 
-    # A key's thread: read before its first post, written to, repeated,
-    # conflicting, misplaced, for a key not sold, and by an outsider.
+    # A Key not sold yet isn't muted, and nor is a 501st Key.
     {:ok, minted} = Keyfleet.Chain.minted(@fleet)
     unsold = Map.put(@address, "token_id", Integer.to_string(minted + 1))
+    assert answer(c, c.signer, "POST", @mute, unsold, %{}, 404).body["error"]["code"] ==
+             "key_unknown"
+
+    muter = "agent:" <> String.downcase(c.signer.address)
+
+    Repo.insert_all(
+      "mutes",
+      for(token_id <- 1_001..1_500, do: %{muter: muter, fleet_id: @fleet, token_id: token_id}),
+      prefix: "keyfleet_app"
+    )
+
+    assert answer(c, c.signer, "POST", @mute, one, %{}, 409).body == refused("mute_limit_reached")
+    Repo.query!("DELETE FROM keyfleet_app.mutes WHERE muter = $1", [muter])
+
+    # A key's thread: read before its first post, written to, repeated,
+    # conflicting, misplaced, for a key not sold, and by an outsider.
     # A send key is the agent's across the fleet, so the thread's posts take new ones.
     thread_post = %{post | "idempotency_key" => "t-1"}
 
