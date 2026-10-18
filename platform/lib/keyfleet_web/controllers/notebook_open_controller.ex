@@ -2,10 +2,12 @@ defmodule KeyfleetWeb.NotebookOpenController do
   @moduledoc """
   Opens a fleet's notebooks for the person signed in here, landing on `to`:
   the notebooks' start page or a saved output
-  (`Keyfleet.Notebooks.destination?/1`). A saved output's address sends
+  (`Keyfleet.Notebooks.destination?/1`). A holder's browser is handed a
+  page that sends a code that works once to the fleet's notebook host
+  (`KeyfleetWeb.NotebookOpenHTML`); the host spends a code only when this
+  site's page sends it. A saved output's address sends
   someone without a notebook sign-in here (`KeyfleetWeb.Plugs.NotebookGateway`);
-  a holder of one of the fleet's keys goes back to it with a link that works
-  once, and anyone else lands on the fleet's workspace with a note saying why.
+  a holder of one of the fleet's keys goes back to it the same way, and anyone else lands on the fleet's workspace with a note saying why.
   Key ownership that can't be read, other than while it is being brought up
   to date, is saved with the site's errors (`Keyfleet.Notebooks.RecordsDownError`).
   """
@@ -15,13 +17,25 @@ defmodule KeyfleetWeb.NotebookOpenController do
   alias Keyfleet.{Fleets, Notebooks}
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
   alias Keyfleet.Notebooks.RecordsDownError
+  alias KeyfleetWeb.ContentSecurityPolicy
 
   def open(conn, %{"fleet_id" => fleet_id} = params) do
     case open_for(conn, fleet_id, params["to"]) do
-      {:ok, url} ->
+      {:ok, entry} ->
+        nonce = 18 |> :crypto.strong_rand_bytes() |> Base.encode64()
+        notebooks = URI.to_string(%{URI.parse(entry.action) | path: nil})
+
+        # The site's referrer policy stays: under `no-referrer` a browser sends
+        # the form with the origin `null`, which the notebook host refuses.
         conn
-        |> put_resp_header("referrer-policy", "no-referrer")
-        |> redirect(external: url)
+        |> put_resp_header("cache-control", "no-store")
+        |> put_resp_header(
+          "content-security-policy",
+          ContentSecurityPolicy.notebook_entry(nonce, notebooks)
+        )
+        |> put_root_layout(false)
+        |> put_view(html: KeyfleetWeb.NotebookOpenHTML)
+        |> render(:entry, entry: entry, nonce: nonce)
 
       {:error, :no_hub} ->
         conn |> put_flash(:error, "This fleet has no notebooks yet.") |> redirect(to: "/")

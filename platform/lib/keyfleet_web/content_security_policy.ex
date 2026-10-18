@@ -23,7 +23,8 @@ defmodule KeyfleetWeb.ContentSecurityPolicy do
 
   `showcase/0` is `sign_in/0` for the local showcase, which frames its own
   preview page. `errors/1` is the baseline plus one request's nonce, for the
-  saved-errors page.
+  saved-errors page, and `notebook_entry/2` the same for the page that opens a
+  fleet's notebooks.
 
   A site that loads anything else adds each origin to the one directive and the
   one profile that needs it. The only wildcard is Privy's own `*.rpc.privy.systems`,
@@ -104,6 +105,19 @@ defmodule KeyfleetWeb.ContentSecurityPolicy do
   def errors(nonce) do
     nonce = "'nonce-#{nonce}'"
     @baseline |> add(%{"script-src" => [nonce], "style-src" => [nonce]}) |> render()
+  end
+
+  @doc """
+  The baseline plus one script element admitted by this request's nonce, and
+  forms that submit to `notebook_origin` alone, for the page that sends a
+  person's notebook code to their fleet's notebook host
+  (`KeyfleetWeb.NotebookOpenController`). It never starts sign-in.
+  """
+  def notebook_entry(nonce, notebook_origin) do
+    @baseline
+    |> add(%{"script-src" => ["'nonce-#{nonce}'"]})
+    |> List.keyreplace("form-action", 0, {"form-action", [notebook_origin]})
+    |> render()
   end
 
   defp pictures,

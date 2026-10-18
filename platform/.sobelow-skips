@@ -6,7 +6,6 @@ Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:98,FE726B
 Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:129,20479D2
 Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:136,1506EF7
 XSS.SendResp: XSS in `send_resp`,lib/keyfleet_web/controllers/public_pages_controller.ex:75,3E5A3B2
-XSS.SendResp: XSS in `send_resp`,lib/keyfleet_web/plugs/notebook_gateway.ex:271,4FDB6C5
-XSS.SendResp: XSS in `send_resp`,lib/keyfleet_web/plugs/notebook_gateway.ex:731,1305379
-XSS.SendResp: XSS in `send_resp`,lib/keyfleet_web/plugs/notebook_gateway.ex:739,4B268B
-XSS.SendResp: XSS in `send_resp`,lib/keyfleet_web/plugs/notebook_gateway.ex:780,209A227
+XSS.SendResp: XSS in `send_resp`,lib/keyfleet_web/plugs/notebook_gateway.ex:722,70C1DD
+XSS.SendResp: XSS in `send_resp`,lib/keyfleet_web/plugs/notebook_gateway.ex:730,D31B6E
+XSS.SendResp: XSS in `send_resp`,lib/keyfleet_web/plugs/notebook_gateway.ex:771,5CD7274

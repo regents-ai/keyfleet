@@ -2360,3 +2360,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Account page's pairing box says a code can't be made right now.
 - Each of these answers `Retry-After` with the seconds until it can be tried
   again.
+
+## 2026-10-18 — Notebook sign-in only from Keyfleet
+
+- Correction to "Notebook and code access hold up under pressure": a fleet's
+  notebooks now sign you in only when Keyfleet's own page sends the one-time
+  code, as a form, after you press Open notebooks. A notebook sign-in address
+  pasted or opened anywhere else signs no one in, and a code sent from another
+  website takes you to Keyfleet to open the notebooks as yourself, so a link
+  someone else made can't sign you in to their account.

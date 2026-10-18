@@ -157,40 +157,46 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
              NotebookSocket.init(opening)
   end
 
-  # Costly failure: a copied or replayed sign-in link opens the notebooks again.
-  test "an Open notebooks link works once", c do
-    {:ok, url} = Notebooks.open(c.holder, signed_in!(c.holder), @fleet)
-    %URI{host: @host, path: "/_keyfleet/enter", query: query} = URI.parse(url)
+  # Costly failure: a copied or replayed sign-in code opens the notebooks again.
+  test "an Open notebooks code works once", c do
+    {:ok, entry} = Notebooks.open(c.holder, signed_in!(c.holder), @fleet)
+    assert %URI{host: @host, path: "/_keyfleet/enter"} = URI.parse(entry.action)
 
-    first = get_notebook(@host, "/_keyfleet/enter?" <> query, nil)
+    first = enter_from(KeyfleetWeb.Endpoint.url(), entry)
     assert first.status == 303
     assert get_resp_header(first, "location") == ["/"]
     cookie = first.resp_cookies["__Host-kf_notebooks"]
     assert %{http_only: true, secure: true, same_site: "Lax", path: "/"} = cookie
     refute Map.has_key?(cookie, :domain)
 
-    again = get_notebook(@host, "/_keyfleet/enter?" <> query, nil)
+    again = enter_from(KeyfleetWeb.Endpoint.url(), entry)
     assert again.status == 403
     assert json_response(again, 403)["error"]["code"] == "notebooks_link_used"
     assert again.resp_cookies == %{}
   end
 
-  # Costly failure: a page on another site sends someone's browser a link made
-  # for another account, signing them in to the notebooks as that account.
-  test "an Open notebooks link opened from another site is not spent there", c do
-    {:ok, url} = Notebooks.open(c.holder, signed_in!(c.holder), @fleet)
-    %URI{path: path, query: query} = URI.parse(url)
-    link = path <> "?" <> query
+  # Costly failure: a page on another site, or a pasted link, sends someone's
+  # browser a code made for another account, signing them in to the notebooks
+  # as that account.
+  test "an Open notebooks code is spent only when Keyfleet's page sends it", c do
+    {:ok, entry} = Notebooks.open(c.holder, signed_in!(c.holder), @fleet)
 
-    elsewhere = notebook(@host, :get, link, nil, [{"sec-fetch-site", "cross-site"}])
-    assert elsewhere.status == 200
+    elsewhere = enter_from("https://elsewhere.example", entry)
+    assert elsewhere.status == 303
+
+    assert get_resp_header(elsewhere, "location") == [
+             KeyfleetWeb.Plugs.NotebookGateway.open_url(@fleet, "/")
+           ]
+
     assert elsewhere.resp_cookies == %{}
-    assert [policy] = get_resp_header(elsewhere, "content-security-policy")
-    assert policy =~ "default-src 'none'"
-    fresh = Plug.HTML.html_escape(KeyfleetWeb.Plugs.NotebookGateway.open_url(@fleet, "/"))
-    assert elsewhere.resp_body =~ ~s(href="#{fresh}")
 
-    here = notebook(@host, :get, link, nil, [{"sec-fetch-site", "same-site"}])
+    pasted =
+      get_notebook(@host, "/_keyfleet/enter?" <> URI.encode_query(code: entry.code, to: "/"), nil)
+
+    assert pasted.status == 403
+    assert pasted.resp_cookies == %{}
+
+    here = enter_from(KeyfleetWeb.Endpoint.url(), entry)
     assert here.status == 303
     assert %{value: _cookie} = here.resp_cookies["__Host-kf_notebooks"]
   end
@@ -589,10 +595,16 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     do: SessionAuthorityHelpers.signed_in_session(account_id)["session_lineage"]
 
   defp enter!(holder, lineage \\ nil) do
-    {:ok, url} = Notebooks.open(holder, lineage || signed_in!(holder), @fleet)
-    %URI{path: path, query: query} = URI.parse(url)
-    entered = get_notebook(@host, path <> "?" <> query, nil)
-    entered.resp_cookies["__Host-kf_notebooks"].value
+    {:ok, entry} = Notebooks.open(holder, lineage || signed_in!(holder), @fleet)
+    enter_from(KeyfleetWeb.Endpoint.url(), entry).resp_cookies["__Host-kf_notebooks"].value
+  end
+
+  # The notebook host's answer to a sign-in code sent from a page at `origin`.
+  defp enter_from(origin, entry) do
+    %{build_conn() | host: @host}
+    |> put_req_header("origin", origin)
+    |> put_req_header("content-type", "application/x-www-form-urlencoded")
+    |> post(URI.parse(entry.action).path, URI.encode_query(code: entry.code, to: entry.to))
   end
 
   defp get_notebook(host, path, cookie), do: notebook(host, :get, path, cookie)

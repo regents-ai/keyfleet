@@ -5,14 +5,17 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   else the site serves, and reaches the fleet's hub only once this site knows
   who sent it and that they hold one of the fleet's keys now:
 
-    * `/_keyfleet/enter?code=…&to=…` spends the one-time link Keyfleet made
-      and sets this host's own sign-in cookie, then sends the browser to `to`:
-      the start page or a saved output. The cookie names the fleet, the person's account, the Keyfleet
-      sign-in it came from and when it ends; on another fleet's host it signs
-      no one in, and once that Keyfleet sign-in ends (signed out, another
-      account, run out) it signs no one in either, checked on every request.
-      A link opened from another site is not spent: the browser is shown a
-      link back to Keyfleet, which makes one for whoever is signed in there.
+    * `POST /_keyfleet/enter` with `code` and `to` spends the one-time code
+      Keyfleet made and sets this host's own sign-in cookie, then sends the
+      browser to `to`: the start page or a saved output. Only Keyfleet's own
+      page sends it (`KeyfleetWeb.NotebookOpenController`): a form from any
+      other address, a fleet's notebook host included, is not spent, and the
+      browser is sent to Keyfleet, which makes a code for whoever is signed in
+      there. So a code made for one account never signs in another's browser.
+      The cookie names the fleet, the person's account, the Keyfleet sign-in
+      it came from and when it ends; on another fleet's host it signs no one
+      in, and once that Keyfleet sign-in ends (signed out, another account,
+      run out) it signs no one in either, checked on every request.
     * A request signed by an agent (SIWA, as on `/api/v1/agent`) is that
       agent's, whatever cookie it carries.
     * Anything else is the cookie's person's, or is refused. A notebook page
@@ -81,6 +84,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   @cookie "__Host-kf_notebooks"
   @salt "notebook session"
   @enter "/_keyfleet/enter"
+  # Keyfleet's page sends a code and where it lands, nothing larger.
+  @enter_form Plug.Parsers.init(parsers: [:urlencoded], pass: ["*/*"], length: 2_048)
   # The sign-in server checks a signed request's body inside an envelope it
   # refuses past 64 KiB, so no larger body can ever be verified.
   @signed_max_body 64 * 1024
@@ -205,14 +210,19 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  defp route(%Plug.Conn{method: "GET", request_path: @enter} = conn, fleet_id) do
-    conn = fetch_query_params(conn)
-    to = conn.query_params["to"]
+  defp route(%Plug.Conn{method: "POST", request_path: @enter} = conn, fleet_id) do
+    %{body_params: form} = conn = Plug.Parsers.call(conn, @enter_form)
+    to = form["to"]
 
     cond do
-      not Notebooks.destination?(to) -> Refusal.json(conn, 400, "invalid_request")
-      "cross-site" in get_req_header(conn, "sec-fetch-site") -> open_here(conn, fleet_id, to)
-      true -> enter(conn, fleet_id, to)
+      not Notebooks.destination?(to) ->
+        Refusal.json(conn, 400, "invalid_request")
+
+      get_req_header(conn, "origin") != [KeyfleetWeb.Endpoint.url()] ->
+        to_keyfleet(conn, fleet_id, to)
+
+      true ->
+        enter(conn, fleet_id, form["code"], to)
     end
   end
 
@@ -223,9 +233,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  # The link lands where it was made for: the start page or a saved output.
-  defp enter(conn, fleet_id, to) do
-    case Notebooks.redeem(fleet_id, conn.query_params["code"]) do
+  # The code lands where it was made for: the start page or a saved output.
+  defp enter(conn, fleet_id, code, to) do
+    case Notebooks.redeem(fleet_id, code) do
       {:ok, {account_id, session_authority_id}} ->
         max_age = Notebooks.config()[:session_max_age]
 
@@ -255,32 +265,13 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  # A link opened from another site may have been made for someone else's
-  # account, and would sign this browser in as them, so it is not spent. The
-  # page's one link asks Keyfleet for a link of this browser's own; followed
-  # from here, that one comes from this site and is spent.
-  defp open_here(conn, fleet_id, to) do
+  # A code sent from anywhere but Keyfleet's own page may have been made for
+  # someone else's account, and would sign this browser in as them, so it is
+  # not spent. Keyfleet makes a code of this browser's own instead.
+  defp to_keyfleet(conn, fleet_id, to) do
     conn
-    |> put_resp_content_type("text/html")
-    |> put_resp_header(
-      "content-security-policy",
-      "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
-    )
-    |> put_resp_header("x-content-type-options", "nosniff")
-    |> put_resp_header("referrer-policy", "no-referrer")
-    |> send_resp(200, open_page(Plug.HTML.html_escape(open_url(fleet_id, to))))
-  end
-
-  defp open_page(href) do
-    """
-    <!doctype html>
-    <html lang="en">
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Open the notebooks</title>
-    <p><a href="#{href}">Open the notebooks</a></p>
-    </html>
-    """
+    |> put_resp_header("location", open_url(fleet_id, to))
+    |> send_resp(303, "")
   end
 
   ## Who sent it
@@ -941,7 +932,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp allowed_route?("HEAD", path), do: allowed_route?("GET", path)
 
-  defp allowed_route?("GET", @enter), do: true
+  defp allowed_route?("POST", @enter), do: true
   defp allowed_route?("GET", "/"), do: true
   defp allowed_route?("GET", "/api/health"), do: true
   defp allowed_route?("GET", "/favicon.ico"), do: true
