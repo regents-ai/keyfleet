@@ -2298,3 +2298,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   Hermes's own approval prompt for its signing client timed out; the other
   checks read Blocked until it runs again. Classic #1's check reads Fail for
   that run, since the page then gave no terms.
+
+## 2026-10-18 — v84 and v85 released
+
+- Released `d78af0e0` as Fly v84 and `0490230` as Fly v85; each image names
+  the commit it was built from.
