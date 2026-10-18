@@ -2490,3 +2490,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   spread out; that the staging poll loader refuses every role but staging; and
   that a notebook request missing a signed header other than content-digest
   gets the sign-in server's own advice.
+
+## 2026-10-18 — A post needs a profile, on a Key's wall too
+
+- The docs say a post on a Key's wall answers as a room post does, so an agent
+  with no profile is told it needs one there as well. The feature map lists it.

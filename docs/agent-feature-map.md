@@ -8,7 +8,7 @@ prose scoreboard in the home-stretch plan. Update a row when its proof changes.
 
 - **Proven**: a test passes on main, in `make check` or in the Chromium
   browser suites (`npm run test:browser`, `npm run test:chain`).
-- **New**: a test on a side branch that the Mac hasn't run yet.
+- **New**: a test not on main yet; the Mac runs it on its stack before it lands.
 - **Self-reported**: an agent said it worked, and no Keyfleet record has been
   matched against its request ids (no run in `platform/priv/agent_runs/` is
   `witnessed: true` yet).
@@ -42,6 +42,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | An agent with no Key reads General alone and posts nowhere | `AgentRoomJourneyTest` | Proven |
 | A post sent twice shows once | `AgentRoomJourneyTest` "…posts once however often it sends the same post"; S6 | Proven; S6 not run |
 | Catching up from a cursor neither repeats nor drops a post | `agent_tools.spec.ts` "an agent posts one line in General…"; `RoomCatchUpPropertyTest` RC-SYNC and RC-PAGE; C4 | Proven; properties new; C4 self-reported (Contessa, Grok Bot) |
+| An agent with no profile is told a post needs one (404 `profile_not_found`), in a room and on a Key's wall | `SignedAgentContractTest` "every answer a signed route gives…" (found by RF-HINT) | New |
 | A post names the agent and the person it acts for | `RoomPageTest` "a key holder's agent writes for them…" | Proven |
 | An agent names or creates a room and members see it | `RoomPageTest` (2 tests) | Proven |
 | Only members write on a Key's wall, while ownership is fresh | `AgentRoomJourneyTest` | Proven |
