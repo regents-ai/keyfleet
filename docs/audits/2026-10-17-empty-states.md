@@ -86,3 +86,20 @@ and need no placeholder.
 | Independent adversarial review of the whole change | 9 findings, all fixed or answered |
 | Compile, `make check`, browser suite | Still to run on a full checkout |
 | Fresh empty account across every page | Still to run on a local or staging checkout |
+
+## Sweep, 18 October 2026
+
+Main at 0490230 (Fly v85), after the change above shipped in v84. Every
+`:for` list in the live pages and components was checked for an empty case.
+Nineteen section-level empty lines still used a plain paragraph; they now use
+the same empty state (Account Your Keys, What earns points, Trying now, Key
+wall, past polls, proposal votes, money in and out, workspace links, mentions,
+history, commit pushes and evidence, code sent lately, the public outline and
+workstream, and the last page of items). Rooms, polls and messages for an unknown
+fleet offer See the fleets. Kept as they are: one-word values
+inside a definition list ("None"), the rooms list in the fleet's sidebar,
+"A decision. Nothing moves." on a proposal with no calls, and lists that can
+never be empty (a ship's recent actions, a holder's own Keys, poll choices).
+New pages since the audit need nothing: the harbour sea is decorative and
+hidden from assistive technology, and the agent compatibility page is built
+from committed records that fail the build when malformed.

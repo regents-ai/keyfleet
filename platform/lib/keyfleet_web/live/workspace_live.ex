@@ -106,10 +106,21 @@ defmodule KeyfleetWeb.WorkspaceLive do
             </.link>
 
             <.no_cards :if={@board.cards == [] and @board.first_page?} board={@board} />
-            <p :if={@board.cards == [] and not @board.first_page?}>
-              There is nothing more here.
-              <.link id="workspace-first-page" patch={@board.first_page}>Back to the first page</.link>
-            </p>
+            <Regent.Primitives.empty_state
+              :if={@board.cards == [] and not @board.first_page?}
+              class="kf-empty"
+              title="There is nothing more here."
+            >
+              <:action>
+                <.link
+                  id="workspace-first-page"
+                  class="rg-button rg-button--secondary"
+                  patch={@board.first_page}
+                >
+                  <span class="rg-button__label">Back to the first page</span>
+                </.link>
+              </:action>
+            </Regent.Primitives.empty_state>
 
             <ol :if={@board.cards != []} id="workspace-cards" class="workspace-cards">
               <li
@@ -225,10 +236,16 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
         <section class="workspace-panel" aria-labelledby="workspace-links-title">
           <h2 id="workspace-links-title">Linked items</h2>
-          <p :if={@item.links.rows == [] and is_nil(@item.links.first)}>
-            Nothing is linked to this yet.
-          </p>
-          <p :if={@item.links.rows == [] and @item.links.first}>There are no more links.</p>
+          <Regent.Primitives.empty_state
+            :if={@item.links.rows == [] and is_nil(@item.links.first)}
+            class="kf-empty"
+            title="Nothing is linked to this yet."
+          />
+          <Regent.Primitives.empty_state
+            :if={@item.links.rows == [] and @item.links.first}
+            class="kf-empty"
+            title="There are no more links."
+          />
           <ul :if={@item.links.rows != []} id="workspace-links" class="workspace-lines">
             <li
               :for={row <- @item.links.rows}
@@ -259,7 +276,11 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
         <section class="workspace-panel" aria-labelledby="workspace-discussion-title">
           <h2 id="workspace-discussion-title">Discussed in</h2>
-          <p :if={@item.object.discussion == []}>No one has mentioned this in the rooms yet.</p>
+          <Regent.Primitives.empty_state
+            :if={@item.object.discussion == []}
+            class="kf-empty"
+            title="No one has mentioned this in the rooms yet."
+          />
           <ul :if={@item.object.discussion != []} id="workspace-discussion" class="workspace-lines">
             <li :for={message <- @item.object.discussion}>
               <.link :if={message.path} patch={message.path}>
@@ -275,7 +296,11 @@ defmodule KeyfleetWeb.WorkspaceLive do
           aria-labelledby="workspace-history-title"
         >
           <h2 id="workspace-history-title">History</h2>
-          <p :if={@item.history.lines == []}>There are no earlier changes.</p>
+          <Regent.Primitives.empty_state
+            :if={@item.history.lines == []}
+            class="kf-empty"
+            title="There are no earlier changes."
+          />
           <ol :if={@item.history.lines != []} id="workspace-history" class="workspace-lines">
             <li :for={line <- @item.history.lines} data-seq={line.seq}>
               <p><.line parts={line.parts} fleet_id={@item.fleet_id} /></p>
@@ -363,9 +388,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
         <section class="workspace-panel" aria-labelledby="workspace-commit-pushes-title">
           <h2 id="workspace-commit-pushes-title">Sent by</h2>
-          <p :if={@commit.pushes == []} id="workspace-commit-no-pushes">
-            No branch or tag was sent ending at this commit. It may sit inside a longer set of changes.
-          </p>
+          <Regent.Primitives.empty_state
+            :if={@commit.pushes == []}
+            id="workspace-commit-no-pushes"
+            class="kf-empty"
+            title="No branch or tag was sent ending at this commit."
+          >
+            It may sit inside a longer set of changes.
+          </Regent.Primitives.empty_state>
           <ol :if={@commit.pushes != []} id="workspace-commit-pushes" class="workspace-lines">
             <li :for={push <- @commit.pushes} data-push={push.id}>
               <p><.key fleet_id={@commit.fleet_id} token_id={push.token_id} /> sent {push.what}</p>
@@ -376,9 +406,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
         <section class="workspace-panel" aria-labelledby="workspace-commit-evidence-title">
           <h2 id="workspace-commit-evidence-title">Evidence that cites it</h2>
-          <p :if={@commit.evidence == []} id="workspace-commit-no-evidence">
-            No evidence in the workspace cites this commit yet.
-          </p>
+          <Regent.Primitives.empty_state
+            :if={@commit.evidence == []}
+            id="workspace-commit-no-evidence"
+            class="kf-empty"
+            title="No evidence in the workspace cites this commit yet."
+          />
           <ul :if={@commit.evidence != []} id="workspace-commit-evidence" class="workspace-lines">
             <li :for={evidence <- @commit.evidence} data-item={evidence.id}>
               <p>
@@ -449,7 +482,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <p :if={@notice} id="code-notice" class="workspace-notebooks-notice">{@notice}</p>
 
       <h3>Sent lately</h3>
-      <p :if={@code.pushes == []} id="code-pushes-empty">No changes have been sent yet.</p>
+      <Regent.Primitives.empty_state
+        :if={@code.pushes == []}
+        id="code-pushes-empty"
+        class="kf-empty"
+        title="No changes have been sent yet."
+      />
       <ol :if={@code.pushes != []} id="code-pushes" class="workspace-lines">
         <li :for={push <- @code.pushes} data-push={push.id}>
           <p>
@@ -588,9 +626,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
       />
       <section class="workspace-panel" aria-labelledby="workspace-public-activity-title">
         <h2 id="workspace-public-activity-title">Workstream</h2>
-        <p :if={@fleet.pulse.activity == []} id="workspace-public-empty">
-          No work has been recorded here yet.
-        </p>
+        <Regent.Primitives.empty_state
+          :if={@fleet.pulse.activity == []}
+          id="workspace-public-empty"
+          class="kf-empty"
+          title="No work has been recorded here yet."
+        />
         <ol :if={@fleet.pulse.activity != []} id="workspace-public-activity" class="workspace-lines">
           <li :for={line <- @fleet.pulse.activity} data-seq={line.seq}>
             <p>{line.text}</p>
@@ -619,7 +660,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
     ~H"""
     <section class="workspace-panel" aria-labelledby={@id <> "-title"}>
       <h2 id={@id <> "-title"}>{@title}</h2>
-      <p :if={@items == []} id={@id <> "-empty"}>{@empty}</p>
+      <Regent.Primitives.empty_state
+        :if={@items == []}
+        id={@id <> "-empty"}
+        class="kf-empty"
+        title={@empty}
+      />
       <ol :if={@items != []} id={@id} class="workspace-lines">
         <li :for={item <- @items} data-item={item.id}>
           <p>

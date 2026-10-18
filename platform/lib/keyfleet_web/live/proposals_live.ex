@@ -364,12 +364,18 @@ defmodule KeyfleetWeb.ProposalsLive do
 
         <section class="proposals-panel proposals-votes" aria-labelledby="proposal-votes-title">
           <h2 id="proposal-votes-title">Votes</h2>
-          <p :if={@page.votes == [] and is_nil(@page.first_votes)} id="proposal-no-votes">
-            No votes yet.
-          </p>
-          <p :if={@page.votes == [] and @page.first_votes} id="proposal-no-later-votes">
-            No later votes.
-          </p>
+          <Regent.Primitives.empty_state
+            :if={@page.votes == [] and is_nil(@page.first_votes)}
+            id="proposal-no-votes"
+            class="kf-empty"
+            title="No votes yet."
+          />
+          <Regent.Primitives.empty_state
+            :if={@page.votes == [] and @page.first_votes}
+            id="proposal-no-later-votes"
+            class="kf-empty"
+            title="No later votes."
+          />
           <ol :if={@page.votes != []} id="proposal-votes" class="proposals-lines">
             <li :for={vote <- @page.votes} data-vote={vote.id}>
               <span>{vote_word(vote.choice)}</span>
@@ -851,9 +857,12 @@ defmodule KeyfleetWeb.ProposalsLive do
         aria-labelledby="treasury-history-title"
       >
         <h3 id="treasury-history-title">Money in and out</h3>
-        <p :if={@treasury.history == []} id="proposals-no-history" class="proposals-detail">
-          No money has moved in or out yet.
-        </p>
+        <Regent.Primitives.empty_state
+          :if={@treasury.history == []}
+          id="proposals-no-history"
+          class="kf-empty"
+          title="No money has moved in or out yet."
+        />
         <ol :if={@treasury.history != []} id="proposals-history" class="proposals-lines">
           <li :for={line <- @treasury.history} data-history={line.id}>
             <span>{history_word(line.kind)} <.amount value={line.amount} /></span>

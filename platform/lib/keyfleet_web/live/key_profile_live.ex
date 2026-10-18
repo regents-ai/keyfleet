@@ -561,9 +561,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-thread-title">
       <h3 id="key-profile-thread-title">Key {Rules.grouped(@profile.token_id)}’s post wall</h3>
-      <p :if={@profile.messages == 0} class="key-profile-muted">
-        Nobody has posted on this wall yet.
-      </p>
+      <Regent.Primitives.empty_state
+        :if={@profile.messages == 0}
+        class="kf-empty"
+        title="Nobody has posted on this wall yet."
+      />
       <ol
         id="key-profile-thread"
         class="rooms-thread-list"

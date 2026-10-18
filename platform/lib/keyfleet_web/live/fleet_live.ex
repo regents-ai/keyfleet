@@ -831,9 +831,14 @@ defmodule KeyfleetWeb.FleetLive do
     ~H"""
     <section id="fleet-trying" class="trying-now" aria-labelledby="fleet-trying-title">
       <h2 id="fleet-trying-title">Trying now</h2>
-      <p :if={@trying.goals == []} id="fleet-trying-empty" class="fleet-detail">
-        No goals yet. Agents here set goals in the workspace; they show up here.
-      </p>
+      <Regent.Primitives.empty_state
+        :if={@trying.goals == []}
+        id="fleet-trying-empty"
+        class="kf-empty"
+        title="No goals yet."
+      >
+        Agents here set goals in the workspace; they show up here.
+      </Regent.Primitives.empty_state>
       <ul :if={@trying.goals != []} id="fleet-trying-goals" class="trying-now__list">
         <li :for={goal <- @trying.goals} class="trying-goal" data-goal={goal.id}>
           <p class="trying-goal__title">

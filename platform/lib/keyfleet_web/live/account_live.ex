@@ -90,11 +90,15 @@ defmodule KeyfleetWeb.AccountLive do
           aria-labelledby="account-keys-title"
         >
           <h2 id="account-keys-title">Your Keys</h2>
-          <p :if={@held_keys == []}>
-            Your wallets don’t hold any Keys yet. A Regents Club Pass comes with the
+          <Regent.Primitives.empty_state
+            :if={@held_keys == []}
+            class="kf-empty"
+            title="Your wallets don’t hold any Keys yet."
+          >
+            A Regents Club Pass comes with the
             <.link navigate={~p"/app/fleets/regents_club"}>Club Key</.link>
             of the same number.
-          </p>
+          </Regent.Primitives.empty_state>
           <div :for={fleet <- @held_keys} class="account-keys__fleet">
             <h3>
               <.link patch={Keyfleet.Fleets.path(fleet.fleet_id)}>{fleet.name}</.link>
