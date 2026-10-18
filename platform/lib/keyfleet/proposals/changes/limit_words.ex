@@ -3,8 +3,8 @@ defmodule Keyfleet.Proposals.Changes.LimitWords do
   Holds each signed-in person, and each agent's wallet, to the saves of
   proposal words in `config :keyfleet, :proposal_words_rate_limit`, counted by
   `Keyfleet.Accounts.RequestRateLimiter`. A save past it is refused
-  (`WordsLimitError`): a person's proposal goes ahead without its words, and
-  an agent is told to wait. An agent changing its address would start the
+  (`WordsLimitError`), and the proposal, a person's or an agent's, goes ahead
+  without its words. An agent changing its address would start the
   API's per-address budget again, so it is counted by its wallet.
   """
   use Ash.Resource.Change
