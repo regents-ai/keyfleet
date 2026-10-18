@@ -4,13 +4,21 @@ import {expect, type Locator, type Page} from "@playwright/test"
 // screen, its controls are big enough for a finger, it raises no error, and
 // it stays live.
 
+// The test server's Privy app id is a stand-in (config/test.exs), which
+// Privy's own sign-in library refuses as it starts; the live site carries a
+// real one.
+const standInPrivyId = "Cannot initialize the Privy provider with an invalid Privy app ID"
+
 /** Every error the page logs or throws from now on, as text. */
 export function watchErrors(page: Page): string[] {
   const errors: string[] = []
+  const keep = (text: string) => {
+    if (!text.includes(standInPrivyId)) errors.push(text)
+  }
   page.on("console", message => {
-    if (message.type() === "error") errors.push(message.text())
+    if (message.type() === "error") keep(message.text())
   })
-  page.on("pageerror", error => errors.push(error.message))
+  page.on("pageerror", error => keep(error.message))
   return errors
 }
 
@@ -34,10 +42,20 @@ export async function expectNoSidewaysScroll(page: Page) {
   const widths = await page.evaluate(() =>
     [document.documentElement, document.querySelector("#app-shell-scroller")]
       .filter(element => element !== null)
-      .map(element => ({name: element!.id || "page", scroll: element!.scrollWidth, width: element!.clientWidth})),
+      .map(element => {
+        const edge = element!.getBoundingClientRect().right
+        // The deepest elements reaching past the screen's edge, so a failure
+        // names what to fix.
+        const past = [...element!.querySelectorAll("*")]
+          .filter(child => child.getBoundingClientRect().right > edge + 0.5)
+          .filter(child => ![...child.children].some(inner => inner.getBoundingClientRect().right > edge + 0.5))
+          .slice(0, 3)
+          .map(child => `${child.tagName.toLowerCase()}${child.id ? `#${child.id}` : ""}.${[...child.classList].join(".")}`)
+        return {name: element!.id || "page", scroll: element!.scrollWidth, width: element!.clientWidth, past}
+      }),
   )
-  for (const {name, scroll, width} of widths) {
-    expect(scroll, `the ${name} is ${scroll}px wide on a ${width}px screen`).toBeLessThanOrEqual(width)
+  for (const {name, scroll, width, past} of widths) {
+    expect(scroll, `the ${name} is ${scroll}px wide on a ${width}px screen (past its edge: ${past.join(", ")})`).toBeLessThanOrEqual(width)
   }
 }
 

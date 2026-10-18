@@ -323,7 +323,7 @@ defmodule KeyfleetWeb.KeysLive do
     ~H"""
     <p class="key-address">
       <code>{@wallet}</code>
-      <Regent.Primitives.copy_button id={@id} text={@wallet} aria-label="Copy the wallet address">
+      <Regent.Primitives.copy_button id={@id} text={@wallet} aria-label="Copy address">
         Copy address
       </Regent.Primitives.copy_button>
     </p>

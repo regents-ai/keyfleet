@@ -70,7 +70,9 @@ defmodule KeyfleetWeb.Security.OutsideDepsTest do
 
       assert deliver(ctx, "GET", other, request).status == 401
       assert_receive {:broker_payload, %{"path" => ^other} = moved}
-      assert reason(ctx, moved) == :signature_invalid
+      # Over another path the signature recovers some other address, which
+      # no agent is signed in as.
+      assert reason(ctx, moved) == :signature_lookup_failed
 
       # Where it was signed for, the same request is served, so the refusal
       # above is the path's and nothing else's.

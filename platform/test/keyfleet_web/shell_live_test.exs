@@ -446,7 +446,11 @@ defmodule KeyfleetWeb.ShellLiveTest do
     FleetNow.read("fibonacci_cascade")
     {:ok, view, _html} = live(conn, "/classic/1/rooms/general")
 
-    assert topics(view) ==
+    # General's own posts too, while it is open (`Keyfleet.Rooms.Message.topic/2`).
+    {[_general], heard} =
+      Enum.split_with(topics(view), &String.starts_with?(&1, "public:room:fleet_tech_classic:"))
+
+    assert heard ==
              Enum.sort([
                Keys.topic("fleet_tech_classic"),
                Rooms.topic("fleet_tech_classic", :public)

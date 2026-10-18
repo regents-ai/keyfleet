@@ -12,6 +12,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   alias Keyfleet.Proposals.Actions
   alias Keyfleet.SharedReading
   alias Keyfleet.TestChainNode
+  alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetProposals
   alias KeyfleetWeb.WalletWords
   alias RegentChain.Call
@@ -576,6 +577,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     end
 
     test "the fleet's page leads to its proposals", %{conn: conn} do
+      # A visitor's hall is drawn from the fleet's own reading.
+      FleetNow.read(@fleet)
       {:ok, view, _html} = open(conn, "#{Keyfleet.Fleets.path(@fleet)}")
       assert has_element?(view, "#fleet-tab-proposals[href='#{@list}']", "Proposals")
     end

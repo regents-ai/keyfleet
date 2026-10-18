@@ -708,24 +708,31 @@ defmodule KeyfleetWeb.PollsLive do
         |> assign(:polls, missing(fleet_id, poll_id))
 
       {%{polls: polls} = fleet, _degraded?} ->
-        case Enum.find(polls, &(&1.id == poll_id)) do
-          %{id: id} ->
-            key = FleetPolls.poll_key(fleet_id, id)
-            socket = socket |> SharedFigures.follow(:polls, [key]) |> listen([])
-            read(socket, failed, fn -> shared_poll(socket, fleet, fleet_id, key, poll_id) end)
-
-          nil ->
-            socket =
-              socket
-              |> SharedFigures.follow(:polls, [fleet_key])
-              |> listen([Polls.topic(poll_id)])
-
-            socket
-            |> read(failed, fn -> visit_poll(socket, fleet, fleet_id, poll_id) end)
-            |> visited(fleet_key)
-            |> close_clock()
-        end
+        listed = Enum.find(polls, &(&1.id == poll_id))
+        show_listed(socket, fleet, fleet_id, poll_id, listed, failed)
     end
+  end
+
+  # A poll on the fleet's list draws on its shared reading; one older than
+  # the list is read for the visit.
+  defp show_listed(socket, fleet, fleet_id, poll_id, %{}, failed) do
+    key = FleetPolls.poll_key(fleet_id, poll_id)
+    socket = socket |> SharedFigures.follow(:polls, [key]) |> listen([])
+    read(socket, failed, fn -> shared_poll(socket, fleet, fleet_id, key, poll_id) end)
+  end
+
+  defp show_listed(socket, fleet, fleet_id, poll_id, nil, failed) do
+    fleet_key = FleetPolls.key(fleet_id)
+
+    socket =
+      socket
+      |> SharedFigures.follow(:polls, [fleet_key])
+      |> listen([Polls.topic(poll_id)])
+
+    socket
+    |> read(failed, fn -> visit_poll(socket, fleet, fleet_id, poll_id) end)
+    |> visited(fleet_key)
+    |> close_clock()
   end
 
   # A poll read for the visit that is still open is one started since the

@@ -36,9 +36,10 @@ defmodule KeyfleetWeb.HomeLive do
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
-  alias Keyfleet.{Fleets, SharedReading}
   alias Keyfleet.Agents.Here
+  alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
+  alias Keyfleet.SharedReading
 
   alias KeyfleetWeb.{
     ActivityLines,
