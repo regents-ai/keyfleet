@@ -175,6 +175,26 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert again.resp_cookies == %{}
   end
 
+  # Costly failure: a page on another site sends someone's browser a link made
+  # for another account, signing them in to the notebooks as that account.
+  test "an Open notebooks link opened from another site is not spent there", c do
+    {:ok, url} = Notebooks.open(c.holder, signed_in!(c.holder), @fleet)
+    %URI{path: path, query: query} = URI.parse(url)
+    link = path <> "?" <> query
+
+    elsewhere = notebook(@host, :get, link, nil, [{"sec-fetch-site", "cross-site"}])
+    assert elsewhere.status == 200
+    assert elsewhere.resp_cookies == %{}
+    assert [policy] = get_resp_header(elsewhere, "content-security-policy")
+    assert policy =~ "default-src 'none'"
+    fresh = Plug.HTML.html_escape(KeyfleetWeb.Plugs.NotebookGateway.open_url(@fleet, "/"))
+    assert elsewhere.resp_body =~ ~s(href="#{fresh}")
+
+    here = notebook(@host, :get, link, nil, [{"sec-fetch-site", "same-site"}])
+    assert here.status == 303
+    assert %{value: _cookie} = here.resp_cookies["__Host-kf_notebooks"]
+  end
+
   # Costly failure: a signature header alone makes the site read a large body,
   # before anything about the sender is checked and as often as they like.
   test "a signed request spends its address's budget first and is read only as far as a signature reaches" do
