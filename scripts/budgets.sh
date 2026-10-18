@@ -55,12 +55,14 @@ reports="$root/platform/_build/lighthouse"
 rm -rf "$reports"
 mkdir -p "$reports"
 config="$root/platform/lighthouserc.cjs"
+# Lighthouse CI as platform/package.json pins it, installed by npm ci.
+lhci="$root/platform/node_modules/.bin/lhci"
 
 echo "==> Loading each page three times in Lighthouse (mobile, simulated slow 4G)"
-(cd "$reports" && npx --yes @lhci/cli@0.15.1 collect --config="$config")
+(cd "$reports" && "$lhci" collect --config="$config")
 
 passed=true
-(cd "$reports" && npx --yes @lhci/cli@0.15.1 assert --config="$config") || passed=false
+(cd "$reports" && "$lhci" assert --config="$config") || passed=false
 
 # The median of each page's runs, as the assertions judge them, and the page
 # Lighthouse ended on when it differs from the one asked for.

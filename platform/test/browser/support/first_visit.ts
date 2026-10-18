@@ -34,6 +34,40 @@ export async function expectConnected(page: Page) {
 }
 
 /**
+ * Waits until nothing on the page is moving: a dialog rising into place, a
+ * page gliding in from the navigation, a pressed control springing back. A
+ * person judges the page once it comes to rest, so the checks measure it then,
+ * with their limits unchanged. After three seconds of motion they measure it
+ * as it is.
+ */
+export async function atRest(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>(resolve => {
+        const shape = () =>
+          [...document.querySelectorAll("main, dialog[open], a[href], button")]
+            .map(element => {
+              const box = element.getBoundingClientRect()
+              return `${box.x},${box.y},${box.width},${box.height}`
+            })
+            .join(";")
+        const until = performance.now() + 3000
+        let last = shape()
+        let calm = 0
+        const frame = () =>
+          requestAnimationFrame(() => {
+            const now = shape()
+            calm = now === last ? calm + 1 : 0
+            last = now
+            if (calm >= 5 || performance.now() > until) resolve()
+            else frame()
+          })
+        frame()
+      }),
+  )
+}
+
+/**
  * Nothing scrolls sideways: neither the page nor the shell's scrolling pane is
  * wider than the screen. A row meant to scroll sideways inside the page, such
  * as a holder's Key cards, scrolls within its own box and is not counted.
@@ -62,6 +96,7 @@ export async function expectNoSidewaysScroll(page: Page) {
 /** `thing` is on the first screen, top to bottom, with nothing scrolled. */
 export async function expectOnFirstScreen(page: Page, thing: Locator, what: string) {
   await expect(thing, `${what} shows`).toBeVisible()
+  await atRest(page)
   const box = (await thing.boundingBox())!
   const screen = await page.evaluate(() => window.innerHeight)
   expect(box.y + box.height, `${what} ends inside the first ${screen}px of the screen`).toBeLessThanOrEqual(screen)
@@ -72,6 +107,7 @@ export async function expectOnFirstScreen(page: Page, thing: Locator, what: stri
  * it. For a measurement the run reports rather than one it fails on.
  */
 export async function belowFirstScreen(page: Page, thing: Locator): Promise<number> {
+  await atRest(page)
   const box = (await thing.boundingBox())!
   const screen = await page.evaluate(() => window.innerHeight)
   return Math.max(0, Math.ceil(box.y + box.height - screen))
@@ -122,6 +158,7 @@ export async function expectTapTargets(page: Page) {
 /** The checks every step of a flow ends with. */
 export async function expectComfortable(page: Page, errors: string[]) {
   await expectConnected(page)
+  await atRest(page)
   await expectNoSidewaysScroll(page)
   await expectTapTargets(page)
   expect(errors, "errors the page raised").toEqual([])

@@ -2360,12 +2360,13 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Each page reports how fast it drew and answered (Core Web Vitals) once as
   it is left, by page and device type, with nothing saved and no address
   kept. A release now stops if a phone-speed Lighthouse run of the main pages
-  breaks the speed budgets.
+  breaks the speed budgets; Lighthouse is pinned with the build's other tools.
 - Load, deploy-during-load and database-fault runs live in `platform/load/`;
   they run on a computer against the release image and a throwaway database,
   and refuse keyfleet.ai.
 - The main flows run at an iPhone's and an Android phone's screen, and axe
-  checks every main page against WCAG 2.2 AA. Toasts and
+  checks every main page against WCAG 2.2 AA; the phone checks measure a page
+  once its motion has settled. Toasts and
   refusals in rooms and polls are announced, footer links are 44 px to tap,
   and the "See the fleets" links land on the fleets.
 - Outside checks: SIWA request binding, Privy token checks and credit debit

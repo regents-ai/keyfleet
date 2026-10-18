@@ -46,9 +46,10 @@ if [[ ! -x $CHROME_PATH ]]; then
 fi
 export CHROME_PATH
 
-# The Lighthouse inside @lhci/cli 0.15.1, which scripts/budgets.sh uses, so
-# these figures and the release budgets come from the same engine.
-lighthouse=(npx --yes lighthouse@12.6.1)
+# Lighthouse as platform/package.json pins it, the version inside the
+# Lighthouse CI that scripts/budgets.sh uses, so these figures and the release
+# budgets come from the same engine.
+lighthouse=(node_modules/.bin/lighthouse)
 
 chrome_flags="--headless=new"
 if [[ $(id -u) == 0 ]]; then chrome_flags+=" --no-sandbox"; fi

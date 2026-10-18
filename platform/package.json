@@ -20,20 +20,22 @@
     "@solana-program/system": "0.15.0",
     "@solana-program/token": "0.17.0",
     "@solana/kit": "8.5.0",
+    "@vgpu/wgsl": "0.6.0",
     "animejs": "4.5.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "vgpu": "0.6.0",
     "viem": "2.57.7",
-    "@vgpu/wgsl": "0.6.0",
     "web-vitals": "6.2.3"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
+    "@lhci/cli": "0.15.1",
     "@playwright/test": "1.61.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@webgpu/types": "0.1.74",
+    "lighthouse": "12.6.1",
     "typescript": "7.0.2",
     "vitest": "5.0.5"
   },
