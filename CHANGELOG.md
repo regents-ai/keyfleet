@@ -2319,3 +2319,25 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - A press the open page doesn't know (for example one left over from a page
   just navigated away from) now changes nothing, where it used to make the
   page start over.
+
+## 2026-10-18 — Notebook and code access hold up under pressure
+
+- A notebook sign-in link opened from another website no longer signs you
+  in. It shows one link, Open the notebooks, which signs in whoever is signed
+  in to Keyfleet in that browser, so a link someone else made can't sign you
+  in to their account.
+- A fleet's notebook host passes on a redirect only within that fleet's own
+  notebooks, and takes each API address in one spelling: an address with
+  escaped characters answers 400 `invalid_request`, so it can't slip past a
+  notebook's limit on sessions or its ban on scheduled jobs.
+- A person makes at most 1,200 requests a minute to a fleet's notebook host
+  (429 `notebook_requests_limit_reached`), and a person or agent starts at
+  most 30 background runs in ten minutes, on the notebook host and through
+  this site together (429 `notebook_runs_limit_reached`).
+- A wallet pushes to a fleet's code at most 120 times an hour (429
+  `code_pushes_limit_reached`), and each push records at most 20 branches and
+  tags.
+- A person makes at most 20 pairing codes in ten minutes; past that the
+  Account page's pairing box says a code can't be made right now.
+- Each of these answers `Retry-After` with the seconds until it can be tried
+  again.
