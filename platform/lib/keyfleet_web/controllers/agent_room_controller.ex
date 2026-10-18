@@ -11,6 +11,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias Keyfleet.Rooms.Errors.CreatedRoomLimitError
   alias Keyfleet.Rooms.Errors.KeyUnknownError
   alias Keyfleet.Rooms.Errors.NoAgentProfileError
+  alias Keyfleet.Rooms.Errors.PostLimitError
   alias Keyfleet.Rooms.Errors.QuoteDiffersError
   alias Keyfleet.Rooms.Errors.QuoteUnknownError
   alias Keyfleet.Rooms.Errors.RenameTooSoonError
@@ -34,7 +35,8 @@ defmodule KeyfleetWeb.AgentRoomController do
     SendConflictError,
     ReplyOutsideRoomError,
     QuoteUnknownError,
-    QuoteDiffersError
+    QuoteDiffersError,
+    PostLimitError
   ]
 
   def rooms(conn, %{"fleet_id" => fleet_id}) do
@@ -380,6 +382,12 @@ defmodule KeyfleetWeb.AgentRoomController do
   defp refuse_named(conn, %ReplyOutsideRoomError{}, _error), do: invalid(conn, "reply_not_here")
   defp refuse_named(conn, %QuoteUnknownError{}, _error), do: invalid(conn, "quote_unknown")
   defp refuse_named(conn, %QuoteDiffersError{}, _error), do: invalid(conn, "quote_differs")
+
+  defp refuse_named(conn, %PostLimitError{retry_after: seconds}, _error) do
+    conn
+    |> put_resp_header("retry-after", Integer.to_string(seconds))
+    |> Refusal.json(429, "post_limit_reached")
+  end
 
   defp refuse_named(conn, nil, error) do
     if Rooms.taken?(error, :quote_request_id),

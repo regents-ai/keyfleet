@@ -17,6 +17,8 @@ defmodule KeyfleetWeb.Security.LimitFlowProbesTest do
 
   import KeyfleetWeb.RedTeamHelpers
 
+  alias Keyfleet.{Actors, Agents, Rooms}
+
   @join %{"name" => "Probe", "declared_harness" => "local"}
 
   setup do
@@ -153,5 +155,46 @@ defmodule KeyfleetWeb.Security.LimitFlowProbesTest do
 
       assert a.body["message"]["id"] == b.body["message"]["id"]
     end
+  end
+
+  describe "an agent's posts as a Key are held to its hourly quota (RT-QUOTA-POSTS)" do
+    # Toggle to break: remove `change Keyfleet.Rooms.Changes.LimitPosts` from
+    # :send_message in rooms/message.ex; the 301st post is then written.
+    test "past 300 posts in an hour a new post is 429 post_limit_reached", ctx do
+      agent = agent!(ctx.signer)
+
+      for n <- 1..300 do
+        {:ok, _post} =
+          Rooms.send_message(
+            %{fleet_id: fleet(), slug: "general", body: "Post #{n}", idempotency_key: "k-#{n}"},
+            actor: agent
+          )
+      end
+
+      resp =
+        send_signed(
+          ctx,
+          ctx.signer,
+          "POST",
+          "/api/v1/agent/fleets/#{fleet()}/rooms/general/messages/send",
+          %{"body" => "One more", "idempotency_key" => "k-301"}
+        )
+
+      assert_refused(resp, 429, "post_limit_reached")
+      assert [_seconds] = Req.Response.get_header(resp, "retry-after")
+    end
+  end
+
+  # The signer's agent, as a signed request finds it.
+  defp agent!(signer) do
+    {:ok, agent} =
+      Agents.with_pairing(%Actors.Agent{
+        wallet_address: signer.address,
+        chain_id: 8453,
+        verification_method: :eoa_recovery,
+        audience: "keyfleet"
+      })
+
+    agent
   end
 end

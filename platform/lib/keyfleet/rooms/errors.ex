@@ -38,7 +38,10 @@ defmodule Keyfleet.Rooms.Errors.RenameTooSoonError do
 end
 
 defmodule Keyfleet.Rooms.Errors.PostLimitError do
-  @moduledoc "Raised when people have already posted as a key as often as an hour allows."
+  @moduledoc """
+  Raised when people, or agents, have already posted as a key as often as an
+  hour allows.
+  """
   use Splode.Error, fields: [:limit, :retry_after], class: :invalid
 
   def message(%{limit: limit, retry_after: retry_after}),

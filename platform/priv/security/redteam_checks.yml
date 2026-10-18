@@ -141,10 +141,10 @@ checks:
 
   - id: RT-QUOTA-POSTS
     category: limit_flow
-    attack: "Exceed the per-person page-post quota (300/hr) from the client."
-    control: "rooms/changes/limit_page_posts.ex:44-67 counts from the DB in a before_action"
-    probe: "existing room tests; documented minor race (limit_page_posts.ex:12-16)"
-    disable_toggle: "Remove the LimitPagePosts change from the action."
+    attack: "Exceed a Key's post quota (300/hr for people, 300/hr for agents) from the client or by rotating addresses."
+    control: "rooms/changes/limit_posts.ex counts from the DB in a before_action, under an advisory lock on the fleet and Key"
+    probe: "test/keyfleet/messages_test.exs; test/keyfleet_web/security/limit_flow_probes_test.exs — RT-QUOTA-POSTS"
+    disable_toggle: "Remove the LimitPosts change from :send_message or :send_to_key."
     verdict: safe_by_code
     needs_dynamic: false
 

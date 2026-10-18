@@ -342,6 +342,31 @@ defmodule Keyfleet.MessagesTest do
     assert %{as_key: 1, author_kind: :agent} = post!(agent, "general", "Hull survey started")
   end
 
+  # An agent's posts reach the per-address limit, which a new address starts
+  # again, so they are counted as the key they are written as.
+  test "agents post as a key 300 times an hour at most, in rooms and on walls together",
+       %{owner: owner, writer: writer} do
+    for n <- 1..299 do
+      {:ok, _} =
+        if rem(n, 2) == 0,
+          do: send_as(writer, "general", "Post #{n}", "k-#{n}"),
+          else: to_key(writer, 1, "Post #{n}")
+    end
+
+    {:ok, last} = to_key(writer, 1, "Post 300", "k-300")
+
+    assert {:error, %Ash.Error.Invalid{errors: [%Rooms.Errors.PostLimitError{} = too_many]}} =
+             send_as(writer, "coding", "One more", "k-301")
+
+    assert too_many.retry_after in 3_500..3_600
+    assert {:ok, %{id: id}} = to_key(writer, 1, "Post 300", "k-300")
+    assert id == last.id
+
+    # What people post themselves as the key is counted apart.
+    assert {:ok, %{author_kind: :human, via_agent_profile_id: nil}} =
+             to_key(owner, 1, "Still here")
+  end
+
   test "a room's notice of a new post carries its place, and a repeat sends none", %{
     writer: writer
   } do

@@ -77,7 +77,7 @@ defmodule Keyfleet.Rooms.Message do
       index(["room_id"], name: "messages_room_namings_index", where: "kind = 'room_named'")
 
       # What people have posted as each key lately, counted against their
-      # hourly limit (`Keyfleet.Rooms.Changes.LimitPagePosts`).
+      # hourly limit (`Keyfleet.Rooms.Changes.LimitPosts`).
       index(["fleet_id", "as_key", "inserted_at DESC"],
         name: "messages_page_posts_index",
         where: "kind = 'post' AND author_kind = 'human' AND via_agent_profile_id IS NULL"
@@ -159,6 +159,7 @@ defmodule Keyfleet.Rooms.Message do
       validate Keyfleet.Graph.Validations.KnownFleet
       validate Keyfleet.Rooms.Validations.QuotesItsPerson
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :room}
+      change Keyfleet.Rooms.Changes.LimitPosts
       change Keyfleet.Agents.Changes.NoteContribution
     end
 
@@ -192,7 +193,7 @@ defmodule Keyfleet.Rooms.Message do
       validate Keyfleet.Graph.Validations.KnownFleet
       validate Keyfleet.Rooms.Validations.IssuedKey
       change {Keyfleet.Rooms.Changes.PostMessage, kind: :post, in: :key}
-      change Keyfleet.Rooms.Changes.LimitPagePosts
+      change Keyfleet.Rooms.Changes.LimitPosts
       change Keyfleet.Agents.Changes.NoteContribution
     end
 
@@ -458,6 +459,23 @@ defmodule Keyfleet.Rooms.Message do
       prepare build(sort: [inserted_at: :desc, id: :asc])
     end
 
+    # What agents have written as one key in the last hour, for themselves or
+    # for their person, in the fleet's rooms and keys' threads together,
+    # newest first.
+    read :agent_posts_last_hour do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+
+      filter expr(
+               kind == :post and fleet_id == ^arg(:fleet_id) and as_key == ^arg(:token_id) and
+                 (author_kind == :agent or not is_nil(via_agent_profile_id)) and
+                 inserted_at > ago(1, :hour)
+             )
+
+      prepare build(sort: [inserted_at: :desc, id: :asc])
+    end
+
     read :in_room do
       public? false
       argument :fleet_id, :string, allow_nil?: false
@@ -586,8 +604,8 @@ defmodule Keyfleet.Rooms.Message do
       authorize_if {Keyfleet.Access.Check, write: :key_walls, scope: :fleet_id}
     end
 
-    # The hourly count behind a person's posting limit is the server's own read.
-    policy action(:page_posts_last_hour) do
+    # The hourly counts behind the posting limits are the server's own reads.
+    policy action([:page_posts_last_hour, :agent_posts_last_hour]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end
