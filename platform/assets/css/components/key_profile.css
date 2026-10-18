@@ -315,7 +315,7 @@
   }
 
   /* The card is never taller than about half the screen, as on a tablet,
-     so a phone on its side still shows the Key's facts under it. */
+     so on a phone held sideways it doesn't fill the sheet. */
   .key-profile-card {
     width: min(58vw, 33svh);
     height: auto;
@@ -342,25 +342,24 @@
     justify-content: flex-end;
   }
 
-  .key-profile__actions > .rg-button {
-    flex: 1 1 auto;
-  }
-
   .key-profile__actions > form {
     flex: none;
   }
 
-  /* The Key's other Keys are a full finger's height, and each Claim fills
-     the row it sits on. */
+  /* The Key's other Keys are a full finger's height, and each Claim spans
+     the panel, one above the other, as Approve and Buy do. */
   .key-profile-keys a {
     display: inline-flex;
     align-items: center;
     min-height: 2.75rem;
   }
 
-  .key-profile .wallet-panel-step,
+  .key-profile .wallet-panel-step {
+    flex: 1 1 100%;
+  }
+
   .key-profile .wallet-panel-step > .rg-button {
-    flex: 1 1 auto;
+    flex-grow: 1;
   }
 
   /* Post spans the box above it, as Send does in the rooms. */

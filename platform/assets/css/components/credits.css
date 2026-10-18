@@ -248,9 +248,9 @@
     font-size: 2.25rem;
   }
 
-  /* The amount takes a press anywhere in its box around the figure, which
-     stays where it was; Purchase History and the policy links are a full
-     finger's height. */
+  /* The amount takes a press in the box's padding around the figure as well
+     as on it, while the figure stays where it was; Purchase History and the
+     policy links are a full finger's height. */
   .credits-panel__amount input {
     margin: -0.5rem -0.75rem;
     padding: 0.5rem 0.75rem;

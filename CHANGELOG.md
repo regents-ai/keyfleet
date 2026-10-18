@@ -2228,25 +2228,33 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   rooms and DMs, links sent in a message, the workspace's titles, back links
   and the Keys and commits an item names, the Treasury's links, older and
   newer pages of proposals, each choice in a poll, members' connections, the
-  hall's channels and the room a request was quoted in.
+  hall's channels, the room a request was quoted in and Keyfleet at the top
+  of the public pages.
 - Start poll and Vote stay at the foot of the screen while their form is in
-  view, so a long poll never hides its button.
+  view, so a long poll never hides its button, and a field the form scrolls
+  to stops clear of it.
 - The Key map's "i" opens its directions on a phone, above the button and
   inside the screen; before, it opened nothing.
 - A fleet's page no longer scrolls sideways on a 320px phone: the bar, the
   way in and the map ran 7px past the edge.
-- Buttons that sit together line up: Approve and Buy, a Key's shard and
-  presence buttons, Claim, Copy and Close, Sign in and Read General, and the
-  workspace's code buttons each fill their row instead of being odd widths.
+- Buttons that sit together line up on a phone: Approve and Buy, a Key's
+  shard and presence buttons and Claim each span the panel one above the
+  other; Copy and Close, Sign in and Read General, Block, Sign in on closed
+  messages and the workspace's code buttons fill their row.
 - The Key window is a sheet up to 768px wide, as every other phone layout
-  is; Close sits beside the Key's name when there's room, and the card stays
-  small enough on a phone held sideways to show the Key's facts.
-- About and Opportunities show their table's lines and grey text again, sit
-  in a padded panel on a phone, and on a phone the table reads as a list, a
-  label over each value, with no word cut in two.
+  is. Close sits beside the Key's name when there's room, and the card stays
+  smaller on a phone held sideways.
+- About and Opportunities show their table's lines and grey text again and
+  sit in a padded panel on a phone. On a phone a two-column table, such as
+  About's key facts in the app and on the public page, reads as a list, a
+  label over each value, with no word cut in two; wider tables keep their
+  columns. At every width a table's last column wraps between words first.
 - At the end of a page on a phone a swipe carries on down to the footer,
   which holds the links the phone's header leaves out; before, only a swipe
   on the header reached it.
-- A line in the hall that disagrees with another keeps its warm mark clear of
-  its time, and a long connected account name wraps instead of widening the
-  page. The workspace's agent guide drops a line about how the site is built.
+- At every width: a line in the hall that disagrees with another keeps its
+  warm mark clear of its time; a long connected account name wraps instead of
+  widening the page; the Treasury's panels are padded as every other panel
+  is; and the Send your agent dialog's title no longer shows a focus ring
+  when it opens. The workspace's agent guide drops a line about how the site
+  is built.

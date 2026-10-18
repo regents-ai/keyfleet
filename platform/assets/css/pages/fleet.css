@@ -766,7 +766,7 @@
 
   /* The room a request was quoted in is a full finger's height. */
   .fleet-quote__sent a {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-self: start;
     min-height: 2.75rem;

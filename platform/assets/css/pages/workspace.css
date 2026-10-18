@@ -318,7 +318,8 @@
   .workspace-facts dd > a,
   .workspace-fields dd > a,
   .workspace-list li > a,
-  .workspace-lines > li > a {
+  .workspace-lines > li > a,
+  .workspace-lines > li > p:first-child > a {
     display: inline-flex;
     align-items: center;
     min-height: 2.75rem;

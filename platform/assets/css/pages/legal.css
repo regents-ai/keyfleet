@@ -8,6 +8,7 @@
   row-gap: 0;
 }
 
+.public-document .legal-home,
 .public-document .legal-nav a {
   display: inline-flex;
   align-items: center;
@@ -138,19 +139,21 @@
     padding: var(--rg-panel-padding);
   }
 
-  /* On a phone a table reads as a list: each row is its first cell, muted,
-     over the rest, with a line between rows, so no word is cut and nothing
-     scrolls sideways. The header row stays for screen readers. */
-  .public-document :is(table, tbody, tr, th, td) {
+  /* On a phone a two-column table reads as a list: each row is its first
+     cell, muted, over its second, with a line between rows, so no word is
+     cut and nothing scrolls sideways. The header row is kept out of sight.
+     A wider table keeps its columns and scrolls inside the page. */
+  .public-document table:not(:has(:is(th, td):nth-child(3))) {
     display: block;
-  }
-
-  .public-document table {
     overflow: visible;
     border-block-start: 1px solid var(--hairline);
   }
 
-  .public-document thead {
+  .public-document table:not(:has(:is(th, td):nth-child(3))) :is(tbody, tr, th, td) {
+    display: block;
+  }
+
+  .public-document table:not(:has(:is(th, td):nth-child(3))) thead {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -159,17 +162,17 @@
     white-space: nowrap;
   }
 
-  .public-document tr {
+  .public-document table:not(:has(:is(th, td):nth-child(3))) tr {
     padding-block: 0.625rem;
     border-block-end: 1px solid var(--hairline);
   }
 
-  .public-document :is(th, td) {
+  .public-document table:not(:has(:is(th, td):nth-child(3))) :is(th, td) {
     padding: 0;
     border: 0;
   }
 
-  .public-document td:first-child {
+  .public-document table:not(:has(:is(th, td):nth-child(3))) td:first-child {
     color: var(--color-fg-muted);
     font-size: 0.875rem;
   }

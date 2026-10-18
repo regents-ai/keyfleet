@@ -192,11 +192,6 @@
   min-width: 0;
 }
 
-/* Start poll and Vote span the form, in the row that keeps them in reach. */
-.polls-form > .sticky-actions {
-  display: grid;
-}
-
 .polls-field input,
 .polls-field select,
 .polls-field textarea {
@@ -237,6 +232,11 @@
 }
 
 @media (max-width: 47.99rem) {
+  /* Start poll and Vote span the form, in the row that keeps them in reach. */
+  .polls-form > .sticky-actions {
+    display: grid;
+  }
+
   /* Each choice, and the Key that started the poll, are a full finger's
      height. */
   .polls-choices label,
