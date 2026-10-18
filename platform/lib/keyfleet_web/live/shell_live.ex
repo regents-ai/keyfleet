@@ -19,7 +19,6 @@ defmodule KeyfleetWeb.ShellLive do
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
-  alias Keyfleet.Notebooks
   alias Keyfleet.Proposals
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Muter
@@ -301,35 +300,20 @@ defmodule KeyfleetWeb.ShellLive do
      |> read_verified_connections()}
   end
 
-  # The fleet's notebooks open on their own address, signed in by a link that
-  # works once; only a holder of one of the fleet's keys gets one.
+  # The fleet's notebooks open on their own address, signed in by a code that
+  # works once, which Keyfleet's notebook page sends there
+  # (`KeyfleetWeb.NotebookOpenController`); only a holder of one of the
+  # fleet's keys gets one.
   defp press("open_notebooks", _params, socket) do
-    with %Human{} = actor <- human_actor(socket),
-         {:ok, url} <-
-           Notebooks.open(
-             actor,
-             socket.assigns.session_lineage,
-             socket.assigns.workspace.fleet_id
-           ) do
-      {:noreply, redirect(socket, external: url)}
-    else
+    case human_actor(socket) do
+      %Human{} ->
+        {:noreply,
+         redirect(socket,
+           to: ~p"/fleets/#{socket.assigns.workspace.fleet_id}/notebooks/open?#{[to: "/"]}"
+         )}
+
       nil ->
         {:noreply, assign(socket, notebooks_notice: "Sign in to open this fleet’s notebooks.")}
-
-      {:error, :signed_out} ->
-        {:noreply, assign(socket, notebooks_notice: "Sign in to open this fleet’s notebooks.")}
-
-      {:error, :not_holder} ->
-        {:noreply,
-         assign(socket,
-           notebooks_notice: "Only holders of this fleet’s Keys can open its notebooks."
-         )}
-
-      {:error, _error} ->
-        {:noreply,
-         assign(socket,
-           notebooks_notice: "The notebooks can’t be opened right now. Try again in a minute."
-         )}
     end
   end
 

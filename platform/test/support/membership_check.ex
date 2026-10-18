@@ -649,13 +649,24 @@ defmodule Keyfleet.MembershipCheck do
     do: SessionAuthorityHelpers.signed_in_session(person.human_account_id)["session_lineage"]
 
   # A notebook sign-in for the person, made the way the fleet's workspace
-  # makes one: a link that works once, spent on the notebook host for its
-  # cookie.
+  # makes one: a code that works once, sent to the notebook host from this
+  # site's page for its cookie.
   defp notebook_cookie(c, %{person: person}, lineage) do
-    with {:ok, link} <- Notebooks.open(person, lineage, @fleet),
-         %URI{path: path, query: query} = URI.parse(link),
+    with {:ok, entry} <- Notebooks.open(person, lineage, @fleet),
+         headers = [
+           {"origin", KeyfleetWeb.Endpoint.url()},
+           {"content-type", "application/x-www-form-urlencoded"}
+         ],
+         form = URI.encode_query(code: entry.code, to: entry.to),
          %{status: 303, headers: %{"set-cookie" => set}} <-
-           send_request(c, "GET", Notebooks.host(@fleet), path <> "?" <> query, [], nil) do
+           send_request(
+             c,
+             "POST",
+             Notebooks.host(@fleet),
+             URI.parse(entry.action).path,
+             headers,
+             form
+           ) do
       Enum.find_value(set, &notebook_cookie_value/1)
     else
       _refused -> nil

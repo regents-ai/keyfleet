@@ -10,8 +10,8 @@ defmodule Keyfleet.Notebooks do
   by a wallet. Each request carries a short pass this site signs
   (`Keyfleet.Notebooks.Pass`).
 
-  A person opens the notebooks from the fleet's workspace, which hands their
-  browser a link that works once (`open/3`); the notebook sign-in it sets ends
+  A person opens the notebooks from the fleet's workspace, whose page sends
+  the notebook host a code that works once (`open/4`); the notebook sign-in it sets ends
   when their Keyfleet sign-in does. When a key changes hands, a job
   brings the fleet's hub in step (`Keyfleet.Notebooks.Roster`) and ends the
   open notebook connections of whoever lost their key (`end_access/2`).
@@ -262,7 +262,8 @@ defmodule Keyfleet.Notebooks do
 
   @doc """
   Opens the fleet's notebooks for a person signed in by the session `lineage`:
-  `{:ok, url}`, the fleet's notebook address with a link that works once, for
+  `{:ok, %{action: url, code: code, to: to}}`, the form Keyfleet's page sends
+  to the fleet's notebook address, with a code that works once, for
   `handoff_ttl_seconds`, landing on `to` (`destination?/1`: the start page or
   a saved output); `{:error, :no_hub}` when the fleet has no notebooks;
   `{:error, :invalid_destination}` for anywhere else to land;
@@ -293,7 +294,7 @@ defmodule Keyfleet.Notebooks do
       )
       |> Ash.create!()
 
-      {:ok, url(fleet_id, "/_keyfleet/enter", URI.encode_query(code: code, to: to))}
+      {:ok, %{action: url(fleet_id, "/_keyfleet/enter"), code: code, to: to}}
     else
       {:ok, false} -> {:error, :not_holder}
       {:error, error} -> {:error, error}
