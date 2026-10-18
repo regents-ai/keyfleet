@@ -2332,3 +2332,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - Released `4dca18a9` as Fly v86; the image names the commit it was built
   from.
+
+## 2026-10-18 — v87 released
+
+- Released `502b2dd4` as Fly v87, after v86. It carries the activity fix
+  above ("A fleet's activity no longer jams the site"); v86 (`4dca18a9`)
+  did not.
