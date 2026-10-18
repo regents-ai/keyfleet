@@ -14,7 +14,8 @@ prose scoreboard in the home-stretch plan. Update a row when its proof changes.
   `witnessed: true` yet).
 - **Not run**: nothing proves it yet.
 
-**Agent runs.** Contessa (Dots, API, 17 Oct: `2026-10-17-dots-api.md`).
+**Agent runs.** Contessa (Dots, API, 17 Oct 19:09–19:18Z: `2026-10-17-dots-api.md`,
+with a request id for each step, so it can be witnessed).
 Hermes (API, 17 Oct: `2026-10-17-hermes-api.md`, blocked by Hermes's own
 approval prompt; Git reported 18 Oct 17:03Z, commit `5402c0b5`). Grok Bot (API,
 18 Oct 20:16Z: task #1, push `24e056ff`, no run file yet). Check ids (C1–C9,
@@ -24,10 +25,10 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 
 | Behaviour | Proof | State |
 | --- | --- | --- |
-| A paired agent learns who it is and who it acts for | `agent_tools.spec.ts` "a paired agent learns who it is…"; C1 | Proven; C1 not run (Contessa's note says pairing and check-in worked) |
+| A paired agent learns who it is and who it acts for | `agent_tools.spec.ts` "a paired agent learns who it is…"; C1 | Proven; C1 self-reported (Contessa) |
 | An unpaired agent is refused with `agent_not_paired`, and works once paired | `agent_tools.spec.ts` "a tool that needs a pairing refuses…" | Proven |
 | An unsigned header grants nothing; only the exact signed request acts | `AgentJoinJourneyTest` (3 kept tests) | Proven |
-| A replayed signed request is refused | C1 | Not run (Contessa skipped it) |
+| A replayed signed request is refused | C1 | Self-reported (Contessa: 409 `request_replayed`) |
 | An agent restarts and signs in as the same agent without pairing again | S4 | Not run |
 | An expired signature is refused with a clear hint; a fresh one works | S3; `CodeGatewayTest` "an agent's password is refused once its sign-in has run out" | Proven for Git; S3 not run |
 | A removed pairing refuses requests and closes open notebook connections | `NotebookGatewayTest` "an agent's open notebook connection closes when its person ends the pairing"; S7 | Proven; S7 not run |
@@ -55,6 +56,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Two writes to one version give one success and one conflict | `AgentGraphJourneyTest` (kept) | Proven |
 | A retried write applies once | `AgentGraphJourneyTest` (kept) | Proven |
 | Creates, links, patches and reads back goals, tasks, evidence, notes and dead ends | C2 | Self-reported (Contessa's run; Hermes and Grok Bot only in reports with no run record) |
+| An agent reading an item back through the API sees the name shown beside its Key | none: the API answers the creator's wallet and Key, not the name | Not offered (Contessa) |
 | An item an agent added names the agent beside its Key | `WorkspacePageTest` "an item an agent added names the agent…" | New |
 | Two agents on one Key each show their own name | S1 | Not run since the fix (failed 17 Oct, before items named agents) |
 
@@ -93,7 +95,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Reads one proposal | C6 | Not run: no proposal existed |
 | A proposal and a vote an agent sent name the agent, beside its wallet | `ProposalsPageTest` "a proposal and a vote an agent sent name the agent" | New |
 | An agent with a shard proposes and votes from its own wallet | Classic fork run on the Mac (`fbff3a46`) | Not run |
-| A second poll vote from the same Key is refused with `409 vote_conflict` | `SignedAgentContractTest`; C5 | Proven; C5 self-reported (Contessa) |
+| A second poll vote from the same Key is refused with `409 vote_conflict` | `SignedAgentContractTest`; C5 | Proven; C5 blocked in Contessa's run (Key 329 had used its poll for the day); an earlier unrecorded run reported it |
 | A poll and a vote an agent sent name the agent | none: the polls page has no page test | Not run |
 
 ## Property tests to add
