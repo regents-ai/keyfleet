@@ -15,13 +15,52 @@ defmodule KeyfleetWeb.Layouts do
   def app(assigns) do
     ~H"""
     {@inner_content}
-    <div id="flash-region" aria-live="polite">
-      <Regent.Primitives.notice :if={message = Phoenix.Flash.get(@flash, :info)}>
+    <div
+      id="flash-region"
+      class="toast-dock"
+      aria-live="polite"
+      phx-hook="MotionList"
+      data-variant={KeyfleetWeb.Motion.standard("toast")}
+      data-layout-id="flash-region"
+      data-children="[data-toast]"
+    >
+      <.toast :if={message = Phoenix.Flash.get(@flash, :info)} kind="info">
         {message}
-      </Regent.Primitives.notice>
-      <Regent.Primitives.notice :if={message = Phoenix.Flash.get(@flash, :error)} tone="error">
+      </.toast>
+      <.toast :if={message = Phoenix.Flash.get(@flash, :error)} kind="error">
         {message}
+      </.toast>
+    </div>
+    """
+  end
+
+  attr(:kind, :string, required: true, values: ~w(info error))
+  slot(:inner_block, required: true)
+
+  # One note in the corner. The region reads a note out when it arrives, and an
+  # error at once; either stays until it is dismissed or the page moves on.
+  defp toast(assigns) do
+    ~H"""
+    <div
+      id={"flash-#{@kind}"}
+      class="toast"
+      role={@kind == "error" && "alert"}
+      data-toast
+      data-layout-id={"flash-#{@kind}"}
+    >
+      <Regent.Primitives.notice tone={@kind} class="toast__notice">
+        {render_slot(@inner_block)}
       </Regent.Primitives.notice>
+      <button
+        type="button"
+        class="toast__dismiss"
+        aria-label="Dismiss"
+        phx-click={
+          JS.push("lv:clear-flash", value: %{key: @kind}) |> JS.hide(to: "#flash-#{@kind}")
+        }
+      >
+        ×
+      </button>
     </div>
     """
   end
