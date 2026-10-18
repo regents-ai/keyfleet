@@ -2290,3 +2290,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   `Retry-After` where waiting helps.
 - Reading a finished notebook run answers its kept page instead of fetching
   it from the notebook host again each time.
+
+## 2026-10-18 — Hermes's recorded compatibility run
+
+- The compatibility page now shows Hermes's 17 October run with its versions
+  and request ids. Only the proposal and treasury reads went out, because
+  Hermes's own approval prompt for its signing client timed out; the other
+  checks read Blocked until it runs again. Classic #1's check reads Fail for
+  that run, since the page then gave no terms.
