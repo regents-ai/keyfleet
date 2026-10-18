@@ -240,15 +240,17 @@ defmodule KeyfleetWeb.ShellLive do
   defp coming_soon_inside?(_route_spec, _params), do: false
 
   # A press that can't be finished because the site's records can't be read
-  # leaves the page as it was and says so. Opening the notebooks and getting a
-  # git password sign the person in elsewhere, so they are answered as before.
+  # leaves the page as it was and says so, until a press goes through. Opening
+  # the notebooks and getting a git password sign the person in elsewhere, so
+  # they are answered as before.
   @impl true
   def handle_event(event, params, socket) when event in @sign_in_events,
     do: press(event, params, socket)
 
   def handle_event(event, params, socket) do
     case PageRead.run("app", fn -> press(event, params, socket) end) do
-      {:ok, answer} -> answer
+      {:ok, {:noreply, socket}} -> {:noreply, clear_flash(socket, :error)}
+      {:ok, {:reply, reply, socket}} -> {:reply, reply, clear_flash(socket, :error)}
       {:error, _failure} -> {:noreply, put_flash(socket, :error, @press_failed)}
     end
   end

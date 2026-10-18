@@ -2216,3 +2216,18 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Leaving a room or a conversation whose read place can't be saved still goes
   to the next page, instead of that page saying it couldn't be loaded.
 - The harbour sea keeps its ships when the fleets on show can't be read.
+
+- A press on a page inside the app that can't be finished because the site's
+  records can't be read now leaves the page as it was and says "Something went
+  wrong on our side. Refresh the page to see the latest, then try again." The
+  notice goes once a press goes through. Before, the page failed and started
+  over. Opening a fleet's notebooks and getting a git password answer as
+  before. Words sent to your agent to quote show as sent even when the list
+  of requests can't be read again, so they're never offered to send twice.
+  changing hands) and can't be read leaves the page as it was; the next one
+  reads again. The fleet hall's feed no longer stops following new activity
+  after one failed read, and the polls page keeps what it shows, looking again
+  a few seconds later so a poll that closed still shows its result.
+- Opening or leaving a room or a conversation whose read place can't be saved
+  still goes ahead, instead of the page saying it couldn't be loaded.
+- The Key map goes without close-ups it can't read, instead of stalling.

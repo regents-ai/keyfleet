@@ -1793,13 +1793,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     |> Enum.map(fn "fleet-members-card-" <> token_id -> String.to_integer(token_id) end)
   end
 
-  # A post written as key 1 `seconds` before `now`, with no notice to anyone.
   # A table renamed inside the test's own transaction can't be read, the way
   # a database that refuses the read can't; the rename ends with the test.
   defp rename!(table, to) do
     Keyfleet.Repo.query!("ALTER TABLE #{Keyfleet.Repo.default_prefix()}.#{table} RENAME TO #{to}")
   end
 
+  # A post written as key 1 `seconds` before `now`, with no notice to anyone.
   defp line!(slug, seconds, now, fleet_id \\ @fleet) do
     room = Rooms.get_room!(fleet_id, slug, authorize?: false)
     body = "Line #{seconds}"
