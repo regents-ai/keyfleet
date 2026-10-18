@@ -1,12 +1,11 @@
 /* Notes from the page (`KeyfleetWeb.Layouts.app`): a dock at the foot of a
-   phone's screen, clear of its home bar and of any bar a page keeps along the
-   bottom, which names its height in --sticky-bar-height. On a wider screen the
-   dock sits in the bottom-right corner. Only the notes catch a press, never the
-   space around them. */
+   phone's screen, clear of its home bar and of a form's action bar
+   (`sticky_actions.css`). On a wider screen the dock sits in the bottom-right
+   corner. Only the notes catch a press, never the space around them. */
 .toast-dock {
   position: fixed;
   inset-inline: var(--space-2);
-  bottom: calc(var(--space-2) + var(--sticky-bar-height, 0px) + env(safe-area-inset-bottom));
+  bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
   z-index: 30;
   display: flex;
   flex-direction: column;
@@ -50,10 +49,17 @@
   color: var(--color-fg);
 }
 
+/* The action bar is a button's height and its padding above and below. */
+@media (max-width: 47.99rem) {
+  :root:has(.sticky-actions) .toast-dock {
+    bottom: calc(var(--space-2) * 3 + 2.75rem + env(safe-area-inset-bottom));
+  }
+}
+
 @media (min-width: 48rem) {
   .toast-dock {
     inset-inline: auto var(--space-3);
-    bottom: calc(var(--space-3) + var(--sticky-bar-height, 0px) + env(safe-area-inset-bottom));
+    bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
     width: 24rem;
   }
 }

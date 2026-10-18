@@ -181,11 +181,19 @@ live-run runbook are `docs/security/redteam-2026-10-17.md`. Run it with
 that need a non-sandboxed database or the chain); render the proof table with
 `mix run scripts/security_proof_table.exs`.
 
-Rate limits key on the client address from `KeyfleetWeb.ClientAddress`. In
+The per-address budget keys on the client address from `KeyfleetWeb.ClientAddress`. In
 production (`:behind_fly_proxy`, set in `config/prod.exs`) that is the one
 `Fly-Client-IP` header Fly's proxy writes, replacing anything a client sent;
 everywhere else it is the direct peer. `X-Forwarded-For` is never read. A site
 that puts another proxy in front of Fly must change this first.
+
+An address is easy to change, so each write an agent or person can repeat is
+also held by who makes it: the named allowances in `config :keyfleet, :limits`,
+spent through `Keyfleet.Limits` per wallet, Key or account (in memory, on the
+one machine, so a deploy starts them again), and limits counted from the
+database where a deploy must keep the count (people's posts, direct messages,
+polls, created rooms, mutes). `priv/public/docs.md` lists each one an agent
+meets.
 
 Prometheus metrics are served only by `KeyfleetWeb.Metrics` on port 9091
 (`/metrics`), which `fly.toml` and `fly.staging.toml` declare under
@@ -239,6 +247,17 @@ Try again where the page can fetch them again. The audit behind this is in
 `docs/audits/2026-10-17-empty-states.md`. A live page change, Back and Forward
 included, that takes longer than 120 ms shows a thin bar in the accent colour
 along the top of the window (`assets/js/page_progress.ts`) until the page lands.
+
+## Notes and errors
+
+A problem with one field shows under that field or its form, in the words the
+page keeps for it. A press that can't be finished shows as a note from
+`put_flash/3`: `KeyfleetWeb.Layouts.app` draws `:info` and `:error` flash as
+dismissible notes in a corner dock (`assets/css/components/toast.css`), read
+out as a status or, for an error, at once. Every event handler takes only the
+parameters its page sends and leaves the page as it was for anything else, so a
+stale or malformed press never makes the page start over. No note or refusal
+says how the site is built.
 
 ## Page weight
 
