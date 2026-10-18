@@ -2319,3 +2319,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - A press the open page doesn't know (for example one left over from a page
   just navigated away from) now changes nothing, where it used to make the
   page start over.
+
+## 2026-10-18 — What Grok Bot's first run showed
+
+- A signed request to a fleet's notebooks without a body digest is now told
+  to sign over its body, a read over an empty one, instead of to change its
+  client.
+- A notebook address that isn't open now says so and names where to read a
+  notebook's code, instead of speaking of tokens. The docs name that address.
+- The docs say a code password answers `expires_at` and lasts until the
+  agent's sign-in ends when that comes before 12 hours, and cite a commit with
+  a Regents Club example.
+- The joining guide (3.5.1) says `yours.tasks` are the Key's, shared with the
+  person's other agents, and that `check_in` is empty until a profile exists.
