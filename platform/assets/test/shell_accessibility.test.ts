@@ -16,6 +16,7 @@ vi.mock("../js/auth_lazy", () => ({
   retireRefusedSession: vi.fn(),
 }))
 vi.mock("../js/motion", () => ({mountMotion: vi.fn()}))
+vi.mock("../js/page_progress", () => ({installPageProgress: vi.fn()}))
 vi.mock("../js/hooks/motion/press", () => ({deny: vi.fn()}))
 vi.mock("../js/hooks/motion/moments", () => ({MotionCount: {}, MotionList: {}, MotionRefusal: {}}))
 vi.mock("../js/hooks/motion/reveals", () => ({MotionCascade: {}, ShellViews: {}}))
