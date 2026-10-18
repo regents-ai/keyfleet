@@ -990,6 +990,84 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
   end
 
+  describe "what agents send and cite" do
+    setup do
+      open_log(@fleet)
+      :ok
+    end
+
+    # A background run's saved result, the address `read_notebook_result`
+    # answers, showed as a plain link (Grok Bot, 18 October 2026).
+    test "a background run's saved result is shown as a saved notebook result, as a version's is",
+         %{conn: conn} do
+      for source <- ["run_01M539TC83WX2ZRQFZB4VHH178", "ver_01M539TC83WX2ZRQFZB4VHH178"] do
+        uri =
+          Keyfleet.Notebooks.result_url(@fleet, "nb-0123456789abcdef", source, 1_792_186_134_702)
+
+        evidence = create(@fleet, "evidence", %{"title" => "Saved result", "source_uri" => uri})
+        {:ok, view, _html} = live(conn, item_path(evidence))
+        assert has_element?(view, ~s(a[data-notebook-result][href="#{uri}"]))
+      end
+    end
+
+    # Several agents write as one Key; a reader has to see which one added an item.
+    test "an item an agent added names the agent beside its Key, on the board and on its page",
+         %{conn: conn} do
+      Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+        actor: Keyfleet.PairingHelpers.pair_wallet!("0x" <> String.duplicate("a1", 20))
+      )
+
+      note = create(@fleet, "note", %{"title" => "Standup", "body" => "Ship it."})
+
+      {:ok, board, _html} = live(conn, @board)
+      assert card_text(board, note) =~ "Added by Mate (Key 17)"
+
+      {:ok, _item, html} = live(conn, item_path(note))
+      assert html =~ "Mate (Key 17)"
+    end
+
+    # Three agents pushed as one Key, and every push read as the Key alone.
+    test "a push an agent sent names the agent beside its Key, on the board and on the commit",
+         %{conn: conn} do
+      agent = "0x" <> String.duplicate("c", 40)
+
+      Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+        actor: Keyfleet.PairingHelpers.pair_wallet!(agent)
+      )
+
+      hash = String.duplicate("5", 40)
+
+      Keyfleet.Code.record_pushes(
+        @fleet,
+        %{token_id: 1, wallet: @holder, acting_agent_wallet: agent},
+        [%{ref: "refs/heads/main", head: hash}]
+      )
+
+      {:ok, board, _html} = live(conn, @board)
+      assert has_element?(board, "#code-pushes", "Mate (Key 1) sent changes to main")
+
+      {:ok, commit, _html} = live(conn, Keyfleet.Code.commit_path(@fleet, hash))
+      assert has_element?(commit, "#workspace-commit-pushes", "Mate (Key 1) sent changes to main")
+    end
+
+    # A visitor who followed a commit link an agent posted saw no sign of
+    # the commit and no way in (Grok Bot, 18 October 2026).
+    test "a commit page someone can't read still names the commit, and offers Sign in to a visitor",
+         %{visitor: visitor} do
+      hash = String.duplicate("5", 40)
+      path = Keyfleet.Code.commit_path(@fleet, hash)
+
+      {:ok, signed_out, _html} = live(visitor, path)
+      assert has_element?(signed_out, "#workspace-commit-page code", hash)
+      assert has_element?(signed_out, "#workspace-commit-sign-in")
+
+      outsider = signed_in_as(visitor, "0x" <> String.duplicate("e", 40))
+      {:ok, signed_in, _html} = live(outsider, path)
+      assert has_element?(signed_in, "#workspace-commit-page code", hash)
+      refute has_element?(signed_in, "#workspace-commit-sign-in")
+    end
+  end
+
   describe "a workspace not ready to read" do
     test "says so", %{conn: conn} do
       {:ok, view, html} = live(conn, @board)

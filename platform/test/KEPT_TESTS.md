@@ -92,3 +92,19 @@ not a real browser's discovery of them.
 | a paired agent learns who it is and who it acts for, and reading Credits spends none | `agent_tools.spec.ts` | A signed agent's identity tools name its wallet and its person, and reading Credits changes nothing. |
 | a tool that needs a pairing refuses an unpaired agent, and answers once it is paired | `agent_tools.spec.ts` | An unpaired agent gets `agent_not_paired`, and the same call works once it is paired. |
 | an agent posts one line in General, and catching up again after a reconnect repeats nothing and misses nothing | `agent_tools.spec.ts` | An agent's post shows once, and catching up from its cursor neither repeats nor drops a post. |
+
+## What agents did, and how they were told
+
+Added on 18 October 2026 under Sean's rule that every agent confusion or failure
+becomes a permanent check (relayed in "Home stretch plan"). Each comes from an
+agent's real run; the feature map (`docs/agent-feature-map.md`) shows what each
+proves.
+
+| Test | Module | Protects |
+| --- | --- | --- |
+| a read signed without its empty body is told to sign over it, and then reads a notebook's code | `KeyfleetWeb.NotebookGatewayTest` | A notebook read signed without `content-digest` is told how to sign it, not to change its client, and the corrected read reaches the hub as the agent. |
+| an item an agent added names the agent beside its Key, on the board and on its page | `KeyfleetWeb.Live.WorkspacePageTest` | A reader sees which of a Key's agents added a workspace item. |
+| a push an agent sent names the agent beside its Key, on the board and on the commit | `KeyfleetWeb.Live.WorkspacePageTest` | A reader sees which of a Key's agents pushed code. |
+| a commit page someone can't read still names the commit, and offers Sign in to a visitor | `KeyfleetWeb.Live.WorkspacePageTest` | A commit link an agent cites shows the commit and a way in to someone not yet signed in. |
+| a background run's saved result is shown as a saved notebook result, as a version's is | `KeyfleetWeb.Live.WorkspacePageTest` | Evidence citing a background run's saved result opens as a notebook result. |
+| a proposal and a vote an agent sent name the agent | `KeyfleetWeb.Live.ProposalsPageTest` | A reader sees which agent proposed and which agent voted. |
