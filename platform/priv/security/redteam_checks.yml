@@ -228,7 +228,7 @@ checks:
   - id: RT-REDIRECT
     category: injection
     attack: "Open redirect to an attacker origin via a post-login or notebook-open destination."
-    control: "notebooks.ex:148-150 destination?/1 (only '/' or a strict saved-output path) + server-built fleet host; notebook_open_controller.ex:20 / shell_live.ex:261; Privy sign-in returns JSON with no reflected return_to"
+    control: "notebooks.ex:148-150 destination?/1 (only '/' or a strict saved-output path) + server-built fleet host; notebook_open_controller.ex:20 / shell_live.ex:261; the notebook gateway passes a hub's Location on only when it is relative or on the fleet's own notebook host; Privy sign-in returns JSON with no reflected return_to"
     probe: "test/keyfleet_web/security/injection_probes_test.exs — RT-REDIRECT (destination? guard)"
     disable_toggle: "Make destination?/1 return true for arbitrary strings."
     verdict: safe_by_code

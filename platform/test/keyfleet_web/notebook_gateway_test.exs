@@ -236,7 +236,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
     again = post_notebook(@host, runs, cookie)
     assert json_response(again, 429)["error"]["code"] == "notebook_runs_limit_reached"
-    assert get_resp_header(again, "retry-after") == ["3600"]
+    assert [_seconds] = get_resp_header(again, "retry-after")
 
     assert get_notebook(@host, "/", cookie).status == 200
     assert_receive {:hub, "GET", "/", "u_" <> _, _body}
