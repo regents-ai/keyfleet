@@ -11,6 +11,7 @@ defmodule KeyfleetWeb.PairingBox do
   """
   use KeyfleetWeb, :live_component
 
+  alias Keyfleet.Limits
   alias KeyfleetWeb.Live.Session
   alias RegentAgents.{Harness, PairingCode, PairingMessage, Person}
 
@@ -34,12 +35,18 @@ defmodule KeyfleetWeb.PairingBox do
   # The account as the page gave it, or as it reads now before each event
   # (`Session.check_component_lease/2`).
   defp take_account(socket, account),
-    do: assign(socket, person: %Person{privy_user_id: account.privy_user_id})
+    do:
+      assign(socket,
+        account_id: account.id,
+        person: %Person{privy_user_id: account.privy_user_id}
+      )
 
   # Choosing an agent, or asking again for the chosen one, makes a code with that
-  # agent's message; codes made before keep working until they expire.
+  # agent's message; codes made before keep working until they expire. Anything
+  # else, such as a form with no agent chosen, changes nothing.
   @impl true
-  def handle_event("issue_pairing_code", %{"harness" => harness}, socket) do
+  def handle_event("issue_pairing_code", %{"harness" => harness}, socket)
+      when is_binary(harness) do
     with {:ok, harness} <- Harness.match(harness),
          true <- harness in Harness.offered() do
       {:noreply, issue(socket, harness)}
@@ -47,6 +54,8 @@ defmodule KeyfleetWeb.PairingBox do
       _not_offered -> {:noreply, socket}
     end
   end
+
+  def handle_event("issue_pairing_code", _params, socket), do: {:noreply, socket}
 
   @impl true
   def render(assigns) do
@@ -114,11 +123,15 @@ defmodule KeyfleetWeb.PairingBox do
 
   defp after_pairing(socket), do: socket
 
+  # Each code made spends the account's allowance; past it, the box says a code
+  # can't be made now, as when one can't be made at all.
   defp issue(socket, harness) do
     code =
-      case RegentAgents.issue_pairing_code(actor: socket.assigns.person) do
-        {:ok, issued} -> issued
-        {:error, _error} -> :unavailable
+      with :ok <- Limits.spend(:pairing_codes, {:human, socket.assigns.account_id}),
+           {:ok, issued} <- RegentAgents.issue_pairing_code(actor: socket.assigns.person) do
+        issued
+      else
+        _unavailable -> :unavailable
       end
 
     assign(socket, pairing: %{harness: harness, code: code})

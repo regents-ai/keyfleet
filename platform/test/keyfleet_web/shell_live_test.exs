@@ -124,6 +124,36 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#{box} input[name=harness][value=hermes][checked]")
   end
 
+  test "the Account page makes pairing codes only within the account's allowance",
+       %{conn: conn} do
+    limits = Application.fetch_env!(:keyfleet, :limits)
+    on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
+
+    Application.put_env(
+      :keyfleet,
+      :limits,
+      Keyword.put(limits, :pairing_codes, limit: 1, window_seconds: 3600)
+    )
+
+    account = register_account("pairing-budget", "0x5555555555555555555555555555555555555555")
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{human_account_id: account.id})
+      |> live("/account")
+
+    box = "#account-agents-pair"
+    html = view |> element(box) |> render_change(%{})
+    refute html =~ ~r/Pairing code: (?!X+\b)\S+/
+
+    html = view |> element(box) |> render_change(%{"harness" => "hermes"})
+    assert [_, code] = Regex.run(~r/Pairing code: (?!X+\b)(\S+)/, html)
+
+    html = view |> element(box) |> render_change(%{"harness" => "hermes"})
+    refute html =~ code
+    refute html =~ ~r/Pairing code: (?!X+\b)\S+/
+  end
+
   test "the Account page lists a paired agent with its picture and harness", %{conn: conn} do
     account = register_account("paired-agent", "0x3333333333333333333333333333333333333333")
 

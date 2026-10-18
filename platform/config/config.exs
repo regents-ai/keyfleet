@@ -154,7 +154,9 @@ config :keyfleet, :limits,
   # Background runs started on a notebook host, by person or agent: well past pressing Run.
   notebook_run_starts: [limit: 30, window_seconds: 600],
   # Pushes to one fleet's code as one wallet: two a minute, past steady work.
-  code_pushes: [limit: 120, window_seconds: 3600]
+  code_pushes: [limit: 120, window_seconds: 3600],
+  # Pairing codes one person makes: choosing each agent in turn, several times over.
+  pairing_codes: [limit: 20, window_seconds: 600]
 
 # Rate limits key on the direct peer. Production turns on Fly's client header.
 config :keyfleet, :behind_fly_proxy, false
