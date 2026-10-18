@@ -819,7 +819,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # A hub reads a path the way a browser does: `.` and `..` segments, in any
   # spelling, move up, and a backslash is a slash. None of those reach a hub,
   # so the path compared below is the one the hub routes.
-  # A saved output's address has one spelling, which needs no decoding.
+  # A saved output's address has one spelling, which needs no decoding, and so
+  # has every API route: what this site checks of a route (the session cap, a
+  # job's schedule) reads the path as it came, so that must be what the hub routes.
   defp check_path(method, "/results/" <> _ = path) when method in ["GET", "HEAD", "DELETE"],
     do: if(Notebooks.result(path) == :error, do: :invalid, else: :ok)
 
@@ -829,8 +831,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         cond do
           String.contains?(decoded, "\\") -> :invalid
           Enum.any?(String.split(decoded, "/"), &(&1 in [".", ".."])) -> :invalid
-          allowed_route?(method, decoded) -> :ok
-          true -> :route_refused
+          not allowed_route?(method, decoded) -> :route_refused
+          String.starts_with?(decoded, "/api/") and decoded != path -> :invalid
+          true -> :ok
         end
 
       :error ->
