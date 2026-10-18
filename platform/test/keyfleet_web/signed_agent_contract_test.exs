@@ -366,6 +366,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @avatar_start, @address, @picture, 404)
     answer(c, c.signer, "POST", @avatar_remove, @address, %{}, 404)
 
+    # Found by RF-HINT: a post needs a profile to be written as.
+    for {template, address} <- [{@send, @address}, {@key_send, one}] do
+      refused = answer(c, c.signer, "POST", template, address, minimal("POST", template), 404)
+      assert refused.body["error"]["code"] == "profile_not_found"
+    end
+
     # Joining and editing.
     joining = %{"name" => "Probe", "declared_harness" => "local"}
     answer(c, c.signer, "POST", @join, @address, %{joining | "name" => ""}, 422)
@@ -818,8 +824,10 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp change({:put, field, value}, body), do: Map.put(body, field, value)
 
   defp nth_field(body, _n) when map_size(body) == 0, do: nil
-  defp nth_field(body, n),
-    do: body |> Map.keys() |> Enum.sort() |> Enum.at(rem(n, map_size(body)))
+
+  # A map's keys come in the same order each time, so a shrunk case names the
+  # same field again.
+  defp nth_field(body, n), do: body |> Map.keys() |> Enum.at(rem(n, map_size(body)))
 
   # An agent paired with key 1's holder quotes the words they sent it: once,
   # then refused as already quoted.

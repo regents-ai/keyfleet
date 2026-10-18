@@ -163,6 +163,7 @@ defmodule Keyfleet.RoomCatchUpPropertyTest do
     post
   end
 
+  # The room's latest line as stored, whoever may read it.
   defp head(slug), do: Rooms.get_room!(@fleet, slug, authorize?: false).head_seq
 
   defp wallet, do: "0x" <> String.duplicate("a", 40)

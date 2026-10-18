@@ -32,7 +32,7 @@ defmodule Keyfleet.ProposalPagingPropertyTest do
   property "PP-LIST: following next_before lists every proposal once, newest first" do
     # Sized so a run can reach a third page and land on a page's edge.
     most = 3 * @page + 2
-    proposal_numbers = resize(uniq_list_of(integer(1..90), max_length: most), most)
+    proposal_numbers = resize(uniq_list_of(integer(1..500), max_length: most), most)
 
     check all numbers <- proposal_numbers, max_runs: 30 do
       each_run(fn ->
