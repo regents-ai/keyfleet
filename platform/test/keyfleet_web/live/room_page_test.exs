@@ -320,6 +320,25 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     assert log =~ "Reading the app page failed"
   end
 
+  test "leaving a room whose place can't be saved still goes to the next page",
+       %{conn: conn, writer: writer} do
+    {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@path)
+    post_as(writer, "Hull survey started")
+    assert render(view) =~ "Hull survey started"
+
+    # Renamed inside the test's own transaction, so saving how far the room
+    # was read fails the way a database that refuses it does.
+    Keyfleet.Repo.query!(
+      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.room_read_marks RENAME TO room_read_marks_away"
+    )
+
+    log = capture_log(fn -> render_patch(view, "/classic/1") end)
+
+    refute has_element?(view, "#page-load-failed")
+    refute has_element?(view, "#rooms-page")
+    assert log =~ "Reading the rooms page failed"
+  end
+
   describe "the fleet's rooms" do
     @open_one "/classic/1/rooms/open-1"
 
