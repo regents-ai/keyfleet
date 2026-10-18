@@ -15,7 +15,8 @@ buttons a person presses with their own wallet.
 
 The homepage is where a visitor chooses a fleet. Each fleet's page is its map
 of keys, with links to its rooms, workspace and proposals. A signed-in
-person's keys are on the Account page.
+person's keys are on the Account page. The homepage's hex tiles light under a
+mouse; on a phone or tablet, or with less motion asked for, they stay still.
 
 Behind every page but the homepage is the harbour: a blueprint sea with an inn,
 a forge and a castle, and one ship for each recently active key. A ship sails to
