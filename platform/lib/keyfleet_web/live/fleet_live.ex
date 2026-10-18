@@ -1489,8 +1489,10 @@ defmodule KeyfleetWeb.FleetLive do
 
   # Why the words sent to the person's agent were not sent.
   defp quote_refusal(form) do
+    errors = form.source.source.errors
+
     case Enum.find(
-           form.source.source.errors,
+           errors,
            &(is_struct(&1, NoPairedAgentError) or is_struct(&1, QuoteLimitError))
          ) do
       %NoPairedAgentError{} ->
@@ -1500,7 +1502,9 @@ defmodule KeyfleetWeb.FleetLive do
         "You've sent #{limit} in the last hour. Try again in #{RoomsLive.minutes(seconds)}."
 
       nil ->
-        "Write up to 1,000 characters"
+        if Enum.any?(errors, &match?(%{field: :body}, &1)),
+          do: "Write up to 1,000 characters",
+          else: "That didn’t go through. Try again."
     end
   end
 

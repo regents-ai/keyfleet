@@ -773,6 +773,9 @@ defmodule KeyfleetWeb.DmsLive do
           Enum.any?(errors, &match?(%KeyUnknownError{}, &1)) ->
             "Key #{Rules.grouped(dms.other_token_id)} isn’t sold yet."
 
+          most = RoomsLive.too_long(errors) ->
+            "A message can be up to #{Rules.grouped(most)} characters."
+
           Enum.any?(errors, &match?(%{field: :body}, &1)) ->
             "Write a message first."
 

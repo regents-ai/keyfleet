@@ -673,13 +673,25 @@ defmodule KeyfleetWeb.RoomsLive do
   end
 
   def post_refusal(%Ash.Error.Invalid{errors: errors}, _fleet_id) do
-    case Enum.find(errors, &match?(%PostLimitError{}, &1)) do
-      nil -> @post_failed
-      too_many -> post_limit(too_many)
+    cond do
+      too_many = Enum.find(errors, &match?(%PostLimitError{}, &1)) -> post_limit(too_many)
+      most = too_long(errors) -> "A post can be up to #{Rules.grouped(most)} characters."
+      true -> @post_failed
     end
   end
 
   def post_refusal(_refusal, _fleet_id), do: @post_failed
+
+  @doc """
+  The most characters some words may run to, when one of `errors` says they
+  ran past it; nil otherwise.
+  """
+  def too_long(errors) do
+    Enum.find_value(errors, fn
+      %{field: :body, vars: vars} when is_list(vars) -> vars[:max]
+      _error -> nil
+    end)
+  end
 
   @doc "What someone is told when their Key has posted as often as an hour allows."
   def post_limit(%PostLimitError{limit: limit, retry_after: seconds}),
