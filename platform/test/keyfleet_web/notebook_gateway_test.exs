@@ -337,6 +337,26 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert_receive {:hub, "GET", ^page, "u_" <> _, _body}
   end
 
+  # Costly failure: a hub's answer sends a member's browser on to another site
+  # from the fleet's own notebook address.
+  test "a hub's redirect is passed on only within the fleet's notebooks", c do
+    cookie = enter!(c.holder)
+    here = Notebooks.url(@fleet, "/projects/proj-fleet")
+
+    for {to, kept} <- [
+          {"/projects/proj-fleet", ["/projects/proj-fleet"]},
+          {here, [here]},
+          {"https://elsewhere.example/", []},
+          {"//elsewhere.example/", []},
+          {"/\\elsewhere.example/", []},
+          {Notebooks.url(@other_fleet, "/"), []}
+        ] do
+      moved = get_notebook(@host, "/projects/moved?" <> URI.encode_query(to: to), cookie)
+      assert moved.status == 302, to
+      assert get_resp_header(moved, "location") == kept, to
+    end
+  end
+
   # Costly failure: a hub accepts a pass meant for another fleet, another person
   # or one that never runs out; or can't check passes while the site is closed.
   test "a pass names the fleet's hub and the holder, runs out soon, and checks against the published keys",
@@ -634,6 +654,11 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
          _holder
        ),
        do: json(conn, 201, %{success: true, data: %{}})
+
+  defp hub_answer(%Plug.Conn{request_path: "/projects/moved"} = conn, _holder) do
+    %{"to" => to} = fetch_query_params(conn).query_params
+    conn |> put_resp_header("location", to) |> send_resp(302, "")
+  end
 
   defp hub_answer(conn, _holder), do: json(conn, 200, %{success: true, data: %{}})
 
