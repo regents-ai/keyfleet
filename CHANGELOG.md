@@ -2147,3 +2147,21 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   code.keyfleet.ai, reached nothing: the store's private address has only an
   IPv6 record, and the site looked for an IPv4 one. Both now look for IPv6,
   so the Regents Club's store can be made.
+
+## 2026-10-18 — The homepage's hex field answers the mouse
+
+- On the homepage, the five tiles nearest a mouse stand up out of the hex
+  field, the one under it highest, and follow it, each rising and sinking in
+  0.3 seconds, with a shadow on the tiles below. This works behind the hero and
+  behind Classic's and the Club's maps, where the raised tiles line up with the
+  map's own keys.
+- A mouse or a finger leaves a short wake of lit tiles that fades behind it,
+  scrolling under a resting mouse moves all of it to the tiles now beneath, and
+  a press or a tap sends a ring out across the tiles.
+- The raised tiles take the page's light or dark ground, so they read on both.
+- The field's fade toward its edges is drawn by the field itself, so a raised
+  tile fades with the tiles around it; the still picture shown before the field
+  loads fades the same way.
+- Nothing moves unless someone does, and the field is still again shortly
+  after. With less motion asked for, the field is a still picture with no
+  raised tiles, wake or ring.
