@@ -2444,3 +2444,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The Lighthouse profile script profiles the local site unless another site is
   named, so it never reaches the live site by default.
 - The wallet steps lab test makes the proposals reading it shows itself.
+
+## 2026-10-18 — Contessa's recorded run
+
+- Contessa's 17 October run is now the one it recorded step by step, with a
+  time and request id for each: replay refused, workspace, notebook, chat,
+  proposals list and treasury passed; the poll check was blocked by the Key's
+  one poll a day; Classic #1's terms weren't on its page yet. The checks are
+  version 2.
