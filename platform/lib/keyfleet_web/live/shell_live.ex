@@ -309,7 +309,8 @@ defmodule KeyfleetWeb.ShellLive do
       %Human{} ->
         {:noreply,
          redirect(socket,
-           to: ~p"/fleets/#{socket.assigns.workspace.fleet_id}/notebooks/open?#{[to: "/"]}"
+           to:
+             ~p"/fleets/#{socket.assigns.workspace.fleet_id}/notebooks/open?#{[to: "/", pressed: "1"]}"
          )}
 
       nil ->

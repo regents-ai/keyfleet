@@ -5,7 +5,9 @@ defmodule KeyfleetWeb.NotebookOpenController do
   (`Keyfleet.Notebooks.destination?/1`). A holder's browser is handed a
   page that sends a code that works once to the fleet's notebook host
   (`KeyfleetWeb.NotebookOpenHTML`); the host spends a code only when this
-  site's page sends it. A saved output's address sends
+  site's page sends it: by itself just after Open notebooks was pressed in
+  the workspace (`pressed=1`), and otherwise when the person presses its
+  button. A saved output's address sends
   someone without a notebook sign-in here (`KeyfleetWeb.Plugs.NotebookGateway`);
   a holder of one of the fleet's keys goes back to it the same way, and anyone else lands on the fleet's workspace with a note saying why.
   Key ownership that can't be read, other than while it is being brought up
@@ -35,7 +37,7 @@ defmodule KeyfleetWeb.NotebookOpenController do
         )
         |> put_root_layout(false)
         |> put_view(html: KeyfleetWeb.NotebookOpenHTML)
-        |> render(:entry, entry: entry, nonce: nonce, by_itself?: params["again"] != "1")
+        |> render(:entry, entry: entry, nonce: nonce, by_itself?: params["pressed"] == "1")
 
       {:error, :no_hub} ->
         conn |> put_flash(:error, "This fleet has no notebooks yet.") |> redirect(to: "/")
