@@ -383,6 +383,9 @@ defmodule KeyfleetWeb.ShellLive do
   defp press(event, params, socket) when event in @poll_events,
     do: PollsLive.handle_event(event, params, socket)
 
+  # A press no page sends changes nothing.
+  defp press(_event, _params, socket), do: {:noreply, socket}
+
   # The person's Credits balance changed on any Regent site: a purchase, a
   # gift, a hold or its close.
   defp notice(:credits_changed, socket) do
