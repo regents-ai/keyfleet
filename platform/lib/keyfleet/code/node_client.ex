@@ -20,6 +20,8 @@ defmodule Keyfleet.Code.NodeClient do
         json: %{name: fleet_id, is_public: false},
         retry: false,
         redirect: false,
+        # The store's private Flycast address has only an IPv6 record.
+        connect_options: [transport_opts: [inet6: true]],
         receive_timeout: Code.config()[:node_timeout_ms]
       ] ++ Code.config()[:req_options]
     )

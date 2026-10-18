@@ -2140,3 +2140,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The sea's page module is formatted and its aliases are in order, and the
   security scan's accepted router findings follow the router's moved lines
   (the sea's pipeline added eight); the six outdated entries are gone.
+
+## 2026-10-18 — A fleet's code store is reached again
+
+- Setting up a fleet's code store, and every git clone or push through
+  code.keyfleet.ai, reached nothing: the store's private address has only an
+  IPv6 record, and the site looked for an IPv4 one. Both now look for IPv6,
+  so the Regents Club's store can be made.

@@ -199,7 +199,9 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
     with {:ok, node} <-
            Mint.HTTP.connect(String.to_existing_atom(scheme), host, port,
              mode: :passive,
-             protocols: [:http1]
+             protocols: [:http1],
+             # The store's private Flycast address has only an IPv6 record.
+             transport_opts: [inet6: true]
            ),
          {:ok, node, ref} <- Mint.HTTP.request(node, conn.method, path, headers, body) do
       exchange(conn, fleet_id, node, ref, body, done)
