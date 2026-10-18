@@ -147,6 +147,9 @@ defmodule KeyfleetWeb.HarbourSeaLive do
 
   def handle_event("close_agent", _params, socket), do: {:noreply, assign(socket, :agent, nil)}
 
+  # A page or ship sent without its address or name.
+  def handle_event(_event, _params, socket), do: {:noreply, socket}
+
   # Anything new in the fleets on show is a nudge to read their ships again,
   # once for a burst. Nothing else they say moves a ship: a new reading of a
   # treasury's balances, every minute, least of all.

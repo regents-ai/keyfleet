@@ -540,12 +540,22 @@ defmodule KeyfleetWeb.DmsLive do
   end
 
   @doc "What the conversation page does with a message, its settings, a block and a delete."
-  def handle_event("validate_dm", %{"dm" => params}, %{assigns: %{dm_form: %{}}} = socket),
-    do:
-      {:noreply,
-       update(socket, :dm_form, &(&1 |> as_signed_in(socket) |> AshPhoenix.Form.validate(params)))}
+  def handle_event(
+        "validate_dm",
+        %{"dm" => %{"body" => body} = params},
+        %{assigns: %{dm_form: %{}}} = socket
+      )
+      when is_binary(body) do
+    {:noreply,
+     update(socket, :dm_form, &(&1 |> as_signed_in(socket) |> AshPhoenix.Form.validate(params)))}
+  end
 
-  def handle_event("send_dm", %{"dm" => params}, %{assigns: %{dm_form: %{}}} = socket) do
+  def handle_event(
+        "send_dm",
+        %{"dm" => %{"body" => body} = params},
+        %{assigns: %{dm_form: %{}}} = socket
+      )
+      when is_binary(body) do
     case socket.assigns.dm_form
          |> as_signed_in(socket)
          |> AshPhoenix.Form.submit(params: params) do
@@ -568,7 +578,8 @@ defmodule KeyfleetWeb.DmsLive do
         "dm_auto_delete",
         %{"days" => days},
         %{assigns: %{dms: %{conversation: %{}}}} = socket
-      ) do
+      )
+      when is_binary(days) do
     %{dms: dms} = socket.assigns
     days = if days == "", do: nil, else: days
 

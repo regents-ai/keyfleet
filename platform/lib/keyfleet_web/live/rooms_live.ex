@@ -367,7 +367,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   @doc "What a room's page does with a mute."
   def handle_event(event, %{"key" => key}, %{assigns: %{room: %{fleet_id: fleet_id}}} = socket)
-      when event in ["mute_key", "unmute_key"] do
+      when event in ["mute_key", "unmute_key"] and is_binary(key) do
     with {token_id, ""} <- Integer.parse(key),
          {:ok, _mute} <- change_mute(event, fleet_id, token_id, ShellLive.human_actor(socket)) do
       {:noreply, show_unmuted(socket)}
@@ -375,6 +375,9 @@ defmodule KeyfleetWeb.RoomsLive do
       _refused -> {:noreply, assign(socket, :room_notice, %{tone: :error, message: @mute_failed})}
     end
   end
+
+  # A press that names no Key, or one from a room that is no longer on show.
+  def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   @doc """
   A room created or named in the fleet on show changes its list of rooms, and

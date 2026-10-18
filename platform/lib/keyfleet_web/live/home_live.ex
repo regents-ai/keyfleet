@@ -307,6 +307,9 @@ defmodule KeyfleetWeb.HomeLive do
   def handle_event("close_buy_key", _params, socket),
     do: {:noreply, assign(socket, :buy_open, false)}
 
+  # A press from an older version of the page.
+  def handle_event(_event, _params, socket), do: {:noreply, socket}
+
   # Something changed in a fleet: it is read again once, a moment later, for
   # however many notices come in the meantime. A room's head names no fleet;
   # the post behind it also sends a notice that does. Balances aren't shown.

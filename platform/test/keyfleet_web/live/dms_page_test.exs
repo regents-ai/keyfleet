@@ -30,6 +30,16 @@ defmodule KeyfleetWeb.Live.DmsPageTest do
     assert has_element?(inbox, "#dms-inbox", "Hello, Key 2")
   end
 
+  test "a message sent as words alone, not as its box, changes nothing", %{conn: conn} do
+    {:ok, page, _html} = conn |> signed_in_as(wallet("a")) |> live("/cascade/1/keys/1/dms/2")
+
+    render_hook(page, "validate_dm", %{"dm" => "Hello, Key 2"})
+    render_hook(page, "send_dm", %{"dm" => "Hello, Key 2"})
+
+    assert has_element?(page, "#dms-composer")
+    refute has_element?(page, "#dms-thread-list", "Hello, Key 2")
+  end
+
   test "a Key sold while its conversation is open closes it at the next message", %{conn: conn} do
     {:ok, page, _html} = conn |> signed_in_as(wallet("a")) |> live("/cascade/1/keys/1/dms/2")
 

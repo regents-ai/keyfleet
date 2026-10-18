@@ -412,6 +412,18 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       assert text(view, "#key-profile-messages") == "1"
       assert text(view, "#key-profile-composer-body") == ""
     end
+
+    test "a message or removal sent without its words or its post changes nothing",
+         %{conn: conn} do
+      {:ok, view, _html} = conn |> signed_in_as(wallet("f")) |> live(@path <> "?key=12")
+
+      render_hook(view, "post_to_key", %{})
+      render_hook(view, "post_to_key", %{"post" => %{"body" => %{"words" => "Ahoy"}}})
+      render_hook(view, "remove_from_wall", %{})
+
+      assert has_element?(view, "#key-profile-composer")
+      assert text(view, "#key-profile-messages") == "0"
+    end
   end
 
   test "the holder opens the Key's messages; another holder writes as their lowest Key", %{

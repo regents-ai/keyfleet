@@ -42,6 +42,9 @@ defmodule KeyfleetWeb.Components.IdleKeys do
       when is_binary(keyset),
       do: {:noreply, page(socket, [after: keyset], [])}
 
+  # A second press of More that lands after the last hundred arrived.
+  def handle_event("more", _params, socket), do: {:noreply, socket}
+
   def handle_event("close", _params, socket), do: {:noreply, assign(socket, open?: false)}
 
   # How many Keys are idle, or nil when they couldn't be counted; the field

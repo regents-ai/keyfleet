@@ -260,6 +260,17 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       end
     end
 
+    test "a press that names no Key, or not as a number, mutes nothing",
+         %{conn: conn, owners: owners} do
+      {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
+
+      render_hook(view, "mute_key", %{})
+      render_hook(view, "mute_key", %{"key" => ["1"]})
+
+      assert has_element?(view, "#rooms-mute-#{owners.id}", "Mute Key #1")
+      refute has_element?(view, "#rooms-muted")
+    end
+
     test "is offered only to someone signed in", %{conn: conn, owners: owners} do
       {:ok, view, html} = live(conn, @path)
 

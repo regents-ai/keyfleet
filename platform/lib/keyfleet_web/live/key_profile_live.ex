@@ -759,12 +759,13 @@ defmodule KeyfleetWeb.KeyProfileLive do
   end
 
   @doc "What the key's profile does with a message written to the key and with Close."
-  def handle_event("post_to_key", %{"post" => %{"body" => body}}, socket) do
+  def handle_event("post_to_key", %{"post" => %{"body" => body}}, socket) when is_binary(body) do
     {:noreply, post_to_key(socket, body)}
   end
 
-  def handle_event("remove_from_wall", %{"id" => message_id}, socket),
-    do: {:noreply, remove_from_wall(socket, message_id)}
+  def handle_event("remove_from_wall", %{"id" => message_id}, socket)
+      when is_binary(message_id),
+      do: {:noreply, remove_from_wall(socket, message_id)}
 
   # A key the visitor arrived on closes by taking it out of the address in
   # place, so closing adds no step to go back through.
@@ -780,7 +781,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
      )}
   end
 
-  def handle_event("close_key", _params, socket), do: {:noreply, socket}
+  # Close with no key open, or a post or removal that arrives without its words
+  # or its post, changes nothing.
+  def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   @doc """
   Something written as, or to, the open key or another of its holder's keys:

@@ -712,7 +712,8 @@ defmodule KeyfleetWeb.PollsLive do
         "start_poll",
         %{"poll" => params},
         %{assigns: %{polls: %{kind: :list} = page}} = socket
-      ) do
+      )
+      when is_map(params) do
     case act(:start, page, params, ShellLive.human_actor(socket)) do
       {:ok, poll} ->
         {:noreply, push_patch(socket, to: poll_path(poll.fleet_id, poll.id))}
@@ -725,16 +726,18 @@ defmodule KeyfleetWeb.PollsLive do
   def handle_event(event, params, %{assigns: %{polls: %{kind: :poll, poll: %Poll{}}}} = socket)
       when event in ["end_poll", "cast_vote"] do
     action = if event == "end_poll", do: :end, else: :vote
-    input = Map.get(params, "vote", %{})
 
-    case act(action, socket.assigns.polls, input, ShellLive.human_actor(socket)) do
+    case act(action, socket.assigns.polls, vote(params), ShellLive.human_actor(socket)) do
       {:error, error} -> {:noreply, socket |> refused(error, default_code(action)) |> refresh()}
       _done -> {:noreply, socket |> assign(:polls_notice, nil) |> refresh()}
     end
   end
 
-  # A press the page no longer shows the poll for.
+  # A press the page no longer shows the poll for, or a poll sent without its boxes.
   def handle_event(_event, _params, socket), do: {:noreply, socket}
+
+  defp vote(%{"vote" => input}) when is_map(input), do: input
+  defp vote(_params), do: %{}
 
   @doc "A change to the polls on show, and the page's clock."
   def handle_info(%Broadcast{event: event}, socket)
@@ -818,7 +821,13 @@ defmodule KeyfleetWeb.PollsLive do
     do:
       "A question is up to 200 characters on one line, with 2 to 10 different choices of up to 100 characters, notes of up to 2,000, and 1 to 60 minutes open. A reason is up to 500 characters."
 
-  defp form(params, errors), do: to_form(params, as: "poll", errors: errors)
+  # Only what was typed goes back in the boxes.
+  defp form(params, errors) do
+    params
+    |> Map.filter(fn {_field, value} -> is_binary(value) end)
+    |> to_form(as: "poll", errors: errors)
+  end
+
   defp start_form, do: form(%{"minutes" => "30"}, [])
 
   # Each line typed is one choice.

@@ -1393,9 +1393,10 @@ defmodule KeyfleetWeb.FleetLive do
 
   def handle_event(
         "validate_quote",
-        %{"quote" => params},
+        %{"quote" => %{"body" => body} = params},
         %{assigns: %{quotes: %{form: %{}}}} = socket
-      ),
+      )
+      when is_binary(body),
       do:
         {:noreply,
          update(socket, :quotes, &%{&1 | form: AshPhoenix.Form.validate(&1.form, params)})}
@@ -1405,9 +1406,10 @@ defmodule KeyfleetWeb.FleetLive do
   # The words go to the person's agent, which decides where to quote them.
   def handle_event(
         "send_quote",
-        %{"quote" => params},
+        %{"quote" => %{"body" => body} = params},
         %{assigns: %{quotes: %{form: %{}}}} = socket
-      ) do
+      )
+      when is_binary(body) do
     %{fleet: %{fleet_id: fleet_id}, quotes: quotes} = socket.assigns
 
     actor = ShellLive.human_actor(socket)
