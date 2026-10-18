@@ -286,8 +286,9 @@ by route pattern, device class and connection type, with nothing saved and
 no address kept (`KeyfleetWeb.Vitals`, whose docs hold the queries). They are
 exported as `keyfleet_vitals_{lcp,inp,fcp,ttfb}_seconds` and
 `keyfleet_vitals_cls` on the metrics port. `load/profile-live.sh <out dir>`
-profiles the live public pages as two emulated phones (lab emulation in
-Chromium, not a device).
+profiles the local site's public pages as two emulated phones (lab emulation
+in Chromium, not a device); the live site only when it is named as a second
+argument.
 
 ## Checks
 

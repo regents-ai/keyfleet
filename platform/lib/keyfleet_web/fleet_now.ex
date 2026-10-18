@@ -86,11 +86,16 @@ defmodule KeyfleetWeb.FleetNow do
     {:ok, %{due: MapSet.new(), topics: topics}}
   end
 
-  # Every fleet is read beside the start, and any not read in time is marked
+  # Every fleet is read beside the start, all at once, so a slow database holds
+  # the start for one wait, not one per fleet. Any not read in time is marked
   # degraded; its next notice or the minute's heal reads it again.
   defp first_read(fleet_ids) do
     fleet_ids
-    |> Task.async_stream(&__MODULE__.read/1, timeout: @first_read, on_timeout: :kill_task)
+    |> Task.async_stream(&__MODULE__.read/1,
+      max_concurrency: length(fleet_ids),
+      timeout: @first_read,
+      on_timeout: :kill_task
+    )
     |> Enum.zip(fleet_ids)
     |> Enum.each(fn
       {{:ok, _read}, _fleet_id} -> :ok

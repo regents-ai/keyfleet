@@ -2434,3 +2434,13 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   agents still reads.
 - The feature map counts the browser suites as proof and says only what each
   run recorded.
+
+## 2026-10-18 — A slow database no longer holds up the start
+
+- The homepage, proposals and polls readings read every fleet at once as the
+  site starts, so a slow database holds the start for one 5 s wait instead of
+  one per fleet. On a two-core machine the old order took about 7 s for each
+  reading; a test holds the database and checks each starts within 6 s.
+- The Lighthouse profile script profiles the local site unless another site is
+  named, so it never reaches the live site by default.
+- The wallet steps lab test makes the proposals reading it shows itself.

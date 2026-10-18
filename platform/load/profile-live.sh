@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# A one-shot Lighthouse profile of the live site's public pages, signed out:
-# the homepage, Classic #1 and the Regents Club, five times each, one after
+# A one-shot Lighthouse profile of a site's public pages, signed out: the
+# homepage, Classic #1 and the Regents Club, five times each, one after
 # another, as two phones. That is 30 ordinary page loads in all, never load.
 #
-#   platform/load/profile-live.sh <out dir>
+#   platform/load/profile-live.sh <out dir> [site]
+#
+# The site is the local one, http://localhost:4000, unless another is named:
+# the live site is profiled only as `platform/load/profile-live.sh <out dir>
+# https://keyfleet.ai`.
 #
 # THIS IS LAB EMULATION IN CHROMIUM, NOT A REAL DEVICE. Both profiles run in
 # headless Chromium on this machine with Lighthouse's simulated slow 4G (150 ms
@@ -25,14 +29,13 @@
 #
 # Into <out dir> go each run's JSON and HTML report
 # (<profile>/<page>-<run>.report.json and .html) and summary.md, the median of
-# each page's five runs, also printed at the end. KEYFLEET_PROFILE_SITE names
-# another site to profile instead of https://keyfleet.ai.
+# each page's five runs, also printed at the end.
 # Chromium is Playwright's (`npx playwright install chromium` in platform/),
 # or the one CHROME_PATH names. It never opens a window.
 set -euo pipefail
 
-out="${1:?usage: platform/load/profile-live.sh <out dir>}"
-site="${KEYFLEET_PROFILE_SITE:-https://keyfleet.ai}"
+out="${1:?usage: platform/load/profile-live.sh <out dir> [site]}"
+site="${2:-http://localhost:4000}"
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 cd "$(dirname "$0")/.."

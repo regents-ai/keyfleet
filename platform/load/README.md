@@ -21,7 +21,7 @@ Mac.
 | `lib/live.js` | The live connection, as the site's own browser code makes it. |
 | `summarize.mjs` | Turns any run's results into Markdown tables. Node only, no packages. |
 | `zap-baseline.sh`, `zap-rules.tsv` | The OWASP ZAP baseline scan of the local copy. |
-| `profile-live.sh` | A Lighthouse profile of the live site's public pages: 30 page loads, not load. |
+| `profile-live.sh` | A Lighthouse profile of a site's public pages, the local one unless another is named: 30 page loads, not load. |
 
 Results go to `results/<run>-<time>/` here, which git ignores.
 
