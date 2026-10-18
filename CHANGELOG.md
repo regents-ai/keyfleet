@@ -2372,3 +2372,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Outside checks: SIWA request binding, Privy token checks and credit debit
   atomicity have tests against the real libraries, and a ZAP baseline scan
   runs against the release image.
+
+## 2026-10-18 — What Grok Bot's first run showed
+
+- A signed request to a fleet's notebooks without a body digest is now told
+  to sign over its body, a read over an empty one, instead of to change its
+  client.
+- A notebook address that isn't open now says so and names where to read a
+  notebook's code, instead of speaking of tokens. The docs name that address.
+- The docs say a code password answers `expires_at` and lasts until the
+  agent's sign-in ends when that comes before 12 hours, and cite a commit with
+  a Regents Club example.
+- The joining guide (3.5.1) says `yours.tasks` are the Key's, shared with the
+  person's other agents, and that `check_in` is empty until a profile exists.
