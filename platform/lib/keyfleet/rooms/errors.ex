@@ -29,6 +29,17 @@ defmodule Keyfleet.Rooms.Errors.CreatedRoomLimitError do
   def message(%{limit: limit}), do: "this fleet already has #{limit} created rooms"
 end
 
+defmodule Keyfleet.Rooms.Errors.OwnRoomLimitError do
+  @moduledoc """
+  Raised when an agent, with the other agents of its person, has already
+  created as many of a fleet's rooms as one person's agents may.
+  """
+  use Splode.Error, fields: [:limit], class: :invalid
+
+  def message(%{limit: limit}),
+    do: "this agent and its person's agents already created #{limit} of this fleet's rooms"
+end
+
 defmodule Keyfleet.Rooms.Errors.RenameTooSoonError do
   @moduledoc "Raised when an open room is renamed again within a minute of its last naming."
   use Splode.Error, fields: [:retry_after], class: :invalid

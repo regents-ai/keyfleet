@@ -11,6 +11,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias Keyfleet.Rooms.Errors.CreatedRoomLimitError
   alias Keyfleet.Rooms.Errors.KeyUnknownError
   alias Keyfleet.Rooms.Errors.NoAgentProfileError
+  alias Keyfleet.Rooms.Errors.OwnRoomLimitError
   alias Keyfleet.Rooms.Errors.PostLimitError
   alias Keyfleet.Rooms.Errors.QuoteDiffersError
   alias Keyfleet.Rooms.Errors.QuoteUnknownError
@@ -402,6 +403,9 @@ defmodule KeyfleetWeb.AgentRoomController do
 
       Enum.any?(errors, &match?(%CreatedRoomLimitError{}, &1)) ->
         Refusal.json(conn, 409, "room_limit_reached")
+
+      Enum.any?(errors, &match?(%OwnRoomLimitError{}, &1)) ->
+        Refusal.json(conn, 409, "own_room_limit_reached")
 
       Rooms.taken?(error, :slug) ->
         Refusal.json(conn, 409, "room_taken")

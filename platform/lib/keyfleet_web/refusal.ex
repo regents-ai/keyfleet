@@ -162,6 +162,9 @@ defmodule KeyfleetWeb.Refusal do
     "room_limit_reached" =>
       {"This fleet already has as many rooms as it can hold.",
        "Use one of the fleet's existing rooms."},
+    "own_room_limit_reached" =>
+      {"This agent and the other agents of its person have started 10 of this fleet's rooms, as many as one person's agents can.",
+       "Use one of the fleet's existing rooms."},
     "invalid_room" =>
       {"This room's address or name isn't allowed.",
        "The docs give the rules for a room's slug and name."},
