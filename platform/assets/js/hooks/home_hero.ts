@@ -54,11 +54,14 @@ type IslandHook = {el: HTMLElement; controller?: CanvasIslandController}
  * in CSS pixels; `data-field-across` instead fits that many tiles across the
  * field, so it lies under a map drawn that many keys wide. The pointer anywhere
  * in the element marked `data-field-scope` lights the tiles near it; in the
- * hero, previewing the Key warms the tiles around its card. Less motion keeps
- * the picture and drops the pointer's light.
+ * hero, previewing the Key warms the tiles around its card. Both come from a
+ * mouse or a desktop's keyboard, so on a phone or tablet, or for a visitor who
+ * asked for less motion, the stylesheet's still drawing is the field and the
+ * GPU is never asked.
  */
 export const HexField = {
   mounted(this: IslandHook) {
+    if (!finePointer()) return
     const root = this.el
     const scope = root.closest<HTMLElement>("[data-field-scope]") ?? root
     const buy = scope.querySelector<HTMLElement>("[data-key-preview]")
@@ -68,7 +71,7 @@ export const HexField = {
     this.controller = createCanvasIsland<FieldRenderer>(root, {}, {
       canvasSelector: "[data-field-canvas]",
       readyFlag: "fieldReady",
-      motionSensitive: false,
+      motionSensitive: true,
       continuous: false,
       browserLoad: async (canvas, size, lost) => {
         const {createFieldRenderer} = await import("../home_hero/renderer")
@@ -104,7 +107,7 @@ export const HexField = {
         })
 
         const onMove = (event: PointerEvent) => {
-          if (!event.isPrimary || still(root)) return
+          if (!event.isPrimary) return
           const box = canvas().getBoundingClientRect()
           renderer()?.point((event.clientX - box.left) / box.width, (event.clientY - box.top) / box.height)
           nudge()
@@ -132,12 +135,10 @@ export const HexField = {
 
         const events = new AbortController()
         const options = {signal: events.signal, passive: true}
-        if (finePointer()) {
-          scope.addEventListener("pointermove", onMove, options)
-          scope.addEventListener("pointerleave", onLeave, options)
-          buy?.addEventListener("pointerenter", onEnter, options)
-          buy?.addEventListener("pointerleave", onExit, options)
-        }
+        scope.addEventListener("pointermove", onMove, options)
+        scope.addEventListener("pointerleave", onLeave, options)
+        buy?.addEventListener("pointerenter", onEnter, options)
+        buy?.addEventListener("pointerleave", onExit, options)
         buy?.addEventListener("focusin", onFocus, options)
         buy?.addEventListener("focusout", onBlur, options)
         const forget = watchTheme(retone)

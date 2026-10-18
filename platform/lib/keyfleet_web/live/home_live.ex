@@ -548,9 +548,9 @@ defmodule KeyfleetWeb.HomeLive do
     doc: "Instead of `cell`, how many tiles fit across the field."
 
   # A field of hex tiles behind a section: the stylesheet draws them still,
-  # and the GPU draws them over that once its first frame has landed. A tile
-  # sits on the field's centre, so a field `across` a map's width of keys lies
-  # under the map's own tiles.
+  # and under a mouse the GPU draws them over that once its first frame has
+  # landed. A tile sits on the field's centre, so a field `across` a map's
+  # width of keys lies under the map's own tiles.
   defp hex_field(assigns) do
     ~H"""
     <div

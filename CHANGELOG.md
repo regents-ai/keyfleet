@@ -2177,3 +2177,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   busy moment on a healthy device doesn't count, and full-speed devices are
   unchanged.
 - A browser saving data gets the still sea from the start.
+
+## 2026-10-18 — The homepage's hex tiles stay still on phones
+
+- On a phone or tablet the homepage's hex tiles are the still drawing the
+  page opens with. Only a mouse or a desktop's keyboard ever lit them, so
+  the drawing that replaced them after loading changed nothing on a phone but
+  the download: about 66 KB compressed, on the homepage. With less motion
+  asked for they stay still on every device.
