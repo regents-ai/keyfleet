@@ -21,18 +21,69 @@ export type Island = {
   readonly radius: number
 }
 
-export const PLACES: Readonly<Record<Place, Island>> = {
-  castle: {x: -3.45, z: -3.45, radius: 2.2},
-  inn: {x: -2.0, z: 4.9, radius: 1.8},
-  forge: {x: 4.6, z: -2.3, radius: 1.7},
+/**
+ * One harbour's map: where its three places and its two rocks lie, and how far
+ * each place's buildings, trees and dock are turned about its island's middle.
+ */
+export type Layout = {
+  readonly places: Readonly<Record<Place, Island>>
+  readonly islets: readonly Island[]
+  readonly spins: Readonly<Record<Place, number>>
 }
 
-export const ISLETS: readonly Island[] = [
-  {x: 4.6, z: 4.4, radius: 0.7},
-  {x: -7.4, z: 0.6, radius: 0.55},
-]
+/**
+ * The harbours: the sea behind the app's pages, and one for each fleet on the
+ * homepage, its islands set a little apart from the others and its buildings
+ * turned another way.
+ */
+export const LAYOUTS = {
+  sea: {
+    places: {
+      castle: {x: -3.45, z: -3.45, radius: 2.2},
+      inn: {x: -2.0, z: 4.9, radius: 1.8},
+      forge: {x: 4.6, z: -2.3, radius: 1.7},
+    },
+    islets: [
+      {x: 4.6, z: 4.4, radius: 0.7},
+      {x: -7.4, z: 0.6, radius: 0.55},
+    ],
+    spins: {castle: 0, inn: 0, forge: 0},
+  },
+  classic: {
+    places: {
+      castle: {x: -2.7, z: -4.1, radius: 2.2},
+      inn: {x: -3.4, z: 4.1, radius: 1.8},
+      forge: {x: 4.9, z: -1.2, radius: 1.7},
+    },
+    islets: [
+      {x: 3.4, z: 5.0, radius: 0.7},
+      {x: -7.2, z: -1.4, radius: 0.55},
+    ],
+    spins: {castle: 0.4, inn: -0.55, forge: 0.7},
+  },
+  club: {
+    places: {
+      castle: {x: -4.2, z: -2.6, radius: 2.2},
+      inn: {x: -0.6, z: 5.3, radius: 1.8},
+      forge: {x: 3.9, z: -3.4, radius: 1.7},
+    },
+    islets: [
+      {x: 5.5, z: 2.6, radius: 0.7},
+      {x: -6.6, z: 2.2, radius: 0.55},
+    ],
+    spins: {castle: -0.35, inn: 0.5, forge: -0.6},
+  },
+} as const satisfies Record<string, Layout>
 
-export const ISLANDS: readonly Island[] = [PLACES.castle, PLACES.inn, PLACES.forge, ...ISLETS]
+export type LayoutName = keyof typeof LAYOUTS
+
+/** Every island of a harbour, the places first. */
+export const islandsOf = (layout: Layout): Island[] => [
+  layout.places.castle,
+  layout.places.inn,
+  layout.places.forge,
+  ...layout.islets,
+]
 
 /** Ships the page will ever draw. */
 export const MAX_SHIPS = 16
@@ -62,7 +113,8 @@ const CLEARANCE = 0.55
 const SHORE = 0.3
 const PERSONAL_SPACE = 0.95
 
-export const orbitRadius = (ship: Ship): number => PLACES[ship.place].radius + RING + ship.lane * LANE
+export const orbitRadius = (layout: Layout, ship: Ship): number =>
+  layout.places[ship.place].radius + RING + ship.lane * LANE
 
 const wrapAngle = (angle: number): number => Math.atan2(Math.sin(angle), Math.cos(angle))
 
@@ -80,14 +132,14 @@ const assignLanes = (ships: readonly Ship[]) => {
 }
 
 /** Puts every ship on its ring, spread evenly around its island, sailing along it. */
-export const parkFleet = (ships: readonly Ship[]) => {
+export const parkFleet = (layout: Layout, ships: readonly Ship[]) => {
   const counts: Record<Place, number> = {inn: 0, forge: 0, castle: 0}
   for (const ship of ships) counts[ship.place] += 1
   const placed: Record<Place, number> = {inn: 0, forge: 0, castle: 0}
   for (const ship of ships) {
-    const island = PLACES[ship.place]
+    const island = layout.places[ship.place]
     const angle = 4.3 + (placed[ship.place]++ / counts[ship.place]) * Math.PI * 2
-    const radius = orbitRadius(ship) * Math.cos(LEAD / 2)
+    const radius = orbitRadius(layout, ship) * Math.cos(LEAD / 2)
     ship.x = island.x + Math.cos(angle) * radius
     ship.z = island.z + Math.sin(angle) * radius
     ship.heading = angle + Math.PI / 2
@@ -101,7 +153,7 @@ export const parkFleet = (ships: readonly Ship[]) => {
  * circling its island, a ship whose agent is gone leaves, and a ship whose agent
  * acted somewhere new turns for that island.
  */
-export const syncFleet = (ships: Ship[], agents: readonly Agent[]): Ship[] => {
+export const syncFleet = (layout: Layout, ships: Ship[], agents: readonly Agent[]): Ship[] => {
   const byId = new Map(ships.map(ship => [ship.id, ship]))
   const arriving: Ship[] = []
   const next = agents.slice(0, MAX_SHIPS).map(agent => {
@@ -116,15 +168,16 @@ export const syncFleet = (ships: Ship[], agents: readonly Agent[]): Ship[] => {
     return fresh
   })
   assignLanes(next)
-  parkFleet(arriving)
+  parkFleet(layout, arriving)
   return next
 }
 
 /** Moves every ship on by `dt` seconds. */
-export const stepFleet = (ships: readonly Ship[], dt: number) => {
+export const stepFleet = (layout: Layout, ships: readonly Ship[], dt: number) => {
+  const islands = islandsOf(layout)
   for (const ship of ships) {
-    const island = PLACES[ship.place]
-    const radius = orbitRadius(ship)
+    const island = layout.places[ship.place]
+    const radius = orbitRadius(layout, ship)
     const dx = ship.x - island.x
     const dz = ship.z - island.z
     const distance = Math.hypot(dx, dz)
@@ -138,7 +191,7 @@ export const stepFleet = (ships: readonly Ship[], dt: number) => {
     wantX /= reach
     wantZ /= reach
 
-    for (const rock of ISLANDS) {
+    for (const rock of islands) {
       const ax = ship.x - rock.x
       const az = ship.z - rock.z
       const away = Math.hypot(ax, az) || 1

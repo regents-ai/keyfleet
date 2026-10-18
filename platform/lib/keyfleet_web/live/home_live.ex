@@ -3,9 +3,15 @@ defmodule KeyfleetWeb.HomeLive do
   The homepage. Top to bottom: Classic #1, the fleet on sale, with the line
   that says what a Key is for and "Buy Next Key", which shows the Key's card
   art and price and opens the fleet's page with its Buy panel open; Classic
-  Keyfleet, its map beside what a Key lets an agent join, its public page and
-  "Buy Key"; the Regents Club and what it is doing right now; what a fleet
-  can use; and the footer.
+  Keyfleet, its sea beside what a Key lets an agent join, Key cards turning
+  over, its public page and "Buy Key"; the Regents Club, its sea, the same
+  cards and what it is doing right now; what a fleet can use; and the footer.
+
+  Each fleet's sea has a ship for each of its most recently active Keys, as
+  anyone reads them (`KeyfleetWeb.HarbourCrew`), its islands and buildings
+  placed a little differently from the other's. Pressing a ship opens its
+  Key's profile on the fleet's page. The cards are thirty Keys of no fleet, a fifth of a
+  second each; the Club's start halfway through, so the two never match.
 
   "Buy Key" opens a window with the next Key's card art, where its price goes,
   how many of the 1,024 Keys have sold, the next Key's price and the one after
@@ -18,18 +24,18 @@ defmodule KeyfleetWeb.HomeLive do
   whose sales are still being read keeps the button working: the fleet's own
   page reads the price again before anything reaches the wallet.
 
-  The Regents Club shows its map, how many Keys it has and who they went to,
-  its public page, its Keys on OpenSea (in a new tab), the addresses holding
+  The Regents Club shows how many Keys it has and who they went to, its
+  public page, its Keys on OpenSea (in a new tab), the addresses holding
   them and how many of those are online now (as
   `KeyfleetWeb.FleetLive.headcount/1` says it), the goal it is trying and its
   latest item, as anyone reads them (`Keyfleet.Activity`). A coming-soon
   fleet shows that it is coming soon and nothing it would have to read.
 
-  The first render reads each fleet's record and sales. Once connected, the
-  Club reads the rest, and each fleet reads again a few seconds after a
-  notice that something changed in it: once for a burst of notices, and only
-  for the fleet the notice was about. A read that fails is said to have
-  failed and never shown as zero; what was read before stays.
+  The first render reads each fleet's record and sales. Once connected, each
+  fleet reads its ships and the Club the rest, and each reads again a few
+  seconds after a notice that something changed in it: once for a burst of
+  notices, and only for the fleet the notice was about. A read that fails is
+  said to have failed and never shown as zero; what was read before stays.
   """
 
   use KeyfleetWeb, :live_view
@@ -44,6 +50,8 @@ defmodule KeyfleetWeb.HomeLive do
     ActivityLines,
     FleetLive,
     FleetPage,
+    HarbourCrew,
+    KeyLinks,
     Motion,
     PageRead,
     PublicDocuments,
@@ -200,17 +208,17 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp unread(fleet_id), do: %{fleet(fleet_id, nil) | failed?: true}
 
-  # A fleet before its first read: its name, its sales and its map. A
-  # coming-soon fleet is never read.
+  # A fleet before its first read: its name and its sales, and a sea without
+  # ships. A coming-soon fleet is never read.
   defp fleet(fleet_id, recorded) do
     coming_soon? = Fleets.coming_soon?(fleet_id, recorded)
 
     %{
       id: fleet_id,
       name: Enum.find(Fleets.catalog(), &(&1.id == fleet_id)).name,
-      layout: Presets.preset(fleet_id),
       coming_soon?: coming_soon?,
       sales: if(not coming_soon?, do: sales(fleet_id, recorded)),
+      ships: [],
       now: nil,
       failed?: false
     }
@@ -239,23 +247,25 @@ defmodule KeyfleetWeb.HomeLive do
     end
   end
 
-  # Classic is watched for its sales, which move the price; the Club for
-  # everything its section shows, as anyone hears it, whoever is signed in.
+  # Each fleet is watched for everything its section shows, its sales and its
+  # sea, as anyone hears it, whoever is signed in.
   defp watch(socket) do
     socket
-    |> watch(socket.assigns.classic, [Keys.topic(@classic)])
-    |> watch(socket.assigns.club, [
-      Keys.topic(@club),
-      Rooms.topic(@club, :public),
-      Graph.topic(@club, :public),
-      Proposals.topic(@club)
-    ])
+    |> watch(socket.assigns.classic)
+    |> watch(socket.assigns.club)
   end
 
-  defp watch(socket, %{coming_soon?: true}, _topics), do: socket
+  defp watch(socket, %{coming_soon?: true}), do: socket
 
-  defp watch(socket, %{id: fleet_id}, topics) do
-    for topic <- topics, do: Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
+  defp watch(socket, %{id: fleet_id}) do
+    for topic <- [
+          Keys.topic(fleet_id),
+          Rooms.topic(fleet_id, :public),
+          Graph.topic(fleet_id, :public),
+          Proposals.topic(fleet_id)
+        ],
+        do: Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
+
     start_read(socket, fleet_id)
   end
 
@@ -265,7 +275,11 @@ defmodule KeyfleetWeb.HomeLive do
         PageRead.run("home", fn -> read(fleet_id, DateTime.utc_now()) end)
       end)
 
-  defp read(@classic, _now), do: %{sales: sales(@classic, Fleets.get_fleet!(@classic))}
+  defp read(@classic, _now),
+    do: %{
+      sales: sales(@classic, Fleets.get_fleet!(@classic)),
+      ships: HarbourCrew.crew([@classic], nil)
+    }
 
   defp read(@club, now) do
     latest = @club |> Activity.page(nil, limit: 1) |> Map.fetch!(:items) |> List.first()
@@ -274,6 +288,7 @@ defmodule KeyfleetWeb.HomeLive do
 
     %{
       sales: sales(@club, Fleets.get_fleet!(@club)),
+      ships: HarbourCrew.crew([@club], nil),
       agents: agents,
       holders: holders,
       trying: trying(@club),
@@ -306,6 +321,17 @@ defmodule KeyfleetWeb.HomeLive do
 
   def handle_event("close_buy_key", _params, socket),
     do: {:noreply, assign(socket, :buy_open, false)}
+
+  # A ship on either sea: its Key's profile on its fleet's page.
+  def handle_event("open_ship", %{"id" => id}, socket) when is_binary(id) do
+    case Enum.find(socket.assigns.classic.ships ++ socket.assigns.club.ships, &(&1.id == id)) do
+      %{fleet_id: fleet_id, token_id: token_id} ->
+        {:noreply, push_navigate(socket, to: KeyLinks.key_path(fleet_id, token_id))}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
 
   # Something changed in a fleet: it is read again once, a moment later, for
   # however many notices come in the meantime. A room's head names no fleet;
@@ -345,13 +371,13 @@ defmodule KeyfleetWeb.HomeLive do
   # the next notice reads again. A failed database read is logged and saved by
   # `KeyfleetWeb.PageRead`; any other read that raised is logged by its task.
   @impl true
-  def handle_async({:now, fleet_id}, {:ok, {:ok, %{sales: sales} = now}}, socket),
+  def handle_async({:now, fleet_id}, {:ok, {:ok, %{sales: sales, ships: ships} = now}}, socket),
     do:
       {:noreply,
        update_fleet(
          socket,
          fleet_id,
-         &%{&1 | sales: sales, now: Map.delete(now, :sales), failed?: false}
+         &%{&1 | sales: sales, ships: ships, now: Map.drop(now, [:sales, :ships]), failed?: false}
        )}
 
   def handle_async({:now, fleet_id}, _failed, socket),
@@ -540,17 +566,12 @@ defmodule KeyfleetWeb.HomeLive do
   attr :class, :string, required: true
 
   attr :cell, :integer,
-    default: nil,
+    required: true,
     doc: "The distance between neighbouring tiles, in CSS pixels."
-
-  attr :across, :integer,
-    default: nil,
-    doc: "Instead of `cell`, how many tiles fit across the field."
 
   # A field of hex tiles behind a section: the stylesheet draws them still,
   # and under a mouse the GPU draws them over that once its first frame has
-  # landed. A tile sits on the field's centre, so a field `across` a map's
-  # width of keys lies under the map's own tiles.
+  # landed. A tile sits on the field's centre.
   defp hex_field(assigns) do
     ~H"""
     <div
@@ -559,8 +580,7 @@ defmodule KeyfleetWeb.HomeLive do
       phx-hook="HexField"
       phx-mounted={JS.ignore_attributes(["data-field-ready"])}
       data-field-cell={@cell}
-      data-field-across={@across}
-      style={if @cell, do: "--rl-cell: #{@cell}px", else: "--rl-cell: calc(100cqi / #{@across})"}
+      style={"--rl-cell: #{@cell}px"}
       aria-hidden="true"
     >
       <div class="rl-field__still"></div>
@@ -597,34 +617,17 @@ defmodule KeyfleetWeb.HomeLive do
   attr :classic, :map, required: true
   attr :buy_open, :boolean, required: true
 
-  # Classic's map beside what a Key lets an agent join, its public page and
-  # "Buy Key".
+  # Classic's sea beside what a Key lets an agent join, the cards turning
+  # over, its public page and "Buy Key".
   defp classic(assigns) do
     ~H"""
-    <section id="home-classic" class="rl-fleet" aria-labelledby="home-classic-title" data-field-scope>
-      <.link
-        navigate={Fleets.path(@classic.id)}
-        class="rl-fleet__map"
-        tabindex="-1"
-        aria-hidden="true"
-      >
-        <%!-- The map is drawn twelve keys wide. --%>
-        <.hex_field id="home-classic-field" class="rl-fleet__field" across={12} />
-        <div
-          id="home-classic-preview"
-          class="key-map-preview"
-          phx-hook="FleetPreview"
-          phx-update="ignore"
-          data-layout={@classic.layout}
-          data-minted={if @classic.sales, do: @classic.sales.keys, else: 0}
-          data-coming-soon={@classic.coming_soon?}
-        >
-        </div>
-      </.link>
+    <section id="home-classic" class="rl-fleet" aria-labelledby="home-classic-title">
+      <.sea id="home-classic-sea" layout="classic" fleet={@classic} />
 
       <div class="rl-fleet__copy">
         <h2 id="home-classic-title">Classic Keyfleet</h2>
         <p id="home-classic-join" class="rl-fleet__line">{classic_join()}</p>
+        <.cards id="home-classic-cards" />
         <div class="rl-fleet__actions">
           <.link
             id="home-classic-public"
@@ -760,21 +763,8 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp club(assigns) do
     ~H"""
-    <section id="home-club" class="rl-fleet" aria-labelledby="home-club-title" data-field-scope>
-      <.link navigate={Fleets.path(@club.id)} class="rl-fleet__map" tabindex="-1" aria-hidden="true">
-        <%!-- The map is drawn twelve keys wide. --%>
-        <.hex_field id="home-club-field" class="rl-fleet__field" across={12} />
-        <div
-          id="home-club-preview"
-          class="key-map-preview"
-          phx-hook="FleetPreview"
-          phx-update="ignore"
-          data-layout={@club.layout}
-          data-minted={if @club.sales, do: @club.sales.keys, else: 0}
-          data-coming-soon={@club.coming_soon?}
-        >
-        </div>
-      </.link>
+    <section id="home-club" class="rl-fleet" aria-labelledby="home-club-title">
+      <.sea id="home-club-sea" layout="club" fleet={@club} />
 
       <div class="rl-fleet__copy">
         <h2 id="home-club-title">{@club.name}</h2>
@@ -802,6 +792,7 @@ defmodule KeyfleetWeb.HomeLive do
           </p>
         </div>
 
+        <.cards id="home-club-cards" />
         <%!-- Until the Club opens there is nothing to view or buy. --%>
         <div :if={!@club.coming_soon?} class="rl-fleet__actions">
           <.link
@@ -830,6 +821,55 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   defp airdrop, do: @airdrop
+
+  attr :id, :string, required: true
+  attr :layout, :string, required: true, values: ~w(classic club)
+  attr :fleet, :map, required: true
+
+  # A fleet's sea: a ship for each of its most recently active Keys, circling
+  # the island of what it did last. The stylesheet shows the harbour still
+  # until the GPU's first frame has landed, and keeps it where there is no GPU.
+  defp sea(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class={["rl-sea", "rl-sea--#{@layout}"]}
+      phx-hook="FleetSea"
+      phx-mounted={JS.ignore_attributes(["data-harbour-ready"])}
+      data-harbour-layout={@layout}
+      data-harbour-crew={HarbourCrew.on_sea(@fleet.ships)}
+      aria-hidden="true"
+    >
+      <div id={"#{@id}-stage"} class="rl-sea__stage" phx-update="ignore" data-harbour-stage>
+        <canvas id={"#{@id}-canvas"} data-harbour-canvas></canvas>
+        <span class="harbour-sea__tag" data-harbour-tag hidden></span>
+      </div>
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+
+  # Thirty Key cards of no fleet, one after another, a fifth of a second each,
+  # from one sheet of six across and five down: the frame steps across a row
+  # while the sheet steps down a row each time it has crossed one.
+  defp cards(assigns) do
+    ~H"""
+    <div id={@id} class="rl-cards" aria-hidden="true">
+      <div class="rl-cards__rows">
+        <img
+          class="rl-cards__sheet"
+          src={~p"/images/home/key-cards.webp"}
+          width="1920"
+          height="2000"
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+    </div>
+    """
+  end
 
   attr :now, :map, required: true
 

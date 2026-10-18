@@ -1,11 +1,12 @@
 import {createCanvasIsland, type CanvasIslandController, type LoadRenderer} from "../canvas_island"
 import type {HarbourLook, HarbourRenderer} from "../harbour/renderer"
-import type {Agent} from "../harbour/sim"
+import type {Agent, LayoutName} from "../harbour/sim"
 import {SLOW} from "./motion/shared"
 
-const browserLoadHarbour: LoadRenderer<HarbourRenderer> = async (canvas, size, onDeviceLost) => {
+/** The harbour the server named in `data-harbour-layout`. */
+const browserLoadHarbour = (layout: LayoutName): LoadRenderer<HarbourRenderer> => async (canvas, size, onDeviceLost) => {
   const {createHarbourRenderer} = await import("../harbour/renderer")
-  return createHarbourRenderer(canvas, size, onDeviceLost)
+  return createHarbourRenderer(canvas, size, onDeviceLost, layout)
 }
 
 /** The browser is saving data, by its own setting or the system's. */
@@ -37,8 +38,8 @@ type HarbourSeaController = CanvasIslandController & {
 }
 
 /**
- * The sea behind every page of the app: one ship for each recent agent, sailing
- * to the island of its last action and circling it.
+ * A sea of the harbour `data-harbour-layout` names: one ship for each recent
+ * agent, sailing to the island of its last action and circling it.
  *
  * The sea always moves, so it draws every frame while the tab is showing. A
  * visitor who asked for less motion gets one still picture, redrawn only when an
@@ -46,8 +47,7 @@ type HarbourSeaController = CanvasIslandController & {
  * device that can't give the sea its frames, such as a phone saving power.
  * Without WebGPU nothing is drawn and the page's own ground shows.
  *
- * The sea lies behind the page and takes no presses until the page is lifted
- * away (pages/harbour.css). Then a mouse over a ship shows its agent's name,
+ * Where the sea takes presses, a mouse over a ship shows its agent's name,
  * pressing a ship hands its agent to `open`, pressing the open sea starts a
  * ripple, and pressing an island does nothing.
  */
@@ -57,7 +57,7 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
   const island = createCanvasIsland<HarbourRenderer>(root, {}, {
     canvasSelector: "[data-harbour-canvas]",
     readyFlag: "harbourReady",
-    browserLoad: browserLoadHarbour,
+    browserLoad: browserLoadHarbour(root.dataset.harbourLayout as LayoutName),
     motionSensitive: false,
     continuous: true,
     interact({renderer, nudge, onReady, onStrain}) {
@@ -172,9 +172,11 @@ type HarbourSeaHook = {
 }
 
 /**
- * The backdrop's hook. The sea lives in a sticky LiveView that never sees the
- * page's params, so it tells the backdrop which page is on screen, on mount and
- * after every live navigation, and the backdrop picks the crew for it.
+ * The backdrop's hook: the sea behind every page of the app, which takes no
+ * presses until the page is lifted away (pages/harbour.css). The sea lives in
+ * a sticky LiveView that never sees the page's params, so it tells the
+ * backdrop which page is on screen, on mount and after every live navigation,
+ * and the backdrop picks the crew for it.
  *
  * A new page, the card's link to a Key included, brings the page back down if
  * it was lifted and closes the card, so nobody is left on a page they can't see.
@@ -216,6 +218,36 @@ export const HarbourSea = {
   },
   destroyed(this: HarbourSeaHook) {
     window.removeEventListener("phx:page-loading-stop", this.onPageLoaded!)
+    this.controller?.destroy()
+    this.controller = undefined
+  },
+}
+
+type FleetSeaHook = {
+  el: HTMLElement
+  controller?: HarbourSeaController
+  pushEvent(event: string, payload: object): void
+}
+
+/**
+ * A fleet's sea in its section of the homepage, its ships that fleet's Keys.
+ * Pressing a ship asks the page to open that Key's profile on the fleet's page.
+ */
+export const FleetSea = {
+  mounted(this: FleetSeaHook) {
+    this.controller = createHarbourSeaController(this.el, id => this.pushEvent("open_ship", {id}))
+    this.controller.mount()
+  },
+  updated(this: FleetSeaHook) {
+    this.controller?.sync()
+  },
+  disconnected(this: FleetSeaHook) {
+    this.controller?.pause()
+  },
+  reconnected(this: FleetSeaHook) {
+    this.controller?.resume()
+  },
+  destroyed(this: FleetSeaHook) {
     this.controller?.destroy()
     this.controller = undefined
   },

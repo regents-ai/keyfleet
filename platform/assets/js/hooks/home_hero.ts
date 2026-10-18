@@ -98,32 +98,29 @@ type Standing = Tile & {key: string; to: number}
 
 /**
  * The hex field. `data-field-cell` is the distance between neighbouring tiles
- * in CSS pixels; `data-field-across` instead fits that many tiles across the
- * field, so it lies under a map drawn that many keys wide. Anywhere in the
- * element marked `data-field-scope`, the five tiles nearest a mouse stand up
- * out of the field, the one under it highest, and follow it as it moves, each
- * rising and sinking in 0.3 seconds. A mouse also lights the tiles near it,
- * and it, or a finger on a screen that also has one, leaves a wake of lit
- * tiles that fades behind it; scrolling under a resting mouse moves all of it
- * to the tiles passing beneath. A press sends a ring out across the tiles. In
- * the hero, previewing the Key warms the tiles around its card. Nothing moves
- * unless someone does, and the field is still again shortly after. All of it
- * comes from a mouse or a desktop's keyboard, so on a phone or tablet, or for
- * a visitor who asked for less motion, the stylesheet's still drawing is the
- * field and the GPU is never asked; the page's own less-motion switch drops
- * the raised tiles, the pointer's light, the wake and the ring. The fade
- * toward the field's edges is the stylesheet's `--rl-fade-*` for each layout.
+ * in CSS pixels. Anywhere in the element marked `data-field-scope`, the five
+ * tiles nearest a mouse stand up out of the field, the one under it highest,
+ * and follow it as it moves, each rising and sinking in 0.3 seconds. A mouse
+ * also lights the tiles near it, and it, or a finger on a screen that also has
+ * one, leaves a wake of lit tiles that fades behind it; scrolling under a
+ * resting mouse moves all of it to the tiles passing beneath. A press sends a
+ * ring out across the tiles. In the hero, previewing the Key warms the tiles
+ * around its card. Nothing moves unless someone does, and the field is still
+ * again shortly after. All of it comes from a mouse or a desktop's keyboard,
+ * so on a phone or tablet, or for a visitor who asked for less motion, the
+ * stylesheet's still drawing is the field and the GPU is never asked; the
+ * page's own less-motion switch drops the raised tiles, the pointer's light,
+ * the wake and the ring. The fade toward the field's edges is the
+ * stylesheet's `--rl-fade-*` for each layout.
  */
 export const HexField = {
   mounted(this: IslandHook) {
     if (!finePointer()) return
     const root = this.el
-    const scope = root.closest<HTMLElement>("[data-field-scope]") ?? root
+    const scope = root.closest<HTMLElement>("[data-field-scope]")!
     const buy = scope.querySelector<HTMLElement>("[data-key-preview]")
     const card = buy?.querySelector<HTMLElement>("[data-key-card]")
-    const field = root.querySelector<HTMLCanvasElement>("[data-field-canvas]")!
-    const {fieldAcross, fieldCell} = root.dataset
-    const cell = () => (fieldAcross ? field.clientWidth / Number(fieldAcross) : Number(fieldCell))
+    const cell = Number(root.dataset.fieldCell)
 
     this.controller = createCanvasIsland<FieldRenderer>(root, {}, {
       canvasSelector: "[data-field-canvas]",
@@ -182,7 +179,7 @@ export const HexField = {
         const standing = new Map<string, Standing>()
         const draw = () => {
           for (const [key, tile] of standing) if (tile.h === 0 && tile.to === 0) standing.delete(key)
-          renderer()?.stand([...standing.values()].sort((a, b) => b.h - a.h), cell() * LIFT)
+          renderer()?.stand([...standing.values()].sort((a, b) => b.h - a.h), cell * LIFT)
           nudge()
         }
         const motion = createScope({root})
@@ -206,7 +203,7 @@ export const HexField = {
         // The tiles nearest the mouse stand; every other tile sinks.
         const follow = (clientX: number, clientY: number) => {
           const box = canvas().getBoundingClientRect()
-          const size = cell()
+          const size = cell
           const near = nearest(
             (clientX - box.left - box.width / 2) / size,
             (clientY - box.top - box.height / 2) / size,
@@ -253,7 +250,7 @@ export const HexField = {
           const box = canvas().getBoundingClientRect()
           const to: [number, number] = [clientX - box.left, clientY - box.top]
           const from = trail ?? to
-          const spacing = cell() * WAKE_SPACING
+          const spacing = cell * WAKE_SPACING
           const gap = Math.hypot(to[0] - from[0], to[1] - from[1])
           if (trail && gap < spacing) return
           const count = Math.min(WAKE_MARKS_PER_MOVE, Math.max(1, Math.round(gap / spacing)))
