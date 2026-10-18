@@ -2369,3 +2369,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   pasted or opened anywhere else signs no one in, and a code sent from another
   website takes you to Keyfleet to open the notebooks as yourself, so a link
   someone else made can't sign you in to their account.
+
+## 2026-10-18 — When the notebooks don't open
+
+- If a fleet's notebooks send you back to Keyfleet instead of opening, the
+  page now says the notebooks didn't open and waits for you to press Open
+  notebooks, instead of trying again by itself.

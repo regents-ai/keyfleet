@@ -270,7 +270,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # not spent. Keyfleet makes a code of this browser's own instead.
   defp to_keyfleet(conn, fleet_id, to) do
     conn
-    |> put_resp_header("location", open_url(fleet_id, to))
+    |> put_resp_header("location", open_url(fleet_id, to, again: "1"))
     |> send_resp(303, "")
   end
 
@@ -398,12 +398,14 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   @doc """
   Keyfleet's address that signs a person in to the fleet's notebooks and
-  lands them on `to` (`KeyfleetWeb.NotebookOpenController`).
+  lands them on `to` (`KeyfleetWeb.NotebookOpenController`). With
+  `again: "1"`, for someone this host sent back, Keyfleet's page waits for a
+  press instead of sending the code by itself.
   """
-  def open_url(fleet_id, to),
+  def open_url(fleet_id, to, query \\ []),
     do:
       KeyfleetWeb.Endpoint.url() <>
-        "/fleets/#{fleet_id}/notebooks/open?" <> URI.encode_query(to: to)
+        "/fleets/#{fleet_id}/notebooks/open?" <> URI.encode_query([to: to] ++ query)
 
   # The shared plug has already refused a repeated signed header and a body it
   # did not capture whole; nothing else is checked before the sign-in server.
