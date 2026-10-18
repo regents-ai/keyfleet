@@ -12,6 +12,7 @@ defmodule Keyfleet.ReleaseTest do
   @direct "postgresql://direct_user:direct-secret@direct.dzx6qo6xqzvojpv5.flympg.net:5432/keyfleet"
   @role "KEYFLEET_DEPLOYMENT_ROLE"
   @role_error "bootstrap-staging requires KEYFLEET_DEPLOYMENT_ROLE to be exactly staging"
+  @load_role_error "seed-load-staging requires KEYFLEET_DEPLOYMENT_ROLE to be exactly staging"
   @missing_table_error "no schema_migrations table: run bootstrap-staging first"
   @unreachable [
     hostname: "127.0.0.1",
@@ -139,6 +140,19 @@ defmodule Keyfleet.ReleaseTest do
 
       assert_raise RuntimeError, @role_error, fn ->
         Release.bootstrap_staging(getenv: getenv, config: @unreachable)
+      end
+    end
+  end
+
+  test "seed-load refuses every role but staging before it opens a connection" do
+    for role <- [nil, "", "production", "Staging", "staging ", "rehearsal"] do
+      getenv = fn
+        @role -> role
+        name -> flunk("seed-load read #{name} before it checked the deployment role")
+      end
+
+      assert_raise RuntimeError, @load_role_error, fn ->
+        Release.seed_load_staging(getenv: getenv, config: @unreachable)
       end
     end
   end

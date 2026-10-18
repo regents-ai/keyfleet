@@ -25,6 +25,7 @@ import {installCopyButtons} from "./copy_buttons"
 import {installPageProgress} from "./page_progress"
 import {installPublicTools} from "./public_tools"
 import {installVitals} from "./vitals"
+import {spreadReconnect} from "./reconnect"
 import {CurrentTab} from "./hooks/current_tab"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {HarbourSea} from "./hooks/harbour_sea"
@@ -314,16 +315,6 @@ const hooks = {
   VerifiedConnections,
 }
 if (!browserCsrfToken()) throw new Error("Missing CSRF token")
-
-// Phoenix's own waits between reconnect attempts, each spread from half to
-// one and a half times its length. A deploy drops every open page at once;
-// without the spread they all come back in the same instant and each reads
-// its page again, more than the site's few database connections can answer.
-const reconnectWaits = [10, 50, 100, 150, 200, 250, 500, 1000, 2000]
-const spreadReconnect = (tries: number) => {
-  const wait = reconnectWaits[tries - 1] ?? 5000
-  return Math.round(wait / 2 + Math.random() * wait)
-}
 
 // Sign in and refresh renew the session and rotate its CSRF state, so every
 // connection and reconnection reads the token the browser holds now.

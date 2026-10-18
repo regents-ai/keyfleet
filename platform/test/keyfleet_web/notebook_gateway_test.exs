@@ -441,6 +441,32 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     refute_received {:hub, "GET", ^code, _subject, _body}
   end
 
+  # Costly failure: an agent that signs over its body but leaves out another
+  # signed header is told to add the content-digest it already sends, and
+  # goes round in circles; it gets the sign-in server's own refusal instead.
+  test "a signed read missing a header other than content-digest gets the sign-in server's own refusal" do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    real_refusals!(secret)
+    epoch!(2, 1, String.downcase(signer.address))
+    code = "/api/v1/projects/proj-fleet/notebooks/nb-0123456789abcdef/content"
+    request = SignedAgentHelpers.sign(signer, secret, "GET", code, "")
+    assert Map.has_key?(request.headers, "content-digest")
+
+    refused =
+      Enum.reduce(
+        Map.delete(request.headers, "x-timestamp"),
+        %{build_conn() | host: @host, remote_ip: {198, 51, 100, 133}},
+        fn {name, value}, conn -> put_req_header(conn, name, value) end
+      )
+      |> dispatch(@endpoint, :get, code, "")
+
+    assert %{"code" => "http_headers_missing", "hint" => @client_hint} =
+             json_response(refused, 401)["error"]
+
+    refute_received {:hub, _method, _path, _subject, _body}
+  end
+
   # Costly failure: an agent whose person ended its pairing keeps working in
   # the fleet's notebooks through a connection it already had open.
   test "an agent's open notebook connection closes when its person ends the pairing" do
