@@ -34,6 +34,13 @@ defmodule KeyfleetWeb.FleetLive do
   recorded, except that the feed names an item other than a goal by its
   title only to the fleet's members, and to anyone else by its type
   (`Keyfleet.Activity`).
+
+  So a reader who isn't a member sees the hall as anyone does, and their
+  hall is drawn from the reading of the fleet every such page shares
+  (`KeyfleetWeb.FleetNow`): its sales, the first page of its feed and
+  "Trying now", drawn again whenever the reading changes. A crowd of them
+  costs what one visitor costs. A member's hall reads their own, and so do
+  the fleet's other views.
   """
 
   use KeyfleetWeb, :html
@@ -71,6 +78,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.Components.MemberList
   alias KeyfleetWeb.Components.Placeholder
   alias KeyfleetWeb.Components.SendAgent
+  alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetPage
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeyMap
@@ -86,9 +94,9 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.WalletWords
   alias KeyfleetWeb.WorkspacePage
 
-  # How long an open fleet page waits after a notice that something happened
-  # in the fleet before it reads the hall's feed again, so a burst of
-  # changes is read once; and how many pages of it the page shows at most.
+  # How long a member's open fleet page waits after a notice that something
+  # happened in the fleet before it reads the hall's feed again, so a burst
+  # of changes is read once; and how many pages of it the page shows at most.
   @activity_refresh_after 2_000
   @activity_pages 5
 
@@ -235,7 +243,7 @@ defmodule KeyfleetWeb.FleetLive do
       <section :if={is_nil(@fleet.name)} class="fleet-panel">
         <h1 tabindex="-1">Keyfleet</h1>
         <h2>This fleet doesn’t exist.</h2>
-        <a href="/#fleets" class="rg-button rg-button--secondary">See the fleets</a>
+        <a href="/#home-classic" class="rg-button rg-button--secondary">See the fleets</a>
       </section>
 
       <.coming_soon :if={@fleet.name && @fleet.coming_soon?} fleet={@fleet} />
@@ -388,7 +396,7 @@ defmodule KeyfleetWeb.FleetLive do
           <p>
             This fleet opens later. Until then it has no Keys for sale, and nobody can join it.
           </p>
-          <a href="/#fleets" class="rg-button rg-button--secondary">See the fleets</a>
+          <a href="/#home-classic" class="rg-button rg-button--secondary">See the fleets</a>
         </section>
       </div>
     </div>
@@ -1519,7 +1527,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp pass_note(_pass), do: "Enter a Pass number"
 
   @doc """
-  The hall's feed is read again from the top, as many pages as are
+  A member's hall reads its feed again from the top, as many pages as are
   shown, once for the burst of notices about the fleet on show that asked
   for it. A wait begun for a fleet the page has since left reads nothing. A
   read again that fails keeps what the hall shows; the next notice reads again.
@@ -1530,7 +1538,7 @@ defmodule KeyfleetWeb.FleetLive do
       ) do
     socket = assign(socket, :activity_refresh, nil)
 
-    case PageRead.run("fleet", fn -> socket |> reread_activity() |> reread_quotes() end) do
+    case PageRead.run("fleet", fn -> socket |> reread_activity(nil) |> reread_quotes() end) do
       {:ok, reread} -> {:noreply, reread}
       {:error, _failure} -> {:noreply, socket}
     end
@@ -1559,31 +1567,48 @@ defmodule KeyfleetWeb.FleetLive do
         show_without_keys(socket, %{fleet_id: fleet_id, name: nil}, params, place)
 
       Fleets.coming_soon?(fleet_id, fleet) ->
-        show_without_keys(
-          socket,
-          %{
-            fleet_id: fleet_id,
-            name: fleet.name,
-            coming_soon?: true,
-            layout: Presets.preset(fleet_id)
-          },
-          params,
-          place
-        )
+        show_without_keys(socket, soon(fleet_id, fleet), params, place)
 
       true ->
-        show_with_keys(socket, fleet_id, fleet, params, place, actor)
+        show_with_keys(socket, fleet, params, place, actor)
     end
   end
 
+  defp soon(fleet_id, fleet),
+    do: %{
+      fleet_id: fleet_id,
+      name: fleet.name,
+      coming_soon?: true,
+      layout: Presets.preset(fleet_id)
+    }
+
   # Any other fleet: its figures and what's happening in it. Its Member List
-  # reads its own page of holders.
-  defp show_with_keys(socket, fleet_id, fleet, params, place, actor) do
-    deployed? = fleet.manager_address != nil
-    current? = deployed? and Chain.fresh?(fleet_id)
-    progress = if deployed?, do: Chain.progress(fleet_id)
+  # reads its own page of holders. The readings it shows are named by the
+  # fleet's own record, never by the address, and heard before they are
+  # fetched, so one that lands in between still reaches the page. A hall
+  # whose reading isn't there yet says the fleet couldn't be read, and one
+  # whose reading still has the fleet coming soon shows it so; neither is
+  # read for the page instead.
+  defp show_with_keys(socket, %{id: fleet_id} = fleet, params, place, actor) do
     shown = view(socket.assigns.fleet_place, socket.assigns.fleet_params || %{})
-    feed = feed_on_return(shown, view(place, params))
+    wanted = view(place, params)
+    socket = follow_shared(socket, fleet_id, wanted)
+
+    case figures(socket, fleet_id, fleet, wanted) do
+      :coming_soon ->
+        show_without_keys(socket, soon(fleet_id, fleet), params, place)
+
+      :unread ->
+        show_without_keys(socket, :unreadable, params, place)
+
+      figures ->
+        feed = feed_on_return(shown, wanted)
+        show_open(socket, fleet, figures, params, place, feed, actor)
+    end
+  end
+
+  defp show_open(socket, %{id: fleet_id} = fleet, figures, params, place, feed, actor) do
+    %{deployed?: deployed?, current?: current?, progress: progress, now: now} = figures
 
     socket
     |> assign(:fleet, %{
@@ -1609,16 +1634,79 @@ defmodule KeyfleetWeb.FleetLive do
       held: FleetPage.held(fleet, actor)
     })
     |> assign(fleet_params: params, fleet_place: place, pass_note: nil)
-    |> follow_agents(fleet_id)
-    |> follow_feed(fleet_id, place, feed)
+    |> show_agents()
+    |> follow_feed(fleet_id, place, feed, now)
     |> read_quotes(fleet_id, actor)
   end
 
-  # The feed is read while the fleet's own views are on show. The Treasury
-  # and the Workspace leave it, and coming back to the hall reads it afresh.
-  defp follow_feed(socket, fleet_id, :fleet, feed), do: read_activity(socket, fleet_id, feed)
+  # How far the fleet has sold, and with it, for a hall drawn from the
+  # fleet's reading, that reading (`now`): the feed's first page and "Trying
+  # now" come from it too. Any other page reads the sales itself.
+  defp figures(socket, fleet_id, fleet, view) do
+    if from_reading?(socket, fleet_id, view) do
+      case FleetNow.fetch(fleet_id) do
+        {%{coming_soon?: false} = reading, _degraded?} ->
+          fleet_id |> sales(reading) |> Map.put(:now, reading)
 
-  defp follow_feed(socket, _fleet_id, _place, _feed) do
+        {%{coming_soon?: true}, _degraded?} ->
+          :coming_soon
+
+        nil ->
+          :unread
+      end
+    else
+      deployed? = fleet.manager_address != nil
+
+      %{
+        deployed?: deployed?,
+        current?: deployed? and Chain.fresh?(fleet_id),
+        progress: if(deployed?, do: Chain.progress(fleet_id)),
+        now: nil
+      }
+    end
+  end
+
+  # The sales a reading holds, as `Keyfleet.Chain.progress/1` gives them.
+  defp sales(fleet_id, %{deployed?: deployed?, current?: current?, minted: minted}),
+    do: %{
+      deployed?: deployed?,
+      current?: current?,
+      progress: if(deployed?, do: Presets.progress(fleet_id, minted))
+    }
+
+  @doc """
+  Whether the page on show is a hall drawn from the fleet's reading every
+  such page shares (`KeyfleetWeb.FleetNow`): the hall's own view, shown to a
+  reader who isn't a member. Its sales, feed and "Trying now" are never read
+  for the page itself; only what is the reader's own is.
+  """
+  def from_reading?(
+        %{assigns: %{fleet: %{fleet_id: fleet_id}, fleet_place: place, fleet_params: params}} =
+          socket
+      ),
+      do: from_reading?(socket, fleet_id, view(place, params))
+
+  def from_reading?(_socket), do: false
+
+  defp from_reading?(socket, fleet_id, view),
+    do: view == :hall and not ShellLive.member?(socket, fleet_id)
+
+  # The feed is held while the fleet's own views are on show: a member's
+  # read for them, anyone else's drawn from the reading on the hall alone,
+  # the one view of it they see. The Treasury and the Workspace leave it,
+  # and coming back to the hall draws it afresh.
+  defp follow_feed(socket, fleet_id, :fleet, feed, %{} = now),
+    do: read_activity(socket, fleet_id, feed, now)
+
+  defp follow_feed(socket, fleet_id, :fleet, feed, nil) do
+    if ShellLive.member?(socket, fleet_id),
+      do: read_activity(socket, fleet_id, feed, nil),
+      else: leave_feed(socket)
+  end
+
+  defp follow_feed(socket, _fleet_id, _place, _feed, _now), do: leave_feed(socket)
+
+  defp leave_feed(socket) do
     socket
     |> assign(activity: nil, activity_refresh: nil)
     |> stream(:activity, [], reset: true)
@@ -1683,6 +1771,15 @@ defmodule KeyfleetWeb.FleetLive do
 
   defp reread_quotes(socket), do: socket
 
+  # A hall drawn from the fleet's reading reads the person's requests again
+  # with it only while one of them is still waiting for their agent, so a
+  # new reading costs everyone else nothing.
+  defp reread_waiting_quotes(%{assigns: %{quotes: %{requests: requests}}} = socket) do
+    if Enum.any?(requests, &is_nil(&1.quoted_in_slug)), do: reread_quotes(socket), else: socket
+  end
+
+  defp reread_waiting_quotes(socket), do: socket
+
   # A fleet there is not, or one coming soon: its name at most, and no keys
   # or activity to read.
   defp show_without_keys(socket, fleet, params, place) do
@@ -1701,21 +1798,35 @@ defmodule KeyfleetWeb.FleetLive do
     |> stream(:activity, [], reset: true)
   end
 
-  # The hall's feed: the fleet's activity, newest first. A page moving
-  # within the same fleet keeps the pages it shows, read again when the hall
-  # comes back into view; another fleet starts from its first page. The
-  # cursor for the next page stays here, on the server.
-  defp read_activity(%{assigns: %{activity: %{fleet_id: fleet_id}}} = socket, fleet_id, :kept),
-    do: socket
+  # The hall's feed: the fleet's activity, newest first, read for the
+  # reader or drawn from the fleet's reading (`now`). A page moving within
+  # the same fleet keeps the pages it shows, drawn again when the hall comes
+  # back into view; another fleet, or a reader who now sees the feed another
+  # way, starts from its first page. The cursor for the next page stays
+  # here, on the server.
+  defp read_activity(
+         %{assigns: %{activity: %{fleet_id: fleet_id, reading?: reading?}}} = socket,
+         fleet_id,
+         :kept,
+         now
+       )
+       when reading? == is_map(now),
+       do: socket
 
-  defp read_activity(%{assigns: %{activity: %{fleet_id: fleet_id}}} = socket, fleet_id, :redrawn),
-    do: reread_activity(socket)
+  defp read_activity(
+         %{assigns: %{activity: %{fleet_id: fleet_id, reading?: reading?}}} = socket,
+         fleet_id,
+         :redrawn,
+         now
+       )
+       when reading? == is_map(now),
+       do: reread_activity(socket, now)
 
-  defp read_activity(socket, fleet_id, _feed) do
+  defp read_activity(socket, fleet_id, _feed, now) do
     {items, socket} =
       socket
       |> assign(activity: %{fleet_id: fleet_id, pages: 1}, activity_refresh: nil)
-      |> read_activity_pages()
+      |> activity_pages(now)
 
     stream(socket, :activity, items, reset: true)
   end
@@ -1723,9 +1834,9 @@ defmodule KeyfleetWeb.FleetLive do
   # Lines already on the page stay where they are drawn: the gone ones leave
   # and the new ones go in at their place, so the list's motion moves only
   # what changed. A reset would empty the list before its motion records it.
-  defp reread_activity(%{assigns: %{activity: %{ids: shown}}} = socket) do
-    {items, socket} = read_activity_pages(socket)
-    kept = MapSet.new(items, & &1.id)
+  defp reread_activity(%{assigns: %{activity: %{ids: shown}}} = socket, now) do
+    {items, socket} = activity_pages(socket, now)
+    kept = socket.assigns.activity.ids
 
     socket =
       shown
@@ -1741,7 +1852,9 @@ defmodule KeyfleetWeb.FleetLive do
     end)
   end
 
-  defp read_activity_pages(%{assigns: %{activity: %{fleet_id: fleet_id, pages: pages}}} = socket) do
+  # A member's feed: as many pages as are shown, read again from the top as
+  # they read them, with "Trying now".
+  defp activity_pages(%{assigns: %{activity: %{fleet_id: fleet_id, pages: pages}}} = socket, nil) do
     {items, cursor, read} =
       FleetPage.activity_pages(fleet_id, pages, ShellLive.human_actor(socket))
 
@@ -1752,20 +1865,52 @@ defmodule KeyfleetWeb.FleetLive do
        pages: read,
        ids: MapSet.new(items, & &1.id),
        empty?: items == [],
-       trying: FleetPage.read_trying_now(fleet_id)
+       trying: FleetPage.read_trying_now(fleet_id),
+       reading?: false
+     })}
+  end
+
+  # Anyone else's: the reading's first page and "Trying now". The pages they
+  # asked for beyond it with "Show earlier" stay below it as they were read,
+  # with the cursor after them. A first page that shares no line with them
+  # starts the feed again from itself, so no gap opens between the two.
+  defp activity_pages(%{assigns: %{activity: activity}} = socket, %{feed: feed, trying: trying}) do
+    first = MapSet.new(feed.items, & &1.id)
+    shown = Map.get(activity, :ids, MapSet.new())
+
+    {ids, cursor, pages} =
+      if activity.pages > 1 and not MapSet.disjoint?(shown, first),
+        do: {MapSet.union(shown, first), activity.cursor, activity.pages},
+        else: {first, feed.cursor, 1}
+
+    {feed.items,
+     assign(socket, :activity, %{
+       fleet_id: activity.fleet_id,
+       cursor: cursor,
+       pages: pages,
+       ids: ids,
+       empty?: MapSet.size(ids) == 0,
+       trying: trying,
+       reading?: true
      })}
   end
 
   @doc """
   One read for a burst of notices about the fleet on show; the wait names
-  the fleet it was begun for.
+  the fleet it was begun for. Only a member's feed is read again: anyone
+  else's is drawn from the fleet's reading when it changes
+  (`shared_changed/2`), and reads nothing on a notice.
   """
   def refresh_activity_soon(
         %{assigns: %{activity: %{fleet_id: fleet_id}, activity_refresh: nil}} = socket,
         fleet_id
       ) do
-    Process.send_after(self(), {:refresh_activity, fleet_id}, @activity_refresh_after)
-    assign(socket, :activity_refresh, fleet_id)
+    if ShellLive.member?(socket, fleet_id) do
+      Process.send_after(self(), {:refresh_activity, fleet_id}, @activity_refresh_after)
+      assign(socket, :activity_refresh, fleet_id)
+    else
+      socket
+    end
   end
 
   def refresh_activity_soon(socket, _fleet_id), do: socket
@@ -1793,19 +1938,26 @@ defmodule KeyfleetWeb.FleetLive do
 
   @doc """
   Sales and transfers move the figures, the key on offer, the levels the map
-  can go to and the Keys the reader holds.
+  can go to and the Keys the reader holds. A hall drawn from the fleet's
+  reading reads only the reader's Keys here; its figures come with the
+  reading a moment later (`shared_changed/2`).
   """
   def refresh_sales(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
-    progress = Chain.progress(fleet_id)
+    if from_reading?(socket) do
+      held = FleetPage.held(fleet.deck, ShellLive.human_actor(socket))
+      assign(socket, :fleet, %{fleet | held: held})
+    else
+      progress = Chain.progress(fleet_id)
 
-    assign(socket, :fleet, %{
-      fleet
-      | progress: progress,
-        current?: Chain.fresh?(fleet_id),
-        buy: FleetPage.next_sale(fleet_id, progress),
-        levels: KeyMap.levels(progress),
-        held: FleetPage.held(fleet.deck, ShellLive.human_actor(socket))
-    })
+      assign(socket, :fleet, %{
+        fleet
+        | progress: progress,
+          current?: Chain.fresh?(fleet_id),
+          buy: FleetPage.next_sale(fleet_id, progress),
+          levels: KeyMap.levels(progress),
+          held: FleetPage.held(fleet.deck, ShellLive.human_actor(socket))
+      })
+    end
   end
 
   @doc "Keys changed hands: the Member List, when it is on show, reads its page again."
@@ -1814,12 +1966,12 @@ defmodule KeyfleetWeb.FleetLive do
     socket
   end
 
-  # "Who's here" and the bar's count of agents, as every page shares them,
-  # heard from before they are read.
-  defp follow_agents(socket, fleet_id) do
-    socket
-    |> SharedFigures.follow(:fleet, [Here.fleet_key(fleet_id)])
-    |> show_agents()
+  # The readings the fleet's page shows, heard from before they are read:
+  # "Who's here" and the bar's count of agents, and for a hall drawn from
+  # the fleet's reading, that reading.
+  defp follow_shared(socket, fleet_id, view) do
+    now = if from_reading?(socket, fleet_id, view), do: [FleetNow.key(fleet_id)], else: []
+    SharedFigures.follow(socket, :fleet, [Here.fleet_key(fleet_id) | now])
   end
 
   # Before the fleet's first reading, the agents and holders are said to be uncounted,
@@ -1840,14 +1992,91 @@ defmodule KeyfleetWeb.FleetLive do
     |> stream(:fleet_who, agents, reset: true)
   end
 
-  @doc "A shared reading the page hears has changed: \"Who's here\" is drawn again."
+  @doc """
+  A shared reading the page hears has changed: \"Who's here\" is drawn
+  again, or a hall drawn from the fleet's reading draws its sales, feed and
+  "Trying now" from the new one. Each is matched on the fleet it is for, so
+  a reading of a fleet the page has left changes nothing, and one of the
+  fleet on show still lands right after it.
+  """
   def shared_changed(
         %{assigns: %{fleet: %{fleet_id: fleet_id}}} = socket,
         {:fleet_agents, fleet_id}
       ),
       do: show_agents(socket)
 
+  def shared_changed(
+        %{assigns: %{fleet: %{fleet_id: fleet_id, coming_soon?: false}}} = socket,
+        {:fleet_now, fleet_id}
+      ) do
+    if from_reading?(socket), do: show_reading(socket), else: socket
+  end
+
   def shared_changed(socket, _key), do: socket
+
+  @doc """
+  The reader's class in the fleet on show has changed (`Keyfleet.Access`).
+  A hall shown to someone who is no longer a member is drawn from the
+  fleet's reading from now on, in place of what they read as one; one
+  shown to a new member stops hearing the reading, and its next notice
+  reads the feed as theirs.
+  """
+  def class_changed(
+        %{assigns: %{fleet: %{fleet_id: fleet_id, coming_soon?: false}}} = socket,
+        fleet_id
+      ) do
+    %{fleet_place: place, fleet_params: params} = socket.assigns
+    socket = follow_shared(socket, fleet_id, view(place, params))
+
+    with true <- from_reading?(socket),
+         {%{coming_soon?: false} = reading, _degraded?} <- FleetNow.fetch(fleet_id) do
+      socket
+      |> show_sales(reading)
+      |> read_activity(fleet_id, :new, reading)
+    else
+      _member_or_unread -> socket
+    end
+  end
+
+  def class_changed(socket, _fleet_id), do: socket
+
+  # The hall drawn again from the fleet's newest reading. A reading with the
+  # fleet no longer open changes nothing on it.
+  defp show_reading(
+         %{assigns: %{fleet: %{fleet_id: fleet_id}, activity: %{ids: _shown}}} = socket
+       ) do
+    case FleetNow.fetch(fleet_id) do
+      {%{coming_soon?: false} = reading, _degraded?} ->
+        socket
+        |> show_sales(reading)
+        |> reread_activity(reading)
+        |> reread_waiting_quotes()
+
+      _not_open ->
+        socket
+    end
+  end
+
+  defp show_reading(socket), do: socket
+
+  # The figures move with the reading as `refresh_sales/1` moves them, once
+  # the fleet is on Base.
+  defp show_sales(
+         %{assigns: %{fleet: %{fleet_id: fleet_id, deployed?: true} = fleet}} = socket,
+         %{deployed?: true} = reading
+       ) do
+    %{current?: current?, progress: progress} = sales(fleet_id, reading)
+
+    assign(socket, :fleet, %{
+      fleet
+      | progress: progress,
+        current?: current?,
+        buy: FleetPage.next_sale(fleet_id, progress),
+        levels: KeyMap.levels(progress)
+    })
+  end
+
+  defp show_sales(socket, _reading), do: socket
 
   def tell_map_chosen(
         %{assigns: %{fleet: %{fleet_id: fleet_id, chosen_key: chosen}}} = socket,

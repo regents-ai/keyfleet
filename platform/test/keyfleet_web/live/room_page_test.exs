@@ -11,6 +11,8 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Message
+  alias Phoenix.Socket.Broadcast
 
   @fleet "fleet_tech_classic"
   @path "/classic/1/rooms/general"
@@ -123,6 +125,116 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     html = render(view)
     assert html =~ "Hull survey started"
     assert html =~ "Replying to post 1"
+  end
+
+  # Every open page of General used to read the room again for each post, all
+  # in the same moment, which a crowd on one room turns into a queue for the
+  # database.
+  test "a post in General reaches every open page of it without any page reading the room",
+       %{conn: conn, writer: writer} do
+    {:ok, visitor, _html} = live(conn, @path)
+    {:ok, member, _html} = conn |> signed_in_as(@owner) |> live(@path)
+    test_pid = self()
+    pages = [visitor.pid, member.pid]
+
+    :telemetry.attach(
+      "room-page-reads",
+      [:keyfleet, :repo, :query],
+      fn _event, _measurements, meta, _config ->
+        if self() in pages, do: send(test_pid, {:page_read, meta.source})
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach("room-page-reads") end)
+
+    first = post_as(writer, "Hull survey started")
+
+    Rooms.send_message!(
+      %{
+        fleet_id: @fleet,
+        slug: "general",
+        body: "On it",
+        idempotency_key: Ash.UUID.generate(),
+        reply_to_id: first.id
+      },
+      actor: writer
+    )
+
+    for page <- [visitor, member] do
+      html = render(page)
+      assert html =~ "Hull survey started"
+      assert html =~ "Replying to post 1"
+      assert has_element?(page, ".rooms-author .rooms-writer", "Their agent for 0xdddd..dddd")
+    end
+
+    refute_received {:page_read, "messages"}
+  end
+
+  test "General's topic carries each new post as a signed-out reader reads it, with no wallet, and nothing of a room for keys only",
+       %{writer: writer} do
+    general = Rooms.get_room!(@fleet, "general", authorize?: false)
+    for_keys = Rooms.get_room!(@fleet, "open-1", authorize?: false)
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Message.topic(@fleet, general.id))
+    Phoenix.PubSub.subscribe(Keyfleet.PubSub, Message.topic(@fleet, for_keys.id))
+
+    agent = shard_agent()
+    Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "local"}, actor: agent)
+    ChainHelpers.issue_shard!(@fleet, 1, @agent)
+
+    first = post_as(writer, "Hull survey started")
+
+    Rooms.send_message!(
+      %{fleet_id: @fleet, slug: "open-1", body: "For keys only", idempotency_key: "k-1"},
+      actor: writer
+    )
+
+    Rooms.send_message!(
+      %{
+        fleet_id: @fleet,
+        slug: "general",
+        body: "Readings are in",
+        idempotency_key: Ash.UUID.generate(),
+        reply_to_id: first.id
+      },
+      actor: agent
+    )
+
+    read = Rooms.read_messages!(@fleet, "general", load: [:reply_to_seq], actor: nil)
+    assert length(read) == 2
+
+    for post <- read do
+      assert_receive %Broadcast{event: "post", payload: payload}
+      assert payload == Message.public(post, post.reply_to_seq)
+      refute inspect(payload) =~ ~r/0x[0-9a-f]{40}/
+    end
+
+    refute_received %Broadcast{event: "post"}
+  end
+
+  test "a post whose notice never came is shown with the next one",
+       %{conn: conn, writer: writer} do
+    {:ok, view, _html} = live(conn, @path)
+
+    # Posted without telling anyone, the way a notice that was lost leaves it.
+    {_post, _unsent} =
+      Rooms.send_message!(
+        %{
+          fleet_id: @fleet,
+          slug: "general",
+          body: "Hull survey started",
+          idempotency_key: Ash.UUID.generate()
+        },
+        actor: writer,
+        return_notifications?: true
+      )
+
+    refute render(view) =~ "Hull survey started"
+
+    post_as(writer, "On it")
+    html = render(view)
+    assert html =~ "Hull survey started"
+    assert html =~ "On it"
   end
 
   test "a post that lands while the page is still reading the room is shown",

@@ -6,8 +6,11 @@ export default defineConfig({
   testDir: "./test/browser",
   // The component workshop and key map exist only when the local showcase is compiled in;
   // playwright.showcase.config.ts runs them against a server built that way.
-  // playwright.chain.config.ts runs the specs that drive the chain, on a database of their own.
+  // playwright.chain.config.ts runs the specs that drive the chain, on a database of their own,
+  // and playwright.devices.config.ts the first visit's flows and accessibility on that server.
   testIgnore: [
+    "main_flows.spec.ts",
+    "accessibility.spec.ts",
     "showcase.spec.ts",
     "key_map.spec.ts",
     "key_map_performance.spec.ts",

@@ -2338,3 +2338,36 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Released `502b2dd4` as Fly v87, after v86. It carries the activity fix
   above ("A fleet's activity no longer jams the site"); v86 (`4dca18a9`)
   did not.
+
+## 2026-10-18 — Launch readiness: a crowd costs what one visitor costs
+
+- Open pages no longer each read the database after every change in a
+  fleet. What anyone who isn't a member sees of the homepage, a fleet's page,
+  the harbour's sea, a fleet's proposals, its Treasury and its polls is read
+  once for every open page and updates about a second after a change.
+  Members still see their own view, with every title.
+- Each new post in a fleet's General room reaches every open page of it as
+  it is written, so a busy room no longer makes every reader's page read the
+  room again. A missed post is read back when the room's next post arrives.
+  The room page saves how far you've read once it is open, not during its
+  first draw.
+- A poll's countdown runs in the browser, so open poll pages no longer ask
+  the site every second. After you vote, the line saying how your Key voted
+  is read out by screen readers.
+- After a deploy, open pages reconnect spread over a moment rather than all
+  at once, and the health check has a database connection of its own, so a
+  busy moment can't mark the machine unhealthy.
+- Each page reports how fast it drew and answered (Core Web Vitals) once as
+  it is left, by page and device type, with nothing saved and no address
+  kept. A release now stops if a phone-speed Lighthouse run of the main pages
+  breaks the speed budgets.
+- Load, deploy-during-load and database-fault runs live in `platform/load/`;
+  they run on a computer against the release image and a throwaway database,
+  and refuse keyfleet.ai.
+- The main flows run at an iPhone's and an Android phone's screen, and axe
+  checks every main page against WCAG 2.2 AA. Toasts and
+  refusals in rooms and polls are announced, footer links are 44 px to tap,
+  and the "See the fleets" links land on the fleets.
+- Outside checks: SIWA request binding, Privy token checks and credit debit
+  atomicity have tests against the real libraries, and a ZAP baseline scan
+  runs against the release image.

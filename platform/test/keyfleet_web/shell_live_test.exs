@@ -6,11 +6,10 @@ defmodule KeyfleetWeb.ShellLiveTest do
   alias Keyfleet.Actors.System
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
-  alias Keyfleet.Graph
   alias Keyfleet.Keys
-  alias Keyfleet.Proposals
   alias Keyfleet.Rooms
   alias KeyfleetWeb.Components.Shell
+  alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.RouteCatalog
 
   test "an anonymous visitor to /account is asked to sign in, without private content", %{
@@ -434,11 +433,17 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#route-content h1", "Profile")
   end
 
+  # A visitor's hall is drawn from the fleet's reading every such page
+  # shares (`KeyfleetWeb.FleetNow`), which hears the fleet's rooms, workspace
+  # and votes once for all of them; the page itself hears only the fleet's
+  # Keys, for what its reader holds, beside the readings it shows.
   test "a visitor's page hears what anyone hears of the fleet on show, and stops hearing the fleet it left",
        %{conn: conn} do
     Fleets.bootstrap_catalog!()
     ChainHelpers.deploy!("fleet_tech_classic")
+    ChainHelpers.deploy!("fibonacci_cascade")
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
+    FleetNow.read("fibonacci_cascade")
     {:ok, view, _html} = live(conn, "/classic/1/rooms/general")
 
     assert topics(view) ==
@@ -447,15 +452,13 @@ defmodule KeyfleetWeb.ShellLiveTest do
                Rooms.topic("fleet_tech_classic", :public)
              ])
 
+    # Neither its rooms, its workspace's notable changes nor its votes.
     render_patch(view, "/cascade/1")
+    assert has_element?(view, "#fleet-hall")
 
-    assert topics(view) ==
-             Enum.sort([
-               Keys.topic("fibonacci_cascade"),
-               Rooms.topic("fibonacci_cascade", :public),
-               Graph.notable_topic("fibonacci_cascade"),
-               Proposals.topic("fibonacci_cascade")
-             ])
+    assert Enum.reject(topics(view), &String.starts_with?(&1, "shared_reading:")) == [
+             Keys.topic("fibonacci_cascade")
+           ]
   end
 
   defp topics(view), do: Keyfleet.PubSub |> Registry.keys(view.pid) |> Enum.sort()

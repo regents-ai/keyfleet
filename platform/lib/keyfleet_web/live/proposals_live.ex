@@ -13,7 +13,12 @@ defmodule KeyfleetWeb.ProposalsLive do
   except one the chain's own state at the latest block makes certain to fail,
   whose button stays in view, disabled, with a few words saying why.
 
-  Everything shown is what `KeyfleetWeb.ProposalsPage` read.
+  Everything shown is what `KeyfleetWeb.ProposalsPage` read. The pages most
+  visitors open, the first page of the list, the Treasury page and the first
+  page of each proposal on that list, are the ones every open page shares
+  (`KeyfleetWeb.FleetProposals`), drawn again when they change; the pages
+  further back are read for the visit, and again a moment after each notice
+  that the fleet's proposals or balances changed.
   """
 
   use KeyfleetWeb, :html
@@ -24,14 +29,17 @@ defmodule KeyfleetWeb.ProposalsLive do
   alias KeyfleetWeb.Components.AddressLinks
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.PresenceCard
+  alias KeyfleetWeb.FleetProposals
   alias KeyfleetWeb.Motion
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ProposalsPage
+  alias KeyfleetWeb.SharedFigures
   alias KeyfleetWeb.WalletPanel
   alias KeyfleetWeb.WalletWords
 
-  # How long a proposals page waits after a notice that the fleet's proposal
-  # records or balances changed before it reads them, so a burst is read once.
+  # How long a page read for the visit waits after a notice that the fleet's
+  # proposal records or balances changed before it reads them, so a burst is
+  # read once.
   @proposals_refresh_after 1_000
 
   @status_words %{
@@ -1188,21 +1196,19 @@ abstain, of {keys(@proposal.counted)} counted</span>|
   A wait begun for a proposals page the page has since left reads nothing. A
   read again that fails keeps what the page shows; the next notice reads again.
   """
-  def handle_info(:refresh_proposals, %{assigns: %{proposals: %{}}} = socket) do
-    socket = assign(socket, :proposals_refresh?, false)
-
-    case PageRead.run("proposals", fn -> proposals(socket) end) do
-      {:ok, page} -> {:noreply, assign(socket, proposals: page)}
-      {:error, _failure} -> {:noreply, socket}
-    end
-  end
+  def handle_info(:refresh_proposals, %{assigns: %{proposals: %{}}} = socket),
+    do: {:noreply, socket |> assign(:proposals_refresh?, false) |> read_again()}
 
   def handle_info(:refresh_proposals, socket),
     do: {:noreply, assign(socket, :proposals_refresh?, false)}
 
-  @doc "One read, a moment later, for a burst of notices about the fleet's proposals."
+  @doc """
+  One read, a moment later, for a burst of notices about the fleet's
+  proposals. A page every visitor shares reads nothing: it is drawn again
+  when its reading changes (`shared_changed/2`).
+  """
   def refresh_soon(socket) do
-    if socket.assigns.proposals_refresh? do
+    if socket.assigns.proposals_refresh? or shared?(socket) do
       socket
     else
       Process.send_after(self(), :refresh_proposals, @proposals_refresh_after)
@@ -1210,14 +1216,104 @@ abstain, of {keys(@proposal.counted)} counted</span>|
     end
   end
 
+  @doc "A reading the page shows has changed: the page draws what is held now."
+  def shared_changed(%{assigns: %{proposals_params: %{}}} = socket, key) do
+    if MapSet.member?(followed(socket), key), do: read_again(socket), else: socket
+  end
+
+  def shared_changed(socket, _key), do: socket
+
   @doc """
-  The proposals page the address names, read afresh; or `:unreadable` when the
-  database couldn't be read.
+  The proposals page the address names, from the reading every page shares
+  or read afresh for this visit; or `:unreadable` when the database couldn't
+  be read, or no reading is held yet.
   """
   def read_proposals(socket) do
-    case PageRead.run("proposals", fn -> proposals(socket) end) do
-      {:ok, page} -> assign(socket, proposals: page)
-      {:error, _failure} -> assign(socket, proposals: :unreadable)
+    case PageRead.run("proposals", fn -> show(socket) end) do
+      {:ok, socket} ->
+        socket
+
+      {:error, _failure} ->
+        socket |> SharedFigures.follow(:proposals, []) |> assign(proposals: :unreadable)
+    end
+  end
+
+  # A page drawn again from its reading, or read again for the visit; a read
+  # that fails keeps what the page shows.
+  defp read_again(socket) do
+    case PageRead.run("proposals", fn -> show(socket) end) do
+      {:ok, socket} -> socket
+      {:error, _failure} -> socket
+    end
+  end
+
+  # The page starts hearing a reading before it fetches it, so a change that
+  # lands in between still reaches it. A page read for the visit is read
+  # before the page stops hearing the reading it showed, so a read that fails
+  # leaves the page as it was, still hearing what it shows.
+  defp show(socket) do
+    case source(socket) do
+      {:shared, key} ->
+        socket = SharedFigures.follow(socket, :proposals, [key])
+        assign(socket, proposals: shared(key))
+
+      {:waiting, key} ->
+        socket |> SharedFigures.follow(:proposals, [key]) |> assign(proposals: :unreadable)
+
+      :visit ->
+        page = proposals(socket)
+        socket |> SharedFigures.follow(:proposals, []) |> assign(proposals: page)
+    end
+  end
+
+  @doc """
+  Whether the page the address names is read for the visit, or waits for
+  the list every page shares, rather than drawn from a held reading. Only
+  such a page needs the fleet's notices (`Keyfleet.Proposals.topic/1`); a
+  shared one hears its reading change instead.
+  """
+  def for_visit?(socket), do: not match?({:shared, _key}, source(socket))
+
+  defp shared(key) do
+    case FleetProposals.fetch(key) do
+      {page, _degraded?} -> page
+      nil -> :unreadable
+    end
+  end
+
+  defp shared?(socket), do: MapSet.size(followed(socket)) > 0
+
+  defp followed(socket), do: Map.get(socket.assigns.shared, :proposals, MapSet.new())
+
+  # Where the page the address names comes from: the reading every page
+  # shares (`KeyfleetWeb.FleetProposals`), or a read for this visit. A
+  # proposal's page is shared when the fleet's list names its page as held,
+  # and its key is built from the list's own number, never the address's.
+  # Until the list is held, a proposal's page waits for it.
+  defp source(%{assigns: %{proposals_params: params, route_spec: %{route_id: :treasury}}}),
+    do: {:shared, FleetProposals.treasury_key(params["fleet_id"])}
+
+  defp source(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposals}}}) do
+    if Map.has_key?(params, "before"),
+      do: :visit,
+      else: {:shared, FleetProposals.list_key(params["fleet_id"])}
+  end
+
+  defp source(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposal}}}) do
+    list = FleetProposals.list_key(params["fleet_id"])
+
+    case Map.has_key?(params, "votes_after") || FleetProposals.fetch(list) do
+      true -> :visit
+      nil -> {:waiting, list}
+      {%{fleet_name: nil}, _degraded?} -> {:shared, list}
+      {%{shared: held}, _degraded?} -> held_source(held, params)
+    end
+  end
+
+  defp held_source(held, %{"fleet_id" => fleet_id, "number" => number}) do
+    case Enum.find(held, &(Integer.to_string(&1) == number)) do
+      nil -> :visit
+      held -> {:shared, FleetProposals.proposal_key(fleet_id, held)}
     end
   end
 

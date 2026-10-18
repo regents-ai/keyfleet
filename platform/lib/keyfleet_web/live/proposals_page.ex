@@ -14,6 +14,12 @@ defmodule KeyfleetWeb.ProposalsPage do
   Once the fleet is on chain, each carries the network its wallet buttons
   send on; the buttons' steps are built by `Keyfleet.WalletSteps`. A page
   name that is not a proposal number is a page that doesn't exist.
+
+  None of them depends on who is reading, so `first_pages/2` reads the ones
+  most visitors open, the first page of the list, the Treasury page and the
+  first page of each proposal on that list, once for every open page
+  (`KeyfleetWeb.FleetProposals`). The pages further back are read for the
+  visit that asks for them.
   """
 
   alias Keyfleet.Chain
@@ -36,15 +42,17 @@ defmodule KeyfleetWeb.ProposalsPage do
     before = number!(params["before"])
 
     with_fleet(fleet_id, fn fleet, reading ->
-      {proposals, older?} = Proposals.list_page(fleet_id, before)
-
-      Map.merge(reading, %{
-        proposals: Enum.map(proposals, &summary/1),
-        first_page?: is_nil(before),
-        older: if(older?, do: list_path(fleet_id, before: List.last(proposals).number)),
-        propose: reading.deployed? && propose(fleet)
-      })
+      listed(fleet, reading, before, Proposals.list_page(fleet_id, before))
     end)
+  end
+
+  defp listed(fleet, reading, before, {proposals, older?}) do
+    Map.merge(reading, %{
+      proposals: Enum.map(proposals, &summary/1),
+      first_page?: is_nil(before),
+      older: if(older?, do: list_path(fleet.id, before: List.last(proposals).number)),
+      propose: reading.deployed? && propose(fleet)
+    })
   end
 
   # How many of the latest votes carried out the Treasury page lists.
@@ -57,13 +65,17 @@ defmodule KeyfleetWeb.ProposalsPage do
   """
   def treasury_page(fleet_id) do
     with_fleet(fleet_id, fn fleet, reading ->
-      Map.merge(reading, %{
-        treasury: reading.deployed? && treasury(fleet, Treasury.get_reading!(fleet_id)),
-        carried: fleet_id |> Proposals.latest_carried_out(@carried) |> Enum.map(&summary/1),
-        progress: reading.deployed? && Chain.progress(fleet_id),
-        manager_address: fleet.manager_address
-      })
+      treasury_shown(fleet, reading, Treasury.assets(fleet), Treasury.get_reading!(fleet_id))
     end)
+  end
+
+  defp treasury_shown(fleet, reading, assets, treasury_reading) do
+    Map.merge(reading, %{
+      treasury: reading.deployed? && treasury(fleet, treasury_reading, assets),
+      carried: fleet.id |> Proposals.latest_carried_out(@carried) |> Enum.map(&summary/1),
+      progress: reading.deployed? && Chain.progress(fleet.id),
+      manager_address: fleet.manager_address
+    })
   end
 
   @doc "The path of the fleet's Treasury page."
@@ -81,19 +93,105 @@ defmodule KeyfleetWeb.ProposalsPage do
           Map.merge(reading, %{number: number, proposal: nil})
 
         proposal ->
-          {votes, more?} = Proposals.votes_after(proposal.id, votes_after, @votes_page)
-          path = &detail_path(fleet_id, proposal.number, &1)
+          assets = Treasury.assets(fleet)
+          balances = balances(Treasury.get_reading!(fleet_id))
+          reads = if reading.deployed?, do: Reads.at_head()
 
-          Map.merge(reading, %{
-            number: number,
-            proposal: Map.merge(summary(proposal), details(proposal, fleet)),
-            on_chain: reading.deployed? && on_chain(fleet, proposal.number),
-            votes: Enum.map(votes, &vote/1),
-            more_votes: if(more?, do: path.(votes_after: List.last(votes).record_seq)),
-            first_votes: if(votes_after > 0, do: path.([]))
-          })
+          proposal
+          |> shown(fleet, reading, assets, balances)
+          |> Map.merge(votes(proposal, votes_after))
+          |> Map.put(:on_chain, reading.deployed? && on_chain(reads, fleet, proposal.number))
       end
     end)
+  end
+
+  # A proposal no vote can change any more, as its records and the vote
+  # contract both say: its votes are all in and its standing is settled.
+  @settled [:rejected, :cancelled, :executed, :execution_expired]
+
+  @doc """
+  The pages of `fleet_id` most visitors open, read together for
+  `KeyfleetWeb.FleetProposals`: `list`, the first page of its proposals;
+  `treasury`, its Treasury page; and `details`, the first page of each
+  proposal on that list, by number, each as `detail/3` reads it.
+
+  `held` answers the proposal's page from the last reading, or nil. A
+  proposal that was already settled then, on its records and on chain, keeps
+  the votes and the standing read then, since neither can change; the rest
+  of its page, its tally and what its calls come to at today's balance, is
+  read again. Every other proposal on the list has its votes read again and
+  its standing read at the latest block, at one block for all of them.
+  """
+  def first_pages(fleet_id, held) do
+    case Fleets.get_fleet!(fleet_id) do
+      nil ->
+        missing = %{fleet_id: fleet_id, fleet_name: nil}
+        %{list: missing, treasury: missing, details: %{}}
+
+      fleet ->
+        first_pages(fleet, about(fleet), held)
+    end
+  end
+
+  defp first_pages(fleet, reading, held) do
+    {proposals, _older?} = listing = Proposals.list_page(fleet.id, nil)
+    assets = Treasury.assets(fleet)
+    treasury_reading = Treasury.get_reading!(fleet.id)
+    balances = balances(treasury_reading)
+
+    pages =
+      for proposal <- proposals,
+          do: {shown(proposal, fleet, reading, assets, balances), held.(proposal.number)}
+
+    reads =
+      if reading.deployed? and Enum.any?(pages, fn {page, held} -> not settled?(page, held) end),
+        do: Reads.at_head()
+
+    %{
+      list: listed(fleet, reading, nil, listing),
+      treasury: treasury_shown(fleet, reading, assets, treasury_reading),
+      details:
+        Map.new(Enum.zip(proposals, pages), fn {proposal, {page, held}} ->
+          {proposal.number, first_detail(proposal, page, held, fleet, reads)}
+        end)
+    }
+  end
+
+  defp first_detail(proposal, page, held, fleet, reads) do
+    if settled?(page, held) do
+      Map.merge(page, Map.take(held, [:on_chain, :votes, :more_votes, :first_votes]))
+    else
+      page
+      |> Map.merge(votes(proposal, 0))
+      |> Map.put(:on_chain, page.deployed? && on_chain(reads, fleet, proposal.number))
+    end
+  end
+
+  defp settled?(%{proposal: %{status: status}}, %{
+         proposal: %{status: held},
+         on_chain: %{status: on_chain}
+       }),
+       do: status in @settled and held in @settled and on_chain in @settled
+
+  defp settled?(_page, _held), do: false
+
+  # A proposal's page but for its votes and where it stands on chain.
+  defp shown(proposal, fleet, reading, assets, balances) do
+    Map.merge(reading, %{
+      number: Integer.to_string(proposal.number),
+      proposal: Map.merge(summary(proposal), details(proposal, fleet, assets, balances))
+    })
+  end
+
+  defp votes(proposal, votes_after) do
+    {votes, more?} = Proposals.votes_after(proposal.id, votes_after, @votes_page)
+    path = &detail_path(proposal.fleet_id, proposal.number, &1)
+
+    %{
+      votes: Enum.map(votes, &vote/1),
+      more_votes: if(more?, do: path.(votes_after: List.last(votes).record_seq)),
+      first_votes: if(votes_after > 0, do: path.([]))
+    }
   end
 
   @doc "The path of the fleet's proposals, from `position`."
@@ -132,20 +230,22 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp with_fleet(fleet_id, read) do
     case Fleets.get_fleet!(fleet_id) do
-      nil ->
-        %{fleet_id: fleet_id, fleet_name: nil}
-
-      fleet ->
-        deployed? = fleet.manager_address != nil
-
-        read.(fleet, %{
-          fleet_id: fleet_id,
-          fleet_name: fleet.name,
-          deployed?: deployed?,
-          chain_id: fleet.chain_id,
-          catching_up?: deployed? and not Chain.fresh?(fleet_id)
-        })
+      nil -> %{fleet_id: fleet_id, fleet_name: nil}
+      fleet -> read.(fleet, about(fleet))
     end
+  end
+
+  # What every page of the fleet starts with.
+  defp about(fleet) do
+    deployed? = fleet.manager_address != nil
+
+    %{
+      fleet_id: fleet.id,
+      fleet_name: fleet.name,
+      deployed?: deployed?,
+      chain_id: fleet.chain_id,
+      catching_up?: deployed? and not Chain.fresh?(fleet.id)
+    }
   end
 
   # The tokens a payment or an advance can be made in: ETH, REGENT, USDC and
@@ -187,10 +287,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp words(nil), do: nil
   defp words(%{text: text}), do: text
 
-  defp details(proposal, fleet) do
-    assets = Treasury.assets(fleet)
-    balances = balances(Treasury.get_reading!(fleet.id))
-
+  defp details(proposal, fleet, assets, balances) do
     %{
       proposer: proposal.proposer,
       author_key: proposal.author_key,
@@ -206,8 +303,8 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   # Where the proposal stands as the vote contract says now, read at the
   # latest block, or `:unreadable` when the network can't be reached.
-  defp on_chain(fleet, number) do
-    with {:ok, reads} <- Reads.at_head(),
+  defp on_chain(reads, fleet, number) do
+    with {:ok, reads} <- reads,
          {:ok, standing} <- VoteSteps.proposal(reads, fleet, number),
          {:ok, status} <- VoteSteps.chain_status(reads, fleet, number) do
       Map.merge(standing, %{status: status, counted: standing.e0 + standing.late})
@@ -327,8 +424,7 @@ defmodule KeyfleetWeb.ProposalsPage do
     }
   end
 
-  defp treasury(fleet, reading) do
-    assets = Treasury.assets(fleet)
+  defp treasury(fleet, reading, assets) do
     %{shown: shown, earlier?: earlier?} = Treasury.latest(fleet.id)
 
     %{

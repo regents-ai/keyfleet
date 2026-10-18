@@ -54,6 +54,7 @@
   font-size: 1.1rem;
 }
 
+/* A control tabbed to stops clear of the title bar that sticks to its top. */
 .key-profile__body {
   display: grid;
   align-content: start;
@@ -61,6 +62,7 @@
   min-width: 0;
   padding: 0 clamp(1rem, 3vw, 2rem) 2rem;
   overflow: auto;
+  scroll-padding-block-start: 6rem;
 }
 
 .key-profile__header {

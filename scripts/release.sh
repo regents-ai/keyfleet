@@ -15,9 +15,11 @@
 # Docker network and removes both afterwards. It runs the staging release
 # commands against it, starts the server with an empty graph volume, and checks
 # the health endpoint, the home page, a built stylesheet, the graph host's
-# Python and the running server's database connection. It runs as staging
-# because that role admits only the staging database hostnames, which the
-# throwaway database answers to on its network. The server gets no chain node
+# Python and the running server's database connection, then measures the
+# pages against their Lighthouse budgets (scripts/budgets.sh), which needs
+# Playwright's Chromium on this machine. It runs as staging because that role
+# admits only the staging database hostnames, which the throwaway database
+# answers to on its network. The server gets no chain node
 # or Privy app, so it reads no chain and offers no sign-in.
 set -euo pipefail
 
@@ -100,8 +102,9 @@ pending="$(docker run --rm "${release_env[@]}" --env DATABASE_DIRECT_URL="$datab
 [[ $pending == none ]] || fail "the database and the release disagree: $pending"
 
 # /data stands in for the Fly volume, empty and owned by the app user as
-# deploying leaves it. The sign-in server's address is required but never
-# reached here; .invalid names can never resolve.
+# deploying leaves it. The addresses and keys of the sign-in server, the code
+# store, the picture bucket, key art and Lighthouse are required but never
+# used here; .invalid names can never resolve.
 echo "==> Starting the server"
 docker run --detach --name "$run-app" "${release_env[@]}" \
   --publish 127.0.0.1::4000 \
@@ -110,6 +113,14 @@ docker run --detach --name "$run-app" "${release_env[@]}" \
   --env PHX_HOST=localhost \
   --env SECRET_KEY_BASE="$(openssl rand -base64 48)" \
   --env KEYFLEET_SIWA_URL=https://siwa.invalid \
+  --env KEYFLEET_HUB_SIGNING_KEY='{"keys":[]}' \
+  --env KEYFLEET_CODE_NODE=http://code.invalid \
+  --env AWS_ENDPOINT_URL_S3=https://storage.invalid \
+  --env BUCKET_NAME=smoke --env AWS_REGION=auto \
+  --env AWS_ACCESS_KEY_ID=smoke --env AWS_SECRET_ACCESS_KEY=smoke \
+  --env PICTURES_PUBLIC_URL=https://pictures.invalid \
+  --env KEY_ART_URL=http://key-art.invalid \
+  --env LIGHTHOUSE_API_KEY=smoke \
   "$image" >/dev/null
 base="http://$(docker port "$run-app" 4000/tcp | head -n 1)"
 wait_for "the health endpoint" curl --silent --fail "$base/healthz"
@@ -131,6 +142,12 @@ connected_database="$(docker exec "$run-app" /app/bin/keyfleet rpc \
   '[[name]] = Keyfleet.Repo.query!("SELECT current_database()").rows; IO.puts(name)')"
 [[ $connected_database == keyfleet_smoke ]] || fail "the server's database answered \"$connected_database\""
 
+# The pages against their Lighthouse budgets, at the address PHX_HOST names so
+# their live connection opens. Every fleet is coming soon in this database, so
+# its room and poll addresses open the fleet's page, and the summary says so.
+echo "==> Measuring the pages against their Lighthouse budgets"
+scripts/budgets.sh "http://localhost:${base##*:}"
+
 echo
 echo "Release built and smoke-checked"
 echo "  app commit      $commit"
@@ -144,3 +161,4 @@ echo "  health          $base/healthz answered $health"
 echo "  static asset    $stylesheet answered $stylesheet_answer"
 echo "  graph host      $graph_host loaded the graph host"
 echo "  database        the running server queried $connected_database"
+echo "  budgets         every page's median Lighthouse run kept within platform/lighthouserc.cjs"

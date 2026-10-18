@@ -29,6 +29,7 @@ defmodule KeyfleetWeb.ShellLive do
     CodePassword,
     DmsLive,
     FleetLive,
+    FleetNow,
     KeyMap,
     KeyProfileLive,
     KeysLive,
@@ -55,6 +56,10 @@ defmodule KeyfleetWeb.ShellLive do
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
   @poll_events ~w(start_poll end_poll cast_vote)
   @sign_in_events ~w(open_notebooks get_code_password)
+
+  # The routes that show a fleet's workspace and its votes.
+  @workspace_routes [:workspace, :workspace_item, :code_commit]
+  @proposals_routes [:proposals, :proposal, :treasury]
 
   @press_failed "Something went wrong on our side. Refresh the page to see the latest, then try again."
 
@@ -399,10 +404,19 @@ defmodule KeyfleetWeb.ShellLive do
   # change; the header's balance still follows.
   defp notice(_message, %{assigns: %{load_failed?: true}} = socket), do: {:noreply, socket}
 
+  # A new post of the room anyone reads, published whole on that room's own
+  # topic (`Keyfleet.Rooms.Message.topic/2`), which the rooms page listens to
+  # while General is open, and shows as it came.
+  defp notice(%Broadcast{topic: "public:room:" <> _} = notice, socket),
+    do: RoomsLive.handle_info(notice, socket)
+
   # A notice that the open room has taken a post it is not showing yet is only a
   # nudge to look again. The new posts are read back from the room itself, and
   # a room shown as for keys only looks again at whether the reader may read
-  # it; the place the notice names is never shown.
+  # it; the place the notice names is never shown. General's posts come whole
+  # just before their head, so a page of General is level with the head when
+  # it arrives and reads nothing; only a post whose notice was lost leaves it
+  # behind.
   defp notice(
          %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}},
          %{assigns: %{room: %{room_id: room_id, last_seq: last_seq}}} = socket
@@ -411,7 +425,8 @@ defmodule KeyfleetWeb.ShellLive do
        do: {:noreply, RoomsLive.show_new_posts(socket)}
 
   # The page only hears about the rooms of the fleet it shows. The rooms page
-  # marks the room in its list as having something new.
+  # marks the room in its list as having something new, and a member's hall
+  # reads its feed again.
   defp notice(%Broadcast{event: "room_head", payload: head}, socket) do
     socket = RoomsLive.note_head(socket, head)
     {:noreply, FleetLive.refresh_activity_soon(socket, fleet_on_show(socket))}
@@ -550,7 +565,13 @@ defmodule KeyfleetWeb.ShellLive do
   # A reading every page shares has changed: the part of the page showing it
   # draws it again.
   defp notice({:shared_reading, key}, socket),
-    do: {:noreply, socket |> FleetLive.shared_changed(key) |> KeyProfileLive.shared_changed(key)}
+    do:
+      {:noreply,
+       socket
+       |> FleetLive.shared_changed(key)
+       |> KeyProfileLive.shared_changed(key)
+       |> ProposalsLive.shared_changed(key)
+       |> PollsLive.shared_changed(key)}
 
   defp notice({:refresh_activity, _fleet_id} = message, socket),
     do: FleetLive.handle_info(message, socket)
@@ -735,14 +756,12 @@ defmodule KeyfleetWeb.ShellLive do
   defp current_account(%{principal: {:human, account}}), do: account
   defp current_account(_access_context), do: nil
 
-  # The header offers a Key while the fleet it is got from is open. A failed
-  # read leaves the offer out rather than the page.
-  defp get_key? do
-    case PageRead.run("header", fn -> get_key_fleet() in Fleets.open_fleet_ids() end) do
-      {:ok, open?} -> open?
-      {:error, _failure} -> false
-    end
-  end
+  # The header offers a Key while the fleet it is got from is open, as that
+  # fleet's reading every page shares has it (`KeyfleetWeb.FleetNow`), so
+  # the offer costs a page no read. Until the fleet has been read the offer
+  # is left out rather than the page.
+  defp get_key?,
+    do: match?({%{coming_soon?: false}, _degraded?}, FleetNow.fetch(get_key_fleet()))
 
   # A sign-in that ends while the page is open withdraws the account, and its
   # balance and the Buy Credits panel go with it. While signed in, the panel and
@@ -766,9 +785,9 @@ defmodule KeyfleetWeb.ShellLive do
     shown = socket.assigns.fleet
 
     socket
-    |> listen_to(fleet_id)
-    |> follow_workspace(fleet_id)
-    |> follow_proposals(fleet_id)
+    |> listen_to(rooms_heard(socket, params, fleet_id))
+    |> follow_workspace(workspace_heard(socket, route_id, fleet_id))
+    |> follow_proposals(proposals_heard(socket, route_id, params, fleet_id))
     |> FleetLive.read_fleet(params, fleet_place(route_id))
     |> FleetLive.tell_map_chosen(shown)
   end
@@ -788,12 +807,34 @@ defmodule KeyfleetWeb.ShellLive do
       |> stream(:fleet_who, [], reset: true)
       |> stream(:activity, [], reset: true)
 
+  # What a page of the fleet hears of its rooms, workspace and votes besides
+  # its Keys: a page showing one of them hears it, and a member's page hears
+  # them all, since a member's feed is read again on each. Anyone else's
+  # hall is drawn from the fleet's reading every such page shares
+  # (`KeyfleetWeb.FleetNow`), which hears them once for all of those pages,
+  # so their page hears only what a Key open over it shows: its wall, in
+  # the rooms, and its votes and rewards. Each gives the fleet heard, or nil.
+  defp rooms_heard(socket, params, fleet_id),
+    do: if(fleet_id && (member?(socket, fleet_id) or Map.has_key?(params, "key")), do: fleet_id)
+
+  defp workspace_heard(socket, route_id, fleet_id),
+    do: if(fleet_id && (route_id in @workspace_routes or member?(socket, fleet_id)), do: fleet_id)
+
+  defp proposals_heard(socket, route_id, params, fleet_id) do
+    if fleet_id &&
+         (route_id in @proposals_routes or member?(socket, fleet_id) or
+            Map.has_key?(params, "key")),
+       do: fleet_id
+  end
+
   # Keys changed in the fleet on show: its sales figures and the key on offer
   # are read again, and its Member List when it is on show (the agents here
   # come from the readings every page shares, `Keyfleet.Agents.Here`), the
   # open key's profile when the key or one of its holder's changed, and the
   # map is told the changed keys' marks, or told to load again when too many
-  # changed to list.
+  # changed to list. A hall drawn from the fleet's reading reads only the
+  # reader's own Keys and profile; its figures come with the reading, and
+  # it shows no map, which reads its Keys afresh when it is next shown.
   defp keys_changed(
          %{assigns: %{fleet: %{fleet_id: fleet_id, deployed?: true}}} = socket,
          fleet_id,
@@ -807,12 +848,9 @@ defmodule KeyfleetWeb.ShellLive do
       |> FleetLive.refresh_activity_soon(fleet_id)
       |> workspace_standing_changed(fleet_id)
 
-    progress = socket.assigns.fleet.progress
-
-    case KeyMap.change(fleet_id, progress, token_ids, human_actor(socket)) do
-      :reset -> {:noreply, push_event(socket, "keymap:reset", %{})}
-      {:patch, patch} -> {:noreply, push_event(socket, "keymap:patch", patch)}
-    end
+    if FleetLive.from_reading?(socket),
+      do: {:noreply, socket},
+      else: tell_map_changed(socket, fleet_id, token_ids)
   end
 
   # Keys changed in the fleet whose polls are on show: who takes part as which
@@ -843,6 +881,15 @@ defmodule KeyfleetWeb.ShellLive do
        |> KeysLive.refresh_key(fleet_id, token_ids)
        |> FleetLive.refresh_activity_soon(fleet_id)}
 
+  defp tell_map_changed(socket, fleet_id, token_ids) do
+    progress = socket.assigns.fleet.progress
+
+    case KeyMap.change(fleet_id, progress, token_ids, human_actor(socket)) do
+      :reset -> {:noreply, push_event(socket, "keymap:reset", %{})}
+      {:patch, patch} -> {:noreply, push_event(socket, "keymap:patch", patch)}
+    end
+  end
+
   # Whether the reader may read the fleet's workspace on show is read afresh.
   defp workspace_standing_changed(
          %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket,
@@ -864,7 +911,8 @@ defmodule KeyfleetWeb.ShellLive do
     do: %{fleet_id: fleet_id, class: Access.class(human_actor(socket), fleet_id)}
 
   # The class read again, and with a new one the page leaves what the old
-  # one heard of the fleet's rooms and workspace for what the new one hears.
+  # one heard of the fleet's rooms, workspace and votes for what the new one
+  # hears, and the fleet's hall moves to how the new one sees it.
   defp reread_class(%{assigns: %{fleet_class: %{fleet_id: fleet_id} = was}} = socket, fleet_id) do
     case fleet_class(socket, fleet_id) do
       ^was ->
@@ -873,16 +921,35 @@ defmodule KeyfleetWeb.ShellLive do
       now ->
         socket
         |> assign(:fleet_class, now)
-        |> listen_to(socket.assigns.room_topic && fleet_id)
-        |> follow_workspace(socket.assigns.workspace_topics not in [nil, []] && fleet_id)
+        |> hear_as_class(fleet_id)
+        |> FleetLive.class_changed(fleet_id)
     end
   end
 
   defp reread_class(socket, _fleet_id), do: socket
 
+  # A room on show is heard by every class, each on its own topic; a page of
+  # the fleet hears what `rooms_heard/3` and the rest say its class hears.
+  defp hear_as_class(%{assigns: %{route_spec: %{route_id: route_id}}} = socket, fleet_id) do
+    on_show = fleet_on_show(socket)
+    params = socket.assigns.fleet_params || %{}
+    rooms = if route_id == :rooms, do: fleet_id, else: rooms_heard(socket, params, on_show)
+
+    socket
+    |> listen_to(rooms)
+    |> follow_workspace(workspace_heard(socket, route_id, on_show))
+    |> follow_proposals(proposals_heard(socket, route_id, params, on_show))
+  end
+
   # The class of the fleet in the address, as it was last read.
   defp class(%{assigns: %{fleet_class: %{fleet_id: fleet_id, class: class}}}, fleet_id),
     do: class
+
+  @doc "Whether the reader is a member of `fleet_id`, the fleet in the address, as last read."
+  def member?(%{assigns: %{fleet_class: %{fleet_id: fleet_id, class: :member}}}, fleet_id),
+    do: true
+
+  def member?(_socket, _fleet_id), do: false
 
   # The fleet whose keys the page on show follows: the fleet's own page, one
   # of its keys' pages, one of its rooms, its workspace, or its polls.
@@ -987,10 +1054,11 @@ defmodule KeyfleetWeb.ShellLive do
     |> RoomsLive.read_room(fleet_id, slug)
   end
 
-  # A fleet's page keeps listening to the fleet's rooms.
-  defp load_room(socket, _route_spec, _params) do
+  # A fleet's page keeps listening to the fleet's rooms, as its reader's
+  # class hears them (`rooms_heard/3`).
+  defp load_room(socket, _route_spec, params) do
     socket
-    |> listen_to(fleet_on_show(socket))
+    |> listen_to(rooms_heard(socket, params, fleet_on_show(socket)))
     |> assign(room: nil, room_notice: nil)
   end
 
@@ -1033,10 +1101,11 @@ defmodule KeyfleetWeb.ShellLive do
     |> WorkspaceLive.read_workspace()
   end
 
-  # A fleet's page keeps hearing about the fleet's workspace.
-  defp load_workspace(socket, _route_spec, _params) do
+  # A fleet's page keeps hearing about the fleet's workspace, as its
+  # reader's class hears it (`workspace_heard/3`).
+  defp load_workspace(socket, %{route_id: route_id}, _params) do
     socket
-    |> follow_workspace(fleet_on_show(socket))
+    |> follow_workspace(workspace_heard(socket, route_id, fleet_on_show(socket)))
     |> assign(workspace: nil, workspace_params: nil)
   end
 
@@ -1063,16 +1132,19 @@ defmodule KeyfleetWeb.ShellLive do
   # loads still reach it. Each visit, reconnection included, reads afresh.
   defp load_proposals(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
        when route_id in [:proposals, :proposal, :treasury] do
+    socket = assign(socket, :proposals_params, params)
+
     socket
-    |> follow_proposals(fleet_id)
-    |> assign(:proposals_params, params)
+    |> follow_proposals(if ProposalsLive.for_visit?(socket), do: fleet_id)
     |> ProposalsLive.read_proposals()
   end
 
-  # A fleet's page keeps hearing about the fleet's votes.
-  defp load_proposals(socket, _route_spec, _params) do
+  # A fleet's page keeps hearing about the fleet's votes, as its reader's
+  # class hears them (`proposals_heard/4`).
+  defp load_proposals(socket, %{route_id: route_id}, params) do
     socket
-    |> follow_proposals(fleet_on_show(socket))
+    |> follow_proposals(proposals_heard(socket, route_id, params, fleet_on_show(socket)))
+    |> SharedFigures.follow(:proposals, [])
     |> assign(proposals: nil, proposals_params: nil)
   end
 

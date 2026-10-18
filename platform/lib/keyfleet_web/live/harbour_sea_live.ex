@@ -14,8 +14,15 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   The root layout renders it beside the page's own LiveView
   (`KeyfleetWeb.Router` marks the pages that have it), so it keeps running
   while the visitor moves between pages; the page tells it where it is with
-  "show_page". It reads as the visitor, under the shell's own sign-in check,
-  and shows nothing the page itself would not.
+  "show_page". It takes the shell's own sign-in check and shows nothing the
+  page itself would not.
+
+  A fleet's ships are drawn from what every visitor who isn't a member sees
+  alike, `KeyfleetWeb.FleetNow`, read once for every open page. Only a
+  member's ships are read as the visitor, since a member sees more (rooms
+  other than General, every item's title). Which ships are the visitor's own
+  is read as the visitor, when the fleet comes on show and when its Keys
+  change hands.
   """
 
   use KeyfleetWeb, :live_view
@@ -27,11 +34,13 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
   alias Keyfleet.Rooms
+  alias Keyfleet.SharedReading
 
   alias KeyfleetWeb.{
     ActivityLines,
     DirectoryMD,
     Endpoint,
+    FleetNow,
     KeyLinks,
     PageRead,
     Read,
@@ -71,8 +80,12 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   @ships 16
   @kept 4
 
-  # Notices about the fleets on show are answered by one read a moment later.
+  # Notices about what the visitor reads as themselves are answered by one
+  # read a moment later, and each visitor's moment is spread over two seconds
+  # more, so the open pages of a fleet's members don't all read in the same
+  # instant. It only delays a read of the visitor's own view.
   @reread_after 1_000
+  @spread 2_000
 
   @doc """
   The sea, as the root layout places it on the page `conn` draws. The page's
@@ -89,6 +102,11 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     )
   end
 
+  # `fleets` are the fleets on show, each with the visitor's class in it, and
+  # `own` the visitor's Keys in each, under the account they were read for.
+  # `public` holds each fleet's ships as anyone who isn't a member sees them,
+  # `crew` the ships of the fleets the visitor is a member of, read as them.
+  # `due` is what the next read for the visitor must read again.
   @impl true
   def mount(params, session, socket) do
     case admit(params, session, socket) do
@@ -97,9 +115,13 @@ defmodule KeyfleetWeb.HarbourSeaLive do
          assign(socket,
            path: nil,
            shown: nil,
-           topics: [],
-           reread_due?: false,
+           fleets: [],
+           own: {nil, %{}},
+           public: %{},
            crew: %Read{},
+           topics: [],
+           watched: [],
+           due: MapSet.new(),
            agent: nil,
            now: nil
          ), layout: false}
@@ -140,7 +162,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   end
 
   def handle_event("show_agent", %{"id" => id}, socket) when is_binary(id) do
-    if ship(socket.assigns.crew, socket.assigns.access_context, id),
+    if ship(on_sea(socket.assigns), id),
       do: {:noreply, assign(socket, agent: id, now: DateTime.utc_now())},
       else: {:noreply, socket}
   end
@@ -150,39 +172,104 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   # A page or ship sent without its address or name.
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
-  # Anything new in the fleets on show is a nudge to read their ships again,
-  # once for a burst. Nothing else they say moves a ship: a new reading of a
-  # treasury's balances, every minute, least of all.
+  # A new reading of a fleet the visitor isn't a member of redraws its ships.
+  # One that has gone leaves the sea as it is drawn.
   @impl true
-  def handle_info({:reread, shown}, %{assigns: %{shown: shown}} = socket) do
-    socket = assign(socket, :reread_due?, false)
-    {:noreply, kept(socket, fn -> read_crew(socket) end)}
-  end
-
-  def handle_info({:reread, _left}, socket), do: {:noreply, socket}
-  def handle_info(%Broadcast{}, socket), do: {:noreply, reread_soon(socket)}
-  def handle_info({:graph_head, _fleet, _run, _mark}, socket), do: {:noreply, reread_soon(socket)}
-  def handle_info({:graph_notable, _fleet}, socket), do: {:noreply, reread_soon(socket)}
-  def handle_info({:proposals_changed, _fleet}, socket), do: {:noreply, reread_soon(socket)}
-  def handle_info({:keys_changed, _fleet, _keys}, socket), do: {:noreply, reread_soon(socket)}
-  def handle_info(_notice, socket), do: {:noreply, socket}
-
-  # The card of a Key that has sailed off the sea closes with it.
-  @impl true
-  def handle_async({Read, _name, _generation} = name, result, socket) do
-    %{assigns: %{agent: agent, crew: crew, access_context: context}} =
-      socket = Read.settle(socket, name, result)
-
-    if agent != nil and ship(crew, context, agent) == nil,
-      do: {:noreply, assign(socket, :agent, nil)},
+  def handle_info({:shared_reading, {:fleet_now, fleet_id} = key}, socket) do
+    if key in socket.assigns.watched,
+      do: {:noreply, socket |> draw([fleet_id]) |> close_sailed()},
       else: {:noreply, socket}
   end
 
-  defp show(%{assigns: %{shown: shown}} = socket, shown), do: socket
-  defp show(socket, shown), do: socket |> assign(shown: shown, reread_due?: false) |> read_crew()
+  # Anything new in a fleet the visitor is a member of is a nudge to read its
+  # ships again, once for a burst; Keys changing hands, to read again which
+  # are the visitor's and whether they are a member. Nothing else a fleet says
+  # moves a ship: a new reading of a treasury's balances, every minute, least
+  # of all.
+  def handle_info({:reread, shown}, %{assigns: %{shown: shown, due: due}} = socket) do
+    socket = assign(socket, :due, MapSet.new())
+    {:noreply, kept(socket, fn -> reread(socket, due) end)}
+  end
 
-  # The sea stays as it is when the fleets on show can't be read; the next
-  # page, or the next notice about the fleets it shows, reads them again.
+  def handle_info({:reread, _left}, socket), do: {:noreply, socket}
+  def handle_info(%Broadcast{}, socket), do: {:noreply, crew_soon(socket)}
+  def handle_info({:graph_head, _fleet, _run, _mark}, socket), do: {:noreply, crew_soon(socket)}
+  def handle_info({:graph_notable, _fleet}, socket), do: {:noreply, crew_soon(socket)}
+  def handle_info({:proposals_changed, _fleet}, socket), do: {:noreply, crew_soon(socket)}
+
+  def handle_info({:keys_changed, fleet_id, _keys}, socket) do
+    if List.keymember?(socket.assigns.fleets, fleet_id, 0),
+      do: {:noreply, reread_soon(socket, {:keys, fleet_id})},
+      else: {:noreply, socket}
+  end
+
+  def handle_info(_notice, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_async({Read, _name, _generation} = name, result, socket),
+    do: {:noreply, socket |> Read.settle(name, result) |> close_sailed()}
+
+  # The card of a Key that has sailed off the sea closes with it.
+  defp close_sailed(%{assigns: %{agent: nil}} = socket), do: socket
+
+  defp close_sailed(socket) do
+    if ship(on_sea(socket.assigns), socket.assigns.agent),
+      do: socket,
+      else: assign(socket, :agent, nil)
+  end
+
+  defp show(%{assigns: %{shown: shown}} = socket, shown), do: socket
+
+  # The visitor's class and Keys in each fleet are read before anything is
+  # heard, so a read that fails leaves the sea, and what it hears, as it was.
+  defp show(socket, shown) do
+    actor = ShellLive.human_actor(socket)
+    fleets = Enum.map(fleets(shown), &{&1, Access.class(actor, &1)})
+    own = Map.new(fleets, fn {fleet_id, _class} -> {fleet_id, owned(actor, fleet_id)} end)
+
+    socket
+    |> assign(
+      shown: shown,
+      fleets: fleets,
+      own: {reader(socket.assigns.access_context), own},
+      due: MapSet.new()
+    )
+    |> follow(actor)
+    |> draw(for {fleet_id, class} <- fleets, class != :member, do: fleet_id)
+    |> read_crew()
+  end
+
+  # What a reread names, read again: the class and Keys of each fleet whose
+  # Keys changed hands, and the ships of the fleets the visitor is a member
+  # of when anything in them changed. A fleet the visitor left is drawn from
+  # its shared reading again; one they joined is read as them.
+  defp reread(socket, due) do
+    actor = ShellLive.human_actor(socket)
+    reader = reader(socket.assigns.access_context)
+    rechecked = for {:keys, fleet_id} <- due, do: fleet_id
+    {owner, own} = socket.assigns.own
+    own = if owner == reader, do: own, else: %{}
+
+    fleets =
+      for {fleet_id, class} <- socket.assigns.fleets do
+        {fleet_id, if(fleet_id in rechecked, do: Access.class(actor, fleet_id), else: class)}
+      end
+
+    own = Map.merge(own, Map.new(rechecked, &{&1, owned(actor, &1)}))
+
+    redrawn =
+      for {fleet_id, class} <- fleets, class != :member, fleet_id in rechecked, do: fleet_id
+
+    crew? = :crew in due or Enum.any?(rechecked, &({&1, :member} in fleets))
+
+    socket =
+      socket |> assign(fleets: fleets, own: {reader, own}) |> follow(actor) |> draw(redrawn)
+
+    if crew?, do: read_crew(socket), else: socket
+  end
+
+  # The sea stays as it is when the visitor's part can't be read; the next
+  # page, or the next notice about the fleets it shows, reads it again.
   defp kept(socket, read) do
     case PageRead.run("harbour", read) do
       {:ok, read_socket} -> read_socket
@@ -190,11 +277,18 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     end
   end
 
-  defp reread_soon(%{assigns: %{reread_due?: true}} = socket), do: socket
+  defp crew_soon(socket), do: reread_soon(socket, :crew)
 
-  defp reread_soon(socket) do
-    Process.send_after(self(), {:reread, socket.assigns.shown}, @reread_after)
-    assign(socket, :reread_due?, true)
+  # The first notice of a burst sets the moment; the rest join it.
+  defp reread_soon(socket, reason) do
+    %{due: due, shown: shown} = socket.assigns
+
+    if MapSet.size(due) == 0 do
+      wait = @reread_after + :rand.uniform(@spread + 1) - 1
+      Process.send_after(self(), {:reread, shown}, wait)
+    end
+
+    assign(socket, :due, MapSet.put(due, reason))
   end
 
   # The fleet whose page is at `path`, when the shell shows that fleet: one
@@ -203,62 +297,143 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     with %{route: route} <- Phoenix.Router.route_info(Router, "GET", path, Endpoint.host()),
          %{fleet_id: fleet_id} when is_binary(fleet_id) <-
            Enum.find(RouteCatalog.entries(), &(&1.path_pattern == route)),
-         true <- fleet_id in Fleets.open_fleet_ids() do
+         true <- open?(fleet_id) do
       fleet_id
     else
       _elsewhere -> :public
     end
   end
 
-  defp fleets(:public), do: Fleets.open_fleet_ids()
+  defp fleets(:public), do: Enum.filter(Fleets.catalog_ids(), &open?/1)
   defp fleets(fleet_id), do: [fleet_id]
 
-  # The ships are read beside the page, as the visitor, after listening to
-  # their fleets, so a change that lands while they load still reaches them.
+  # Whether a fleet is open, as its shared reading last read it: the
+  # reading's `coming_soon?` is `Fleets.coming_soon?/2` of the fleet's record,
+  # the rule `Fleets.open_fleet_ids/0` reads too. A fleet not read yet is as
+  # the catalog marks it, as the homepage shows it.
+  defp open?(fleet_id) do
+    case FleetNow.fetch(fleet_id) do
+      {%{coming_soon?: coming_soon?}, _degraded?} -> not coming_soon?
+      nil -> not Fleets.coming_soon?(fleet_id, nil)
+    end
+  end
+
+  # What the visitor hears of each fleet on show. A member hears what the
+  # shell hears for their class: its rooms, its workspace and its votes. Anyone
+  # else hears its shared reading, which hears those for everyone. A signed-in
+  # visitor also hears its Keys, which change which ships are theirs and
+  # whether they are a member; a signed-out one holds none.
+  defp follow(socket, actor) do
+    %{fleets: fleets, topics: topics_was, watched: watched_was} = socket.assigns
+    topics = Enum.flat_map(fleets, fn {fleet_id, class} -> topics(fleet_id, class, actor) end)
+    watched = for {fleet_id, class} <- fleets, class != :member, do: FleetNow.key(fleet_id)
+
+    Enum.each(topics_was -- topics, &Phoenix.PubSub.unsubscribe(Keyfleet.PubSub, &1))
+    Enum.each(topics -- topics_was, &Phoenix.PubSub.subscribe(Keyfleet.PubSub, &1))
+    Enum.each(watched_was -- watched, &SharedReading.unsubscribe/1)
+    Enum.each(watched -- watched_was, &SharedReading.subscribe/1)
+    assign(socket, topics: topics, watched: watched)
+  end
+
+  defp topics(fleet_id, :member, _actor),
+    do: [
+      Rooms.topic(fleet_id, :member),
+      Graph.topic(fleet_id, :member),
+      Proposals.topic(fleet_id),
+      Keys.topic(fleet_id)
+    ]
+
+  defp topics(_fleet_id, _class, nil), do: []
+  defp topics(fleet_id, _class, _actor), do: [Keys.topic(fleet_id)]
+
+  # The ships of `fleet_ids` from their shared readings, heard first. A fleet
+  # whose reading is absent keeps the ships it has; a fleet gone from the sea
+  # takes its ships with it.
+  defp draw(socket, fleet_ids) do
+    %{fleets: fleets, public: public} = socket.assigns
+
+    public =
+      Enum.reduce(
+        fleet_ids,
+        Map.take(public, Enum.map(fleets, &elem(&1, 0))),
+        fn fleet_id, public ->
+          case FleetNow.fetch(fleet_id) do
+            {%{coming_soon?: false, feed: %{items: items}}, _degraded?} ->
+              Map.put(public, fleet_id, fleet_ships(fleet_id, items))
+
+            {%{coming_soon?: true}, _degraded?} ->
+              Map.put(public, fleet_id, [])
+
+            nil ->
+              public
+          end
+        end
+      )
+
+    assign(socket, :public, public)
+  end
+
+  # The ships of the fleets the visitor is a member of are read beside the
+  # page, as the visitor, after listening to those fleets, so a change that
+  # lands while they load still reaches them.
   defp read_crew(socket) do
     actor = ShellLive.human_actor(socket)
-    fleet_ids = fleets(socket.assigns.shown)
-    reader = actor && actor.human_account_id
 
-    socket
-    |> follow(fleet_ids, actor)
-    |> Read.start(:crew, reader, fn -> {:ok, crew(fleet_ids, actor)} end)
+    case for({fleet_id, :member} <- socket.assigns.fleets, do: fleet_id) do
+      [] ->
+        socket
+
+      fleet_ids ->
+        Read.start(socket, :crew, reader(socket.assigns.access_context), fn ->
+          {:ok,
+           Map.new(fleet_ids, fn fleet_id ->
+             %{items: items} = Activity.page(fleet_id, nil, actor: actor)
+             {fleet_id, fleet_ships(fleet_id, items)}
+           end)}
+        end)
+    end
   end
 
-  # What the visitor's class hears of each fleet, as the shell hears it: its
-  # rooms, its workspace, its votes and its Keys, which can change the class.
-  defp follow(socket, fleet_ids, actor) do
-    topics =
-      Enum.flat_map(fleet_ids, fn fleet_id ->
-        class = Access.class(actor, fleet_id)
+  # The Keys the visitor holds in a fleet; a signed-out visitor holds none.
+  defp owned(actor, fleet_id), do: MapSet.new(Keys.held_keys(actor, fleet_id), & &1.token_id)
 
-        [
-          Rooms.topic(fleet_id, class),
-          Graph.topic(fleet_id, class),
-          Proposals.topic(fleet_id),
-          Keys.topic(fleet_id)
-        ]
-      end)
+  # The ships on the sea: each fleet's, as the visitor's class there sees it,
+  # the visitor's own Keys first, then the most recently active. What was read
+  # for the visitor shows only while they are signed in as they were then: a
+  # sign-in that ends while the page is open takes it away with it. A fleet
+  # the visitor has just joined shows as anyone sees it until their own read
+  # of it lands; one they have left shows only as anyone sees it.
+  defp drawn(fleets, public, crew, {owner, own}, access_context) do
+    reader = reader(access_context)
+    read = if crew.owner == reader, do: crew.value || %{}, else: %{}
+    own = if owner == reader, do: own, else: %{}
 
-    was = socket.assigns.topics
-    Enum.each(was -- topics, &Phoenix.PubSub.unsubscribe(Keyfleet.PubSub, &1))
-    Enum.each(topics -- was, &Phoenix.PubSub.subscribe(Keyfleet.PubSub, &1))
-    assign(socket, :topics, topics)
-  end
+    fleets
+    |> Enum.flat_map(fn {fleet_id, class} ->
+      mine = Map.get(own, fleet_id, MapSet.new())
 
-  # The visitor's own Keys first, then the most recently active.
-  defp crew(fleet_ids, actor) do
-    fleet_ids
-    |> Enum.flat_map(&fleet_ships(&1, actor))
+      ships =
+        if class == :member,
+          do: read[fleet_id] || public[fleet_id],
+          else: public[fleet_id]
+
+      for ship <- ships || [], do: Map.put(ship, :own?, MapSet.member?(mine, ship.token_id))
+    end)
     |> Enum.sort_by(&{not &1.own?, -DateTime.to_unix(&1.at, :microsecond)})
     |> Enum.take(@ships)
   end
 
+  defp on_sea(assigns),
+    do: drawn(assigns.fleets, assigns.public, assigns.crew, assigns.own, assigns.access_context)
+
+  defp ship(ships, id), do: Enum.find(ships, &(&1.id == id))
+
+  defp reader(%{principal: {:human, account}}), do: account.id
+  defp reader(_access_context), do: nil
+
   # Each Key that did something at an island in the first page of the fleet's
   # activity, at the island of its newest action.
-  defp fleet_ships(fleet_id, actor) do
-    %{items: items} = Activity.page(fleet_id, nil, actor: actor)
-    own = MapSet.new(Keys.held_keys(actor, fleet_id), & &1.token_id)
+  defp fleet_ships(fleet_id, items) do
     %{name: fleet} = Enum.find(Fleets.catalog(), &(&1.id == fleet_id))
 
     items
@@ -276,7 +451,6 @@ defmodule KeyfleetWeb.HarbourSeaLive do
         place: Map.fetch!(@places, newest.kind),
         color: elem(@inks, rem(token_id, tuple_size(@inks))),
         at: newest.at,
-        own?: MapSet.member?(own, token_id),
         actions:
           done
           |> Enum.map(&elem(&1, 1))
@@ -311,17 +485,6 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     end)
   end
 
-  # The ships read for the visitor as they are signed in now. A sign-in that
-  # ends while the page is open takes them away with it.
-  defp ships(%Read{owner: owner, value: value}, access_context) do
-    if owner == reader(access_context), do: value || [], else: []
-  end
-
-  defp ship(crew, access_context, id), do: Enum.find(ships(crew, access_context), &(&1.id == id))
-
-  defp reader(%{principal: {:human, account}}), do: account.id
-  defp reader(_access_context), do: nil
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -332,7 +495,10 @@ defmodule KeyfleetWeb.HarbourSeaLive do
       phx-mounted={JS.ignore_attributes(["data-harbour-ready"])}
       data-harbour-crew={
         Jason.encode!(
-          Enum.map(ships(@crew, @access_context), &Map.take(&1, [:id, :name, :place, :color]))
+          Enum.map(
+            drawn(@fleets, @public, @crew, @own, @access_context),
+            &Map.take(&1, [:id, :name, :place, :color])
+          )
         )
       }
       aria-hidden="true"
@@ -362,7 +528,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
       </svg>
     </button>
     <.agent_card
-      :if={ship = @agent && ship(@crew, @access_context, @agent)}
+      :if={ship = @agent && ship(drawn(@fleets, @public, @crew, @own, @access_context), @agent)}
       ship={ship}
       now={@now}
     />

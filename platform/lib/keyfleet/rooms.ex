@@ -133,7 +133,8 @@ defmodule Keyfleet.Rooms do
   the fleet's rooms, posts and keys' threads: "room_head", "key_activity" and
   "rooms_changed". Whoever reads every room hears of every room. Anyone else
   hears of General and the keys' threads alone, and of no room made or named.
-  A listener is on one of the two, never both.
+  A listener is on one of the two, never both. General's new posts are also
+  published whole, on `Keyfleet.Rooms.Message.topic/2`.
   """
   def topic(fleet_id, class) do
     if Access.enough?(class, :read, :rooms),

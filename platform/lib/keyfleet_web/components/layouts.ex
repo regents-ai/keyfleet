@@ -12,12 +12,16 @@ defmodule KeyfleetWeb.Layouts do
   attr(:flash, :map, required: true)
   attr(:inner_content, :any, required: true)
 
+  # The dock is the polite live region and is always on the page, so a note
+  # that arrives in it is read out; one that arrived with its own region would
+  # often go unread. An error note is also an alert, read out at once.
   def app(assigns) do
     ~H"""
     {@inner_content}
     <div
       id="flash-region"
       class="toast-dock"
+      aria-live="polite"
       phx-hook="MotionList"
       data-variant={KeyfleetWeb.Motion.standard("toast")}
       data-layout-id="flash-region"
@@ -36,14 +40,15 @@ defmodule KeyfleetWeb.Layouts do
   attr(:kind, :string, required: true, values: ~w(info error))
   slot(:inner_block, required: true)
 
-  # One note in the corner, read out when it arrives: politely, or at once for
-  # an error. Either stays until it is dismissed or the page moves on.
+  # One note in the corner, read out when it arrives: politely, through the
+  # dock, or at once for an error. Either stays until it is dismissed or the
+  # page moves on.
   defp toast(assigns) do
     ~H"""
     <div
       id={"flash-#{@kind}"}
       class="toast"
-      role={if @kind == "error", do: "alert", else: "status"}
+      role={@kind == "error" && "alert"}
       data-toast
       data-layout-id={"flash-#{@kind}"}
     >

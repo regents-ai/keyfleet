@@ -3,10 +3,10 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   import ExUnit.CaptureLog
 
-  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys}
+  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, SharedReading}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.Components.SendAgent
-  alias Phoenix.Socket.Broadcast
+  alias KeyfleetWeb.FleetNow
 
   # Invariants covered:
   # - smoke: 200 mount and the public-home landmark, outside the signed-in shell
@@ -17,10 +17,12 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   pressed, and it and the card's tag name the Key on offer and its price
   #   after the Keys sold
   # - once every Classic Key is sold, the button can't be pressed and says so
-  # - the Club shows its newest open goal and featured item once connected,
-  #   and the first render reads neither; a coming-soon Club reads nothing
+  # - the Club shows its newest open goal and featured item from the first
+  #   render; a coming-soon Club reads nothing
+  # - an open page draws again when the homepage's reading changes
   # - a Club read that fails is said to have failed and never shown as zero
-  # - a burst of notices is answered by one refresh of each fleet it names
+  # - a burst of notices is answered by one read of each fleet it names, for
+  #   every open homepage at once
   # - the command box shows the homepage instruction whole and copies exactly
   #   what it shows
   # - the Markdown homepage carries the tagline as Sean wrote it, says Classic
@@ -46,6 +48,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     end
 
     Enum.each(Fleets.catalog_ids(), &Workspace.open_log/1)
+    read_fleets()
     :ok
   end
 
@@ -77,6 +80,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   test "once Classic is on sale, Buy Next Key opens its page at the Key on offer",
        %{conn: conn} do
     for token_id <- 1..3, do: issue!(@classic, token_id)
+    read_fleets()
 
     {:ok, view, _html} = live(conn, "/")
 
@@ -92,6 +96,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   test "once every Classic Key is sold, Buy Next Key can't be pressed and says so",
        %{conn: conn} do
     issue!(@classic, 1024)
+    read_fleets()
 
     {:ok, view, _html} = live(conn, "/")
 
@@ -99,16 +104,16 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-buy-why") == "1,024/1,024 Keys sold"
   end
 
-  test "the Club shows its newest open goal and what it features, once connected",
+  test "the Club shows its newest open goal and what it features, from the first render",
        %{conn: conn} do
     goal("Sell the first audit", %{"open_questions" => ["Who pays for it?"]})
     Workspace.edit(@club, goal("Ship the site"), %{"status" => "dropped"})
+    read_fleets()
 
     static = conn |> get("/") |> html_response(200)
-    assert attribute(static, "[data-fleet-trying]", "class") == []
+    assert static =~ "Trying: Sell the first audit"
 
     {:ok, view, _html} = live(conn, "/")
-    render_async(view, 3_000)
 
     assert text(view, "#home-club [data-fleet-trying]") == "Trying: Sell the first audit"
 
@@ -130,16 +135,24 @@ defmodule KeyfleetWeb.HomeLiveTest do
   @tag :club_undeployed
   test "a coming-soon Club says so and reads nothing", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
-    render_async(view, 3_000)
 
     assert text(view, "#home-club [data-fleet-soon]") == "Opens soon"
     refute has_element?(view, "#home-club [data-fleet-who]")
   end
 
+  test "an open homepage draws again when the Club's reading changes", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+    assert text(view, "#home-club [data-fleet-trying]") == "No goal set yet"
+
+    goal("Sell the first audit")
+    FleetNow.read(@club)
+
+    assert text(view, "#home-club [data-fleet-trying]") == "Trying: Sell the first audit"
+  end
+
   test "a Club read that fails is said to have failed, never zero, and the page stays up",
        %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
-    render_async(view, 3_000)
     refute has_element?(view, "[data-fleet-failed]")
 
     # Renamed inside the test's own transaction, so the next reads fail the way
@@ -148,12 +161,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
       "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.graph_events RENAME TO graph_events_away"
     )
 
-    log =
-      capture_log(fn ->
-        send(view.pid, {:refresh, @club})
-        render(view)
-        render_async(view, 3_000)
-      end)
+    log = capture_log(fn -> FleetNow.read(@club) end)
 
     assert text(view, "#home-club [data-fleet-failed]") == "Couldn’t load this fleet just now."
     assert log =~ "failed"
@@ -166,8 +174,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
     )
 
     capture_log(fn ->
+      first_read(@club)
       {:ok, view, _html} = live(conn, "/")
-      render_async(view, 3_000)
 
       assert has_element?(view, "#home-club [data-fleet-failed]")
       assert text(view, "#home-club [data-fleet-who]") == ""
@@ -181,6 +189,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
     )
 
     capture_log(fn ->
+      first_read(@classic)
+      first_read(@club)
       {:ok, view, _html} = live(conn, "/")
 
       assert has_element?(view, "#public-home")
@@ -201,38 +211,25 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-instruction") == SendAgent.home_instruction()
   end
 
-  test "a burst of notices is answered by one refresh of each fleet", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/")
-    render_async(view, 3_000)
+  test "a burst of notices is answered by one read of each fleet, for every open homepage",
+       %{conn: conn} do
+    producer = start_supervised!(FleetNow)
+    {:ok, _view, _html} = live(conn, "/")
+    {:ok, _view, _html} = live(conn, "/")
 
-    # Watch the pauses the page sets before reading a fleet again.
-    :erlang.trace_pattern({:erlang, :send_after, 3}, true, [:global])
-    :erlang.trace(view.pid, true, [:call])
-    on_exit(fn -> :erlang.trace_pattern({:erlang, :send_after, 3}, false, [:global]) end)
+    # Watch the fleets the producer reads; the two open pages read nothing.
+    :erlang.trace_pattern({FleetNow, :read, 1}, true, [:global])
+    :erlang.trace(producer, true, [:call])
+    on_exit(fn -> :erlang.trace_pattern({FleetNow, :read, 1}, false, [:global]) end)
 
-    send(view.pid, {:graph_notable, @club})
-    send(view.pid, {:graph_notable, @club})
-    send(view.pid, {:proposals_changed, @club})
-    send(view.pid, {:keys_changed, @classic, [1]})
+    send(producer, {:graph_notable, @club})
+    send(producer, {:graph_notable, @club})
+    send(producer, {:proposals_changed, @club})
+    send(producer, {:keys_changed, @classic, [1]})
 
-    send(view.pid, %Broadcast{
-      event: "key_activity",
-      payload: %{fleet_id: @classic, token_ids: [1]}
-    })
-
-    render(view)
-
-    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @club}]}}
-    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @classic}]}}
-    refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
-
-    # Once the fleet has read again, its next notice sets a pause of its own.
-    send(view.pid, {:refresh, @club})
-    send(view.pid, {:graph_notable, @club})
-    render(view)
-
-    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @club}]}}
-    refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
+    assert_receive {:trace, ^producer, :call, {FleetNow, :read, [@club]}}, 2_000
+    assert_receive {:trace, ^producer, :call, {FleetNow, :read, [@classic]}}
+    refute_receive {:trace, ^producer, :call, {FleetNow, :read, _}}, 1_500
   end
 
   test "the page and the Markdown homepage carry the tagline as written", %{conn: conn} do
@@ -294,6 +291,15 @@ defmodule KeyfleetWeb.HomeLiveTest do
       },
       actor: %Actors.System{}
     )
+  end
+
+  # What the homepage's producer does as the site starts and on each pass.
+  defp read_fleets, do: Enum.each([@classic, @club], &FleetNow.read/1)
+
+  # A fleet the site has never read, as just after it starts, then read once.
+  defp first_read(fleet_id) do
+    SharedReading.delete(FleetNow.key(fleet_id))
+    FleetNow.read(fleet_id)
   end
 
   defp goal(title, data \\ %{}),
