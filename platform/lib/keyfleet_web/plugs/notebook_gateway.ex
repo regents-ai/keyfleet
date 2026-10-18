@@ -432,30 +432,28 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # its address's API budget, and starting a background run, whoever asks,
   # spends a smaller one too.
   defp within_allowances(conn, fleet_id, subject, actor) do
-    allowances(conn, actor)
-    |> Enum.find(fn {name, _code} -> Limits.spend(name, subject) == :limited end)
-    |> case do
-      nil ->
-        admit(conn, fleet_id, subject, actor)
-
-      {name, code} ->
-        window = Application.fetch_env!(:keyfleet, :limits)[name][:window_seconds]
-
+    with :ok <- spend(:notebook_requests, subject, not is_struct(actor, Keyfleet.Actors.Agent)),
+         :ok <- spend(:notebook_run_starts, subject, run_start?(conn)) do
+      admit(conn, fleet_id, subject, actor)
+    else
+      {:limited, name, seconds} ->
         conn
-        |> put_resp_header("retry-after", Integer.to_string(window))
-        |> Refusal.json(429, code)
+        |> put_resp_header("retry-after", Integer.to_string(seconds))
+        |> Refusal.json(429, limit_code(name))
     end
   end
 
-  defp allowances(conn, actor) do
-    for {name, code, spent?} <- [
-          {:notebook_requests, "notebook_requests_limit_reached",
-           not is_struct(actor, Keyfleet.Actors.Agent)},
-          {:notebook_run_starts, "notebook_runs_limit_reached", run_start?(conn)}
-        ],
-        spent?,
-        do: {name, code}
+  defp spend(_name, _subject, false), do: :ok
+
+  defp spend(name, subject, true) do
+    case Limits.admit(name, subject) do
+      :ok -> :ok
+      {:limited, seconds} -> {:limited, name, seconds}
+    end
   end
+
+  defp limit_code(:notebook_requests), do: "notebook_requests_limit_reached"
+  defp limit_code(:notebook_run_starts), do: "notebook_runs_limit_reached"
 
   defp run_start?(%Plug.Conn{
          method: "POST",
