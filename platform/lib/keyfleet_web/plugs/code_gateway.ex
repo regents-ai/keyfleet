@@ -14,8 +14,10 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   What reaches the store carries a pass (`Keyfleet.Code.Pass`) in place of the
   password, with only the headers git's exchange needs. Bodies stream both
-  ways, a request's up to `max_pack_bytes`. When the store reports changes
-  done, each branch or tag moved is recorded for the fleet's workspace. A
+  ways, a request's up to `max_pack_bytes`, and each push spends
+  `:code_pushes` for the wallet it is sent as (`Keyfleet.Limits`). When the
+  store reports changes done, each branch or tag moved, up to `@recorded` of
+  them, is recorded for the fleet's workspace. A
   store that cannot be reached, stops mid-exchange or answers with a fault of
   its own is saved with the site's errors (`Keyfleet.Code.StoreDownError`).
   """
@@ -23,7 +25,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   import Plug.Conn
 
-  alias Keyfleet.Code
+  alias Keyfleet.{Code, Limits}
   alias Keyfleet.Code.{Pass, ReceivePack, StoreDownError}
   alias KeyfleetWeb.{CodePassword, Refusal}
 
@@ -37,6 +39,9 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   @chunk 1_000_000
   # Enough of each side of a push to read its commands and the store's report.
   @captured 65_536
+  # The most branches and tags one push records; a push of more (`--all`,
+  # `--tags`) records the first of them.
+  @recorded 20
 
   @impl Plug
   def init(opts), do: opts
@@ -65,7 +70,8 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
          {:holder, {:ok, %{} = holder}} <-
            {:holder, current_holder(fleet_id, subject, actor)},
          {:allowed, {:ok, pass}} <- {:allowed, pass(fleet_id, holder, need)},
-         {:owner, {:ok, owner}} <- {:owner, Code.owner(fleet_id)} do
+         {:owner, {:ok, owner}} <- {:owner, Code.owner(fleet_id)},
+         {:pushes, :ok} <- {:pushes, spend_push(conn, fleet_id, holder)} do
       forward(
         conn,
         fleet_id,
@@ -91,6 +97,13 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
       {:allowed, :restricted} ->
         refuse(conn, 403, "code_edits_restricted")
 
+      {:pushes, :limited} ->
+        window = Application.fetch_env!(:keyfleet, :limits)[:code_pushes][:window_seconds]
+
+        conn
+        |> put_resp_header("retry-after", Integer.to_string(window))
+        |> refuse(429, "code_pushes_limit_reached")
+
       {:owner, {:setting_up, seconds}} ->
         # The next try, and a minute for it to finish.
         wait = seconds + 60
@@ -115,6 +128,18 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   defp current_holder(fleet_id, subject, actor),
     do: Code.admitted(fleet_id, subject, fn -> Code.holder(actor, fleet_id) end)
 
+  # Each push spends the allowance of the wallet it is sent as in the fleet
+  # (`Keyfleet.Keys.identity/2`), so a person and the agents pushing as their
+  # Key share one; copying the code spends none.
+  defp spend_push(
+         %Plug.Conn{method: "POST", path_info: [_repository, "git-receive-pack"]},
+         fleet_id,
+         holder
+       ),
+       do: Limits.spend(:code_pushes, {fleet_id, holder.wallet})
+
+  defp spend_push(_conn, _fleet_id, _holder), do: :ok
+
   # When the store took a push, what it moved is recorded under the holder.
   defp sent(
          %Plug.Conn{method: "POST", path_info: [_repository, "git-receive-pack"]},
@@ -122,8 +147,10 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
          holder,
          request,
          response
-       ),
-       do: Code.record_pushes(fleet_id, holder, ReceivePack.updates(request, response))
+       ) do
+    updates = request |> ReceivePack.updates(response) |> Enum.take(@recorded)
+    Code.record_pushes(fleet_id, holder, updates)
+  end
 
   defp sent(_conn, _fleet_id, _holder, _request, _response), do: :ok
 
