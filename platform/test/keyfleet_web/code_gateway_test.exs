@@ -130,6 +130,35 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     refute_received {:store, _method, _path, _claims, _body}
   end
 
+  # Costly failure: one wallet pushes to a fleet's code as often as a script
+  # can, each push up to `max_pack_bytes`.
+  test "each push spends its wallet's allowance in the fleet, and copying spends none", c do
+    limits = Application.fetch_env!(:keyfleet, :limits)
+    on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
+
+    Application.put_env(
+      :keyfleet,
+      :limits,
+      Keyword.put(limits, :code_pushes, limit: 1, window_seconds: 3600)
+    )
+
+    # Other tests may push as the same wallet in this window; start unspent.
+    :ets.delete_all_objects(Keyfleet.Accounts.RequestRateLimiter)
+
+    password = person_password!(c.holder)
+    push = "/#{@fleet}.git/git-receive-pack"
+
+    assert git(:post, push, password, "0000").status == 200
+    assert_receive {:store, "POST", _path, _claims, "0000"}
+
+    refused = git(:post, push, password, "0000")
+    assert refused.status == 429
+    assert get_resp_header(refused, "retry-after") == ["3600"]
+    refute_received {:store, "POST", _path, _claims, _body}
+
+    assert git(:get, "/#{@fleet}.git/info/refs?service=git-receive-pack", password).status == 200
+  end
+
   # Costly failure: an agent's password keeps opening the code after the
   # sign-in it was made under has run out.
   test "an agent's password is refused once its sign-in has run out" do

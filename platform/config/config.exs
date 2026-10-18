@@ -152,7 +152,9 @@ config :keyfleet, :limits,
   # A person's notebook requests, by account: a page loads 100-odd uncached files.
   notebook_requests: [limit: 1200, window_seconds: 60],
   # Background runs started on a notebook host, by person or agent: well past pressing Run.
-  notebook_run_starts: [limit: 30, window_seconds: 600]
+  notebook_run_starts: [limit: 30, window_seconds: 600],
+  # Pushes to one fleet's code as one wallet: two a minute, past steady work.
+  code_pushes: [limit: 120, window_seconds: 3600]
 
 # Rate limits key on the direct peer. Production turns on Fly's client header.
 config :keyfleet, :behind_fly_proxy, false
