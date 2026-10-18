@@ -11,6 +11,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       sign-in it came from and when it ends; on another fleet's host it signs
       no one in, and once that Keyfleet sign-in ends (signed out, another
       account, run out) it signs no one in either, checked on every request.
+      A link opened from another site is not spent: the browser is shown a
+      link back to Keyfleet, which makes one for whoever is signed in there.
     * A request signed by an agent (SIWA, as on `/api/v1/agent`) is that
       agent's, whatever cookie it carries.
     * Anything else is the cookie's person's, or is refused. A notebook page
@@ -206,9 +208,11 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     conn = fetch_query_params(conn)
     to = conn.query_params["to"]
 
-    if Notebooks.destination?(to),
-      do: enter(conn, fleet_id, to),
-      else: Refusal.json(conn, 400, "invalid_request")
+    cond do
+      not Notebooks.destination?(to) -> Refusal.json(conn, 400, "invalid_request")
+      "cross-site" in get_req_header(conn, "sec-fetch-site") -> open_here(conn, fleet_id, to)
+      true -> enter(conn, fleet_id, to)
+    end
   end
 
   defp route(conn, fleet_id) do
@@ -248,6 +252,34 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       :error ->
         Refusal.json(conn, 403, "notebooks_link_used")
     end
+  end
+
+  # A link opened from another site may have been made for someone else's
+  # account, and would sign this browser in as them, so it is not spent. The
+  # page's one link asks Keyfleet for a link of this browser's own; followed
+  # from here, that one comes from this site and is spent.
+  defp open_here(conn, fleet_id, to) do
+    conn
+    |> put_resp_content_type("text/html")
+    |> put_resp_header(
+      "content-security-policy",
+      "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    )
+    |> put_resp_header("x-content-type-options", "nosniff")
+    |> put_resp_header("referrer-policy", "no-referrer")
+    |> send_resp(200, open_page(Plug.HTML.html_escape(open_url(fleet_id, to))))
+  end
+
+  defp open_page(href) do
+    """
+    <!doctype html>
+    <html lang="en">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Open the notebooks</title>
+    <p><a href="#{href}">Open the notebooks</a></p>
+    </html>
+    """
   end
 
   ## Who sent it
