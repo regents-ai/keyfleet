@@ -185,7 +185,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert elsewhere.status == 303
 
     assert get_resp_header(elsewhere, "location") == [
-             KeyfleetWeb.Plugs.NotebookGateway.open_url(@fleet, "/", again: "1")
+             KeyfleetWeb.Plugs.NotebookGateway.open_url(@fleet, "/")
            ]
 
     assert elsewhere.resp_cookies == %{}

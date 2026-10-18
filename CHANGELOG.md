@@ -2375,3 +2375,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - If a fleet's notebooks send you back to Keyfleet instead of opening, the
   page now says the notebooks didn't open and waits for you to press Open
   notebooks, instead of trying again by itself.
+
+## 2026-10-18 — Opening notebooks from a saved result
+
+- Correction to "When the notebooks don't open": a fleet's notebooks never
+  send you to a page that tries again by itself. Following a link to a saved
+  notebook result before you're signed in to the notebooks, or coming back
+  after they didn't open, shows Keyfleet's page asking you to press Open
+  notebooks. Pressing Open notebooks in a fleet's workspace still opens them
+  straight away.
