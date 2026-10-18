@@ -138,7 +138,7 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
     {:ok, list, _html} = open(conn, @list)
     assert has_element?(list, "#poll-#{poll.id}", "Started by Their agent (Key 1)")
 
-    {:ok, holder, _html} = live(signed_in_as(conn, @voter), "#{@list}/#{poll.id}")
+    {:ok, holder, _html} = open(signed_in_as(conn, @voter), "#{@list}/#{poll.id}")
     assert has_element?(holder, "#poll-status", "Their agent (Key 1)")
 
     assert shows?(
