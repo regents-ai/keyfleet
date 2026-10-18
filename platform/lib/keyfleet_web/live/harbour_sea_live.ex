@@ -33,6 +33,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     DirectoryMD,
     Endpoint,
     KeyLinks,
+    PageRead,
     Read,
     RouteCatalog,
     Router,
@@ -135,11 +136,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     socket =
       if path == socket.assigns.path, do: socket, else: assign(socket, path: path, agent: nil)
 
-    shown = shown(path)
-
-    if shown == socket.assigns.shown,
-      do: {:noreply, socket},
-      else: {:noreply, socket |> assign(shown: shown, reread_due?: false) |> read_crew()}
+    {:noreply, kept(socket, fn -> show(socket, shown(path)) end)}
   end
 
   def handle_event("show_agent", %{"id" => id}, socket) when is_binary(id) do
@@ -154,8 +151,10 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   # once for a burst. Nothing else they say moves a ship: a new reading of a
   # treasury's balances, every minute, least of all.
   @impl true
-  def handle_info({:reread, shown}, %{assigns: %{shown: shown}} = socket),
-    do: {:noreply, socket |> assign(:reread_due?, false) |> read_crew()}
+  def handle_info({:reread, shown}, %{assigns: %{shown: shown}} = socket) do
+    socket = assign(socket, :reread_due?, false)
+    {:noreply, kept(socket, fn -> read_crew(socket) end)}
+  end
 
   def handle_info({:reread, _left}, socket), do: {:noreply, socket}
   def handle_info(%Broadcast{}, socket), do: {:noreply, reread_soon(socket)}
@@ -174,6 +173,18 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     if agent != nil and ship(crew, context, agent) == nil,
       do: {:noreply, assign(socket, :agent, nil)},
       else: {:noreply, socket}
+  end
+
+  defp show(%{assigns: %{shown: shown}} = socket, shown), do: socket
+  defp show(socket, shown), do: socket |> assign(shown: shown, reread_due?: false) |> read_crew()
+
+  # The sea stays as it is when the fleets on show can't be read; the next
+  # page or notice reads them again.
+  defp kept(socket, read) do
+    case PageRead.run("harbour", read) do
+      {:ok, read_socket} -> read_socket
+      {:error, _failure} -> socket
+    end
   end
 
   defp reread_soon(%{assigns: %{reread_due?: true}} = socket), do: socket

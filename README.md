@@ -79,7 +79,9 @@ last few actions.
   address, a fleet's workspace stalling, and a page that couldn't read what it
   shows. Errors keep being saved through and after a database outage.
 - A page that can't read what it shows keeps the site's header and says so,
-  with Try again, instead of failing whole.
+  with Try again, instead of failing whole. Once a page is open, an update it
+  can't read leaves it as it was, and a press that can't be finished says to
+  refresh the page.
 - Recovery: the [restore drill](docs/restore-drill.md) restores the graph and
   code store volumes from Fly snapshots and the database to a point in time,
   all onto scratch copies. It has not been run yet.

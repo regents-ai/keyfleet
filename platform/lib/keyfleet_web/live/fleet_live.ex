@@ -1505,15 +1505,20 @@ defmodule KeyfleetWeb.FleetLive do
   @doc """
   The hall's feed is read again from the top, as many pages as are
   shown, once for the burst of notices about the fleet on show that asked
-  for it. A wait begun for a fleet the page has since left reads nothing.
+  for it. A wait begun for a fleet the page has since left reads nothing. A
+  read again that fails keeps what the hall shows; the next notice reads again.
   """
   def handle_info(
         {:refresh_activity, fleet_id},
         %{assigns: %{activity: %{fleet_id: fleet_id}}} = socket
-      ),
-      do:
-        {:noreply,
-         socket |> assign(:activity_refresh, nil) |> reread_activity() |> reread_quotes()}
+      ) do
+    socket = assign(socket, :activity_refresh, nil)
+
+    case PageRead.run("fleet", fn -> socket |> reread_activity() |> reread_quotes() end) do
+      {:ok, reread} -> {:noreply, reread}
+      {:error, _failure} -> {:noreply, socket}
+    end
+  end
 
   def handle_info({:refresh_activity, _fleet_id}, socket), do: {:noreply, socket}
 

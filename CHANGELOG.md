@@ -2166,3 +2166,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   to the first page is now a button.
 - An address naming a fleet that doesn’t exist offers See the fleets on its
   rooms, polls and messages pages, as the fleet page already did.
+
+## 2026-10-18 — Open pages ride out a database that can't be read
+
+- A press on any page that can't be finished because the site's records can't
+  be read now leaves the page as it was and says "Something went wrong on our
+  side. Refresh the page to see the latest, then try again." Before, the page
+  failed and started over. Opening a fleet's notebooks and getting a git
+  password answer as before.
+- An update that arrives while a page is open (a new post, a vote, a Key
+  changing hands, a poll closing) and can't be read leaves the page as it was;
+  the next one reads again. The fleet hall's feed and the polls page no longer
+  stop following new activity, or swap the page for "couldn't be loaded", after
+  one failed read.
+- Leaving a room or a conversation whose read place can't be saved still goes
+  to the next page, instead of that page saying it couldn't be loaded.
+- The harbour sea keeps its ships when the fleets on show can't be read.
