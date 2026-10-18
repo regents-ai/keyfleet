@@ -18,7 +18,6 @@ defmodule KeyfleetWeb.Layouts do
     <div
       id="flash-region"
       class="toast-dock"
-      aria-live="polite"
       phx-hook="MotionList"
       data-variant={KeyfleetWeb.Motion.standard("toast")}
       data-layout-id="flash-region"
@@ -37,14 +36,14 @@ defmodule KeyfleetWeb.Layouts do
   attr(:kind, :string, required: true, values: ~w(info error))
   slot(:inner_block, required: true)
 
-  # One note in the corner. The region reads a note out when it arrives, and an
-  # error at once; either stays until it is dismissed or the page moves on.
+  # One note in the corner, read out when it arrives: politely, or at once for
+  # an error. Either stays until it is dismissed or the page moves on.
   defp toast(assigns) do
     ~H"""
     <div
       id={"flash-#{@kind}"}
       class="toast"
-      role={@kind == "error" && "alert"}
+      role={if @kind == "error", do: "alert", else: "status"}
       data-toast
       data-layout-id={"flash-#{@kind}"}
     >

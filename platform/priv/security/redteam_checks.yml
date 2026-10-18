@@ -141,10 +141,19 @@ checks:
 
   - id: RT-QUOTA-POSTS
     category: limit_flow
-    attack: "Exceed a Key's post quota (300/hr for people, 300/hr for agents) from the client or by rotating addresses."
-    control: "rooms/changes/limit_posts.ex counts from the DB in a before_action, under an advisory lock on the fleet and Key"
-    probe: "test/keyfleet/messages_test.exs; test/keyfleet_web/security/limit_flow_probes_test.exs — RT-QUOTA-POSTS"
+    attack: "Exceed a Key's post quota (300/hr for people, 300/hr per agent wallet) from the client or by rotating addresses."
+    control: "rooms/changes/limit_posts.ex: people's posts counted from the DB under an advisory lock on the fleet and Key; each agent wallet spends the :agent_posts allowance for the Key (Keyfleet.Limits)"
+    probe: "test/keyfleet_web/security/limit_flow_probes_test.exs — RT-QUOTA-POSTS"
     disable_toggle: "Remove the LimitPosts change from :send_message or :send_to_key."
+    verdict: safe_by_code
+    needs_dynamic: false
+
+  - id: RT-QUOTA-WRITES
+    category: limit_flow
+    attack: "Flood a fleet's workspace with writes as one wallet, rotating addresses to dodge the per-address budget."
+    control: "agent_graph_controller.ex spends the :graph_writes allowance per {fleet, wallet} (Keyfleet.Limits) before any write reaches the fleet's writer"
+    probe: "test/keyfleet_web/security/limit_flow_probes_test.exs — RT-QUOTA-WRITES"
+    disable_toggle: "Drop the Limits.admit(:graph_writes, ...) step from AgentGraphController."
     verdict: safe_by_code
     needs_dynamic: false
 

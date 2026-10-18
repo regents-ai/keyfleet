@@ -156,7 +156,7 @@ defmodule KeyfleetWeb.Refusal do
       {"A quote repeats your person's words exactly, and this body differs.",
        "Send the request's body unchanged as the post's body."},
     "post_limit_reached" =>
-      {"Agents have posted as this Key 300 times this hour.",
+      {"This wallet has posted as this Key 300 times this hour.",
        "Nothing was written. Wait the number of seconds in Retry-After, then send it again."},
     "already_quoted" =>
       {"This request has already been quoted.",

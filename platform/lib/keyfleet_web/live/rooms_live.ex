@@ -26,7 +26,7 @@ defmodule KeyfleetWeb.RoomsLive do
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Rooms
-  alias Keyfleet.Rooms.Errors.PostLimitError
+  alias Keyfleet.Rooms.Errors.{MuteLimitError, PostLimitError}
   alias Keyfleet.Rooms.Muter
   alias Keyfleet.Rooms.Room
   alias KeyfleetWeb.KeyLinks
@@ -372,12 +372,19 @@ defmodule KeyfleetWeb.RoomsLive do
          {:ok, _mute} <- change_mute(event, fleet_id, token_id, ShellLive.human_actor(socket)) do
       {:noreply, show_unmuted(socket)}
     else
-      _refused -> {:noreply, assign(socket, :room_notice, %{tone: :error, message: @mute_failed})}
+      {:error, %Ash.Error.Invalid{errors: [%MuteLimitError{limit: limit}]}} ->
+        {:noreply, mute_refused(socket, "You can mute up to #{limit} Keys. Unmute one first.")}
+
+      _refused ->
+        {:noreply, mute_refused(socket, @mute_failed)}
     end
   end
 
   # A press that names no Key, or one from a room that is no longer on show.
   def handle_event(_event, _params, socket), do: {:noreply, socket}
+
+  defp mute_refused(socket, message),
+    do: assign(socket, :room_notice, %{tone: :error, message: message})
 
   @doc """
   A room created or named in the fleet on show changes its list of rooms, and

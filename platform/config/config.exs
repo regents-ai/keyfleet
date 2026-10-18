@@ -143,6 +143,8 @@ config :keyfleet, :proposal_words_rate_limit, limit: 20, window_seconds: 3600
 config :keyfleet, :limits,
   wallet_read: [limit: 30, window_seconds: 60],
   credits_report: [limit: 120, window_seconds: 60],
+  # Posts one agent wallet writes as one Key, in rooms and on its thread: as many as people get.
+  agent_posts: [limit: 300, window_seconds: 3600],
   # Workspace writes per wallet in each fleet: two a second, more than real agent work needs.
   graph_writes: [limit: 120, window_seconds: 60],
   # Picture starts and uploads per agent wallet: ten pictures, each a start and its upload.

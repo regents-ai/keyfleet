@@ -1,28 +1,32 @@
 defmodule Keyfleet.Rooms.Changes.LimitPosts do
   @moduledoc """
-  Holds each key to 300 posts an hour that people write themselves, and to
-  300 an hour that agents write, counted apart from the posts stored in the
-  last hour (`Keyfleet.Rooms.Message`'s `:page_posts_last_hour` and
-  `:agent_posts_last_hour`), across the fleet's rooms and keys' threads.
+  Holds each key to 300 posts an hour that people write themselves, and each
+  agent to 300 an hour as each key it writes as, across the fleet's rooms and
+  keys' threads.
 
   People post from the page and its tools, which the API's per-address limit
-  doesn't reach. Agents post through the API, but an agent changing its
-  address would start that limit again, so the posts written as a key are
-  counted too: an agent's own and the ones it writes for its person alike.
+  doesn't reach. Their posts are counted from the ones stored in the last
+  hour (`Keyfleet.Rooms.Message`'s `:page_posts_last_hour`), so a deploy keeps
+  the count. It runs after `Keyfleet.Rooms.Changes.PostMessage` has settled
+  the key the post is written as, and holds that key's posts for this one
+  alone until it commits, so two posts as one key at the same moment, in two
+  rooms or threads, are counted one after the other.
 
-  A refused post stores nothing, so it never counts; a repeat of a post
-  already made is handed back, never refused. The count is the database's, so
-  every machine sees the same one and a deploy keeps it. It runs after
-  `Keyfleet.Rooms.Changes.PostMessage` has settled the key the post is
-  written as, and holds that key's posts for this one alone until it
-  commits, so two posts as one key at the same moment, in two rooms or
-  threads, are counted one after the other.
+  Agents post through the API, but an agent changing its address would start
+  that limit again, so each agent wallet also spends the `:agent_posts`
+  allowance of the key it writes as: its own posts and the ones it writes for
+  its person alike. Each wallet has its own, so one shard holder's agent
+  never uses up another's.
+
+  A refused post stores nothing; a repeat of a post already made is handed
+  back, never refused.
   """
   use Ash.Resource.Change
 
   require Ash.Query
 
   alias Keyfleet.Actors.System
+  alias Keyfleet.Limits
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.PostLimitError
   alias Keyfleet.Rooms.Message
@@ -39,18 +43,29 @@ defmodule Keyfleet.Rooms.Changes.LimitPosts do
   end
 
   defp limit(changeset, actor) do
+    if persons_own?(changeset),
+      do: limit_person(changeset, actor),
+      else: limit_agent(changeset, actor)
+  end
+
+  defp persons_own?(changeset),
+    do:
+      Ash.Changeset.get_attribute(changeset, :author_kind) == :human and
+        is_nil(Ash.Changeset.get_attribute(changeset, :via_agent_profile_id))
+
+  defp limit_person(changeset, actor) do
     fleet_id = Ash.Changeset.get_attribute(changeset, :fleet_id)
     token_id = Ash.Changeset.get_attribute(changeset, :as_key)
 
     Keyfleet.Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
-      Jason.encode!(["posts_as_key", fleet_id, token_id])
+      Jason.encode!(["page_posts", fleet_id, token_id])
     ])
 
     # The 300th newest post of the hour: while there is one, the key is at
     # its limit until that post is an hour old.
     case Message
          |> Ash.Query.for_read(
-           counted(changeset),
+           :page_posts_last_hour,
            %{fleet_id: fleet_id, token_id: token_id},
            actor: %System{}
          )
@@ -60,19 +75,33 @@ defmodule Keyfleet.Rooms.Changes.LimitPosts do
       [] ->
         changeset
 
-      [oldest] ->
-        if repeat?(changeset, actor),
-          do: changeset,
-          else: Ash.Changeset.add_error(changeset, refusal(oldest))
+      [%Message{inserted_at: oldest}] ->
+        seconds = DateTime.diff(DateTime.add(oldest, @hour), DateTime.utc_now(), :second)
+        refuse(changeset, actor, max(seconds, 1))
     end
   end
 
-  # A person's own post, or one an agent writes, for itself or for its person.
-  defp counted(changeset) do
-    if Ash.Changeset.get_attribute(changeset, :author_kind) == :human and
-         is_nil(Ash.Changeset.get_attribute(changeset, :via_agent_profile_id)),
-       do: :page_posts_last_hour,
-       else: :agent_posts_last_hour
+  defp limit_agent(changeset, actor) do
+    who = {
+      Ash.Changeset.get_attribute(changeset, :fleet_id),
+      Ash.Changeset.get_attribute(changeset, :as_key),
+      Ash.Changeset.get_attribute(changeset, :author_wallet)
+    }
+
+    case Limits.admit(:agent_posts, who) do
+      :ok -> changeset
+      {:limited, seconds} -> refuse(changeset, actor, seconds)
+    end
+  end
+
+  defp refuse(changeset, actor, retry_after) do
+    if repeat?(changeset, actor),
+      do: changeset,
+      else:
+        Ash.Changeset.add_error(
+          changeset,
+          PostLimitError.exception(limit: @limit, retry_after: retry_after)
+        )
   end
 
   # Looked for as the one posting, who may read their own posts on every
@@ -84,10 +113,5 @@ defmodule Keyfleet.Rooms.Changes.LimitPosts do
       Ash.Changeset.get_attribute(changeset, :idempotency_key),
       actor: actor
     ) != nil
-  end
-
-  defp refusal(%Message{inserted_at: oldest}) do
-    seconds = DateTime.diff(DateTime.add(oldest, @hour), DateTime.utc_now(), :second)
-    PostLimitError.exception(limit: @limit, retry_after: max(seconds, 1))
   end
 end

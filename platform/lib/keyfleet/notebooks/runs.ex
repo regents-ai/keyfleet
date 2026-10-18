@@ -207,39 +207,17 @@ defmodule Keyfleet.Notebooks.Runs do
   end
 
   # A finished run's kept page, kept now if it isn't yet; nil while the run
-  # has no page. A failed read of the kept pages is saved with the site's
-  # errors.
+  # has no page.
   defp result_url(fleet_id, subject, notebook_id, run_id, %{"status" => status}, run_path)
        when status in @with_page do
-    case Notebooks.saved_outputs(fleet_id, [run_id], actor: %System{}) do
-      {:ok, kept} ->
-        {:ok,
-         kept_url(fleet_id, notebook_id, run_id, kept) ||
-           keep_page(fleet_id, subject, notebook_id, run_id, run_path <> "/html")}
-
-      {:error, error} ->
-        RecordsDownError.report(
-          "The kept page of a run of #{fleet_id}'s notebook could not be read: " <>
-            inspect(error.__struct__)
-        )
-
-        {:error, :unavailable}
+    with {:ok, kept} <- result_urls(fleet_id, [%{"run_id" => run_id}]) do
+      {:ok,
+       kept[{notebook_id, run_id}] ||
+         keep_page(fleet_id, subject, notebook_id, run_id, run_path <> "/html")}
     end
   end
 
   defp result_url(_fleet_id, _subject, _notebook_id, _run_id, _run, _run_path), do: {:ok, nil}
-
-  # Of two copies of one run's page, the newer is its saved result.
-  defp kept_url(fleet_id, notebook_id, run_id, kept) do
-    case Enum.filter(kept, &(&1.notebook_id == notebook_id)) do
-      [] ->
-        nil
-
-      copies ->
-        copy = Enum.max_by(copies, & &1.saved_at)
-        Notebooks.result_url(fleet_id, notebook_id, run_id, copy.saved_at)
-    end
-  end
 
   # The run's page, read whole up to `saved_page_max_bytes` and kept under its
   # address, which is the answer; nil when there is no page to keep yet.
