@@ -97,11 +97,9 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
       {:allowed, :restricted} ->
         refuse(conn, 403, "code_edits_restricted")
 
-      {:pushes, :limited} ->
-        window = Application.fetch_env!(:keyfleet, :limits)[:code_pushes][:window_seconds]
-
+      {:pushes, {:limited, seconds}} ->
         conn
-        |> put_resp_header("retry-after", Integer.to_string(window))
+        |> put_resp_header("retry-after", Integer.to_string(seconds))
         |> refuse(429, "code_pushes_limit_reached")
 
       {:owner, {:setting_up, seconds}} ->
@@ -136,7 +134,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
          fleet_id,
          holder
        ),
-       do: Limits.spend(:code_pushes, {fleet_id, holder.wallet})
+       do: Limits.admit(:code_pushes, {fleet_id, holder.wallet})
 
   defp spend_push(_conn, _fleet_id, _holder), do: :ok
 

@@ -153,7 +153,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
 
     refused = git(:post, push, password, "0000")
     assert refused.status == 429
-    assert get_resp_header(refused, "retry-after") == ["3600"]
+    assert [_seconds] = get_resp_header(refused, "retry-after")
     refute_received {:store, "POST", _path, _claims, _body}
 
     assert git(:get, "/#{@fleet}.git/info/refs?service=git-receive-pack", password).status == 200

@@ -1145,7 +1145,8 @@ paths:
             too_many_requests: too many requests from this client address in the current window;
             wait the seconds in Retry-After. notebook_runs_full: the notebook already has as many
             runs waiting as it takes; read the runs you started until they finish, then start
-            another.
+            another. notebook_runs_limit_reached: you have started 30 runs in ten minutes, here and on
+            the notebook host together; wait the seconds in Retry-After.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/RecoveryError"}

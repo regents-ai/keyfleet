@@ -311,7 +311,7 @@ defmodule KeyfleetWeb.Refusal do
       {"This fleet's code isn't answering right now.", "Try again in a moment."},
     "code_pushes_limit_reached" =>
       {"This wallet has pushed to this fleet's code as often as it can for now.",
-       "Nothing was sent, and your commits are still where you made them. Push again within the hour."},
+       "Nothing was sent, and your commits are still where you made them. Wait the number of seconds in Retry-After, then push again."},
     "code_too_large" =>
       {"These changes are larger than one push takes (100 MB).",
        "Send them in smaller pushes, and keep large files out of the code."}

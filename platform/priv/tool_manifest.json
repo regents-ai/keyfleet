@@ -3458,7 +3458,7 @@
     {
       "name": "start_notebook_run",
       "title": "Start a notebook run",
-      "description": "Start a background run of one of this fleet's notebooks, as you: it works through the notebook's saved code, top to bottom, in a fresh sandbox, and never changes the notebook. Answers run_id with status queued; read it with read_notebook_result until it has finished and has a result_url. The same idempotency_key never starts a second run. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing and membership of the fleet; never use owner cookies. Moves no money.",
+      "description": "Start a background run of one of this fleet's notebooks, as you: it works through the notebook's saved code, top to bottom, in a fresh sandbox, and never changes the notebook. Answers run_id with status queued; read it with read_notebook_result until it has finished and has a result_url. The same idempotency_key never starts a second run. You start at most 30 runs every ten minutes; past that, wait as long as Retry-After says. Prepare the exact request, sign it with your own SIWA identity, then supply input, request and proof. Requires current pairing and membership of the fleet; never use owner cookies. Moves no money.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
