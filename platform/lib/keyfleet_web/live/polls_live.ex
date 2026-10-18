@@ -507,23 +507,35 @@ defmodule KeyfleetWeb.PollsLive do
     |> assign(polls: nil, poll_form: nil, polls_notice: nil)
   end
 
-  @doc "The polls on show, read again: after a change to them, or to who holds the fleet's Keys."
-  def refresh(%{assigns: %{polls: %{kind: :list, fleet_id: fleet_id}}} = socket),
-    do: show(socket, [Polls.fleet_topic(fleet_id)], fn -> read_list(socket, fleet_id) end)
+  @doc """
+  The polls on show, read again: after a change to them, or to who holds the
+  fleet's Keys. A read again that fails keeps what the page shows; the next
+  notice reads again.
+  """
+  def refresh(%{assigns: %{polls: %{kind: :list, fleet_id: fleet_id} = page}} = socket),
+    do: show(socket, [Polls.fleet_topic(fleet_id)], fn -> read_list(socket, fleet_id) end, page)
 
-  def refresh(%{assigns: %{polls: %{kind: :poll, fleet_id: fleet_id, poll_id: id}}} = socket),
-    do: show(socket, [Polls.topic(id)], fn -> read_detail(socket, fleet_id, id) end)
+  def refresh(
+        %{assigns: %{polls: %{kind: :poll, fleet_id: fleet_id, poll_id: id} = page}} = socket
+      ),
+      do: show(socket, [Polls.topic(id)], fn -> read_detail(socket, fleet_id, id) end, page)
 
   def refresh(socket), do: socket
 
   # The page listens to the address's own topic before it reads, so a change
   # made between the read and the listening is still heard.
-  defp show(socket, topics, read) do
+  defp show(socket, topics, read, shown \\ nil) do
     socket = listen(socket, Enum.uniq(socket.assigns.polls_topics ++ topics))
 
-    case PageRead.run("polls", read) do
-      {:ok, page} -> socket |> assign(:polls, page) |> listen(topics(page)) |> start_clock()
-      {:error, _failure} -> socket |> assign(:polls, :unreadable) |> listen([]) |> stop_clock()
+    case {PageRead.run("polls", read), shown} do
+      {{:ok, page}, _shown} ->
+        socket |> assign(:polls, page) |> listen(topics(page)) |> start_clock()
+
+      {{:error, _failure}, nil} ->
+        socket |> assign(:polls, :unreadable) |> listen([]) |> stop_clock()
+
+      {{:error, _failure}, shown} ->
+        listen(socket, topics(shown))
     end
   end
 

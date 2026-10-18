@@ -619,8 +619,14 @@ defmodule KeyfleetWeb.RoomsLive do
   @doc """
   The person signed in leaves the open room, by going to another page, another
   room, or closing the page: it is read up to the last place the page showed.
+  When that can't be saved, the person still leaves.
   """
-  def leave(socket), do: mark_read(socket)
+  def leave(socket) do
+    case PageRead.run("rooms", fn -> mark_read(socket) end) do
+      {:ok, left} -> left
+      {:error, _failure} -> socket
+    end
+  end
 
   # The open room is read up to the last place the page has shown, muted posts
   # included, for a person signed in. It is written when the room opens and

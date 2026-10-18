@@ -54,6 +54,9 @@ defmodule KeyfleetWeb.ShellLive do
   @key_profile_events ~w(post_to_key remove_from_wall close_key)
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
   @poll_events ~w(start_poll end_poll cast_vote)
+  @sign_in_events ~w(open_notebooks get_code_password)
+
+  @press_failed "Something went wrong on our side. Refresh the page to see the latest, then try again."
 
   @impl true
   def mount(_params, _session, socket) do
@@ -236,12 +239,35 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp coming_soon_inside?(_route_spec, _params), do: false
 
+  # A press that can't be finished because the site's records can't be read
+  # leaves the page as it was and says so. Opening the notebooks and getting a
+  # git password sign the person in elsewhere, so they are answered as before.
   @impl true
-  def handle_event(
-        "request_verified_connection",
-        %{"action" => action, "provider" => provider},
-        socket
-      ) do
+  def handle_event(event, params, socket) when event in @sign_in_events,
+    do: press(event, params, socket)
+
+  def handle_event(event, params, socket) do
+    case PageRead.run("app", fn -> press(event, params, socket) end) do
+      {:ok, answer} -> answer
+      {:error, _failure} -> {:noreply, put_flash(socket, :error, @press_failed)}
+    end
+  end
+
+  # A notice the page can't answer because the site's records can't be read
+  # leaves the page as it was; the next notice or visit reads again.
+  @impl true
+  def handle_info(message, socket) do
+    case PageRead.run("app", fn -> notice(message, socket) end) do
+      {:ok, answer} -> answer
+      {:error, _failure} -> {:noreply, socket}
+    end
+  end
+
+  defp press(
+         "request_verified_connection",
+         %{"action" => action, "provider" => provider},
+         socket
+       ) do
     with %Human{} <- human_actor(socket),
          {:ok, provider} <- Providers.parse(provider),
          {:ok, request} <-
@@ -266,7 +292,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   # The outcome is judged against the connections read after the provider came
   # back, so it waits for that read to land.
-  def handle_event("refresh_verified_connections", params, socket) do
+  defp press("refresh_verified_connections", params, socket) do
     {:noreply,
      socket
      |> assign(connection_outcome: params, verified_connections_notice: nil)
@@ -275,7 +301,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   # The fleet's notebooks open on their own address, signed in by a link that
   # works once; only a holder of one of the fleet's keys gets one.
-  def handle_event("open_notebooks", _params, socket) do
+  defp press("open_notebooks", _params, socket) do
     with %Human{} = actor <- human_actor(socket),
          {:ok, url} <-
            Notebooks.open(
@@ -307,7 +333,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   # A git password for the fleet's code, for a holder of one of its keys; it
   # ends when this sign-in does.
-  def handle_event("get_code_password", _params, socket) do
+  defp press("get_code_password", _params, socket) do
     with %Human{} = actor <- human_actor(socket),
          {:ok, %{password: password, expires_at: expires_at}} <-
            CodePassword.for_person(
@@ -342,54 +368,53 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  def handle_event(event, params, socket) when event in @room_events,
+  defp press(event, params, socket) when event in @room_events,
     do: RoomsLive.handle_event(event, params, socket)
 
-  def handle_event(event, params, socket) when event in @key_profile_events,
+  defp press(event, params, socket) when event in @key_profile_events,
     do: KeyProfileLive.handle_event(event, params, socket)
 
-  def handle_event(event, params, socket) when event in @fleet_events,
+  defp press(event, params, socket) when event in @fleet_events,
     do: FleetLive.handle_event(event, params, socket)
 
-  def handle_event(event, params, socket) when event in @dm_events,
+  defp press(event, params, socket) when event in @dm_events,
     do: DmsLive.handle_event(event, params, socket)
 
-  def handle_event(event, params, socket) when event in @poll_events,
+  defp press(event, params, socket) when event in @poll_events,
     do: PollsLive.handle_event(event, params, socket)
 
   # The person's Credits balance changed on any Regent site: a purchase, a
   # gift, a hold or its close.
-  @impl true
-  def handle_info(:credits_changed, socket) do
+  defp notice(:credits_changed, socket) do
     account = current_account(socket.assigns.access_context)
     {:noreply, read_credits(socket, account)}
   end
 
   # A page that couldn't be loaded shows nothing else that a notice could
   # change; the header's balance still follows.
-  def handle_info(_message, %{assigns: %{load_failed?: true}} = socket), do: {:noreply, socket}
+  defp notice(_message, %{assigns: %{load_failed?: true}} = socket), do: {:noreply, socket}
 
   # A notice that the open room has taken a post it is not showing yet is only a
   # nudge to look again. The new posts are read back from the room itself, and
   # a room shown as for keys only looks again at whether the reader may read
   # it; the place the notice names is never shown.
-  def handle_info(
-        %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}},
-        %{assigns: %{room: %{room_id: room_id, last_seq: last_seq}}} = socket
-      )
-      when seq > last_seq,
-      do: {:noreply, RoomsLive.show_new_posts(socket)}
+  defp notice(
+         %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}},
+         %{assigns: %{room: %{room_id: room_id, last_seq: last_seq}}} = socket
+       )
+       when seq > last_seq,
+       do: {:noreply, RoomsLive.show_new_posts(socket)}
 
   # The page only hears about the rooms of the fleet it shows. The rooms page
   # marks the room in its list as having something new.
-  def handle_info(%Broadcast{event: "room_head", payload: head}, socket) do
+  defp notice(%Broadcast{event: "room_head", payload: head}, socket) do
     socket = RoomsLive.note_head(socket, head)
     {:noreply, FleetLive.refresh_activity_soon(socket, fleet_on_show(socket))}
   end
 
   # The person's agents changed on any Regent site: paired, checked in,
   # corrected or unpaired.
-  def handle_info(:agents_changed, socket) do
+  defp notice(:agents_changed, socket) do
     if socket.assigns.route_spec.route_id == :account,
       do: send_update(KeyfleetWeb.PairingBox, id: "account-agents-pair", agents_changed: true)
 
@@ -398,124 +423,131 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # A Points award or correction landed for this account; the Points page follows.
-  def handle_info(
-        %{topic: "points:" <> _, payload: :points_changed},
-        %{assigns: %{route_spec: %{route_id: :points}}} = socket
-      ),
-      do: {:noreply, read_points(socket)}
+  defp notice(
+         %{topic: "points:" <> _, payload: :points_changed},
+         %{assigns: %{route_spec: %{route_id: :points}}} = socket
+       ),
+       do: {:noreply, read_points(socket)}
 
-  def handle_info(%{topic: "points:" <> _, payload: :points_changed}, socket),
+  defp notice(%{topic: "points:" <> _, payload: :points_changed}, socket),
     do: {:noreply, socket}
 
-  def handle_info(%Broadcast{event: event} = notice, socket)
-      when event in ["dm_head", "dm_deleted"],
-      do: DmsLive.handle_info(notice, socket)
+  defp notice(%Broadcast{event: event} = notice, socket)
+       when event in ["dm_head", "dm_deleted"],
+       do: DmsLive.handle_info(notice, socket)
 
-  def handle_info(%Broadcast{event: event} = notice, socket)
-      when event in ["key_activity", "wall_removed"],
-      do: KeyProfileLive.handle_info(notice, socket)
+  defp notice(%Broadcast{event: event} = notice, socket)
+       when event in ["key_activity", "wall_removed"],
+       do: KeyProfileLive.handle_info(notice, socket)
 
-  def handle_info(%Broadcast{event: "rooms_changed"} = notice, socket),
+  defp notice(%Broadcast{event: "rooms_changed"} = notice, socket),
     do: RoomsLive.handle_info(notice, socket)
 
-  def handle_info(%Broadcast{event: event} = notice, socket)
-      when event in ["poll_changed", "polls_changed"],
-      do: PollsLive.handle_info(notice, socket)
+  defp notice(%Broadcast{event: event} = notice, socket)
+       when event in ["poll_changed", "polls_changed"],
+       do: PollsLive.handle_info(notice, socket)
 
-  def handle_info(:polls_tick = message, socket), do: PollsLive.handle_info(message, socket)
+  defp notice(:polls_tick = message, socket), do: PollsLive.handle_info(message, socket)
 
   # A mute added or taken away hides or shows that key's posts in the room on
   # show and in the open key's thread.
-  def handle_info(
-        %Broadcast{event: "mutes_changed", payload: %{fleet_id: fleet_id}} = notice,
-        socket
-      ) do
+  defp notice(
+         %Broadcast{event: "mutes_changed", payload: %{fleet_id: fleet_id}} = notice,
+         socket
+       ) do
     {:noreply, socket} = RoomsLive.handle_info(notice, socket)
     {:noreply, KeyProfileLive.show_unmuted(socket, fleet_id)}
   end
 
   # Keys changed in a fleet. What the reader may read of the fleet in the
   # address is read again first, and the page moves to what that class hears.
-  def handle_info({:keys_changed, fleet_id, token_ids}, socket),
-    do: socket |> reread_class(fleet_id) |> keys_changed(fleet_id, token_ids)
+  # The class read stands, with what it hears, when the page can't be read again.
+  defp notice({:keys_changed, fleet_id, token_ids}, socket) do
+    socket = reread_class(socket, fleet_id)
+
+    case PageRead.run("app", fn -> keys_changed(socket, fleet_id, token_ids) end) do
+      {:ok, answer} -> answer
+      {:error, _failure} -> {:noreply, socket}
+    end
+  end
 
   # A notice that the open fleet's workspace has moved past what the page last
   # read is only a nudge to read it again, once, a moment later: the notices
   # that come in the meantime are answered by that one read.
-  def handle_info(
-        {:graph_head, fleet_id, run_id, watermark},
-        %{assigns: %{workspace: %{fleet_id: fleet_id, seen: seen}}} = socket
-      ),
-      do: {:noreply, WorkspaceLive.refresh_soon(socket, seen, run_id, watermark)}
+  defp notice(
+         {:graph_head, fleet_id, run_id, watermark},
+         %{assigns: %{workspace: %{fleet_id: fleet_id, seen: seen}}} = socket
+       ),
+       do: {:noreply, WorkspaceLive.refresh_soon(socket, seen, run_id, watermark)}
 
-  def handle_info({:graph_head, fleet_id, _run_id, _watermark}, socket),
+  defp notice({:graph_head, fleet_id, _run_id, _watermark}, socket),
     do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
   # What anyone hears of the workspace: the fleet's activity has a new change
   # of it to show.
-  def handle_info(
-        {:graph_notable, fleet_id},
-        %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket
-      ),
-      do: {:noreply, WorkspaceLive.refresh_later(socket)}
+  defp notice(
+         {:graph_notable, fleet_id},
+         %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket
+       ),
+       do: {:noreply, WorkspaceLive.refresh_later(socket)}
 
-  def handle_info({:graph_notable, fleet_id}, socket),
+  defp notice({:graph_notable, fleet_id}, socket),
     do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
-  def handle_info(:refresh_workspace = message, socket),
+  defp notice(:refresh_workspace = message, socket),
     do: WorkspaceLive.handle_info(message, socket)
 
   # Changes sent to the open fleet's code show in its workspace a moment later.
-  def handle_info(
-        {:code_pushed, fleet_id},
-        %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket
-      ),
-      do: {:noreply, WorkspaceLive.refresh_later(socket)}
+  defp notice(
+         {:code_pushed, fleet_id},
+         %{assigns: %{workspace: %{fleet_id: fleet_id}}} = socket
+       ),
+       do: {:noreply, WorkspaceLive.refresh_later(socket)}
 
-  def handle_info({:code_pushed, _fleet_id}, socket), do: {:noreply, socket}
+  defp notice({:code_pushed, _fleet_id}, socket), do: {:noreply, socket}
 
   # A notice that the open fleet's proposal records or balances changed is a
   # nudge to read its page again, once, a moment later, like the workspace's.
-  def handle_info(
-        {notice, fleet_id},
-        %{assigns: %{proposals: %{fleet_id: fleet_id}}} = socket
-      )
-      when notice in [:proposals_changed, :balances_changed],
-      do: {:noreply, ProposalsLive.refresh_soon(socket)}
+  defp notice(
+         {notice, fleet_id},
+         %{assigns: %{proposals: %{fleet_id: fleet_id}}} = socket
+       )
+       when notice in [:proposals_changed, :balances_changed],
+       do: {:noreply, ProposalsLive.refresh_soon(socket)}
 
   # Votes recorded in the fleet move the open key's two vote figures.
-  def handle_info(
-        {:proposals_changed, fleet_id},
-        %{assigns: %{key_profile: %{fleet_id: fleet_id, issued?: true}}} = socket
-      ) do
+  defp notice(
+         {:proposals_changed, fleet_id},
+         %{assigns: %{key_profile: %{fleet_id: fleet_id, issued?: true}}} = socket
+       ) do
     {:noreply,
      socket
      |> KeyProfileLive.refresh_votes()
      |> FleetLive.refresh_activity_soon(fleet_id)}
   end
 
-  def handle_info({:proposals_changed, fleet_id}, socket),
+  defp notice({:proposals_changed, fleet_id}, socket),
     do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
   # A new reading of the fleet's balances, every minute, may carry
   # income, so the open key's rewards are read again with it.
-  def handle_info(
-        {:balances_changed, fleet_id},
-        %{assigns: %{key_profile: %{fleet_id: fleet_id}}} = socket
-      ),
-      do: {:noreply, KeyProfileLive.refresh_rewards(socket)}
+  defp notice(
+         {:balances_changed, fleet_id},
+         %{assigns: %{key_profile: %{fleet_id: fleet_id}}} = socket
+       ),
+       do: {:noreply, KeyProfileLive.refresh_rewards(socket)}
 
-  def handle_info({:balances_changed, _fleet_id}, socket), do: {:noreply, socket}
+  defp notice({:balances_changed, _fleet_id}, socket), do: {:noreply, socket}
 
-  def handle_info(:refresh_proposals = message, socket),
+  defp notice(:refresh_proposals = message, socket),
     do: ProposalsLive.handle_info(message, socket)
 
   # A reading every page shares has changed: the part of the page showing it
   # draws it again.
-  def handle_info({:shared_reading, key}, socket),
+  defp notice({:shared_reading, key}, socket),
     do: {:noreply, socket |> FleetLive.shared_changed(key) |> KeyProfileLive.shared_changed(key)}
 
-  def handle_info({:refresh_activity, _fleet_id} = message, socket),
+  defp notice({:refresh_activity, _fleet_id} = message, socket),
     do: FleetLive.handle_info(message, socket)
 
   @impl true

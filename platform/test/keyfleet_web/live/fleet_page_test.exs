@@ -1,6 +1,8 @@
 defmodule KeyfleetWeb.Live.FleetPageTest do
   use KeyfleetWeb.ConnCase, async: false
 
+  import ExUnit.CaptureLog
+
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors
@@ -1209,6 +1211,47 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert [_new | ^before] = now_items(view)
     end
 
+    test "a read again that fails keeps the hall as it was, and the next notice reads again",
+         %{conn: conn} do
+      now = DateTime.utc_now()
+      line!("general", 1, now)
+      {:ok, view, _html} = live(conn, @path)
+      before = now_items(view)
+
+      rename!("messages", "messages_away")
+
+      log =
+        capture_log(fn ->
+          send(view.pid, {:proposals_changed, @fleet})
+          Process.sleep(2_200)
+          render(view)
+        end)
+
+      assert now_items(view) == before
+      assert log =~ "Reading the fleet page failed"
+
+      rename!("messages_away", "messages")
+      line!("coding", 0, now)
+      send(view.pid, {:proposals_changed, @fleet})
+      Process.sleep(2_200)
+
+      assert [_new | ^before] = now_items(view)
+    end
+
+    test "Show earlier that can't be read keeps the hall and says what to do", %{conn: conn} do
+      now = DateTime.utc_now()
+      for n <- 1..200, do: line!(if(rem(n, 2) == 0, do: "general", else: "coding"), n, now)
+      {:ok, view, _html} = live(conn, @path)
+      first = now_items(view)
+
+      rename!("messages", "messages_away")
+      log = capture_log(fn -> view |> element("#fleet-feed-earlier") |> render_click() end)
+
+      assert now_items(view) == first
+      assert render(view) =~ "Something went wrong on our side."
+      assert log =~ "Reading the app page failed"
+    end
+
     test "a burst of notices is read once, after a pause", %{conn: conn} do
       {:ok, view, _html} = live(conn, @path)
       line!("general", 0, DateTime.utc_now())
@@ -1751,6 +1794,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   end
 
   # A post written as key 1 `seconds` before `now`, with no notice to anyone.
+  # A table renamed inside the test's own transaction can't be read, the way
+  # a database that refuses the read can't; the rename ends with the test.
+  defp rename!(table, to) do
+    Keyfleet.Repo.query!("ALTER TABLE #{Keyfleet.Repo.default_prefix()}.#{table} RENAME TO #{to}")
+  end
+
   defp line!(slug, seconds, now, fleet_id \\ @fleet) do
     room = Rooms.get_room!(fleet_id, slug, authorize?: false)
     body = "Line #{seconds}"
