@@ -144,7 +144,9 @@ config :keyfleet, :limits,
   wallet_read: [limit: 30, window_seconds: 60],
   credits_report: [limit: 120, window_seconds: 60],
   # Workspace writes per wallet in each fleet: two a second, more than real agent work needs.
-  graph_writes: [limit: 120, window_seconds: 60]
+  graph_writes: [limit: 120, window_seconds: 60],
+  # Picture starts and uploads per agent wallet: ten pictures, each a start and its upload.
+  avatar_uploads: [limit: 20, window_seconds: 600]
 
 # Rate limits key on the direct peer. Production turns on Fly's client header.
 config :keyfleet, :behind_fly_proxy, false

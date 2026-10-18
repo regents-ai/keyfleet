@@ -8,13 +8,16 @@ defmodule KeyfleetWeb.AgentAvatarController do
   ticket signed by this site that binds the agent, its profile and exactly
   that picture. `upload` takes the bytes at that address; the ticket is its
   permission, so it is not signed itself. `remove` is a signed request that
-  takes the picture away.
+  takes the picture away. Each start and each upload spends the agent's
+  wallet's `:avatar_uploads` allowance, since every upload keeps a new
+  picture and has the one it replaces deleted.
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Agents
   alias Keyfleet.Agents.Avatar
+  alias Keyfleet.Limits
   alias KeyfleetWeb.Refusal
 
   @salt "agent avatar upload"
@@ -35,7 +38,8 @@ defmodule KeyfleetWeb.AgentAvatarController do
   def start(conn, params) do
     actor = conn.assigns.agent_actor
 
-    with {:ok, declared} <- Avatar.declare(params),
+    with :ok <- Limits.admit(:avatar_uploads, actor.wallet_address),
+         {:ok, declared} <- Avatar.declare(params),
          %{id: profile_id} <- Agents.get_my_profile!(actor: actor) do
       ticket =
         Phoenix.Token.sign(conn, @salt, %{
@@ -51,6 +55,7 @@ defmodule KeyfleetWeb.AgentAvatarController do
         expires_at: DateTime.utc_now() |> DateTime.add(@ticket_seconds) |> DateTime.to_iso8601()
       })
     else
+      {:limited, seconds} -> limited(conn, seconds)
       :error -> Refusal.json(conn, 422, "invalid_avatar")
       nil -> Refusal.json(conn, 404, "profile_not_found")
     end
@@ -82,6 +87,7 @@ defmodule KeyfleetWeb.AgentAvatarController do
     cap = Avatar.max_bytes()
 
     with true <- Agent.valid?(actor),
+         :ok <- Limits.admit(:avatar_uploads, actor.wallet_address),
          [type] when type == declared.content_type <- get_req_header(conn, "content-type"),
          {:ok, bytes, conn} when byte_size(bytes) <= cap <-
            read_body(conn, length: cap, read_length: cap + 1),
@@ -89,6 +95,7 @@ defmodule KeyfleetWeb.AgentAvatarController do
       json(conn, %{avatar_url: Avatar.url(profile)})
     else
       false -> Refusal.json(conn, 403, "agent_not_paired")
+      {:limited, seconds} -> limited(conn, seconds)
       {:more, _partial, conn} -> Refusal.json(conn, 413, "request_too_large")
       {:error, :mismatch} -> Refusal.json(conn, 422, "avatar_mismatch")
       {:error, :unreadable} -> Refusal.json(conn, 422, "invalid_avatar")
@@ -96,5 +103,11 @@ defmodule KeyfleetWeb.AgentAvatarController do
       {:error, _reason} -> Refusal.json(conn, 503, "avatar_unavailable")
       _other_type -> Refusal.json(conn, 422, "avatar_mismatch")
     end
+  end
+
+  defp limited(conn, seconds) do
+    conn
+    |> put_resp_header("retry-after", Integer.to_string(seconds))
+    |> Refusal.json(429, "avatar_limit_reached")
   end
 end

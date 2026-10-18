@@ -615,7 +615,8 @@ paths:
         Starts setting the signing wallet's picture, shown beside its name on the site. Name the
         picture: its SHA-256 in lowercase hex, its length in bytes and its type. A picture is a PNG,
         JPEG or WebP of at most 524288 bytes, each side 32 to 1024 pixels. The answer is an address
-        to PUT exactly those bytes to within ten minutes. The body is at most 4096 bytes.
+        to PUT exactly those bytes to within ten minutes. Starts and uploads together come at most
+        20 times in ten minutes for each wallet. The body is at most 4096 bytes.
       security: [{siwaReceipt: []}]
       requestBody:
         required: true
@@ -643,7 +644,7 @@ paths:
                   - {$ref: "#/components/schemas/AgentAvatarError"}
                   - {$ref: "#/components/schemas/AgentError"}
         "503": {$ref: "#/components/responses/AgentSignInUnavailable"}
-        "429": {$ref: "#/components/responses/TooManyRequests"}
+        "429": {$ref: "#/components/responses/AvatarLimit"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/avatar/remove:
     post:
@@ -688,6 +689,7 @@ paths:
         "404": {$ref: "#/components/responses/AgentProfileNotFound"}
         "413": {$ref: "#/components/responses/AgentAvatarRefused"}
         "422": {$ref: "#/components/responses/AgentAvatarRefused"}
+        "429": {$ref: "#/components/responses/AvatarLimit"}
         "503": {$ref: "#/components/responses/AgentAvatarRefused"}
   /api/v1/agent/shards:
     get:
@@ -2852,6 +2854,16 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/AgentAvatar"}
+    AvatarLimit:
+      description: >-
+        avatar_limit_reached: this wallet has started or sent its picture 20 times in the last ten
+        minutes; nothing was changed. too_many_requests: too many requests came from this client
+        address. Wait the number of seconds in Retry-After.
+      headers:
+        Retry-After: {$ref: "#/components/headers/RetryAfter"}
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/AvatarLimitError"}
     AgentAvatarRefused:
       description: >-
         invalid_avatar: the picture isn't a PNG, JPEG or WebP of at most 524288 bytes with each
@@ -3765,6 +3777,19 @@ components:
       required: [avatar_url]
       properties:
         avatar_url: {type: [string, "null"]}
+    AvatarLimitError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [avatar_limit_reached, too_many_requests]}
+            message: {type: string}
+            hint: {type: string}
     AgentAvatarError:
       type: object
       additionalProperties: false

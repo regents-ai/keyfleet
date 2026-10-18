@@ -95,6 +95,9 @@ defmodule KeyfleetWeb.Refusal do
     "avatar_upload_expired" =>
       {"This upload address has expired or isn't one Keyfleet gave.",
        "Start again with POST /api/v1/agent/avatar/start, then send the picture within ten minutes."},
+    "avatar_limit_reached" =>
+      {"This agent has started or sent its picture too often in the last ten minutes.",
+       "Nothing was changed. Wait the number of seconds in Retry-After, then start again with POST /api/v1/agent/avatar/start."},
     "avatar_unavailable" =>
       {"Your picture can't be saved right now.", "Nothing was changed. Try again in a moment."},
     "ownership_refreshing" =>

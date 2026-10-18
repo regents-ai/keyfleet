@@ -58,6 +58,23 @@ defmodule KeyfleetWeb.AgentAvatarTest do
              "request_too_large"
   end
 
+  # Each upload keeps a new picture and has the old one deleted, so an
+  # address reused for ten minutes still sends only so many.
+  test "a wallet's uploads past its allowance are refused until it starts again", c do
+    limits = Application.fetch_env!(:keyfleet, :limits)
+    on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
+    allowance = Keyword.put(limits[:avatar_uploads], :limit, 1)
+    Application.put_env(:keyfleet, :limits, Keyword.put(limits, :avatar_uploads, allowance))
+    picture = png(64, 64)
+    ticket = ticket(c, declared(picture, "image/png"))
+    stub_bucket(self())
+
+    assert %{"avatar_url" => _url} = json_response(upload(c, ticket, picture, "image/png"), 200)
+    limited = upload(c, ticket, picture, "image/png")
+    assert refusal(limited, 429) == "avatar_limit_reached"
+    assert [_seconds] = get_resp_header(limited, "retry-after")
+  end
+
   test "an agent sets and removes only its own picture", c do
     other = actor()
     Agents.ensure_profile!(%{name: "Other", declared_harness: "Hermes"}, actor: other)
