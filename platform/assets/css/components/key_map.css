@@ -60,15 +60,6 @@
   outline-offset: 2px;
 }
 
-.key-map__still {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  margin: 0;
-  color: var(--color-fg-muted);
-}
-
 /* A still picture of a fleet's map, in the map's own tones and marks; it
    fills whatever box it is given. */
 .key-map-preview {

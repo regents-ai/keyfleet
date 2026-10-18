@@ -69,6 +69,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.MemberList
+  alias KeyfleetWeb.Components.Placeholder
   alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.FleetPage
   alias KeyfleetWeb.KeyLinks
@@ -1146,7 +1147,7 @@ defmodule KeyfleetWeb.FleetLive do
         aria-label="Key map"
         aria-describedby="key-map-help"
       >
-        <p class="key-map__still">Loading the map…</p>
+        <Placeholder.placeholder label="Loading the map" shape="area" role={nil} />
       </div>
 
       <div class="fleet-map-notes">

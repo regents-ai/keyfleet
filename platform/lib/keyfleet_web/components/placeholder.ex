@@ -12,15 +12,23 @@ defmodule KeyfleetWeb.Components.Placeholder do
     required: true,
     doc: ~s(What is on its way, such as "Loading your points".)
 
-  attr :lines, :integer, default: 3
-  attr :shape, :string, default: "lines", values: ~w(lines figures)
+  attr :lines, :integer, default: 3, doc: "ignored by the area shape, which is one bar"
+
+  attr :shape, :string,
+    default: "lines",
+    values: ~w(lines figures area),
+    doc: "area fills the box it stands in, for a picture still on its way"
+
   attr :class, :any, default: nil
 
   attr :role, :any,
     default: "status",
     doc: "nil inside a region that already announces its changes"
 
-  def placeholder(assigns) do
+  def placeholder(%{shape: "area"} = assigns), do: bars(assign(assigns, :lines, 1))
+  def placeholder(assigns), do: bars(assigns)
+
+  defp bars(assigns) do
     ~H"""
     <div id={@id} class={["kf-placeholder", "kf-placeholder--#{@shape}", @class]} role={@role}>
       <span class="visually-hidden">{@label}</span>

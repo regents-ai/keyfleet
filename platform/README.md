@@ -227,9 +227,21 @@ A list or section with nothing to show uses `Regent.Primitives.empty_state`
 with `class="kf-empty"`: one sentence saying what will fill it, at most one
 supporting sentence, and one next step when there is one. A section waiting
 on figures shows `KeyfleetWeb.Components.Placeholder.placeholder/1` in the
-shape of what replaces it, and figures that didn’t arrive say "aren’t showing
-right now" with Try again where the page can fetch them again. The audit
-behind this is in `docs/audits/2026-10-17-empty-states.md`.
+shape of what replaces it (`shape="area"` fills a picture's box, such as the
+Key map's), and figures that didn’t arrive say "aren’t showing right now" with
+Try again where the page can fetch them again. The audit behind this is in
+`docs/audits/2026-10-17-empty-states.md`. A live page change, Back and Forward
+included, that takes longer than 120 ms shows a thin bar in the accent colour
+along the top of the window (`assets/js/page_progress.ts`) until the page lands.
+
+## Page weight
+
+Every page loads `app.js` and the files it imports before it is ready, so
+anything only some visitors use loads on demand: the canvas pictures' renderers,
+the showcase and animation-lab hooks, and the tools offered to a browser's own
+agent (`public_tool_list.ts`, `page_tools.ts`), which load only where
+`document.modelContext` exists. The root layout preloads the two faces its
+pages draw with, Geist Regular and Geist Pixel Square.
 
 ## Checks
 

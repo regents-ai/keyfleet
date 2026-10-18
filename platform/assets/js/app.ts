@@ -22,6 +22,7 @@ import {
   type ShellState,
 } from "./shell_state"
 import {installCopyButtons} from "./copy_buttons"
+import {installPageProgress} from "./page_progress"
 import {installPublicTools} from "./public_tools"
 import {CurrentTab} from "./hooks/current_tab"
 import {FleetPreview} from "./hooks/fleet_preview"
@@ -330,6 +331,7 @@ liveSocket.connect()
 installAccountAuthLazyLoader()
 installCrossTabCsrf()
 installCopyButtons()
+installPageProgress()
 watchPresses(document)
 mountMotion(document)
 window.liveSocket = liveSocket

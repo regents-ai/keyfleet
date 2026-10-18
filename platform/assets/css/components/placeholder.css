@@ -24,6 +24,15 @@
   height: 2.5rem;
 }
 
+.kf-placeholder--area {
+  position: absolute;
+  inset: 0;
+}
+
+.kf-placeholder--area .kf-placeholder__bar {
+  height: 100%;
+}
+
 @keyframes kf-placeholder-pulse {
   50% { opacity: 0.45; }
 }

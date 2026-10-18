@@ -2166,3 +2166,18 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   to the first page is now a button.
 - An address naming a fleet that doesn’t exist offers See the fleets on its
   rooms, polls and messages pages, as the fleet page already did.
+
+## 2026-10-18 — Pages are lighter and show when the next one is coming
+
+- The script every page loads first is 8% smaller again (186 KB down to
+  171 KB, compressed): the list of tools offered to a browser's own agent loads
+  only in a browser that has one.
+- Moving to another page, Back and Forward included, shows a thin bar along
+  the top of the window when the page takes longer than a moment to arrive. With less motion asked for, the
+  bar shows without easing across.
+- The Key map shows a grey placeholder filling its box while it loads, in
+  place of a line of text.
+- The two typefaces the site's pages use start downloading with the page instead of
+  after its styles.
+- The Keyfleet logo and the link-preview picture are smaller files with
+  identical pixels (153 KB to 85 KB, and 450 KB to 401 KB).

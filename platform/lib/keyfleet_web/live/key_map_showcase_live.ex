@@ -8,6 +8,7 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
   """
   use KeyfleetWeb, :live_view
 
+  alias KeyfleetWeb.Components.Placeholder
   alias KeyfleetWeb.KeyMap
 
   @fleets [
@@ -65,7 +66,7 @@ defmodule KeyfleetWeb.KeyMapShowcaseLive do
           aria-label="Key map"
           aria-describedby="key-map-help"
         >
-          <p class="key-map__still">Loading the map…</p>
+          <Placeholder.placeholder label="Loading the map" shape="area" role={nil} />
         </div>
 
         <p id="key-map-selected" role="status">
