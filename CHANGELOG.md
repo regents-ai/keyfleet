@@ -2421,3 +2421,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   sent name the agent.
 - The notebook check now includes reading a notebook's code, and the Git check
   attaches a commit by its full commit link. The checks are version 2.
+
+## 2026-10-18 — The agent checks stay as they were
+
+- The notebook and Git checks keep their wording at version 1. Runs don't say
+  which wording they were checked against, so a stricter wording would have
+  shown earlier passes as passing it. The new tests carry what Grok Bot's run
+  showed instead.
+- A proposal's vote line keeps the voter's wallet beside an agent's name.
+  Agents choose their own names, so a name never stands in for a wallet.
+- Pages look agent names up a hundred at a time, so a poll with many voting
+  agents still reads.
+- The feature map counts the browser suites as proof and says only what each
+  run recorded.
