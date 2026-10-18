@@ -582,8 +582,8 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
                  audience: "keyfleet",
                  wallet_audiences: ["keyfleet"]
                ) do
-            {:ok, _verified} ->
-              SignedAgentHelpers.verdict(payload, secret)
+            {:ok, verified} ->
+              SignedAgentHelpers.granted(verified, payload)
 
             {:error, reason} ->
               {status, code, message} = Siwa.Contract.refusal(reason)

@@ -44,7 +44,6 @@ defmodule KeyfleetWeb.Vitals do
 
   alias KeyfleetWeb.RouteCatalog
 
-  @routes Enum.map(RouteCatalog.entries(), & &1.path_pattern)
   @fields ~w(route device connection metrics)
   @devices ~w(phone desktop)
   # `navigator.connection.effectiveType`, where the browser has it.
@@ -70,7 +69,7 @@ defmodule KeyfleetWeb.Vitals do
   """
   def route(conn) do
     case Phoenix.Router.route_info(KeyfleetWeb.Router, "GET", conn.request_path, conn.host) do
-      %{route: route} when route in @routes -> route
+      %{route: route} -> if page?(route), do: route
       _other -> nil
     end
   end
@@ -82,8 +81,9 @@ defmodule KeyfleetWeb.Vitals do
   within its bound.
   """
   def record(%{"route" => route, "device" => device, "metrics" => metrics} = report)
-      when route in @routes and device in @devices and is_map(metrics) do
-    with [] <- Map.keys(report) -- @fields,
+      when device in @devices and is_map(metrics) do
+    with true <- page?(route),
+         [] <- Map.keys(report) -- @fields,
          {:ok, connection} <- connection(report),
          {:ok, values} <- values(metrics) do
       for {event, value} <- values do
@@ -103,6 +103,10 @@ defmodule KeyfleetWeb.Vitals do
   end
 
   def record(_report), do: :error
+
+  # Read when a page reports, not as this module compiles, so the router and
+  # its pages don't recompile this module and everything that calls it.
+  defp page?(route), do: Enum.any?(RouteCatalog.entries(), &(&1.path_pattern == route))
 
   defp connection(%{"connection" => connection}) when connection in @connections,
     do: {:ok, connection}

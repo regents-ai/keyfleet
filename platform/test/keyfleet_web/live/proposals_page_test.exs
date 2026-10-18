@@ -244,7 +244,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ProposalHelpers.vote!(@fleet, 1, @voter, :no, [3])
       ChainViews.put!(on_chain(1, :open))
 
-      {:ok, view, _html} = live(conn, "#{@list}/1")
+      {:ok, view, _html} = open(conn, "#{@list}/1")
 
       assert has_element?(view, "#proposal-proposer", "Mate (Key 1,234),")
 
