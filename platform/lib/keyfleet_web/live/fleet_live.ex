@@ -1416,14 +1416,7 @@ defmodule KeyfleetWeb.FleetLive do
       # Sent words are never offered to send again: the box empties and says
       # so even when the requests can't be read again.
       {:ok, _request} ->
-        case PageRead.run("fleet", fn -> read_quotes(socket, fleet_id, actor, "Sent") end) do
-          {:ok, read} ->
-            {:noreply, read}
-
-          {:error, _failure} ->
-            {:noreply,
-             assign(socket, :quotes, %{quotes | form: quote_form(fleet_id, actor), note: "Sent"})}
-        end
+        {:noreply, sent_quotes(socket, fleet_id, actor)}
 
       {:error, form} ->
         {:noreply, assign(socket, :quotes, %{quotes | form: form, note: quote_refusal(form)})}
@@ -1647,6 +1640,16 @@ defmodule KeyfleetWeb.FleetLive do
       requests: Rooms.my_quote_requests!(fleet_id, actor: actor),
       note: note
     })
+  end
+
+  defp sent_quotes(socket, fleet_id, actor) do
+    case PageRead.run("fleet", fn -> read_quotes(socket, fleet_id, actor, "Sent") end) do
+      {:ok, read} ->
+        read
+
+      {:error, _failure} ->
+        update(socket, :quotes, &%{&1 | form: quote_form(fleet_id, actor), note: "Sent"})
+    end
   end
 
   defp quote_form(fleet_id, actor) do
