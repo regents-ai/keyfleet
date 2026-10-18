@@ -21,6 +21,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   @other_host "fibonacci-cascade.notebooks.localhost"
   @holder_wallet "0x" <> String.duplicate("a", 40)
   @buyer_wallet "0x" <> String.duplicate("b", 40)
+  @client_hint "Update your sign-in client, then send the request again."
 
   setup context do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
@@ -400,6 +401,46 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     end
   end
 
+  # Costly failure: an agent that signs a notebook read the way it signs a
+  # read on the site is told to change its client, which can't help, and
+  # never reads a notebook's code (Grok Bot, 18 October 2026).
+  test "a read signed without its empty body is told to sign over it, and then reads a notebook's code" do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    real_refusals!(secret)
+    wallet = String.downcase(signer.address)
+    epoch!(2, 1, wallet)
+
+    profile =
+      Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+        actor: Keyfleet.PairingHelpers.pair_wallet!(wallet)
+      )
+
+    subject = Notebooks.agent_subject(profile.id)
+    code = "/api/v1/projects/proj-fleet/notebooks/nb-0123456789abcdef/content"
+
+    [unbound, bound] =
+      for body <- [nil, ""] do
+        request = SignedAgentHelpers.sign(signer, secret, "GET", code, body)
+
+        Enum.reduce(
+          request.headers,
+          %{build_conn() | host: @host, remote_ip: {198, 51, 100, 132}},
+          fn {name, value}, conn -> put_req_header(conn, name, value) end
+        )
+        |> dispatch(@endpoint, :get, code, "")
+      end
+
+    assert %{"code" => "http_headers_missing", "hint" => hint} =
+             json_response(unbound, 401)["error"]
+
+    assert hint =~ "content-digest"
+    refute hint == @client_hint
+    assert bound.status == 200
+    assert_receive {:hub, "GET", ^code, ^subject, ""}
+    refute_received {:hub, "GET", ^code, _subject, _body}
+  end
+
   # Costly failure: an agent whose person ended its pairing keeps working in
   # the fleet's notebooks through a connection it already had open.
   test "an agent's open notebook connection closes when its person ends the pairing" do
@@ -522,6 +563,37 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     |> put_req_header(Siwa.Contract.signature_input_header(), "sig1=()")
     |> put_req_header("content-type", "application/json")
     |> dispatch(@endpoint, :post, "/api/v1/projects/proj-fleet/notebooks", body)
+  end
+
+  # A sign-in server that refuses as the real one does: each refusal's own
+  # code and message, with the hint it gives every client.
+  defp real_refusals!(secret) do
+    old = Application.get_env(:keyfleet, :siwa_broker_url)
+    on_exit(fn -> Application.put_env(:keyfleet, :siwa_broker_url, old) end)
+
+    url =
+      SignedAgentHelpers.serve!(:broker, fn conn, _opts ->
+        {:ok, raw, conn} = read_body(conn)
+        payload = Jason.decode!(raw)
+
+        {status, body} =
+          case Siwa.verify_authenticated_request(payload,
+                 secret: secret,
+                 audience: "keyfleet",
+                 wallet_audiences: ["keyfleet"]
+               ) do
+            {:ok, _verified} ->
+              SignedAgentHelpers.verdict(payload, secret)
+
+            {:error, reason} ->
+              {status, code, message} = Siwa.Contract.refusal(reason)
+              {status, %{error: %{code: code, message: message, hint: @client_hint}}}
+          end
+
+        json(conn, status, body)
+      end)
+
+    Application.put_env(:keyfleet, :siwa_broker_url, url)
   end
 
   ## The hub
