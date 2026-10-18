@@ -338,7 +338,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       {:ok, other_page, _html} = live(conn, @path)
       {:ok, owner_view, _html} = build_conn() |> signed_in_as(@owner) |> live(@path)
 
-      assert has_element?(view, "#rooms-mute-#{owners.id}", "Mute Key #1")
+      assert has_element?(view, "#rooms-mute-#{owners.id}", "Mute Key 1")
       refute has_element?(view, "#rooms-muted")
 
       view |> element("#rooms-mute-#{owners.id}") |> render_click()
@@ -379,7 +379,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       render_hook(view, "mute_key", %{})
       render_hook(view, "mute_key", %{"key" => ["1"]})
 
-      assert has_element?(view, "#rooms-mute-#{owners.id}", "Mute Key #1")
+      assert has_element?(view, "#rooms-mute-#{owners.id}", "Mute Key 1")
       refute has_element?(view, "#rooms-muted")
     end
 
@@ -536,7 +536,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: writer)
 
       assert has_element?(view, "#rooms-thread-title", "Hull survey")
-      assert render(view) =~ "Named by 0xdddd..dddd on"
+      assert render(view) =~ "Named on"
 
       assert has_element?(view, ".rooms-naming a", "Key 1")
       assert has_element?(view, ".rooms-naming .rooms-writer", "Their agent for 0xdddd..dddd")

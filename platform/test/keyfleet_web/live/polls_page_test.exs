@@ -86,7 +86,7 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
     # Once it closes, anyone sees the counts; only the holder reads every Key's
     # vote, a moment later.
     assert shows?(fn -> has_element?(visitor, "#poll-results", "Most votes: Left door") end)
-    assert shows?(fn -> has_element?(holder, "#poll-each-vote", "Key #2") end, 40)
+    assert shows?(fn -> has_element?(holder, "#poll-each-vote", "Key 2") end, 40)
     refute has_element?(visitor, "#poll-each-vote")
   end
 

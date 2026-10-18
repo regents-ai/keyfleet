@@ -26,6 +26,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   import KeyfleetWeb.Components.LoadFailed
 
   alias Keyfleet.Fleets.Rules
+  alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.Components.AddressLinks
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.PresenceCard
@@ -354,12 +355,12 @@ defmodule KeyfleetWeb.ProposalsLive do
             </li>
           </ol>
           <p id="proposal-proposer" class="proposals-detail">
-            Key {Rules.grouped(@page.proposal.author_key)},
+            {ActivityLines.key_name(@page.proposal.author_key, @page.agents[@page.proposal.proposer])},
             <.wallet address={@page.proposal.proposer} />
             <Regent.Primitives.tip id="proposal-content-tip" label="About the proposal’s text">
               {if @page.proposal.text,
-                do: "Its words match the code kept on the network:",
-                else: "Its words weren’t saved on Keyfleet. Its code on the network is"} {@page.proposal.content_hash}.
+                do: "Its words match the fingerprint recorded on Base:",
+                else: "Its words weren’t saved on Keyfleet. Its fingerprint on Base is"} {@page.proposal.content_hash}.
             </Regent.Primitives.tip>
           </p>
           <p :if={@page.proposal.executor} id="proposal-executor" class="proposals-detail">
@@ -387,7 +388,11 @@ defmodule KeyfleetWeb.ProposalsLive do
           <ol :if={@page.votes != []} id="proposal-votes" class="proposals-lines">
             <li :for={vote <- @page.votes} data-vote={vote.id}>
               <span>{vote_word(vote.choice)}</span>
-              <span>{RegentFormat.short_address(vote.voter)}, with {key_list(vote.keys)}</span>
+              <span>
+                {@page.agents[vote.voter] || RegentFormat.short_address(vote.voter)}, with {key_list(
+                  vote.keys
+                )}
+              </span>
             </li>
           </ol>
           <nav
@@ -1187,8 +1192,8 @@ abstain, of {keys(@proposal.counted)} counted</span>|
   defp keys(1), do: "1 Key"
   defp keys(count), do: "#{count} Keys"
 
-  defp key_list([token_id]), do: "Key #{token_id}"
-  defp key_list(token_ids), do: "Keys #{Enum.join(token_ids, ", ")}"
+  defp key_list([token_id]), do: "Key #{Rules.grouped(token_id)}"
+  defp key_list(token_ids), do: "Keys #{Enum.map_join(token_ids, ", ", &Rules.grouped/1)}"
 
   defp at(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M UTC")
 

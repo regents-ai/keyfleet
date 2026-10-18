@@ -29,7 +29,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   alias Keyfleet.Proposals.Actions
   alias Keyfleet.Treasury
   alias Keyfleet.WalletSteps.{Reads, VoteSteps}
-  alias KeyfleetWeb.NotFoundError
+  alias KeyfleetWeb.{NotFoundError, WorkspacePage}
 
   @number ~r/\A[1-9][0-9]{0,17}\z/
   @votes_page 50
@@ -159,7 +159,7 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp first_detail(proposal, page, held, fleet, reads) do
     if settled?(page, held) do
-      Map.merge(page, Map.take(held, [:on_chain, :votes, :more_votes, :first_votes]))
+      Map.merge(page, Map.take(held, [:on_chain, :votes, :agents, :more_votes, :first_votes]))
     else
       page
       |> Map.merge(votes(proposal, 0))
@@ -189,6 +189,7 @@ defmodule KeyfleetWeb.ProposalsPage do
 
     %{
       votes: Enum.map(votes, &vote/1),
+      agents: WorkspacePage.agent_names([proposal.proposer | Enum.map(votes, & &1.voter)]),
       more_votes: if(more?, do: path.(votes_after: List.last(votes).record_seq)),
       first_votes: if(votes_after > 0, do: path.([]))
     }
