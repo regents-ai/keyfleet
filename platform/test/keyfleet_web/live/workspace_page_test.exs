@@ -753,7 +753,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     test "a change elsewhere shows up without the reader doing anything", %{conn: conn} do
       open_log(@other)
       {:ok, view, _html} = live(conn, @board)
-      watch_reads(view)
+      board = watch_reads(view)
       assert cards(view) == []
 
       task = create(@fleet, "task", %{"title" => "New work", "progress" => "todo"})
@@ -767,7 +767,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       # A notice about a fleet the page has since left changes nothing either.
       send(view.pid, {:graph_head, @other, "log_fixture", 2})
-      refute_receive :workspace_read, 1_300
+      refute_receive {:workspace_read, ^board}, 1_300
 
       Phoenix.PubSub.broadcast(
         Keyfleet.PubSub,
@@ -775,13 +775,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         {:graph_head, @fleet, "log_fixture", 2}
       )
 
-      assert_receive :workspace_read, 2_000
+      assert_receive {:workspace_read, ^board}, 2_000
       assert cards(view) == [task]
       assert hd(activity(view)) == "Key 17 added the task “New work”."
       refute render(view) =~ "Other fleet"
 
       {:ok, item, _html} = live(conn, item_path(task))
-      watch_reads(item)
+      page = watch_reads(item)
       edit(@fleet, task, %{"progress" => "doing"})
 
       Phoenix.PubSub.broadcast(
@@ -790,7 +790,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         {:graph_head, @fleet, "log_fixture", 4}
       )
 
-      assert_receive :workspace_read, 2_000
+      assert_receive {:workspace_read, ^page}, 2_000
       assert has_element?(item, "#workspace-fields", "In progress")
       assert hd(history(item)) == "Key 17 updated “New work”: progress is now in progress."
     end
@@ -799,7 +799,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       conn: conn
     } do
       {:ok, view, _html} = live(conn, @board)
-      watch_reads(view)
+      board = watch_reads(view)
       task = create(@fleet, "task", %{"title" => "New work", "progress" => "todo"})
 
       for watermark <- [1, 2, 2] do
@@ -810,9 +810,9 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         )
       end
 
-      refute_receive :workspace_read, 600
-      assert_receive :workspace_read, 1_000
-      refute_receive :workspace_read, 1_300
+      refute_receive {:workspace_read, ^board}, 600
+      assert_receive {:workspace_read, ^board}, 1_000
+      refute_receive {:workspace_read, ^board}, 1_300
       assert cards(view) == [task]
 
       # What the page has already read, or less, is not read again.
@@ -824,7 +824,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         )
       end
 
-      refute_receive :workspace_read, 1_300
+      refute_receive {:workspace_read, ^board}, 1_300
 
       # A copy of a fresh log is read however far along it is.
       Phoenix.PubSub.broadcast(
@@ -833,7 +833,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         {:graph_head, @fleet, "log_fresh", 1}
       )
 
-      assert_receive :workspace_read, 2_000
+      assert_receive {:workspace_read, ^board}, 2_000
     end
   end
 
@@ -1169,7 +1169,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   # A page position as the site writes one: the sort values it follows.
   defp keyset(values), do: values |> :erlang.term_to_binary() |> Base.encode64()
 
-  # Tells this test each time the open page reads the workspace again.
+  # Tells this test each time the open page reads the workspace again, naming
+  # the page, whose process it returns.
   defp watch_reads(view) do
     id = "workspace-reads-#{System.unique_integer([:positive])}"
 
@@ -1181,11 +1182,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     )
 
     on_exit(fn -> :telemetry.detach(id) end)
+    view.pid
   end
 
   @doc false
   def report_read(_event, _measurements, %{source: "graph_cursors"}, {test, page}) do
-    if self() == page, do: send(test, :workspace_read)
+    if self() == page, do: send(test, {:workspace_read, page})
   end
 
   def report_read(_event, _measurements, _meta, _config), do: :ok
