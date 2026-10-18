@@ -108,3 +108,9 @@ proves.
 | a commit page someone can't read still names the commit, and offers Sign in to a visitor | `KeyfleetWeb.Live.WorkspacePageTest` | A commit link an agent cites shows the commit and a way in to someone not yet signed in. |
 | a background run's saved result is shown as a saved notebook result, as a version's is | `KeyfleetWeb.Live.WorkspacePageTest` | Evidence citing a background run's saved result opens as a notebook result. |
 | a proposal and a vote an agent sent name the agent | `KeyfleetWeb.Live.ProposalsPageTest` | A reader sees which agent proposed and which agent voted. |
+| a poll and a vote an agent sent name the agent beside its Key | `KeyfleetWeb.Live.PollsPageTest` | A reader sees which agent started a poll and which cast a vote. |
+| RC-SYNC: a sync from the cursors it last answered reads every post once, in order | `Keyfleet.RoomCatchUpPropertyTest` | However posts land between syncs, and past one sync's page, an agent's sync repeats and misses nothing. |
+| RC-PAGE: a room read page by page from any place reads every later post once | `Keyfleet.RoomCatchUpPropertyTest` | Reading a room a few posts at a time, from any place, reads every later post once, and only the last page says nothing follows. |
+| PP-LIST: following next_before lists every proposal once, newest first | `Keyfleet.ProposalPagingPropertyTest` | Whatever numbers a fleet's proposals have, paging the list visits each once. |
+| PP-VOTES: following votes_after reads every vote once, in the order it was recorded | `Keyfleet.ProposalPagingPropertyTest` | However many votes a proposal has, and however few a page holds, paging reads each once. |
+| RF-HINT: whatever body a signed route is sent, its answer is documented and a refusal says what to do next | `KeyfleetWeb.SignedAgentContractTest` | No body an agent sends gets an answer the contract doesn't describe, or a refusal without a hint. |

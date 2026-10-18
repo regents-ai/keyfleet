@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   admits, and the answers it really gives.
   """
   use ExUnit.Case, async: false
+  use ExUnitProperties
   import KeyfleetWeb.RefusalHelpers
   import Plug.Conn
 
@@ -735,6 +736,78 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert Enum.sort(documented -- answered) == Enum.sort(legacy)
     assert answered -- documented == []
   end
+
+  # Costly failure: an agent sending a body the docs didn't foresee gets an
+  # answer no doc describes, or a refusal with no next step, and is stuck.
+  property "RF-HINT: whatever body a signed route is sent, its answer is documented and a refusal says what to do next",
+           c do
+    # Every run sends a request; the client's budget is not what's checked.
+    Application.put_env(:keyfleet, :api_rate_limit, limit: 1_000_000, window_seconds: 3_600)
+
+    check all {method, template} <- member_of(routes()),
+              changes <- list_of(body_change(), max_length: 3),
+              max_runs: 200 do
+      body = changed(minimal(method, template), changes)
+
+      response =
+        send_signed(c, c.signer, method, fill(template, @address), body && Jason.encode!(body))
+
+      where = "#{method} #{template} #{inspect(body)}: #{response.status} #{inspect(response.body)}"
+
+      assert ContractSchema.response_errors(response.body, method, template, response.status) ==
+               [],
+             where
+
+      if response.status >= 400 do
+        assert %{"error" => %{"hint" => hint}} = response.body, where
+        assert is_binary(hint) and String.trim(hint) != "", where
+      end
+    end
+  end
+
+  # One change to a route's least body: a field dropped, or a field set to any
+  # JSON value. A number names the body's nth field, counting round; a word
+  # names a field it may not take.
+  defp body_change do
+    field = one_of([integer(0..5), string(:alphanumeric, min_length: 1, max_length: 8)])
+
+    one_of([
+      tuple({constant(:drop), integer(0..5)}),
+      tuple({constant(:put), field, json_value()})
+    ])
+  end
+
+  defp json_value do
+    leaf =
+      one_of([
+        integer(),
+        float(),
+        boolean(),
+        constant(nil),
+        string(:printable, max_length: 40)
+      ])
+
+    tree(leaf, fn child ->
+      one_of([
+        list_of(child, max_length: 3),
+        map_of(string(:alphanumeric, max_length: 6), child, max_length: 3)
+      ])
+    end)
+  end
+
+  # A read has no body to change.
+  defp changed(nil, _changes), do: nil
+  defp changed(body, changes), do: Enum.reduce(changes, body, &change/2)
+
+  defp change({:drop, n}, body), do: Map.delete(body, nth_field(body, n))
+
+  defp change({:put, n, value}, body) when is_integer(n),
+    do: Map.put(body, nth_field(body, n) || "x", value)
+
+  defp change({:put, field, value}, body), do: Map.put(body, field, value)
+
+  defp nth_field(body, _n) when map_size(body) == 0, do: nil
+  defp nth_field(body, n), do: body |> Map.keys() |> Enum.sort() |> Enum.at(rem(n, map_size(body)))
 
   # An agent paired with key 1's holder quotes the words they sent it: once,
   # then refused as already quoted.

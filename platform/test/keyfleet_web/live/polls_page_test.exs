@@ -6,6 +6,7 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
   alias Keyfleet.Actors.Human
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
+  alias Keyfleet.PairingHelpers
   alias Keyfleet.Polls
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.SharedReading
@@ -113,6 +114,37 @@ defmodule KeyfleetWeb.Live.PollsPageTest do
 
     assert_receive {:trace, ^producer, :call, {FleetPolls, :read, [@fleet]}}, 2_000
     refute_receive {:trace, ^producer, :call, {FleetPolls, :read, _}}, 1_500
+  end
+
+  # Several agents act for one Key; a reader has to see which started a poll
+  # and which cast a vote.
+  test "a poll and a vote an agent sent name the agent beside its Key", %{conn: conn} do
+    agent = PairingHelpers.agent_for!(human(@starter))
+
+    poll =
+      Polls.start_poll!(
+        %{
+          fleet_id: @fleet,
+          question: "Which door next?",
+          choices: ["Left door", "Right door"],
+          minutes: 30
+        },
+        actor: agent
+      )
+
+    Polls.cast_vote!(%{fleet_id: @fleet, poll_id: poll.id, choice: "Left door"}, actor: agent)
+    Polls.end_poll!(poll, @fleet, actor: human(@starter))
+
+    {:ok, list, _html} = open(conn, @list)
+    assert has_element?(list, "#poll-#{poll.id}", "Started by Their agent (Key 1)")
+
+    {:ok, holder, _html} = live(signed_in_as(conn, @voter), "#{@list}/#{poll.id}")
+    assert has_element?(holder, "#poll-status", "Their agent (Key 1)")
+
+    assert shows?(
+             fn -> has_element?(holder, "#poll-each-vote", ~r/Their agent \(Key 1\)\s+chose Left door/) end,
+             40
+           )
   end
 
   defp start! do
