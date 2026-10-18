@@ -15,14 +15,16 @@ defmodule KeyfleetWeb.AgentChainController do
   wallet sends, and the contract decides.
 
   Proposing saves the proposal's words before answering, so they are on the
-  proposal's page once the chain reader records it. A wallet that may not
-  vote the Key it names can't make the proposal, so its words are not saved.
+  proposal's page once the chain reader records it; words that can't be kept
+  now leave nothing built to send. A wallet that may not vote the Key it names
+  can't make the proposal, so its words are not saved.
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
+  alias Keyfleet.Proposals.Errors.WordsLimitError
   alias Keyfleet.WalletSteps
   alias KeyfleetWeb.AgentChainJSON
   alias KeyfleetWeb.Refusal
@@ -42,11 +44,9 @@ defmodule KeyfleetWeb.AgentChainController do
     inputs = conn.body_params
 
     answer(conn, fleet_id, :propose, %{inputs: inputs}, fn built ->
-      if built.figures.governs? do
-        {:ok, _words} = Proposals.save_words(fleet_id, inputs["text"], conn.assigns.agent_actor)
-      end
-
-      built
+      if built.figures.governs?,
+        do: keep_words(fleet_id, inputs["text"], conn.assigns.agent_actor, built),
+        else: built
     end)
   end
 
@@ -76,13 +76,49 @@ defmodule KeyfleetWeb.AgentChainController do
         )
 
       case built.problem do
-        nil -> json(conn, AgentChainJSON.answer(flow, fleet, shape.(built)))
+        nil -> respond(conn, flow, fleet, shape.(built))
         problem -> refuse(conn, flow, built, problem, Map.get(params, :inputs, %{}))
       end
     else
       {:refuse, status, code} -> Refusal.json(conn, status, code)
       {:key_unknown, token_id} -> Refusal.key_unknown(conn, fleet_id, token_id)
     end
+  end
+
+  # What was built, or why it isn't answered after all.
+  defp respond(conn, _flow, _fleet, {:refuse, status, code}), do: Refusal.json(conn, status, code)
+
+  defp respond(conn, _flow, _fleet, {:limited, seconds}) do
+    conn
+    |> put_resp_header("retry-after", Integer.to_string(seconds))
+    |> Refusal.json(429, "proposal_words_limit_reached")
+  end
+
+  defp respond(conn, flow, fleet, built),
+    do: json(conn, AgentChainJSON.answer(flow, fleet, built))
+
+  # A proposal is answered only once its words are kept, so they show with it
+  # when the chain reader records it.
+  defp keep_words(fleet_id, text, agent, built) do
+    case Proposals.save_words(fleet_id, text, agent) do
+      {:ok, _words} ->
+        built
+
+      {:error, %Ash.Error.Invalid{errors: errors} = error} ->
+        case Enum.find(errors, &match?(%WordsLimitError{}, &1)) do
+          %WordsLimitError{retry_after: seconds} -> {:limited, seconds}
+          nil -> unkept(error)
+        end
+
+      {:error, error} ->
+        unkept(error)
+    end
+  end
+
+  # A failure is saved with the site's errors, and the agent asks again.
+  defp unkept(error) do
+    if is_exception(error), do: Keyfleet.Alert.report(error)
+    {:refuse, 503, "proposal_words_unavailable"}
   end
 
   defp on_chain(fleet_id) do

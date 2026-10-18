@@ -1602,8 +1602,8 @@ paths:
         The transaction that makes a proposal with one Key the signing wallet holds, or holds an
         active shard of while the Key's agent voting is on. The proposal's words are kept here and
         shown with the proposal once it is on the chain, which holds their fingerprint
-        (content_hash). Nothing is sent here: the signing wallet sends it itself, on Base. The
-        body is at most 56,192 bytes.
+        (content_hash). Nothing is sent here: the signing wallet sends it itself, on Base. A wallet
+        keeps the words of at most 20 proposals an hour. The body is at most 56,192 bytes.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -1633,8 +1633,8 @@ paths:
                 oneOf:
                   - {$ref: "#/components/schemas/ProposalInvalidError"}
                   - {$ref: "#/components/schemas/AgentError"}
-        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
-        "429": {$ref: "#/components/responses/TooManyRequests"}
+        "503": {$ref: "#/components/responses/ProposeUnavailable"}
+        "429": {$ref: "#/components/responses/ProposalWordsLimit"}
         default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/proposals/vote:
     post:
@@ -2959,6 +2959,33 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/ChainUnavailableError"}
+    ProposeUnavailable:
+      description: >-
+        proposal_words_unavailable: the proposal's words can't be kept right now, so nothing was
+        built; send the same request again shortly. siwa_request_failed: the sign-in service could
+        not be reached. chain_unavailable: the chain can't be read right now, so nothing could be
+        built; send the same request again shortly. pairing_unavailable: the agent's pairing could
+        not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet;
+        Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503
+        without a code of its own; send the same request again shortly.
+      headers:
+        Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: "#/components/schemas/ChainUnavailableError"}
+              - {$ref: "#/components/schemas/ProposalWordsError"}
+    ProposalWordsLimit:
+      description: >-
+        proposal_words_limit_reached: this wallet has kept the words of 20 proposals this hour, so
+        nothing was built. too_many_requests: too many requests came from this client address.
+        Wait the number of seconds in Retry-After.
+      headers:
+        Retry-After: {$ref: "#/components/headers/RetryAfter"}
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/ProposalWordsError"}
     FleetUnknown:
       description: There is no such fleet
       content:
@@ -5586,6 +5613,19 @@ components:
           required: [code, message, hint]
           properties:
             code: {type: string, const: fleet_not_on_chain}
+            message: {type: string}
+            hint: {type: string}
+    ProposalWordsError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, hint]
+          properties:
+            code: {type: string, enum: [proposal_words_unavailable, proposal_words_limit_reached, too_many_requests]}
             message: {type: string}
             hint: {type: string}
     ChainUnavailableError:

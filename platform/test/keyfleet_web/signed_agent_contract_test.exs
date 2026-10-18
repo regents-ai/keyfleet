@@ -902,6 +902,17 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert made["content_hash"] == Keyfleet.WalletSteps.VoteSteps.content_hash("Survey the hull")
     assert [%{text: "Survey the hull"}] = Ash.read!(Keyfleet.Proposals.Words)
 
+    # Past the words a wallet keeps in an hour, here none, nothing is built.
+    budget = Application.fetch_env!(:keyfleet, :proposal_words_rate_limit)
+    on_exit(fn -> Application.put_env(:keyfleet, :proposal_words_rate_limit, budget) end)
+    Application.put_env(:keyfleet, :proposal_words_rate_limit, Keyword.put(budget, :limit, 0))
+    again = %{words | "text" => "Survey the deck"}
+    limited = answer(c, c.signer, "POST", @propose, @address, again, 429)
+    assert limited.body == refused("proposal_words_limit_reached")
+    assert [_seconds] = Req.Response.get_header(limited, "retry-after")
+    assert [%{text: "Survey the hull"}] = Ash.read!(Keyfleet.Proposals.Words)
+    Application.put_env(:keyfleet, :proposal_words_rate_limit, budget)
+
     unreadable = answer(c, c.signer, "POST", @propose, @address, %{words | "kind" => "vote"}, 422)
     assert unreadable.body["error"]["code"] == "invalid_proposal"
 

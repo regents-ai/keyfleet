@@ -131,6 +131,12 @@ defmodule KeyfleetWeb.Refusal do
     "invalid_amount" =>
       {"This amount can't be read as USDC.",
        "error.details.problem says how to write it. Correct it, then send the request again."},
+    "proposal_words_limit_reached" =>
+      {"This wallet has saved the words of 20 proposals this hour.",
+       "Nothing was built. Wait the number of seconds in Retry-After, then send the request again."},
+    "proposal_words_unavailable" =>
+      {"The proposal's words can't be kept right now.",
+       "Nothing was built. Try again in a moment."},
     "proposal_unknown" =>
       {"This fleet has no proposal with this number.",
        "A sync lists the fleet's proposals and their numbers."},
