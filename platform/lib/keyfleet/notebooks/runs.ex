@@ -22,7 +22,8 @@ defmodule Keyfleet.Notebooks.Runs do
   once its page is kept, `result_url`, or `{:ok, notebooks}` for a listing;
   or `{:error, reason}`: `:not_found` for a notebook or run the hub doesn't
   have, `:runs_full` when the notebook takes no more runs for now, or
-  `:unavailable` when the hub didn't answer.
+  `:unavailable` when the hub didn't answer or the kept pages couldn't be
+  read.
   """
 
   alias Keyfleet.Actors.System
@@ -75,18 +76,16 @@ defmodule Keyfleet.Notebooks.Runs do
   @doc """
   Reads run `run_id` of `notebook_id` as `subject`, in whichever of the
   notebook's jobs it is, and once it has finished with a page, keeps that
-  page and answers its address.
+  page and answers its address. A page already kept is answered as it is, so
+  a finished run's page is fetched from the hub once.
   """
   def read(fleet_id, subject, project_id, notebook_id, run_id) do
     notebook = notebook_path(project_id, notebook_id)
 
     with {:ok, %{"items" => jobs}} <-
            fleet_id |> request(subject, :get, notebook <> "/jobs") |> answer(200),
-         {:ok, run_path, run} <- find_run(fleet_id, subject, notebook, jobs, run_id) do
-      result_url =
-        if run["status"] in @with_page,
-          do: keep_page(fleet_id, subject, notebook_id, run_id, run_path <> "/html")
-
+         {:ok, run_path, run} <- find_run(fleet_id, subject, notebook, jobs, run_id),
+         {:ok, result_url} <- result_url(fleet_id, subject, notebook_id, run_id, run, run_path) do
       {:ok, view(notebook_id, run, result_url)}
     end
   end
@@ -205,6 +204,41 @@ defmodule Keyfleet.Notebooks.Runs do
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
+  end
+
+  # A finished run's kept page, kept now if it isn't yet; nil while the run
+  # has no page. A failed read of the kept pages is saved with the site's
+  # errors.
+  defp result_url(fleet_id, subject, notebook_id, run_id, %{"status" => status}, run_path)
+       when status in @with_page do
+    case Notebooks.saved_outputs(fleet_id, [run_id], actor: %System{}) do
+      {:ok, kept} ->
+        {:ok,
+         kept_url(fleet_id, notebook_id, run_id, kept) ||
+           keep_page(fleet_id, subject, notebook_id, run_id, run_path <> "/html")}
+
+      {:error, error} ->
+        RecordsDownError.report(
+          "The kept page of a run of #{fleet_id}'s notebook could not be read: " <>
+            inspect(error.__struct__)
+        )
+
+        {:error, :unavailable}
+    end
+  end
+
+  defp result_url(_fleet_id, _subject, _notebook_id, _run_id, _run, _run_path), do: {:ok, nil}
+
+  # Of two copies of one run's page, the newer is its saved result.
+  defp kept_url(fleet_id, notebook_id, run_id, kept) do
+    case Enum.filter(kept, &(&1.notebook_id == notebook_id)) do
+      [] ->
+        nil
+
+      copies ->
+        copy = Enum.max_by(copies, & &1.saved_at)
+        Notebooks.result_url(fleet_id, notebook_id, run_id, copy.saved_at)
+    end
   end
 
   # The run's page, read whole up to `saved_page_max_bytes` and kept under its
