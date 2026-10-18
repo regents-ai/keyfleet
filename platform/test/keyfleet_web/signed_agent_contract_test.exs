@@ -739,37 +739,48 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
   # Costly failure: an agent sending a body the docs didn't foresee gets an
   # answer no doc describes, or a refusal with no next step, and is stuck.
-  property "RF-HINT: whatever body a signed route is sent, its answer is documented and a refusal says what to do next",
+  property "RF-HINT: any body sent to a signed route here gets a documented answer, and a refusal a hint",
            c do
-    # Every run sends a request; the client's budget is not what's checked.
-    Application.put_env(:keyfleet, :api_rate_limit, limit: 1_000_000, window_seconds: 3_600)
+    contract = YamlElixir.read_from_file!(@contract)
 
-    check all {method, template} <- member_of(routes()),
-              changes <- list_of(body_change(), max_length: 3),
-              max_runs: 200 do
+    documented =
+      Map.new(routes(), fn {method, template} = route ->
+        {route, Map.keys(request_schema(contract, method, template, [])["properties"] || %{})}
+      end)
+
+    requests = bind(member_of(routes()), &changes(&1, documented))
+
+    check all {{method, template}, changes} <- requests, max_runs: 200 do
       body = changed(minimal(method, template), changes)
+      path = fill(template, @address)
+      response = send_signed(c, c.signer, method, path, body && Jason.encode!(body))
+      answer = "#{response.status} #{inspect(response.body)}"
+      where = "#{method} #{template} #{inspect(body)}: #{answer}"
+      errors = ContractSchema.response_errors(response.body, method, template, response.status)
 
-      response =
-        send_signed(c, c.signer, method, fill(template, @address), body && Jason.encode!(body))
-
-      where = "#{method} #{template} #{inspect(body)}: #{response.status} #{inspect(response.body)}"
-
-      assert ContractSchema.response_errors(response.body, method, template, response.status) ==
-               [],
-             where
+      assert errors == [], where
 
       if response.status >= 400 do
-        assert %{"error" => %{"hint" => hint}} = response.body, where
-        assert is_binary(hint) and String.trim(hint) != "", where
+        assert match?(%{"error" => %{"hint" => hint}} when is_binary(hint), response.body), where
+        assert String.trim(response.body["error"]["hint"]) != "", where
       end
     end
   end
 
+  # Up to three changes to a route's least body.
+  defp changes(route, documented),
+    do: tuple({constant(route), list_of(body_change(documented[route]), max_length: 3)})
+
   # One change to a route's least body: a field dropped, or a field set to any
-  # JSON value. A number names the body's nth field, counting round; a word
-  # names a field it may not take.
-  defp body_change do
-    field = one_of([integer(0..5), string(:alphanumeric, min_length: 1, max_length: 8)])
+  # JSON value. A number names the body's nth field, counting round; a word is
+  # one of the fields the route documents, or one it may not take.
+  defp body_change(fields) do
+    field =
+      one_of([
+        integer(0..5),
+        member_of(["x" | fields]),
+        string(:alphanumeric, min_length: 1, max_length: 8)
+      ])
 
     one_of([
       tuple({constant(:drop), integer(0..5)}),
@@ -807,7 +818,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp change({:put, field, value}, body), do: Map.put(body, field, value)
 
   defp nth_field(body, _n) when map_size(body) == 0, do: nil
-  defp nth_field(body, n), do: body |> Map.keys() |> Enum.sort() |> Enum.at(rem(n, map_size(body)))
+  defp nth_field(body, n),
+    do: body |> Map.keys() |> Enum.sort() |> Enum.at(rem(n, map_size(body)))
 
   # An agent paired with key 1's holder quotes the words they sent it: once,
   # then refused as already quoted.

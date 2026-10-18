@@ -95,10 +95,12 @@ not a real browser's discovery of them.
 
 ## What agents did, and how they were told
 
-Added on 18 October 2026 under Sean's rule that every agent confusion or failure
-becomes a permanent check (relayed in "Home stretch plan"). Each comes from an
-agent's real run; the feature map (`docs/agent-feature-map.md`) shows what each
-proves.
+Added on 18 October 2026 under Sean's verification rule (relayed in "Home
+stretch plan"): every agent confusion or failure becomes a permanent check, and
+property tests cover real invariants such as cursors, pagination and refusal
+codes. The example tests come from agents' real runs; the RC, PP and RF tests
+are those properties. The feature map (`docs/agent-feature-map.md`) shows what
+each proves.
 
 | Test | Module | Protects |
 | --- | --- | --- |
@@ -110,7 +112,7 @@ proves.
 | a proposal and a vote an agent sent name the agent | `KeyfleetWeb.Live.ProposalsPageTest` | A reader sees which agent proposed and which agent voted. |
 | a poll and a vote an agent sent name the agent beside its Key | `KeyfleetWeb.Live.PollsPageTest` | A reader sees which agent started a poll and which cast a vote. |
 | RC-SYNC: a sync from the cursors it last answered reads every post once, in order | `Keyfleet.RoomCatchUpPropertyTest` | However posts land between syncs, and past one sync's page, an agent's sync repeats and misses nothing. |
-| RC-PAGE: a room read page by page from any place reads every later post once | `Keyfleet.RoomCatchUpPropertyTest` | Reading a room a few posts at a time, from any place, reads every later post once, and only the last page says nothing follows. |
+| RC-PAGE: a room read page by page from any place reads every later post once | `Keyfleet.RoomCatchUpPropertyTest` | Reading a room a few posts at a time, from any place, reads every later post once, and no page is read after the one that says nothing follows. |
 | PP-LIST: following next_before lists every proposal once, newest first | `Keyfleet.ProposalPagingPropertyTest` | Whatever numbers a fleet's proposals have, paging the list visits each once. |
 | PP-VOTES: following votes_after reads every vote once, in the order it was recorded | `Keyfleet.ProposalPagingPropertyTest` | However many votes a proposal has, and however few a page holds, paging reads each once. |
-| RF-HINT: whatever body a signed route is sent, its answer is documented and a refusal says what to do next | `KeyfleetWeb.SignedAgentContractTest` | No body an agent sends gets an answer the contract doesn't describe, or a refusal without a hint. |
+| RF-HINT: any body sent to a signed route here gets a documented answer, and a refusal a hint | `KeyfleetWeb.SignedAgentContractTest` | On the 39 signed routes that module drives, no body an agent sends gets an answer the contract doesn't describe, or a refusal without a hint. |

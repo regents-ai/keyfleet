@@ -31,9 +31,14 @@ defmodule Keyfleet.RoomCatchUpPropertyTest do
 
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
 
-    # Every run posts; the hourly allowance an agent has is not what's checked.
+    # Every run posts; the hourly allowance an agent has is not what's checked,
+    # and the posts counted against it are cleared for the modules after this.
     limits = Application.fetch_env!(:keyfleet, :limits)
-    on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
+
+    on_exit(fn ->
+      Application.put_env(:keyfleet, :limits, limits)
+      :ets.delete_all_objects(Keyfleet.Accounts.RequestRateLimiter)
+    end)
 
     Application.put_env(
       :keyfleet,
@@ -91,8 +96,10 @@ defmodule Keyfleet.RoomCatchUpPropertyTest do
       seqs = pages |> List.flatten() |> Enum.map(& &1.seq)
 
       assert seqs == Enum.to_list((from + 1)..head//1)
-      # Every page but the last is full and says more follow.
+      # Every page but the last is full and says more follow; the last says
+      # nothing follows, so no empty page is read after it.
       for page <- Enum.drop(pages, -1), do: assert(length(page) == limit)
+      assert List.last(pages) != [] or pages == [[]]
     end
   end
 
@@ -129,7 +136,10 @@ defmodule Keyfleet.RoomCatchUpPropertyTest do
   end
 
   defp pages(writer, after_seq, limit, pages) do
-    page = Rooms.read_messages!(@fleet, "general", %{after_seq: after_seq, limit: limit}, actor: writer)
+    page =
+      Rooms.read_messages!(@fleet, "general", %{after_seq: after_seq, limit: limit},
+        actor: writer
+      )
 
     if Rooms.more_after?(page),
       do: pages(writer, List.last(page).seq, limit, [page | pages]),
@@ -141,7 +151,12 @@ defmodule Keyfleet.RoomCatchUpPropertyTest do
   defp post!(writer, slug) do
     {:ok, post} =
       Rooms.send_message(
-        %{fleet_id: @fleet, slug: slug, body: "Hull survey", idempotency_key: Ash.UUID.generate()},
+        %{
+          fleet_id: @fleet,
+          slug: slug,
+          body: "Hull survey",
+          idempotency_key: Ash.UUID.generate()
+        },
         actor: writer
       )
 
