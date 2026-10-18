@@ -192,6 +192,10 @@ defmodule Keyfleet.SharedReading do
     ArgumentError -> :error
   end
 
+  @doc "The largest reading `kind` accepts, as `:erlang.external_size/1` measures it."
+  @spec bytes(atom()) :: pos_integer()
+  def bytes(kind) when is_map_key(@kinds, kind), do: @kinds[kind].bytes
+
   @doc "Hear `{:shared_reading, key}` whenever the reading for `key` changes."
   @spec subscribe(key()) :: :ok
   def subscribe(key), do: Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic(checked(key)))
@@ -378,7 +382,7 @@ defmodule Keyfleet.SharedReading do
 
   defp fits(kind, reading) do
     cond do
-      :erlang.external_size(reading) > @kinds[kind].bytes -> {:error, :too_large}
+      :erlang.external_size(reading) > bytes(kind) -> {:error, :too_large}
       not plain?(reading) -> {:error, :not_plain}
       true -> :ok
     end

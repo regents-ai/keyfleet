@@ -2370,5 +2370,6 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   refusals in rooms and polls are announced, footer links are 44 px to tap,
   and the "See the fleets" links land on the fleets.
 - Outside checks: SIWA request binding, Privy token checks and credit debit
-  atomicity have tests against the real libraries, and a ZAP baseline scan
+  atomicity have tests against the real libraries, example cases and
+  generated ones, and a ZAP baseline scan
   runs against the release image.
