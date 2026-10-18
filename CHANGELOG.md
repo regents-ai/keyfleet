@@ -2390,3 +2390,21 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Released `b0a40c13` as Fly v88, after v87. It carries the notebook
   sign-in change: only the workspace press sends the notebook code by
   itself, and every trip back from the notebook host waits for a press.
+
+## 2026-10-18 — The homepage's hex field answers the mouse
+
+- On the homepage, the five tiles nearest a mouse stand up out of the hex
+  field, the one under it highest, and follow it, each rising and sinking in
+  0.3 seconds, with a shadow on the tiles below. This works behind the hero and
+  behind Classic's and the Club's maps, where the raised tiles line up with the
+  map's own keys.
+- A mouse leaves a short wake of lit tiles that fades behind it, scrolling
+  under a resting mouse moves all of it to the tiles now beneath, and a press
+  sends a ring out across the tiles.
+- The raised tiles take the page's light or dark ground, so they read on both.
+- The field's fade toward its edges is drawn by the field itself, so a raised
+  tile fades with the tiles around it; the still picture shown before the field
+  loads fades the same way.
+- Nothing moves unless someone does, and the field is still again shortly
+  after. On phones and tablets, and with less motion asked for, the field stays
+  the still picture.
