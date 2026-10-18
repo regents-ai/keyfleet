@@ -903,14 +903,17 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert made["content_hash"] == Keyfleet.WalletSteps.VoteSteps.content_hash("Survey the hull")
     assert [%{text: "Survey the hull"}] = Ash.read!(Keyfleet.Proposals.Words)
 
-    # Past the words a wallet keeps in an hour, here none, nothing is built.
+    # Past the words a wallet keeps in an hour, here none, the step is still
+    # answered and the words are left unsaved.
     budget = Application.fetch_env!(:keyfleet, :proposal_words_rate_limit)
     on_exit(fn -> Application.put_env(:keyfleet, :proposal_words_rate_limit, budget) end)
     Application.put_env(:keyfleet, :proposal_words_rate_limit, Keyword.put(budget, :limit, 0))
     again = %{words | "text" => "Survey the deck"}
-    limited = answer(c, c.signer, "POST", @propose, @address, again, 429)
-    assert limited.body == refused("proposal_words_limit_reached")
-    assert [_seconds] = Req.Response.get_header(limited, "retry-after")
+    unsaved = answer(c, c.signer, "POST", @propose, @address, again, 200).body
+
+    assert unsaved["content_hash"] ==
+             Keyfleet.WalletSteps.VoteSteps.content_hash("Survey the deck")
+
     assert [%{text: "Survey the hull"}] = Ash.read!(Keyfleet.Proposals.Words)
     Application.put_env(:keyfleet, :proposal_words_rate_limit, budget)
 

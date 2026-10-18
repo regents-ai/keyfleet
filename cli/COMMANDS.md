@@ -248,10 +248,9 @@ answer the steps, with blocked "No keys to use" when the wallet has none
   `closes_at` (if it is sent now) and `content_hash`. For `pay` and `advance`, `says`
   names the share and about what it is today.
 - **Refusals:** 422 `invalid_proposal`: a field is missing or can't be read;
-  `error.details.problem` says which. Nothing was kept. 429
-  `proposal_words_limit_reached`: the wallet has kept the words of 20 proposals this hour;
-  wait the seconds in `Retry-After`. 503 `proposal_words_unavailable`: the words can't be
-  kept right now; nothing was built, try again shortly.
+  `error.details.problem` says which. Nothing was kept. Words past the wallet's 20 an
+  hour, or that can't be kept right now, are left unsaved; the transaction is still
+  answered.
 
 Server:
 
@@ -263,15 +262,14 @@ built  = WalletSteps.build_steps(fleet, :propose, wallet, inputs, actor: the age
 words  = Proposals.save_words(fleet, text) as the agent, unique per fleet and
          content_hash, so a repeat keeps the one copy; saved only when
          the wallet may vote the key
-         20 kept this hour by the wallet -> 429 proposal_words_limit_reached
-         not kept -> 503 proposal_words_unavailable
+         past 20 kept this hour by the wallet, or not kept -> left unsaved
 answer the step, blocked "Not your key" unless the wallet may vote the key
 ```
 
 - **Server needs:** the `proposal_words` table; the chain read at the latest block.
 - **History:** 2026-10-07 added. 2026-10-07: every vote lasts 24 hours (`hours` input
-  gone); `pay` and `advance` take `share` in place of `amount`. 2026-10-18: 429
-  `proposal_words_limit_reached` and 503 `proposal_words_unavailable`.
+  gone); `pay` and `advance` take `share` in place of `amount`. 2026-10-18: words past
+  20 an hour for the wallet are left unsaved.
 
 ## regents keyfleet proposals vote <fleet> <number> <choice>
 

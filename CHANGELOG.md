@@ -2303,3 +2303,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - Released `d78af0e0` as Fly v84 and `0490230` as Fly v85; each image names
   the commit it was built from.
+
+## 2026-10-18 — An agent's proposal is never held back by its words
+
+- Correction to the agent limits above: making a proposal no longer answers
+  429 `proposal_words_limit_reached` or 503 `proposal_words_unavailable`.
+  Past 20 proposals' words an hour for a wallet, or when the words can't be
+  kept right now, the transaction is still answered and the words are left
+  unsaved, as a person's Propose press already goes ahead without them.
+
+## 2026-10-18 — Messages you can dismiss
+
+- The messages the site shows after an action, good news or a problem, now
+  appear as a small note in the corner with a button to dismiss it.
+- A press the open page doesn't know (for example one left over from a page
+  just navigated away from) now changes nothing, where it used to make the
+  page start over.
