@@ -179,7 +179,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   defp show(socket, shown), do: socket |> assign(shown: shown, reread_due?: false) |> read_crew()
 
   # The sea stays as it is when the fleets on show can't be read; the next
-  # page or notice reads them again.
+  # page, or the next notice about the fleets it shows, reads them again.
   defp kept(socket, read) do
     case PageRead.run("harbour", read) do
       {:ok, read_socket} -> read_socket

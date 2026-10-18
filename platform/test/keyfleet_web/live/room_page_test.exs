@@ -334,9 +334,31 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
     log = capture_log(fn -> render_patch(view, "/classic/1") end)
 
+    assert has_element?(view, "#fleet-page")
+    refute has_element?(view, "#fleet-unreadable")
     refute has_element?(view, "#page-load-failed")
-    refute has_element?(view, "#rooms-page")
     assert log =~ "Reading the rooms page failed"
+  end
+
+  test "a new post that can't be read leaves the room as it was",
+       %{conn: conn, writer: writer} do
+    {:ok, view, _html} = conn |> signed_in_as(@stranger) |> live(@path)
+    post_as(writer, "Hull survey started")
+    assert render(view) =~ "Hull survey started"
+
+    # Renamed inside the test's own transaction, so reading the room's posts
+    # fails the way a database that refuses it does.
+    Keyfleet.Repo.query!(
+      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.messages RENAME TO messages_away"
+    )
+
+    room = Rooms.get_room!(@fleet, "general", authorize?: false)
+    head = %Phoenix.Socket.Broadcast{event: "room_head", payload: %{room_id: room.id, seq: 99}}
+    log = capture_log(fn -> send(view.pid, head) && render(view) end)
+
+    assert render(view) =~ "Hull survey started"
+    refute has_element?(view, "#page-load-failed")
+    assert log =~ "Reading the app page failed"
   end
 
   describe "the fleet's rooms" do

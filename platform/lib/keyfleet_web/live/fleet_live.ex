@@ -1409,9 +1409,20 @@ defmodule KeyfleetWeb.FleetLive do
       ) do
     %{fleet: %{fleet_id: fleet_id}, quotes: quotes} = socket.assigns
 
+    actor = ShellLive.human_actor(socket)
+
     case AshPhoenix.Form.submit(quotes.form, params: params) do
+      # Sent words are never offered to send again: the box empties and says
+      # so even when the requests can't be read again.
       {:ok, _request} ->
-        {:noreply, read_quotes(socket, fleet_id, ShellLive.human_actor(socket), "Sent")}
+        case PageRead.run("fleet", fn -> read_quotes(socket, fleet_id, actor, "Sent") end) do
+          {:ok, read} ->
+            {:noreply, read}
+
+          {:error, _failure} ->
+            {:noreply,
+             assign(socket, :quotes, %{quotes | form: quote_form(fleet_id, actor), note: "Sent"})}
+        end
 
       {:error, form} ->
         {:noreply, assign(socket, :quotes, %{quotes | form: form, note: quote_refusal(form)})}
@@ -1434,13 +1445,18 @@ defmodule KeyfleetWeb.FleetLive do
 
   def handle_event("keymap_ready", _params, socket), do: {:noreply, socket}
 
-  # The map asks for the close-ups of the keys it has in view.
+  # The map asks for the close-ups of the keys it has in view, and goes
+  # without them when they can't be read.
   def handle_event(
         "keymap_pictures",
         %{"keys" => token_ids},
         %{assigns: %{fleet: %{deployed?: true} = fleet}} = socket
-      ),
-      do: {:reply, KeyMap.pictures(fleet.deck, fleet.progress, token_ids), socket}
+      ) do
+    case PageRead.run("map", fn -> KeyMap.pictures(fleet.deck, fleet.progress, token_ids) end) do
+      {:ok, pictures} -> {:reply, pictures, socket}
+      {:error, _failure} -> {:reply, %{pictures: []}, socket}
+    end
+  end
 
   def handle_event("keymap_pictures", _params, socket), do: {:noreply, socket}
 
@@ -1624,21 +1640,24 @@ defmodule KeyfleetWeb.FleetLive do
   def read_quotes(socket, _fleet_id, nil, _note), do: assign(socket, :quotes, nil)
 
   def read_quotes(socket, fleet_id, actor, note) do
-    form =
-      AshPhoenix.Form.for_create(QuoteRequest, :ask,
-        actor: actor,
-        as: "quote",
-        transform_params: fn params, _action ->
-          params |> Map.take(["body"]) |> Map.put("fleet_id", fleet_id)
-        end
-      )
-
     assign(socket, :quotes, %{
       paired?: Agents.has_paired_agent?(actor),
-      form: to_form(form),
+      form: quote_form(fleet_id, actor),
       requests: Rooms.my_quote_requests!(fleet_id, actor: actor),
       note: note
     })
+  end
+
+  defp quote_form(fleet_id, actor) do
+    QuoteRequest
+    |> AshPhoenix.Form.for_create(:ask,
+      actor: actor,
+      as: "quote",
+      transform_params: fn params, _action ->
+        params |> Map.take(["body"]) |> Map.put("fleet_id", fleet_id)
+      end
+    )
+    |> to_form()
   end
 
   # A post quoting the person is a new line in a room, so their requests are

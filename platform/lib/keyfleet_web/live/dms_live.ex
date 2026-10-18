@@ -735,22 +735,17 @@ defmodule KeyfleetWeb.DmsLive do
 
   @doc """
   The person leaves the open conversation, by going to another page or
-  closing this one: it is read up to the last message the page showed. When
-  that can't be saved, the person still leaves.
+  closing this one: it is read up to the last message the page showed.
   """
-  def leave(socket) do
-    case PageRead.run("messages", fn -> mark_read(socket, ShellLive.human_actor(socket)) end) do
-      {:ok, left} -> left
-      {:error, _failure} -> socket
-    end
-  end
+  def leave(socket), do: mark_read(socket, ShellLive.human_actor(socket))
 
   # The open conversation is read up to the last message the page has shown.
   # It is written when the conversation opens and when the person leaves it,
-  # not as messages arrive.
+  # not as messages arrive. When it can't be saved the conversation still
+  # opens, and the person still leaves.
   defp mark_read(%{assigns: %{dms: %{conversation: %{id: id}, last_seq: seq}}} = socket, actor)
        when seq > 0 do
-    Dms.mark_conversation_read!(id, seq, actor: actor)
+    PageRead.run("messages", fn -> Dms.mark_conversation_read!(id, seq, actor: actor) end)
     socket
   end
 
