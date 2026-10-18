@@ -6,7 +6,8 @@ prose scoreboard in the home-stretch plan. Update a row when its proof changes.
 
 **States.**
 
-- **Proven**: a test in `make check` passes on main.
+- **Proven**: a test passes on main, in `make check` or in the Chromium
+  browser suites (`npm run test:browser`, `npm run test:chain`).
 - **New**: a test on `claude/agent-surfaces-sweep-1018` that the Mac hasn't run yet.
 - **Self-reported**: an agent said it worked, and no Keyfleet record has been
   matched against its request ids (no run in `platform/priv/agent_runs/` is
@@ -23,7 +24,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 
 | Behaviour | Proof | State |
 | --- | --- | --- |
-| A paired agent learns who it is and who it acts for | `agent_tools.spec.ts` "a paired agent learns who it is…"; C1 | Proven; C1 self-reported (Contessa) |
+| A paired agent learns who it is and who it acts for | `agent_tools.spec.ts` "a paired agent learns who it is…"; C1 | Proven; C1 not run (Contessa's note says pairing and check-in worked) |
 | An unpaired agent is refused with `agent_not_paired`, and works once paired | `agent_tools.spec.ts` "a tool that needs a pairing refuses…" | Proven |
 | An unsigned header grants nothing; only the exact signed request acts | `AgentJoinJourneyTest` (3 kept tests) | Proven |
 | A replayed signed request is refused | C1 | Not run (Contessa skipped it) |
@@ -53,7 +54,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | After a sale only the new owner's agent writes as the Key | `AgentGraphJourneyTest` (kept, 3 tests) | Proven |
 | Two writes to one version give one success and one conflict | `AgentGraphJourneyTest` (kept) | Proven |
 | A retried write applies once | `AgentGraphJourneyTest` (kept) | Proven |
-| Creates, links, patches and reads back goals, tasks, evidence, notes and dead ends | C2 | Self-reported (Contessa, Hermes, Grok Bot) |
+| Creates, links, patches and reads back goals, tasks, evidence, notes and dead ends | C2 | Self-reported (Contessa's run; Hermes and Grok Bot only in reports with no run record) |
 | An item an agent added names the agent beside its Key | `WorkspacePageTest` "an item an agent added names the agent…" | New |
 | Two agents on one Key each show their own name | S1 | Not run since the fix (failed 17 Oct, before items named agents) |
 
@@ -62,12 +63,13 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Behaviour | Proof | State |
 | --- | --- | --- |
 | A Key-holding agent's signed request reaches the hub as that agent, body unchanged | `NotebookGatewayTest` (kept) | Proven |
-| A read signed without `content-digest` is told how to sign it, then reads a notebook's code | `NotebookGatewayTest` "a read signed without its empty body…" | New (Grok Bot's 401) |
+| A read signed without `content-digest` is told how to sign it, and the corrected read reaches the hub as the agent | `NotebookGatewayTest` "a read signed without its empty body…" | New (Grok Bot's 401) |
+| Reads a notebook's code | Grok Bot's report | Self-reported |
 | The hub's token routes stay closed in every spelling | `NotebookGatewayTest` "the hub's token routes are refused…" | Proven |
 | A slow start returns once, without a second runner request | `NotebookGatewayTest` (kept) | Proven |
-| Starts a run, reads, saves and reopens the result; opens another member's | C3 | Self-reported (Contessa, Hermes); partial for Grok Bot |
+| Starts a run, reads, saves and reopens the result; opens another member's | C3 | Self-reported (Contessa's run; Hermes only in a report with no run record); partial for Grok Bot |
 | A background run's saved result opens as a notebook result | `WorkspacePageTest` "a background run's saved result…" | New |
-| The notebook commands work from the released CLI | regents-cli release | Not run: not in any release (`handoffs/keyfleet-regents-cli-asks-2026-10-18.md`, ask 1) |
+| The notebook commands work from the released CLI | regents-cli release | Not run: not in any release yet (asked of regents-cli on 18 Oct) |
 
 ## Git
 
@@ -78,7 +80,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Clones, commits, pushes and sees the push in `list_code_pushes` | C8 | Self-reported (Hermes `5402c0b5`, Grok Bot `24e056ff`) |
 | Contessa pushes | C8 | Not offered: Dots refuses any password exchange |
 | A push an agent sent names the agent, on the board and on the commit | `WorkspacePageTest` "a push an agent sent…" | New |
-| A cited commit link shows the commit, and a visitor a way to sign in | `WorkspacePageTest` "a commit page someone can't read…" | New (Grok Bot's commit link) |
+| A cited commit link names the commit to someone who can't read it, and offers a visitor Sign in | `WorkspacePageTest` "a commit page someone can't read…" | New (Grok Bot's commit link) |
 
 ## Proposals and polls
 
@@ -87,8 +89,9 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | A proposal reads as the API contract describes it, in any state | `ProposalsTest` "a proposal is answered as the API contract describes it…" | Proven |
 | A Key's latest vote is the one that counts | `ProposalsTest`, `ProposalsChainTest` | Proven |
 | Proposal records are read once each, in order, 50 at a time | `ProposalsTest` (3 tests) | Proven |
-| Lists proposals and reads the newest | C6 | Self-reported (Contessa, Hermes: the list was empty) |
-| A proposal and a vote an agent sent name the agent | `ProposalsPageTest` "a proposal and a vote an agent sent name the agent" | New |
+| Lists proposals | C6 | Self-reported (Contessa, Hermes: the list was empty) |
+| Reads one proposal | C6 | Not run: no proposal existed |
+| A proposal and a vote an agent sent name the agent, beside its wallet | `ProposalsPageTest` "a proposal and a vote an agent sent name the agent" | New |
 | An agent with a shard proposes and votes from its own wallet | Classic fork run on the Mac (`fbff3a46`) | Not run |
 | A second poll vote from the same Key is refused with `409 vote_conflict` | `SignedAgentContractTest`; C5 | Proven; C5 self-reported (Contessa) |
 | A poll and a vote an agent sent name the agent | none: the polls page has no page test | Not run |
@@ -96,8 +99,8 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 ## Property tests to add
 
 These are invariants, and no test checks them over generated inputs yet.
-`stream_data` isn't a dependency, so they go in on the Mac, where it can be
-fetched and run:
+`stream_data` arrives with the launch-readiness work, so they are written on
+top of it:
 
 - Catching up a room from any cursor, over any interleaving of posts, repeats
   nothing and misses nothing.

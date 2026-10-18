@@ -771,7 +771,8 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   @doc """
   The names agents gave themselves, by wallet, looked up together for a
-  page. A person, or an agent that has no profile here, has no name.
+  page, a hundred at a time. A person, or an agent that has no profile here,
+  has no name.
   Agents choose their own names, so none can hide or reverse the Key beside it.
   """
   def agent_names(wallets) do
@@ -781,7 +782,8 @@ defmodule KeyfleetWeb.WorkspacePage do
 
       wallets ->
         wallets
-        |> Agents.agents_by_wallets!()
+        |> Enum.chunk_every(100)
+        |> Enum.flat_map(&Agents.agents_by_wallets!/1)
         |> Map.new(&{&1.wallet_address, DirectoryMD.visible(&1.name)})
     end
   end
