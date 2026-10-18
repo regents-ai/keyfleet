@@ -23,7 +23,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   alias Keyfleet.Proposals.Actions
   alias Keyfleet.Treasury
   alias Keyfleet.WalletSteps.{Reads, VoteSteps}
-  alias KeyfleetWeb.NotFoundError
+  alias KeyfleetWeb.{NotFoundError, WorkspacePage}
 
   @number ~r/\A[1-9][0-9]{0,17}\z/
   @votes_page 50
@@ -89,6 +89,7 @@ defmodule KeyfleetWeb.ProposalsPage do
             proposal: Map.merge(summary(proposal), details(proposal, fleet)),
             on_chain: reading.deployed? && on_chain(fleet, proposal.number),
             votes: Enum.map(votes, &vote/1),
+            agents: WorkspacePage.agent_names([proposal.proposer | Enum.map(votes, & &1.voter)]),
             more_votes: if(more?, do: path.(votes_after: List.last(votes).record_seq)),
             first_votes: if(votes_after > 0, do: path.([]))
           })

@@ -29,7 +29,7 @@ defmodule KeyfleetWeb.PollsLive do
   alias Keyfleet.Polls.Poll
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeysLive
-  alias KeyfleetWeb.PageRead
+  alias KeyfleetWeb.{ActivityLines, PageRead, WorkspacePage}
   alias KeyfleetWeb.PollRefusal
   alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.ShellLive
@@ -73,12 +73,12 @@ defmodule KeyfleetWeb.PollsLive do
         <h2 id="polls-start-title">
           Start a poll
           <Regent.Primitives.tip id="polls-start-tip" label="About starting a poll">
-            You ask as Key #{Rules.grouped(@page.voter.key)}. A poll asks one question and stays open from 1 minute to an hour; you can end it early. Each Key starts one poll a day.
+            You ask as Key {Rules.grouped(@page.voter.key)}. A poll asks one question and stays open from 1 minute to an hour; you can end it early. Each Key starts one poll a day.
           </Regent.Primitives.tip>
         </h2>
 
         <p :if={@page.last_started} id="polls-start-limit" class="polls-detail">
-          Key #{Rules.grouped(@page.voter.key)} started a poll in the last day. It can start another after {RoomsLive.stamp(
+          Key {Rules.grouped(@page.voter.key)} started a poll in the last day. It can start another after {RoomsLive.stamp(
             DateTime.add(@page.last_started.inserted_at, 1, :day)
           )}.
         </p>
@@ -230,7 +230,7 @@ defmodule KeyfleetWeb.PollsLive do
         <.link patch={poll_path(@page.fleet_id, @poll.id)}>{@poll.question}</.link>
       </h3>
       <p class="polls-detail">
-        Started by Key #{Rules.grouped(@poll.started_by_key)} · {count(
+        Started by {ActivityLines.key_name(@poll.started_by_key, @page.agents[@poll.acting_agent_wallet])} · {count(
           @poll.votes_cast,
           "vote",
           "votes"
@@ -286,7 +286,7 @@ defmodule KeyfleetWeb.PollsLive do
         </span>
         Started by
         <.link patch={KeyLinks.key_path(@page.fleet_id, @poll.started_by_key)}>
-          Key #{Rules.grouped(@poll.started_by_key)}
+          {ActivityLines.key_name(@poll.started_by_key, @page.agents[@poll.acting_agent_wallet])}
         </.link>
         · {if @open?,
           do: seconds_left(@poll.closes_at, @page.now),
@@ -392,7 +392,7 @@ defmodule KeyfleetWeb.PollsLive do
             <ul class="polls-votes">
               <li :for={vote <- @page.votes}>
                 <.link patch={KeyLinks.key_path(@page.fleet_id, vote.token_id)}>
-                  Key #{Rules.grouped(vote.token_id)}
+                  {ActivityLines.key_name(vote.token_id, @page.agents[vote.acting_agent_wallet])}
                 </.link>
                 chose {vote.choice}
                 <span :if={vote.reason} class="polls-reason">“{vote.reason}”</span>
@@ -559,9 +559,12 @@ defmodule KeyfleetWeb.PollsLive do
 
   defp read_list(socket, fleet_id) do
     with_fleet(socket, fleet_id, fn page, actor ->
+      polls = Polls.list_polls!(fleet_id, actor: actor)
+
       Map.merge(page, %{
         kind: :list,
-        polls: Polls.list_polls!(fleet_id, actor: actor),
+        polls: polls,
+        agents: WorkspacePage.agent_names(Enum.map(polls, & &1.acting_agent_wallet)),
         last_started: page.voter && Polls.last_started!(fleet_id, page.voter.key, actor: actor)
       })
     end)
@@ -571,13 +574,16 @@ defmodule KeyfleetWeb.PollsLive do
     with_fleet(socket, fleet_id, fn page, actor ->
       poll = Polls.get_poll!(fleet_id, poll_id, actor: actor)
       member? = poll != nil and page.voter != nil
+      votes = if member?, do: Polls.votes_in_poll!(fleet_id, poll_id, actor: actor), else: []
+      wallets = [poll && poll.acting_agent_wallet | Enum.map(votes, & &1.acting_agent_wallet)]
 
       Map.merge(page, %{
         kind: :poll,
         poll_id: poll_id,
         poll: poll,
+        agents: WorkspacePage.agent_names(wallets),
         my_vote: if(member?, do: Polls.my_vote!(fleet_id, poll_id, actor: actor)),
-        votes: if(member?, do: Polls.votes_in_poll!(fleet_id, poll_id, actor: actor), else: [])
+        votes: votes
       })
     end)
   end

@@ -327,6 +327,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :commit, :any, required: true, doc: "the commit as read, or `:unreadable`"
 
+  attr :signed_out?, :boolean,
+    default: false,
+    doc: "whether nobody is signed in, so the members-only page offers Sign in"
+
   def commit(%{commit: :unreadable} = assigns), do: ~H|<.unreadable id="workspace-commit-page" />|
 
   def commit(%{commit: %{members_only?: true}} = assigns) do
@@ -337,7 +341,17 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <p id="workspace-commit-members-only" class="workspace-lede">
           This commit is in {@commit.fleet_name}’s shared code. Its Key holders and their paired agents can read it.
         </p>
+        <p class="workspace-detail"><code>{@commit.hash}</code></p>
         <.link patch={KeyLinks.members_path(@commit.fleet_id)}>See this fleet’s Keys</.link>
+        <Regent.Primitives.button
+          :if={@signed_out?}
+          id="workspace-commit-sign-in"
+          type="button"
+          variant="secondary"
+          data-account-target="sign-in"
+        >
+          Sign in
+        </Regent.Primitives.button>
       </header>
     </article>
     """
@@ -398,7 +412,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </Regent.Primitives.empty_state>
           <ol :if={@commit.pushes != []} id="workspace-commit-pushes" class="workspace-lines">
             <li :for={push <- @commit.pushes} data-push={push.id}>
-              <p><.key fleet_id={@commit.fleet_id} token_id={push.token_id} /> sent {push.what}</p>
+              <p>
+                <.key fleet_id={@commit.fleet_id} token_id={push.token_id} agent={push.agent} /> sent {push.what}
+              </p>
               <p class="workspace-detail">{push.at}</p>
             </li>
           </ol>
@@ -491,7 +507,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <ol :if={@code.pushes != []} id="code-pushes" class="workspace-lines">
         <li :for={push <- @code.pushes} data-push={push.id}>
           <p>
-            <.key fleet_id={@fleet_id} token_id={push.token_id} /> sent {push.what}, ending at
+            <.key fleet_id={@fleet_id} token_id={push.token_id} agent={push.agent} /> sent {push.what}, ending at
             <.value
               value={push.commit}
               fleet_id={@fleet_id}
@@ -700,7 +716,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <dt>Notebooks <span class="workspace-detail">marimo</span></dt>
           <dd>
             <%= if Keyfleet.Notebooks.hub?(@fleet_id) do %>
-              Configured for this fleet. Members can open notebooks and saved documents.
+              Ready for this fleet. Members can open notebooks and saved results.
             <% else %>
               Not connected for this fleet yet.
             <% end %>
@@ -718,7 +734,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
       </dl>
       <Regent.Primitives.disclosure id="workspace-agent-guide" summary="Work here with an agent">
         <p>
-          Pair your agent with your account, then have it check access to this fleet. It signs its own requests.
+          Pair your agent with your account, then have it check access to this fleet.
         </p>
         <ol class="workspace-list">
           <li>Read the existing work. Choose a task and record the next step.</li>

@@ -19,7 +19,9 @@ defmodule KeyfleetWeb.AgentGraphController do
       {400, "The body doesn't fit this operation. Check it against the docs, then send it again."},
     "forbidden_scope" =>
       {403, "details names the scope. Write only in scopes the Key may write."},
-    "not_found" => {404, "Check the id. graph/changes lists what the workspace holds."},
+    "not_found" =>
+      {404,
+       "Check the id. The workspace's changes (`workspace changes` on the command line) list everything it holds."},
     "conflict" =>
       {409,
        "details.object is the item as it is now. Merge your change into it, then send it with its version and a new command_id."},

@@ -659,7 +659,11 @@ defmodule KeyfleetWeb.ShellLive do
             item={@workspace}
             signed_out?={is_nil(actor(@access_context))}
           />
-          <WorkspaceLive.commit :if={@route_spec.route_id == :code_commit} commit={@workspace} />
+          <WorkspaceLive.commit
+            :if={@route_spec.route_id == :code_commit}
+            commit={@workspace}
+            signed_out?={is_nil(actor(@access_context))}
+          />
           <TreasuryLive.page
             :if={@route_spec.route_id == :treasury}
             page={@proposals}
