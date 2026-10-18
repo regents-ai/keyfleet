@@ -6,10 +6,12 @@ defmodule KeyfleetWeb.AgentNotebookController do
   read it until it has finished and its saved result has an address the
   workspace can cite (`Keyfleet.Notebooks.Runs`). The agent is let in exactly
   as on the fleet's notebook host (`Keyfleet.Notebooks.admit/3`), and the hub
-  knows each run as the agent's.
+  knows each run as the agent's. Starting a run spends the agent's
+  `:notebook_run_starts` allowance, the same one the notebook host spends.
   """
   use KeyfleetWeb, :controller
 
+  alias Keyfleet.Limits
   alias Keyfleet.Notebooks
   alias Keyfleet.Notebooks.Runs
   alias KeyfleetWeb.Refusal
@@ -27,7 +29,8 @@ defmodule KeyfleetWeb.AgentNotebookController do
         "idempotency_key" => idempotency_key
       }) do
     in_notebooks(conn, fleet_id, fn subject, project_id ->
-      Runs.start(fleet_id, subject, project_id, notebook_id, idempotency_key)
+      with :ok <- Limits.admit(:notebook_run_starts, subject),
+           do: Runs.start(fleet_id, subject, project_id, notebook_id, idempotency_key)
     end)
   end
 
@@ -56,6 +59,14 @@ defmodule KeyfleetWeb.AgentNotebookController do
       {:error, :catching_up} -> Refusal.json(conn, 503, "notebooks_catching_up")
       {:error, :setting_up} -> Refusal.json(conn, 503, "notebooks_setting_up")
       {:error, :unavailable} -> Refusal.json(conn, 503, "notebooks_unavailable")
+      {:limited, seconds} -> runs_limited(conn, seconds)
     end
+  end
+
+  # Runs started on the notebook host and here share one allowance.
+  defp runs_limited(conn, seconds) do
+    conn
+    |> put_resp_header("retry-after", Integer.to_string(seconds))
+    |> Refusal.json(429, "notebook_runs_limit_reached")
   end
 end
