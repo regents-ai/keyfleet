@@ -326,7 +326,7 @@
 }
 
 @layer regents-product {
-  #treasury-page .proposals-panel { justify-items: stretch; padding: clamp(1rem, 2.5vw, 2rem); }
+  #treasury-page .proposals-panel { justify-items: stretch; }
   #treasury-page .proposals-table { display: table; table-layout: fixed; }
   #treasury-page .proposals-table th, #treasury-page .proposals-table td { white-space: normal; overflow-wrap: anywhere; }
   .treasury-permissions { margin: 0; }
@@ -362,6 +362,26 @@
     .proposals-page .wallet-panel-step,
     .proposals-page .wallet-panel-step > .rg-button:not(.rg-button--quiet) {
       flex: 1 1 auto;
+    }
+
+    /* Older and newer pages and each carried-out proposal are a full
+       finger's height; an address's BaseScan link is as tall and as wide. */
+    .proposals-pages a,
+    .proposals-lines > li > a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2.75rem;
+    }
+
+    .proposals-lines > li > a {
+      justify-self: start;
+    }
+
+    #treasury-page .proposals-address a {
+      align-items: center;
+      justify-content: center;
+      min-width: 2.75rem;
+      min-height: 2.75rem;
     }
 
     /* The Treasury's tables break only between words, and a table still too

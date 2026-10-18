@@ -235,6 +235,8 @@
 .verified-connections__list li > div {
   display: grid;
   gap: 0.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Only the text cell is muted; the row's button keeps the shared button's ink. */
@@ -428,6 +430,25 @@ div.verified-connections__notice p {
   .rg-account__agent {
     flex-wrap: wrap;
     row-gap: 0;
+  }
+
+  /* Each Key, each fleet's name above its Keys, the link under the agents
+     and under Credits, and each connected account are a full finger's
+     height. */
+  .account-keys__fleet h3 a,
+  .account-keys__list a,
+  #account-agents .rg-account__footer > a,
+  #account-credits > a,
+  .verified-connections__list a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
+
+  #account-agents .rg-account__footer > a,
+  #account-credits > a,
+  .verified-connections__list a {
+    justify-self: start;
   }
 
   /* "Copy message" and "Make a new code" fill the row they wrap onto. */

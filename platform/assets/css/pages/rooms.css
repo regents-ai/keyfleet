@@ -295,6 +295,19 @@
     min-height: 2.75rem;
   }
 
+  /* The Key a post was written as, which opens its page, is a full
+     finger's height too. */
+  .rooms-author > a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
+
+  /* Signing in and General each fill the row they wrap onto. */
+  .rooms-locked-actions > .rg-button {
+    flex-grow: 1;
+  }
+
   /* Send spans the box above it. */
   .rooms-composer {
     justify-items: stretch;

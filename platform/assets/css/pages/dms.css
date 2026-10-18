@@ -116,6 +116,20 @@
     align-items: center;
   }
 
+  /* A file or link sent in a message is a full finger's height. */
+  .dms-parts a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
+
+  /* Block spans its panel like the choice above it, and so does Sign in
+     when the messages are closed. */
+  .dms-settings > .rg-button,
+  #dms-closed > .rg-button {
+    justify-self: stretch;
+  }
+
   /* A Key's one action spans its heading. */
   .key-messages {
     justify-self: stretch;

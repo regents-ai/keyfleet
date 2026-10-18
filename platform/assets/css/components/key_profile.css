@@ -301,7 +301,7 @@
 
 /* Phones: a sheet against the bottom edge, with a strip of the fleet's page
    left showing above it, so it reads as a layer over the map. */
-@media (max-width: 599px) {
+@media (max-width: 47.99rem) {
   .key-profile,
   .key-profile[open]:not(:modal) {
     width: 100vw;
@@ -314,8 +314,10 @@
     padding-block-end: env(safe-area-inset-bottom);
   }
 
+  /* The card is never taller than about half the screen, as on a tablet,
+     so a phone on its side still shows the Key's facts under it. */
   .key-profile-card {
-    width: 58vw;
+    width: min(58vw, 33svh);
     height: auto;
   }
 
@@ -328,14 +330,16 @@
     grid-column: 1 / -1;
   }
 
-  /* The title has its own line, with the message button and Close under it,
-     so Close never runs past the screen's edge. */
+  /* Close sits beside the title when they fit. With the message button too,
+     both go on a line of their own under the title, so Close never runs past
+     the screen's edge. */
   .key-profile__header {
     flex-wrap: wrap;
   }
 
   .key-profile__actions {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
+    justify-content: flex-end;
   }
 
   .key-profile__actions > .rg-button {
@@ -344,6 +348,19 @@
 
   .key-profile__actions > form {
     flex: none;
+  }
+
+  /* The Key's other Keys are a full finger's height, and each Claim fills
+     the row it sits on. */
+  .key-profile-keys a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
+
+  .key-profile .wallet-panel-step,
+  .key-profile .wallet-panel-step > .rg-button {
+    flex: 1 1 auto;
   }
 
   /* Post spans the box above it, as Send does in the rooms. */

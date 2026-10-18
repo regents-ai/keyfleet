@@ -163,7 +163,9 @@ defmodule KeyfleetWeb.PollsLive do
             </select>
           </Regent.Primitives.field>
 
-          <Regent.Primitives.button type="submit">Start poll</Regent.Primitives.button>
+          <div class="sticky-actions">
+            <Regent.Primitives.button type="submit">Start poll</Regent.Primitives.button>
+          </div>
         </.form>
       </section>
 
@@ -324,7 +326,9 @@ defmodule KeyfleetWeb.PollsLive do
             >
               <input id={field.id} name="vote[reason]" maxlength="500" autocomplete="off" />
             </Regent.Primitives.field>
-            <Regent.Primitives.button type="submit">Vote</Regent.Primitives.button>
+            <div class="sticky-actions">
+              <Regent.Primitives.button type="submit">Vote</Regent.Primitives.button>
+            </div>
           </.form>
 
           <ul :if={@open? and not @can_vote?} class="polls-options">

@@ -68,3 +68,12 @@
   flex: none;
   padding-inline: 0;
 }
+
+/* On a phone each connection is a full finger's height. */
+@media (max-width: 47.99rem) {
+  .member-card__connections a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
+}

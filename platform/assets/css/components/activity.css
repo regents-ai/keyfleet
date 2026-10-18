@@ -22,7 +22,10 @@
   line-height: 1.45;
 }
 
+/* The warm mark sits in the margin before the line, clear of its time. */
 .activity-line[data-tone="disagreement"] {
+  margin-inline-start: -0.6rem;
+  padding-inline-start: 0.6rem;
   box-shadow: inset 3px 0 0 var(--ash-accent-warm);
 }
 

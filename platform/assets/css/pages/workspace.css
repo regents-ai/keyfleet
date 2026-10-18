@@ -301,18 +301,38 @@
 }
 
 @media (max-width: 47.99rem) {
-  /* The kinds of item, archived items and the page links are a full
-     finger's height. */
+  /* Every link that stands on its own line is a full finger's height: the
+     kinds of item, the page links, the way back to the workspace, archived
+     items, each item's title, and the Keys, commits and addresses an item
+     names. */
   .workspace-filters {
     row-gap: 0;
   }
 
   .workspace-filters a,
-  .workspace-toggle,
-  .workspace-pages a {
+  .workspace-pages a,
+  .workspace-kicker a,
+  .workspace-heading > a,
+  .workspace-panel > a,
+  .workspace-card h3 a,
+  .workspace-facts dd > a,
+  .workspace-fields dd > a,
+  .workspace-list li > a,
+  .workspace-lines > li > a {
     display: inline-flex;
     align-items: center;
     min-height: 2.75rem;
+  }
+
+  /* Sign in, the code's Copy buttons and Get a git password span their
+     panel. */
+  .workspace-heading > .rg-button,
+  .workspace-panel > .rg-button {
+    justify-self: stretch;
+  }
+
+  .workspace-code-line .rg-copy {
+    flex-grow: 1;
   }
 }
 

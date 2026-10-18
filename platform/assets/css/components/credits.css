@@ -247,6 +247,21 @@
   .credits-panel__amount {
     font-size: 2.25rem;
   }
+
+  /* The amount takes a press anywhere in its box around the figure, which
+     stays where it was; Purchase History and the policy links are a full
+     finger's height. */
+  .credits-panel__amount input {
+    margin: -0.5rem -0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .credits-panel__history,
+  .credits-panel__legal a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
 }
 
 /* On the narrowest phones each press stacks: the button across the panel,

@@ -192,6 +192,11 @@
   min-width: 0;
 }
 
+/* Start poll and Vote span the form, in the row that keeps them in reach. */
+.polls-form > .sticky-actions {
+  display: grid;
+}
+
 .polls-field input,
 .polls-field select,
 .polls-field textarea {
@@ -229,5 +234,19 @@
   display: block;
   color: var(--color-fg-muted);
   white-space: pre-line;
+}
+
+@media (max-width: 47.99rem) {
+  /* Each choice, and the Key that started the poll, are a full finger's
+     height. */
+  .polls-choices label,
+  .polls-status a {
+    min-height: 2.75rem;
+  }
+
+  .polls-status a {
+    display: inline-flex;
+    align-items: center;
+  }
 }
 }

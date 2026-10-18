@@ -27,8 +27,9 @@
 }
 
 /* The title takes focus when the dialog opens so it is read out first; it is
-   not something to press, so it shows no focus ring. */
-.send-agent h2:focus {
+   not something to press, so it shows no focus ring. Named under the shell to
+   outrank its ring for everything inside it. */
+#app-shell .send-agent h2:focus {
   outline: none;
 }
 
@@ -53,6 +54,20 @@
 
 .send-agent__actions form {
   margin: 0;
+}
+
+/* On a phone Copy and Close fill the row they sit on, so the two read as a
+   pair rather than two odd widths. */
+@media (max-width: 47.99rem) {
+  .send-agent__actions > .rg-button,
+  .send-agent__actions > form,
+  .send-agent__actions > form > .rg-button {
+    flex: 1 1 auto;
+  }
+
+  .send-agent__actions > form {
+    display: flex;
+  }
 }
 
 .send-agent__guide {

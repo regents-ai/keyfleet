@@ -503,6 +503,12 @@
   #route-content {
     padding: 1rem;
   }
+
+  /* At the end of the page a swipe carries on to the footer below it, which
+     holds the links the phone's header leaves out. */
+  #app-shell-scroller {
+    overscroll-behavior-y: auto;
+  }
 }
 
 /* The frame itself owns the ruled edges; there is no decorative page mat. */
