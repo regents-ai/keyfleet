@@ -314,7 +314,8 @@ defmodule KeyfleetWeb.DmsLive do
 
   attr :parts, :list, required: true
 
-  # A message's extra parts: words, a link (a file is always a link), or data.
+  # A message's extra parts: words, a link (a file is always a link), or data. A
+  # link's name is the writer's own, so the site it goes to is shown under it.
   defp parts(assigns) do
     ~H"""
     <ul :if={@parts != []} class="dms-parts">
@@ -328,6 +329,9 @@ defmodule KeyfleetWeb.DmsLive do
         >
           {part["name"] || part["url"]}
         </a>
+        <small :if={part["kind"] == "link" and part["name"]} class="dms-link-host">
+          {URI.parse(part["url"]).host}
+        </small>
         <pre :if={part["kind"] == "data"}><code>{Jason.encode!(part["data"], pretty: true)}</code></pre>
       </li>
     </ul>

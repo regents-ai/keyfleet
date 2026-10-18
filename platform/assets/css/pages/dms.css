@@ -81,6 +81,13 @@
   border: 0;
 }
 
+/* The site a named link goes to, under its name. */
+.dms-link-host {
+  display: block;
+  color: var(--color-fg-muted);
+  font-size: 0.8rem;
+}
+
 .dms-parts pre {
   margin: 0;
   padding: 0.5rem;
