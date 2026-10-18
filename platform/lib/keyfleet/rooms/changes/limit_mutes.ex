@@ -40,9 +40,10 @@ defmodule Keyfleet.Rooms.Changes.LimitMutes do
       else: Ash.Changeset.add_error(changeset, MuteLimitError.exception(limit: @limit))
   end
 
-  # The server's own counts: every mute the muter has, in every fleet.
-  defp count(muter),
-    do: Mute |> Ash.Query.filter(muter == ^muter) |> Ash.count!(authorize?: false)
+  defp count(muter) do
+    # The limit counts the muter's mutes in every fleet, not only this one's.
+    Mute |> Ash.Query.filter(muter == ^muter) |> Ash.count!(authorize?: false)
+  end
 
   defp muted?(changeset, muter) do
     fleet_id = Ash.Changeset.get_attribute(changeset, :fleet_id)
@@ -50,6 +51,7 @@ defmodule Keyfleet.Rooms.Changes.LimitMutes do
 
     Mute
     |> Ash.Query.filter(muter == ^muter and fleet_id == ^fleet_id and token_id == ^token_id)
+    # A repeat mute is checked against the muter's own row, whoever may read it.
     |> Ash.exists?(authorize?: false)
   end
 end

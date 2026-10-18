@@ -481,6 +481,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     # A Key not sold yet isn't muted, and nor is a 501st Key.
     {:ok, minted} = Keyfleet.Chain.minted(@fleet)
     unsold = Map.put(@address, "token_id", Integer.to_string(minted + 1))
+
     assert answer(c, c.signer, "POST", @mute, unsold, %{}, 404).body["error"]["code"] ==
              "key_unknown"
 

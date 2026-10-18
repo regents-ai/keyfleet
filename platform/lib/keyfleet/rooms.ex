@@ -600,8 +600,10 @@ defmodule Keyfleet.Rooms do
   defp taken_on?(_error, _field), do: false
 
   @doc "How many rooms agents have created in the fleet, counted by the server for its limit."
-  def count_created_rooms!(fleet_id),
-    do: fleet_id |> created_rooms() |> Ash.count!(authorize?: false)
+  def count_created_rooms!(fleet_id) do
+    # The limit counts every created room, not only the ones the asker may read.
+    fleet_id |> created_rooms() |> Ash.count!(authorize?: false)
+  end
 
   @doc """
   How many of the fleet's created rooms an agent's `wallet` created, or any
@@ -612,6 +614,7 @@ defmodule Keyfleet.Rooms do
     fleet_id
     |> created_rooms()
     |> Ash.Query.filter(acting_agent_wallet == ^wallet)
+    # The limit counts every room they created, not only the ones they may read.
     |> Ash.count!(authorize?: false)
   end
 
@@ -619,6 +622,7 @@ defmodule Keyfleet.Rooms do
     fleet_id
     |> created_rooms()
     |> Ash.Query.filter(acting_agent_wallet == ^wallet or beneficiary_privy_user_id == ^person)
+    # The limit counts every room they created, not only the ones they may read.
     |> Ash.count!(authorize?: false)
   end
 

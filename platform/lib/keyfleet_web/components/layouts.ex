@@ -54,9 +54,7 @@ defmodule KeyfleetWeb.Layouts do
         type="button"
         class="toast__dismiss"
         aria-label="Dismiss"
-        phx-click={
-          JS.push("lv:clear-flash", value: %{key: @kind}) |> JS.hide(to: "#flash-#{@kind}")
-        }
+        phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> JS.hide(to: "#flash-#{@kind}")}
       >
         ×
       </button>
