@@ -229,7 +229,10 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = live(conn, "#{@list}/1")
 
       assert has_element?(view, "#proposal-proposer", "Mate (Key 1,234),")
-      assert lines(view, "#proposal-votes li") == ["Yes Mate, with Key 1,234", "No 0xeeee..eeee, with Key 3"]
+      assert lines(view, "#proposal-votes li") == [
+               "Yes Mate (0xcccc..cccc), with Key 1,234",
+               "No 0xeeee..eeee, with Key 3"
+             ]
     end
 
     test "a proposal whose standing can't be read from the network says so", %{conn: conn} do

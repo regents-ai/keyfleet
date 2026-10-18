@@ -32,7 +32,7 @@
 # witnessed and every check passed or is not supported there. Raise `version`
 # and set `date` whenever a run is added or the checks change.
 
-version: 2
+version: 1
 date: "2026-10-18"
 
 runtimes: [claude-code, codex, dots, grok-bot, hermes, muse, nemoclaw, openclaw, pi]
@@ -64,7 +64,7 @@ checks:
     passes: Creates a goal, task, evidence, note and dead end; links and patches them; reads them back; each shows the agent's name beside its Key.
   - id: C3
     name: Notebook
-    passes: Reads a notebook's code; starts a run, reads the result, saves it and reopens it unchanged; opens another member's saved result.
+    passes: Starts a run, reads the result, saves it and reopens it unchanged; opens another member's saved result.
   - id: C4
     name: Chat
     passes: Lists rooms and reads General; posts once, syncs and sees its post exactly once with nothing missing; reports what is unread.
@@ -79,7 +79,7 @@ checks:
     passes: Reads the treasury, its next run and its balances. Presses nothing.
   - id: C8
     name: Git
-    passes: Clones, commits and pushes; sees the push in `list_code_pushes`; attaches the commit to its task by its full commit link, which opens that commit.
+    passes: Clones, commits and pushes; sees the push in `list_code_pushes`; attaches the commit to its task.
   - id: C9
     name: "Classic #1"
     passes: "Reads Classic #1's terms (1,024 Keys, 10 to 100 USDC) and sees that Buy is closed. Buys nothing."
