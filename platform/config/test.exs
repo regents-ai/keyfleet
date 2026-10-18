@@ -119,7 +119,7 @@ config :keyfleet, Keyfleet.Repo,
   port: 5432,
   database: "keyfleet#{System.get_env("MIX_TEST_PARTITION")}_test",
   pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: 10,
+  pool_size: String.to_integer(System.get_env("POOL_SIZE", "10")),
   # A case that sends two callers at one row shares one sandboxed connection
   # between them, so the second caller waits while the first one holds it. The
   # sandbox drops a waiting caller once it has waited longer than twice
