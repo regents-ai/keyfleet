@@ -94,7 +94,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   @runtime_request ~w(marimo-server-token marimo-session-id)
   # Only what a notebook page reads from the hub's answers comes back: the
   # content and how it is encoded, what makes caching, ranges, downloads and
-  # redirects work, the two headers the notebook app reads on a snapshot, and
+  # redirects within the fleet's notebooks work (`own_location?/2`), the two
+  # headers the notebook app reads on a snapshot, and
   # the security headers the hub sets on its pages, which only restrict them.
   # Cookies, credentials, cross-origin grants and caching rules never do; this
   # site's own `no-store` stands.
@@ -633,11 +634,13 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp stream_back({:ok, %Req.Response{} = response}, conn, fleet_id) do
     conn =
-      Enum.reduce(response.headers, conn, fn {name, values}, conn ->
-        if name in @kept_response,
-          do: Enum.reduce(values, conn, &prepend_resp_headers(&2, [{name, &1}])),
-          else: conn
-      end)
+      for {name, values} <- response.headers,
+          name in @kept_response,
+          value <- values,
+          name != "location" or own_location?(value, fleet_id),
+          reduce: conn do
+        conn -> prepend_resp_headers(conn, [{name, value}])
+      end
 
     cond do
       conn.method == "HEAD" or response.status in [204, 304] ->
@@ -650,6 +653,22 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       true ->
         conn = send_chunked(conn, response.status)
         Enum.reduce_while(response.body, conn, &send_part(response, &2, &1))
+    end
+  end
+
+  # A hub sends the browser on only within the fleet's notebooks: to a path
+  # here, or an address naming this host. Any other location, or one a browser
+  # might read another way, is dropped.
+  defp own_location?(location, fleet_id) do
+    case URI.new(location) do
+      {:ok, %URI{scheme: nil, host: nil}} ->
+        true
+
+      {:ok, %URI{scheme: scheme, host: host}} when scheme in ["http", "https"] ->
+        is_binary(host) and String.downcase(host) == Notebooks.host(fleet_id)
+
+      _other ->
+        false
     end
   end
 
