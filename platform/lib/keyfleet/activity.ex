@@ -153,12 +153,6 @@ defmodule Keyfleet.Activity do
     limit = Keyword.get(opts, :limit, @page)
     true = limit in 1..@page
     actor = Keyword.get(opts, :actor)
-    # One database session for the whole page: the clock the first page
-    # reads is the one that stamped the posts it reads.
-    Repo.checkout(fn -> read_page(fleet_id, cursor, limit, actor) end)
-  end
-
-  defp read_page(fleet_id, cursor, limit, actor) do
     positions = cursor || start()
 
     # A read that came back full leaves out its last entry, which may be the

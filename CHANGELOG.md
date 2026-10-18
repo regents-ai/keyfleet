@@ -2319,3 +2319,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - A press the open page doesn't know (for example one left over from a page
   just navigated away from) now changes nothing, where it used to make the
   page start over.
+
+## 2026-10-18 — A fleet's activity no longer jams the site
+
+- Reading a fleet's activity no longer keeps one database connection to
+  itself while its other reads wait for more. With a few people on the Club
+  page at once, those reads could take every connection and stall each other
+  until the page gave up and tried again, which is what failed on
+  `/app/fleets/regents_club` three times on 18 October.
+
+## 2026-10-18 — v86 released
+
+- Released `4dca18a9` as Fly v86; the image names the commit it was built
+  from.
