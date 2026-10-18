@@ -2442,3 +2442,18 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   home-hero-field; 941 server tests and 299 browser-code tests pass, six new
   regressions, headless Chromium 26 of 26 at 390 and 1280; gaps: WebKit not run
   on the Mac, local data has no ships to draw.
+
+## 2026-10-18 — Gentler, clearer motion on the fleet and poll pages
+
+- When a Pass number opens no Key, the reason shows at once and gives a short
+  shake, and shakes again when the reason changes. The note under "Send to my
+  agent" does the same when the words can't be sent; "Sent" stays still.
+- Words sent to your agent slide into their list instead of appearing with a
+  jump.
+- An open poll's "votes so far" number turns over to its new value when a vote
+  arrives.
+- On the key map, the hover zoom happens only under a mouse, so a tap on a
+  phone leaves the map still, and it uses the site's shared timing.
+- The dashed line round the level on sale no longer moves; it stays dashed.
+- With less motion asked for, the shakes and the turning number are still and
+  every message and number shows at once.

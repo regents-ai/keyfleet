@@ -153,13 +153,13 @@
 .km-tile[data-pic] > span:first-of-type { font-size: 0; }
 
 /* Under the pointer a sold key's hex rises and its close-up draws back
-   inside it, a zoom out. */
-@media (hover: hover) {
+   inside it, a zoom out. A tap on a phone leaves the map still. */
+@media (hover: hover) and (pointer: fine) {
   .km-tile::before,
   .km-tile::after,
   .km-pic,
   .km-pic > img {
-    transition: transform 160ms ease-out;
+    transition: transform var(--duration-fast) var(--ease-out);
   }
 
   .km-tile:hover:not([data-state~="unsold"]) {
@@ -220,8 +220,8 @@
 }
 
 /* The levels' outlines, in the gap round each tile on a level's edge: solid
-   once sold out, dashed while a level waits, and a thicker accent dash that
-   marches round the level on sale now. */
+   once sold out, dashed while a level waits, and a thicker accent dash
+   round the level on sale now. */
 .km-edges {
   position: absolute;
   top: 50%;
@@ -245,15 +245,6 @@
   stroke: var(--km-on-sale-line);
   stroke-width: 3px;
   stroke-dasharray: 7 5;
-  animation: km-march 2.4s linear infinite;
-}
-
-@keyframes km-march {
-  to { stroke-dashoffset: -24; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .km-edge[data-level="on-sale"] { animation: none; }
 }
 
 .km-tile > span:last-child {
