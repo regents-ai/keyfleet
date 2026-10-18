@@ -230,6 +230,26 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert has_element?(view, "#proposal-no-calls", "A decision. Nothing moves.")
     end
 
+    # An agent proposes and votes from its own wallet, through a shard; the
+    # page named only the wallet, so nobody could tell which agent it was.
+    test "a proposal and a vote an agent sent name the agent", %{conn: conn} do
+      agent = ProposalHelpers.wallet("c")
+
+      Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+        actor: Keyfleet.PairingHelpers.pair_wallet!(agent)
+      )
+
+      ProposalHelpers.proposal!(@fleet, 1, proposer: agent, author_key: 1_234)
+      ProposalHelpers.vote!(@fleet, 1, agent, :yes, [1_234])
+      ProposalHelpers.vote!(@fleet, 1, @voter, :no, [3])
+      ChainViews.put!(on_chain(1, :open))
+
+      {:ok, view, _html} = live(conn, "#{@list}/1")
+
+      assert has_element?(view, "#proposal-proposer", "Mate (Key 1,234),")
+      assert lines(view, "#proposal-votes li") == ["Yes Mate, with Key 1,234", "No 0xeeee..eeee, with Key 3"]
+    end
+
     test "a proposal whose standing can't be read from the network says so", %{conn: conn} do
       ProposalHelpers.proposal!(@fleet, 1)
 
