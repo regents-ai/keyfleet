@@ -25,13 +25,6 @@ defmodule KeyfleetWeb.Live.Session do
     |> Map.put("render_route", local_route(conn.request_path, conn.query_string))
   end
 
-  # Pages outside the product shell only show who is signed in, in the site
-  # header; they act for nobody, so they hold no lease.
-  def on_mount(:show_account, _params, session, socket) do
-    {_lineage, account} = session |> SessionAuthority.claim() |> SessionAuthority.resolve()
-    {:cont, socket |> assign(signed_out_reason: :signed_out) |> assign_principal(account)}
-  end
-
   def on_mount(:load_human, _params, session, socket) do
     socket = assign(socket, session_lease: nil, signed_out_reason: :signed_out)
 
@@ -47,8 +40,9 @@ defmodule KeyfleetWeb.Live.Session do
   # cannot honour it is refused here, not left to a later hook. An exactly
   # current claim drives the socket when the page was rendered for its lineage;
   # otherwise one full request for the same route realigns them. Anything else
-  # lands on the public root, which is outside the product shell and so cannot
-  # raise the same rejection again.
+  # lands on the public root, whose page names a cookie the server refuses, so
+  # the browser retires it before the socket connects and the root cannot raise
+  # the same rejection again.
   defp connected(socket, %{"render_topic" => rendered} = static, handshake),
     do: admit(socket, rendered, static["render_route"], SessionAuthority.claim(handshake))
 

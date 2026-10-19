@@ -46,6 +46,7 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.SharedReading
   alias Keyfleet.TestChainNode
   alias Keyfleet.WorkspaceFixtures
+  alias KeyfleetWeb.FleetNow
   alias RegentChain.Call
   alias RegentChain.Event
 
@@ -135,6 +136,8 @@ defmodule Keyfleet.BrowserChain do
       calls: &answer/3
     )
 
+    # Read now, so the first page opened already finds the fleet on sale.
+    FleetNow.read(fleet_id)
     reread()
     minted(fleet_id)
   end

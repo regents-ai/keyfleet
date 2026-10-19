@@ -18,8 +18,11 @@ defmodule KeyfleetWeb.HomeLive do
 
   "Buy Key" opens a window with the same cards turning, where its price goes,
   how many of the 1,024 Keys have sold, the next Key's price and the one after
-  it. Its own Buy follows the same sale as "Buy Next Key": closed, with the
-  reason beside it, until the sale opens, then on to the fleet's Buy panel.
+  it. It follows the same sale as "Buy Next Key": closed, with the reason
+  beside it, until the sale opens, then the fleet's own Approve and Buy
+  (`KeyfleetWeb.FleetLive.buy_order/1`), so a Key is bought without leaving
+  the homepage. The page holds the sign-in the way the fleet's pages do, so
+  those steps act for whoever is signed in.
 
   "Buy Next Key" names the Key on offer and its price, read from the fleet's
   sales. While Classic is coming soon, or once it has sold every Key, the
@@ -62,10 +65,11 @@ defmodule KeyfleetWeb.HomeLive do
     PublicDocuments,
     RouteCatalog,
     SharedFigures,
+    ShellLive,
     Time
   }
 
-  alias KeyfleetWeb.Components.{SendAgent, Shell}
+  alias KeyfleetWeb.Components.{FleetRisks, SendAgent, Shell}
 
   @classic "fleet_tech_classic"
   @club "regents_club"
@@ -230,7 +234,7 @@ defmodule KeyfleetWeb.HomeLive do
       do: %{coming_soon?: true, sales: nil, now: nil, ships: []},
       else: %{
         coming_soon?: false,
-        sales: sales(fleet_id, %{deployed?: false, current?: false, minted: 0}),
+        sales: sales(fleet_id, %{deployed?: false, chain_id: nil, current?: false, minted: 0}),
         now: nil,
         ships: []
       }
@@ -239,13 +243,22 @@ defmodule KeyfleetWeb.HomeLive do
   # How far a fleet has sold. A fleet not yet deployed has sold nothing; one
   # whose sales are still being read isn't current. The Key on offer is the
   # one its fleet page's Buy button names.
-  defp sales(fleet_id, %{deployed?: deployed?, current?: current?, minted: minted}) do
+  defp sales(fleet_id, %{
+         deployed?: deployed?,
+         chain_id: chain_id,
+         current?: current?,
+         minted: minted
+       }) do
+    progress = Presets.progress(fleet_id, minted)
+
     %{
       deployed?: deployed?,
       current?: current?,
+      chain_id: chain_id,
+      progress: progress,
       keys: minted,
       given?: Presets.given?(fleet_id),
-      buy: if(deployed?, do: FleetPage.next_sale(fleet_id, Presets.progress(fleet_id, minted)))
+      buy: if(deployed?, do: FleetPage.next_sale(fleet_id, progress))
     }
   end
 
@@ -322,7 +335,11 @@ defmodule KeyfleetWeb.HomeLive do
 
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, integrations: @integrations)
+    assigns =
+      assign(assigns,
+        integrations: @integrations,
+        actor: ShellLive.human_actor(%{assigns: assigns})
+      )
 
     ~H"""
     <Regent.Structure.frame id="public-home" class="rl-root">
@@ -339,7 +356,12 @@ defmodule KeyfleetWeb.HomeLive do
           <.hero classic={@classic} />
         </Regent.Structure.row>
         <Regent.Structure.row rail={false}>
-          <.classic classic={@classic} buy_open={@buy_open} />
+          <.classic
+            classic={@classic}
+            buy_open={@buy_open}
+            actor={@actor}
+            lease={@session_lease}
+          />
         </Regent.Structure.row>
         <Regent.Structure.row rail={false}><.club club={@club} /></Regent.Structure.row>
         <Regent.Structure.row rail={false}>
@@ -550,7 +572,6 @@ defmodule KeyfleetWeb.HomeLive do
   defp offer(%{sales: %{buy: buy}}) do
     %{
       state: :open,
-      href: Fleets.path(@classic) <> "?buy",
       price: "Key #{grouped(buy.token_id)} · #{FleetLive.usdc(buy.price)}",
       why: nil
     }
@@ -561,6 +582,8 @@ defmodule KeyfleetWeb.HomeLive do
 
   attr :classic, :map, required: true
   attr :buy_open, :boolean, required: true
+  attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # Classic's sea beside what a Key lets an agent join, the cards turning
   # over, its public page and "Buy Key". "Buy Key" follows the same sale as
@@ -607,7 +630,7 @@ defmodule KeyfleetWeb.HomeLive do
         <p :if={@offer.why} id="home-classic-why" class="rl-fleet__why">{@offer.why}</p>
       </div>
 
-      <.buy_key :if={@buy_open} classic={@classic} />
+      <.buy_key :if={@buy_open} classic={@classic} actor={@actor} lease={@lease} />
     </section>
     """
   end
@@ -615,11 +638,15 @@ defmodule KeyfleetWeb.HomeLive do
   defp classic_join, do: @classic_join
 
   attr :classic, :map, required: true
+  attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   # The window "Buy Key" opens: the Key cards turning, where its price goes,
   # how far the sale has gone, and the next Key's price and the one after it.
-  # Its Buy is the same as "Buy Next Key" above, with the reason it is closed
-  # right under it, so a phone that scrolls the window sees both together.
+  # Once the sale is open it holds the fleet's own Approve and Buy, with what
+  # a buyer should know under them. Until then its Buy is closed, with the
+  # reason right under it, so a phone that scrolls the window sees both
+  # together.
   defp buy_key(assigns) do
     assigns = assign(assigns, offer(assigns.classic)) |> assign(key_window(assigns.classic))
 
@@ -649,15 +676,24 @@ defmodule KeyfleetWeb.HomeLive do
           <dd id="home-buy-key-after">{@following || "None left"}</dd>
         </div>
       </dl>
+      <FleetLive.buy_order
+        :if={@state == :open}
+        id="home-buy-key"
+        fleet={
+          %{
+            fleet_id: @classic.id,
+            chain_id: @classic.sales.chain_id,
+            progress: @classic.sales.progress
+          }
+        }
+        actor={@actor}
+        lease={@lease}
+      >
+        <:details>
+          <FleetRisks.disclosure id="home-buy-key-risks" />
+        </:details>
+      </FleetLive.buy_order>
       <div class="rl-buy-key__actions">
-        <.link
-          :if={@state == :open}
-          id="home-buy-key-go"
-          navigate={@href}
-          class="rg-button rg-button--primary"
-        >
-          <span class="rg-button__label">Buy Key</span>
-        </.link>
         <Regent.Primitives.button
           :if={@state != :open}
           id="home-buy-key-go"
@@ -666,7 +702,7 @@ defmodule KeyfleetWeb.HomeLive do
         >
           Buy Key
         </Regent.Primitives.button>
-        <p id="home-buy-key-why" class="rl-buy-key__why">{@why}</p>
+        <p :if={@state != :open} id="home-buy-key-why" class="rl-buy-key__why">{@why}</p>
         <form method="dialog">
           <Regent.Primitives.button
             id="home-buy-key-close"

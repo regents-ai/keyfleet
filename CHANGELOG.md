@@ -2876,3 +2876,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: on the homepage, the header's "Get a Key" and the hero's "Buy Next Key" now open the "Buy Key" window, as the Classic section's "Buy Key" already did. Its Buy still goes on to Classic's page to buy. "Get a Key" on every other page still opens Classic's page with buying open.
 - Why: Sean asked for it (18:04Z): both buttons should open the buy window, not leave the homepage.
+
+## 2026-10-19 — Approve and Buy inside the homepage Buy Key window
+
+- What: the homepage "Buy Key" window now holds Classic's own Approve and Buy, with the same figures, reasons and risks as Classic's page, so a Key is bought without leaving the homepage. The homepage now holds the sign-in the way the fleet's pages do, so those steps act for whoever is signed in. The shared Classic reading now carries the fleet's network for the window.
+- Why: Sean asked for it (18:16Z): the approve and buy steps should happen inside the "Buy Key" window.

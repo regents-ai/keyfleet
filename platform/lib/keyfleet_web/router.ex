@@ -344,7 +344,8 @@ defmodule KeyfleetWeb.Router do
     pipe_through :browser
 
     live_session :home,
-      on_mount: [KeyfleetWeb.Live.LaunchGateHook, {KeyfleetWeb.Live.Session, :show_account}] do
+      session: {KeyfleetWeb.Live.Session, :render_context, []},
+      on_mount: [KeyfleetWeb.Live.LaunchGateHook, {KeyfleetWeb.Live.Session, :load_human}] do
       live "/", HomeLive, :home
     end
 
