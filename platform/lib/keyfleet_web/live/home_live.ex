@@ -2,7 +2,8 @@ defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
   The homepage. Top to bottom: Classic #1, the fleet on sale, with the line
   that says what a Key is for and "Buy Next Key", which shows the Key's card
-  art and price and opens the fleet's page with its Buy panel open; Classic
+  art and price and opens the "Buy Key" window, as the header's "Get a Key"
+  does; Classic
   Keyfleet, its sea beside what a Key lets an agent join, Key cards turning
   over, its public page and "Buy Key"; the Regents Club, its sea, what it is
   doing right now, its public page and its Keys on OpenSea; what a fleet can
@@ -328,7 +329,7 @@ defmodule KeyfleetWeb.HomeLive do
       <Shell.header
         account_control={@account_control}
         get_key={not @classic.coming_soon?}
-        get_key_link={:navigate}
+        get_key_link={:buy_key}
         menu={false}
         theme={true}
       />
@@ -473,11 +474,13 @@ defmodule KeyfleetWeb.HomeLive do
         </div>
       </div>
 
-      <.link
+      <button
         :if={@state == :open}
         id="home-buy-next-key"
-        navigate={@href}
+        type="button"
         class="rg-button rg-button--primary rl-buy__button"
+        phx-click="open_buy_key"
+        aria-haspopup="dialog"
       >
         <span class="rg-button__label" data-press-label>
           <span class="rl-buy__label">
@@ -485,7 +488,7 @@ defmodule KeyfleetWeb.HomeLive do
             <span id="home-buy-price" class="rl-buy__price">{@price}</span>
           </span>
         </span>
-      </.link>
+      </button>
       <Regent.Primitives.button
         :if={@state != :open}
         id="home-buy-next-key"
