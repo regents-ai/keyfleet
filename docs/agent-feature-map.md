@@ -20,7 +20,7 @@ versions weren't recorded, so it can't be witnessed as it stands).
 Hermes (API, 17 Oct: `2026-10-17-hermes-api.md`, blocked by Hermes's own
 approval prompt; Git reported 18 Oct 17:03Z, commit `5402c0b5`). Grok Bot (API,
 19 Oct 04:00–04:05Z: `2026-10-19-grok-bot-api.md`, request ids except from the
-notebook host; 8 of 9 checks passed). Check ids (C1–C9,
+notebook host; 8 of 9 checks passed, and C2 passed on its 15:16Z rerun). Check ids (C1–C9,
 S1–S8) are in `platform/priv/agent_compatibility.yml`.
 
 ## Sign-in and pairing
@@ -60,7 +60,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Two writes to one version give one success and one conflict | `AgentGraphJourneyTest` (kept) | Proven |
 | A retried write applies once | `AgentGraphJourneyTest` (kept) | Proven |
 | Creates, links, patches and reads back goals, tasks, evidence, notes and dead ends | C2 | Self-reported (Contessa's and Grok Bot's runs; Hermes only in a report with no run record) |
-| An agent reading an item or a change back through the API learns the agent's name, by wallet | `AgentGraphJourneyTest` "a workspace read names each agent behind what it answers…" | Proven (Grok Bot's C2 failed for want of it) |
+| An agent reading an item or a change back through the API learns the agent's name, by wallet | `AgentGraphJourneyTest` "a workspace read names each agent behind what it answers…" | Proven; Grok Bot's C2 rerun saw its name in every read (19 Oct 15:16Z), after failing for want of it |
 | An item an agent added names the agent beside its Key | `WorkspacePageTest` "an item an agent added names the agent…" | Proven |
 | Two agents on one Key each show their own name | S1 | Not run since the fix (failed 17 Oct, before items named agents) |
 
@@ -85,7 +85,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | An agent's signed git request reaches the code store as the exact bytes it signed, with no password | `CodeGatewayTest` "a Key-holding agent's push reaches the store as the exact bytes it signed" | Proven (live since v91, 19 Oct) |
 | A person's git password works only while they hold a Key; a sale ends it at once | `CodeGatewayTest` | Proven |
 | One fleet's password opens no other fleet | `CodeGatewayTest` | Proven |
-| Clones, commits, pushes and sees the push in `list_code_pushes` | C8 | Self-reported with a password (Grok Bot's run, `96291be8`; Hermes `5402c0b5` in a report); not run with the signing helper |
+| Clones, commits, pushes and sees the push in `list_code_pushes` | C8 | Self-reported: with the signing helper (Contessa, `8e9eeb21`); with a password (Grok Bot's run, `96291be8`; Hermes `5402c0b5` in a report) |
 | Contessa pushes | C8 | Self-reported (19 Oct 14:59–15:34Z): cloned and pushed `8e9eeb21` with the signing helper, `list_code_pushes` named it with Key 329, and evidence #34 attaches it to task #27, now done |
 | A push an agent sent names the agent, on the board and on the commit | `WorkspacePageTest` "a push an agent sent…" | Proven |
 | A cited commit link names the commit to someone who can't read it, and offers a visitor Sign in | `WorkspacePageTest` "a commit page someone can't read…" | Proven (Grok Bot's commit link) |
