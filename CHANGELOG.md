@@ -2515,3 +2515,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 ## 2026-10-19 — A page load asks for the wallet once
 
 - A signed-in page asked Privy for its wallets when it opened, and the fleet page's wallet panel asked again when it appeared. When the first answer had already arrived, the page asked a second time for nothing. The page now asks once a page load, since every later wallet change reaches it on its own; it asks again only when an earlier ask failed.
+
+## 2026-10-19 — v89 and v90 released
+
+- Released `9c97d33f` as Fly v89, after v88. It carries the homepage with the
+  next Key in the middle, the first-visit Classic page and the steadier checks.
+- Released `9919f4c3` as Fly v90, after v89. A page now asks the wallet bridge
+  to sync once, however many of its parts want the wallet; a sync that failed
+  is asked for again.
