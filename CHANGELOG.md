@@ -2853,3 +2853,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main 1fb76f87 to keyfleet.ai as Fly release v97 (rollback v96, a6b33beb): a buyer who loses Key N in a rush gets the next Key for up to 5% more.
 - Why: Sean released it (1. a, 16:46Z). Full check on a fresh copy was clean, with the Foundry rush test of 25 buyers on Classic; WebKit not run on the Mac.
+
+## 2026-10-19 — Classic #1's sea behind every page, and its three buildings open their pages
+
+- What: every page behind the homepage now shows Classic #1's sea, the Regents Club's pages included. Pointing at the inn, the forge or the castle names it (General chat, Workspace, Proposals) and raises it a little; pressing it opens that page of Classic #1. The buildings answer where the sea shows: in the page's empty margins, or anywhere once the page is lifted away. While Classic is coming soon, those pages show its coming-soon page.
+- Why: Sean, 19 Oct 16:17Z: the background sea should be Classic #1's for everyone, and its three buildings should lead to General chat, the workspace and the treasury proposals.
+- Evidence: level ordinary; feature app-sea; a server check in platform/test/keyfleet_web/live/harbour_sea_live_test.exs (Classic's sea on a Club page and /about, the three links) and a script check in platform/assets/test/harbour_sea.test.ts (only the open sea takes a press, never a painted card, words or a control); naming, raising and pressing each building checked by hand in headless Chromium at 1440 and 390, light and dark; gaps: the browser suite has no graphics chip; WebKit not run on the Mac.

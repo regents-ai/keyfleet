@@ -1,12 +1,16 @@
 defmodule KeyfleetWeb.HarbourSeaLive do
   @moduledoc """
-  The sea behind the product's pages: one ship for each of the most recently
-  active Keys, sailing to the island of the Key's last action and circling it
-  (`KeyfleetWeb.HarbourCrew`).
+  The sea behind the product's pages: Classic #1's harbour on every page and
+  for every visitor (`KeyfleetWeb.Components.Shell.get_key_fleet/0`), one ship
+  for each of its most recently active Keys, sailing to the island of the
+  Key's last action and circling it (`KeyfleetWeb.HarbourCrew`). The visitor's
+  own Keys come first, then the most recent, sixteen at most.
 
-  On a fleet's pages the ships are that fleet's Keys; anywhere else they are
-  the latest Keys of every open fleet. The visitor's own Keys come first, then
-  the most recent, sixteen at most. The sea takes no presses until its button
+  Each of the three buildings opens its part of the fleet: the inn its General
+  room, the forge its workspace and the castle its proposals. While the fleet
+  is coming soon, those open its own page, which says so. Wherever the sea
+  shows between the page's parts, a mouse over a building names it and lifts
+  it, and pressing it opens it. The sea takes no other press until its button
   lifts the page away; then pressing a ship opens its card: the Key's last few
   actions and a link to its profile.
 
@@ -33,20 +37,21 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   alias Keyfleet.Keys
   alias Keyfleet.Proposals
   alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Room
   alias Keyfleet.SharedReading
 
   alias KeyfleetWeb.{
     ActivityLines,
-    Endpoint,
     FleetNow,
     HarbourCrew,
     KeyLinks,
     PageRead,
     Read,
-    RouteCatalog,
     Router,
     ShellLive
   }
+
+  alias KeyfleetWeb.Components.Shell
 
   alias KeyfleetWeb.Live.Session
   alias KeyfleetWeb.Plugs.LaunchGate
@@ -123,14 +128,14 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     end
   end
 
-  # The page on show, by its address. A new address closes the card; a new
-  # fleet brings its ships.
+  # The page on show, by its address. A new address closes the card; the
+  # first brings Classic #1's ships.
   @impl true
   def handle_event("show_page", %{"path" => path}, socket) when is_binary(path) do
     socket =
       if path == socket.assigns.path, do: socket, else: assign(socket, path: path, agent: nil)
 
-    {:noreply, kept(socket, fn -> show(socket, shown(path)) end)}
+    {:noreply, kept(socket, fn -> show(socket, Shell.get_key_fleet()) end)}
   end
 
   def handle_event("show_agent", %{"id" => id}, socket) when is_binary(id) do
@@ -192,11 +197,11 @@ defmodule KeyfleetWeb.HarbourSeaLive do
 
   defp show(%{assigns: %{shown: shown}} = socket, shown), do: socket
 
-  # The visitor's class and Keys in each fleet are read before anything is
+  # The visitor's class and Keys in the fleet are read before anything is
   # heard, so a read that fails leaves the sea, and what it hears, as it was.
   defp show(socket, shown) do
     actor = ShellLive.human_actor(socket)
-    fleets = Enum.map(fleets(shown), &{&1, Access.class(actor, &1)})
+    fleets = [{shown, Access.class(actor, shown)}]
     own = Map.new(fleets, fn {fleet_id, _class} -> {fleet_id, owned(actor, fleet_id)} end)
 
     socket
@@ -261,33 +266,6 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     end
 
     assign(socket, :due, MapSet.put(due, reason))
-  end
-
-  # The fleet whose page is at `path`, when the shell shows that fleet: one
-  # that is open. Anywhere else, every open fleet (`:public`).
-  defp shown(path) do
-    with %{route: route} <- Phoenix.Router.route_info(Router, "GET", path, Endpoint.host()),
-         %{fleet_id: fleet_id} when is_binary(fleet_id) <-
-           Enum.find(RouteCatalog.entries(), &(&1.path_pattern == route)),
-         true <- open?(fleet_id) do
-      fleet_id
-    else
-      _elsewhere -> :public
-    end
-  end
-
-  defp fleets(:public), do: Enum.filter(Fleets.catalog_ids(), &open?/1)
-  defp fleets(fleet_id), do: [fleet_id]
-
-  # Whether a fleet is open, as its shared reading last read it: the
-  # reading's `coming_soon?` is `Fleets.coming_soon?/2` of the fleet's record,
-  # the rule `Fleets.open_fleet_ids/0` reads too. A fleet not read yet is as
-  # the catalog marks it, as the homepage shows it.
-  defp open?(fleet_id) do
-    case FleetNow.fetch(fleet_id) do
-      {%{coming_soon?: coming_soon?}, _degraded?} -> not coming_soon?
-      nil -> not Fleets.coming_soon?(fleet_id, nil)
-    end
   end
 
   # What the visitor hears of each fleet on show. A member hears what the
@@ -394,6 +372,18 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     |> HarbourCrew.sea()
   end
 
+  # The three buildings as the hook reads them, in `data-harbour-places`: the
+  # name each shows under the mouse and the part of Classic #1 it opens.
+  defp places do
+    fleet = Fleets.path(Shell.get_key_fleet())
+
+    Jason.encode!(%{
+      inn: %{name: "General chat", href: "#{fleet}/rooms/#{Room.public_slug()}"},
+      forge: %{name: "Workspace", href: "#{fleet}/workspace"},
+      castle: %{name: "Proposals", href: "#{fleet}/proposals"}
+    })
+  end
+
   defp on_sea(assigns),
     do: drawn(assigns.fleets, assigns.public, assigns.crew, assigns.own, assigns.access_context)
 
@@ -412,6 +402,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
       phx-mounted={JS.ignore_attributes(["data-harbour-ready"])}
       data-harbour-layout="sea"
       data-harbour-crew={HarbourCrew.on_sea(drawn(@fleets, @public, @crew, @own, @access_context))}
+      data-harbour-places={places()}
       aria-hidden="true"
     >
       <div id="harbour-stage" class="harbour-sea__stage" phx-update="ignore" data-harbour-stage>

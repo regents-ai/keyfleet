@@ -47,8 +47,8 @@
   opacity: 1;
 }
 
-/* The name of the ship under the mouse, standing on its masthead. The hook
-   moves it with `translate`. */
+/* The name of the ship or building under the mouse, standing on the ship's
+   masthead or over the pointer. The hook moves it with `translate`. */
 .harbour-sea__tag {
   position: absolute;
   top: 0;
@@ -82,6 +82,16 @@
   width: 0.55rem;
   height: 0.55rem;
   content: "";
+}
+
+/* A building's name carries no sail colour. */
+.harbour-sea__tag[data-kind="place"]::before {
+  display: none;
+}
+
+/* A building under the mouse where the sea shows between the page's parts. */
+:root.harbour-pointing {
+  cursor: pointer;
 }
 
 /* ---- The page over the sea ---- */
