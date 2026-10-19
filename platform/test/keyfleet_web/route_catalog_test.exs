@@ -161,13 +161,13 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert account.local_state == %{}
   end
 
-  test "the product sidebar names Classic, links the Regents Club, and Account on every product route" do
+  test "the product sidebar links Classic, the Regents Club, and Account on every product route" do
     for entry <- Enum.reject(RouteCatalog.entries(), &(&1.live_action == :home)) do
       assert RouteCatalog.fetch!(entry.path_pattern, sample_params(entry)).sidebar_model ==
                %RouteCatalog.SidebarModel{
                  id: :product,
                  targets: [
-                   %RouteCatalog.NameOnly{label: "Classic #1"},
+                   %RouteTarget{route_id: :fleet, label: "Classic #1", path: "/classic/1"},
                    %RouteTarget{
                      route_id: :fleet,
                      label: "Regents Club",
@@ -231,9 +231,6 @@ defmodule KeyfleetWeb.RouteCatalogTest do
     assert Enum.all?(targets, fn
              %{"type" => "route", "destination" => path, "route_id" => route_id}
              when is_binary(path) and is_binary(route_id) ->
-               true
-
-             %{"type" => "name", "label" => label} when is_binary(label) ->
                true
 
              _target ->

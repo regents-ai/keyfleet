@@ -21,7 +21,8 @@ type Spot = {x: number; scaleX: number}
 
 // How the underline travels and how the new view arrives. `step` is 1 when
 // the chosen view comes after the last one and -1 when it comes before; `base`
-// is the underline's own width.
+// is the underline's own width. The new view slides in solid: a view that
+// faded in would let the picture behind the page show through it.
 export type TabMove = {
   ink: (from: Spot, to: Spot, base: number) => AnimationParams
   panel: (step: number) => AnimationParams
@@ -30,7 +31,7 @@ export type TabMove = {
 export const TABS: Record<string, TabMove> = {
   glide: {
     ink: (_from, to) => ({...to, duration: SLOW, ease: EASE_IN_OUT}),
-    panel: step => ({x: {from: step * 24}, opacity: {from: 0}, duration: SLOW, ease: EASE_OUT}),
+    panel: step => ({x: {from: step * 24}, duration: SLOW, ease: EASE_OUT}),
   },
 }
 

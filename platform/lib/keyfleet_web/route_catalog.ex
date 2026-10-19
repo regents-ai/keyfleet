@@ -6,7 +6,6 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   alias __MODULE__.{
     Entry,
-    NameOnly,
     RouteTarget,
     SidebarModel,
     Spec
@@ -231,16 +230,12 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   defp sidebar_model(nil), do: %SidebarModel{id: :public, targets: []}
 
-  # The fleets the sidebar shows, as a link to the fleet's page or as its name
-  # alone, then the account page.
+  # The fleets the sidebar shows, each a link to the fleet's page, then the
+  # account page.
   defp sidebar_model(:product) do
     fleets =
-      for %{sidebar: shown, name: name, path: path} <- Fleets.catalog(), shown != nil do
-        case shown do
-          :link -> %RouteTarget{route_id: :fleet, label: name, path: path}
-          :name -> %NameOnly{label: name}
-        end
-      end
+      for %{sidebar: :link, name: name, path: path} <- Fleets.catalog(),
+          do: %RouteTarget{route_id: :fleet, label: name, path: path}
 
     %SidebarModel{
       id: :product,
@@ -276,8 +271,6 @@ defmodule KeyfleetWeb.RouteCatalog do
   defp sidebar_handoff(sidebar) do
     %{"id" => sidebar.id, "targets" => Enum.map(sidebar.targets, &target_handoff/1)}
   end
-
-  defp target_handoff(%NameOnly{label: label}), do: %{"type" => "name", "label" => label}
 
   defp target_handoff(%RouteTarget{} = target) do
     %{

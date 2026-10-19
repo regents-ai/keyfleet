@@ -2881,3 +2881,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: the homepage "Buy Key" window now holds Classic's own Approve and Buy, with the same figures, reasons and risks as Classic's page, so a Key is bought without leaving the homepage. The homepage now holds the sign-in the way the fleet's pages do, so those steps act for whoever is signed in. The shared Classic reading now carries the fleet's network for the window.
 - Why: Sean asked for it (18:16Z): the approve and buy steps should happen inside the "Buy Key" window.
+
+## 2026-10-19 — Classic #1 in the side menu, steady page changes, a shorter Club line
+
+- What: "Classic #1" in the side menu is now a link to its page, like "Regents Club"; the side menu's name-only entry is gone. A page picked with the mouse (a fleet's tabs, the side menu) slides in solid instead of fading in, so the harbour picture behind the page no longer flashes through. The homepage's Regents Club card says how many Keys it has and how many accounts hold them, without "online now"; the Club's own page still says it.
+- Why: Sean asked for all three (18:29Z to 18:47Z): moving between the Classic #1 tabs flashed the background, "open up the Classic #1 sidenav", and remove "· 0 online now" for the Regents Club on the homepage.
