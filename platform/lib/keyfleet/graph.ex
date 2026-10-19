@@ -57,6 +57,7 @@ defmodule Keyfleet.Graph do
       define :read_object, action: :in_fleet, args: [:fleet_id, :id], not_found_error?: false
       define :read_objects, action: :with_ids, args: [:fleet_id, :ids]
       define :workspace_cards, action: :cards, args: [:fleet_id]
+      define :goal_work, action: :around_goal, args: [:fleet_id, :goal_id]
       define :object_titles, action: :titled, args: [:fleet_id, :ids]
       define :open_work, action: :open_work, args: [:fleet_id, :kind]
       define :outline, action: :outline, args: [:fleet_id, :type]
