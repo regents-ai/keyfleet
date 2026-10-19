@@ -568,8 +568,8 @@ function dustAround(canvas: HTMLCanvasElement, card: HTMLElement, near: () => vo
  * the card a little toward the pointer, and it settles when the pointer leaves.
  * Once it is level again it keeps no turn of its own: the stylesheet has it.
  * Dust gathers outside its edge on the side facing the pointer, and pointing at
- * the card or the button flashes it into a shuffle of a hundred Keys, which
- * dissolves back to the pass when the pointer leaves both. The shuffle's
+ * the card or the button flashes it into a shuffle of a hundred Keys, the pass
+ * fading out under it, and the two dissolve back when the pointer leaves both. The shuffle's
  * picture loads the first time the dust shows. A finger, a keyboard or less
  * motion gets the card as it is.
  */
@@ -579,6 +579,7 @@ export const NextKeyCard = {
     const area = root.closest<HTMLElement>("[data-key-preview]") ?? root
     const tilt = root.querySelector<HTMLElement>("[data-key-tilt]")!
     const dust = root.querySelector<HTMLCanvasElement>("[data-key-dust]")!
+    const pass = root.querySelector<HTMLImageElement>("[data-key-pass]")!
     const shuffle = root.querySelector<HTMLImageElement>("[data-key-shuffle]")!
     let turn: AnimatableObject | undefined
     let point: ((on: boolean) => void) | undefined
@@ -605,17 +606,21 @@ export const NextKeyCard = {
 
       let pointing = false
       let flash: JSAnimation | undefined
-      let fade: JSAnimation | undefined
+      let fades: JSAnimation[] = []
+      // The shuffle comes in as the pass goes, and the other way round; each
+      // Key's key reaches past the card, where the pass's own would show.
       const reveal = () => {
         if (!pointing) return
         shuffle.style.visibility = "visible"
-        fade?.cancel()
-        fade = animate(shuffle, {opacity: 1, duration: FAST, ease: EASE_OUT})
+        fades = [
+          animate(shuffle, {opacity: 1, duration: FAST, ease: EASE_OUT}),
+          animate(pass, {opacity: 0, duration: FAST, ease: EASE_OUT}),
+        ]
       }
       point = on => {
         if (on === pointing) return
         pointing = on
-        fade?.cancel()
+        fades.forEach(fade => fade.cancel())
         if (on) {
           flash?.cancel()
           flash = animate(tilt, {
@@ -628,24 +633,33 @@ export const NextKeyCard = {
           load()
           shuffle.decode().then(reveal, () => {})
         } else {
-          fade = animate(shuffle, {
-            opacity: 0,
-            duration: DISSOLVE,
-            ease: EASE_IN_OUT,
-            onComplete: () => {
-              shuffle.style.visibility = "hidden"
-            },
-          })
+          fades = [
+            animate(shuffle, {
+              opacity: 0,
+              duration: DISSOLVE,
+              ease: EASE_IN_OUT,
+              onComplete: () => {
+                shuffle.style.visibility = "hidden"
+              },
+            }),
+            animate(pass, {
+              opacity: 1,
+              duration: DISSOLVE,
+              ease: EASE_IN_OUT,
+              onComplete: () => pass.style.removeProperty("opacity"),
+            }),
+          ]
         }
       }
       return () => {
         drawing.abort()
         stopDust()
         flash?.cancel()
-        fade?.cancel()
+        fades.forEach(fade => fade.cancel())
         tilt.style.removeProperty("filter")
         shuffle.style.removeProperty("visibility")
         shuffle.style.removeProperty("opacity")
+        pass.style.removeProperty("opacity")
         turn = undefined
         point = undefined
       }

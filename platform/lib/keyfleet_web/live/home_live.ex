@@ -520,8 +520,9 @@ defmodule KeyfleetWeb.HomeLive do
   # soon it names the first Key, the one the sale will open with, and the
   # button says it can't be pressed yet: a press shakes it and sends nothing.
   # The card and its price tag are the same in every state. Under a mouse the
-  # card has dust outside its edge and a shuffle of a hundred Keys behind the
-  # pass (NextKeyCard draws both); the shuffle's picture loads only then.
+  # card has dust outside its edge and, when pointed at, a shuffle of a
+  # hundred real Keys over the pass (NextKeyCard draws both); the shuffle's
+  # picture loads only once the dust shows.
   defp buy_next_key(assigns) do
     assigns = assign(assigns, offer(assigns.classic))
 
@@ -547,11 +548,14 @@ defmodule KeyfleetWeb.HomeLive do
           data-key-tilt
         >
           <img
+            id="home-buy-pass"
+            phx-mounted={JS.ignore_attributes(["style"])}
             src={~p"/images/home/next-key-pass.webp"}
             width="600"
             height="754"
             alt=""
             fetchpriority="high"
+            data-key-pass
           />
           <img
             id="home-buy-shuffle"
@@ -559,7 +563,7 @@ defmodule KeyfleetWeb.HomeLive do
             phx-mounted={JS.ignore_attributes(["src", "style"])}
             data-src={~p"/images/home/next-key-shuffle.webp"}
             width="480"
-            height="603"
+            height="600"
             alt=""
             data-key-shuffle
           />

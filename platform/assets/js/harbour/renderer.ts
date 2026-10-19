@@ -124,7 +124,7 @@ const DAY_SUN = normalize([0.55, 0.9, -0.35])
 const NIGHT_SUN = normalize([-0.35, 0.85, -0.45])
 /** The ink of the outlines, as INK_DAY and INK_NIGHT in the shaders. */
 const DAY_INK = [0.12, 0.3, 0.62]
-const NIGHT_INK = [0.66, 0.84, 1.0]
+const NIGHT_INK = [0.8, 0.81, 0.82]
 
 /** `layout` names the harbour drawn: its islands and where its buildings stand. */
 export async function createHarbourRenderer(

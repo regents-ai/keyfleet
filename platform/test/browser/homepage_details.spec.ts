@@ -171,8 +171,9 @@ test.describe("on a desktop", () => {
     await expect.poll(async () => (await lit()).left).toBe(0)
   })
 
-  // Pointing at the card or its button flashes the card and shows the shuffle;
-  // leaving both dissolves it back to the pass over about half a second.
+  // Pointing at the card or its button flashes the card and shows the shuffle,
+  // the pass fading out under it; leaving both dissolves the two back over
+  // about half a second.
   for (const [what, target] of [
     ["the card", "#home-buy-card"],
     ["the button", "#home-buy-next-key"],
@@ -183,6 +184,7 @@ test.describe("on a desktop", () => {
       await live(page)
       const shuffle = page.locator("#home-buy-shuffle")
       const seen = (property: "opacity" | "visibility") => shuffle.evaluate((img, name) => getComputedStyle(img)[name], property)
+      const pass = () => page.locator("#home-buy-pass").evaluate(img => getComputedStyle(img).opacity)
       await page.locator("#home-buy-tilt").evaluate(tilt => {
         const flashes: string[] = []
         new MutationObserver(() => flashes.push(tilt.style.filter)).observe(tilt, {attributeFilter: ["style"]})
@@ -192,6 +194,7 @@ test.describe("on a desktop", () => {
       await page.locator(target).hover()
       await expect(shuffle).toHaveAttribute("src", /next-key-shuffle/)
       await expect.poll(() => seen("opacity")).toBe("1")
+      await expect.poll(pass).toBe("0")
       expect(await page.evaluate(() => (window as unknown as {flashes: string[]}).flashes.some(f => f.includes("brightness")))).toBe(true)
       await expect.poll(() => page.locator("#home-buy-tilt").evaluate(tilt => tilt.style.filter)).toBe("")
 
@@ -200,6 +203,7 @@ test.describe("on a desktop", () => {
       await expect.poll(() => seen("visibility")).toBe("hidden")
       const gone = await page.evaluate(() => performance.now())
       expect(await seen("opacity")).toBe("0")
+      expect(await pass()).toBe("1")
       expect(gone - left, "the dissolve takes about half a second").toBeGreaterThanOrEqual(450)
     })
   }

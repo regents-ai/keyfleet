@@ -3,13 +3,14 @@
 //
 //   node shuffle.mjs ../platform/priv/static/images/home/next-key-shuffle.webp
 //
-// The seeds are fixed by their order, so every run draws the same cards. The
-// page is bundled the way build.mjs bundles the still page, with changes to the
-// card shader: the studio and the dither are left out, the foil, the face's
-// shine and the glare are halved, and each pixel's alpha is how much of the
-// card, its edge or its key covers it, so the cards come out cut out of their
-// backdrop. Chromium draws on the computer's graphics chip. The frames are joined with libwebp's own
-// tools, cwebp and webpmux, which must be installed.
+// Each card is a real Key from the trait table, from a fixed seed of no fleet's
+// deck, so every run draws the same cards. The page is bundled the way build.mjs
+// bundles the still page, with the card shader changed only to leave out the
+// studio and the dither, and to make each pixel's alpha how much of the card,
+// its edge or its key covers it, so the cards come out cut out of their
+// backdrop, as the turning cards lower on the homepage are. Chromium draws on
+// the computer's graphics chip. The frames are joined with libwebp's own tools,
+// cwebp and webpmux, which must be installed.
 import {execFile} from "node:child_process"
 import {createHash} from "node:crypto"
 import {mkdir, mkdtemp, readFile, rm, writeFile} from "node:fs/promises"
@@ -27,26 +28,18 @@ if (!out) throw new Error("name the WebP file to write")
 const CARDS = 100
 /** How long each card shows, in milliseconds: ten a second. */
 const SHOWS = 100
-/** The size each card is drawn at, then the part of it the homepage's card box
- * holds (the interim pass's own box) and the size that part is kept at. */
+/** The size each card is drawn at, and the scale it is kept at. */
 const SIZE = [1200, 1500]
-const FRAME = {box: [55, 123, 999, 1255], size: [480, 603]}
+const SCALE = 0.4
 /** libwebp's quality for each card's colour and for its outline. */
 const QUALITY = ["-q", "50", "-alpha_q", "50", "-m", "6", "-sharp_yuv"]
 
-/** The card shader, without the studio and with the card's coverage as alpha, toned down to the interim pass's shine. */
+/** The card shader, without the studio and with the card's coverage as alpha. */
 const CUTS = [
   ["var col = vec3f(0.010, 0.011, 0.014) + vec3f(0.02, 0.021, 0.025) * exp(-r2 * 0.9);", "var col = vec3f(0.0);"],
   ["col *= 1.0 - 0.8 * exp(-max(sdBox(screen - off, HALF * 0.97, 0.06), 0.0) * 16.0);", ""],
   // The still's dither is grain the animated picture would spend its bytes on.
   ["outc += vec3f((hash22(uv * res).x - 0.5) / 255.0);", ""],
-  // Half the foil, the face's shine and the glare, as the interim pass reflects half the studio light.
-  ["const FOIL = 0.72;", "const FOIL = 0.36;"],
-  [
-    "var shell = base * (0.1 + 0.9 * nl) + env * (0.03 + 0.3 * fres) * g + vec3f(pow(nh, mix(16.0, 260.0, g)) * g * 1.2);",
-    "var shell = base * (0.1 + 0.9 * nl) + (env * (0.03 + 0.3 * fres) * g + vec3f(pow(nh, mix(16.0, 260.0, g)) * g * 1.2)) * 0.5;",
-  ],
-  ["* 0.04 * extC.a;", "* 0.02 * extC.a;"],
   ["return vec4f(outc, 1.0);", "return vec4f(outc, max(max(edgeIn, extC.a), k.a));"],
 ]
 const cutOut = {
@@ -108,7 +101,7 @@ try {
   const mux = []
   // A few at a time, so one page never holds every picture at once.
   for (let from = 0; from < cards.length; from += 10) {
-    const drawn = await page.evaluate(([batch, size, frame]) => window.shuffleCards(batch, size, frame), [cards.slice(from, from + 10), SIZE, FRAME])
+    const drawn = await page.evaluate(([batch, size, scale]) => window.shuffleCards(batch, size, scale), [cards.slice(from, from + 10), SIZE, SCALE])
     for (const [i, card] of drawn.entries()) {
       const name = join(frames, `card-${String(from + i).padStart(3, "0")}`)
       await writeFile(`${name}.png`, Buffer.from(card.split(",")[1], "base64"))

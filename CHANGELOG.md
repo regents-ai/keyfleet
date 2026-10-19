@@ -2480,10 +2480,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   facing the pointer, follows it round the edge and brightens as it comes
   closer.
 - Pointing at the card or at "Buy Next Key" flashes the card and starts a
-  shuffle through a hundred Keys in the interim pass's own look, ten a second,
-  on a loop. Leaving both dissolves it back to the interim pass over half a
-  second.
-- The shuffle is one 3.3 MB animated picture that loads only under a mouse,
+  shuffle through a hundred real Keys, drawn whole like the turning cards
+  further down but none of the same ones, ten a second, on a loop, the interim
+  pass fading out beneath it. Leaving both dissolves it back to the interim
+  pass over half a second.
+- The shuffle is one 1.9 MB animated picture that loads only under a mouse,
   once the dust shows. `node key-art/shuffle.mjs` draws it again.
 - With less motion asked for, and on a phone or tablet, the card stays the
   interim pass with no dust or shuffle. "Buy Next Key" works as before.
@@ -2492,3 +2493,13 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   flash, shuffle, half-second dissolve, a hundred frames at ten a second, less
   motion, phone tap); break check: no dust and no dissolve each fail them;
   gaps: WebKit not run on the Mac.
+
+## 2026-10-19 — The seas are dark charcoal by night
+
+- In dark mode the harbour seas, on the homepage and the app's sea page, are
+  dark charcoal with pale grey lines instead of blue. The windows' and flags'
+  colours stay. Classic's and the Club's still pictures, shown before a sea
+  draws, are drawn again to match.
+- Evidence: level ordinary; feature home-fleet-seas; the night stills are the
+  sea's own drawing, held still, in headless Chromium on the graphics chip at
+  1440 wide; gaps: WebKit not run on the Mac.

@@ -45,14 +45,14 @@ cd key-art
 node shuffle.mjs ../platform/priv/static/images/home/next-key-shuffle.webp
 ```
 
-The cards are Keys of no fleet's deck, from fixed seeds, in the Interim Access
-Pass's look: black shells, dark metal, warm crowns, a plain satin foil, the
-slot on the left, and half the foil, face shine and glare. Each is drawn with the site's card code
-on the graphics chip at 1200×1500, cut out of the studio, cropped to the
-pass's box and kept at 480×603. It needs `npm ci` here and in `platform/`, and
-libwebp's `cwebp` and `webpmux`. A WebP is the one animated picture with
-transparency every current browser shows in a plain image; at this size it is
-about 3.3 MB, so the page loads it only under a mouse, once its dust shows.
+The cards are real Keys from the trait table, of no fleet's deck, from fixed
+seeds unlike the thirty turning cards lower on the homepage. Each is drawn
+whole with the site's card code on the graphics chip at 1200×1500, its key
+reaching past its card, cut out of the studio and kept at 480×600. It needs
+`npm ci` here and in `platform/`, and libwebp's `cwebp` and `webpmux`. A WebP
+is the one animated picture with transparency every current browser shows in
+a plain image; at this size it is about 1.9 MB, so the page loads it only under
+a mouse, once its dust shows.
 
 ## Going live
 

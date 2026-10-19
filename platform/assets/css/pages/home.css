@@ -73,9 +73,14 @@
      its button flashes the card into a shuffle of a hundred Keys, which
      dissolves back to the pass when the pointer leaves. NextKeyCard draws the
      dust in the warm light of the hex field and shows the shuffle over the
-     pass. */
+     pass. Each shuffled Key is drawn whole, its key reaching past its card,
+     so the picture is larger than the pass: its cards (columns 62 to 417 and
+     rows 50 to 549 of 480 by 600) sit centred on the pass's card at its width. */
   .rl-buy__dust { position: absolute; inset: -3rem; inline-size: calc(100% + 6rem); block-size: calc(100% + 6rem); pointer-events: none; color: var(--rl-field-light); }
-  .rl-buy__shuffle { position: absolute; inset: 0; visibility: hidden; opacity: 0; }
+  .rl-buy__tilt .rl-buy__shuffle {
+    position: absolute; inset-inline-start: -7.02%; inset-block-start: -10.94%;
+    inline-size: 122.47%; block-size: 121.82%; visibility: hidden; opacity: 0;
+  }
   /* The price on the card itself, beside the crown in its lower corner (the
      crown ends 197 of the picture's 716 columns in and 40 of its 900 rows up).
      The card's art is dark in both themes, so the tag keeps light ink on
