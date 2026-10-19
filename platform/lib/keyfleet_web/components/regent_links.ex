@@ -1,6 +1,6 @@
 defmodule KeyfleetWeb.Components.RegentLinks do
   @moduledoc """
-  The shared brand links: X and GitHub.
+  The shared brand links: X, GitHub and the Regents Products menu.
 
   The landing header and the app shell header render the same controls. Both
   point at Regents, which runs Keyfleet.
@@ -12,7 +12,6 @@ defmodule KeyfleetWeb.Components.RegentLinks do
 
   def header_links(assigns) do
     ~H"""
-    <.apps_menu id={"#{@id}-apps"} />
     <a
       id={@id}
       href="https://x.com/regents_sh"
@@ -30,45 +29,76 @@ defmodule KeyfleetWeb.Components.RegentLinks do
     >
       <.source_icon kind={:github} />
     </a>
+    <.apps_menu id={"#{@id}-apps"} />
     """
   end
 
+  # The other Regents Products, each shown with the crown in its own pair of
+  # brand colours, as the template's menu has them, less this site.
+  @regents_apps [
+    %{name: "Patchbay", url: "https://patchbay.help", tone: "patchbay"},
+    %{name: "Autolaunch", url: "https://autolaunch.sh", tone: "autolaunch"},
+    %{name: "Techtree", url: "https://techtree.sh", tone: "techtree"},
+    %{name: "$REGENT Staking", url: "https://regents.sh/stake", tone: "protocol"}
+  ]
+
   attr :id, :string, required: true
 
+  # The template's Regents Products menu. The browser opens and closes the panel
+  # itself (`popover`), so it closes on Escape or a press anywhere else, and a
+  # page update never shuts it. The header and the footer each have one; each
+  # panel hangs from its own button (`components/shell.css`).
   def apps_menu(assigns) do
-    assigns =
-      assign(assigns, :apps, [
-        {"Patchbay", "https://patchbay.help"},
-        {"Autolaunch", "https://autolaunch.sh"},
-        {"Keyfleet", "https://keyfleet.ai"},
-        {"Techtree", "https://techtree.sh"},
-        {"Protocol", "https://regents.sh/stake"}
-      ])
+    assigns = assign(assigns, :apps, @regents_apps)
 
     ~H"""
     <button
       id={"#{@id}-button"}
-      class="rg-button rg-button--quiet"
+      class="shell-tool shell-apps-button"
       type="button"
       popovertarget={@id}
-      aria-label="Regents apps"
+      aria-label="Regents Products"
     >
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <rect :for={{x, y} <- app_dots()} x={x} y={y} width="4" height="4" />
+      <svg class="shell-icon--apps" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <rect :for={{x, y} <- nine_dots()} x={x} y={y} width="4.5" height="4.5" />
       </svg>
+      <span class="shell-tool__tip" aria-hidden="true">Regents Products</span>
     </button>
-    <nav id={@id} class="regents-apps" popover aria-labelledby={"#{@id}-title"}>
-      <h2 id={"#{@id}-title"}>Regents Labs apps</h2>
+    <nav
+      id={@id}
+      class="shell-apps"
+      popover
+      aria-labelledby={"#{@id}-title"}
+    >
+      <h2 id={"#{@id}-title"}>Regents Products</h2>
       <ul>
-        <li :for={{name, url} <- @apps}>
-          <a href={url} target="_blank" rel="noopener noreferrer">{name}</a>
+        <li :for={app <- @apps}>
+          <a href={app.url} target="_blank" rel="noopener noreferrer">
+            <span class="shell-apps__tile" data-tone={app.tone}><.crown /></span>
+            <span>{app.name}</span>
+          </a>
         </li>
       </ul>
     </nav>
     """
   end
 
-  defp app_dots, do: for(x <- [2, 10, 18], y <- [2, 10, 18], do: {x, y})
+  # The Regents crown: thirteen blocks, drawn in the current text colour.
+  defp crown(assigns) do
+    ~H"""
+    <svg class="shell-apps__crown" viewBox="31 46 178 106" fill="currentColor" aria-hidden="true">
+      <rect :for={{x, y} <- crown_blocks()} x={x} y={y} width="34" height="34" />
+    </svg>
+    """
+  end
+
+  defp nine_dots, do: for(y <- [1.5, 9.75, 18], x <- [1.5, 9.75, 18], do: {x, y})
+
+  defp crown_blocks do
+    top = for x <- [31, 103, 175], do: {x, 46}
+    rows = for y <- [82, 118], x <- [31, 67, 103, 139, 175], do: {x, y}
+    top ++ rows
+  end
 
   attr :kind, :atom, required: true
 

@@ -2502,3 +2502,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   it, and a renamed room shows its naming once, in the line that says which Key
   named it and when.
 - On a phone, the open room's posts come before the list of rooms.
+
+## 2026-10-19 — The Regents Products menu matches the other Regents sites
+
+- The nine-dot button now sits after the X and GitHub marks and opens a
+  "Regents Products" panel straight under it: Patchbay, Autolaunch, Techtree
+  and $REGENT Staking, each a crown tile in its own colours, two to a row.
+- In the footer the same panel opens above the button; on a phone it spans
+  the screen.
