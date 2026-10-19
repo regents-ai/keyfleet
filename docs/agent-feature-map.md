@@ -19,18 +19,19 @@ with a request id for most steps; the notebook host gives none, and its
 versions weren't recorded, so it can't be witnessed as it stands).
 Hermes (API, 17 Oct: `2026-10-17-hermes-api.md`, blocked by Hermes's own
 approval prompt; Git reported 18 Oct 17:03Z, commit `5402c0b5`). Grok Bot (API,
-18 Oct 20:16Z: task #1, push `24e056ff`, no run file yet). Check ids (C1–C9,
+19 Oct 04:00–04:05Z: `2026-10-19-grok-bot-api.md`, request ids except from the
+notebook host; 8 of 9 checks passed). Check ids (C1–C9,
 S1–S8) are in `platform/priv/agent_compatibility.yml`.
 
 ## Sign-in and pairing
 
 | Behaviour | Proof | State |
 | --- | --- | --- |
-| A paired agent learns who it is and who it acts for | `agent_tools.spec.ts` "a paired agent learns who it is…"; C1 | Proven; C1 self-reported (Contessa) |
+| A paired agent learns who it is and who it acts for | `agent_tools.spec.ts` "a paired agent learns who it is…"; C1 | Proven; C1 self-reported (Contessa, Grok Bot) |
 | An unpaired agent is refused with `agent_not_paired`, and works once paired | `agent_tools.spec.ts` "a tool that needs a pairing refuses…" | Proven |
 | An unsigned header grants nothing; only the exact signed request acts | `AgentJoinJourneyTest` (3 kept tests) | Proven |
 | On the 39 signed routes the contract test drives, any body gets a documented answer, and a refusal a hint | `SignedAgentContractTest` RF-HINT | New (the workspace, notebook, code-push, treasury, profile-read and account routes aren't in it) |
-| A replayed signed request is refused | C1 | Self-reported (Contessa: 409 `request_replayed`) |
+| A replayed signed request is refused | C1 | Self-reported (Contessa, Grok Bot: 409 `request_replayed`) |
 | An agent restarts and signs in as the same agent without pairing again | S4 | Not run |
 | An expired signature is refused with a clear hint; a fresh one works | S3; `CodeGatewayTest` "an agent's password is refused once its sign-in has run out" | Proven for Git; S3 not run |
 | A removed pairing refuses requests and closes open notebook connections | `NotebookGatewayTest` "an agent's open notebook connection closes when its person ends the pairing"; S7 | Proven; S7 not run |
@@ -58,8 +59,8 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | After a sale only the new owner's agent writes as the Key | `AgentGraphJourneyTest` (kept, 3 tests) | Proven |
 | Two writes to one version give one success and one conflict | `AgentGraphJourneyTest` (kept) | Proven |
 | A retried write applies once | `AgentGraphJourneyTest` (kept) | Proven |
-| Creates, links, patches and reads back goals, tasks, evidence, notes and dead ends | C2 | Self-reported (Contessa's run; Hermes and Grok Bot only in reports with no run record) |
-| An agent reading an item back through the API sees the name shown beside its Key | none: the API answers the creator's wallet and Key, not the name | Not offered (Contessa) |
+| Creates, links, patches and reads back goals, tasks, evidence, notes and dead ends | C2 | Self-reported (Contessa's and Grok Bot's runs; Hermes only in a report with no run record) |
+| An agent reading an item back through the API sees the name shown beside its Key | none: the API answers the creator's wallet and Key, not the name | Not offered: failed C2 for Grok Bot, not checkable for Contessa |
 | An item an agent added names the agent beside its Key | `WorkspacePageTest` "an item an agent added names the agent…" | New |
 | Two agents on one Key each show their own name | S1 | Not run since the fix (failed 17 Oct, before items named agents) |
 
@@ -69,10 +70,10 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | --- | --- | --- |
 | A Key-holding agent's signed request reaches the hub as that agent, body unchanged | `NotebookGatewayTest` (kept) | Proven |
 | A read signed without `content-digest` is told how to sign it, and the corrected read reaches the hub as the agent | `NotebookGatewayTest` "a read signed without its empty body…" | New (Grok Bot's 401) |
-| Reads a notebook's code | Grok Bot's report | Self-reported |
+| Reads a notebook's code | C3 note in Grok Bot's run | Self-reported (Grok Bot) |
 | The hub's token routes stay closed in every spelling | `NotebookGatewayTest` "the hub's token routes are refused…" | Proven |
 | A slow start returns once, without a second runner request | `NotebookGatewayTest` (kept) | Proven |
-| Starts a run, reads, saves and reopens the result; opens another member's | C3 | Self-reported (Contessa's run; Hermes only in a report with no run record); partial for Grok Bot |
+| Starts a run, reads, saves and reopens the result; opens another member's | C3 | Self-reported (Contessa's and Grok Bot's runs; Hermes only in a report with no run record) |
 | A background run's saved result opens as a notebook result | `WorkspacePageTest` "a background run's saved result…" | New |
 | The notebook commands work from the released CLI | regents-cli release | Not run: not in any release yet (asked of regents-cli on 18 Oct) |
 
@@ -82,7 +83,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | --- | --- | --- |
 | Only a holder's password reaches the code store; a sale ends it at once | `CodeGatewayTest` | Proven |
 | One fleet's password opens no other fleet | `CodeGatewayTest` | Proven |
-| Clones, commits, pushes and sees the push in `list_code_pushes` | C8 | Self-reported (Hermes `5402c0b5`, Grok Bot `24e056ff`) |
+| Clones, commits, pushes and sees the push in `list_code_pushes` | C8 | Self-reported (Grok Bot's run, `96291be8`; Hermes `5402c0b5` in a report) |
 | Contessa pushes | C8 | Not offered: Dots refuses any password exchange |
 | A push an agent sent names the agent, on the board and on the commit | `WorkspacePageTest` "a push an agent sent…" | New |
 | A cited commit link names the commit to someone who can't read it, and offers a visitor Sign in | `WorkspacePageTest` "a commit page someone can't read…" | New (Grok Bot's commit link) |
@@ -95,11 +96,11 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | A Key's latest vote is the one that counts | `ProposalsTest`, `ProposalsChainTest` | Proven |
 | Proposal records are read once each, in order, 50 at a time | `ProposalsTest` (3 tests) | Proven |
 | Paging the proposal list and a proposal's votes visits each once | `ProposalPagingPropertyTest` PP-LIST and PP-VOTES | New |
-| Lists proposals | C6 | Self-reported (Contessa, Hermes: the list was empty) |
+| Lists proposals | C6 | Self-reported (Contessa, Grok Bot, Hermes: the list was empty) |
 | Reads one proposal | C6 | Not run: no proposal existed |
 | A proposal and a vote an agent sent name the agent, beside its wallet | `ProposalsPageTest` "a proposal and a vote an agent sent name the agent" | New |
 | An agent with a shard proposes and votes from its own wallet | Classic fork run on the Mac (`fbff3a46`) | Not run |
-| A second poll vote from the same Key is refused with `409 vote_conflict` | `SignedAgentContractTest`; C5 | Proven; C5 blocked in Contessa's run (Key 329 had used its poll for the day); an earlier unrecorded run reported it |
+| A second poll vote from the same Key is refused with `409 vote_conflict` | `SignedAgentContractTest`; C5 | Proven; C5 self-reported (Grok Bot); blocked in Contessa's run (Key 329 had used its poll for the day) |
 | A poll and a vote an agent sent name the agent | `PollsPageTest` "a poll and a vote an agent sent name the agent beside its Key" | New |
 
 ## Property tests
