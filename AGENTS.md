@@ -15,8 +15,8 @@ signed-in Overview. The [README](README.md) describes the product.
 - There is no `identity/` folder. The shared profile domain comes from
   `regents/identity`, pinned by git in `platform/mix.exs` with `design-system`
   and `elixir-utils`.
-- `make check` runs every gate: the platform's `mix precommit`, TypeScript
-  typecheck and unit tests, then the required-fixes check against ash-template
+- `make check` runs every gate: the platform's `mix precommit` (which ends
+  with the TypeScript typecheck, the unit tests and the browser suite), then the required-fixes check against ash-template
   (needs `gh auth login`), then the CLI's build, typecheck and tests, then the
   contracts' `forge fmt --check`, `forge build` and `forge test`.
   `make check-platform`, `check-required-fixes`, `check-cli` and

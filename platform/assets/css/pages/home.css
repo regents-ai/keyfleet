@@ -22,13 +22,18 @@
   .rl-root :is(h1, h2, h3, p) { margin-block: 0; }
   .rl-root [id] { scroll-margin-block-start: 2rem; }
   .rl-header-links { display: flex; align-items: center; gap: var(--space-2); }
-  .rl-header-links > a:not(.rg-button), .rl-header-links svg { display: inline-flex; width: 1.5rem; height: 1.5rem; }
+  .rl-header-links > a:not(.rg-button) { display: inline-grid; place-items: center; }
+  .rl-header-links svg { display: block; width: 1.5rem; height: 1.5rem; }
+  /* Under a finger each brand link is a full finger's size around its 24px mark. */
+  @media (pointer: coarse) {
+    .rl-header-links > a:not(.rg-button) { min-width: 2.75rem; min-height: 2.75rem; }
+  }
 
   .rl-overline { font-family: var(--font-family-ui); font-size: .6875rem; letter-spacing: .16em; text-transform: uppercase; }
   .rl-eyebrow { color: var(--rl-muted); font-family: var(--font-family-ui); font-size: .8125rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; }
 
-  /* The hero. Wide: the headline, the facts and the instruction on the left,
-     "Buy Next Key" on the right. Narrow: the headline, then the button, then
+  /* The hero. Wide: the headline, the facts and the instruction in the left
+     half, "Buy Next Key" centred in the right half. Narrow: the headline, then the button, then
      the instruction. The hex field sits behind all of it. */
   .rl-hero {
     position: relative; isolation: isolate; overflow: hidden;
@@ -155,12 +160,12 @@
 
   @media (min-width: 64rem) {
     .rl-hero {
-      grid-template-columns: minmax(0, 1fr) 22rem; grid-template-rows: auto 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto 1fr;
       grid-template-areas: "head buy" "give buy"; align-items: start;
     }
     .rl-give { align-self: end; }
     .rl-hero__field {
-      --rl-fade-x: .82; --rl-fade-y: .5; --rl-fade-width: .55; --rl-fade-height: .95;
+      --rl-fade-x: .75; --rl-fade-y: .5; --rl-fade-width: .6; --rl-fade-height: .95;
       --rl-fade-from: .25; --rl-fade-to: .8;
     }
   }

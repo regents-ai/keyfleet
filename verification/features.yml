@@ -59,12 +59,13 @@ features:
       - live: KeyfleetWeb.HomeLive
     proofs:
       - platform/assets/test/key_cards.test.ts
+      - platform/test/browser/homepage_details.spec.ts
     regressions:
       - id: R-20261019-cards-rest-off-screen
         from: Sentinel read of 9b93fe1b
         test: platform/assets/test/key_cards.test.ts
     gaps:
-      - That the stylesheet stops the cards off screen is checked in headless Chromium, not by a test in the repo.
+      - WebKit is not run on the Mac.
 
   - id: home-hero-field
     what: >-
@@ -85,6 +86,7 @@ features:
     proofs:
       - platform/assets/test/home_field_renderer.test.ts
       - platform/assets/test/canvas_island.test.ts
+      - platform/test/browser/homepage_details.spec.ts
     regressions:
       - id: R-20261019-field-build-not-lost
         from: Sentinel read of 9b93fe1b
@@ -93,4 +95,52 @@ features:
         from: Sentinel read of 9b93fe1b
         test: platform/assets/test/canvas_island.test.ts
     gaps:
-      - The raised tiles, wake and ring are checked by hand in headless Chromium at 1280; WebKit is not run on the Mac.
+      - The raised tiles, wake and ring are checked by hand in headless Chromium at 1280; the still drawing under a finger at 390 is checked in the repo. WebKit is not run on the Mac.
+
+  - id: home-next-key
+    what: >-
+      On a wide screen the homepage's headline takes the hero's left half and the
+      next Key's card, with "Buy Next Key", sits in the middle of its right half.
+      Under a mouse the card turns toward the pointer and settles level again.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/assets/css/pages/home.css
+      - platform/assets/js/hooks/home_hero.ts
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/browser/homepage_details.spec.ts
+    regressions:
+      - id: R-20261019-card-keeps-no-turn
+        from: Sentinel read of ff1146e1
+        test: platform/test/browser/homepage_details.spec.ts
+    gaps:
+      - WebKit is not run on the Mac.
+
+  - id: header-footer-links
+    what: >-
+      Every link and button in the site header and footer has a name and is at
+      least 44 pixels square under a finger, on a touch phone and tablet, the X
+      and GitHub marks included. Under a mouse they keep the design system's own
+      sizes.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/shell.ex
+      - platform/lib/keyfleet_web/components/layouts.ex
+      - platform/lib/keyfleet_web/components/regent_links.ex
+      - platform/assets/css/app.css
+      - platform/assets/css/pages/home.css
+    entry:
+      - route: GET /
+    proofs:
+      - platform/test/browser/homepage_details.spec.ts
+    regressions:
+      - id: R-20261019-links-fit-a-finger
+        from: Sentinel read of ff1146e1
+        test: platform/test/browser/homepage_details.spec.ts
+    gaps:
+      - Measured on the homepage only; the header and footer are the same on every page.

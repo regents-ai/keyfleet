@@ -2457,3 +2457,19 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The dashed line round the level on sale no longer moves; it stays dashed.
 - With less motion asked for, the shakes and the turning number are still and
   every message and number shows at once.
+
+## 2026-10-19 — The next Key sits in the middle, and every link fits a finger
+
+- On a wide screen the headline takes the left half of the homepage's top and
+  the next Key's card, with "Buy Next Key", sits in the middle of the right half.
+- Once the card has turned toward the mouse and settled level again, it keeps no
+  turn of its own.
+- The X and GitHub marks in the header and footer, and the footer's shorter
+  links such as "About", are now each a full finger's size under a finger, on a
+  phone or a tablet. Under a mouse they keep their own size.
+- `mix precommit` now ends with the TypeScript typecheck, the unit tests and the
+  browser suite, so every commit's gate runs the homepage's browser checks.
+- Evidence: level ordinary; features home-next-key, header-footer-links,
+  home-key-cards, home-hero-field; new browser checks in
+  platform/test/browser/homepage_details.spec.ts; gaps: WebKit not run on the
+  Mac, local data has no ships to draw.

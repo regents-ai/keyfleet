@@ -155,9 +155,15 @@ input:focus-visible,
 }
 .regent-footer p { margin: 0; }
 .regent-footer__social { display: flex; align-items: center; gap: var(--space-2); }
-.regent-footer__social > a, .regent-footer__social > a svg { display: inline-flex; width: 1.5rem; height: 1.5rem; }
+.regent-footer__social > a { display: inline-grid; place-items: center; }
+.regent-footer__social > a svg { display: block; width: 1.5rem; height: 1.5rem; }
 .regent-footer__links { display: flex; flex-wrap: wrap; column-gap: var(--space-3); }
 .regent-footer__links a { display: inline-flex; align-items: center; min-height: 2.75rem; color: inherit; }
+/* Under a finger each brand link and each short link is a full finger's size. */
+@media (pointer: coarse) {
+  .regent-footer__social > a { min-width: 2.75rem; min-height: 2.75rem; }
+  .regent-footer__links a { justify-content: center; min-width: 2.75rem; }
+}
 .regent-footer__links .regent-footer__guide {
   display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0; border: 0;
   background: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer;

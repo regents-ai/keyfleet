@@ -374,6 +374,7 @@ type KeyCardHook = {el: HTMLElement; scope?: Scope; release?: () => void}
 /**
  * The next Key's card. Under a mouse, pointing at the card or its button turns
  * the card a little toward the pointer, and it settles when the pointer leaves.
+ * Once it is level again it keeps no turn of its own: the stylesheet has it.
  * A finger, a keyboard or less motion gets the card as it is.
  */
 export const NextKeyCard = {
@@ -386,7 +387,16 @@ export const NextKeyCard = {
     const scope = createScope({root, mediaQueries: {reduced: "(prefers-reduced-motion: reduce)"}})
     this.scope = scope.add(() => {
       if (scope.matches.reduced || !finePointer()) return
-      turn = createAnimatable(tilt, {rotateX: 0, rotateY: 0, duration: 420, ease: EASE_OUT})
+      const level = createAnimatable(tilt, {
+        rotateX: 0,
+        rotateY: 0,
+        duration: 420,
+        ease: EASE_OUT,
+        onComplete: () => {
+          if (level.rotateX() === 0 && level.rotateY() === 0) tilt.style.removeProperty("transform")
+        },
+      })
+      turn = level
       return () => {
         turn = undefined
       }

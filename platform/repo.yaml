@@ -42,7 +42,3 @@ local_path_dependencies:
 acceptance_commands:
   - cwd: platform
     command: mix precommit
-  - cwd: platform
-    command: npm run typecheck
-  - cwd: platform
-    command: npm test

@@ -202,7 +202,12 @@ defmodule Keyfleet.MixProject do
         "test --warnings-as-errors",
         "ash.codegen --check",
         "usage_rules.sync --check",
-        "keyfleet.route_handoff --check"
+        "keyfleet.route_handoff --check",
+        "cmd npm run typecheck",
+        "cmd npm test",
+        # The browser suite (test/browser) on its own server, once the ExUnit suite
+        # on the same database has finished.
+        "cmd npm run test:browser"
       ]
     ]
   end
