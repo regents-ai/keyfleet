@@ -20,14 +20,15 @@ const purchaseSelector = "0xb48eb184"
 const requestRevealSelector = "0x40261cdd"
 
 // Opens the fleet's page, signed in as `bearer` unless it is null, at its
-// Buying a key panel; returns the page's uncaught errors.
+// Buying a key panel, as the header's "Get a Key" does: earlier tests may have
+// sold this account a Key, and a holder's way in has no Buy button. Returns
+// the page's uncaught errors.
 async function openBuying(page: Page, bearer: string | null = "valid") {
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   if (bearer) await (await installAuthenticatedPrivy(page, bearer)).establishLocalSession()
-  await page.goto(`/classic/1`)
+  await page.goto(`/classic/1?buy`)
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
-  await page.locator("#fleet-get-key").click()
   await expect(page.locator("#buy-key-title")).toBeVisible()
   return errors
 }
