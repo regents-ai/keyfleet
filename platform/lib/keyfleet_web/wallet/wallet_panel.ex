@@ -448,12 +448,17 @@ defmodule KeyfleetWeb.WalletPanel do
     end
   end
 
+  # A purchase's figures are on its buttons and the note under Approve, so
+  # its line says only why its steps couldn't be built.
+  defp line(%{flow: :buy, built: %{problem: nil}}), do: nil
+  defp line(assigns), do: WalletWords.line(assigns.flow, assigns.built, assigns.inputs)
+
   @impl true
   def render(assigns) do
     assigns =
       assign(assigns,
         panel: Map.take(assigns, [:inputs, :built, :review, :presses, :signer]),
-        line: WalletWords.line(assigns.flow, assigns.built, assigns.inputs),
+        line: line(assigns),
         chain: chain_name(%{assigns: assigns}),
         read_only: assigns.actor == nil and assigns.flow in @read_only_for_visitors
       )

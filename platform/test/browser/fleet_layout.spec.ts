@@ -55,9 +55,11 @@ test("on a tall screen the hall fills the box to the screen's foot and scrolls o
 })
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`"Get a Key" is filled Tangerine with Charcoal words in ${scheme}`, async ({page}) => {
-    await page.emulateMedia({colorScheme: scheme})
+  test(`"Get a Key" is filled Tangerine with Charcoal words in ${scheme}`, async ({page, baseURL}) => {
+    // The theme the visitor chose, as the switch writes it.
+    await page.context().addCookies([{name: "regent_theme", value: scheme, url: baseURL!}])
     await openFleet(page)
+    await expect(page.locator("html")).toHaveAttribute("data-theme", scheme)
 
     const button = page.locator("#fleet-get-key")
     await expect(button).toHaveText("Join this Keyfleet by purchasing the next Key: 10 USDC")

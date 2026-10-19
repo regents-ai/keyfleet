@@ -621,17 +621,6 @@
   color: var(--color-fg-muted);
 }
 
-/* The Buy panel's line keeps its space while empty, so the words appearing
-   never move the buttons a buyer is about to press. */
-.fleet-buy-order .wallet-panel-line {
-  min-block-size: 1.5em;
-}
-
-.fleet-buy-order .wallet-panel-line[hidden] {
-  display: block;
-  visibility: hidden;
-}
-
 /* Approve and Buy carry 1 and 2 while both are showing. */
 .fleet-step-mark {
   display: inline-grid;
@@ -643,6 +632,34 @@
   border: 1px solid currentColor;
   font-size: 0.75rem;
   line-height: 1;
+}
+
+/* Under Approve, on a line of its own: why a little more than the price is
+   allowed. */
+.fleet-approve-note {
+  display: flex;
+  flex: 1 1 100%;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.fleet-approve-note[hidden] {
+  display: none;
+}
+
+.fleet-approve-note svg {
+  flex: none;
+  inline-size: 1em;
+  block-size: 1em;
+  margin-block-start: 0.15em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
 }
 
 /* The list of keys, and a missing fleet */

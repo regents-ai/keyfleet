@@ -48,14 +48,14 @@ test("the homepage shows Classic #1, its price, and Buy waiting for the sale", a
   test.info().annotations.push({type: "Buy Next Key below the first screen", description: `${below}px`})
   await expectComfortable(page, errors)
 
-  // "Buy Key" opens the sale's window: nothing sold yet, the first Key's
-  // price, and its Buy closed with the same reason.
+  // "Buy Key" opens the sale's window: nothing sold yet, and its Buy closed
+  // with the same reason.
   await page.locator("#home-classic-buy").click()
   const sale = page.getByRole("dialog", {name: "Buy Key"})
   await expect(sale).toBeVisible()
+  await expect(sale.locator("#home-buy-key-traits")).toHaveText("Your Key’s traits are randomized")
   await expect(sale.locator("#home-buy-key-sold")).toHaveText("0 of 1,024")
-  await expect(sale.locator("#home-buy-key-next")).toHaveText("Key 1 · 10 USDC")
-  await expectOnFirstScreen(page, sale.locator("#home-buy-key-next"), "the next Key's price")
+  await expectOnFirstScreen(page, sale.locator("#home-buy-key-sold"), "how many Keys are sold")
   await expect(sale.locator("#home-buy-key-go")).toBeDisabled()
   await expect(sale.locator("#home-buy-key-why")).toHaveText("Sales open soon")
   await expectComfortable(page, errors)

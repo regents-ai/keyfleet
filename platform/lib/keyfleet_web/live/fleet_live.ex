@@ -1249,7 +1249,7 @@ defmodule KeyfleetWeb.FleetLive do
                 data-variant={Motion.standard("count")}
               >
                 <span data-count>
-                  {on_sale(panel, :token_id) && grouped(on_sale(panel, :token_id))}
+                  {key_on_sale(panel)}
                 </span>
               </span>
               ·
@@ -1335,13 +1335,25 @@ defmodule KeyfleetWeb.FleetLive do
           data-onchain-step="approve"
           hidden={not approve_shown?(panel)}
           disabled={WalletPanel.blocked(panel, "approve") != nil}
-          aria-describedby={WalletPanel.blocked(panel, "approve") && "#{@id}-button-why"}
+          aria-describedby={approve_described_by(@id, panel)}
         >
           <span class="fleet-step-mark" aria-hidden="true">1</span>
-          <span data-press-label>
-            Approve {on_sale(panel, :max_price) && usdc(on_sale(panel, :max_price))}
-          </span>
+          <span data-press-label>Approve USDC</span>
         </Regent.Primitives.button>
+        <p
+          id={"#{@id}-approve-note"}
+          class="fleet-approve-note"
+          hidden={not approve_shown?(panel)}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="7" />
+            <path d="M8 7v4.5M8 4.5v.01" />
+          </svg>
+          <span>
+            Small amount extra is approved to buy the next Key in case the current
+            Key {key_on_sale(panel)} is bought first.
+          </span>
+        </p>
         <Regent.Primitives.button
           id={"#{@id}-button"}
           data-onchain-step="buy"
@@ -1349,9 +1361,7 @@ defmodule KeyfleetWeb.FleetLive do
           aria-describedby={buy_blocked(panel) && "#{@id}-button-why"}
         >
           <span :if={approve_shown?(panel)} class="fleet-step-mark" aria-hidden="true">2</span>
-          <span data-press-label>
-            Buy Key {on_sale(panel, :token_id) && grouped(on_sale(panel, :token_id))}
-          </span>
+          <span data-press-label>Buy Key {key_on_sale(panel)}</span>
         </Regent.Primitives.button>
         <span :if={buy_blocked(panel)} id={"#{@id}-button-why"} class="wallet-panel-why">
           {WalletWords.blocked(buy_blocked(panel))}
@@ -1368,6 +1378,20 @@ defmodule KeyfleetWeb.FleetLive do
 
   # The Key on sale's number or price, as the steps were built from them.
   defp on_sale(panel, figure), do: panel |> WalletPanel.figures() |> Map.get(figure)
+
+  # The Key on sale's number as the page writes it, or nil before the steps are built.
+  defp key_on_sale(panel) do
+    token_id = on_sale(panel, :token_id)
+    token_id && grouped(token_id)
+  end
+
+  # Approve is described by the note under it, and by the reason beside Buy
+  # while the network fee holds both back.
+  defp approve_described_by(id, panel) do
+    if WalletPanel.blocked(panel, "approve"),
+      do: "#{id}-approve-note #{id}-button-why",
+      else: "#{id}-approve-note"
+  end
 
   # Approve shows while the wallet the figures are for needs an approval.
   defp approve_shown?(%{built: %{figures: %{approve?: true}}}), do: true

@@ -133,6 +133,11 @@ test("on the homepage, Approve and Buy are pressed inside the Buy Key window, si
   await expect(window.locator("#home-buy-key-order-from")).toHaveText("Sending from 0x1111..1111 on Base.")
   await expect(window.locator("#home-buy-key-button")).toBeDisabled()
   await expect(window.locator("#home-buy-key-button-why")).toHaveText("Approve USDC first")
+  await expect(window.locator("#home-buy-key-approve")).toHaveText("1 Approve USDC")
+  const onSale = (await window.locator("#home-buy-key-button [data-press-label]").innerText()).replace("Buy Key ", "")
+  await expect(window.locator("#home-buy-key-approve-note")).toHaveText(
+    `Small amount extra is approved to buy the next Key in case the current Key ${onSale} is bought first.`,
+  )
 
   await window.locator("#home-buy-key-approve").click()
   await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
@@ -144,6 +149,7 @@ test("on the homepage, Approve and Buy are pressed inside the Buy Key window, si
   allowUsdc(me, Number(BigInt(`0x${approval.transaction.data.slice(-64)}`)))
   landStep(approval.hash, approval.transaction, true)
   await expect(window.locator("#home-buy-key-approve")).toBeHidden()
+  await expect(window.locator("#home-buy-key-approve-note")).toBeHidden()
 
   await window.locator("#home-buy-key-button").click()
   await expect.poll(async () => (await sentByStandIn(page)).length).toBe(2)

@@ -639,13 +639,13 @@ defmodule KeyfleetWeb.HomeLive do
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
-  # The window "Buy Key" opens: the Key cards turning, where its price goes,
-  # how far the sale has gone, and the next Key's price and the one after it.
-  # Once the sale is open it holds the fleet's own Approve and Buy. Until
+  # The window "Buy Key" opens: the Key cards turning, how far the sale has
+  # gone, and once the sale is open the fleet's own Approve and Buy. Until
   # then its Buy is closed, with the reason right under it, so a phone that
   # scrolls the window sees both together.
   defp buy_key(assigns) do
-    assigns = assign(assigns, offer(assigns.classic)) |> assign(key_window(assigns.classic))
+    assigns =
+      assigns |> assign(offer(assigns.classic)) |> assign(:sold, sold_count(assigns.classic))
 
     ~H"""
     <dialog
@@ -658,19 +658,11 @@ defmodule KeyfleetWeb.HomeLive do
     >
       <h2 id="home-buy-key-title" tabindex="-1" data-modal-title>Buy Key</h2>
       <.cards id="home-buy-key-cards" />
-      <p id="home-buy-key-split" class="rl-buy-key__split">{split()}</p>
+      <p id="home-buy-key-traits" class="rl-buy-key__note">Your Key’s traits are randomized</p>
       <dl class="rl-buy-key__facts">
         <div>
           <dt>Sold</dt>
           <dd id="home-buy-key-sold">{@sold}</dd>
-        </div>
-        <div>
-          <dt>Next Key</dt>
-          <dd id="home-buy-key-next">{@price || "None left"}</dd>
-        </div>
-        <div>
-          <dt>The Key after</dt>
-          <dd id="home-buy-key-after">{@following || "None left"}</dd>
         </div>
       </dl>
       <FleetLive.buy_order
@@ -711,25 +703,9 @@ defmodule KeyfleetWeb.HomeLive do
     """
   end
 
-  defp split, do: @split
-
   # How many of the 1,024 Keys have sold, and the price of the Key after the
   # one on offer. Before the sale opens nothing has sold and the first Key is
   # on offer.
-  defp key_window(classic) do
-    after_next =
-      case classic.sales do
-        nil -> Presets.progress(@classic, 1)
-        %{buy: %{token_id: nil}} -> nil
-        %{buy: %{token_id: token_id}} -> Presets.progress(@classic, token_id)
-      end
-
-    %{
-      sold: sold_count(classic),
-      following: after_next && after_next.next_token_id && price(after_next)
-    }
-  end
-
   defp sold_count(classic) do
     max = Presets.max_supply(@classic)
 

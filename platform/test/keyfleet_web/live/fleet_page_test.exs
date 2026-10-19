@@ -425,8 +425,14 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert buy.to == @contract
       assert "0x" <> _calldata = buy.data
 
-      assert text(view, "#buy-key-order-line") ==
-               "Key 151: 42.99817 USDC. If it sells first, you get the next Key for up to 45.15 USDC."
+      # The figures are on the buttons and the note under Approve, not in a line above.
+      assert has_element?(view, "#buy-key-order-line[hidden]")
+      assert text(view, "#buy-key-approve [data-press-label]") == "Approve USDC"
+
+      assert text(view, "#buy-key-approve-note") ==
+               "Small amount extra is approved to buy the next Key in case the current Key 151 is bought first."
+
+      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 151"
 
       assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa..aaaa on Base."
       refute has_element?(view, "#buy-key-approve[hidden]")
@@ -482,8 +488,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert_push_event(view, "onchain-steps:review", %{review: %{steps: [%{step: "buy"}]}})
       assert has_element?(view, "#buy-key-approve[hidden]")
 
-      assert text(view, "#buy-key-order-line") ==
-               "Key 151: 42.99817 USDC. If it sells first, you get the next Key for up to 45.15 USDC."
+      assert has_element?(view, "#buy-key-approve-note[hidden]")
+      assert has_element?(view, "#buy-key-order-line[hidden]")
+      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 151"
     end
 
     test "a purchase that doesn't go through says why it may not have", %{conn: conn} do
@@ -533,8 +540,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert has_element?(view, "#buy-key-order-from[hidden]")
 
-      assert text(view, "#buy-key-order-line") ==
-               "Key 151: 42.99817 USDC. If it sells first, you get the next Key for up to 45.15 USDC."
+      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 151"
 
       view
       |> with_target("#buy-key-order")
@@ -588,8 +594,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       refute_push_event(view, "onchain-steps:review", %{review: %{}})
 
-      assert text(view, "#buy-key-order-line") ==
-               "Key 151: 42.99817 USDC. If it sells first, you get the next Key for up to 45.15 USDC."
+      assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 151"
 
       refute has_element?(view, "#buy-key-button[disabled]")
 
