@@ -9,7 +9,8 @@ defmodule KeyfleetWeb.Components.Shell do
 
   # Classic is the fleet that sells Keys: once it is open, "Get a Key" in the
   # header opens its page with its own "Get a Key" pressed
-  # (`KeyfleetWeb.FleetLive`). Until then the header has no "Get a Key".
+  # (`KeyfleetWeb.FleetLive`), or on the homepage its "Buy Key" window. Until
+  # then the header has no "Get a Key".
   @get_key_fleet "fleet_tech_classic"
 
   @doc "The fleet the header's \"Get a Key\" opens, shown only while it is open."
@@ -137,8 +138,9 @@ defmodule KeyfleetWeb.Components.Shell do
 
   attr :get_key_link, :atom,
     required: true,
-    values: [:patch, :navigate],
-    doc: "`:patch` inside the app shell, `:navigate` from any other page"
+    values: [:patch, :navigate, :buy_key],
+    doc:
+      "`:patch` inside the app shell, `:buy_key` on the homepage, `:navigate` from any other page"
 
   attr :menu, :boolean,
     required: true,
@@ -246,13 +248,29 @@ defmodule KeyfleetWeb.Components.Shell do
 
   attr :link, :atom,
     required: true,
-    values: [:patch, :navigate],
-    doc: "`:patch` from the app's own pages, `:navigate` from any other"
+    values: [:patch, :navigate, :buy_key],
+    doc:
+      "`:patch` from the app's own pages, `:buy_key` on the homepage, which opens its \"Buy Key\" window, `:navigate` from any other"
 
   @doc """
   "Get a Key" in the site header, for everyone, signed in or not, once Classic
-  is open: it opens Classic's page with its buying panel open.
+  is open: it opens Classic's page with its buying panel open, or on the
+  homepage its "Buy Key" window.
   """
+  def get_key(%{link: :buy_key} = assigns) do
+    ~H"""
+    <button
+      id={@id}
+      type="button"
+      class="rg-button rg-button--primary"
+      phx-click="open_buy_key"
+      aria-haspopup="dialog"
+    >
+      <span class="rg-button__label">Get a Key</span>
+    </button>
+    """
+  end
+
   def get_key(assigns) do
     assigns =
       assign(assigns, :to, [{assigns.link, Keyfleet.Fleets.path(@get_key_fleet) <> "?buy"}])

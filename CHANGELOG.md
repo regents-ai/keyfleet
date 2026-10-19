@@ -2871,3 +2871,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main 2bad602a to keyfleet.ai as Fly release v98 (rollback v97, 1fb76f87): the 1,024-card Classic #1 deck, in the deployment manifests and on the server.
 - Why: Sean released it (1. a, 16:59Z) so the Regents Safe can create Classic #1 from it. Full check on a fresh copy was clean (990 tests, 304 page tests, 72 Chromium walks; WebKit not run on the Mac) and every contract test succeeded, including the audit tests on a Base fork.
+
+## 2026-10-19 — Homepage buttons open the Buy Key window
+
+- What: on the homepage, the header's "Get a Key" and the hero's "Buy Next Key" now open the "Buy Key" window, as the Classic section's "Buy Key" already did. Its Buy still goes on to Classic's page to buy. "Get a Key" on every other page still opens Classic's page with buying open.
+- Why: Sean asked for it (18:04Z): both buttons should open the buy window, not leave the homepage.

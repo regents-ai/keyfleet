@@ -722,20 +722,16 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, home, _html} = live(build_conn(), "/")
       render_async(home, 3_000)
 
-      # It opens the fleet's page with "Get a Key" pressed, as the header does.
-      assert has_element?(home, ~s(a#home-buy-next-key[href="/classic/1?buy"]), "Key 1 · 10 USDC")
+      assert has_element?(home, "button#home-buy-next-key", "Key 1 · 10 USDC")
     end
 
-    # The header's "Get a Key", there for everyone on the homepage and every
-    # app page, lands on Classic with its own "Get a Key" pressed, then drops
-    # the press from the address so the next press opens it again.
+    # The header's "Get a Key", there for everyone on every app page, lands on
+    # Classic with its own "Get a Key" pressed, then drops the press from the
+    # address so the next press opens it again.
     test "the header's Get a Key lands on Classic at Buying a Key", %{conn: conn} do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
       read_now("fleet_tech_classic")
-
-      {:ok, home, _html} = live(build_conn(), "/")
-      assert has_element?(home, ~s(#shell-get-key[href="/classic/1?buy"]))
 
       {:ok, view, _html} = live(conn, @path)
       view |> element("#shell-get-key") |> render_click()

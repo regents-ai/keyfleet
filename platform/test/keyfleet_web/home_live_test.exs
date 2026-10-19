@@ -82,7 +82,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute has_element?(view, "#shell-get-key")
   end
 
-  test "once Classic is on sale, Buy Next Key opens its page at the Key on offer",
+  test "once Classic is on sale, Buy Next Key names the Key on offer and opens the Buy Key window",
        %{conn: conn} do
     for token_id <- 1..3, do: issue!(@classic, token_id)
     read_fleets()
@@ -91,11 +91,23 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     price = Keyfleet.Fleets.Presets.progress(@classic, 3).next_price
 
-    assert has_element?(view, ~s(a#home-buy-next-key[href="/classic/1?buy"]), "Buy Next Key")
     assert text(view, "#home-buy-price") == "Key 4 · #{KeyfleetWeb.FleetLive.usdc(price)}"
     assert text(view, "#home-buy-tag") == "Key 4 · #{KeyfleetWeb.FleetLive.usdc(price)}"
     assert text(view, "#home-buy-why") == ""
     assert text(view, "#home-classic-sold") == "3"
+
+    view |> element("button#home-buy-next-key") |> render_click()
+    assert has_element?(view, ~s(dialog#home-buy-key a#home-buy-key-go[href="/classic/1?buy"]))
+  end
+
+  test "once Classic is on sale, the header's Get a Key opens the Buy Key window", %{conn: conn} do
+    issue!(@classic, 1)
+    read_fleets()
+
+    {:ok, view, _html} = live(conn, "/")
+    view |> element("button#shell-get-key") |> render_click()
+
+    assert has_element?(view, "dialog#home-buy-key")
   end
 
   test "once Classic is on sale, Buy Key opens its window with the Key cards turning",
