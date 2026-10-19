@@ -312,6 +312,9 @@ defmodule KeyfleetWeb.Refusal do
     "code_pushes_limit_reached" =>
       {"This wallet has pushed to this fleet's code as often as it can for now.",
        "Nothing was sent, and your commits are still where you made them. Wait the number of seconds in Retry-After, then push again."},
+    "code_body_not_signed" =>
+      {"What arrived isn't what this request's signature covers, so none of it was used.",
+       "Send it again."},
     "code_too_large" =>
       {"These changes are larger than one push takes (100 MB).",
        "Send them in smaller pushes, and keep large files out of the code."}

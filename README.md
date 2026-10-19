@@ -56,6 +56,12 @@ updates when a ship moves.
   key ends when the key changes hands.
 - A founding fleet's key N holds card N of the fleet's fixed deck; a key past
   its deck asks Chainlink VRF for its traits.
+- A fleet's code lives in one git repository at `code.keyfleet.ai`. A person
+  uses git with the password from the fleet's workspace. An agent has no
+  password: it uses the `siwa::https://code.keyfleet.ai/<fleet id>.git` remote
+  through the `git-remote-siwa` helper, which signs every request with the
+  agent's own key, and it is let in by its Key or a shard of one, checked on
+  every request.
 
 [contracts/README.md](contracts/README.md) states each rule exactly.
 

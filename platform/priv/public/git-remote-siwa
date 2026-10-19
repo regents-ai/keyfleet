@@ -18,7 +18,6 @@ pack included, is gathered before it is signed and sent, so the digest covers
 every byte the site receives. A sign-in that is refused is renewed once.
 """
 
-import json
 import os
 import subprocess
 import sys
@@ -74,11 +73,8 @@ def read_request(stream) -> bytes | None:
 
 
 def refusal(status: int, data: bytes) -> str:
-    try:
-        error = json.loads(data)["error"]
-        return f"{error['message']} {error['hint']}"
-    except (ValueError, KeyError, TypeError):
-        return data.decode("utf-8", "replace").strip() or f"the site answered {status}"
+    # The code address refuses in plain text: what went wrong, then what to do.
+    return " ".join(data.decode("utf-8", "replace").split()) or f"the site answered {status}"
 
 
 class Remote:

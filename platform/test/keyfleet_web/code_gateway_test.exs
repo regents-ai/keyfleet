@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
   # records every request it gets.
   use ExUnit.Case, async: false
   use Oban.Testing, repo: Keyfleet.Repo
+  use ExUnitProperties
 
   import Phoenix.ConnTest
   import Plug.Conn
@@ -12,7 +13,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{ChainHelpers, Code, Fleets, Keys}
   alias Keyfleet.Code.Setup
-  alias KeyfleetWeb.{CodePassword, SessionAuthorityHelpers}
+  alias KeyfleetWeb.{CodePassword, SessionAuthorityHelpers, SignedAgentHelpers}
 
   @endpoint KeyfleetWeb.Endpoint
   @fleet "fibonacci_syndicate"
@@ -186,6 +187,106 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     assert git(:get, "/#{fleet}.git/info/refs?service=git-upload-pack", password).status == 200
   end
 
+  ## What a push sends
+
+  # Costly failure: an agent's push reaches the store changed, or not at all.
+  test "a Key-holding agent's push reaches the store as the exact bytes it signed" do
+    agent = key_holding_agent!(2)
+    pack = :crypto.strong_rand_bytes(150_000)
+
+    pushed = signed(agent, "/#{@fleet}.git/git-receive-pack", pack)
+
+    assert pushed.status == 200
+    receive_pack = "/#{@owner}/#{@fleet}/git-receive-pack"
+    sub = "did:pkh:eip155:8453:" <> agent.wallet
+    assert_receive {:store, "POST", ^receive_pack, %{"sub" => ^sub}, ^pack}
+    assert spooled() == []
+  end
+
+  # Costly failure: bytes changed after an agent signed them reach the store
+  # under its name.
+  property "a body differing from the signed one by any byte reaches nothing, and its file is gone" do
+    agent = key_holding_agent!(3)
+
+    check all(
+            pack <- binary(min_length: 1, max_length: 200_000),
+            at <- integer(0..(byte_size(pack) - 1)),
+            max_runs: 20
+          ) do
+      <<before::binary-size(at), byte, rest::binary>> = pack
+      changed = before <> <<Bitwise.bxor(byte, 1)>> <> rest
+
+      refused = signed(agent, "/#{@fleet}.git/git-receive-pack", pack, changed)
+
+      assert refused.status == 400
+      assert refused.resp_body =~ "isn't what this request's signature covers"
+      refute_received {:store, _method, _path, _claims, _body}
+      assert spooled() == []
+    end
+  end
+
+  # Costly failure: one push fills the site's disk or memory.
+  test "a push past the limit is refused with 413, reaches nothing, and its file is gone", c do
+    put_code(max_pack_bytes: 100_000)
+    password = person_password!(c.holder)
+
+    refused =
+      git(:post, "/#{@fleet}.git/git-receive-pack", password, :binary.copy(<<0>>, 100_001))
+
+    assert refused.status == 413
+    refute_received {:store, _method, _path, _claims, _body}
+    assert spooled() == []
+  end
+
+  # Costly failure: a sender trickling a push a byte at a time holds the
+  # site's connections for ever. Each tiny piece arrives well inside the
+  # wait for the next read, so only the whole body's deadline ends it.
+  @tag :capture_log
+  test "a push trickled a byte at a time is cut off at the deadline and reaches nothing", c do
+    put_code(body_idle_ms: 500, body_timeout_ms: 1_000)
+    password = person_password!(c.holder)
+    socket = open_site!()
+
+    :ok =
+      :gen_tcp.send(socket, [
+        "POST /#{@fleet}.git/git-receive-pack HTTP/1.1\r\n",
+        "host: #{@host}\r\n",
+        "authorization: #{Plug.BasicAuth.encode_basic_auth("git", password)}\r\n",
+        "content-type: application/x-git-receive-pack-request\r\n",
+        "transfer-encoding: chunked\r\n\r\n"
+      ])
+
+    started = Elixir.System.monotonic_time(:millisecond)
+    assert trickle(socket, 40) == :cut_off
+    assert Elixir.System.monotonic_time(:millisecond) - started < 3_000
+
+    refute_received {:store, _method, _path, _claims, _body}
+    :sys.get_state(Plug.Upload)
+    assert spooled() == []
+  end
+
+  # Costly failure: a sender that stops partway holds a connection for as
+  # long as the whole body may take.
+  @tag :capture_log
+  test "a push that stops partway is answered 408 once a read has waited too long", c do
+    put_code(body_idle_ms: 500)
+    password = person_password!(c.holder)
+    socket = open_site!()
+
+    :ok =
+      :gen_tcp.send(socket, [
+        "POST /#{@fleet}.git/git-receive-pack HTTP/1.1\r\n",
+        "host: #{@host}\r\n",
+        "authorization: #{Plug.BasicAuth.encode_basic_auth("git", password)}\r\n",
+        "content-type: application/x-git-receive-pack-request\r\n",
+        "content-length: 1000\r\n\r\n",
+        :binary.copy("x", 10)
+      ])
+
+    assert {:ok, "HTTP/1.1 408" <> _answer} = :gen_tcp.recv(socket, 0, 3_000)
+    refute_received {:store, _method, _path, _claims, _body}
+  end
+
   ## The fleet and its people
 
   defp account!(privy_did, wallet) do
@@ -239,6 +340,69 @@ defmodule KeyfleetWeb.CodeGatewayTest do
         else: conn
 
     dispatch(conn, @endpoint, method, path, body)
+  end
+
+  # A paired agent whose own wallet holds Key `token_id`, and the sign-in server
+  # that checks its requests.
+  defp key_holding_agent!(token_id) do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_broker!(self(), secret)
+    wallet = String.downcase(signer.address)
+    Keyfleet.PairingHelpers.pair_wallet!(wallet)
+    epoch!(token_id, 1, wallet)
+    %{signer: signer, secret: secret, wallet: wallet}
+  end
+
+  # `signed` is what the agent signed; `sent` is what arrives. Each agent
+  # sends from its own address, so no other test spent its budget.
+  defp signed(agent, path, signed, sent \\ nil) do
+    request = SignedAgentHelpers.sign(agent.signer, agent.secret, "POST", path, signed)
+
+    %{build_conn() | host: @host, remote_ip: {198, 51, 100, 140}}
+    |> then(
+      &Enum.reduce(request.headers, &1, fn {name, value}, conn ->
+        put_req_header(conn, name, value)
+      end)
+    )
+    |> dispatch(@endpoint, :post, path, sent || signed)
+  end
+
+  defp put_code(settings),
+    do:
+      Application.put_env(
+        :keyfleet,
+        :code,
+        Keyword.merge(Application.fetch_env!(:keyfleet, :code), settings)
+      )
+
+  # The files bodies are written to while they arrive.
+  defp spooled,
+    do: Path.wildcard(Path.join([Elixir.System.tmp_dir!(), "plug-*", "keyfleet-code-*"]))
+
+  # The site, served on a real socket, so a body can arrive slowly.
+  defp open_site! do
+    site = SignedAgentHelpers.serve!(:site, @endpoint)
+    %URI{port: port} = URI.parse(site)
+    {:ok, socket} = :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false])
+    socket
+  end
+
+  # Sends one byte every 100 ms until the site closes the connection or the
+  # bytes run out.
+  defp trickle(_socket, 0), do: :still_open
+
+  defp trickle(socket, left) do
+    case :gen_tcp.recv(socket, 0, 100) do
+      {:error, :timeout} ->
+        case :gen_tcp.send(socket, "1\r\nx\r\n") do
+          :ok -> trickle(socket, left - 1)
+          {:error, _closed} -> :cut_off
+        end
+
+      {:error, :closed} ->
+        :cut_off
+    end
   end
 
   ## The store

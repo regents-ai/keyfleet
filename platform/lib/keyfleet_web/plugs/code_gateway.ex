@@ -10,25 +10,30 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   (`git-upload-pack`) and changes sent (`git-receive-pack`). Who sent it:
 
     * An agent signs every request with its own sign-in (SIWA, as on
-      `/api/v1/agent`): its method, its path with the query, and the digest
-      of its exact body, an empty one included. The whole body, a pack
-      included, is read first, up to `max_pack_bytes`, so the sign-in server
-      checks the digest of the very bytes the store is then sent; nothing
-      reaches the store before that. The agent is then let in by what its own
-      wallet holds or by its pairing with a holder, checked on every request.
+      `/api/v1/agent`): its method, its path with the query, and the
+      `content-digest` it declares for its exact body, an empty one included.
+      The sign-in server checks the signature before any of the body is read.
+      The agent is then let in by what its own wallet holds or by its pairing
+      with a holder, checked on every request.
     * A person signs in with a password from `KeyfleetWeb.CodePassword`, under
       any user name, checked at most every `access_ttl_ms`.
+
+  Only then is the body read, into a file as it arrives, never held whole: at
+  most `max_pack_bytes`, each read waiting at most `body_idle_ms` and the whole
+  body at most `body_timeout_ms`, so a sender trickling bytes is cut off. An
+  agent's body reaches the store only if it is the one its signature declared;
+  any other is refused and its file deleted, and nothing was sent to the store.
 
   A key changing hands clears the fleet's admissions at once.
 
   What reaches the store carries a pass (`Keyfleet.Code.Pass`) in place of
   any sign-in, with only the headers git's exchange needs. The store's answer
   streams back. Each push spends `:code_pushes` for the wallet it is sent as
-  (`Keyfleet.Limits`). When the store reports changes done, each branch or tag
-  moved, up to `@recorded` of them, is recorded for the fleet's workspace,
-  under the key and, for an agent, the agent too. A store that cannot be reached, stops mid-exchange or answers
-  with a fault of its own is saved with the site's errors
-  (`Keyfleet.Code.StoreDownError`).
+  (`Keyfleet.Limits`), before its body is read. When the store reports changes
+  done, each branch or tag moved, up to `@recorded` of them, is recorded for
+  the fleet's workspace, under the key and, for an agent, the agent too. A
+  store that cannot be reached, stops mid-exchange or answers with a fault of
+  its own is saved with the site's errors (`Keyfleet.Code.StoreDownError`).
   """
   @behaviour Plug
   @behaviour Siwa.AgentAuthPlug.Hooks
@@ -36,7 +41,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   import Plug.Conn
 
   alias Keyfleet.{Code, Limits}
-  alias Keyfleet.Code.{Pass, ReceivePack, StoreDownError}
+  alias Keyfleet.Code.{Pass, ReceivePack, RecordsDownError, StoreDownError}
   alias KeyfleetWeb.{CodePassword, Refusal}
   alias KeyfleetWeb.Plugs.SignedAgent
 
@@ -53,6 +58,9 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   # `--tags`) records the first of them.
   @recorded 20
 
+  # How much of a body is read, written and sent at a time.
+  @piece 65_536
+
   @impl Plug
   def init(opts), do: opts
 
@@ -68,30 +76,40 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
       conn
       |> put_resp_header("cache-control", "no-store")
       |> put_resp_header("retry-after", "3600")
-      |> Refusal.json(503, "not_open_yet")
+      |> refuse(503, "not_open_yet")
     end
   end
 
+  # The body's path is the one Plug.Upload.random_file/1 made, never the sender's.
+  # sobelow_skip ["Traversal.FileModule"]
   defp serve_open(conn) do
     conn = put_resp_header(conn, "cache-control", "no-store")
 
     with {:route, {:ok, fleet_id, need, target}} <- {:route, route(conn)},
          {:signed_in, {:ok, conn, subject, actor}} <- {:signed_in, identify(conn, fleet_id)},
          {:holder, {:ok, %{} = holder}} <-
-           {:holder, current_holder(fleet_id, subject, actor)},
+           {:holder, reported(fleet_id, current_holder(fleet_id, subject, actor))},
          {:allowed, {:ok, pass}} <- {:allowed, pass(fleet_id, holder, need)},
          {:owner, {:ok, owner}} <- {:owner, Code.owner(fleet_id)},
-         {:pushes, :ok} <- {:pushes, spend_push(conn, fleet_id, holder)} do
-      forward(
-        conn,
-        fleet_id,
-        "/#{owner}/#{fleet_id}/#{target}",
-        pass,
-        &sent(conn, fleet_id, holder, &1, &2)
-      )
+         {:pushes, :ok} <- {:pushes, spend_push(conn, fleet_id, holder)},
+         {:body, {:ok, conn, body}} <- {:body, spool(conn)} do
+      conn
+      |> forward(fleet_id, "/#{owner}/#{fleet_id}/#{target}", pass, body, fn response ->
+        sent(conn, fleet_id, holder, body.head, response)
+      end)
+      |> tap(fn _conn -> File.rm!(body.path) end)
     else
       {:route, :error} ->
         refuse(conn, 404, "code_not_found")
+
+      {:body, {:too_large, conn}} ->
+        refuse(conn, 413, "code_too_large")
+
+      {:body, {:error, conn}} ->
+        refuse(conn, 400, "invalid_request")
+
+      {:body, {:not_signed, conn}} ->
+        refuse(conn, 400, "code_body_not_signed")
 
       {:signed_in, {:refused, conn}} ->
         conn
@@ -127,6 +145,15 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
         refuse(conn, 503, "code_unavailable")
     end
   end
+
+  # A key that could not be checked is saved with the site's errors; the sender
+  # is told to try again shortly.
+  defp reported(fleet_id, {:error, error} = failed) do
+    RecordsDownError.report("Who holds a key of #{fleet_id} could not be read: #{inspect(error)}")
+    failed
+  end
+
+  defp reported(_fleet_id, found), do: found
 
   defp current_holder(fleet_id, _subject, %Keyfleet.Actors.Agent{} = actor),
     do: Code.holder(actor, fleet_id)
@@ -207,32 +234,25 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   end
 
   defp read_signed(conn) do
-    with {:ok, conn} <- read_whole(conn) do
-      conn
-      |> Siwa.AgentAuthPlug.call(
-        client: Keyfleet.SiwaBroker,
-        hooks: __MODULE__,
-        audience: "keyfleet",
-        query: :signed,
-        body: :always
-      )
-      |> agent()
-    end
+    conn
+    |> Siwa.AgentAuthPlug.call(
+      client: Keyfleet.SiwaBroker,
+      hooks: __MODULE__,
+      audience: "keyfleet",
+      query: :signed,
+      body: :declared
+    )
+    |> agent()
   end
 
   defp agent(%Plug.Conn{halted: true} = conn), do: {:refused, conn}
   defp agent(%Plug.Conn{assigns: %{agent_actor: actor}} = conn), do: {:ok, conn, nil, actor}
 
-  # A person's body is read only once their password stands.
   defp identify_person(conn, fleet_id) do
     with {_user, password} <- Plug.BasicAuth.parse_basic_auth(conn),
-         {:ok, subject, actor} <- CodePassword.read(password, fleet_id),
-         {:ok, conn} <- read_whole(conn) do
+         {:ok, subject, actor} <- CodePassword.read(password, fleet_id) do
       {:ok, conn, subject, actor}
     else
-      {:refused, conn} ->
-        {:refused, conn}
-
       :error ->
         {:refused,
          conn
@@ -241,26 +261,77 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
     end
   end
 
-  # The whole body is kept as it came (`conn.assigns.raw_body`), a read's
-  # empty one included: a signature covers these exact bytes, and the store
-  # is sent them. The shared reader asks for it in one read, so the read is
-  # given as long as a large push takes to arrive.
-  defp read_whole(conn) do
-    case Siwa.AgentAuthPlug.read_body(
-           conn,
-           [read_timeout: Code.config()[:body_timeout_ms]],
-           Code.config()[:max_pack_bytes]
-         ) do
-      {:ok, _body, conn} -> {:ok, conn}
-      {:more, _partial, conn} -> {:refused, refuse(conn, 413, "code_too_large")}
-      {:error, _reason} -> {:refused, refuse(conn, 400, "invalid_request")}
-    end
-  rescue
-    Plug.Parsers.RequestTooLargeError -> {:refused, refuse(conn, 413, "code_too_large")}
+  ## The body
+
+  # The body is written to a file as it arrives. A sender still sending when
+  # `body_timeout_ms` is up is cut off there, even one trickling a byte at a
+  # time inside a single read.
+  # sobelow_skip ["Traversal.FileModule"]
+  defp spool(conn) do
+    {:ok, path} = Plug.Upload.random_file("keyfleet-code")
+    {:ok, deadline} = :timer.kill_after(Code.config()[:body_timeout_ms])
+    file = File.open!(path, [:write, :raw, :binary])
+
+    spooled =
+      try do
+        conn
+        |> fill(file, %{path: path, size: 0, sha256: :crypto.hash_init(:sha256), head: ""})
+        |> declared()
+      after
+        File.close(file)
+        :timer.cancel(deadline)
+      end
+
+    # A refused body's file goes at once.
+    with {_refused, _conn} <- spooled, do: File.rm!(path)
+    spooled
   end
 
-  # The shared plug has already refused a repeated signed header and a body it
-  # did not capture whole; nothing else is checked before the sign-in server.
+  defp fill(conn, file, body) do
+    case read_body(conn,
+           length: @piece,
+           read_length: @piece,
+           read_timeout: Code.config()[:body_idle_ms]
+         ) do
+      {:error, _reason} -> {:error, conn}
+      {more, data, conn} -> piece(conn, file, more, data, body)
+    end
+  end
+
+  defp piece(conn, file, more, data, body) do
+    body = %{
+      body
+      | size: body.size + byte_size(data),
+        sha256: :crypto.hash_update(body.sha256, data),
+        head: capture(body.head, data)
+    }
+
+    cond do
+      body.size > Code.config()[:max_pack_bytes] ->
+        {:too_large, conn}
+
+      more == :more ->
+        :ok = IO.binwrite(file, data)
+        fill(conn, file, body)
+
+      true ->
+        :ok = IO.binwrite(file, data)
+        {:ok, conn, %{body | sha256: :crypto.hash_final(body.sha256)}}
+    end
+  end
+
+  # An agent's body must be the one its signature declared; a person's has
+  # no declaration.
+  defp declared({:ok, %Plug.Conn{assigns: %{siwa_body_digest: digest}} = conn, body} = spooled) do
+    if Siwa.AgentAuthPlug.declared_body_matches?(body.sha256, digest),
+      do: spooled,
+      else: {:not_signed, conn}
+  end
+
+  defp declared(spooled), do: spooled
+
+  # The shared plug has already refused a repeated signed header and a body
+  # read before it; nothing else is checked before the sign-in server.
   @impl Siwa.AgentAuthPlug.Hooks
   def before_verify(_conn, _headers), do: {:ok, nil}
 
@@ -268,15 +339,21 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   @impl Siwa.AgentAuthPlug.Hooks
   def accept(conn, data, _context), do: SignedAgent.accept_agent(conn, data)
 
+  # Every refusal on the code address is the one plain shape below, a sign-in
+  # refused included.
   @impl Siwa.AgentAuthPlug.Hooks
-  defdelegate deny(conn, metadata), to: SignedAgent
+  def deny(conn, metadata) do
+    {status, body} = SignedAgent.refusal(conn, metadata)
+    conn |> refuse(status, body) |> halt()
+  end
 
   # A key whose edits a vote restricted may still copy the code.
   defp pass(fleet_id, %{restricted?: true}, :read), do: {:ok, Pass.read(fleet_id)}
   defp pass(_fleet_id, %{restricted?: true}, :push), do: :restricted
   defp pass(fleet_id, %{wallet: wallet}, _need), do: {:ok, Pass.push(fleet_id, wallet)}
 
-  # Git shows a plain-text answer to the person running it.
+  # Git shows a plain-text answer to the person running it, and the signing
+  # helper reads the same.
   defp refuse(conn, status, code) when is_binary(code),
     do: refuse(conn, status, Refusal.body(code))
 
@@ -288,9 +365,9 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   ## Forwarding
 
-  # `done` is told the start of the request and of the answer once the store
-  # has answered in full and the answer reached the client.
-  defp forward(conn, fleet_id, path, pass, done) do
+  # `done` is told the start of the answer once the store has answered in
+  # full and the answer reached the client.
+  defp forward(conn, fleet_id, path, pass, body, done) do
     %URI{scheme: scheme, host: host, port: port} = URI.parse(Code.config()[:node])
 
     headers = [
@@ -298,7 +375,10 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
       | for({name, value} <- conn.req_headers, name in @kept_request, do: {name, value})
     ]
 
-    body = if conn.method == "POST", do: conn.assigns.raw_body
+    {headers, request_body} =
+      if conn.method == "POST",
+        do: {[{"content-length", Integer.to_string(body.size)} | headers], :stream},
+        else: {headers, nil}
 
     with {:ok, node} <-
            Mint.HTTP.connect(String.to_existing_atom(scheme), host, port,
@@ -307,10 +387,11 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
              # The store's private Flycast address has only an IPv6 record.
              transport_opts: [inet6: true]
            ),
-         {:ok, node, ref} <- Mint.HTTP.request(node, conn.method, path, headers, body) do
+         {:ok, node, ref} <- Mint.HTTP.request(node, conn.method, path, headers, request_body),
+         {:ok, node} <- stream(node, ref, request_body, body) do
       case answer(conn, node, ref, %{status: nil, response: ""}) do
         {:done, conn, %{status: 200, response: response}} ->
-          done.(capture("", body || ""), response)
+          done.(response)
           conn
 
         {:done, conn, %{status: status}} when status in 500..599 ->
@@ -331,6 +412,25 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
         )
 
         refuse(conn, 502, "code_unavailable")
+    end
+  end
+
+  # The checked body goes to the store from its file, a piece at a time.
+  defp stream(node, _ref, nil, _body), do: {:ok, node}
+
+  # sobelow_skip ["Traversal.FileModule"]
+  defp stream(node, ref, :stream, body) do
+    body.path
+    |> File.stream!(@piece)
+    |> Enum.reduce_while({:ok, node}, fn piece, {:ok, node} ->
+      case Mint.HTTP.stream_request_body(node, ref, piece) do
+        {:ok, node} -> {:cont, {:ok, node}}
+        failed -> {:halt, failed}
+      end
+    end)
+    |> case do
+      {:ok, node} -> Mint.HTTP.stream_request_body(node, ref, :eof)
+      failed -> failed
     end
   end
 
