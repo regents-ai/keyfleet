@@ -4,9 +4,10 @@
 #   scripts/deploy.sh production       # keyfleet, from platform/fly.toml
 #   scripts/deploy.sh staging          # keyfleet-staging, from platform/fly.staging.toml
 #
-# It refuses a working tree with any change, and a commit that is not on
-# origin/main, so what runs is always what the repository holds. The build
-# context is the one platform/scripts/build-release-context.sh assembles for
+# It refuses a working tree with any change, a commit that is not on
+# origin/main, and a commit that does not contain the one already live, so what
+# runs is always what the repository holds and never takes live work out. The
+# build context is the one platform/scripts/build-release-context.sh assembles for
 # amd64, which Fly runs: `git archive` of this commit's platform/ folder plus the
 # graph host's sealed Python supply, checked against its checksums. Fly's remote
 # builder builds the image from it, labelled with the short commit. Every deploy
@@ -14,8 +15,8 @@
 set -euo pipefail
 
 case "${1:-}" in
-  production) config="platform/fly.toml" ;;
-  staging) config="platform/fly.staging.toml" ;;
+  production) config="platform/fly.toml" app="keyfleet" ;;
+  staging) config="platform/fly.staging.toml" app="keyfleet-staging" ;;
   *)
     echo "Usage: scripts/deploy.sh production|staging" >&2
     exit 2
@@ -34,6 +35,16 @@ git fetch --quiet origin main
 commit="$(git rev-parse HEAD)"
 if ! git merge-base --is-ancestor "$commit" origin/main; then
   echo "Refusing to deploy: ${commit:0:7} is not on origin/main. Push it to main first." >&2
+  exit 1
+fi
+
+# The running image is tagged with the short commit it was built from (the
+# --image-label below). A commit that does not contain it would take live work
+# back out, which happens when two releases cross: bring this checkout up to
+# origin/main and deploy again.
+live="$(fly image show --app "$app" --json | jq -r '.[0].Tag')"
+if ! git merge-base --is-ancestor "$live" "$commit"; then
+  echo "Refusing to deploy: ${commit:0:7} does not contain ${live:0:7}, which is live. Update to origin/main first." >&2
   exit 1
 fi
 

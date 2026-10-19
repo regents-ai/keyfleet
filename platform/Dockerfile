@@ -32,17 +32,24 @@ RUN mix local.hex 2.5.1 --force && \
   mix local.rebar rebar3 https://builds.hex.pm/installs/1.18.4/rebar3-3.25.1-otp-28 \
     --sha512 992fd755b7926fae455e5e07d9d195f4d3e7f181609eed1b9cabfe548624df10d148cd4b59bda40bebb185d3d68f9a9fd68a70b294101c8ad9cf0fadcc683d24 \
     --force
+
+# Layers run from what changes least to what changes most, so an ordinary
+# release rebuilds only the application's own files. The page packages change
+# only with package-lock.json, and copying them takes over a minute, so they
+# come first. The dependencies read only the compile-time configuration;
+# runtime.exs joins the application's own files.
+COPY --from=assets /workspace/platform/node_modules node_modules
 COPY platform/mix.exs platform/mix.lock ./
-COPY platform/config config
+COPY platform/config/config.exs platform/config/prod.exs config/
 RUN mix deps.get --only prod --check-locked && mix deps.compile
 
+COPY platform/config/runtime.exs config/
 COPY platform/lib lib
 COPY platform/priv priv
 COPY platform/rel rel
 COPY platform/assets assets
 COPY platform/contracts contracts
 COPY cli/commands.json /workspace/cli/commands.json
-COPY --from=assets /workspace/platform/node_modules node_modules
 RUN mix compile && mix assets.deploy && mix release
 
 # The graph host: a standalone CPython and the packages uv.lock pins, installed

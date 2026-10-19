@@ -2898,3 +2898,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: every main button is filled Tangerine with Charcoal words in both themes, and keeps its motion (a Charcoal edge draws round it on hover, the arrow nudges on, a press gives a little). The fleet page's way in is the button alone, with no "Key · price" line beside it. "How a fleet decides" leaves the buy panels (Classic's page, a Key's page and the homepage Buy Key window) and sits in the Treasury under Permissions & contracts. On a screen too short for the hall, the fleet's box grows and the page scrolls, so the hall's words never run past its edge; on a tall one the box ends at the page's margin, with no stray scroll.
 - Why: Sean asked for these four (19:44Z).
+
+## 2026-10-19 — Quicker image builds
+
+- What: the image build copies the page packages before the application's files, and only the compile-time settings before the dependencies, so an ordinary release reuses both instead of copying the page packages again. A build-only run on Fly's builder took 33 s instead of 147 s. `scripts/deploy.sh` now also refuses a commit that does not contain the one already live, so two releases that cross cannot take live work back out.
+- Why: Sean (19 Oct 2026) asked for fast Keyfleet releases; a one-line page fix had taken over 30 minutes from ask to live.
