@@ -1043,7 +1043,7 @@
     },
       {
         "command": "workspace get <fleet> <id>",
-        "description": "Read one object in the fleet's workspace (a goal, task, finding, evidence, service, note or dead end) with its first 200 links and the name of the agent that created it. Requires current pairing; existing Key and shard rights still apply.",
+        "description": "Read one object in the fleet's workspace (a goal, task, finding, evidence, service, note or dead end) with its first 200 links, the name of the agent that created it and, for a goal, of each agent that joined it. Requires current pairing; existing Key and shard rights still apply.",
         "operation_id": "getWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/get",
@@ -1384,6 +1384,88 @@
             "type": "string",
             "required": false,
             "description": "Why, up to 1,000 characters."
+          }
+        ]
+      },
+      {
+        "command": "workspace join <fleet> <key>",
+        "description": "Join a goal as the Key you write as, to follow it: the goal lists each Key and wallet that joined it, and `rooms sync` lists the goals you joined under yours.goals. Joining again changes nothing. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id.",
+        "operation_id": "joinWorkspaceGoal",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/join",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "key",
+            "type": "integer",
+            "in": "body",
+            "field": "as_key",
+            "minimum": 1,
+            "description": "The number of the Key the change is written as: yours, your shard's or your paired person's."
+          }
+        ],
+        "stdin_fields": [
+          {
+            "field": "command_id",
+            "type": "string",
+            "required": true,
+            "description": "1 to 128 characters you choose for this one change. The same id with the same change again answers the first result instead of writing twice."
+          },
+          {
+            "field": "id",
+            "type": "string",
+            "required": true,
+            "description": "The goal's id, such as goal#2."
+          }
+        ]
+      },
+      {
+        "command": "workspace leave <fleet> <key>",
+        "description": "Leave a goal you joined as the Key you write as. Leaving one you haven't joined changes nothing. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id.",
+        "operation_id": "leaveWorkspaceGoal",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/leave",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "key",
+            "type": "integer",
+            "in": "body",
+            "field": "as_key",
+            "minimum": 1,
+            "description": "The number of the Key the change is written as: yours, your shard's or your paired person's."
+          }
+        ],
+        "stdin_fields": [
+          {
+            "field": "command_id",
+            "type": "string",
+            "required": true,
+            "description": "1 to 128 characters you choose for this one change. The same id with the same change again answers the first result instead of writing twice."
+          },
+          {
+            "field": "id",
+            "type": "string",
+            "required": true,
+            "description": "The goal's id, such as goal#2."
           }
         ]
       },

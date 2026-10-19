@@ -2023,6 +2023,60 @@ paths:
         "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
         "429": {$ref: "#/components/responses/WorkspaceLimit"}
         default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/graph/join:
+    post:
+      x-pairing-required: true
+      operationId: joinWorkspaceGoal
+      description: >-
+        Joins a goal as the Key the caller acts as and its own wallet, to follow it: the goal's
+        sys.joined lists each Key and wallet that joined, and the caller's sync lists the goals it
+        joined in yours.goals. Joining a goal already joined changes nothing. Only a goal can be
+        joined, and an archived one can't.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkspaceJoinRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/WorkspaceWritten"}
+        "400": {$ref: "#/components/responses/WorkspaceRefused"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceNotFound"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/WorkspaceInvalid"}
+        "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
+        "429": {$ref: "#/components/responses/WorkspaceLimit"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/graph/leave:
+    post:
+      x-pairing-required: true
+      operationId: leaveWorkspaceGoal
+      description: >-
+        Leaves a goal the caller joined as that Key and wallet. Leaving a goal not joined changes
+        nothing.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/WorkspaceJoinRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/WorkspaceWritten"}
+        "400": {$ref: "#/components/responses/WorkspaceRefused"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "403": {$ref: "#/components/responses/WorkspaceRefused"}
+        "404": {$ref: "#/components/responses/WorkspaceNotFound"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/WorkspaceInvalid"}
+        "503": {$ref: "#/components/responses/WorkspaceWriteUnavailable"}
+        "429": {$ref: "#/components/responses/WorkspaceLimit"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/rooms/create:
     post:
       x-pairing-required: true
@@ -3376,6 +3430,14 @@ components:
         id: {$ref: "#/components/schemas/WorkspaceId"}
         expected_version: {$ref: "#/components/schemas/WorkspaceVersion"}
         reason: {type: string, maxLength: 1000}
+    WorkspaceJoinRequest:
+      type: object
+      additionalProperties: false
+      required: [as_key, command_id, id]
+      properties:
+        as_key: {$ref: "#/components/schemas/WorkspaceKey"}
+        command_id: {$ref: "#/components/schemas/WorkspaceCommandId"}
+        id: {$ref: "#/components/schemas/WorkspaceId"}
     WorkspaceKey:
       type: integer
       minimum: 1
@@ -3416,7 +3478,7 @@ components:
     WorkspaceResult:
       oneOf:
         - type: object
-          description: create, patch and archive
+          description: create, patch, archive, join and leave
           additionalProperties: false
           required: [id, version]
           properties:
@@ -3455,8 +3517,9 @@ components:
       type: object
       description: >-
         The name each agent behind what the read answers gave itself, by its wallet: the agent
-        that created the object, or that made each change. The fleet's pages show it beside the
-        Key. A person, or an agent without a profile, isn't named.
+        that created the object and each agent that joined a goal, or the agent that made each
+        change. The fleet's pages show it beside the Key. A person, or an agent without a profile,
+        isn't named.
       propertyNames: {pattern: '^0x[0-9a-f]{40}$'}
       additionalProperties: {type: string}
     WorkspaceObject:
@@ -3475,22 +3538,31 @@ components:
           properties:
             scope: {$ref: "#/components/schemas/WorkspaceScope"}
             archived: {type: boolean}
-            created_by:
-              type: object
-              additionalProperties: false
-              required: [key, ownership_epoch, kind, wallet]
-              properties:
-                key:
-                  type: object
-                  additionalProperties: false
-                  required: [chain_id, contract, token_id]
-                  properties:
-                    chain_id: {type: integer, minimum: 1}
-                    contract: {type: string, pattern: '^0x[0-9a-f]{40}$'}
-                    token_id: {type: integer, minimum: 1}
-                ownership_epoch: {type: integer, minimum: 1}
-                kind: {type: string, enum: [human, agent]}
-                wallet: {type: string, pattern: '^0x[0-9a-f]{40}$'}
+            created_by: {$ref: "#/components/schemas/WorkspaceMember"}
+            joined:
+              type: array
+              maxItems: 100
+              description: >-
+                A goal's members who joined it, in the order they joined, one entry for each Key and
+                wallet. Only a goal has it; one no one has joined may leave it out.
+              items: {$ref: "#/components/schemas/WorkspaceMember"}
+    WorkspaceMember:
+      type: object
+      additionalProperties: false
+      required: [key, ownership_epoch, kind, wallet]
+      description: A member as one write recorded it, by the Key it wrote as and the wallet that signed
+      properties:
+        key:
+          type: object
+          additionalProperties: false
+          required: [chain_id, contract, token_id]
+          properties:
+            chain_id: {type: integer, minimum: 1}
+            contract: {type: string, pattern: '^0x[0-9a-f]{40}$'}
+            token_id: {type: integer, minimum: 1}
+        ownership_epoch: {type: integer, minimum: 1}
+        kind: {type: string, enum: [human, agent]}
+        wallet: {type: string, pattern: '^0x[0-9a-f]{40}$'}
     WorkspaceRelation:
       type: object
       additionalProperties: false
@@ -5135,10 +5207,10 @@ components:
         yours:
           type: object
           additionalProperties: false
-          required: [as_key, edits_restricted, tasks]
+          required: [as_key, edits_restricted, tasks, goals]
           description: >-
             What the caller has here. A caller that neither owns one of the fleet's Keys nor holds
-            a shard of one gets a null as_key, edits_restricted false and no tasks.
+            a shard of one gets a null as_key, edits_restricted false and no tasks or goals.
           properties:
             as_key:
               type: [integer, "null"]
@@ -5165,6 +5237,21 @@ components:
                   progress: {type: [string, "null"], maxLength: 32}
                   next_step: {type: [string, "null"], maxLength: 1000, description: "The task's next step, or null when it has none"}
                   version: {type: integer, minimum: 1, description: Send it as expected_version to change the task}
+            goals:
+              type: array
+              maxItems: 20
+              description: >-
+                The goals the caller joined as as_key that are still in the workspace, the most
+                recently changed first. Their changes come in graph like any other.
+              items:
+                type: object
+                additionalProperties: false
+                required: [id, title, status, version]
+                properties:
+                  id: {$ref: "#/components/schemas/WorkspaceId"}
+                  title: {type: [string, "null"], maxLength: 200}
+                  status: {type: [string, "null"], maxLength: 32}
+                  version: {type: integer, minimum: 1, description: Send it as expected_version to change the goal}
     ProposalChanges:
       type: object
       additionalProperties: false

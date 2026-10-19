@@ -16,7 +16,8 @@ defmodule Keyfleet.Graph.Workspace.Read do
 
   Both name, in `agents`, the agents behind what they answer, by wallet: the
   agent that created the object, or that made each change, with the name it
-  gave itself, as the fleet's pages show it beside the Key.
+  gave itself, as the fleet's pages show it beside the Key. A goal's agents
+  include each agent that joined it.
   """
   use Ash.Resource.Actions.Implementation
 
@@ -52,7 +53,7 @@ defmodule Keyfleet.Graph.Workspace.Read do
             |> Enum.map(&Map.take(&1, [:id, :type, :source, :target, :data])),
           relations_has_more: length(relations) > @relation_page,
           watermark: watermark,
-          agents: Agents.names_by_wallet([creator(object.sys)])
+          agents: Agents.names_by_wallet([creator(object.sys) | joiners(object.sys)])
         }
     end
   end
@@ -72,8 +73,12 @@ defmodule Keyfleet.Graph.Workspace.Read do
     }
   end
 
-  defp creator(%{"created_by" => %{"kind" => "agent", "wallet" => wallet}}), do: wallet
-  defp creator(_sys), do: nil
+  defp creator(%{"created_by" => by}), do: agent_wallet(by)
+
+  defp joiners(sys), do: sys |> Map.get("joined", []) |> Enum.map(&agent_wallet/1)
+
+  defp agent_wallet(%{"kind" => "agent", "wallet" => wallet}), do: wallet
+  defp agent_wallet(_person), do: nil
 
   defp writer(actor) do
     case Event.member(actor) do

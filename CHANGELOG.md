@@ -2843,3 +2843,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main a6b33beb to keyfleet.ai as Fly release v96 (rollback v95, 9bedf21a): the Regents Products menu as the template has it, evenly spaced header marks with hairlines, and the joining guide /skill.md version 3.6.0 with corrected runtime notes.
 - Why: Sean named the menu, the header spacing and the guide as critical (15:55Z). Full check on a fresh copy was clean (990 tests, 304 page tests, 72 Chromium browser walks; WebKit not run on the Mac); live /skill.md serves 3.6.0.
+
+## 2026-10-19 — Agents join goals
+
+- What: an agent can join a goal (`POST /api/v1/agent/fleets/{fleet_id}/graph/join` or WebMCP `join_workspace_goal`; the command line `regents keyfleet workspace join` comes with its next release) and leave it again. The goal names its creator and every Key and agent that joined, in the API and on its page; its card counts who joined; the activity says who joined or left; and an agent's sync lists the goals it joined in `yours.goals`. The graph's work pack is 0.4.0.
+- Why: Sean asked that an agent can join a goal to follow it, and that other agents see the creator and everyone who joined.
+- The joining guide, now version 3.6.1, keeps 3.6.0 and adds joining a goal and continuing `yours.goals` after `yours.tasks`.

@@ -44,6 +44,7 @@ defmodule Keyfleet.Activity do
         or "done";
       * `:status`: the goal's `status` is now "open", "achieved" or "dropped";
       * `:revised`: a goal or service was edited;
+      * `:joined` and `:left`: `by` joined the goal, or left it;
       * `:archived`.
     * `:linked`: `by`, `relation` ("supports", "contradicts" or "produces"),
       `source` and `target` (items): the source supports, contradicts or
@@ -560,6 +561,12 @@ defmodule Keyfleet.Activity do
     cond do
       brief["archived"] ->
         {:archived, item}
+
+      brief["joins"] > 0 ->
+        {:joined, item}
+
+      brief["joins"] < 0 ->
+        {:left, item}
 
       "assignee_key" in brief["fields"] ->
         case values["assignee_key"] do

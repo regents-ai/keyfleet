@@ -1,4 +1,4 @@
-"""The pinned `keyfleet_work@0.3.0` work pack.
+"""The pinned `keyfleet_work@0.4.0` work pack.
 
 Two models per object type: the member model is what a member may write, and
 the record model adds the server-owned `sys` block and is what the graph
@@ -14,7 +14,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, Scope, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.3.0"
+PACK_VERSION = "0.4.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -126,17 +126,29 @@ class KeyCoordinate(_Model):
     token_id: Count
 
 
-class CreatedBy(_Model):
+# A member as one write stamped it: the Key it wrote as, at which of the
+# Key's ownerships, and the wallet that signed.
+class Member(_Model):
     key: KeyCoordinate
     ownership_epoch: Epoch
     kind: Literal["human", "agent"]
     wallet: Address
 
 
+# The most members one goal records as joined.
+MAX_JOINED = 100
+
+
 class Sys(_Model):
     scope: Scope
-    created_by: CreatedBy
+    created_by: Member
     archived: bool
+
+
+# A goal also records who joined it, in the order they joined: one entry for
+# each Key and wallet.
+class GoalSys(Sys):
+    joined: list[Member] = Field(default_factory=list, max_length=MAX_JOINED)
 
 
 MEMBER_MODELS: dict[str, type[WorkObject]] = {
@@ -151,7 +163,9 @@ MEMBER_MODELS: dict[str, type[WorkObject]] = {
 
 
 RECORD_MODELS: dict[str, type[WorkObject]] = {
-    name: create_model(f"{member.__name__}Record", __base__=member, sys=(Sys, ...))
+    name: create_model(
+        f"{member.__name__}Record", __base__=member, sys=(GoalSys if name == "goal" else Sys, ...)
+    )
     for name, member in MEMBER_MODELS.items()
 }
 
