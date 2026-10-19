@@ -292,6 +292,16 @@ argument.
 
 ## Checks
 
+Before an ordinary change ships, `make check-change` from the monorepo root
+compiles with warnings as errors, checks formatting and runs the tests that
+cover what changed since `origin/main` (`BASE=<ref>` picks another starting
+point): the ExUnit suite split four ways when anything under `lib`, `test`
+(outside the browser tests), `config` or `priv` or the Mix files changed,
+Vitest and Playwright on the tests that import what changed, and the graph
+host's tests and the contracts' gate when their folders changed. Its ExUnit run gives each quarter of the test
+files a database named after the checkout (`keyfleet_c<checksum>p1_test` to
+`p4`), created on first use, so two checkouts can run it at once.
+
 From the monorepo root, `make check-platform` runs this component's gate and
 `make check` runs every component's:
 
@@ -370,8 +380,10 @@ and `package-lock.json`. The Fly configuration lives in `fly.toml` and
 lists the launch steps in order.
 
 Deploy from the monorepo root with `scripts/deploy.sh production` (or
-`staging`, which uses `fly.staging.toml`). It refuses any uncommitted change
-and any commit not on `origin/main`, assembles the context folder for amd64
+`staging`, which uses `fly.staging.toml`). It refuses any uncommitted change,
+any commit not on `origin/main` and any commit that does not contain the one
+live (the running image's tag), so two releases that cross cannot take live
+work out. It assembles the context folder for amd64
 from that commit, and deploys it with Fly's remote builder, labelling the
 image with the short commit:
 
@@ -410,6 +422,27 @@ from the sealed files alone with the network off, and writes
 cache, the CPython download, and their checksums in `SUPPLY-ADDENDUM.txt`.
 It prints the supply name to set as `ARM64_GRAPH_HOST_SUPPLY` or
 `AMD64_GRAPH_HOST_SUPPLY` in `scripts/build-release-context.sh`.
+
+### Shipping a change
+
+An ordinary change ships on the tests that cover it, with no other sign-off:
+
+1. Commit it on top of `origin/main`.
+2. Run `make check-change` from the monorepo root.
+3. Add its line to the monorepo's `CHANGELOG.md`, push to `main` (never
+   force), and run `scripts/deploy.sh production`. Fly waits for `/healthz`
+   on the new machine and reports a failed deploy when it does not answer.
+
+When another change reaches `main` first, rebase onto it, run
+`make check-change` again and deploy; the deploy script refuses a commit that
+does not contain the live one. To roll back, `fly releases -a keyfleet
+--image` names the previous image, and
+`fly deploy --config platform/fly.toml --ha=false --image <that image>` from
+the monorepo root runs it again.
+
+Anything signed in Safe{Wallet}, a contract change, a write to production
+data, and a first change to sign-in or the wallet waits for the founder's go,
+and runs `make check` in place of `make check-change`.
 
 ## Release
 

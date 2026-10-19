@@ -15,6 +15,10 @@ signed-in Overview. The [README](README.md) describes the product.
 - There is no `identity/` folder. The shared profile domain comes from
   `regents/identity`, pinned by git in `platform/mix.exs` with `design-system`
   and `elixir-utils`.
+- `make check-change` is the check an ordinary change runs before it ships:
+  compile with warnings as errors, format, then the tests that cover what
+  changed since `origin/main` (`scripts/check-change.sh`). The platform
+  README's "Shipping a change" says how a change goes live.
 - `make check` runs every gate: the platform's `mix precommit` (which ends
   with the TypeScript typecheck, the unit tests and the browser suite), then the required-fixes check against ash-template
   (needs `gh auth login`), then the CLI's build, typecheck and tests, then the
@@ -27,12 +31,12 @@ signed-in Overview. The [README](README.md) describes the product.
 - `make readiness` starts the local development server on a free port with the
   error debugger off and checks what the agent-readiness scorer looks for
   (`scripts/readiness.sh`). It needs the local development database.
-- `make release` is the one release path: it refuses uncommitted changes, runs
-  `make check`, builds HEAD's `platform/` and the graph host's sealed Python
-  supply into an image and starts it against a throwaway database
-  (`scripts/release.sh`). It never deploys.
-- Follow the workspace's `regent-workflow`; use one integrating owner for this
-  repository. Scope verification to observable acceptance and preserve useful
+- `make release` refuses uncommitted changes, runs `make check`, builds HEAD's
+  `platform/` and the graph host's sealed Python supply into an image and
+  starts it against a throwaway database (`scripts/release.sh`). It never
+  deploys; `scripts/deploy.sh production` does.
+- Follow the workspace's `regent-workflow`; whoever makes a change ships it.
+  Scope verification to observable acceptance and preserve useful
   regression coverage.
 - Preserve uncommitted work and public command/API shapes. Every distinct wallet
   press reaches the wallet. No signing, production access, deployment or

@@ -1,11 +1,16 @@
 .DEFAULT_GOAL := help
-.PHONY: help check check-platform check-required-fixes check-cli check-contracts check-audit-fork check-notebook-hub release readiness
+.PHONY: help check check-change check-platform check-required-fixes check-cli check-contracts check-audit-fork check-notebook-hub release readiness
 help:
+	@echo "Run make check-change before an ordinary change ships: it runs the tests that cover what changed since origin/main."
 	@echo "Run make check for every gate, or check-platform, check-required-fixes, check-cli or check-contracts for one component."
 	@echo "Run make check-notebook-hub for the fleet notebook hub; it is not part of make check and must succeed before any hub image is pushed."
 	@echo "Run make release to run every gate, then build the committed tree into an image and start it against a throwaway database."
 	@echo "Run make readiness to start the local server and check what the agent-readiness scorer looks for."
 check: check-platform check-required-fixes check-cli check-contracts
+# The check an ordinary change runs before it ships (scripts/check-change.sh).
+# BASE=<ref> compares with another starting point than origin/main.
+check-change:
+	scripts/check-change.sh
 check-platform:
 	cd platform && mix precommit
 # Every site runs the same check against ash-template's current main branch, so a
