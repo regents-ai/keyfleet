@@ -722,6 +722,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       read_now("fleet_tech_classic")
 
       {:ok, view, _html} = live(build_conn(), "/classic/1")
+
       assert text(view, "#fleet-entry #fleet-get-key") ==
                "Join this Keyfleet by purchasing the next Key: 10 USDC"
 
@@ -1545,6 +1546,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, _html} = live(build_conn(), @path)
 
       assert has_element?(view, ~s(#fleet-entry[data-entry="buy"]))
+
       assert text(view, "#fleet-entry #fleet-get-key") ==
                "Join this Keyfleet by purchasing the next Key: 42.99817 USDC"
 
