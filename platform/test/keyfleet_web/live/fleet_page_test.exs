@@ -371,7 +371,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       {:ok, view, _html} = live(conn, @path)
       assert text(view, "#fleet-sales") == "150 Keys sold · 0 agents here"
-      assert has_element?(view, "#fleet-get-key")
+      assert text(view, "#fleet-entry .fleet-entry__line") == "You hold 150 Keys."
       refute has_element?(view, "#fleet-soon")
     end
   end
@@ -699,11 +699,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
 
     # "Buy Key" opens "Get a Key" and takes the reader to buying a key.
-    test "Buy Key opens Get a Key at Buying a key", %{conn: conn} do
+    test "Buy Key opens Get a Key at Buying a key" do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
+      read_now()
 
-      {:ok, view, _html} = live(conn, @path)
+      {:ok, view, _html} = live(build_conn(), @path)
       commands = click_commands(view, "#fleet-get-key")
 
       assert ["remove_attr", %{"attr" => "hidden", "to" => "#fleet-about"}] in commands
@@ -1022,8 +1023,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   end
 
   # A key bought reaches the open page when the chain reader records it: the
-  # member list, the map and the next key on offer all move on, and the
-  # Treasury page counts it.
+  # member list and the map move on, the buyer's way in becomes their Key,
+  # and the Treasury page counts it.
   test "a key bought appears once the chain reader records it", %{conn: conn} do
     fleet = deploy!("fleet_tech_accelerant", 5_000_000)
     {:ok, view, _html} = live(conn, "/accelerant/1?view=members")
@@ -1034,11 +1035,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert_pushed(view, "keymap:patch", %{minted: 1, keys: [[1, 1]]})
 
-    assert has_element?(
-             view,
-             "#fleet-get-key",
-             "Add another Key to increase vote weight and treasury share: 10.5 USDC"
-           )
+    assert text(view, "#fleet-entry .fleet-entry__line") == "You hold Key 1."
+    refute has_element?(view, "#fleet-get-key")
 
     assert shown_keys(view, @owner) == [1]
 
@@ -1521,7 +1519,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       :ok
     end
 
-    test "a holder's cards each open their Key, and the next can still be bought", %{conn: conn} do
+    test "a holder's cards each open their Key, with no Buy button beside them", %{conn: conn} do
       {:ok, view, _html} = live(conn, @path)
 
       assert text(view, "#fleet-entry .fleet-entry__line") == "You hold 150 Keys."
@@ -1529,9 +1527,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, ~s(#fleet-entry-card-50[href="#{@path}?key=50"]), "Key 50")
       refute has_element?(view, "#fleet-entry-card-51")
       assert text(view, "#fleet-entry-more") == "and 100 more"
-
-      assert text(view, "#fleet-entry #fleet-get-key") ==
-               "Add another Key to increase vote weight and treasury share: 42.99817 USDC"
+      refute has_element?(view, "#fleet-get-key")
 
       view |> element("#fleet-entry-card-2") |> render_click()
       assert_patch(view, @path <> "?key=2")
