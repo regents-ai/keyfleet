@@ -16,7 +16,7 @@ from typing import Annotated, Literal, Optional
 from activegraph.packs import ObjectType, Pack, RelationType
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, create_model
 
-from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, Scope, multi_line, single_line
+from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
 PACK_VERSION = "0.5.0"
@@ -177,7 +177,8 @@ class ReviewReceipt(_Model):
 
 
 class Sys(_Model):
-    scope: Scope
+    # Every item belongs to the whole fleet, and every member may change it.
+    scope: Literal["fleet"]
     created_by: Member
     archived: bool
 
@@ -246,6 +247,8 @@ PACK = Pack(
         ),
         # From a review to the task it judged; only the review op makes one.
         RelationType("reviews", source_types=("review",), target_types=("task",)),
+        # From a forked task to the task it was copied from; only the fork op makes one.
+        RelationType("forks", source_types=("task",), target_types=("task",)),
     ],
     behaviors=[],
     tools=[],

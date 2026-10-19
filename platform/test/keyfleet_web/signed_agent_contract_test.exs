@@ -180,7 +180,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "as_key" => 1,
        "command_id" => "c-1",
        "type" => "goal",
-       "scope" => "fleet",
        "data" => %{}
      }},
     {"POST", @graph <> "patch", [],
@@ -215,6 +214,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
      }},
     {"POST", @graph <> "join", [], %{"as_key" => 1, "command_id" => "c-1", "id" => "goal#1"}},
     {"POST", @graph <> "leave", [], %{"as_key" => 1, "command_id" => "c-1", "id" => "goal#1"}},
+    {"POST", @graph <> "fork", [], %{"as_key" => 1, "command_id" => "c-1", "id" => "task#1"}},
     {"POST", @graph <> "submit", [],
      %{
        "as_key" => 1,
@@ -256,7 +256,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              {@dm <> "read", Keyfleet.Dms.Message, :in_conversation}
            ] ++
              for(
-               op <- ~w(get changes create patch link unlink archive join leave submit review),
+               op <-
+                 ~w(get changes create patch link unlink archive join leave submit review fork),
                do: {@graph <> op, Keyfleet.Graph.Workspace, String.to_atom(op)}
              )
 

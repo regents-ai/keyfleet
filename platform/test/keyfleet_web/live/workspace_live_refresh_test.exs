@@ -121,7 +121,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
   # so to every open page before the wait ends.
   defp create!(type, data, id) do
     {:ok, %{"result" => %{"id" => object_id}, "head_seq" => head}} =
-      command("create", %{type: type, scope: "fleet", data: data}, id)
+      command("create", %{type: type, data: data}, id)
 
     {object_id, await(head)}
   end
@@ -152,8 +152,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
         credential_ref: nil,
         checked_at: "2026-09-22T12:00:00Z",
         chain_block: nil
-      },
-      writable_scopes: ["fleet"]
+      }
     }
   end
 

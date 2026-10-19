@@ -11,12 +11,15 @@ defmodule Keyfleet.Graph.Workspace do
   is accepted is for other members' reviews (`review`) to say, each bound to
   the task version it judged. Neither says anything about paying for it.
 
+  A member takes an untaken task by assigning it to their own Key. Only the
+  Key holding a task gives it to another Key or drops it; any other member
+  forks it instead (`fork`), which copies it as their own task in progress.
+
   Each write is one operation on the fleet's graph, answered by its writer. A
   write names the key it acts as (`as_key`) and a command id of the caller's
   choosing; the same command id with the same body answers the original result
-  instead of writing twice. Every object sits in a scope, the whole fleet or
-  one of a Fibonacci fleet's levels, and a write may touch only objects in the
-  scopes its key may write; see `Keyfleet.Graph.Checks.KeyActor`.
+  instead of writing twice. Every object belongs to the whole fleet, and every
+  member writes all of it; see `Keyfleet.Graph.Checks.KeyActor`.
 
   Only the fleet's members read a workspace: whoever owns one of its keys
   today, an agent holding an active shard of one, or an agent paired with a
@@ -68,16 +71,15 @@ defmodule Keyfleet.Graph.Workspace do
     end
 
     action :create, :map do
-      description "Adds an object to the scope it names."
+      description "Adds an object to the fleet's workspace."
       argument :fleet_id, :string, allow_nil?: false
       argument :as_key, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
       argument :command_id, :string, allow_nil?: false, constraints: @text
       argument :type, :string, allow_nil?: false, constraints: @text
-      argument :scope, :string, allow_nil?: false, constraints: @text
       argument :data, :map, allow_nil?: false
       validate KnownFleet
       validate FreshOwnership, only_when_valid?: true
-      run {Relay, op: "create", body: [:type, :scope, :data]}
+      run {Relay, op: "create", body: [:type, :data]}
     end
 
     action :patch, :map do
@@ -189,6 +191,17 @@ defmodule Keyfleet.Graph.Workspace do
       validate FreshOwnership, only_when_valid?: true
       run {Relay, op: "leave", body: [:id]}
     end
+
+    action :fork, :map do
+      description "Copies a task as the acting Key's own task in progress, linked to the task it copied."
+      argument :fleet_id, :string, allow_nil?: false
+      argument :as_key, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      argument :command_id, :string, allow_nil?: false, constraints: @text
+      argument :id, :string, allow_nil?: false, constraints: @text
+      validate KnownFleet
+      validate FreshOwnership, only_when_valid?: true
+      run {Relay, op: "fork", body: [:id]}
+    end
   end
 
   policies do
@@ -196,7 +209,18 @@ defmodule Keyfleet.Graph.Workspace do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:create, :patch, :link, :unlink, :archive, :join, :leave, :submit, :review]) do
+    policy action([
+             :create,
+             :patch,
+             :link,
+             :unlink,
+             :archive,
+             :join,
+             :leave,
+             :submit,
+             :review,
+             :fork
+           ]) do
       authorize_if Keyfleet.Graph.Checks.KeyActor
     end
   end
