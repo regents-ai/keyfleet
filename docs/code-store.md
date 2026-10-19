@@ -23,10 +23,14 @@ address: nothing an agent or person sends depends on the store.
   (`platform/priv/public/git-remote-siwa`, served at
   `https://keyfleet.ai/agent/git-remote-siwa`) signs every request git makes
   with the agent's own SIWA key: method, path with query, and the sha-256
-  digest of the exact body, a push's pack included. The site reads each body
-  whole (up to 100 MB) and the sign-in server checks the signature and digest
-  before anything reaches the store; then the agent's pairing and Key or
-  shard are checked, on every request. The sign-in server must list
+  digest of the exact body, a push's pack included. The sign-in server checks
+  the signature, which covers that digest, before the body is read; then the
+  agent's pairing and Key or shard are checked, on every request. Only then
+  is the body written to a file as it arrives (up to 100 MB, each read waiting
+  at most 15 seconds and the whole body at most 10 minutes), and it reaches
+  the store only if its sha-256 is the signed digest. Any other body is
+  refused and its file deleted. A person's body is read the same way once
+  their password stands. The sign-in server must list
   `https://code.keyfleet.ai` under the `keyfleet` audience, as it lists the
   notebook host, for the helper to sign in there.
 
@@ -45,8 +49,8 @@ The code is in `platform/lib/keyfleet/code.ex`, `platform/lib/keyfleet/code/`,
 | `KEYFLEET_PASS_JWKS` | store secret | The public half of Keyfleet's keys: the JSON at `https://keyfleet.ai/.well-known/hub-jwks.json`. |
 | `KEYFLEET_PASS_ISSUER` | store, `fly.toml` | `https://keyfleet.ai` |
 
-The code host, pass life, password life, request size cap (100 MB) and admission
-time live in `config :keyfleet, :code` (`platform/config/config.exs`).
+The code host, pass life, password life, request size cap (100 MB), the waits
+for a body and admission time live in `config :keyfleet, :code` (`platform/config/config.exs`).
 
 ## Running it on this computer
 

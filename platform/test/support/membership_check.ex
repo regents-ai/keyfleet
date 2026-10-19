@@ -236,15 +236,15 @@ defmodule Keyfleet.MembershipCheck do
       )
 
     refused =
-      for {place, answer} <- [
-            {"in rooms", room(c, paired, @fleet)},
-            {"the workspace", workspace(c, paired, @fleet)},
-            {"the notebooks", notebooks(c, paired, @fleet)},
-            {"the fleet's code", agent_git(c, paired, @fleet)}
+      for {place, answer, refused} <- [
+            {"in rooms", room(c, paired, @fleet), &refused_exactly/3},
+            {"the workspace", workspace(c, paired, @fleet), &refused_exactly/3},
+            {"the notebooks", notebooks(c, paired, @fleet), &refused_exactly/3},
+            {"the fleet's code", agent_git(c, paired, @fleet), &refused_to_git/3}
           ] do
         line(
           "revocation: unpaired agent refused #{place} (403 agent_not_paired, Refusal's words)",
-          refused_exactly(answer, 403, "agent_not_paired")
+          refused.(answer, 403, "agent_not_paired")
         )
       end
 

@@ -2360,3 +2360,23 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   through the signing helper, never a password.
 - Dots' page says it pushes with its own sign-in through the helper, with no
   password to ask its person for, and that this hasn't been tried on Dots yet.
+
+## 2026-10-18 — A push is checked as it arrives, not held whole first
+
+- Correction to the entry above: the code address no longer reads a whole
+  body before the signature is checked. The sign-in server checks the
+  signature, which covers the body's digest, first; the body is then written
+  to a file as it arrives, never held in memory, and reaches the code only if
+  it is the body that was signed. A body that isn't is refused and its file
+  deleted at once.
+- A body that stops arriving for 15 seconds is answered 408, and one still
+  arriving after 10 minutes, however slowly, is cut off.
+- Tests hold that a paired agent's push reaches the code as the exact bytes it
+  signed, that a body differing by any one byte reaches nothing, and that a
+  body over the limit, one trickled a byte at a time and one that stops
+  partway each reach nothing.
+- The shared sign-in library moves to elixir-utils `9de2012`, whose sign-in
+  check takes the body's declared digest instead of reading the body itself.
+  With it, an agent whose person has not signed in here yet checks in to
+  403 `person_not_here`, the answer every site gives, instead of 404
+  `account_missing`.

@@ -4,7 +4,7 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one commit. Publish shared commits
   # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "695a824a7fe956a0337592b454479389cd95f8b6"
+  @elixir_utils_ref "9de201223ab1f29d56497e096817fe88e5eb623e"
   @design_system "https://github.com/regents-ai/design-system.git"
   @design_system_ref "9e93f1497f5a014bccd3be0e5c5729f2b866cc54"
 
@@ -57,7 +57,7 @@ defmodule Keyfleet.MixProject do
       {:oban, "~> 2.24"},
       # The notebook gateway's connection to a fleet hub's live notebook sockets.
       {:mint_web_socket, "~> 1.0"},
-      # The code gateway streams git's request to the fleets' code store.
+      # The code gateway's connection to the fleets' code store.
       {:mint, "~> 1.11"},
       {:ash_oban, "~> 0.10.0"},
       {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
