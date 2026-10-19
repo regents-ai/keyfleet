@@ -2938,3 +2938,5 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: signed out, the first press of an on-chain button (Buy Key in the homepage window, Buy on Classic's page, the Treasury's buttons) opens the sign-in window instead of saying "Sign in to send this. Nothing was sent." Where Approve comes before a step, both buttons are the same size, one above the other. Once the approval has landed, Approve turns grey with a green edge and its mark becomes a tick: the buy panels read "USDC approved" and the Treasury's Return reads "Approved". The note about the small extra amount goes once the approval is done.
 - Why: Sean asked for an audit of the on-chain presses around buying Keys and the treasury (20:50Z): sign-in on the first press, Approve and Buy the same size, Approve greyed with a green border after it succeeds.
+
+- Released 2839078b as Fly v106 (19 Oct 2026 21:26Z).
