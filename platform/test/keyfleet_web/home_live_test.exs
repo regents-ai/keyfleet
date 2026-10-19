@@ -14,8 +14,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - smoke: 200 mount and the public-home landmark, outside the signed-in shell
   # - while Classic is coming soon, "Buy Next Key" and the card's tag name Key 1
   #   and its price, but the button says it can't be pressed, with "Sales open
-  #   soon" beside it, links nowhere, and the header offers no Get a Key
-  # - once Classic is on sale, "Buy Next Key" and the header's "Get a Key"
+  #   soon" beside it, links nowhere, and the header offers no Purchase Key
+  # - once Classic is on sale, "Buy Next Key" and the header's "Purchase Key"
   #   open the "Buy Key" window, which holds the fleet's own Approve and Buy,
   #   and the button and the card's tag name the Key on offer and its price
   #   after the Keys sold
@@ -113,7 +113,9 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute has_element?(view, "#home-buy-key-go")
   end
 
-  test "once Classic is on sale, the header's Get a Key opens the Buy Key window", %{conn: conn} do
+  test "once Classic is on sale, the header's Purchase Key opens the Buy Key window", %{
+    conn: conn
+  } do
     issue!(@classic, 1)
     read_fleets()
 

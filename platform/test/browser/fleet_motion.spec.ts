@@ -12,7 +12,7 @@ import {
 } from "./support/motion"
 
 // A fleet page's motion: presses squish and dialogs rise only for a pointer,
-// "Get a Key" simply opens, a sale rolls its numbers and its line
+// "Purchase Key" simply opens, a sale rolls its numbers and its line
 // joins the hall's feed, and everything ends clean. Nothing moves for a reader
 // who asked for less motion.
 const fleet = "fleet_tech_classic"

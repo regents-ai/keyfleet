@@ -7,13 +7,13 @@ defmodule KeyfleetWeb.Components.Shell do
   alias KeyfleetWeb.RouteCatalog.RouteTarget
   alias Phoenix.LiveView.JS
 
-  # Classic is the fleet that sells Keys: once it is open, "Get a Key" in the
-  # header opens its page with its own "Get a Key" pressed
+  # Classic is the fleet that sells Keys: once it is open, "Purchase Key" in the
+  # header opens its page with its own "Purchase Key" pressed
   # (`KeyfleetWeb.FleetLive`), or on the homepage its "Buy Key" window. Until
-  # then the header has no "Get a Key".
+  # then the header has no "Purchase Key".
   @get_key_fleet "fleet_tech_classic"
 
-  @doc "The fleet the header's \"Get a Key\" opens, shown only while it is open."
+  @doc "The fleet the header's \"Purchase Key\" opens, shown only while it is open."
   def get_key_fleet, do: @get_key_fleet
 
   attr(:route_spec, :map, required: true)
@@ -134,7 +134,7 @@ defmodule KeyfleetWeb.Components.Shell do
 
   attr :get_key, :boolean,
     required: true,
-    doc: "whether the fleet \"Get a Key\" opens is open, so the header shows it"
+    doc: "whether the fleet \"Purchase Key\" opens is open, so the header shows it"
 
   attr :get_key_link, :atom,
     required: true,
@@ -155,7 +155,7 @@ defmodule KeyfleetWeb.Components.Shell do
 
   @doc """
   The site header: brand, Menu (only where there is a sidebar), the theme
-  switch (not on the always-dark homepage), links, "Get a Key" (once Classic
+  switch (not on the always-dark homepage), links, "Purchase Key" (once Classic
   is open), the Credits balance (inside the app, signed in) and the account
   control. It fits one line on a phone.
   """
@@ -253,7 +253,7 @@ defmodule KeyfleetWeb.Components.Shell do
       "`:patch` from the app's own pages, `:buy_key` on the homepage, which opens its \"Buy Key\" window, `:navigate` from any other"
 
   @doc """
-  "Get a Key" in the site header, for everyone, signed in or not, once Classic
+  "Purchase Key" in the site header, for everyone, signed in or not, once Classic
   is open: it opens Classic's page with its buying panel open, or on the
   homepage its "Buy Key" window.
   """
@@ -266,7 +266,7 @@ defmodule KeyfleetWeb.Components.Shell do
       phx-click="open_buy_key"
       aria-haspopup="dialog"
     >
-      <span class="rg-button__label">Get a Key</span>
+      <span class="rg-button__label">Purchase Key</span>
     </button>
     """
   end
@@ -277,7 +277,7 @@ defmodule KeyfleetWeb.Components.Shell do
 
     ~H"""
     <.link id={@id} class="rg-button rg-button--primary" {@to}>
-      <span class="rg-button__label">Get a Key</span>
+      <span class="rg-button__label">Purchase Key</span>
     </.link>
     """
   end
@@ -295,6 +295,7 @@ defmodule KeyfleetWeb.Components.Shell do
     <div id="account-control" class="account-control">
       <Regent.Primitives.button
         :if={@account_control.kind == :sign_in}
+        variant="secondary"
         type="button"
         data-account-target="sign-in"
         disabled={!@enabled}

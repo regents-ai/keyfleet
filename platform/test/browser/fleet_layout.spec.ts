@@ -55,7 +55,7 @@ test("on a tall screen the hall fills the box to the screen's foot and scrolls o
 })
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`"Get a Key" is filled Tangerine with Charcoal words in ${scheme}`, async ({page, baseURL}) => {
+  test(`"Purchase Key" is filled Tangerine with Charcoal words in ${scheme}`, async ({page, baseURL}) => {
     // The theme the visitor chose, as the switch writes it.
     await page.context().addCookies([{name: "regent_theme", value: scheme, url: baseURL!}])
     await openFleet(page)
@@ -68,5 +68,44 @@ for (const scheme of ["light", "dark"] as const) {
       ink: getComputedStyle(element).color,
     }))
     expect(paint).toEqual({fill: "rgb(255, 91, 25)", ink: "rgb(22, 22, 22)"})
+  })
+}
+
+// Nothing in the fleet's box sits under the open "Purchase Key" panel (Sean, 19
+// October 2026): on a wide screen what the box holds moves over to leave the
+// panel its own column, and narrower the panel covers the whole box.
+const underPanel = (page: Page) =>
+  page.evaluate(() => {
+    const panel = document.querySelector("#fleet-about")!.getBoundingClientRect()
+    return [...document.querySelectorAll(".fleet-stage *")]
+      .filter(el => !el.closest("#fleet-about") && el.children.length === 0 && el.textContent!.trim())
+      .filter(el => {
+        const box = el.getBoundingClientRect()
+        return box.width > 0 && box.right > panel.left + 1 && box.left < panel.left && box.bottom > panel.top && box.top < panel.bottom
+      })
+      .map(el => el.textContent!.trim().slice(0, 40))
+  })
+
+for (const width of [1440, 1280, 1024]) {
+  test(`at ${width} wide nothing in the box sits under the open "Purchase Key"`, async ({page}) => {
+    await page.setViewportSize({width, height: 900})
+    await page.goto(`/classic/1?buy`)
+    await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+    await expect(page.locator("#fleet-about")).toBeVisible()
+
+    for (const tab of ["hall", "treasury"]) {
+      if (tab === "treasury") {
+        await page.locator("#fleet-tab-treasury").click()
+        await expect(page.locator("#fleet-view")).toHaveAttribute("data-view", "treasury")
+        await expect(page.locator("#fleet-about")).toBeVisible()
+      }
+      expect(await underPanel(page)).toEqual([])
+      if (width < 1120) {
+        const [panel, stage] = await Promise.all(
+          ["#fleet-about", "#fleet-view > .fleet-stage"].map(selector => page.locator(selector).boundingBox()),
+        )
+        expect(Math.abs(panel!.x - stage!.x)).toBeLessThanOrEqual(1)
+      }
+    }
   })
 }

@@ -784,7 +784,7 @@
       "get": {
         "operationId": "readTreasury",
         "summary": "Read public fleet treasury figures",
-        "description": "Indexed balances with exact atomic strings, separately held rewards, daily allocation, money history, permissions and contract links. Each treasury.history line has kind (forwarded, protocol_share_sent, paid, advanced, split_allocated or regent_bought), amount, account and spent, the USDC a regent_bought line cost (null for every other kind). treasury.convert_typed is the USDC amount Turn into REGENT starts with, at most \"250\", or \"\" when nothing waits. Inspect catching_up and treasury.as_of before using these figures. Never submits transactions.",
+        "description": "Indexed balances with exact atomic strings, separately held rewards, daily allocation, money history, permissions and contract links. Each treasury.history line has kind (forwarded, protocol_share_sent, paid, advanced, split_allocated or regent_bought), amount, account and spent, the USDC a regent_bought line cost (null for every other kind). treasury.convert_typed is the USDC amount Buy REGENT starts with, at most \"250\", or \"\" when nothing waits. Inspect catching_up and treasury.as_of before using these figures. Never submits transactions.",
         "security": [],
         "parameters": [
           {

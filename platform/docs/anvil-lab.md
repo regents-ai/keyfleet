@@ -35,7 +35,7 @@ cast rpc evm_increaseTime 86400 --rpc-url http://127.0.0.1:8546   # a day
 
 Sign in at http://localhost:4097/account with the wallet you started the lab with.
 
-- Fleet page, http://localhost:4097/app/fleets/fleet_tech_classic: **Get a Key**, Approve, then
+- Fleet page, http://localhost:4097/app/fleets/fleet_tech_classic: **Purchase Key**, Approve, then
   Buy. Key 1 shows as yours, on the page and on Account.
 - Rooms, http://localhost:4097/app/fleets/fleet_tech_classic/rooms/general: once you hold a Key,
   you can post.

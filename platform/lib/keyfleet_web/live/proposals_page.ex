@@ -438,7 +438,7 @@ defmodule KeyfleetWeb.ProposalsPage do
     |> Map.merge(figures(fleet, reading, assets))
   end
 
-  # What a press of Turn into REGENT starts with: what is waiting, at most
+  # What a press of Buy REGENT starts with: what is waiting, at most
   # one piece of 250 USDC, as typed. Typed in by hand until a reading says.
   defp convert_typed(nil), do: ""
 

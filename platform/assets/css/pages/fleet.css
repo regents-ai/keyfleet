@@ -2,7 +2,7 @@
 /* The fleet page: a slim bar with the fleet's name, who is here, Send your
    agent and the fleet's places (Hall, Map, Treasury); one way in under it;
    then the hall (channels, feed and the fleet now), the map filling the rest
-   of the screen, or the list of Keys, with "Get a Key" opening over any of
+   of the screen, or the list of Keys, with "Purchase Key" opening over any of
    them. The key page's grammar carries over: one
    ground, hairline panels, the display face for headings. */
 
@@ -402,7 +402,7 @@
   white-space: nowrap;
 }
 
-/* While "Get a Key" is open, the Key on offer is marked on the map as a
+/* While "Purchase Key" is open, the Key on offer is marked on the map as a
    chosen Key is, and the note under the map names it in the same line. */
 .key-map-selected__offer {
   display: none;
@@ -574,7 +574,7 @@
   font-size: 0.875rem;
 }
 
-/* Get a Key */
+/* Purchase Key */
 
 .fleet-about {
   position: absolute;
@@ -584,12 +584,38 @@
   display: grid;
   align-content: start;
   gap: 1.25rem;
-  width: min(26rem, 100%);
+  width: min(var(--fleet-about-width), 100%);
   overflow: auto;
   overscroll-behavior: contain;
   padding: var(--rg-panel-padding);
   border-inline-start: 1px solid var(--ash-line-strong);
   background: var(--color-surface);
+}
+
+.fleet-stage {
+  --fleet-about-width: 26rem;
+}
+
+/* On a wide screen the panel is a column of its own: what the stage holds
+   moves over to leave it room, so nothing sits under the panel. */
+@media (min-width: 70rem) {
+  .fleet-stage:has(> #fleet-about:not([hidden])) {
+    padding-inline-end: var(--fleet-about-width);
+  }
+
+  .fleet-view:is([data-view="treasury"], [data-view="proposals"], [data-view="workspace"])
+    > .fleet-stage:has(> #fleet-about:not([hidden])) {
+    padding-inline-end: calc(var(--fleet-about-width) + var(--rg-panel-padding));
+  }
+}
+
+/* Narrower, two columns would squeeze both, so the panel covers the whole
+   stage until it is closed. */
+@media (min-width: 48rem) and (max-width: 69.99rem) {
+  .fleet-about {
+    width: 100%;
+    border-inline-start: 0;
+  }
 }
 
 .fleet-about__heading {

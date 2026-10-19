@@ -220,6 +220,16 @@ defmodule KeyfleetWeb.WalletPanel do
     {:noreply, socket}
   end
 
+  # Buy REGENT clears its amount once the wallet has the press, so the form
+  # starts over for the next one.
+  def handle_event(
+        "step_pressed",
+        %{"step" => "convert"},
+        %{assigns: %{flow: :convert}} = socket
+      ),
+      do:
+        {:noreply, socket |> assign(inputs: %{socket.assigns.inputs | "amount" => ""}) |> sync()}
+
   def handle_event("step_pressed", _params, socket), do: {:noreply, socket}
 
   def handle_event("step_sent", params, socket), do: {:noreply, OnchainSteps.sent(socket, params)}

@@ -162,7 +162,7 @@ paths:
   /api/v1/fleets/{fleet_id}/treasury:
     get:
       operationId: readTreasury
-      description: Public indexed balances, separate rewards, history and permissions; inspect catching_up and treasury.as_of. Atomic amounts are decimal strings. Each treasury.history line has kind (forwarded, protocol_share_sent, paid, advanced, split_allocated or regent_bought), amount, account and spent, the USDC a regent_bought line cost (null for every other kind). treasury.convert_typed is the USDC amount Turn into REGENT starts with, at most "250", or "" when nothing waits. No transaction is submitted.
+      description: Public indexed balances, separate rewards, history and permissions; inspect catching_up and treasury.as_of. Atomic amounts are decimal strings. Each treasury.history line has kind (forwarded, protocol_share_sent, paid, advanced, split_allocated or regent_bought), amount, account and spent, the USDC a regent_bought line cost (null for every other kind). treasury.convert_typed is the USDC amount Buy REGENT starts with, at most "250", or "" when nothing waits. No transaction is submitted.
       security: []
       parameters:
         - {name: fleet_id, in: path, required: true, schema: {type: string}}

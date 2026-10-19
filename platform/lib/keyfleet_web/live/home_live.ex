@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
   The homepage. Top to bottom: Classic #1, the fleet on sale, with the line
   that says what a Key is for and "Buy Next Key", which shows the Key's card
-  art and price and opens the "Buy Key" window, as the header's "Get a Key"
+  art and price and opens the "Buy Key" window, as the header's "Purchase Key"
   does; Classic
   Keyfleet, its sea beside what a Key lets an agent join, Key cards turning
   over, its public page and "Buy Key"; the Regents Club, its sea, what it is

@@ -7,7 +7,7 @@ defmodule KeyfleetWeb.FleetLive do
   Under the bar is one way in, whichever applies first: the reader's own Key
   to enter as, the Regents Club Pass a Club Key comes with, the Key on sale,
   or signing in. A fleet that sells Keys offers the next one by its price
-  to someone holding none of its Keys; it opens "Get a Key"
+  to someone holding none of its Keys; it opens "Purchase Key"
   over the page, with the Key on offer and its Buy button at its top. Opened
   with `?buy`, the page is drawn with it already pressed. Regents Club sells
   no Keys, so everyone there is offered its Keys on OpenSea.
@@ -27,7 +27,7 @@ defmodule KeyfleetWeb.FleetLive do
   page, under the same bar, in place of the other views.
 
   A coming-soon fleet's page shows its name, its map faded and that it is
-  coming soon, and nothing else: no price, no keys, no "Get a key", no "Send
+  coming soon, and nothing else: no price, no keys, no "Purchase Key", no "Send
   your agent", and no rooms, workspace or proposals.
 
   Everything here is public and read from what the fleet's contract has
@@ -424,7 +424,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp view(:fleet, _params), do: :hall
   defp view(place, _params), do: place
 
-  # "Buy Key" opens "Get a Key" and takes the reader to the Key on offer. An
+  # "Buy Key" opens "Purchase Key" and takes the reader to the Key on offer. An
   # address ending in `?buy` is drawn that way; on arrival it then drops
   # `?buy` from the address so the next press of "Buy Key" opens it again.
   defp get_key do
@@ -434,7 +434,7 @@ defmodule KeyfleetWeb.FleetLive do
     |> JS.focus(to: "#buy-key-title")
   end
 
-  # Whether the address asks for the page with "Get a Key" pressed, on a
+  # Whether the address asks for the page with "Purchase Key" pressed, on a
   # fleet with a Key to buy.
   defp buying?(params, fleet), do: Map.has_key?(params, "buy") and Map.get(fleet, :buy) != nil
 
@@ -534,7 +534,7 @@ defmodule KeyfleetWeb.FleetLive do
 
   defp entry(%{fleet: %{buy: %{price: price}}} = assigns) when price != nil do
     ~H"""
-    <section id="fleet-entry" class="fleet-entry" data-entry="buy" aria-label="Get a Key">
+    <section id="fleet-entry" class="fleet-entry" data-entry="buy" aria-label="Purchase Key">
       <.buy_key_button buy={@fleet.buy} />
     </section>
     """
@@ -561,7 +561,7 @@ defmodule KeyfleetWeb.FleetLive do
 
   attr :buy, :map, required: true
 
-  # Opens "Get a Key" at the Key on sale; the panel holds the wallet's button.
+  # Opens "Purchase Key" at the Key on sale; the panel holds the wallet's button.
   defp buy_key_button(assigns) do
     ~H"""
     <Regent.Primitives.button
@@ -1034,7 +1034,10 @@ defmodule KeyfleetWeb.FleetLive do
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
-  attr :buying, :boolean, required: true, doc: "whether the page opens with \"Get a Key\" pressed"
+
+  attr :buying, :boolean,
+    required: true,
+    doc: "whether the page opens with \"Purchase Key\" pressed"
 
   # Opens over the hall, the map or the list of Keys on a fleet with a Key to
   # buy: the Key on offer with its Buy button, then the fleet's pricing.
@@ -1047,7 +1050,7 @@ defmodule KeyfleetWeb.FleetLive do
       hidden={not @buying}
     >
       <div class="fleet-about__heading">
-        <h2 id="fleet-about-title" tabindex="-1">Get a Key</h2>
+        <h2 id="fleet-about-title" tabindex="-1">Purchase Key</h2>
         <Regent.Primitives.button
           id="fleet-about-close"
           class="fleet-about__close"
@@ -1114,7 +1117,7 @@ defmodule KeyfleetWeb.FleetLive do
   # The controls only move the map, so they never wait on the page; a search
   # asks the page which Keys to mark, and the map writes what was found. The map
   # draws itself once its script loads; until then it says so, and the list
-  # of keys below still has every key. While "Get a Key" is open, the Key on
+  # of keys below still has every key. While "Purchase Key" is open, the Key on
   # offer stands out on the map and the note under it names that Key.
   defp key_map(assigns) do
     assigns = assign(assigns, :map, "#key-map-#{assigns.fleet.fleet_id}")

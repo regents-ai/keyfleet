@@ -1058,6 +1058,25 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert send.data == Call.encode("sendProtocolShare()", [])
     end
 
+    # Buy REGENT starts over once the wallet has the press (Sean, 19 October
+    # 2026), so a second press never repeats an amount by mistake.
+    test "a press of Buy REGENT clears its amount", %{conn: conn} do
+      ChainViews.put!(list_views())
+      {:ok, view, _html} = open(signed_in_as(conn, @holder), @treasury_page)
+      render_async(view, @async_wait)
+
+      amount = "#proposals-convert-form input[name=amount]"
+      form = %{"amount" => "12.5"}
+      view |> form("#proposals-convert-form", form) |> render_change()
+      assert has_element?(view, ~s(#{amount}[value="12.5"]))
+
+      view
+      |> with_target("#proposals-convert")
+      |> render_hook("step_pressed", %{"step" => "convert", "form" => form})
+
+      assert has_element?(view, ~s(#{amount}[value=""]))
+    end
+
     # Signed out, the split preview and presence are read from the chain as
     # for a member and shown without their buttons. The Treasury tab shows a
     # visitor its figures only: sending the staking share and turning USDC

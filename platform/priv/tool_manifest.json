@@ -384,7 +384,7 @@
     {
       "name": "convert_to_regent",
       "title": "Turn USDC into REGENT",
-      "description": "Press this page's Turn into REGENT: turns USDC waiting from Key sales into REGENT, at most the amount typed and at most 250 USDC a press. Every fleet shares one line, so the USDC may be another fleet's. Anyone may. Held back \"Nothing waiting to turn into REGENT\" when no fleet is in line, or \"Opens <time>\" before the next piece may run. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "description": "Press this page's Buy REGENT: turns USDC waiting from Key sales into REGENT, at most the amount typed and at most 250 USDC a press. Every fleet shares one line, so the USDC may be another fleet's. Anyone may. Held back \"Nothing waiting to turn into REGENT\" when no fleet is in line, or \"Opens <time>\" before the next piece may run. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
       "input_schema": {
         "type": "object",
         "properties": {

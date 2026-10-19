@@ -49,7 +49,7 @@ from the fleet's Treasury tab (`/<type>/<number>/treasury`, such as
 | --- | --- | --- |
 | Daily Treasury Slice to Keys | treasury `runDailySplit()` | due (`nextRunAt`) for more than 6 hours |
 | Send to REGENT staking | manager `sendProtocolShare()` | something owed for more than 24 hours |
-| Turn into REGENT | REGENT buyer `convert(uint256)`, at most 250 USDC a press | USDC waiting more than 3 hours with no piece turned for that fleet |
+| Buy REGENT | REGENT buyer `convert(uint256)`, at most 250 USDC a press | USDC waiting more than 3 hours with no piece turned for that fleet |
 
 `Keyfleet.Treasury.OverdueCheck` reads each deployed fleet's latest balance
 reading every hour. Each kind is one error at `/admin/errors` listing every
@@ -59,7 +59,7 @@ from its first balance reading after it is recorded on the site.
 
 Classic #1 (manager `0xc73D8774Dfc51bc11207DC04B0ff5117C30458B6`, predicted)
 is covered this way once it is recorded. After a sell-out its manager holds
-about 36,036 USDC to turn into REGENT: about 145 presses of Turn into REGENT,
+about 36,036 USDC to turn into REGENT: about 145 presses of Buy REGENT,
 one each 15 minutes at the earliest, over about 36 hours. A press is refused
 when a full piece would move REGENT's price by more than 1%; a smaller amount
 typed in the field may still work. Then one press of Send to REGENT staking

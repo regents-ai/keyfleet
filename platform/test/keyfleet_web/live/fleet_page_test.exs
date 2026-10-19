@@ -703,8 +703,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#buy-key")
     end
 
-    # "Buy Key" opens "Get a Key" and takes the reader to buying a key.
-    test "Buy Key opens Get a Key at Buying a key" do
+    # "Buy Key" opens "Purchase Key" and takes the reader to buying a key.
+    test "Buy Key opens Purchase Key at Buying a key" do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       read_now()
@@ -740,10 +740,10 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(home, "button#home-buy-next-key", "Key 1 · 10 USDC")
     end
 
-    # The header's "Get a Key", there for everyone on every app page, lands on
-    # Classic with its own "Get a Key" pressed, then drops the press from the
+    # The header's "Purchase Key", there for everyone on every app page, lands on
+    # Classic with its own "Purchase Key" pressed, then drops the press from the
     # address so the next press opens it again.
-    test "the header's Get a Key lands on Classic at Buying a Key", %{conn: conn} do
+    test "the header's Purchase Key lands on Classic at Buying a Key", %{conn: conn} do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
       read_now("fleet_tech_classic")
@@ -752,7 +752,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       view |> element("#shell-get-key") |> render_click()
       assert_patch(view, "/classic/1?buy")
 
-      # Drawn already open as "Get a Key", so it shows before the page connects.
+      # Drawn already open as "Purchase Key", so it shows before the page connects.
       assert has_element?(view, "#fleet-about:not([hidden])")
 
       [arrival] =

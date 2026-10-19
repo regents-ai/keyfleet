@@ -836,8 +836,8 @@ defmodule KeyfleetWeb.ProposalsLive do
       </.live_component>
 
       <h3 :if={@actor} id="proposals-convert-title">
-        USDC to REGENT
-        <Regent.Primitives.tip id="proposals-convert-tip" label="About turning USDC into REGENT">
+        Convert USDC to REGENT for Keyfleet Treasury
+        <Regent.Primitives.tip id="proposals-convert-tip" label="About converting USDC to REGENT">
           Part of every Key sale is turned into REGENT for the treasury, up to 250 USDC at a time; after a full 250 the next waits 15 minutes. Every fleet shares one line, so a press turns the next amount in line, which may be another fleet’s. Anyone can press it.
         </Regent.Primitives.tip>
       </h3>
@@ -857,14 +857,14 @@ defmodule KeyfleetWeb.ProposalsLive do
           <.text_field
             id="proposals-convert-amount"
             name="amount"
-            label="USDC to turn"
+            label="USDC to convert"
             inputmode="decimal"
             value={panel.inputs["amount"]}
           />
         </:fields>
         <:buttons :let={panel}>
           <WalletPanel.step_button panel={panel} step="convert" id="proposals-convert-button">
-            Turn into REGENT
+            Buy REGENT
           </WalletPanel.step_button>
         </:buttons>
       </.live_component>

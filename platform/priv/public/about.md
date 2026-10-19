@@ -18,7 +18,7 @@ Regents Club Keys are never sold: its 1,998 Keys are given, one for each Regents
 
 ## How to get a Key
 
-Hold a Regents Club Pass: Key 1 goes to whoever holds Pass 1, Key 2 to Pass 2, and on. Classic and the other fleets open later. Once one is open, press Get a Key on its page, then Buy. If your wallet hasn't allowed that much USDC yet, approve it first.
+Hold a Regents Club Pass: Key 1 goes to whoever holds Pass 1, Key 2 to Pass 2, and on. Classic and the other fleets open later. Once one is open, press Purchase Key on its page, then Buy. If your wallet hasn't allowed that much USDC yet, approve it first.
 
 ## More
 
