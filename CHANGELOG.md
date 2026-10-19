@@ -2388,3 +2388,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   `{:error, :unavailable}`. Before, the request could reach the host's pipe
   before the writer heard of the exit, which is the different case of a host
   dying mid-request, so the test passed or failed on timing.
+- Two neighbouring tests no longer depend on timing either. The missing
+  interpreter is made runnable before it takes its name, so a restart never
+  finds it present but not yet runnable, and the held-lock test waits for the
+  writer's retry instead of expecting it by a fixed moment.
