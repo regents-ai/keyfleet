@@ -23,7 +23,7 @@ long (see "Money nobody has moved" below).
 | `Keyfleet.Notebooks.Roster` | queued by Reconcile and by Key changes | brings a hub's members in step with the Keys | notebook_hubs | saved error, 20 tries |
 | `Keyfleet.SharedReading.Heal` | every minute, two kinds | rereads fleet agents and Key agents | default | saved error; the next minute replaces it |
 | `Keyfleet.Treasury.OverdueCheck` | :23 past every hour | saves an error for each kind of money nobody has moved in time, naming each fleet | default | saved error, 1 try; the next hour runs it again |
-| `Keyfleet.Keys.DeckEndCheck` | :41 past every hour | saves one error naming each fleet within 100 Keys of its deck's end that can sell past it (Classic #1 from its 900th Key to its 1,000th), so the randomness subscription is readied before Key 1,001 | default | saved error, 1 try; the next hour runs it again |
+| `Keyfleet.Keys.DeckEndCheck` | :41 past every hour | saves one error naming each fleet within 100 Keys of its deck's end that can sell past it (Accelerant #1 from its 900th Key to its 1,000th), so the randomness subscription is readied before Key 1,001 | default | saved error, 1 try; the next hour runs it again |
 | `Keyfleet.ErrorPruner` | 04:17 UTC daily | clears saved errors not seen for a week | default | saved error, 3 tries |
 | Direct messages `remove_expired` (AshOban) | hourly | deletes expired direct messages | default | saved error |
 | Key pictures `close_up` and `small_card` (AshOban triggers) | every minute | makes each revealed Key's close-up and small card where one is missing | key_art | saved error, 5 tries; the next minute queues it again |
@@ -74,9 +74,9 @@ have added the Key collection as a consumer of the randomness subscription and
 funded it in ETH ([deployment.md](deployment.md)). Until then such a Key still
 sells and waits in Revealing. `Keyfleet.Keys.DeckEndCheck` saves one error at
 `/admin/errors` while a fleet has sold between 100 fewer Keys than its deck
-and its deck's size: for Classic #1, from Key 900 to Key 1,000. Sentinel emails
-once; each hour in that window adds an occurrence. The Regents Club, whose
-supply is its deck, is never named.
+and its deck's size: for Accelerant #1, from Key 900 to Key 1,000. Sentinel emails
+once; each hour in that window adds an occurrence. Classic #1 and the Regents
+Club, whose supply is their deck, are never named.
 
 ## Seeing that a job ran
 

@@ -171,11 +171,11 @@ So every fleet, founding or open, has a pre-made deck. The site deals each key a
 
 **On chain, all of it:** each fleet's `deckHash` and `deckSize`, both fixed once (both zero means "no deck yet"; one zero and the other not is refused), `deckOf(fleet)`, and `KeyRevealed(tokenId, fleet, keyNumber, requestId, seed)`. There is no dealing on chain, no card map and no `cardOf`. The reveal callback keeps today's 100,000 gas limit.
 
-**Founding decks (from the NFTs lane):** one JSON file per fleet, `{"fleet", "table", "cards": [1,000 0x-prefixed 32-byte card seeds]}`, cards indexed `0..999`, bound to trait table `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`. `deckHash` is keccak256 of the file's exact bytes; `deckSize` is 1,000.
+**Founding decks (from the NFTs lane):** one JSON file per fleet, `{"fleet", "table", "cards": [1,000 0x-prefixed 32-byte card seeds]}`, cards indexed `0..999`, bound to trait table `0xa0a1e42883778c77dcefbf4e7ef64267271158935a622f9582697ff14a4864fe`. `deckHash` is keccak256 of the file's exact bytes; `deckSize` is 1,000, except CLASSIC #1's 1,024 cards, one for each of its Keys.
 
 | Fleet | `deckHash` | `deckSize` |
 |---|---|---|
-| CLASSIC #1 | `0xe9b1900adb56811096d08f67852af8a64ec509ed2982e94f14f172f687b577e7` | 1000 |
+| CLASSIC #1 | `0x985aa7794cdd1bfdf90d9b68ae557e3e32e343077303ba55d6d7005a981c5818` | 1024 |
 | SYNDICATE #1 | `0x1298cf785709867c5397762ba4dfa3d4a1c1394db0cd26444285c48cc6e57706` | 1000 |
 | CASCADE #1 | `0x2942590c4d3873db390aef50e4648137fdb93729a370105a1aa9a62e43222b66` | 1000 |
 | ACCELERANT #1 | `0xbac8510a15a85770ff5cb64b4f0fef57244235ee79327ce3e3e375ce629b6d4d` | 1000 |
