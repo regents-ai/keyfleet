@@ -1649,7 +1649,7 @@ without six decimals, a zero keeper and a zero trait table hash.
   past that; `record` writes
   `deployments/base-fork-lab.json` through `RecordKeyfleets`, in the shape of
   the release's deployed record; `fulfil` answers every draw still waiting
-  (Classic #1's keys 1 to 1,000 hold their cards by number and draw nothing).
+  (Classic #1's keys 1 to 1,024 hold their cards by number and draw nothing).
   The shell script also gives each buyer named 100 ETH and exactly 1,000 USDC.
   Every step refuses any chain but 31337 (`WrongChain`).
 

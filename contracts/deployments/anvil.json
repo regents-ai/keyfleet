@@ -33,8 +33,8 @@
   },
   "foundingFleets": {
     "classic": {
-      "deckHash": "0xe9b1900adb56811096d08f67852af8a64ec509ed2982e94f14f172f687b577e7",
-      "deckSize": 1000,
+      "deckHash": "0x985aa7794cdd1bfdf90d9b68ae557e3e32e343077303ba55d6d7005a981c5818",
+      "deckSize": 1024,
       "profile": {
         "name": "Classic #1",
         "description": "",
