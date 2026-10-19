@@ -2507,3 +2507,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 ## 2026-10-19 — The API contract is read once for the contract tests
 
 - The test helper that checks answers against the API contract now reads the contract file once, when it compiles, instead of for every answer it checks. The longest contract test took 53 seconds on a busy Mac, close to the one-minute limit, and timed out once in the full check; it now takes 11 seconds.
+
+## 2026-10-19 — A page load asks for the wallet once
+
+- A signed-in page asked Privy for its wallets when it opened, and the fleet page's wallet panel asked again when it appeared. When the first answer had already arrived, the page asked a second time for nothing. The page now asks once a page load, since every later wallet change reaches it on its own; it asks again only when an earlier ask failed.

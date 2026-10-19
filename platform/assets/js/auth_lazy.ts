@@ -743,6 +743,10 @@ export function createLazyAuthLoader(
     request: AccountRequest | IdentityRequest
     promise: Promise<void>
   } | null = null
+  // Once running, the bridge publishes every wallet change itself, so a page
+  // load asks it to sync once, however many of its panels want their wallet.
+  // Only a sync that failed is asked for again.
+  let synced: Promise<void> | null = null
 
   const sameRequest = (
     first: AccountRequest | IdentityRequest,
@@ -841,6 +845,7 @@ export function createLazyAuthLoader(
           return Promise.reject(new Error("Automatic reconciliation is disabled."))
         }
       }
+      if (request === "sync" && synced) return synced
       if (
         delivering &&
         sameRequest(delivering.request, request) &&
@@ -849,8 +854,14 @@ export function createLazyAuthLoader(
         return delivering.promise
       }
       pending = request
-      if (handle) return deliverPending()
-      return preparing ?? prepare()
+      const attempt = handle ? deliverPending() : preparing ?? prepare()
+      if (request === "sync") {
+        synced = attempt
+        void attempt.catch(() => {
+          if (synced === attempt) synced = null
+        })
+      }
+      return attempt
     },
     identity(request: IdentityRequest): Promise<void> {
       if (disposed) return Promise.reject(new DOMException("Authentication view disposed.", "AbortError"))

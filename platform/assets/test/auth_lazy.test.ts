@@ -411,6 +411,36 @@ describe("lazy browser authentication", () => {
     ])
   })
 
+  it("asks the bridge to sync once a page load, even after the first sync finished", async () => {
+    const handleRequest = vi.fn(async (_request: AccountRequest) => undefined)
+    const loader = createLazyAuthLoader(
+      vi.fn(async () => ({
+        startPrivyBridge: vi.fn(async () => ({request: handleRequest})),
+      })),
+    )
+
+    await loader.request("sync")
+    await loader.request("sync")
+
+    expect(handleRequest.mock.calls.map(([request]) => request)).toEqual(["sync"])
+  })
+
+  it("asks the bridge to sync again after a sync failed", async () => {
+    const handleRequest = vi
+      .fn(async (_request: AccountRequest) => undefined)
+      .mockRejectedValueOnce(new Error("wallet sync failed"))
+    const loader = createLazyAuthLoader(
+      vi.fn(async () => ({
+        startPrivyBridge: vi.fn(async () => ({request: handleRequest})),
+      })),
+    )
+
+    await expect(loader.request("sync")).rejects.toThrow("wallet sync failed")
+    await loader.request("sync")
+
+    expect(handleRequest.mock.calls.map(([request]) => request)).toEqual(["sync", "sync"])
+  })
+
   it("keeps a successful in-flight sync independent from a queued sign-out rejection", async () => {
     let resolveSync: (() => void) | undefined
     const signOutError = new Error("local session deletion failed")
