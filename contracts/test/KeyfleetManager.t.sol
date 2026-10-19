@@ -454,6 +454,43 @@ contract KeyfleetManagerTest is KeyfleetFixture {
         assertEq(usdc.balanceOf(buyer), 9 * price, "only the price was taken, not the maximum");
     }
 
+    /// @dev Invariant: buyers who all saw the same next key and signed for its price plus 5%, as
+    /// keyfleet.ai builds a purchase, each get the next key left at its own price until a key costs
+    /// more than that; every later one is refused with no USDC taken.
+    function test_aRushForOneKeyGivesEachBuyerTheNextKeyUpToTheirMaximum() public {
+        KeyfleetManager fleet = _deploy(KeyfleetPresets.Preset.FleetTechClassic);
+        uint256 quoted = fleet.nextPrice();
+        uint256 maxPrice = (quoted * 105 + 1e6 - 1) / 1e6 * 1e4;
+        uint256 within;
+        while (KeyfleetPresets.classicPrice(within + 1, CLASSIC_START) <= maxPrice) ++within;
+        assertGt(within, 20, "a 5% maximum rides out a rush of twenty keys");
+
+        for (uint256 i = 0; i < within + 3; ++i) {
+            address payer = _wallet(i);
+            usdc.mint(payer, maxPrice);
+            vm.prank(payer);
+            usdc.approve(address(fleet), maxPrice);
+        }
+
+        for (uint256 i = 0; i < within; ++i) {
+            address payer = _wallet(i);
+            uint256 price = fleet.nextPrice();
+            vm.prank(payer);
+            uint256 tokenId = fleet.purchase(payer, maxPrice, block.timestamp, _noProof());
+            assertEq(tokenId, _key(fleet, i + 1), "each buyer gets the next key left");
+            assertEq(usdc.balanceOf(payer), maxPrice - price, "and pays only that key's price");
+        }
+
+        for (uint256 i = within; i < within + 3; ++i) {
+            address payer = _wallet(i);
+            uint256 price = fleet.nextPrice();
+            vm.prank(payer);
+            vm.expectRevert(abi.encodeWithSelector(KeyfleetManager.PriceAboveMax.selector, price, maxPrice));
+            fleet.purchase(payer, maxPrice, block.timestamp, _noProof());
+            assertEq(usdc.balanceOf(payer), maxPrice, "a refused purchase takes no USDC");
+        }
+    }
+
     /// @dev Invariant: Classic stops at 1024 keys, each sold at its own price on the curve from
     /// 10 USDC to 100 USDC; 10% of every sale is owed to REGENT staking in USDC and the other 90% is in
     /// the treasury as REGENT.

@@ -2843,3 +2843,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main a6b33beb to keyfleet.ai as Fly release v96 (rollback v95, 9bedf21a): the Regents Products menu as the template has it, evenly spaced header marks with hairlines, and the joining guide /skill.md version 3.6.0 with corrected runtime notes.
 - Why: Sean named the menu, the header spacing and the guide as critical (15:55Z). Full check on a fresh copy was clean (990 tests, 304 page tests, 72 Chromium browser walks; WebKit not run on the Mac); live /skill.md serves 3.6.0.
+
+## 2026-10-19 — A rush for one Key gives the next Key (protected: money flow)
+
+- What: Buy now approves and signs for the next Key's price plus 5%, rounded up to the cent, instead of exactly the price. The sale contract never takes a Key number; it sells whichever Key is next when the purchase lands, at that Key's own price, and refuses only above the buyer's maximum. So a buyer who loses Key N in a rush gets Key N+1, or the next one left, paying only its price, as long as it is within 5% (22 Classic Keys anywhere on the curve). Past that the purchase is refused and no USDC is taken. The panel says so: "Key 1: 10 USDC. If it sells first, you get the next Key for up to 10.5 USDC." A Foundry test drives a rush of 25 buyers on Classic.
+- Why: Sean asked that a buyer who loses Key N get N+1 or any Key they can afford. Before, the purchase capped at exactly the quoted price, and Classic's price rises with every Key, so every buyer who lost a race was refused and had to approve again. No contract change: the live factory's `purchase(receiver, maxPrice, deadline, proof)` already works this way.
