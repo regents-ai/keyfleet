@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   import ExUnit.CaptureLog
 
   alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, SharedReading}
+  alias Keyfleet.Agents.Here
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.{FleetNow, KeyLinks}
@@ -14,8 +15,9 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - while Classic is coming soon, "Buy Next Key" and the card's tag name Key 1
   #   and its price, but the button says it can't be pressed, with "Sales open
   #   soon" beside it, links nowhere, and the header offers no Get a Key
-  # - once Classic is on sale, "Buy Next Key" opens its page with Get a Key
-  #   pressed, and it and the card's tag name the Key on offer and its price
+  # - once Classic is on sale, "Buy Next Key" and the header's "Get a Key"
+  #   open the "Buy Key" window, which holds the fleet's own Approve and Buy,
+  #   and the button and the card's tag name the Key on offer and its price
   #   after the Keys sold
   # - once every Classic Key is sold, the button can't be pressed and says so
   # - the Club shows its newest open goal and featured item from the first
@@ -82,7 +84,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute has_element?(view, "#shell-get-key")
   end
 
-  test "once Classic is on sale, Buy Next Key opens its page at the Key on offer",
+  test "once Classic is on sale, Buy Next Key names the Key on offer and opens the Buy Key window",
        %{conn: conn} do
     for token_id <- 1..3, do: issue!(@classic, token_id)
     read_fleets()
@@ -91,11 +93,35 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     price = Keyfleet.Fleets.Presets.progress(@classic, 3).next_price
 
-    assert has_element?(view, ~s(a#home-buy-next-key[href="/classic/1?buy"]), "Buy Next Key")
     assert text(view, "#home-buy-price") == "Key 4 · #{KeyfleetWeb.FleetLive.usdc(price)}"
     assert text(view, "#home-buy-tag") == "Key 4 · #{KeyfleetWeb.FleetLive.usdc(price)}"
     assert text(view, "#home-buy-why") == ""
     assert text(view, "#home-classic-sold") == "3"
+
+    view |> element("button#home-buy-next-key") |> render_click()
+
+    assert has_element?(
+             view,
+             ~s(dialog#home-buy-key button#home-buy-key-button[data-onchain-step="buy"])
+           )
+
+    assert has_element?(
+             view,
+             ~s(dialog#home-buy-key button#home-buy-key-approve[data-onchain-step="approve"])
+           )
+
+    assert has_element?(view, "dialog#home-buy-key #home-buy-key-risks")
+    refute has_element?(view, "#home-buy-key-go")
+  end
+
+  test "once Classic is on sale, the header's Get a Key opens the Buy Key window", %{conn: conn} do
+    issue!(@classic, 1)
+    read_fleets()
+
+    {:ok, view, _html} = live(conn, "/")
+    view |> element("button#shell-get-key") |> render_click()
+
+    assert has_element?(view, "dialog#home-buy-key")
   end
 
   test "once Classic is on sale, Buy Key opens its window with the Key cards turning",
@@ -118,6 +144,18 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert has_element?(view, ~s(button#home-buy-next-key[aria-disabled="true"]))
     assert text(view, "#home-buy-why") == "1,024/1,024 Keys sold"
+  end
+
+  test "the Club's card says how many Keys it has and who holds them, not who is online",
+       %{conn: conn} do
+    here = Here.fleet_key(@club)
+    :ok = SharedReading.put(here, %{here: 3, agents: [], holders: %{holders: 247, online: 5}})
+    on_exit(fn -> SharedReading.delete(here) end)
+    read_fleets()
+
+    {:ok, view, _html} = live(conn, "/")
+
+    assert text(view, "#home-club [data-fleet-who]") == "0 total Keys for 247 accounts"
   end
 
   test "the Club shows its newest open goal and what it features, from the first render",

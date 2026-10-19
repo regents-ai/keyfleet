@@ -15,7 +15,7 @@ defmodule KeyfleetWeb.ErrorHTML do
         _ -> nil
       end
 
-    theme = Enum.find([assigns[:theme], cookie_theme], &(&1 in ["light", "dark"]))
+    theme = Enum.find([assigns[:theme], cookie_theme], "light", &(&1 in ["light", "dark"]))
 
     assigns =
       assign(assigns,

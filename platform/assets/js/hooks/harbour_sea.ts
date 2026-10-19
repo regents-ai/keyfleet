@@ -23,14 +23,11 @@ const crewOf = (root: HTMLElement): CrewMember[] => JSON.parse(root.dataset.harb
 /** Space kept between a ship's name and the sides of the screen, in pixels. */
 const TAG_MARGIN = 4
 
-/** Dark unless the page or the device asks for light, the same reading as the theme switch. */
-const lookOf = (root: HTMLElement, light: MediaQueryList): HarbourLook => {
-  const theme = document.documentElement.dataset.theme
-  return {
-    night: theme ? theme === "dark" : !light.matches,
-    haze: getComputedStyle(root).getPropertyValue("--harbour-haze").trim(),
-  }
-}
+/** Night in the dark theme, day in the light one. */
+const lookOf = (root: HTMLElement): HarbourLook => ({
+  night: document.documentElement.dataset.theme === "dark",
+  haze: getComputedStyle(root).getPropertyValue("--harbour-haze").trim(),
+})
 
 type HarbourSeaController = CanvasIslandController & {
   /** Hands the crew the server wrote last to the sea on screen. */
@@ -63,12 +60,11 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
     continuous: true,
     interact({renderer, nudge, onReady, onStrain}) {
       const calm = window.matchMedia("(prefers-reduced-motion: reduce)")
-      const light = window.matchMedia("(prefers-color-scheme: light)")
       const saving = savingData()
       let strained = false
       const holding = () => calm.matches || saving || strained
       const restyle = () => {
-        renderer()?.setLook(lookOf(root, light))
+        renderer()?.setLook(lookOf(root))
         nudge()
       }
       const onCalmChange = () => {
@@ -132,7 +128,7 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
       onReady(() => {
         const harbour = renderer()!
         harbour.setCalm(holding())
-        harbour.setLook(lookOf(root, light))
+        harbour.setLook(lookOf(root))
         harbour.setAgents(crew)
       })
       sync = () => {
@@ -141,7 +137,6 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
         nudge()
       }
       themeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]})
-      light.addEventListener("change", restyle)
       calm.addEventListener("change", onCalmChange)
       stage.addEventListener("pointermove", onPointerMove)
       stage.addEventListener("pointerleave", hideTag)
@@ -150,7 +145,6 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
       return () => {
         sync = () => {}
         themeObserver.disconnect()
-        light.removeEventListener("change", restyle)
         calm.removeEventListener("change", onCalmChange)
         hideTag()
         stage.removeEventListener("pointermove", onPointerMove)

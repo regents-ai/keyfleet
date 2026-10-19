@@ -30,14 +30,9 @@ const tone = (root: HTMLElement, property: string): Rgb => {
 
 /** Calls `retone` whenever the page's light or dark changes. */
 const watchTheme = (retone: () => void) => {
-  const scheme = matchMedia("(prefers-color-scheme: dark)")
   const observer = new MutationObserver(retone)
   observer.observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]})
-  scheme.addEventListener("change", retone)
-  return () => {
-    observer.disconnect()
-    scheme.removeEventListener("change", retone)
-  }
+  return () => observer.disconnect()
 }
 
 /** A number the stylesheet states in a custom property. */

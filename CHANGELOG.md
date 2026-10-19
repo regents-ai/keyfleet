@@ -2876,3 +2876,18 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: the side menu shows Classic #1 as a link to its page, like the Regents Club, instead of a greyed-out name. The menu's name-only entry is gone, since no fleet uses it now.
 - Why: Classic #1 is open and selling; Sean asked for the link to work (19:10Z).
+
+## 2026-10-19 — Homepage buttons open the Buy Key window
+
+- What: on the homepage, the header's "Get a Key" and the hero's "Buy Next Key" now open the "Buy Key" window, as the Classic section's "Buy Key" already did. Its Buy still goes on to Classic's page to buy. "Get a Key" on every other page still opens Classic's page with buying open.
+- Why: Sean asked for it (18:04Z): both buttons should open the buy window, not leave the homepage.
+
+## 2026-10-19 — Approve and Buy inside the homepage Buy Key window
+
+- What: the homepage "Buy Key" window now holds Classic's own Approve and Buy, with the same figures, reasons and risks as Classic's page, so a Key is bought without leaving the homepage. The homepage now holds the sign-in the way the fleet's pages do, so those steps act for whoever is signed in. The shared Classic reading now carries the fleet's network for the window.
+- Why: Sean asked for it (18:16Z): the approve and buy steps should happen inside the "Buy Key" window.
+
+## 2026-10-19 — Steady page changes, a shorter Club line, light until chosen
+
+- What: a page picked with the mouse (a fleet's tabs, the side menu) slides in solid instead of fading in, so the harbour picture behind the page no longer flashes through. The homepage's Regents Club card says how many Keys it has and how many accounts hold them, without "online now"; the Club's own page still says it. Every page is light until the visitor chooses a theme, whatever the device asks for; the switch still flips between light and dark and the choice holds.
+- Why: Sean asked for each (18:29Z to 18:57Z): moving between the Classic #1 tabs flashed the background, remove "· 0 online now" for the Regents Club on the homepage, and "I want it default light mode" for visitors who have not chosen.
