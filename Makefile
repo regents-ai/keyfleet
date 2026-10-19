@@ -7,7 +7,7 @@ help:
 	@echo "Run make readiness to start the local server and check what the agent-readiness scorer looks for."
 check: check-platform check-required-fixes check-cli check-contracts
 check-platform:
-	cd platform && mix precommit && npm run typecheck && npm test
+	cd platform && mix precommit
 # Every site runs the same check against ash-template's current main branch, so a
 # newly published required fix reaches every site's next gate. Needs `gh auth login`.
 TEMPLATE := repos/regents-ai/ash-template

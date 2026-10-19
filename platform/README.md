@@ -275,8 +275,6 @@ From the monorepo root, `make check-platform` runs this component's gate and
 
 ```sh
 mix precommit
-npm run typecheck
-npm test
 ```
 
 These need `MIX_TEST_PARTITION` set, even to an empty value. For example, with
@@ -286,13 +284,14 @@ the test database `keyfleet_test`:
 MIX_TEST_PARTITION= make check
 ```
 
-The browser suite runs separately with `npm run test:browser`.
-
 `mix precommit` compiles with warnings as errors, checks unused dependency
 locks, refuses Hex packages that are retired or carry a security advisory
 (`mix hex.audit`), checks formatting, runs Credo in strict mode and Sobelow, holds the
 compile-connected `xref` graph under its limit, runs the test suite with
 warnings as errors, and verifies the Ash codegen and route handoff are current.
+It ends with the TypeScript typecheck, the Vitest unit suite and the browser
+suite, which starts once the ExUnit suite has finished. `npm run test:browser`
+runs the browser suite alone.
 
 | Command | What it does |
 | --- | --- |
