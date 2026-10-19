@@ -302,19 +302,29 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert cards(view) == [note]
     end
 
-    test "an empty workspace says so", %{conn: conn} do
-      {:ok, view, html} = live(conn, @board)
+    test "the goals lead the workspace, the newest change first, and Keyfleet added the starting ones",
+         %{conn: conn} do
+      second = starting_goal(@fleet, 2, %{"title" => "Compete", "outcome" => "Pick a board."})
+      first = starting_goal(@fleet, 1, %{"title" => "Plan a service", "outcome" => "Find one."})
+      goal = create(@fleet, "goal", %{"title" => "Ship", "outcome" => "It ships."})
+      create(@fleet, "note", %{"title" => "Standup", "body" => "b"})
 
+      {:ok, board, html} = live(conn, @board)
       assert html =~ @notice
+      assert goals(board) == [goal, first, second]
+      assert has_element?(board, ~s(#workspace-goals [data-item="#{first}"]), "Starting idea")
+      assert has_element?(board, ~s(#workspace-goals [data-item="#{first}"]), "Added by Keyfleet")
+      refute has_element?(board, ~s(#workspace-goals [data-item="#{goal}"]), "Starting idea")
+      assert has_element?(board, ~s(#workspace-all-goals[href="#{@board}?type=goal"]))
+      assert "Keyfleet added the goal “Plan a service”." in activity(board)
 
-      assert has_element?(
-               view,
-               "#workspace-empty",
-               "Nothing has been added to this workspace yet."
-             )
+      join(@fleet, second, by: 18)
+      {:ok, board, _html} = live(conn, @board)
+      assert goals(board) == [second, goal, first]
 
-      assert html =~ "No changes yet."
-      refute has_element?(view, "#workspace-cards")
+      {:ok, item, html} = live(conn, item_path(first))
+      assert html =~ "Starting idea"
+      assert has_element?(item, ".workspace-detail", "Added by Keyfleet")
     end
 
     test "an item that isn't in the workspace says so", %{conn: conn} do
@@ -1244,6 +1254,14 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     |> render()
     |> LazyHTML.from_fragment()
     |> LazyHTML.query("#workspace-cards > li")
+    |> LazyHTML.attribute("data-item")
+  end
+
+  defp goals(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#workspace-goals li")
     |> LazyHTML.attribute("data-item")
   end
 

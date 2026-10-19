@@ -17,16 +17,17 @@ import json
 import secrets
 from contextlib import contextmanager
 from importlib import metadata
-from typing import Any, Callable, Iterator, Optional
+from typing import Annotated, Any, Callable, Iterator, Optional
 
 from activegraph import Event, Graph, Runtime
 from activegraph.store.sqlite import SQLiteEventStore
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, RootModel, ValidationError
 from pydantic_core import from_json
 
 from keyfleet_graph import protocol
 from keyfleet_graph.pack import (
     MAX_JOINED,
+    MAX_STARTING,
     MEMBER_MODELS,
     PACK,
     PACK_NAME,
@@ -41,6 +42,9 @@ from keyfleet_graph.reactions import ATTENTION_EVENT, DependsOnLinks, Reactions
 LEDGER_EVENT = "keyfleet.command"
 # The host's own name on the events only it writes: the ledger and attention.
 GATEWAY_ACTOR = "keyfleet:gateway"
+# The name on the writes that keep a workspace's starting goals as the site
+# lists them.
+STARTING_ACTOR = "keyfleet:starting_goals"
 # A `changes` page stops at this many bytes of encoded events, or after the
 # first event when that one alone is larger.
 CHANGES_PAGE_BYTES = 512 * 1024
@@ -73,8 +77,19 @@ def body_hash(body: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+class StartingGoal(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    title: str
+    outcome: str
+
+
+class StartingGoals(RootModel[Annotated[list[StartingGoal], Field(max_length=MAX_STARTING)]]):
+    pass
+
+
 class Host:
-    def __init__(self, fleet: str, db_path: str):
+    def __init__(self, fleet: str, db_path: str, starting_goals: list[StartingGoal]):
         # The upstream store's run, fixed per fleet. What names this log to
         # readers is `log_id`, minted with the file.
         self._run = f"kf_{fleet}"
@@ -88,6 +103,7 @@ class Host:
         with self._transaction():
             self.log_id = self._log_id()
             self.runtime.load_pack(PACK)
+            self._keep_starting_goals(starting_goals)
             self._settle()
         self._ledger = {
             (event.payload["principal"], event.payload["command_id"]): event.payload
@@ -198,6 +214,7 @@ class Host:
     def _plan_patch(self, command: Command, body: protocol.PatchBody) -> Callable[[Reactions], dict]:
         obj = self._editable(body.id)
         _check_version(obj, body.expected_version)
+        _check_not_starting(obj)
         _check_fields(MEMBER_MODELS[obj.type], set(body.set) | set(body.unset), body.set, command, obj)
         merged = {**obj.data, **body.set}
         for field in body.unset:
@@ -222,6 +239,7 @@ class Host:
     def _plan_archive(self, command: Command, body: protocol.ArchiveBody) -> Callable[[Reactions], dict]:
         obj = self._editable(body.id)
         _check_version(obj, body.expected_version)
+        _check_not_starting(obj)
         archived = {**obj.data["sys"], "archived": True}
 
         def apply(reactions: Reactions) -> dict:
@@ -429,6 +447,38 @@ class Host:
 
         return apply
 
+    # ---------- starting goals ----------
+
+    def _keep_starting_goals(self, goals: list[StartingGoal]) -> None:
+        """Makes the workspace's starting goals the ones listed, by their number.
+
+        A missing one is added and one whose words changed is rewritten; the
+        last is added first, so the first is the newest. One past the end of
+        the list is archived. Who joined each is left as it is.
+        """
+        held = {
+            obj.data["sys"]["starting"]: obj
+            for obj in self.graph.query("goal")
+            if obj.data["sys"].get("starting") is not None
+        }
+        for number, goal in reversed(list(enumerate(goals, start=1))):
+            obj = held.get(number)
+            if obj is None:
+                sys = {"scope": "fleet", "created_by": None, "starting": number, "archived": False}
+                record = _validate(RECORD_MODELS["goal"], {**goal.model_dump(), "sys": sys})
+                self.graph.add_object("goal", record, actor=STARTING_ACTOR)
+                continue
+            updates = {field: value for field, value in goal.model_dump().items() if obj.data[field] != value}
+            if obj.data["sys"]["archived"]:
+                updates["sys"] = {**obj.data["sys"], "archived": False}
+            if updates:
+                _validate(RECORD_MODELS["goal"], {**obj.data, **updates})
+                self.graph.patch_object(obj.id, updates, actor=STARTING_ACTOR)
+        for number, obj in held.items():
+            if number > len(goals) and not obj.data["sys"]["archived"]:
+                sys = {**obj.data["sys"], "archived": True}
+                self.graph.patch_object(obj.id, {"sys": sys}, actor=STARTING_ACTOR)
+
     # ---------- state helpers ----------
 
     def _goal(self, object_id: str):
@@ -623,6 +673,12 @@ def _check_version(obj, expected_version: int) -> None:
             "the object changed since that version",
             {"current_version": obj.version, "object": _object_view(obj)},
         )
+
+
+def _check_not_starting(obj) -> None:
+    if obj.data["sys"].get("starting") is not None:
+        raise _invalid("id", "a starting goal stays as it is: join it, or link work to it")
+
 
 
 def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], command: Command, current) -> None:

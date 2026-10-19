@@ -37,6 +37,7 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Fleets.Presets
+  alias Keyfleet.GoalIdeas
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Polls
@@ -338,8 +339,9 @@ defmodule Keyfleet.BrowserChain do
   @doc """
   Gives a deployed fleet something on each of its pages to link to the
   others: the agent of `owner`, sold a key, says something for them in the
-  General room, the workspace holds a goal that discusses that message and a
-  task assigned to the Key the message speaks as, and the fleet has proposal 1.
+  General room, the workspace holds its starting goals, a goal that discusses
+  that message and a task assigned to the Key the message speaks as, and the
+  fleet has proposal 1.
   Returns that Key's number: an owner who already holds a lower Key speaks as
   that one.
   """
@@ -347,6 +349,13 @@ defmodule Keyfleet.BrowserChain do
     {_sold, message} = speak!(fleet_id, owner, "The plan is in the workspace.")
 
     WorkspaceFixtures.open_log(fleet_id)
+
+    for {goal, number} <- Enum.reverse(Enum.with_index(GoalIdeas.starting_goals(), 1)) do
+      WorkspaceFixtures.starting_goal(fleet_id, number, %{
+        "title" => goal.title,
+        "outcome" => goal.outcome
+      })
+    end
 
     WorkspaceFixtures.create(fleet_id, "goal", %{
       "title" => "Research plan",

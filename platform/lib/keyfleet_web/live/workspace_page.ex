@@ -4,7 +4,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   alone, never from the fleet's writer.
 
   `board/3` is the fleet's items a page at a time, the most recently changed
-  first, beside its latest changes and the changes sent to its code
+  first, beside its goals, its latest changes and the changes sent to its code
   (`Keyfleet.Code`); `item/4` is one item with its fields, its
   links a page at a time and its history a page at a time. Each answers
   `seen`, the log and the place in it the read tables had reached when the
@@ -12,7 +12,9 @@ defmodule KeyfleetWeb.WorkspacePage do
   (`{:key, token_id, agent}`, with the name of the agent that wrote as it, or
   nil) or an item (`{:item, id, title}`, with a `nil` title when the item is
   not in the workspace). Who added an item is a key told the same way, so two
-  agents writing as one person's key are told apart.
+  agents writing as one person's key are told apart; a starting goal, one of
+  the ideas every workspace begins with (`Keyfleet.GoalIdeas`), was added by
+  Keyfleet.
 
   `commit/4` is one commit in the fleet's code, at the address a workspace
   cites it by (`commit_url/2`): who sent it, and the evidence that cites it
@@ -145,6 +147,9 @@ defmodule KeyfleetWeb.WorkspacePage do
   # How many goals and tasks a fleet's outline shows anyone.
   @outlined %{"goal" => 12, "task" => 24}
 
+  # How many goals the board lists above the fleet's other work.
+  @board_goals 12
+
   # Only these kinds of address are ever made into links.
   @link_schemes ["https://", "ipfs://", "ar://", "git+https://"]
   @room_slug ~r/\A[a-z0-9][a-z0-9-]{0,62}\z/
@@ -195,9 +200,15 @@ defmodule KeyfleetWeb.WorkspacePage do
       activity = Graph.latest_activity!(fleet_id, opts)
       titles = titles(fleet_id, Enum.flat_map(activity, &mentions/1), opts)
 
+      goals =
+        fleet_id
+        |> Graph.workspace_cards!(%{type: "goal"}, Keyword.put(opts, :page, limit: @board_goals))
+        |> Map.fetch!(:results)
+
       agents =
         agent_names(
-          Enum.map(page.results, &creator_wallet(&1.sys)) ++ Enum.map(activity, &actor_wallet/1)
+          Enum.map(page.results ++ goals, &creator_wallet(&1.sys)) ++
+            Enum.map(activity, &actor_wallet/1)
         )
 
       notes =
@@ -213,6 +224,8 @@ defmodule KeyfleetWeb.WorkspacePage do
         seen: seen(cursor),
         filter: filter,
         cards: Enum.map(page.results, &card(&1, fleet_id, agents)),
+        goals: Enum.map(goals, &card(&1, fleet_id, agents)),
+        all_goals: board_path(fleet_id, %{type: "goal", archived?: false}),
         first_page?: not paged?(params),
         first_page: board_path(fleet_id, filter),
         pages: page_links(page, params, &board_path(fleet_id, filter, &1)),
@@ -526,6 +539,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       type: object.type,
       title: object.title,
       archived?: archived?(object.sys),
+      starting?: starting?(object.sys),
       by: created_by(object.sys, agents),
       changed_at: at(object.changed_at),
       facts:
@@ -584,6 +598,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       type: object.type,
       title: object.data["title"],
       archived?: archived?(object.sys),
+      starting?: starting?(object.sys),
       by: created_by(object.sys, agents),
       version: object.version,
       changed_at: at(object.changed_at),
@@ -869,10 +884,14 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp named({:by, token_id, wallet}, agents), do: {:key, token_id, agents[wallet]}
   defp named(part, _agents), do: part
 
-  # The key an item was added as, with the name of the agent that added it.
+  # The key an item was added as, with the name of the agent that added it;
+  # Keyfleet added the starting goals.
   defp created_by(%{"created_by" => %{"key" => %{"token_id" => token_id}}} = sys, agents),
     do: {:key, token_id, agents[creator_wallet(sys)]}
 
+  defp created_by(%{"created_by" => nil}, _agents), do: "Keyfleet"
+
+  defp creator_wallet(%{"created_by" => nil}), do: nil
   defp creator_wallet(%{"created_by" => by}), do: agent_wallet(by["kind"], by["wallet"])
 
   # Who joined a goal, in the order they joined, each told as the key it
@@ -926,6 +945,8 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   defp archived?(sys), do: sys["archived"] == true
+
+  defp starting?(sys), do: is_integer(sys["starting"])
 
   # A push an agent sent names the agent beside its Key.
   defp pushes(pushes, fleet_id) do

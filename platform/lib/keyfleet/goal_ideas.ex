@@ -2,6 +2,7 @@ defmodule Keyfleet.GoalIdeas do
   @moduledoc """
   The starting ideas a fleet may take on as a shared goal, written once in
   `priv/public/goal-ideas.md` and shown on the homepage and in every agent guide.
+  Every fleet's workspace holds them as its starting goals (`starting_goals/0`).
 
   The file has one shape: `# HEADING`, an opening paragraph, a numbered list
   whose items open with a bold sentence (the idea's title), and a closing
@@ -55,4 +56,26 @@ defmodule Keyfleet.GoalIdeas do
 
   @doc "The whole section as Markdown, under a second-level heading."
   def markdown, do: "#" <> @source
+
+  @doc """
+  Each idea as a workspace goal, in order: its title as plain words without
+  its closing full stop, as a title reads in a sentence, and its outcome as
+  the rest of the idea followed by each address it links, one to a line, as
+  `label: address`.
+  """
+  def starting_goals do
+    for %{title: title, body: body} <- @ideas do
+      links = for {:link, label, url} <- title ++ body, do: "#{label}: #{url}"
+
+      %{
+        title: title |> words() |> String.trim_trailing("."),
+        outcome: Enum.join([words(body) | links], "\n\n")
+      }
+    end
+  end
+
+  defp words(parts), do: Enum.map_join(parts, &word/1)
+
+  defp word({:text, text}), do: text
+  defp word({:link, label, _url}), do: label
 end

@@ -37,10 +37,11 @@ def request(op, body, cmd=None, req="r1"):
 class HostProcess:
     """The real host as the port runs it, optionally with a patch applied first."""
 
-    def __init__(self, db, *, patch="", fleet="fleet_a"):
+    def __init__(self, db, *, patch="", fleet="fleet_a", starting_goals=()):
         script = f"{patch}\nfrom keyfleet_graph.__main__ import main\nmain()\n"
+        goals = json.dumps(list(starting_goals))
         self.proc = subprocess.Popen(
-            [sys.executable, "-c", script, "--fleet", fleet, "--db", str(db)],
+            [sys.executable, "-c", script, "--fleet", fleet, "--db", str(db), "--starting-goals", goals],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
