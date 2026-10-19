@@ -79,7 +79,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     end
   end
 
-  test "before any choice a reading page and home carry no theme and follow the device" do
+  test "before any choice a reading page and home are light" do
     for path <- ["/privacy", "/"] do
       document =
         build_conn()
@@ -87,18 +87,15 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
         |> html_response(200)
         |> LazyHTML.from_document()
 
-      assert document |> LazyHTML.query("html[data-theme]") |> Enum.count() == 0
+      assert document |> LazyHTML.query("html") |> LazyHTML.attribute("data-theme") == ["light"]
 
       assert document
              |> LazyHTML.query("meta[name=color-scheme]")
-             |> LazyHTML.attribute("content") == ["dark light"]
+             |> LazyHTML.attribute("content") == ["light"]
 
       assert document
              |> LazyHTML.query("meta[name=theme-color]")
-             |> LazyHTML.attribute("media") == [
-               "(prefers-color-scheme: light)",
-               "(prefers-color-scheme: dark)"
-             ]
+             |> LazyHTML.attribute("content") == ["#e5e3d2"]
     end
   end
 

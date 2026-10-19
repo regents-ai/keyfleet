@@ -341,8 +341,8 @@ defmodule KeyfleetWeb.Components.Shell do
   @doc """
   The colour theme switch: one control that flips between the two themes.
 
-  It names the theme showing by itself, from the page's theme or the device's
-  setting, so the server passes no theme. The browser owns the press: it writes
+  It names the theme showing by itself, from the page's theme, so the server
+  passes no theme. The browser owns the press: it writes
   the theme cookie the server reads on the next render and restyles the page, so
   the control is left out of LiveView's patching.
   """

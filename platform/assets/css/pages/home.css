@@ -222,11 +222,6 @@
   :root[data-theme="light"] .rl-sea { --harbour-haze: #f6f4ea; }
   :root[data-theme="light"] .rl-sea--classic { --rl-sea-still: url("/images/home/sea-classic-day.webp"); }
   :root[data-theme="light"] .rl-sea--club { --rl-sea-still: url("/images/home/sea-club-day.webp"); }
-  @media (prefers-color-scheme: light) {
-    :root:not([data-theme]) .rl-sea { --harbour-haze: #f6f4ea; }
-    :root:not([data-theme]) .rl-sea--classic { --rl-sea-still: url("/images/home/sea-classic-day.webp"); }
-    :root:not([data-theme]) .rl-sea--club { --rl-sea-still: url("/images/home/sea-club-day.webp"); }
-  }
   .rl-sea__stage { position: absolute; inset: 0; color: var(--color-fg); }
   .rl-sea__stage canvas {
     position: absolute; inset: 0; display: block; inline-size: 100%; block-size: 100%;
