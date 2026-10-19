@@ -202,6 +202,7 @@ defmodule KeyfleetWeb.Router do
     get "/agents/:agent/skill.md", AgentFilesController, :agent_skill
     get "/metadata/collection.json", MetadataController, :collection
     get "/metadata/keys/:token_id", MetadataController, :show
+    get "/share/:file", ShareCardController, :show
   end
 
   # A visitor's page timings, sent by `navigator.sendBeacon` as the page is

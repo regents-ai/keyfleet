@@ -300,6 +300,15 @@ defmodule Keyfleet.Keys.KeyAttachment do
       get? true
     end
 
+    # The fleet's newest change of hands read so far: the latest sale or
+    # transfer of any of its keys, by its place on the chain.
+    read :newest_in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id))
+      prepare build(sort: [block_number: :desc, log_index: :desc], limit: 1, select: [:token_id])
+      get? true
+    end
+
     # What was recorded from a stretch of the fleet's blocks, so a second
     # reading of the same stretch can be checked against it.
     read :recorded_in_blocks do

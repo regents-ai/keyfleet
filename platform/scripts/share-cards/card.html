@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Keyfleet share pictures</title>
+    <!--
+      Drawn by render.mjs, one picture per address:
+        ?card=home                         the site's picture: home.png (the earlier
+                                           picture without its address) with the
+                                           address at the top right
+        ?card=fleet&name=…&keys=…&key=…    a fleet's picture, without its figures,
+                                           its Key's name or its Key's card
+      The fleet pictures' figures, Key name and card are added by the server
+      (KeyfleetWeb.ShareCard) at the places marked data-slot, which render.mjs
+      measures and writes to priv/share/layout.json.
+    -->
+    <style>
+      @font-face {
+        font-family: "Geist";
+        src: url("../../deps/regent_ui/regent_ui/priv/static/fonts/Geist-Regular.woff2") format("woff2");
+        font-weight: 400;
+      }
+      @font-face {
+        font-family: "Geist";
+        src: url("../../deps/regent_ui/regent_ui/priv/static/fonts/Geist-SemiBold.woff2") format("woff2");
+        font-weight: 600;
+      }
+      @font-face {
+        font-family: "Geist Mono";
+        src: url("../../deps/regent_ui/regent_ui/priv/static/fonts/GeistMono-Regular.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Geist Pixel";
+        src: url("../../deps/regent_ui/regent_ui/priv/static/fonts/GeistPixel-Square.woff2") format("woff2");
+      }
+
+      :root {
+        --ink: #efeee4;
+        --muted: #a9a79a;
+        --accent: #f26b2a;
+        --paper: #161616;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+
+      html,
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: var(--paper);
+      }
+
+      .card {
+        position: relative;
+        width: 1200px;
+        height: 630px;
+        background:
+          radial-gradient(ellipse 70% 90% at 78% 30%, rgb(255 255 255 / 0.035), transparent 70%),
+          var(--paper);
+        color: var(--ink);
+        font-family: "Geist", sans-serif;
+      }
+
+      /* The mark and name at the top left, the address at the top right.
+         X lays the site's name over a picture's bottom-left corner, so
+         nothing is drawn there. */
+      .brand {
+        position: absolute;
+        top: 62px;
+        left: 72px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        color: var(--muted);
+        font-size: 19px;
+        line-height: 26px;
+        letter-spacing: 0.28em;
+      }
+
+      .brand svg {
+        width: 36px;
+        height: 26px;
+      }
+
+      .address {
+        position: absolute;
+        top: 62px;
+        right: 72px;
+        font-size: 26px;
+        font-weight: 600;
+        line-height: 26px;
+        letter-spacing: -0.01em;
+      }
+
+      .home {
+        position: absolute;
+        inset: 0;
+      }
+
+      /* A fleet's picture. */
+      .fleet-name {
+        position: absolute;
+        left: 72px;
+        top: 138px;
+        font-family: "Geist Pixel", monospace;
+        font-size: 80px;
+        line-height: 84px;
+        letter-spacing: -0.01em;
+      }
+
+      .figure {
+        position: absolute;
+        left: 72px;
+        width: 620px;
+      }
+
+      .figure .value {
+        height: 66px;
+      }
+
+      .figure .label {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 24px;
+      }
+
+      .figure.keys {
+        top: 262px;
+      }
+
+      .figure.treasury {
+        top: 392px;
+      }
+
+      .latest {
+        position: absolute;
+        left: 784px;
+        top: 112px;
+        width: 344px;
+        text-align: center;
+      }
+
+      .latest .picture {
+        width: 344px;
+        height: 430px;
+        box-shadow: 0 22px 46px rgb(0 0 0 / 0.65);
+      }
+
+      .latest .label {
+        margin-top: 16px;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 22px;
+      }
+
+      .latest .name {
+        height: 28px;
+        margin-top: 4px;
+      }
+
+      /* One style's characters, side by side, for the server to set figures with. */
+      .glyphs {
+        position: absolute;
+        left: 0;
+        top: 0;
+        display: flex;
+        white-space: pre;
+        color: var(--ink);
+      }
+
+      .glyphs span {
+        display: block;
+      }
+
+      .glyphs.value {
+        font-family: "Geist", sans-serif;
+        font-size: 58px;
+        font-weight: 600;
+        line-height: 66px;
+        letter-spacing: -0.01em;
+      }
+
+      .glyphs.name {
+        font-family: "Geist Mono", monospace;
+        font-size: 20px;
+        line-height: 28px;
+        letter-spacing: 0.04em;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card" id="card"></main>
+    <template id="brand">
+      <div class="brand">
+        <svg viewBox="31 46 178 106" aria-hidden="true">
+          <g fill="#e8e6d0">
+            <rect x="31" y="46" width="34" height="34" /><rect x="103" y="46" width="34" height="34" /><rect x="175" y="46" width="34" height="34" />
+            <rect x="31" y="82" width="34" height="34" /><rect x="67" y="82" width="34" height="34" /><rect x="103" y="82" width="34" height="34" /><rect x="139" y="82" width="34" height="34" /><rect x="175" y="82" width="34" height="34" />
+            <rect x="31" y="118" width="34" height="34" /><rect x="67" y="118" width="34" height="34" /><rect x="103" y="118" width="34" height="34" /><rect x="139" y="118" width="34" height="34" /><rect x="175" y="118" width="34" height="34" />
+          </g>
+        </svg>
+        KEYFLEET
+      </div>
+    </template>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const card = document.getElementById("card");
+      const text = (tag, className, words) => {
+        const el = document.createElement(tag);
+        el.className = className;
+        el.textContent = words;
+        return el;
+      };
+
+      const draw = {
+        home() {
+          const base = document.createElement("img");
+          base.className = "home";
+          base.alt = "";
+          base.src = "home.png";
+          card.append(base, text("div", "address", "keyfleet.ai"));
+        },
+
+        fleet() {
+          card.append(document.getElementById("brand").content.cloneNode(true));
+          card.append(text("div", "address", "keyfleet.ai"));
+          card.append(text("h1", "fleet-name", params.get("name")));
+
+          for (const [place, label] of [["keys", params.get("keys")], ["treasury", "Treasury"]]) {
+            const figure = document.createElement("div");
+            figure.className = `figure ${place}`;
+            const value = text("div", "value", "");
+            value.dataset.slot = place;
+            figure.append(value, text("div", "label", label));
+            card.append(figure);
+          }
+
+          const latest = document.createElement("div");
+          latest.className = "latest";
+          const picture = text("div", "picture", "");
+          picture.dataset.slot = "picture";
+          const name = text("div", "name", "");
+          name.dataset.slot = "name";
+          latest.append(picture, text("div", "label", params.get("key")), name);
+          card.append(latest);
+        },
+
+        glyphs() {
+          for (const el of [document.documentElement, document.body]) el.style.background = "transparent";
+          card.remove();
+          const row = document.createElement("div");
+          row.className = `glyphs ${params.get("style")}`;
+          for (const character of params.get("characters")) row.append(text("span", "", character));
+          document.body.append(row);
+        },
+      };
+
+      draw[params.get("card")]();
+    </script>
+  </body>
+</html>
