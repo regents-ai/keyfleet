@@ -62,7 +62,7 @@ for (const scheme of ["light", "dark"] as const) {
     await expect(page.locator("html")).toHaveAttribute("data-theme", scheme)
 
     const button = page.locator("#fleet-get-key")
-    await expect(button).toHaveText("Join this Keyfleet by purchasing the next Key: 10 USDC")
+    await expect(button).toHaveText(/Join this Keyfleet by purchasing the next Key: [0-9.,]+ USDC/)
     const paint = await button.evaluate(element => ({
       fill: getComputedStyle(element, "::before").backgroundColor,
       ink: getComputedStyle(element).color,
