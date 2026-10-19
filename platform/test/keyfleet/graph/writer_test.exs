@@ -395,7 +395,7 @@ defmodule Keyfleet.Graph.WriterTest do
        ctx do
     [stormy, calm] = Enum.take(@fleets, 2)
     # Task 1 has 200 tasks waiting on it, each also waiting on the same 100
-    # done tasks: every time it is marked done, the reactions read until the
+    # done tasks: every time it is submitted, the reactions read until the
     # work bound stops them.
     seed_waiting!(ctx.data_dir, stormy, 200, 100)
     start_graph(ctx, [stormy, calm])
@@ -409,9 +409,13 @@ defmodule Keyfleet.Graph.WriterTest do
       Task.async(fn ->
         Stream.iterate(1, &(&1 + 1))
         |> Enum.reduce_while([], fn n, asked ->
-          progress = if rem(n, 2) == 1, do: "done", else: "doing"
-          patch = %{id: "task#1", expected_version: n, set: %{progress: progress}}
-          {:ok, reply} = Writer.command(stormy, "patch", patch, authorized("storm-#{n}"))
+          {op, body} =
+            if rem(n, 2) == 1,
+              do: {"submit", %{result_ref: "https://example.com/storm/#{n}"}},
+              else: {"patch", %{set: %{progress: "doing"}}}
+
+          body = Map.merge(body, %{id: "task#1", expected_version: n})
+          {:ok, reply} = Writer.command(stormy, op, body, authorized("storm-#{n}"))
           asked = [Enum.count(reply["events"], &(&1["type"] == "keyfleet.attention")) | asked]
           if n == 2, do: send(test, :storming)
 
@@ -429,9 +433,10 @@ defmodule Keyfleet.Graph.WriterTest do
     asked = Task.await(storm, 30_000)
 
     # The storm ran from before the first calm write until after the last, and
-    # every round that marked task 1 done asked for all its bounds allow.
+    # every round that submitted task 1 asked for its review and for all the
+    # unblocked tasks its bounds allow.
     assert length(asked) > 2
-    assert asked |> Enum.take_every(2) |> Enum.uniq() == [19]
+    assert asked |> Enum.take_every(2) |> Enum.uniq() == [1 + 19]
 
     # The calm fleet's writes answer as they did before the storm, well inside
     # the writer's reply budget.

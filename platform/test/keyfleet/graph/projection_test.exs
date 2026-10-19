@@ -358,7 +358,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     assert {caught_up.graph.events, caught_up.graph.next_cursor} == {[], head}
   end
 
-  test "an object read answers its first 200 links, oldest first, and says more exist" do
+  test "an object read answers its links 200 at a time, oldest first, with where to read on" do
     start_projector(catch_up_interval: 60_000)
     {_head, ids} = build_workspace()
 
@@ -381,13 +381,23 @@ defmodule Keyfleet.Graph.ProjectionTest do
     assert Projector.await(@fleet, log_id(), head) == head
 
     {:ok, read} = Graph.get_object(@fleet, ids.task, actor: @holder)
-    assert {length(read.relations), read.relations_has_more} == {200, true}
+    assert length(read.relations) == 200
     assert ContractSchema.errors(read, "WorkspaceObjectView") == []
     # The task's link to the goal came first, so the newest link is left out.
     assert hd(read.relations).target == ids.goal
 
     assert Enum.map(tl(read.relations), & &1.id) ==
              links |> Enum.map(&elem(&1, 1)) |> Enum.take(199)
+
+    # The next page starts after the last link the first one held, and ends the list.
+    {:ok, rest} =
+      Graph.get_object(@fleet, ids.task, %{relations_after: read.relations_next_cursor},
+        actor: @holder
+      )
+
+    assert ContractSchema.errors(rest, "WorkspaceObjectView") == []
+    assert Enum.map(rest.relations, & &1.id) == [links |> List.last() |> elem(1)]
+    assert rest.relations_next_cursor == nil
   end
 
   # The projector's own round asks the writer where its log stands, so it is

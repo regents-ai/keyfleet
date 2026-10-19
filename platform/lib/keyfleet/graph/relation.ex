@@ -29,14 +29,16 @@ defmodule Keyfleet.Graph.Relation do
   end
 
   actions do
-    # The links from or to one object, oldest first.
+    # The links from or to one object made after `after_seq`, oldest first.
     read :touching do
       argument :fleet_id, :string, allow_nil?: false
       argument :object_id, :string, allow_nil?: false, constraints: @text
+      argument :after_seq, :integer, allow_nil?: false, constraints: [min: 0]
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 201]
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and
+                 fragment("? > ?", created_seq, ^arg(:after_seq)) and
                  (source == ^arg(:object_id) or target == ^arg(:object_id))
              )
 
