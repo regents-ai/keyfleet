@@ -2866,3 +2866,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   `anvil.json`, the deploy test and the docs name it with its 1,024 cards.
 - The hourly deck-end check and its notes now use Accelerant #1 as their
   example, since Classic #1 no longer sells past its deck.
+
+## 2026-10-19 — v98 released
+
+- What: released main 2bad602a to keyfleet.ai as Fly release v98 (rollback v97, 1fb76f87): the 1,024-card Classic #1 deck, in the deployment manifests and on the server.
+- Why: Sean released it (1. a, 16:59Z) so the Regents Safe can create Classic #1 from it. Full check on a fresh copy was clean (990 tests, 304 page tests, 72 Chromium walks; WebKit not run on the Mac) and every contract test succeeded, including the audit tests on a Base fork.
