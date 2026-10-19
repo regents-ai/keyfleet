@@ -44,8 +44,10 @@ features:
 
   - id: home-key-cards
     what: >-
-      A visitor sees thirty Key cards turning over in Classic's and the Club's
-      sections, a fifth of a second each, only while they are on screen.
+      A visitor sees thirty Key cards turning over in Classic's section and in
+      the Buy Key window, a fifth of a second each, only while they are on
+      screen. The Regents Club's section has none; it shows its public page
+      and its Keys on OpenSea, even while it is coming soon.
     who: person
     level: ordinary
     paths:
@@ -60,6 +62,7 @@ features:
     proofs:
       - platform/assets/test/key_cards.test.ts
       - platform/test/browser/homepage_details.spec.ts
+      - platform/test/keyfleet_web/home_live_test.exs
     regressions:
       - id: R-20261019-cards-rest-off-screen
         from: Sentinel read of 9b93fe1b

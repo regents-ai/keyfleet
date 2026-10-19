@@ -237,17 +237,16 @@
      are on screen (`KeyCards` marks them turning). The sheet holds them six
      across and five down: the rows step down one every six cards while the
      sheet steps across one each card, so they show in order, and the rows
-     and the sheet stop and start together. The Club's start halfway through.
-     Less motion shows the first card alone. */
-  .rl-cards { --rl-cards-from: 0s; inline-size: 9rem; aspect-ratio: 4 / 5; overflow: hidden; }
-  #home-club .rl-cards { --rl-cards-from: -3s; }
+     and the sheet stop and start together. Less motion shows the first card
+     alone. */
+  .rl-cards { inline-size: 9rem; aspect-ratio: 4 / 5; overflow: hidden; }
   .rl-cards__rows { inline-size: 600%; block-size: 500%; }
   .rl-cards__sheet { display: block; inline-size: 100%; block-size: 100%; }
   @keyframes rl-cards-down { to { translate: 0 -100%; } }
   @keyframes rl-cards-across { to { translate: -100% 0; } }
   @media (prefers-reduced-motion: no-preference) {
-    .rl-cards__rows { animation: rl-cards-down 6s steps(5, jump-end) var(--rl-cards-from) infinite paused; }
-    .rl-cards__sheet { animation: rl-cards-across 1.2s steps(6, jump-end) var(--rl-cards-from) infinite paused; }
+    .rl-cards__rows { animation: rl-cards-down 6s steps(5, jump-end) infinite paused; }
+    .rl-cards__sheet { animation: rl-cards-across 1.2s steps(6, jump-end) infinite paused; }
     .rl-cards[data-cards-turning] :is(.rl-cards__rows, .rl-cards__sheet) { animation-play-state: running; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -258,7 +257,7 @@
   .rl-fleet__line { max-inline-size: 42ch; color: var(--rl-muted); text-wrap: pretty; }
   .rl-fleet__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-block-start: var(--space-2); }
 
-  /* The window "Buy Key" opens: the card art, the split, and the sale's
+  /* The window "Buy Key" opens: the Key cards turning, the split, and the sale's
      figures in a ruled list. Phones see it across the whole width. */
   .rl-buy-key {
     inline-size: min(26rem, calc(100vw - 2rem)); max-inline-size: none; max-block-size: calc(100dvh - 2rem);
@@ -269,7 +268,7 @@
   .rl-buy-key::backdrop { background: var(--ash-scrim); }
   .rl-buy-key h2 { margin: 0; font-size: 1.5rem; line-height: 1.1; }
   .rl-buy-key h2:focus { outline: none; }
-  .rl-buy-key__art { display: block; justify-self: center; inline-size: min(100%, 12rem); block-size: auto; }
+  .rl-buy-key .rl-cards { justify-self: center; inline-size: min(100%, 12rem); }
   .rl-buy-key__split { margin: 0; font-size: .875rem; text-align: center; color: var(--rl-muted); }
   .rl-buy-key__facts { display: grid; margin: 0; border-block-start: 1px solid var(--rl-line); }
   .rl-buy-key__facts > div {

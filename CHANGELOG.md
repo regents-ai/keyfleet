@@ -2503,3 +2503,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Evidence: level ordinary; feature home-fleet-seas; the night stills are the
   sea's own drawing, held still, in headless Chromium on the graphics chip at
   1440 wide; gaps: WebKit not run on the Mac.
+
+## 2026-10-19 — Turning Keys in the Buy Key window; the Club's links show before it opens
+
+- The Buy Key window shows the thirty Key cards turning over, as Classic's
+  section does, in place of the interim pass.
+- The Regents Club's section no longer has turning cards. Its "Public View"
+  and "Buy Key on OpenSea" (in a new tab) now show even while the Club is
+  coming soon; the second was called "Buy Access Key".
+- Evidence: level ordinary; feature home-key-cards; browser checks in
+  platform/test/browser/homepage_details.spec.ts (the window's cards turn at
+  the pass's size, the Club has none) and a server check in
+  platform/test/keyfleet_web/home_live_test.exs (both Club links while coming
+  soon); gaps: WebKit not run on the Mac.

@@ -139,6 +139,22 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert text(view, "#home-club [data-fleet-soon]") == "Opens soon"
     refute has_element?(view, "#home-club [data-fleet-who]")
+
+    # Sean, 19 Oct: the Club's public page and its Keys on OpenSea show even
+    # before it opens, and its section has no turning cards.
+    assert has_element?(
+             view,
+             ~s(#home-club-public[href="/app/fleets/regents_club"]),
+             "Public View"
+           )
+
+    assert has_element?(
+             view,
+             ~s(#home-club-opensea[href^="https://opensea.io/collection/keyfleet?"]),
+             "Buy Key on OpenSea"
+           )
+
+    refute has_element?(view, "#home-club .rl-cards")
   end
 
   test "a Club read that fails is said to have failed, never zero, and the page stays up",

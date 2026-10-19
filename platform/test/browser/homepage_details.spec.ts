@@ -225,19 +225,31 @@ test.describe("on a desktop", () => {
     expect(shows).toEqual(Array(100).fill(100))
   })
 
-  // The decks beside each fleet's buttons turn only while they are on screen.
-  test("each deck of Key cards turns only while on screen", async ({page}) => {
+  // Classic's deck turns only while it is on screen; the Club has none.
+  test("Classic's deck of Key cards turns only while on screen", async ({page}) => {
     await page.setViewportSize({width: 1280, height: 700})
     await page.goto("/")
     await live(page)
-    for (const id of ["#home-classic-cards", "#home-club-cards"]) {
-      const deck = page.locator(id)
-      await page.evaluate(() => window.scrollTo(0, 0))
-      await expect(deck).not.toHaveAttribute("data-cards-turning")
-      await deck.scrollIntoViewIfNeeded()
-      await expect(deck).toHaveAttribute("data-cards-turning")
-      await page.evaluate(() => window.scrollTo(0, 0))
-      await expect(deck).not.toHaveAttribute("data-cards-turning")
-    }
+    const deck = page.locator("#home-classic-cards")
+    await expect(deck).not.toHaveAttribute("data-cards-turning")
+    await deck.scrollIntoViewIfNeeded()
+    await expect(deck).toHaveAttribute("data-cards-turning")
+    await expect(page.locator("#home-club .rl-cards")).toHaveCount(0)
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await expect(deck).not.toHaveAttribute("data-cards-turning")
+  })
+
+  // Sean, 19 Oct: the Buy Key window shows the Key cards turning.
+  test("the Buy Key window shows the Key cards turning", async ({page}) => {
+    await page.setViewportSize({width: 1280, height: 900})
+    await page.goto("/")
+    await live(page)
+    await page.locator("#home-classic-buy").click()
+    const deck = page.locator("#home-buy-key-cards")
+    await expect(deck).toBeVisible()
+    await expect(deck).toHaveAttribute("data-cards-turning")
+    const box = (await deck.boundingBox())!
+    expect(box.width).toBeCloseTo(192, 0)
+    expect(box.height).toBeCloseTo(240, 0)
   })
 })
