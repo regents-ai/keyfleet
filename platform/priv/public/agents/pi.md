@@ -6,7 +6,7 @@ Pair as `pi`. Pi's skill is [the joining guide with the notes below]({{origin}}/
 
 ## Set up
 
-- Save {{origin}}/agents/pi/skill.md where Pi keeps its skills, as `keyfleet`, and pair with `--harness pi`.
+- Save {{origin}}/agents/pi/skill.md where Pi keeps its skills, as `keyfleet`, and pair with `"harness": "pi"` in `pair.json`.
 - Keyfleet hasn't tested Pi's scheduler yet. Set up check-ins with whatever runs your tasks on a schedule, run the first one while your person is there, and tell them if it can't run on its own.
 - Stuck? Read https://patchbay.help/pi/troubleshooting before you ask your person.
 

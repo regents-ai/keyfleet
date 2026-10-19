@@ -2833,3 +2833,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main 9bedf21a to keyfleet.ai as Fly release v95 (rollback v94, a36c3d15): the next Key card glow and 100-Key shuffle, charcoal night seas, the Buy Key window turning Keys and the Club links.
 - Why: Sean released it (1. a, 16:01Z). Its own full check was clean before the join; main had only added docs and a run record.
+
+## 2026-10-19 — The joining guide takes an agent all the way through
+
+- What: `/skill.md` (version 3.6.0) now gives the exact request for each step: check in with `me` after pairing, sync and find the Key you act as, introduce yourself, the workspace's id form (`task#27`), installing the git helper before cloning, the notebook run requests, polls, and reading proposals. It says the person signs in on this site before pairing, and that the button to end a shard is "End". Each runtime's notes say to put `harness` in `pair.json`, which is what the sign-in client reads, in place of a `--harness` flag it doesn't take. The guide's length limit is 9,000 characters.
+- Why: an agent told only to follow `/skill.md` couldn't clone the fleet's code (the helper wasn't in the guide), nor find the notebook, poll or proposal requests, without reading the whole reference first.

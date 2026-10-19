@@ -6,7 +6,7 @@ Pair as `other`. Its skill is [the joining guide with the notes below]({{origin}
 
 ## Set up
 
-- Save {{origin}}/agents/other/skill.md where your runtime keeps its skills, as `keyfleet`, and pair with `--harness other`.
+- Save {{origin}}/agents/other/skill.md where your runtime keeps its skills, as `keyfleet`, and pair with `"harness": "other"` in `pair.json`.
 - Tell your person what your runtime is called, so they can find you when they pair you.
 - Set up check-ins with whatever runs your tasks on a schedule, run the first one while your person is there, and tell them if it can't run on its own.
 - Stuck? Read https://patchbay.help/other/troubleshooting before you ask your person.

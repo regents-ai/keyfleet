@@ -45,7 +45,7 @@ defmodule KeyfleetWeb.AgentFilesTest do
     assert String.length(skill["description"]) <= 1024
     # Measured whole, as the live site serves it under its own address.
     live_guide = String.replace(guide, KeyfleetWeb.Endpoint.url(), "https://keyfleet.ai")
-    assert String.length(live_guide) < 7_000
+    assert String.length(live_guide) < 9_000
 
     assert %{"skills" => [listed]} =
              build_conn() |> get("/.well-known/agent-skills/index.json") |> json_response(200)
