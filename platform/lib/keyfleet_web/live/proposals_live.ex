@@ -675,7 +675,8 @@ defmodule KeyfleetWeb.ProposalsLive do
   The shared money: the treasury's address on Base, to check and to send to;
   each asset's balance and what is set aside for claims, the daily split's
   rate and when it next opens with its preview, the advances still out, and
-  the share owed to REGENT staking.
+  the share owed to REGENT staking. A visitor sees the figures only; the
+  buttons that move the money show once they sign in.
   """
   def treasury(assigns) do
     ~H"""
@@ -749,6 +750,9 @@ defmodule KeyfleetWeb.ProposalsLive do
             </tr>
           </tbody>
         </table>
+        <p id="proposals-waiting">
+          Key sales waiting to become REGENT: <.amount value={@treasury.waiting} count />
+        </p>
         <p class="proposals-detail">
           Balances as of <time datetime={DateTime.to_iso8601(@treasury.as_of)}>{at(@treasury.as_of)}</time>.
         </p>
@@ -764,6 +768,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             <.amount value={advance.amount} />, <.wallet address={advance.operator} />
           </span>
           <.live_component
+            :if={@actor}
             module={WalletPanel}
             id={"proposals-return-#{advance.id}"}
             class="proposals-action"
@@ -806,13 +811,14 @@ defmodule KeyfleetWeb.ProposalsLive do
         </li>
       </ol>
 
-      <h3 id="proposals-share-title">
+      <h3 :if={@actor} id="proposals-share-title">
         REGENT staking share
         <Regent.Primitives.tip id="proposals-share-tip" label="About the REGENT staking share">
           10% of every key sale is set aside for REGENT staking. Anyone can send it.
         </Regent.Primitives.tip>
       </h3>
       <.live_component
+        :if={@actor}
         module={WalletPanel}
         id="proposals-regents-share"
         class="proposals-action"
@@ -829,13 +835,14 @@ defmodule KeyfleetWeb.ProposalsLive do
         </:buttons>
       </.live_component>
 
-      <h3 id="proposals-convert-title">
+      <h3 :if={@actor} id="proposals-convert-title">
         USDC to REGENT
         <Regent.Primitives.tip id="proposals-convert-tip" label="About turning USDC into REGENT">
           Part of every Key sale is turned into REGENT for the treasury, up to 250 USDC at a time; after a full 250 the next waits 15 minutes. Every fleet shares one line, so a press turns the next amount in line, which may be another fleet’s. Anyone can press it.
         </Regent.Primitives.tip>
       </h3>
       <.live_component
+        :if={@actor}
         module={WalletPanel}
         id="proposals-convert"
         class="proposals-action"

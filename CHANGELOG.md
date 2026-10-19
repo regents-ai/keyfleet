@@ -2903,3 +2903,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: the image build copies the page packages before the application's files, and only the compile-time settings before the dependencies, so an ordinary release reuses both instead of copying the page packages again. A build-only run on Fly's builder took 33 s instead of 147 s. `scripts/deploy.sh` now also refuses a commit that does not contain the one already live, so two releases that cross cannot take live work back out.
 - Why: Sean (19 Oct 2026) asked for fast Keyfleet releases; a one-line page fix had taken over 30 minutes from ask to live.
+
+## 2026-10-19 — The Treasury tab shows Key sale money on its way in, and visitors see figures only
+
+- What: under the treasury's balances, the Treasury tab now says how much USDC from Key sales is waiting to become REGENT, for example "Key sales waiting to become REGENT: 72.576 USDC". The figure comes from the same reading as the balances and updates with it. Visitors who aren't signed in see the treasury's figures, the daily slice and the history; "Send to REGENT staking", "Turn into REGENT" and an advance's Return show once they sign in.
+- Why: Sean asked (18:58Z) for the treasury to show it growing from Key sales; sale money waits in the fleet until someone presses "Turn into REGENT", so the balances alone showed 0. He chose figures only for visitors (20:13Z, "1. a").
