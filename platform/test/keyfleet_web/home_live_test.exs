@@ -36,6 +36,9 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   opens soon until it does, then links its page
   # - launch-gate: internal links stay on the fleets' maps, the account page,
   #   the public documents, or anchors that exist
+  # - the page ends with the starting ideas for a shared goal as Sean wrote
+  #   them, each link to another site opening in a new tab, and the Markdown
+  #   homepage carries the same section
 
   @classic "fleet_tech_classic"
   @club "regents_club"
@@ -388,6 +391,65 @@ defmodule KeyfleetWeb.HomeLiveTest do
     [section | _] = String.split(section, "\n## ", parts: 2)
     assert section =~ "Sales open soon."
     refute section =~ "What it’s doing right now"
+  end
+
+  @idea_titles [
+    "Plan a service that earns stablecoins.",
+    "Compete on Yukon.",
+    "Tackle the OpenAI math dataset.",
+    "Launch a Revstake token on Autolaunch.",
+    "Launch a Memestock token on Autolaunch.",
+    "Participate in IMD.",
+    "Compete in OpenEnv Arena.",
+    "Discover other agent arenas."
+  ]
+
+  @idea_links [
+    "https://www.onedollaraudit.com/",
+    "https://yukon.org/",
+    "https://huggingface.co/datasets/FineEnvs/openai-math",
+    "https://autolaunch.sh/",
+    "https://autolaunch.sh/",
+    "https://imd.fun/",
+    "https://openenvarena-arena.hf.space/"
+  ]
+
+  test "the page ends with the starting ideas for a shared goal, as written, and so does the Markdown homepage",
+       %{conn: conn} do
+    {:ok, view, html} = live(conn, "/")
+
+    sections = attribute(html, "main section[id]", "id")
+    assert List.last(sections) == "home-goal-ideas"
+
+    assert text(view, "#home-goal-ideas-title") ==
+             "Initial Ideas for a Keyfleet to Pursue as a Shared Goal"
+
+    assert text(view, ".rl-ideas__intro") ==
+             "Every idea is optional. Choose a goal that fits your fleet's interests and strengths, or propose something entirely new."
+
+    titles = for n <- 1..8, do: text(view, "#home-goal-idea-#{n} h3")
+    assert titles == @idea_titles
+
+    assert text(view, "#home-goal-idea-1 p") ==
+             "Research a customer problem and create a business plan for an agent-operated service paid in stablecoins. Study One Dollar Audit as prior art."
+
+    assert text(view, ".rl-ideas__closing") =~
+             ~r/\AFind your collective edge\. Each agent brings different strengths: .+ than any member could alone\.\z/
+
+    assert attribute(html, "#home-goal-ideas a", "href") == @idea_links
+    assert Enum.uniq(attribute(html, "#home-goal-ideas a", "target")) == ["_blank"]
+    assert Enum.uniq(attribute(html, "#home-goal-ideas a", "rel")) == ["noopener noreferrer"]
+
+    markdown =
+      build_conn() |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
+
+    [_, section] =
+      String.split(markdown, "\n## Initial Ideas for a Keyfleet to Pursue as a Shared Goal\n",
+        parts: 2
+      )
+
+    assert section =~ "\n2. **Compete on [Yukon](https://yukon.org/).** Choose a leaderboard"
+    assert section =~ "\n**Find your collective edge.** Each agent brings"
   end
 
   @open_paths ~w(/account /llms.txt /agents.md /skill.md /docs /about /contact /privacy /terms)

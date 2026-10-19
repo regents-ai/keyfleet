@@ -7,7 +7,9 @@ defmodule KeyfleetWeb.HomeLive do
   Keyfleet, its sea beside what a Key lets an agent join, Key cards turning
   over, its public page and "Buy Key"; the Regents Club, its sea, what it is
   doing right now, its public page and its Keys on OpenSea; what a fleet can
-  use; and the footer.
+  use; the starting ideas a fleet may take on as a shared goal
+  (`Keyfleet.GoalIdeas`), each link to another site opening in a new tab; and
+  the footer.
 
   Each fleet's sea has a ship for each of its most recently active Keys, as
   anyone reads them (`KeyfleetWeb.HarbourCrew`), from the fleet's activity in
@@ -51,6 +53,7 @@ defmodule KeyfleetWeb.HomeLive do
   alias Keyfleet.Agents.Here
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
+  alias Keyfleet.GoalIdeas
   alias Keyfleet.SharedReading
 
   alias KeyfleetWeb.{
@@ -161,6 +164,7 @@ defmodule KeyfleetWeb.HomeLive do
 
     [Every fleet](#{PublicDocuments.url("/fleets.md")}) in brief, with a link to each fleet’s own page.
 
+    #{GoalIdeas.markdown()}
     ## More
 
     [Your account](#{PublicDocuments.url("/account")}) · [Developer documentation](#{PublicDocuments.url("/docs")}) · [Agent guide](#{PublicDocuments.url("/llms.txt")})
@@ -365,6 +369,7 @@ defmodule KeyfleetWeb.HomeLive do
         <Regent.Structure.row rail={false}>
           <.integrations integrations={@integrations} />
         </Regent.Structure.row>
+        <Regent.Structure.row rail={false}><.goal_ideas /></Regent.Structure.row>
       </main>
 
       <Regent.Structure.row rail={false}>
@@ -881,6 +886,64 @@ defmodule KeyfleetWeb.HomeLive do
         </li>
       </ul>
     </section>
+    """
+  end
+
+  defp goal_ideas(assigns) do
+    assigns =
+      assign(assigns,
+        heading: GoalIdeas.heading(),
+        intro: GoalIdeas.intro(),
+        ideas: GoalIdeas.ideas(),
+        closing: GoalIdeas.closing()
+      )
+
+    ~H"""
+    <section id="home-goal-ideas" class="rl-ideas" aria-labelledby="home-goal-ideas-title">
+      <h2 id="home-goal-ideas-title">{@heading}</h2>
+      <p class="rl-ideas__intro"><.parts parts={@intro} /></p>
+      <ol
+        id="home-goal-idea-tiles"
+        class="rl-ideas__tiles"
+        phx-hook="MotionCascade"
+        data-variant={Motion.standard("grid")}
+      >
+        <li
+          :for={{idea, n} <- Enum.with_index(@ideas, 1)}
+          id={"home-goal-idea-#{n}"}
+          phx-mounted={JS.ignore_attributes(["style"])}
+        >
+          <span class="rl-ideas__n" aria-hidden="true">{n}</span>
+          <h3><.parts parts={idea.title} /></h3>
+          <p><.parts parts={idea.body} /></p>
+        </li>
+      </ol>
+      <p class="rl-ideas__closing">
+        <strong><.parts parts={@closing.title} /></strong> <.parts parts={@closing.body} />
+      </p>
+    </section>
+    """
+  end
+
+  # Plain text and links, each link to another site opening in a new tab.
+  # The parts sit side by side with nothing between them, so a link followed
+  # by a full stop keeps it close.
+  attr :parts, :list, required: true
+
+  defp parts(assigns), do: ~H"<.part :for={part <- @parts} part={part} />"
+
+  attr :part, :any, required: true
+
+  defp part(%{part: {:text, text}} = assigns) do
+    assigns = assign(assigns, text: text)
+    ~H"{@text}"
+  end
+
+  defp part(%{part: {:link, label, url}} = assigns) do
+    assigns = assign(assigns, label: label, url: url)
+
+    ~H"""
+    <a href={@url} target="_blank" rel="noopener noreferrer">{@label}</a>
     """
   end
 end

@@ -11,6 +11,9 @@ defmodule KeyfleetWeb.AgentGuides do
       `/agents/SLUG/skill.md`;
     * `## Questions`, then `## Troubleshooting`, ending with its Patchbay link.
 
+  Each runtime's page and skill end with the starting ideas for a fleet's
+  shared goal (`Keyfleet.GoalIdeas`), so every agent joining a fleet reads them.
+
   A runtime that `KeyfleetWeb.AgentCompatibility` covers gets its status line
   from there, under its name, and on `/agents`; that page is
   `/agents/compatibility`. Adding a runtime is adding its file. Nothing here
@@ -54,8 +57,13 @@ defmodule KeyfleetWeb.AgentGuides do
 
   def document("/agents/" <> slug) do
     case @by_slug do
-      %{^slug => guide} -> %{markdown: fill(with_status(slug, guide.source))}
-      _other -> nil
+      %{^slug => guide} ->
+        %{
+          markdown: fill(with_status(slug, guide.source) <> "\n" <> Keyfleet.GoalIdeas.markdown())
+        }
+
+      _other ->
+        nil
     end
   end
 
