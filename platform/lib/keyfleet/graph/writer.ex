@@ -15,6 +15,10 @@ defmodule Keyfleet.Graph.Writer do
   every command it committed, so retrying with the same command id returns the
   original result instead of applying it twice.
 
+  Each host is started with the fleet's starting goals (`:starting_goals`, each
+  `%{title, outcome}`), which it keeps in the workspace as listed before it
+  answers.
+
   A write's authority is decided at its turn, inside the writer: whatever
   changed while it waited behind other requests, such as a key changing hands,
   counts. That check gets `:check_timeout` to read what it needs, and a caller
@@ -138,6 +142,7 @@ defmodule Keyfleet.Graph.Writer do
       restart_min: Keyword.fetch!(opts, :restart_min),
       restart_max: Keyword.fetch!(opts, :restart_max),
       restart_delay: Keyword.fetch!(opts, :restart_min),
+      starting_goals: Jason.encode!(Keyword.fetch!(opts, :starting_goals)),
       host: nil,
       next_req: 0
     }
@@ -245,7 +250,18 @@ defmodule Keyfleet.Graph.Writer do
 
   defp open_port(state) do
     db = Path.join(state.data_dir, "#{state.fleet_id}.sqlite")
-    args = ["-I", "-m", "keyfleet_graph", "--fleet", state.fleet_id, "--db", db]
+
+    args = [
+      "-I",
+      "-m",
+      "keyfleet_graph",
+      "--fleet",
+      state.fleet_id,
+      "--db",
+      db,
+      "--starting-goals",
+      state.starting_goals
+    ]
 
     {:ok,
      Port.open({:spawn_executable, state.python}, [

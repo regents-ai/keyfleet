@@ -482,10 +482,13 @@ defmodule Keyfleet.Graph.WriterTest do
     })
   end
 
+  # The fleets start with no starting goals, so each log holds only what a
+  # test writes.
   defp graph_opts(ctx, fleets, opts) do
     Keyword.merge(
       [
         fleets: fleets,
+        starting_goals: [],
         data_dir: ctx.data_dir,
         reply_timeout: 5_000,
         hello_timeout: 30_000,
@@ -606,7 +609,7 @@ defmodule Keyfleet.Graph.WriterTest do
     key = {"chain_id": 1, "contract": "#{@contract}", "token_id": 17}
     created_by = {"key": key, "ownership_epoch": 3, "kind": "agent", "wallet": "#{@wallet}"}
     sys_record = {"scope": "fleet", "created_by": created_by, "archived": False}
-    host = Host(fleet, db)
+    host = Host(fleet, db, [])
     add = host.graph.add_object
     with host._transaction():
         blocker = add("task", {"title": "Blocker", "sys": sys_record}, actor=actor).id

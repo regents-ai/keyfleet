@@ -22,7 +22,8 @@ defmodule Keyfleet.Graph.Supervisor do
   host to answer and for a reply, `:check_timeout` is how long a write's
   ownership check may spend reading, and `:restart_min` and `:restart_max` bound
   the delay before a failed host is replaced. `:fleets` defaults to the fixed
-  catalog.
+  catalog, and `:starting_goals`, the goals every workspace starts with, to
+  `Keyfleet.GoalIdeas.starting_goals/0`.
   """
   use Supervisor
 
@@ -35,7 +36,8 @@ defmodule Keyfleet.Graph.Supervisor do
     :reply_timeout,
     :check_timeout,
     :restart_min,
-    :restart_max
+    :restart_max,
+    :starting_goals
   ]
 
   def start_link(opts \\ []) do
@@ -44,7 +46,12 @@ defmodule Keyfleet.Graph.Supervisor do
 
   @impl true
   def init(opts) do
-    opts = Keyword.merge(Application.fetch_env!(:keyfleet, :graph), opts)
+    opts =
+      :keyfleet
+      |> Application.fetch_env!(:graph)
+      |> Keyword.merge(opts)
+      |> Keyword.put_new_lazy(:starting_goals, &Keyfleet.GoalIdeas.starting_goals/0)
+
     writer_opts = Keyword.take(opts, @writer_opts)
 
     writers =

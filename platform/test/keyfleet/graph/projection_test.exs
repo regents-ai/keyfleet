@@ -765,10 +765,13 @@ defmodule Keyfleet.Graph.ProjectionTest do
     run_id
   end
 
+  # The fleet starts with no starting goals, so its log holds only what a
+  # test writes.
   defp start_writer(data_dir) do
     start_supervised!(
       {Keyfleet.Graph.Supervisor,
        fleets: [@fleet],
+       starting_goals: [],
        data_dir: data_dir,
        reply_timeout: 5_000,
        hello_timeout: 30_000,

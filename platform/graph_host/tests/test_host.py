@@ -11,7 +11,9 @@ from conftest import CONTRACT, WALLET, HostProcess, command, request
 
 from keyfleet_graph import protocol
 from keyfleet_graph.__main__ import EXIT_FAILED, EXIT_LOCKED
-from keyfleet_graph.host import CHANGES_PAGE_BYTES, Host
+from keyfleet_graph.host import CHANGES_PAGE_BYTES, Host, Refusal, StartingGoal
+from keyfleet_graph.pack import RECORD_MODELS
+from pydantic import ValidationError
 
 PINNED_VERSION = "1.10.0"
 PINNED_COMMIT = "8aedb1866cf5dce056af97529152ffd6f468a1ed"
@@ -32,7 +34,7 @@ def _ok(host, op, body, command_id):
 @pytest.fixture
 def seeded(db):
     """A host holding a goal at version 2, a task, a finding and an archived note."""
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     _ok(host, "create", {"type": "goal", "scope": "fleet", "data": GOAL}, "s1")
     _ok(host, "create", {"type": "task", "scope": "fleet", "data": {"title": "Draft"}}, "s2")
     _ok(host, "create", {"type": "finding", "scope": "fleet", "data": {"title": "F", "statement": "S"}}, "s3")
@@ -357,7 +359,7 @@ def test_changes_pages_through_every_event_exactly_once(seeded):
 
 
 def test_a_changes_page_stops_at_its_byte_budget_and_the_cursor_continues(db):
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     for n in range(60):
         _ok(host, "create", {"type": "note", "scope": "fleet", "data": {"title": f"N{n}", "body": "x" * 20_000}}, f"n{n}")
 
@@ -552,7 +554,7 @@ def test_the_private_seams_of_the_pinned_activegraph_hold(db):
     assert activegraph.__version__ == PINNED_VERSION
     assert direct_url["vcs_info"]["commit_id"] == PINNED_COMMIT
 
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     store = host.graph.store
     assert type(store) is SQLiteEventStore
     assert store._conn.isolation_level is None
@@ -569,7 +571,7 @@ def test_the_private_seams_of_the_pinned_activegraph_hold(db):
 
 
 def test_right_to_left_text_is_kept_as_written(db):
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     title = "خدمة العملاء \U0001F680"
 
     created = _ok(host, "create", {"type": "goal", "scope": "fleet", "data": {**GOAL, "title": title}}, "rtl")
@@ -578,7 +580,7 @@ def test_right_to_left_text_is_kept_as_written(db):
 
 
 def test_emoji_joined_with_a_zero_width_joiner_are_kept_as_written(db):
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     family = "Crew \U0001F469‍\U0001F469‍\U0001F467"
     mechanic = "\U0001F9D1‍\U0001F527 on shift"
 
@@ -588,3 +590,108 @@ def test_emoji_joined_with_a_zero_width_joiner_are_kept_as_written(db):
     assert host.graph.get_object(goal["id"]).data["title"] == family
     stored = host.graph.get_object(note["id"]).data
     assert (stored["title"], stored["body"]) == (mechanic, f"{family}\n{mechanic}")
+
+
+STARTING = [
+    {"title": "Plan a service.", "outcome": "Research a customer problem."},
+    {"title": "Compete on Yukon.", "outcome": "Choose a challenge.\n\nYukon: https://yukon.org/"},
+]
+
+
+def _starting(host):
+    """The workspace's starting goals by number, as `(id, title, outcome, archived)`."""
+    return {
+        obj.data["sys"]["starting"]: (obj.id, obj.data["title"], obj.data["outcome"], obj.data["sys"]["archived"])
+        for obj in host.graph.query("goal")
+        if obj.data["sys"]["starting"] is not None
+    }
+
+
+def _goal_writes(host):
+    return [event.id for event in host.graph.events if event.actor == "keyfleet:starting_goals"]
+
+
+def _created_ids(host):
+    return [event.payload["object"]["id"] for event in host.graph.events if event.type == "object.created"]
+
+
+def test_a_new_workspace_starts_with_its_starting_goals_the_first_newest(db):
+    host = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in STARTING])
+
+    assert _starting(host) == {
+        1: ("goal#2", "Plan a service.", "Research a customer problem.", False),
+        2: ("goal#1", "Compete on Yukon.", "Choose a challenge.\n\nYukon: https://yukon.org/", False),
+    }
+    assert _created_ids(host) == ["goal#1", "goal#2"]
+    goal = host.graph.get_object("goal#2").data
+    assert goal["status"] == "open"
+    assert goal["sys"] == {"scope": "fleet", "created_by": None, "starting": 1, "archived": False, "joined": []}
+    assert {event.actor for event in host.graph.events if event.type == "object.created"} == {"keyfleet:starting_goals"}
+
+
+def test_starting_goals_are_kept_as_listed_across_restarts(db):
+    first = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in STARTING])
+    written = _goal_writes(first)
+    first.graph.store.close()
+    same = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in STARTING])
+    assert _goal_writes(same) == written
+    same.graph.store.close()
+
+    reworded = [{**STARTING[0], "outcome": "Research one customer's problem."}]
+    host = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in reworded])
+    assert _starting(host) == {
+        1: ("goal#2", "Plan a service.", "Research one customer's problem.", False),
+        2: ("goal#1", "Compete on Yukon.", "Choose a challenge.\n\nYukon: https://yukon.org/", True),
+    }
+    host.graph.store.close()
+
+    back = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in STARTING])
+    assert _starting(back)[2] == ("goal#1", "Compete on Yukon.", "Choose a challenge.\n\nYukon: https://yukon.org/", False)
+    assert _created_ids(back) == ["goal#1", "goal#2"]
+
+
+def test_a_starting_goal_is_joined_and_linked_but_never_changed_or_archived(db):
+    host = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in STARTING])
+    task = _ok(host, "create", {"type": "task", "scope": "fleet", "data": {"title": "Enter"}}, "t")
+
+    _ok(host, "join", {"id": "goal#1"}, "j")
+    _ok(host, "link", {"source": task["id"], "target": "goal#1", "type": "implements"}, "l")
+    for op, body in [
+        ("patch", {"id": "goal#1", "expected_version": 2, "set": {"status": "achieved"}}),
+        ("archive", {"id": "goal#1", "expected_version": 2}),
+    ]:
+        reply = _call(host, request(op, body, command(op)))
+        assert reply["error"]["code"] == "invalid", reply
+        assert reply["error"]["details"]["errors"][0]["path"] == "id"
+
+    goal = host.graph.get_object("goal#1").data
+    assert (goal["status"], goal["sys"]["archived"], len(goal["sys"]["joined"])) == ("open", False, 1)
+
+
+def test_a_restart_keeps_who_joined_a_starting_goal_whose_words_change(db):
+    host = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in STARTING])
+    _ok(host, "join", {"id": "goal#2"}, "j")
+    host.graph.store.close()
+
+    reworded = [{**STARTING[0], "title": "Plan a paid service."}, STARTING[1]]
+    host = Host("fleet_a", str(db), [StartingGoal(**goal) for goal in reworded])
+    goal = host.graph.get_object("goal#2").data
+    assert goal["title"] == "Plan a paid service."
+    assert len(goal["sys"]["joined"]) == 1
+
+
+@pytest.mark.parametrize(
+    "sys",
+    [
+        {"scope": "fleet", "created_by": None, "archived": False},
+        {"scope": "fleet", "created_by": None, "starting": 0, "archived": False},
+    ],
+)
+def test_a_goal_is_either_created_by_a_member_or_a_starting_goal(sys):
+    with pytest.raises(ValidationError):
+        RECORD_MODELS["goal"].model_validate({**GOAL, "sys": sys})
+
+
+def test_starting_goals_whose_words_do_not_fit_a_goal_stop_the_host(db):
+    with pytest.raises(Refusal):
+        Host("fleet_a", str(db), [StartingGoal(title="two\nlines", outcome="o")])

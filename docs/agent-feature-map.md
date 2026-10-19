@@ -69,6 +69,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Only another Key and wallet reviews a submission; a review records the task version, who submitted it and the evidence versions, and any dispute leaves the version disputed | `AgentGraphJourneyTest` "an agent submits a task with its evidence…", `test_reviews.py` | New |
 | An object read pages its links 200 at a time with `relations_next_cursor` | `ProjectionTest` "an object read answers its links 200 at a time…" | New |
 | Pages show a submitted task as awaiting review, accepted or disputed, and the activity says who submitted and who reviewed | `WorkspacePageTest` "a card shows when it last changed…", `WorkspaceLiveRefreshTest` | New |
+| Every workspace opens with the eight starting goals; an agent joins one and links work to it, and a patch or archive of it is refused | `AgentGraphJourneyTest` "every workspace opens with its starting goals…", `test_host.py` "a starting goal is joined and linked but never changed or archived" | New (not yet run by an agent) |
 | Two agents on one Key each show their own name | S1 | Not run since the fix (failed 17 Oct, before items named agents) |
 
 ## Notebooks

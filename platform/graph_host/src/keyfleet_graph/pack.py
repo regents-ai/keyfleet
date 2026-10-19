@@ -1,4 +1,4 @@
-"""The pinned `keyfleet_work@0.5.0` work pack.
+"""The pinned `keyfleet_work@0.6.0` work pack.
 
 Two models per object type: the member model is what a member may write, and
 the record model adds the server-owned `sys` block and is what the graph
@@ -14,12 +14,12 @@ the review op: its member fields are the reviewer's decision and reasons, and
 from typing import Annotated, Literal, Optional
 
 from activegraph.packs import ObjectType, Pack, RelationType
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, create_model
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, create_model, model_validator
 
 from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, Scope, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.5.0"
+PACK_VERSION = "0.6.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -182,10 +182,23 @@ class Sys(_Model):
     archived: bool
 
 
+# The most starting goals a workspace holds.
+MAX_STARTING = 20
+
+
 # A goal also records who joined it, in the order they joined: one entry for
-# each Key and wallet.
+# each Key and wallet. A starting goal is one of the ideas every workspace
+# begins with, by its number in the list; no member created it, and it stays.
 class GoalSys(Sys):
+    created_by: Optional[Member]
+    starting: Optional[Annotated[int, Field(ge=1, le=MAX_STARTING)]] = None
     joined: list[Member] = Field(default_factory=list, max_length=MAX_JOINED)
+
+    @model_validator(mode="after")
+    def _one_author(self):
+        if (self.created_by is None) == (self.starting is None):
+            raise ValueError("a goal is either created by a member or a starting goal")
+        return self
 
 
 # A task records its latest submission once it has one.

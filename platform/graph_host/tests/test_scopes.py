@@ -31,7 +31,7 @@ def _refused(host, op, body, scopes):
 @pytest.fixture
 def scoped(db):
     """A task in the fleet scope, one in level 2 and one in level 3."""
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     for n, scope in enumerate(("fleet", "level:2", "level:3"), start=1):
         _ok(host, "create", {"type": "task", "scope": scope, "data": {"title": f"T{n}"}}, f"s{n}")
     return host
@@ -121,11 +121,11 @@ def test_archiving_keeps_the_scope(scoped):
 
 
 def test_a_reopened_host_keeps_each_object_in_its_scope(db):
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     _ok(host, "create", {"type": "task", "scope": "level:3", "data": {"title": "T"}}, "c1")
     host.graph.store.close()
 
-    reopened = Host("fleet_a", str(db))
+    reopened = Host("fleet_a", str(db), [])
 
     assert _scope_of(reopened, "task#1") == "level:3"
     patch = {"id": "task#1", "expected_version": 1, "set": {"progress": "doing"}}
@@ -135,7 +135,7 @@ def test_a_reopened_host_keeps_each_object_in_its_scope(db):
 def test_the_most_scopes_a_key_can_hold_is_accepted(db):
     # Key 1 of a sold-out Fibonacci fleet: the fleet and all twenty levels.
     every_scope = ["fleet", *(f"level:{level}" for level in range(1, 21))]
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
 
     created = _ok(host, "create", {"type": "goal", "scope": "level:20", "data": GOAL}, "c-21", scopes=every_scope)
 

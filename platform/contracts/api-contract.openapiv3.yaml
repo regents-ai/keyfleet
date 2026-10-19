@@ -3656,7 +3656,20 @@ components:
           properties:
             scope: {$ref: "#/components/schemas/WorkspaceScope"}
             archived: {type: boolean}
-            created_by: {$ref: "#/components/schemas/WorkspaceMember"}
+            created_by:
+              description: >-
+                The member that created the object. A starting goal, one of the ideas every workspace
+                begins with, has none.
+              oneOf:
+                - {$ref: "#/components/schemas/WorkspaceMember"}
+                - {type: "null"}
+            starting:
+              type: [integer, "null"]
+              minimum: 1
+              maximum: 20
+              description: >-
+                A starting goal's number in the list of ideas every workspace begins with. A starting
+                goal can be joined and linked to, never changed or archived. Only a goal has it.
             joined:
               type: array
               maxItems: 100

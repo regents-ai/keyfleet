@@ -76,7 +76,7 @@ def change(reply):
 
 @pytest.fixture
 def fleet(db):
-    return Fleet(Host("fleet_a", str(db)))
+    return Fleet(Host("fleet_a", str(db), []))
 
 
 EVIDENCE = {"source_uri": "https://example.com/source"}
@@ -367,13 +367,13 @@ def test_a_retry_after_a_crash_between_commit_and_reply_asks_nothing_twice(db):
 
 
 def test_a_reopened_host_asks_nothing_again_and_its_next_cause_is_new(db):
-    first = Fleet(Host("fleet_a", str(db)))
+    first = Fleet(Host("fleet_a", str(db), []))
     blocker, waiting = first.create("task"), first.create("task")
     first.link(waiting, blocker)
     done = first.submit(blocker)
     first.host.graph.store.close()
 
-    reopened = Fleet(Host("fleet_a", str(db)))
+    reopened = Fleet(Host("fleet_a", str(db), []))
     reopened.n = first.n
 
     # Opening the log runs nothing again, so it gains no attention.
@@ -389,7 +389,7 @@ def test_a_reopened_host_asks_nothing_again_and_its_next_cause_is_new(db):
 
 
 def test_the_same_change_in_two_fleets_asks_under_two_keys(tmp_path):
-    fleets = [Fleet(Host(name, str(tmp_path / f"{name}.sqlite"))) for name in ("fleet_a", "fleet_b")]
+    fleets = [Fleet(Host(name, str(tmp_path / f"{name}.sqlite"), [])) for name in ("fleet_a", "fleet_b")]
     replies = []
     for fleet in fleets:
         blocker, waiting = fleet.create("task"), fleet.create("task")

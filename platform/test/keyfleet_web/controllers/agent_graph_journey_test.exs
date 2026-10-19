@@ -9,6 +9,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   alias Keyfleet.ChainHelpers
   alias Keyfleet.ContractSchema
   alias Keyfleet.Fleets
+  alias Keyfleet.Graph
   alias Keyfleet.Graph.Projector
   alias Keyfleet.Graph.Writer
   alias Keyfleet.Keys
@@ -304,6 +305,76 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert ContractSchema.errors(receipt, "WorkspaceObjectView") == []
   end
 
+  test "every workspace opens with its starting goals, which agents join and link work to but never change or archive",
+       c do
+    start_graph(c)
+    [ann, bea] = shard_agents(c)
+
+    starting =
+      for %{"type" => "object.created", "payload" => %{"object" => object}} <-
+            graph(c, ann, "changes", %{}).body["events"],
+          do: object
+
+    assert Enum.map(starting, &{&1["data"]["title"], &1["data"]["sys"]["starting"]}) ==
+             Keyfleet.GoalIdeas.starting_goals()
+             |> Enum.with_index(1)
+             |> Enum.map(fn {goal, number} -> {goal.title, number} end)
+             |> Enum.reverse()
+
+    assert Enum.all?(starting, &(&1["data"]["sys"]["created_by"] == nil))
+    assert Graph.count_open_work(@fleet, :goals_open) == {:ok, 0}
+
+    goal = List.last(starting)
+    assert goal["data"]["sys"]["starting"] == 1
+    joined = graph(c, bea, "join", %{as_key: 2, command_id: "j-1", id: goal["id"]})
+    assert joined.body["result"] == %{"id" => goal["id"], "version" => 2}
+
+    task =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "t-1",
+        type: "task",
+        data: %{title: "Draft"}
+      })
+
+    linked =
+      graph(c, ann, "link", %{
+        as_key: 1,
+        command_id: "k-1",
+        source: task["id"],
+        target: goal["id"],
+        type: "implements"
+      })
+
+    assert linked.status == 200
+
+    patched =
+      graph(c, ann, "patch", %{
+        as_key: 1,
+        command_id: "p-1",
+        id: goal["id"],
+        expected_version: 2,
+        set: %{status: "dropped"}
+      })
+
+    archived =
+      graph(c, ann, "archive", %{
+        as_key: 1,
+        command_id: "a-1",
+        id: goal["id"],
+        expected_version: 2
+      })
+
+    for refused <- [patched, archived] do
+      assert {refused.status, refused.body["error"]["code"]} == {422, "invalid"}
+    end
+
+    read = graph(c, ann, "get", %{id: goal["id"]}).body
+    assert read["object"]["version"] == 2
+    assert ContractSchema.errors(read, "WorkspaceObjectView") == []
+    assert Graph.count_open_work(@fleet, :goals_open) == {:ok, 1}
+  end
+
   # Syndicate keys other suites commit outside the sandbox would count as
   # sold, so the level tests run on the Cascade fleet.
   test "a key writes the fleet and its own level, and a later level once all its keys are sold",
@@ -475,7 +546,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     retried = graph(c, ann, "create", create)
     assert retried.status == 200
-    assert retried.body["result"] == %{"id" => "goal#1", "version" => 1}
+    assert %{"id" => "goal#" <> _, "version" => 1} = retried.body["result"]
     assert graph(c, ann, "create", create).body["replayed"] == true
   end
 
