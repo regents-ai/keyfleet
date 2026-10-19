@@ -2908,3 +2908,5 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: under the treasury's balances, the Treasury tab now says how much USDC from Key sales is waiting to become REGENT, for example "Key sales waiting to become REGENT: 72.576 USDC". The figure comes from the same reading as the balances and updates with it. Visitors who aren't signed in see the treasury's figures, the daily slice and the history; "Send to REGENT staking", "Turn into REGENT" and an advance's Return show once they sign in.
 - Why: Sean asked (18:58Z) for the treasury to show it growing from Key sales; sale money waits in the fleet until someone presses "Turn into REGENT", so the balances alone showed 0. He chose figures only for visitors (20:13Z, "1. a").
+
+- Released 946e7c9c as Fly v102 (19 Oct 2026 20:32Z).
