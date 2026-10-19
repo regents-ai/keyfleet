@@ -643,17 +643,17 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-goal-results [data-item="#{run}"] a[data-notebook-result][href="#{result}"]),
+               ~s(#workspace-goal-notebook-rows [data-item="#{run}"] a[data-notebook-result][href="#{result}"]),
                "The forecast"
              )
 
       assert has_element?(
                view,
-               ~s(#workspace-goal-commits [data-item="#{code}"] a[href="#{Keyfleet.Code.commit_path(@fleet, hash)}"]),
+               ~s(#workspace-goal-code-rows [data-item="#{code}"] a[href="#{Keyfleet.Code.commit_path(@fleet, hash)}"]),
                "The price page"
              )
 
-      assert has_element?(view, "#workspace-goal-commits code", String.slice(hash, 0, 12))
+      assert has_element?(view, "#workspace-goal-code-rows code", String.slice(hash, 0, 12))
     end
 
     test "a goal's page with nothing around it says so", %{conn: conn} do
@@ -666,17 +666,19 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "No work is linked to this goal yet."
              )
 
-      assert has_element?(
-               view,
-               "#workspace-goal-notebooks-empty",
-               "No notebook results are cited for this goal yet."
-             )
+      assert has_element?(view, "#workspace-goal-code-empty", "Nothing here yet.")
 
       assert has_element?(
                view,
-               "#workspace-goal-code-empty",
-               "No commits are cited for this goal yet."
+               "#workspace-goal-notebooks-none",
+               "Notebooks aren’t connected for this fleet yet."
              )
+
+      refute has_element?(view, "#workspace-goal-notebooks-empty")
+
+      # Where its code goes is named, and links nowhere until something is there.
+      assert has_element?(view, "#workspace-goal-folder-name", "goals/goal-#{id_number(goal)}")
+      refute has_element?(view, "#workspace-goal-folder")
     end
 
     test "a goal's page lists the hundred most recently changed items around it",
@@ -789,6 +791,205 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       view |> element("#workspace-latest-history") |> render_click()
       assert length(history(view)) == 2
       assert linked(view) == [goal]
+    end
+  end
+
+  describe "a goal's own place in the code and the notebooks" do
+    setup do
+      open_log(@fleet)
+      :ok
+    end
+
+    test "a goal's page lists the files in its folder, and each opens to the file", %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+      folder = "goals/goal-#{id_number(goal)}"
+
+      store!(%{
+        (folder <> "/plan.md") => "# Plan\nSell one Key.\n",
+        (folder <> "/model/price.py") => "PRICE = 10\n",
+        "README.md" => "Top"
+      })
+
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      assert rows(view, "#workspace-goal-code-rows") == [
+               ["Folder", "model"],
+               ["File", "plan.md", "21 B"]
+             ]
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-folder[href="#{Keyfleet.Code.files_path(@fleet, folder)}"]),
+               folder
+             )
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-code-rows [data-file="plan.md"] a[href="#{Keyfleet.Code.files_path(@fleet, folder <> "/plan.md")}"])
+             )
+
+      file = view
+      file |> element(~s(#workspace-goal-code-rows [data-file="plan.md"] a)) |> render_click()
+      assert_patch(file, Keyfleet.Code.files_path(@fleet, folder <> "/plan.md"))
+
+      assert text(file, "#workspace-file") == "# Plan\nSell one Key.\n"
+
+      assert lines(file, "#workspace-files-crumbs > a") == [
+               "Code",
+               "goals",
+               "goal-#{id_number(goal)}"
+             ]
+
+      assert has_element?(file, "#workspace-files-page h2", "plan.md")
+
+      # Every read of the code carries a pass for this fleet's code alone.
+      assert_received {:store, _path, ["Bearer " <> pass]}
+      assert {:ok, %{"fleet" => @fleet, "scope" => "read"}} = claims(pass)
+    end
+
+    test "a goal's page says so when the code can't be read", %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+      Keyfleet.Code.record_repository!(@fleet, "z6MkOwner", actor: %Actors.System{})
+      Req.Test.stub(Keyfleet.Code.NodeClient, &Plug.Conn.send_resp(&1, 503, ""))
+
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      assert has_element?(
+               view,
+               "#workspace-goal-code-unreadable",
+               "The code can’t be read right now. Try again in a minute."
+             )
+
+      refute has_element?(view, "#workspace-goal-code-empty")
+    end
+
+    test "a goal's page lists the notebooks tagged with its name, each opening that notebook",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+      tag = "goal-#{id_number(goal)}"
+      project = "proj-0123456789abcdef"
+      notebook = "nb-0123456789abcdef"
+
+      hub!(project, fn %{"tag" => ^tag, "limit" => "50"} ->
+        [%{"id" => notebook, "title" => "Price model"}]
+      end)
+
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      to = Keyfleet.Notebooks.notebook_path(project, notebook)
+      assert Keyfleet.Notebooks.destination?(to)
+      open = "/fleets/#{@fleet}/notebooks/open?" <> URI.encode_query(to: to)
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-notebook-rows [data-notebook="#{notebook}"] a[href="#{open}"]),
+               "Price model"
+             )
+
+      refute has_element?(view, "#workspace-goal-notebooks-none")
+    end
+
+    test "a goal's page says so when the notebooks can't be read", %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+      hub!("proj-0123456789abcdef", :down)
+
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      assert has_element?(
+               view,
+               "#workspace-goal-notebooks-unreadable",
+               "The notebooks can’t be read right now. Try again in a minute."
+             )
+
+      refute has_element?(view, "#workspace-goal-notebooks-empty")
+    end
+  end
+
+  describe "the fleet's code" do
+    setup do
+      open_log(@fleet)
+
+      store!(%{
+        "README.md" => "Hello",
+        "goals/goal-1/data.bin" => <<0, 1, 2>>,
+        "goals/goal-1/big.txt" => String.duplicate("a", 512 * 1024 + 1),
+        "goals/goal-1/notes/one.md" => "one"
+      })
+
+      :ok
+    end
+
+    test "opens at the top folder, folders first, with how to copy it and what was sent lately",
+         %{conn: conn} do
+      Keyfleet.Code.record_pushes(@fleet, %{token_id: 1, wallet: @holder}, [
+        %{ref: "refs/heads/main", head: String.duplicate("5", 40)}
+      ])
+
+      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, ""))
+
+      assert rows(view, "#workspace-file-rows") == [
+               ["Folder", "goals"],
+               ["File", "README.md", "5 B"]
+             ]
+
+      assert has_element?(view, "#workspace-files-page h2", "Code")
+      refute has_element?(view, "#workspace-files-crumbs")
+      assert has_element?(view, "#workspace-files-clone", Keyfleet.Code.clone_url(@fleet))
+      assert has_element?(view, "#workspace-files-pushes", "Key 1 sent changes to main")
+
+      view |> element(~s(#workspace-file-rows [data-file="goals"] a)) |> render_click()
+      assert_patch(view, Keyfleet.Code.files_path(@fleet, "goals"))
+      assert rows(view, "#workspace-file-rows") == [["Folder", "goal-1"]]
+    end
+
+    test "names a file that isn't text, or is too large, without showing it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, "goals/goal-1/data.bin"))
+      assert has_element?(view, "#workspace-file-not-text")
+      refute has_element?(view, "#workspace-file")
+
+      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, "goals/goal-1/big.txt"))
+      assert has_element?(view, "#workspace-file-too-large")
+      refute has_element?(view, "#workspace-file")
+    end
+
+    test "a place that isn't in the code, or can't be one, is a page that doesn't exist",
+         %{conn: conn} do
+      for path <- ["goals/goal-2", "goals//goal-1", "goals/../README.md", "/README.md", ""] do
+        assert_raise KeyfleetWeb.NotFoundError, fn ->
+          live(conn, Keyfleet.Code.files_path(@fleet, "") <> "?" <> URI.encode_query(path: path))
+        end
+      end
+
+      assert_raise KeyfleetWeb.NotFoundError, fn ->
+        live(conn, Keyfleet.Fleets.path(@fleet) <> "/code/#{@other}/files")
+      end
+    end
+
+    test "says so when the code can't be read", %{conn: conn} do
+      Req.Test.stub(Keyfleet.Code.NodeClient, &Plug.Conn.send_resp(&1, 503, ""))
+      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, "README.md"))
+
+      assert has_element?(
+               view,
+               "#workspace-files-unreadable",
+               "The code can’t be read right now. Try again in a minute."
+             )
+    end
+
+    test "shows only that it is members' code to anyone else, and offers Sign in to a visitor",
+         %{visitor: visitor} do
+      path = Keyfleet.Code.files_path(@fleet, "README.md")
+
+      {:ok, signed_out, _html} = live(visitor, path)
+      assert has_element?(signed_out, "#workspace-files-members-only")
+      assert has_element?(signed_out, "#workspace-files-sign-in")
+      refute has_element?(signed_out, "#workspace-files")
+
+      outsider = signed_in_as(visitor, "0x" <> String.duplicate("e", 40))
+      {:ok, signed_in, _html} = live(outsider, path)
+      assert has_element?(signed_in, "#workspace-files-members-only")
+      refute has_element?(signed_in, "#workspace-files-sign-in")
+      refute_received {:store, _path, _pass}
     end
   end
 
@@ -1349,6 +1550,78 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
   defp item_path(id), do: KeyfleetWeb.WorkspacePage.item_path(@fleet, id)
 
+  # The fleet's repository, holding `files` by their paths, answered as the
+  # code store answers: a folder's names, or one file's bytes.
+  defp store!(files) do
+    Keyfleet.Code.record_repository!(@fleet, "z6MkOwner", actor: %Actors.System{})
+    test = self()
+
+    Req.Test.stub(Keyfleet.Code.NodeClient, fn conn ->
+      send(test, {:store, conn.request_path, Plug.Conn.get_req_header(conn, "authorization")})
+
+      ["", "api", "v1", "repos", "z6MkOwner", @fleet, read | path] =
+        String.split(conn.request_path, "/")
+
+      path = Enum.map_join(path, "/", &URI.decode/1)
+
+      case read do
+        "tree" -> Req.Test.json(conn, %{"entries" => entries(files, path), "path" => path})
+        "blob" when is_map_key(files, path) -> Plug.Conn.send_resp(conn, 200, files[path])
+        "blob" -> Plug.Conn.send_resp(conn, 404, "")
+      end
+    end)
+  end
+
+  defp entries(files, folder) do
+    prefix = if folder == "", do: "", else: folder <> "/"
+
+    files
+    |> Enum.filter(fn {path, _bytes} -> String.starts_with?(path, prefix) end)
+    |> Enum.map(fn {path, bytes} ->
+      case path |> String.replace_prefix(prefix, "") |> String.split("/", parts: 2) do
+        [name] -> %{"kind" => "blob", "path" => name, "size" => byte_size(bytes)}
+        [name, _rest] -> %{"kind" => "tree", "path" => name, "size" => nil}
+      end
+    end)
+    |> Enum.uniq()
+  end
+
+  # The fleet's notebook hub, answering a listing of the project's notebooks
+  # with what `answer` makes of its query, or nothing at all when `:down`.
+  defp hub!(project_id, answer) do
+    hub =
+      KeyfleetWeb.SignedAgentHelpers.serve!(:hub, fn conn, _opts ->
+        conn = Plug.Conn.fetch_query_params(conn)
+
+        case answer do
+          :down ->
+            Plug.Conn.send_resp(conn, 503, "")
+
+          answer ->
+            "/api/v1/projects/" <> ^project_id <> "/notebooks" = conn.request_path
+
+            Req.Test.json(conn, %{
+              "success" => true,
+              "data" => %{"items" => answer.(conn.query_params), "next_cursor" => nil}
+            })
+        end
+      end)
+
+    notebooks = Application.fetch_env!(:keyfleet, :notebooks)
+    on_exit(fn -> Application.put_env(:keyfleet, :notebooks, notebooks) end)
+    Application.put_env(:keyfleet, :notebooks, Keyword.put(notebooks, :fleets, %{@fleet => hub}))
+    Keyfleet.Notebooks.record_hub!(@fleet, project_id, actor: %Actors.System{})
+  end
+
+  defp claims(pass) do
+    [_header, payload, _signature] = String.split(pass, ".")
+    payload |> Base.url_decode64!(padding: false) |> Jason.decode()
+  end
+
+  defp text(view, selector),
+    do:
+      view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> LazyHTML.text()
+
   defp signed_in_as(conn, wallet) do
     account =
       Accounts.register_verified!(
@@ -1429,6 +1702,17 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> Enum.map(&(&1 |> LazyHTML.text() |> squish()))
+  end
+
+  # Each row of a list, as the parts a person reads in it.
+  defp rows(view, list) do
+    html = view |> render() |> LazyHTML.from_fragment()
+
+    for row <- LazyHTML.query(html, list <> " > li") do
+      for part <- [".workspace-kind", ".workspace-row-title", ".workspace-row-meta"],
+          node <- LazyHTML.query(row, part),
+          do: node |> LazyHTML.text() |> squish()
+    end
   end
 
   defp squish(text), do: text |> String.replace(~r/\s+/u, " ") |> String.trim()

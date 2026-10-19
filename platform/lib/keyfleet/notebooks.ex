@@ -96,6 +96,7 @@ defmodule Keyfleet.Notebooks do
   # The hub's own id shapes (marimohub f103eb2, packages/core/src/ids.ts): a
   # saved page comes from a notebook version or from a background run. And
   # when a saved page was made, in milliseconds since 1970.
+  @project_id ~r/\Aproj-[0-9a-z]{16}\z/
   @notebook_id ~r/\Anb-[0-9a-z]{16}\z/
   @source_id ~r/\A(ver_[0-9A-Z]{26}|run_[0-9A-HJKMNP-TV-Z]{26})\z/
   @saved_at ~r/\A[1-9][0-9]{0,15}\z/
@@ -145,10 +146,30 @@ defmodule Keyfleet.Notebooks do
     end
   end
 
-  @doc "Where a link that opens the notebooks may land: their start page or a saved output."
+  @doc "The path of one notebook on its fleet's notebook host, where it opens to edit."
+  def notebook_path(project_id, notebook_id),
+    do: "/projects/#{project_id}/notebooks/#{notebook_id}"
+
+  @doc """
+  Where a link that opens the notebooks may land: their start page, one
+  notebook (`notebook_path/2`) or a saved output.
+  """
   def destination?("/"), do: true
-  def destination?(path) when is_binary(path), do: result(path) != :error
+
+  def destination?(path) when is_binary(path),
+    do: notebook?(path) or result(path) != :error
+
   def destination?(_path), do: false
+
+  defp notebook?(path) do
+    case String.split(path, "/") do
+      ["", "projects", project_id, "notebooks", notebook_id] ->
+        Regex.match?(@project_id, project_id) and Regex.match?(@notebook_id, notebook_id)
+
+      _other ->
+        false
+    end
+  end
 
   @doc "How the hubs know a person: by their account here."
   def subject(%Human{human_account_id: id}) when is_integer(id), do: "u_#{id}"
@@ -264,8 +285,8 @@ defmodule Keyfleet.Notebooks do
   Opens the fleet's notebooks for a person signed in by the session `lineage`:
   `{:ok, %{action: url, code: code, to: to}}`, the form Keyfleet's page sends
   to the fleet's notebook address, with a code that works once, for
-  `handoff_ttl_seconds`, landing on `to` (`destination?/1`: the start page or
-  a saved output); `{:error, :no_hub}` when the fleet has no notebooks;
+  `handoff_ttl_seconds`, landing on `to` (`destination?/1`: the start page,
+  one notebook or a saved output); `{:error, :no_hub}` when the fleet has no notebooks;
   `{:error, :invalid_destination}` for anywhere else to land;
   `{:error, :signed_out}` when that sign-in is no longer current;
   `{:error, :not_holder}` when they hold none of the fleet's keys; or `{:error, error}`
