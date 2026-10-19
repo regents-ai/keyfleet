@@ -263,13 +263,16 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
   end
 
-  # An open fleet with no contract has sold nothing and has no price to show.
-  test "a fleet not yet deployed shows no sales figures or price", %{conn: conn} do
+  # A fleet with no contract has sold nothing: it shows what it will sell, and
+  # no sales figures.
+  test "a fleet not yet deployed shows what it will sell and no sales figures", %{conn: conn} do
     ChainHelpers.seed_cursor!("fleet_tech_classic")
 
     {:ok, view, html} = live(conn, "/classic/1")
 
-    assert html =~ "Coming soon"
+    assert html =~ "Sales open soon"
+    assert text(view, "#fleet-soon-facts") =~ "1,024"
+    assert text(view, "#fleet-soon-facts") =~ "10–100 USDC"
     refute has_element?(view, "#fleet-sales")
     refute has_element?(view, "#fleet-get-key")
 
@@ -308,8 +311,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, html} = live(conn, @path)
 
       assert has_element?(view, "#fleet-soon h1", "Cascade #1")
-      assert has_element?(view, "#fleet-soon-title", "Coming soon")
-      assert has_element?(view, ~s(#fleet-soon a[href="/#fleets"]), "See the fleets")
+      assert has_element?(view, "#fleet-soon-title", "Sales open soon")
+      assert has_element?(view, ~s(#fleet-soon a[href="/"]), "See the fleets")
+      # Cascade has no supply limit, so only its first price shows.
+      assert text(view, "#fleet-soon-facts") =~ "From 10 USDC"
+      refute text(view, "#fleet-soon-facts") =~ "Keys"
 
       for id <-
             ~w(fleet-get-key fleet-send-agent fleet-channels fleet-members fleet-tab-workspace
@@ -318,8 +324,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       end
 
       refute html =~ "Keys sold"
-      # The header's Buy Credits dialog is on every signed-in page; the fleet offers nothing.
-      refute view |> element("#route-content") |> render() =~ "USDC"
     end
 
     test "its rooms, workspace, proposals and treasury lead back to its page", %{conn: conn} do
@@ -334,14 +338,14 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         # Reached from inside the shell, the same page patches back.
         render_patch(view, @path <> page)
         assert_patch(view, @path)
-        assert has_element?(view, "#fleet-soon-title", "Coming soon")
+        assert has_element?(view, "#fleet-soon-title", "Sales open soon")
       end
     end
 
     test "opens once its deployment is recorded", %{conn: conn} do
       ChainHelpers.seed_cursor!(@fleet)
       {:ok, view, _html} = live(conn, @path)
-      assert has_element?(view, "#fleet-soon-title", "Coming soon")
+      assert has_element?(view, "#fleet-soon-title", "Sales open soon")
 
       deploy!()
       Here.read(@fleet)

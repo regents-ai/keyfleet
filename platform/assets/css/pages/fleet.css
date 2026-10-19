@@ -479,6 +479,25 @@
   color: var(--color-fg-muted);
 }
 
+/* What the fleet will sell: each fact's label over its value, side by side. */
+.fleet-soon__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 0;
+}
+
+.fleet-soon__facts dt {
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+}
+
+.fleet-soon__facts dd {
+  margin: 0;
+  font-size: 1.125rem;
+  font-variant-numeric: tabular-nums;
+}
+
 #fleet-soon .fleet-unsold {
   opacity: 0.35;
 }

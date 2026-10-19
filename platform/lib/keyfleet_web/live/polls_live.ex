@@ -486,7 +486,7 @@ defmodule KeyfleetWeb.PollsLive do
       </header>
       <section class="polls-panel">
         <h2>This fleet doesn’t exist.</h2>
-        <a href="/#fleets" class="rg-button rg-button--secondary">See the fleets</a>
+        <a href="/" class="rg-button rg-button--secondary">See the fleets</a>
       </section>
     </article>
     """

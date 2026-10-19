@@ -111,7 +111,8 @@
   /* While the sale is closed the button reads as off: the inert grey fill and
      muted ink a disabled button has, set through the colours the button
      paints with. It stays focusable, so its preview and its reason are too. */
-  .rl-buy__button[aria-disabled="true"] {
+  .rl-buy__button[aria-disabled="true"],
+  .rl-fleet__closed[aria-disabled="true"] {
     --color-accent: color-mix(in srgb, var(--color-fg) 22%, var(--color-surface));
     --color-fg-on-accent: var(--color-fg-muted);
     cursor: default;
@@ -244,6 +245,7 @@
   .rl-fleet__copy > h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
   .rl-fleet__line { max-inline-size: 42ch; color: var(--rl-muted); text-wrap: pretty; }
   .rl-fleet__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-block-start: var(--space-2); }
+  .rl-fleet__why { margin: 0; color: var(--rl-muted); font-size: .875rem; }
 
   /* The window "Buy Key" opens: the card art, the split, and the sale's
      figures in a ruled list. Phones see it across the whole width. */
@@ -334,6 +336,7 @@
    rule: while the sale is closed the edge takes the same inert grey as the
    fill, in both themes. */
 :root .rl-buy .rl-buy__button[aria-disabled="true"]::after,
+:root .rl-fleet .rl-fleet__closed[aria-disabled="true"]::after,
 :root .rl-buy-key [aria-disabled="true"]::after {
   --rg-button-edge-ink: color-mix(in srgb, var(--color-fg) 22%, var(--color-surface));
   --rg-button-cut-ink: transparent;

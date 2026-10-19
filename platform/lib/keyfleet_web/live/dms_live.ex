@@ -269,7 +269,7 @@ defmodule KeyfleetWeb.DmsLive do
       <h2 :if={@dms != :unreadable}>{closed_reason(@dms)}</h2>
       <a
         :if={@dms != :unreadable and is_nil(@dms.fleet_name)}
-        href="/#fleets"
+        href="/"
         class="rg-button rg-button--secondary"
       >
         See the fleets
