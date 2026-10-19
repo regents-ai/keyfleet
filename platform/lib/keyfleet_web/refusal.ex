@@ -303,6 +303,9 @@ defmodule KeyfleetWeb.Refusal do
        "The Keyfleet team has been told. Try again in a few minutes."},
     "code_unavailable" =>
       {"This fleet's code isn't answering right now.", "Try again in a moment."},
+    "code_body_not_signed" =>
+      {"What arrived isn't what this request's signature covers, so none of it was used.",
+       "Send it again."},
     "code_too_large" =>
       {"These changes are larger than one push takes (100 MB).",
        "Send them in smaller pushes, and keep large files out of the code."}

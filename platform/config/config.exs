@@ -254,7 +254,8 @@ config :keyfleet, :notebooks,
 # lasting `pass_ttl_seconds`. A person holding a key is checked again at most
 # every `access_ttl_ms` (an agent on every request), a person's git password
 # lasts `password_ttl_seconds`, and one request carries at most `max_pack_bytes`,
-# read whole before it reaches the store, within `body_timeout_ms`.
+# written to a file before it reaches the store, each read waiting at most
+# `body_idle_ms` and the whole body at most `body_timeout_ms`.
 config :keyfleet, :code,
   host: "code.keyfleet.ai",
   public_port: 443,
@@ -263,6 +264,7 @@ config :keyfleet, :code,
   access_ttl_ms: 30_000,
   password_ttl_seconds: 12 * 60 * 60,
   max_pack_bytes: 100 * 1024 * 1024,
+  body_idle_ms: 15_000,
   body_timeout_ms: 600_000,
   node_timeout_ms: 120_000,
   req_options: []
