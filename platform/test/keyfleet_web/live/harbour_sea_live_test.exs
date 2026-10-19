@@ -6,35 +6,57 @@ defmodule KeyfleetWeb.HarbourSeaLiveTest do
   alias KeyfleetWeb.{FleetNow, HarbourSeaLive}
 
   # Invariants covered:
-  # - a signed-out visitor's sea draws a fleet's ships from the fleet's shared
-  #   reading, and an open sea redraws when that reading is read again
-  # - showing a fleet and hearing its new reading cost a signed-out visitor's
+  # - every page's sea is Classic #1's, the Club's pages included, drawn for a
+  #   signed-out visitor from Classic's shared reading, and an open sea
+  #   redraws when that reading is read again
+  # - the inn, the forge and the castle open Classic #1's General room,
+  #   workspace and proposals
+  # - showing the fleet and hearing its new reading cost a signed-out visitor's
   #   sea no database read, and it hears none of the fleet's own notices, so a
   #   crowd of open pages doesn't read the fleet again on each of them
 
+  @classic "fleet_tech_classic"
   @club "regents_club"
 
   setup do
     Fleets.bootstrap_catalog!()
-    ChainHelpers.deploy!(@club)
-    ChainHelpers.seed_cursor!(@club)
-    Workspace.open_log(@club)
-    # What the producer does as the site starts; producers don't run here.
-    FleetNow.read(@club)
+
+    for fleet_id <- [@classic, @club] do
+      ChainHelpers.deploy!(fleet_id)
+      ChainHelpers.seed_cursor!(fleet_id)
+      Workspace.open_log(fleet_id)
+      # What the producer does as the site starts; producers don't run here.
+      FleetNow.read(fleet_id)
+    end
+
     :ok
   end
 
-  test "a signed-out sea draws its fleet from the shared reading, and draws it again",
+  test "every page's sea is Classic #1's, drawn from its shared reading and drawn again",
        %{conn: conn} do
     view = sea(conn)
-    show_club(view)
+    show(view, "/app/fleets/regents_club")
     assert crew(view) == []
 
-    goal()
-    assert crew(view) == []
-
+    goal(@club, 18)
     FleetNow.read(@club)
-    assert [%{"id" => "regents_club:17", "place" => "forge"}] = crew(view)
+    goal(@classic, 17)
+    assert crew(view) == []
+
+    FleetNow.read(@classic)
+    assert [%{"id" => "fleet_tech_classic:17", "place" => "forge"}] = crew(view)
+
+    show(view, "/about")
+    assert [%{"id" => "fleet_tech_classic:17"}] = crew(view)
+  end
+
+  test "the inn, the forge and the castle open Classic #1's General room, workspace and proposals",
+       %{conn: conn} do
+    assert %{
+             "inn" => %{"name" => "General chat", "href" => "/classic/1/rooms/general"},
+             "forge" => %{"name" => "Workspace", "href" => "/classic/1/workspace"},
+             "castle" => %{"name" => "Proposals", "href" => "/classic/1/proposals"}
+           } == conn |> sea() |> attribute("data-harbour-places")
   end
 
   test "a signed-out sea reads nothing itself and hears none of the fleet's notices",
@@ -56,19 +78,19 @@ defmodule KeyfleetWeb.HarbourSeaLiveTest do
 
     on_exit(fn -> :telemetry.detach(handler) end)
 
-    show_club(view)
-    goal()
-    FleetNow.read(@club)
-    assert [%{"id" => "regents_club:17"}] = crew(view)
+    show(view, "/classic/1")
+    goal(@classic, 17)
+    FleetNow.read(@classic)
+    assert [%{"id" => "fleet_tech_classic:17"}] = crew(view)
     refute_received :sea_query
 
     heard = Registry.keys(Keyfleet.PubSub, pid)
 
     for topic <- [
-          Rooms.topic(@club, :public),
-          Graph.topic(@club, :public),
-          Proposals.topic(@club),
-          Keys.topic(@club)
+          Rooms.topic(@classic, :public),
+          Graph.topic(@classic, :public),
+          Proposals.topic(@classic),
+          Keys.topic(@classic)
         ],
         do: refute(topic in heard)
   end
@@ -79,23 +101,24 @@ defmodule KeyfleetWeb.HarbourSeaLiveTest do
     view
   end
 
-  # What the page tells the sea when the Club's page is on show.
-  defp show_club(view),
-    do: render_hook(view, "show_page", %{"path" => "/app/fleets/regents_club"})
+  # What the page tells the sea when a page is on show.
+  defp show(view, path), do: render_hook(view, "show_page", %{"path" => path})
 
-  # A goal Key 17 makes, which sails its ship to the forge.
-  defp goal do
+  # A goal a Key makes, which sails its ship to the forge.
+  defp goal(fleet_id, key) do
     data = %{"title" => "Sell the first audit", "outcome" => "O"}
-    Workspace.create(@club, "goal", data, by: 17)
+    Workspace.create(fleet_id, "goal", data, by: key)
   end
 
   # The ships the sea hands its hook.
-  defp crew(view) do
+  defp crew(view), do: attribute(view, "data-harbour-crew")
+
+  defp attribute(view, name) do
     view
     |> element("#harbour")
     |> render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.attribute("data-harbour-crew")
+    |> LazyHTML.attribute(name)
     |> hd()
     |> Jason.decode!()
   end

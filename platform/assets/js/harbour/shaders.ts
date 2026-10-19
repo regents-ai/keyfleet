@@ -16,6 +16,8 @@ export const RIPPLE_COURANT = 0.5
 export const RIPPLE_STEP = 1 / 62
 /** Ripple drops one step of the sea takes in at most. */
 export const MAX_DROPS = 4
+/** How much taller a place stands at its full lift, as a share of its height. */
+export const RISE = 0.16
 
 /**
  * The ripple field as the scene shaders read it: its height at any point on the
@@ -52,6 +54,25 @@ fn riding(p: vec3f, origin: vec3f) -> vec3f {
 }
 `
 
+/**
+ * A place under the pointer stands taller: its island, buildings and smoke
+ * stretch up from the water by its lift, so nothing comes away from the sea.
+ * The first three islands are the castle, the inn and the forge (islandsOf).
+ */
+const risen = /* wgsl */ `
+const RISE: f32 = ${RISE};
+
+fn risen(p: vec3f) -> vec3f {
+  var lift = 0.0;
+  for (var i = 0u; i < 3u; i++) {
+    let island = scene.islands[i];
+    let reach = 1.0 - smoothstep(island.z * 1.45, island.z * 1.6, length(p.xz - island.xy));
+    lift = max(lift, scene.lifts[i] * reach);
+  }
+  return vec3f(p.x, p.y * (1.0 + RISE * lift), p.z);
+}
+`
+
 /** Keep in step with MAX_SHIPS and the five islands of every layout in sim.ts (islandsOf). */
 const shared = /* wgsl */ `
 struct Camera {
@@ -69,6 +90,8 @@ struct Scene {
   // 0 by day, 1 by night, eased between.
   night: f32,
   shipCount: u32,
+  // How far the castle, the inn and the forge stand risen, each 0 to 1.
+  lifts: vec4f,
   // x, z, radius, unused.
   islands: array<vec4f, 5>,
   // x, z, heading, speed from 0 to 1.
@@ -150,9 +173,9 @@ fn swayed(position: vec3f, material: u32, sway: f32, phase: f32) -> vec3f {
 /**
  * Islands, buildings, ships and smoke: every mesh vertex names its material.
  * Sails and pennants keep their agent's colour, and lit windows and the forge
- * glow at night. Ships also ride the ripples.
+ * glow at night. Ships ride the ripples, and the land rises under the pointer.
  */
-const parts = (ride: boolean) => /* wgsl */ `${shared}${ride ? rippleField : ""}
+const parts = (ride: boolean) => /* wgsl */ `${shared}${ride ? rippleField : risen}
 struct PartInput {
   @location(0) position: vec3f,
   @location(1) material: f32,
@@ -179,7 +202,7 @@ fn vs_main(input: PartInput) -> PartVarying {
   let local = swayed(input.position, material, input.sway, input.style.w);
   var output: PartVarying;
   let world = (model * vec4f(local, 1.0)).xyz;
-  output.world = ${ride ? "riding(world, input.world3.xyz)" : "world"};
+  output.world = ${ride ? "riding(world, input.world3.xyz)" : "risen(world)"};
   output.material = material;
   output.style = input.style;
   output.clip = camera.viewProjection * vec4f(output.world, 1.0);
@@ -286,7 +309,7 @@ fn fs_main(input: WaterVarying) -> @location(0) vec4f {
 }
 `
 
-/** Depth from the sun, for every mesh that casts a shadow. Ships ride the ripples here too. */
+/** Depth from the sun, for every mesh that casts a shadow. Ships ride the ripples here too, and the land rises. */
 const shadow = (ride: boolean) => /* wgsl */ `${ride ? rippleField : ""}
 struct Scene {
   lightViewProjection: mat4x4f,
@@ -295,11 +318,13 @@ struct Scene {
   haze: vec3f,
   night: f32,
   shipCount: u32,
+  lifts: vec4f,
   islands: array<vec4f, 5>,
   ships: array<vec4f, 16>,
 }
 
 @group(0) @binding(1) var<uniform> scene: Scene;
+${ride ? "" : risen}
 
 struct ShadowInput {
   @location(0) position: vec3f,
@@ -321,7 +346,7 @@ fn vs_main(input: ShadowInput) -> @builtin(position) vec4f {
     p.x += input.sway * (0.075 + 0.02 * sin(scene.time * 1.7 + input.style.w));
   }
   let world = (model * vec4f(p, 1.0)).xyz;
-  return scene.lightViewProjection * vec4f(${ride ? "riding(world, input.world3.xyz)" : "world"}, 1.0);
+  return scene.lightViewProjection * vec4f(${ride ? "riding(world, input.world3.xyz)" : "risen(world)"}, 1.0);
 }
 
 @fragment

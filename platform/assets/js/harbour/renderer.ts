@@ -54,6 +54,7 @@ import {
   type Island,
   type Layout,
   type LayoutName,
+  type Place,
   type Ship,
 } from "./sim"
 
@@ -77,8 +78,10 @@ export type HarbourRenderer = IslandRenderer & {
   setCalm(calm: boolean): void
   /** The ship drawn nearest a point on the canvas (0 to 1 across, 0 to 1 down), if one is there. */
   shipAt(u: number, v: number): ShipMark | null
-  /** Whether an island, its buildings included, is drawn under a point on the canvas. */
-  onIsland(u: number, v: number): boolean
+  /** The place whose island or buildings are drawn under a point on the canvas, the nearest if two are. */
+  placeAt(u: number, v: number): Place | null
+  /** Raises one place, as the pointer comes over it, and lets the others down. A calm harbour stays still. */
+  lift(place: Place | null): void
   /** Starts a ripple on the sea under a point on the canvas. A calm harbour stays still. */
   ripple(u: number, v: number): void
 }
@@ -110,6 +113,8 @@ const SHIP_REACH = 0.62
  */
 const BUILDING_LEVELS = [0.6, 1, 1.4, 1.8]
 const BUILDING_REACH = 0.9
+/** How quickly a place rises and settles, as a share of the way each second. */
+const LIFT_PACE = 9
 const PUFFS = {forge: 8, inn: 4}
 /** The moment a calm harbour is shown at: flags and sails mid-wave. */
 const STILL_TIME = 2.4
@@ -208,6 +213,7 @@ async function build(
     haze: [0.9, 0.89, 0.82],
     night: 0,
     shipCount: 0,
+    lifts: [0, 0, 0, 0],
     islands: rows(islandRows),
     ships: rows(shipRows),
   }
@@ -296,6 +302,9 @@ async function build(
   let nightGoal = 0
   let calm = false
   let lastStep: number | undefined
+  /** The place the pointer is over, and how far each island stands risen, in the order islandsOf lists them. */
+  let raised: Place | null = null
+  const lifts = islands.map(() => 0)
   /** Seconds the ripples are owed, and the clicks waiting to land in their next step. */
   let rippleClock = 0
   let drops: [number, number][] = []
@@ -467,6 +476,7 @@ async function build(
       light()
       parkFleet(layout, ships)
       stillRipples()
+      lifts.fill(0)
     },
     shipAt(u, v) {
       let nearest: Ship | undefined
@@ -486,14 +496,20 @@ async function build(
       const [markU, markV] = onCanvas(nearest.x, seaHeight(nearest.x, nearest.z) + SHIP_TOP, nearest.z)
       return {id: nearest.id, u: markU, v: markV}
     },
-    onIsland(u, v) {
+    placeAt(u, v) {
       const near = (island: Island, y: number, reach: number) => {
         const hit = onLevel(u, v, y)
         return hit !== null && Math.hypot(hit[0] - island.x, hit[1] - island.z) < reach
       }
-      return Object.values(layout.places).some(
-        island => near(island, 0, island.radius) || BUILDING_LEVELS.some(y => near(island, y, BUILDING_REACH)),
-      )
+      const under = (Object.keys(layout.places) as Place[]).filter(place => {
+        const island = layout.places[place]
+        return near(island, 0, island.radius) || BUILDING_LEVELS.some(y => near(island, y, BUILDING_REACH))
+      })
+      const distance = (place: Place) => onCanvas(layout.places[place].x, 0, layout.places[place].z)[2]
+      return under.sort((a, b) => distance(a) - distance(b))[0] ?? null
+    },
+    lift(place) {
+      raised = calm ? null : place
     },
     ripple(u, v) {
       if (calm) return
@@ -525,10 +541,15 @@ async function build(
         if (Math.abs(night - nightGoal) < 0.002) night = nightGoal
         light()
       }
+      islands.forEach((island, index) => {
+        const goal = raised !== null && island === layout.places[raised] ? 1 : 0
+        lifts[index] += (goal - lifts[index]!) * Math.min(1, dt * LIFT_PACE)
+      })
       return true
     },
     present() {
       sceneValues.time = time
+      sceneValues.lifts = [lifts[0]!, lifts[1]!, lifts[2]!, 0]
       placeShips()
       placeSmoke()
       sceneUniforms.set(sceneValues)

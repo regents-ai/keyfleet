@@ -42,6 +42,32 @@ features:
       - The seas' drawing is checked in headless Chromium at 390 and 1280; WebKit is not run on the Mac.
       - A sea asked to hold still on a slow device is given another chance only when the tab is shown again.
 
+  - id: app-sea
+    what: >-
+      Every page behind the homepage shows Classic #1's sea, the Regents Club's
+      pages included. Pointing at the inn, the forge or the castle where the sea
+      shows, in the page's empty margins or with the page lifted away, names it
+      and raises it; pressing it opens Classic #1's General chat, workspace or
+      proposals. With the page lifted, pressing a ship opens its Key.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/harbour_sea_live.ex
+      - platform/lib/keyfleet_web/harbour_crew.ex
+      - platform/assets/js/canvas_island.ts
+      - platform/assets/js/hooks/harbour_sea.ts
+      - platform/assets/js/harbour/**
+      - platform/assets/css/pages/harbour.css
+    entry:
+      - route: GET /about
+      - route: GET /classic/1
+      - live: KeyfleetWeb.HarbourSeaLive
+    proofs:
+      - platform/test/keyfleet_web/live/harbour_sea_live_test.exs
+      - platform/assets/test/harbour_sea.test.ts
+    gaps:
+      - Naming, raising and opening the buildings is checked by hand in headless Chromium with a graphics chip at 1440 and 390; the browser suite has no graphics chip, and WebKit is not run on the Mac.
+
   - id: home-key-cards
     what: >-
       A visitor sees thirty Key cards turning over in Classic's section and in
