@@ -2507,3 +2507,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 ## 2026-10-19 — The API contract is read once for the contract tests
 
 - The test helper that checks answers against the API contract now reads the contract file once, when it compiles, instead of for every answer it checks. The longest contract test took 53 seconds on a busy Mac, close to the one-minute limit, and timed out once in the full check; it now takes 11 seconds.
+
+## 2026-10-19 — The fleet page checks wait long enough for the page to load
+
+- The fleet page fills in its Key, price and buttons a moment after it opens. Its checks waited at most a tenth of a second for that; on a busy Mac the page took a little longer now and then, so the check for a fleet that sells out while open failed about one run in ten. Every fleet page check now waits up to three seconds, as the homepage checks do, and the sold-out check waits for the page before reading it.
