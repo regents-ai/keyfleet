@@ -90,7 +90,6 @@
    there is no WebGPU; everything above it lets the sea through. */
 body:has(> .harbour-sea) {
   --sea-lift: 560ms;
-  --sea-gutter: var(--space-4);
   background: transparent;
 }
 
@@ -111,8 +110,10 @@ body:has(> .harbour-sea) #app-shell {
 }
 
 /* The account tabs and the reading column (/about, /opportunities) carry text
-   straight on the ground, so they keep it. Cards already paint their own. */
-body:has(> .harbour-sea) #shell-tabs {
+   straight on the ground, so they keep it. Cards already paint their own. The
+   account pages stand on the ground whole, so the sea never shows through them. */
+body:has(> .harbour-sea) #shell-tabs,
+body:has(> .harbour-sea) #route-content:has(.account-page) {
   background: var(--color-bg);
 }
 
@@ -143,7 +144,7 @@ body.sea-lifted .harbour-sea__harbour {
 
 /* ---- The lift button ---- */
 
-/* It stands at the header's top right, inside the frame, in a slot the header
+/* It stands at the header's top right, in a slot the header
    leaves empty for it, so it never covers a header control. It is centred on
    the header's row, which its buttons make 4.75rem high (3.875rem on a
    phone). */
@@ -156,7 +157,7 @@ body:has(> .harbour-sea) #shell-header {
 .harbour-sea .harbour-sea__lift {
   position: absolute;
   top: calc(1px + (4.75rem - 2.75rem) / 2);
-  right: calc(max(var(--sea-gutter), (100% - var(--rg-frame-max)) / 2) + 1px + var(--space-1));
+  right: var(--space-1);
   z-index: 2;
   display: grid;
   place-items: center;
@@ -196,19 +197,8 @@ body.sea-lifted .harbour-sea .harbour-sea__lift {
   rotate: 180deg;
 }
 
-/* The frame's gutter, as `.rg-sheet` sets it at each width. */
-@media (max-width: 74.99rem) {
-  body:has(> .harbour-sea) {
-    --sea-gutter: var(--space-3);
-  }
-}
-
 /* A phone's header is one short row; the slot is the button and a hair more. */
 @media (max-width: 47.99rem) {
-  body:has(> .harbour-sea) {
-    --sea-gutter: var(--space-2);
-  }
-
   body:has(> .harbour-sea) #shell-header {
     padding-inline-end: calc(2.75rem + 2 * 4px);
   }
@@ -229,7 +219,7 @@ body.sea-lifted .harbour-sea .harbour-sea__lift {
 
   .harbour-sea .harbour-sea__lift {
     top: calc(1px + (3.875rem - 2.75rem) / 2);
-    right: calc(var(--sea-gutter) + 1px + 4px);
+    right: 4px;
   }
 }
 

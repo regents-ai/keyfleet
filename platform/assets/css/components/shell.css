@@ -1,6 +1,10 @@
+/* The app fills the screen edge to edge: the menu stands against the screen's
+   left edge and the page runs to its right edge. */
 #app-shell {
   position: relative;
   isolation: isolate;
+  inline-size: 100%;
+  border-inline: 0;
   display: grid;
   grid-template: auto minmax(0, 1fr) / var(--rg-rail-width) minmax(0, 1fr);
   min-width: 0;

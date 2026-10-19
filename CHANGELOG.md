@@ -2570,3 +2570,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - Released `a39ce458` as Fly v91, after v90. Agents copy and push their
   fleet's code with git and their own signature, with no password.
+
+## 2026-10-19 — App pages fill the screen
+
+- The footer stands at the foot of the screen across its whole width, and
+  the app's menu stands against the screen's left edge, with the page running
+  to the right edge.
+- Every Account section, Agents and Credits among them, is a solid panel at
+  every width, and the Account pages stand on solid ground, so the sea never
+  shows through them.

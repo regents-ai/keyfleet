@@ -394,22 +394,19 @@ div.verified-connections__notice p {
   }
 }
 
-/* On a phone the account's sections stack in one column, so every section is
-   a panel with the same inner edge, as on the site's other pages. These rules
-   sit outside the product layer, so they win over the shared account
-   sections' own padding. */
+/* Every account section is a panel with the same inner edge as the others, so
+   nothing behind the page shows through it. These rules sit outside the
+   product layer, so they win over the shared account sections' own padding
+   and open ground. */
+.account-grid > .rg-account,
+.account-page > .rg-account--signed-out {
+  padding: var(--rg-panel-padding);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+/* On a phone the account's sections stack in one column. */
 @media (max-width: 47.99rem) {
-  .account-grid > .rg-account,
-  .account-page > .rg-account--signed-out {
-    padding: var(--space-2);
-  }
-
-  .account-grid > .rg-account,
-  .account-page > .rg-account--signed-out {
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-  }
-
   /* Signed out, "Sign in" is the page's one action and spans the panel. */
   .rg-account--signed-out > .rg-button {
     flex: 1 1 auto;
