@@ -2473,3 +2473,21 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   home-key-cards, home-hero-field; new browser checks in
   platform/test/browser/homepage_details.spec.ts; gaps: WebKit not run on the
   Mac, local data has no ships to draw.
+
+## 2026-10-19 — A first visit no longer loops: Classic's page says what it will sell
+
+- A fleet whose sales haven't opened says "Sales open soon" on its page and
+  shows what it will sell: Classic #1's 1,024 Keys at 10–100 USDC, or a
+  Fibonacci fleet's first price. Before, it said only that nobody could join.
+- "See the fleets" goes to the homepage. It pointed at a section that doesn't
+  exist, so the page reloaded at the top.
+- On the homepage, the Classic section's "Buy Key" is closed with its reason
+  while the sale is, like "Buy Next Key" above it. It used to look open and
+  lead to a window whose own Buy button was closed.
+- The homepage's third fact reads "Sales · Open soon" before the sale, instead
+  of "Sold · Opens soon".
+- The Regents Club's button reads "Buy Key on OpenSea ↗" on the homepage too,
+  as it does on the Club's page.
+- Evidence: level ordinary; from the first-visit audit of v88
+  (/mnt/project-files/audits/first-visit-2026-10-19/README.md); fleet page
+  tests updated; not compiled or run in the cloud, the Mac runs the gate.

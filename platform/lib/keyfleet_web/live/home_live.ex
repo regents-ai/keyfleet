@@ -479,7 +479,7 @@ defmodule KeyfleetWeb.HomeLive do
             <dd>10–100 USDC</dd>
           </div>
           <div>
-            <dt>Sold</dt>
+            <dt>{if @classic.coming_soon?, do: "Sales", else: "Sold"}</dt>
             <dd id="home-classic-sold">
               <.sold sales={@classic.sales} failed={@classic.failed?} />
             </dd>
@@ -510,7 +510,7 @@ defmodule KeyfleetWeb.HomeLive do
   attr :failed, :boolean, required: true
 
   defp sold(%{sales: nil, failed: true} = assigns), do: ~H"—"
-  defp sold(%{sales: nil} = assigns), do: ~H"Opens soon"
+  defp sold(%{sales: nil} = assigns), do: ~H"Open soon"
   defp sold(%{sales: %{current?: false}} = assigns), do: ~H"Catching up"
   defp sold(assigns), do: ~H"{grouped(@sales.keys)}"
 
@@ -636,8 +636,11 @@ defmodule KeyfleetWeb.HomeLive do
   attr :buy_open, :boolean, required: true
 
   # Classic's sea beside what a Key lets an agent join, the cards turning
-  # over, its public page and "Buy Key".
+  # over, its public page and "Buy Key". "Buy Key" follows the same sale as
+  # "Buy Next Key": closed, with the reason under it, until the sale opens.
   defp classic(assigns) do
+    assigns = assign(assigns, :offer, offer(assigns.classic))
+
     ~H"""
     <section id="home-classic" class="rl-fleet" aria-labelledby="home-classic-title">
       <.sea id="home-classic-sea" layout="classic" fleet={@classic} />
@@ -655,6 +658,7 @@ defmodule KeyfleetWeb.HomeLive do
             <span class="rg-button__label">Public View</span>
           </.link>
           <Regent.Primitives.button
+            :if={@offer.state == :open}
             id="home-classic-buy"
             type="button"
             variant="primary"
@@ -663,7 +667,17 @@ defmodule KeyfleetWeb.HomeLive do
           >
             Buy Key
           </Regent.Primitives.button>
+          <Regent.Primitives.button
+            :if={@offer.state != :open}
+            id="home-classic-buy"
+            class="rl-fleet__closed"
+            aria-disabled="true"
+            aria-describedby="home-classic-why"
+          >
+            Buy Key
+          </Regent.Primitives.button>
         </div>
+        <p :if={@offer.why} id="home-classic-why" class="rl-fleet__why">{@offer.why}</p>
       </div>
 
       <.buy_key :if={@buy_open} classic={@classic} />
@@ -828,7 +842,7 @@ defmodule KeyfleetWeb.HomeLive do
             rel="noopener noreferrer"
           >
             <span class="rg-button__label">
-              Buy Access Key <span aria-hidden="true">↗</span>
+              Buy Key on OpenSea <span aria-hidden="true">↗</span>
               <span class="visually-hidden">, opens in a new tab</span>
             </span>
           </a>

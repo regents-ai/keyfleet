@@ -235,7 +235,7 @@ defmodule KeyfleetWeb.FleetLive do
       <section :if={is_nil(@fleet.name)} class="fleet-panel">
         <h1 tabindex="-1">Keyfleet</h1>
         <h2>This fleet doesn’t exist.</h2>
-        <a href="/#fleets" class="rg-button rg-button--secondary">See the fleets</a>
+        <a href="/" class="rg-button rg-button--secondary">See the fleets</a>
       </section>
 
       <.coming_soon :if={@fleet.name && @fleet.coming_soon?} fleet={@fleet} />
@@ -384,11 +384,14 @@ defmodule KeyfleetWeb.FleetLive do
       <div class="fleet-stage">
         <.map_preview fleet={@fleet} />
         <section class="fleet-soon" aria-labelledby="fleet-soon-title">
-          <h2 id="fleet-soon-title">Coming soon</h2>
-          <p>
-            This fleet opens later. Until then it has no Keys for sale, and nobody can join it.
-          </p>
-          <a href="/#fleets" class="rg-button rg-button--secondary">See the fleets</a>
+          <h2 id="fleet-soon-title">Sales open soon</h2>
+          <dl :if={@fleet.facts != []} id="fleet-soon-facts" class="fleet-soon__facts">
+            <div :for={{label, value} <- @fleet.facts}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          </dl>
+          <a href="/" class="rg-button rg-button--secondary">See the fleets</a>
         </section>
       </div>
     </div>
@@ -1594,7 +1597,8 @@ defmodule KeyfleetWeb.FleetLive do
             fleet_id: fleet_id,
             name: fleet.name,
             coming_soon?: true,
-            layout: Presets.preset(fleet_id)
+            layout: Presets.preset(fleet_id),
+            facts: soon_facts(fleet_id)
           },
           params,
           place
@@ -1603,6 +1607,29 @@ defmodule KeyfleetWeb.FleetLive do
       true ->
         show_with_keys(socket, fleet_id, fleet, params, place, actor)
     end
+  end
+
+  # What a coming-soon fleet will sell: how many Keys, when it has a limit, and
+  # the price of its first Key, or for Classic, whose 1,024 prices are a fixed
+  # table, of its first and last.
+  defp soon_facts(fleet_id) do
+    supply = Presets.max_supply(fleet_id)
+    first = Presets.issue_price(fleet_id, 1)
+
+    price =
+      cond do
+        first == nil ->
+          nil
+
+        Presets.preset(fleet_id) == :classic ->
+          last = Presets.issue_price(fleet_id, supply)
+          String.trim_trailing(usdc(first), " USDC") <> "–" <> usdc(last)
+
+        true ->
+          "From #{usdc(first)}"
+      end
+
+    Enum.reject([{"Keys", supply && grouped(supply)}, {"Price", price}], &(elem(&1, 1) == nil))
   end
 
   # Any other fleet: its figures and what's happening in it. Its Member List
