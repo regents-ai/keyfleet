@@ -33,6 +33,7 @@ defmodule Keyfleet.Application do
         Keyfleet.Chain.RewardsWaiting,
         graph_children(),
         here_child(),
+        ships_child(),
         # Agent requests held open waiting for news, by client address.
         KeyfleetWeb.AgentWaits,
         # Start a worker by calling: Keyfleet.Worker.start_link(arg)
@@ -88,6 +89,11 @@ defmodule Keyfleet.Application do
   # never reads them on its own.
   defp here_child do
     if serving?(), do: Keyfleet.Agents.Here
+  end
+
+  # So are the ships on the fleets' seas.
+  defp ships_child do
+    if serving?(), do: KeyfleetWeb.FleetShips
   end
 
   defp serving?, do: Phoenix.Endpoint.server?(:keyfleet, KeyfleetWeb.Endpoint)

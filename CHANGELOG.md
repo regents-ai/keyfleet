@@ -2424,3 +2424,21 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   that sea shows, by night or by day with the page. With less motion asked for,
   the cards rest on the first one.
 - The hex field now sits behind the hero only.
+
+## 2026-10-19 — The homepage's cards and seas rest when nobody is looking
+
+- The Key cards in Classic's and the Club's sections turn only while they are
+  on screen. Scrolled away, they hold the card they reached and go on from it
+  when they come back.
+- Every open homepage now shares one reading of each fleet's ships, read again
+  a moment after the fleet changes, so a busy fleet no longer has each visitor's
+  page read its ships again. The seas carry their ships from the first moment
+  the page shows, and keep them when the page reconnects.
+- A post taken off a wall no longer stops the homepage; the fleet is read again.
+- A sea that held still on a slow device tries again when its tab is shown
+  again. A hex field that cannot start lets go of the mouse and stays the still
+  picture.
+- Evidence: level ordinary; features home-fleet-seas, home-key-cards,
+  home-hero-field; 941 server tests and 299 browser-code tests pass, six new
+  regressions, headless Chromium 26 of 26 at 390 and 1280; gaps: WebKit not run
+  on the Mac, local data has no ships to draw.

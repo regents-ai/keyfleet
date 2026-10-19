@@ -3,9 +3,10 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   import ExUnit.CaptureLog
 
-  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys}
+  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, SharedReading}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.Components.SendAgent
+  alias KeyfleetWeb.{FleetShips, KeyLinks}
   alias Phoenix.Socket.Broadcast
 
   # Invariants covered:
@@ -20,7 +21,11 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - the Club shows its newest open goal and featured item once connected,
   #   and the first render reads neither; a coming-soon Club reads nothing
   # - a Club read that fails is said to have failed and never shown as zero
-  # - a burst of notices is answered by one refresh of each fleet it names
+  # - a burst of notices is answered by one refresh of each fleet it names,
+  #   and a post taken off a wall reads its fleet again
+  # - each sea draws the ships of the one reading every open page shares, from
+  #   the first render; a burst of notices reads no ships of its own, a new
+  #   reading reaches the open page, and pressing a ship opens its Key
   # - the command box shows the homepage instruction whole and copies exactly
   #   what it shows
   # - the Markdown homepage carries the tagline as Sean wrote it, says Classic
@@ -235,6 +240,83 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, _}]}}, 100
   end
 
+  # R-20261019-wall-removal-reads-again: a post taken off a Club wall stopped
+  # every open homepage, which knew no such notice.
+  test "a post taken off a wall reads its fleet again", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+    render_async(view, 3_000)
+
+    :erlang.trace_pattern({:erlang, :send_after, 3}, true, [:global])
+    :erlang.trace(view.pid, true, [:call])
+    on_exit(fn -> :erlang.trace_pattern({:erlang, :send_after, 3}, false, [:global]) end)
+
+    send(view.pid, %Broadcast{
+      event: "wall_removed",
+      payload: %{fleet_id: @club, token_id: 17, message_id: Ecto.UUID.generate()}
+    })
+
+    render(view)
+
+    assert_receive {:trace, _, :call, {:erlang, :send_after, [_, _, {:refresh, @club}]}}
+  end
+
+  # R-20261019-home-ships-shared: each open homepage read both fleets' ships
+  # again for every burst of notices, and drew its seas empty until it had.
+  describe "the fleets' seas" do
+    setup do
+      on_exit(fn ->
+        for fleet_id <- [@classic, @club], do: SharedReading.delete(FleetShips.key(fleet_id))
+      end)
+    end
+
+    test "draw the ships of the one shared reading from the first render", %{conn: conn} do
+      SharedReading.put(FleetShips.key(@classic), [ship(@classic, 7, "forge")])
+      SharedReading.put(FleetShips.key(@club), [ship(@club, 12, "castle")])
+
+      static = conn |> get("/") |> html_response(200)
+      assert crew(static, "#home-classic-sea") == [7]
+      assert crew(static, "#home-club-sea") == [12]
+
+      {:ok, _view, html} = live(conn, "/")
+      assert crew(html, "#home-classic-sea") == [7]
+      assert crew(html, "#home-club-sea") == [12]
+    end
+
+    test "take new ships only from the shared reading, and a ship opens its Key",
+         %{conn: conn} do
+      SharedReading.put(FleetShips.key(@classic), [ship(@classic, 7, "forge")])
+      SharedReading.put(FleetShips.key(@club), [ship(@club, 12, "castle")])
+
+      {:ok, view, _html} = live(conn, "/")
+      render_async(view, 3_000)
+
+      # Neither fleet has any activity saved, so a page reading its own ships
+      # would draw both seas empty.
+      send(view.pid, {:keys_changed, @classic, [7]})
+      send(view.pid, {:graph_notable, @club})
+      send(view.pid, {:refresh, @classic})
+      send(view.pid, {:refresh, @club})
+      render(view)
+      render_async(view, 3_000)
+
+      assert crew(render(view), "#home-classic-sea") == [7]
+      assert crew(render(view), "#home-club-sea") == [12]
+
+      SharedReading.put(FleetShips.key(@classic), [
+        ship(@classic, 9, "inn"),
+        ship(@classic, 7, "forge")
+      ])
+
+      assert crew(render(view), "#home-classic-sea") == [9, 7]
+      assert crew(render(view), "#home-club-sea") == [12]
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               render_hook(view, "open_ship", %{"id" => "#{@club}:12"})
+
+      assert to == KeyLinks.key_path(@club, 12)
+    end
+  end
+
   test "the page and the Markdown homepage carry the tagline as written", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
     assert text(view, "#home-title") == "Your personal agent joins a Fleet with a Key."
@@ -294,6 +376,29 @@ defmodule KeyfleetWeb.HomeLiveTest do
       },
       actor: %Actors.System{}
     )
+  end
+
+  # A ship as the shared reading holds it.
+  defp ship(fleet_id, token_id, place),
+    do: %{
+      id: "#{fleet_id}:#{token_id}",
+      fleet_id: fleet_id,
+      token_id: token_id,
+      name: "Key #{token_id}",
+      place: place,
+      color: "#e4572e"
+    }
+
+  # The Keys of the ships a sea's hook is handed, in order.
+  defp crew(html, sea) do
+    [json] =
+      html
+      |> LazyHTML.from_document()
+      |> LazyHTML.query(sea)
+      |> LazyHTML.attribute("data-harbour-crew")
+
+    for %{"id" => id} <- Jason.decode!(json),
+        do: id |> String.split(":") |> List.last() |> String.to_integer()
   end
 
   defp goal(title, data \\ %{}),

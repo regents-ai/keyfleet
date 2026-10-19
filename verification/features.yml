@@ -1,0 +1,96 @@
+repo: keyfleet
+# Started with the homepage's moving parts. Every other part of Keyfleet is not
+# mapped yet; each change maps what it touches first.
+features:
+  - id: home-fleet-seas
+    what: >-
+      A visitor sees Classic's and the Regents Club's seas on the homepage, a ship
+      for each of the fleet's most recently active Keys, and pressing a ship opens
+      that Key on the fleet's page. Every open homepage shares one reading of each
+      fleet's ships.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/lib/keyfleet_web/fleet_ships.ex
+      - platform/lib/keyfleet_web/harbour_crew.ex
+      - platform/lib/keyfleet/shared_reading.ex
+      - platform/lib/keyfleet/application.ex
+      - platform/config/config.exs
+      - platform/assets/js/canvas_island.ts
+      - platform/assets/js/hooks/harbour_sea.ts
+      - platform/assets/js/harbour/**
+      - platform/priv/static/images/home/sea-*.webp
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/keyfleet_web/home_live_test.exs
+      - platform/test/keyfleet_web/fleet_ships_test.exs
+      - platform/assets/test/canvas_island.test.ts
+    regressions:
+      - id: R-20261019-home-ships-shared
+        from: Sentinel read of 9b93fe1b
+        test: platform/test/keyfleet_web/home_live_test.exs
+      - id: R-20261019-strained-sea-recovers
+        from: Sentinel read of 9b93fe1b
+        test: platform/assets/test/canvas_island.test.ts
+      - id: R-20261019-wall-removal-reads-again
+        from: breaker review of the fixes to 9b93fe1b
+        test: platform/test/keyfleet_web/fleet_ships_test.exs
+    gaps:
+      - The seas' drawing is checked in headless Chromium at 390 and 1280; WebKit is not run on the Mac.
+      - A sea asked to hold still on a slow device is given another chance only when the tab is shown again.
+
+  - id: home-key-cards
+    what: >-
+      A visitor sees thirty Key cards turning over in Classic's and the Club's
+      sections, a fifth of a second each, only while they are on screen.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/assets/css/pages/home.css
+      - platform/assets/js/hooks/key_cards.ts
+      - platform/assets/js/app.ts
+      - platform/priv/static/images/home/key-cards.webp
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/assets/test/key_cards.test.ts
+    regressions:
+      - id: R-20261019-cards-rest-off-screen
+        from: Sentinel read of 9b93fe1b
+        test: platform/assets/test/key_cards.test.ts
+    gaps:
+      - That the stylesheet stops the cards off screen is checked in headless Chromium, not by a test in the repo.
+
+  - id: home-hero-field
+    what: >-
+      Under a mouse, the hex field behind the homepage's hero raises the tiles
+      nearest it, lights a wake and sends a ring out on a press; phones, tablets
+      and less motion see the still drawing.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/assets/css/pages/home.css
+      - platform/assets/js/canvas_island.ts
+      - platform/assets/js/hooks/home_hero.ts
+      - platform/assets/js/home_hero/**
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/assets/test/home_field_renderer.test.ts
+      - platform/assets/test/canvas_island.test.ts
+    regressions:
+      - id: R-20261019-field-build-not-lost
+        from: Sentinel read of 9b93fe1b
+        test: platform/assets/test/home_field_renderer.test.ts
+      - id: R-20261019-failed-start-lets-go
+        from: Sentinel read of 9b93fe1b
+        test: platform/assets/test/canvas_island.test.ts
+    gaps:
+      - The raised tiles, wake and ring are checked by hand in headless Chromium at 1280; WebKit is not run on the Mac.

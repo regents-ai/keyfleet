@@ -233,6 +233,9 @@ export async function createFieldRenderer(
       },
     }
   } catch (error) {
+    // Set first, so the loss that disposing the device reports is not taken
+    // for one to recover from.
+    disposed = true
     gpu.dispose()
     throw error
   }

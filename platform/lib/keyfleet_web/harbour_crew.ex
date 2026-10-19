@@ -7,8 +7,9 @@ defmodule KeyfleetWeb.HarbourCrew do
 
   The reader's own Keys come first, then the most recent, sixteen at most. A
   ship keeps its ink on every sea, and carries the Key's last few actions for
-  its card. The sea behind the app's pages (`KeyfleetWeb.HarbourSeaLive`) and
-  each fleet's sea on the homepage (`KeyfleetWeb.HomeLive`) read them here.
+  its card. The sea behind the app's pages (`KeyfleetWeb.HarbourSeaLive`) reads
+  them here, and so does the one reading of each fleet's ships that every open
+  homepage shares (`KeyfleetWeb.FleetShips`).
   """
 
   alias Keyfleet.Activity

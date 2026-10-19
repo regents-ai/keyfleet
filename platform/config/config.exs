@@ -219,7 +219,8 @@ config :keyfleet, Oban,
       {"23 * * * *", Keyfleet.Treasury.OverdueCheck},
       {"41 * * * *", Keyfleet.Keys.DeckEndCheck},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_agents"}},
-      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "key_agents"}}
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "key_agents"}},
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_ships"}}
     ]
   ],
   pruner: [max_age: {7, :days}],
