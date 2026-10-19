@@ -451,10 +451,11 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp figures(_fleet, nil, _assets), do: %{read?: false}
 
-  defp figures(_fleet, reading, assets) do
+  defp figures(fleet, reading, assets) do
     %{
       read?: true,
       as_of: reading.block_time,
+      waiting: amount(Decimal.to_integer(reading.conversion_waiting), fleet.usdc_address, assets),
       balances:
         Enum.map(
           reading.assets,

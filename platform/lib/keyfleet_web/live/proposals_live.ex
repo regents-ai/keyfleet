@@ -749,6 +749,9 @@ defmodule KeyfleetWeb.ProposalsLive do
             </tr>
           </tbody>
         </table>
+        <p id="proposals-waiting">
+          Key sales waiting to become REGENT: <.amount value={@treasury.waiting} count />
+        </p>
         <p class="proposals-detail">
           Balances as of <time datetime={DateTime.to_iso8601(@treasury.as_of)}>{at(@treasury.as_of)}</time>.
         </p>

@@ -457,6 +457,21 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert cells(view, @usdc) == ["3 USDC", "0 USDC"]
     end
 
+    test "the treasury tab shows the USDC from Key sales waiting to become REGENT", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = open(conn, @treasury_page)
+
+      ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 0)],
+        conversion_waiting: Decimal.new(72_576_000)
+      )
+
+      FleetProposals.read(@fleet)
+
+      assert shows?(fn -> has_element?(view, "#proposals-waiting") end)
+      assert text(view, "#proposals-waiting") == "Key sales waiting to become REGENT: 72.576 USDC"
+    end
+
     test "a burst of notices is answered by one read of each fleet, for every open page", %{
       conn: conn
     } do

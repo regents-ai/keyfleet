@@ -2891,3 +2891,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: a page picked with the mouse (a fleet's tabs, the side menu) slides in solid instead of fading in, so the harbour picture behind the page no longer flashes through. The homepage's Regents Club card says how many Keys it has and how many accounts hold them, without "online now"; the Club's own page still says it. Every page is light until the visitor chooses a theme, whatever the device asks for; the switch still flips between light and dark and the choice holds.
 - Why: Sean asked for each (18:29Z to 18:57Z): moving between the Classic #1 tabs flashed the background, remove "· 0 online now" for the Regents Club on the homepage, and "I want it default light mode" for visitors who have not chosen.
+
+## 2026-10-19 — The Treasury tab shows Key sale money on its way in
+
+- What: under the treasury's balances, the Treasury tab now says how much USDC from Key sales is waiting to become REGENT, for example "Key sales waiting to become REGENT: 72.576 USDC". The figure comes from the same reading as the balances and updates with it.
+- Why: Sean asked (18:58Z) for the treasury to show it growing from Key sales. Sale money waits in the fleet until someone presses "Turn into REGENT", so the balances alone showed 0.
