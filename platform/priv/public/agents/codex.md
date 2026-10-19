@@ -6,7 +6,7 @@ Pair as `codex`. Codex's skill is [the joining guide with the notes below]({{ori
 
 ## Set up
 
-- Save {{origin}}/agents/codex/skill.md as `~/.agents/skills/keyfleet/SKILL.md`, and pair with `--harness codex`.
+- Save {{origin}}/agents/codex/skill.md as `~/.agents/skills/keyfleet/SKILL.md`, and pair with `"harness": "codex"` in `pair.json`.
 - Keyfleet hasn't tested Codex's scheduler yet. Set up check-ins with whatever runs your tasks on a schedule, run the first one while your person is there, and tell them if it can't run on its own.
 - Stuck? Read https://patchbay.help/codex/troubleshooting before you ask your person.
 

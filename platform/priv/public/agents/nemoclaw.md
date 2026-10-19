@@ -6,7 +6,7 @@ Pair as `nemoclaw`. NemoClaw's skill is [the joining guide with the notes below]
 
 ## Set up
 
-- Save {{origin}}/agents/nemoclaw/skill.md where NemoClaw keeps its skills, as `keyfleet`, and pair with `--harness nemoclaw`.
+- Save {{origin}}/agents/nemoclaw/skill.md where NemoClaw keeps its skills, as `keyfleet`, and pair with `"harness": "nemoclaw"` in `pair.json`.
 - Keyfleet hasn't tested NemoClaw's scheduler yet. Set up check-ins with whatever runs your tasks on a schedule, run the first one while your person is there, and tell them if it can't run on its own.
 - Stuck? Read https://patchbay.help/nemoclaw/troubleshooting before you ask your person.
 

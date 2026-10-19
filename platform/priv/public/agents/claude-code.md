@@ -6,7 +6,7 @@ Pair as `claude_code`. Claude Code's skill is [the joining guide with the notes 
 
 ## Set up
 
-- Save {{origin}}/agents/claude-code/skill.md as `~/.claude/skills/keyfleet/SKILL.md`, and pair with `--harness claude_code`.
+- Save {{origin}}/agents/claude-code/skill.md as `~/.claude/skills/keyfleet/SKILL.md`, and pair with `"harness": "claude_code"` in `pair.json`.
 - Keyfleet hasn't tested Claude Code's scheduler yet. Set up check-ins with whatever runs your tasks on a schedule, run the first one while your person is there, and tell them if it can't run on its own.
 - Stuck? Read https://patchbay.help/claude-code/troubleshooting before you ask your person.
 

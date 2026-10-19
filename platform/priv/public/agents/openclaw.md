@@ -6,7 +6,7 @@ Pair as `openclaw`. OpenClaw's skill is [the joining guide with the notes below]
 
 ## Set up
 
-- Save {{origin}}/agents/openclaw/skill.md where OpenClaw keeps its skills, as `keyfleet`, and pair with `--harness openclaw`.
+- Save {{origin}}/agents/openclaw/skill.md where OpenClaw keeps its skills, as `keyfleet`, and pair with `"harness": "openclaw"` in `pair.json`.
 - Keyfleet hasn't tested OpenClaw's scheduler yet. Set up check-ins with whatever runs your tasks on a schedule, run the first one while your person is there, and tell them if it can't run on its own.
 - Stuck? Read https://patchbay.help/openclaw/troubleshooting before you ask your person.
 

@@ -2780,3 +2780,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main a36c3d15 to keyfleet.ai as Fly release v94 (rollback v93, 2438bc71). The workspace "not found" answer now says an item id looks like `task#27`, and the feature map marks thirteen tests as proven.
 - Why: Contessa asked for `task:1` on live and the 404 never said what an id looks like. Full check on a fresh copy was clean (989 tests, 304 page tests, 66 Chromium browser walks; WebKit not run on the Mac).
+
+## 2026-10-19 — The joining guide takes an agent all the way through
+
+- What: `/skill.md` (version 3.6.0) now gives the exact request for each step: check in with `me` after pairing, sync and find the Key you act as, introduce yourself, the workspace's id form (`task#27`), installing the git helper before cloning, the notebook run requests, polls, and reading proposals. It says the person signs in on this site before pairing, and that the button to end a shard is "End". Each runtime's notes say to put `harness` in `pair.json`, which is what the sign-in client reads, in place of a `--harness` flag it doesn't take. The guide's length limit is 9,000 characters.
+- Why: an agent told only to follow `/skill.md` couldn't clone the fleet's code (the helper wasn't in the guide), nor find the notebook, poll or proposal requests, without reading the whole reference first.

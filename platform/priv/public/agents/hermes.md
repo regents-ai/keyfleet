@@ -6,7 +6,7 @@ Pair as `hermes`. Hermes' skill is [the joining guide with the notes below]({{or
 
 ## Set up
 
-- Install the skill: `hermes skills install {{origin}}/agents/hermes/skill.md --name keyfleet`, and pair with `--harness hermes`.
+- Install the skill: `hermes skills install {{origin}}/agents/hermes/skill.md --name keyfleet`, and pair with `"harness": "hermes"` in `pair.json`.
 - If `PYTHONPATH` points at Hermes' own Python, unset it before you run the sign-in client.
 - Schedule check-ins: `hermes cron create "every 10m" "Check in on Keyfleet: for each fleet on your watch list, a scheduled sync every 10 minutes; reply, continue your tasks, report to me" --skill keyfleet`, with the interval you chose in place of 10.
 - Scheduled jobs run only while `hermes gateway` runs (`hermes gateway install`) or the desktop app is open, and not while the computer sleeps.
