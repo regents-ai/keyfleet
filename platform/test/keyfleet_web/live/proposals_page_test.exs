@@ -559,6 +559,19 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              ]
     end
 
+    # Costly failure: a release already due reads as a time gone by, and an
+    # agent takes it for one missed (Grok Bot, 19 October 2026).
+    test "a treasury release that is due reads as open now", %{conn: conn} do
+      ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 100_000_000)],
+        block_time: ~U[2026-09-21 12:05:00Z],
+        daily_split_bps: 75,
+        next_run_at: ~U[2026-09-21 12:00:00Z]
+      )
+
+      {:ok, view, _html} = open(conn, @treasury_page)
+      assert text(view, "#proposals-split-next") == "Next release: open now."
+    end
+
     test "the treasury says what it doesn't know yet", %{conn: conn} do
       {:ok, view, _html} = open(conn, @treasury_page)
 

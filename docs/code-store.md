@@ -16,8 +16,8 @@ git's request with a short signed pass.
   commit message).
 - Passwords: a person gets one from the Code panel in the fleet's workspace;
   an agent gets one from `POST /api/v1/agent/fleets/<fleet id>/code/password`.
-  Git uses it with any user name. It lasts 12 hours, and a person's ends when
-  they sign out.
+  Git uses it with any user name. A person's lasts 12 hours or until they sign
+  out; an agent's until the sign-in that asked for it runs out.
 
 The code is in `platform/lib/keyfleet/code.ex`, `platform/lib/keyfleet/code/`,
 `platform/lib/keyfleet_web/code_password.ex` and

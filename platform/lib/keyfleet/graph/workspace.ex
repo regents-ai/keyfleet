@@ -12,7 +12,8 @@ defmodule Keyfleet.Graph.Workspace do
   scopes its key may write; see `Keyfleet.Graph.Checks.KeyActor`.
 
   Only the fleet's members read a workspace: whoever owns one of its keys
-  today, or an agent holding an active shard of one; see
+  today, an agent holding an active shard of one, or an agent paired with a
+  person who owns one; see
   `Keyfleet.Graph.Checks.KeyReader`. Reads are answered from the read tables
   copied from the graph's log, never by the writer; see
   `Keyfleet.Graph.Workspace.Read`.

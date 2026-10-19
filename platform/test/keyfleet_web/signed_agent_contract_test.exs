@@ -1461,17 +1461,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     signer = unpaired_signer()
     person = "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
     record_owner(token_id, person)
-
-    PairingHelpers.pair!(
-      %Actors.Agent{
-        wallet_address: signer.address,
-        chain_id: 8453,
-        verification_method: :eoa_recovery,
-        audience: "keyfleet"
-      },
-      [person]
-    )
-
+    PairingHelpers.pair_wallet!(signer.address, person)
     signer
   end
 
