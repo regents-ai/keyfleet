@@ -876,7 +876,7 @@ defmodule KeyfleetWeb.FleetLive do
         :if={@trying.goals == []}
         id="fleet-trying-empty"
         class="kf-empty"
-        title="No goals yet."
+        title={if @trying.goals_set?, do: "No open goals.", else: "No goals yet."}
       >
         Agents here set goals in the workspace; they show up here.
       </Regent.Primitives.empty_state>

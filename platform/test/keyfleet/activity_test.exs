@@ -160,7 +160,7 @@ defmodule Keyfleet.ActivityTest do
     Workspace.unlink(@fleet, link)
     Workspace.attention(@fleet, "stale", task)
     Workspace.edit(@fleet, task, %{"assignee_key" => 17})
-    Workspace.edit(@fleet, task, %{"progress" => "done"})
+    Workspace.submit(@fleet, task, "https://example.com/plates")
     Workspace.link(@fleet, finding, goal, "contradicts")
 
     %{items: items} = Activity.page(@fleet, nil, actor: owner)
@@ -178,11 +178,7 @@ defmodule Keyfleet.ActivityTest do
                  source: %{id: finding, type: "finding", title: "Rust", confidence: "low"},
                  target: %{id: goal, type: "goal", title: "Survey the hull"}
                },
-               %{
-                 by: by,
-                 item: %{id: task, type: "task", title: "Map every plate"},
-                 progress: "done"
-               },
+               %{by: by, item: %{id: task, type: "task", title: "Map every plate"}},
                %{
                  by: by,
                  item: %{id: task, type: "task", title: "Map every plate"},
@@ -205,7 +201,7 @@ defmodule Keyfleet.ActivityTest do
                  source: %{id: finding, type: "finding", title: nil},
                  target: %{id: goal, type: "goal", title: "Survey the hull"}
                },
-               %{by: by, item: %{id: task, type: "task", title: nil}, progress: "done"},
+               %{by: by, item: %{id: task, type: "task", title: nil}},
                %{
                  by: by,
                  item: %{id: task, type: "task", title: nil},
@@ -292,13 +288,18 @@ defmodule Keyfleet.ActivityTest do
       assert Activity.headline(@fleet, DateTime.add(seen_at, 8, :day)) == nil
     end
 
-    test "a task done this week comes before an open question, and not after a week" do
+    test "a task accepted this week comes before an open question, and not after a week" do
       goal = Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
       Workspace.edit(@fleet, goal, %{"open_questions" => ["Where does the rust start?"]})
       task = Workspace.create(@fleet, "task", %{"title" => "Map the plates"})
-      Workspace.edit(@fleet, task, %{"progress" => "done"})
+      Workspace.submit(@fleet, task, "https://example.com/plates")
 
-      assert %{kind: :progress, facts: %{item: %{id: ^task}, progress: "done"}} =
+      # Submitted work waits for a review before it is featured.
+      assert %{kind: :open_question} = Activity.headline(@fleet, @this_week)
+
+      Workspace.review(@fleet, task, "accept", by: 4)
+
+      assert %{kind: :reviewed, facts: %{item: %{id: ^task}, decision: "accept"}} =
                Activity.headline(@fleet, @this_week)
 
       assert %{
@@ -318,7 +319,7 @@ defmodule Keyfleet.ActivityTest do
                Activity.headline(@fleet, @this_week)
     end
 
-    test "finished work and a proposal carried out: the newer is featured", %{seen_at: seen_at} do
+    test "accepted work and a proposal carried out: the newer is featured", %{seen_at: seen_at} do
       task = Workspace.create(@fleet, "task", %{"title" => "Map the plates"})
       proposal!(@fleet, 1, %{})
       # Carried out at the time the chain records were seen.
@@ -326,13 +327,13 @@ defmodule Keyfleet.ActivityTest do
       post!(PairingHelpers.agent_for!(human("a")), "general", "Paid")
       now = DateTime.add(seen_at, 1, :hour)
 
-      graph_event_at!(DateTime.add(seen_at, -1, :minute), "patch.applied", done(task))
+      graph_event_at!(DateTime.add(seen_at, -1, :minute), "object.created", accepted(task))
       assert %{kind: :executed, facts: %{number: 1}} = Activity.headline(@fleet, now)
       # A week on, neither counts.
       assert Activity.headline(@fleet, DateTime.add(now, 7, :day)) == nil
 
-      graph_event_at!(DateTime.add(seen_at, 1, :minute), "patch.applied", done(task))
-      assert %{kind: :progress, facts: %{item: %{id: ^task}}} = Activity.headline(@fleet, now)
+      graph_event_at!(DateTime.add(seen_at, 1, :minute), "object.created", accepted(task))
+      assert %{kind: :reviewed, facts: %{item: %{id: ^task}}} = Activity.headline(@fleet, now)
     end
 
     test "the open question is the first of the most recently changed open goal" do
@@ -461,8 +462,18 @@ defmodule Keyfleet.ActivityTest do
   end
 
   # A member's patch marking `task` done.
-  defp done(task),
-    do: %{"target" => task, "diff" => %{"progress" => %{"old" => "doing", "new" => "done"}}}
+  # A review accepting `task`, as its creation is logged.
+  defp accepted(task) do
+    sys = %{"review" => %{"task" => task}}
+
+    %{
+      "object" => %{
+        "id" => "review#1",
+        "type" => "review",
+        "data" => %{"decision" => "accept", "sys" => sys}
+      }
+    }
+  end
 
   # `count` new notes, logged at `at`.
   defp notes!(count, at) do

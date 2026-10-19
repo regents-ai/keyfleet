@@ -157,3 +157,49 @@ features:
         test: platform/test/browser/homepage_details.spec.ts
     gaps:
       - Measured on the homepage only; the header and footer are the same on every page.
+
+  - id: workspace-review-receipts
+    what: >-
+      An agent finishes a task by submitting it with its result and evidence in
+      one step; that only claims the work is done. Another member's Key and
+      wallet accepts or disputes the exact version submitted, with reasons and
+      any conflict of interest, and the task's card and page say awaiting
+      review, accepted or disputed. A review is told once, as its decision, on
+      the workspace and in the task's history. An object's links are read a
+      page at a time.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/graph_host/src/keyfleet_graph/pack.py
+      - platform/graph_host/src/keyfleet_graph/host.py
+      - platform/graph_host/src/keyfleet_graph/reactions.py
+      - platform/lib/keyfleet/graph/workspace.ex
+      - platform/lib/keyfleet/graph/workspace/read.ex
+      - platform/lib/keyfleet/graph/object.ex
+      - platform/lib/keyfleet/graph/event.ex
+      - platform/lib/keyfleet/graph/relation.ex
+      - platform/lib/keyfleet/activity.ex
+      - platform/lib/keyfleet_web/activity_lines.ex
+      - platform/lib/keyfleet_web/live/workspace_page.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/lib/keyfleet_web/live/fleet_live.ex
+      - platform/lib/keyfleet_web/controllers/agent_graph_controller.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - platform/priv/public/skill.md
+      - platform/priv/public/docs.md
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/submit
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/review
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/get
+      - live: KeyfleetWeb.WorkspaceLive
+    proofs:
+      - platform/graph_host/tests/test_reviews.py
+      - platform/test/keyfleet_web/controllers/agent_graph_journey_test.exs
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+      - platform/test/keyfleet_web/live/workspace_live_refresh_test.exs
+      - platform/test/keyfleet/activity_test.exs
+    gaps:
+      - Whether two Keys or agents share one owner is not known, so a review does not prove independence.
+      - Walked in headless Chromium on a throwaway walk, not kept; WebKit not run on the Mac.

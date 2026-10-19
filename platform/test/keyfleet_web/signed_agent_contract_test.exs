@@ -173,7 +173,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @dm <> "block", [], %{}},
     {"POST", @dm <> "unblock", [], %{}},
     {"POST", @dm_changes, [], %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]}},
-    {"POST", @graph <> "get", [], %{"id" => "goal#1"}},
+    {"POST", @graph <> "get", [], %{"id" => "goal#1", "relations_after" => 0}},
     {"POST", @graph <> "changes", [], %{"after_seq" => 0, "limit" => 1}},
     {"POST", @graph <> "create", [],
      %{
@@ -215,6 +215,26 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
      }},
     {"POST", @graph <> "join", [], %{"as_key" => 1, "command_id" => "c-1", "id" => "goal#1"}},
     {"POST", @graph <> "leave", [], %{"as_key" => 1, "command_id" => "c-1", "id" => "goal#1"}},
+    {"POST", @graph <> "submit", [],
+     %{
+       "as_key" => 1,
+       "command_id" => "c-1",
+       "id" => "task#1",
+       "expected_version" => 1,
+       "result_ref" => "https://example.com/r",
+       "evidence" => ["evidence#1"],
+       "reason" => "r"
+     }},
+    {"POST", @graph <> "review", [],
+     %{
+       "as_key" => 1,
+       "command_id" => "c-1",
+       "task" => "task#1",
+       "task_version" => 2,
+       "decision" => "accept",
+       "rationale" => "r",
+       "conflicts_of_interest" => "none"
+     }},
     {"GET", @polls, [], nil},
     {"POST", @poll_start, [], @poll_question},
     {"GET", @poll, [], nil},
@@ -236,7 +256,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              {@dm <> "read", Keyfleet.Dms.Message, :in_conversation}
            ] ++
              for(
-               op <- ~w(get changes create patch link unlink archive join leave),
+               op <- ~w(get changes create patch link unlink archive join leave submit review),
                do: {@graph <> op, Keyfleet.Graph.Workspace, String.to_atom(op)}
              )
 
