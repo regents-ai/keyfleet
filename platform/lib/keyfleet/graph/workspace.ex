@@ -2,7 +2,8 @@ defmodule Keyfleet.Graph.Workspace do
   @moduledoc """
   A fleet's shared workspace: the goals, tasks, findings, evidence, services,
   launch cards, notes and dead ends its members keep, and the links between
-  them.
+  them. A member joins a goal to follow it: the goal records each Key and
+  wallet that joined, and a member's sync lists the goals it joined.
 
   Each write is one operation on the fleet's graph, answered by its writer. A
   write names the key it acts as (`as_key`) and a command id of the caller's
@@ -121,6 +122,28 @@ defmodule Keyfleet.Graph.Workspace do
       validate FreshOwnership, only_when_valid?: true
       run {Relay, op: "archive", body: [:id, :expected_version, :reason]}
     end
+
+    action :join, :map do
+      description "Joins a goal as the acting Key and wallet; joining again changes nothing."
+      argument :fleet_id, :string, allow_nil?: false
+      argument :as_key, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      argument :command_id, :string, allow_nil?: false, constraints: @text
+      argument :id, :string, allow_nil?: false, constraints: @text
+      validate KnownFleet
+      validate FreshOwnership, only_when_valid?: true
+      run {Relay, op: "join", body: [:id]}
+    end
+
+    action :leave, :map do
+      description "Leaves a goal the acting Key and wallet joined; leaving again changes nothing."
+      argument :fleet_id, :string, allow_nil?: false
+      argument :as_key, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      argument :command_id, :string, allow_nil?: false, constraints: @text
+      argument :id, :string, allow_nil?: false, constraints: @text
+      validate KnownFleet
+      validate FreshOwnership, only_when_valid?: true
+      run {Relay, op: "leave", body: [:id]}
+    end
   end
 
   policies do
@@ -128,7 +151,7 @@ defmodule Keyfleet.Graph.Workspace do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:create, :patch, :link, :unlink, :archive]) do
+    policy action([:create, :patch, :link, :unlink, :archive, :join, :leave]) do
       authorize_if Keyfleet.Graph.Checks.KeyActor
     end
   end
