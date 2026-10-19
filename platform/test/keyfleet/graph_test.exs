@@ -65,7 +65,7 @@ defmodule Keyfleet.GraphTest do
   test "a key's owner writes as that key, and the log records a person with no credential" do
     owner = %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
 
-    assert {:ok, %{result: %{"id" => "note#1", "version" => 1}, replayed: false}} =
+    assert {:ok, %{result: %{"id" => "note#" <> _, "version" => 1}, replayed: false}} =
              Graph.create_object(@fleet, Map.merge(@note, %{as_key: 1, command_id: "h-1"}),
                actor: owner
              )
@@ -98,7 +98,7 @@ defmodule Keyfleet.GraphTest do
   end
 
   test "only a wallet that owns one of the fleet's Keys, or holds a shard of one, reads the workspace" do
-    {:ok, _written} = write(@holder, 1, "w-1")
+    {:ok, %{result: %{"id" => note}}} = write(@holder, 1, "w-1")
 
     stranger = %Actors.Human{
       human_account_id: 2,
@@ -108,7 +108,7 @@ defmodule Keyfleet.GraphTest do
     agent = Keyfleet.PairingHelpers.pair_wallet!(@agent_wallet)
 
     reads = fn actor ->
-      {Graph.get_object(@fleet, "note#1", actor: actor),
+      {Graph.get_object(@fleet, note, actor: actor),
        Graph.list_changes(@fleet, %{}, actor: actor)}
     end
 
@@ -119,7 +119,7 @@ defmodule Keyfleet.GraphTest do
     ChainHelpers.issue_shard!(@fleet, 1, @agent_wallet)
 
     for actor <- [@holder, agent] do
-      assert {{:ok, %{object: %{id: "note#1"}}}, {:ok, %{events: [_ | _]}}} = reads.(actor)
+      assert {{:ok, %{object: %{id: ^note}}}, {:ok, %{events: [_ | _]}}} = reads.(actor)
     end
 
     # Ownership being read again grants nothing, a Key's owner included.

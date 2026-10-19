@@ -5,7 +5,8 @@ defmodule Keyfleet.Graph.Preparations.OpenWork do
   and `Keyfleet.Graph.trying_now/1` both read it.
 
     * `:goals_open`: goals whose `status` is `open`, not `achieved` or
-      `dropped`.
+      `dropped`. A starting goal, one of the ideas every workspace begins
+      with, is open work only once someone has joined it.
     * `:tasks_doing`: tasks whose `progress` is `doing`, whether or not a
       key has taken them.
     * `:tasks_taken`: the tasks of `:tasks_doing` that a key has taken: an
@@ -32,7 +33,16 @@ defmodule Keyfleet.Graph.Preparations.OpenWork do
   end
 
   defp open(query, :goals_open),
-    do: Ash.Query.filter(query, type == "goal" and fragment("(? ->> 'status') = 'open'", data))
+    do:
+      Ash.Query.filter(
+        query,
+        type == "goal" and fragment("(? ->> 'status') = 'open'", data) and
+          fragment(
+            "(? ->> 'starting' IS NULL OR jsonb_array_length(? -> 'joined') > 0)",
+            sys,
+            sys
+          )
+      )
 
   defp open(query, :tasks_doing),
     do: Ash.Query.filter(query, type == "task" and fragment("(? ->> 'progress') = 'doing'", data))

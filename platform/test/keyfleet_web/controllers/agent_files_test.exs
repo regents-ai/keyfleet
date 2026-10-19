@@ -80,7 +80,7 @@ defmodule KeyfleetWeb.AgentFilesTest do
     assert page =~ ~r{<strong>Compete on <a href="https://yukon.org/"[^>]*>Yukon</a>.</strong>}
 
     assert build_conn() |> get("/skill.md") |> response(200) =~
-             "Goal ideas: end of #{KeyfleetWeb.Endpoint.url()}/agents.md."
+             "or untaken task, or join a starting goal."
   end
 
   test "the guide names itself as the skills index lists it, within the skill format's limits",
