@@ -32,15 +32,14 @@ defmodule KeyfleetWeb.HomeLive do
 
   The Regents Club shows how many Keys it has and who they went to, its
   public page and its Keys on OpenSea (in a new tab), even while it is coming
-  soon, the addresses holding
-  them and how many of those are online now (as
-  `KeyfleetWeb.FleetLive.headcount/1` says it), the goal it is trying and its
+  soon, the addresses holding them (as `KeyfleetWeb.FleetLive.given/1` says
+  it), the goal it is trying and its
   latest item, as anyone reads them (`Keyfleet.Activity`). A coming-soon
   fleet shows that it is coming soon and nothing it would have to read.
 
   The page reads nothing itself. Each fleet is read once for every open page
   (`KeyfleetWeb.FleetNow`), the ships on its sea with it, and the Club's
-  headcount comes from the agents here (`Keyfleet.Agents.Here`); the page draws what those hold and draws
+  holders come from the agents here (`Keyfleet.Agents.Here`); the page draws what those hold and draws
   again when any of them changes. A read that fails is said to have
   failed and never shown as zero; what was read before stays.
   """
@@ -276,13 +275,12 @@ defmodule KeyfleetWeb.HomeLive do
     )
   end
 
-  # How many agents are here, how many addresses hold the fleet's Keys and how
-  # many of them are online now, as the fleet's own page shows them from the
-  # one shared reading every open page uses.
+  # How many addresses hold the fleet's Keys, as the fleet's own page shows
+  # them from the one shared reading every open page uses.
   defp here(fleet_id) do
     case SharedFigures.reading(Here.fleet_key(fleet_id)) do
-      %{here: here, holders: holders} -> %{agents: here, holders: holders}
-      nil -> %{agents: nil, holders: nil}
+      %{holders: holders} -> %{holders: holders}
+      nil -> %{holders: nil}
     end
   end
 
@@ -767,11 +765,10 @@ defmodule KeyfleetWeb.HomeLive do
               never moves. --%>
         <div :if={!@club.coming_soon? or @club.failed?} class="rl-club__now">
           <p class="rl-club__who" data-fleet-who>
-            <FleetLive.headcount
+            <FleetLive.given
               :if={@club.now}
-              id="home-club-count"
+              id="home-club-keys"
               sales={@club.sales}
-              agents={@club.now.agents}
               holders={@club.now.holders}
             />
           </p>

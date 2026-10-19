@@ -200,17 +200,17 @@ test("a signed-in account shows its account menu", async ({page}) => {
 })
 
 // Signed out, the account page is named as the header's button names it.
-test("the sidebar names Classic, links the Regents Club, then the Account page", async ({page}) => {
+test("the sidebar links Classic, the Regents Club, then the Account page", async ({page}) => {
   await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await expect(page.getByRole("heading", {level: 1, name: "Syndicate #1"})).toBeVisible()
 
   const sidebar = page.locator("#shell-sidebar")
-  const items = await sidebar.locator("li > a, li > span").evaluateAll(elements =>
+  const items = await sidebar.locator("li > a").evaluateAll(elements =>
     elements.map(element => [element.textContent?.trim(), element.getAttribute("href")]),
   )
   expect(items).toEqual([
-    ["Classic #1", null],
+    ["Classic #1", "/classic/1"],
     ["Regents Club", "/app/fleets/regents_club"],
     ["Sign in", "/account"],
   ])
@@ -286,6 +286,38 @@ test("rapid page switches leave the latest page at rest", async ({page}) => {
   for (const region of ["#route-content", "#shell-sidebar"]) {
     await expect(page.locator(region), `${region} is left to the stylesheet`).not.toHaveAttribute("style")
   }
+})
+
+// The page behind the content is a picture; a page that faded in would let it
+// show through for a moment. A page picked with the mouse slides in, fully
+// opaque from the first frame to the last.
+test("a page picked with the mouse slides in solid", async ({page}) => {
+  await page.goto(fleetPath)
+  await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
+
+  await page.evaluate(() => {
+    const frames: {opacity: string; transform: string}[] = []
+    ;(window as unknown as {frames_seen: typeof frames}).frames_seen = frames
+    const started = performance.now()
+    const look = () => {
+      const view = document.querySelector("#route-content")
+      if (view) {
+        const style = getComputedStyle(view)
+        frames.push({opacity: style.opacity, transform: style.transform})
+      }
+      if (performance.now() - started < 1500) requestAnimationFrame(look)
+    }
+    requestAnimationFrame(look)
+  })
+  await page.getByRole("navigation", {name: "Context navigation"}).getByRole("link", {name: "Regents Club"}).click()
+  await expect(page).toHaveURL(/\/app\/fleets\/regents_club$/)
+  await page.waitForTimeout(1600)
+
+  const frames = await page.evaluate(
+    () => (window as unknown as {frames_seen: {opacity: string; transform: string}[]}).frames_seen,
+  )
+  expect(frames.some(frame => frame.transform !== "none"), "the page slid in").toBe(true)
+  expect(frames.filter(frame => frame.opacity !== "1")).toEqual([])
 })
 
 // Before any choice the page carries no theme and follows the device, dark unless it asks

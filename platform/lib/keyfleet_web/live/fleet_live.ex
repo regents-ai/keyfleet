@@ -118,9 +118,9 @@ defmodule KeyfleetWeb.FleetLive do
 
   @doc """
   How many keys a fleet has sold and how many agents run them, in one line,
-  as the homepage's card and the fleet's own bar both say it. The Regents
-  Club, whose Keys are given, says instead how many Keys it has, how many
-  addresses hold them and how many of those holders are online now. A fleet
+  as the fleet's own bar says it. The Regents Club, whose Keys are given,
+  says instead how many Keys it has and how many addresses hold them
+  (`given/1`), then how many of those holders are online now. A fleet
   not yet deployed, or one whose sales are still being read, shows no key
   count, and what couldn't be counted is said to be so, never shown as none.
   """
@@ -165,15 +165,26 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  defp given(%{sales: %{current?: false}} = assigns), do: ~H"Figures are catching up"
+  attr :id, :string, required: true, doc: "the start of each number's id"
+  attr :sales, :map, required: true, doc: "the fleet's sales, as `headcount/1` takes them"
 
-  defp given(%{holders: nil} = assigns) do
+  attr :holders, :map,
+    required: true,
+    doc: "how many addresses hold a Key, as `headcount/1` takes them, or nil"
+
+  @doc """
+  How many Keys a fleet whose Keys are given has and how many accounts hold
+  them, as the homepage's Regents Club card says it.
+  """
+  def given(%{sales: %{current?: false}} = assigns), do: ~H"Figures are catching up"
+
+  def given(%{holders: nil} = assigns) do
     ~H"""
     <Count.count id={@id} value={@sales.keys} one="total Key" many="total Keys" />
     """
   end
 
-  defp given(assigns) do
+  def given(assigns) do
     ~H"""
     <Count.count id={@id} value={@sales.keys} one="total Key" many="total Keys" /> for
     <Count.count id={"#{@id}-holders"} value={@holders.holders} one="account" many="accounts" />

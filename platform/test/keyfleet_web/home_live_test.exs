@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   import ExUnit.CaptureLog
 
   alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, SharedReading}
+  alias Keyfleet.Agents.Here
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.{FleetNow, KeyLinks}
@@ -143,6 +144,18 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert has_element?(view, ~s(button#home-buy-next-key[aria-disabled="true"]))
     assert text(view, "#home-buy-why") == "1,024/1,024 Keys sold"
+  end
+
+  test "the Club's card says how many Keys it has and who holds them, not who is online",
+       %{conn: conn} do
+    here = Here.fleet_key(@club)
+    :ok = SharedReading.put(here, %{here: 3, agents: [], holders: %{holders: 247, online: 5}})
+    on_exit(fn -> SharedReading.delete(here) end)
+    read_fleets()
+
+    {:ok, view, _html} = live(conn, "/")
+
+    assert text(view, "#home-club [data-fleet-who]") == "0 total Keys for 247 accounts"
   end
 
   test "the Club shows its newest open goal and what it features, from the first render",
