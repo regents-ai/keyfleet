@@ -28,7 +28,7 @@ defmodule Keyfleet.Graph.Writer do
   alias Keyfleet.Graph.StalledError
 
   @read_ops ~w(hello changes)
-  @write_ops ~w(create patch link unlink archive join leave)
+  @write_ops ~w(create patch link unlink archive join leave submit review)
 
   # How long a killed host gets to be reaped before the writer moves on.
   @reap_ms 5_000

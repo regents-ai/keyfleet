@@ -236,6 +236,74 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert sync(c, bea)["yours"]["goals"] == []
   end
 
+  # Costly failure: work its own Key or wallet accepted, or a submission read
+  # as accepted, would let one member approve what the fleet may later pay for.
+  test "an agent submits a task with its evidence, and only another Key and wallet may review it",
+       c do
+    start_graph(c)
+    [ann, bea] = shard_agents(c)
+
+    task =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "t-1",
+        type: "task",
+        data: %{title: "Draft"}
+      })
+
+    source = %{title: "The brief", source_uri: "https://example.com/brief"}
+
+    evidence =
+      write!(c, ann, "create", %{as_key: 1, command_id: "e-1", type: "evidence", data: source})
+
+    submitted =
+      graph(c, ann, "submit", %{
+        as_key: 1,
+        command_id: "s-1",
+        id: task["id"],
+        expected_version: 1,
+        result_ref: "https://example.com/brief",
+        evidence: [evidence["id"]]
+      })
+
+    assert submitted.body["result"] == %{"id" => task["id"], "version" => 2}
+
+    read = graph(c, bea, "get", %{id: task["id"]}).body
+    assert %{"review" => "awaiting_review", "data" => %{"progress" => "done"}} = read["object"]
+    assert %{"version" => 2, "evidence" => [evidence_id]} = read["object"]["sys"]["submitted"]
+    assert evidence_id == evidence["id"]
+    assert [%{"type" => "produces", "target" => ^evidence_id}] = read["relations"]
+    assert ContractSchema.errors(read, "WorkspaceObjectView") == []
+
+    review = %{
+      as_key: 1,
+      command_id: "r-1",
+      task: task["id"],
+      task_version: 2,
+      decision: "accept",
+      rationale: "The brief answers the deliverable.",
+      conflicts_of_interest: "none"
+    }
+
+    refused = graph(c, ann, "review", review)
+    assert {refused.status, refused.body["error"]["code"]} == {403, "self_review"}
+
+    disputed =
+      graph(c, bea, "review", %{review | as_key: 2, command_id: "r-2", decision: "dispute"})
+
+    assert disputed.status == 200
+    assert graph(c, ann, "get", %{id: task["id"]}).body["object"]["review"] == "disputed"
+
+    receipt = graph(c, ann, "get", %{id: disputed.body["result"]["id"]}).body
+
+    assert %{"task" => task_id, "task_version" => 2, "evidence" => [%{"version" => 1}]} =
+             receipt["object"]["sys"]["review"]
+
+    assert task_id == task["id"]
+    assert receipt["object"]["sys"]["review"]["submitted_by"]["wallet"] == ann.address
+    assert ContractSchema.errors(receipt, "WorkspaceObjectView") == []
+  end
+
   # Syndicate keys other suites commit outside the sandbox would count as
   # sold, so the level tests run on the Cascade fleet.
   test "a key writes the fleet and its own level, and a later level once all its keys are sold",

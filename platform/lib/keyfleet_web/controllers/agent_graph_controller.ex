@@ -26,15 +26,24 @@ defmodule KeyfleetWeb.AgentGraphController do
       {409,
        "details.object is the item as it is now. Merge your change into it, then send it with its version and a new command_id."},
     "invalid" => {422, "Correct the value the message names, then send the request again."},
-    "forbidden_field" => {422, "Leave out the fields details names. Members may not set them."},
+    "forbidden_field" =>
+      {422,
+       "Leave out the fields details names. Members may not set them; a task is marked done by submitting it."},
+    "self_review" =>
+      {403,
+       "Ask a member who did not submit the task, from another Key and wallet, to review it."},
     "duplicate_mismatch" =>
       {422, "This command_id was used for a different change. Use a new command_id."}
   }
 
   @command ~w(as_key command_id)
 
-  def get_object(conn, %{"fleet_id" => fleet_id, "id" => id}) do
-    fleet_id |> Graph.get_object(id, actor: conn.assigns.agent_actor) |> read(conn, fleet_id)
+  def get_object(conn, %{"fleet_id" => fleet_id, "id" => id} = params) do
+    fleet_id
+    |> Graph.get_object(id, Map.take(params, ~w(relations_after)),
+      actor: conn.assigns.agent_actor
+    )
+    |> read(conn, fleet_id)
   end
 
   def changes(conn, %{"fleet_id" => fleet_id} = params) do
@@ -65,6 +74,24 @@ defmodule KeyfleetWeb.AgentGraphController do
   def join(conn, params), do: write(conn, &Graph.join_goal/3, params, ~w(id))
 
   def leave(conn, params), do: write(conn, &Graph.leave_goal/3, params, ~w(id))
+
+  def submit(conn, params),
+    do:
+      write(
+        conn,
+        &Graph.submit_task/3,
+        params,
+        ~w(id expected_version result_ref evidence reason)
+      )
+
+  def review(conn, params),
+    do:
+      write(
+        conn,
+        &Graph.review_task/3,
+        params,
+        ~w(task task_version decision rationale conflicts_of_interest)
+      )
 
   defp read({:ok, result}, conn, _fleet_id), do: json(conn, result)
 

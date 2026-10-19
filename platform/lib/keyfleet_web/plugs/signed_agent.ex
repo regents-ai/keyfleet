@@ -62,7 +62,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @dm_changes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/dms/changes\z"
   # What an agent's own wallet sends to the fleet's contracts.
   @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|treasury/(?:send_share|convert)|proposals/(?:create|vote|cancel|carry_out)|keys/#{@token}/claim)\z"
-  @graph_ops ~w(get changes create patch link unlink archive join leave)
+  @graph_ops ~w(get changes create patch link unlink archive join leave submit review)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
 
   # The fields each room, sync, proposal read and poll body holds: the ones it
@@ -132,7 +132,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # ones it may add. A write names the key it acts as and its command id.
   @command_fields %{"as_key" => :key, "command_id" => :text}
   @graph_bodies %{
-    "get" => {%{"id" => :text}, %{}},
+    "get" => {%{"id" => :text}, %{"relations_after" => :seq}},
     "changes" => {%{}, %{"after_seq" => :seq, "limit" => :graph_page}},
     "create" =>
       {Map.merge(@command_fields, %{"type" => :text, "scope" => :text, "data" => :object}), %{}},
@@ -147,7 +147,18 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       {Map.merge(@command_fields, %{"id" => :text, "expected_version" => :version}),
        %{"reason" => :text}},
     "join" => {Map.merge(@command_fields, %{"id" => :text}), %{}},
-    "leave" => {Map.merge(@command_fields, %{"id" => :text}), %{}}
+    "leave" => {Map.merge(@command_fields, %{"id" => :text}), %{}},
+    "submit" =>
+      {Map.merge(@command_fields, %{"id" => :text, "expected_version" => :version}),
+       %{"result_ref" => :text, "evidence" => :texts, "reason" => :text}},
+    "review" =>
+      {Map.merge(@command_fields, %{
+         "task" => :text,
+         "task_version" => :version,
+         "decision" => :text,
+         "rationale" => :text,
+         "conflicts_of_interest" => :text
+       }), %{}}
   }
   @verification_methods %{
     "eoa_recovery" => :eoa_recovery,

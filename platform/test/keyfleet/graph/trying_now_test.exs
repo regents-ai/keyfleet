@@ -35,7 +35,7 @@ defmodule Keyfleet.Graph.TryingNowTest do
     task("Marked doing, nobody on it", %{"progress" => "doing"})
     task("Write the offer")
     task("Claimed, not started", %{"assignee_key" => 9})
-    task("Finished", %{"progress" => "done", "assignee_key" => 3})
+    Workspace.submit(@fleet, task("Finished"), "https://example.com/finished", by: 3)
     Workspace.archive(@fleet, task("Abandoned"))
 
     Workspace.open_log(@other_fleet)

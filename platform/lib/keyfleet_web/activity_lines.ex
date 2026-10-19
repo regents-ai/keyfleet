@@ -49,7 +49,8 @@ defmodule KeyfleetWeb.ActivityLines do
     "evidence" => "some evidence",
     "service" => "a service",
     "note" => "a note",
-    "dead_end" => "a dead end"
+    "dead_end" => "a dead end",
+    "review" => "a review"
   }
   @unknown_type "an item"
 
@@ -73,7 +74,7 @@ defmodule KeyfleetWeb.ActivityLines do
   @channels %{
     chat: ~w(post posts room_named)a,
     work:
-      ~w(created claimed unclaimed progress status revised joined left archived linked open_question)a,
+      ~w(created claimed unclaimed submitted progress status reviewed revised joined left archived linked open_question)a,
     keys: ~w(sale given transfer shard_issued shard_ended)a,
     votes: ~w(proposed votes executed)a
   }
@@ -121,6 +122,15 @@ defmodule KeyfleetWeb.ActivityLines do
     do: [who(f.by), " gave ", item(f.item), " to ", key(f.to), "."]
 
   defp sentence(%{kind: :unclaimed, facts: f}), do: [item(f.item), " is open again."]
+
+  defp sentence(%{kind: :submitted, facts: f}),
+    do: [who(f.by), " submitted ", item(f.item), " for review."]
+
+  defp sentence(%{kind: :reviewed, facts: %{decision: "accept"} = f}),
+    do: [who(f.by), " accepted ", item(f.item), "."]
+
+  defp sentence(%{kind: :reviewed, facts: %{decision: "dispute"} = f}),
+    do: [who(f.by), " disputed ", item(f.item), "."]
 
   defp sentence(%{kind: :progress, facts: f}),
     do: [who(f.by), " marked ", item(f.item), " " <> choice("progress", f.progress) <> "."]
@@ -201,6 +211,7 @@ defmodule KeyfleetWeb.ActivityLines do
 
     * `goals`: `%{id: id, goal: part}`, each goal as the part `parts/1`
       gives an item, or "A goal" when it has no title;
+    * `goals_set?`: whether the workspace holds any goal, open or not;
     * `counts`: the open work in words, as "2 open goals · 3 tasks in
       progress · 2 taken · 4 not taken yet", or nil when there is none;
     * `question`: the parts "Open question: {question}", or nil.
@@ -209,6 +220,7 @@ defmodule KeyfleetWeb.ActivityLines do
     %{
       goals:
         Enum.map(now.goals, &%{id: &1.id, goal: &1 |> item() |> List.wrap() |> opening() |> hd()}),
+      goals_set?: now.goals_set?,
       counts: counts(now.counts),
       question: now.question && ["Open question: ", words(now.question)]
     }

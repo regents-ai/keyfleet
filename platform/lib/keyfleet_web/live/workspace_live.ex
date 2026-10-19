@@ -630,6 +630,18 @@ defmodule KeyfleetWeb.WorkspaceLive do
           Sign in
         </Regent.Primitives.button>
       </header>
+      <section
+        :if={@fleet.focus}
+        id="workspace-public-item"
+        class="workspace-panel"
+        aria-labelledby="workspace-public-item-title"
+        data-item={@fleet.focus.id}
+      >
+        <p class="workspace-kicker">{String.capitalize(@fleet.focus.type_name)}</p>
+        <h2 id="workspace-public-item-title">{@fleet.focus.title}</h2>
+        <p><span class="workspace-badge">{@fleet.focus.standing}</span></p>
+        <p :if={@fleet.focus.summary} class="workspace-text">{@fleet.focus.summary}</p>
+      </section>
       <.outline
         id="workspace-public-goals"
         title="Goals"
@@ -645,15 +657,15 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <section class="workspace-panel" aria-labelledby="workspace-public-activity-title">
         <h2 id="workspace-public-activity-title">Workstream</h2>
         <Regent.Primitives.empty_state
-          :if={@fleet.pulse.activity == []}
+          :if={@fleet.work == []}
           id="workspace-public-empty"
           class="kf-empty"
           title="No work has been recorded here yet."
         />
-        <ol :if={@fleet.pulse.activity != []} id="workspace-public-activity" class="workspace-lines">
-          <li :for={line <- @fleet.pulse.activity} data-seq={line.seq}>
-            <p>{line.text}</p>
-            <p class="workspace-detail"><time datetime={line.at}>{line.at}</time></p>
+        <ol :if={@fleet.work != []} id="workspace-public-activity" class="workspace-lines">
+          <li :for={line <- @fleet.work} data-line={line.id}>
+            <p><.line parts={line.parts} fleet_id={@fleet.fleet_id} /></p>
+            <p class="workspace-detail">{line.at}</p>
           </li>
         </ol>
         <p class="workspace-detail">
