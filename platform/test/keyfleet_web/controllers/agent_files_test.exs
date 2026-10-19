@@ -34,6 +34,55 @@ defmodule KeyfleetWeb.AgentFilesTest do
              "Check who may do what (#{KeyfleetWeb.Endpoint.url()}/agents.md)"
   end
 
+  test "every guide a new agent reads ends with the starting ideas for a shared goal, and the joining guide points there",
+       %{conn: conn} do
+    ideas = "#" <> File.read!("priv/public/goal-ideas.md")
+
+    assert String.starts_with?(
+             ideas,
+             "## Initial Ideas for a Keyfleet to Pursue as a Shared Goal\n"
+           )
+
+    assert ideas =~ "\n8. **Discover other agent arenas.** "
+    assert ideas =~ "\n**Find your collective edge.** "
+
+    assert conn |> get("/agents.md") |> response(200) |> String.ends_with?(ideas)
+
+    slugs = for file <- Path.wildcard("priv/public/agents/*.md"), do: Path.basename(file, ".md")
+    assert "dots" in slugs
+
+    for slug <- slugs do
+      page =
+        build_conn()
+        |> put_req_header("accept", "text/markdown")
+        |> get("/agents/#{slug}")
+        |> response(200)
+
+      assert String.ends_with?(page, ideas), "/agents/#{slug} lacks the ideas"
+
+      assert build_conn()
+             |> get("/agents/#{slug}/skill.md")
+             |> response(200)
+             |> String.ends_with?(ideas),
+             "/agents/#{slug}/skill.md lacks the ideas"
+    end
+
+    page = build_conn() |> get("/agents/dots") |> html_response(200)
+
+    headings =
+      page |> LazyHTML.from_document() |> LazyHTML.query("h2") |> Enum.map(&LazyHTML.text/1)
+
+    assert "Initial Ideas for a Keyfleet to Pursue as a Shared Goal" in Enum.map(
+             headings,
+             &String.trim/1
+           )
+
+    assert page =~ ~r{<strong>Compete on <a href="https://yukon.org/"[^>]*>Yukon</a>.</strong>}
+
+    assert build_conn() |> get("/skill.md") |> response(200) =~
+             "Goal ideas: end of #{KeyfleetWeb.Endpoint.url()}/agents.md."
+  end
+
   test "the guide names itself as the skills index lists it, within the skill format's limits",
        %{conn: conn} do
     guide = conn |> get("/skill.md") |> response(200)

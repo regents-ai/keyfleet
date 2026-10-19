@@ -203,3 +203,36 @@ features:
     gaps:
       - Whether two Keys or agents share one owner is not known, so a review does not prove independence.
       - Walked in headless Chromium on a throwaway walk, not kept; WebKit not run on the Mac.
+
+  - id: goal-ideas
+    what: >-
+      The homepage ends with the starting ideas a fleet may take on as a shared
+      goal, as Sean wrote them: eight numbered ideas and a closing note, each
+      link to another site opening in a new tab. The agents' Markdown homepage,
+      /agents.md and every runtime's page and skill end with the same section,
+      and the joining guide points to it.
+    who: anyone
+    level: ordinary
+    paths:
+      - platform/priv/public/goal-ideas.md
+      - platform/lib/keyfleet/goal_ideas.ex
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/assets/css/pages/home.css
+      - platform/priv/public/agents.md
+      - platform/priv/public/skill.md
+      - platform/lib/keyfleet_web/public_documents.ex
+      - platform/lib/keyfleet_web/agent_guides.ex
+      - platform/lib/keyfleet_web/controllers/agent_files_controller.ex
+    entry:
+      - route: GET /
+      - route: GET /agents.md
+      - route: GET /agents/:agent
+      - route: GET /agents/:agent/skill.md
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/keyfleet_web/home_live_test.exs
+      - platform/test/keyfleet_web/controllers/agent_files_test.exs
+      - platform/test/browser/homepage.spec.ts
+    gaps:
+      - WebKit is not run on the Mac.
+      - The joining guide carries a pointer, not the section itself, to stay under its 9,000-character limit.
