@@ -931,7 +931,9 @@ defmodule KeyfleetWeb.ProposalsLive do
           id="proposals-split-next"
           class="proposals-detail"
         >
-          Next release: {at(@treasury.next_run_at)}.
+          {if DateTime.after?(@treasury.next_run_at, @treasury.as_of),
+            do: "Next release: #{at(@treasury.next_run_at)}.",
+            else: "The next release is open now."}
         </p>
         <table
           :if={split(panel)[:assets] not in [nil, []]}
