@@ -581,3 +581,223 @@
      is wider. */
   #shell-header:has(.shell-get-key, .shell-credits) .theme-control { display: none; }
 }
+
+/* ---- Header marks ---- */
+
+/* The theme switch, the nine-dot menu, X and GitHub each fill a 2.75rem press
+   target with nothing between them, so their marks stand evenly apart, and a
+   hairline sits after the theme switch and after the nine-dot menu. */
+#shell-header .theme-control {
+  margin-inline-end: 0;
+}
+
+#shell-header .rl-header-links,
+.regent-footer__social {
+  gap: 0;
+}
+
+#shell-header .theme-control + .rl-header-links::before,
+.rl-header-links__rule {
+  content: "";
+  flex: none;
+  width: 1px;
+  height: 1.25rem;
+  margin-inline: 0.5rem;
+  background: var(--hairline-strong);
+}
+
+:is(#shell-header .rl-header-links, .regent-footer__social) > a {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+@media (hover: hover) {
+  :is(#shell-header .rl-header-links, .regent-footer__social) > a:hover {
+    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
+  }
+}
+
+/* ---- Regents Products ---- */
+
+/* The nine-dot button, as the template's is, without the plain button's border
+   and fill, in the same ink as the X and GitHub marks beside it. */
+:is(.rl-header-links, .regent-footer__social) .shell-tool {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.shell-tool .shell-icon--apps {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+@media (hover: hover) {
+  .shell-tool:hover {
+    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
+  }
+}
+
+.shell-apps-button:has(+ .shell-apps:popover-open) {
+  background: var(--ash-panel-strong);
+}
+
+/* A name for the icon, shown on hover and on keyboard focus: under it in the
+   header, over it in the footer. */
+.shell-tool__tip {
+  position: absolute;
+  inset-block-start: calc(100% + 0.35rem);
+  inset-inline-start: 50%;
+  z-index: 8;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--ash-line-strong);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.regent-footer .shell-tool__tip {
+  inset-block: auto calc(100% + 0.35rem);
+}
+
+.shell-tool:focus-visible > .shell-tool__tip {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .shell-tool:hover > .shell-tool__tip {
+    opacity: 1;
+  }
+}
+
+.shell-apps-button:has(+ .shell-apps:popover-open) > .shell-tool__tip {
+  opacity: 0;
+}
+
+/* The panel hangs from its button, as the template's does: straight under it,
+   its right edge lined up with the button's. In the footer, where the screen
+   ends first, it opens above. The browser places it above everything else and
+   closes it on Escape or a press outside. */
+#shell-token-menu-apps-button { anchor-name: --shell-token-menu-apps; }
+#shell-token-menu-apps { position-anchor: --shell-token-menu-apps; }
+#footer-brand-links-apps-button { anchor-name: --footer-brand-links-apps; }
+#footer-brand-links-apps { position-anchor: --footer-brand-links-apps; }
+
+.shell-apps {
+  position: fixed;
+  inset: anchor(bottom) anchor(right) auto auto;
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  width: min(21rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  margin: 0.25rem 0 0;
+  padding: 1rem;
+  overflow: auto;
+  border: 1px solid var(--ash-line-strong);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font-family: var(--font-family-ui);
+  line-height: 1.4;
+}
+
+.shell-apps h2 {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-family-title);
+  font-size: 1.1rem;
+  font-weight: 400;
+}
+
+.shell-apps ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shell-apps a {
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  padding: 0.75rem 0.25rem;
+  color: inherit;
+  font-size: 0.85rem;
+  text-align: center;
+  text-decoration: none;
+}
+
+.shell-apps a:focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .shell-apps a:hover {
+    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
+  }
+}
+
+.shell-apps__tile {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border: 1px solid var(--ash-line-strong);
+}
+
+.shell-apps .shell-apps__crown {
+  display: block;
+  width: 70%;
+  height: auto;
+}
+
+/* Each product's crown in its own pair of the four brand colours. */
+.shell-apps__tile[data-tone="patchbay"] {
+  background: var(--palette-platinum);
+  color: var(--palette-charcoal);
+}
+
+.shell-apps__tile[data-tone="autolaunch"] {
+  background: var(--palette-tangerine-tango);
+  color: var(--palette-charcoal);
+}
+
+.shell-apps__tile[data-tone="techtree"] {
+  background: var(--palette-powder-blue);
+  color: var(--palette-charcoal);
+}
+
+.shell-apps__tile[data-tone="protocol"] {
+  background: var(--palette-charcoal);
+  color: var(--palette-tangerine-tango);
+}
+
+/* On a phone the panel spans the screen, still straight under or over its
+   button. */
+@media (max-width: 47.99rem) {
+  .shell-apps {
+    inset: anchor(bottom) 0.5rem auto;
+    position-try-fallbacks: flip-block;
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-tool__tip {
+    transition: none;
+  }
+}

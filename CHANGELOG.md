@@ -2780,3 +2780,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main a36c3d15 to keyfleet.ai as Fly release v94 (rollback v93, 2438bc71). The workspace "not found" answer now says an item id looks like `task#27`, and the feature map marks thirteen tests as proven.
 - Why: Contessa asked for `task:1` on live and the 404 never said what an id looks like. Full check on a fresh copy was clean (989 tests, 304 page tests, 66 Chromium browser walks; WebKit not run on the Mac).
+
+## 2026-10-19 — The Regents Products menu matches the template, and the header marks stand evenly apart
+
+- What: the nine-dot button opens the template's "Regents Products" panel, hung straight under the button with its right edge lined up: Patchbay, Autolaunch, Techtree and $REGENT Staking as crown tiles in their brand colours, three to a row. Keyfleet no longer lists itself. In the footer the panel opens above its button; on a phone it spans the screen. The theme switch, the nine-dot menu, X and GitHub each fill the same press target, with a hairline after the theme switch and after the nine-dot menu.
+- Why: the panel showed plain name boxes in the middle of the screen and listed Keyfleet; the four header marks sat unevenly.

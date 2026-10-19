@@ -186,21 +186,3 @@ body:has(> .regent-footer) { display: flex; flex-direction: column; height: auto
 body:has(> .regent-footer) > :first-child { flex: 1 0 auto; }
 body:has(> .regent-footer) > [data-phx-main] { display: grid; grid-template-rows: 1fr; }
 .rg-panel.rg-support-panel { --color-fg: var(--support-panel-ink); --color-fg-muted: color-mix(in srgb, var(--support-panel-ink) 72%, var(--support-panel-surface)); --color-surface: var(--support-panel-surface); --color-border: color-mix(in srgb, var(--support-panel-ink) 22%, var(--support-panel-surface)); }
-
-/* The browser owns opening, Escape and outside-click dismissal. */
-.regents-apps {
-  width: min(24rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem);
-  overflow: auto; margin: auto; padding: var(--space-3);
-  background: var(--color-surface); color: var(--color-fg);
-  border: 1px solid var(--hairline-strong);
-}
-.regents-apps h2 { font-size: 1.25rem; }
-.regents-apps ul {
-  list-style: none; padding: 0;
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-.regents-apps a {
-  display: flex; align-items: center; justify-content: center; min-height: 3rem;
-  padding: var(--space-2); border: 1px solid var(--hairline-strong);
-}
