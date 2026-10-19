@@ -656,7 +656,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
       for token_id <- 1..1_023, do: issue!("fleet_tech_classic", token_id)
-      chain!(allowance: 100_000_000, minted: 1_023, price: 100_000_000)
+      chain!(allowance: 105_000_000, minted: 1_023, price: 100_000_000)
       {:ok, view, _html} = live(conn, "/classic/1")
       render_async(view, 3_000)
       assert text(view, "#buy-key-number") == "1,024"
@@ -665,7 +665,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       active!(view, @owner)
       assert_push_event(view, "onchain-steps:review", %{review: %{steps: [buy]} = review})
       hash = "0x" <> String.duplicate("3", 64)
-      chain!(allowance: 100_000_000, minted: 1_024, price: :sold_out)
+      chain!(allowance: 105_000_000, minted: 1_024, price: :sold_out)
       TestChainNode.land!(hash, review, buy, "0x1")
 
       view
