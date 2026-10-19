@@ -175,18 +175,21 @@ defmodule Keyfleet.Graph.WriterTest do
        ctx do
     [fleet] = Enum.take(@fleets, 1)
 
+    # The next request meets an idle exit only once the writer has seen the
+    # exit; a request written to a host that has just died fails on the closed
+    # pipe instead, which is a different case. So the test waits until the
+    # writer has let the host go, and the restart waits a second, well past
+    # the one request the test sends in between.
     log =
       capture_host_failures(fn ->
-        start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir))
+        start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir), restart_min: 1_000)
         await_ready(fleet)
         [%{"pid" => os_pid}] = launches(ctx.tmp_dir)
 
         shell_kill(Integer.to_string(os_pid))
+        await(fn -> :sys.get_state(writer(fleet)).host == nil end)
 
-        assert Writer.request(fleet, "hello", %{}) in [
-                 {:error, :indeterminate},
-                 {:error, :unavailable}
-               ]
+        assert Writer.request(fleet, "hello", %{}) == {:error, :unavailable}
 
         await_ready(fleet)
       end)

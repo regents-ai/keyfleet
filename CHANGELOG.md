@@ -2491,3 +2491,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Evidence: level ordinary; from the first-visit audit of v88
   (/mnt/project-files/audits/first-visit-2026-10-19/README.md); fleet page
   tests updated; not compiled or run in the cloud, the Mac runs the gate.
+
+## 2026-10-19 — The idle-exit work-graph test waits for the writer
+
+- The test of a graph host that exits while idle now waits until the writer
+  has seen the exit before it sends the next request, and expects exactly
+  `{:error, :unavailable}`. Before, the request could reach the host's pipe
+  before the writer heard of the exit, which is the different case of a host
+  dying mid-request, so the test passed or failed on timing.
