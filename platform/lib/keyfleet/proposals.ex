@@ -197,6 +197,22 @@ defmodule Keyfleet.Proposals do
     |> Ash.read!()
   end
 
+  @doc """
+  The fleet's proposals neither carried out nor cancelled whose vote has
+  closed by `now` and whose execution expiry has not come, lowest number
+  first: those that may be carried out now or once they have waited their
+  day, unless their vote rejected them.
+  """
+  def awaiting_carry_out(fleet_id, now \\ DateTime.utc_now()) do
+    Proposal
+    |> Ash.Query.filter(
+      fleet_id == ^fleet_id and closes_at <= ^now and execution_expiry > ^now and
+        not exists(execution, true) and not exists(cancellation, true)
+    )
+    |> Ash.Query.sort(number: :asc)
+    |> Ash.read!()
+  end
+
   defp below(query, nil), do: query
   defp below(query, number), do: Ash.Query.filter(query, number < ^number)
 

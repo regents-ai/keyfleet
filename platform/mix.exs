@@ -199,8 +199,9 @@ defmodule Keyfleet.MixProject do
         # Read marks add two: the rooms' and direct messages' ReadMark records, each
         # with its domain. Saved notebook outputs add one: the SavedOutput record.
         # Main itself counted 79 on 16 Oct, one above the 78 recorded here; these
-        # three records bring it to 82.
-        "xref graph --label compile-connected --fail-above 82",
+        # three records bring it to 82. The upkeep adds two: its UpkeepLine and
+        # UpkeepSwitch records, each with its domain.
+        "xref graph --label compile-connected --fail-above 84",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

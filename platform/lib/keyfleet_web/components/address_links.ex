@@ -1,13 +1,17 @@
 defmodule KeyfleetWeb.Components.AddressLinks do
   @moduledoc """
   What a person can do with a wallet address shown on a page: copy it in
-  full, or open it on OpenSea or Basescan. The site builds both links from the
-  address it holds; nothing a visitor sends reaches them.
+  full, or open it on OpenSea or Basescan; and a transaction's page on
+  Basescan. The site builds every link from the address or hash it holds;
+  nothing a visitor sends reaches them.
   """
   use KeyfleetWeb, :html
 
   @doc "The address's page on Basescan."
   def basescan(address), do: "https://basescan.org/address/#{address}"
+
+  @doc "The transaction's page on Basescan."
+  def basescan_tx(hash), do: "https://basescan.org/tx/#{hash}"
 
   @doc "The address's profile on OpenSea."
   def opensea(address), do: "https://opensea.io/#{address}"

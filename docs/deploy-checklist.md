@@ -59,6 +59,7 @@ the values from their owners.
 | `LIGHTHOUSE_API_KEY` | Regent's Lighthouse account key; revealed keys' cards are kept on IPFS there. |
 | `PICTURES_PUBLIC_URL` | The address the bucket's objects are read from, `https://<bucket>.fly.storage.tigris.dev`. Pages may load pictures from it. |
 | `SENTRY_DSN`, `SENTRY_RELEASE`, `SENTRY_ENVIRONMENT` | Optional error reporting. |
+| `KEYFLEET_UPKEEP_KEY` | The private key of the routine upkeep's account, which presses the Treasury buttons that are due and pays only their network fees. Keep only a little ETH in it. The upkeep starts paused; a Credits admin resumes it at `/admin/upkeep` ([recurring jobs](recurring-jobs.md#pausing-the-upkeep)). |
 
 Sean creates both database logins at launch; neither exists before then.
 `keyfleet-runtime` reads and changes records but cannot create, change or drop

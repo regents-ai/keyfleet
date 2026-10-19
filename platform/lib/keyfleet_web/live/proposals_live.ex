@@ -1210,7 +1210,8 @@ abstain, of {keys(@proposal.counted)} counted</span>|
   defp key_list([token_id]), do: "Key #{Rules.grouped(token_id)}"
   defp key_list(token_ids), do: "Keys #{Enum.map_join(token_ids, ", ", &Rules.grouped/1)}"
 
-  defp at(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M UTC")
+  @doc "A time as the proposals and Treasury pages show it."
+  def at(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M UTC")
 
   @doc """
   A wait begun for a proposals page the page has since left reads nothing. A

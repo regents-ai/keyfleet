@@ -244,6 +244,8 @@ defmodule Keyfleet.ReleaseTest do
              "treasury_asset_details",
              "treasury_events",
              "treasury_readings",
+             "treasury_upkeep_lines",
+             "treasury_upkeep_switch",
              "wall_removals"
            ]
   end

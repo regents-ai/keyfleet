@@ -7,7 +7,8 @@ defmodule KeyfleetWeb.ProposalsPage do
   `treasury_page/1` is the fleet's Treasury page: how many of its Keys have a
   vote now, its shared money once it is on chain (the latest reading of its
   treasury, its daily split, the advances still out and its latest money in
-  and out), the votes carried out lately, and its sales so far.
+  and out), what the routine upkeep last did for it, once it is set up, the
+  votes carried out lately, and its sales so far.
   `detail/3` is one proposal with its votes, fifty to a page, its calls in
   plain words and exactly as carrying it out sends them, and where it stands as the vote contract says at the latest
   block: its status, the keys counted and each tally, never worked out here.
@@ -72,6 +73,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp treasury_shown(fleet, reading, assets, treasury_reading) do
     Map.merge(reading, %{
       treasury: reading.deployed? && treasury(fleet, treasury_reading, assets),
+      upkeep: reading.deployed? && Treasury.upkeep(fleet.id),
       carried: fleet.id |> Proposals.latest_carried_out(@carried) |> Enum.map(&summary/1),
       progress: reading.deployed? && Chain.progress(fleet.id),
       manager_address: fleet.manager_address

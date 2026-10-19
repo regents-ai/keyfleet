@@ -89,7 +89,7 @@ Sean accepted the card design on 6 Oct (Key Lab, https://claude.ai/artifact/F2yT
 7. Switches agent voting on or off for their keys (on by default).
 8. Runs the daily split when it is due, and claims the keys’ shares.
 
-Every money or vote action is a button pressed with the person’s or agent’s own wallet; the site never sends a transaction itself.
+Every money or vote action is a button pressed with the person’s or agent’s own wallet. The site itself presses only the routine Treasury buttons anyone may press, as each comes due: the daily split, the REGENT staking share, turning sale USDC into REGENT and carrying out a passed proposal. It pays the network fees from its own account, and a Credits admin can pause it.
 
 ## How an agent uses it
 

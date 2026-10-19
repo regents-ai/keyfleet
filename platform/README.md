@@ -92,7 +92,8 @@ production.
 | `KEYFLEET_SIWA_URL` | Yes in production | The SIWA sign-in server that checks signed agent requests and that the joining guide names; `fly.toml` sets it. Development and tests default to a local siwa-server on port 4100. |
 | `KEYFLEET_RPC_URL` | For the fleet reader | The Base node the site reads the fleets through, and what a page's wallet buttons sent (`:chain_nodes`); see [the chain reader](../docs/chain-reader.md). Wallets are given Base's public address. Unset, the fleet reader does not run and sent steps are read from Base's public node. |
 | `PORT` | No | HTTP port. Defaults to `4000`. |
-| `REGENT_CREDITS_ADMINS` | No | The Privy accounts, comma separated, that may give Credits, handle refunds and read the saved errors at `/admin/errors`. Unset, nobody can, and `/admin/errors` answers not found. |
+| `REGENT_CREDITS_ADMINS` | No | The Privy accounts, comma separated, that may give Credits, handle refunds, read the saved errors at `/admin/errors` and pause or resume the routine upkeep at `/admin/upkeep`. Unset, nobody can, and both answer not found. |
+| `KEYFLEET_UPKEEP_KEY` | For the routine upkeep | The private key of the account the routine upkeep presses the Treasury buttons from. It pays only network fees, so keep only a little ETH in it. Unset, the upkeep is not set up; see [recurring jobs](../docs/recurring-jobs.md#pausing-the-upkeep). |
 | `KEYFLEET_DEPLOYMENT_ROLE` | Yes in production | `production` or `staging`. There is no default; each role admits only its own database hosts. |
 | `DATABASE_POOLED_URL` | Yes in production | Pooled PostgreSQL connection string for an approved host. |
 | `DATABASE_DIRECT_URL` | Only when migrating | Direct PostgreSQL connection string used by the migration release command. |
@@ -161,7 +162,7 @@ security policy; the router's pipelines choose one.
 
 | Profile | Pipelines | What it allows |
 | --- | --- | --- |
-| `reading` | `:public_documents` (the reading pages, including Privacy and Terms, which also send no referrer), `:early` (the early-access page, which also sends no referrer), `:directory`, and the launch gate's "not open yet" answers | The strict baseline: scripts, styles, images and fonts from this site (images also as `data:`), requests and the live connection back to it, inline style attributes (Anime.js text splitting), no frames, never framed. |
+| `reading` | `:public_documents` (the reading pages, including Privacy and Terms, which also send no referrer), `:early` (the early-access page, which also sends no referrer), `:upkeep_admin` (the routine upkeep's switch at `/admin/upkeep`, which also sends no referrer), `:directory`, and the launch gate's "not open yet" answers | The strict baseline: scripts, styles, images and fonts from this site (images also as `data:`), requests and the live connection back to it, inline style attributes (Anime.js text splitting), no frames, never framed. |
 | `sign_in` | `:browser` | The baseline plus Privy wallet sign-in: Privy's API, frame and wallet RPC, Cloudflare Turnstile, WalletConnect's relays, verify frame, wallet list and logos, RPC and event reporting, Coinbase Wallet's relay, and inline style elements for Privy's window. |
 | `showcase` | `:local_showcase` | `sign_in` that may frame its own preview page. Local development only. |
 

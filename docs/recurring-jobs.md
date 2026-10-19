@@ -6,11 +6,15 @@ dashboard. An operator works with three tools: the saved errors at
 `/admin/errors` (Credits admins), which Fly Sentinel reads every minute and
 emails; SQL on `keyfleet_app.oban_jobs`; and the running app's `rpc`.
 
-The site sends no transaction of its own. The treasury's daily split, the
-REGENT staking share, turning USDC from Key sales into REGENT, and draws asked
-again are buttons anyone presses on the fleet's Treasury tab; no job runs them.
-`Keyfleet.Treasury.OverdueCheck` saves an error when the first three wait too
-long (see "Money nobody has moved" below).
+The site presses the routine Treasury buttons itself. Every 5 minutes
+`Keyfleet.Treasury.Upkeep` sends, for each deployed fleet, whichever is due of
+the daily split, the REGENT staking share, the next piece of USDC from Key
+sales to turn into REGENT and the carrying out of an approved proposal, with
+the same checks the buttons have, and pays the network fees from its own
+account. Anyone may still press every one of them on the fleet's Treasury tab.
+Draws asked again stay a button only. `Keyfleet.Treasury.OverdueCheck` saves an
+error when the first three still wait too long (see "Money nobody has moved"
+below).
 
 ## The jobs
 
@@ -22,6 +26,7 @@ long (see "Money nobody has moved" below).
 | `Keyfleet.Notebooks.Reconcile` | every 10 minutes | queues a notebook hub update for each fleet with a hub | default | saved error, 3 tries |
 | `Keyfleet.Notebooks.Roster` | queued by Reconcile and by Key changes | brings a hub's members in step with the Keys | notebook_hubs | saved error, 20 tries |
 | `Keyfleet.SharedReading.Heal` | every minute, two kinds | rereads fleet agents and Key agents | default | saved error; the next minute replaces it |
+| `Keyfleet.Treasury.Upkeep` | every 5 minutes | presses each deployed fleet's Treasury buttons that are due: the daily split, Send to REGENT staking, Turn into REGENT and carrying out approved proposals; the Treasury tab shows what its latest check did | upkeep | A press refused or not landed shows on the Treasury tab; a raise is a saved error. The next check, 5 minutes later, looks again |
 | `Keyfleet.Treasury.OverdueCheck` | :23 past every hour | saves an error for each kind of money nobody has moved in time, naming each fleet | default | saved error, 1 try; the next hour runs it again |
 | `Keyfleet.Keys.DeckEndCheck` | :41 past every hour | saves one error naming each fleet within 100 Keys of its deck's end that can sell past it (Accelerant #1 from its 900th Key to its 1,000th), so the randomness subscription is readied before Key 1,001 | default | saved error, 1 try; the next hour runs it again |
 | `Keyfleet.ErrorPruner` | 04:17 UTC daily | clears saved errors not seen for a week | default | saved error, 3 tries |
@@ -40,10 +45,20 @@ record is catching up; the SQL below shows when each job last ran.
 
 ## Money nobody has moved
 
-Three money jobs run only when someone presses them. Anyone may press each,
-from the fleet's Treasury tab (`/<type>/<number>/treasury`, such as
-`/classic/1/treasury`) or as an agent (`run_split`; `send_share` and
-`convert` once their agent routes are added).
+`Keyfleet.Treasury.Upkeep` presses the three money buttons below, and carries
+out each approved proposal, as soon as each is due. It runs the daily split
+whenever it is due, also when it would share nothing, so the split's next run
+stays a day ahead and a late split always means one nobody ran. It checks what the button
+checks first and sends nothing the chain would refuse, nothing while network
+fees are high, and nothing new while one of its own transactions waits to
+land. Anyone may still press each, from the fleet's Treasury tab
+(`/<type>/<number>/treasury`, such as `/classic/1/treasury`) or as an agent
+(the `split`, `treasury/send_share` and `treasury/convert` requests). The tab's
+Routine upkeep section shows whether it is running, what its latest check did
+for the fleet and its latest presses, each with its transaction on BaseScan.
+
+`Keyfleet.Treasury.OverdueCheck` stays as the backstop: while the upkeep is
+paused, out of ETH or held back, the money still waits, and it says so.
 
 | Job | Contract call | Saved as late when |
 | --- | --- | --- |
@@ -60,11 +75,27 @@ from its first balance reading after it is recorded on the site.
 Classic #1 (manager `0xc73D8774Dfc51bc11207DC04B0ff5117C30458B6`, predicted)
 is covered this way once it is recorded. After a sell-out its manager holds
 about 36,036 USDC to turn into REGENT: about 145 presses of Turn into REGENT,
-one each 15 minutes at the earliest, over about 36 hours. A press is refused
-when a full piece would move REGENT's price by more than 1%; a smaller amount
-typed in the field may still work. Then one press of Send to REGENT staking
-sends the 4,004.05 USDC owed. The conversion alert stays quiet while pieces
-keep turning at least every 3 hours.
+one each 15 minutes at the earliest, over about 36 hours, which the upkeep
+makes as each opens. A press is refused when a full piece would move REGENT's
+price by more than 1%; the upkeep then asks for half as much, down to 1 USDC,
+and a smaller amount typed in the field may work for anyone.
+Then one press of Send to REGENT staking sends the 4,004.05 USDC owed. The
+conversion alert stays quiet while pieces keep turning at least every 3 hours.
+
+### Pausing the upkeep
+
+A Credits admin pauses the upkeep at `/admin/upkeep` with one button, and it
+sends nothing more from that moment; the same button then resumes it. Pausing
+changes nothing for people: every button still works. Anyone else who opens the
+address gets the not-found page. The upkeep starts paused after its release;
+resume it once its account holds ETH.
+
+The Fly secret `KEYFLEET_UPKEEP_KEY` holds the upkeep account's private key,
+and `/admin/upkeep` shows that account's address. The account needs no rights:
+it pays only the network fees of its presses (`convert` costs about 722,000 gas
+on Base), so keep only a little ETH in it and top it up when the Treasury tab
+says it is waiting for ETH. Without the secret the upkeep is not set up: the
+Treasury tab has no Routine upkeep section and `/admin/upkeep` says Not set up.
 
 ## Keys past the deck
 
@@ -132,7 +163,9 @@ fly ssh console -C "/app/bin/keyfleet rpc 'Oban.resume_queue(queue: :chain)'"
 ```
 
 `notebook_hubs` stops the notebook hub updates the same way, and `key_art`
-the Key pictures. The `default`
+the Key pictures. Pause the routine upkeep with its switch at `/admin/upkeep`
+rather than its `upkeep` queue, since a queue pause ends at the next restart.
+The `default`
 queue holds the watch, the cron jobs above and other work, so pausing it
 stops all of them. A pause lasts until it is resumed or the app restarts; a
 restart or a release starts every queue again. To stop one cron job for good,
