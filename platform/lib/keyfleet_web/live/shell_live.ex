@@ -57,7 +57,7 @@ defmodule KeyfleetWeb.ShellLive do
   @sign_in_events ~w(open_notebooks get_code_password)
 
   # The routes that show a fleet's workspace and its votes.
-  @workspace_routes [:workspace, :workspace_item, :code_commit]
+  @workspace_routes [:workspace, :workspace_item, :code_commit, :code_files]
   @proposals_routes [:proposals, :proposal, :treasury]
 
   @press_failed "Something went wrong on our side. Refresh the page to see the latest, then try again."
@@ -233,6 +233,7 @@ defmodule KeyfleetWeb.ShellLive do
               :workspace,
               :workspace_item,
               :code_commit,
+              :code_files,
               :proposals,
               :proposal,
               :treasury,
@@ -670,6 +671,11 @@ defmodule KeyfleetWeb.ShellLive do
             commit={@workspace}
             signed_out?={is_nil(actor(@access_context))}
           />
+          <WorkspaceLive.files
+            :if={@route_spec.route_id == :code_files}
+            files={@workspace}
+            signed_out?={is_nil(actor(@access_context))}
+          />
           <TreasuryLive.page
             :if={@route_spec.route_id == :treasury}
             page={@proposals}
@@ -737,8 +743,9 @@ defmodule KeyfleetWeb.ShellLive do
   defp fleet_place(:treasury), do: :treasury
   defp fleet_place(route_id) when route_id in [:proposals, :proposal], do: :proposals
 
-  defp fleet_place(route_id) when route_id in [:workspace, :workspace_item, :code_commit],
-    do: :workspace
+  defp fleet_place(route_id)
+       when route_id in [:workspace, :workspace_item, :code_commit, :code_files],
+       do: :workspace
 
   defp fleet_place(_route_id), do: nil
 
@@ -768,6 +775,7 @@ defmodule KeyfleetWeb.ShellLive do
               :workspace,
               :workspace_item,
               :code_commit,
+              :code_files,
               :proposals,
               :proposal
             ] do
@@ -950,6 +958,7 @@ defmodule KeyfleetWeb.ShellLive do
               :workspace,
               :workspace_item,
               :code_commit,
+              :code_files,
               :polls,
               :poll
             ],
@@ -1078,7 +1087,7 @@ defmodule KeyfleetWeb.ShellLive do
   # The page starts listening before it reads, so a change that lands while it
   # loads still reaches it. Each visit, reconnection included, reads afresh.
   defp load_workspace(socket, %{route_id: route_id}, %{"fleet_id" => fleet_id} = params)
-       when route_id in [:workspace, :workspace_item, :code_commit] do
+       when route_id in [:workspace, :workspace_item, :code_commit, :code_files] do
     socket
     |> follow_workspace(fleet_id)
     |> assign(

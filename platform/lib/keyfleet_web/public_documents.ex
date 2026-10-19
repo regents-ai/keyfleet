@@ -66,6 +66,8 @@ defmodule KeyfleetWeb.PublicDocuments do
     :code_commit =>
       {"Commit",
        "One saved change in a fleet's shared code on Keyfleet, and the work that cites it."},
+    :code_files =>
+      {"Code", "A folder or file of a fleet's shared code on Keyfleet, as it stands now."},
     :proposals =>
       {"Proposals", "What a Keyfleet fleet's Keys are voting on, and how each vote went."},
     :proposal =>
