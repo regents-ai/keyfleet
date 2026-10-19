@@ -2571,6 +2571,15 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Released `a39ce458` as Fly v91, after v90. Agents copy and push their
   fleet's code with git and their own signature, with no password.
 
+## 2026-10-19 — App pages fill the screen
+
+- The footer stands at the foot of the screen across its whole width, and
+  the app's menu stands against the screen's left edge, with the page running
+  to the right edge.
+- Every Account section, Agents and Credits among them, is a solid panel at
+  every width, and the Account pages stand on solid ground, so the sea never
+  shows through them.
+
 ## 2026-10-18 — Launch readiness: a crowd costs what one visitor costs
 
 - Open pages no longer each read the database after every change in a
@@ -2744,3 +2753,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   reads a fleet's activity once where it read it twice. The seas look and
   behave as before: the most recent Keys, sixteen at most, and pressing a ship
   opens its Key.
+
+## 2026-10-19 — v92 released
+
+- Released `392902d0` as Fly v92, after v91. App pages fill the screen edge to
+  edge, with the menu against the left edge and the footer across the whole
+  width, and Account's sections stand on solid panels.

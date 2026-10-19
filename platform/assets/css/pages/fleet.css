@@ -805,11 +805,10 @@
   }
 
   /* On a phone the panel opens over the whole page under the site's header,
-     inside the page's frame, so the Key on offer and its Buy button are at
-     the top of the screen. */
+     so the Key on offer and its Buy button are at the top of the screen. */
   .fleet-about {
     position: fixed;
-    inset: var(--shell-header-bottom) calc(var(--rg-page-gutter) + 1px) 0;
+    inset: var(--shell-header-bottom) 0 0;
     z-index: 3;
     width: auto;
     border-inline-start: 0;
