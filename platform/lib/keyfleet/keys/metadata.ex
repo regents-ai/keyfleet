@@ -65,10 +65,13 @@ defmodule Keyfleet.Keys.Metadata do
   The picture the metadata of minted Key `token_id` of `fleet` names: the
   pass until its card is kept on IPFS, then the card.
   """
-  def image(fleet, token_id) do
+  def image(fleet, token_id), do: KeyArt.link(image_cid(fleet, token_id))
+
+  @doc "The IPFS address of the picture `image/2` names."
+  def image_cid(fleet, token_id) do
     case Keys.card_seed(fleet, token_id) do
-      nil -> picture(nil)
-      seed -> picture(Keys.get_picture!(fleet.id, token_id, seed))
+      nil -> cid(nil)
+      seed -> cid(Keys.get_picture!(fleet.id, token_id, seed))
     end
   end
 
@@ -99,8 +102,10 @@ defmodule Keyfleet.Keys.Metadata do
   @doc "The picture a Key not minted yet shows: the pass."
   def pass, do: picture(nil)
 
-  defp picture(nil), do: KeyArt.link(@interim_pass_cid)
-  defp picture(%{cid: cid}), do: KeyArt.link(cid)
+  defp picture(kept), do: KeyArt.link(cid(kept))
+
+  defp cid(nil), do: @interim_pass_cid
+  defp cid(%{cid: cid}), do: cid
 
   defp fleet_of(token_id),
     do:
