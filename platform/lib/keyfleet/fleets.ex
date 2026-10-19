@@ -13,13 +13,12 @@ defmodule Keyfleet.Fleets do
   # `path` is where the fleet's pages are on the site: its type and its number
   # within that type, so the next Classic is `/classic/2`. The Regents Club's
   # are where they have been since it opened. `sidebar` is how the fleet shows
-  # in the site's sidebar: `:link` to its page, `:name` as its name alone, or
-  # `nil`, left out.
+  # in the site's sidebar: `:link` to its page, or `nil`, left out.
   @catalog [
     %{
       id: "fleet_tech_classic",
       path: "/classic/1",
-      sidebar: :name,
+      sidebar: :link,
       name: "Classic #1",
       card: "CLASSIC",
       type_number: 1,

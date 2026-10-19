@@ -233,7 +233,6 @@
    words and case as the header. */
 #shell-sidebar li > a,
 #shell-sidebar li > button,
-#shell-sidebar li > span,
 #shell-sidebar [data-tree] > a {
   display: flex;
   align-items: center;

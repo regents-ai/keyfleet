@@ -4,7 +4,7 @@ defmodule KeyfleetWeb.Components.Shell do
   use Phoenix.Component
 
   alias KeyfleetWeb.Components.RegentLinks
-  alias KeyfleetWeb.RouteCatalog.{NameOnly, RouteTarget}
+  alias KeyfleetWeb.RouteCatalog.RouteTarget
   alias Phoenix.LiveView.JS
 
   # Classic is the fleet that sells Keys: once it is open, "Get a Key" in the
@@ -339,12 +339,6 @@ defmodule KeyfleetWeb.Components.Shell do
   attr(:target, :map, required: true)
   attr(:route_spec, :map, required: true)
   attr(:account_control, Keyfleet.AccessContext.AccountControl, required: true)
-
-  defp sidebar_target(%{target: %NameOnly{}} = assigns) do
-    ~H"""
-    <span>{@target.label}</span>
-    """
-  end
 
   defp sidebar_target(%{target: %RouteTarget{} = target} = assigns) do
     assigns = assign(assigns, :label, sidebar_label(target, assigns.account_control))

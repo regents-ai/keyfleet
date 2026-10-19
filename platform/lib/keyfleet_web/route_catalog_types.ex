@@ -17,12 +17,6 @@ defmodule KeyfleetWeb.RouteCatalog.RouteTarget do
   defstruct @enforce_keys
 end
 
-defmodule KeyfleetWeb.RouteCatalog.NameOnly do
-  @moduledoc false
-  @enforce_keys [:label]
-  defstruct @enforce_keys
-end
-
 defmodule KeyfleetWeb.RouteCatalog.Spec do
   @moduledoc false
   @enforce_keys [

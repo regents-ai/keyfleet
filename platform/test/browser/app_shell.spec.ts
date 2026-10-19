@@ -200,17 +200,17 @@ test("a signed-in account shows its account menu", async ({page}) => {
 })
 
 // Signed out, the account page is named as the header's button names it.
-test("the sidebar names Classic, links the Regents Club, then the Account page", async ({page}) => {
+test("the sidebar links Classic and the Regents Club, then the Account page", async ({page}) => {
   await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await expect(page.getByRole("heading", {level: 1, name: "Syndicate #1"})).toBeVisible()
 
   const sidebar = page.locator("#shell-sidebar")
-  const items = await sidebar.locator("li > a, li > span").evaluateAll(elements =>
+  const items = await sidebar.locator("li > a").evaluateAll(elements =>
     elements.map(element => [element.textContent?.trim(), element.getAttribute("href")]),
   )
   expect(items).toEqual([
-    ["Classic #1", null],
+    ["Classic #1", "/classic/1"],
     ["Regents Club", "/app/fleets/regents_club"],
     ["Sign in", "/account"],
   ])
