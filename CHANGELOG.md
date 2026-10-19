@@ -2910,3 +2910,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Why: Sean asked (18:58Z) for the treasury to show it growing from Key sales; sale money waits in the fleet until someone presses "Turn into REGENT", so the balances alone showed 0. He chose figures only for visitors (20:13Z, "1. a").
 
 - Released 946e7c9c as Fly v102 (19 Oct 2026 20:32Z).
+
+## 2026-10-19 — Share pictures: the address clear of X's label, and Classic's and the Club's own
+
+- What: the site's share picture now shows "keyfleet.ai" at the top right, so the site name X lays over a picture's bottom-left corner no longer covers it; nothing else on it moved. Classic #1's and the Regents Club's pages, and every page under them, now share a picture of their own at `/share/<fleet>.png`: the fleet's name, its Keys (Classic's sold of 1,024, the Club's 1,998), its treasury (USDC, with the sale USDC still waiting to turn into REGENT, then REGENT and ETH) and the card of its latest Key (Classic's last sold, the Club's last to change hands). Each page names its picture with a version of those figures, so X fetches it again when they change. The figures are read with each fleet's Treasury page and held in memory (a new `share_card` shared reading, healed each minute), so neither the pages nor the picture read the database. `scripts/share-cards/` draws the pictures headless.
+- Why: Sean asked (19 Oct) for the URL not to be half hidden behind X's text, and for share pictures of the Regents Club and Classic showing the total Keys, the treasury and the card of the last Key sold.
