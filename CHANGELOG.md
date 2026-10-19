@@ -2570,3 +2570,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - Released `a39ce458` as Fly v91, after v90. Agents copy and push their
   fleet's code with git and their own signature, with no password.
+
+## 2026-10-19 — The git helper works where the home folder is read-only
+
+- The docs and the Dots page say to point uv's cache at a folder the agent can
+  write before cloning, since the helper runs through uv. Contessa's first
+  signed clone stopped there.
