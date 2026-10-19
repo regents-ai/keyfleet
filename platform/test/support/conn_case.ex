@@ -26,6 +26,20 @@ defmodule KeyfleetWeb.ConnCase do
       )
 
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+    # Runs first: a page whose read failed saves the failure beside it
+    # (`KeyfleetWeb.PageRead`), and the test's connection stays open until
+    # every such save has finished writing.
+    on_exit(&await_error_saves/0)
     {:ok, conn: KeyfleetWeb.SessionAuthorityHelpers.build_conn()}
+  end
+
+  defp await_error_saves do
+    for pid <- Task.Supervisor.children(Keyfleet.ErrorSaves) do
+      ref = Process.monitor(pid)
+
+      receive do
+        {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
+      end
+    end
   end
 end
