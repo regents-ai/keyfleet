@@ -207,8 +207,12 @@ defmodule Keyfleet.Graph.WriterTest do
           start_graph(ctx, [fleet], python: python)
 
           assert_unavailable_for_a_while(fleet)
-          File.write!(python, "#!/bin/sh\nexec '#{python()}' \"$@\"\n")
-          File.chmod!(python, 0o755)
+          # Made runnable before it takes the name, so a restart never finds
+          # the interpreter present but not yet runnable.
+          staged = python <> ".staged"
+          File.write!(staged, "#!/bin/sh\nexec '#{python()}' \"$@\"\n")
+          File.chmod!(staged, 0o755)
+          File.rename!(staged, python)
           await_ready(fleet)
         end)
 
@@ -243,8 +247,10 @@ defmodule Keyfleet.Graph.WriterTest do
         capture_host_failures(fn ->
           start_graph(ctx, [fleet], python: hooked_python(ctx.tmp_dir))
 
+          # The writer has tried again while the lock is held, however slowly
+          # this machine runs it.
+          await(fn -> length(launches(ctx.tmp_dir)) >= 2 end)
           assert_unavailable_for_a_while(fleet)
-          assert length(launches(ctx.tmp_dir)) >= 2
           Port.close(holder)
           await_ready(fleet)
         end)
