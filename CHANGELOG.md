@@ -2848,3 +2848,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: Buy now approves and signs for the next Key's price plus 5%, rounded up to the cent, instead of exactly the price. The sale contract never takes a Key number; it sells whichever Key is next when the purchase lands, at that Key's own price, and refuses only above the buyer's maximum. So a buyer who loses Key N in a rush gets Key N+1, or the next one left, paying only its price, as long as it is within 5% (22 Classic Keys anywhere on the curve). Past that the purchase is refused and no USDC is taken. The panel says so: "Key 1: 10 USDC. If it sells first, you get the next Key for up to 10.5 USDC." A Foundry test drives a rush of 25 buyers on Classic.
 - Why: Sean asked that a buyer who loses Key N get N+1 or any Key they can afford. Before, the purchase capped at exactly the quoted price, and Classic's price rises with every Key, so every buyer who lost a race was refused and had to approve again. No contract change: the live factory's `purchase(receiver, maxPrice, deadline, proof)` already works this way.
+
+## 2026-10-19 — v97 released
+
+- What: released main 1fb76f87 to keyfleet.ai as Fly release v97 (rollback v96, a6b33beb): a buyer who loses Key N in a rush gets the next Key for up to 5% more.
+- Why: Sean released it (1. a, 16:46Z). Full check on a fresh copy was clean, with the Foundry rush test of 25 buyers on Classic; WebKit not run on the Mac.
