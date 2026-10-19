@@ -2780,3 +2780,45 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main a36c3d15 to keyfleet.ai as Fly release v94 (rollback v93, 2438bc71). The workspace "not found" answer now says an item id looks like `task#27`, and the feature map marks thirteen tests as proven.
 - Why: Contessa asked for `task:1` on live and the 404 never said what an id looks like. Full check on a fresh copy was clean (989 tests, 304 page tests, 66 Chromium browser walks; WebKit not run on the Mac).
+## 2026-10-19 — The next Key's card glows toward the mouse and shuffles when pointed at
+
+- Under a mouse, warm dust gathers just outside the next Key's card on the side
+  facing the pointer, follows it round the edge and brightens as it comes
+  closer.
+- Pointing at the card or at "Buy Next Key" flashes the card and starts a
+  shuffle through a hundred real Keys, drawn whole like the turning cards
+  further down but none of the same ones, ten a second, on a loop, the interim
+  pass fading out beneath it. Leaving both dissolves it back to the interim
+  pass over half a second.
+- The shuffle is one 1.9 MB animated picture that loads only under a mouse,
+  once the dust shows. `node key-art/shuffle.mjs` draws it again.
+- With less motion asked for, and on a phone or tablet, the card stays the
+  interim pass with no dust or shuffle. "Buy Next Key" works as before.
+- Evidence: level ordinary; feature home-next-key; new browser checks in
+  platform/test/browser/homepage_details.spec.ts (dust side and brightness,
+  flash, shuffle, half-second dissolve, a hundred frames at ten a second, less
+  motion, phone tap); break check: no dust and no dissolve each fail them;
+  gaps: WebKit not run on the Mac.
+
+## 2026-10-19 — The seas are dark charcoal by night
+
+- In dark mode the harbour seas, on the homepage and the app's sea page, are
+  dark charcoal with pale grey lines instead of blue. The windows' and flags'
+  colours stay. Classic's and the Club's still pictures, shown before a sea
+  draws, are drawn again to match.
+- Evidence: level ordinary; feature home-fleet-seas; the night stills are the
+  sea's own drawing, held still, in headless Chromium on the graphics chip at
+  1440 wide; gaps: WebKit not run on the Mac.
+
+## 2026-10-19 — Turning Keys in the Buy Key window; the Club's links show before it opens
+
+- The Buy Key window shows the thirty Key cards turning over, as Classic's
+  section does, in place of the interim pass.
+- The Regents Club's section no longer has turning cards. Its "Public View"
+  and "Buy Key on OpenSea" (in a new tab) now show even while the Club is
+  coming soon; the second was called "Buy Access Key".
+- Evidence: level ordinary; feature home-key-cards; browser checks in
+  platform/test/browser/homepage_details.spec.ts (the window's cards turn at
+  the pass's size, the Club has none) and a server check in
+  platform/test/keyfleet_web/home_live_test.exs (both Club links while coming
+  soon); gaps: WebKit not run on the Mac.

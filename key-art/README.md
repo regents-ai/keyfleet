@@ -34,6 +34,26 @@ PORT=4890 npm start
 The site's development settings point at `http://127.0.0.1:4890`. `npm run
 typecheck` checks the page against the site's TypeScript settings.
 
+## The homepage's shuffle
+
+`shuffle.mjs` draws the hundred Keys the homepage's next Key card shuffles
+through when a mouse points at it, and writes them as one looping animated
+WebP, ten cards a second:
+
+```sh
+cd key-art
+node shuffle.mjs ../platform/priv/static/images/home/next-key-shuffle.webp
+```
+
+The cards are real Keys from the trait table, of no fleet's deck, from fixed
+seeds unlike the thirty turning cards lower on the homepage. Each is drawn
+whole with the site's card code on the graphics chip at 1200×1500, its key
+reaching past its card, cut out of the studio and kept at 480×600. It needs
+`npm ci` here and in `platform/`, and libwebp's `cwebp` and `webpmux`. A WebP
+is the one animated picture with transparency every current browser shows in
+a plain image; at this size it is about 1.9 MB, so the page loads it only under
+a mouse, once its dust shows.
+
 ## Going live
 
 Nothing here goes on Fly without the founder's go.

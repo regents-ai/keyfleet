@@ -4,17 +4,18 @@ defmodule KeyfleetWeb.HomeLive do
   that says what a Key is for and "Buy Next Key", which shows the Key's card
   art and price and opens the fleet's page with its Buy panel open; Classic
   Keyfleet, its sea beside what a Key lets an agent join, Key cards turning
-  over, its public page and "Buy Key"; the Regents Club, its sea, the same
-  cards and what it is doing right now; what a fleet can use; and the footer.
+  over, its public page and "Buy Key"; the Regents Club, its sea, what it is
+  doing right now, its public page and its Keys on OpenSea; what a fleet can
+  use; and the footer.
 
   Each fleet's sea has a ship for each of its most recently active Keys, as
   anyone reads them (`KeyfleetWeb.HarbourCrew`), from the fleet's activity in
   the one reading every open page shares (`KeyfleetWeb.FleetNow`), its islands and buildings placed a little differently from the other's.
   Pressing a ship opens its Key's profile on the fleet's page. The cards are
   thirty Keys of no fleet, a fifth of a second each, turning only while on
-  screen; the Club's start halfway through.
+  screen.
 
-  "Buy Key" opens a window with the next Key's card art, where its price goes,
+  "Buy Key" opens a window with the same cards turning, where its price goes,
   how many of the 1,024 Keys have sold, the next Key's price and the one after
   it. Its own Buy follows the same sale as "Buy Next Key": closed, with the
   reason beside it, until the sale opens, then on to the fleet's Buy panel.
@@ -26,7 +27,8 @@ defmodule KeyfleetWeb.HomeLive do
   page reads the price again before anything reaches the wallet.
 
   The Regents Club shows how many Keys it has and who they went to, its
-  public page, its Keys on OpenSea (in a new tab), the addresses holding
+  public page and its Keys on OpenSea (in a new tab), even while it is coming
+  soon, the addresses holding
   them and how many of those are online now (as
   `KeyfleetWeb.FleetLive.headcount/1` says it), the goal it is trying and its
   latest item, as anyone reads them (`Keyfleet.Activity`). A coming-soon
@@ -419,7 +421,10 @@ defmodule KeyfleetWeb.HomeLive do
   # The Key on offer, its card art and its price. While Classic is coming
   # soon it names the first Key, the one the sale will open with, and the
   # button says it can't be pressed yet: a press shakes it and sends nothing.
-  # The card and its price tag are the same in every state.
+  # The card and its price tag are the same in every state. Under a mouse the
+  # card has dust outside its edge and, when pointed at, a shuffle of a
+  # hundred real Keys over the pass (NextKeyCard draws both); the shuffle's
+  # picture loads only once the dust shows.
   defp buy_next_key(assigns) do
     assigns = assign(assigns, offer(assigns.classic))
 
@@ -432,6 +437,12 @@ defmodule KeyfleetWeb.HomeLive do
         aria-hidden="true"
         data-key-card
       >
+        <canvas
+          id="home-buy-dust"
+          class="rl-buy__dust"
+          phx-mounted={JS.ignore_attributes(["width", "height"])}
+          data-key-dust
+        ></canvas>
         <div
           id="home-buy-tilt"
           class="rl-buy__tilt"
@@ -439,11 +450,24 @@ defmodule KeyfleetWeb.HomeLive do
           data-key-tilt
         >
           <img
+            id="home-buy-pass"
+            phx-mounted={JS.ignore_attributes(["style"])}
             src={~p"/images/home/next-key-pass.webp"}
             width="600"
             height="754"
             alt=""
             fetchpriority="high"
+            data-key-pass
+          />
+          <img
+            id="home-buy-shuffle"
+            class="rl-buy__shuffle"
+            phx-mounted={JS.ignore_attributes(["src", "style"])}
+            data-src={~p"/images/home/next-key-shuffle.webp"}
+            width="480"
+            height="600"
+            alt=""
+            data-key-shuffle
           />
           <span :if={@price} id="home-buy-tag" class="rl-buy__tag">{@price}</span>
         </div>
@@ -589,7 +613,7 @@ defmodule KeyfleetWeb.HomeLive do
 
   attr :classic, :map, required: true
 
-  # The window "Buy Key" opens: the next Key's card art, where its price goes,
+  # The window "Buy Key" opens: the Key cards turning, where its price goes,
   # how far the sale has gone, and the next Key's price and the one after it.
   # Its Buy is the same as "Buy Next Key" above, with the reason it is closed
   # right under it, so a phone that scrolls the window sees both together.
@@ -606,13 +630,7 @@ defmodule KeyfleetWeb.HomeLive do
       aria-labelledby="home-buy-key-title"
     >
       <h2 id="home-buy-key-title" tabindex="-1" data-modal-title>Buy Key</h2>
-      <img
-        class="rl-buy-key__art"
-        src={~p"/images/home/next-key-pass.webp"}
-        width="600"
-        height="754"
-        alt=""
-      />
+      <.cards id="home-buy-key-cards" />
       <p id="home-buy-key-split" class="rl-buy-key__split">{split()}</p>
       <dl class="rl-buy-key__facts">
         <div>
@@ -724,9 +742,7 @@ defmodule KeyfleetWeb.HomeLive do
           </p>
         </div>
 
-        <.cards id="home-club-cards" />
-        <%!-- Until the Club opens there is nothing to view or buy. --%>
-        <div :if={!@club.coming_soon?} class="rl-fleet__actions">
+        <div class="rl-fleet__actions">
           <.link
             id="home-club-public"
             navigate={Fleets.path(@club.id)}

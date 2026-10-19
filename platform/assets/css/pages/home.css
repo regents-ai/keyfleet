@@ -68,6 +68,19 @@
   .rl-buy__card { position: relative; aspect-ratio: 600 / 754; perspective: 60rem; }
   .rl-buy__tilt { position: absolute; inset: 0; }
   .rl-buy__tilt img { display: block; inline-size: 100%; block-size: 100%; object-fit: contain; }
+  /* Under a mouse, dust gathers just outside the card's edge on the side
+     facing the pointer, brighter the nearer it comes; pointing at the card or
+     its button flashes the card into a shuffle of a hundred Keys, which
+     dissolves back to the pass when the pointer leaves. NextKeyCard draws the
+     dust in the warm light of the hex field and shows the shuffle over the
+     pass. Each shuffled Key is drawn whole, its key reaching past its card,
+     so the picture is larger than the pass: its cards (columns 62 to 417 and
+     rows 50 to 549 of 480 by 600) sit centred on the pass's card at its width. */
+  .rl-buy__dust { position: absolute; inset: -3rem; inline-size: calc(100% + 6rem); block-size: calc(100% + 6rem); pointer-events: none; color: var(--rl-field-light); }
+  .rl-buy__tilt .rl-buy__shuffle {
+    position: absolute; inset-inline-start: -7.02%; inset-block-start: -10.94%;
+    inline-size: 122.47%; block-size: 121.82%; visibility: hidden; opacity: 0;
+  }
   /* The price on the card itself, beside the crown in its lower corner (the
      crown ends 197 of the picture's 716 columns in and 40 of its 900 rows up).
      The card's art is dark in both themes, so the tag keeps light ink on
@@ -225,17 +238,16 @@
      are on screen (`KeyCards` marks them turning). The sheet holds them six
      across and five down: the rows step down one every six cards while the
      sheet steps across one each card, so they show in order, and the rows
-     and the sheet stop and start together. The Club's start halfway through.
-     Less motion shows the first card alone. */
-  .rl-cards { --rl-cards-from: 0s; inline-size: 9rem; aspect-ratio: 4 / 5; overflow: hidden; }
-  #home-club .rl-cards { --rl-cards-from: -3s; }
+     and the sheet stop and start together. Less motion shows the first card
+     alone. */
+  .rl-cards { inline-size: 9rem; aspect-ratio: 4 / 5; overflow: hidden; }
   .rl-cards__rows { inline-size: 600%; block-size: 500%; }
   .rl-cards__sheet { display: block; inline-size: 100%; block-size: 100%; }
   @keyframes rl-cards-down { to { translate: 0 -100%; } }
   @keyframes rl-cards-across { to { translate: -100% 0; } }
   @media (prefers-reduced-motion: no-preference) {
-    .rl-cards__rows { animation: rl-cards-down 6s steps(5, jump-end) var(--rl-cards-from) infinite paused; }
-    .rl-cards__sheet { animation: rl-cards-across 1.2s steps(6, jump-end) var(--rl-cards-from) infinite paused; }
+    .rl-cards__rows { animation: rl-cards-down 6s steps(5, jump-end) infinite paused; }
+    .rl-cards__sheet { animation: rl-cards-across 1.2s steps(6, jump-end) infinite paused; }
     .rl-cards[data-cards-turning] :is(.rl-cards__rows, .rl-cards__sheet) { animation-play-state: running; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -247,7 +259,7 @@
   .rl-fleet__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-block-start: var(--space-2); }
   .rl-fleet__why { margin: 0; color: var(--rl-muted); font-size: .875rem; }
 
-  /* The window "Buy Key" opens: the card art, the split, and the sale's
+  /* The window "Buy Key" opens: the Key cards turning, the split, and the sale's
      figures in a ruled list. Phones see it across the whole width. */
   .rl-buy-key {
     inline-size: min(26rem, calc(100vw - 2rem)); max-inline-size: none; max-block-size: calc(100dvh - 2rem);
@@ -258,7 +270,7 @@
   .rl-buy-key::backdrop { background: var(--ash-scrim); }
   .rl-buy-key h2 { margin: 0; font-size: 1.5rem; line-height: 1.1; }
   .rl-buy-key h2:focus { outline: none; }
-  .rl-buy-key__art { display: block; justify-self: center; inline-size: min(100%, 12rem); block-size: auto; }
+  .rl-buy-key .rl-cards { justify-self: center; inline-size: min(100%, 12rem); }
   .rl-buy-key__split { margin: 0; font-size: .875rem; text-align: center; color: var(--rl-muted); }
   .rl-buy-key__facts { display: grid; margin: 0; border-block-start: 1px solid var(--rl-line); }
   .rl-buy-key__facts > div {

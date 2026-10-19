@@ -82,9 +82,9 @@ struct Scene {
 
 // Paper and ink, by day and by night (display colours).
 const PAPER_DAY: vec3f = vec3f(0.95, 0.96, 0.97);
-const PAPER_NIGHT: vec3f = vec3f(0.07, 0.15, 0.3);
+const PAPER_NIGHT: vec3f = vec3f(0.11, 0.115, 0.12);
 const INK_DAY: vec3f = vec3f(0.12, 0.3, 0.62);
-const INK_NIGHT: vec3f = vec3f(0.66, 0.84, 1.0);
+const INK_NIGHT: vec3f = vec3f(0.8, 0.81, 0.82);
 
 fn paper() -> vec3f {
   return mix(PAPER_DAY, PAPER_NIGHT, scene.night);

@@ -7,7 +7,7 @@ features:
       A visitor sees Classic's and the Regents Club's seas on the homepage, a ship
       for each of the fleet's most recently active Keys, and pressing a ship opens
       that Key on the fleet's page. Every open homepage shares one reading of each
-      fleet's ships.
+      fleet's ships. By night the seas are dark charcoal with pale grey lines.
     who: person
     level: ordinary
     paths:
@@ -44,8 +44,10 @@ features:
 
   - id: home-key-cards
     what: >-
-      A visitor sees thirty Key cards turning over in Classic's and the Club's
-      sections, a fifth of a second each, only while they are on screen.
+      A visitor sees thirty Key cards turning over in Classic's section and in
+      the Buy Key window, a fifth of a second each, only while they are on
+      screen. The Regents Club's section has none; it shows its public page
+      and its Keys on OpenSea, even while it is coming soon.
     who: person
     level: ordinary
     paths:
@@ -60,12 +62,14 @@ features:
     proofs:
       - platform/assets/test/key_cards.test.ts
       - platform/test/browser/homepage_details.spec.ts
+      - platform/test/keyfleet_web/home_live_test.exs
     regressions:
       - id: R-20261019-cards-rest-off-screen
         from: Sentinel read of 9b93fe1b
         test: platform/assets/test/key_cards.test.ts
     gaps:
       - WebKit is not run on the Mac.
+      - The browser checks run with Classic's sale closed, so the Buy Key window's cards are checked in the server tests only.
 
   - id: home-hero-field
     what: >-
@@ -102,12 +106,20 @@ features:
       On a wide screen the homepage's headline takes the hero's left half and the
       next Key's card, with "Buy Next Key", sits in the middle of its right half.
       Under a mouse the card turns toward the pointer and settles level again.
+      Dust gathers just outside the card's edge on the side facing the mouse,
+      brighter the nearer it is; pointing at the card or the button flashes the
+      card into a looping shuffle of a hundred real Keys at ten a second, which
+      dissolves back to the pass over half a second when the mouse leaves. Less
+      motion and a finger get the pass as it is, with no dust and no shuffle.
     who: person
     level: ordinary
     paths:
       - platform/lib/keyfleet_web/live/home_live.ex
       - platform/assets/css/pages/home.css
       - platform/assets/js/hooks/home_hero.ts
+      - platform/priv/static/images/home/next-key-shuffle.webp
+      - key-art/shuffle.mjs
+      - key-art/page/shuffle.ts
     entry:
       - route: GET /
       - live: KeyfleetWeb.HomeLive
@@ -119,6 +131,7 @@ features:
         test: platform/test/browser/homepage_details.spec.ts
     gaps:
       - WebKit is not run on the Mac.
+      - The shuffle's picture is about 1.9 MB; it loads only under a mouse, once the dust shows.
 
   - id: header-footer-links
     what: >-
