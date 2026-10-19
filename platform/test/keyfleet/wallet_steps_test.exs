@@ -120,8 +120,10 @@ defmodule Keyfleet.WalletStepsTest do
 
       built = build!(:buy)
       assert built.problem == nil
+
       assert %{token_id: 1, price: 10_000_000, max_price: 10_500_000, approve?: true} =
                built.figures
+
       assert built.figures.blocked == %{"buy" => :approve_usdc_first}
       assert built.review.chain.chain_id == 8453
       assert names(built) == ["approve", "buy"]

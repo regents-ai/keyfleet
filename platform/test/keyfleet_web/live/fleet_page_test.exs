@@ -527,6 +527,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
                  "Switch to 0xaaaa..aaaa."
 
       assert has_element?(view, "#buy-key-order-from[hidden]")
+
       assert text(view, "#buy-key-order-line") ==
                "Key 151: 42.99817 USDC. If it sells first, you get the next Key for up to 45.15 USDC."
 
@@ -581,8 +582,10 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       active!(view, @owner)
 
       refute_push_event(view, "onchain-steps:review", %{review: %{}})
+
       assert text(view, "#buy-key-order-line") ==
                "Key 151: 42.99817 USDC. If it sells first, you get the next Key for up to 45.15 USDC."
+
       refute has_element?(view, "#buy-key-button[disabled]")
 
       view
