@@ -40,11 +40,14 @@ defmodule Keyfleet.Activity do
       * `:claimed`: the task was given to `to` (a key; `to` equal to `by`
         means the key took it on itself);
       * `:unclaimed`: the task is nobody's again;
+      * `:submitted`: the task was submitted for review;
       * `:progress`: the task's `progress` is now "todo", "doing", "blocked"
         or "done";
       * `:status`: the goal's `status` is now "open", "achieved" or "dropped";
       * `:revised`: a goal or service was edited;
       * `:archived`.
+    * `:reviewed`: `by`, `item` (the task reviewed) and `decision`
+      ("accept" or "dispute").
     * `:linked`: `by`, `relation` ("supports", "contradicts" or "produces"),
       `source` and `target` (items): the source supports, contradicts or
       produces the target.
@@ -168,6 +171,19 @@ defmodule Keyfleet.Activity do
     %{items: name(taken, fleet_id, actor), cursor: next_cursor(streams)}
   end
 
+  @doc """
+  The fleet's latest workspace changes, newest first, told as `page/3` tells
+  them. Options: `:limit` (1 to #{@page}, #{@page} by default) and `:actor`.
+  """
+  @spec work(String.t(), keyword()) :: [item()]
+  def work(fleet_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, @page)
+    true = limit in 1..@page
+    actor = Keyword.get(opts, :actor)
+    {entries, _more?, _top} = read(:graph, fleet_id, nil, limit, actor)
+    entries |> Enum.take(limit) |> name(fleet_id, actor)
+  end
+
   # Where a walk begins in each source. Posts are read up to now by the
   # database's clock, which stamps them, one microsecond past so that the time
   # itself is included. The sources kept in record order begin just past the
@@ -188,14 +204,14 @@ defmodule Keyfleet.Activity do
   The item a fleet features at `now`, by the first rule that finds one:
 
     1. the latest `contradicts` link, if made in the last seven days;
-    2. the latest goal achieved, task marked done or proposal carried out, if
-       in the last seven days;
+    2. the latest goal achieved, task accepted in a review or proposal
+       carried out, if in the last seven days;
     3. the first open question of the most recently changed open goal.
 
   Nil when no rule finds one, and the fleet's latest item, the first of
   `page/3`, is featured instead; the caller has read it already.
 
-  Links, achieved goals and finished tasks are looked for among the fleet's
+  Links, achieved goals and accepted tasks are looked for among the fleet's
   200 latest notable workspace changes.
   """
   @spec headline(String.t(), DateTime.t()) :: item() | nil
@@ -542,6 +558,9 @@ defmodule Keyfleet.Activity do
     )
   end
 
+  defp change("object.created", %{"object_type" => "review"} = brief),
+    do: {:reviewed, %{item: {:item, brief["task"]}, decision: brief["decision"]}}
+
   defp change("object.created", brief), do: {:created, %{item: {:item, brief["object"]}}}
 
   defp change("relation.created", brief) do
@@ -560,6 +579,9 @@ defmodule Keyfleet.Activity do
     cond do
       brief["archived"] ->
         {:archived, item}
+
+      brief["submitted"] ->
+        {:submitted, item}
 
       "assignee_key" in brief["fields"] ->
         case values["assignee_key"] do

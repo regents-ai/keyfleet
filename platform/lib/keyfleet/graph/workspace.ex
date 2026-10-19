@@ -1,8 +1,13 @@
 defmodule Keyfleet.Graph.Workspace do
   @moduledoc """
   A fleet's shared workspace: the goals, tasks, findings, evidence, services,
-  launch cards, notes and dead ends its members keep, and the links between
-  them.
+  notes and dead ends its members keep, the links between them, and the
+  reviews of submitted tasks.
+
+  A task is marked done only by submitting it (`submit`), with its result and
+  the evidence it rests on. A submission claims the work is done; whether it
+  is accepted is for other members' reviews (`review`) to say, each bound to
+  the task version it judged. Neither says anything about paying for it.
 
   Each write is one operation on the fleet's graph, answered by its writer. A
   write names the key it acts as (`as_key`) and a command id of the caller's
@@ -33,9 +38,15 @@ defmodule Keyfleet.Graph.Workspace do
 
   actions do
     action :get, :map do
-      description "One object with its relations."
+      description "One object with a page of its relations."
       argument :fleet_id, :string, allow_nil?: false
       argument :id, :string, allow_nil?: false, constraints: @text
+
+      argument :relations_after, :integer,
+        allow_nil?: false,
+        default: 0,
+        constraints: [min: 0, max: @bigint]
+
       validate KnownFleet
       run {Read, read: :get}
     end
@@ -109,6 +120,39 @@ defmodule Keyfleet.Graph.Workspace do
       run {Relay, op: "unlink", body: [:relation_id]}
     end
 
+    action :submit, :map do
+      description "Submits a task for review: marks it done with its result and links its evidence."
+      argument :fleet_id, :string, allow_nil?: false
+      argument :as_key, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      argument :command_id, :string, allow_nil?: false, constraints: @text
+      argument :id, :string, allow_nil?: false, constraints: @text
+      argument :expected_version, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      argument :result_ref, :string, constraints: @text
+      argument :evidence, {:array, :string}, constraints: [items: @text]
+      argument :reason, :string, constraints: @text
+      validate KnownFleet
+      validate FreshOwnership, only_when_valid?: true
+      run {Relay, op: "submit", body: [:id, :expected_version, :result_ref, :evidence, :reason]}
+    end
+
+    action :review, :map do
+      description "Records a member's decision on the submitted task version they read."
+      argument :fleet_id, :string, allow_nil?: false
+      argument :as_key, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      argument :command_id, :string, allow_nil?: false, constraints: @text
+      argument :task, :string, allow_nil?: false, constraints: @text
+      argument :task_version, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      argument :decision, :string, allow_nil?: false, constraints: @text
+      argument :rationale, :string, allow_nil?: false, constraints: @text
+      argument :conflicts_of_interest, :string, allow_nil?: false, constraints: @text
+      validate KnownFleet
+      validate FreshOwnership, only_when_valid?: true
+
+      run {Relay,
+           op: "review",
+           body: [:task, :task_version, :decision, :rationale, :conflicts_of_interest]}
+    end
+
     action :archive, :map do
       description "Archives the object at the version the caller last saw; its history stays."
       argument :fleet_id, :string, allow_nil?: false
@@ -128,7 +172,7 @@ defmodule Keyfleet.Graph.Workspace do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:create, :patch, :link, :unlink, :archive]) do
+    policy action([:create, :patch, :link, :unlink, :archive, :submit, :review]) do
       authorize_if Keyfleet.Graph.Checks.KeyActor
     end
   end

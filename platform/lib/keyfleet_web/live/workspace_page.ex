@@ -22,22 +22,25 @@ defmodule KeyfleetWeb.WorkspacePage do
   (`Keyfleet.Graph.Checks.KeyReader`) and its code: for anyone else every page
   answers `members_only?: true`. The board then shows the fleet's outline,
   each goal and task by title, standing and the public summary its members
-  wrote, beside the fixed public summaries from `Keyfleet.WorkspacePulse`;
-  nothing else members write.
+  wrote, beside its latest workspace changes told as the fleet's feed tells
+  them to anyone (`Keyfleet.Activity.work/2`); nothing else members write.
+  An item's page shows that item's own outline entry first, when it is a
+  goal or task in the outline.
 
   A page name that is not one the tables can answer, such as an unknown type
   or a damaged page position, is a page that doesn't exist.
   """
 
-  alias Keyfleet.{Agents, Code, Fleets, Notebooks}
+  alias Keyfleet.{Activity, Agents, Code, Fleets, Notebooks}
   alias Keyfleet.Graph
   alias Keyfleet.Rooms
+  alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.Endpoint
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.RoomsLive
 
-  @types ~w(goal task finding evidence service note dead_end)
+  @types ~w(goal task finding evidence service note dead_end review)
 
   @type_names %{
     "goal" => {"goal", "Goals"},
@@ -46,7 +49,8 @@ defmodule KeyfleetWeb.WorkspacePage do
     "evidence" => {"evidence", "Evidence"},
     "service" => {"service", "Services"},
     "note" => {"note", "Notes"},
-    "dead_end" => {"dead end", "Dead ends"}
+    "dead_end" => {"dead end", "Dead ends"},
+    "review" => {"review", "Reviews"}
   }
 
   # Each type's fields in the order they are shown, with their names; any
@@ -90,6 +94,11 @@ defmodule KeyfleetWeb.WorkspacePage do
     "dead_end" => [
       {"what_was_tried", "What was tried"},
       {"why_it_failed", "Why it didn’t work"}
+    ],
+    "review" => [
+      {"decision", "Decision"},
+      {"rationale", "Reasons"},
+      {"conflicts_of_interest", "Conflicts of interest"}
     ]
   }
 
@@ -98,8 +107,14 @@ defmodule KeyfleetWeb.WorkspacePage do
       "todo" => "To do",
       "doing" => "In progress",
       "blocked" => "Blocked",
-      "done" => "Done"
+      "done" => "Submitted"
     },
+    "review" => %{
+      "awaiting_review" => "Awaiting review",
+      "accepted" => "Accepted",
+      "disputed" => "Disputed"
+    },
+    "decision" => %{"accept" => "Accepted", "dispute" => "Disputed"},
     "status" => %{"open" => "Open", "achieved" => "Achieved", "dropped" => "Dropped"},
     "confidence" => %{"low" => "Low", "medium" => "Medium", "high" => "High"},
     "payment_asset" => %{
@@ -109,6 +124,9 @@ defmodule KeyfleetWeb.WorkspacePage do
     }
   }
 
+  # Where a submitted task's review can stand.
+  @reviews Map.keys(@choices["review"])
+
   # What one item is to another, read from the link's source to its target.
   @relations %{
     "supports" => "supports",
@@ -116,8 +134,12 @@ defmodule KeyfleetWeb.WorkspacePage do
     "depends_on" => "depends on",
     "implements" => "delivers on",
     "produces" => "produces",
-    "references" => "mentions"
+    "references" => "mentions",
+    "reviews" => "reviews"
   }
+
+  # How every time on a workspace page is written.
+  @at "%-d %B %Y at %H:%M UTC"
 
   # How many goals and tasks a fleet's outline shows anyone.
   @outlined %{"goal" => 12, "task" => 24}
@@ -205,7 +227,7 @@ defmodule KeyfleetWeb.WorkspacePage do
         %{fleet_id: fleet_id, fleet_name: name, ready?: false, seen: nil, filter: filter}
 
       {:members_only, name} ->
-        members_only(fleet_id, name)
+        members_only(fleet_id, name, actor, nil)
     end
   end
 
@@ -216,7 +238,8 @@ defmodule KeyfleetWeb.WorkspacePage do
     history_through = history_position!(params)
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
-         {:ok, object} <- members_read(fleet, Graph.read_object(fleet_id, object_id, opts)),
+         {:ok, object} <-
+           members_read(fleet, Graph.read_object(fleet_id, object_id, [load: [:review]] ++ opts)),
          {:ready, cursor} <- ready(fleet, opts) do
       base = %{fleet_id: fleet_id, fleet_name: fleet.name, ready?: true, seen: seen(cursor)}
 
@@ -260,30 +283,44 @@ defmodule KeyfleetWeb.WorkspacePage do
       end
     else
       {:missing, name} -> %{fleet_id: fleet_id, fleet_name: name, ready?: false, seen: nil}
-      {:members_only, name} -> members_only(fleet_id, name)
+      {:members_only, name} -> members_only(fleet_id, name, actor, object_id)
     end
   end
 
-  defp members_only(fleet_id, name) do
-    pulse =
-      case Keyfleet.WorkspacePulse.read(fleet_id) do
-        {:ok, pulse} -> pulse
-        :unknown -> %{activity: [], notebooks_configured: false}
-        {:error, error} -> raise error
-      end
-
+  defp members_only(fleet_id, name, actor, object_id) do
     %{
       fleet_id: fleet_id,
       fleet_name: name,
       members_only?: true,
       seen: nil,
-      pulse: pulse,
-      outline: Map.new(@outlined, fn {type, limit} -> {type, outline(fleet_id, type, limit)} end)
+      focus: focus(fleet_id, object_id),
+      work:
+        for item <- Activity.work(fleet_id, actor: actor) do
+          %{id: item.id, at: Calendar.strftime(item.at, @at), parts: ActivityLines.parts(item)}
+        end,
+      outline:
+        Map.new(@outlined, fn {type, limit} -> {type, outline(fleet_id, type, limit: limit)} end)
     }
   end
 
-  defp outline(fleet_id, type, limit) do
-    for object <- Graph.outline!(fleet_id, type, query: [limit: limit]) do
+  # The goal or task an item's page names, as the outline shows it to anyone.
+  defp focus(_fleet_id, nil), do: nil
+
+  defp focus(fleet_id, object_id) do
+    case String.split(object_id, "#", parts: 2) do
+      [type, _number] when type in ["goal", "task"] ->
+        fleet_id
+        |> outline(type, filter: [id: object_id], limit: 1)
+        |> List.first()
+        |> then(&(&1 && Map.put(&1, :type_name, type |> type_name() |> elem(0))))
+
+      _other ->
+        nil
+    end
+  end
+
+  defp outline(fleet_id, type, query) do
+    for object <- Graph.outline!(fleet_id, type, query: query) do
       %{
         id: object.id,
         title: object.title,
@@ -294,6 +331,9 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   defp standing("goal", status), do: choice("status", status)
+
+  defp standing("task", review) when review in @reviews, do: choice("review", review)
+
   defp standing("task", progress), do: choice("progress", progress)
 
   @doc """
@@ -483,7 +523,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       level: level(object.sys),
       by: created_by(object.sys, agents),
       changed_at: at(object.changed_at),
-      facts: facts(object.type, object.card, fleet_id),
+      facts: facts(object.type, Map.put(object.card, "review", object.review), fleet_id),
       gist: object.card["gist"]
     }
   end
@@ -494,6 +534,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp facts("task", card, _fleet_id) do
     present([
       {"Progress", choice("progress", card["progress"])},
+      {"Review", card["review"] && choice("review", card["review"])},
       {"Taken by", key_or(card["assignee_key"], "No one yet")}
     ])
   end
@@ -541,15 +582,30 @@ defmodule KeyfleetWeb.WorkspacePage do
       version: object.version,
       changed_at: at(object.changed_at),
       fields:
-        Enum.flat_map(known ++ others, fn {field, label} ->
-          case field_value(field, object.data[field], fleet_id) do
-            nil -> []
-            shown -> [{label, shown}]
-          end
-        end),
+        receipt(object) ++
+          Enum.flat_map(known ++ others, fn {field, label} ->
+            case field_value(field, object.data[field], fleet_id) do
+              nil -> []
+              shown -> [{label, shown}]
+            end
+          end),
       discussion: discussion(object.data["discussion"], fleet_id, opts)
     }
   end
+
+  # Where a submitted task's review stands, and what a review judged: the
+  # task's version and who submitted it.
+  defp receipt(%{type: "task", review: review}) when is_binary(review),
+    do: [{"Review", choice("review", review)}]
+
+  defp receipt(%{type: "review", sys: %{"review" => review}}) do
+    [
+      {"Version reviewed", Integer.to_string(review["task_version"])},
+      {"Submitted by", {:key, review["submitted_by"]["key"]["token_id"], nil}}
+    ]
+  end
+
+  defp receipt(_object), do: []
 
   defp field_value(_field, nil, _fleet_id), do: nil
   defp field_value(_field, [], _fleet_id), do: nil
@@ -636,11 +692,25 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # The ids a change's line names.
   defp mentions(%{brief: brief}),
-    do: Enum.filter([brief["object"], brief["source"], brief["target"]], &is_binary/1)
+    do:
+      Enum.filter(
+        [brief["object"], brief["source"], brief["target"], brief["task"]],
+        &is_binary/1
+      )
 
   defp line(event, titles, agents) do
     parts = event |> parts(titles) |> Enum.map(&named(&1, agents))
     %{seq: event.seq, at: at(event.timestamp), parts: parts}
+  end
+
+  defp parts(
+         %{type: "object.created", brief: %{"object_type" => "review", "task" => task} = brief} =
+           event,
+         titles
+       )
+       when is_binary(task) do
+    did = if brief["decision"] == "accept", do: " accepted ", else: " disputed "
+    [who(event.actor), did, item_part(task, titles), "."]
   end
 
   defp parts(%{type: "object.created", brief: %{"object" => id} = brief} = event, titles)
@@ -655,6 +725,13 @@ defmodule KeyfleetWeb.WorkspacePage do
        )
        when is_binary(id),
        do: [who(event.actor), " archived ", item_part(id, titles), "."]
+
+  defp parts(
+         %{type: "patch.applied", brief: %{"object" => id, "submitted" => true}} = event,
+         titles
+       )
+       when is_binary(id),
+       do: [who(event.actor), " submitted ", item_part(id, titles), " for review."]
 
   defp parts(%{type: "patch.applied", brief: %{"object" => id} = brief} = event, titles)
        when is_binary(id) do
@@ -802,7 +879,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       agent: agents[push.acting_agent_wallet],
       what: moved(push.ref),
       commit: {:commit, push.head, Code.commit_path(fleet_id, push.head)},
-      at: Calendar.strftime(push.pushed_at, "%-d %B %Y at %H:%M UTC")
+      at: Calendar.strftime(push.pushed_at, @at)
     }
   end
 
@@ -812,7 +889,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp at(timestamp) do
     {:ok, datetime, 0} = DateTime.from_iso8601(timestamp)
-    Calendar.strftime(datetime, "%-d %B %Y at %H:%M UTC")
+    Calendar.strftime(datetime, @at)
   end
 
   defp humanize(field), do: field |> String.replace("_", " ") |> String.capitalize()

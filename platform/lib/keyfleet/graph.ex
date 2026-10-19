@@ -30,6 +30,8 @@ defmodule Keyfleet.Graph do
       define :link_objects, action: :link, args: [:fleet_id]
       define :unlink_relation, action: :unlink, args: [:fleet_id]
       define :archive_object, action: :archive, args: [:fleet_id]
+      define :submit_task, action: :submit, args: [:fleet_id]
+      define :review_task, action: :review, args: [:fleet_id]
     end
 
     resource Keyfleet.Graph.Cursor do
@@ -61,7 +63,9 @@ defmodule Keyfleet.Graph do
     end
 
     resource Keyfleet.Graph.Relation do
-      define :read_relations_touching, action: :touching, args: [:fleet_id, :object_id, :limit]
+      define :read_relations_touching,
+        action: :touching,
+        args: [:fleet_id, :object_id, :after_seq, :limit]
       define :object_links, action: :linked, args: [:fleet_id, :object_id]
       define :producers_of, action: :producing, args: [:fleet_id, :targets]
       define :project_relations, action: :project
@@ -100,6 +104,8 @@ defmodule Keyfleet.Graph do
 
     * `goals`: up to #{@goals_shown} open goals, most recently changed first,
       each with its `title`.
+    * `goals_set?`: whether the workspace holds any goal, open or not, that
+      is not archived.
     * `counts`: how many of each kind of open work the workspace holds, as
       `count_open_work/2` counts them: `goals_open`, `tasks_doing`,
       `tasks_taken` and `tasks_untaken`.
@@ -129,6 +135,7 @@ defmodule Keyfleet.Graph do
 
     %{
       goals: goals,
+      goals_set?: goals != [] or outline!(fleet_id, "goal", query: [limit: 1]) != [],
       counts: counts,
       question: goals |> question_of() |> then(&(&1 && &1.question))
     }

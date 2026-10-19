@@ -34,7 +34,7 @@ from keyfleet_graph.pack import (
     RELATION_ENDPOINTS,
     RelationData,
 )
-from keyfleet_graph.protocol import Command
+from keyfleet_graph.protocol import MAX_EVIDENCE, Command
 from keyfleet_graph.reactions import ATTENTION_EVENT, DependsOnLinks, Reactions
 
 LEDGER_EVENT = "keyfleet.command"
@@ -46,9 +46,10 @@ CHANGES_PAGE_BYTES = 512 * 1024
 
 # The settling quantum only drains lifecycle bookkeeping: the pack carries no
 # behaviors, so any work left after it is a fault. It holds the most one
-# command can write: its change, `MAX_ATTENTION` attention events and its
-# ledger event. A test fails if `MAX_ATTENTION` grows past what fits.
-_QUANTUM_EVENTS = 64
+# command can write: a submission's change and its `MAX_EVIDENCE` links,
+# `MAX_ATTENTION` attention events and its ledger event. A test fails if
+# either bound grows past what fits.
+_QUANTUM_EVENTS = 96
 _QUANTUM_SECONDS = 1.0
 
 
@@ -191,13 +192,12 @@ class Host:
 
         def apply(reactions: Reactions) -> dict:
             obj = self.graph.add_object(body.type, record, actor=command.principal)
-            reactions.created(obj, self._last_event_id())
             return {"id": obj.id, "version": obj.version}
 
         return apply
 
     def _plan_patch(self, command: Command, body: protocol.PatchBody) -> Callable[[Reactions], dict]:
-        obj = self._live(body.id, "id")
+        obj = self._editable(body.id)
         _check_version(obj, body.expected_version)
         _check_scope(command, obj)
         _check_fields(MEMBER_MODELS[obj.type], set(body.set) | set(body.unset), body.set, command)
@@ -213,14 +213,12 @@ class Host:
             self.graph.patch_object(
                 obj.id, updates, actor=command.principal, rationale=body.reason, evidence=body.evidence
             )
-            current = self.graph.get_object(obj.id)
-            reactions.patched(current, updates, self._last_event_id())
-            return {"id": obj.id, "version": current.version}
+            return {"id": obj.id, "version": self.graph.get_object(obj.id).version}
 
         return apply
 
     def _plan_archive(self, command: Command, body: protocol.ArchiveBody) -> Callable[[Reactions], dict]:
-        obj = self._live(body.id, "id")
+        obj = self._editable(body.id)
         _check_version(obj, body.expected_version)
         _check_scope(command, obj)
         archived = {**obj.data["sys"], "archived": True}
@@ -262,6 +260,8 @@ class Host:
         rel = self.graph.get_relation(body.relation_id)
         if rel is None:
             raise Refusal("not_found", "no such relation", {"id": body.relation_id})
+        if rel.type == "reviews":
+            raise _invalid("relation_id", "a review stays linked to the task it judged")
         target = self.graph.get_object(rel.target)
         _check_scope(command, self.graph.get_object(rel.source), target)
 
@@ -270,6 +270,110 @@ class Host:
             self.depends_on.removed(rel)
             reactions.unlinked(rel, target, self._last_event_id())
             return {"relation_id": rel.id}
+
+        return apply
+
+    def _plan_submit(self, command: Command, body: protocol.SubmitBody) -> Callable[[Reactions], dict]:
+        """Marks a task done for review, with its result and the evidence it rests on, in one write.
+
+        The task becomes the acting Key's; one taken by another Key is refused.
+        Each evidence item is linked as something the task `produces`. A
+        submission is only a claim: whether the work is accepted is for its
+        reviews to say.
+        """
+        task = self._task(body.id, "id")
+        _check_version(task, body.expected_version)
+        _check_scope(command, task)
+        key = command.auth.key.token_id
+        if task.data.get("assignee_key") not in (None, key):
+            raise Refusal(
+                "forbidden_field",
+                "the task is taken by another Key",
+                {"fields": ["assignee_key"], "assignee_key": task.data["assignee_key"]},
+            )
+        evidence = list(dict.fromkeys(body.evidence))
+        if body.result_ref is None and not evidence:
+            raise _invalid("evidence", "a submission names its result, its evidence or both")
+        produced = []
+        for index, item_id in enumerate(evidence):
+            item = self._live(item_id, f"evidence.{index}")
+            if item.type not in RELATION_ENDPOINTS["produces"][1]:
+                raise _invalid(f"evidence.{index}", f"a task cannot produce a {item.type}")
+            _check_scope(command, item)
+            produced.append(item)
+        submitted = {**_creator(command), "version": task.version + 1, "evidence": evidence}
+        merged = {
+            **task.data,
+            "progress": "done",
+            "assignee_key": key,
+            "result_ref": body.result_ref,
+            "sys": {**task.data["sys"], "submitted": submitted},
+        }
+        record = _validate(RECORD_MODELS["task"], merged)
+        updates = {field: value for field, value in record.items() if task.data.get(field) != value}
+        was_done = task.data["progress"] == "done"
+
+        def apply(reactions: Reactions) -> dict:
+            self.graph.patch_object(
+                task.id, updates, actor=command.principal, rationale=body.reason, evidence=evidence
+            )
+            current = self.graph.get_object(task.id)
+            reactions.submitted(current, was_done, self._last_event_id())
+            for item in produced:
+                if not self.graph.relations(source=task.id, target=item.id, type="produces"):
+                    self.graph.add_relation(task.id, item.id, "produces", {}, actor=command.principal)
+            return {"id": task.id, "version": current.version}
+
+        return apply
+
+    def _plan_review(self, command: Command, body: protocol.ReviewBody) -> Callable[[Reactions], dict]:
+        """Records one member's decision on the task version they read.
+
+        A review binds itself to that version, to who submitted it and to each
+        piece of its evidence as it then stood. The Key or wallet that submitted
+        the task cannot review it, and a Key reviews each version once. Whether
+        two different Keys belong to different people is not something the
+        graph knows, so a review never claims it.
+        """
+        task = self._task(body.task, "task")
+        _check_scope(command, task)
+        submitted = task.data["sys"].get("submitted")
+        if task.data["progress"] != "done" or submitted is None:
+            raise _invalid("task", "the task has not been submitted for review")
+        _check_version(task, body.task_version)
+        reviewer = _creator(command)
+        submitted_by = {field: submitted[field] for field in ("key", "ownership_epoch", "kind", "wallet")}
+        if reviewer["key"] == submitted_by["key"] or reviewer["wallet"] == submitted_by["wallet"]:
+            raise Refusal(
+                "self_review",
+                "the Key or wallet that submitted a task cannot review it",
+                {"submitted_by": submitted_by},
+            )
+        for rel in self.graph.relations(target=task.id, type="reviews"):
+            prior = self.graph.get_object(rel.source).data["sys"]
+            if prior["review"]["task_version"] == task.version and prior["created_by"]["key"] == reviewer["key"]:
+                raise _invalid("task_version", "this Key has already reviewed this version of the task")
+        receipt = {
+            "task": task.id,
+            "task_version": task.version,
+            "submitted_by": submitted_by,
+            "evidence": [
+                {"id": item_id, "version": self._object(item_id, "evidence").version}
+                for item_id in submitted["evidence"]
+            ],
+        }
+        member = {
+            "decision": body.decision,
+            "rationale": body.rationale,
+            "conflicts_of_interest": body.conflicts_of_interest,
+        }
+        sys = {**_sys(command, task.data["sys"]["scope"]), "review": receipt}
+        record = _validate(RECORD_MODELS["review"], {**member, "sys": sys})
+
+        def apply(reactions: Reactions) -> dict:
+            review = self.graph.add_object("review", record, actor=command.principal)
+            self.graph.add_relation(review.id, task.id, "reviews", {}, actor=command.principal)
+            return {"id": review.id, "version": review.version}
 
         return apply
 
@@ -285,6 +389,19 @@ class Host:
         obj = self._object(object_id, path)
         if obj.data["sys"]["archived"]:
             raise _invalid(path, "the object is archived")
+        return obj
+
+    def _task(self, object_id: str, path: str):
+        obj = self._live(object_id, path)
+        if obj.type != "task":
+            raise _invalid(path, "the object is not a task")
+        return obj
+
+    # Reviews are written once and stay as written.
+    def _editable(self, object_id: str):
+        obj = self._live(object_id, "id")
+        if obj.type == "review":
+            raise _invalid("id", "a review cannot be changed")
         return obj
 
     def _log_id(self) -> str:
@@ -368,6 +485,8 @@ _PLANNERS = {
     "archive": Host._plan_archive,
     "link": Host._plan_link,
     "unlink": Host._plan_unlink,
+    "submit": Host._plan_submit,
+    "review": Host._plan_review,
 }
 
 
@@ -456,6 +575,12 @@ def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], comma
     unknown = sorted(field for field in fields if field not in member.model_fields)
     if unknown:
         raise Refusal("forbidden_field", "these fields are not member-writable", {"fields": unknown})
+    if "result_ref" in fields or values.get("progress") == "done":
+        raise Refusal(
+            "forbidden_field",
+            "a task is marked done, with its result, only by submitting it",
+            {"fields": sorted({"result_ref", "progress"} & set(fields))},
+        )
     if values.get("assignee_key") not in (None, command.auth.key.token_id):
         raise Refusal(
             "forbidden_field",
@@ -464,18 +589,18 @@ def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], comma
         )
 
 
-def _sys(command: Command, scope: str) -> dict[str, Any]:
+def _creator(command: Command) -> dict[str, Any]:
     auth = command.auth
     return {
-        "scope": scope,
-        "created_by": {
-            "key": auth.key.model_dump(mode="json"),
-            "ownership_epoch": auth.ownership_epoch,
-            "kind": auth.kind,
-            "wallet": auth.operator_wallet,
-        },
-        "archived": False,
+        "key": auth.key.model_dump(mode="json"),
+        "ownership_epoch": auth.ownership_epoch,
+        "kind": auth.kind,
+        "wallet": auth.operator_wallet,
     }
+
+
+def _sys(command: Command, scope: str) -> dict[str, Any]:
+    return {"scope": scope, "created_by": _creator(command), "archived": False}
 
 
 def _byte_page(events: list[dict[str, Any]]) -> list[dict[str, Any]]:

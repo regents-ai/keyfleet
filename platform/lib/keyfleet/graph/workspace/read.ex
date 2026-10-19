@@ -8,7 +8,10 @@ defmodule Keyfleet.Graph.Workspace.Read do
   fleet's log the tables had reached: a write whose `head_seq` is at or below
   it is in the answer, and nothing past it is.
 
-  `get` answers one object and its first 200 links. `changes` answers the
+  `get` answers one object and a page of up to 200 of its links, oldest
+  first, made after `relations_after`; `relations_next_cursor` is the
+  `relations_after` to read the next page from, or nil after the last one.
+  `changes` answers the
   copied events after `after_seq`, oldest first, at most `limit` of them and
   no more than 512 KiB of them unless one event alone is larger;
   `next_cursor` is the `after_seq` to read on from, and `run_id` names the
@@ -33,7 +36,7 @@ defmodule Keyfleet.Graph.Workspace.Read do
     Graph.in_snapshot(fn -> read(kind, input.arguments, Ash.Context.to_opts(context)) end)
   end
 
-  defp read(:get, %{fleet_id: fleet_id, id: id}, opts) do
+  defp read(:get, %{fleet_id: fleet_id, id: id, relations_after: after_seq}, opts) do
     {_run_id, watermark} = standing(fleet_id, opts)
 
     case Graph.read_object!(fleet_id, id, opts) do
@@ -42,15 +45,15 @@ defmodule Keyfleet.Graph.Workspace.Read do
          RefusedError.exception(code: "not_found", reason: "no such object", details: %{id: id})}
 
       object ->
-        relations = Graph.read_relations_touching!(fleet_id, id, @relation_page + 1, opts)
+        {page, rest} =
+          fleet_id
+          |> Graph.read_relations_touching!(id, after_seq, @relation_page + 1, opts)
+          |> Enum.split(@relation_page)
 
         %{
           object: Map.take(object, [:id, :type, :data, :sys, :version]),
-          relations:
-            relations
-            |> Enum.take(@relation_page)
-            |> Enum.map(&Map.take(&1, [:id, :type, :source, :target, :data])),
-          relations_has_more: length(relations) > @relation_page,
+          relations: Enum.map(page, &Map.take(&1, [:id, :type, :source, :target, :data])),
+          relations_next_cursor: if(rest != [], do: List.last(page).created_seq),
           watermark: watermark,
           agents: Agents.names_by_wallet([creator(object.sys)])
         }

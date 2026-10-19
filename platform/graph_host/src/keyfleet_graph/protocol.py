@@ -13,6 +13,8 @@ from typing import Annotated, Any, BinaryIO, Literal, Optional
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 MAX_REQUEST_BYTES = 1 << 20
+# The most evidence one patch or submission may name.
+MAX_EVIDENCE = 20
 # SQLite stores integers as signed 64-bit; every integer a request carries fits.
 MAX_INT = (1 << 63) - 1
 _HEADER = struct.Struct(">I")
@@ -175,15 +177,13 @@ class CreateBody(_Shape):
     scope: Scope
     data: dict[str, Any]
 
-
-
 class PatchBody(_Shape):
     id: Id
     expected_version: Version
     set: dict[str, Any] = Field(default_factory=dict)
     unset: Annotated[list[Name], Field(max_length=64)] = Field(default_factory=list)
     reason: Optional[Reason] = None
-    evidence: Annotated[list[Id], Field(max_length=20)] = Field(default_factory=list)
+    evidence: Annotated[list[Id], Field(max_length=MAX_EVIDENCE)] = Field(default_factory=list)
 
 
 class LinkBody(_Shape):
@@ -203,6 +203,22 @@ class ArchiveBody(_Shape):
     reason: Optional[Reason] = None
 
 
+class SubmitBody(_Shape):
+    id: Id
+    expected_version: Version
+    result_ref: Optional[str] = None
+    evidence: Annotated[list[Id], Field(max_length=MAX_EVIDENCE)] = Field(default_factory=list)
+    reason: Optional[Reason] = None
+
+
+class ReviewBody(_Shape):
+    task: Id
+    task_version: Version
+    decision: str
+    rationale: str
+    conflicts_of_interest: str
+
+
 READ_OPS: dict[str, type[_Shape]] = {
     "hello": HelloBody,
     "changes": ChangesBody,
@@ -214,4 +230,6 @@ WRITE_OPS: dict[str, type[_Shape]] = {
     "link": LinkBody,
     "unlink": UnlinkBody,
     "archive": ArchiveBody,
+    "submit": SubmitBody,
+    "review": ReviewBody,
 }

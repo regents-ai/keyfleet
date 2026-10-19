@@ -136,7 +136,8 @@ defmodule Keyfleet.Graph.Event do
     end
 
     # The latest disagreement (`:contradiction`, a `contradicts` link) or the
-    # latest finished work (`:completion`, a goal achieved or a task done)
+    # latest finished work (`:completion`, a goal achieved or a review that
+    # accepts a task)
     # among the fleet's 200 latest notable changes, or none.
     read :latest_mark do
       argument :fleet_id, :string, allow_nil?: false
@@ -284,9 +285,11 @@ defmodule Keyfleet.Graph.Event do
   calculations do
     # What a line about the event needs from it, read in the database so a
     # page of lines never loads the text the event carries:
-    #   object.created   object, object_type
-    #   patch.applied    object, fields (the names changed), archived, and
-    #                    values: {old, new} of the few short fields shown
+    #   object.created   object, object_type, and for a review its
+    #                    decision and the task it reviews
+    #   patch.applied    object, fields (the names changed), archived,
+    #                    submitted (the patch submitted a task for review),
+    #                    and values: {old, new} of the few short fields shown
     #   relation.created relation_type, source, target
     #   relation.removed the same, from the event that made the link
     #   keyfleet.attention kind, object
@@ -297,13 +300,14 @@ defmodule Keyfleet.Graph.Event do
                 fragment(
                   """
                   CASE ?
-                  WHEN 'object.created' THEN jsonb_build_object('object', ? #>> '{object,id}', 'object_type', ? #>> '{object,type}')
+                  WHEN 'object.created' THEN jsonb_strip_nulls(jsonb_build_object('object', ? #>> '{object,id}', 'object_type', ? #>> '{object,type}', 'decision', ? #>> '{object,data,decision}', 'task', ? #>> '{object,data,sys,review,task}'))
                   WHEN 'patch.applied' THEN jsonb_build_object(
                     'object', (? ->> 'target'),
                     'fields', CASE WHEN jsonb_typeof(? -> 'diff') = 'object'
                       THEN (SELECT COALESCE(jsonb_agg(k.key ORDER BY k.key), '[]'::jsonb) FROM jsonb_object_keys(? -> 'diff') AS k(key))
                       ELSE '[]'::jsonb END,
                     'archived', COALESCE((? #> '{diff,sys,new,archived}') = 'true'::jsonb, false),
+                    'submitted', (? #> '{diff,sys,new,submitted,version}') IS NOT NULL AND (? #> '{diff,sys,new,submitted,version}') IS DISTINCT FROM (? #> '{diff,sys,old,submitted,version}'),
                     'values', jsonb_strip_nulls(jsonb_build_object(
                       'status', ? #> '{diff,status}',
                       'progress', ? #> '{diff,progress}',
@@ -320,6 +324,10 @@ defmodule Keyfleet.Graph.Event do
                   END
                   """,
                   type,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
                   payload,
                   payload,
                   payload,
@@ -369,14 +377,18 @@ defmodule Keyfleet.Graph.Event do
   defp mark(query, :completion) do
     Ash.Query.filter(
       query,
-      type == "patch.applied" and
-        fragment(
-          "((split_part(? ->> 'target', '#', 1) = 'goal' AND (? #>> '{diff,status,new}') = 'achieved') OR (split_part(? ->> 'target', '#', 1) = 'task' AND (? #>> '{diff,progress,new}') = 'done'))",
-          payload,
-          payload,
-          payload,
-          payload
-        )
+      (type == "patch.applied" and
+         fragment(
+           "split_part(? ->> 'target', '#', 1) = 'goal' AND (? #>> '{diff,status,new}') = 'achieved'",
+           payload,
+           payload
+         )) or
+        (type == "object.created" and
+           fragment(
+             "(? #>> '{object,type}') = 'review' AND (? #>> '{object,data,decision}') = 'accept'",
+             payload,
+             payload
+           ))
     )
   end
 

@@ -1,9 +1,14 @@
-"""The pinned `keyfleet_work@0.3.0` work pack.
+"""The pinned `keyfleet_work@0.4.0` work pack.
 
 Two models per object type: the member model is what a member may write, and
 the record model adds the server-owned `sys` block and is what the graph
 stores. Every model forbids unknown keys, so nothing a member writes can land
 outside the declared fields.
+
+A task is marked done only by submitting it, which records who submitted it
+and the evidence it rests on in `sys.submitted`. A review is written only by
+the review op: its member fields are the reviewer's decision and reasons, and
+`sys.review` binds it to the task version and the submission it judged.
 """
 
 from typing import Annotated, Literal, Optional
@@ -14,7 +19,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, Scope, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.3.0"
+PACK_VERSION = "0.4.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -78,6 +83,8 @@ class Goal(WorkObject):
 
 
 class Task(WorkObject):
+    """`progress` "done" and `result_ref` are written only by submitting the task."""
+
     deliverable: Optional[_text(2000, multiline=True)] = None
     assignee_key: Optional[Count] = None
     progress: Literal["todo", "doing", "blocked", "done"] = "todo"
@@ -120,6 +127,17 @@ class DeadEnd(WorkObject):
     why_it_failed: _text(2000, required=True, multiline=True)
 
 
+# One member's judgement of one submitted task version. Reviews are never
+# edited, archived or linked by hand; a reviewer who changes their mind
+# reviews the task's next version.
+class Review(_Model):
+    decision: Literal["accept", "dispute"]
+    rationale: _text(4000, required=True, multiline=True)
+    # Anything that could sway the reviewer, such as owning the submitting Key
+    # or sharing in its pay; "none" when there is nothing to declare.
+    conflicts_of_interest: _text(1000, required=True, multiline=True)
+
+
 class KeyCoordinate(_Model):
     chain_id: Annotated[int, Field(ge=1, le=MAX_INT)]
     contract: Address
@@ -133,10 +151,33 @@ class CreatedBy(_Model):
     wallet: Address
 
 
+class Submitted(CreatedBy):
+    # The task version the submission made: the version its reviews judge
+    # until the task changes again.
+    version: Annotated[int, Field(ge=2, le=MAX_INT)]
+    evidence: list[str] = _items()
+
+
+class ReviewedEvidence(_Model):
+    id: str
+    version: Annotated[int, Field(ge=1, le=MAX_INT)]
+
+
+class ReviewReceipt(_Model):
+    task: str
+    task_version: Annotated[int, Field(ge=1, le=MAX_INT)]
+    submitted_by: CreatedBy
+    evidence: list[ReviewedEvidence] = _items()
+
+
 class Sys(_Model):
     scope: Scope
     created_by: CreatedBy
     archived: bool
+    # A task's latest submission, and what a review judged; each is left out
+    # of every other object's record.
+    submitted: Optional[Submitted] = Field(default=None, exclude_if=lambda value: value is None)
+    review: Optional[ReviewReceipt] = Field(default=None, exclude_if=lambda value: value is None)
 
 
 MEMBER_MODELS: dict[str, type[WorkObject]] = {
@@ -150,9 +191,9 @@ MEMBER_MODELS: dict[str, type[WorkObject]] = {
 }
 
 
-RECORD_MODELS: dict[str, type[WorkObject]] = {
+RECORD_MODELS: dict[str, type[BaseModel]] = {
     name: create_model(f"{member.__name__}Record", __base__=member, sys=(Sys, ...))
-    for name, member in MEMBER_MODELS.items()
+    for name, member in {**MEMBER_MODELS, "review": Review}.items()
 }
 
 
@@ -178,8 +219,12 @@ PACK = Pack(
     description="Keyfleet shared work graph.",
     object_types=[ObjectType(name, model) for name, model in RECORD_MODELS.items()],
     relation_types=[
-        RelationType(name, source_types=sources, target_types=targets)
-        for name, (sources, targets) in RELATION_ENDPOINTS.items()
+        *(
+            RelationType(name, source_types=sources, target_types=targets)
+            for name, (sources, targets) in RELATION_ENDPOINTS.items()
+        ),
+        # From a review to the task it judged; only the review op makes one.
+        RelationType("reviews", source_types=("review",), target_types=("task",)),
     ],
     behaviors=[],
     tools=[],
