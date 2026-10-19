@@ -6,11 +6,11 @@
    homepage, /early) is drawn as before. Unlayered, so it wins over the shell's
    own rules. */
 
-/* The far sea fades into `--harbour-haze`, the page's ground in each theme; the
+/* The far sea fades into `--harbour-haze`, the chart's paper in each theme; the
    harbour reads it as a hex colour, so it is written out, not taken from a
    variable. */
 .harbour-sea__harbour {
-  --harbour-haze: #0b0b0b;
+  --harbour-haze: #141414;
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -18,12 +18,12 @@
 }
 
 :root[data-theme="light"] .harbour-sea__harbour {
-  --harbour-haze: #f6f4ea;
+  --harbour-haze: #e4e0cc;
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) .harbour-sea__harbour {
-    --harbour-haze: #f6f4ea;
+    --harbour-haze: #e4e0cc;
   }
 }
 

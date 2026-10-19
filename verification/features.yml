@@ -7,7 +7,9 @@ features:
       A visitor sees Classic's and the Regents Club's seas on the homepage, a ship
       for each of the fleet's most recently active Keys, and pressing a ship opens
       that Key on the fleet's page. Every open homepage shares one reading of each
-      fleet's ships. By night the seas are dark charcoal with pale grey lines.
+      fleet's ships. The seas are drawn as a chart: ink lines on warm paper by
+      day and paper lines on ink by night, a ruled dial with a fan of lines,
+      dashed rows of small crew marks, and an orange dashed route to the lead ship.
     who: person
     level: ordinary
     paths:

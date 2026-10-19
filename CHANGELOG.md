@@ -2516,3 +2516,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the pass's size, the Club has none) and a server check in
   platform/test/keyfleet_web/home_live_test.exs (both Club links while coming
   soon); gaps: WebKit not run on the Mac.
+
+## 2026-10-19 — The seas drawn as the crew's chart
+
+- The harbour seas, on the homepage and the app's sea page, take the look of
+  the crew film: warm paper and ink with one orange, a ruled dial at the edge
+  with a fan of fine lines meeting at a black square, dashed rows of small
+  crew marks round the islands and across the water, and an orange dashed
+  route from the dial to the lead ship. By night the paper and ink swap.
+  Classic's and the Club's still pictures are drawn again to match.
+- Evidence: level ordinary; feature home-fleet-seas; looked at in headless
+  Chromium on the graphics chip at 1280 and 390, light and dark, with ships
+  moving; the stills are the sea's own drawing, held still; gaps: WebKit not
+  run on the Mac.

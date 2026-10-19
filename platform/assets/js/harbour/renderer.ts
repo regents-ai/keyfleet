@@ -1,12 +1,13 @@
 /**
- * Draws the agent harbour with WebGPU through vgpu: a blueprint of a sea of
- * islands, one ship for each agent. Loaded only once the harbour is really going to be shown.
+ * Draws the agent harbour with WebGPU through vgpu: the crew's chart of a sea
+ * of islands, one ship for each agent. Loaded only once the harbour is really going to be shown.
  *
  * The harbour as a page's background: looking across the sea from low down,
  * the islands square to the page and the water running out to the sky.
  *
  * Each frame the ripples take their steps, the sun draws its shadow map, the
- * scene is drawn into a multisampled target, and a last pass lays it on the page.
+ * scene is drawn into a multisampled target, and a last pass lays it on the page
+ * with the chart over it: the crew icons on their rows and the lead ship's route.
  * Every mesh is instanced; the islands and buildings are one instance, the ships
  * and the smoke one each.
  */
@@ -29,10 +30,18 @@ import {instanceGeometry} from "vgpu/scene/gpu"
 import type {IslandRenderer} from "../canvas_island"
 import {harbourMesh, puffMesh, shipMesh, smokeFrom, VERTEX_FLOATS} from "./meshes"
 import {
+  CIRCLE_FIRST,
+  CIRCLE_GROWTH,
+  CIRCLE_ROWS,
+  GLYPH_COUNT,
+  ICON_GAP,
   MAX_DROPS,
+  MAX_MARKS,
+  PALETTE,
   RIPPLE_CELLS,
   RIPPLE_REACH,
   RIPPLE_STEP,
+  WATER_KEY,
   partsWgsl,
   presentWgsl,
   rippleStepWgsl,
@@ -118,13 +127,21 @@ const MAX_STEP = 1 / 20
 /** How high a click lifts the water, in world units, and the most steps the ripples take in one frame. */
 const DROP_HEIGHT = 0.12
 const MAX_RIPPLE_STEPS = 4
+/**
+ * The crew icons: the space between two on a place's row and on a great circle,
+ * in world units, and how fast a place's row slides round, in radians a second.
+ * The great circles slide the other way, more slowly.
+ */
+const ICON_SPACING = 1.3
+const CIRCLE_SPACING = 1.8
+const ICON_DRIFT = 0.05
+const CIRCLE_DRIFT = -0.02
+/** Share of the icons drawn grey rather than ink. */
+const ICON_GREY = 0.35
 
 /** Where the sun shines from: it casts the hatched shade. */
 const DAY_SUN = normalize([0.55, 0.9, -0.35])
 const NIGHT_SUN = normalize([-0.35, 0.85, -0.45])
-/** The ink of the outlines, as INK_DAY and INK_NIGHT in the shaders. */
-const DAY_INK = [0.12, 0.3, 0.62]
-const NIGHT_INK = [0.8, 0.81, 0.82]
 
 /** `layout` names the harbour drawn: its islands and where its buildings stand. */
 export async function createHarbourRenderer(
@@ -169,10 +186,10 @@ async function build(
   const rippleShader = prepareShader(rippleStepWgsl, "harbour_ripples.wgsl")
 
   // The islands and buildings never move: one instance at the origin. Its tint
-  // is the castle's banner colour.
+  // is the castle's banner colour, the chart's one orange.
   const tint = {style: {format: "float32x4", default: [0, 0, 0, 0]}} as const
   const land = instances({capacity: 1, attributes: tint})
-  land.add({style: [...displayColor("#d8453a"), 0]})
+  land.add({style: [...PALETTE.accent, 0]})
   const fleet = instances({capacity: MAX_SHIPS, attributes: tint})
   const smoke = instances({capacity: PUFFS.forge + PUFFS.inn, attributes: tint})
   const puffIds = Array.from({length: PUFFS.forge + PUFFS.inn}, (_, index) => smoke.add({style: [0, 0, 0, index]}))
@@ -205,7 +222,7 @@ async function build(
     lightViewProjection: new Float32Array(16),
     sunDirection: [...DAY_SUN],
     time: STILL_TIME,
-    haze: [0.9, 0.89, 0.82],
+    haze: [...PALETTE.paperDay],
     night: 0,
     shipCount: 0,
     islands: rows(islandRows),
@@ -272,11 +289,19 @@ async function build(
     set: {...lit, ...riding()},
     label: "harbour.sea",
   })
+  const markRows = new Float32Array(MAX_MARKS * 4)
   const presentValues = {
     resolution: [size[0], size[1]],
-    vignette: 0.1,
     line: 1,
-    ink: [...DAY_INK],
+    cell: 1,
+    ink: [...PALETTE.inkDay],
+    time: STILL_TIME,
+    paper: [...PALETTE.paperDay],
+    markCount: 0,
+    band: [...PALETTE.bandDay],
+    leading: 0,
+    lead: [0, 0],
+    marks: rows(markRows),
   }
   const present = effect(gpu, presentShader, {
     set: {present: presentValues, sceneColor: sceneTarget, linearSampler: sampler(gpu, {minFilter: "linear", magFilter: "linear"})},
@@ -299,7 +324,7 @@ async function build(
   /** Seconds the ripples are owed, and the clicks waiting to land in their next step. */
   let rippleClock = 0
   let drops: [number, number][] = []
-  let clear: [number, number, number, number] = [0.9, 0.89, 0.82, 1]
+  let clear: [number, number, number, number] = [...PALETTE.paperDay, WATER_KEY]
   const world = new Float32Array(16)
   const seaHeight = (x: number, z: number) => waveHeight(x, z, time)
 
@@ -385,6 +410,41 @@ async function build(
     sceneValues.shipCount = row
   }
 
+  /**
+   * The crew icons, evenly round each place's row and each great circle and
+   * sliding slowly along it, and the lead ship, all in the canvas's pixels. An
+   * icon behind the camera or off the canvas is left out; the present pass
+   * hides the ones behind land.
+   */
+  const iconRow = (x: number, z: number, radius: number, spacing: number, drift: number) => {
+    const count = Math.round((Math.PI * 2 * radius) / spacing)
+    return Array.from({length: count}, (_, slot) => ({x, z, radius, drift, angle: (slot / count) * Math.PI * 2}))
+  }
+  const icons = [
+    ...Object.values(layout.places).flatMap(island => iconRow(island.x, island.z, island.radius + ICON_GAP, ICON_SPACING, ICON_DRIFT)),
+    ...Array.from({length: CIRCLE_ROWS}, (_, row) => iconRow(0, 0, CIRCLE_FIRST * CIRCLE_GROWTH ** row, CIRCLE_SPACING, CIRCLE_DRIFT)).flat(),
+  ]
+  const placeMarks = () => {
+    const [width, height] = stage.size
+    let count = 0
+    icons.forEach(({x: middleX, z: middleZ, radius, drift, angle}, index) => {
+      if (count === MAX_MARKS) return
+      const turned = angle + time * drift
+      const x = middleX + Math.cos(turned) * radius
+      const z = middleZ + Math.sin(turned) * radius
+      const [u, v, w] = onCanvas(x, seaHeight(x, z), z)
+      if (w <= 0 || u < -0.05 || u > 1.05 || v < -0.05 || v > 1.05) return
+      const pick = unit(index * 12.9898)
+      markRows.set([u * width, v * height, Math.floor(pick * GLYPH_COUNT), unit(index * 78.233) < ICON_GREY ? 1 : 0], count * 4)
+      count += 1
+    })
+    presentValues.markCount = count
+    const lead = ships[0]
+    const [u, v, w] = lead ? onCanvas(lead.x, seaHeight(lead.x, lead.z) + SHIP_MIDDLE, lead.z) : [0, 0, 0]
+    presentValues.leading = w > 0 ? 1 : 0
+    presentValues.lead = [u * width, v * height]
+  }
+
   const chimneys = smokeFrom(layout)
   const placeSmoke = () => {
     puffIds.forEach((id, index) => {
@@ -453,7 +513,7 @@ async function build(
       nightGoal = look.night ? 1 : 0
       const haze = displayColor(look.haze)
       sceneValues.haze = haze
-      clear = [haze[0], haze[1], haze[2], 1]
+      clear = [haze[0], haze[1], haze[2], WATER_KEY]
       if (calm || lastStep === undefined) {
         night = nightGoal
         light()
@@ -507,8 +567,9 @@ async function build(
       stage.resize([width, height])
       sceneTarget.resize([width, height])
       presentValues.resolution = [width, height]
-      // Outlines keep the same width on the page at any resolution.
+      // Outlines and icons keep the same size on the page at any resolution.
       presentValues.line = Math.max(1, height / 640)
+      presentValues.cell = Math.max(1, Math.round(Math.min(width, height) / 420))
       present.set({present: presentValues})
       fitCamera()
     },
@@ -533,8 +594,11 @@ async function build(
       placeSmoke()
       sceneUniforms.set(sceneValues)
       const counts = passes.map(pass => pass.bridge.publish())
-      presentValues.vignette = 0.1 + 0.16 * night
-      presentValues.ink = mix3(DAY_INK, NIGHT_INK, night)
+      presentValues.time = time
+      presentValues.ink = mix3(PALETTE.inkDay, PALETTE.inkNight, night)
+      presentValues.paper = mix3(PALETTE.paperDay, PALETTE.paperNight, night)
+      presentValues.band = mix3(PALETTE.bandDay, PALETTE.bandNight, night)
+      placeMarks()
       present.set({present: presentValues})
       stepRipples()
       const ripples = riding()
@@ -746,6 +810,11 @@ function add(a: readonly number[], b: readonly number[]): number[] {
 
 function fract(value: number): number {
   return value - Math.floor(value)
+}
+
+/** A fixed number from 0 to 1 for a seed, the same one every time. */
+function unit(seed: number): number {
+  return fract(Math.sin(seed) * 43758.5453)
 }
 
 function smoothstep(edge0: number, edge1: number, value: number): number {

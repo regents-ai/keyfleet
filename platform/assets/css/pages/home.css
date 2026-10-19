@@ -206,23 +206,23 @@
     padding: var(--rg-panel-padding);
   }
 
-  /* A fleet's sea, its far water fading into `--harbour-haze`, the page's
-     ground in each theme, which the harbour reads as a hex colour. Until the
+  /* A fleet's sea, its far water fading into `--harbour-haze`, the chart's
+     paper in each theme, which the harbour reads as a hex colour. Until the
      GPU's first frame lands, and where there is none, the box shows that
      fleet's harbour still. */
   .rl-sea {
-    --harbour-haze: #0b0b0b;
+    --harbour-haze: #141414;
     position: relative; overflow: hidden; min-width: 0; aspect-ratio: 16 / 10;
     border: 1px solid var(--hairline-strong);
     background: var(--harbour-haze) var(--rl-sea-still) 50% 50% / cover no-repeat;
   }
   .rl-sea--classic { --rl-sea-still: url("/images/home/sea-classic-night.webp"); }
   .rl-sea--club { --rl-sea-still: url("/images/home/sea-club-night.webp"); }
-  :root[data-theme="light"] .rl-sea { --harbour-haze: #f6f4ea; }
+  :root[data-theme="light"] .rl-sea { --harbour-haze: #e4e0cc; }
   :root[data-theme="light"] .rl-sea--classic { --rl-sea-still: url("/images/home/sea-classic-day.webp"); }
   :root[data-theme="light"] .rl-sea--club { --rl-sea-still: url("/images/home/sea-club-day.webp"); }
   @media (prefers-color-scheme: light) {
-    :root:not([data-theme]) .rl-sea { --harbour-haze: #f6f4ea; }
+    :root:not([data-theme]) .rl-sea { --harbour-haze: #e4e0cc; }
     :root:not([data-theme]) .rl-sea--classic { --rl-sea-still: url("/images/home/sea-classic-day.webp"); }
     :root:not([data-theme]) .rl-sea--club { --rl-sea-still: url("/images/home/sea-club-day.webp"); }
   }
