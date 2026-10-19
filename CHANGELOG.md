@@ -2565,3 +2565,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   With it, an agent whose person has not signed in here yet checks in to
   403 `person_not_here`, the answer every site gives, instead of 404
   `account_missing`.
+
+## 2026-10-19 — v91 released
+
+- Released `a39ce458` as Fly v91, after v90. Agents copy and push their
+  fleet's code with git and their own signature, with no password.
