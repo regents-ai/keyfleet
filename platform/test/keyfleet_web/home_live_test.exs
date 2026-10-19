@@ -98,6 +98,17 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-classic-sold") == "3"
   end
 
+  test "once Classic is on sale, Buy Key opens its window with the Key cards turning",
+       %{conn: conn} do
+    issue!(@classic, 1)
+    read_fleets()
+
+    {:ok, view, _html} = live(conn, "/")
+    view |> element("button#home-classic-buy") |> render_click()
+
+    assert has_element?(view, "dialog#home-buy-key #home-buy-key-cards.rl-cards")
+  end
+
   test "once every Classic Key is sold, Buy Next Key can't be pressed and says so",
        %{conn: conn} do
     issue!(@classic, 1024)
@@ -143,6 +154,22 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert text(view, "#home-club [data-fleet-soon]") == "Opens soon"
     refute has_element?(view, "#home-club [data-fleet-who]")
+
+    # Sean, 19 Oct: the Club's public page and its Keys on OpenSea show even
+    # before it opens, and its section has no turning cards.
+    assert has_element?(
+             view,
+             ~s(#home-club-public[href="/app/fleets/regents_club"]),
+             "Public View"
+           )
+
+    assert has_element?(
+             view,
+             ~s(#home-club-opensea[href^="https://opensea.io/collection/keyfleet?"]),
+             "Buy Key on OpenSea"
+           )
+
+    refute has_element?(view, "#home-club .rl-cards")
   end
 
   test "an open homepage draws again when the Club's reading changes", %{conn: conn} do
