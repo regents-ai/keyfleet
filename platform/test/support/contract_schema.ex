@@ -138,7 +138,8 @@ defmodule Keyfleet.ContractSchema do
   end
 
   defp rule(keyword, _rule, value, _schema, _schemas, _at)
-       when keyword in ~w(required properties additionalProperties) and not is_map(value),
+       when keyword in ~w(required properties additionalProperties propertyNames) and
+              not is_map(value),
        do: []
 
   defp rule("required", names, value, _schema, _schemas, at),
@@ -157,6 +158,17 @@ defmodule Keyfleet.ContractSchema do
     known = Map.get(schema, "properties", %{})
     for name <- Map.keys(value), not Map.has_key?(known, name), do: "#{at}: has #{name}"
   end
+
+  defp rule("additionalProperties", %{} = property, value, schema, schemas, at) do
+    known = Map.get(schema, "properties", %{})
+
+    for {name, field} <- value, not Map.has_key?(known, name), reduce: [] do
+      errors -> errors ++ check(field, property, schemas, "#{at}.#{name}")
+    end
+  end
+
+  defp rule("propertyNames", names, value, _schema, schemas, at),
+    do: Enum.flat_map(Map.keys(value), &check(&1, names, schemas, "#{at} key #{&1}"))
 
   defp rule(keyword, rule, _value, _schema, _schemas, at),
     do: raise(ArgumentError, "#{at}: this check does not know #{keyword}: #{inspect(rule)}")

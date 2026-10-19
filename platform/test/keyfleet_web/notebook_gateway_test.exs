@@ -403,7 +403,8 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
   # Costly failure: an agent that signs a notebook read the way it signs a
   # read on the site is told to change its client, which can't help, and
-  # never reads a notebook's code (Grok Bot, 18 October 2026).
+  # never reads a notebook's code (Grok Bot, 18 October 2026); and, its
+  # answers naming no request, can't cite either one (Grok Bot, 19 October).
   test "a read signed without its empty body is told to sign over it, and then reads a notebook's code" do
     {:ok, signer} = Siwa.LocalSigner.new()
     secret = :crypto.strong_rand_bytes(32)
@@ -437,6 +438,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert hint =~ "content-digest"
     refute hint == @client_hint
     assert bound.status == 200
+    for answer <- [unbound, bound], do: assert([_named] = get_resp_header(answer, "x-request-id"))
     assert_receive {:hub, "GET", ^code, ^subject, ""}
     refute_received {:hub, "GET", ^code, _subject, _body}
   end

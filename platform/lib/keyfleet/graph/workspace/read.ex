@@ -13,9 +13,14 @@ defmodule Keyfleet.Graph.Workspace.Read do
   no more than 512 KiB of them unless one event alone is larger;
   `next_cursor` is the `after_seq` to read on from, and `run_id` names the
   log they come from.
+
+  Both name, in `agents`, the agents behind what they answer, by wallet: the
+  agent that created the object, or that made each change, with the name it
+  gave itself, as the fleet's pages show it beside the Key.
   """
   use Ash.Resource.Actions.Implementation
 
+  alias Keyfleet.Agents
   alias Keyfleet.Graph
   alias Keyfleet.Graph.Errors.RefusedError
   alias Keyfleet.Graph.Event
@@ -46,7 +51,8 @@ defmodule Keyfleet.Graph.Workspace.Read do
             |> Enum.take(@relation_page)
             |> Enum.map(&Map.take(&1, [:id, :type, :source, :target, :data])),
           relations_has_more: length(relations) > @relation_page,
-          watermark: watermark
+          watermark: watermark,
+          agents: Agents.names_by_wallet([creator(object.sys)])
         }
     end
   end
@@ -61,8 +67,19 @@ defmodule Keyfleet.Graph.Workspace.Read do
       events: page,
       next_cursor: if(has_more, do: List.last(page).seq, else: max(after_seq, watermark)),
       has_more: has_more,
-      watermark: watermark
+      watermark: watermark,
+      agents: page |> Enum.map(&writer(&1.actor)) |> Agents.names_by_wallet()
     }
+  end
+
+  defp creator(%{"created_by" => %{"kind" => "agent", "wallet" => wallet}}), do: wallet
+  defp creator(_sys), do: nil
+
+  defp writer(actor) do
+    case Event.member(actor) do
+      {_token_id, "agent", wallet} -> wallet
+      _person_or_workspace -> nil
+    end
   end
 
   # A fleet whose log has never been copied reads as an empty log.

@@ -129,7 +129,6 @@ defmodule KeyfleetWeb.WorkspacePage do
   # notebooks' `/results/`: notebook id, version or run id, and when the page
   # was saved in milliseconds since 1970.
   @saved_result ~r/\Anb-[a-z0-9]{16}\/(ver_[0-9A-Z]{26}|run_[0-9A-HJKMNP-TV-Z]{26})\/[1-9][0-9]{0,15}\z/
-  @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(human|agent):(0x[0-9a-f]{40})\z/
   @level ~r/\Alevel:([1-9][0-9]{0,8})\z/
 
   @doc "The types of item a workspace holds."
@@ -744,8 +743,8 @@ defmodule KeyfleetWeb.WorkspacePage do
   # when an agent wrote as it (`named/2` puts its name in); anything else was
   # the workspace's own doing.
   defp who(actor) do
-    case Regex.run(@member, actor, capture: :all_but_first) do
-      [token_id, kind, wallet] -> {:by, String.to_integer(token_id), agent_wallet(kind, wallet)}
+    case Graph.Event.member(actor) do
+      {token_id, kind, wallet} -> {:by, token_id, agent_wallet(kind, wallet)}
       nil -> "Keyfleet"
     end
   end
@@ -771,21 +770,13 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   @doc """
   The names agents gave themselves, by wallet, looked up together for a
-  page, a hundred at a time. A person, or an agent that has no profile here,
-  has no name.
+  page. A person, or an agent that has no profile here, has no name.
   Agents choose their own names, so none can hide or reverse the Key beside it.
   """
   def agent_names(wallets) do
-    case wallets |> Enum.reject(&is_nil/1) |> Enum.uniq() do
-      [] ->
-        %{}
-
-      wallets ->
-        wallets
-        |> Enum.chunk_every(100)
-        |> Enum.flat_map(&Agents.agents_by_wallets!/1)
-        |> Map.new(&{&1.wallet_address, DirectoryMD.visible(&1.name)})
-    end
+    wallets
+    |> Agents.names_by_wallet()
+    |> Map.new(fn {wallet, name} -> {wallet, DirectoryMD.visible(name)} end)
   end
 
   defp archived?(sys), do: sys["archived"] == true

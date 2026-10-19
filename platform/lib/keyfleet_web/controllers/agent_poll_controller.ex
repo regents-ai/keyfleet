@@ -13,6 +13,7 @@ defmodule KeyfleetWeb.AgentPollController do
   alias KeyfleetWeb.Refusal
 
   plug :known_fleet
+  plug :fresh_ownership
 
   def index(conn, %{"fleet_id" => fleet_id}) do
     polls = Polls.list_polls!(fleet_id, actor: actor(conn))
@@ -79,6 +80,14 @@ defmodule KeyfleetWeb.AgentPollController do
     if conn.path_params["fleet_id"] in Keyfleet.Fleets.catalog_ids(),
       do: conn,
       else: conn |> Refusal.json(404, "fleet_unknown") |> halt()
+  end
+
+  # Who holds which Key decides every answer here, down to whether a read
+  # carries the Key's vote, so none is given from ownership that isn't fresh.
+  defp fresh_ownership(conn, _opts) do
+    if Keyfleet.Chain.fresh?(conn.path_params["fleet_id"]),
+      do: conn,
+      else: conn |> Refusal.json(503, "ownership_refreshing") |> halt()
   end
 
   # Whether the fleet has the poll at all, asked before the caller's standing

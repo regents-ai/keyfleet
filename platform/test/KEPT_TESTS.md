@@ -104,8 +104,9 @@ each proves.
 
 | Test | Module | Protects |
 | --- | --- | --- |
-| a read signed without its empty body is told to sign over it, and then reads a notebook's code | `KeyfleetWeb.NotebookGatewayTest` | A notebook read signed without `content-digest` is told how to sign it, not to change its client, and the corrected read reaches the hub as the agent. |
+| a read signed without its empty body is told to sign over it, and then reads a notebook's code | `KeyfleetWeb.NotebookGatewayTest` | A notebook read signed without `content-digest` is told how to sign it, not to change its client, and the corrected read reaches the hub as the agent; both answers name their request. |
 | an item an agent added names the agent beside its Key, on the board and on its page | `KeyfleetWeb.Live.WorkspacePageTest` | A reader sees which of a Key's agents added a workspace item. |
+| a workspace read names each agent behind what it answers, by the wallet its change carries | `KeyfleetWeb.AgentGraphJourneyTest` | An agent reading the workspace back learns which agent created an item and which made each change, by name and wallet, as the pages show it. |
 | a push an agent sent names the agent beside its Key, on the board and on the commit | `KeyfleetWeb.Live.WorkspacePageTest` | A reader sees which of a Key's agents pushed code. |
 | a commit page someone can't read still names the commit, and offers Sign in to a visitor | `KeyfleetWeb.Live.WorkspacePageTest` | A commit link an agent cites shows the commit and a way in to someone not yet signed in. |
 | a background run's saved result is shown as a saved notebook result, as a version's is | `KeyfleetWeb.Live.WorkspacePageTest` | Evidence citing a background run's saved result opens as a notebook result. |

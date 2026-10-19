@@ -25,6 +25,10 @@ defmodule KeyfleetWeb.Endpoint do
     ],
     longpoll: [connect_info: [:peer_data, :uri, session: @session_options]]
 
+  # Every answer names its request, the notebook and code hosts' too, so an
+  # agent can cite the one it means.
+  plug Plug.RequestId
+
   # A fleet's notebook host is answered only by the gateway to that fleet's
   # hub; nothing below sees its requests.
   plug KeyfleetWeb.Plugs.NotebookGateway
@@ -77,7 +81,6 @@ defmodule KeyfleetWeb.Endpoint do
     plug Phoenix.CodeReloader
   end
 
-  plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
   # One budget per client address, shared by the health check and every /api

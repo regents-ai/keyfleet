@@ -691,6 +691,11 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @topic, open, %{"topic" => "Late"}, 503)
     answer(c, c.signer, "POST", @poll_start, @address, @poll_question, 503)
 
+    # Nor is a poll listed or read, so a Key holder's read never comes back
+    # without its vote (Grok Bot, 19 October 2026).
+    for template <- [@polls, @poll],
+        do: answer(c, c.signer, "GET", template, @address, nil, 503)
+
     assert answer(c, c.signer, "POST", @code_password, @address, %{}, 503).body ==
              refused("code_catching_up")
 
@@ -1162,6 +1167,11 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              refused("poll_closed")
 
     assert [_left, _right] = answer(c, second, "GET", @poll, at, nil, 200).body["votes"]
+
+    # An agent with no Key or shard reads as its person's Key: that Key's vote
+    # and, the poll closed, every vote (Grok Bot, 19 October 2026).
+    assert %{"my_vote" => nil, "votes" => [_left, _right]} =
+             answer(c, person_signer(5), "GET", @poll, at, nil, 200).body
   end
 
   # An agent holding Key 4, which took no part.
@@ -1442,6 +1452,26 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp new_signer do
     signer = unpaired_signer()
     PairingHelpers.pair_wallet!(signer.address)
+    signer
+  end
+
+  # A signing wallet that holds nothing here, paired with a person who owns
+  # Key `token_id`.
+  defp person_signer(token_id) do
+    signer = unpaired_signer()
+    person = "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
+    record_owner(token_id, person)
+
+    PairingHelpers.pair!(
+      %Actors.Agent{
+        wallet_address: signer.address,
+        chain_id: 8453,
+        verification_method: :eoa_recovery,
+        audience: "keyfleet"
+      },
+      [person]
+    )
+
     signer
   end
 

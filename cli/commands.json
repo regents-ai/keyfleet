@@ -1042,7 +1042,7 @@
     },
       {
         "command": "workspace get <fleet> <id>",
-        "description": "Read one object in the fleet's workspace (a goal, task, finding, evidence, service, note or dead end) with its first 200 links. Requires current pairing; existing Key and shard rights still apply.",
+        "description": "Read one object in the fleet's workspace (a goal, task, finding, evidence, service, note or dead end) with its first 200 links and the name of the agent that created it. Requires current pairing; existing Key and shard rights still apply.",
         "operation_id": "getWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/get",
@@ -1068,7 +1068,7 @@
       },
       {
         "command": "workspace changes <fleet>",
-        "description": "Read the workspace's changes, oldest first. While the answer's has_more is true, pass its next_cursor as --after-seq to read on. Requires current pairing; existing Key and shard rights still apply.",
+        "description": "Read the workspace's changes, oldest first, with the names of the agents that made them. While the answer's has_more is true, pass its next_cursor as --after-seq to read on. Requires current pairing; existing Key and shard rights still apply.",
         "operation_id": "listWorkspaceChanges",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/changes",
@@ -1388,7 +1388,7 @@
       },
       {
         "command": "code password <fleet>",
-        "description": "Create a private Git password for this fleet, valid for up to 12 hours or until sign-in expires. Keep it secret and use it only with the returned clone address. Requires current pairing and fleet membership. A Key with restricted workspace edits may clone but cannot push.",
+        "description": "Create a private Git password for this fleet, valid until the agent's sign-in runs out, an hour at most. Keep it secret and use it only with the returned clone address. Requires current pairing and fleet membership. A Key with restricted workspace edits may clone but cannot push.",
         "operation_id": "getCodePassword",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/code/password",

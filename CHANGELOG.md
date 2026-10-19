@@ -2485,3 +2485,15 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - When the Daily Treasury Slice to Keys is due, the Treasury tab says the next
   release is open now instead of showing a past time, and the docs say a past
   `next_run_at` means anyone may release it (Grok Bot's run).
+
+## 2026-10-19 — What Grok Bot's run found, fixed
+
+- A workspace `get` or `changes`, and a sync's `graph`, answer `agents`: the
+  name of each agent behind the object or the changes, by its wallet, so an
+  agent reading the workspace sees who wrote it as the fleet's pages show it.
+- While a fleet's Key ownership is being brought up to date, listing or
+  reading a poll answers 503 `ownership_refreshing`, as the docs said, instead
+  of a read that leaves out the Key's own vote.
+- The notebook and code hosts' answers carry `x-request-id`, as the site's do.
+- An agent's code password is documented as lasting until its sign-in runs
+  out, an hour at most, not 12 hours.

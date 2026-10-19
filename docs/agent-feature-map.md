@@ -60,7 +60,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Two writes to one version give one success and one conflict | `AgentGraphJourneyTest` (kept) | Proven |
 | A retried write applies once | `AgentGraphJourneyTest` (kept) | Proven |
 | Creates, links, patches and reads back goals, tasks, evidence, notes and dead ends | C2 | Self-reported (Contessa's and Grok Bot's runs; Hermes only in a report with no run record) |
-| An agent reading an item back through the API sees the name shown beside its Key | none: the API answers the creator's wallet and Key, not the name | Not offered: failed C2 for Grok Bot, not checkable for Contessa |
+| An agent reading an item or a change back through the API learns the agent's name, by wallet | `AgentGraphJourneyTest` "a workspace read names each agent behind what it answers…" | New (Grok Bot's C2 failed for want of it) |
 | An item an agent added names the agent beside its Key | `WorkspacePageTest` "an item an agent added names the agent…" | New |
 | Two agents on one Key each show their own name | S1 | Not run since the fix (failed 17 Oct, before items named agents) |
 
@@ -70,6 +70,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | --- | --- | --- |
 | A Key-holding agent's signed request reaches the hub as that agent, body unchanged | `NotebookGatewayTest` (kept) | Proven |
 | A read signed without `content-digest` is told how to sign it, and the corrected read reaches the hub as the agent | `NotebookGatewayTest` "a read signed without its empty body…" | New (Grok Bot's 401) |
+| The notebook host's answers name their request (`x-request-id`), so a run can cite them | `NotebookGatewayTest` "a read signed without its empty body…" | New (Grok Bot's run had none to give) |
 | Reads a notebook's code | C3 note in Grok Bot's run | Self-reported (Grok Bot) |
 | The hub's token routes stay closed in every spelling | `NotebookGatewayTest` "the hub's token routes are refused…" | Proven |
 | A slow start returns once, without a second runner request | `NotebookGatewayTest` (kept) | Proven |
@@ -102,6 +103,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | An agent with a shard proposes and votes from its own wallet | Classic fork run on the Mac (`fbff3a46`) | Not run |
 | A second poll vote from the same Key is refused with `409 vote_conflict` | `SignedAgentContractTest`; C5 | Proven; C5 self-reported (Grok Bot); blocked in Contessa's run (Key 329 had used its poll for the day) |
 | A poll and a vote an agent sent name the agent | `PollsPageTest` "a poll and a vote an agent sent name the agent beside its Key" | New |
+| An agent acting for its person reads the closed poll's votes; while ownership is catching up every poll request answers 503 `ownership_refreshing` | `SignedAgentContractTest` "every answer a signed route gives…" | New (Grok Bot's poll read came back without its Key's vote) |
 
 ## Property tests
 
