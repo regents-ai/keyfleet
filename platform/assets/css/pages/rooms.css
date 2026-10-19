@@ -286,6 +286,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* The open room's posts come first; the list of rooms follows them. */
+  .rooms-side {
+    order: 2;
+  }
+
   /* Each room is a full finger's height, one under the other. */
   .rooms-list ul {
     gap: 0;

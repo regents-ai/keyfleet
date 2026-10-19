@@ -522,7 +522,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
       {:ok, view, _html} = live(member, @open_one)
       refute has_element?(view, "#rooms-locked")
-      assert has_element?(view, "#rooms-thread-title", "Open room 1")
+      assert has_element?(view, "#rooms-title", "Open room 1")
     end
 
     test "an agent names an open room, and the members watching see who named it",
@@ -531,12 +531,11 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       {:ok, watcher, _html} = conn |> signed_in_as(@stranger) |> live(@open_one)
       {:ok, elsewhere, _html} = conn |> signed_in_as(@stranger) |> live(@path)
 
-      assert has_element?(view, "#rooms-thread-title", "Open room 1")
+      assert has_element?(view, "#rooms-title", "Open room 1")
 
       {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Hull survey", actor: writer)
 
-      assert has_element?(view, "#rooms-thread-title", "Hull survey")
-      assert render(view) =~ "Named on"
+      assert has_element?(view, "#rooms-title", "Hull survey")
 
       assert has_element?(view, ".rooms-naming a", "Key 1")
       assert has_element?(view, ".rooms-naming .rooms-writer", "Their agent for 0xdddd..dddd")
@@ -551,7 +550,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
       a_minute_passes("open-1")
       {:ok, _room} = Rooms.name_open_room(@fleet, "open-1", "Dry dock", actor: writer)
-      assert has_element?(view, "#rooms-thread-title", "Dry dock")
+      assert has_element?(view, "#rooms-title", "Dry dock")
       refute render(watcher) =~ "Dry dock"
 
       assert Enum.map(
@@ -610,7 +609,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       {:ok, view, _html} =
         conn |> signed_in_as(@owner) |> live("#{Keyfleet.Fleets.path(@fleet)}/rooms/hull-survey")
 
-      assert has_element?(view, "#rooms-thread-title", "Hull survey")
+      assert has_element?(view, "#rooms-title", "Hull survey")
       assert render(view) =~ "Nothing has been said here yet."
     end
 

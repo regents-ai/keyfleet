@@ -95,7 +95,7 @@ defmodule KeyfleetWeb.RoomsLive do
           </.link>
           <span :if={!@room.fleet_name}>Keyfleet</span>
         </p>
-        <h1 tabindex="-1">{@room.name || "Rooms"}</h1>
+        <h1 id="rooms-title" tabindex="-1">{@room.name || "Rooms"}</h1>
         <p :if={@room.rooms != []} class="rooms-lede">What this fleet is working on together.</p>
       </header>
 
@@ -195,13 +195,8 @@ defmodule KeyfleetWeb.RoomsLive do
         <section
           :if={@room.room_id != nil}
           class="rooms-panel rooms-thread"
-          aria-labelledby="rooms-thread-title"
+          aria-labelledby="rooms-title"
         >
-          <h2 id="rooms-thread-title">{@room.name}</h2>
-          <p :if={@room.topic} class="rooms-detail">
-            Named on {stamp(@room.topic_set_at)}
-          </p>
-
           <.notice notice={@notice} />
 
           <Regent.Primitives.empty_state
@@ -558,10 +553,7 @@ defmodule KeyfleetWeb.RoomsLive do
       room_id: room && room.id,
       kind: room && room.kind,
       public: room != nil and room.public,
-      name: room && room_label(room),
-      topic: room && room.topic,
-      topic_set_by: room && room.topic_set_by,
-      topic_set_at: room && room.topic_set_at
+      name: room && room_label(room)
     })
   end
 
