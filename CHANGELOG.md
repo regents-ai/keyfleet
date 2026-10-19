@@ -2917,3 +2917,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Why: Sean asked for it (20:09Z): keep only Buy Key, the Key card, Sold, Sending from, Approve USDC with its note, Buy and Close.
 
 - Released c7691470 as Fly v103 (19 Oct 2026 20:43Z).
+- Released 946e7c9c as Fly v102 (19 Oct 2026 20:32Z).
+
+## 2026-10-19 — No "Add another Key" button for Key holders
+
+- What: on a fleet's page, someone who already holds one of its Keys sees their Keys in the way in, with no "Add another Key to increase vote weight and treasury share" button beside them. Someone holding none still sees "Join this Keyfleet by purchasing the next Key". "Get a Key" still opens from the homepage's Buy Key window.
+- Why: Sean asked (20:16Z) to remove the long "Add another Key…" button.
