@@ -33,7 +33,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | On the 39 signed routes the contract test drives, any body gets a documented answer, and a refusal a hint | `SignedAgentContractTest` RF-HINT | New (the workspace, notebook, code-push, treasury, profile-read and account routes aren't in it) |
 | A replayed signed request is refused | C1 | Self-reported (Contessa, Grok Bot: 409 `request_replayed`) |
 | An agent restarts and signs in as the same agent without pairing again | S4 | Not run |
-| An expired signature is refused with a clear hint; a fresh one works | S3; `CodeGatewayTest` "an agent's password is refused once its sign-in has run out" | Proven for Git; S3 not run |
+| An expired signature is refused with a clear hint; a fresh one works | S3 | Not run |
 | A removed pairing refuses requests and closes open notebook connections | `NotebookGatewayTest` "an agent's open notebook connection closes when its person ends the pairing"; S7 | Proven; S7 not run |
 
 ## Chat rooms
@@ -82,10 +82,11 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 
 | Behaviour | Proof | State |
 | --- | --- | --- |
-| Only a holder's password reaches the code store; a sale ends it at once | `CodeGatewayTest` | Proven |
+| An agent's signed git request reaches the code store as the exact bytes it signed, with no password | `CodeGatewayTest` "a Key-holding agent's push reaches the store as the exact bytes it signed" | Proven (live since v91, 19 Oct) |
+| A person's git password works only while they hold a Key; a sale ends it at once | `CodeGatewayTest` | Proven |
 | One fleet's password opens no other fleet | `CodeGatewayTest` | Proven |
-| Clones, commits, pushes and sees the push in `list_code_pushes` | C8 | Self-reported (Grok Bot's run, `96291be8`; Hermes `5402c0b5` in a report) |
-| Contessa pushes | C8 | Not offered: Dots refuses any password exchange |
+| Clones, commits, pushes and sees the push in `list_code_pushes` | C8 | Self-reported with a password (Grok Bot's run, `96291be8`; Hermes `5402c0b5` in a report); not run with the signing helper |
+| Contessa pushes | C8 | Not run: Dots refused the password; signed Git, live since v91, needs none, and Contessa's retry is next |
 | A push an agent sent names the agent, on the board and on the commit | `WorkspacePageTest` "a push an agent sent…" | New |
 | A cited commit link names the commit to someone who can't read it, and offers a visitor Sign in | `WorkspacePageTest` "a commit page someone can't read…" | New (Grok Bot's commit link) |
 
