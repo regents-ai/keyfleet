@@ -62,9 +62,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
             <p class="workspace-detail">
               Newest first. Ask your agent to join one, or to add its own.
             </p>
-            <ol class="workspace-cards">
-              <.card :for={card <- @board.goals} card={card} fleet_id={@board.fleet_id} />
-            </ol>
+            <.goal_rows id="workspace-goal-rows" rows={@board.goals} fleet_id={@board.fleet_id} />
             <.link id="workspace-all-goals" class="workspace-toggle" patch={@board.all_goals}>
               See every goal
             </.link>
@@ -134,7 +132,17 @@ defmodule KeyfleetWeb.WorkspaceLive do
               </:action>
             </Regent.Primitives.empty_state>
 
-            <ol :if={@board.cards != []} id="workspace-cards" class="workspace-cards">
+            <.goal_rows
+              :if={@board.cards != [] and @board.filter.type == "goal"}
+              id="workspace-cards"
+              rows={@board.cards}
+              fleet_id={@board.fleet_id}
+            />
+            <ol
+              :if={@board.cards != [] and @board.filter.type != "goal"}
+              id="workspace-cards"
+              class="workspace-cards"
+            >
               <.card :for={card <- @board.cards} card={card} fleet_id={@board.fleet_id} />
             </ol>
 
@@ -220,7 +228,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </p>
         </section>
 
-        <section class="workspace-panel" aria-labelledby="workspace-links-title">
+        <.goal_work :if={@item.goal} goal={@item.goal} fleet_id={@item.fleet_id} />
+
+        <section :if={@item.links} class="workspace-panel" aria-labelledby="workspace-links-title">
           <h2 id="workspace-links-title">Linked items</h2>
           <Regent.Primitives.empty_state
             :if={@item.links.rows == [] and is_nil(@item.links.first)}
@@ -745,6 +755,128 @@ defmodule KeyfleetWeb.WorkspaceLive do
     do: ~H"<.item_link part={@part} fleet_id={@fleet_id} />"
 
   defp part(assigns), do: ~H"{@part}"
+
+  attr :id, :string, required: true
+  attr :rows, :list, required: true
+  attr :fleet_id, :string, required: true
+
+  # Goals one line each, like a list of pages: the title, then what stands
+  # out about it, how many joined and the day it last changed.
+  defp goal_rows(assigns) do
+    ~H"""
+    <ol id={@id} class="workspace-rows">
+      <li :for={row <- @rows} class="workspace-row" data-item={row.id} data-type="goal">
+        <.link class="workspace-row-title" patch={WorkspacePage.item_path(@fleet_id, row.id)}>
+          {row.title}
+        </.link>
+        <span class="workspace-row-meta">
+          <span :if={row.starting?} class="workspace-badge">Starting idea</span>
+          <span :if={row.level} class="workspace-badge" data-level={row.level}>
+            Level {row.level}
+          </span>
+          <span :if={row.archived?} class="workspace-badge">Archived</span>
+          <span>{row.status}</span>
+          <span :if={row.joined > 0}>{row.joined} joined</span>
+          <span>{row.changed_on}</span>
+        </span>
+      </li>
+    </ol>
+    """
+  end
+
+  attr :goal, :map, required: true
+  attr :fleet_id, :string, required: true
+
+  # The work around a goal, by where it is kept: the workspace's items, the
+  # notebooks' saved results and the commits of the fleet's code its evidence
+  # cites. Each line opens one of them.
+  defp goal_work(assigns) do
+    ~H"""
+    <section
+      id="workspace-goal-work"
+      class="workspace-panel workspace-wide"
+      aria-labelledby="workspace-goal-work-title"
+    >
+      <h2 id="workspace-goal-work-title">Work and notes</h2>
+      <Regent.Primitives.empty_state
+        :if={@goal.items == []}
+        id="workspace-goal-work-empty"
+        class="kf-empty"
+        title="No work is linked to this goal yet."
+      />
+      <ol :if={@goal.items != []} id="workspace-goal-items" class="workspace-rows">
+        <li :for={row <- @goal.items} class="workspace-row" data-item={row.id} data-type={row.type}>
+          <span class="workspace-kind">{type_label(row.type)}</span>
+          <.link class="workspace-row-title" patch={WorkspacePage.item_path(@fleet_id, row.id)}>
+            {row.title}
+          </.link>
+          <span class="workspace-row-meta">
+            <span :if={row.standing}>{row.standing}</span>
+            <span>{row.changed_on}</span>
+          </span>
+        </li>
+      </ol>
+      <p :if={@goal.more?} id="workspace-goal-work-more" class="workspace-detail">
+        The 100 most recently changed.
+      </p>
+    </section>
+
+    <section
+      id="workspace-goal-notebooks"
+      class="workspace-panel"
+      aria-labelledby="workspace-goal-notebooks-title"
+    >
+      <h2 id="workspace-goal-notebooks-title">Notebooks</h2>
+      <Regent.Primitives.empty_state
+        :if={@goal.results == []}
+        id="workspace-goal-notebooks-empty"
+        class="kf-empty"
+        title="No notebook results are cited for this goal yet."
+      />
+      <ol :if={@goal.results != []} id="workspace-goal-results" class="workspace-rows">
+        <li :for={result <- @goal.results} class="workspace-row" data-item={result.id}>
+          <a
+            class="workspace-row-title"
+            href={result.uri}
+            rel="noopener noreferrer"
+            data-notebook-result
+          >
+            {result.title}
+          </a>
+          <span class="workspace-row-meta">
+            <.link patch={WorkspacePage.item_path(@fleet_id, result.id)}>Evidence</.link>
+            <span>{result.changed_on}</span>
+          </span>
+        </li>
+      </ol>
+    </section>
+
+    <section
+      id="workspace-goal-code"
+      class="workspace-panel"
+      aria-labelledby="workspace-goal-code-title"
+    >
+      <h2 id="workspace-goal-code-title">Code</h2>
+      <Regent.Primitives.empty_state
+        :if={@goal.commits == []}
+        id="workspace-goal-code-empty"
+        class="kf-empty"
+        title="No commits are cited for this goal yet."
+      />
+      <ol :if={@goal.commits != []} id="workspace-goal-commits" class="workspace-rows">
+        <li :for={commit <- @goal.commits} class="workspace-row" data-item={commit.id}>
+          <.link class="workspace-row-title" patch={commit.path} data-commit={commit.hash}>
+            {commit.title}
+          </.link>
+          <span class="workspace-row-meta">
+            <code>{String.slice(commit.hash, 0, 12)}</code>
+            <span>{commit.changed_on}</span>
+          </span>
+        </li>
+      </ol>
+    </section>
+    """
+  end
 
   attr :card, :map, required: true
   attr :fleet_id, :string, required: true

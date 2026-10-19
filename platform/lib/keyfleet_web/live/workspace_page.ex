@@ -6,7 +6,9 @@ defmodule KeyfleetWeb.WorkspacePage do
   `board/3` is the fleet's items a page at a time, the most recently changed
   first, beside its goals, its latest changes and the changes sent to its code
   (`Keyfleet.Code`); `item/4` is one item with its fields, its
-  links a page at a time and its history a page at a time. Each answers
+  links a page at a time and its history a page at a time, and a goal with
+  the work around it in place of its links. Goals are listed one line each,
+  the board's and every list of goals. Each answers
   `seen`, the log and the place in it the read tables had reached when the
   page was read. Every change is told as one plain line: a list of parts, each a piece of text, a key
   (`{:key, token_id, agent}`, with the name of the agent that wrote as it, or
@@ -143,11 +145,17 @@ defmodule KeyfleetWeb.WorkspacePage do
   # How every time on a workspace page is written.
   @at "%-d %B %Y at %H:%M UTC"
 
+  # How a list line writes the day an item last changed.
+  @on "%-d %b %Y"
+
   # How many goals and tasks a fleet's outline shows anyone.
   @outlined %{"goal" => 12, "task" => 24}
 
   # How many goals the board lists above the fleet's other work.
   @board_goals 12
+
+  # How many items of the work around a goal its page lists.
+  @goal_items 100
 
   # Only these kinds of address are ever made into links.
   @link_schemes ["https://", "ipfs://", "ar://", "git+https://"]
@@ -207,8 +215,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
       agents =
         agent_names(
-          Enum.map(page.results ++ goals, &creator_wallet(&1.sys)) ++
-            Enum.map(activity, &actor_wallet/1)
+          Enum.map(page.results, &creator_wallet(&1.sys)) ++ Enum.map(activity, &actor_wallet/1)
         )
 
       notes =
@@ -223,8 +230,8 @@ defmodule KeyfleetWeb.WorkspacePage do
         ready?: true,
         seen: seen(cursor),
         filter: filter,
-        cards: Enum.map(page.results, &card(&1, fleet_id, agents)),
-        goals: Enum.map(goals, &card(&1, fleet_id, agents)),
+        cards: Enum.map(page.results, &entry(&1, filter, fleet_id, agents)),
+        goals: Enum.map(goals, &goal_row/1),
         all_goals: board_path(fleet_id, %{type: "goal", archived?: false}),
         first_page?: not paged?(params),
         first_page: board_path(fleet_id, filter),
@@ -244,7 +251,10 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  @doc "One item, a page of its links and a page of its history."
+  @doc """
+  One item, a page of its links and a page of its history. A goal comes with
+  the work around it (`goal`) in place of its links.
+  """
   def item(fleet_id, object_id, params, actor) do
     opts = [actor: actor]
     links_at = position!(params, "links")
@@ -261,10 +271,18 @@ defmodule KeyfleetWeb.WorkspacePage do
           Map.put(base, :object, nil)
 
         object ->
-          links =
-            page!(
-              Graph.object_links(fleet_id, object_id, page: links_at ++ [limit: 50], actor: actor)
-            )
+          # A goal's page lists the work around it in place of its links.
+          {links, goal} =
+            if object.type == "goal" do
+              {nil, goal_work(fleet_id, object_id, opts)}
+            else
+              {page!(
+                 Graph.object_links(fleet_id, object_id,
+                   page: links_at ++ [limit: 50],
+                   actor: actor
+                 )
+               ), nil}
+            end
 
           {history, earlier} =
             fleet_id
@@ -272,7 +290,7 @@ defmodule KeyfleetWeb.WorkspacePage do
             |> page!()
             |> Enum.split(50)
 
-          others = Enum.map(links.results, &other_end(&1, object_id))
+          others = if links, do: Enum.map(links.results, &other_end(&1, object_id)), else: []
           titles = titles(fleet_id, others ++ Enum.flat_map(history, &mentions/1), opts)
 
           agents =
@@ -285,14 +303,17 @@ defmodule KeyfleetWeb.WorkspacePage do
 
           Map.merge(base, %{
             object: detail(object, fleet_id, agents, opts),
-            links: %{
-              rows: Enum.map(links.results, &link_row(&1, object, titles)),
-              more:
-                if(links.more?,
-                  do: path.("links", List.last(links.results).__metadata__.keyset)
-                ),
-              first: if(links_at != [], do: path.("links", nil))
-            },
+            goal: goal,
+            links:
+              links &&
+                %{
+                  rows: Enum.map(links.results, &link_row(&1, object, titles)),
+                  more:
+                    if(links.more?,
+                      do: path.("links", List.last(links.results).__metadata__.keyset)
+                    ),
+                  first: if(links_at != [], do: path.("links", nil))
+                },
             history: %{
               lines: Enum.map(history, &line(&1, titles, agents)),
               more: if(earlier != [], do: path.("history", List.last(history).seq - 1)),
@@ -348,6 +369,8 @@ defmodule KeyfleetWeb.WorkspacePage do
       }
     end
   end
+
+  defp standing(_type, nil), do: nil
 
   defp standing("goal", status), do: choice("status", status)
 
@@ -531,6 +554,62 @@ defmodule KeyfleetWeb.WorkspacePage do
     fleet_id
     |> Graph.object_titles!(Enum.uniq(ids), opts)
     |> Map.new(&{&1.id, &1})
+  end
+
+  # Goals are listed one line each; every other item is a card.
+  defp entry(object, %{type: "goal"}, _fleet_id, _agents), do: goal_row(object)
+  defp entry(object, _filter, fleet_id, agents), do: card(object, fleet_id, agents)
+
+  defp goal_row(object) do
+    %{
+      id: object.id,
+      title: object.title,
+      starting?: starting?(object.sys),
+      archived?: archived?(object.sys),
+      level: level(object.sys),
+      status: choice("status", object.card["status"]),
+      joined: length(joined(object.sys)),
+      changed_on: on(object.changed_at)
+    }
+  end
+
+  # What a goal's page lists of the work around it (`Keyfleet.Graph.Object`,
+  # `:around_goal`): each item one line, and of the evidence among them, the
+  # saved notebook results and the commits of the fleet's code it cites.
+  defp goal_work(fleet_id, goal_id, opts) do
+    {objects, more} = fleet_id |> Graph.goal_work!(goal_id, opts) |> Enum.split(@goal_items)
+
+    sources =
+      for %{type: "evidence"} = object <- objects,
+          do: {object, source(object.card["source_uri"], fleet_id)}
+
+    %{
+      items:
+        for object <- objects do
+          %{
+            id: object.id,
+            type: object.type,
+            title: object.title,
+            standing: standing(object.type, object.standing),
+            changed_on: on(object.changed_at)
+          }
+        end,
+      more?: more != [],
+      results:
+        for {object, {:notebook_result, uri}} <- sources do
+          %{id: object.id, title: object.title, uri: uri, changed_on: on(object.changed_at)}
+        end,
+      commits:
+        for {object, {:commit, hash, path}} <- sources do
+          %{
+            id: object.id,
+            title: object.title,
+            hash: hash,
+            path: path,
+            changed_on: on(object.changed_at)
+          }
+        end
+    }
   end
 
   defp card(object, fleet_id, agents) do
@@ -973,6 +1052,11 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp at(timestamp) do
     {:ok, datetime, 0} = DateTime.from_iso8601(timestamp)
     Calendar.strftime(datetime, @at)
+  end
+
+  defp on(timestamp) do
+    {:ok, datetime, 0} = DateTime.from_iso8601(timestamp)
+    Calendar.strftime(datetime, @on)
   end
 
   defp humanize(field), do: field |> String.replace("_", " ") |> String.capitalize()

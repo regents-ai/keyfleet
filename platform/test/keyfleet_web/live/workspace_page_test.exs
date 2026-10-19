@@ -328,14 +328,26 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert html =~ @notice
       assert goals(board) == [goal, first, second]
       assert has_element?(board, ~s(#workspace-goals [data-item="#{first}"]), "Starting idea")
-      assert has_element?(board, ~s(#workspace-goals [data-item="#{first}"]), "Added by Keyfleet")
+      assert has_element?(board, ~s(#workspace-goals [data-item="#{first}"]), "Open")
       refute has_element?(board, ~s(#workspace-goals [data-item="#{goal}"]), "Starting idea")
+      refute has_element?(board, ~s(#workspace-goals [data-item="#{second}"]), "joined")
       assert has_element?(board, ~s(#workspace-all-goals[href="#{@board}?type=goal"]))
       assert "Keyfleet added the goal “Plan a service”." in activity(board)
 
       join(@fleet, second, by: 18)
       {:ok, board, _html} = live(conn, @board)
       assert goals(board) == [second, goal, first]
+      assert has_element?(board, ~s(#workspace-goals [data-item="#{second}"]), "1 joined")
+
+      # Every goal is one line, there as on the list of every goal.
+      board |> element("#workspace-all-goals") |> render_click()
+      assert cards(board) == [second, goal, first]
+
+      assert has_element?(
+               board,
+               ~s(#workspace-cards .workspace-row[data-item="#{first}"]),
+               "Starting idea"
+             )
 
       {:ok, item, html} = live(conn, item_path(first))
       assert html =~ "Starting idea"
@@ -513,10 +525,19 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, goal_view, _html} = live(conn, item_path(goal))
 
+      refute has_element?(goal_view, "#workspace-links")
+      assert work(goal_view) == [task]
+
       assert has_element?(
                goal_view,
-               ~s(#workspace-links [data-relation="#{delivers}"][data-direction="to"]),
-               "delivers on this goal"
+               ~s(#workspace-goal-items [data-item="#{task}"] a[href="#{item_path(task)}"]),
+               "Draft the brief"
+             )
+
+      assert has_element?(
+               goal_view,
+               ~s(#workspace-goal-items [data-item="#{task}"]),
+               "In progress"
              )
 
       assert has_element?(goal_view, "p", "No one has mentioned this in the rooms yet.")
@@ -574,13 +595,105 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, view, _html} = live(conn, item_path(goal))
 
-      assert has_element?(view, "p", "Nothing is linked to this yet.")
+      assert has_element?(view, "p", "No work is linked to this goal yet.")
 
       assert history(view) == [
                "Key 8 unlinked “Draft” from “Revenue”, which it no longer delivers on.",
                "Key 17 linked “Draft” to “Revenue”, which it delivers on.",
                "Key 17 added the goal “Revenue”."
              ]
+    end
+
+    test "a goal's page lists the work around it, its notebook results and its commits",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+      task = create(@fleet, "task", %{"title" => "Price check", "progress" => "doing"})
+      link(@fleet, task, goal, "implements")
+      finding = create(@fleet, "finding", %{"title" => "Funds pay", "statement" => "s"})
+      link(@fleet, finding, goal, "supports")
+
+      hash = String.duplicate("ab", 20)
+      commit = KeyfleetWeb.WorkspacePage.commit_url(@fleet, hash)
+
+      result =
+        Keyfleet.Notebooks.result_url(
+          @fleet,
+          "nb-0123456789abcdef",
+          "run_01M539TC83WX2ZRQFZB4VHH178",
+          1_792_186_134_702
+        )
+
+      code = create(@fleet, "evidence", %{"title" => "The price page", "source_uri" => commit})
+      run = create(@fleet, "evidence", %{"title" => "The forecast", "source_uri" => result})
+      link(@fleet, task, code, "produces")
+      link(@fleet, task, run, "produces")
+
+      # What the goal's work links to further on, and what is put away, stays off it.
+      far = create(@fleet, "note", %{"title" => "Aside", "body" => "b"})
+      link(@fleet, far, finding, "references")
+      old = create(@fleet, "task", %{"title" => "Old try", "progress" => "todo"})
+      link(@fleet, old, goal, "implements")
+      archive(@fleet, old)
+
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      assert work(view) == [run, code, finding, task]
+      assert has_element?(view, ~s(#workspace-goal-items [data-item="#{task}"]), "Task")
+      refute has_element?(view, "#workspace-goal-work-more")
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-results [data-item="#{run}"] a[data-notebook-result][href="#{result}"]),
+               "The forecast"
+             )
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-commits [data-item="#{code}"] a[href="#{Keyfleet.Code.commit_path(@fleet, hash)}"]),
+               "The price page"
+             )
+
+      assert has_element?(view, "#workspace-goal-commits code", String.slice(hash, 0, 12))
+    end
+
+    test "a goal's page with nothing around it says so", %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      assert has_element?(
+               view,
+               "#workspace-goal-work-empty",
+               "No work is linked to this goal yet."
+             )
+
+      assert has_element?(
+               view,
+               "#workspace-goal-notebooks-empty",
+               "No notebook results are cited for this goal yet."
+             )
+
+      assert has_element?(
+               view,
+               "#workspace-goal-code-empty",
+               "No commits are cited for this goal yet."
+             )
+    end
+
+    test "a goal's page lists the hundred most recently changed items around it",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Hub", "outcome" => "o", "status" => "open"})
+
+      notes =
+        for n <- 1..101 do
+          note = create(@fleet, "note", %{"title" => "Note #{n}", "body" => "b"})
+          link(@fleet, note, goal, "references")
+          note
+        end
+
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      assert work(view) == notes |> Enum.reverse() |> Enum.take(100)
+      assert has_element?(view, "#workspace-goal-work-more", "The 100 most recently changed.")
     end
 
     test "a review is told once, as its decision on the task", %{conn: conn} do
@@ -609,12 +722,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
 
     test "links and history come fifty at a time", %{conn: conn} do
-      hub = create(@fleet, "goal", %{"title" => "Hub", "outcome" => "o", "status" => "open"})
+      hub = create(@fleet, "task", %{"title" => "Hub", "progress" => "todo"})
 
       tasks =
         for n <- 1..52 do
           task = create(@fleet, "task", %{"title" => "Task #{n}", "progress" => "todo"})
-          link(@fleet, task, hub, "implements")
+          link(@fleet, task, hub, "depends_on")
           task
         end
 
@@ -633,9 +746,9 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       view |> element("#workspace-more-history") |> render_click()
 
       assert history(view) == [
-               "Key 17 linked “Task 2” to “Hub”, which it delivers on.",
-               "Key 17 linked “Task 1” to “Hub”, which it delivers on.",
-               "Key 17 added the goal “Hub”."
+               "Key 17 linked “Task 2” to “Hub”, which it depends on.",
+               "Key 17 linked “Task 1” to “Hub”, which it depends on.",
+               "Key 17 added the task “Hub”."
              ]
 
       refute has_element?(view, "#workspace-more-history")
@@ -1290,6 +1403,14 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
   defp workspace(view),
     do: view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query(".workspace-page")
+
+  defp work(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#workspace-goal-items > li")
+    |> LazyHTML.attribute("data-item")
+  end
 
   defp linked(view) do
     view
