@@ -2770,3 +2770,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main 2438bc71 to keyfleet.ai as Fly release v93 (rollback v92, 392902d0). It carries the Grok and launch-readiness work, the fleet map, one fleet reader in place of two, the steadier hall test, the full-width footer and solid account panels, and the Git helper read-only home note.
 - Why: one checked head instead of several side branches; the full check on a fresh copy was clean (989 tests, 304 page tests, 66 Chromium browser walks; WebKit not run on the Mac).
+
+## 2026-10-19 — A workspace id that isn't found says what an id looks like
+
+- What: the workspace's 404 `not_found` hint, the docs and the command guide now say an item's id is its type, `#` and a number, such as `task#27`. Contessa's signed Git run is in the feature map: clone, push and `list_code_pushes` worked; attaching the commit to its task is still to do.
+- Why: Contessa asked for `task:1` and got only "no such object" before finding the right form.
