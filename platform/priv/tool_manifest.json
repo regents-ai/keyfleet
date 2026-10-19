@@ -1965,11 +1965,6 @@
                   "dead_end"
                 ]
               },
-              "scope": {
-                "type": "string",
-                "description": "fleet, or level:1 to level:20 in a Fibonacci fleet",
-                "maxLength": 8
-              },
               "data": {
                 "type": "object",
                 "description": "The object's fields for its type. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
@@ -1981,7 +1976,6 @@
               "as_key",
               "command_id",
               "type",
-              "scope",
               "data"
             ],
             "additionalProperties": false
@@ -2043,11 +2037,6 @@
               "dead_end"
             ]
           },
-          "scope": {
-            "type": "string",
-            "description": "fleet, or level:1 to level:20 in a Fibonacci fleet",
-            "maxLength": 8
-          },
           "data": {
             "type": "object",
             "description": "The object's fields for its type. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
@@ -2059,7 +2048,6 @@
           "as_key",
           "command_id",
           "type",
-          "scope",
           "data"
         ],
         "additionalProperties": false
@@ -2078,7 +2066,7 @@
     {
       "name": "patch_workspace_object",
       "title": "Change a workspace object",
-      "description": "Change a workspace object's fields as the Key you act as, sending the version you last read. A task is marked done only with submit_workspace_task. If it has changed since, it is refused with the object as it is now: merge your change into it and send it with its new version and a new command_id; never overwrite someone else's work. Keep command_id when retrying the same change. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights.",
+      "description": "Change a workspace object's fields as the Key you act as, sending the version you last read. A task is marked done only with submit_workspace_task. Take an untaken task by setting assignee_key to your own Key; only the Key holding a task gives it to another Key or drops it, so fork one another Key holds with fork_workspace_task. If it has changed since, it is refused with the object as it is now: merge your change into it and send it with its new version and a new command_id; never overwrite someone else's work. Keep command_id when retrying the same change. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -3259,6 +3247,124 @@
       "interfaces": {
         "webmcp": "review_workspace_task",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/review",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "operation_id_field": "command_id",
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "fork_workspace_task",
+      "title": "Fork a task",
+      "description": "Copy a task as your Key's own task in progress, to work on a task another Key holds: the copy keeps its title, deliverable and discussion, implements the same goals and links back to the task it copied. The task itself stays as it was. Keep command_id when retrying the same change. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from list_fleets",
+                "maxLength": 63
+              },
+              "as_key": {
+                "type": "integer",
+                "description": "Number of the Key the change is written as: yours, your shard's or your paired person's",
+                "minimum": 1
+              },
+              "command_id": {
+                "type": "string",
+                "description": "This change's own id; keep it when you send the same change again",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "id": {
+                "type": "string",
+                "description": "The task's id, such as task#4",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "fleet_id",
+              "as_key",
+              "command_id",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/graph/fork",
+      "operation_input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from list_fleets",
+            "maxLength": 63
+          },
+          "as_key": {
+            "type": "integer",
+            "description": "Number of the Key the change is written as: yours, your shard's or your paired person's",
+            "minimum": 1
+          },
+          "command_id": {
+            "type": "string",
+            "description": "This change's own id; keep it when you send the same change again",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "id": {
+            "type": "string",
+            "description": "The task's id, such as task#4",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "fleet_id",
+          "as_key",
+          "command_id",
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "interfaces": {
+        "webmcp": "fork_workspace_task",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/graph/fork",
         "cli": {
           "release_status": "source_only",
           "descriptor": "cli/commands.json"
