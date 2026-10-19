@@ -8,7 +8,11 @@ defmodule Keyfleet.ContractSchema do
   passed unchecked.
   """
 
-  @contract Path.expand("../../contracts/api-contract.openapiv3.yaml", __DIR__)
+  # The contract is read once, when this module compiles; reading it for
+  # every answer a test checks made the longest contract test take a minute.
+  @contract_path Path.expand("../../contracts/api-contract.openapiv3.yaml", __DIR__)
+  @external_resource @contract_path
+  @contract YamlElixir.read_from_file!(@contract_path)
   @prefix "#/components/schemas/"
   @notes ~w(description default)
   @uuid ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
@@ -19,7 +23,7 @@ defmodule Keyfleet.ContractSchema do
   """
   @spec errors(term(), String.t()) :: [String.t()]
   def errors(value, name) do
-    schemas = YamlElixir.read_from_file!(@contract)["components"]["schemas"]
+    schemas = contract()["components"]["schemas"]
     json = value |> Jason.encode!() |> Jason.decode!()
     check(json, %{"$ref" => @prefix <> name}, schemas, "$")
   end
@@ -31,7 +35,7 @@ defmodule Keyfleet.ContractSchema do
   """
   @spec response_errors(term(), String.t(), String.t(), pos_integer()) :: [String.t()]
   def response_errors(value, method, path, status) do
-    contract = YamlElixir.read_from_file!(@contract)
+    contract = contract()
     operation = contract["paths"][path][String.downcase(method)]
 
     case operation["responses"][Integer.to_string(status)] do
@@ -45,6 +49,8 @@ defmodule Keyfleet.ContractSchema do
         body_errors(value, response, contract)
     end
   end
+
+  defp contract, do: @contract
 
   defp body_errors(
          value,

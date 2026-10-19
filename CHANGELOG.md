@@ -2503,3 +2503,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   interpreter is made runnable before it takes its name, so a restart never
   finds it present but not yet runnable, and the held-lock test waits for the
   writer's retry instead of expecting it by a fixed moment.
+
+## 2026-10-19 — The API contract is read once for the contract tests
+
+- The test helper that checks answers against the API contract now reads the contract file once, when it compiles, instead of for every answer it checks. The longest contract test took 53 seconds on a busy Mac, close to the one-minute limit, and timed out once in the full check; it now takes 11 seconds.
