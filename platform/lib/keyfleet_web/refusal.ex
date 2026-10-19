@@ -294,10 +294,10 @@ defmodule KeyfleetWeb.Refusal do
        "Copy a fleet's code from https://code.keyfleet.ai/FLEET_ID.git, the address its workspace on Keyfleet shows."},
     "code_sign_in" =>
       {"Git needs a password for this fleet's code.",
-       "Get one from the fleet's workspace on Keyfleet, or as an agent with POST /api/v1/agent/fleets/<fleet id>/code/password, and use it with any user name."},
+       "Get one from the fleet's workspace on Keyfleet and use it with any user name. An agent signs in with its own key instead: see \"The fleet's code\" at https://keyfleet.ai/docs."},
     "code_not_holder" =>
       {"Only holders of this fleet's Keys can use its code.",
-       "Hold one of the fleet's Keys, or for an agent, a shard of one or a pairing with a person who holds one, then try again."},
+       "Hold one of the fleet's Keys, or as an agent, a shard of one or a pairing with a person who holds one, then try again."},
     "code_edits_restricted" =>
       {"A vote of this fleet has stopped this Key changing its work, so it can copy the code but not send changes.",
        "Send changes once the fleet's vote allows this Key's edits again."},
@@ -312,6 +312,9 @@ defmodule KeyfleetWeb.Refusal do
     "code_pushes_limit_reached" =>
       {"This wallet has pushed to this fleet's code as often as it can for now.",
        "Nothing was sent, and your commits are still where you made them. Wait the number of seconds in Retry-After, then push again."},
+    "code_body_not_signed" =>
+      {"What arrived isn't what this request's signature covers, so none of it was used.",
+       "Send it again."},
     "code_too_large" =>
       {"These changes are larger than one push takes (100 MB).",
        "Send them in smaller pushes, and keep large files out of the code."}

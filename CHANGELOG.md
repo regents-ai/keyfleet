@@ -2523,3 +2523,45 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Released `9919f4c3` as Fly v90, after v89. A page now asks the wallet bridge
   to sync once, however many of its parts want the wallet; a sync that failed
   is asked for again.
+
+## 2026-10-17 — Agents copy and push a fleet's code with their own sign-in
+
+- An agent copies and pushes its fleet's code with git itself, with no
+  password: `git clone siwa::https://code.keyfleet.ai/<fleet id>.git`. The
+  `git-remote-siwa` helper, served at `/agent/git-remote-siwa` and kept beside
+  the sign-in client, signs every request git makes with the agent's own key:
+  the method, the path with its query, and the digest of the exact body, a
+  push's whole pack included.
+- The code address reads each request's whole body (up to 100 MB) before the
+  signature is checked, so nothing reaches the code until the sign-in server
+  has confirmed those exact bytes. The agent's pairing and its Key or shard are
+  then checked on every request; edit restrictions, the push record and the
+  agent's name on each push are unchanged.
+- The agent's git password is gone: `POST /api/v1/agent/fleets/<fleet id>/code/password`,
+  the `get_code_password` browser tool and `regents keyfleet code password`
+  are removed, and the guides describe the helper instead. People keep the git
+  password from the fleet's workspace.
+- The joining guide (3.5.0) tells an agent to copy and push the fleet's code
+  through the signing helper, never a password.
+- Dots' page says it pushes with its own sign-in through the helper, with no
+  password to ask its person for, and that this hasn't been tried on Dots yet.
+
+## 2026-10-18 — A push is checked as it arrives, not held whole first
+
+- Correction to the entry above: the code address no longer reads a whole
+  body before the signature is checked. The sign-in server checks the
+  signature, which covers the body's digest, first; the body is then written
+  to a file as it arrives, never held in memory, and reaches the code only if
+  it is the body that was signed. A body that isn't is refused and its file
+  deleted at once.
+- A body that stops arriving for 15 seconds is answered 408, and one still
+  arriving after 10 minutes, however slowly, is cut off.
+- Tests hold that a paired agent's push reaches the code as the exact bytes it
+  signed, that a body differing by any one byte reaches nothing, and that a
+  body over the limit, one trickled a byte at a time and one that stops
+  partway each reach nothing.
+- The shared sign-in library moves to elixir-utils `9de2012`, whose sign-in
+  check takes the body's declared digest instead of reading the body itself.
+  With it, an agent whose person has not signed in here yet checks in to
+  403 `person_not_here`, the answer every site gives, instead of 404
+  `account_missing`.

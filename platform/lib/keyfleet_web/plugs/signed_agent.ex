@@ -35,7 +35,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
-  @code_password_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/password\z"
   @code_pushes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/pushes\z"
   # A fleet's notebooks and their runs: a notebook and a run named as the hub
   # names them.
@@ -52,7 +51,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @poll_start_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/start\z"
   @poll_vote_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@poll}/vote\z"
   @poll_end_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@poll}/end\z"
-  @empty_body_paths [@mute_path, @code_password_path, @poll_end_path]
+  @empty_body_paths [@mute_path, @poll_end_path]
   @poll_post_paths [@poll_start_path, @poll_vote_path, @poll_end_path]
 
   # Direct messages: a Key's conversations and blocks, what it does in one
@@ -180,10 +179,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           deny(conn, %{reason: :invalid_request})
 
         {:more, _raw, conn} ->
-          answer(conn, 413, "request_too_large")
+          send_refusal(conn, 413, KeyfleetWeb.Refusal.body("request_too_large"))
 
         :too_large ->
-          answer(conn, 413, "request_too_large")
+          send_refusal(conn, 413, KeyfleetWeb.Refusal.body("request_too_large"))
       end
     else
       _ -> deny(conn, %{reason: :invalid_request})
@@ -367,43 +366,52 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   @impl Siwa.AgentAuthPlug.Hooks
-  def deny(conn, %{reason: :smart_wallet_on_ethereum}),
-    do: answer(conn, 401, "smart_wallet_on_ethereum")
-
-  def deny(conn, %{reason: :agent_not_paired}), do: answer(conn, 403, "agent_not_paired")
-  def deny(conn, %{reason: :pairing_unavailable}), do: answer(conn, 503, "pairing_unavailable")
-
-  def deny(conn, %{reason: :out_of_range}), do: answer(conn, 422, "out_of_range")
-
-  def deny(conn, %{reason: :too_many_keys}),
-    do: send_refusal(conn, 422, KeyfleetWeb.Refusal.body("out_of_range", @too_many_keys))
-
-  def deny(conn, %{reason: :body_does_not_fit}) do
-    body = KeyfleetWeb.Refusal.body("invalid_request", takes(conn.request_path))
-    send_refusal(conn, 422, body)
+  def deny(conn, metadata) do
+    {status, body} = refusal(conn, metadata)
+    send_refusal(conn, status, body)
   end
 
-  # The shared plug's own refusals keep its reason as the code, as on every site.
-  def deny(conn, %{source: :siwa_plug, reason: reason}),
-    do: answer(conn, 401, Atom.to_string(reason))
+  @doc """
+  The status and refusal body (`KeyfleetWeb.Refusal`) for a request the shared
+  plug or this site's checks turned away, for a caller that answers in a shape
+  of its own (`KeyfleetWeb.Plugs.CodeGateway`).
+  """
+  def refusal(_conn, %{reason: :smart_wallet_on_ethereum}),
+    do: answer(401, "smart_wallet_on_ethereum")
 
-  def deny(conn, %{reason: :siwa_request_failed}), do: answer(conn, 503, "siwa_request_failed")
+  def refusal(_conn, %{reason: :agent_not_paired}), do: answer(403, "agent_not_paired")
+  def refusal(_conn, %{reason: :pairing_unavailable}), do: answer(503, "pairing_unavailable")
+
+  def refusal(_conn, %{reason: :out_of_range}), do: answer(422, "out_of_range")
+
+  def refusal(_conn, %{reason: :too_many_keys}),
+    do: {422, KeyfleetWeb.Refusal.body("out_of_range", @too_many_keys)}
+
+  def refusal(conn, %{reason: :body_does_not_fit}),
+    do: {422, KeyfleetWeb.Refusal.body("invalid_request", takes(conn.request_path))}
+
+  # The shared plug's own refusals keep its reason as the code, as on every site.
+  def refusal(_conn, %{source: :siwa_plug, reason: reason}),
+    do: answer(401, Atom.to_string(reason))
+
+  def refusal(_conn, %{reason: :siwa_request_failed}), do: answer(503, "siwa_request_failed")
 
   # The sign-in service answered with a refusal or a failure: its status and its
   # own words, as on every site.
-  def deny(conn, %{siwa_status: status} = failure) do
-    send_refusal(conn, status, %{
-      error: %{
-        code: failure[:siwa_code] || "sign_in_refused",
-        message: failure[:siwa_message] || "The request's wallet signature was not accepted.",
-        hint: failure[:siwa_hint] || "Sign the request again with your agent key, then send it."
-      }
-    })
+  def refusal(_conn, %{siwa_status: status} = failure) do
+    {status,
+     %{
+       error: %{
+         code: failure[:siwa_code] || "sign_in_refused",
+         message: failure[:siwa_message] || "The request's wallet signature was not accepted.",
+         hint: failure[:siwa_hint] || "Sign the request again with your agent key, then send it."
+       }
+     }}
   end
 
-  def deny(conn, _metadata), do: answer(conn, 401, "unauthorized")
+  def refusal(_conn, _metadata), do: answer(401, "unauthorized")
 
-  defp answer(conn, status, code), do: send_refusal(conn, status, KeyfleetWeb.Refusal.body(code))
+  defp answer(status, code), do: {status, KeyfleetWeb.Refusal.body(code)}
 
   defp send_refusal(conn, status, body) do
     conn
@@ -457,7 +465,6 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @key_send_path,
         @sync_path,
         @proposal_read_path,
-        @code_password_path,
         @run_start_path,
         @chain_path,
         @graph_path,

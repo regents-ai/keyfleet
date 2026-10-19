@@ -3,9 +3,11 @@
 Each fleet has one private git repository. It lives on Keyfleet's own copy of
 Twigpine (the `keyfleet` branch of `repos/twigpine`, app `keyfleet-code`),
 which has no public address. People and agents reach it only through
-`https://code.keyfleet.ai/<fleet id>.git`, where Keyfleet checks that they hold
-one of the fleet's keys (or, for an agent, a shard of one) and then forwards
-git's request with a short signed pass.
+`https://code.keyfleet.ai/<fleet id>.git`, where Keyfleet checks who sent each
+request and that they hold one of the fleet's keys (or, for an agent, a shard
+of one or a pairing with a holder), and then forwards git's request with a
+short signed pass. Anything that speaks git's smart HTTP can sit behind that
+address: nothing an agent or person sends depends on the store.
 
 - Who may use it: holders of the fleet's keys and their agents. Checked at
   most every 30 seconds, and again at once when a key changes hands.
@@ -14,14 +16,28 @@ git's request with a short signed pass.
 - Each change sent is recorded under the key and the wallet that sent it, and
   the fleet's workspace shows the latest ten (key, branch and time; never the
   commit message).
-- Passwords: a person gets one from the Code panel in the fleet's workspace;
-  an agent gets one from `POST /api/v1/agent/fleets/<fleet id>/code/password`.
-  Git uses it with any user name. It lasts 12 hours, and a person's ends when
+- People: a person gets a password from the Code panel in the fleet's
+  workspace. Git uses it with any user name. It lasts 12 hours and ends when
   they sign out.
+- Agents: no password. The `git-remote-siwa` helper
+  (`platform/priv/public/git-remote-siwa`, served at
+  `https://keyfleet.ai/agent/git-remote-siwa`) signs every request git makes
+  with the agent's own SIWA key: method, path with query, and the sha-256
+  digest of the exact body, a push's pack included. The sign-in server checks
+  the signature, which covers that digest, before the body is read; then the
+  agent's pairing and Key or shard are checked, on every request. Only then
+  is the body written to a file as it arrives (up to 100 MB, each read waiting
+  at most 15 seconds and the whole body at most 10 minutes), and it reaches
+  the store only if its sha-256 is the signed digest. Any other body is
+  refused and its file deleted. A person's body is read the same way once
+  their password stands. The sign-in server must list
+  `https://code.keyfleet.ai` under the `keyfleet` audience, as it lists the
+  notebook host, for the helper to sign in there.
 
 The code is in `platform/lib/keyfleet/code.ex`, `platform/lib/keyfleet/code/`,
-`platform/lib/keyfleet_web/code_password.ex` and
-`platform/lib/keyfleet_web/plugs/code_gateway.ex`. The store's own notes are in
+`platform/lib/keyfleet_web/code_password.ex`,
+`platform/lib/keyfleet_web/plugs/code_gateway.ex` and the helper
+`platform/priv/public/git-remote-siwa`. The store's own notes are in
 `repos/twigpine/infra/keyfleet/README.md`.
 
 ## Settings
@@ -33,8 +49,8 @@ The code is in `platform/lib/keyfleet/code.ex`, `platform/lib/keyfleet/code/`,
 | `KEYFLEET_PASS_JWKS` | store secret | The public half of Keyfleet's keys: the JSON at `https://keyfleet.ai/.well-known/hub-jwks.json`. |
 | `KEYFLEET_PASS_ISSUER` | store, `fly.toml` | `https://keyfleet.ai` |
 
-The code host, pass life, password life, push size cap (100 MB) and admission
-time live in `config :keyfleet, :code` (`platform/config/config.exs`).
+The code host, pass life, password life, request size cap (100 MB), the waits
+for a body and admission time live in `config :keyfleet, :code` (`platform/config/config.exs`).
 
 ## Running it on this computer
 

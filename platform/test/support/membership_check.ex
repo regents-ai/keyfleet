@@ -96,7 +96,6 @@ defmodule Keyfleet.MembershipCheck do
     lineage = signed_in!(holder)
     cookie = notebook_cookie(c, holder, lineage)
     own_password = person_password(holder, lineage)
-    password = code_password(c, holder, @fleet)
     socket = open_socket(c, holder, @fleet)
 
     before = [
@@ -107,8 +106,7 @@ defmodule Keyfleet.MembershipCheck do
         notebooks(c, holder, @fleet)
       ),
       line("transfer: holder's agent opens a notebook connection", opened(socket)),
-      admission("transfer: holder's agent gets a code password", password),
-      admission("transfer: git lets the holder's agent in", git(c, @fleet, password(password))),
+      admission("transfer: git lets the holder's agent in", agent_git(c, holder, @fleet)),
       admission(
         "transfer: holder opens the notebooks with their sign-in",
         notebook_page(c, cookie)
@@ -137,9 +135,9 @@ defmodule Keyfleet.MembershipCheck do
         403,
         "notebooks_not_holder"
       ),
-      refusal(
-        "transfer: buyer's agent refused a code password",
-        code_password(c, buyer, @fleet),
+      git_refusal(
+        "transfer: git refuses the buyer's agent",
+        agent_git(c, buyer, @fleet),
         403,
         "code_not_holder"
       )
@@ -172,15 +170,9 @@ defmodule Keyfleet.MembershipCheck do
         403,
         "notebooks_not_holder"
       ),
-      refusal(
-        "transfer: old holder's agent refused a code password",
-        code_password(c, holder, @fleet),
-        403,
-        "code_not_holder"
-      ),
       git_refusal(
-        "transfer: git refuses the password the old holder's agent got before",
-        git(c, @fleet, password(password)),
+        "transfer: git refuses the old holder's agent",
+        agent_git(c, holder, @fleet),
         403,
         "code_not_holder"
       ),
@@ -210,27 +202,17 @@ defmodule Keyfleet.MembershipCheck do
       line(
         "transfer: new holder's agent opens a notebook connection",
         opened(open_socket(c, buyer, @fleet))
-      )
+      ),
+      admission("transfer: git lets the new holder's agent in", agent_git(c, buyer, @fleet))
     ]
 
-    new_password = code_password(c, buyer, @fleet)
-
-    code = [
-      admission("transfer: new holder's agent gets a code password", new_password),
-      admission(
-        "transfer: git lets the new holder's agent in",
-        git(c, @fleet, password(new_password))
-      )
-    ]
-
-    before ++ [roster] ++ moved ++ code
+    before ++ [roster] ++ moved
   end
 
   defp revocation(c) do
     read_chain!()
     paired = pair!()
     BrowserChain.sell!(@fleet, paired.wallet)
-    password = code_password(c, paired, @fleet)
     socket = open_socket(c, paired, @fleet)
 
     admitted = [
@@ -241,8 +223,7 @@ defmodule Keyfleet.MembershipCheck do
         notebooks(c, paired, @fleet)
       ),
       line("revocation: paired agent opens a notebook connection", opened(socket)),
-      admission("revocation: paired agent gets a code password", password),
-      admission("revocation: git lets the paired agent in", git(c, @fleet, password(password)))
+      admission("revocation: git lets the paired agent in", agent_git(c, paired, @fleet))
     ]
 
     unpair!(paired)
@@ -255,35 +236,26 @@ defmodule Keyfleet.MembershipCheck do
       )
 
     refused =
-      for {place, answer} <- [
-            {"in rooms", room(c, paired, @fleet)},
-            {"the workspace", workspace(c, paired, @fleet)},
-            {"the notebooks", notebooks(c, paired, @fleet)},
-            {"a code password", code_password(c, paired, @fleet)}
+      for {place, answer, refused} <- [
+            {"in rooms", room(c, paired, @fleet), &refused_exactly/3},
+            {"the workspace", workspace(c, paired, @fleet), &refused_exactly/3},
+            {"the notebooks", notebooks(c, paired, @fleet), &refused_exactly/3},
+            {"the fleet's code", agent_git(c, paired, @fleet), &refused_to_git/3}
           ] do
         line(
           "revocation: unpaired agent refused #{place} (403 agent_not_paired, Refusal's words)",
-          refused_exactly(answer, 403, "agent_not_paired")
+          refused.(answer, 403, "agent_not_paired")
         )
       end
 
-    git =
-      git_refusal(
-        "revocation: git refuses the password the agent got before",
-        git(c, @fleet, password(password)),
-        401,
-        "code_sign_in"
-      )
-
     site = line("revocation: agent_not_paired sends the person to this site", own_site())
-    admitted ++ [closed | refused] ++ [git, site]
+    admitted ++ [closed | refused] ++ [site]
   end
 
   defp other_fleet(c) do
     read_chain!()
     outsider = pair!()
     BrowserChain.sell!(@other_fleet, outsider.wallet)
-    own_password = code_password(c, outsider, @other_fleet)
 
     [
       refusal(
@@ -308,17 +280,11 @@ defmodule Keyfleet.MembershipCheck do
         403,
         "notebooks_not_holder"
       ),
-      refusal(
-        "other fleet: agent refused a code password",
-        code_password(c, outsider, @fleet),
+      git_refusal(
+        "other fleet: git refuses the agent on this fleet's code",
+        agent_git(c, outsider, @fleet),
         403,
         "code_not_holder"
-      ),
-      git_refusal(
-        "other fleet: git refuses its own fleet's password on this fleet's code",
-        git(c, @fleet, password(own_password)),
-        401,
-        "code_sign_in"
       ),
       admission(
         "other fleet: agent reads a members-only room of its own fleet",
@@ -332,10 +298,9 @@ defmodule Keyfleet.MembershipCheck do
         "other fleet: agent is let into its own fleet's notebooks",
         notebooks(c, outsider, @other_fleet)
       ),
-      admission("other fleet: agent gets its own fleet's code password", own_password),
       admission(
         "other fleet: git lets the agent into its own fleet's code",
-        git(c, @other_fleet, password(own_password))
+        agent_git(c, outsider, @other_fleet)
       )
     ]
   end
@@ -614,8 +579,13 @@ defmodule Keyfleet.MembershipCheck do
   defp workspace(c, agent, fleet_id),
     do: signed(c, agent, "POST", "/api/v1/agent/fleets/#{fleet_id}/graph/changes", "{}")
 
-  defp code_password(c, agent, fleet_id),
-    do: signed(c, agent, "POST", "/api/v1/agent/fleets/#{fleet_id}/code/password", "{}")
+  # Git as an agent runs it through the signing helper: every request to the
+  # code host signed with the agent's own key, an empty body included.
+  defp agent_git(c, agent, fleet_id) do
+    path = "/#{fleet_id}.git/info/refs?service=git-upload-pack"
+    headers = signed_headers(c, agent, "GET", path, "")
+    send_request(c, "GET", Code.config()[:host], path, headers, nil)
+  end
 
   # On the notebook host a GET signs the empty body too.
   defp notebooks(c, agent, fleet_id) do
@@ -627,9 +597,6 @@ defmodule Keyfleet.MembershipCheck do
     headers = signed_headers(c, agent, method, path, body)
     send_request(c, method, "localhost", path, headers, body)
   end
-
-  defp password(%{status: 200, body: %{"password" => password}}), do: password
-  defp password(_refused), do: nil
 
   defp git(_c, _fleet_id, nil), do: %{status: nil, body: "no password to give git"}
 

@@ -111,7 +111,7 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
     assert_received {:verified, ["keyfleet"], %{"method" => "GET", "path" => "/api/agents/v1/me"}}
   end
 
-  test "an agent paired by a person with no Keyfleet account checks in to account_missing",
+  test "an agent paired by a person with no Keyfleet account checks in to person_not_here",
        %{conn: conn} do
     siwa_verifies()
     stranger = %RegentAgents.Person{privy_user_id: "did:privy:keyfleet-no-account"}
@@ -126,7 +126,7 @@ defmodule KeyfleetWeb.SharedAgentPairingTest do
     contact = last_contact_at()
 
     checked_in = get(build_conn(), "/api/agents/v1/me")
-    assert json_response(checked_in, 404)["error"]["code"] == "account_missing"
+    assert json_response(checked_in, 403)["error"]["code"] == "person_not_here"
     assert last_contact_at() == contact
   end
 
