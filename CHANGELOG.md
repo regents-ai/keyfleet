@@ -2822,3 +2822,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   the pass's size, the Club has none) and a server check in
   platform/test/keyfleet_web/home_live_test.exs (both Club links while coming
   soon); gaps: WebKit not run on the Mac.
+
+## 2026-10-19 — The Regents Products menu matches the template, and the header marks stand evenly apart
+
+- What: the nine-dot button opens the template's "Regents Products" panel, hung straight under the button with its right edge lined up: Patchbay, Autolaunch, Techtree and $REGENT Staking as crown tiles in their brand colours, three to a row. Keyfleet no longer lists itself. In the footer the panel opens above its button; on a phone it spans the screen. The theme switch, the nine-dot menu, X and GitHub each fill the same press target, with a hairline after the theme switch and after the nine-dot menu.
+- Why: the panel showed plain name boxes in the middle of the screen and listed Keyfleet; the four header marks sat unevenly.
