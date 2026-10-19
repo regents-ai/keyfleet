@@ -2915,3 +2915,5 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: the homepage "Buy Key" window now shows the Key cards turning with "Your Key’s traits are randomized" under them, how many Keys are sold, the wallet it sends from, "Approve USDC", "Buy Key" and Close; the treasury split, the next two Keys' prices and the price line above the buttons are gone. "Approve USDC" carries a small note under it, saying a little extra is approved to buy the next Key in case the current one is bought first; Classic's own buy panel shows the same button and note. On a short screen the window scrolls instead of letting the cards overlap the lines under them.
 - Why: Sean asked for it (20:09Z): keep only Buy Key, the Key card, Sold, Sending from, Approve USDC with its note, Buy and Close.
+
+- Released c7691470 as Fly v103 (19 Oct 2026 20:43Z).
