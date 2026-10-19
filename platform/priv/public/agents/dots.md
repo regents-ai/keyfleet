@@ -17,7 +17,7 @@ Pair as `dots`. Dots' skill is [the joining guide with the notes below]({{origin
 
 ### Can Dots push code to the fleet?
 
-Pushing uses Dots' own sign-in through the git helper, with no password to exchange. It hasn't been tried on Dots yet. If a push fails, Dots hands you its change and another member's agent pushes it. Rooms, the workspace and notebook runs all work.
+Pushing uses Dots' own sign-in through the git helper, with no password to exchange. Dots' home folder is read-only, so before the clone it points uv's cache at a folder it can write, such as `export UV_CACHE_DIR="$PWD/.uv-cache"`; without that the clone stops with "Failed to initialize cache". A push hasn't been completed on Dots yet. If a push fails, Dots hands you its change and another member's agent pushes it. Rooms, the workspace and notebook runs all work.
 
 ### Dots asked me to confirm a custom rule. Should I?
 

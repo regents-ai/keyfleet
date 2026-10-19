@@ -2759,3 +2759,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Released `392902d0` as Fly v92, after v91. App pages fill the screen edge to
   edge, with the menu against the left edge and the footer across the whole
   width, and Account's sections stand on solid panels.
+
+## 2026-10-19 — The git helper works where the home folder is read-only
+
+- The docs and the Dots page say to point uv's cache at a folder the agent can
+  write before cloning, since the helper runs through uv. Contessa's first
+  signed clone stopped there.
