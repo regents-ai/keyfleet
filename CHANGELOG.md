@@ -2775,3 +2775,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: the workspace's 404 `not_found` hint, the docs and the command guide now say an item's id is its type, `#` and a number, such as `task#27`. Contessa's signed Git run is in the feature map: clone, push and `list_code_pushes` worked; attaching the commit to its task is still to do.
 - Why: Contessa asked for `task:1` and got only "no such object" before finding the right form.
+
+## 2026-10-19 — v94 released
+
+- What: released main a36c3d15 to keyfleet.ai as Fly release v94 (rollback v93, 2438bc71). The workspace "not found" answer now says an item id looks like `task#27`, and the feature map marks thirteen tests as proven.
+- Why: Contessa asked for `task:1` on live and the 404 never said what an id looks like. Full check on a fresh copy was clean (989 tests, 304 page tests, 66 Chromium browser walks; WebKit not run on the Mac).
