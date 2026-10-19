@@ -366,7 +366,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       chain!(allowance: 42_998_170)
 
       {:ok, view, _html} = live(conn, @path)
-      render_async(view)
+      render_async(view, 3_000)
 
       assert text(view, "#fleet-about #buy-key-title #buy-key-offer") ==
                "Key 151 · 42.99817 USDC · Level 9"
@@ -447,7 +447,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#buy-key-button[disabled]")
       refute has_element?(view, "#buy-key-button-why")
 
-      render_async(view)
+      render_async(view, 3_000)
 
       assert has_element?(
                view,
@@ -486,7 +486,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         "transaction_hash" => hash
       })
 
-      render_async(view)
+      render_async(view, 3_000)
       assert has_element?(view, "#buy-key-order-sent li[data-state=reverted] strong", "Buy Key")
 
       assert text(view, "#buy-key-order-sent span") == "Not bought. No USDC was taken."
@@ -579,7 +579,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       chain!(allowance: 10_000_000, minted: 0, price: 10_000_000)
 
       {:ok, view, _html} = live(conn, "/classic/1")
-      render_async(view)
+      render_async(view, 3_000)
 
       assert text(view, "#buy-key-number") == "1"
       assert text(view, "#buy-key-price") == "10 USDC"
@@ -619,7 +619,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       chain!(allowance: 10_000_000, minted: 0, price: 10_000_000)
 
       {:ok, view, _html} = live(conn, "/classic/1")
-      render_async(view)
+      render_async(view, 3_000)
 
       refute has_element?(view, "#buy-key-button-why")
       refute has_element?(view, "#buy-key-elsewhere")
@@ -634,6 +634,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       for token_id <- 1..1_023, do: issue!("fleet_tech_classic", token_id)
       chain!(allowance: 100_000_000, minted: 1_023, price: 100_000_000)
       {:ok, view, _html} = live(conn, "/classic/1")
+      render_async(view, 3_000)
       assert text(view, "#buy-key-number") == "1,024"
       assert text(view, "#buy-key-price") == "100 USDC"
 
@@ -651,7 +652,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         "transaction_hash" => hash
       })
 
-      render_async(view)
+      render_async(view, 3_000)
 
       issue!("fleet_tech_classic", 1_024, @owner)
       send(view.pid, {:keys_changed, "fleet_tech_classic", [1_024]})
@@ -694,7 +695,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, "#fleet-entry .fleet-entry__line", "Key 1 · 10 USDC")
 
       {:ok, home, _html} = live(build_conn(), "/")
-      render_async(home)
+      render_async(home, 3_000)
 
       # It opens the fleet's page with "Get a Key" pressed, as the header does.
       assert has_element?(home, ~s(a#home-buy-next-key[href="/classic/1?buy"]), "Key 1 · 10 USDC")
@@ -888,7 +889,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, _html} = live(conn, @map_path)
       # The Buy panel's own read of the chain lands first, so it isn't taken
       # for a change.
-      render_async(view)
+      render_async(view, 3_000)
       shown = render(view)
 
       send(view.pid, {:keys_changed, "fibonacci_syndicate", [7, 151]})
@@ -1031,7 +1032,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       ChainViews.put!(launch_views(0, :active, 1))
 
       {:ok, view, _html} = live(conn, @treasury_path)
-      render_async(view)
+      render_async(view, 3_000)
 
       assert text(view, "#fleet-launch-action-line") == "No launch yet."
       refute has_element?(view, "#fleet-launch [data-onchain-step]")
@@ -1078,7 +1079,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       # While the sale is still running, settling it is certain to fail too.
       ChainViews.put!(launch_views(0, :active, 1_500))
       {:ok, view, _html} = live(conn, @treasury_path)
-      render_async(view)
+      render_async(view, 3_000)
       assert text(view, "#fleet-launch-settle-why") == "Sale still running"
     end
 
@@ -1088,7 +1089,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       ChainViews.put!(launch_views(7, :graduated, 900))
 
       {:ok, view, _html} = live(conn, @treasury_path)
-      render_async(view)
+      render_async(view, 3_000)
 
       assert text(view, "#fleet-launch-settle-why") == "Already settled"
       assert text(view, "#fleet-launch-bind-why") == "Already added"
@@ -1098,7 +1099,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       # A visitor reads where the launch stands, with no buttons.
       {:ok, view, _html} = live(build_conn(), @treasury_path)
-      render_async(view)
+      render_async(view, 3_000)
 
       assert text(view, "#fleet-launch-sale") == "Sold"
       assert text(view, "#fleet-launch-split") == "Included"
@@ -1109,7 +1110,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       ChainViews.put!(launch_views(7, :failed, 900))
 
       {:ok, view, _html} = live(conn, @treasury_path)
-      render_async(view)
+      render_async(view, 3_000)
 
       assert text(view, "#fleet-launch-settle-why") == "Already settled"
 
@@ -1722,7 +1723,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     |> with_target(panel)
     |> render_hook("onchain_active_wallet", %{"address" => wallet})
 
-    render_async(view)
+    render_async(view, 3_000)
   end
 
   # The chain the buy steps read: the Keys sold (150 unless `:minted` says),

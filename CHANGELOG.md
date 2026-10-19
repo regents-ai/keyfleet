@@ -2511,3 +2511,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 ## 2026-10-19 — A page load asks for the wallet once
 
 - A signed-in page asked Privy for its wallets when it opened, and the fleet page's wallet panel asked again when it appeared. When the first answer had already arrived, the page asked a second time for nothing. The page now asks once a page load, since every later wallet change reaches it on its own; it asks again only when an earlier ask failed.
+
+## 2026-10-19 — The fleet page checks wait long enough for the page to load
+
+- The fleet page fills in its Key, price and buttons a moment after it opens. Its checks waited at most a tenth of a second for that; on a busy Mac the page took a little longer now and then, so the check for a fleet that sells out while open failed about one run in ten. Every fleet page check now waits up to three seconds, as the homepage checks do, and the sold-out check waits for the page before reading it.
