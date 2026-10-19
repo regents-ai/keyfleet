@@ -55,6 +55,34 @@ test.describe("on a touch phone", () => {
     await expect(page.locator("#home-hero-field")).not.toHaveAttribute("data-field-ready")
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   })
+
+  // A finger gets the pass as it is: tapping the card shows no shuffle and loads none.
+  test("tapping the next Key's card leaves it the pass", async ({page}) => {
+    await page.goto("/")
+    await live(page)
+    await page.locator("#home-buy-card").tap()
+    await page.waitForTimeout(800)
+    await expect(page.locator("#home-buy-shuffle")).not.toHaveAttribute("src")
+    expect(await page.locator("#home-buy-shuffle").evaluate(img => getComputedStyle(img).visibility)).toBe("hidden")
+  })
+})
+
+// Less motion: the card stays the pass, with no dust and no shuffle.
+test.describe("with less motion", () => {
+  test.use({contextOptions: {reducedMotion: "reduce"}})
+
+  test("the card stays still: no dust and no shuffle", async ({page}) => {
+    await page.setViewportSize({width: 1280, height: 900})
+    await page.goto("/")
+    await live(page)
+    const card = (await page.locator("#home-buy-card").boundingBox())!
+    await page.mouse.move(card.x + card.width + 30, card.y + card.height / 2, {steps: 6})
+    await page.locator("#home-buy-card").hover()
+    await page.waitForTimeout(800)
+    await expect(page.locator("#home-buy-shuffle")).not.toHaveAttribute("src")
+    expect(await page.locator("#home-buy-shuffle").evaluate(img => getComputedStyle(img).visibility)).toBe("hidden")
+    expect(await page.locator("#home-buy-dust").evaluate((canvas: HTMLCanvasElement) => canvas.width)).toBe(300)
+  })
 })
 
 // From 768 wide the header shows the X and GitHub links too.
@@ -110,6 +138,87 @@ test.describe("on a desktop", () => {
 
     await page.mouse.move(4, 4, {steps: 6})
     await expect.poll(() => tilt.evaluate(element => element.style.transform)).toBe("")
+  })
+
+  // Sean, 19 Oct: dust just outside the card's edge on the side facing the mouse,
+  // following it and brighter the nearer it is. Read from the dust's own pixels,
+  // left and right of the card.
+  test("dust gathers outside the card on the side facing a mouse, brighter as it nears", async ({page}) => {
+    await page.setViewportSize({width: 1280, height: 900})
+    await page.goto("/")
+    await live(page)
+    const card = (await page.locator("#home-buy-card").boundingBox())!
+    const middle = card.y + card.height / 2
+    const lit = () =>
+      page.locator("#home-buy-dust").evaluate((canvas: HTMLCanvasElement) => {
+        const {data} = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height)
+        const sides = [0, 0]
+        for (let i = 3; i < data.length; i += 4) sides[(i >> 2) % canvas.width < canvas.width / 2 ? 0 : 1] += data[i]
+        return {left: sides[0], right: sides[1]}
+      })
+
+    // The card sits right of centre, so the room to back away is on its left.
+    await page.mouse.move(card.x - 300, middle, {steps: 6})
+    await expect.poll(async () => (await lit()).left).toBeGreaterThan(0)
+    await page.waitForTimeout(600)
+    const far = await lit()
+    await page.mouse.move(card.x - 30, middle, {steps: 6})
+    await expect.poll(async () => (await lit()).left).toBeGreaterThan(far.left * 1.5)
+    const near = await lit()
+    expect(near.right, "the side away from the mouse").toBeLessThan(near.left * 0.1)
+
+    await page.mouse.move(4, 4, {steps: 6})
+    await expect.poll(async () => (await lit()).left).toBe(0)
+  })
+
+  // Pointing at the card or its button flashes the card and shows the shuffle;
+  // leaving both dissolves it back to the pass over about half a second.
+  for (const [what, target] of [
+    ["the card", "#home-buy-card"],
+    ["the button", "#home-buy-next-key"],
+  ]) {
+    test(`pointing at ${what} flashes the card into the shuffle, and leaving dissolves it back`, async ({page}) => {
+      await page.setViewportSize({width: 1280, height: 900})
+      await page.goto("/")
+      await live(page)
+      const shuffle = page.locator("#home-buy-shuffle")
+      const seen = (property: "opacity" | "visibility") => shuffle.evaluate((img, name) => getComputedStyle(img)[name], property)
+      await page.locator("#home-buy-tilt").evaluate(tilt => {
+        const flashes: string[] = []
+        new MutationObserver(() => flashes.push(tilt.style.filter)).observe(tilt, {attributeFilter: ["style"]})
+        Object.assign(window, {flashes})
+      })
+
+      await page.locator(target).hover()
+      await expect(shuffle).toHaveAttribute("src", /next-key-shuffle/)
+      await expect.poll(() => seen("opacity")).toBe("1")
+      expect(await page.evaluate(() => (window as unknown as {flashes: string[]}).flashes.some(f => f.includes("brightness")))).toBe(true)
+      await expect.poll(() => page.locator("#home-buy-tilt").evaluate(tilt => tilt.style.filter)).toBe("")
+
+      const left = await page.evaluate(() => performance.now())
+      await page.mouse.move(4, 4, {steps: 2})
+      await expect.poll(() => seen("visibility")).toBe("hidden")
+      const gone = await page.evaluate(() => performance.now())
+      expect(await seen("opacity")).toBe("0")
+      expect(gone - left, "the dissolve takes about half a second").toBeGreaterThanOrEqual(450)
+    })
+  }
+
+  // Sean, 19 Oct: a hundred cards over ten seconds, on a loop.
+  test("the shuffle is a hundred cards at ten a second, looping", async ({page}) => {
+    const picture = await (await page.request.get("/images/home/next-key-shuffle.webp")).body()
+    expect(picture.toString("ascii", 0, 4) + picture.toString("ascii", 8, 12)).toBe("RIFFWEBP")
+    const shows: number[] = []
+    let loops = -1
+    for (let at = 12; at < picture.length; ) {
+      const chunk = picture.toString("ascii", at, at + 4)
+      const size = picture.readUInt32LE(at + 4)
+      if (chunk === "ANIM") loops = picture.readUInt16LE(at + 12)
+      if (chunk === "ANMF") shows.push(picture.readUIntLE(at + 20, 3))
+      at += 8 + size + (size % 2)
+    }
+    expect(loops, "loops forever").toBe(0)
+    expect(shows).toEqual(Array(100).fill(100))
   })
 
   // The decks beside each fleet's buttons turn only while they are on screen.

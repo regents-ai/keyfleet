@@ -519,7 +519,9 @@ defmodule KeyfleetWeb.HomeLive do
   # The Key on offer, its card art and its price. While Classic is coming
   # soon it names the first Key, the one the sale will open with, and the
   # button says it can't be pressed yet: a press shakes it and sends nothing.
-  # The card and its price tag are the same in every state.
+  # The card and its price tag are the same in every state. Under a mouse the
+  # card has dust outside its edge and a shuffle of a hundred Keys behind the
+  # pass (NextKeyCard draws both); the shuffle's picture loads only then.
   defp buy_next_key(assigns) do
     assigns = assign(assigns, offer(assigns.classic))
 
@@ -532,6 +534,12 @@ defmodule KeyfleetWeb.HomeLive do
         aria-hidden="true"
         data-key-card
       >
+        <canvas
+          id="home-buy-dust"
+          class="rl-buy__dust"
+          phx-mounted={JS.ignore_attributes(["width", "height"])}
+          data-key-dust
+        ></canvas>
         <div
           id="home-buy-tilt"
           class="rl-buy__tilt"
@@ -544,6 +552,16 @@ defmodule KeyfleetWeb.HomeLive do
             height="754"
             alt=""
             fetchpriority="high"
+          />
+          <img
+            id="home-buy-shuffle"
+            class="rl-buy__shuffle"
+            phx-mounted={JS.ignore_attributes(["src", "style"])}
+            data-src={~p"/images/home/next-key-shuffle.webp"}
+            width="480"
+            height="603"
+            alt=""
+            data-key-shuffle
           />
           <span :if={@price} id="home-buy-tag" class="rl-buy__tag">{@price}</span>
         </div>

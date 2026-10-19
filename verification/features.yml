@@ -102,12 +102,20 @@ features:
       On a wide screen the homepage's headline takes the hero's left half and the
       next Key's card, with "Buy Next Key", sits in the middle of its right half.
       Under a mouse the card turns toward the pointer and settles level again.
+      Dust gathers just outside the card's edge on the side facing the mouse,
+      brighter the nearer it is; pointing at the card or the button flashes the
+      card into a looping shuffle of a hundred Keys at ten a second, which
+      dissolves back to the pass over half a second when the mouse leaves. Less
+      motion and a finger get the pass as it is, with no dust and no shuffle.
     who: person
     level: ordinary
     paths:
       - platform/lib/keyfleet_web/live/home_live.ex
       - platform/assets/css/pages/home.css
       - platform/assets/js/hooks/home_hero.ts
+      - platform/priv/static/images/home/next-key-shuffle.webp
+      - key-art/shuffle.mjs
+      - key-art/page/shuffle.ts
     entry:
       - route: GET /
       - live: KeyfleetWeb.HomeLive
@@ -119,6 +127,7 @@ features:
         test: platform/test/browser/homepage_details.spec.ts
     gaps:
       - WebKit is not run on the Mac.
+      - The shuffle's picture is about 3.3 MB; it loads only under a mouse, once the dust shows.
 
   - id: header-footer-links
     what: >-

@@ -68,6 +68,14 @@
   .rl-buy__card { position: relative; aspect-ratio: 600 / 754; perspective: 60rem; }
   .rl-buy__tilt { position: absolute; inset: 0; }
   .rl-buy__tilt img { display: block; inline-size: 100%; block-size: 100%; object-fit: contain; }
+  /* Under a mouse, dust gathers just outside the card's edge on the side
+     facing the pointer, brighter the nearer it comes; pointing at the card or
+     its button flashes the card into a shuffle of a hundred Keys, which
+     dissolves back to the pass when the pointer leaves. NextKeyCard draws the
+     dust in the warm light of the hex field and shows the shuffle over the
+     pass. */
+  .rl-buy__dust { position: absolute; inset: -3rem; inline-size: calc(100% + 6rem); block-size: calc(100% + 6rem); pointer-events: none; color: var(--rl-field-light); }
+  .rl-buy__shuffle { position: absolute; inset: 0; visibility: hidden; opacity: 0; }
   /* The price on the card itself, beside the crown in its lower corner (the
      crown ends 197 of the picture's 716 columns in and 40 of its 900 rows up).
      The card's art is dark in both themes, so the tag keeps light ink on

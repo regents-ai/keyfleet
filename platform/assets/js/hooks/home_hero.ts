@@ -1,14 +1,14 @@
 /**
  * The homepage's moving parts around "Buy Next Key": the hex field behind the
- * hero, with the tiles nearest a mouse standing up out of it, and the turn of
- * the next Key's card. Each only presents; the page is
- * complete and readable before any of it loads, and none of it decides whether
- * the button can be pressed.
+ * hero, with the tiles nearest a mouse standing up out of it, and the next
+ * Key's card with its turn, its dust and its shuffle. Each only presents; the
+ * page is complete and readable before any of it loads, and none of it decides
+ * whether the button can be pressed.
  */
-import {animate, createAnimatable, createScope, type AnimatableObject, type Scope} from "animejs"
+import {animate, createAnimatable, createScope, type AnimatableObject, type JSAnimation, type Scope} from "animejs"
 import {createCanvasIsland, type CanvasIslandController} from "../canvas_island"
 import type {FieldRenderer, Rgb, Tile} from "../home_hero/renderer"
-import {EASE_IN_OUT, EASE_OUT, still} from "./motion/shared"
+import {EASE_IN_OUT, EASE_OUT, FAST, still} from "./motion/shared"
 
 /** Any colour the page can state, as the three 0..1 sRGB channels a shader takes. */
 let swatch: CanvasRenderingContext2D | undefined
@@ -371,18 +371,217 @@ export const HexField = {
 
 type KeyCardHook = {el: HTMLElement; scope?: Scope; release?: () => void}
 
+/** The pass's own card inside its picture's box, as fractions of it: columns 52 to 597
+ * of 600 and rows 1 to 751 of 754, with corners rounded a twentieth of its width. */
+const PASS = {left: 52 / 600, right: 597 / 600, top: 1 / 754, bottom: 751 / 754, corner: 0.05}
+/** How far from the card's edge the dust starts to show, in card widths. */
+const DUST_REACH = 1.5
+/** How far out a mote drifts before it fades, in card widths, and how many there are. */
+const DUST_DRIFT = 0.1
+const MOTES = 360
+/** How quickly the dust follows the pointer and brightens or dims: the share of the way it closes each millisecond. */
+const FOLLOW = 0.012
+/** How long the shuffle takes to dissolve back to the pass. */
+const DISSOLVE = 500
+
+type Point = [number, number]
+type Outline = {x0: number; y0: number; x1: number; y1: number; r: number}
+/** A mote of dust: where along the card's edge it rises from (0..1), how far out it has drifted, its pace, size and twinkle. */
+type Mote = {along: number; out: number; pace: number; size: number; phase: number}
+
+/** The point on the card's rounded edge nearest `p`, the way out from it there, and how far `p` is outside it (below 0 inside). */
+function nearestOnEdge([px, py]: Point, {x0, y0, x1, y1, r}: Outline): {at: Point; away: number} {
+  const qx = Math.min(Math.max(px, x0 + r), x1 - r)
+  const qy = Math.min(Math.max(py, y0 + r), y1 - r)
+  const dx = px - qx
+  const dy = py - qy
+  const length = Math.hypot(dx, dy)
+  if (length > 1e-6) return {at: [qx + (dx / length) * r, qy + (dy / length) * r], away: length - r}
+  // Inside the straight part: the nearest side.
+  const sides: [number, Point][] = [
+    [px - x0, [x0, py]],
+    [x1 - px, [x1, py]],
+    [py - y0, [px, y0]],
+    [y1 - py, [px, y1]],
+  ]
+  const [inside, at] = sides.reduce((near, side) => (side[0] < near[0] ? side : near))
+  return {at, away: -inside}
+}
+
+/** The point `along` (0..1) the card's rounded edge, going round it, and the way out from the card there. */
+function pointOnEdge(along: number, {x0, y0, x1, y1, r}: Outline): {at: Point; out: Point} {
+  const w = x1 - x0 - 2 * r
+  const h = y1 - y0 - 2 * r
+  const arc = (Math.PI / 2) * r
+  let d = along * (2 * (w + h) + 4 * arc)
+  const corners: [Point, number][] = [
+    [[x1 - r, y0 + r], -Math.PI / 2],
+    [[x1 - r, y1 - r], 0],
+    [[x0 + r, y1 - r], Math.PI / 2],
+    [[x0 + r, y0 + r], Math.PI],
+  ]
+  const sides: [Point, Point, number][] = [
+    [[x0 + r, y0], [0, -1], w],
+    [[x1, y0 + r], [1, 0], h],
+    [[x1 - r, y1], [0, 1], w],
+    [[x0, y1 - r], [-1, 0], h],
+  ]
+  const runs: Point[] = [[1, 0], [0, 1], [-1, 0], [0, -1]]
+  for (let i = 0; i < 4; i++) {
+    const [[sx, sy], out, length] = sides[i]
+    if (d <= length) return {at: [sx + runs[i][0] * d, sy + runs[i][1] * d], out}
+    d -= length
+    if (d <= arc || i === 3) {
+      const [[cx, cy], from] = corners[i]
+      const a = from + Math.min(d, arc) / r
+      return {at: [cx + Math.cos(a) * r, cy + Math.sin(a) * r], out: [Math.cos(a), Math.sin(a)]}
+    }
+    d -= arc
+  }
+  throw new Error("unreachable")
+}
+
+/** A soft round glow in `color`, drawn once and stamped for every mote. */
+function glowSprite(color: string): HTMLCanvasElement {
+  const sprite = document.createElement("canvas")
+  sprite.width = sprite.height = 32
+  const g = sprite.getContext("2d")!
+  const light = g.createRadialGradient(16, 16, 0, 16, 16, 16)
+  light.addColorStop(0, color)
+  light.addColorStop(0.35, color)
+  light.addColorStop(1, "transparent")
+  g.fillStyle = light
+  g.fillRect(0, 0, 32, 32)
+  return sprite
+}
+
+/**
+ * Dust just outside the card's edge, gathered on the side facing the pointer
+ * and brighter the nearer the pointer is. It draws only while there is some to
+ * see, and clears when the pointer is gone. `near` hears each frame the
+ * pointer is within reach.
+ */
+function dustAround(canvas: HTMLCanvasElement, card: HTMLElement, near: () => void, signal: AbortSignal) {
+  const g = canvas.getContext("2d")!
+  const spawn = (out: number): Mote => ({
+    along: Math.random(),
+    out,
+    pace: 0.35 + Math.random() * 0.65,
+    size: 0.6 + Math.random() ** 2 * 1.6,
+    phase: Math.random() * Math.PI * 2,
+  })
+  const motes = Array.from({length: MOTES}, () => spawn(Math.random()))
+  let sprite = glowSprite(getComputedStyle(canvas).color)
+  let pointer: Point | undefined
+  let aim: Point | undefined
+  let glow = 0
+  let frame = 0
+  let last = 0
+
+  const draw = (now: number) => {
+    const step = Math.min(now - last, 64)
+    last = now
+    const w = canvas.offsetWidth
+    const h = canvas.offsetHeight
+    const dpr = Math.min(devicePixelRatio, 2)
+    if (canvas.width !== Math.round(w * dpr)) canvas.width = Math.round(w * dpr)
+    if (canvas.height !== Math.round(h * dpr)) canvas.height = Math.round(h * dpr)
+    const margin = -canvas.offsetLeft
+    const cw = card.offsetWidth
+    const ch = card.offsetHeight
+    const edge = {
+      x0: margin + PASS.left * cw,
+      x1: margin + PASS.right * cw,
+      y0: margin + PASS.top * ch,
+      y1: margin + PASS.bottom * ch,
+      r: PASS.corner * cw,
+    }
+
+    let bright = 0
+    if (pointer && !still(card)) {
+      const box = canvas.getBoundingClientRect()
+      const local: Point = [((pointer[0] - box.left) * w) / box.width, ((pointer[1] - box.top) * h) / box.height]
+      const {at, away} = nearestOnEdge(local, edge)
+      bright = Math.max(0, 1 - Math.max(away, 0) / (DUST_REACH * cw)) ** 1.2
+      if (bright > 0) near()
+      aim = aim ? [aim[0] + (at[0] - aim[0]) * Math.min(1, step * FOLLOW * 1.5), aim[1] + (at[1] - aim[1]) * Math.min(1, step * FOLLOW * 1.5)] : at
+    }
+    glow += (bright - glow) * Math.min(1, step * FOLLOW)
+
+    g.setTransform(dpr, 0, 0, dpr, 0, 0)
+    g.clearRect(0, 0, w, h)
+    if (glow < 0.004 && bright === 0) {
+      frame = 0
+      aim = undefined
+      return
+    }
+    g.globalCompositeOperation = "lighter"
+    const drift = DUST_DRIFT * cw
+    // Near the card the dust gathers tightly toward the pointer; further off it spreads wide and faint.
+    const spread = cw * (0.16 + 0.3 * (1 - glow))
+    for (const mote of motes) {
+      mote.out += (step / 1000) * mote.pace * 0.6
+      if (mote.out >= 1) Object.assign(mote, spawn(0))
+      const {at, out} = pointOnEdge(mote.along, edge)
+      const toward = aim ? Math.exp(-((Math.hypot(at[0] - aim[0], at[1] - aim[1]) / spread) ** 2)) : 0
+      const alpha = 1.5 * glow * toward * Math.sin(Math.PI * mote.out) * (0.65 + 0.35 * Math.sin(mote.phase + now / 260))
+      if (alpha < 0.01) continue
+      const reach = 2 + mote.out * drift
+      const size = mote.size * (4 + 9 * glow)
+      g.globalAlpha = Math.min(1, alpha)
+      g.drawImage(sprite, at[0] + out[0] * reach - size / 2, at[1] + out[1] * reach - size / 2, size, size)
+    }
+    g.globalAlpha = 1
+    g.globalCompositeOperation = "source-over"
+    frame = requestAnimationFrame(draw)
+  }
+  const wake = () => {
+    if (frame) return
+    last = performance.now()
+    frame = requestAnimationFrame(draw)
+  }
+
+  const options = {signal, passive: true}
+  document.addEventListener(
+    "pointermove",
+    (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") return
+      pointer = [event.clientX, event.clientY]
+      wake()
+    },
+    options,
+  )
+  document.documentElement.addEventListener("pointerleave", () => (pointer = undefined), options)
+  window.addEventListener("blur", () => (pointer = undefined), options)
+  const forget = watchTheme(() => {
+    sprite = glowSprite(getComputedStyle(canvas).color)
+  })
+  return () => {
+    forget()
+    cancelAnimationFrame(frame)
+    g.clearRect(0, 0, canvas.width, canvas.height)
+  }
+}
+
 /**
  * The next Key's card. Under a mouse, pointing at the card or its button turns
  * the card a little toward the pointer, and it settles when the pointer leaves.
  * Once it is level again it keeps no turn of its own: the stylesheet has it.
- * A finger, a keyboard or less motion gets the card as it is.
+ * Dust gathers outside its edge on the side facing the pointer, and pointing at
+ * the card or the button flashes it into a shuffle of a hundred Keys, which
+ * dissolves back to the pass when the pointer leaves both. The shuffle's
+ * picture loads the first time the dust shows. A finger, a keyboard or less
+ * motion gets the card as it is.
  */
 export const NextKeyCard = {
   mounted(this: KeyCardHook) {
     const root = this.el
     const area = root.closest<HTMLElement>("[data-key-preview]") ?? root
     const tilt = root.querySelector<HTMLElement>("[data-key-tilt]")!
+    const dust = root.querySelector<HTMLCanvasElement>("[data-key-dust]")!
+    const shuffle = root.querySelector<HTMLImageElement>("[data-key-shuffle]")!
     let turn: AnimatableObject | undefined
+    let point: ((on: boolean) => void) | undefined
 
     const scope = createScope({root, mediaQueries: {reduced: "(prefers-reduced-motion: reduce)"}})
     this.scope = scope.add(() => {
@@ -397,8 +596,58 @@ export const NextKeyCard = {
         },
       })
       turn = level
+
+      const load = () => {
+        if (!shuffle.getAttribute("src")) shuffle.src = shuffle.dataset.src!
+      }
+      const drawing = new AbortController()
+      const stopDust = dustAround(dust, root, load, drawing.signal)
+
+      let pointing = false
+      let flash: JSAnimation | undefined
+      let fade: JSAnimation | undefined
+      const reveal = () => {
+        if (!pointing) return
+        shuffle.style.visibility = "visible"
+        fade?.cancel()
+        fade = animate(shuffle, {opacity: 1, duration: FAST, ease: EASE_OUT})
+      }
+      point = on => {
+        if (on === pointing) return
+        pointing = on
+        fade?.cancel()
+        if (on) {
+          flash?.cancel()
+          flash = animate(tilt, {
+            filter: [
+              {to: "brightness(2.4)", duration: 90, ease: "outQuad"},
+              {to: "brightness(1)", duration: 300, ease: EASE_OUT},
+            ],
+            onComplete: () => tilt.style.removeProperty("filter"),
+          })
+          load()
+          shuffle.decode().then(reveal, () => {})
+        } else {
+          fade = animate(shuffle, {
+            opacity: 0,
+            duration: DISSOLVE,
+            ease: EASE_IN_OUT,
+            onComplete: () => {
+              shuffle.style.visibility = "hidden"
+            },
+          })
+        }
+      }
       return () => {
+        drawing.abort()
+        stopDust()
+        flash?.cancel()
+        fade?.cancel()
+        tilt.style.removeProperty("filter")
+        shuffle.style.removeProperty("visibility")
+        shuffle.style.removeProperty("opacity")
         turn = undefined
+        point = undefined
       }
     })
 
@@ -412,9 +661,23 @@ export const NextKeyCard = {
       turn?.rotateX(0)
       turn?.rotateY(0)
     }
+    // The card and its button: the area between them, or anything else, is neither.
+    const onOver = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") return
+      const target = event.target as Element
+      point?.(!still(root) && target.closest("[data-key-card], #home-buy-next-key") !== null)
+    }
     const events = new AbortController()
     area.addEventListener("pointermove", onTurn, {signal: events.signal, passive: true})
-    area.addEventListener("pointerleave", onSettle, {signal: events.signal, passive: true})
+    area.addEventListener("pointerover", onOver, {signal: events.signal, passive: true})
+    area.addEventListener(
+      "pointerleave",
+      () => {
+        onSettle()
+        point?.(false)
+      },
+      {signal: events.signal, passive: true},
+    )
     this.release = () => events.abort()
   },
   destroyed(this: KeyCardHook) {

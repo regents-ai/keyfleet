@@ -2473,3 +2473,22 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   home-key-cards, home-hero-field; new browser checks in
   platform/test/browser/homepage_details.spec.ts; gaps: WebKit not run on the
   Mac, local data has no ships to draw.
+
+## 2026-10-19 — The next Key's card glows toward the mouse and shuffles when pointed at
+
+- Under a mouse, warm dust gathers just outside the next Key's card on the side
+  facing the pointer, follows it round the edge and brightens as it comes
+  closer.
+- Pointing at the card or at "Buy Next Key" flashes the card and starts a
+  shuffle through a hundred Keys in the interim pass's own look, ten a second,
+  on a loop. Leaving both dissolves it back to the interim pass over half a
+  second.
+- The shuffle is one 3.3 MB animated picture that loads only under a mouse,
+  once the dust shows. `node key-art/shuffle.mjs` draws it again.
+- With less motion asked for, and on a phone or tablet, the card stays the
+  interim pass with no dust or shuffle. "Buy Next Key" works as before.
+- Evidence: level ordinary; feature home-next-key; new browser checks in
+  platform/test/browser/homepage_details.spec.ts (dust side and brightness,
+  flash, shuffle, half-second dissolve, a hundred frames at ten a second, less
+  motion, phone tap); break check: no dust and no dissolve each fail them;
+  gaps: WebKit not run on the Mac.
