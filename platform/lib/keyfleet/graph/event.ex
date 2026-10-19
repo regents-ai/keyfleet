@@ -285,8 +285,9 @@ defmodule Keyfleet.Graph.Event do
     # What a line about the event needs from it, read in the database so a
     # page of lines never loads the text the event carries:
     #   object.created   object, object_type
-    #   patch.applied    object, fields (the names changed), archived, and
-    #                    values: {old, new} of the few short fields shown
+    #   patch.applied    object, fields (the names changed), archived, joins
+    #                    (members who joined the goal, less those who left)
+    #                    and values: {old, new} of the few short fields shown
     #   relation.created relation_type, source, target
     #   relation.removed the same, from the event that made the link
     #   keyfleet.attention kind, object
@@ -304,6 +305,7 @@ defmodule Keyfleet.Graph.Event do
                       THEN (SELECT COALESCE(jsonb_agg(k.key ORDER BY k.key), '[]'::jsonb) FROM jsonb_object_keys(? -> 'diff') AS k(key))
                       ELSE '[]'::jsonb END,
                     'archived', COALESCE((? #> '{diff,sys,new,archived}') = 'true'::jsonb, false),
+                    'joins', jsonb_array_length(COALESCE(? #> '{diff,sys,new,joined}', '[]'::jsonb)) - jsonb_array_length(COALESCE(? #> '{diff,sys,old,joined}', '[]'::jsonb)),
                     'values', jsonb_strip_nulls(jsonb_build_object(
                       'status', ? #> '{diff,status}',
                       'progress', ? #> '{diff,progress}',
@@ -320,6 +322,8 @@ defmodule Keyfleet.Graph.Event do
                   END
                   """,
                   type,
+                  payload,
+                  payload,
                   payload,
                   payload,
                   payload,

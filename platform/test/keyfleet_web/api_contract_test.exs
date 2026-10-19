@@ -24,6 +24,8 @@ defmodule KeyfleetWeb.ApiContractTest do
              @graph <> "changes",
              @graph <> "create",
              @graph <> "get",
+             @graph <> "join",
+             @graph <> "leave",
              @graph <> "link",
              @graph <> "patch",
              @graph <> "unlink",
@@ -376,7 +378,9 @@ defmodule KeyfleetWeb.ApiContractTest do
           {"patch", command ++ ~w(id expected_version), ~w(set unset reason evidence)},
           {"link", command ++ ~w(source target type), ~w(note)},
           {"unlink", command ++ ~w(relation_id), []},
-          {"archive", command ++ ~w(id expected_version), ~w(reason)}
+          {"archive", command ++ ~w(id expected_version), ~w(reason)},
+          {"join", command ++ ~w(id), []},
+          {"leave", command ++ ~w(id), []}
         ] do
       assert %{"post" => operation} = path = contract["paths"][@graph <> op]
       assert Map.keys(path) == ["post"]
