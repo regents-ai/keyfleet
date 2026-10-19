@@ -2502,3 +2502,10 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   it, and a renamed room shows its naming once, in the line that says which Key
   named it and when.
 - On a phone, the open room's posts come before the list of rooms.
+
+## 2026-10-19 — A signed-in page checks the wallets once at startup
+
+- Once the sign-in bridge has started it keeps the wallets in step with Privy
+  by itself, so a later ask from the wallet panel no longer starts a second
+  check. One startup now makes exactly one check, whether the wallet panel asks
+  before or after Privy finishes loading; the browser test covers both orders.

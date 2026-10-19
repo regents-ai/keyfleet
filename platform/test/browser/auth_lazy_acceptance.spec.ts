@@ -354,9 +354,22 @@ test("the bounded failure report survives the recommended immediate reload exact
   ])
 })
 
-test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no session", async ({
+// The page's wallet panel asks Privy for its wallets as it connects, while
+// startup is reconciling the session too. Which one comes first depends on the
+// network, so each order is held in place here; either way one startup is
+// one sync.
+const startupOrders = [
+  {name: "the wallet panel asks while Privy is still loading", panelFirst: true},
+  {name: "the wallet panel asks after startup has finished", panelFirst: false},
+] as const
+
+for (const order of startupOrders) {
+test(`ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no session when ${order.name}`, async ({
   page,
 }) => {
+  const {panelFirst} = order
+  const reconciled = () =>
+    page.evaluate(() => (window as Window & {__u3Reconciled?: boolean}).__u3Reconciled === true)
   let bridgeRequests = 0
   let sessionDeletes = 0
   let sessionPosts = 0
@@ -376,6 +389,12 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
   })
   await page.route(bridgePattern, async route => {
     bridgeRequests += 1
+    if (panelFirst) {
+      await page
+        .locator("[data-phx-main].phx-connected [phx-hook='OnchainSteps']")
+        .first()
+        .waitFor({state: "attached"})
+    }
     await route.fulfill({
       body: realReconciliationBridgeStub,
       contentType: "application/javascript",
@@ -383,6 +402,12 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
   })
 
   await establishLocalSession(page)
+  if (!panelFirst) {
+    await page.routeWebSocket(/\/live\/websocket/, async socket => {
+      await expect.poll(reconciled).toBe(true)
+      socket.connectToServer()
+    })
+  }
   const sessionCookieBefore = (await page.context().cookies()).find(
     cookie => cookie.name === "__Host-keyfleet",
   )?.value
@@ -405,13 +430,7 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
       ),
     )
     .toEqual(["sync"])
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () => (window as Window & {__u3Reconciled?: boolean}).__u3Reconciled,
-      ),
-    )
-    .toBe(true)
+  await expect.poll(reconciled).toBe(true)
 
   expect(bridgeRequests).toBe(1)
   expect(sessionDeletes).toBe(0)
@@ -450,6 +469,7 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
   expect(documentRequests).toEqual([pageUrl(page, fleetPath)])
   expect((await page.request.get("/auth/session")).status()).toBe(200)
 })
+}
 
 test("a held pre-logout session response cannot restore browser or LiveView access", async ({
   page,

@@ -848,6 +848,9 @@ export function createLazyAuthLoader(
       ) {
         return delivering.promise
       }
+      // A started bridge keeps the wallets in step with Privy on its own, so a
+      // later ask for them is already answered.
+      if (request === "sync" && handle) return Promise.resolve()
       pending = request
       if (handle) return deliverPending()
       return preparing ?? prepare()

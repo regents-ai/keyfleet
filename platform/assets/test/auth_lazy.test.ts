@@ -443,6 +443,22 @@ describe("lazy browser authentication", () => {
     ])
   })
 
+  it("asks a started bridge for the wallets once, however often a page asks again", async () => {
+    const handleRequest = vi.fn(async (_request: AccountRequest) => undefined)
+    const loader = createLazyAuthLoader(
+      vi.fn(async () => ({
+        startPrivyBridge: vi.fn(async () => ({request: handleRequest})),
+      })),
+    )
+
+    await loader.request("sync")
+    await loader.request("sync")
+    await loader.request("sign-in")
+    await loader.request("sync")
+
+    expect(handleRequest.mock.calls.map(([request]) => request)).toEqual(["sync", "sign-in"])
+  })
+
   it("retries the fixed server-owned bridge URL and starts exactly once", async () => {
     const handleRequest = vi.fn(async () => undefined)
     const startPrivyBridge = vi.fn(async () => ({request: handleRequest}))
