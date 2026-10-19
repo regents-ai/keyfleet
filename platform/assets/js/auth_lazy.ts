@@ -109,6 +109,11 @@ export function finishWalletSignOut(
 
 const bridgePath = /^\/assets\/js\/privy_bridge(?:-[a-f0-9]{32})?\.js$/
 
+// Privy brings a Google or other redirect sign-in back to the page with these.
+export function returnedFromOAuth(search: string): boolean {
+  return new URLSearchParams(search).has("privy_oauth_code")
+}
+
 export function reloadDocumentOnce(documentRoot: Document, reload: () => void): void {
   if (reloadedDocuments.has(documentRoot)) return
   reloadedDocuments.add(documentRoot)
@@ -1098,6 +1103,9 @@ export function installAccountAuthLazyLoader(
     })
   } else if (documentRoot.querySelector("#account-control [data-account-target='profile']")) {
     reconcileSignedInStartup()
+  } else if (returnedFromOAuth(documentRoot.location?.search ?? "")) {
+    // Privy finishes a redirect sign-in only once it is running on the page.
+    onWalletSync()
   }
   return () => {
     installed = false

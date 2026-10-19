@@ -2871,3 +2871,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main 2bad602a to keyfleet.ai as Fly release v98 (rollback v97, 1fb76f87): the 1,024-card Classic #1 deck, in the deployment manifests and on the server.
 - Why: Sean released it (1. a, 16:59Z) so the Regents Safe can create Classic #1 from it. Full check on a fresh copy was clean (990 tests, 304 page tests, 72 Chromium walks; WebKit not run on the Mac) and every contract test succeeded, including the audit tests on a Base fork.
+
+## 2026-10-19 — Sign in with email, a phone number, Google or a wallet (protected: sign-in)
+
+- What: the sign-in window offers every way to sign in that is turned on for Regents in Privy, the same window Techtree shows: email, a text message, Google and the other social accounts, and "Continue with a wallet". Someone who signs in without a wallet gets a Privy wallet of their own at once, and Keyfleet signs them in as soon as that wallet is ready. Google brings the person back to the page they started on, and the sign-in finishes there. A person who brings their own wallet signs in as before.
+- Why: Sean asked for Techtree's sign-in window on Keyfleet. The site had limited the window to wallets, so the choices turned on in Privy never showed. Keyfleet and Techtree share one Privy app, so nothing changes in Privy's settings.
