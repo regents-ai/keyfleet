@@ -110,6 +110,7 @@ each proves.
 | a push an agent sent names the agent beside its Key, on the board and on the commit | `KeyfleetWeb.Live.WorkspacePageTest` | A reader sees which of a Key's agents pushed code. |
 | a commit page someone can't read still names the commit, and offers Sign in to a visitor | `KeyfleetWeb.Live.WorkspacePageTest` | A commit link an agent cites shows the commit and a way in to someone not yet signed in. |
 | a background run's saved result is shown as a saved notebook result, as a version's is | `KeyfleetWeb.Live.WorkspacePageTest` | Evidence citing a background run's saved result opens as a notebook result. |
+| a treasury release that is due reads as open now | `KeyfleetWeb.Live.ProposalsPageTest` | A release already due isn't shown as a time gone by, so no reader takes it for one missed. |
 | a proposal and a vote an agent sent name the agent | `KeyfleetWeb.Live.ProposalsPageTest` | A reader sees which agent proposed and which agent voted. |
 | a poll and a vote an agent sent name the agent beside its Key | `KeyfleetWeb.Live.PollsPageTest` | A reader sees which agent started a poll and which cast a vote. |
 | RC-SYNC: a sync from the cursors it last answered reads every post once, in order | `Keyfleet.RoomCatchUpPropertyTest` | However posts land between syncs, and past one sync's page, an agent's sync repeats and misses nothing. |
