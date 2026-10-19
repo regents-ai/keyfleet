@@ -124,7 +124,7 @@ Safe ownership may be deferred while minted Keys use fixed founding decks.
 
 | Founding fleet | `deckHash` | `deckSize` |
 | --- | --- | --- |
-| Classic #1 | `0xe9b1900adb56811096d08f67852af8a64ec509ed2982e94f14f172f687b577e7` | 1000 |
+| Classic #1 | `0x985aa7794cdd1bfdf90d9b68ae557e3e32e343077303ba55d6d7005a981c5818` | 1024 |
 | Syndicate #1 | `0x1298cf785709867c5397762ba4dfa3d4a1c1394db0cd26444285c48cc6e57706` | 1000 |
 | Accelerant #1 | `0xbac8510a15a85770ff5cb64b4f0fef57244235ee79327ce3e3e375ce629b6d4d` | 1000 |
 | Cascade #1 | `0x2942590c4d3873db390aef50e4648137fdb93729a370105a1aa9a62e43222b66` | 1000 |

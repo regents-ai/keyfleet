@@ -2853,3 +2853,16 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main 1fb76f87 to keyfleet.ai as Fly release v97 (rollback v96, a6b33beb): a buyer who loses Key N in a rush gets the next Key for up to 5% more.
 - Why: Sean released it (1. a, 16:46Z). Full check on a fresh copy was clean, with the Foundry rush test of 25 buyers on Classic; WebKit not run on the Mac.
+
+## 2026-10-19 — Classic #1 gets one card for each of its 1,024 Keys
+
+- Classic #1's founding deck now has 1,024 cards, one for each Key it can
+  sell, so every Classic Key is dealt its card by number and none waits on a
+  Chainlink draw. The 1,000-card deck it replaces was never used on chain:
+  Classic #1 is not created yet, and its deck is fixed only when the Regents
+  Safe creates it.
+- The new deck is `0x985aa7794cdd1bfdf90d9b68ae557e3e32e343077303ba55d6d7005a981c5818`,
+  made with `mix keyfleet.new_deck` from the same trait table. `base.json`,
+  `anvil.json`, the deploy test and the docs name it with its 1,024 cards.
+- The hourly deck-end check and its notes now use Accelerant #1 as their
+  example, since Classic #1 no longer sells past its deck.
