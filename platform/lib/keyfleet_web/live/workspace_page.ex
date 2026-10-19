@@ -135,7 +135,8 @@ defmodule KeyfleetWeb.WorkspacePage do
     "implements" => "delivers on",
     "produces" => "produces",
     "references" => "mentions",
-    "reviews" => "reviews"
+    "reviews" => "reviews",
+    "forks" => "copies"
   }
 
   # How every time on a workspace page is written.
@@ -151,7 +152,6 @@ defmodule KeyfleetWeb.WorkspacePage do
   # notebooks' `/results/`: notebook id, version or run id, and when the page
   # was saved in milliseconds since 1970.
   @saved_result ~r/\Anb-[a-z0-9]{16}\/(ver_[0-9A-Z]{26}|run_[0-9A-HJKMNP-TV-Z]{26})\/[1-9][0-9]{0,15}\z/
-  @level ~r/\Alevel:([1-9][0-9]{0,8})\z/
 
   @doc "The types of item a workspace holds."
   def types, do: @types
@@ -526,7 +526,6 @@ defmodule KeyfleetWeb.WorkspacePage do
       type: object.type,
       title: object.title,
       archived?: archived?(object.sys),
-      level: level(object.sys),
       by: created_by(object.sys, agents),
       changed_at: at(object.changed_at),
       facts:
@@ -585,7 +584,6 @@ defmodule KeyfleetWeb.WorkspacePage do
       type: object.type,
       title: object.data["title"],
       archived?: archived?(object.sys),
-      level: level(object.sys),
       by: created_by(object.sys, agents),
       version: object.version,
       changed_at: at(object.changed_at),
@@ -772,6 +770,15 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
+  # A fork's link is told as the copy being made.
+  defp parts(
+         %{type: "relation.created", brief: %{"relation_type" => "forks", "target" => task}} =
+           event,
+         titles
+       )
+       when is_binary(task),
+       do: [who(event.actor), " forked ", item_part(task, titles), "."]
+
   defp parts(
          %{type: type, brief: %{"source" => source, "target" => target} = brief} = event,
          titles
@@ -919,13 +926,6 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   defp archived?(sys), do: sys["archived"] == true
-
-  defp level(%{"scope" => scope}) do
-    case Regex.run(@level, scope, capture: :all_but_first) do
-      [level] -> String.to_integer(level)
-      nil -> nil
-    end
-  end
 
   # A push an agent sent names the agent beside its Key.
   defp pushes(pushes, fleet_id) do

@@ -131,9 +131,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
               >
                 <p class="workspace-kind">
                   <span>{type_label(card.type)}</span>
-                  <span :if={card.level} class="workspace-badge" data-level={card.level}>
-                    Level {card.level}
-                  </span>
                   <span :if={card.archived?} class="workspace-badge">Archived</span>
                 </p>
                 <h3>
@@ -202,9 +199,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <h2>{item_heading(@item)}</h2>
         <p :if={@item[:object]} class="workspace-lede">
           <span>{type_label(@item.object.type)}</span>
-          <span :if={@item.object.level} class="workspace-badge" data-level={@item.object.level}>
-            Level {@item.object.level}
-          </span>
           <span :if={@item.object.archived?} class="workspace-badge">Archived</span>
         </p>
       </header>

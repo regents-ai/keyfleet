@@ -34,6 +34,7 @@ defmodule Keyfleet.Graph do
       define :leave_goal, action: :leave, args: [:fleet_id]
       define :submit_task, action: :submit, args: [:fleet_id]
       define :review_task, action: :review, args: [:fleet_id]
+      define :fork_task, action: :fork, args: [:fleet_id]
     end
 
     resource Keyfleet.Graph.Cursor do

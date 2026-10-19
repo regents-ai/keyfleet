@@ -60,7 +60,7 @@ defmodule Keyfleet.WorkspaceFixtures do
 
   @doc """
   Adds an object and answers its id, `<type>#<place in the log>` unless `:id`
-  is given. Options: `:by` (key number, 17), `:scope` ("fleet").
+  is given. Options: `:by` (key number, 17).
   """
   def create(fleet_id, type, data, opts \\ []) do
     data = Map.merge(Map.fetch!(@defaults, type), data)
@@ -69,7 +69,7 @@ defmodule Keyfleet.WorkspaceFixtures do
       id = Keyword.get(opts, :id, "#{type}##{seq}")
 
       sys = %{
-        "scope" => Keyword.get(opts, :scope, "fleet"),
+        "scope" => "fleet",
         "created_by" => member(opts),
         "archived" => false
       }
