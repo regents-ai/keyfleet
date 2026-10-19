@@ -28,7 +28,7 @@ defmodule Keyfleet.Graph.Writer do
   alias Keyfleet.Graph.StalledError
 
   @read_ops ~w(hello changes)
-  @write_ops ~w(create patch link unlink archive join leave submit review)
+  @write_ops ~w(create patch link unlink archive join leave submit review fork)
 
   # How long a killed host gets to be reaped before the writer moves on.
   @reap_ms 5_000
@@ -80,8 +80,8 @@ defmodule Keyfleet.Graph.Writer do
 
   `authorize` runs inside the writer when the write's turn comes, just before
   the write reaches the host, and is given the milliseconds it may spend. It
-  answers `{:ok, command}`, the command's `:id`, `:principal`, `:auth` and
-  `:writable_scopes` as they stand at that moment, or `{:error, error}`, which
+  answers `{:ok, command}`, the command's `:id`, `:principal` and `:auth` as
+  they stand at that moment, or `{:error, error}`, which
   is returned as it is with nothing sent; one that exits or raises is
   answered `{:error, :unavailable}`, also with nothing sent.
   """

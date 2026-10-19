@@ -487,7 +487,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
     goal = created!("goal", %{title: "Revenue", outcome: "One paying customer."}, "g-1")
 
     {:ok, %{"head_seq" => head, "result" => %{"id" => task}}} =
-      command("create", %{type: "task", scope: "fleet", data: %{title: "Draft"}}, "t-1")
+      command("create", %{type: "task", data: %{title: "Draft"}}, "t-1")
 
     assert Projector.await(@fleet, run_id, head) == head
     created = Graph.read_object!(@fleet, task, actor: @holder)
@@ -612,13 +612,13 @@ defmodule Keyfleet.Graph.ProjectionTest do
 
   defp created!(type, data, id) do
     {:ok, %{"result" => %{"id" => object_id}}} =
-      command("create", %{type: type, scope: "fleet", data: data}, id)
+      command("create", %{type: type, data: data}, id)
 
     object_id
   end
 
   defp note(title, body \\ "Ship it."),
-    do: %{type: "note", scope: "fleet", data: %{title: title, body: body}}
+    do: %{type: "note", data: %{title: title, body: body}}
 
   defp write!(op, body, id) do
     {:ok, %{"head_seq" => head}} = command(op, body, id)
@@ -640,8 +640,7 @@ defmodule Keyfleet.Graph.ProjectionTest do
         credential_ref: nil,
         checked_at: "2026-09-22T12:00:00Z",
         chain_block: nil
-      },
-      writable_scopes: ["fleet"]
+      }
     }
   end
 

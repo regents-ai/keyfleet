@@ -103,10 +103,6 @@ Count = Annotated[int, Field(ge=0, le=MAX_INT)]
 Version = Annotated[int, Field(ge=1, le=MAX_INT)]
 Epoch = Annotated[int, Field(ge=1, le=MAX_INT)]
 Address = Annotated[str, StringConstraints(pattern=r"^0x[0-9a-f]{40}$")]
-# The whole fleet, or one of a Fibonacci fleet's twenty levels.
-Scope = Annotated[str, StringConstraints(pattern=r"^(fleet|level:([1-9]|1[0-9]|20))$")]
-# Every scope a command could be granted: the fleet and each level.
-MAX_WRITABLE_SCOPES = 21
 Id = Annotated[str, StringConstraints(min_length=1, max_length=128), single_line]
 Name = Annotated[str, StringConstraints(max_length=64), single_line]
 Reason = Annotated[str, StringConstraints(max_length=1000), multi_line]
@@ -135,9 +131,6 @@ class Auth(_Shape):
 class Command(_Shape):
     id: Id
     principal: str
-    # Resolved by the gateway from the acting key and the fleet's sales, never
-    # by the member; see `Keyfleet.Graph.Checks.KeyActor`.
-    writable_scopes: Annotated[list[Scope], Field(max_length=MAX_WRITABLE_SCOPES)]
     auth: Auth
 
     @model_validator(mode="after")
@@ -174,7 +167,6 @@ class ChangesBody(_Shape):
 
 class CreateBody(_Shape):
     type: Name
-    scope: Scope
     data: dict[str, Any]
 
 class PatchBody(_Shape):
@@ -219,6 +211,10 @@ class SubmitBody(_Shape):
     reason: Optional[Reason] = None
 
 
+class ForkBody(_Shape):
+    id: Id
+
+
 class ReviewBody(_Shape):
     task: Id
     task_version: Version
@@ -242,4 +238,5 @@ WRITE_OPS: dict[str, type[_Shape]] = {
     "leave": LeaveBody,
     "submit": SubmitBody,
     "review": ReviewBody,
+    "fork": ForkBody,
 }

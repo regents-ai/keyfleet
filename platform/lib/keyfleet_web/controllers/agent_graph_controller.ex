@@ -17,8 +17,6 @@ defmodule KeyfleetWeb.AgentGraphController do
   @workspace_refusals %{
     "bad_request" =>
       {400, "The body doesn't fit this operation. Check it against the docs, then send it again."},
-    "forbidden_scope" =>
-      {403, "details names the scope. Write only in scopes the Key may write."},
     "not_found" =>
       {404,
        "Check the id: an item's id is its type, `#` and its number, such as `task#27`. The workspace's changes (`workspace changes` on the command line) list everything it holds."},
@@ -28,7 +26,7 @@ defmodule KeyfleetWeb.AgentGraphController do
     "invalid" => {422, "Correct the value the message names, then send the request again."},
     "forbidden_field" =>
       {422,
-       "Leave out the fields details names. Members may not set them; a task is marked done by submitting it."},
+       "Leave out the fields details names. Members may not set them; a task is marked done by submitting it, and a task another Key holds is forked rather than taken."},
     "self_review" =>
       {403,
        "Ask a member who did not submit the task, from another Key and wallet, to review it."},
@@ -52,7 +50,7 @@ defmodule KeyfleetWeb.AgentGraphController do
     |> read(conn, fleet_id)
   end
 
-  def create(conn, params), do: write(conn, &Graph.create_object/3, params, ~w(type scope data))
+  def create(conn, params), do: write(conn, &Graph.create_object/3, params, ~w(type data))
 
   def patch(conn, params),
     do:
@@ -74,6 +72,8 @@ defmodule KeyfleetWeb.AgentGraphController do
   def join(conn, params), do: write(conn, &Graph.join_goal/3, params, ~w(id))
 
   def leave(conn, params), do: write(conn, &Graph.leave_goal/3, params, ~w(id))
+
+  def fork(conn, params), do: write(conn, &Graph.fork_task/3, params, ~w(id))
 
   def submit(conn, params),
     do:

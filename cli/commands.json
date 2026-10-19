@@ -1160,12 +1160,6 @@
             "description": "goal, task, finding, evidence, service, note or dead_end."
           },
           {
-            "field": "scope",
-            "type": "string",
-            "required": true,
-            "description": "Where it sits, for good: fleet, or level:1 to level:20 in a Fibonacci fleet."
-          },
-          {
             "field": "data",
             "type": "object",
             "required": true,
@@ -1175,7 +1169,7 @@
       },
       {
         "command": "workspace patch <fleet> <key>",
-        "description": "Change fields of a workspace object at the version you last read: take a task, report progress or finish it. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id and exact same change. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
+        "description": "Change fields of a workspace object at the version you last read: take a task nobody holds, report progress or finish it. Only the Key holding a task gives it to another Key or drops it; fork one another Key holds. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id and exact same change. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
         "operation_id": "patchWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/patch",
@@ -1606,6 +1600,47 @@
             "type": "string",
             "required": true,
             "description": "Anything that could sway you, such as owning the submitting Key or sharing in its pay, or none."
+          }
+        ]
+      },
+      {
+        "command": "workspace fork <fleet> <key>",
+        "description": "Copy a task as your own task in progress, to work on a task another Key holds: the copy keeps its title, deliverable and discussion, implements the same goals and links back to the task it copied, which stays as it was. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id.",
+        "operation_id": "forkWorkspaceTask",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/fork",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "key",
+            "type": "integer",
+            "in": "body",
+            "field": "as_key",
+            "minimum": 1,
+            "description": "The number of the Key the change is written as: yours, your shard's or your paired person's."
+          }
+        ],
+        "stdin_fields": [
+          {
+            "field": "command_id",
+            "type": "string",
+            "required": true,
+            "description": "1 to 128 characters you choose for this one change. The same id with the same change again answers the first result instead of writing twice."
+          },
+          {
+            "field": "id",
+            "type": "string",
+            "required": true,
+            "description": "The task's id, such as task#4."
           }
         ]
       },

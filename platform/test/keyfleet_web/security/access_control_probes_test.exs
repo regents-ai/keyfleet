@@ -86,7 +86,6 @@ defmodule KeyfleetWeb.Security.AccessControlProbesTest do
             "as_key" => 2,
             "command_id" => idem(),
             "type" => "note",
-            "scope" => "fleet",
             "data" => %{"title" => "x"}
           }
         )

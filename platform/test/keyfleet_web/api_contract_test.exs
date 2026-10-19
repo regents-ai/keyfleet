@@ -23,6 +23,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              @graph <> "archive",
              @graph <> "changes",
              @graph <> "create",
+             @graph <> "fork",
              @graph <> "get",
              @graph <> "join",
              @graph <> "leave",
@@ -376,7 +377,7 @@ defmodule KeyfleetWeb.ApiContractTest do
     for {op, required, optional} <- [
           {"get", ~w(id), ~w(relations_after)},
           {"changes", [], ~w(after_seq limit)},
-          {"create", command ++ ~w(type scope data), []},
+          {"create", command ++ ~w(type data), []},
           {"patch", command ++ ~w(id expected_version), ~w(set unset reason evidence)},
           {"link", command ++ ~w(source target type), ~w(note)},
           {"unlink", command ++ ~w(relation_id), []},
@@ -385,7 +386,8 @@ defmodule KeyfleetWeb.ApiContractTest do
           {"leave", command ++ ~w(id), []},
           {"submit", command ++ ~w(id expected_version), ~w(result_ref evidence reason)},
           {"review", command ++ ~w(task task_version decision rationale conflicts_of_interest),
-           []}
+           []},
+          {"fork", command ++ ~w(id), []}
         ] do
       assert %{"post" => operation} = path = contract["paths"][@graph <> op]
       assert Map.keys(path) == ["post"]
@@ -399,20 +401,6 @@ defmodule KeyfleetWeb.ApiContractTest do
       assert Enum.sort(Map.get(schema, "required", [])) == Enum.sort(required)
       assert Enum.sort(Map.keys(schema["properties"])) == Enum.sort(required ++ optional)
     end
-
-    assert schemas["WorkspaceCreateRequest"]["properties"]["scope"] == %{
-             "$ref" => "#/components/schemas/WorkspaceScope"
-           }
-
-    # The fleet, or one of a Fibonacci fleet's twenty levels, written one way only.
-    scope = Regex.compile!(schemas["WorkspaceScope"]["pattern"])
-    scopes = ["fleet" | Enum.map(1..20, &"level:#{&1}")]
-    assert Enum.all?(scopes, &Regex.match?(scope, &1))
-
-    refute Enum.any?(
-             ~w(level:0 level:21 level:01 Level:1 level: fleet:1 all),
-             &Regex.match?(scope, &1)
-           )
   end
 
   # A signed agent route the router serves and the contract leaves out, or
