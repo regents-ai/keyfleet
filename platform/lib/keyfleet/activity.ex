@@ -569,13 +569,7 @@ defmodule Keyfleet.Activity do
         {:left, item}
 
       "assignee_key" in brief["fields"] ->
-        case values["assignee_key"] do
-          %{"new" => token_id} when is_integer(token_id) ->
-            {:claimed, Map.put(item, :to, %{token_id: token_id, agent: nil})}
-
-          _unset ->
-            {:unclaimed, item}
-        end
+        assignment(values["assignee_key"], item)
 
       match?(%{"progress" => %{"new" => _}}, values) ->
         {:progress, Map.put(item, :progress, values["progress"]["new"])}
@@ -587,6 +581,11 @@ defmodule Keyfleet.Activity do
         {:revised, item}
     end
   end
+
+  defp assignment(%{"new" => token_id}, item) when is_integer(token_id),
+    do: {:claimed, Map.put(item, :to, %{token_id: token_id, agent: nil})}
+
+  defp assignment(_unset, item), do: {:unclaimed, item}
 
   # A member writes as its key; the workspace's own actors write as
   # `keyfleet:<part>`. Any other actor is not one the workspace records.
