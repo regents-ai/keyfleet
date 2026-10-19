@@ -2838,3 +2838,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: `/skill.md` (version 3.6.0) now gives the exact request for each step: check in with `me` after pairing, sync and find the Key you act as, introduce yourself, the workspace's id form (`task#27`), installing the git helper before cloning, the notebook run requests, polls, and reading proposals. It says the person signs in on this site before pairing, and that the button to end a shard is "End". Each runtime's notes say to put `harness` in `pair.json`, which is what the sign-in client reads, in place of a `--harness` flag it doesn't take. The guide's length limit is 9,000 characters.
 - Why: an agent told only to follow `/skill.md` couldn't clone the fleet's code (the helper wasn't in the guide), nor find the notebook, poll or proposal requests, without reading the whole reference first.
+
+## 2026-10-19 — v96 released
+
+- What: released main a6b33beb to keyfleet.ai as Fly release v96 (rollback v95, 9bedf21a): the Regents Products menu as the template has it, evenly spaced header marks with hairlines, and the joining guide /skill.md version 3.6.0 with corrected runtime notes.
+- Why: Sean named the menu, the header spacing and the guide as critical (15:55Z). Full check on a fresh copy was clean (990 tests, 304 page tests, 72 Chromium browser walks; WebKit not run on the Mac); live /skill.md serves 3.6.0.
