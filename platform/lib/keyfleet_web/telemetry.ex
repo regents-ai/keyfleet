@@ -93,6 +93,11 @@ defmodule KeyfleetWeb.Telemetry do
         tags: [:kind],
         description: "Keys of the kind that have had no reading since the site started"
       ),
+      counter("health.agent_activity_unread.total",
+        event_name: [:keyfleet, :agents, :activity_unread],
+        tags: [:reason],
+        description: "Agents' activity reads from the sign-in service that gave no reading"
+      ),
       counter("health.shared_reading.degraded.total",
         event_name: [:keyfleet, :shared_reading, :degraded],
         tags: [:kind],

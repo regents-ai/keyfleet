@@ -75,7 +75,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
   end
 
-  test "signed-in account control renders its address avatar and Sign out", %{conn: conn} do
+  test "the signed-in name opens the side panel, which holds Sign out", %{conn: conn} do
     account = register_account("signed-in-control", "0x1111111111111111111111111111111111111111")
 
     {:ok, view, _html} =
@@ -92,15 +92,31 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(
              view,
-             "#account-control button[type=button][data-account-target=sign-out]",
+             "#account-control button#account-chip[data-aside-toggle][aria-controls=shell-aside]"
+           )
+
+    refute has_element?(view, "#account-control [data-account-target=sign-out]")
+    # Fleets beside the name is the homepage's alone.
+    refute has_element?(view, "#shell-fleets")
+
+    assert has_element?(
+             view,
+             "#shell-aside #shell-account button[type=button][data-account-target=sign-out]",
              "Sign out"
            )
 
+    assert has_element?(
+             view,
+             ~s(#shell-account a[href="https://regents.sh/account"][target=_blank]),
+             "Manage Account"
+           )
+
+    assert has_element?(view, "#shell-header #shell-aside-button[data-aside-toggle]")
     assert has_element?(view, "#theme-control button.theme-toggle[data-theme-toggle]")
     refute has_element?(view, "#account-control [phx-click]")
   end
 
-  test "the Account page pairs only an offered agent, with a new code",
+  test "the side panel pairs only an offered agent, with a new code",
        %{conn: conn} do
     account = register_account("pairing-box", "0x2222222222222222222222222222222222222222")
 
@@ -109,7 +125,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> init_test_session(%{human_account_id: account.id})
       |> live("/account")
 
-    box = "#account-agents-pair"
+    box = "#shell-pairing-box"
     assert has_element?(view, "#{box} input[name=harness][value=hermes]")
     refute has_element?(view, "#{box} input[name=harness][value=chatgpt]")
 
@@ -123,7 +139,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#{box} input[name=harness][value=hermes][checked]")
   end
 
-  test "the Account page makes pairing codes only within the account's allowance",
+  test "the side panel makes pairing codes only within the account's allowance",
        %{conn: conn} do
     limits = Application.fetch_env!(:keyfleet, :limits)
     on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
@@ -141,7 +157,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> init_test_session(%{human_account_id: account.id})
       |> live("/account")
 
-    box = "#account-agents-pair"
+    box = "#shell-pairing-box"
     html = view |> element(box) |> render_change(%{})
     refute html =~ ~r/Pairing code: (?!X+\b)\S+/
 
@@ -189,7 +205,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> live("/account")
 
     assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign in")
-    refute has_element?(view, "#account-control [data-account-target=sign-out]", "Sign out")
+    refute has_element?(view, "[data-account-target=sign-out]")
+    refute has_element?(view, "#shell-aside")
   end
 
   test "signed-in account presentation survives an in-shell patch", %{conn: conn} do
@@ -211,10 +228,10 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert view.pid == pid
     assert render(view) =~ ~s(data-shell-instance="#{instance}")
     assert has_element?(view, "#account-control [data-account-target=profile]", "0x2222..2222")
-    assert has_element?(view, "#account-control [data-account-target=sign-out]", "Sign out")
+    assert has_element?(view, "#shell-account [data-account-target=sign-out]", "Sign out")
   end
 
-  test "the signed-in account chip shows the picture, the name and Sign out" do
+  test "the signed-in account chip shows the picture and the name, and opens the side panel" do
     html =
       render_shell(%AccountControl{
         kind: :signed_in,
@@ -225,6 +242,8 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert html =~ ~r/data-account-target="profile">\s*Ada\s*</
     assert html =~ ~s(class="account-avatar")
     assert html =~ ~s(src="data:image/svg+xml;base64,PHN2Zy8+")
+    assert html =~ ~r/<button[^>]*id="account-chip"[^>]*data-aside-toggle/s
+    assert html =~ ~r/<aside[^>]*id="shell-aside"/
     assert html =~ "Sign out"
     refute html =~ "Sign Out"
   end

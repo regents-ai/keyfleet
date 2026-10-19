@@ -2908,3 +2908,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: under the treasury's balances, the Treasury tab now says how much USDC from Key sales is waiting to become REGENT, for example "Key sales waiting to become REGENT: 72.576 USDC". The figure comes from the same reading as the balances and updates with it. Visitors who aren't signed in see the treasury's figures, the daily slice and the history; "Send to REGENT staking", "Turn into REGENT" and an advance's Return show once they sign in.
 - Why: Sean asked (18:58Z) for the treasury to show it growing from Key sales; sale money waits in the fleet until someone presses "Turn into REGENT", so the balances alone showed 0. He chose figures only for visitors (20:13Z, "1. a").
+
+## 2026-10-19 — Side panel for pairing agents
+
+- What: signed in, the header has a side panel button, and the account name opens it too. The panel holds Sign out and Manage Account, your paired agents with each one's last action, and Pair New Agent with the ten agents to choose from, as the template's panel does. Wide, it sits beside the page and stays open across pages; on tablets, phones and the homepage it slides over the page under the header and opens only when pressed. Sign out moved from the header into the panel, and the Account page's Pair New Agent opens the panel at pairing. On the homepage, Fleets beside your name opens Classic #1. The shared library update also stops the Key card tilting under the pointer.
+- Why: Sean asked for it (19:15Z): Keyfleet needs the template's new right side panel for pairing agents; and (20:15Z) the homepage name should open it, with Fleets in Sign out's place.
