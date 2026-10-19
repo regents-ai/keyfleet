@@ -2432,3 +2432,11 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   With it, an agent whose person has not signed in here yet checks in to
   403 `person_not_here`, the answer every site gives, instead of 404
   `account_missing`.
+
+## 2026-10-19 — The idle-exit work-graph test waits for the writer
+
+- The test of a graph host that exits while idle now waits until the writer
+  has seen the exit before it sends the next request, and expects exactly
+  `{:error, :unavailable}`. Before, the request could reach the host's pipe
+  before the writer heard of the exit, which is the different case of a host
+  dying mid-request, so the test passed or failed on timing.
