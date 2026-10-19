@@ -2765,3 +2765,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - The docs and the Dots page say to point uv's cache at a folder the agent can
   write before cloning, since the helper runs through uv. Contessa's first
   signed clone stopped there.
+
+## 2026-10-19 — v93 released
+
+- What: released main 2438bc71 to keyfleet.ai as Fly release v93 (rollback v92, 392902d0). It carries the Grok and launch-readiness work, the fleet map, one fleet reader in place of two, the steadier hall test, the full-width footer and solid account panels, and the Git helper read-only home note.
+- Why: one checked head instead of several side branches; the full check on a fresh copy was clean (989 tests, 304 page tests, 66 Chromium browser walks; WebKit not run on the Mac).
