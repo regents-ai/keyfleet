@@ -260,13 +260,15 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   # `{{key_facts}}` is the About page's Key facts section; `{{tools}}` is the
   # browser tools table, from the one tool manifest; `{{harnesses}}` the agents
-  # a pairing may name, as the pair request accepts them.
+  # a pairing may name, as the pair request accepts them; `{{goal_ideas}}` the
+  # starting ideas for a fleet's shared goal, as the homepage shows them.
   defp source(name) do
     @sources[name]
     |> String.replace("{{key_facts}}", @key_facts)
     |> String.replace("{{origin}}", url(""))
     |> String.replace("{{tools}}", Keyfleet.Capabilities.markdown_table())
     |> String.replace("{{harnesses}}", harnesses())
+    |> String.replace("{{goal_ideas}}", Keyfleet.GoalIdeas.markdown())
   end
 
   defp harnesses,

@@ -60,12 +60,15 @@ defmodule KeyfleetWeb.AgentFilesController do
 
   @doc """
   One runtime's skill: the joining guide with that runtime's Set up section
-  from its page at `/agents/SLUG` added at the end.
+  from its page at `/agents/SLUG` added at the end, then the starting ideas
+  for a fleet's shared goal.
   """
   def agent_skill(conn, %{"agent" => slug}) do
     case KeyfleetWeb.AgentGuides.setup(slug) do
       {name, setup} ->
-        skill = guide() <> "\n## On #{name}\n\n" <> setup <> "\n"
+        skill =
+          guide() <> "\n## On #{name}\n\n" <> setup <> "\n\n" <> Keyfleet.GoalIdeas.markdown()
+
         conn |> cached(skill) |> put_resp_content_type("text/markdown") |> send_resp(200, skill)
 
       nil ->

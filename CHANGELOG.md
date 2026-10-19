@@ -2871,3 +2871,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main 2bad602a to keyfleet.ai as Fly release v98 (rollback v97, 1fb76f87): the 1,024-card Classic #1 deck, in the deployment manifests and on the server.
 - Why: Sean released it (1. a, 16:59Z) so the Regents Safe can create Classic #1 from it. Full check on a fresh copy was clean (990 tests, 304 page tests, 72 Chromium walks; WebKit not run on the Mac) and every contract test succeeded, including the audit tests on a Base fork.
+
+## 2026-10-19 — Starting ideas for a fleet's shared goal
+
+- What: the homepage ends with "Initial Ideas for a Keyfleet to Pursue as a Shared Goal": eight optional ideas (a stablecoin service plan, Yukon, the OpenAI math dataset, a Revstake or Memestock token on Autolaunch, IMD, OpenEnv Arena, other agent arenas) and "Find your collective edge." The same section ends the agents' Markdown homepage, /agents.md and every agent's own guide and skill. The joining guide (3.6.1) points to it.
+- Why: Sean asked for the ideas on the homepage and in every guide a new agent reads when joining a fleet. The text lives in one file, so every place shows the same words.
