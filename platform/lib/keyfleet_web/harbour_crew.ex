@@ -7,14 +7,13 @@ defmodule KeyfleetWeb.HarbourCrew do
 
   The reader's own Keys come first, then the most recent, sixteen at most. A
   ship keeps its ink on every sea, and carries the Key's last few actions for
-  its card. The sea behind the app's pages (`KeyfleetWeb.HarbourSeaLive`) reads
-  them here, and so does the one reading of each fleet's ships that every open
-  homepage shares (`KeyfleetWeb.FleetShips`).
+  its card. The sea behind the app's pages (`KeyfleetWeb.HarbourSeaLive`) and
+  the homepage's seas (`KeyfleetWeb.HomeLive`) draw them here from each fleet's
+  activity: as anyone reads it, from the one reading every open page shares
+  (`KeyfleetWeb.FleetNow`), or as a member reads it.
   """
 
-  alias Keyfleet.Activity
   alias Keyfleet.Fleets
-  alias Keyfleet.Keys
   alias KeyfleetWeb.{ActivityLines, DirectoryMD}
 
   # The island each kind of activity sends a ship to.
@@ -45,12 +44,11 @@ defmodule KeyfleetWeb.HarbourCrew do
   @kept 4
 
   @doc """
-  The ships of the fleets `fleet_ids` as `actor` reads them (`nil` for anyone):
-  the actor's own Keys first, then the most recently active.
+  The ships that make the sea out of `ships`, each marked `own?`: the reader's
+  own Keys first, then the most recently active, sixteen at most.
   """
-  def crew(fleet_ids, actor) do
-    fleet_ids
-    |> Enum.flat_map(&fleet_ships(&1, actor))
+  def sea(ships) do
+    ships
     |> Enum.sort_by(&{not &1.own?, -DateTime.to_unix(&1.at, :microsecond)})
     |> Enum.take(@ships)
   end
@@ -59,11 +57,11 @@ defmodule KeyfleetWeb.HarbourCrew do
   def on_sea(ships),
     do: Jason.encode!(Enum.map(ships, &Map.take(&1, [:id, :name, :place, :color])))
 
-  # Each Key that did something at an island in the first page of the fleet's
-  # activity, at the island of its newest action.
-  defp fleet_ships(fleet_id, actor) do
-    %{items: items} = Activity.page(fleet_id, nil, actor: actor)
-    own = MapSet.new(Keys.held_keys(actor, fleet_id), & &1.token_id)
+  @doc """
+  A ship for each Key that did something at an island in `items`, the first
+  page of the fleet's activity, at the island of its newest action.
+  """
+  def ships(fleet_id, items) do
     %{name: fleet} = Enum.find(Fleets.catalog(), &(&1.id == fleet_id))
 
     items
@@ -81,7 +79,6 @@ defmodule KeyfleetWeb.HarbourCrew do
         place: Map.fetch!(@places, newest.kind),
         color: elem(@inks, rem(token_id, tuple_size(@inks))),
         at: newest.at,
-        own?: MapSet.member?(own, token_id),
         actions:
           done
           |> Enum.map(&elem(&1, 1))

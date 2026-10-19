@@ -12,6 +12,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
   alias Keyfleet.Keys
   alias Keyfleet.Rooms
   alias Keyfleet.Traits
+  alias KeyfleetWeb.FleetNow
   alias RegentChain.Call
 
   # Other suites commit Syndicate keys outside the sandbox; Cascade holds only
@@ -46,6 +47,9 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     epoch!(12, 2, wallet("e"))
     epoch!(3, 1, wallet("e"))
     epoch!(20, 1, wallet("e"))
+    # A hall shown to anyone but a member draws from the fleet's reading,
+    # taken here as the site's producer would take it.
+    FleetNow.read(@fleet)
 
     :ok
   end

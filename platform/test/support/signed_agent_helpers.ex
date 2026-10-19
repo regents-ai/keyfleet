@@ -96,39 +96,44 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
            audience: "keyfleet",
            wallet_audiences: ["keyfleet"]
          ) do
-      {:ok, %{claims: claims, covered_components: covered}} ->
-        {200,
-         %{
-           code: "http_envelope_valid",
-           data: %{
-             verified: true,
-             walletAddress: claims["sub"],
-             chainId: claims["chain_id"],
-             verificationMethod: "eoa_recovery",
-             keyId: claims["key_id"],
-             receiptExpiresAt:
-               DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
-             requiredHeaders: Siwa.required_authenticated_request_headers(payload["body_digest"]),
-             requiredCoveredComponents:
-               Siwa.required_authenticated_request_components(
-                 payload["headers"],
-                 payload["body_digest"]
-               ),
-             coveredComponents: covered,
-             agentRegistration: nil,
-             agentBook: nil,
-             principal: %{
-               kind: "wallet",
-               wallet_address: claims["sub"],
-               chain_id: claims["chain_id"],
-               audience: claims["aud"]
-             }
-           }
-         }}
-
-      {:error, _} ->
-        {401, %{error: refusal()}}
+      {:ok, verified} -> granted(verified, payload)
+      {:error, _} -> {401, %{error: refusal()}}
     end
+  end
+
+  @doc """
+  The sign-in server's `{200, verdict}` for `payload` once it has verified it.
+  A request verifies once: the sign-in server refuses the same signature again.
+  """
+  def granted(%{claims: claims, covered_components: covered}, payload) do
+    {200,
+     %{
+       code: "http_envelope_valid",
+       data: %{
+         verified: true,
+         walletAddress: claims["sub"],
+         chainId: claims["chain_id"],
+         verificationMethod: "eoa_recovery",
+         keyId: claims["key_id"],
+         receiptExpiresAt:
+           DateTime.from_unix!(claims["exp"], :millisecond) |> DateTime.to_iso8601(),
+         requiredHeaders: Siwa.required_authenticated_request_headers(payload["body_digest"]),
+         requiredCoveredComponents:
+           Siwa.required_authenticated_request_components(
+             payload["headers"],
+             payload["body_digest"]
+           ),
+         coveredComponents: covered,
+         agentRegistration: nil,
+         agentBook: nil,
+         principal: %{
+           kind: "wallet",
+           wallet_address: claims["sub"],
+           chain_id: claims["chain_id"],
+           audience: claims["aud"]
+         }
+       }
+     }}
   end
 
   # The sign-in server's refusal of a request whose signature does not hold.

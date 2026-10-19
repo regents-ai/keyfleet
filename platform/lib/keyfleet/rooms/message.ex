@@ -487,58 +487,156 @@ defmodule Keyfleet.Rooms.Message do
     end
   end
 
-  # Delivered after the transaction commits, as `%Phoenix.Socket.Broadcast{}`
-  # on the two topics of `Keyfleet.Rooms.topic/2`: "room_head" with
+  # Delivered after the transaction commits, as `%Phoenix.Socket.Broadcast{}`.
+  #
+  # A post in General goes first, whole, on General's own topic (`topic/2`):
+  # "post" with `public/2`, what a signed-out reader of General is shown of
+  # it, so every open page of General shows it without reading the room. Its
+  # order marker is `seq`, the place the database gave it under the room's
+  # lock (`Keyfleet.Rooms.Sequence`). General is read by anyone
+  # (`Keyfleet.Access`, `:general_room` read `:public`, checked for posts by
+  # `Keyfleet.Rooms.Checks.PublicRoom`); if that read ever narrows, this
+  # publication goes in the same change, since the policy does not guard it.
+  #
+  # Then, on the two topics of `Keyfleet.Rooms.topic/2`: "room_head" with
   # `%{room_id, seq}` for every new line, and "key_activity" with
   # `%{fleet_id, token_ids}` for a new post, naming the key it was written as
   # and the key whose thread it went to. The members' topic takes every line.
   # The other takes a line of General or of a key's thread, which anyone
-  # reads, and nothing of any other room. A repeat the database handed back is
-  # not announced. Best effort: anyone reading a room reads it from the room
-  # itself.
+  # reads, and nothing of any other room.
+  #
+  # Publications are sent in the order written here, from the one process
+  # that posted, so a page of General hears a post before the room's head
+  # that counts it: a page that showed the post is level with the head and
+  # does nothing more, and a page that missed it reads the room from the head.
+  # A repeat the database handed back is not announced. Best effort: a page
+  # that hears nothing reads the room when it is next opened.
   pub_sub do
     module Phoenix.PubSub
     name Keyfleet.PubSub
-    prefix "fleet"
     broadcast_type :phoenix_broadcast
     filter &(!Ash.Resource.get_metadata(&1.data, :upsert_skipped))
 
-    publish_all :create, [:fleet_id, "rooms", "members"],
+    publish :send_message, ["public", "room", :fleet_id, :room_id],
+      event: "post",
+      filter: &Keyfleet.Rooms.Message.in_general?/1,
+      load: [:reply_to_seq, :agent_profile, :via_agent_profile],
+      returns: :map,
+      transform:
+        &Keyfleet.Rooms.Message.public(&1.data, Map.get(&1.data.calculations, :reply_to_seq))
+
+    publish_all :create, ["fleet", :fleet_id, "rooms", "members"],
       event: "room_head",
       transform: &Keyfleet.Rooms.Message.head/1
 
-    publish_all :create, [:fleet_id, "rooms"],
+    publish_all :create, ["fleet", :fleet_id, "rooms"],
       event: "room_head",
       transform: &Keyfleet.Rooms.Message.head/1,
       filter: &Keyfleet.Rooms.Message.read_by_anyone?/1
 
-    publish :send_message, [:fleet_id, "rooms", "members"],
+    publish :send_message, ["fleet", :fleet_id, "rooms", "members"],
       event: "key_activity",
       transform: &Keyfleet.Rooms.Message.key_activity/1
 
-    publish :send_message, [:fleet_id, "rooms"],
+    publish :send_message, ["fleet", :fleet_id, "rooms"],
       event: "key_activity",
       transform: &Keyfleet.Rooms.Message.key_activity/1,
       filter: &Keyfleet.Rooms.Message.read_by_anyone?/1
 
-    publish :send_to_key, [:fleet_id, "rooms", "members"],
+    publish :send_to_key, ["fleet", :fleet_id, "rooms", "members"],
       event: "key_activity",
       transform: &Keyfleet.Rooms.Message.key_activity/1
 
-    publish :send_to_key, [:fleet_id, "rooms"],
+    publish :send_to_key, ["fleet", :fleet_id, "rooms"],
       event: "key_activity",
       transform: &Keyfleet.Rooms.Message.key_activity/1
   end
 
+  @doc """
+  The topic on which each new post of the fleet's room `room_id` is published
+  whole, when anyone may read that room: General alone.
+  """
+  def topic(fleet_id, room_id), do: "public:room:#{fleet_id}:#{room_id}"
+
+  @doc """
+  What anyone is shown of a line, named one by one: what a room's page draws
+  of it, and what General's topic carries for each new post (`topic/2`).
+  `reply_to_seq` is the place of the post it answers, nil when it answers
+  none: a calculation, on the line when the page reads it with
+  `load: [:reply_to_seq]` and from the publication's own load when it is
+  published. Who wrote it is `author/1`.
+  """
+  def public(message, reply_to_seq) do
+    %{
+      id: message.id,
+      room_id: message.room_id,
+      seq: message.seq,
+      kind: message.kind,
+      as_key: message.as_key,
+      body: message.body,
+      inserted_at: message.inserted_at,
+      reply_to_seq: message.reply_to_id && reply_to_seq,
+      quoting?: message.quote_request_id != nil,
+      author: author(message)
+    }
+  end
+
+  @doc """
+  Who wrote a line, as anyone is shown it: an agent by its name, what it runs
+  on, its picture and whether a verified person stands behind it; a person by
+  their wallet, only ever shortened, and the name of the agent that wrote it
+  for them. `arrival` is how it reached Keyfleet: `:agent` when an agent's
+  signed request carried it, as the agent itself or for its person, and
+  `:web` when a person typed it on the website. Needs the line's
+  `agent_profile` and `via_agent_profile`.
+  """
+  def author(%{author_kind: :agent, agent_profile: %{name: name} = profile}),
+    do: %{
+      kind: :agent,
+      arrival: :agent,
+      name: name,
+      harness: profile.declared_harness,
+      picture: picture(profile.avatar_src),
+      human_backed: profile.human_backed == true,
+      wallet: nil,
+      via_agent: nil
+    }
+
+  def author(message),
+    do: %{
+      kind: :human,
+      arrival:
+        if(message.author_kind == :agent or message.via_agent_profile_id != nil,
+          do: :agent,
+          else: :web
+        ),
+      name: nil,
+      harness: nil,
+      picture: nil,
+      human_backed: false,
+      wallet: RegentFormat.short_address(message.author_wallet),
+      via_agent: via_agent(message.via_agent_profile)
+    }
+
+  # A picture not read with the profile is not shown.
+  defp picture(src) when is_binary(src), do: src
+  defp picture(_not_read), do: nil
+
+  defp via_agent(%{name: name}), do: name
+  defp via_agent(_none), do: nil
+
   @doc false
   def head(%{data: message}), do: %{room_id: message.room_id, seq: message.seq}
 
+  # A post written to the room anyone reads.
+  @doc false
+  def in_general?(%{changeset: changeset}),
+    do: Ash.Changeset.get_argument(changeset, :slug) == Keyfleet.Rooms.Room.public_slug()
+
   # A line of a key's thread, or one written to the room anyone reads.
   @doc false
-  def read_by_anyone?(%{data: message, changeset: changeset}),
-    do:
-      message.in_key_thread or
-        Ash.Changeset.get_argument(changeset, :slug) == Keyfleet.Rooms.Room.public_slug()
+  def read_by_anyone?(%{data: message} = notification),
+    do: message.in_key_thread or in_general?(notification)
 
   @doc false
   def key_activity(%{data: message, changeset: changeset}) do

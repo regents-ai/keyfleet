@@ -137,7 +137,6 @@ defmodule Keyfleet.Activity do
   @post_span 21_600_000_000
   @listed_keys 3
   @recent 7 * 86_400
-  @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(human|agent):(0x[0-9a-f]{40})\z/
 
   @doc """
   A page of the fleet's activity, newest first: `%{items: items, cursor: cursor}`.
@@ -587,9 +586,9 @@ defmodule Keyfleet.Activity do
   defp actor("keyfleet:" <> _part), do: nil
 
   defp actor(actor) do
-    case Regex.run(@member, actor, capture: :all_but_first) do
-      [token_id, "agent", wallet] -> {:actor, String.to_integer(token_id), wallet}
-      [token_id, "human", _wallet] -> %{token_id: String.to_integer(token_id), agent: nil}
+    case Graph.Event.member(actor) do
+      {token_id, "agent", wallet} -> {:actor, token_id, wallet}
+      {token_id, "human", _wallet} -> %{token_id: token_id, agent: nil}
     end
   end
 
@@ -638,13 +637,7 @@ defmodule Keyfleet.Activity do
 
   defp agents_by_wallet(nil), do: %{}
 
-  defp agents_by_wallet(refs) do
-    refs
-    |> Enum.map(&elem(&1, 2))
-    |> Enum.uniq()
-    |> Agents.agents_by_wallets!()
-    |> Map.new(&{&1.wallet_address, &1.name})
-  end
+  defp agents_by_wallet(refs), do: refs |> Enum.map(&elem(&1, 2)) |> Agents.names_by_wallet()
 
   defp holders(_fleet_id, nil), do: %{}
 

@@ -39,9 +39,11 @@ defmodule Keyfleet.BrowserChain do
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
+  alias Keyfleet.Polls
   alias Keyfleet.ProposalHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
+  alias Keyfleet.SharedReading
   alias Keyfleet.TestChainNode
   alias Keyfleet.WorkspaceFixtures
   alias RegentChain.Call
@@ -133,6 +135,7 @@ defmodule Keyfleet.BrowserChain do
       calls: &answer/3
     )
 
+    reread()
     minted(fleet_id)
   end
 
@@ -353,9 +356,17 @@ defmodule Keyfleet.BrowserChain do
     })
 
     ProposalHelpers.proposal!(fleet_id, 1)
+    reread()
 
     message.as_key
   end
+
+  # The fleet's proposals and polls as every visitor shares them
+  # (`KeyfleetWeb.FleetProposals`, `KeyfleetWeb.FleetPolls`) are read again a
+  # second later, as the minute's heal would have them read; no job runs on
+  # the browser test server, and a deployment or a proposal written here
+  # sends no notice of its own.
+  defp reread, do: Enum.each([:fleet_proposals, :fleet_polls], &SharedReading.heal/1)
 
   @doc """
   Sells the fleet's next key to `owner`, whose agent says `body` for them in the
@@ -365,6 +376,21 @@ defmodule Keyfleet.BrowserChain do
   def say!(fleet_id, owner, body) do
     {token_id, _message} = speak!(fleet_id, owner, body)
     token_id
+  end
+
+  @doc """
+  The person holding a Key of the fleet with the wallet `owner` asks it
+  `question` in a poll open for an hour, choosing between "Yes" and "Not yet".
+  Returns the poll's id. Each Key starts one poll a day, so an owner asks once.
+  """
+  def poll!(fleet_id, owner, question) do
+    poll =
+      Polls.start_poll!(
+        %{fleet_id: fleet_id, question: question, choices: ["Yes", "Not yet"], minutes: 60},
+        actor: %Human{human_account_id: 1, wallet_addresses: [owner]}
+      )
+
+    poll.id
   end
 
   @doc "Opens the product pages when `open?`, and closes them behind the launch gate otherwise."

@@ -24,6 +24,7 @@ import {
 import {installCopyButtons} from "./copy_buttons"
 import {installPageProgress} from "./page_progress"
 import {installPublicTools} from "./public_tools"
+import {installVitals} from "./vitals"
 import {CurrentTab} from "./hooks/current_tab"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {FleetSea, HarbourSea} from "./hooks/harbour_sea"
@@ -33,6 +34,7 @@ import {KeyCards} from "./hooks/key_cards"
 import {KeyMap} from "./hooks/key_map"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
+import {PollCountdown} from "./hooks/poll_countdown"
 import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
 import {MotionCascade, ShellViews} from "./hooks/motion/reveals"
 import {VerifiedConnections} from "./hooks/verified_connections"
@@ -310,15 +312,27 @@ const hooks = {
   MotionRefusal,
   NextKeyCard,
   OnchainSteps,
+  PollCountdown,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
   VerifiedConnections,
 }
 if (!browserCsrfToken()) throw new Error("Missing CSRF token")
 
+// Phoenix's own waits between reconnect attempts, each spread from half to
+// one and a half times its length. A deploy drops every open page at once;
+// without the spread they all come back in the same instant and each reads
+// its page again, more than the site's few database connections can answer.
+const reconnectWaits = [10, 50, 100, 150, 200, 250, 500, 1000, 2000]
+const spreadReconnect = (tries: number) => {
+  const wait = reconnectWaits[tries - 1] ?? 5000
+  return Math.round(wait / 2 + Math.random() * wait)
+}
+
 // Sign in and refresh renew the session and rotate its CSRF state, so every
 // connection and reconnection reads the token the browser holds now.
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
+  reconnectAfterMs: spreadReconnect,
   params: () => ({_csrf_token: browserCsrfToken()}),
   hooks,
 })
@@ -335,6 +349,7 @@ installAccountAuthLazyLoader()
 installCrossTabCsrf()
 installCopyButtons()
 installPageProgress()
+installVitals()
 watchPresses(document)
 mountMotion(document)
 window.liveSocket = liveSocket

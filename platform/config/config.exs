@@ -220,7 +220,12 @@ config :keyfleet, Oban,
       {"41 * * * *", Keyfleet.Keys.DeckEndCheck},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_agents"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "key_agents"}},
-      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_ships"}}
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_now"}},
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_proposals"}},
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_treasury"}},
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "proposal"}},
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_polls"}},
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "poll"}}
     ]
   ],
   pruner: [max_age: {7, :days}],

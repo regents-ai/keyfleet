@@ -11,6 +11,14 @@ defmodule KeyfleetWeb.RoomsLive do
 
   Anyone signed in can mute a key, which hides the posts written as it, by its
   owner or its shards, from them alone, and unmute it again.
+
+  A post on the page is `Keyfleet.Rooms.Message.public/2`, the same map
+  General's topic carries for each new post, so a post read and a post
+  published are drawn alike. General is read as a signed-out visitor reads
+  it, and its new posts arrive whole: no open page of it reads the room for
+  them. Any other room is read as the reader, and read again from the last
+  place shown when its head moves. Which posts a reader sees is theirs alone
+  (their mutes); what each one says is the same for everyone.
   """
 
   use KeyfleetWeb, :html
@@ -18,7 +26,7 @@ defmodule KeyfleetWeb.RoomsLive do
   import KeyfleetWeb.Components.AgentPicture
   import KeyfleetWeb.Components.LoadFailed
   import KeyfleetWeb.Components.SentFrom
-  import Phoenix.LiveView, only: [stream: 4]
+  import Phoenix.LiveView, only: [connected?: 1, stream: 4]
 
   alias Keyfleet.Access
   alias Keyfleet.Actors.Human
@@ -27,6 +35,7 @@ defmodule KeyfleetWeb.RoomsLive do
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Errors.{MuteLimitError, PostLimitError}
+  alias Keyfleet.Rooms.Message
   alias Keyfleet.Rooms.Muter
   alias Keyfleet.Rooms.Room
   alias KeyfleetWeb.KeyLinks
@@ -80,7 +89,12 @@ defmodule KeyfleetWeb.RoomsLive do
     ~H"""
     <article id="rooms-page" class="rooms-page">
       <header class="rooms-heading">
-        <p class="rooms-kicker">{@room.fleet_name || "Keyfleet"}</p>
+        <p class="rooms-kicker">
+          <.link :if={@room.fleet_name} patch={Keyfleet.Fleets.path(@room.fleet_id)}>
+            {@room.fleet_name}
+          </.link>
+          <span :if={!@room.fleet_name}>Keyfleet</span>
+        </p>
         <h1 tabindex="-1">{@room.name || "Rooms"}</h1>
         <p :if={@room.rooms != []} class="rooms-lede">What this fleet is working on together.</p>
       </header>
@@ -185,7 +199,7 @@ defmodule KeyfleetWeb.RoomsLive do
         >
           <h2 id="rooms-thread-title">{@room.name}</h2>
           <p :if={@room.topic} class="rooms-detail">
-            Named by {RegentFormat.short_address(@room.topic_set_by)} on {stamp(@room.topic_set_at)}
+            Named on {stamp(@room.topic_set_at)}
           </p>
 
           <.notice notice={@notice} />
@@ -235,10 +249,10 @@ defmodule KeyfleetWeb.RoomsLive do
                   phx-click="mute_key"
                   phx-value-key={message.as_key}
                 >
-                  Mute Key #{Rules.grouped(message.as_key)}
+                  Mute Key {Rules.grouped(message.as_key)}
                 </Regent.Primitives.button>
               </p>
-              <p :if={message.kind == :post and message.reply_to_id} class="rooms-detail">
+              <p :if={message.kind == :post and message.reply_to_seq} class="rooms-detail">
                 Replying to post {message.reply_to_seq}
               </p>
               <div :if={message.kind == :post} class="rooms-body">{body_html(message.body)}</div>
@@ -260,11 +274,13 @@ defmodule KeyfleetWeb.RoomsLive do
 
   attr :notice, :map, required: true
 
+  # A refusal is an alert, so a screen reader reads it out as it appears.
   defp notice(assigns) do
     ~H"""
     <p
       :if={@notice}
       id="rooms-notice"
+      role={@notice.tone == :error && "alert"}
       class={["rooms-notice", @notice.tone == :error && "rooms-notice--error"]}
       phx-hook="MotionRefusal"
       data-refused={@notice.tone == :error}
@@ -288,7 +304,7 @@ defmodule KeyfleetWeb.RoomsLive do
   def room_label(%{topic: topic}), do: topic
 
   attr :fleet_id, :string, required: true
-  attr :message, :map, required: true
+  attr :message, :map, required: true, doc: "a line as `Message.public/2` draws it"
 
   # Who wrote a line: the key it was written as, which opens that key, and
   # beneath it the person's wallet or the agent's name, and whether the agent
@@ -298,12 +314,12 @@ defmodule KeyfleetWeb.RoomsLive do
     <.link patch={KeyLinks.key_path(@fleet_id, @message.as_key)}>
       Key {Rules.grouped(@message.as_key)}
     </.link>
-    <.agent_picture :if={writer_picture(@message)} src={writer_picture(@message)} />
+    <.agent_picture :if={@message.author.picture} src={@message.author.picture} />
     <small class="rooms-writer">
-      <.sent_from via={arrival(@message)} /> {writer(@message)}
+      <.sent_from via={@message.author.arrival} /> {written_by(@message.author)}
     </small>
-    <small :if={@message.quote_request_id} class="rooms-writer">Quoting its person</small>
-    <.verified_human :if={human_backed?(@message)} id={"rooms-human-#{@message.id}"} />
+    <small :if={@message.quoting?} class="rooms-writer">Quoting its person</small>
+    <.verified_human :if={@message.author.human_backed} id={"rooms-human-#{@message.id}"} />
     """
   end
 
@@ -322,37 +338,25 @@ defmodule KeyfleetWeb.RoomsLive do
     """
   end
 
-  @doc "Whether a verified person stands behind the agent that wrote a line."
-  def human_backed?(%{author_kind: :agent, agent_profile: %{human_backed: true}}), do: true
-  def human_backed?(_message), do: false
+  @doc "Whether a verified person stands behind the agent that wrote a line read with its author."
+  def human_backed?(message), do: Message.author(message).human_backed
 
   @doc """
-  Who wrote a line: the agent's name and what it runs on, or the person's
-  wallet, with the name of the agent that wrote it for them.
+  Who wrote a line read with its author: the agent's name and what it runs
+  on, or the person's wallet, with the name of the agent that wrote it for
+  them.
   """
-  def writer(%{author_kind: :agent, agent_profile: %{name: name, declared_harness: harness}}),
-    do: "#{name} · #{harness}"
+  def writer(message), do: message |> Message.author() |> written_by()
 
-  def writer(%{author_wallet: wallet, via_agent_profile: %{name: name}}),
-    do: "#{name} for #{RegentFormat.short_address(wallet)}"
-
-  def writer(%{author_wallet: wallet}), do: RegentFormat.short_address(wallet)
-
-  @doc """
-  How a line reached Keyfleet: `:agent` when an agent's signed request carried
-  it, as the agent itself or for its person, and `:web` when a person typed it
-  on the website.
-  """
-  def arrival(%{author_kind: :agent}), do: :agent
-  def arrival(%{via_agent_profile_id: nil}), do: :web
-  def arrival(%{via_agent_profile_id: _agent}), do: :agent
+  @doc "How a line read with its author reached Keyfleet (`Message.author/1`)."
+  def arrival(message), do: Message.author(message).arrival
 
   @doc "The picture beside an agent's name on a line it wrote; nil for a person's line."
-  def writer_picture(%{author_kind: :agent, agent_profile: %{avatar_src: src}})
-      when is_binary(src),
-      do: src
+  def writer_picture(message), do: Message.author(message).picture
 
-  def writer_picture(_message), do: nil
+  defp written_by(%{kind: :agent, name: name, harness: harness}), do: "#{name} · #{harness}"
+  defp written_by(%{via_agent: nil, wallet: wallet}), do: wallet
+  defp written_by(%{via_agent: name, wallet: wallet}), do: "#{name} for #{wallet}"
 
   @doc """
   A post's words as the page shows them. They are the writer's own, escaped
@@ -393,8 +397,10 @@ defmodule KeyfleetWeb.RoomsLive do
   def handle_info(
         %Broadcast{event: "rooms_changed", payload: %{fleet_id: fleet_id}},
         %{assigns: %{room: %{fleet_id: fleet_id}}} = socket
-      ),
-      do: {:noreply, recheck_standing(socket)}
+      ) do
+    actor = ShellLive.human_actor(socket)
+    {:noreply, show_standing(socket, actor, standing(actor, fleet_id))}
+  end
 
   # A mute added or taken away on another of the muter's pages.
   def handle_info(
@@ -403,13 +409,33 @@ defmodule KeyfleetWeb.RoomsLive do
       ),
       do: {:noreply, show_unmuted(socket)}
 
+  # A new post of the room on show, published whole (`Message.public/2`), is
+  # shown as it came when it takes the next place in the room's order, or
+  # counted and left out when its Key is muted. One the page already shows
+  # changes nothing, and so does one that skips a place: the room's head comes
+  # right behind every post, and the shell reads the room from the last place
+  # shown when the head is past it, so a post whose notice was lost is shown
+  # with the next one.
+  def handle_info(
+        %Broadcast{event: "post", payload: %{room_id: room_id, seq: seq} = post},
+        %{assigns: %{room: %{room_id: room_id, last_seq: last_seq} = room}} = socket
+      )
+      when seq == last_seq + 1 do
+    unmuted = Rooms.unmuted([post], room.muted)
+
+    {:noreply,
+     socket
+     |> assign(:room, %{room | last_seq: seq, shown?: room.shown? or unmuted != []})
+     |> stream(:posts, unmuted, limit: -@thread_kept)}
+  end
+
   def handle_info(%Broadcast{}, socket), do: {:noreply, socket}
 
   @doc "The room named in the address, with its latest posts, and the fleet's other rooms."
   def read_room(socket, fleet_id, slug) do
     case PageRead.run("rooms", fn -> show_room(socket, fleet_id, slug) end) do
       {:ok, socket} ->
-        socket
+        follow_posts(socket)
 
       {:error, _failure} ->
         socket
@@ -447,7 +473,8 @@ defmodule KeyfleetWeb.RoomsLive do
             muted: muted,
             muter?: Muter.of(actor) != nil,
             key?: key?,
-            refreshing?: refreshing?(actor, rooms, fleet_id)
+            refreshing?: refreshing?(actor, rooms, fleet_id),
+            listening: nil
           },
           rooms
         ),
@@ -456,6 +483,32 @@ defmodule KeyfleetWeb.RoomsLive do
     |> stream(:posts, unmuted, reset: true, limit: -@thread_kept)
     |> mark_read()
   end
+
+  # The room on show, when anyone may read it, has each new post published
+  # whole on a topic of its own, which the page listens to until it leaves.
+  # It starts once the room has been read: a post that lands in between
+  # moves the room's head, which the shell listens to from before the read,
+  # and the page reads it then.
+  defp follow_posts(%{assigns: %{room: %{public: true, room_id: room_id} = room}} = socket)
+       when is_binary(room_id) do
+    if connected?(socket) do
+      topic = Message.topic(room.fleet_id, room_id)
+      :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
+      assign(socket, :room, %{room | listening: topic})
+    else
+      socket
+    end
+  end
+
+  defp follow_posts(socket), do: socket
+
+  defp stop_following(%{assigns: %{room: %{listening: topic} = room}} = socket)
+       when is_binary(topic) do
+    :ok = Phoenix.PubSub.unsubscribe(Keyfleet.PubSub, topic)
+    assign(socket, :room, %{room | listening: nil})
+  end
+
+  defp stop_following(socket), do: socket
 
   defp change_mute("mute_key", fleet_id, token_id, actor),
     do: Rooms.mute_key(fleet_id, token_id, actor: actor)
@@ -548,8 +601,19 @@ defmodule KeyfleetWeb.RoomsLive do
 
   defp read_latest(room, opts) do
     page = %{after_seq: max(room.head_seq - @thread_page, 0), limit: @thread_page}
-    Rooms.read_messages!(room.fleet_id, room.slug, page, [load: [:reply_to_seq]] ++ opts)
+
+    room.fleet_id
+    |> Rooms.read_messages!(room.slug, page, read_as(room, opts))
+    |> Enum.map(&public/1)
   end
+
+  # General is read the way a signed-out visitor reads it, so the page shows
+  # of it what its topic carries, the same for every reader. Any other room
+  # is read as the reader, with the class read once for the page.
+  defp read_as(%{public: true}, _opts), do: [actor: nil, load: [:reply_to_seq]]
+  defp read_as(_room, opts), do: [load: [:reply_to_seq]] ++ opts
+
+  defp public(post), do: Message.public(post, post.reply_to_seq)
 
   @doc """
   Only the posts after the last one on the page are read and added to it. A
@@ -564,9 +628,10 @@ defmodule KeyfleetWeb.RoomsLive do
            room.fleet_id,
            room.slug,
            %{after_seq: room.last_seq, limit: @thread_page},
-           [actor: ShellLive.human_actor(socket), load: [:reply_to_seq]] ++ opts
+           read_as(room, [actor: ShellLive.human_actor(socket)] ++ opts)
          ) do
       {:ok, posts} ->
+        posts = Enum.map(posts, &public/1)
         unmuted = Rooms.unmuted(posts, room.muted)
 
         socket
@@ -591,11 +656,29 @@ defmodule KeyfleetWeb.RoomsLive do
   Who the reader is in the fleet, read afresh rather than carried over from
   what the page showed, when the fleet's Keys change and after a refusal: a
   Key arriving opens the fleet's rooms to them, and a Key leaving leaves them
-  General alone, with any other room cleared and shown as for keys only.
+  General alone, with any other room cleared and shown as for keys only. When
+  the Keys that changed hands leave the reader where they stood, the open
+  room stays as it is and nothing more is read.
   """
   def recheck_standing(%{assigns: %{room: %{fleet_id: fleet_id} = room}} = socket) do
     actor = ShellLive.human_actor(socket)
-    {key?, opts} = standing(actor, fleet_id)
+    {key?, _opts} = standing = standing(actor, fleet_id)
+
+    if key? == room.key? and is_binary(room.room_id),
+      do: socket,
+      else: show_standing(socket, actor, standing)
+  end
+
+  def recheck_standing(socket), do: socket
+
+  # The rooms the reader is shown with the standing just read, and the room on
+  # show carried on from the last place shown when it is still the one open.
+  # General's posts arrive whole, so it is not read again.
+  defp show_standing(
+         %{assigns: %{room: %{fleet_id: fleet_id} = room}} = socket,
+         actor,
+         {key?, opts}
+       ) do
     rooms = list_rooms!(fleet_id, opts)
 
     shown =
@@ -606,12 +689,12 @@ defmodule KeyfleetWeb.RoomsLive do
 
     socket = assign(socket, :room, shown)
 
-    if shown.room_id != nil and shown.room_id == room.room_id,
-      do: show_new_posts(socket, Keyword.take(opts, [:context])),
-      else: show_latest(socket)
+    cond do
+      shown.room_id == nil or shown.room_id != room.room_id -> show_latest(socket)
+      shown.public -> socket
+      true -> show_new_posts(socket, Keyword.take(opts, [:context]))
+    end
   end
-
-  def recheck_standing(socket), do: socket
 
   defp last_seq([], shown), do: shown
   defp last_seq(posts, _shown), do: List.last(posts).seq
@@ -629,19 +712,23 @@ defmodule KeyfleetWeb.RoomsLive do
 
   @doc """
   The person signed in leaves the open room, by going to another page, another
-  room, or closing the page: it is read up to the last place the page showed.
+  room, or closing the page: it is read up to the last place the page showed,
+  and the page stops hearing its posts.
   """
-  def leave(socket), do: mark_read(socket)
+  def leave(socket), do: socket |> mark_read() |> stop_following()
 
   # The open room is read up to the last place the page has shown, muted posts
-  # included, for a person signed in. It is written when the room opens and
-  # when the person leaves it, not as posts arrive. When it can't be saved the
-  # room still opens, and the person still leaves.
+  # included, for a person signed in. It is written when the open page shows
+  # the room and when the person leaves it, not as posts arrive, and never by
+  # the page's first render, which the open page follows straight away. When
+  # it can't be saved the room still opens, and the person still leaves.
   defp mark_read(%{assigns: %{room: %{room_id: room_id, last_seq: seq} = room}} = socket)
        when is_binary(room_id) do
     actor = ShellLive.human_actor(socket)
 
-    with true <- match?(%Human{}, actor) and seq > Map.get(room.read_to, room_id, 0),
+    with true <-
+           connected?(socket) and match?(%Human{}, actor) and
+             seq > Map.get(room.read_to, room_id, 0),
          {:ok, _mark} <-
            PageRead.run("rooms", fn -> Rooms.mark_room_read!(room_id, seq, actor: actor) end) do
       assign(socket, :room, %{room | read_to: Map.put(room.read_to, room_id, seq)})

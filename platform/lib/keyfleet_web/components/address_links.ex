@@ -22,7 +22,7 @@ defmodule KeyfleetWeb.Components.AddressLinks do
         id={"#{@id}-copy"}
         variant="quiet"
         text={@address}
-        aria-label="Copy the wallet address"
+        aria-label="Copy address"
       >
         Copy address
       </Regent.Primitives.copy_button>

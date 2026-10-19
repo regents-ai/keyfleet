@@ -1,0 +1,26 @@
+# OWASP ZAP baseline rules for Keyfleet, read by zap-baseline.sh (zap-baseline.py -c).
+# Tab separated: rule id, level, (rule name), and the reason shown in the report.
+# A rule not listed here warns. IGNORE is used only where the code shows the finding
+# is intended; FAIL only where the code guarantees the opposite on every answer.
+#
+# Informational rules about how the site is built, not about a weakness.
+10109	IGNORE	(Modern Web Application)	Informational: the pages are Phoenix LiveView, which draws links with JavaScript.
+10049	IGNORE	(Content Cacheability)	Informational: fingerprinted assets are cached a year on purpose (endpoint.ex Plug.Static); pages are private, max-age=0.
+#
+# The content security policies are intended as written (lib/keyfleet_web/content_security_policy.ex):
+# sign-in pages allow style-src 'unsafe-inline' because Privy's window writes style elements, every
+# page allows style-src-attr 'unsafe-inline' for LiveView's kept style attributes, and
+# https://*.rpc.privy.systems is Privy's published wildcard. The rule stays WARN, not IGNORE, because
+# the same rule id would also report a script-src regression.
+10055	WARN	(CSP)	Expected: style-src 'unsafe-inline' on sign-in pages and *.rpc.privy.systems; anything about script-src is new.
+#
+# Every cookie the server sets carries all three flags: the session (config/config.exs :session_options)
+# and the notebook pass (lib/keyfleet_web/plugs/notebook_gateway.ex). A cookie without one is a regression.
+10010	FAIL	(Cookie No HttpOnly Flag)	Both server cookies are HttpOnly (config.exs session_options; notebook_gateway.ex).
+10011	FAIL	(Cookie Without Secure Flag)	Both server cookies are Secure (config.exs session_options; notebook_gateway.ex).
+10054	FAIL	(Cookie without SameSite Attribute)	Both server cookies are SameSite=Lax (config.exs session_options; notebook_gateway.ex).
+#
+# The agent files are public on purpose and answer with Access-Control-Allow-Origin: *
+# (lib/keyfleet_web/controllers/agent_files_controller.ex cached/2). Rule 10098 still reports
+# a cross-origin grant on every other address.
+10098	OUTOFSCOPE	^https?://[^/]+/(skill\.md|commands\.json|\.well-known/agent-skills/.*|agents/[^/]+/skill\.md)(\?.*)?$

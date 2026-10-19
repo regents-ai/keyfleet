@@ -4,6 +4,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   admits, and the answers it really gives.
   """
   use ExUnit.Case, async: false
+  use ExUnitProperties
   import KeyfleetWeb.RefusalHelpers
   import Plug.Conn
 
@@ -363,6 +364,12 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @avatar_start, @address, @picture, 404)
     answer(c, c.signer, "POST", @avatar_remove, @address, %{}, 404)
 
+    # Found by RF-HINT: a post needs a profile to be written as.
+    for {template, address} <- [{@send, @address}, {@key_send, one}] do
+      refused = answer(c, c.signer, "POST", template, address, minimal("POST", template), 404)
+      assert refused.body["error"]["code"] == "profile_not_found"
+    end
+
     # Joining and editing.
     joining = %{"name" => "Probe", "declared_harness" => "local"}
     answer(c, c.signer, "POST", @join, @address, %{joining | "name" => ""}, 422)
@@ -675,6 +682,11 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     answer(c, c.signer, "POST", @topic, open, %{"topic" => "Late"}, 503)
     answer(c, c.signer, "POST", @poll_start, @address, @poll_question, 503)
 
+    # Nor is a poll listed or read, so a Key holder's read never comes back
+    # without its vote (Grok Bot, 19 October 2026).
+    for template <- [@polls, @poll],
+        do: answer(c, c.signer, "GET", template, @address, nil, 503)
+
     # Every route: unsigned, too large, signed with a body that fits none of
     # them, signed by an unpaired agent, and with the sign-in check away.
     for {method, template} <- routes() do
@@ -723,6 +735,92 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert Enum.sort(documented -- answered) == Enum.sort(legacy)
     assert answered -- documented == []
   end
+
+  # Costly failure: an agent sending a body the docs didn't foresee gets an
+  # answer no doc describes, or a refusal with no next step, and is stuck.
+  property "RF-HINT: any body sent to a signed route here gets a documented answer, and a refusal a hint",
+           c do
+    contract = YamlElixir.read_from_file!(@contract)
+
+    documented =
+      Map.new(routes(), fn {method, template} = route ->
+        {route, Map.keys(request_schema(contract, method, template, [])["properties"] || %{})}
+      end)
+
+    requests = bind(member_of(routes()), &changes(&1, documented))
+
+    check all {{method, template}, changes} <- requests, max_runs: 200 do
+      body = changed(minimal(method, template), changes)
+      path = fill(template, @address)
+      response = send_signed(c, c.signer, method, path, body && Jason.encode!(body))
+      answer = "#{response.status} #{inspect(response.body)}"
+      where = "#{method} #{template} #{inspect(body)}: #{answer}"
+      errors = ContractSchema.response_errors(response.body, method, template, response.status)
+
+      assert errors == [], where
+
+      if response.status >= 400 do
+        assert match?(%{"error" => %{"hint" => hint}} when is_binary(hint), response.body), where
+        assert String.trim(response.body["error"]["hint"]) != "", where
+      end
+    end
+  end
+
+  # Up to three changes to a route's least body.
+  defp changes(route, documented),
+    do: tuple({constant(route), list_of(body_change(documented[route]), max_length: 3)})
+
+  # One change to a route's least body: a field dropped, or a field set to any
+  # JSON value. A number names the body's nth field, counting round; a word is
+  # one of the fields the route documents, or one it may not take.
+  defp body_change(fields) do
+    field =
+      one_of([
+        integer(0..5),
+        member_of(["x" | fields]),
+        string(:alphanumeric, min_length: 1, max_length: 8)
+      ])
+
+    one_of([
+      tuple({constant(:drop), integer(0..5)}),
+      tuple({constant(:put), field, json_value()})
+    ])
+  end
+
+  defp json_value do
+    leaf =
+      one_of([
+        integer(),
+        float(),
+        boolean(),
+        constant(nil),
+        string(:printable, max_length: 40)
+      ])
+
+    tree(leaf, fn child ->
+      one_of([
+        list_of(child, max_length: 3),
+        map_of(string(:alphanumeric, max_length: 6), child, max_length: 3)
+      ])
+    end)
+  end
+
+  # A read has no body to change.
+  defp changed(nil, _changes), do: nil
+  defp changed(body, changes), do: Enum.reduce(changes, body, &change/2)
+
+  defp change({:drop, n}, body), do: Map.delete(body, nth_field(body, n))
+
+  defp change({:put, n, value}, body) when is_integer(n),
+    do: Map.put(body, nth_field(body, n) || "x", value)
+
+  defp change({:put, field, value}, body), do: Map.put(body, field, value)
+
+  defp nth_field(body, _n) when map_size(body) == 0, do: nil
+
+  # A map's keys come in the same order each time, so a shrunk case names the
+  # same field again.
+  defp nth_field(body, n), do: body |> Map.keys() |> Enum.at(rem(n, map_size(body)))
 
   # An agent paired with key 1's holder quotes the words they sent it: once,
   # then refused as already quoted.
@@ -1057,6 +1155,11 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              refused("poll_closed")
 
     assert [_left, _right] = answer(c, second, "GET", @poll, at, nil, 200).body["votes"]
+
+    # An agent with no Key or shard reads as its person's Key: that Key's vote
+    # and, the poll closed, every vote (Grok Bot, 19 October 2026).
+    assert %{"my_vote" => nil, "votes" => [_left, _right]} =
+             answer(c, person_signer(5), "GET", @poll, at, nil, 200).body
   end
 
   # An agent holding Key 4, which took no part.
@@ -1336,6 +1439,16 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   defp new_signer do
     signer = unpaired_signer()
     PairingHelpers.pair_wallet!(signer.address)
+    signer
+  end
+
+  # A signing wallet that holds nothing here, paired with a person who owns
+  # Key `token_id`.
+  defp person_signer(token_id) do
+    signer = unpaired_signer()
+    person = "0x" <> Base.encode16(:crypto.strong_rand_bytes(20), case: :lower)
+    record_owner(token_id, person)
+    PairingHelpers.pair_wallet!(signer.address, person)
     signer
   end
 

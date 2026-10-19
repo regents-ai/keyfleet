@@ -10,6 +10,9 @@ defmodule KeyfleetWeb.Telemetry do
   The figures every visitor sees alike (`Keyfleet.SharedReading`) report, for
   each kind, how many keys are held, how many have never been read, how long ago
   the oldest was read, each reading that could not be taken and each one refused.
+  Visitors' browsers report each page's Core Web Vitals (`KeyfleetWeb.Vitals`,
+  which also gives the queries for their 75th percentiles), one histogram for
+  each with buckets around its targets, by page and device.
   """
 
   import Telemetry.Metrics
@@ -111,6 +114,58 @@ defmodule KeyfleetWeb.Telemetry do
       counter("keyfleet.shared_reading.woken.total",
         event_name: [:keyfleet, :shared_reading, :woken],
         tags: [:kind]
+      ),
+      # Visitors' page timings (KeyfleetWeb.Vitals). Each metric has its own
+      # buckets, finest around Google's "good" and "poor" bounds, and each
+      # target (LCP 2.5 s, INP 0.2 s, CLS 0.1) is a bucket bound, so the share
+      # of page views within it is exact. Labels are only the site's route
+      # patterns and two devices.
+      distribution("keyfleet.vitals.lcp.seconds",
+        event_name: [:keyfleet, :vitals, :lcp],
+        measurement: :value,
+        tags: [:route, :device],
+        description: "Largest Contentful Paint visitors' browsers measured",
+        reporter_options: [buckets: [0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 30]]
+      ),
+      distribution("keyfleet.vitals.fcp.seconds",
+        event_name: [:keyfleet, :vitals, :fcp],
+        measurement: :value,
+        tags: [:route, :device],
+        description: "First Contentful Paint visitors' browsers measured",
+        reporter_options: [buckets: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.8, 2.25, 3, 4, 6, 10]]
+      ),
+      distribution("keyfleet.vitals.ttfb.seconds",
+        event_name: [:keyfleet, :vitals, :ttfb],
+        measurement: :value,
+        tags: [:route, :device],
+        description: "Time to the first byte of the page visitors' browsers measured",
+        reporter_options: [buckets: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.65, 0.8, 1, 1.4, 1.8, 3, 5]]
+      ),
+      distribution("keyfleet.vitals.inp.seconds",
+        event_name: [:keyfleet, :vitals, :inp],
+        measurement: :value,
+        tags: [:route, :device],
+        description: "Interaction to Next Paint visitors' browsers measured",
+        reporter_options: [
+          buckets: [0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 2]
+        ]
+      ),
+      distribution("keyfleet.vitals.cls",
+        event_name: [:keyfleet, :vitals, :cls],
+        measurement: :value,
+        tags: [:route, :device],
+        description: "Cumulative Layout Shift visitors' browsers measured, a score with no unit",
+        reporter_options: [buckets: [0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.25, 0.5, 1]]
+      ),
+      counter("keyfleet.vitals.reports.total",
+        event_name: [:keyfleet, :vitals, :report],
+        tags: [:device, :connection],
+        description: "Page timing reports counted, by device and the browser's connection type"
+      ),
+      counter("keyfleet.vitals.refused.total",
+        event_name: [:keyfleet, :vitals, :refused],
+        tags: [:reason],
+        description: "Page timing reports refused: rate_limited, too_large or invalid"
       ),
       # Background jobs report each run's outcome and time from Oban's own events.
       counter("keyfleet.jobs.finished.total",

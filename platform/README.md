@@ -268,6 +268,28 @@ agent (`public_tool_list.ts`, `page_tools.ts`), which load only where
 `document.modelContext` exists. The root layout preloads the two faces its
 pages draw with, Geist Regular and Geist Pixel Square.
 
+## Capacity and visitors' timings
+
+A crowd on one page costs about what one visitor costs. What every visitor
+who isn't a member sees of a fleet, its proposals, its Treasury and its polls
+is read once for every open page and held in `Keyfleet.SharedReading`
+(`KeyfleetWeb.FleetNow`, `FleetProposals`, `FleetPolls`); each producer reads
+again at most once a second after a notice and heals every minute. Each new
+post in a fleet's General room reaches every open page of it whole, on
+`Keyfleet.Rooms.Message.topic/2`. A member's pages still read as the member.
+`/healthz` checks the database over a connection of its own, so a busy pool
+never fails the machine's health check. After a deploy, open pages reconnect
+spread over a moment rather than all at once (`assets/js/app.ts`).
+
+Each page reports its Core Web Vitals once as it is left, to `POST /vitals`,
+by route pattern, device class and connection type, with nothing saved and
+no address kept (`KeyfleetWeb.Vitals`, whose docs hold the queries). They are
+exported as `keyfleet_vitals_{lcp,inp,fcp,ttfb}_seconds` and
+`keyfleet_vitals_cls` on the metrics port. `load/profile-live.sh <out dir>`
+profiles the local site's public pages as two emulated phones (lab emulation
+in Chromium, not a device); the live site only when it is named as a second
+argument.
+
 ## Checks
 
 From the monorepo root, `make check-platform` runs this component's gate and
@@ -371,6 +393,13 @@ opens its rooms and turns its key sales on, all at once; a coming-soon fleet
 opens with it. It refuses a fleet whose chain, USDC or trait table differs
 from a fleet already recorded.
 
+`/app/bin/seed-load-staging` gives a staging database the one finished
+Regents Club poll the load runs visit and prints its address; it refuses any
+role but staging and refuses while the Club is still coming soon, and running
+it again changes nothing. Load, deploy-during-load and database-fault runs
+start the release image and a throwaway database on one computer
+([load/README.md](load/README.md)).
+
 The graph host's Python supply is sealed by
 `scripts/seal-graph-host-supply.sh <arch>`, once for `arm64` and once for
 `amd64`, whenever `graph_host/uv.lock` or `graph_host/.python-version` changes.
@@ -402,8 +431,13 @@ hostname, and runs the image as staging against it: `bin/bootstrap-staging`,
 `bin/migrate` and `bin/pending-migrations` (which must print `none`), then the
 server with an empty `/data`, whose `/healthz`, home page, fingerprinted
 stylesheet, graph host Python and own database connection it checks. The
-server gets no chain node or Privy app, and a sign-in server
-address that never resolves. It removes the database, the network and the
+server gets no chain node or Privy app, and stand-in addresses for the sign-in
+server and the other services it needs that never resolve. Last,
+`../scripts/budgets.sh` holds the image's main pages to their speed budgets
+(`lighthouserc.cjs`: a phone on slow 4G, median of three runs, Largest
+Contentful Paint under 2.5 s, layout shift under 0.1, blocking time under
+200 ms, stylesheets within 60 KiB and a page's script within 180 KiB), and a
+page over any of them stops the release. It removes the database, the network and the
 context afterwards, keeps the image, and prints the app commit, the
 shared-library commits from `mix.lock`, the graph host supply and the image
 digest. It never deploys.

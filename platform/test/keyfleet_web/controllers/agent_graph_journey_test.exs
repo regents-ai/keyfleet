@@ -161,6 +161,39 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert Enum.count(events, &(&1["type"] == "keyfleet.command")) == 1
   end
 
+  # Costly failure: an agent reading the workspace back finds each item's
+  # creator only as a wallet, so it can't check the name the fleet's pages
+  # show beside the Key (Grok Bot, 19 October 2026).
+  test "a workspace read names each agent behind what it answers, by the wallet its change carries",
+       c do
+    start_graph(c)
+    [ann, bea] = shard_agents(c)
+    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
+
+    patched =
+      graph(c, bea, "patch", %{
+        as_key: 2,
+        command_id: "p-1",
+        id: goal["id"],
+        expected_version: 1,
+        set: %{status: "achieved"}
+      })
+
+    assert patched.status == 200
+
+    read = graph(c, bea, "get", %{id: goal["id"]}).body
+    assert read["agents"] == %{ann.address => "Ann"}
+    assert ContractSchema.errors(read, "WorkspaceObjectView") == []
+
+    changes = graph(c, ann, "changes", %{}).body
+    assert changes["agents"] == %{ann.address => "Ann", bea.address => "Bea"}
+    assert ContractSchema.errors(changes, "WorkspaceChanges") == []
+
+    actors = Map.new(changes["events"], &{&1["type"], &1["actor"]})
+    assert String.ends_with?(actors["object.created"], "/agent:" <> ann.address)
+    assert String.ends_with?(actors["patch.applied"], "/agent:" <> bea.address)
+  end
+
   # Syndicate keys other suites commit outside the sandbox would count as
   # sold, so the level tests run on the Cascade fleet.
   test "a key writes the fleet and its own level, and a later level once all its keys are sold",

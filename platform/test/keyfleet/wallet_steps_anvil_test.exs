@@ -22,7 +22,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   alias Keyfleet.Chain.{RpcClient, Scanner}
   alias Keyfleet.Fleets.Fleet
   alias Keyfleet.WalletSteps.{Reads, VoteSteps}
-  alias KeyfleetWeb.ProposalsPage
+  alias KeyfleetWeb.{FleetProposals, ProposalsPage}
   alias RegentChain.{Abi, Call, Event, Outcome, Review}
 
   @endpoint KeyfleetWeb.Endpoint
@@ -243,6 +243,8 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       scan!()
       conn = KeyfleetWeb.SessionAuthorityHelpers.build_conn()
 
+      # The signed-out list shows the shared reading, made here from that record.
+      FleetProposals.read(@fleet_id)
       {:ok, list, _html} = live(conn, ProposalsPage.list_path(@fleet_id))
 
       assert cards(list) == [

@@ -100,3 +100,6 @@ export const landStep = (hash: string, transaction: SentTransaction, succeeded: 
 /** Sells the fleet's next key to `owner`, who says `body` in the General room; returns the key. */
 export const sayInGeneral = (fleet: string, owner: string, body: string) =>
   Number(call("say!", [fleet, owner, body]))
+
+/** The holder of a Key, by its wallet `owner`, asks the fleet `question` in an hour-long poll; returns the poll's id. */
+export const startPoll = (fleet: string, owner: string, question: string) => call("poll!", [fleet, owner, question])

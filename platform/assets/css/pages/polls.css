@@ -102,6 +102,11 @@
   max-width: 100%;
 }
 
+/* The place a vote's line is read out from takes no room until it holds one. */
+.polls-said:not(:has(*)) {
+  margin-block-end: -1rem;
+}
+
 .polls-panel h2 {
   display: inline-flex;
   flex-wrap: wrap;

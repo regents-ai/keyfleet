@@ -13,17 +13,15 @@ defmodule KeyfleetWeb.HealthController do
   end
 
   # A running server alone does not make the site ready: read one of the site's
-  # own tables without returning rows. The timeout is below Fly's two-second
-  # health deadline, and no error or connection detail leaves this endpoint. The
-  # schema is the repository's own configured name, never request input.
+  # own tables without returning rows, through the check's own connection
+  # (`Keyfleet.Application`), so pages keeping the site's pool busy never fail
+  # it. The timeout is below Fly's two-second health deadline, and no error or
+  # connection detail leaves this endpoint. The schema is the repository's own
+  # configured name, never request input.
   # sobelow_skip ["SQL.Query"]
   defp database_ready? do
     sql = "SELECT 1 FROM \"#{Keyfleet.Repo.default_prefix()}\".session_authorities LIMIT 0"
-
-    match?(
-      {:ok, _},
-      Ecto.Adapters.SQL.query(Keyfleet.Repo, sql, [], timeout: 1_000, log: false)
-    )
+    match?({:ok, _}, Postgrex.query(Keyfleet.Health, sql, [], timeout: 1_000))
   rescue
     _error -> false
   catch

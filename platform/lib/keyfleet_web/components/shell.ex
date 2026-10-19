@@ -160,7 +160,7 @@ defmodule KeyfleetWeb.Components.Shell do
   def header(assigns) do
     ~H"""
     <header id="shell-header">
-      <.link id="shell-brand" class="shell-brand" href="/">
+      <.link id="shell-brand" class="shell-brand" href="/" aria-label="Keyfleet">
         <span class="shell-brand__mark" aria-hidden="true">
           <img
             class="shell-brand__mark-light"

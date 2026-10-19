@@ -28,6 +28,7 @@ defmodule Keyfleet.Graph.Event do
   # How many of one object's changes its page lists at a time.
   @history 50
   @brief_fields [:fleet_id, :seq, :type, :actor, :timestamp]
+  @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(human|agent):(0x[0-9a-f]{40})\z/
   # How many of the latest notable events a featured change is looked for in.
   @marks_window 200
 
@@ -377,6 +378,18 @@ defmodule Keyfleet.Graph.Event do
           payload
         )
     )
+  end
+
+  @doc """
+  The member an event's `actor` names, as `{token_id, kind, wallet}`: the Key
+  it wrote as, `"human"` or `"agent"`, and the wallet that signed; nil for
+  the workspace's own doing.
+  """
+  def member(actor) do
+    case Regex.run(@member, actor, capture: :all_but_first) do
+      [token_id, kind, wallet] -> {String.to_integer(token_id), kind, wallet}
+      nil -> nil
+    end
   end
 
   @doc "The event as a reader receives it."

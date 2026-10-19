@@ -40,6 +40,23 @@ defmodule Keyfleet.Agents do
   alias Keyfleet.Agents.{Avatar, AvatarBucket, CheckIn, DeleteAvatar}
 
   @doc """
+  The names agents gave themselves, as `%{wallet => name}`, for the agents
+  among `wallets` that have a profile, read a hundred wallets at a time.
+  """
+  def names_by_wallet(wallets) do
+    case wallets |> Enum.reject(&is_nil/1) |> Enum.uniq() do
+      [] ->
+        %{}
+
+      wallets ->
+        wallets
+        |> Enum.chunk_every(100)
+        |> Enum.flat_map(&agents_by_wallets!/1)
+        |> Map.new(&{&1.wallet_address, &1.name})
+    end
+  end
+
+  @doc """
   Whether the signed-in person has an agent paired to their account, from
   their account on regents.sh. A reading that fails counts as none.
   """

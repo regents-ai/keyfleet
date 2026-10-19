@@ -178,7 +178,7 @@ defmodule KeyfleetWeb.AgentCompatibility do
   defp scenario_row(scenario) do
     result =
       case Enum.find(@runs, &Map.has_key?(&1["results"], scenario["id"])) do
-        nil -> "NOT RUN"
+        nil -> "Not run"
         run -> "#{cell(run, scenario)} (#{run_names(run)})"
       end
 
@@ -213,7 +213,7 @@ defmodule KeyfleetWeb.AgentCompatibility do
       Enum.map_join(steps, "\n", fn step ->
         result = run["results"][step["id"]]
 
-        "| #{step["id"]} #{step["name"]} | #{result["result"]} | #{known(result["at"])} | #{known(result["request_id"])} | #{text(result["note"])} |"
+        "| #{step["id"]} #{step["name"]} | #{word(result["result"])} | #{known(result["at"])} | #{known(result["request_id"])} | #{text(result["note"])} |"
       end)
 
     who =
@@ -250,14 +250,21 @@ defmodule KeyfleetWeb.AgentCompatibility do
   end
 
   # A result links to the run it came from; NOT RUN has no run behind it.
-  defp cell(nil, _step), do: "NOT RUN"
+  defp cell(nil, _step), do: "Not run"
 
   defp cell(run, step) do
     case run["results"][step["id"]]["result"] do
-      "NOT RUN" -> "NOT RUN"
-      result -> "[#{result}#{if run["witnessed"], do: "", else: "*"}](#{link(title(run))})"
+      "NOT RUN" -> "Not run"
+      result -> "[#{word(result)}#{if run["witnessed"], do: "", else: "*"}](#{link(title(run))})"
     end
   end
+
+  # How each recorded result reads on the page.
+  defp word("PASS"), do: "Passed"
+  defp word("FAIL"), do: "Failed"
+  defp word("BLOCKED"), do: "Blocked"
+  defp word("NOT SUPPORTED"), do: "Not offered"
+  defp word("NOT RUN"), do: "Not run"
 
   defp title(run) do
     interface = Enum.find(@interfaces, &(&1["id"] == run["interface"]))

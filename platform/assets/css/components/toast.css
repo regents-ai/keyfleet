@@ -49,6 +49,12 @@
   color: var(--color-fg);
 }
 
+/* A note stays until it is dismissed, so while one shows a control tabbed
+   to near the foot of the page stops above the dock instead of under it. */
+:root:has(.toast) #app-shell-scroller {
+  scroll-padding-block-end: 8rem;
+}
+
 /* The action bar is a button's height and its padding above and below. */
 @media (max-width: 47.99rem) {
   :root:has(.sticky-actions) .toast-dock {

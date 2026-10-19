@@ -8,8 +8,8 @@ defmodule KeyfleetWeb.HomeLive do
   cards and what it is doing right now; what a fleet can use; and the footer.
 
   Each fleet's sea has a ship for each of its most recently active Keys, as
-  anyone reads them, read once for every open page (`KeyfleetWeb.FleetShips`),
-  its islands and buildings placed a little differently from the other's.
+  anyone reads them (`KeyfleetWeb.HarbourCrew`), from the fleet's activity in
+  the one reading every open page shares (`KeyfleetWeb.FleetNow`), its islands and buildings placed a little differently from the other's.
   Pressing a ship opens its Key's profile on the fleet's page. The cards are
   thirty Keys of no fleet, a fifth of a second each, turning only while on
   screen; the Club's start halfway through.
@@ -32,32 +32,30 @@ defmodule KeyfleetWeb.HomeLive do
   latest item, as anyone reads them (`Keyfleet.Activity`). A coming-soon
   fleet shows that it is coming soon and nothing it would have to read.
 
-  The first render reads each fleet's record and sales, and its ships from the
-  shared reading. Once connected, each sea takes its ships whenever that
-  reading changes, and the Club reads the rest. Classic reads its sales again a
-  few seconds after a notice that a Key changed, and the Club its sales and
-  the rest after a notice that anything it shows changed: once for a burst of
-  notices, and only for the fleet the notice was about. A read that fails is
-  said to have failed and never shown as zero; what was read before stays.
+  The page reads nothing itself. Each fleet is read once for every open page
+  (`KeyfleetWeb.FleetNow`), the ships on its sea with it, and the Club's
+  headcount comes from the agents here (`Keyfleet.Agents.Here`); the page draws what those hold and draws
+  again when any of them changes. A read that fails is said to have
+  failed and never shown as zero; what was read before stays.
   """
 
   use KeyfleetWeb, :live_view
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
-  alias Keyfleet.{Activity, Chain, Fleets, Graph, Keys, Proposals, Rooms, SharedReading}
   alias Keyfleet.Agents.Here
+  alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
+  alias Keyfleet.SharedReading
 
   alias KeyfleetWeb.{
     ActivityLines,
     FleetLive,
+    FleetNow,
     FleetPage,
-    FleetShips,
     HarbourCrew,
     KeyLinks,
     Motion,
-    PageRead,
     PublicDocuments,
     RouteCatalog,
     SharedFigures,
@@ -65,7 +63,6 @@ defmodule KeyfleetWeb.HomeLive do
   }
 
   alias KeyfleetWeb.Components.{SendAgent, Shell}
-  alias Phoenix.Socket.Broadcast
 
   @classic "fleet_tech_classic"
   @club "regents_club"
@@ -125,25 +122,14 @@ defmodule KeyfleetWeb.HomeLive do
     }
   ]
 
-  # A burst of notices about one fleet is answered by one read, this long
-  # after the first of them.
-  @refresh_after 5_000
-
   @doc """
-  The homepage for agents, in Markdown. It reads only whether the two fleets
-  are coming soon, so it costs a plain visit one small read. Every visit to the
-  homepage builds it, so when the fleets can't be read it says so rather than
-  failing the page.
+  The homepage for agents, in Markdown. It says whether the two fleets are
+  coming soon, from the homepage's own reading of them, so it costs a visit no
+  read. When a fleet hasn't been read it says so rather than failing the page.
   """
   def agent_markdown do
-    {classic, club} =
-      case PageRead.run("home", fn -> Map.new(Fleets.list_fleets!(), &{&1.id, &1}) end) do
-        {:ok, recorded} ->
-          {state(@classic, recorded, "Sales open soon."), state(@club, recorded, "Coming soon.")}
-
-        {:error, _failure} ->
-          {"Couldn’t read this fleet just now.", "Couldn’t read this fleet just now."}
-      end
+    classic = state(@classic, "Sales open soon.")
+    club = state(@club, "Coming soon.")
 
     integrations =
       Enum.map_join(@integrations, "\n", &"- **#{&1.name}**: #{&1.line}")
@@ -176,8 +162,13 @@ defmodule KeyfleetWeb.HomeLive do
     """
   end
 
-  defp state(fleet_id, recorded, soon),
-    do: if(Fleets.coming_soon?(fleet_id, recorded[fleet_id]), do: soon, else: links(fleet_id))
+  defp state(fleet_id, soon) do
+    case FleetNow.fetch(fleet_id) do
+      {%{coming_soon?: true}, _failed?} -> soon
+      {%{coming_soon?: false}, _failed?} -> links(fleet_id)
+      nil -> "Couldn’t read this fleet just now."
+    end
+  end
 
   defp links(fleet_id),
     do:
@@ -186,129 +177,87 @@ defmodule KeyfleetWeb.HomeLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    socket =
-      socket
-      |> assign(PublicDocuments.page("/"))
-      |> assign(route_spec: RouteCatalog.fetch!("/"), buy_open: false, refreshing: MapSet.new())
-      |> assign(fleets())
+    # Heard before they are read, so a change that lands in between still
+    # reaches the page.
+    if connected?(socket), do: Enum.each(keys(), &SharedReading.subscribe/1)
 
-    {:ok, if(connected?(socket), do: watch(socket), else: socket)}
+    {:ok,
+     socket
+     |> assign(PublicDocuments.page("/"))
+     |> assign(route_spec: RouteCatalog.fetch!("/"), buy_open: false)
+     |> assign(classic: fleet(@classic), club: fleet(@club))}
   end
 
-  # The two fleets as recorded. When they can't be read the page still draws:
-  # each fleet as the catalog has it, saying it couldn't be read. The page's
-  # connection reads them again as it mounts.
-  defp fleets do
-    read = fn ->
-      recorded = Map.new(Fleets.list_fleets!(), &{&1.id, &1})
-      [classic: fleet(@classic, recorded[@classic]), club: fleet(@club, recorded[@club])]
-    end
+  # Each fleet's reading, and the Club's agents here.
+  defp keys, do: [FleetNow.key(@classic), FleetNow.key(@club), Here.fleet_key(@club)]
 
-    case PageRead.run("home", read) do
-      {:ok, fleets} -> fleets
-      {:error, _failure} -> [classic: unread(@classic), club: unread(@club)]
-    end
-  end
+  # A fleet as the homepage shows it: its name, the ships on its sea, and what
+  # was last read of it. A fleet whose last read failed keeps what was read
+  # before and says the read failed; one never read shows as the catalog has
+  # it.
+  defp fleet(fleet_id) do
+    {shown, failed?} =
+      case FleetNow.fetch(fleet_id) do
+        {reading, degraded?} -> {shown(fleet_id, reading), degraded?}
+        nil -> {unread(fleet_id), true}
+      end
 
-  defp unread(fleet_id), do: %{fleet(fleet_id, nil) | failed?: true}
-
-  # A fleet before its first read: its name, its sales and the ships on its
-  # sea. A coming-soon fleet is never read.
-  defp fleet(fleet_id, recorded) do
-    coming_soon? = Fleets.coming_soon?(fleet_id, recorded)
-
-    %{
+    Map.merge(shown, %{
       id: fleet_id,
       name: Enum.find(Fleets.catalog(), &(&1.id == fleet_id)).name,
-      coming_soon?: coming_soon?,
-      sales: if(not coming_soon?, do: sales(fleet_id, recorded)),
-      ships: if(coming_soon?, do: [], else: ships(fleet_id)),
-      now: nil,
-      failed?: false
+      failed?: failed?
+    })
+  end
+
+  defp shown(_fleet_id, %{coming_soon?: true}),
+    do: %{coming_soon?: true, sales: nil, now: nil, ships: []}
+
+  defp shown(fleet_id, reading),
+    do: %{
+      coming_soon?: false,
+      sales: sales(fleet_id, reading),
+      now: now(fleet_id, reading),
+      ships: ships(fleet_id, reading)
     }
+
+  # A fleet before its first read: a coming-soon one as the catalog has it,
+  # any other with nothing sold.
+  defp unread(fleet_id) do
+    if Fleets.coming_soon?(fleet_id, nil),
+      do: %{coming_soon?: true, sales: nil, now: nil, ships: []},
+      else: %{
+        coming_soon?: false,
+        sales: sales(fleet_id, %{deployed?: false, current?: false, minted: 0}),
+        now: nil,
+        ships: []
+      }
   end
 
   # How far a fleet has sold. A fleet not yet deployed has sold nothing; one
   # whose sales are still being read isn't current. The Key on offer is the
   # one its fleet page's Buy button names.
-  defp sales(fleet_id, recorded) do
-    deployed? = recorded != nil and recorded.manager_address != nil
-    minted = if deployed?, do: minted!(fleet_id), else: 0
-
+  defp sales(fleet_id, %{deployed?: deployed?, current?: current?, minted: minted}) do
     %{
       deployed?: deployed?,
-      current?: deployed? and Chain.fresh?(fleet_id),
+      current?: current?,
       keys: minted,
       given?: Presets.given?(fleet_id),
       buy: if(deployed?, do: FleetPage.next_sale(fleet_id, Presets.progress(fleet_id, minted)))
     }
   end
 
-  defp minted!(fleet_id) do
-    case Chain.minted(fleet_id) do
-      {:ok, minted} -> minted
-      {:error, failure} -> raise failure
-    end
-  end
+  # What the Club is doing right now: the title of its most recently changed
+  # open goal, the item it features and its latest item, beside who's here.
+  # Classic's part of the homepage shows only its sales.
+  defp now(@classic, _reading), do: nil
 
-  # Each fleet is watched for everything its section shows, as anyone hears
-  # it, whoever is signed in: its sea through the shared reading, which it
-  # starts hearing before it takes the ships again, and the rest through the
-  # notices about what that fleet's section reads.
-  defp watch(socket) do
-    socket
-    |> watch(socket.assigns.classic)
-    |> watch(socket.assigns.club)
-  end
+  defp now(fleet_id, reading) do
+    latest = List.first(reading.feed.items)
 
-  defp watch(socket, %{coming_soon?: true}), do: socket
-
-  defp watch(socket, %{id: fleet_id}) do
-    for topic <- topics(fleet_id), do: Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
-    SharedReading.subscribe(FleetShips.key(fleet_id))
-
-    socket
-    |> update_fleet(fleet_id, &%{&1 | ships: ships(fleet_id)})
-    |> start_read(fleet_id)
-  end
-
-  # Classic's section reads only its sales; the Club's also reads its rooms,
-  # its workspace and its proposals.
-  defp topics(@classic), do: [Keys.topic(@classic)]
-
-  defp topics(@club),
-    do: [
-      Keys.topic(@club),
-      Rooms.topic(@club, :public),
-      Graph.topic(@club, :public),
-      Proposals.topic(@club)
-    ]
-
-  # The ships on the fleet's sea, from the one reading every open page shares;
-  # none until the first one is taken.
-  defp ships(fleet_id), do: SharedFigures.reading(FleetShips.key(fleet_id)) || []
-
-  defp start_read(socket, fleet_id),
-    do:
-      start_async(socket, {:now, fleet_id}, fn ->
-        PageRead.run("home", fn -> read(fleet_id, DateTime.utc_now()) end)
-      end)
-
-  defp read(@classic, _now), do: %{sales: sales(@classic, Fleets.get_fleet!(@classic))}
-
-  defp read(@club, now) do
-    latest = @club |> Activity.page(nil, limit: 1) |> Map.fetch!(:items) |> List.first()
-
-    {agents, holders} = here(@club)
-
-    %{
-      sales: sales(@club, Fleets.get_fleet!(@club)),
-      agents: agents,
-      holders: holders,
-      trying: trying(@club),
-      featured: Activity.headline(@club, now) || latest,
-      latest: latest
-    }
+    Map.merge(
+      %{trying: reading.goal, featured: reading.headline || latest, latest: latest},
+      here(fleet_id)
+    )
   end
 
   # How many agents are here, how many addresses hold the fleet's Keys and how
@@ -316,16 +265,8 @@ defmodule KeyfleetWeb.HomeLive do
   # one shared reading every open page uses.
   defp here(fleet_id) do
     case SharedFigures.reading(Here.fleet_key(fleet_id)) do
-      %{here: here, holders: holders} -> {here, holders}
-      nil -> {nil, nil}
-    end
-  end
-
-  # The title of the fleet's most recently changed open goal.
-  defp trying(fleet_id) do
-    case Graph.open_work!(fleet_id, :goals_open, query: [limit: 1]) do
-      [goal] -> goal.title
-      [] -> nil
+      %{here: here, holders: holders} -> %{agents: here, holders: holders}
+      nil -> %{agents: nil, holders: nil}
     end
   end
 
@@ -347,62 +288,21 @@ defmodule KeyfleetWeb.HomeLive do
     end
   end
 
-  # Something changed in a fleet: it is read again once, a moment later, for
-  # however many notices come in the meantime. A room's head names no fleet;
-  # the post behind it also sends a notice that does. Balances aren't shown.
   @impl true
-  def handle_info({:graph_notable, fleet_id}, socket),
-    do: {:noreply, later(socket, fleet_id)}
+  def handle_info({:shared_reading, {:fleet_now, @classic}}, socket),
+    do: {:noreply, assign(socket, :classic, fleet(@classic))}
 
-  def handle_info({:keys_changed, fleet_id, _token_ids}, socket),
-    do: {:noreply, later(socket, fleet_id)}
+  def handle_info({:shared_reading, _club_key}, socket),
+    do: {:noreply, assign(socket, :club, fleet(@club))}
 
-  def handle_info({:proposals_changed, fleet_id}, socket),
-    do: {:noreply, later(socket, fleet_id)}
-
-  def handle_info(%Broadcast{event: event, payload: %{fleet_id: fleet_id}}, socket)
-      when event in ["key_activity", "wall_removed"],
-      do: {:noreply, later(socket, fleet_id)}
-
-  def handle_info(%Broadcast{event: "room_head"}, socket), do: {:noreply, socket}
-  def handle_info({:balances_changed, _fleet_id}, socket), do: {:noreply, socket}
-
-  def handle_info({:shared_reading, {:fleet_ships, fleet_id}}, socket),
-    do: {:noreply, update_fleet(socket, fleet_id, &%{&1 | ships: ships(fleet_id)})}
-
-  def handle_info({:refresh, fleet_id}, socket) do
-    socket = update(socket, :refreshing, &MapSet.delete(&1, fleet_id))
-    {:noreply, start_read(socket, fleet_id)}
+  # The ships on the fleet's sea, from its activity in the reading as anyone
+  # reads it, so none is the reader's own.
+  defp ships(fleet_id, reading) do
+    fleet_id
+    |> HarbourCrew.ships(reading.feed.items)
+    |> Enum.map(&Map.put(&1, :own?, false))
+    |> HarbourCrew.sea()
   end
-
-  # Reads the fleet again shortly, unless it is already due.
-  defp later(socket, fleet_id) do
-    if MapSet.member?(socket.assigns.refreshing, fleet_id) do
-      socket
-    else
-      Process.send_after(self(), {:refresh, fleet_id}, @refresh_after)
-      update(socket, :refreshing, &MapSet.put(&1, fleet_id))
-    end
-  end
-
-  # A fleet whose read failed keeps what it showed and says the read failed;
-  # the next notice reads again. A failed database read is logged and saved by
-  # `KeyfleetWeb.PageRead`; any other read that raised is logged by its task.
-  @impl true
-  def handle_async({:now, fleet_id}, {:ok, {:ok, %{sales: sales} = now}}, socket),
-    do:
-      {:noreply,
-       update_fleet(
-         socket,
-         fleet_id,
-         &%{&1 | sales: sales, now: Map.delete(now, :sales), failed?: false}
-       )}
-
-  def handle_async({:now, fleet_id}, _failed, socket),
-    do: {:noreply, update_fleet(socket, fleet_id, &%{&1 | failed?: true})}
-
-  defp update_fleet(socket, @classic, fun), do: update(socket, :classic, fun)
-  defp update_fleet(socket, @club, fun), do: update(socket, :club, fun)
 
   # What the featured item is, in a word or two.
   defp label(%{kind: :linked, facts: %{relation: "contradicts"}}), do: "Problem raised"

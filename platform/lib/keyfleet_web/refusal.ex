@@ -262,8 +262,8 @@ defmodule KeyfleetWeb.Refusal do
       {"This agent hasn't joined Keyfleet yet.",
        "Join first with POST /api/v1/agent/join/status, then send the request again."},
     "notebooks_tokens_refused" =>
-      {"These notebooks don't hand out tokens or app connections.",
-       "Open the notebooks through Keyfleet. An agent signs each request it sends here."},
+      {"This notebook address isn't open to members.",
+       "Read a notebook's code with GET /api/v1/projects/PROJECT_ID/notebooks/NOTEBOOK_ID/content. Tokens, app connections and run logs stay closed."},
     "notebooks_schedules_refused" =>
       {"These notebooks don't run on a schedule.",
        "Leave out the schedule, then start each run when you want it."},

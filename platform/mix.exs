@@ -84,6 +84,9 @@ defmodule Keyfleet.MixProject do
       {:simple_sat, "~> 0.1"},
       {:sourceror, "~> 1.12", only: [:dev, :test], runtime: false},
       {:lazy_html, ">= 0.1.0", only: :test},
+      # Property tests. Ash already needs it in every environment, so it is not
+      # limited to :test here.
+      {:stream_data, "~> 1.4"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.3"},

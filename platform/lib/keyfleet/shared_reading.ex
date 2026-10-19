@@ -83,19 +83,6 @@ defmodule Keyfleet.SharedReading do
       bytes: 32_768,
       within: 120
     },
-    fleet_ships: %{
-      open:
-        "a fleet's activity is open to a signed-out read (Keyfleet.Activity with no actor), " <>
-          "the same the homepage and the fleet's page show anyone; a ship keeps only a Key's " <>
-          "number, the name its agent shows in the directory, an island and a colour. If that " <>
-          "read tightens, this kind changes with it",
-      # One for each fleet in Keyfleet.Fleets' catalog, as for fleet_agents.
-      keys: 5,
-      # Sixteen ships of the fleet with the longest id, their agents' names each
-      # 120 four-byte characters, measure 9,911 bytes.
-      bytes: 16_384,
-      within: 120
-    },
     key_agents: %{
       open:
         "a Key's active shards and their agents are open to a signed-out read " <>
@@ -103,6 +90,86 @@ defmodule Keyfleet.SharedReading do
           "if either policy tightens, this kind changes with it",
       keys: 10_000,
       bytes: 20_480,
+      within: 120
+    },
+    fleet_now: %{
+      open:
+        "a fleet's activity, what it is trying and how far it has sold, as a signed-out " <>
+          "visitor reads them, are open to a signed-out read: Keyfleet.Activity.page/3 and " <>
+          "headline/2 with no actor (General, the Keys' threads and goal titles, under the " <>
+          "Keyfleet.Rooms.Message and Keyfleet.Graph.Object :titled read policies), " <>
+          "Keyfleet.Graph.trying_now/1 and :open_work, the fleet's record, and the Keys sold " <>
+          "(Keyfleet.Chain.minted/2), which the chain shows anyone; if any of these tightens, " <>
+          "this kind changes with it",
+      # One for each fleet in Keyfleet.Fleets' catalog, like fleet_agents.
+      keys: 5,
+      # Not yet measured at its fullest: a page of 30 activity items, the
+      # open goals and a few numbers. A reading over it is refused and
+      # counted, and pages keep the one before.
+      bytes: 65_536,
+      within: 120
+    },
+    fleet_proposals: %{
+      open:
+        "the first page of a fleet's proposals, their tallies and words, is open to a signed-out " <>
+          "read (Keyfleet.Proposals.Proposal, Vote, Cancellation, Execution and Words read " <>
+          "policies), with the fleet's record, its chain cursor (Keyfleet.Chain.Cursor) and the " <>
+          "tokens its treasury pays in (Keyfleet.Treasury.AssetDetails and Reading read " <>
+          "policies); if any of these tightens, this kind changes with it",
+      # One for each fleet in Keyfleet.Fleets' catalog, like fleet_agents.
+      keys: 5,
+      # Not yet measured: twenty proposals, each with up to 4,000 bytes of words.
+      bytes: 131_072,
+      within: 120
+    },
+    fleet_treasury: %{
+      open:
+        "a fleet's Treasury page is open to a signed-out read: its latest reading, money " <>
+          "history and advances (Keyfleet.Treasury.Reading, Event and AssetDetails read " <>
+          "policies), the votes carried out (Keyfleet.Proposals.Proposal and Execution), the " <>
+          "fleet's record, its chain cursor and the Keys sold (Keyfleet.Keys.KeyAttachment), " <>
+          "which the chain shows anyone; if any of these tightens, this kind changes with it",
+      keys: 5,
+      # Not yet measured: the latest history, the open advances and five votes carried out.
+      bytes: 65_536,
+      within: 120
+    },
+    proposal: %{
+      open:
+        "a proposal's first page is open to a signed-out read: the proposal, its calls, its " <>
+          "first fifty votes and its words (Keyfleet.Proposals.Proposal, Vote, Cancellation, " <>
+          "Execution and Words read policies), what its calls come to at the treasury's latest " <>
+          "balance (Keyfleet.Treasury.Reading and AssetDetails) and where it stands on the vote " <>
+          "contract, which the chain shows anyone; if any of these tightens, this kind changes " <>
+          "with it",
+      # Twenty for each catalog fleet, with room for a pass to put new proposals
+      # before it deletes the ones they pushed off the list.
+      keys: 200,
+      # Up to 4,000 bytes of words, fifty votes and the calls; a larger one is
+      # refused, counted, and read for each visit instead.
+      bytes: 131_072,
+      within: 120
+    },
+    fleet_polls: %{
+      open:
+        "a fleet's latest hundred polls are open to a signed-out read (Keyfleet.Polls.Poll " <>
+          ":listed read policy and its fields but :notes); a poll's notes and each Key's vote " <>
+          "are for Key holders only (Poll's :notes field policy, Keyfleet.Polls.Vote :in_poll " <>
+          "and :mine) and are never held here; if any of these changes, this kind changes with it",
+      keys: 5,
+      # Not yet measured: a hundred polls, each with a question of up to 200
+      # characters and up to ten choices' counts.
+      bytes: 196_608,
+      within: 120
+    },
+    poll: %{
+      open:
+        "one poll on a fleet's list, with its choices, as anyone reads it: the read policies " <>
+          "of fleet_polls, with notes and votes left out",
+      # A hundred for each catalog fleet, with room for a pass to put new polls
+      # before it deletes the ones they pushed off.
+      keys: 1_000,
+      bytes: 16_384,
       within: 120
     }
   }
@@ -124,6 +191,10 @@ defmodule Keyfleet.SharedReading do
     # No table for the instant its owner restarts: the same as no reading.
     ArgumentError -> :error
   end
+
+  @doc "The largest reading `kind` accepts, as `:erlang.external_size/1` measures it."
+  @spec bytes(atom()) :: pos_integer()
+  def bytes(kind) when is_map_key(@kinds, kind), do: @kinds[kind].bytes
 
   @doc "Hear `{:shared_reading, key}` whenever the reading for `key` changes."
   @spec subscribe(key()) :: :ok
@@ -311,7 +382,7 @@ defmodule Keyfleet.SharedReading do
 
   defp fits(kind, reading) do
     cond do
-      :erlang.external_size(reading) > @kinds[kind].bytes -> {:error, :too_large}
+      :erlang.external_size(reading) > bytes(kind) -> {:error, :too_large}
       not plain?(reading) -> {:error, :not_plain}
       true -> :ok
     end

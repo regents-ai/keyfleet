@@ -204,6 +204,14 @@ defmodule KeyfleetWeb.Router do
     get "/metadata/keys/:token_id", MetadataController, :show
   end
 
+  # A visitor's page timings, sent by `navigator.sendBeacon` as the page is
+  # left. No pipeline: the beacon cannot send a CSRF token, and nothing here
+  # reads a session; it only adds numbers to the timing histograms
+  # (KeyfleetWeb.VitalsController).
+  scope "/", KeyfleetWeb do
+    post "/vitals", VitalsController, :create
+  end
+
   scope "/", KeyfleetWeb do
     pipe_through :public_documents
     get "/docs", PublicPagesController, :show
