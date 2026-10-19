@@ -2384,3 +2384,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   after they didn't open, shows Keyfleet's page asking you to press Open
   notebooks. Pressing Open notebooks in a fleet's workspace still opens them
   straight away.
+
+## 2026-10-19 — v88 released
+
+- Released `b0a40c13` as Fly v88, after v87. It carries the notebook
+  sign-in change: only the workspace press sends the notebook code by
+  itself, and every trip back from the notebook host waits for a press.
