@@ -2827,3 +2827,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: the nine-dot button opens the template's "Regents Products" panel, hung straight under the button with its right edge lined up: Patchbay, Autolaunch, Techtree and $REGENT Staking as crown tiles in their brand colours, three to a row. Keyfleet no longer lists itself. In the footer the panel opens above its button; on a phone it spans the screen. The theme switch, the nine-dot menu, X and GitHub each fill the same press target, with a hairline after the theme switch and after the nine-dot menu.
 - Why: the panel showed plain name boxes in the middle of the screen and listed Keyfleet; the four header marks sat unevenly.
+- Under a mouse the X and GitHub marks and the nine-dot keep their own 24 pixel size with an even gap between them, as the design system has them; the full 44 pixel press targets with no gap are for a finger.
+
+## 2026-10-19 — v95 released
+
+- What: released main 9bedf21a to keyfleet.ai as Fly release v95 (rollback v94, a36c3d15): the next Key card glow and 100-Key shuffle, charcoal night seas, the Buy Key window turning Keys and the Club links.
+- Why: Sean released it (1. a, 16:01Z). Its own full check was clean before the join; main had only added docs and a run record.

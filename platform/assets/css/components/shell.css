@@ -584,16 +584,17 @@
 
 /* ---- Header marks ---- */
 
-/* The theme switch, the nine-dot menu, X and GitHub each fill a 2.75rem press
-   target with nothing between them, so their marks stand evenly apart, and a
-   hairline sits after the theme switch and after the nine-dot menu. */
+/* The theme switch, the nine-dot menu, X and GitHub stand evenly apart, with a
+   hairline after the theme switch and after the nine-dot menu. Under a mouse
+   each mark keeps its own size with an even gap between; under a finger each
+   fills a 2.75rem press target with nothing between them. */
 #shell-header .theme-control {
   margin-inline-end: 0;
 }
 
 #shell-header .rl-header-links,
 .regent-footer__social {
-  gap: 0;
+  gap: var(--space-3);
 }
 
 #shell-header .theme-control + .rl-header-links::before,
@@ -602,13 +603,31 @@
   flex: none;
   width: 1px;
   height: 1.25rem;
-  margin-inline: 0.5rem;
   background: var(--hairline-strong);
 }
 
-:is(#shell-header .rl-header-links, .regent-footer__social) > a {
-  min-width: 2.75rem;
-  min-height: 2.75rem;
+/* The theme switch sits outside the marks' row, so its hairline brings its own
+   gap before it. */
+#shell-header .theme-control + .rl-header-links::before {
+  margin-inline-start: var(--space-3);
+}
+
+@media (pointer: coarse) {
+  #shell-header .rl-header-links,
+  .regent-footer__social {
+    gap: 0;
+  }
+
+  #shell-header .theme-control + .rl-header-links::before,
+  .rl-header-links__rule {
+    margin-inline: 0.5rem;
+  }
+
+  :is(#shell-header .rl-header-links, .regent-footer__social) > a,
+  :is(.rl-header-links, .regent-footer__social) .shell-tool {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
 }
 
 @media (hover: hover) {
@@ -625,8 +644,8 @@
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   border: 0;
   border-radius: 0;
