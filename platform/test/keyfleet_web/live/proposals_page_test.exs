@@ -1004,6 +1004,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert pressable?(view, "approve", ["#proposals-return-1-approve"])
       assert has_element?(view, "#proposals-return-1-button-why", "Approve first")
+      refute has_element?(view, "#proposals-return-1-approve[data-done]")
 
       # A pending approval is never a reason: the return may be pressed as
       # soon as the approval is sent, before it lands.
@@ -1030,6 +1031,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       view |> form("#proposals-return-1-form", amount: "3") |> render_change()
       render_async(view, @async_wait)
       assert pressable?(view, "return", ["#proposals-return-1-button"])
+
+      # The approval sent from here stays in view, marked done, and still
+      # takes presses.
+      assert has_element?(view, "#proposals-return-1-approve[data-done]", "Approved")
+      assert pressable?(view, "approve", ["#proposals-return-1-approve"])
     end
 
     test "sending Regents its share says what is owed, and waits for something owed", %{

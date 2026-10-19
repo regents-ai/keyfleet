@@ -1,4 +1,4 @@
-import {expect, test, type Page} from "@playwright/test"
+import {expect, test, type Locator, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {allowUsdc, landStep, offerRewards, prepareFleet, refuseDraw, sellKey} from "./support/fleet_chain"
 import {sentByStandIn, useStandInWallet} from "./support/stand_in_wallet"
@@ -36,6 +36,34 @@ async function openBuying(page: Page, bearer: string | null = "valid") {
 const sentLine = (page: Page, hash: string) => page.locator(`#buy-key-order-sent li:has(code[title="${hash}"])`)
 const pressNote = (page: Page) => page.locator("#buy-key-order-press-note")
 
+// Approve and Buy are drawn the same size.
+async function sameSize(approve: Locator, buy: Locator) {
+  const [a, b] = await Promise.all([approve.boundingBox(), buy.boundingBox()])
+  expect(a!.width).toBeCloseTo(b!.width, 0)
+  expect(a!.height).toBeCloseTo(b!.height, 0)
+}
+
+// A button's edge ink, and the theme's green, as the page draws them.
+const edgeAndGreen = (button: Locator) =>
+  button.evaluate(element => {
+    const probe = document.createElement("span")
+    probe.style.color = "var(--color-success)"
+    document.body.append(probe)
+    const green = getComputedStyle(probe).color
+    probe.remove()
+    return {edge: getComputedStyle(element, "::before").getPropertyValue("--rg-button-edge-ink").trim(), green}
+  })
+
+// A landed Approve stays in view, greyed with a green edge.
+async function shownDone(approve: Locator) {
+  await expect(approve).toHaveAttribute("data-done", "")
+  await expect(approve).toHaveText("✓ USDC approved")
+  await expect.poll(async () => {
+    const {edge, green} = await edgeAndGreen(approve)
+    return edge === green
+  }).toBe(true)
+}
+
 test.beforeAll(() => {
   prepareFleet(fleet)
 })
@@ -54,6 +82,7 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   await expect(page.locator("#buy-key-approve")).toBeVisible()
   await expect(page.locator("#buy-key-button")).toBeDisabled()
   await expect(page.locator("#buy-key-button-why")).toHaveText("Approve USDC first")
+  await sameSize(page.locator("#buy-key-approve"), page.locator("#buy-key-button"))
 
   // Pressed twice before the wallet answers the first: both reach it.
   await page.locator("#buy-key-approve").click()
@@ -78,7 +107,9 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   landStep(first.hash, first.transaction, true)
   await expect(sentLine(page, first.hash)).toHaveAttribute("data-state", "confirmed")
   await expect(sentLine(page, first.hash)).toContainText("Approved. Now press the next button.")
-  await expect(page.locator("#buy-key-approve")).toBeHidden()
+  await shownDone(page.locator("#buy-key-approve"))
+  await expect(page.locator("#buy-key-approve-note")).toBeHidden()
+  await sameSize(page.locator("#buy-key-approve"), page.locator("#buy-key-button"))
 
   await page.locator("#buy-key-button").click()
   await expect.poll(async () => (await sentByStandIn(page)).length).toBe(3)
@@ -92,6 +123,9 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   await expect(sentLine(page, bought.hash)).toContainText("Not bought. No USDC was taken.")
   await page.locator("#buy-key-button").click()
   await expect.poll(async () => (await sentByStandIn(page)).length).toBe(4)
+
+  // The chain has the approval, so there is none to send.
+  await expect(page.locator("#buy-key-approve")).toBeDisabled()
   expect(errors).toEqual([])
 })
 
@@ -135,6 +169,7 @@ test("on the homepage, Approve and Buy are pressed inside the Buy Key window, si
   await expect(window.locator("#home-buy-key-button")).toBeDisabled()
   await expect(window.locator("#home-buy-key-button-why")).toHaveText("Approve USDC first")
   await expect(window.locator("#home-buy-key-approve")).toHaveText("1 Approve USDC")
+  await sameSize(window.locator("#home-buy-key-approve"), window.locator("#home-buy-key-button"))
   const onSale = (await window.locator("#home-buy-key-button [data-press-label]").innerText()).replace("Buy Key ", "")
   await expect(window.locator("#home-buy-key-approve-note")).toHaveText(
     `Small amount extra is approved to buy the next Key in case the current Key ${onSale} is bought first.`,
@@ -149,7 +184,7 @@ test("on the homepage, Approve and Buy are pressed inside the Buy Key window, si
 
   allowUsdc(me, Number(BigInt(`0x${approval.transaction.data.slice(-64)}`)))
   landStep(approval.hash, approval.transaction, true)
-  await expect(window.locator("#home-buy-key-approve")).toBeHidden()
+  await shownDone(window.locator("#home-buy-key-approve"))
   await expect(window.locator("#home-buy-key-approve-note")).toBeHidden()
 
   await window.locator("#home-buy-key-button").click()
@@ -176,16 +211,28 @@ test("a press the wallet declines says so, and the next press still reaches the 
   expect(errors).toEqual([])
 })
 
-// Signed out, the page starts Privy's sign-in, which this test server has no
-// Privy app for, so the page's own errors aren't checked here.
-test("signed out, a press sends nothing, whatever wallet is open, and asks to sign in", async ({page}) => {
-  await openBuying(page, null)
+// Signed out, a press opens sign-in. Sign-in's own code, standing in for
+// Privy, notes what it is asked.
+test("signed out, a press opens sign-in and sends nothing, whatever wallet is open", async ({page}) => {
+  await page.route(/\/assets\/js\/privy_bridge(?:-[a-f0-9]{32})?\.js\?(?:vsn=d&)?regent_retry=\d+$/, route =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: `export async function startPrivyBridge() {
+        return {async request(request) { window.__bridgeCalls = [...(window.__bridgeCalls || []), request] }}
+      }`,
+    }),
+  )
+  const errors = await openBuying(page, null)
   await useStandInWallet(page, me)
 
   await expect(page.locator("#buy-key-order-from")).toBeHidden()
   await page.locator("#buy-key-button").click()
-  await expect(pressNote(page)).toHaveText("Sign in to send this. Nothing was sent.")
+  await expect
+    .poll(() => page.evaluate(() => (window as Window & {__bridgeCalls?: string[]}).__bridgeCalls ?? []))
+    .toContain("sign-in")
+  await expect(pressNote(page)).toHaveCount(0)
   expect(await sentByStandIn(page)).toEqual([])
+  expect(errors).toEqual([])
 })
 
 test("a key's income is claimed to the wallet that holds it, and the claim is followed until it lands", async ({

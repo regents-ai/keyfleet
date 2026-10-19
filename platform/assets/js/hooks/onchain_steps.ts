@@ -107,9 +107,12 @@ export const OnchainSteps: Hook = {
       }
     }
 
+    // Signed out, a button carries the page's sign-in mark, and its press
+    // opens sign-in instead (auth_lazy.ts).
     this.clicked = event => {
       const button = (event.target as Element | null)?.closest<HTMLElement>("[data-onchain-step]")
       if (!button?.dataset.onchainStep || !this.el.contains(button)) return
+      if (button.dataset.accountTarget === "sign-in") return
       void this.pressButton!(button, formInputs(this.el))
     }
     this.el.addEventListener("click", this.clicked)

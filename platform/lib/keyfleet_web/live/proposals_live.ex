@@ -795,9 +795,9 @@ defmodule KeyfleetWeb.ProposalsLive do
                 panel={panel}
                 step="approve"
                 id={"proposals-return-#{advance.id}-approve"}
-                variant="secondary"
+                done={WalletPanel.approved?(panel)}
               >
-                Approve
+                {if WalletPanel.approved?(panel), do: "Approved", else: "Approve"}
               </WalletPanel.step_button>
               <WalletPanel.step_button
                 panel={panel}

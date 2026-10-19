@@ -1329,17 +1329,23 @@ defmodule KeyfleetWeb.FleetLive do
         <Regent.Primitives.button
           id={"#{@id}-approve"}
           data-onchain-step="approve"
+          data-account-target={panel.signed_out && "sign-in"}
+          data-done={approve_done?(panel)}
           hidden={not approve_shown?(panel)}
-          disabled={WalletPanel.blocked(panel, "approve") != nil}
+          disabled={WalletPanel.blocked(panel, "approve") != nil or approve_done?(panel)}
           aria-describedby={approve_described_by(@id, panel)}
         >
-          <span class="fleet-step-mark" aria-hidden="true">1</span>
-          <span data-press-label>Approve USDC</span>
+          <span class="fleet-step-mark" aria-hidden="true">
+            {if approve_done?(panel), do: "✓", else: "1"}
+          </span>
+          <span data-press-label>
+            {if approve_done?(panel), do: "USDC approved", else: "Approve USDC"}
+          </span>
         </Regent.Primitives.button>
         <p
           id={"#{@id}-approve-note"}
           class="fleet-approve-note"
-          hidden={not approve_shown?(panel)}
+          hidden={not approval_needed?(panel)}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <circle cx="8" cy="8" r="7" />
@@ -1353,6 +1359,7 @@ defmodule KeyfleetWeb.FleetLive do
         <Regent.Primitives.button
           id={"#{@id}-button"}
           data-onchain-step="buy"
+          data-account-target={panel.signed_out && "sign-in"}
           disabled={buy_blocked(panel) != nil}
           aria-describedby={buy_blocked(panel) && "#{@id}-button-why"}
         >
@@ -1381,17 +1388,31 @@ defmodule KeyfleetWeb.FleetLive do
     token_id && grouped(token_id)
   end
 
-  # Approve is described by the note under it, and by the reason beside Buy
-  # while the network fee holds both back.
+  # Approve is described by the note under it while it is needed, and by the
+  # reason beside Buy while the network fee holds both back.
   defp approve_described_by(id, panel) do
-    if WalletPanel.blocked(panel, "approve"),
-      do: "#{id}-approve-note #{id}-button-why",
-      else: "#{id}-approve-note"
+    ids =
+      for {shown?, part} <- [
+            {approval_needed?(panel), "approve-note"},
+            {WalletPanel.blocked(panel, "approve") != nil, "button-why"}
+          ],
+          shown?,
+          do: "#{id}-#{part}"
+
+    if ids != [], do: Enum.join(ids, " ")
   end
 
-  # Approve shows while the wallet the figures are for needs an approval.
-  defp approve_shown?(%{built: %{figures: %{approve?: true}}}), do: true
-  defp approve_shown?(_panel), do: false
+  # Approve shows while the wallet the figures are for needs an approval, and
+  # stays once an approval sent from here has landed, marked done.
+  defp approve_shown?(panel), do: approval_needed?(panel) or approve_done?(panel)
+
+  defp approval_needed?(%{built: %{figures: %{approve?: true}}}), do: true
+  defp approval_needed?(_panel), do: false
+
+  # Done once the figures read after it no longer ask for one. The chain then
+  # has the approval, so no approve step is built and Approve can't be
+  # pressed, as when it was hidden; it takes presses again once one is needed.
+  defp approve_done?(panel), do: WalletPanel.approved?(panel) and not approval_needed?(panel)
 
   @doc "Atomic USDC shown exactly, since it is what a purchase pays."
   def usdc(atoms) do

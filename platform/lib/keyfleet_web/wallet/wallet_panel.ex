@@ -39,11 +39,12 @@ defmodule KeyfleetWeb.WalletPanel do
       agent (`assets/js/page_tools.ts`), if any; and `class`;
     * the slots `heading`, `fields`, `notes`, `buttons` and `details` (the
       last under what was sent), each given the panel's state (`inputs`,
-      `built`, `review`, `presses`, `signer`) to read.
+      `built`, `review`, `presses`, `signer`, `signed_out`) to read.
 
   Buttons name their step with `data-onchain-step` and sit outside the form;
   fields that feed the steps carry `data-onchain-input` with the name they
-  are built from.
+  are built from. Signed out, a button also carries
+  `data-account-target="sign-in"`, so its press opens sign-in instead.
   """
   use KeyfleetWeb, :live_component
 
@@ -93,11 +94,17 @@ defmodule KeyfleetWeb.WalletPanel do
   attr :step, :string, required: true
   attr :id, :string, required: true
   attr :variant, :string, default: "primary"
+
+  attr :done, :boolean,
+    default: false,
+    doc: "marks a step that has landed, as Approve once it has"
+
   slot :inner_block, required: true
 
   @doc """
   One wallet button: it names its step, and when the chain's own state makes
   that step certain to fail it stays in view, disabled, with why beside it.
+  Signed out, its press opens sign-in.
   """
   def step_button(assigns) do
     assigns = assign(assigns, reason: blocked(assigns.panel, assigns.step))
@@ -108,6 +115,8 @@ defmodule KeyfleetWeb.WalletPanel do
         id={@id}
         variant={@variant}
         data-onchain-step={@step}
+        data-account-target={@panel.signed_out && "sign-in"}
+        data-done={@done}
         disabled={@reason != nil}
         aria-describedby={@reason && "#{@id}-why"}
       >
@@ -123,6 +132,17 @@ defmodule KeyfleetWeb.WalletPanel do
   @doc "Whether `step` has been sent and has not been turned down."
   def sent?(%{presses: presses}, step),
     do: Enum.any?(presses.sent, &(&1.name == step and &1.outcome in [:pending, :confirmed]))
+
+  @doc """
+  Whether an approval sent from this group has landed and the figures read
+  since hold no step back for want of one: Approve is then shown done.
+  """
+  def approved?(%{presses: presses} = panel) do
+    landed? = Enum.any?(presses.sent, &(&1.name == "approve" and &1.outcome == :confirmed))
+    held = panel |> figures() |> Map.get(:blocked, %{}) |> Map.values()
+
+    landed? and not Enum.any?(held, &(&1 in [:approve_first, :approve_usdc_first]))
+  end
 
   @impl true
   def mount(socket) do
@@ -467,7 +487,10 @@ defmodule KeyfleetWeb.WalletPanel do
   def render(assigns) do
     assigns =
       assign(assigns,
-        panel: Map.take(assigns, [:inputs, :built, :review, :presses, :signer]),
+        panel:
+          assigns
+          |> Map.take([:inputs, :built, :review, :presses, :signer])
+          |> Map.put(:signed_out, assigns.actor == nil),
         line: line(assigns),
         chain: chain_name(%{assigns: assigns}),
         read_only: assigns.actor == nil and assigns.flow in @read_only_for_visitors

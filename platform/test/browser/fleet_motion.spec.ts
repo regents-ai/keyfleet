@@ -76,6 +76,15 @@ test("a keyboard press picks a channel and opens panels and dialogs at once, wit
 test("Buy pressed again and again squishes only its label, which ends at rest, and every press is answered", async ({
   page,
 }) => {
+  // Sign-in's own code, standing in for Privy, notes what it is asked.
+  await page.route(/\/assets\/js\/privy_bridge(?:-[a-f0-9]{32})?\.js\?(?:vsn=d&)?regent_retry=\d+$/, route =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: `export async function startPrivyBridge() {
+        return {async request(request) { window.__bridgeCalls = [...(window.__bridgeCalls || []), request] }}
+      }`,
+    }),
+  )
   await openFleet(page)
   await page.locator("#fleet-get-key").click()
   await expect(page.locator("#buy-key-button")).toBeVisible()
@@ -88,8 +97,11 @@ test("Buy pressed again and again squishes only its label, which ends at rest, a
   expect(await moved(page, "#buy-key-button [data-press-label]")).toBe(true)
   expect(await moved(page, "#buy-key-button")).toBe(false)
   expect(await leftovers(page)).toEqual([])
-  // Signed out, a press sends nothing and says so.
-  await expect(page.locator("#buy-key-order-press-note")).toHaveText("Sign in to send this. Nothing was sent.")
+  // Signed out, a press opens sign-in and sends nothing.
+  await expect
+    .poll(() => page.evaluate(() => (window as Window & {__bridgeCalls?: string[]}).__bridgeCalls ?? []))
+    .toContain("sign-in")
+  await expect(page.locator("#buy-key-order-press-note")).toHaveCount(0)
 })
 
 test("a sale rolls the count, each digit clipped by class, and its line joins the feed without moving the lines below, ending as plain text", async ({page}) => {

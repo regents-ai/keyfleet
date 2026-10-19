@@ -436,6 +436,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa..aaaa on Base."
       refute has_element?(view, "#buy-key-approve[hidden]")
+      refute has_element?(view, "#buy-key-approve[data-done]")
+      refute has_element?(view, "#buy-key-order [data-account-target]")
       assert has_element?(view, "#buy-key-button[disabled][aria-describedby=buy-key-button-why]")
       assert text(view, "#buy-key-button-why") == "Approve USDC first"
     end
@@ -484,9 +486,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-order-sent span") == "Approved. Now press the next button."
       refute has_element?(view, "#buy-key-button[disabled]")
 
-      # Built again for the allowance now in place: the purchase alone.
+      # Built again for the allowance now in place: the purchase alone, with
+      # Approve still in view, marked done. The chain has the approval, so
+      # there is none to send.
       assert_push_event(view, "onchain-steps:review", %{review: %{steps: [%{step: "buy"}]}})
-      assert has_element?(view, "#buy-key-approve[hidden]")
+      refute has_element?(view, "#buy-key-approve[hidden]")
+      assert has_element?(view, "#buy-key-approve[data-done][disabled]")
+      assert text(view, "#buy-key-approve [data-press-label]") == "USDC approved"
+      assert text(view, "#buy-key-approve .fleet-step-mark") == "✓"
+      refute has_element?(view, "#buy-key-approve[aria-describedby]")
 
       assert has_element?(view, "#buy-key-approve-note[hidden]")
       assert has_element?(view, "#buy-key-order-line[hidden]")
@@ -583,7 +591,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, "#account-control [data-account-target=sign-in]", "Sign in")
     end
 
-    test "signed out, nothing is built and a press says to sign in", %{conn: _conn} do
+    # Signed out, Buy carries the page's sign-in mark, so a person's press
+    # opens sign-in. A browser's own agent presses past it, and is told to
+    # sign in.
+    test "signed out, nothing is built, Buy opens sign-in and an agent's press says to sign in",
+         %{conn: _conn} do
       deploy!()
       ChainHelpers.seed_cursor!(@fleet)
       chain!(allowance: 0)
@@ -597,6 +609,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 151"
 
       refute has_element?(view, "#buy-key-button[disabled]")
+      assert has_element?(view, "#buy-key-button[data-account-target=sign-in]")
 
       view
       |> with_target("#buy-key-order")

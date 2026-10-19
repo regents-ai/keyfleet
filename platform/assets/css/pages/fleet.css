@@ -869,16 +869,6 @@
     white-space: nowrap;
   }
 
-  /* Approve and Buy span the panel, one above the other, so the two line
-     up and each label has the panel's width. */
-  .fleet-buy-order > .wallet-panel-buttons {
-    justify-self: stretch;
-  }
-
-  .fleet-buy-order > .wallet-panel-buttons > .rg-button {
-    flex: 1 1 100%;
-  }
-
   /* The coming-soon note keeps the bar's margin from the view's edges, and
      its one button spans it. */
   .fleet-soon {
