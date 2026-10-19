@@ -385,7 +385,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#fleet-about #buy-key-title #buy-key-offer") ==
                "Key 151 · 42.99817 USDC · Level 9"
 
-      assert text(view, "#buy-key-tip") =~ "costs no more than 45.15 USDC"
+      assert text(view, "#buy-key-tip") =~ "If someone buys this Key first, nothing is spent"
       assert text(view, "#buy-key-number") == "151"
       assert text(view, "#buy-key-price") == "42.99817 USDC"
       assert text(view, "#fleet-about #buy-key-order #buy-key-button") == "Buy Key 151"
@@ -393,8 +393,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
 
     # The steps are built on the server for the wallet that sends them, and
-    # the page has them before anyone presses: an approval of the most the
-    # purchase may cost when the wallet hasn't allowed that much, then the purchase.
+    # the page has them before anyone presses: an approval of exactly the Key's
+    # price when the wallet hasn't allowed that much, then the purchase.
     test "builds Approve and Buy for the signed-in wallet once it is the active one", %{
       conn: conn
     } do
@@ -416,12 +416,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       [approve, buy] = review.steps
       assert approve.to == @usdc
-      assert approve.data == Call.encode("approve(address,uint256)", [@contract, 45_150_000])
+      assert approve.data == Call.encode("approve(address,uint256)", [@contract, 42_998_170])
+      assert text(view, "#buy-key-approve") == "1 Approve 42.99817 USDC"
       assert buy.to == @contract
       assert "0x" <> _calldata = buy.data
 
       assert text(view, "#buy-key-order-line") ==
-               "Key 151: 42.99817 USDC. If it sells first, you get the next Key for up to 45.15 USDC."
+               "Key 151: 42.99817 USDC."
 
       assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa..aaaa on Base."
       refute has_element?(view, "#buy-key-approve[hidden]")
@@ -478,7 +479,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, "#buy-key-approve[hidden]")
 
       assert text(view, "#buy-key-order-line") ==
-               "Key 151: 42.99817 USDC. If it sells first, you get the next Key for up to 45.15 USDC."
+               "Key 151: 42.99817 USDC."
     end
 
     test "a purchase that doesn't go through says why it may not have", %{conn: conn} do
@@ -529,7 +530,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, "#buy-key-order-from[hidden]")
 
       assert text(view, "#buy-key-order-line") ==
-               "Key 151: 42.99817 USDC. If it sells first, you get the next Key for up to 45.15 USDC."
+               "Key 151: 42.99817 USDC."
 
       view
       |> with_target("#buy-key-order")
@@ -584,7 +585,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute_push_event(view, "onchain-steps:review", %{review: %{}})
 
       assert text(view, "#buy-key-order-line") ==
-               "Key 151: 42.99817 USDC. If it sells first, you get the next Key for up to 45.15 USDC."
+               "Key 151: 42.99817 USDC."
 
       refute has_element?(view, "#buy-key-button[disabled]")
 

@@ -2896,3 +2896,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: under the treasury's balances, the Treasury tab now says how much USDC from Key sales is waiting to become REGENT, for example "Key sales waiting to become REGENT: 72.576 USDC". The figure comes from the same reading as the balances and updates with it.
 - Why: Sean asked (18:58Z) for the treasury to show it growing from Key sales. Sale money waits in the fleet until someone presses "Turn into REGENT", so the balances alone showed 0.
+
+## 2026-10-19 — Approve and Buy at exactly the Key price
+
+- What: buying a Key approves and pays exactly the Key's price. The buy line, the tip and the Approve button all show that one price, and the wallet is asked to allow that much USDC and no more. The 5% allowance for Keys sold first is gone: if someone buys the Key first, the purchase is turned down, nothing is spent, and the buyer can buy the next Key at its price.
+- Why: Sean chose exact price (18:58Z, "1. a"): one number everywhere.

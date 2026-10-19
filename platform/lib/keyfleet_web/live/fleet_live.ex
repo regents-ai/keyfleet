@@ -1264,10 +1264,9 @@ defmodule KeyfleetWeb.FleetLive do
             </span>
             <span :if={!on_sale(panel, :price)}>Buying a Key</span>
             <Regent.Primitives.tip :if={on_sale(panel, :price)} id="buy-key-tip" label="About paying">
-              Paid in USDC on Base from your wallet. If someone buys this Key first, you get the
-              next one, as long as it costs no more than {usdc(on_sale(panel, :max_price))}, and
-              you pay only its price. If your wallet hasn’t already allowed that much USDC, press
-              Approve first.
+              Paid in USDC on Base from your wallet. If someone buys this Key first, nothing is
+              spent and you can buy the next one at its price. If your wallet hasn’t already
+              allowed that much USDC, press Approve first.
             </Regent.Primitives.tip>
           </h3>
         </:heading>
@@ -1312,9 +1311,8 @@ defmodule KeyfleetWeb.FleetLive do
   The exceptions are presses the chain's own state makes certain to fail: a
   sold-out fleet, sales not open yet, or an approval not made yet. Buy then
   stays in view but can't be pressed, with why beside it. Approve shows when
-  the wallet's USDC allowance to the fleet is below the most a purchase may
-  cost, the price with room for Keys sold first. The buttons
-  stay in the page when the fleet sells out, so the buyer keeps the outcome
+  the wallet's USDC allowance to the fleet is below the Key's price. The
+  buttons stay in the page when the fleet sells out, so the buyer keeps the outcome
   of every purchase they sent.
   """
   def buy_order(assigns) do
@@ -1343,7 +1341,7 @@ defmodule KeyfleetWeb.FleetLive do
         >
           <span class="fleet-step-mark" aria-hidden="true">1</span>
           <span data-press-label>
-            Approve {on_sale(panel, :max_price) && usdc(on_sale(panel, :max_price))}
+            Approve {on_sale(panel, :price) && usdc(on_sale(panel, :price))}
           </span>
         </Regent.Primitives.button>
         <Regent.Primitives.button

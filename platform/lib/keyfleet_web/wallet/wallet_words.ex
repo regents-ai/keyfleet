@@ -33,10 +33,8 @@ defmodule KeyfleetWeb.WalletWords do
 
   # The same words whether or not Approve is showing: the numbered buttons
   # carry the order, so the line never changes length under a press.
-  defp says(:buy, %{token_id: token_id, price: price, max_price: max_price}),
-    do:
-      "Key #{Rules.grouped(token_id)}: #{FleetLive.usdc(price)}. " <>
-        "If it sells first, you get the next Key for up to #{FleetLive.usdc(max_price)}."
+  defp says(:buy, %{token_id: token_id, price: price}),
+    do: "Key #{Rules.grouped(token_id)}: #{FleetLive.usdc(price)}."
 
   defp says(:ballot, %{keys: [_key | _more] = keys}), do: "With #{key_words(keys)}."
 

@@ -114,15 +114,14 @@ defmodule Keyfleet.WalletStepsTest do
          {"uint256", [amount]}}
       ]
 
-    test "approves the price plus room for Keys sold first when the allowance is short, then buys for the signer",
+    test "approves exactly the Key price when the allowance is short, then buys for the signer at that price",
          %{fleet: fleet} do
       ChainViews.put!(sale(fleet, 0))
 
       built = build!(:buy)
       assert built.problem == nil
 
-      assert %{token_id: 1, price: 10_000_000, max_price: 10_500_000, approve?: true} =
-               built.figures
+      assert %{token_id: 1, price: 10_000_000, approve?: true} = built.figures
 
       assert built.figures.blocked == %{"buy" => :approve_usdc_first}
       assert built.review.chain.chain_id == 8453
@@ -132,30 +131,30 @@ defmodule Keyfleet.WalletStepsTest do
       assert approve.to == @usdc
 
       assert approve.data ==
-               Call.encode("approve(address,uint256)", [fleet.manager_address, 10_500_000])
+               Call.encode("approve(address,uint256)", [fleet.manager_address, 10_000_000])
 
       assert buy.to == fleet.manager_address
 
       assert buy.data ==
                Call.encode("purchase(address,uint256,uint256,bytes32[])", [
                  @signer,
-                 10_500_000,
+                 10_000_000,
                  @now + 600,
                  []
                ])
     end
 
-    test "an allowance of the most the purchase may cost leaves only the purchase, once sales open",
+    test "an allowance of the Key price leaves only the purchase, once sales open",
          %{fleet: fleet} do
-      ChainViews.put!(sale(fleet, 10_000_000))
+      ChainViews.put!(sale(fleet, 9_999_999))
       assert build!(:buy).figures.approve?
 
-      ChainViews.put!(sale(fleet, 10_500_000))
+      ChainViews.put!(sale(fleet, 10_000_000))
       assert %{figures: %{approve?: false, blocked: blocked}} = built = build!(:buy)
       assert blocked == %{}
       assert names(built) == ["buy"]
 
-      ChainViews.put!(sale(fleet, 10_500_000, false))
+      ChainViews.put!(sale(fleet, 10_000_000, false))
       assert build!(:buy).figures.blocked == %{"buy" => :sales_not_open}
     end
 

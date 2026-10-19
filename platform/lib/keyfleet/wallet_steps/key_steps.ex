@@ -20,12 +20,6 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # block's own clock, so a wallet's computer running fast or slow doesn't
   # shorten or stretch it.
   @purchase_seconds 600
-  # How far above the next Key's price, in percent, a purchase may still go
-  # through: Keys sold first in a rush move the price up a little each, and
-  # the buyer gets the next Key left at or under this.
-  @purchase_headroom_percent 5
-  # The most a purchase may cost is rounded up to a whole cent.
-  @cent 10_000
   # A key's seed before its random draw arrives.
   @no_seed "0x" <> String.duplicate("0", 64)
   # How long a renewed shard lasts, in days.
@@ -318,12 +312,12 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # the next Key only once every Key is sold (Regents Club Keys, never priced,
   # are turned away before this), so a refusal means there is nothing left to
   # buy. The purchase never names a Key: the manager sells whichever Key is
-  # next when it lands, at that Key's price. So a buyer who loses a rush for
-  # the Key on offer gets the next one left, as long as its price is within
-  # the most the purchase names, the price plus @purchase_headroom_percent;
-  # past that it is refused and no USDC is taken. The wallet approves that
-  # most when its USDC allowance to the manager is below it, and until it does
-  # the purchase is certain to fail, as it is before the fleet's sales open.
+  # next when it lands, and the purchase names the Key's price as the most it
+  # pays. So a buyer who loses a rush for the Key on offer is refused, as the
+  # next Key costs more, and no USDC is taken. The wallet approves exactly the
+  # price when its USDC allowance to the manager is below it, and until it
+  # does the purchase is certain to fail, as it is before the fleet's sales
+  # open.
   # Founding fleets ask nothing of buyers, so the purchase carries no proof.
   # A visitor sees the same figures, with no allowance and nothing to send.
   defp buy(%{fleet: fleet, signer: signer}) do
@@ -352,8 +346,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
            ),
          {:ok, allowance} <- allowance(reads, fleet, signer) do
       now = DateTime.to_unix(Reads.now(reads))
-      max_price = max_price(price)
-      approve? = allowance != nil and allowance < max_price
+      approve? = allowance != nil and allowance < price
 
       blocked =
         cond do
@@ -367,16 +360,11 @@ defmodule Keyfleet.WalletSteps.KeySteps do
             %{}
         end
 
-      {:ok, purchase(fleet, signer, max_price, now + @purchase_seconds, approve?),
-       Map.merge(figures, %{max_price: max_price, approve?: approve?, blocked: blocked})}
+      {:ok, purchase(fleet, signer, price, now + @purchase_seconds, approve?),
+       Map.merge(figures, %{approve?: approve?, blocked: blocked})}
     else
       _unread -> {:problem, :unread, Map.put(figures, :approve?, nil)}
     end
-  end
-
-  defp max_price(price) do
-    whole = 100 * @cent
-    div(price * (100 + @purchase_headroom_percent) + whole - 1, whole) * @cent
   end
 
   # The wallet's USDC allowance to the manager; a visitor has none to read.
@@ -392,14 +380,14 @@ defmodule Keyfleet.WalletSteps.KeySteps do
         {:uint, 256}
       )
 
-  defp purchase(_fleet, nil, _max_price, _deadline, _approve?), do: []
+  defp purchase(_fleet, nil, _price, _deadline, _approve?), do: []
 
-  defp purchase(fleet, signer, max_price, deadline, approve?) do
+  defp purchase(fleet, signer, price, deadline, approve?) do
     approve =
       Review.step(
         "approve",
         fleet.usdc_address,
-        Call.encode("approve(address,uint256)", [fleet.manager_address, max_price])
+        Call.encode("approve(address,uint256)", [fleet.manager_address, price])
       )
 
     buy =
@@ -408,7 +396,7 @@ defmodule Keyfleet.WalletSteps.KeySteps do
         fleet.manager_address,
         Call.encode("purchase(address,uint256,uint256,bytes32[])", [
           signer,
-          max_price,
+          price,
           deadline,
           []
         ])
