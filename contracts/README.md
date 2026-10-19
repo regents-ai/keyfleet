@@ -1665,17 +1665,22 @@ Nothing below can be fixed after the fact unless it says so.
    `base.json` now uses the Safe as keeper. It records the deck of every fleet
    created in phase 4 and asks for card refreshes through Safe transactions.
    The Safe can replace it later with `setKeeper`.
-2. **Routine public jobs.** Nothing runs by itself. An operator can run a bot
-   that presses, as each comes due:
+2. **Routine public jobs.** The site's routine upkeep presses them every 5
+   minutes, as each comes due:
    - the REGENT buyer's `convert(250000000)` whenever `nextPieceAt()` has passed
-     and `queueLength()` is above zero, and on `PriceMoved` the same with a
-     smaller amount, such as half, until a piece goes through;
-   - each fleet's `runDailySplit()` once `nextRunAt()` has passed;
+     and `queueLength()` is above zero, and on `PriceMoved` the same with half
+     as much, down to 1 USDC, until a piece goes through;
+   - each fleet's `runDailySplit()` once `nextRunAt()` has passed, also when it
+     would share nothing, so `nextRunAt()` stays a day ahead;
    - each manager's `sendProtocolShare()` whenever `protocolShareOwed()` is
-     above zero, at least once a day, since the 10% share waits in the manager
-     until someone sends it.
-   Anyone may press each of them, so the bot needs no rights, only ETH for gas;
-   `convert` costs about 722,000 gas on Base.
+     above zero, since the 10% share waits in the manager until someone sends
+     it;
+   - each fleet's votes `execute(proposalId, calls)` for an approved proposal
+     once it may be carried out, until its `executionExpiry`.
+   Anyone may press each of them, so the upkeep account needs no rights, only
+   ETH for gas; `convert` costs about 722,000 gas on Base. It starts paused:
+   fund the account behind `KEYFLEET_UPKEEP_KEY` with a little ETH, then resume
+   it at `/admin/upkeep` ([../docs/recurring-jobs.md](../docs/recurring-jobs.md#pausing-the-upkeep)).
 3. **The REGENT pool's hook still charges its fee.** Check that the hook at
    `0xd60D6B218116cFd801E28F78d011a203D2b068Cc` still takes at least 1% on every
    swap of the WETH/REGENT pool. The 1% rule measures only each piece's own move

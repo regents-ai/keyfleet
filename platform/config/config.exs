@@ -201,6 +201,8 @@ config :keyfleet, Oban,
   # one long-lived history job per fleet and its minutely balance readings.
   # Reading a signed-in wallet's ENS name waits on an Ethereum mainnet node.
   # `regent_credits` checks Credits purchases on chain.
+  # The upkeep sends one transaction at a time from its one account, so its
+  # queue runs one job.
   queues: [
     default: 5,
     notebook_hubs: 1,
@@ -209,7 +211,8 @@ config :keyfleet, Oban,
     key_art: 1,
     chain: 10,
     ens: 3,
-    regent_credits: 3
+    regent_credits: 3,
+    upkeep: 1
   ],
   cron: [
     crontab: [
@@ -217,6 +220,7 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.Chain.Watch},
       {"17 4 * * *", Keyfleet.ErrorPruner},
       {"23 * * * *", Keyfleet.Treasury.OverdueCheck},
+      {"*/5 * * * *", Keyfleet.Treasury.Upkeep},
       {"41 * * * *", Keyfleet.Keys.DeckEndCheck},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_agents"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "key_agents"}},

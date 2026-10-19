@@ -8,10 +8,12 @@ Classic, Syndicate, Cascade and Accelerant, whose keys are bought in USDC. Key
 holders talk in the fleet's rooms, share work in its workspace, notebooks and
 git repository, and vote on proposals that record a decision, pay from the
 fleet's treasury or restrict a key's edits. A key's owner can give agent
-wallets time-limited shards of the key. The site never sends a transaction
-itself: the routine ones anyone may send, such as the daily split, sending the
-protocol share to REGENT staking and turning sale USDC into REGENT, are
-buttons a person presses with their own wallet.
+wallets time-limited shards of the key. Every wallet button sends from the
+wallet of the person who presses it. The site's routine upkeep also presses
+the routine ones anyone may press, as each comes due: the daily split, sending
+the protocol share to REGENT staking, turning sale USDC into REGENT and
+carrying out an approved proposal. It pays only the network fees, from its own
+account, and a Credits admin can pause it at `/admin/upkeep`.
 
 The homepage is where a visitor chooses a fleet. Each fleet's page is its map
 of keys, with links to its rooms, workspace and proposals. A signed-in
@@ -43,10 +45,11 @@ updates when a ship moves.
   afterwards.
 - The rest of a sale goes to the fleet's treasury (on Accelerant, 20% of each
   later sale, with 70% going to the holder of the key before) and is turned
-  into REGENT in pieces, by anyone who presses for the next one. Every token
-  the treasury receives is the fleet's shared money. Once a day anyone may run
-  the daily split, which shares a small part of its ETH, REGENT and USDC
-  equally across the keys minted at least 2 days before.
+  into REGENT in pieces, by anyone who presses for the next one, and by the
+  site's routine upkeep when nobody has. Every token the treasury receives is
+  the fleet's shared money. Once a day anyone may run the daily split, which
+  shares a small part of its ETH, REGENT and USDC equally across the keys
+  minted at least 2 days before.
 - Every vote lasts 24 hours, one ballot per key. A proposal passes when Yes
   reaches 60% of the keys present when it opened plus those that voted, and
   anyone may then carry it out within 48 hours. A payment moves at most 99%

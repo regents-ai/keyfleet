@@ -112,6 +112,30 @@ defmodule KeyfleetWeb.Router do
     )
   end
 
+  # The routine upkeep's switch: Credits admins only, checked as the saved
+  # errors are, before the form's token, so anyone else's press gets the
+  # not-found page too. One form and no script, so it keeps the reading policy.
+  pipeline :upkeep_admin do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :enforce_session_authority
+
+    plug :put_secure_browser_headers, %{
+      "content-security-policy" => ContentSecurityPolicy.reading(),
+      "referrer-policy" => "no-referrer"
+    }
+
+    plug KeyfleetWeb.ErrorsAdmin, policy: :reading
+    plug :protect_from_forgery
+    plug KeyfleetWeb.Plugs.Theme
+  end
+
+  scope "/admin", KeyfleetWeb do
+    pipe_through :upkeep_admin
+    get "/upkeep", UpkeepAdminController, :show
+    post "/upkeep", UpkeepAdminController, :update
+  end
+
   if Application.compile_env(:keyfleet, :local_showcase, false) do
     pipeline :local_showcase do
       plug KeyfleetWeb.Showcase.LocalOnly

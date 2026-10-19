@@ -12,8 +12,10 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
   alias Keyfleet.Proposals.Actions
   alias Keyfleet.SharedReading
   alias Keyfleet.TestChainNode
+  alias Keyfleet.Treasury
   alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetProposals
+  alias KeyfleetWeb.ProposalsLive
   alias KeyfleetWeb.WalletWords
   alias RegentChain.Call
 
@@ -575,6 +577,63 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                "Shared with Key holders 1 USDC",
                "Received 10 USDC"
              ]
+    end
+
+    test "the treasury tab says what Keyfleet's routine upkeep last did, once it has its key",
+         %{conn: conn} do
+      {:ok, view, _html} = open(conn, @treasury_page)
+      refute has_element?(view, "#treasury-upkeep")
+
+      Application.put_env(:keyfleet, Keyfleet.Treasury.Upkeep,
+        private_key: :binary.copy(<<0x11>>, 32)
+      )
+
+      on_exit(fn -> Application.delete_env(:keyfleet, Keyfleet.Treasury.Upkeep) end)
+
+      run = Ecto.UUID.generate()
+      hash = "0x" <> String.duplicate("ab", 32)
+      system = %Actors.System{}
+
+      Treasury.record_upkeep_line!(
+        %{
+          run_id: run,
+          fleet_id: @fleet,
+          step: :send_share,
+          outcome: :sent,
+          transaction_hash: hash,
+          raw_transaction: "0x02f8"
+        },
+        actor: system
+      )
+      |> Treasury.settle_upkeep_line!(:done, nil, actor: system)
+
+      for line <- [
+            %{
+              fleet_id: @fleet,
+              step: :run_split,
+              reason: :not_due,
+              opens_at: ~U[2026-10-20 12:00:00Z]
+            },
+            %{step: :convert, reason: :nothing_queued}
+          ],
+          do:
+            Treasury.record_upkeep_line!(Map.merge(line, %{run_id: run, outcome: :skipped}),
+              actor: system
+            )
+
+      {:ok, view, _html} = open(conn, @treasury_page)
+      assert text(view, "#treasury-upkeep-state") == "Paused"
+
+      assert lines(view, "#treasury-upkeep-lines li") == [
+               "Next release #{ProposalsLive.at(~U[2026-10-20 12:00:00Z])}",
+               "Sent the share owed to REGENT staking View on BaseScan",
+               "No USDC waiting to turn into REGENT"
+             ]
+
+      assert has_element?(
+               view,
+               ~s(#treasury-upkeep-recent a[href="https://basescan.org/tx/#{hash}"])
+             )
     end
 
     # Costly failure: a release already due reads as a time gone by, and an

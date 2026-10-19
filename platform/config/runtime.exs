@@ -91,6 +91,21 @@ if config_env() != :test do
   end
 end
 
+# The upkeep account's key, KEYFLEET_UPKEEP_KEY: 0x and 64 hex digits. It
+# signs the Treasury buttons anyone may press (Keyfleet.Treasury.Upkeep) and
+# nothing else; without it nothing is pressed, and a key of any other shape
+# stops the boot. The key is kept as its 32 bytes and never printed.
+upkeep_key = System.get_env("KEYFLEET_UPKEEP_KEY", "")
+
+if config_env() != :test and upkeep_key != "" do
+  with "0x" <> hex when byte_size(hex) == 64 <- upkeep_key,
+       {:ok, private_key} <- Base.decode16(hex, case: :mixed) do
+    config :keyfleet, Keyfleet.Treasury.Upkeep, private_key: private_key
+  else
+    _malformed -> raise "KEYFLEET_UPKEEP_KEY must be 0x and 64 hex digits"
+  end
+end
+
 # Each fleet's trait table, and card deck if it has one, ships with the
 # release, named by its hash; the tests keep theirs elsewhere.
 if config_env() != :test do

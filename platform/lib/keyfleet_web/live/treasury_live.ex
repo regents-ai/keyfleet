@@ -1,7 +1,10 @@
 defmodule KeyfleetWeb.TreasuryLive do
   @moduledoc """
   Public treasury balances, wallet actions, history, permissions and contracts.
-  Uses the existing indexed reads and wallet approval flow.
+  Uses the existing indexed reads and wallet approval flow. Under the money
+  buttons, once routine upkeep is set up: whether it is running, what its
+  latest check did for the fleet, each line in a few plain words, and its
+  latest presses with their transactions on Basescan.
   """
 
   use KeyfleetWeb, :html
@@ -51,6 +54,8 @@ defmodule KeyfleetWeb.TreasuryLive do
         actor={@actor}
         lease={@lease}
       />
+
+      <.routine_upkeep :if={@page.upkeep} upkeep={@page.upkeep} />
 
       <%!-- A fleet not yet on chain has no treasury to show. --%>
       <section :if={!@page.treasury} id="treasury-not-live" class="proposals-panel">
@@ -162,6 +167,134 @@ defmodule KeyfleetWeb.TreasuryLive do
     </article>
     """
   end
+
+  attr :upkeep, :map, required: true, doc: "as `Keyfleet.Treasury.upkeep/1` reads it"
+
+  # What Keyfleet's own presses of the routine buttons last did for the fleet.
+  defp routine_upkeep(assigns) do
+    ~H"""
+    <section id="treasury-upkeep" class="proposals-panel" aria-labelledby="treasury-upkeep-title">
+      <h2 id="treasury-upkeep-title">
+        Routine upkeep
+        <span id="treasury-upkeep-state" class="proposals-badge">
+          {if @upkeep.paused?, do: "Paused", else: "Running"}
+        </span>
+        <Regent.Primitives.tip id="treasury-upkeep-tip" label="About routine upkeep">
+          Keyfleet presses the routine buttons above when they come due, with the same checks, and anyone can still press them first.
+        </Regent.Primitives.tip>
+      </h2>
+      <p class="proposals-detail">
+        <span :if={@upkeep.paused?}>Paused for now. Every button above still works.</span>
+        <span :if={@upkeep.checked_at} id="treasury-upkeep-checked">
+          Last checked
+          <time datetime={DateTime.to_iso8601(@upkeep.checked_at)}>
+            {ProposalsLive.at(@upkeep.checked_at)}
+          </time>
+        </span>
+        <span :if={is_nil(@upkeep.checked_at)}>Not checked yet.</span>
+      </p>
+      <ol :if={@upkeep.lines != []} id="treasury-upkeep-lines" class="proposals-lines">
+        <li :for={line <- @upkeep.lines} data-step={line.step} data-outcome={line.outcome}>
+          <.upkeep_line line={line} />
+        </li>
+      </ol>
+      <h3 :if={@upkeep.recent != []} id="treasury-upkeep-recent-title">Recent</h3>
+      <ol :if={@upkeep.recent != []} id="treasury-upkeep-recent" class="proposals-lines">
+        <li :for={line <- @upkeep.recent} data-step={line.step} data-outcome={line.outcome}>
+          <.upkeep_line line={line} />
+          <span class="proposals-detail">
+            <time datetime={DateTime.to_iso8601(line.at)}>{ProposalsLive.at(line.at)}</time>
+          </span>
+        </li>
+      </ol>
+    </section>
+    """
+  end
+
+  attr :line, :map, required: true
+
+  # One thing the upkeep did or held back, with its transaction once it has one.
+  defp upkeep_line(assigns) do
+    ~H"""
+    <span>
+      {upkeep_said(@line)}
+      <a
+        :if={@line.transaction_hash}
+        href={AddressLinks.basescan_tx(@line.transaction_hash)}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="View the transaction on BaseScan"
+      >
+        View on BaseScan
+      </a>
+    </span>
+    """
+  end
+
+  # A line of the upkeep in a few words: what was done, what is on its way,
+  # or why nothing was sent, one clause for each.
+  defp upkeep_said(%{outcome: :done, step: :run_split}),
+    do: "Released the Daily Treasury Slice to Keys"
+
+  defp upkeep_said(%{outcome: :done, step: :send_share}),
+    do: "Sent the share owed to REGENT staking"
+
+  defp upkeep_said(%{outcome: :done, step: :convert, amount: nil}),
+    do: "Skipped USDC that couldn’t be turned into REGENT"
+
+  defp upkeep_said(%{outcome: :done, step: :convert, amount: amount}),
+    do: "Turned #{usdc(amount)} into REGENT"
+
+  defp upkeep_said(%{outcome: :done, step: :carry_out, proposal: number}),
+    do: "Carried out Proposal #{number}"
+
+  defp upkeep_said(%{outcome: :sent, step: nil}), do: "Waiting for the network to confirm"
+
+  defp upkeep_said(%{outcome: :sent} = line),
+    do: "#{upkeep_doing(line)}, waiting for the network to confirm"
+
+  defp upkeep_said(%{reason: :not_due, step: :run_split, opens_at: opens_at}),
+    do: "Next release #{ProposalsLive.at(opens_at)}"
+
+  defp upkeep_said(%{reason: :not_due, step: :convert, opens_at: opens_at}),
+    do: "USDC turns into REGENT again from #{ProposalsLive.at(opens_at)}"
+
+  defp upkeep_said(%{reason: :not_due, step: :carry_out, proposal: number, opens_at: opens_at}),
+    do: "Proposal #{number} can be carried out from #{ProposalsLive.at(opens_at)}"
+
+  defp upkeep_said(%{reason: :not_due, opens_at: opens_at}),
+    do: "Not due until #{ProposalsLive.at(opens_at)}"
+
+  defp upkeep_said(%{reason: :no_keys_sold}),
+    do: "No Keys sold yet, so there is no one to share with"
+
+  defp upkeep_said(%{reason: :nothing_owed}), do: "Nothing owed to REGENT staking"
+  defp upkeep_said(%{reason: :nothing_queued}), do: "No USDC waiting to turn into REGENT"
+
+  defp upkeep_said(%{reason: :refused} = line),
+    do: "#{upkeep_doing(line)} would be refused right now, so it waits"
+
+  defp upkeep_said(%{reason: :unread}), do: "Couldn’t reach the network, trying again shortly"
+
+  defp upkeep_said(%{reason: :no_eth_for_gas}),
+    do: "Waiting for Keyfleet to add ETH for network fees"
+
+  defp upkeep_said(%{reason: :fees_high}), do: "Waiting for network fees to come down"
+
+  defp upkeep_said(%{reason: :earlier_waiting}),
+    do: "Waiting for an earlier transaction to confirm"
+
+  defp upkeep_said(%{reason: :reverted} = line), do: "#{upkeep_doing(line)} didn’t go through"
+  defp upkeep_said(%{reason: :not_sent} = line), do: "#{upkeep_doing(line)} couldn’t be sent"
+
+  # What a line was about, as it was under way.
+  defp upkeep_doing(%{step: :run_split}), do: "Releasing the Daily Treasury Slice to Keys"
+  defp upkeep_doing(%{step: :send_share}), do: "Sending the share owed to REGENT staking"
+  defp upkeep_doing(%{step: :convert}), do: "Turning USDC into REGENT"
+  defp upkeep_doing(%{step: :carry_out, proposal: number}), do: "Carrying out Proposal #{number}"
+  defp upkeep_doing(%{step: nil}), do: "A transaction"
+
+  defp usdc(amount), do: "#{ProposalsPage.units(amount, 6)} USDC"
 
   attr :page, :map, required: true
 

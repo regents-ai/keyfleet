@@ -2923,3 +2923,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: on a fleet's page, someone who already holds one of its Keys sees their Keys in the way in, with no "Add another Key to increase vote weight and treasury share" button beside them. Someone holding none still sees "Join this Keyfleet by purchasing the next Key". "Get a Key" still opens from the homepage's Buy Key window.
 - Why: Sean asked (20:16Z) to remove the long "Add another Key…" button.
+
+## 2026-10-19 — Keyfleet presses the routine Treasury buttons itself
+
+- What: every 5 minutes Keyfleet presses each fleet's Treasury buttons that are due, from its own account: the Daily Treasury Slice to Keys, Send to REGENT staking, Turn into REGENT and carrying out approved proposals. It checks what the button checks first, pays only the network fees, and waits when the fee is above 1 gwei per gas or the account has too little ETH. Anyone can still press every button first. The Treasury tab has a Routine upkeep section: running or paused, when it last checked, what that check did in a few words, and its latest presses, each with its transaction on BaseScan. A Credits admin pauses and resumes it with one button at `/admin/upkeep`, which also shows the account that pays the fees; anyone else gets the not-found page. It starts paused: put a little ETH on Base in the account behind `KEYFLEET_UPKEEP_KEY`, then resume it. The hourly overdue check stays.
+- Why: Sean chose (20:13Z, "2. a") a site account that presses "Turn into REGENT" and "Send to REGENT staking" on a timer, so Key sale money reaches the treasury as REGENT without anyone pressing. Built on the upkeep first written on 17 October; a lab-chain test now runs it against the fleet's real contracts.
