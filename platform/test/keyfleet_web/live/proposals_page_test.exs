@@ -457,6 +457,21 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert cells(view, @usdc) == ["3 USDC", "0 USDC"]
     end
 
+    test "the treasury tab shows the USDC from Key sales waiting to become REGENT", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = open(conn, @treasury_page)
+
+      ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 0)],
+        conversion_waiting: Decimal.new(72_576_000)
+      )
+
+      FleetProposals.read(@fleet)
+
+      assert shows?(fn -> has_element?(view, "#proposals-waiting") end)
+      assert text(view, "#proposals-waiting") == "Key sales waiting to become REGENT: 72.576 USDC"
+    end
+
     test "a burst of notices is answered by one read of each fleet, for every open page", %{
       conn: conn
     } do
@@ -546,8 +561,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert text(view, "#proposals-advances li > span") ==
                "Advance 1: 3 USDC of 4 USDC, 0xdddd..dddd"
 
-      # The return of all that is still out is typed already.
-      assert has_element?(view, "#proposals-return-1-amount[value='3']")
+      # Signed out, the advance shows without its Return; signed in, the
+      # return of all that is still out is typed already.
+      refute has_element?(view, "#proposals-return-1")
+      {:ok, member, _html} = open(signed_in_as(conn, @holder), @treasury_page)
+      assert has_element?(member, "#proposals-return-1-amount[value='3']")
 
       # Newest first; an advance coming back changes only what is still out.
       assert lines(view, "#proposals-history li") == [
@@ -1041,10 +1059,12 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
     end
 
     # Signed out, the split preview and presence are read from the chain as
-    # for a member and shown without their buttons. Nothing is built for the
-    # other buttons, so nothing holds them back: every press reaches the
+    # for a member and shown without their buttons. The Treasury tab shows a
+    # visitor its figures only: sending the staking share and turning USDC
+    # into REGENT show once they sign in (Sean, 19 October 2026). Nothing is
+    # built for Propose, so nothing holds it back: every press reaches the
     # wallet, which asks to sign in.
-    test "signed out, the split and presence show read-only, and the other buttons take the press",
+    test "signed out, the split and presence show read-only, the treasury shows no buttons, and Propose takes the press",
          %{conn: conn} do
       ChainViews.put!(
         list_views(usdc_held: 250_000_000, minted: 4, keys: [{2, @other, 0}], maintenance: true)
@@ -1062,7 +1082,10 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert preview(treasury, @usdc) == ["USDC", "250 USDC", "100 USDC", "0.625 USDC"]
       refute has_element?(treasury, "#proposals-split-action [data-onchain-step]")
-      assert pressable?(treasury, "send_share", ["#proposals-send-share"])
+      refute has_element?(treasury, "#proposals-regents-share")
+      refute has_element?(treasury, "#proposals-convert")
+      refute has_element?(treasury, "#proposals-share-title")
+      refute has_element?(treasury, "#proposals-convert-title")
     end
   end
 

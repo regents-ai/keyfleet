@@ -2898,3 +2898,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: every main button is filled Tangerine with Charcoal words in both themes, and keeps its motion (a Charcoal edge draws round it on hover, the arrow nudges on, a press gives a little). The fleet page's way in is the button alone, with no "Key · price" line beside it. "How a fleet decides" leaves the buy panels (Classic's page, a Key's page and the homepage Buy Key window) and sits in the Treasury under Permissions & contracts. On a screen too short for the hall, the fleet's box grows and the page scrolls, so the hall's words never run past its edge; on a tall one the box ends at the page's margin, with no stray scroll.
 - Why: Sean asked for these four (19:44Z).
+
+## 2026-10-19 — The Treasury tab shows Key sale money on its way in, and visitors see figures only
+
+- What: under the treasury's balances, the Treasury tab now says how much USDC from Key sales is waiting to become REGENT, for example "Key sales waiting to become REGENT: 72.576 USDC". The figure comes from the same reading as the balances and updates with it. Visitors who aren't signed in see the treasury's figures, the daily slice and the history; "Send to REGENT staking", "Turn into REGENT" and an advance's Return show once they sign in.
+- Why: Sean asked (18:58Z) for the treasury to show it growing from Key sales; sale money waits in the fleet until someone presses "Turn into REGENT", so the balances alone showed 0. He chose figures only for visitors (20:13Z, "1. a").
