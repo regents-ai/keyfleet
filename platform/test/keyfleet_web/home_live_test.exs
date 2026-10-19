@@ -110,7 +110,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
              ~s(dialog#home-buy-key button#home-buy-key-approve[data-onchain-step="approve"])
            )
 
-    assert has_element?(view, "dialog#home-buy-key #home-buy-key-risks")
     refute has_element?(view, "#home-buy-key-go")
   end
 

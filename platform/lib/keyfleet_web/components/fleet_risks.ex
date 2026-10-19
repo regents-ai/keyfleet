@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.Components.FleetRisks do
   @moduledoc """
-  How a fleet decides and spends, said before someone buys a key or gives an
-  agent a shard of one. The words follow §14 of the contracts specification.
+  How a fleet decides and spends, said in the fleet's Treasury and before
+  someone gives an agent a shard of a Key. The words follow §14 of the contracts specification.
   """
   use KeyfleetWeb, :html
 

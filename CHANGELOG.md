@@ -2893,3 +2893,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Why: Sean asked for each (18:29Z to 18:57Z): moving between the Classic #1 tabs flashed the background, remove "· 0 online now" for the Regents Club on the homepage, and "I want it default light mode" for visitors who have not chosen.
 
 - Released 0de31ad7 as Fly v100 (19 Oct 2026 19:55Z).
+
+## 2026-10-19 — Clear buttons, the hall inside its box, How a fleet decides in the Treasury
+
+- What: every main button is filled Tangerine with Charcoal words in both themes, and keeps its motion (a Charcoal edge draws round it on hover, the arrow nudges on, a press gives a little). The fleet page's way in is the button alone, with no "Key · price" line beside it. "How a fleet decides" leaves the buy panels (Classic's page, a Key's page and the homepage Buy Key window) and sits in the Treasury under Permissions & contracts. On a screen too short for the hall, the fleet's box grows and the page scrolls, so the hall's words never run past its edge; on a tall one the box ends at the page's margin, with no stray scroll.
+- Why: Sean asked for these four (19:44Z).

@@ -30,7 +30,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias Keyfleet.Rooms
   alias Keyfleet.Treasury
   alias KeyfleetWeb.CheckIns
-  alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.Placeholder
   alias KeyfleetWeb.DmsLive
   alias KeyfleetWeb.FleetLive
@@ -188,7 +187,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <dd>{FleetLive.usdc(@profile.issue_price)}</dd>
         </div>
       </dl>
-      <FleetRisks.disclosure id="key-profile-buy-risks" />
       <FleetLive.buy_order
         id="key-profile-buy"
         fleet={@fleet}

@@ -6,9 +6,13 @@
    them. The key page's grammar carries over: one
    ground, hairline panels, the display face for headings. */
 
+/* A fleet's page fills what the header leaves, and its view the page, so the
+   view reaches the screen's foot whatever the header's height. */
+#route-content:has(> .fleet-page > .fleet-view) {
+  display: grid;
+}
+
 .fleet-page {
-  /* The shell's header and the page's padding above and below the view. */
-  --fleet-view-top: calc(4rem + 1px + 2 * var(--rg-panel-padding));
   display: grid;
   gap: 1.5rem;
   min-width: 0;
@@ -43,7 +47,6 @@
      and a holder's cards, never push the view past the page's edge. */
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(20rem, 1fr);
-  min-height: calc(100dvh - var(--fleet-view-top));
 }
 
 /* The Treasury, Proposals and the Workspace have no way in under the bar, so
@@ -53,9 +56,12 @@
 }
 
 /* The hall's columns scroll on their own, like a chat app's, so the view
-   keeps to the screen. */
-.fleet-view[data-view="hall"] {
-  height: calc(100dvh - var(--fleet-view-top));
+   keeps to the screen: the stage takes no height from what it holds, only the
+   rest of the view. On a screen too short for the bar, the way in and the
+   hall's 20rem together, the view grows and the page scrolls, so nothing runs
+   past the view's edge. */
+.fleet-view[data-view="hall"] > .fleet-stage {
+  contain: size;
 }
 
 /* The bar */
@@ -380,7 +386,6 @@
 }
 
 /* What a buyer should know, under the buttons, spans the panel. */
-#buy-key-order > .fleet-risks,
 #buy-key-order > .fleet-detail {
   justify-self: stretch;
 }
@@ -683,8 +688,8 @@
 @media (max-width: 64rem) {
   /* Narrower than a laptop, the hall is one column that scrolls with the
      page: the channels as a row, then the feed, then the fleet now. */
-  .fleet-view[data-view="hall"] {
-    height: auto;
+  .fleet-view[data-view="hall"] > .fleet-stage {
+    contain: none;
   }
 
   .fleet-hall {
@@ -730,10 +735,6 @@
 }
 
 @media (max-width: 47.99rem) {
-  .fleet-page {
-    --fleet-view-top: calc(var(--shell-header-bottom) + 2rem);
-  }
-
   .fleet-bar {
     gap: 0.75rem;
     padding-block: 0.75rem;

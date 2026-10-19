@@ -1,0 +1,12 @@
+@layer regents-product {
+/* Every main button is a clear call to act in both themes: filled Tangerine
+   with Charcoal words. It keeps the shared button's motion: hovered, a
+   Charcoal edge draws round its cut corners and the arrow nudges on; pressed,
+   the paint and words give a little. A button that can't act now still fills
+   the inert grey every disabled button has. */
+.rg-button:where(:not(.rg-button--secondary):not(.rg-button--quiet)) {
+  --color-accent: var(--palette-tangerine-tango);
+  --color-fg-on-accent: var(--palette-charcoal);
+  --rg-button-border-color: var(--palette-charcoal);
+}
+}

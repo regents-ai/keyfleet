@@ -74,7 +74,6 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.Count
-  alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.MemberList
   alias KeyfleetWeb.Components.Placeholder
   alias KeyfleetWeb.Components.SendAgent
@@ -538,7 +537,6 @@ defmodule KeyfleetWeb.FleetLive do
   defp entry(%{fleet: %{buy: %{price: price}}} = assigns) when price != nil do
     ~H"""
     <section id="fleet-entry" class="fleet-entry" data-entry="buy" aria-label="Get a Key">
-      <p class="fleet-entry__line">Key {grouped(@fleet.buy.token_id)} · {usdc(@fleet.buy.price)}</p>
       <.buy_key_button buy={@fleet.buy} holder?={false} />
     </section>
     """
@@ -1272,8 +1270,6 @@ defmodule KeyfleetWeb.FleetLive do
           </h3>
         </:heading>
         <:details :let={panel}>
-          <FleetRisks.disclosure :if={buy_blocked(panel) != :sold_out} id="buy-key-risks" />
-
           <p :if={buy_blocked(panel) == :sold_out} id="buy-key-elsewhere" class="fleet-detail">
             You can still get a Key from someone who holds one: it moves like any other token on
             Base.

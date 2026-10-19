@@ -2,6 +2,7 @@
 @import "../vendor/regent_ui/primitives.css";
 @import "./tokens/root.css";
 @import "./components/shell.css";
+@import "./components/buttons.css";
 @import "./components/sticky_actions.css";
 @import "./components/key_map.css";
 @import "./components/key_profile.css";

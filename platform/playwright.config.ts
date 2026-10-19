@@ -17,6 +17,7 @@ export default defineConfig({
     "fleet_map.spec.ts",
     "key_profile.spec.ts",
     "fleet_motion.spec.ts",
+    "fleet_layout.spec.ts",
     "wallet_buttons.spec.ts",
     "key_shards.spec.ts",
     "room_mutes.spec.ts",

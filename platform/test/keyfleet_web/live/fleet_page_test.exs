@@ -238,12 +238,17 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     # producer doesn't run under test (`KeyfleetWeb.FleetProposals`).
     FleetProposals.read(@fleet)
 
-    # How the fleet works is on its Treasury page.
+    # How the fleet works and how it decides are on its Treasury page, not
+    # beside the buttons that buy a Key.
+    refute has_element?(view, "#fleet-about .fleet-risks")
+
     view |> element("#fleet-tab-treasury") |> render_click()
     assert_patch(view, @treasury_path)
 
     assert text(view, "#treasury-rules") =~
              "When a level sells out, the holders of the level before it are paid back"
+
+    assert has_element?(view, "#treasury-rules #treasury-risks summary", "How a fleet decides")
 
     for row <- Keyfleet.Authority.treasury_rows() do
       assert has_element?(view, "#treasury-rules dt", row.what)
@@ -709,15 +714,18 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     end
 
     # A buyer sees what the next Key costs before pressing anything, as the
-    # Buy button will name it: over the fleet's Buy button, and on the
-    # homepage's "Buy Next Key".
+    # Buy button will name it: on the fleet's own button, with no line beside
+    # it, and on the homepage's "Buy Next Key".
     test "the next Key and its price show before any press" do
       deploy!("fleet_tech_classic")
       ChainHelpers.seed_cursor!("fleet_tech_classic")
       read_now("fleet_tech_classic")
 
       {:ok, view, _html} = live(build_conn(), "/classic/1")
-      assert has_element?(view, "#fleet-entry .fleet-entry__line", "Key 1 · 10 USDC")
+      assert text(view, "#fleet-entry #fleet-get-key") ==
+               "Join this Keyfleet by purchasing the next Key: 10 USDC"
+
+      refute has_element?(view, "#fleet-entry .fleet-entry__line")
 
       {:ok, home, _html} = live(build_conn(), "/")
       render_async(home, 3_000)
@@ -1018,7 +1026,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   test "a key bought appears once the chain reader records it", %{conn: conn} do
     fleet = deploy!("fleet_tech_accelerant", 5_000_000)
     {:ok, view, _html} = live(conn, "/accelerant/1?view=members")
-    assert has_element?(view, "#fleet-entry .fleet-entry__line", "Key 1 ·")
+    assert has_element?(view, "#fleet-get-key", "Join this Keyfleet by purchasing the next Key")
 
     StubClient.put_chain(chain_head(5_000_010), [ownership_log(1, 1, @owner, 5_000_003)])
     assert Scanner.step(fleet, StubClient) == :ok
@@ -1537,8 +1545,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, _html} = live(build_conn(), @path)
 
       assert has_element?(view, ~s(#fleet-entry[data-entry="buy"]))
-      assert text(view, "#fleet-entry .fleet-entry__line") == "Key 151 · 42.99817 USDC"
-
       assert text(view, "#fleet-entry #fleet-get-key") ==
                "Join this Keyfleet by purchasing the next Key: 42.99817 USDC"
 

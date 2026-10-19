@@ -68,7 +68,7 @@ defmodule KeyfleetWeb.HomeLive do
     Time
   }
 
-  alias KeyfleetWeb.Components.{FleetRisks, SendAgent, Shell}
+  alias KeyfleetWeb.Components.{SendAgent, Shell}
 
   @classic "fleet_tech_classic"
   @club "regents_club"
@@ -641,10 +641,9 @@ defmodule KeyfleetWeb.HomeLive do
 
   # The window "Buy Key" opens: the Key cards turning, where its price goes,
   # how far the sale has gone, and the next Key's price and the one after it.
-  # Once the sale is open it holds the fleet's own Approve and Buy, with what
-  # a buyer should know under them. Until then its Buy is closed, with the
-  # reason right under it, so a phone that scrolls the window sees both
-  # together.
+  # Once the sale is open it holds the fleet's own Approve and Buy. Until
+  # then its Buy is closed, with the reason right under it, so a phone that
+  # scrolls the window sees both together.
   defp buy_key(assigns) do
     assigns = assign(assigns, offer(assigns.classic)) |> assign(key_window(assigns.classic))
 
@@ -686,11 +685,7 @@ defmodule KeyfleetWeb.HomeLive do
         }
         actor={@actor}
         lease={@lease}
-      >
-        <:details>
-          <FleetRisks.disclosure id="home-buy-key-risks" />
-        </:details>
-      </FleetLive.buy_order>
+      />
       <div class="rl-buy-key__actions">
         <Regent.Primitives.button
           :if={@state != :open}
