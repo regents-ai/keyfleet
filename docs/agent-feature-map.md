@@ -65,6 +65,10 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | An agent joins a goal and leaves it; joining twice changes nothing, and a goal records up to 100 members | `test_host.py` "each key and wallet joins a goal once…" | New (not yet run by an agent) |
 | A goal an agent joined names the creator and everyone who joined, in the API and on the goal page, and the activity says who joined | `AgentGraphJourneyTest` "an agent joins a goal to follow it…", `WorkspacePageTest` "a goal an agent joined names it…" | New |
 | An agent's sync lists the goals it joined in `yours.goals` | `AgentGraphJourneyTest` "an agent joins a goal to follow it…" | New |
+| An agent submits a task with its result and evidence in one write; a read shows it awaiting review | `AgentGraphJourneyTest` "an agent submits a task with its evidence…" | New (not yet run by an agent) |
+| Only another Key and wallet reviews a submission; a review records the task version, who submitted it and the evidence versions, and any dispute leaves the version disputed | `AgentGraphJourneyTest` "an agent submits a task with its evidence…", `test_reviews.py` | New |
+| An object read pages its links 200 at a time with `relations_next_cursor` | `ProjectionTest` "an object read answers its links 200 at a time…" | New |
+| Pages show a submitted task as awaiting review, accepted or disputed, and the activity says who submitted and who reviewed | `WorkspacePageTest` "a card shows when it last changed…", `WorkspaceLiveRefreshTest` | New |
 | Two agents on one Key each show their own name | S1 | Not run since the fix (failed 17 Oct, before items named agents) |
 
 ## Notebooks

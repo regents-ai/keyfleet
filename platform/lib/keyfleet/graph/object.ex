@@ -3,6 +3,12 @@ defmodule Keyfleet.Graph.Object do
   One workspace object as the fleet's graph log last left it: its member
   fields (`data`), its server-owned fields (`sys`) and its version.
 
+  A task marked done has been submitted for review, and its `review` says
+  where that stands: `awaiting_review` until a review of the task's current
+  version has been recorded, then `disputed` if any review of that version
+  disputes it, otherwise `accepted`. Any change to the task makes a new
+  version, which waits for review again.
+
   An object last changed where its creation or its latest patch (an archive
   included) stands in the log: `changed_seq` is that event's place and
   `changed_at` its time. Nothing else moves them: linking the object,
@@ -63,7 +69,7 @@ defmodule Keyfleet.Graph.Object do
       prepare build(
                 sort: [changed_seq: :desc],
                 select: [:fleet_id, :id, :type, :sys, :version, :changed_seq, :changed_at],
-                load: [:title, :card]
+                load: [:title, :card, :review]
               )
 
       # Ties, which the log never makes, break the way the index reads back.
@@ -98,9 +104,9 @@ defmodule Keyfleet.Graph.Object do
 
     # The fleet's goals or tasks, as `type` says, the most recently changed
     # first, archived ones left out. Anyone may read it, so each comes with
-    # its title, its standing (a goal's status, a task's progress) and the
-    # public summary its members wrote, and nothing else. Callers bound it
-    # with a limit.
+    # its title, its standing (a goal's status, a task's progress or, once
+    # submitted, its review) and the public summary its members wrote, and
+    # nothing else. Callers bound it with a limit, or ask for one by id.
     read :outline do
       argument :fleet_id, :string, allow_nil?: false
 
@@ -259,17 +265,59 @@ defmodule Keyfleet.Graph.Object do
   end
 
   calculations do
-    calculate :title, :string, expr(fragment("left(? ->> 'title', 200)", data)), public?: true
+    # A review has no title of its own; it is named by its decision.
+    calculate :title,
+              :string,
+              expr(
+                fragment(
+                  "left(CASE ? WHEN 'review' THEN CASE ? ->> 'decision' WHEN 'accept' THEN 'Review: accepted' WHEN 'dispute' THEN 'Review: disputed' END ELSE ? ->> 'title' END, 200)",
+                  type,
+                  data,
+                  data
+                )
+              ),
+              public?: true
+
+    # Where a submitted task's review stands; nothing for any other object.
+    # The reviews of a task are the `reviews` links to it, read through the
+    # links' index on their target.
+    calculate :review,
+              :string,
+              expr(
+                fragment(
+                  """
+                  CASE WHEN ? = 'task' AND (? ->> 'progress') = 'done' THEN COALESCE((
+                    SELECT CASE
+                      WHEN bool_or((review.data ->> 'decision') = 'dispute') THEN 'disputed'
+                      WHEN bool_or((review.data ->> 'decision') = 'accept') THEN 'accepted'
+                    END
+                    FROM keyfleet_app.graph_relations AS link
+                    JOIN keyfleet_app.graph_objects AS review
+                      ON review.fleet_id = link.fleet_id AND review.id = link.source
+                    WHERE link.fleet_id = ? AND link.target = ? AND link.type = 'reviews'
+                      AND (review.sys #>> '{review,task_version}')::bigint = ?
+                  ), 'awaiting_review') END
+                  """,
+                  type,
+                  data,
+                  fleet_id,
+                  id,
+                  version
+                )
+              ),
+              public?: true
 
     # A task's next step as its author wrote it; nothing for any other object.
     calculate :next_step, :string, expr(fragment("? ->> 'next_step'", data)), public?: true
 
-    # A goal's status or a task's progress; nothing for any other object.
+    # A goal's status, a task's progress or, once it is submitted, its
+    # review; nothing for any other object.
     calculate :standing,
               :string,
               expr(
                 fragment(
-                  "left(CASE ? WHEN 'goal' THEN ? ->> 'status' WHEN 'task' THEN ? ->> 'progress' END, 32)",
+                  "COALESCE(?, left(CASE ? WHEN 'goal' THEN ? ->> 'status' WHEN 'task' THEN ? ->> 'progress' END, 32))",
+                  review,
                   type,
                   data,
                   data
@@ -313,6 +361,7 @@ defmodule Keyfleet.Graph.Object do
                       WHEN 'service' THEN ? ->> 'problem'
                       WHEN 'note' THEN ? ->> 'body'
                       WHEN 'dead_end' THEN ? ->> 'why_it_failed'
+                      WHEN 'review' THEN ? ->> 'rationale'
                     END, 240)))
                   """,
                   data,
@@ -324,6 +373,7 @@ defmodule Keyfleet.Graph.Object do
                   data,
                   data,
                   type,
+                  data,
                   data,
                   data,
                   data,

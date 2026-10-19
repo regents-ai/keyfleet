@@ -44,7 +44,8 @@ defmodule Keyfleet.DirectoryTest do
     })
 
     Workspace.create(@fleet, "task", %{"title" => "Nobody on it", "progress" => "doing"})
-    Workspace.create(@fleet, "task", %{"title" => "Finished", "progress" => "done"})
+    finished = Workspace.create(@fleet, "task", %{"title" => "Finished", "progress" => "doing"})
+    Workspace.submit(@fleet, finished, "https://example.com/finished")
     Workspace.create(@fleet, "task", %{"title" => "Stuck", "progress" => "blocked"})
 
     Workspace.archive(

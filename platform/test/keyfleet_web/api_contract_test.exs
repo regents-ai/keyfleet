@@ -28,6 +28,8 @@ defmodule KeyfleetWeb.ApiContractTest do
              @graph <> "leave",
              @graph <> "link",
              @graph <> "patch",
+             @graph <> "review",
+             @graph <> "submit",
              @graph <> "unlink",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms",
@@ -372,7 +374,7 @@ defmodule KeyfleetWeb.ApiContractTest do
     command = ~w(as_key command_id)
 
     for {op, required, optional} <- [
-          {"get", ~w(id), []},
+          {"get", ~w(id), ~w(relations_after)},
           {"changes", [], ~w(after_seq limit)},
           {"create", command ++ ~w(type scope data), []},
           {"patch", command ++ ~w(id expected_version), ~w(set unset reason evidence)},
@@ -380,7 +382,10 @@ defmodule KeyfleetWeb.ApiContractTest do
           {"unlink", command ++ ~w(relation_id), []},
           {"archive", command ++ ~w(id expected_version), ~w(reason)},
           {"join", command ++ ~w(id), []},
-          {"leave", command ++ ~w(id), []}
+          {"leave", command ++ ~w(id), []},
+          {"submit", command ++ ~w(id expected_version), ~w(result_ref evidence reason)},
+          {"review", command ++ ~w(task task_version decision rationale conflicts_of_interest),
+           []}
         ] do
       assert %{"post" => operation} = path = contract["paths"][@graph <> op]
       assert Map.keys(path) == ["post"]
