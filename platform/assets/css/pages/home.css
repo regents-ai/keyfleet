@@ -215,10 +215,12 @@
   }
   .rl-sea[data-harbour-ready="true"] canvas { opacity: 1; }
 
-  /* Thirty Key cards turning over, a fifth of a second each. The sheet holds
-     them six across and five down: the rows step down one every six cards
-     while the sheet steps across one each card, so they show in order. The
-     Club's start halfway through. Less motion shows the first card alone. */
+  /* Thirty Key cards turning over, a fifth of a second each, only while they
+     are on screen (`KeyCards` marks them turning). The sheet holds them six
+     across and five down: the rows step down one every six cards while the
+     sheet steps across one each card, so they show in order, and the rows
+     and the sheet stop and start together. The Club's start halfway through.
+     Less motion shows the first card alone. */
   .rl-cards { --rl-cards-from: 0s; inline-size: 9rem; aspect-ratio: 4 / 5; overflow: hidden; }
   #home-club .rl-cards { --rl-cards-from: -3s; }
   .rl-cards__rows { inline-size: 600%; block-size: 500%; }
@@ -226,8 +228,9 @@
   @keyframes rl-cards-down { to { translate: 0 -100%; } }
   @keyframes rl-cards-across { to { translate: -100% 0; } }
   @media (prefers-reduced-motion: no-preference) {
-    .rl-cards__rows { animation: rl-cards-down 6s steps(5, jump-end) var(--rl-cards-from) infinite; }
-    .rl-cards__sheet { animation: rl-cards-across 1.2s steps(6, jump-end) var(--rl-cards-from) infinite; }
+    .rl-cards__rows { animation: rl-cards-down 6s steps(5, jump-end) var(--rl-cards-from) infinite paused; }
+    .rl-cards__sheet { animation: rl-cards-across 1.2s steps(6, jump-end) var(--rl-cards-from) infinite paused; }
+    .rl-cards[data-cards-turning] :is(.rl-cards__rows, .rl-cards__sheet) { animation-play-state: running; }
   }
   @media (prefers-reduced-motion: reduce) {
     .rl-sea__stage canvas { transition: none; }

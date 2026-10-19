@@ -44,7 +44,8 @@ type HarbourSeaController = CanvasIslandController & {
  * The sea always moves, so it draws every frame while the tab is showing. A
  * visitor who asked for less motion gets one still picture, redrawn only when an
  * agent moves on or the theme changes, and so does a browser saving data or a
- * device that can't give the sea its frames, such as a phone saving power.
+ * device that can't give the sea its frames, such as a phone saving power,
+ * until the tab is shown again.
  * Without WebGPU nothing is drawn and the page's own ground shows.
  *
  * Where the sea takes presses, a mouse over a ship shows its agent's name,
@@ -119,9 +120,10 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
         if (!harbour.onIsland(u, v)) harbour.ripple(u, v)
       }
       // The sea fades out and comes back as the still picture, rather than
-      // stopping mid-wave.
-      onStrain(() => {
-        strained = true
+      // stopping mid-wave. Given another chance, it moves on from there.
+      onStrain(held => {
+        strained = held
+        if (!held) return onCalmChange()
         void canvas.animate({opacity: [1, 0]}, {duration: SLOW, easing: "ease-in"}).finished.then(() => {
           onCalmChange()
           canvas.animate({opacity: [0, 1]}, {duration: SLOW, easing: "ease-out"})

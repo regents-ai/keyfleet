@@ -8,10 +8,11 @@ defmodule KeyfleetWeb.HomeLive do
   cards and what it is doing right now; what a fleet can use; and the footer.
 
   Each fleet's sea has a ship for each of its most recently active Keys, as
-  anyone reads them (`KeyfleetWeb.HarbourCrew`), its islands and buildings
-  placed a little differently from the other's. Pressing a ship opens its
-  Key's profile on the fleet's page. The cards are thirty Keys of no fleet, a fifth of a
-  second each; the Club's start halfway through, so the two never match.
+  anyone reads them, read once for every open page (`KeyfleetWeb.FleetShips`),
+  its islands and buildings placed a little differently from the other's.
+  Pressing a ship opens its Key's profile on the fleet's page. The cards are
+  thirty Keys of no fleet, a fifth of a second each, turning only while on
+  screen; the Club's start halfway through.
 
   "Buy Key" opens a window with the next Key's card art, where its price goes,
   how many of the 1,024 Keys have sold, the next Key's price and the one after
@@ -31,9 +32,11 @@ defmodule KeyfleetWeb.HomeLive do
   latest item, as anyone reads them (`Keyfleet.Activity`). A coming-soon
   fleet shows that it is coming soon and nothing it would have to read.
 
-  The first render reads each fleet's record and sales. Once connected, each
-  fleet reads its ships and the Club the rest, and each reads again a few
-  seconds after a notice that something changed in it: once for a burst of
+  The first render reads each fleet's record and sales, and its ships from the
+  shared reading. Once connected, each sea takes its ships whenever that
+  reading changes, and the Club reads the rest. Classic reads its sales again a
+  few seconds after a notice that a Key changed, and the Club its sales and
+  the rest after a notice that anything it shows changed: once for a burst of
   notices, and only for the fleet the notice was about. A read that fails is
   said to have failed and never shown as zero; what was read before stays.
   """
@@ -42,7 +45,7 @@ defmodule KeyfleetWeb.HomeLive do
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
-  alias Keyfleet.{Activity, Chain, Fleets, Graph, Keys, Proposals, Rooms}
+  alias Keyfleet.{Activity, Chain, Fleets, Graph, Keys, Proposals, Rooms, SharedReading}
   alias Keyfleet.Agents.Here
   alias Keyfleet.Fleets.Presets
 
@@ -50,6 +53,7 @@ defmodule KeyfleetWeb.HomeLive do
     ActivityLines,
     FleetLive,
     FleetPage,
+    FleetShips,
     HarbourCrew,
     KeyLinks,
     Motion,
@@ -208,8 +212,8 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp unread(fleet_id), do: %{fleet(fleet_id, nil) | failed?: true}
 
-  # A fleet before its first read: its name and its sales, and a sea without
-  # ships. A coming-soon fleet is never read.
+  # A fleet before its first read: its name, its sales and the ships on its
+  # sea. A coming-soon fleet is never read.
   defp fleet(fleet_id, recorded) do
     coming_soon? = Fleets.coming_soon?(fleet_id, recorded)
 
@@ -218,7 +222,7 @@ defmodule KeyfleetWeb.HomeLive do
       name: Enum.find(Fleets.catalog(), &(&1.id == fleet_id)).name,
       coming_soon?: coming_soon?,
       sales: if(not coming_soon?, do: sales(fleet_id, recorded)),
-      ships: [],
+      ships: if(coming_soon?, do: [], else: ships(fleet_id)),
       now: nil,
       failed?: false
     }
@@ -247,8 +251,10 @@ defmodule KeyfleetWeb.HomeLive do
     end
   end
 
-  # Each fleet is watched for everything its section shows, its sales and its
-  # sea, as anyone hears it, whoever is signed in.
+  # Each fleet is watched for everything its section shows, as anyone hears
+  # it, whoever is signed in: its sea through the shared reading, which it
+  # starts hearing before it takes the ships again, and the rest through the
+  # notices about what that fleet's section reads.
   defp watch(socket) do
     socket
     |> watch(socket.assigns.classic)
@@ -258,16 +264,29 @@ defmodule KeyfleetWeb.HomeLive do
   defp watch(socket, %{coming_soon?: true}), do: socket
 
   defp watch(socket, %{id: fleet_id}) do
-    for topic <- [
-          Keys.topic(fleet_id),
-          Rooms.topic(fleet_id, :public),
-          Graph.topic(fleet_id, :public),
-          Proposals.topic(fleet_id)
-        ],
-        do: Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
+    for topic <- topics(fleet_id), do: Phoenix.PubSub.subscribe(Keyfleet.PubSub, topic)
+    SharedReading.subscribe(FleetShips.key(fleet_id))
 
-    start_read(socket, fleet_id)
+    socket
+    |> update_fleet(fleet_id, &%{&1 | ships: ships(fleet_id)})
+    |> start_read(fleet_id)
   end
+
+  # Classic's section reads only its sales; the Club's also reads its rooms,
+  # its workspace and its proposals.
+  defp topics(@classic), do: [Keys.topic(@classic)]
+
+  defp topics(@club),
+    do: [
+      Keys.topic(@club),
+      Rooms.topic(@club, :public),
+      Graph.topic(@club, :public),
+      Proposals.topic(@club)
+    ]
+
+  # The ships on the fleet's sea, from the one reading every open page shares;
+  # none until the first one is taken.
+  defp ships(fleet_id), do: SharedFigures.reading(FleetShips.key(fleet_id)) || []
 
   defp start_read(socket, fleet_id),
     do:
@@ -275,11 +294,7 @@ defmodule KeyfleetWeb.HomeLive do
         PageRead.run("home", fn -> read(fleet_id, DateTime.utc_now()) end)
       end)
 
-  defp read(@classic, _now),
-    do: %{
-      sales: sales(@classic, Fleets.get_fleet!(@classic)),
-      ships: HarbourCrew.crew([@classic], nil)
-    }
+  defp read(@classic, _now), do: %{sales: sales(@classic, Fleets.get_fleet!(@classic))}
 
   defp read(@club, now) do
     latest = @club |> Activity.page(nil, limit: 1) |> Map.fetch!(:items) |> List.first()
@@ -288,7 +303,6 @@ defmodule KeyfleetWeb.HomeLive do
 
     %{
       sales: sales(@club, Fleets.get_fleet!(@club)),
-      ships: HarbourCrew.crew([@club], nil),
       agents: agents,
       holders: holders,
       trying: trying(@club),
@@ -346,11 +360,15 @@ defmodule KeyfleetWeb.HomeLive do
   def handle_info({:proposals_changed, fleet_id}, socket),
     do: {:noreply, later(socket, fleet_id)}
 
-  def handle_info(%Broadcast{event: "key_activity", payload: %{fleet_id: fleet_id}}, socket),
-    do: {:noreply, later(socket, fleet_id)}
+  def handle_info(%Broadcast{event: event, payload: %{fleet_id: fleet_id}}, socket)
+      when event in ["key_activity", "wall_removed"],
+      do: {:noreply, later(socket, fleet_id)}
 
   def handle_info(%Broadcast{event: "room_head"}, socket), do: {:noreply, socket}
   def handle_info({:balances_changed, _fleet_id}, socket), do: {:noreply, socket}
+
+  def handle_info({:shared_reading, {:fleet_ships, fleet_id}}, socket),
+    do: {:noreply, update_fleet(socket, fleet_id, &%{&1 | ships: ships(fleet_id)})}
 
   def handle_info({:refresh, fleet_id}, socket) do
     socket = update(socket, :refreshing, &MapSet.delete(&1, fleet_id))
@@ -371,13 +389,13 @@ defmodule KeyfleetWeb.HomeLive do
   # the next notice reads again. A failed database read is logged and saved by
   # `KeyfleetWeb.PageRead`; any other read that raised is logged by its task.
   @impl true
-  def handle_async({:now, fleet_id}, {:ok, {:ok, %{sales: sales, ships: ships} = now}}, socket),
+  def handle_async({:now, fleet_id}, {:ok, {:ok, %{sales: sales} = now}}, socket),
     do:
       {:noreply,
        update_fleet(
          socket,
          fleet_id,
-         &%{&1 | sales: sales, ships: ships, now: Map.drop(now, [:sales, :ships]), failed?: false}
+         &%{&1 | sales: sales, now: Map.delete(now, :sales), failed?: false}
        )}
 
   def handle_async({:now, fleet_id}, _failed, socket),
@@ -852,10 +870,17 @@ defmodule KeyfleetWeb.HomeLive do
 
   # Thirty Key cards of no fleet, one after another, a fifth of a second each,
   # from one sheet of six across and five down: the frame steps across a row
-  # while the sheet steps down a row each time it has crossed one.
+  # while the sheet steps down a row each time it has crossed one. They turn
+  # only while on screen; the browser marks them turning.
   defp cards(assigns) do
     ~H"""
-    <div id={@id} class="rl-cards" aria-hidden="true">
+    <div
+      id={@id}
+      class="rl-cards"
+      phx-hook="KeyCards"
+      phx-mounted={JS.ignore_attributes(["data-cards-turning"])}
+      aria-hidden="true"
+    >
       <div class="rl-cards__rows">
         <img
           class="rl-cards__sheet"

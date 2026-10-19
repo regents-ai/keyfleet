@@ -58,8 +58,12 @@ type IslandInteraction<Renderer extends IslandRenderer> = {
   nudge(): void
   /** Registers work to run each time a renderer lands, before its first frame. */
   onReady(compose: () => void): void
-  /** Registers work to run once a picture that keeps moving is handed too few frames. */
-  onStrain(hold: () => void): void
+  /**
+   * Registers work to run once a picture that keeps moving is handed too few
+   * frames (`true`), and when it is given another chance, as the tab is shown
+   * again (`false`).
+   */
+  onStrain(hold: (strained: boolean) => void): void
 }
 
 type IslandKind<Renderer extends IslandRenderer> = {
@@ -163,7 +167,7 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
   let easingFrames = 0
   let recoveries = 0
   let compose: (() => void) | undefined
-  let strain: (() => void) | undefined
+  let strain: ((strained: boolean) => void) | undefined
   let strained = false
   let lastFrameAt: number | undefined
   let pacedFrames = 0
@@ -264,9 +268,15 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
     renderer = undefined
   }
 
-  /** A retreat the island does not come back from: the GPU is not going to draw this. */
+  /**
+   * A retreat the island does not come back from: the GPU is not going to draw
+   * this, so whatever steers the picture lets go now. The tab and motion
+   * listeners stay until destroy(), and find nothing to do.
+   */
   const retire = () => {
     retired = true
+    release?.()
+    release = undefined
     retreat()
   }
 
@@ -322,7 +332,19 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
     strained = slowFrames >= pacedFrames * STRAINED_SHARE
     pacedFrames = 0
     slowFrames = 0
-    if (strained) strain?.()
+    if (strained) strain?.(true)
+  }
+
+  /**
+   * A tab shown again may be on a device that has its frames back, plugged in
+   * or out of its power saving, so a picture that was asked to hold still is
+   * timed afresh.
+   */
+  const relieve = () => {
+    strained = false
+    pacedFrames = 0
+    slowFrames = 0
+    strain?.(false)
   }
 
   function tick(time: number): void {
@@ -364,6 +386,7 @@ export const createCanvasIsland = <Renderer extends IslandRenderer>(
     })
     const onVisibilityChange = () => {
       visible = !document.hidden
+      if (visible && strained) relieve()
       sync()
     }
 

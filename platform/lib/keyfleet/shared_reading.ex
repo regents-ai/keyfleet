@@ -83,6 +83,19 @@ defmodule Keyfleet.SharedReading do
       bytes: 32_768,
       within: 120
     },
+    fleet_ships: %{
+      open:
+        "a fleet's activity is open to a signed-out read (Keyfleet.Activity with no actor), " <>
+          "the same the homepage and the fleet's page show anyone; a ship keeps only a Key's " <>
+          "number, the name its agent shows in the directory, an island and a colour. If that " <>
+          "read tightens, this kind changes with it",
+      # One for each fleet in Keyfleet.Fleets' catalog, as for fleet_agents.
+      keys: 5,
+      # Sixteen ships of the fleet with the longest id, their agents' names each
+      # 120 four-byte characters, measure 9,911 bytes.
+      bytes: 16_384,
+      within: 120
+    },
     key_agents: %{
       open:
         "a Key's active shards and their agents are open to a signed-out read " <>

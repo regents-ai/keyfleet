@@ -1,7 +1,7 @@
 /**
  * The homepage's moving parts around "Buy Next Key": the hex field behind the
- * hero and the fleets' maps, with the tiles nearest a mouse standing up out of
- * it, and the turn of the next Key's card. Each only presents; the page is
+ * hero, with the tiles nearest a mouse standing up out of it, and the turn of
+ * the next Key's card. Each only presents; the page is
  * complete and readable before any of it loads, and none of it decides whether
  * the button can be pressed.
  */
@@ -203,10 +203,9 @@ export const HexField = {
         // The tiles nearest the mouse stand; every other tile sinks.
         const follow = (clientX: number, clientY: number) => {
           const box = canvas().getBoundingClientRect()
-          const size = cell
           const near = nearest(
-            (clientX - box.left - box.width / 2) / size,
-            (clientY - box.top - box.height / 2) / size,
+            (clientX - box.left - box.width / 2) / cell,
+            (clientY - box.top - box.height / 2) / cell,
             RAISED,
           )
           const keys = new Set<string>()
@@ -215,7 +214,7 @@ export const HexField = {
             keys.add(key)
             let tile = standing.get(key)
             if (!tile) {
-              tile = {key, x: centre.x * size + box.width / 2, y: centre.y * size + box.height / 2, h: 0, to: 0}
+              tile = {key, x: centre.x * cell + box.width / 2, y: centre.y * cell + box.height / 2, h: 0, to: 0}
               standing.set(key, tile)
             }
             stand(tile, heightAt(centre.away, rank === 0))

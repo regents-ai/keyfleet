@@ -1,8 +1,8 @@
 /**
  * The homepage's hex field, one fullscreen pass over a clear canvas with
  * premultiplied alpha, so the page's own ground shows through and only the
- * lines and the light are the shader's: pointy-top hex tiles behind the hero
- * and the Club's map, a hairline rim on each, lit near the pointer, along the
+ * lines and the light are the shader's: pointy-top hex tiles behind the hero,
+ * a hairline rim on each, lit near the pointer, along the
  * wake a pointer or a finger leaves, in the ring a press sends out, and around
  * the Key while it is previewed. The field fades out toward its edges here
  * rather than in the stylesheet, so a raised tile fades with the tiles around
@@ -54,9 +54,9 @@ const EDGE = 0.44;
 const LIT = vec3f(0.9, 0.89, 0.82);
 
 // Pointy-top hexagons, one unit between neighbouring centres across a row,
-// with a tile centred on the canvas's centre, so a field cut to a map's width
-// lies under the map's own tiles. hex() returns the point's offset from its cell's centre and how far it is
-// from that centre toward the nearest edge, which is 0.5 on the edge itself.
+// with a tile centred on the canvas's centre. hex() returns the point's offset
+// from its cell's centre and how far it is from that centre toward the nearest
+// edge, which is 0.5 on the edge itself.
 fn hex(p: vec2f) -> vec3f {
   let r = vec2f(1.0, 1.7320508);
   let h = r * 0.5;
