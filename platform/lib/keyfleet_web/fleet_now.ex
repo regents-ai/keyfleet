@@ -160,6 +160,7 @@ defmodule KeyfleetWeb.FleetNow do
     %{
       coming_soon?: false,
       deployed?: deployed?,
+      chain_id: if(deployed?, do: recorded.chain_id),
       current?: deployed? and Chain.fresh?(fleet_id),
       minted: if(deployed?, do: minted!(fleet_id), else: 0),
       feed: %{items: items, cursor: cursor},

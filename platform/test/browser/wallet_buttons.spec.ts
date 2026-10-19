@@ -119,6 +119,42 @@ test("a wallet the account doesn't link: a note names both, and a press sends no
   expect(errors).toEqual([])
 })
 
+test("on the homepage, Approve and Buy are pressed inside the Buy Key window, signed in", async ({page}) => {
+  const errors: string[] = []
+  page.on("pageerror", error => errors.push(error.message))
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await page.goto("/")
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+  await page.locator("#home-buy-next-key").click()
+  const window = page.locator("dialog#home-buy-key")
+  await expect(window).toBeVisible()
+  await useStandInWallet(page, me)
+
+  await expect(window.locator("#home-buy-key-order-from")).toHaveText("Sending from 0x1111..1111 on Base.")
+  await expect(window.locator("#home-buy-key-button")).toBeDisabled()
+  await expect(window.locator("#home-buy-key-button-why")).toHaveText("Approve USDC first")
+
+  await window.locator("#home-buy-key-approve").click()
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
+  const [approval] = await sentByStandIn(page)
+  expect(approval.transaction.to.toLowerCase()).toBe(usdc)
+  expect(approval.transaction.data.startsWith(approveSelector)).toBe(true)
+  await expect(window.locator("#home-buy-key-button")).toBeEnabled()
+
+  allowUsdc(me, Number(BigInt(`0x${approval.transaction.data.slice(-64)}`)))
+  landStep(approval.hash, approval.transaction, true)
+  await expect(window.locator("#home-buy-key-approve")).toBeHidden()
+
+  await window.locator("#home-buy-key-button").click()
+  await expect.poll(async () => (await sentByStandIn(page)).length).toBe(2)
+  const bought = (await sentByStandIn(page))[1]
+  expect(bought.transaction.to.toLowerCase()).toBe(fleetContract)
+  expect(bought.transaction.data.startsWith(purchaseSelector)).toBe(true)
+  await expect(window).toBeVisible()
+  await expect(page).toHaveURL(/\/$/)
+  expect(errors).toEqual([])
+})
+
 test("a press the wallet declines says so, and the next press still reaches the wallet", async ({page}) => {
   const errors = await openBuying(page)
   await useStandInWallet(page, me, "decline")

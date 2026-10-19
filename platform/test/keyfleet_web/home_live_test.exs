@@ -14,8 +14,9 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - while Classic is coming soon, "Buy Next Key" and the card's tag name Key 1
   #   and its price, but the button says it can't be pressed, with "Sales open
   #   soon" beside it, links nowhere, and the header offers no Get a Key
-  # - once Classic is on sale, "Buy Next Key" opens its page with Get a Key
-  #   pressed, and it and the card's tag name the Key on offer and its price
+  # - once Classic is on sale, "Buy Next Key" and the header's "Get a Key"
+  #   open the "Buy Key" window, which holds the fleet's own Approve and Buy,
+  #   and the button and the card's tag name the Key on offer and its price
   #   after the Keys sold
   # - once every Classic Key is sold, the button can't be pressed and says so
   # - the Club shows its newest open goal and featured item from the first
@@ -97,7 +98,19 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-classic-sold") == "3"
 
     view |> element("button#home-buy-next-key") |> render_click()
-    assert has_element?(view, ~s(dialog#home-buy-key a#home-buy-key-go[href="/classic/1?buy"]))
+
+    assert has_element?(
+             view,
+             ~s(dialog#home-buy-key button#home-buy-key-button[data-onchain-step="buy"])
+           )
+
+    assert has_element?(
+             view,
+             ~s(dialog#home-buy-key button#home-buy-key-approve[data-onchain-step="approve"])
+           )
+
+    assert has_element?(view, "dialog#home-buy-key #home-buy-key-risks")
+    refute has_element?(view, "#home-buy-key-go")
   end
 
   test "once Classic is on sale, the header's Get a Key opens the Buy Key window", %{conn: conn} do
