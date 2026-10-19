@@ -109,6 +109,12 @@ REFUSALS = [
     ("not_found", request("patch", {"id": "goal#404", "expected_version": 1, "set": {}}, command("c"))),
     ("not_found", request("link", {"source": "finding#3", "target": "goal#404", "type": "supports"}, command("c"))),
     ("not_found", request("unlink", {"relation_id": "rel_404"}, command("c"))),
+    ("not_found", request("join", {"id": "goal#404"}, command("c"))),
+    ("invalid", request("join", {"id": "task#2"}, command("c"))),
+    ("invalid", request("join", {"id": "note#4"}, command("c"))),
+    ("invalid", request("leave", {"id": "task#2"}, command("c"))),
+    ("forbidden_scope", request("join", {"id": "goal#1"}, command("c", scopes=()))),
+    ("bad_request", request("join", {"id": "goal#1", "expected_version": 2}, command("c"))),
     ("duplicate_mismatch", request("create", {"type": "task", "scope": "fleet", "data": {"title": "Other"}}, command("s2"))),
     ("duplicate_mismatch", request("archive", {"id": "task#2", "expected_version": 1}, command("s2"))),
     ("bad_request", {"v": 2, "req": "r", "op": "hello", "body": {}}),
@@ -259,6 +265,57 @@ def test_a_link_is_idempotent_on_its_triple_and_an_unlink_removes_it(seeded):
     assert seeded.graph.relations() == []
     relinked = _ok(seeded, "link", link, "l3")
     assert (relinked["existing"], relinked["relation_id"] != created["relation_id"]) == (False, True)
+
+
+def test_each_key_and_wallet_joins_a_goal_once_and_leaves_it(seeded):
+    other = "0x" + "c3" * 20
+
+    def joined():
+        return [(entry["key"]["token_id"], entry["wallet"]) for entry in seeded.graph.get_object("goal#1").data["sys"]["joined"]]
+
+    assert _ok(seeded, "join", {"id": "goal#1"}, "j1") == {"id": "goal#1", "version": 3}
+    assert _ok(seeded, "join", {"id": "goal#1"}, "j2") == {"id": "goal#1", "version": 3}
+    assert _call(seeded, request("join", {"id": "goal#1"}, command("j3", wallet=other)))["ok"]
+    assert _call(seeded, request("join", {"id": "goal#1"}, command("j4", token_id=18)))["ok"]
+    assert joined() == [(17, WALLET), (17, other), (18, WALLET)]
+
+    assert _ok(seeded, "leave", {"id": "goal#1"}, "l1") == {"id": "goal#1", "version": 6}
+    assert _ok(seeded, "leave", {"id": "goal#1"}, "l2") == {"id": "goal#1", "version": 6}
+    assert joined() == [(17, other), (18, WALLET)]
+    assert seeded.graph.get_object("goal#1").data["status"] == "achieved"
+
+
+def test_a_keys_joins_from_an_earlier_owner_lapse_when_its_owner_joins(seeded):
+    other = "0x" + "c3" * 20
+    assert _ok(seeded, "join", {"id": "goal#1"}, "j1")["version"] == 3
+    assert _call(seeded, request("join", {"id": "goal#1"}, command("j2", token_id=18)))["ok"]
+
+    sold = command("j3", wallet=other)
+    bought = {**_with_auth(sold, ownership_epoch=4), "principal": sold["principal"].replace("@3/", "@4/")}
+    assert _call(seeded, request("join", {"id": "goal#1"}, bought))["ok"]
+    sys = seeded.graph.get_object("goal#1").data["sys"]
+    assert [(entry["key"]["token_id"], entry["ownership_epoch"], entry["wallet"]) for entry in sys["joined"]] == [
+        (18, 3, WALLET),
+        (17, 4, other),
+    ]
+
+
+def test_a_patch_that_changes_nothing_is_refused_on_a_goal_from_an_older_pack(seeded):
+    goal = seeded.graph.get_object("goal#1")
+    older = {field: value for field, value in goal.data["sys"].items() if field != "joined"}
+    seeded.graph.patch_object("goal#1", {"sys": older}, actor="system")
+
+    same = _call(seeded, request("patch", {"id": "goal#1", "expected_version": 3, "set": {"status": "achieved"}}, command("p1")))
+    assert same["error"]["code"] == "invalid"
+
+
+def test_a_goal_records_at_most_its_limit_of_members(seeded):
+    for token_id in range(1, 101):
+        assert _call(seeded, request("join", {"id": "goal#1"}, command(f"j{token_id}", token_id=token_id)))["ok"]
+
+    full = _call(seeded, request("join", {"id": "goal#1"}, command("j101", token_id=101)))
+    assert full["error"]["code"] == "invalid"
+    assert _ok(seeded, "join", {"id": "goal#1"}, "again") == {"id": "goal#1", "version": 102}
 
 
 def _all_changes(host, limit):

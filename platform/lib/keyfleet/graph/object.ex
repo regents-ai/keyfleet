@@ -163,6 +163,32 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
+    # The goals a Key and wallet of the fleet joined and that are still in the
+    # workspace, newest change first.
+    read :joined_by do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1]
+      argument :wallet, :string, allow_nil?: false, constraints: @text
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and type == "goal" and
+                 fragment(
+                   "(? -> 'joined') @> jsonb_build_array(jsonb_build_object('key', jsonb_build_object('token_id', ?::bigint), 'wallet', ?::text))",
+                   sys,
+                   ^arg(:token_id),
+                   ^arg(:wallet)
+                 ) and
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys)
+             )
+
+      prepare build(
+                sort: [changed_seq: :desc],
+                limit: 20,
+                select: [:fleet_id, :id, :type, :version],
+                load: [:title, :card]
+              )
+    end
+
     # The titles of a few of the fleet's objects, to name the objects a page
     # mentions: every one for the fleet's members, the goals for anyone else.
     read :titled do
@@ -204,7 +230,7 @@ defmodule Keyfleet.Graph.Object do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:in_fleet, :cards, :assigned_to_keys, :citing]) do
+    policy action([:in_fleet, :cards, :assigned_to_keys, :joined_by, :citing]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 

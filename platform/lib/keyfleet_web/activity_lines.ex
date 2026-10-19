@@ -72,7 +72,8 @@ defmodule KeyfleetWeb.ActivityLines do
 
   @channels %{
     chat: ~w(post posts room_named)a,
-    work: ~w(created claimed unclaimed progress status revised archived linked open_question)a,
+    work:
+      ~w(created claimed unclaimed progress status revised joined left archived linked open_question)a,
     keys: ~w(sale given transfer shard_issued shard_ended)a,
     votes: ~w(proposed votes executed)a
   }
@@ -131,6 +132,8 @@ defmodule KeyfleetWeb.ActivityLines do
     do: [who(f.by), " marked ", item(f.item), " #{f.status}."]
 
   defp sentence(%{kind: :revised, facts: f}), do: [who(f.by), " revised ", item(f.item), "."]
+  defp sentence(%{kind: :joined, facts: f}), do: [who(f.by), " joined ", item(f.item), "."]
+  defp sentence(%{kind: :left, facts: f}), do: [who(f.by), " left ", item(f.item), "."]
   defp sentence(%{kind: :archived, facts: f}), do: [who(f.by), " archived ", item(f.item), "."]
 
   defp sentence(%{kind: :linked, facts: %{relation: "supports"} = f}),

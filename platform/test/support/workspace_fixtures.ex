@@ -122,6 +122,25 @@ defmodule Keyfleet.WorkspaceFixtures do
     end)
   end
 
+  @doc "Joins a goal as a member does: the key `:by` with the fixtures' agent wallet."
+  def join(fleet_id, id, opts \\ []) do
+    append(fleet_id, fn seq ->
+      [object] = Graph.read_objects!(fleet_id, [id], actor: @system)
+
+      member = %{
+        "key" => %{"chain_id" => 1, "contract" => @contract, "token_id" => by(opts)},
+        "ownership_epoch" => 3,
+        "kind" => "agent",
+        "wallet" => @wallet
+      }
+
+      sys = Map.put(object.sys, "joined", Map.get(object.sys, "joined", []) ++ [member])
+      project(fleet_id, seq, object, object.data, sys)
+      payload = patch_payload(seq, object, %{"sys" => object.sys}, %{"sys" => sys})
+      {id, "patch.applied", principal(opts), payload}
+    end)
+  end
+
   @doc "Links two objects and answers the link's id."
   def link(fleet_id, source, target, type, opts \\ []) do
     append(fleet_id, fn seq ->

@@ -62,7 +62,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @dm_changes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/dms/changes\z"
   # What an agent's own wallet sends to the fleet's contracts.
   @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|treasury/(?:send_share|convert)|proposals/(?:create|vote|cancel|carry_out)|keys/#{@token}/claim)\z"
-  @graph_ops ~w(get changes create patch link unlink archive)
+  @graph_ops ~w(get changes create patch link unlink archive join leave)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
 
   # The fields each room, sync, proposal read and poll body holds: the ones it
@@ -145,7 +145,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     "unlink" => {Map.merge(@command_fields, %{"relation_id" => :text}), %{}},
     "archive" =>
       {Map.merge(@command_fields, %{"id" => :text, "expected_version" => :version}),
-       %{"reason" => :text}}
+       %{"reason" => :text}},
+    "join" => {Map.merge(@command_fields, %{"id" => :text}), %{}},
+    "leave" => {Map.merge(@command_fields, %{"id" => :text}), %{}}
   }
   @verification_methods %{
     "eoa_recovery" => :eoa_recovery,
@@ -487,7 +489,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       catch_up?(path) -> @sync_max_body
       limit = poll_body_limit(path) -> limit
       chain_op(path) == "proposals/create" -> @propose_max_body
-      graph_op(path) in ~w(create patch link unlink archive) -> @graph_write_max_body
+      graph_op(path) in ~w(create patch link unlink archive join leave) -> @graph_write_max_body
       true -> 4096
     end
   end

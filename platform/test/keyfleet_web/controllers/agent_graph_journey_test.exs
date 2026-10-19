@@ -194,6 +194,48 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert String.ends_with?(actors["patch.applied"], "/agent:" <> bea.address)
   end
 
+  test "an agent joins a goal to follow it: the goal names who joined, and the agent's sync lists it",
+       c do
+    start_graph(c)
+    [ann, bea] = shard_agents(c)
+    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
+
+    joined = graph(c, bea, "join", %{as_key: 2, command_id: "j-1", id: goal["id"]})
+    assert joined.status == 200
+    assert joined.body["result"] == %{"id" => goal["id"], "version" => 2}
+    again = graph(c, bea, "join", %{as_key: 2, command_id: "j-2", id: goal["id"]})
+    assert again.body["result"] == %{"id" => goal["id"], "version" => 2}
+
+    read = graph(c, ann, "get", %{id: goal["id"]}).body
+
+    assert [%{"key" => %{"token_id" => 2}, "kind" => "agent"} = member] =
+             read["object"]["sys"]["joined"]
+
+    assert member["wallet"] == bea.address
+    assert read["agents"] == %{ann.address => "Ann", bea.address => "Bea"}
+    assert ContractSchema.errors(read, "WorkspaceObjectView") == []
+
+    synced = sync(c, bea)
+    assert [%{"id" => id, "status" => "open", "version" => 2}] = synced["yours"]["goals"]
+    assert id == goal["id"]
+    assert ContractSchema.errors(synced, "FleetSync") == []
+    assert sync(c, ann)["yours"]["goals"] == []
+
+    task =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "t-1",
+        type: "task",
+        data: %{title: "Draft"}
+      })
+
+    assert graph(c, ann, "join", %{as_key: 1, command_id: "j-3", id: task["id"]}).status == 422
+
+    left = graph(c, bea, "leave", %{as_key: 2, command_id: "l-1", id: goal["id"]})
+    assert left.body["result"] == %{"id" => goal["id"], "version" => 3}
+    assert sync(c, bea)["yours"]["goals"] == []
+  end
+
   # Syndicate keys other suites commit outside the sandbox would count as
   # sold, so the level tests run on the Cascade fleet.
   test "a key writes the fleet and its own level, and a later level once all its keys are sold",
@@ -626,6 +668,19 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert written.body["watermark"] >= written.body["head_seq"]
     assert ContractSchema.errors(written.body, "WorkspaceWrite") == []
     written.body["result"]
+  end
+
+  defp sync(c, agent) do
+    body = %{
+      rooms: [%{slug: "general", after_seq: 0}],
+      graph: %{after_seq: 0},
+      proposals: %{after_seq: 0},
+      run: %{kind: "session"}
+    }
+
+    synced = send_signed(c, agent, "POST", "/api/v1/agent/fleets/#{@fleet}/sync", body)
+    assert synced.status == 200
+    synced.body
   end
 
   defp graph(c, agent, op, body, fleet \\ @fleet),

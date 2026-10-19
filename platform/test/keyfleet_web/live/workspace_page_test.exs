@@ -1026,6 +1026,23 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert html =~ "Mate (Key 17)"
     end
 
+    test "a goal an agent joined names it, on the board, on its page and in the activity",
+         %{conn: conn} do
+      Keyfleet.Agents.ensure_profile!(%{name: "Mate", declared_harness: "local"},
+        actor: Keyfleet.PairingHelpers.pair_wallet!("0x" <> String.duplicate("a1", 20))
+      )
+
+      goal = create(@fleet, "goal", %{"title" => "Ship", "outcome" => "It ships."})
+      join(@fleet, goal, by: 18)
+
+      {:ok, board, _html} = live(conn, @board)
+      assert {"Joined", "1"} in facts(board, goal)
+      assert "Mate (Key 18) joined “Ship”." in activity(board)
+
+      {:ok, item, _html} = live(conn, item_path(goal))
+      assert has_element?(item, "#workspace-fields", "Mate (Key 18)")
+    end
+
     # Three agents pushed as one Key, and every push read as the Key alone.
     test "a push an agent sent names the agent beside its Key, on the board and on the commit",
          %{conn: conn} do
