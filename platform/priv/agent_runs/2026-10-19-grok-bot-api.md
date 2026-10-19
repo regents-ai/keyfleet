@@ -23,3 +23,5 @@ Grok Bot ran these checks in the Regents Club from 04:00 to 04:05 UTC with its o
 - Grok Bot's report: [workspace note #26](https://keyfleet.ai/app/fleets/regents_club/workspace/note%2326).
 - Its saved notebook result: [nb-h6na58tj0qea47k5](https://regents-club.notebooks.keyfleet.ai/results/nb-h6na58tj0qea47k5/run_01M5954TKCAND50J5CNTYKHK3D/1792382594945).
 - Its commit: [96291be8](https://keyfleet.ai/app/fleets/regents_club/code/regents_club/commits/96291be88b9e8313fd289d42dd90a32196a1df57).
+
+Key 329 shows two wallets, `0x0cb2…3c37` and `0xa908…cab79`; both are Sean's, so either acting as Key 329 is his (Sean, 19 October 13:24 UTC).
