@@ -30,6 +30,8 @@ defmodule Keyfleet.Graph do
       define :link_objects, action: :link, args: [:fleet_id]
       define :unlink_relation, action: :unlink, args: [:fleet_id]
       define :archive_object, action: :archive, args: [:fleet_id]
+      define :join_goal, action: :join, args: [:fleet_id]
+      define :leave_goal, action: :leave, args: [:fleet_id]
     end
 
     resource Keyfleet.Graph.Cursor do
@@ -57,6 +59,7 @@ defmodule Keyfleet.Graph do
       define :outline, action: :outline, args: [:fleet_id, :type]
       define :evidence_citing, action: :citing, args: [:fleet_id, :uri]
       define :tasks_assigned_to, action: :assigned_to_keys, args: [:fleet_id, :token_ids]
+      define :goals_joined_by, action: :joined_by, args: [:fleet_id, :token_id, :wallet]
       define :project_objects, action: :project
     end
 

@@ -26,6 +26,7 @@ from pydantic_core import from_json
 
 from keyfleet_graph import protocol
 from keyfleet_graph.pack import (
+    MAX_JOINED,
     MEMBER_MODELS,
     PACK,
     PACK_NAME,
@@ -205,7 +206,11 @@ class Host:
         for field in body.unset:
             merged.pop(field, None)
         record = _validate(RECORD_MODELS[obj.type], merged)
-        updates = {field: value for field, value in record.items() if obj.data.get(field) != value}
+        # A member's patch never changes sys; a record from an older pack may
+        # validate with sys fields it never stored.
+        updates = {
+            field: value for field, value in record.items() if field != "sys" and obj.data.get(field) != value
+        }
         if not updates:
             raise _invalid("set", "the patch changes nothing")
 
@@ -273,7 +278,47 @@ class Host:
 
         return apply
 
+    def _plan_join(self, command: Command, body: protocol.JoinBody) -> Callable[[Reactions], dict]:
+        goal = self._goal(body.id)
+        _check_scope(command, goal)
+        member = _member(command)
+        recorded = goal.data["sys"].get("joined", [])
+        joined = _unlapsed(recorded, member)
+        if any(_same_member(entry, member) for entry in joined):
+            if joined == recorded:
+                return lambda _reactions: {"id": goal.id, "version": goal.version}
+            return self._rejoined(command, goal, joined)
+        if len(joined) >= MAX_JOINED:
+            raise _invalid("id", f"the goal has the most members it can record, {MAX_JOINED}")
+        return self._rejoined(command, goal, [*joined, member])
+
+    def _plan_leave(self, command: Command, body: protocol.LeaveBody) -> Callable[[Reactions], dict]:
+        goal = self._goal(body.id)
+        _check_scope(command, goal)
+        member = _member(command)
+        recorded = goal.data["sys"].get("joined", [])
+        joined = [entry for entry in _unlapsed(recorded, member) if not _same_member(entry, member)]
+        if joined == recorded:
+            return lambda _reactions: {"id": goal.id, "version": goal.version}
+        return self._rejoined(command, goal, joined)
+
+    def _rejoined(self, command: Command, goal, joined: list) -> Callable[[Reactions], dict]:
+        record = {**goal.data, "sys": {**goal.data["sys"], "joined": joined}}
+        sys = _validate(RECORD_MODELS["goal"], record)["sys"]
+
+        def apply(_reactions: Reactions) -> dict:
+            self.graph.patch_object(goal.id, {"sys": sys}, actor=command.principal)
+            return {"id": goal.id, "version": self.graph.get_object(goal.id).version}
+
+        return apply
+
     # ---------- state helpers ----------
+
+    def _goal(self, object_id: str):
+        goal = self._live(object_id, "id")
+        if goal.type != "goal":
+            raise _invalid("id", f"only a goal can be joined, not a {goal.type}")
+        return goal
 
     def _object(self, object_id: str, path: str):
         obj = self.graph.get_object(object_id)
@@ -368,6 +413,8 @@ _PLANNERS = {
     "archive": Host._plan_archive,
     "link": Host._plan_link,
     "unlink": Host._plan_unlink,
+    "join": Host._plan_join,
+    "leave": Host._plan_leave,
 }
 
 
@@ -465,17 +512,32 @@ def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], comma
 
 
 def _sys(command: Command, scope: str) -> dict[str, Any]:
+    return {"scope": scope, "created_by": _member(command), "archived": False}
+
+
+def _member(command: Command) -> dict[str, Any]:
     auth = command.auth
     return {
-        "scope": scope,
-        "created_by": {
-            "key": auth.key.model_dump(mode="json"),
-            "ownership_epoch": auth.ownership_epoch,
-            "kind": auth.kind,
-            "wallet": auth.operator_wallet,
-        },
-        "archived": False,
+        "key": auth.key.model_dump(mode="json"),
+        "ownership_epoch": auth.ownership_epoch,
+        "kind": auth.kind,
+        "wallet": auth.operator_wallet,
     }
+
+
+# One Key and wallet join a goal once.
+def _same_member(entry: dict[str, Any], member: dict[str, Any]) -> bool:
+    return entry["key"] == member["key"] and entry["wallet"] == member["wallet"]
+
+
+# A Key's joins from an earlier ownership lapse when its owner now joins or
+# leaves: the agents who joined then no longer act as the Key.
+def _unlapsed(joined: list[dict[str, Any]], member: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        entry
+        for entry in joined
+        if entry["key"] != member["key"] or entry["ownership_epoch"] == member["ownership_epoch"]
+    ]
 
 
 def _byte_page(events: list[dict[str, Any]]) -> list[dict[str, Any]]:

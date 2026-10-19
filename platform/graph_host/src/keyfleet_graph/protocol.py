@@ -197,6 +197,14 @@ class UnlinkBody(_Shape):
     relation_id: Id
 
 
+class JoinBody(_Shape):
+    id: Id
+
+
+class LeaveBody(_Shape):
+    id: Id
+
+
 class ArchiveBody(_Shape):
     id: Id
     expected_version: Version
@@ -214,4 +222,6 @@ WRITE_OPS: dict[str, type[_Shape]] = {
     "link": LinkBody,
     "unlink": UnlinkBody,
     "archive": ArchiveBody,
+    "join": JoinBody,
+    "leave": LeaveBody,
 }

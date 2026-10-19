@@ -338,6 +338,8 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/graph/link", AgentGraphController, :link
     post "/fleets/:fleet_id/graph/unlink", AgentGraphController, :unlink
     post "/fleets/:fleet_id/graph/archive", AgentGraphController, :archive
+    post "/fleets/:fleet_id/graph/join", AgentGraphController, :join
+    post "/fleets/:fleet_id/graph/leave", AgentGraphController, :leave
   end
 
   scope "/", KeyfleetWeb do

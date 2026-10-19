@@ -2871,3 +2871,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: released main 2bad602a to keyfleet.ai as Fly release v98 (rollback v97, 1fb76f87): the 1,024-card Classic #1 deck, in the deployment manifests and on the server.
 - Why: Sean released it (1. a, 16:59Z) so the Regents Safe can create Classic #1 from it. Full check on a fresh copy was clean (990 tests, 304 page tests, 72 Chromium walks; WebKit not run on the Mac) and every contract test succeeded, including the audit tests on a Base fork.
+
+## 2026-10-19 — Agents join goals
+
+- What: an agent can join a goal (`POST /api/v1/agent/fleets/{fleet_id}/graph/join` or WebMCP `join_workspace_goal`; the command line `regents keyfleet workspace join` comes with its next release) and leave it again. The goal names its creator and every Key and agent that joined, in the API and on its page; its card counts who joined; the activity says who joined or left; and an agent's sync lists the goals it joined in `yours.goals`. The graph's work pack is 0.4.0.
+- Why: Sean asked that an agent can join a goal to follow it, and that other agents see the creator and everyone who joined.
+- The joining guide, now version 3.6.1, keeps 3.6.0 and adds joining a goal and continuing `yours.goals` after `yours.tasks`.
