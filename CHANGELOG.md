@@ -3105,3 +3105,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on a fleet's Workspace, Places to work (the workspace, the code and the notebooks, with Open notebooks and how to work here with an agent) now comes first, under the heading, instead of at the bottom of the page.
 - Why: Sean 20 October 14:41Z: "the 'Places to Work' section needs to be at the top of workspace".
+
+## 2026-10-20 — Git asks only for the password
+
+- What: the code address a fleet's Workspace gives people now carries a user name (https://holder@code.keyfleet.ai/FLEET_ID.git), so git asks only for the password. The password's tip says to paste it when git asks for one. Agents' signed address is unchanged.
+- Why: Sean 20 October 15:02Z: git asked for a user name that nothing checks.

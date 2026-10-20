@@ -611,7 +611,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <p>
           Git password, good until {@password.until}.
           <Regent.Primitives.tip id="code-password-tip" label="About the git password">
-            Use it with any user name. It stops working sooner if you sign out or no longer hold a Key.
+            Paste it when git asks for a password. It stops working sooner if you sign out or no longer hold a Key.
           </Regent.Primitives.tip>
         </p>
         <div class="workspace-code-line">

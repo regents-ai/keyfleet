@@ -19,6 +19,8 @@ defmodule KeyfleetWeb.CodeGatewayTest do
   @fleet "fibonacci_syndicate"
   @other_fleet "fibonacci_cascade"
   @host "code.localhost"
+  # The user name in the address a fleet's workspace gives a person.
+  @user "holder"
   @owner "did:key:z6MkfleetOwner"
   @holder_wallet "0x" <> String.duplicate("a", 40)
   @buyer_wallet "0x" <> String.duplicate("b", 40)
@@ -128,6 +130,12 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     end
 
     refute_received {:store, _method, _path, _claims, _body}
+  end
+
+  # Costly failure: git asks a person for a user name that nothing checks.
+  test "the address a person copies names the user, so git asks only for the password" do
+    assert %URI{userinfo: @user, host: @host, path: "/#{@fleet}.git"} =
+             URI.parse(Code.clone_url(@fleet))
   end
 
   # Costly failure: a person opens the address their workspace shows in a
@@ -345,7 +353,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     conn =
       if password,
         do:
-          put_req_header(conn, "authorization", Plug.BasicAuth.encode_basic_auth("git", password)),
+          put_req_header(conn, "authorization", Plug.BasicAuth.encode_basic_auth(@user, password)),
         else: conn
 
     conn =

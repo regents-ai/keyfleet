@@ -42,10 +42,14 @@ defmodule Keyfleet.Code do
   @doc "The code store settings: `config :keyfleet, :code`."
   def config, do: Application.fetch_env!(:keyfleet, :code)
 
-  @doc "The address git copies the fleet's code from."
+  @doc """
+  The address a person's git copies the fleet's code from. It carries a user
+  name, which the site ignores, so git asks only for the password.
+  """
   def clone_url(fleet_id) do
     %URI{
       scheme: "https",
+      userinfo: "holder",
       host: config()[:host],
       port: config()[:public_port],
       path: "/#{fleet_id}.git"
