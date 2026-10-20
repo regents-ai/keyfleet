@@ -134,6 +134,21 @@ defmodule Keyfleet.SharedReading do
       bytes: 65_536,
       within: 120
     },
+    share_card: %{
+      open:
+        "the figures on a fleet's share picture are open to a signed-out read: its Keys sold " <>
+          "(Keyfleet.Chain.minted/2) and the Key to change hands last " <>
+          "(Keyfleet.Keys.KeyAttachment), which the chain shows anyone, its treasury's latest " <>
+          "reading (Keyfleet.Treasury.Reading read policy), and that Key's name and card " <>
+          "picture (Keyfleet.Keys.KeyReveal and KeyPicture read policies), which its Key's " <>
+          "page shows anyone; if any of these tightens, this kind changes with it",
+      # One for each fleet with a picture of its own (KeyfleetWeb.ShareCard.fleets/0).
+      keys: 2,
+      # A few short lines: the Keys, up to three treasury amounts, a Key's name
+      # and an IPFS address.
+      bytes: 1_024,
+      within: 120
+    },
     proposal: %{
       open:
         "a proposal's first page is open to a signed-out read: the proposal, its calls, its " <>

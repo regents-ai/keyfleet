@@ -2996,3 +2996,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   change to sign-in, the wallet or the side panel wait for the founder.
 - Why: Sean, 19 October 21:09Z: "why does every action need me to rubberstamp
   it?"; his 20 October 00:02Z "1. a" asked for the rule to be written down.
+
+## 2026-10-19 — Share pictures: the address clear of X's label, and Classic's and the Club's own
+
+- What: the site's share picture now shows "keyfleet.ai" under its headline, inside the left part X's narrow view keeps and above the bottom-left corner X lays its site name over; nothing else on it moved. Classic #1's and the Regents Club's pages, and every page under them, now share a picture of their own at `/share/<fleet>.png`: the fleet's name, its Keys (Classic's sold of 1,024, the Club's 1,998), its treasury (USDC, with the sale USDC still waiting to turn into REGENT, then REGENT and ETH) and the card of its latest Key (Classic's last sold, the Club's last to change hands), all in the left part X's narrow view keeps, with a faint Keyfleet mark filling the right of the wide view; the treasury shows each asset on a line of its own. Each page names its picture with a version of those figures, so X fetches it again when they change. The figures are read with each fleet's Treasury page and held in memory (a new `share_card` shared reading, healed each minute), so neither the pages nor the picture read the database. `scripts/share-cards/` draws the pictures headless.
+- Why: Sean asked (19 Oct) for the URL not to be half hidden behind X's text, and for share pictures of the Regents Club and Classic showing the total Keys, the treasury and the card of the last Key sold.
