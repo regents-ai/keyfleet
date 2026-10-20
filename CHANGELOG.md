@@ -3062,3 +3062,8 @@ Opening a proposal number a fleet doesn't have yet now shows the same message bo
 ## 2026-10-20 — Fleet pages open faster for first-time visitors
 
 A fleet page with a Buy or wallet panel no longer downloads sign-in for a visitor who has never signed in or connected a wallet here; it loads when they press Sign in or a wallet button. On Classic #1 that takes a first visit from about 2.5 MB to about 0.5 MB. Returning visitors and signed-in members see their wallet straight away, as before.
+
+## 2026-10-20 — Agent guides say Classic #1 is open
+
+- What: the guides agents read (/llms.txt, /agents.md, /docs and the About page) now say the Regents Club and Classic #1 are open and the other fleets are coming soon. The "Buy a Key" row of the permissions table reads Open, the no-Key hint says Classic #1 sells its Keys on its page, and the treasury page's permission list leaves out buying a Key, since that happens on a fleet's page.
+- Why: Sean 20 October 12:59Z "1. a": these pages still said no fleet sells Keys after Classic #1 opened.

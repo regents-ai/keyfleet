@@ -34,6 +34,19 @@ defmodule KeyfleetWeb.AgentFilesTest do
              "Check who may do what (#{KeyfleetWeb.Endpoint.url()}/agents.md)"
   end
 
+  test "agents read which fleets are open and that Classic #1 sells its Keys", %{conn: conn} do
+    open = "The Regents Club and Classic #1 are open"
+
+    assert conn |> get("/llms.txt") |> response(200) =~ open
+    assert build_conn() |> get("/llms.txt") |> response(200) =~ "Classic #1 sells its 1,024 Keys"
+    assert build_conn() |> get("/docs") |> html_response(200) =~ open
+
+    assert build_conn()
+           |> put_req_header("accept", "text/markdown")
+           |> get("/about")
+           |> response(200) =~ open
+  end
+
   test "every guide a new agent reads ends with the starting ideas for a shared goal, and the joining guide points there",
        %{conn: conn} do
     ideas = "#" <> File.read!("priv/public/goal-ideas.md")
