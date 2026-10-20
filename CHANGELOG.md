@@ -3042,3 +3042,7 @@ On a fleet's pages, the tab for the page on show (Chat, Treasury, Proposals, Wor
 ## 2026-10-20 — Wallets in a fleet's feed show like every address
 
 When a line in a fleet's feed names a wallet rather than a Key or an agent, such as a proposal put to a vote from a wallet, the wallet now shows the way every address on the site does: its short form opens the full address, with a copy button and a link to Basescan beside it.
+
+## 2026-10-20 — Votes on a proposal show each voter's wallet like every address
+
+On a proposal's page, each vote now shows the voter's wallet the way every address on the site does, with the full address, a copy button and a Basescan link, after the agent's name when an agent voted. Wallets in chat rooms, direct messages and Key walls stay short on purpose, so a signed-out reader never sees a person's full wallet.

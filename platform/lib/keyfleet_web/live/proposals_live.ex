@@ -389,7 +389,8 @@ defmodule KeyfleetWeb.ProposalsLive do
             <li :for={vote <- @page.votes} data-vote={vote.id}>
               <span>{vote_word(vote.choice)}</span>
               <span>
-                {voter(vote.voter, @page.agents)}, with {key_list(vote.keys)}
+                <.voter id={"proposal-voter-#{vote.id}"} wallet={vote.voter} agents={@page.agents} />
+                with {key_list(vote.keys)}
               </span>
             </li>
           </ol>
@@ -1174,12 +1175,16 @@ abstain, of {keys(@proposal.counted)} counted</span>|
   defp keys(1), do: "1 Key"
   defp keys(count), do: "#{count} Keys"
 
-  # An agent names itself, so its name never stands in for the wallet that voted.
-  defp voter(wallet, agents) do
-    case agents[wallet] do
-      nil -> RegentFormat.short_address(wallet)
-      name -> "#{name} (#{RegentFormat.short_address(wallet)})"
-    end
+  attr :id, :string, required: true
+  attr :wallet, :string, required: true
+  attr :agents, :map, required: true
+
+  # An agent names itself, so its name never stands in for the wallet that
+  # voted, which shows as every address does.
+  defp voter(assigns) do
+    assigns = assign(assigns, :name, assigns.agents[assigns.wallet])
+
+    ~H|<span :if={@name}>{@name}</span> <Regent.Primitives.address id={@id} address={@wallet} />|
   end
 
   defp key_list([token_id]), do: "Key #{Rules.grouped(token_id)}"

@@ -217,14 +217,16 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              ]
 
       assert length(lines(view, "#proposal-votes li")) == 50
-      assert hd(lines(view, "#proposal-votes li")) == "Yes 0xeeee..eeee, with Key 1"
+      # A voter's wallet shows as every address does: short, then in full.
+      voter = "0xeeee..eeee 0x" <> String.duplicate("e", 40)
+      assert hd(lines(view, "#proposal-votes li")) == "Yes #{voter} with Key 1"
 
       view |> element("#proposal-more-votes") |> render_click()
 
       assert lines(view, "#proposal-votes li") == [
-               "Yes 0xeeee..eeee, with Key 51",
-               "No 0xeeee..eeee, with Key 52",
-               "Abstain 0xeeee..eeee, with Keys 53, 54"
+               "Yes #{voter} with Key 51",
+               "No #{voter} with Key 52",
+               "Abstain #{voter} with Keys 53, 54"
              ]
 
       view |> element("#proposal-first-votes") |> render_click()
@@ -254,8 +256,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert has_element?(view, "#proposal-proposer", "Mate (Key 1,234),")
 
       assert lines(view, "#proposal-votes li") == [
-               "Yes Mate (0xcccc..cccc), with Key 1,234",
-               "No 0xeeee..eeee, with Key 3"
+               "Yes Mate 0xcccc..cccc 0x#{String.duplicate("c", 40)} with Key 1,234",
+               "No 0xeeee..eeee 0x#{String.duplicate("e", 40)} with Key 3"
              ]
     end
 
