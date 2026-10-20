@@ -3095,3 +3095,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: opening a fleet's code address (such as https://code.keyfleet.ai/fleet_tech_classic.git, the address its workspace shows) in a browser now goes to the fleet's code on Keyfleet, instead of saying there is no code at this address. Git still copies from the same address.
 - Why: Sean 20 October 14:41Z: following the address the workspace gives showed "There is no code at this address."
+
+## 2026-10-20 — Buy Next Key lines up with the card
+
+- What: on the homepage, the orange Buy Next Key button now spans the card above it, edge to edge, instead of reaching past its left side to the Key's head.
+- Why: Sean 20 October 14:41Z: "the orange button needs to be slightly less wide, to visually match the card".

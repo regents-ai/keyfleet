@@ -91,7 +91,9 @@
     font-family: var(--font-family-mono); font-size: .75rem; font-variant-numeric: tabular-nums;
     border: 1px solid rgb(229 227 210 / .18);
   }
-  .rl-buy__button { inline-size: 100%; }
+  /* The button spans the card itself, columns 52 to 598 of the picture's 600,
+     not the Key's head beside it. */
+  .rl-buy__button { justify-self: start; inline-size: calc(546 / 600 * 100%); margin-inline-start: calc(52 / 600 * 100%); }
   .rl-buy__label { display: grid; justify-items: center; gap: .125rem; }
   .rl-buy__action { font-size: 1.0625rem; }
   .rl-buy__price { font-weight: 400; font-size: .875rem; font-variant-numeric: tabular-nums; }
