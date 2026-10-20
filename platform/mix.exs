@@ -161,7 +161,7 @@ defmodule Keyfleet.MixProject do
       ],
       # The database is prepared before the site starts: its job queue starts
       # only on a migrated database.
-      test: ["keyfleet.setup_local_auth", "test"],
+      test: ["ecto.create --quiet", "keyfleet.setup_local_auth", "test"],
       "test.external": ["test --only external"],
       precommit: [
         "compile --warnings-as-errors",

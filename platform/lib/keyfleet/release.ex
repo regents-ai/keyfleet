@@ -42,7 +42,7 @@ defmodule Keyfleet.Release do
   release command, so a deploy that takes a fleet's coming-soon mark away also
   opens that fleet's rooms. It never binds a fleet to a deployment.
   """
-  def migrate, do: with_release_repo(&migrate!/0)
+  def migrate, do: with_release_repo([], fn _repo -> migrate!() end)
 
   @doc """
   Applies the shared database changes this release's pinned libraries carry
@@ -54,13 +54,13 @@ defmodule Keyfleet.Release do
   the founder's own named go; the site whose release first carries it runs this
   from the new image before that deployment, because only that image carries
   the change's file. Each library's ledger takes a migration lock, so two sites
-  running it at once apply each change once.
+  running it at once apply each change once. Its options are the bootstrap's.
   """
-  def migrate_shared do
+  def migrate_shared(opts \\ []) when is_list(opts) do
     applied =
-      with_release_repo(fn ->
-        unapplied = unapplied_shared_migrations(Keyfleet.Repo)
-        if unapplied != [], do: apply_shared(Keyfleet.Repo)
+      with_release_repo(opts, fn repo ->
+        unapplied = unapplied_shared_migrations(repo)
+        if unapplied != [], do: apply_shared(repo)
         unapplied
       end)
 
@@ -93,7 +93,7 @@ defmodule Keyfleet.Release do
   bound, is refused and changes nothing. The running site starts reading a
   newly bound fleet within a minute (`Keyfleet.Chain.Watch`).
   """
-  def seed_deployment(path), do: with_release_repo(fn -> seed_deployment!(path) end)
+  def seed_deployment(path), do: with_release_repo([], fn _repo -> seed_deployment!(path) end)
 
   @doc "Seeds from `path` through an already running repository, as `seed_deployment/1` does."
   # The path is the operator's own argument on the machine they are signed in to.
@@ -144,20 +144,13 @@ defmodule Keyfleet.Release do
   the record has been corrected by hand. `bin/clear-fleet-stop <fleet id>`
   runs it; a running app picks the fleet up on its next pass.
   """
-  def clear_fleet_stop(fleet_id), do: with_release_repo(fn -> clear_fleet_stop!(fleet_id) end)
+  def clear_fleet_stop(fleet_id),
+    do: with_release_repo([], fn _repo -> clear_fleet_stop!(fleet_id) end)
 
   @doc "Clears the stop through an already running repository, as `clear_fleet_stop/1` does."
   def clear_fleet_stop!(fleet_id) do
     Keyfleet.Chain.clear_divergence!(fleet_id)
     IO.puts("#{fleet_id} will be read again.")
-  end
-
-  defp with_release_repo(fun) do
-    load_app()
-    Application.put_env(@app, Keyfleet.Repo, migration_config!())
-
-    {:ok, result, _started} = Ecto.Migrator.with_repo(Keyfleet.Repo, fn _repo -> fun.() end)
-    result
   end
 
   @doc """
@@ -168,7 +161,7 @@ defmodule Keyfleet.Release do
   command creates a staging-only approximation of it with the shape the local
   fixture already proves sufficient, then applies every shared change this
   release carries, as `migrate_shared/0` does in production, and runs every
-  migration into `keyfleet_app`.
+  migration into `keyfleet_app` (`prepare_database!/2`).
 
   It refuses any database that already carries migration state or the
   regent_names schema, and it repairs nothing: recovery from a half-finished
@@ -187,21 +180,22 @@ defmodule Keyfleet.Release do
       raise @bootstrap_role_error
     end
 
-    load_app()
-    Application.put_env(@app, Keyfleet.Repo, configuration!(opts, getenv))
-    path = migrations_directory(opts)
-
-    Ecto.Migrator.with_repo(Keyfleet.Repo, fn repo ->
+    with_release_repo(opts, fn repo ->
       refuse_existing_state!(repo)
-
-      # The fixture is the only definition of these tables' shape in the
-      # repository, and the whole test suite runs on it. Calling it keeps
-      # staging identical to that proven shape instead of copying it.
-      Keyfleet.LocalDatabaseFixture.create_shared_tables!()
-
-      apply_shared(repo)
-      repo.migrate!(path)
+      prepare_database!(repo, migrations_directory(opts))
     end)
+  end
+
+  @doc false
+  # Staging's first deployment and every local database
+  # (`Keyfleet.LocalDatabaseFixture`) are prepared the same way, in production's
+  # order: the tables this repository reads but does not own (the fixture is the
+  # only definition of their shape), every shared change this release carries,
+  # then this site's own migrations.
+  def prepare_database!(repo, path \\ migrations_path()) do
+    Keyfleet.LocalDatabaseFixture.create_shared_tables!()
+    apply_shared(repo)
+    repo.migrate!(path)
   end
 
   @doc """
@@ -225,12 +219,7 @@ defmodule Keyfleet.Release do
       raise @load_seed_role_error
     end
 
-    load_app()
-    Application.put_env(@app, Keyfleet.Repo, configuration!(opts, getenv))
-
-    {:ok, poll_path, _started} =
-      Ecto.Migrator.with_repo(Keyfleet.Repo, fn _repo -> seed_load!() end)
-
+    poll_path = with_release_repo(opts, fn _repo -> seed_load!() end)
     IO.puts("poll: #{poll_path}")
   end
 
@@ -273,14 +262,9 @@ defmodule Keyfleet.Release do
   Its options are the bootstrap's.
   """
   def pending_migrations(opts \\ []) when is_list(opts) do
-    getenv = Keyword.get(opts, :getenv, &System.get_env/1)
-    load_app()
-    Application.put_env(@app, Keyfleet.Repo, configuration!(opts, getenv))
-    path = migrations_directory(opts)
-
-    {:ok, {pending, applied_without_file, shared}, _started} =
-      Ecto.Migrator.with_repo(Keyfleet.Repo, fn repo ->
-        {pending, applied_without_file} = disagreements(repo, path)
+    {pending, applied_without_file, shared} =
+      with_release_repo(opts, fn repo ->
+        {pending, applied_without_file} = disagreements(repo, migrations_directory(opts))
         {pending, applied_without_file, unapplied_shared_migrations(repo)}
       end)
 
@@ -338,13 +322,26 @@ defmodule Keyfleet.Release do
 
   defp unapplied_shared_migrations(repo) do
     for {app, schema, _migrator} <- carried_shared(),
-        {:down, version, _name} <-
-          Ecto.Migrator.migrations(repo, [Application.app_dir(app, "priv/repo/migrations")],
-            prefix: schema,
-            skip_table_creation: true,
-            migration_lock: false
-          ),
+        version <-
+          unapplied_versions(repo, schema, Application.app_dir(app, "priv/repo/migrations")),
         do: "#{schema} #{version}"
+  end
+
+  # A read only: with its table creation skipped and no migration lock the
+  # migrator just selects the schema's ledger. A library whose ledger does not
+  # exist yet has had none of its changes applied.
+  defp unapplied_versions(repo, schema, path) do
+    if table_exists?(repo, schema, "schema_migrations") do
+      for {:down, version, _name} <-
+            Ecto.Migrator.migrations(repo, [path],
+              prefix: schema,
+              skip_table_creation: true,
+              migration_lock: false
+            ),
+          do: version
+    else
+      Enum.sort(carried_versions(path))
+    end
   end
 
   defp apply_shared(repo), do: Enum.each(carried_shared(), fn {_, _, m} -> m.up(repo) end)
@@ -380,15 +377,20 @@ defmodule Keyfleet.Release do
 
   defp migration_source(repo), do: repo.config()[:migration_source] || "schema_migrations"
 
-  defp configuration!(opts, getenv) do
-    Keyword.get_lazy(opts, :config, fn -> migration_config!(getenv) end)
+  # Loads the app and starts only its database connection, on the release
+  # login unless `:config` names another, for as long as `fun` runs; returns
+  # what `fun` returns.
+  defp with_release_repo(opts, fun) do
+    getenv = Keyword.get(opts, :getenv, &System.get_env/1)
+    :ok = Application.ensure_loaded(@app)
+    config = Keyword.get_lazy(opts, :config, fn -> migration_config!(getenv) end)
+    Application.put_env(@app, Keyfleet.Repo, config)
+    {:ok, result, _started} = Ecto.Migrator.with_repo(Keyfleet.Repo, fun)
+    result
   end
 
-  defp migrations_directory(opts) do
-    Keyword.get_lazy(opts, :migrations_path, &migrations_path/0)
-  end
-
-  defp load_app, do: :ok = Application.ensure_loaded(@app)
+  defp migrations_directory(opts),
+    do: Keyword.get_lazy(opts, :migrations_path, &migrations_path/0)
 
   defp migrations_path, do: Application.app_dir(@app, "priv/repo/migrations")
 end
