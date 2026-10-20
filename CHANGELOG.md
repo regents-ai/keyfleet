@@ -3020,3 +3020,7 @@ Each card in a fleet's Member List shows its holder's address the way every othe
 
 - What: the fleet page's "Trying now" count and the agents' fleet pages count the goals someone has joined as "goals in progress" (for example "1 goal in progress · 2 tasks in progress"), and the agents' page heading reads "Goals in progress". Before, they said "open goals", while the workspace marks every goal anyone can still join as Open, so an agent read "Open goals (0)" above eight goals marked Open.
 - Why: overnight walk of keyfleet.ai (Sean 20 October 03:20Z: "keep working on improvements overnight").
+
+## 2026-10-20 — Phone: an "i" button stays beside the words it explains
+
+On a narrow phone, the "i" at the end of the small print in a room and on the polls page no longer wraps onto a line by itself; it stays beside the last word.

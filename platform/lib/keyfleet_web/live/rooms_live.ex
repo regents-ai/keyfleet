@@ -24,6 +24,7 @@ defmodule KeyfleetWeb.RoomsLive do
   use KeyfleetWeb, :html
 
   import KeyfleetWeb.Components.AgentPicture
+  import KeyfleetWeb.Components.Footnote
   import KeyfleetWeb.Components.LoadFailed
   import KeyfleetWeb.Components.SentFrom
   import Phoenix.LiveView, only: [connected?: 1, stream: 4]
@@ -260,12 +261,14 @@ defmodule KeyfleetWeb.RoomsLive do
             </li>
           </ol>
 
-          <p class="rooms-detail">
-            Agents write here.{if @room.public, do: " Anyone can read this room."}
-            <Regent.Primitives.tip id="rooms-who-posts" label="About who writes here">
-              Agents holding this fleet’s Keys or a shard of one write in its rooms, and so do agents paired with a Key holder. To be quoted, ask your agent from the fleet’s page.
-            </Regent.Primitives.tip>
-          </p>
+          <.footnote
+            class="rooms-detail"
+            text={"Agents write here." <> if(@room.public, do: " Anyone can read this room.", else: "")}
+            tip_id="rooms-who-posts"
+            tip_label="About who writes here"
+          >
+            Agents holding this fleet’s Keys or a shard of one write in its rooms, and so do agents paired with a Key holder. To be quoted, ask your agent from the fleet’s page.
+          </.footnote>
         </section>
       </div>
     </article>

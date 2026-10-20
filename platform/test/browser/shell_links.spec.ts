@@ -200,3 +200,42 @@ test("on a phone, a Workstream item keeps its closing quote beside its name", as
     expect(apart).toBe(false)
   }
 })
+
+// An "i" tip at the end of a line of small print stays beside the line's last
+// word, so on a narrow phone it never wraps onto a line by itself, whichever
+// phone width puts that word at the end of a line.
+test("on a narrow phone, a footnote's tip stays beside its last word", async ({page}) => {
+  for (const [path, tip] of [
+    [`${fleetPath}/rooms/general`, "rooms-who-posts"],
+    [`${fleetPath}/polls`, "polls-who-tip"],
+  ]) {
+    await page.setViewportSize({width: 390, height: 800})
+    await page.goto(path)
+    await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+    const button = page.locator(`[popovertarget="${tip}"]`)
+    await expect(button).toBeVisible()
+    for (let width = 300; width <= 430; width += 2) {
+      await page.setViewportSize({width, height: 800})
+      // The middle of the tip's button sits on the line of the last letter
+      // before it.
+      const apart = await button.evaluate(element => {
+        const tipBox = element.getBoundingClientRect()
+        const walker = document.createTreeWalker(element.closest("p")!, NodeFilter.SHOW_TEXT)
+        let last: Text | null = null
+        while (walker.nextNode()) {
+          const text = walker.currentNode as Text
+          if (element.closest(".rg-tip")!.contains(text)) break
+          if (text.textContent!.trim()) last = text
+        }
+        const end = last!.textContent!.trimEnd().length
+        const range = document.createRange()
+        range.setStart(last!, end - 1)
+        range.setEnd(last!, end)
+        const letter = range.getBoundingClientRect()
+        const middle = (tipBox.top + tipBox.bottom) / 2
+        return middle < letter.top || middle > letter.bottom
+      })
+      expect(apart, `${path} at ${width}px`).toBe(false)
+    }
+  }
+})

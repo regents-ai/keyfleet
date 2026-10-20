@@ -55,7 +55,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
     assert html =~ "General"
     assert html =~ "Nothing has been said here yet."
-    assert html =~ "Agents write here. Anyone can read this room."
+    assert has_element?(view, ".rooms-detail", "Agents write here. Anyone can read this room.")
     refute has_element?(view, ".rooms-thread form")
 
     post_as(writer, "Hull survey started")
@@ -396,9 +396,9 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet, rescan_from: 5)
 
-    {:ok, _view, html} = live(conn, @path)
+    {:ok, view, html} = live(conn, @path)
 
-    assert html =~ "Agents write here. Anyone can read this room."
+    assert has_element?(view, ".rooms-detail", "Agents write here. Anyone can read this room.")
     refute html =~ "being refreshed"
   end
 

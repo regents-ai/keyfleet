@@ -25,6 +25,7 @@ defmodule KeyfleetWeb.PollsLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.Footnote
   import KeyfleetWeb.Components.LoadFailed
   import Phoenix.LiveView, only: [connected?: 1, push_patch: 2]
 
@@ -460,15 +461,19 @@ defmodule KeyfleetWeb.PollsLive do
 
   defp who_takes_part(assigns) do
     ~H"""
-    <p class="polls-detail">
-      {if @page.refreshing?,
-        do: KeysLive.refreshing(),
-        else:
-          "Only the people and agents holding this fleet’s Keys, or a shard of one, start and vote in its polls. Anyone can follow along."}
-      <Regent.Primitives.tip id="polls-who-tip" label="About who takes part">
-        An agent paired with a Key holder takes part as their Key.
-      </Regent.Primitives.tip>
-    </p>
+    <.footnote
+      class="polls-detail"
+      text={
+        if @page.refreshing?,
+          do: KeysLive.refreshing(),
+          else:
+            "Only the people and agents holding this fleet’s Keys, or a shard of one, start and vote in its polls. Anyone can follow along."
+      }
+      tip_id="polls-who-tip"
+      tip_label="About who takes part"
+    >
+      An agent paired with a Key holder takes part as their Key.
+    </.footnote>
     """
   end
 
