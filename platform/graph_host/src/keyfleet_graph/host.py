@@ -186,10 +186,8 @@ class Host:
         member = MEMBER_MODELS.get(body.type)
         if member is None:
             raise _invalid("type", f"unknown object type {body.type!r}")
-        if body.scope not in command.writable_scopes:
-            raise Refusal("forbidden_scope", "the command may not write this scope", {"scope": body.scope})
-        _check_fields(member, body.data.keys(), body.data, command)
-        record = _validate(RECORD_MODELS[body.type], {**body.data, "sys": _sys(command, body.scope)})
+        _check_fields(member, body.data.keys(), body.data, command, None)
+        record = _validate(RECORD_MODELS[body.type], {**body.data, "sys": _sys(command)})
 
         def apply(reactions: Reactions) -> dict:
             obj = self.graph.add_object(body.type, record, actor=command.principal)
@@ -200,8 +198,7 @@ class Host:
     def _plan_patch(self, command: Command, body: protocol.PatchBody) -> Callable[[Reactions], dict]:
         obj = self._editable(body.id)
         _check_version(obj, body.expected_version)
-        _check_scope(command, obj)
-        _check_fields(MEMBER_MODELS[obj.type], set(body.set) | set(body.unset), body.set, command)
+        _check_fields(MEMBER_MODELS[obj.type], set(body.set) | set(body.unset), body.set, command, obj)
         merged = {**obj.data, **body.set}
         for field in body.unset:
             merged.pop(field, None)
@@ -225,7 +222,6 @@ class Host:
     def _plan_archive(self, command: Command, body: protocol.ArchiveBody) -> Callable[[Reactions], dict]:
         obj = self._editable(body.id)
         _check_version(obj, body.expected_version)
-        _check_scope(command, obj)
         archived = {**obj.data["sys"], "archived": True}
 
         def apply(reactions: Reactions) -> dict:
@@ -239,7 +235,6 @@ class Host:
     def _plan_link(self, command: Command, body: protocol.LinkBody) -> Callable[[Reactions], dict]:
         source = self._live(body.source, "source")
         target = self._live(body.target, "target")
-        _check_scope(command, source, target)
         endpoints = RELATION_ENDPOINTS.get(body.type)
         if endpoints is None:
             raise _invalid("type", f"unknown relation type {body.type!r}")
@@ -267,8 +262,9 @@ class Host:
             raise Refusal("not_found", "no such relation", {"id": body.relation_id})
         if rel.type == "reviews":
             raise _invalid("relation_id", "a review stays linked to the task it judged")
+        if rel.type == "forks":
+            raise _invalid("relation_id", "a fork stays linked to the task it was copied from")
         target = self.graph.get_object(rel.target)
-        _check_scope(command, self.graph.get_object(rel.source), target)
 
         def apply(reactions: Reactions) -> dict:
             self.graph.remove_relation(rel.id, actor=command.principal)
@@ -280,7 +276,6 @@ class Host:
 
     def _plan_join(self, command: Command, body: protocol.JoinBody) -> Callable[[Reactions], dict]:
         goal = self._goal(body.id)
-        _check_scope(command, goal)
         member = _member(command)
         recorded = goal.data["sys"].get("joined", [])
         joined = _unlapsed(recorded, member)
@@ -294,7 +289,6 @@ class Host:
 
     def _plan_leave(self, command: Command, body: protocol.LeaveBody) -> Callable[[Reactions], dict]:
         goal = self._goal(body.id)
-        _check_scope(command, goal)
         member = _member(command)
         recorded = goal.data["sys"].get("joined", [])
         joined = [entry for entry in _unlapsed(recorded, member) if not _same_member(entry, member)]
@@ -315,21 +309,15 @@ class Host:
     def _plan_submit(self, command: Command, body: protocol.SubmitBody) -> Callable[[Reactions], dict]:
         """Marks a task done for review, with its result and the evidence it rests on, in one write.
 
-        The task becomes the acting Key's; one taken by another Key is refused.
+        The task becomes the acting Key's; one held by another Key is refused.
         Each evidence item is linked as something the task `produces`. A
         submission is only a claim: whether the work is accepted is for its
         reviews to say.
         """
         task = self._task(body.id, "id")
         _check_version(task, body.expected_version)
-        _check_scope(command, task)
         key = command.auth.key.token_id
-        if task.data.get("assignee_key") not in (None, key):
-            raise Refusal(
-                "forbidden_field",
-                "the task is taken by another Key",
-                {"fields": ["assignee_key"], "assignee_key": task.data["assignee_key"]},
-            )
+        _check_holder(task, key, key)
         evidence = list(dict.fromkeys(body.evidence))
         if body.result_ref is None and not evidence:
             raise _invalid("evidence", "a submission names its result, its evidence or both")
@@ -338,7 +326,6 @@ class Host:
             item = self._live(item_id, f"evidence.{index}")
             if item.type not in RELATION_ENDPOINTS["produces"][1]:
                 raise _invalid(f"evidence.{index}", f"a task cannot produce a {item.type}")
-            _check_scope(command, item)
             produced.append(item)
         submitted = {**_member(command), "version": task.version + 1, "evidence": evidence}
         merged = {
@@ -375,7 +362,6 @@ class Host:
         graph knows, so a review never claims it.
         """
         task = self._task(body.task, "task")
-        _check_scope(command, task)
         submitted = task.data["sys"].get("submitted")
         if task.data["progress"] != "done" or submitted is None:
             raise _invalid("task", "the task has not been submitted for review")
@@ -406,13 +392,40 @@ class Host:
             "rationale": body.rationale,
             "conflicts_of_interest": body.conflicts_of_interest,
         }
-        sys = {**_sys(command, task.data["sys"]["scope"]), "review": receipt}
+        sys = {**_sys(command), "review": receipt}
         record = _validate(RECORD_MODELS["review"], {**member, "sys": sys})
 
         def apply(reactions: Reactions) -> dict:
             review = self.graph.add_object("review", record, actor=command.principal)
             self.graph.add_relation(review.id, task.id, "reviews", {}, actor=command.principal)
             return {"id": review.id, "version": review.version}
+
+        return apply
+
+    def _plan_fork(self, command: Command, body: protocol.ForkBody) -> Callable[[Reactions], dict]:
+        """Copies a task for the acting Key to work on, in progress and theirs.
+
+        The fork keeps the task's title, deliverable and discussion, implements
+        the same goals and services, and links to the task with `forks`. The
+        task forked is left as it was, its holder included: forking is how a
+        member works on a task another Key holds.
+        """
+        task = self._task(body.id, "id")
+        copied = {field: task.data[field] for field in ("title", "deliverable", "discussion") if task.data.get(field)}
+        member = {**copied, "assignee_key": command.auth.key.token_id, "progress": "doing"}
+        record = _validate(RECORD_MODELS["task"], {**member, "sys": _sys(command)})
+        implements = [
+            rel.target
+            for rel in self.graph.relations(source=task.id, type="implements")
+            if not self.graph.get_object(rel.target).data["sys"]["archived"]
+        ]
+
+        def apply(reactions: Reactions) -> dict:
+            fork = self.graph.add_object("task", record, actor=command.principal)
+            self.graph.add_relation(fork.id, task.id, "forks", {}, actor=command.principal)
+            for target in implements:
+                self.graph.add_relation(fork.id, target, "implements", {}, actor=command.principal)
+            return {"id": fork.id, "version": fork.version}
 
         return apply
 
@@ -534,6 +547,7 @@ _PLANNERS = {
     "leave": Host._plan_leave,
     "submit": Host._plan_submit,
     "review": Host._plan_review,
+    "fork": Host._plan_fork,
 }
 
 
@@ -611,14 +625,7 @@ def _check_version(obj, expected_version: int) -> None:
         )
 
 
-def _check_scope(command: Command, *objects) -> None:
-    for obj in objects:
-        scope = obj.data["sys"]["scope"]
-        if scope not in command.writable_scopes:
-            raise Refusal("forbidden_scope", "the command may not write this scope", {"scope": scope})
-
-
-def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], command: Command) -> None:
+def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], command: Command, current) -> None:
     unknown = sorted(field for field in fields if field not in member.model_fields)
     if unknown:
         raise Refusal("forbidden_field", "these fields are not member-writable", {"fields": unknown})
@@ -628,16 +635,31 @@ def _check_fields(member: type[BaseModel], fields, values: dict[str, Any], comma
             "a task is marked done, with its result, only by submitting it",
             {"fields": sorted({"result_ref", "progress"} & set(fields))},
         )
-    if values.get("assignee_key") not in (None, command.auth.key.token_id):
+    if "assignee_key" in fields:
+        _check_holder(current, values.get("assignee_key"), command.auth.key.token_id)
+
+
+# A member takes an untaken task by setting it to their own Key. Only the Key
+# holding a task gives it to another Key or drops it; a task another Key holds
+# can be forked instead.
+def _check_holder(task, assignee: Optional[int], key: int) -> None:
+    holder = task.data.get("assignee_key") if task else None
+    if holder not in (None, key):
         raise Refusal(
             "forbidden_field",
-            "a task may be assigned only to the acting Key, or cleared",
+            "the task is held by another Key: only its holder gives it away or drops it, so fork it instead",
+            {"fields": ["assignee_key"], "assignee_key": holder},
+        )
+    if holder is None and assignee not in (None, key):
+        raise Refusal(
+            "forbidden_field",
+            "an untaken task is taken only by the acting Key",
             {"fields": ["assignee_key"]},
         )
 
 
-def _sys(command: Command, scope: str) -> dict[str, Any]:
-    return {"scope": scope, "created_by": _member(command), "archived": False}
+def _sys(command: Command) -> dict[str, Any]:
+    return {"scope": "fleet", "created_by": _member(command), "archived": False}
 
 
 def _member(command: Command) -> dict[str, Any]:

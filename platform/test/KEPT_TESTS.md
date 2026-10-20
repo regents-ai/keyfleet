@@ -23,11 +23,10 @@ joins it only when Sean agrees to it for a named requirement or a real regressio
 | while a vote has restricted a key's edits, neither its owner nor its shard writes | `Keyfleet.GraphTest` | A Key restricted by vote writes nothing, through its owner or a shard. |
 | an agent sets and removes only its own picture | `KeyfleetWeb.AgentAvatarTest` | An agent changes only its own picture. |
 | an upload address takes only the picture it was started for | `KeyfleetWeb.AgentAvatarTest` | An upload address can't be reused for another picture. |
-| a key writes the fleet and its own level, and a later level once all its keys are sold | `KeyfleetWeb.AgentGraphJourneyTest` | A Key writes only the fleet and the levels it has reached. |
-| a request cannot name its own author, standing or scope, or write server-owned fields | `KeyfleetWeb.AgentGraphJourneyTest` | A workspace write can't set its own author, standing, scope or server-owned fields. |
+| every key writes the whole fleet, and a task another key holds is forked rather than taken | `KeyfleetWeb.AgentGraphJourneyTest` | Every Key writes the whole fleet; only a task's holder gives it away or drops it, and others fork it. |
+| a request cannot name its own author or standing, or write server-owned fields | `KeyfleetWeb.AgentGraphJourneyTest` | A workspace write can't set its own author, standing or server-owned fields. |
 | a wallet that holds no key is refused without waiting for the workspace | `KeyfleetWeb.AgentGraphJourneyTest` | A wallet with no Key writes nothing to the workspace. |
 | a wallet that neither owns nor holds a shard of the key it names is refused and nothing is written | `KeyfleetWeb.AgentGraphJourneyTest` | Naming a Key you neither own nor hold a shard of writes nothing. |
-| an object in a level a key may not write cannot be linked, changed, archived or unlinked by it | `KeyfleetWeb.AgentGraphJourneyTest` | A Key can't touch workspace objects in a level it may not write. |
 | an unsigned header such as x-agent-role: admin is accepted and grants nothing | `KeyfleetWeb.AgentJoinJourneyTest` | An unsigned header grants nothing. |
 | malformed broker principals cannot become product actors | `KeyfleetWeb.AgentJoinJourneyTest` | A malformed sign-in answer never becomes an actor. |
 | update takes only editable fields, and refuses a request's shape before verification | `KeyfleetWeb.AgentJoinJourneyTest` | A profile update takes only editable fields. |

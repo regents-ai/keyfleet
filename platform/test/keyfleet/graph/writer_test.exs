@@ -8,7 +8,7 @@ defmodule Keyfleet.Graph.WriterTest do
   @fleets Keyfleet.Fleets.catalog_ids()
   @wallet "0x" <> String.duplicate("a1", 20)
   @contract "0x" <> String.duplicate("b2", 20)
-  @note %{type: "note", scope: "fleet", data: %{title: "Plan", body: "Ship the first service."}}
+  @note %{type: "note", data: %{title: "Plan", body: "Ship the first service."}}
 
   # A host that stops is saved with the site's errors, from the writer's own
   # process.
@@ -642,8 +642,7 @@ defmodule Keyfleet.Graph.WriterTest do
         credential_ref: nil,
         checked_at: "2026-09-22T12:00:00Z",
         chain_block: nil
-      },
-      writable_scopes: ["fleet"]
+      }
     }
   end
 

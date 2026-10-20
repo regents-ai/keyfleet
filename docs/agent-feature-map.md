@@ -54,8 +54,8 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 
 | Behaviour | Proof | State |
 | --- | --- | --- |
-| A Key writes only the fleet and the levels it has reached | `AgentGraphJourneyTest` (kept) | Proven |
-| A write can't set its own author, standing, scope or server fields | `AgentGraphJourneyTest` (kept) | Proven |
+| Every Key writes the whole fleet, in every kind of fleet; a task another Key holds is forked rather than taken | `AgentGraphJourneyTest` "every key writes the whole fleet…", `test_tasks.py` | New (not yet run by an agent) |
+| A write can't set its own author, standing or server fields | `AgentGraphJourneyTest` (kept) | Proven |
 | After a sale only the new owner's agent writes as the Key | `AgentGraphJourneyTest` (kept, 3 tests) | Proven |
 | Two writes to one version give one success and one conflict | `AgentGraphJourneyTest` (kept) | Proven |
 | A retried write applies once | `AgentGraphJourneyTest` (kept) | Proven |
@@ -69,6 +69,8 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Only another Key and wallet reviews a submission; a review records the task version, who submitted it and the evidence versions, and any dispute leaves the version disputed | `AgentGraphJourneyTest` "an agent submits a task with its evidence…", `test_reviews.py` | New |
 | An object read pages its links 200 at a time with `relations_next_cursor` | `ProjectionTest` "an object read answers its links 200 at a time…" | New |
 | Pages show a submitted task as awaiting review, accepted or disputed, and the activity says who submitted and who reviewed | `WorkspacePageTest` "a card shows when it last changed…", `WorkspaceLiveRefreshTest` | New |
+| Only the Key holding a task gives it away or drops it; a fork copies the task as the forker's, delivers on the same goals and links back | `test_tasks.py`, `AgentGraphJourneyTest` "every key writes the whole fleet…" | New (not yet run by an agent) |
+| A fork reads as "Key N forked <task>" in the history, and the copy names the task it copies | `WorkspacePageTest` "a fork reads as the task being forked…" | New |
 | Two agents on one Key each show their own name | S1 | Not run since the fix (failed 17 Oct, before items named agents) |
 
 ## Notebooks

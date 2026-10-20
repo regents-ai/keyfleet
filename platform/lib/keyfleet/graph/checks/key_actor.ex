@@ -14,10 +14,7 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
   hands moves the right to write with it, ends its shards, and an unknown
   owner grants nothing.
 
-  Every key writes the fleet scope. A key of a Fibonacci fleet also writes its
-  own level, and a later level once every key of that level is sold, as far as
-  the fleet's key history has been read; never an earlier level. Classic and
-  Accelerant keys write the fleet scope only.
+  Every key writes the whole fleet's workspace, whatever kind of fleet it is.
   The policy asks first; the fleet's writer asks again when the write's turn
   comes, and only that answer lets the write through.
 
@@ -30,7 +27,6 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
 
   alias Keyfleet.Actors.Agent
   alias Keyfleet.Actors.Human
-  alias Keyfleet.Fleets.Presets
   alias Keyfleet.Graph.Errors.CheckExpiredError
   alias Keyfleet.Graph.Errors.EditsRestrictedError
   alias Keyfleet.Graph.Errors.NotKeyHolderError
@@ -61,15 +57,14 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
 
   @doc """
   The command a write carries: its id, the member principal it is recorded
-  under, the audit stamp of the standing that admits it and the scopes it may
-  write, read now within `within` milliseconds.
+  under and the audit stamp of the standing that admits it, read now within
+  `within` milliseconds.
   """
   def command(actor, fleet_id, token_id, command_id, within) do
     deadline = System.monotonic_time(:microsecond) + within * 1_000
 
-    with {:ok, auth} <- authority(actor, fleet_id, token_id, deadline),
-         {:ok, scopes} <- writable_scopes(fleet_id, token_id, deadline) do
-      {:ok, %{id: command_id, principal: principal(auth), auth: auth, writable_scopes: scopes}}
+    with {:ok, auth} <- authority(actor, fleet_id, token_id, deadline) do
+      {:ok, %{id: command_id, principal: principal(auth), auth: auth}}
     end
   end
 
@@ -233,19 +228,6 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
         error ->
           error
       end
-    end
-  end
-
-  # Read once the standing is known, so the key has an owner on record.
-  defp writable_scopes(fleet_id, token_id, deadline) do
-    if Presets.levelled?(fleet_id) do
-      with {:ok, opts} <- within(deadline, fleet_id),
-           {:ok, minted} <- Keyfleet.Chain.minted(fleet_id, opts) do
-        levels = Presets.writable_levels(token_id, minted)
-        {:ok, ["fleet" | Enum.map(levels, &"level:#{&1}")]}
-      end
-    else
-      {:ok, ["fleet"]}
     end
   end
 
