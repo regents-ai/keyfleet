@@ -30,8 +30,8 @@ defmodule Keyfleet.LocalDatabaseFixture do
   # shipped inside this application's priv directory and holds only DDL written
   # in this repository, so neither the path nor the statements come from input.
   # The shared profile and agent pairing schemas come from `regent_identity`'s
-  # and `regent_agents`' own migrations, which Regents alone runs in production;
-  # running them again changes nothing.
+  # and `regent_agents`' own migrations, which `bin/migrate-shared` applies in
+  # production; running them again changes nothing.
   # sobelow_skip ["SQL.Query", "Traversal.FileModule"]
   def create_shared_tables! do
     :keyfleet

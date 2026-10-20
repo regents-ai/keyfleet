@@ -3086,3 +3086,16 @@ The feed used to fold every Key bought in a row into one line, so a single purch
 
 - What: a fleet page's tabs now read Chat, Workspace, Treasury, Keys, Proposals.
 - Why: Sean asked for that order (13:48Z).
+
+## 2026-10-20 — Every site applies shared changes the same way
+
+- New `/app/bin/migrate-shared`, the same command every Regent site carries: it
+  applies the shared Identity, Agents, Credits and Points database changes this
+  release carries that the database has not applied, and prints each one, or
+  `none` (Sean, 19 Oct 2026: every site works the same). A deployment still
+  never applies them.
+- The release check and `/app/bin/pending-migrations` read the same list, so a
+  deployment now also stops while a shared Identity change is missing, and the
+  listing names any missing shared change under `shared-pending:`. The staging
+  bootstrap applies every shared change before Keyfleet's own migrations, so a
+  bootstrapped staging database passes the release check.
