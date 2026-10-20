@@ -302,7 +302,19 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert cards(view) == [note]
     end
 
-    test "the goals lead the workspace, the newest change first, and Keyfleet added the starting ones",
+    test "Places to work comes first, under the heading", %{conn: conn} do
+      {:ok, _board, html} = live(conn, @board)
+
+      ids =
+        html
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#workspace-page > *")
+        |> Enum.map(&(&1 |> LazyHTML.attribute("class") |> List.first()))
+
+      assert Enum.take(ids, 2) == ["workspace-heading", "workspace-tools workspace-panel"]
+    end
+
+    test "the goals lead the work, the newest change first, and Keyfleet added the starting ones",
          %{conn: conn} do
       second = starting_goal(@fleet, 2, %{"title" => "Compete", "outcome" => "Pick a board."})
       first = starting_goal(@fleet, 1, %{"title" => "Plan a service", "outcome" => "Find one."})

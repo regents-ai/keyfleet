@@ -3100,3 +3100,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on the homepage, the orange Buy Next Key button now spans the card above it, edge to edge, instead of reaching past its left side to the Key's head.
 - Why: Sean 20 October 14:41Z: "the orange button needs to be slightly less wide, to visually match the card".
+
+## 2026-10-20 — Places to work leads the Workspace
+
+- What: on a fleet's Workspace, Places to work (the workspace, the code and the notebooks, with Open notebooks and how to work here with an agent) now comes first, under the heading, instead of at the bottom of the page.
+- Why: Sean 20 October 14:41Z: "the 'Places to Work' section needs to be at the top of workspace".

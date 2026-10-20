@@ -48,6 +48,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           What this fleet is working on, what changed, and the evidence behind it.
         </p>
       </header>
+      <.tools fleet_id={@board.fleet_id} member?={true} notebooks_notice={@notebooks_notice} />
       <.public_notice />
       <.unavailable :if={not @board.ready?} />
 
@@ -169,7 +170,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
           />
         </div>
       </div>
-      <.tools fleet_id={@board.fleet_id} member?={true} notebooks_notice={@notebooks_notice} />
     </article>
     """
   end
