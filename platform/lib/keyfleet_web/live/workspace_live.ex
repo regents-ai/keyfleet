@@ -54,6 +54,23 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <div :if={@board.ready?} class="workspace-grid">
         <div class="workspace-main">
           <section
+            id="workspace-goals"
+            class="workspace-panel workspace-items"
+            aria-labelledby="workspace-goals-title"
+          >
+            <h2 id="workspace-goals-title">Starting ideas for optional goals to take on</h2>
+            <p class="workspace-detail">
+              Newest first. Ask your agent to join one, or to add its own.
+            </p>
+            <ol class="workspace-cards">
+              <.card :for={card <- @board.goals} card={card} fleet_id={@board.fleet_id} />
+            </ol>
+            <.link id="workspace-all-goals" class="workspace-toggle" patch={@board.all_goals}>
+              See every goal
+            </.link>
+          </section>
+
+          <section
             class="workspace-panel workspace-activity"
             aria-labelledby="workspace-activity-title"
           >
@@ -61,15 +78,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
             <p class="workspace-detail">
               Recorded changes, newest first. Open an item to read its notes and results.
             </p>
-            <Regent.Primitives.empty_state
-              :if={@board.activity == []}
-              id="workspace-activity-empty"
-              class="kf-empty"
-              title="No changes yet."
-            >
-              They show up here as agents work.
-            </Regent.Primitives.empty_state>
-            <ol :if={@board.activity != []} id="workspace-activity" class="workspace-lines">
+            <ol id="workspace-activity" class="workspace-lines">
               <li :for={line <- @board.activity} data-seq={line.seq}>
                 <p><.line parts={line.parts} fleet_id={@board.fleet_id} /></p>
                 <p :if={line.note} class="workspace-text">{line.note}</p>
@@ -105,7 +114,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
               {if @board.filter.archived?, do: "Hide archived items", else: "Show archived items"}
             </.link>
 
-            <.no_cards :if={@board.cards == [] and @board.first_page?} board={@board} />
+            <.no_cards
+              :if={@board.cards == [] and @board.first_page? and @board.filter.type}
+              board={@board}
+            />
             <Regent.Primitives.empty_state
               :if={@board.cards == [] and not @board.first_page?}
               class="kf-empty"
@@ -123,31 +135,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
             </Regent.Primitives.empty_state>
 
             <ol :if={@board.cards != []} id="workspace-cards" class="workspace-cards">
-              <li
-                :for={card <- @board.cards}
-                class="workspace-card"
-                data-item={card.id}
-                data-type={card.type}
-              >
-                <p class="workspace-kind">
-                  <span>{type_label(card.type)}</span>
-                  <span :if={card.archived?} class="workspace-badge">Archived</span>
-                </p>
-                <h3>
-                  <.link patch={WorkspacePage.item_path(@board.fleet_id, card.id)}>{card.title}</.link>
-                </h3>
-                <p :if={card.gist} class="workspace-gist">{card.gist}</p>
-                <dl :if={card.facts != []} class="workspace-facts">
-                  <div :for={{label, value} <- card.facts}>
-                    <dt>{label}</dt>
-                    <dd><.value value={value} fleet_id={@board.fleet_id} /></dd>
-                  </div>
-                </dl>
-                <p class="workspace-detail">
-                  <span>Added by <.part part={card.by} fleet_id={@board.fleet_id} /></span>
-                  <span>Last changed {card.changed_at}</span>
-                </p>
-              </li>
+              <.card :for={card <- @board.cards} card={card} fleet_id={@board.fleet_id} />
             </ol>
 
             <nav
@@ -199,6 +187,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <h2>{item_heading(@item)}</h2>
         <p :if={@item[:object]} class="workspace-lede">
           <span>{type_label(@item.object.type)}</span>
+          <span :if={@item.object.starting?} class="workspace-badge">Starting idea</span>
           <span :if={@item.object.archived?} class="workspace-badge">Archived</span>
         </p>
       </header>
@@ -546,9 +535,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :board, :map, required: true
 
-  # The first page with no items: a kind with none of its own, a workspace whose
-  # every item is archived, or one nothing has been added to yet.
-  defp no_cards(%{board: %{filter: %{type: type} = filter}} = assigns) when is_binary(type) do
+  # The first page of one kind of item with none of that kind. A workspace
+  # always holds its starting goals, so every other first page has items.
+  defp no_cards(%{board: %{filter: filter}} = assigns) do
     assigns =
       assign(assigns,
         title: empty_words(filter),
@@ -563,39 +552,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </.link>
       </:action>
     </Regent.Primitives.empty_state>
-    """
-  end
-
-  # Items are archived, never removed, so changes with no item left to show
-  # mean every one is archived.
-  defp no_cards(%{board: %{filter: %{archived?: false} = filter, activity: [_ | _]}} = assigns) do
-    assigns =
-      assign(assigns,
-        archived: WorkspacePage.board_path(assigns.board.fleet_id, %{filter | archived?: true})
-      )
-
-    ~H"""
-    <Regent.Primitives.empty_state
-      id="workspace-empty"
-      class="kf-empty"
-      title="Everything here is archived."
-    >
-      <:action>
-        <.link class="rg-button rg-button--secondary" patch={@archived}>
-          <span class="rg-button__label">Show archived items</span>
-        </.link>
-      </:action>
-    </Regent.Primitives.empty_state>
-    """
-  end
-
-  defp no_cards(assigns) do
-    ~H"""
-    <Regent.Primitives.empty_state
-      id="workspace-empty"
-      class="kf-empty"
-      title="Nothing has been added to this workspace yet."
-    />
     """
   end
 
@@ -786,6 +742,35 @@ defmodule KeyfleetWeb.WorkspaceLive do
     do: ~H"<.item_link part={@part} fleet_id={@fleet_id} />"
 
   defp part(assigns), do: ~H"{@part}"
+
+  attr :card, :map, required: true
+  attr :fleet_id, :string, required: true
+
+  defp card(assigns) do
+    ~H"""
+    <li class="workspace-card" data-item={@card.id} data-type={@card.type}>
+      <p class="workspace-kind">
+        <span>{type_label(@card.type)}</span>
+        <span :if={@card.starting?} class="workspace-badge">Starting idea</span>
+        <span :if={@card.archived?} class="workspace-badge">Archived</span>
+      </p>
+      <h3>
+        <.link patch={WorkspacePage.item_path(@fleet_id, @card.id)}>{@card.title}</.link>
+      </h3>
+      <p :if={@card.gist} class="workspace-gist">{@card.gist}</p>
+      <dl :if={@card.facts != []} class="workspace-facts">
+        <div :for={{label, value} <- @card.facts}>
+          <dt>{label}</dt>
+          <dd><.value value={value} fleet_id={@fleet_id} /></dd>
+        </div>
+      </dl>
+      <p class="workspace-detail">
+        <span>Added by <.part part={@card.by} fleet_id={@fleet_id} /></span>
+        <span>Last changed {@card.changed_at}</span>
+      </p>
+    </li>
+    """
+  end
 
   attr :part, :any, required: true
   attr :fleet_id, :string, required: true

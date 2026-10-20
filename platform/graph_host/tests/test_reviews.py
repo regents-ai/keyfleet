@@ -39,7 +39,7 @@ REVIEWER = {"token_id": 18, "wallet": OTHER_WALLET}
 
 @pytest.fixture
 def host(db):
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     _ok(host, "create", {"type": "task", "data": {"title": "Draft"}}, command("t"))
     _ok(host, "create", {"type": "evidence", "data": EVIDENCE}, command("e1"))
     _ok(host, "create", {"type": "evidence", "data": EVIDENCE}, command("e2"))

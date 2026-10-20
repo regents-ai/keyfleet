@@ -1,4 +1,7 @@
-"""`python -m keyfleet_graph --fleet <id> --db <path>`: serve one fleet's graph over stdio.
+"""`python -m keyfleet_graph --fleet <id> --db <path> --starting-goals <json>`: serve one fleet's graph over stdio.
+
+`--starting-goals` is the JSON list of the goals every workspace starts with,
+each `{"title", "outcome"}`, in the order the site lists them.
 
 Standard output is taken for the protocol before anything else runs and file
 descriptor 1 is pointed at standard error, so a stray print can never corrupt
@@ -33,9 +36,10 @@ def main() -> None:
         os._exit(EXIT_LOCKED)
 
     try:
-        from keyfleet_graph.host import Host
+        from keyfleet_graph.host import Host, StartingGoals
 
-        host = Host(args.fleet, args.db)
+        starting_goals = StartingGoals.model_validate_json(args.starting_goals).root
+        host = Host(args.fleet, args.db, starting_goals)
         serve(host, requests, replies)
     except BaseException:
         traceback.print_exc()
@@ -52,6 +56,7 @@ def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="keyfleet_graph")
     parser.add_argument("--fleet", required=True, type=_fleet_id)
     parser.add_argument("--db", required=True)
+    parser.add_argument("--starting-goals", required=True)
     return parser.parse_args()
 
 

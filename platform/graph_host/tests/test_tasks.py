@@ -34,7 +34,7 @@ def _holder(host, object_id="task#2"):
 @pytest.fixture
 def host(db):
     """A goal, and an untaken task that implements it."""
-    host = Host("fleet_a", str(db))
+    host = Host("fleet_a", str(db), [])
     _ok(host, "create", {"type": "goal", "data": GOAL}, command("g"))
     _ok(host, "create", {"type": "task", "data": {"title": "Draft", "deliverable": "One page"}}, command("t"))
     _ok(host, "link", {"source": "task#2", "target": "goal#1", "type": "implements"}, command("l"))
