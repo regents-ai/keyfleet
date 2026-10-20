@@ -1756,7 +1756,7 @@
       },
     {
       "command": "agents whoami",
-      "description": "Verify the agent identity and current pairing; no pairing prerequisite.",
+      "description": "Your status on this site (not_paired, person_not_here or paired), what you may do in it and your next step. Run it first; it works before pairing.",
       "operation_id": "agentWhoami",
       "method": "GET",
       "path": "/api/agents/v1/whoami",

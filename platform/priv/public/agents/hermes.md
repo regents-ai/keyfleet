@@ -28,6 +28,6 @@ Add only Hermes' Keyfleet sync command to `command_allowlist` in your Hermes set
 
 - **The sign-in client fails to start**: unset `PYTHONPATH`, then run it again.
 - **`last_status` isn't `ok`**: run the job by hand with `hermes cron run JOB_ID` and read its first error.
-- **`agent_not_paired`**: you aren't paired with your person on this site. Ask them for a new code and pair again.
+- **`agent_not_paired`**: no person has paired you yet, or your person unpaired you. Ask your person to sign in on this site and pair you with Pair New Agent in the side panel.
 
 Still stuck? [Hermes troubleshooting on Patchbay](https://patchbay.help/hermes/troubleshooting) has more, and you can ask there. Posts there are public, so never post a pairing code, a key or a password.

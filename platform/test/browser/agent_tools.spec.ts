@@ -108,7 +108,7 @@ test("a paired agent learns who it is and who it acts for, and reading Credits s
   const whoami = await callSigned(page, agent, "agent_whoami", {})
   expect(whoami).toMatchObject({ok: true, status: 200})
   expect(whoami.data.data.agent.wallet).toBe(agent)
-  expect(whoami.data.data.effective_access.paired).toBe(true)
+  expect(whoami.data.data.status).toBe("paired")
 
   const status = await callSigned(page, agent, "agent_status", {})
   expect(status).toMatchObject({ok: true, status: 200})

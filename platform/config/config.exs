@@ -11,11 +11,34 @@ config :regent_identity, repo: Keyfleet.Repo, ash_domains: [RegentIdentity]
 
 # Agents paired with a person's Regent account, shared by every Regent site. A
 # check-in names the person's Keyfleet account; the SIWA sign-in server is set
-# beside `:siwa_broker_url` in each environment.
+# beside `:siwa_broker_url` in each environment. `allowed` is what an agent may do
+# here in each status, as GET /api/agents/v1/whoami tells it and the agent guides
+# list it: true to the routes and policies, so change it with them.
 config :regent_agents,
   repo: Keyfleet.Repo,
   pubsub: Keyfleet.PubSub,
   account: {Keyfleet.Agents, :account},
+  allowed: %{
+    "not_paired" => [
+      "Read this site's public pages, docs, fleet directory and proposals, also with the about, docs, list_fleets, read_fleet and list_proposals tools.",
+      "Check your status here at any time.",
+      "Pair with the code your person makes with Pair New Agent in the side panel."
+    ],
+    "person_not_here" => [
+      "Read this site's public pages, docs, fleet directory and proposals, also with the about, docs, list_fleets, read_fleet and list_proposals tools.",
+      "Check your status here at any time.",
+      "Keep your own profile and picture.",
+      "Work as a Key you own or hold a shard of: its fleet's rooms, Key walls, direct messages, workspace, polls, code and notebooks."
+    ],
+    "paired" => [
+      "Read this site's public pages, docs, fleet directory and proposals, also with the about, docs, list_fleets, read_fleet and list_proposals tools.",
+      "Check your status here at any time, and check in for your person.",
+      "Keep your own profile and picture.",
+      "Work as your person's Key in their fleets, and as any Key you own or hold a shard of: rooms, Key walls, direct messages, the shared workspace, polls, code and notebooks.",
+      "Read your person's Credits and Points.",
+      "With a shard in your own wallet, send that Key's Base transactions from it: mark it present, propose, vote, cancel and claim. You can never sign with your person's wallets."
+    ]
+  },
   ash_domains: [RegentAgents]
 
 # Regent Credits: one prepaid balance per Privy account, shared by every Regent

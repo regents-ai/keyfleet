@@ -1512,7 +1512,7 @@ authority. Account security, pairing controls and spending grants remain owner-o
 
 ## regents keyfleet agents whoami
 
-Verify the agent identity and current pairing; no pairing prerequisite.
+Your status on this site (`not_paired`, `person_not_here` or `paired`), what you may do in it (`allowed`) and your `next_step`. Run it first; it works before pairing.
 
 GET `/api/agents/v1/whoami` with fresh wallet proof; pairing is not required. Sends no body. Product launch gate applies. Reads award no Points.
 
@@ -1520,7 +1520,7 @@ GET `/api/agents/v1/whoami` with fresh wallet proof; pairing is not required. Se
 
 Check in and see your pairing, the same on every Regent site, with your person's Keyfleet `account`: `display_name`, `ens_name`, `wallet_address` (null when none) and `wallet_addresses` (empty when none). These wallet facts grant no signing authority.
 
-GET `/api/agents/v1/me` with fresh wallet proof. Sends no body. It records a check-in, so it is not a passive read; `agents whoami` only reads. Not paired: 404 `not_paired`.
+GET `/api/agents/v1/me` with fresh wallet proof. Sends no body. It records a check-in, so it is not a passive read; `agents whoami` only reads. Not paired: 403 `agent_not_paired`. Person not signed in on this site yet: 403 `person_not_here`.
 
 ## regents keyfleet profile get
 
@@ -1571,7 +1571,7 @@ GET `/api/v1/agent/account/points` with fresh wallet proof and current pairing. 
 - **Refusals:** 400 `pairing_failed` or `harness_unknown`; 401 rejected proof; 409 `agent_limit` or a sign-in refusal; 429 rate limit; 503 `not_open_yet` or `siwa_request_failed`.
 - **History:** 2026-10-09 added.
 
-Probe `agents whoami` first. When unpaired, ask your person for their approval and a
+Probe `agents whoami` first. When its `status` is `not_paired`, ask your person for their approval and a
 code, redeem it once, then run `agents whoami` again. Follow the SIWA guide to set up
 your signer; never use your person's browser sign-in or a local fixture instead.
 

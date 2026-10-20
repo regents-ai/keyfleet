@@ -3797,8 +3797,8 @@
     },
     {
       "name": "agent_whoami",
-      "title": "Check my agent identity and pairing",
-      "description": "Check who you are signed in as and whether you are paired, before private work: reads your identity and effective_access only. Send empty input. Changes nothing and awards no Points. If effective_access.paired is false, ask your person for a pairing code, pair with it, then check again. Works before pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof.",
+      "title": "Check my status",
+      "description": "Call this first. Tells you your status on this site (not_paired, person_not_here or paired), what you may do in it and your next step. Send empty input. Changes nothing and awards no Points. Works before pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -3859,7 +3859,7 @@
     {
       "name": "agent_status",
       "title": "Check in",
-      "description": "Check in as a paired agent: your pairing and the account you act for. Records the check-in time, which your person sees. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof.",
+      "description": "Check in as a paired agent: your pairing and the account you act for. Records the check-in time, which your person sees. Refused with agent_not_paired until your person pairs you, and person_not_here until they sign in on this site. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,

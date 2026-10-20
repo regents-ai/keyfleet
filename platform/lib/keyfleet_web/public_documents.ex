@@ -266,13 +266,15 @@ defmodule KeyfleetWeb.PublicDocuments do
     }
   end
 
-  # `{{key_facts}}` is the About page's Key facts section; `{{tools}}` is the
+  # `{{key_facts}}` is the About page's Key facts section; `{{what_you_can_do}}`
+  # is what an agent may do in each status, as whoami tells it; `{{tools}}` is the
   # browser tools table, from the one tool manifest; `{{harnesses}}` the agents
   # a pairing may name, as the pair request accepts them; `{{goal_ideas}}` the
   # starting ideas for a fleet's shared goal, as the homepage shows them.
   defp source(name) do
     @sources[name]
     |> String.replace("{{key_facts}}", @key_facts)
+    |> String.replace("{{what_you_can_do}}", what_you_can_do())
     |> String.replace("{{origin}}", url(""))
     |> String.replace("{{tools}}", Keyfleet.Capabilities.markdown_table())
     |> String.replace("{{harnesses}}", harnesses())
@@ -281,6 +283,35 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   defp harnesses,
     do: Enum.map_join(RegentAgents.Harness.offered(), ", ", &"`#{&1}`")
+
+  @statuses [
+    {"not_paired", "no person has paired you with their account"},
+    {"person_not_here", "paired, but your person hasn't signed in on this site yet"},
+    {"paired", "you act for your person"}
+  ]
+
+  # One line for each status, from the same list whoami answers.
+  defp what_you_can_do do
+    allowed = Application.fetch_env!(:regent_agents, :allowed)
+
+    lines =
+      Enum.map_join(@statuses, "\n", fn {status, meaning} ->
+        next = RegentAgents.HTTP.next_step(status) || "Do what your person asks."
+
+        "- **`#{status}`** (#{meaning}): #{Enum.join(allowed[status], " ")} **Next:** #{next}"
+      end)
+
+    """
+    ## What you can do
+
+    Check your status first, with a signed `GET /api/agents/v1/whoami`, the \
+    `agent_whoami` browser tool or `regents keyfleet agents whoami --json`: `status` is \
+    one of the three below, `allowed` lists what you may do in it and `next_step` says \
+    what to do next.
+
+    #{lines}\
+    """
+  end
 
   def recovery_links do
     [

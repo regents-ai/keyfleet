@@ -19,7 +19,9 @@ defmodule Keyfleet.ChainClientTest do
       )
 
     step = Review.find(review, "pay")
-    hash = "0x" <> String.duplicate("5", 64)
+    # The test node keeps every landed transaction for the whole run, so a hash
+    # another test landed would answer for some other step.
+    hash = "0x" <> Base.encode16(:crypto.strong_rand_bytes(32), case: :lower)
 
     assert Outcome.of(ChainClient, review, step, hash) == {:ok, :pending}
 

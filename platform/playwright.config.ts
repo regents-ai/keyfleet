@@ -26,6 +26,7 @@ export default defineConfig({
     "shell_links.spec.ts",
     "early_page.spec.ts",
     "agent_tools.spec.ts",
+    "account_agents.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

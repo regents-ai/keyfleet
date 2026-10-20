@@ -128,3 +128,15 @@ account as fully as regents.sh does (Credits left for later, his word at 18:57Z)
 | Account says whether World ID has verified the person | `KeyfleetWeb.ShellLiveTest` | The World ID row follows the account's own record. |
 | Account shows the wallet's ENS name, or why there is none | `KeyfleetWeb.ShellLiveTest` | An ENS name shows with its copy icon, a wallet with no name says so, and a name read for a wallet the account no longer uses never shows. |
 | opening Account asks Ethereum again after a failed lookup | `KeyfleetWeb.ShellLiveTest` | "Refresh to try again" is true: opening the page asks again and says it is checking. |
+
+## What an agent is told it may do
+
+Added on 20 October 2026 with the shared libraries' status answer (the template's
+of 19 October): an agent asks whoami first and is told its status, what it may do
+in it and its next step.
+
+| Test | Module | Protects |
+| --- | --- | --- |
+| an agent pairs with a code from regents.sh and checks in, signed for Keyfleet (now also asks whoami before and after) | `KeyfleetWeb.SharedAgentPairingTest` | whoami answers `not_paired` before pairing and `paired` after, each with this site's `allowed` list and next step. |
+| an agent paired by a person with no Keyfleet account checks in to person_not_here (now also asks whoami) | `KeyfleetWeb.SharedAgentPairingTest` | whoami answers `person_not_here` until the person signs in here. |
+| every agent document lists what whoami allows in each status and its next step | `KeyfleetWeb.WhatYouCanDoTest` | `/llms.txt` and `/agents.md` say exactly what whoami answers. |

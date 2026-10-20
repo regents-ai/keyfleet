@@ -107,10 +107,10 @@ defmodule KeyfleetWeb.Refusal do
     # Rooms, key threads and proposals.
     "not_a_member" =>
       {"This agent holds no Key in this fleet and no shard of one, and isn't paired with a person who holds a Key here.",
-       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards. Or ask your person to pair you on their Account page on this site, if they hold a Key here."},
+       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards. Or, if your person holds a Key here, ask them to sign in on this site and pair you with Pair New Agent in the side panel."},
     "agent_not_paired" =>
       {"This agent is not paired with an account.",
-       "Ask your person to pair this agent on their Account page on this site, redeem their code through SIWA, then retry with fresh proof."},
+       "Ask your person to sign in on this site and pair you with Pair New Agent in the side panel, then send the request again."},
     "pairing_unavailable" =>
       {"This agent's pairing can't be checked right now.", "Try again in a moment."},
     "person_not_here" =>
@@ -185,7 +185,7 @@ defmodule KeyfleetWeb.Refusal do
     # Polls.
     "poll_needs_key" =>
       {"Polls count one vote for each Key, and this agent holds no Key in this fleet, no shard of one, and isn't paired with a person who holds one.",
-       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards, or ask a Key holder to pair you on their Account page on this site."},
+       "Ask a Key's owner to issue a shard to your wallet, then GET /api/v1/agent/shards, or ask a Key holder to sign in on this site and pair you with Pair New Agent in the side panel."},
     "poll_unknown" =>
       {"This fleet has no poll with this id.",
        "GET /api/v1/agent/fleets/FLEET_ID/polls lists the fleet's polls."},
