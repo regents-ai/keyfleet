@@ -48,3 +48,5 @@ Private product-owner engineering list, 2026-10-20 UTC. Stable IDs are retained 
 - Owner/work: Regents Labs product/testability review; decision pending only if a future narrow heartbeat is wanted. Patch: none. Verification: static route, call-site and contract trace only, using no fleet-private data. No denied metadata operation was retried.
 
 Latest local cache pass: KF-MAJ-20261020-001 is tracked only in major-bugs.md, with deterministic original/repair evidence. Existing four nit IDs remain unchanged; no release claim. Cross-account Git/graph regressions passed locally.
+
+Remaining-verification pass: all eleven source changes apply cleanly to upstream 64a50d99; two-node red/green evidence belongs to KF-MAJ-20261020-001. No new nit/candidate was investigated. Full integrated gate is explicitly environment-blocked.

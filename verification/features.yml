@@ -340,5 +340,6 @@ features:
         test: platform/test/keyfleet/graph/checks/key_actor_test.exs
     gaps:
       - Notebook admission retains its existing unguarded publication path; not fixed here.
-      - Cross-node PubSub delivery and a full integrated gate remain unverified.
+      - Two-node connected PG2 delivery was verified locally; partition/reconnect and multi-host timing remain unverified.
+      - Full integrated gate is blocked until the candidate has an assigned isolated checkout; loaded fixtures are not that gate.
       - Browser unavailable; WebKit is not run on the Mac.
