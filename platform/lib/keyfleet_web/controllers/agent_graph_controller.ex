@@ -62,6 +62,10 @@ defmodule KeyfleetWeb.AgentGraphController do
   def archive(conn, params),
     do: write(conn, &Graph.archive_object/3, params, ~w(id expected_version reason))
 
+  def join(conn, params), do: write(conn, &Graph.join_goal/3, params, ~w(id))
+
+  def leave(conn, params), do: write(conn, &Graph.leave_goal/3, params, ~w(id))
+
   defp read({:ok, result}, conn, _fleet_id), do: json(conn, result)
 
   # Only the fleet's members read its workspace, and who they are can't be

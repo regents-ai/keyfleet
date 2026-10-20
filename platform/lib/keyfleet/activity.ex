@@ -44,6 +44,7 @@ defmodule Keyfleet.Activity do
         or "done";
       * `:status`: the goal's `status` is now "open", "achieved" or "dropped";
       * `:revised`: a goal or service was edited;
+      * `:joined` and `:left`: `by` joined the goal, or left it;
       * `:archived`.
     * `:linked`: `by`, `relation` ("supports", "contradicts" or "produces"),
       `source` and `target` (items): the source supports, contradicts or
@@ -561,14 +562,14 @@ defmodule Keyfleet.Activity do
       brief["archived"] ->
         {:archived, item}
 
-      "assignee_key" in brief["fields"] ->
-        case values["assignee_key"] do
-          %{"new" => token_id} when is_integer(token_id) ->
-            {:claimed, Map.put(item, :to, %{token_id: token_id, agent: nil})}
+      brief["joins"] > 0 ->
+        {:joined, item}
 
-          _unset ->
-            {:unclaimed, item}
-        end
+      brief["joins"] < 0 ->
+        {:left, item}
+
+      "assignee_key" in brief["fields"] ->
+        assignment(values["assignee_key"], item)
 
       match?(%{"progress" => %{"new" => _}}, values) ->
         {:progress, Map.put(item, :progress, values["progress"]["new"])}
@@ -580,6 +581,11 @@ defmodule Keyfleet.Activity do
         {:revised, item}
     end
   end
+
+  defp assignment(%{"new" => token_id}, item) when is_integer(token_id),
+    do: {:claimed, Map.put(item, :to, %{token_id: token_id, agent: nil})}
+
+  defp assignment(_unset, item), do: {:unclaimed, item}
 
   # A member writes as its key; the workspace's own actors write as
   # `keyfleet:<part>`. Any other actor is not one the workspace records.

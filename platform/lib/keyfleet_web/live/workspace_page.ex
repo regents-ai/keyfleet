@@ -238,7 +238,13 @@ defmodule KeyfleetWeb.WorkspacePage do
 
           others = Enum.map(links.results, &other_end(&1, object_id))
           titles = titles(fleet_id, others ++ Enum.flat_map(history, &mentions/1), opts)
-          agents = agent_names([creator_wallet(object.sys) | Enum.map(history, &actor_wallet/1)])
+
+          agents =
+            agent_names(
+              [creator_wallet(object.sys) | joined_wallets(object.sys)] ++
+                Enum.map(history, &actor_wallet/1)
+            )
+
           path = &item_path(fleet_id, object_id, item_query(params, &1, &2))
 
           Map.merge(base, %{
@@ -483,7 +489,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       level: level(object.sys),
       by: created_by(object.sys, agents),
       changed_at: at(object.changed_at),
-      facts: facts(object.type, object.card, fleet_id),
+      facts: facts(object.type, object.card, fleet_id) ++ joined_fact(object.sys),
       gist: object.card["gist"]
     }
   end
@@ -546,7 +552,7 @@ defmodule KeyfleetWeb.WorkspacePage do
             nil -> []
             shown -> [{label, shown}]
           end
-        end),
+        end) ++ joined_field(object.sys, agents),
       discussion: discussion(object.data["discussion"], fleet_id, opts)
     }
   end
@@ -656,6 +662,15 @@ defmodule KeyfleetWeb.WorkspacePage do
        when is_binary(id),
        do: [who(event.actor), " archived ", item_part(id, titles), "."]
 
+  defp parts(%{type: "patch.applied", brief: %{"object" => id, "joins" => joins}} = event, titles)
+       when is_binary(id) and joins != 0,
+       do: [
+         who(event.actor),
+         if(joins > 0, do: " joined ", else: " left "),
+         item_part(id, titles),
+         "."
+       ]
+
   defp parts(%{type: "patch.applied", brief: %{"object" => id} = brief} = event, titles)
        when is_binary(id) do
     item = item_part(id, titles)
@@ -757,6 +772,35 @@ defmodule KeyfleetWeb.WorkspacePage do
     do: {:key, token_id, agents[creator_wallet(sys)]}
 
   defp creator_wallet(%{"created_by" => by}), do: agent_wallet(by["kind"], by["wallet"])
+
+  # Who joined a goal, in the order they joined, each told as the key it
+  # joined as with the name of its agent.
+  defp joined(sys), do: Map.get(sys, "joined", [])
+
+  defp joined_wallets(sys), do: Enum.map(joined(sys), &agent_wallet(&1["kind"], &1["wallet"]))
+
+  defp joined_field(sys, agents) do
+    case joined(sys) do
+      [] ->
+        []
+
+      members ->
+        keys =
+          for member <- members,
+              do:
+                {:key, member["key"]["token_id"],
+                 agents[agent_wallet(member["kind"], member["wallet"])]}
+
+        [{"Joined", {:list, keys}}]
+    end
+  end
+
+  defp joined_fact(sys) do
+    case length(joined(sys)) do
+      0 -> []
+      count -> [{"Joined", Integer.to_string(count)}]
+    end
+  end
 
   defp actor_wallet(event) do
     case who(event.actor) do

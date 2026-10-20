@@ -213,6 +213,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "expected_version" => 1,
        "reason" => "r"
      }},
+    {"POST", @graph <> "join", [], %{"as_key" => 1, "command_id" => "c-1", "id" => "goal#1"}},
+    {"POST", @graph <> "leave", [], %{"as_key" => 1, "command_id" => "c-1", "id" => "goal#1"}},
     {"GET", @polls, [], nil},
     {"POST", @poll_start, [], @poll_question},
     {"GET", @poll, [], nil},
@@ -234,7 +236,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              {@dm <> "read", Keyfleet.Dms.Message, :in_conversation}
            ] ++
              for(
-               op <- ~w(get changes create patch link unlink archive),
+               op <- ~w(get changes create patch link unlink archive join leave),
                do: {@graph <> op, Keyfleet.Graph.Workspace, String.to_atom(op)}
              )
 
