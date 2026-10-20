@@ -809,6 +809,45 @@ describe("Privy session bridge", () => {
     expect(showFailure).toHaveBeenLastCalledWith("closed")
   })
 
+  // Privy keeps its own session in the browser. One it already held when the
+  // page loaded is not the visitor signing in, so a Disconnect stays standing.
+  it("REDIRECT_RETURN: a Privy session already held never ends a Disconnect", async () => {
+    const {localStorage} = stubBrowserGlobals("sign-in")
+    localStorage.setItem("regent:wallet-disconnected:v1", "true")
+    const completeLogin = vi.fn(async () => undefined)
+    const callbacks = createPrivyLoginCallbacks({completeLogin, loginOpen: {current: true}, showFailure: vi.fn()})
+
+    callbacks.onComplete?.({wasAlreadyAuthenticated: true} as never)
+    await settled()
+
+    expect(completeLogin).not.toHaveBeenCalled()
+    expect(localStorage.getItem("regent:wallet-disconnected:v1")).toBe("true")
+  })
+
+  it("REDIRECT_RETURN: the page Google returns to finishes the sign-in the visitor started", async () => {
+    productionRootRender.mockReset()
+    stubBrowserGlobals("sign-in")
+    vi.stubGlobal("window", {...window, location: {...window.location, search: "?privy_oauth_code=code"}})
+    stubSessionRequests()
+
+    const startup = bridge.startPrivyBridge({}, {
+      appId: "test-app",
+      authenticated: false,
+      getAccessToken: async () => null,
+      logout: async () => undefined,
+      ready: true,
+      walletsReady: true,
+      wallets: [],
+    } as unknown as bridge.PrivyBridgeProviderState)
+
+    expect(renderedAccountBridge().props).toMatchObject({oauthReturn: true})
+    expect(productionRootRender.mock.calls[0]?.[0].props.config).toMatchObject({
+      embeddedWallets: {showWalletUIs: true, ethereum: {createOnLogin: "users-without-wallets"}},
+    })
+    expect(productionRootRender.mock.calls[0]?.[0].props.config).not.toHaveProperty("loginMethods")
+    void startup.catch(() => undefined)
+  })
+
   it("keeps background Privy errors silent and non-terminal", () => {
     const loginOpen = {current: false}
     const showFailure = vi.fn()
@@ -1308,6 +1347,7 @@ describe("Privy session bridge", () => {
       walletsReady: true,
       wallets: [wallet],
       activeWallet: wallet,
+      linkedWallets: [wallet.address],
     } as unknown as bridge.PrivyBridgeProviderState)
     renderAccountBridge(renderedAccountBridge())
     await startup
@@ -1411,6 +1451,53 @@ describe("Privy session bridge", () => {
     expect(getAccessToken).not.toHaveBeenCalled()
     expect(sessionRequests).toEqual([])
     expect(reload).not.toHaveBeenCalled()
+  })
+
+  // Email and Google sign-ins reach Privy before their Privy wallet exists, and
+  // the site signs an account in only with a wallet. The page waits for it.
+  it("EMAIL_SIGN_IN_WAITS_FOR_ITS_WALLET: asks the server only once the new wallet is linked", async () => {
+    productionRootRender.mockReset()
+    replaceActiveEthereumWallet(null)
+    const renderAccountBridge = installAccountBridgeRenderer()
+    const {reload} = stubBrowserGlobals("sign-in")
+    const sessionRequests = stubSessionRequests()
+    const getAccessToken = vi.fn(async () => "verified")
+    const providerState = {
+      appId: "test-app",
+      authenticated: true,
+      getAccessToken,
+      getIdentityToken: async () => "verified-identity",
+      logout: async () => undefined,
+      ready: true,
+      walletsReady: true,
+      wallets: [],
+      linkedWallets: [],
+    }
+
+    const startup = bridge.startPrivyBridge({}, providerState as unknown as bridge.PrivyBridgeProviderState)
+    const accountElement = renderedAccountBridge()
+    renderAccountBridge(accountElement)
+    await startup
+    await settled()
+
+    expect(getAccessToken).not.toHaveBeenCalled()
+    expect(sessionRequests).toEqual([])
+
+    const wallet = ethereumWallet("0x1111111111111111111111111111111111111111", {
+      walletClientType: "privy",
+      connectorType: "embedded",
+    })
+    renderAccountBridge(React.cloneElement(accountElement, {
+      providerState: {...providerState, wallets: [wallet], linkedWallets: [wallet.address]},
+    } as never))
+    await until(() => reload.mock.calls.length > 0)
+
+    expect(sessionRequests).toEqual([
+      {url: "/auth/csrf", method: "GET"},
+      {url: "/auth/privy/session", method: "POST"},
+      {url: "/auth/csrf", method: "GET"},
+    ])
+    expect(reload).toHaveBeenCalledOnce()
   })
 
   it("SIGNED_IN_STALE_PROVIDER_EXITS: unauthenticated truth revokes before wallet readiness", async () => {

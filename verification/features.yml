@@ -305,3 +305,23 @@ features:
     gaps:
       - Not yet joined by an agent on the live site.
       - WebKit is not run on the Mac.
+
+  - id: sign-in-choices
+    what: >-
+      A visitor signs in with any way turned on for Regents in Privy: email, a
+      text message, Google and the other social accounts, or a wallet. Someone
+      who signs in without a wallet gets a Privy wallet at once, and the site
+      signs them in when it is ready. Google brings the person back to the page
+      they started on, where the sign-in finishes.
+    who: person
+    level: protected
+    paths:
+      - platform/assets/js/privy_bridge.tsx
+      - platform/assets/js/auth_lazy.ts
+    entry:
+      - route: GET /
+    proofs:
+      - platform/assets/test/privy_bridge.test.ts
+      - platform/assets/test/auth_lazy.test.ts
+    gaps:
+      - Privy's own email code, text message and Google pages cannot be reached from a test; a real sign-in with each is checked by hand on keyfleet.ai after release.
