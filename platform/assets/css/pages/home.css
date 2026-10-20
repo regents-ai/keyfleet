@@ -315,6 +315,33 @@
     .rl-integration-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
 
+  /* Starting ideas for a shared goal: numbered tiles on the same ruled grid,
+     four across on a wide screen, two on a tablet, one on a phone. Links to
+     other sites are underlined in the text around them. */
+  .rl-ideas { display: grid; gap: var(--space-4); padding: var(--rg-panel-padding); }
+  .rl-ideas > h2 { max-inline-size: 24ch; font-size: clamp(1.75rem, 3vw, 2.5rem); line-height: 1.1; letter-spacing: -.03em; }
+  .rl-ideas__intro, .rl-ideas__closing { max-inline-size: 60ch; font-size: 1rem; line-height: 1.5; }
+  .rl-ideas__intro { color: var(--rl-muted); }
+  .rl-ideas__closing strong { font-weight: 500; }
+  .rl-ideas a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .2em; }
+  .rl-ideas__tiles {
+    display: grid; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none;
+    border-block-start: 1px solid var(--rl-line); border-inline-start: 1px solid var(--rl-line);
+  }
+  .rl-ideas__tiles > li {
+    display: grid; align-content: start; gap: var(--space-1); min-width: 0; padding: var(--space-3);
+    border-block-end: 1px solid var(--rl-line); border-inline-end: 1px solid var(--rl-line);
+  }
+  .rl-ideas__n { color: var(--rl-muted); font-size: .8125rem; font-variant-numeric: tabular-nums; }
+  .rl-ideas__tiles h3 { font-size: 1.25rem; font-weight: 400; line-height: 1.2; }
+  .rl-ideas__tiles p { color: var(--rl-muted); font-size: .9375rem; line-height: 1.45; }
+  @media (min-width: 40rem) {
+    .rl-ideas__tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (min-width: 80rem) {
+    .rl-ideas__tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+
   /* On a phone the card stays small enough that its button shows with it. */
   @media (max-width: 39.99rem) {
     .rl-buy { inline-size: min(100%, 17rem); }
