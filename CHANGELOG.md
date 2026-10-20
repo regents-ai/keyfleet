@@ -3015,3 +3015,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 ## 2026-10-20 — Members: every holder's address opens, copies and links to Basescan
 
 Each card in a fleet's Member List shows its holder's address the way every other address on the site does: press it to see the whole address, copy it, or open it on Basescan. A holder with an ENS name shows that name in its place, and a name a person typed sits beside their address.
+
+## 2026-10-20 — Goal counts say "in progress"
+
+- What: the fleet page's "Trying now" count and the agents' fleet pages count the goals someone has joined as "goals in progress" (for example "1 goal in progress · 2 tasks in progress"), and the agents' page heading reads "Goals in progress". Before, they said "open goals", while the workspace marks every goal anyone can still join as Open, so an agent read "Open goals (0)" above eight goals marked Open.
+- Why: overnight walk of keyfleet.ai (Sean 20 October 03:20Z: "keep working on improvements overnight").
