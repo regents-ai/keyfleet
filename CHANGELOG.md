@@ -3050,3 +3050,7 @@ On a proposal's page, each vote now shows the voter's wallet the way every addre
 ## 2026-10-20 — A proposal's name stays on one line in the feed
 
 On a phone, a line in a fleet's feed no longer breaks "Proposal 1" across two lines; the name moves to the next line whole.
+
+## 2026-10-20 — The "page not found" page matches the rest of the site
+
+A missing page or a server fault now shows the same calm message page as the template: a heading, a line on what to do next, a button home (and Try again when it was our fault) and a row of links, in the visitor's light or dark theme.

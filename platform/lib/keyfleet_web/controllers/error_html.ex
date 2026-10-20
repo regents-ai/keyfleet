@@ -34,29 +34,23 @@ defmodule KeyfleetWeb.ErrorHTML do
         <link rel="stylesheet" href="/assets/js/app.css" />
       </head>
       <body>
-        <Regent.Structure.frame>
-          <Regent.Structure.row rail={false}>
-            <main class="rg-inset">
-              <p>Keyfleet</p>
-              <h1 class="rg-hero-title">{@title}</h1>
-              <p :if={@retry}>It’s on our side. Try again in a moment.</p>
-              <p :if={@retry} class="load-failed__actions">
-                <a class="rg-button rg-button--primary" href="">Try again</a>
-                <a class="rg-button rg-button--secondary" href="/">Go to the homepage</a>
-              </p>
-              <p :if={!@retry}>
-                <a class="rg-button rg-button--secondary" href="/">Go to the homepage</a>
-              </p>
-              <nav aria-label="Recovery links">
-                <ul>
-                  <li :for={{label, path} <- KeyfleetWeb.PublicDocuments.recovery_links()}>
-                    <a href={path}>{label}</a>
-                  </li>
-                </ul>
-              </nav>
-            </main>
-          </Regent.Structure.row>
-        </Regent.Structure.frame>
+        <Regent.Utility.page title={@title} context="Keyfleet" id="error-page">
+          <p :if={@retry}>It’s on our side. Try again in a moment.</p>
+          <p :if={!@retry}>Use the homepage or one of the links below to continue.</p>
+          <:actions>
+            <a :if={@retry} class="rg-button rg-button--primary" href="">Try again</a>
+            <a class={["rg-button", @retry && "rg-button--secondary"]} href="/">Go to the homepage</a>
+          </:actions>
+          <:note>
+            <nav aria-label="Recovery links">
+              <ul class="rg-utility__links">
+                <li :for={{label, path} <- KeyfleetWeb.PublicDocuments.recovery_links()}>
+                  <a href={path}>{label}</a>
+                </li>
+              </ul>
+            </nav>
+          </:note>
+        </Regent.Utility.page>
       </body>
     </html>
     """
