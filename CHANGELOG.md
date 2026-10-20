@@ -3071,3 +3071,8 @@ A fleet page with a Buy or wallet panel no longer downloads sign-in for a visito
 ## 2026-10-20 — Each Key purchase gets its own line in the fleet feed
 
 The feed used to fold every Key bought in a row into one line, so a single purchase could read "Keys 1–18 were bought". Each purchase now has its own line naming only the Keys it bought, for example "Key 18 was bought".
+
+## 2026-10-20 — Side panel for pairing agents
+
+- What: signed in, the header has a side panel button, and the account name opens it too. The panel holds Sign out and Manage Account, your paired agents with each one's last action, and Pair New Agent with the ten agents to choose from, as the template's panel does. Wide, it sits beside the page and stays open across pages; on tablets, phones and the homepage it slides over the page under the header and opens only when pressed. Sign out moved from the header into the panel, and the Account page's Pair New Agent opens the panel at pairing. On the homepage, Fleets beside your name opens Classic #1.
+- Why: Sean asked for it (19:15Z): Keyfleet needs the template's new right side panel for pairing agents; and (20:15Z) the homepage name should open it, with Fleets in Sign out's place.

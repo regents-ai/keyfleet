@@ -1,5 +1,17 @@
 defmodule KeyfleetWeb.Components.Shell do
-  @moduledoc "Semantic presentation seam for Ash-owned shell behavior."
+  @moduledoc """
+  The app shell: the header, the sidebar, the page and, for someone signed in,
+  the side panel on the right, plus the Buy Credits dialog.
+
+  The side panel is the same on every page that has it, the app's pages and the
+  homepage: Sign out, Manage Account on regents.sh, the agents paired with the
+  account (the `agents` slot) and the box to pair an agent (the `pairing` slot).
+  The account's name and the panel button in the header open and close it.
+  Whether it is open is the browser's (`assets/js/shell_panels.ts` and the
+  `keyfleet_aside` cookie, read into `<html data-aside>`), so the server never
+  stores it. On the app's pages on a wide screen the page beside it gives way;
+  on a narrower screen, and on the homepage, it covers the page.
+  """
 
   use Phoenix.Component
 
@@ -28,6 +40,8 @@ defmodule KeyfleetWeb.Components.Shell do
 
   slot(:content, required: true)
   slot(:credits_panel, doc: "The Buy Credits panel, opened from the header's balance.")
+  slot(:agents, doc: "The agents paired with the account, in the side panel.")
+  slot(:pairing, doc: "The box to pair an agent, in the side panel.")
 
   def shell(assigns) do
     ~H"""
@@ -108,6 +122,11 @@ defmodule KeyfleetWeb.Components.Shell do
         </main>
       </div>
 
+      <.aside account_control={@account_control}>
+        <:agents>{render_slot(@agents)}</:agents>
+        <:pairing :if={@pairing != []}>{render_slot(@pairing)}</:pairing>
+      </.aside>
+
       <Regent.Structure.dialog
         :if={@credits_panel != []}
         id="shell-credits"
@@ -152,6 +171,10 @@ defmodule KeyfleetWeb.Components.Shell do
     default: nil,
     doc:
       "The account's Credits reading, shown as the balance that opens Buy Credits; nil hides it."
+
+  attr :fleets, :boolean,
+    default: false,
+    doc: "whether a Fleets link to Classic's page follows the signed-in name (the homepage)"
 
   @doc """
   The site header: brand, Menu (only where there is a sidebar), the theme
@@ -212,8 +235,79 @@ defmodule KeyfleetWeb.Components.Shell do
       >
         <.credits_amount amount={@credits} />
       </button>
-      <.account_control account_control={@account_control} />
+      <.account_control account_control={@account_control} fleets={@fleets} />
+      <button
+        :if={@account_control.kind == :signed_in}
+        id="shell-aside-button"
+        class="shell-tool shell-aside-button"
+        type="button"
+        aria-controls="shell-aside"
+        aria-expanded="false"
+        aria-label="Side panel"
+        data-aside-toggle
+        phx-mounted={JS.ignore_attributes(["aria-expanded"])}
+      >
+        <svg
+          class="shell-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="square"
+          stroke-linejoin="miter"
+          aria-hidden="true"
+        >
+          <path d="M3 4h18v16H3zM15 4v16" />
+        </svg>
+        <span class="shell-tool__tip" aria-hidden="true">Side panel</span>
+      </button>
     </header>
+    """
+  end
+
+  attr :account_control, Keyfleet.AccessContext.AccountControl, required: true
+
+  attr :covers, :boolean,
+    default: false,
+    doc: "whether it covers the page at every width, as on the homepage"
+
+  slot :agents, doc: "The agents paired with the account."
+  slot :pairing, doc: "The box to pair an agent."
+
+  @doc """
+  The side panel, for someone signed in: Sign out and Manage Account, the
+  account's agents and the box to pair a new one.
+  """
+  def aside(assigns) do
+    ~H"""
+    <aside
+      :if={@account_control.kind == :signed_in}
+      id="shell-aside"
+      aria-label="Your account and agents"
+      tabindex="-1"
+      data-covers={@covers}
+    >
+      <div id="shell-account" class="shell-aside__head">
+        <Regent.Primitives.button variant="secondary" type="button" data-account-target="sign-out">
+          Sign out
+        </Regent.Primitives.button>
+        <a
+          href="https://regents.sh/account"
+          class="rg-button rg-button--secondary"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Manage Account
+        </a>
+      </div>
+
+      {render_slot(@agents)}
+
+      <section :if={@pairing != []} id="shell-pairing" aria-labelledby="shell-pairing-title">
+        <h2 id="shell-pairing-title">Pair New Agent</h2>
+        {render_slot(@pairing)}
+      </section>
+    </aside>
     """
   end
 
@@ -285,10 +379,20 @@ defmodule KeyfleetWeb.Components.Shell do
   attr :account_control, Keyfleet.AccessContext.AccountControl, required: true
   attr :enabled, :boolean, default: true
 
+  attr :panel, :boolean,
+    default: true,
+    doc: """
+    Signed in, the name opens the side panel, which holds Sign out. A page
+    without the side panel (the Privy workshop page) shows Sign out beside the name.
+    """
+
+  attr :fleets, :boolean,
+    default: false,
+    doc: "Signed in, a Fleets link to Classic's page follows the name."
+
   @doc """
-  The account control: Sign in, or the account's name with Sign out beside it.
-  auth_lazy.ts drives its `data-account-target` markers; the component itself
-  never authenticates anyone.
+  The account control: Sign in, or the account's name. auth_lazy.ts drives its
+  `data-account-target` markers; the component itself never authenticates anyone.
   """
   def account_control(assigns) do
     ~H"""
@@ -302,27 +406,39 @@ defmodule KeyfleetWeb.Components.Shell do
       >
         {@account_control.label}
       </Regent.Primitives.button>
-      <span :if={@account_control.kind == :signed_in} class="account-chip">
-        <img
-          :if={@account_control.avatar_src}
-          class="account-avatar"
-          src={@account_control.avatar_src}
-          referrerpolicy="no-referrer"
-          width="36"
-          height="36"
-          alt=""
-        />
-        <span class="account-name" data-account-target="profile">{@account_control.label}</span>
-      </span>
-      <Regent.Primitives.button
-        :if={@account_control.kind == :signed_in}
-        variant="quiet"
+      <button
+        :if={@panel and @account_control.kind == :signed_in}
+        id="account-chip"
+        class="account-chip"
         type="button"
-        disabled={!@enabled}
-        data-account-target="sign-out"
+        aria-controls="shell-aside"
+        aria-expanded="false"
+        data-aside-toggle
+        phx-mounted={JS.ignore_attributes(["aria-expanded"])}
       >
-        Sign out
-      </Regent.Primitives.button>
+        <.account_name account_control={@account_control} />
+      </button>
+      <.link
+        :if={@fleets and @account_control.kind == :signed_in}
+        id="shell-fleets"
+        class="rg-button rg-button--quiet"
+        href={Keyfleet.Fleets.path(get_key_fleet())}
+      >
+        <span class="rg-button__label">Fleets</span>
+      </.link>
+      <%= if !@panel and @account_control.kind == :signed_in do %>
+        <span class="account-chip">
+          <.account_name account_control={@account_control} />
+        </span>
+        <Regent.Primitives.button
+          variant="quiet"
+          type="button"
+          disabled={!@enabled}
+          data-account-target="sign-out"
+        >
+          Sign out
+        </Regent.Primitives.button>
+      <% end %>
       <p
         id="account-auth-status"
         class="account-auth-status"
@@ -334,6 +450,25 @@ defmodule KeyfleetWeb.Components.Shell do
       >
       </p>
     </div>
+    """
+  end
+
+  attr :account_control, Keyfleet.AccessContext.AccountControl, required: true
+
+  # The account's picture and name. The `profile` marker tells the browser the
+  # page was drawn for a signed-in account.
+  defp account_name(assigns) do
+    ~H"""
+    <img
+      :if={@account_control.avatar_src}
+      class="account-avatar"
+      src={@account_control.avatar_src}
+      referrerpolicy="no-referrer"
+      width="36"
+      height="36"
+      alt=""
+    />
+    <span class="account-name" data-account-target="profile">{@account_control.label}</span>
     """
   end
 

@@ -305,3 +305,42 @@ features:
     gaps:
       - Not yet joined by an agent on the live site.
       - WebKit is not run on the Mac.
+  - id: side-panel
+    what: >-
+      A signed-in person opens the side panel from the header's panel button or
+      their account name, on every page. It holds Sign out and Manage Account,
+      their paired agents with each one's last action, and Pair New Agent with
+      the ten agents to choose from. On a wide screen it sits beside the page and
+      stays open across pages and reloads; on tablets, phones and the homepage it
+      covers the page under the header and opens only when pressed. Escape
+      closes it, and the Account page's Pair New Agent opens it at pairing. On
+      the homepage, Fleets beside the name opens Classic #1's page.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/shell.ex
+      - platform/lib/keyfleet_web/components/panel_agents.ex
+      - platform/lib/keyfleet_web/components/pairing_box.ex
+      - platform/lib/keyfleet_web/agent_guides.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/lib/keyfleet_web/live/account_live.ex
+      - platform/lib/keyfleet_web/plugs/panels.ex
+      - platform/lib/keyfleet/agents/activity_reading.ex
+      - platform/assets/js/shell_panels.ts
+      - platform/assets/js/hooks/panel_agents.ts
+      - platform/assets/js/hooks/side_panel.ts
+      - platform/assets/css/components/shell.css
+    entry:
+      - route: GET /
+      - route: GET /account
+      - live: KeyfleetWeb.ShellLive
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/test/keyfleet_web/home_live_test.exs
+      - platform/test/keyfleet_web/panel_agents_test.exs
+      - platform/test/browser/side_panel.spec.ts
+    gaps:
+      - Checked in headless Chromium at 320, 375, 768 and 1440; WebKit is not run on the Mac.
+      - A newly paired agent reaches an open panel through the database's change notice, which the tests send by hand.

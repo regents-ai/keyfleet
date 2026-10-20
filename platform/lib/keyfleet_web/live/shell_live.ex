@@ -133,7 +133,8 @@ defmodule KeyfleetWeb.ShellLive do
        quotes: nil
      )
      |> read_credits(current_account(socket.assigns.access_context))
-     |> follow_credits(current_account(socket.assigns.access_context))}
+     |> follow_credits(current_account(socket.assigns.access_context))
+     |> follow_agents(current_account(socket.assigns.access_context))}
   end
 
   # A page that couldn't be loaded may have started listening to what it was
@@ -419,13 +420,18 @@ defmodule KeyfleetWeb.ShellLive do
   end
 
   # The person's agents changed on any Regent site: paired, checked in,
-  # corrected or unpaired.
+  # corrected or unpaired. The side panel follows on every page, the Account
+  # page's list on that page.
   defp notice(:agents_changed, socket) do
-    if socket.assigns.route_spec.route_id == :account,
-      do: send_update(KeyfleetWeb.PairingBox, id: "account-agents-pair", agents_changed: true)
+    send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
+    send_update(KeyfleetWeb.PanelAgents, id: "shell-agents", agents_changed: true)
 
-    account = current_account(socket.assigns.access_context)
-    {:noreply, read_paired_agents(socket, account)}
+    if socket.assigns.route_spec.route_id == :account do
+      account = current_account(socket.assigns.access_context)
+      {:noreply, read_paired_agents(socket, account)}
+    else
+      {:noreply, socket}
+    end
   end
 
   # A Points award or correction landed for this account; the Points page follows.
@@ -589,6 +595,22 @@ defmodule KeyfleetWeb.ShellLive do
           credits={@credits}
         />
       </:credits_panel>
+      <:agents :if={current_account(@access_context)}>
+        <.live_component
+          module={KeyfleetWeb.PanelAgents}
+          id="shell-agents"
+          lease={@session_lease}
+          account={current_account(@access_context)}
+        />
+      </:agents>
+      <:pairing :if={current_account(@access_context)}>
+        <.live_component
+          module={KeyfleetWeb.PairingBox}
+          id="shell-pairing-box"
+          lease={@session_lease}
+          account={current_account(@access_context)}
+        />
+      </:pairing>
       <:content :if={@load_failed?}>
         <article id="page-load-failed" class="fleet-page">
           <section class="fleet-panel">
@@ -608,7 +630,6 @@ defmodule KeyfleetWeb.ShellLive do
           account={current_account(@access_context)}
           signed_out_reason={@signed_out_reason}
           account_control={@account_control}
-          lease={@session_lease}
           held_keys={@held_keys}
           paired_agents={@paired_agents}
           credits={@credits}
@@ -1210,7 +1231,6 @@ defmodule KeyfleetWeb.ShellLive do
     socket
     |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
     |> read_paired_agents(account)
-    |> follow_agents(account)
   end
 
   defp load_account_page(socket, _route_spec), do: assign(socket, :held_keys, [])
@@ -1222,7 +1242,7 @@ defmodule KeyfleetWeb.ShellLive do
 
   defp read_paired_agents(socket, nil), do: Read.clear(socket, :paired_agents)
 
-  # Hears when the person's agents change, once per page.
+  # Hears when the person's agents change, for the side panel on every page.
   defp follow_agents(%{assigns: %{agents_topic: nil}} = socket, %{privy_user_id: person}) do
     if connected?(socket) do
       topic = RegentAgents.topic(person)

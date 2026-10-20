@@ -24,6 +24,7 @@ import {
 import {installCopyButtons} from "./copy_buttons"
 import {installPageProgress} from "./page_progress"
 import {installPublicTools} from "./public_tools"
+import {installShellPanels} from "./shell_panels"
 import {installVitals} from "./vitals"
 import {CurrentTab} from "./hooks/current_tab"
 import {FleetPreview} from "./hooks/fleet_preview"
@@ -34,15 +35,18 @@ import {KeyCards} from "./hooks/key_cards"
 import {KeyMap} from "./hooks/key_map"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
+import {PanelAgents} from "./hooks/panel_agents"
 import {PollCountdown} from "./hooks/poll_countdown"
 import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
 import {MotionCascade, ShellViews} from "./hooks/motion/reveals"
+import {SidePanel} from "./hooks/side_panel"
 import {VerifiedConnections} from "./hooks/verified_connections"
 import {mountMotion} from "./motion"
 
 type ShellHook = Hook & {
   el: HTMLElement
   cleanup?: () => void
+  panels?: ReturnType<typeof installShellPanels>
   shellState?: ShellState
   restoreState?: () => void
 }
@@ -233,12 +237,14 @@ const shellBehavior: Hook = {
     shell.addEventListener("click", onClick)
     shell.addEventListener("keydown", onKeydown)
     window.addEventListener("popstate", onHistoryNavigation)
+    this.panels = installShellPanels(shell)
     this.restoreState()
     scroller()?.scrollTo({top: 0})
     shell.dataset.behaviorReady = "true"
 
     this.cleanup = () => {
       closeMenu(false)
+      this.panels?.cleanup()
       shell.removeEventListener("click", onClick)
       shell.removeEventListener("keydown", onKeydown)
       window.removeEventListener("popstate", onHistoryNavigation)
@@ -260,6 +266,7 @@ const shellBehavior: Hook = {
       this.shellState = reconcileShellState(this.shellState, incoming)
     }
     this.restoreState?.()
+    this.panels?.sync()
     if (menuWasOpen && this.shellState?.menuOpen === false) {
       this.el.querySelector<HTMLButtonElement>("#mobile-menu-button")?.focus()
     }
@@ -301,8 +308,10 @@ const hooks = {
   MotionRefusal,
   NextKeyCard,
   OnchainSteps,
+  PanelAgents,
   PollCountdown,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
+  SidePanel,
   VerifiedConnections,
 }
 if (!browserCsrfToken()) throw new Error("Missing CSRF token")
