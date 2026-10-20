@@ -5,6 +5,7 @@ defmodule Keyfleet.ReleaseTest do
 
   import ExUnit.CaptureIO
 
+  alias Keyfleet.LocalDatabaseFixture
   alias Keyfleet.Release
 
   @moduletag timeout: 300_000
@@ -147,12 +148,7 @@ defmodule Keyfleet.ReleaseTest do
   test "bootstrap refuses a database that already carries migration state" do
     config = disposable_database()
 
-    assert {:ok, _result, _started} =
-             Release.bootstrap_staging(
-               getenv: staging_getenv(),
-               config: config,
-               migrations_path: migrations_directory([])
-             )
+    bootstrap(config, migrations_directory([]))
 
     assert_raise RuntimeError,
                  "keyfleet_app.schema_migrations already exists: destroy and recreate the staging database",
@@ -177,8 +173,7 @@ defmodule Keyfleet.ReleaseTest do
   test "bootstrap prepares an empty staging database and runs every migration to completion" do
     config = disposable_database()
 
-    assert {:ok, _result, _started} =
-             Release.bootstrap_staging(getenv: staging_getenv(), config: config)
+    bootstrap(config)
 
     assert column_names(config, "regent_names", "platform_human_users") == [
              "avatar",
@@ -259,12 +254,7 @@ defmodule Keyfleet.ReleaseTest do
     config = disposable_database()
     held_back = release_migration_files() |> Enum.take(-1)
 
-    assert {:ok, _result, _started} =
-             Release.bootstrap_staging(
-               getenv: staging_getenv(),
-               config: config,
-               migrations_path: migrations_directory(release_migration_files() -- held_back)
-             )
+    bootstrap(config, migrations_directory(release_migration_files() -- held_back))
 
     expected = Enum.map_join(held_back, " ", &version_of/1)
 
@@ -293,6 +283,35 @@ defmodule Keyfleet.ReleaseTest do
     end
 
     refute migration_table?(config)
+  end
+
+  # A shared change missing from its own ledger is what a release carrying a
+  # newer shared library meets: the listing names it, and the deployment check
+  # refuses and applies nothing.
+  test "a missing shared change is listed and stops the deployment check" do
+    config = bootstrapped_database()
+    [{schema, version} | _] = applied_shared(config)
+    query!(config, "DELETE FROM #{schema}.schema_migrations WHERE version = $1", [version])
+
+    assert capture_io(fn -> Release.pending_migrations(config: config) end) ==
+             "shared-pending: #{schema} #{version}\n"
+
+    assert_raise RuntimeError,
+                 "These separately approved shared migrations must be applied before deployment: #{schema} #{version}",
+                 fn -> with_config(config, fn -> with_repo(&Release.migrate!/0) end) end
+  end
+
+  test "migrate-shared applies every shared change this site carries, once" do
+    config = disposable_database()
+
+    with_config(config, fn ->
+      with_repo(fn -> LocalDatabaseFixture.create_shared_tables!() end)
+    end)
+
+    assert capture_io(fn -> Release.migrate_shared(config: config) end) ==
+             "applied: #{Enum.join(shipped_shared(), ", ")}\n"
+
+    assert capture_io(fn -> Release.migrate_shared(config: config) end) == "none\n"
   end
 
   # The listing is meant to be safe to run while a migration is in flight, which
@@ -351,12 +370,17 @@ defmodule Keyfleet.ReleaseTest do
     config
   end
 
+  defp bootstrap(config, migrations_path \\ release_migrations_path()) do
+    Release.bootstrap_staging(
+      getenv: staging_getenv(),
+      config: config,
+      migrations_path: migrations_path
+    )
+  end
+
   defp bootstrapped_database do
     config = disposable_database()
-
-    assert {:ok, _result, _started} =
-             Release.bootstrap_staging(getenv: staging_getenv(), config: config)
-
+    bootstrap(config)
     config
   end
 
@@ -501,15 +525,39 @@ defmodule Keyfleet.ReleaseTest do
     end)
   end
 
+  # Every shared ledger's newest applied change, one per shared schema.
+  defp applied_shared(config) do
+    for schema <- ~w(regent_identity regent_agents regent_credits regent_points regent_payments),
+        query!(config, "SELECT to_regclass($1) IS NOT NULL", ["#{schema}.schema_migrations"]).rows ==
+          [[true]],
+        %{rows: [[version]]} =
+          query!(config, "SELECT max(version) FROM #{schema}.schema_migrations"),
+        do: {schema, version}
+  end
+
+  # Every change the shared libraries this site carries ship, as the release
+  # names them, in the order they apply.
+  defp shipped_shared do
+    for app <- [:regent_identity, :regent_agents, :regent_credits, :regent_points],
+        file <-
+          app
+          |> Application.app_dir("priv/repo/migrations")
+          |> Path.join("*.exs")
+          |> Path.wildcard()
+          |> Enum.sort(),
+        do: "#{app} #{file |> Path.basename() |> version_of()}"
+  end
+
   defp query!(config, sql, params \\ []) do
     with_config(config, fn ->
-      {:ok, result, _started} =
-        Ecto.Migrator.with_repo(Keyfleet.Repo, fn repo ->
-          Ecto.Adapters.SQL.query!(repo, sql, params)
-        end)
-
-      result
+      with_repo(fn -> Ecto.Adapters.SQL.query!(Keyfleet.Repo, sql, params) end)
     end)
+  end
+
+  # Starts only the repository, on the configuration in place, while `fun` runs.
+  defp with_repo(fun) do
+    {:ok, result, _started} = Ecto.Migrator.with_repo(Keyfleet.Repo, fn _repo -> fun.() end)
+    result
   end
 
   defp with_config(config, fun) do

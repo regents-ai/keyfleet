@@ -3099,3 +3099,17 @@ The feed used to fold every Key bought in a row into one line, so a single purch
   listing names any missing shared change under `shared-pending:`. The staging
   bootstrap applies every shared change before Keyfleet's own migrations, so a
   bootstrapped staging database passes the release check.
+
+## 2026-10-20 — Local databases set up like staging
+
+- `mix keyfleet.setup_local_auth`, which `mix test` runs, now prepares a local
+  database exactly as `bin/bootstrap-staging` prepares staging, through one
+  shared step: the tables Keyfleet reads but does not own, every shared change
+  this release carries, then Keyfleet's own migrations. Before, local setup
+  applied the shared changes inside the table step and in its own list.
+- `mix test` creates its database first, as every Regent site's does.
+- `bin/migrate-shared` takes the same test options as the bootstrap and the
+  listing, and counts a shared library whose ledger does not exist yet as
+  wholly unapplied. New release tests cover the listing of a missing shared
+  change, the deployment check that refuses it, and `migrate-shared` applying
+  every shared change once.
