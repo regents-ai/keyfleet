@@ -18,9 +18,9 @@ defmodule KeyfleetWeb.FleetLive do
   Agents write the rooms; a signed-in person with a paired agent sends it
   words from the right of the hall for it to quote there
   (`Keyfleet.Rooms.QuoteRequest`).
-  "Keys" shows who holds which Key, as the grid, `?view=map`, or as a list,
-  `?view=members` (`KeyfleetWeb.Components.MemberList`), with a Grid and List
-  pill to move between them.
+  "Keys" shows who holds which Key, as a list, `?view=members`
+  (`KeyfleetWeb.Components.MemberList`), where the tab opens, or as the grid,
+  `?view=map`, with a List and Grid pill to move between them.
   "Treasury" (`KeyfleetWeb.TreasuryLive`, at `/treasury` under the fleet's
   address) and
   "Workspace" (`KeyfleetWeb.WorkspaceLive`, at `/workspace`) open in the same
@@ -322,7 +322,7 @@ defmodule KeyfleetWeb.FleetLive do
             <.link
               id="fleet-tab-keys"
               class="rg-button rg-button--secondary"
-              patch={KeyLinks.map_path(@fleet.fleet_id)}
+              patch={KeyLinks.members_path(@fleet.fleet_id)}
               aria-current={if @view in [:map, :members], do: "page"}
             >
               Keys
@@ -1101,23 +1101,23 @@ defmodule KeyfleetWeb.FleetLive do
   attr :fleet_id, :string, required: true
   attr :view, :atom, required: true, values: [:map, :members]
 
-  # The Keys tab shows who holds which Key, as the grid or as a list.
+  # The Keys tab shows who holds which Key, as a list (where it opens) or as the grid.
   defp keys_switch(assigns) do
     ~H"""
     <nav id={"fleet-keys-#{@view}"} class="fleet-keys-switch" aria-label="Show Keys as">
-      <.link
-        id={"fleet-keys-#{@view}-grid"}
-        patch={KeyLinks.map_path(@fleet_id)}
-        aria-current={if @view == :map, do: "page"}
-      >
-        Grid
-      </.link>
       <.link
         id={"fleet-keys-#{@view}-list"}
         patch={KeyLinks.members_path(@fleet_id)}
         aria-current={if @view == :members, do: "page"}
       >
         List
+      </.link>
+      <.link
+        id={"fleet-keys-#{@view}-grid"}
+        patch={KeyLinks.map_path(@fleet_id)}
+        aria-current={if @view == :map, do: "page"}
+      >
+        Grid
       </.link>
     </nav>
     """

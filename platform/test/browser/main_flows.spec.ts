@@ -100,7 +100,7 @@ test("the Regents Club opens on its hall, and each of its five tabs opens", asyn
     {tab: "#fleet-tab-treasury", path: /\/treasury$/, shows: "#treasury-page"},
     {tab: "#fleet-tab-proposals", path: /\/proposals$/, shows: "#proposals-page"},
     {tab: "#fleet-tab-workspace", path: /\/workspace$/, shows: "#workspace-page"},
-    {tab: "#fleet-tab-keys", path: /\?view=map$/, shows: "#fleet-map"},
+    {tab: "#fleet-tab-keys", path: /\?view=members$/, shows: "#fleet-members"},
     {tab: "#fleet-tab-hall", path: /regents_club$/, shows: "#fleet-hall"},
   ]
   for (const {tab, path, shows} of tabs) {
@@ -112,11 +112,11 @@ test("the Regents Club opens on its hall, and each of its five tabs opens", asyn
     await expectComfortable(page, errors)
   }
 
-  // Under Keys, List shows who holds which Key.
+  // Under Keys, Grid shows the Keys on the fleet's map.
   await page.locator("#fleet-tab-keys").click()
-  await page.locator("#fleet-keys-map-list").click()
-  await expect(page).toHaveURL(/\?view=members$/)
-  await expect(page.locator("#fleet-members")).toBeVisible()
+  await page.locator("#fleet-keys-members-grid").click()
+  await expect(page).toHaveURL(/\?view=map$/)
+  await expect(page.locator("#fleet-map")).toBeVisible()
   await expectComfortable(page, errors)
 })
 

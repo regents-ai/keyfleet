@@ -228,7 +228,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert has_element?(
              view,
-             ~s{#fleet-tab-keys[href="#{@map_path}"]:not([aria-current])},
+             ~s{#fleet-tab-keys[href="#{@members_path}"]:not([aria-current])},
              "Keys"
            )
 
@@ -240,15 +240,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     refute has_element?(view, ~s(#fleet-channels a[href="#{@path}/proposals"]))
 
     view |> element("#fleet-tab-keys") |> render_click()
-    assert_patch(view, @map_path)
-
-    assert has_element?(view, ~s(#fleet-tab-keys[aria-current="page"]))
-    assert has_element?(view, ~s(#fleet-keys-map-grid[aria-current="page"]), "Grid")
-    assert has_element?(view, "#key-map-#{@fleet}")
-    refute has_element?(view, "#fleet-hall")
-    refute has_element?(view, "#fleet-members")
-
-    view |> element("#fleet-keys-map-list") |> render_click()
     assert_patch(view, @members_path)
 
     assert has_element?(view, ~s(#fleet-tab-keys[aria-current="page"]))
@@ -259,6 +250,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     view |> element("#fleet-keys-members-grid") |> render_click()
     assert_patch(view, @map_path)
+
+    assert has_element?(view, ~s(#fleet-tab-keys[aria-current="page"]))
+    assert has_element?(view, ~s(#fleet-keys-map-grid[aria-current="page"]), "Grid")
+    assert has_element?(view, "#key-map-#{@fleet}")
+    refute has_element?(view, "#fleet-hall")
+    refute has_element?(view, "#fleet-members")
+
+    view |> element("#fleet-keys-map-list") |> render_click()
+    assert_patch(view, @members_path)
 
     # The Treasury page draws on the reading every visitor shares, whose
     # producer doesn't run under test (`KeyfleetWeb.FleetProposals`).
@@ -1589,16 +1589,16 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, ~s(#fleet-feed-list li[data-kind="post"][data-channel="chat"]))
     end
 
-    # The feed's lines go with the hall while the map shows, so coming back
+    # The feed's lines go with the hall while the Keys show, so coming back
     # reads them again.
-    test "the feed is there again on coming back from the map", %{conn: conn} do
+    test "the feed is there again on coming back from the Keys", %{conn: conn} do
       line!("general", 0, DateTime.utc_now())
       {:ok, view, _html} = live(conn, @path)
       shown = now_items(view)
       assert shown != []
 
       view |> element("#fleet-tab-keys") |> render_click()
-      assert_patch(view, @map_path)
+      assert_patch(view, @members_path)
       assert now_items(view) == []
 
       view |> element("#fleet-tab-hall") |> render_click()
