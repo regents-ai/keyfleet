@@ -3090,3 +3090,8 @@ The feed used to fold every Key bought in a row into one line, so a single purch
 ## 2026-10-20 — Members are signed back in on every page
 
 A member whose sign-in here had lapsed was signed back in by itself only on a fleet's main page. Now any page they open (chat, workspace, proposals, the homepage) signs them back in without a press, as long as this browser still remembers their sign-in. First-time visitors still get the light page.
+
+## 2026-10-20 — The code address opens the fleet's code in a browser
+
+- What: opening a fleet's code address (such as https://code.keyfleet.ai/fleet_tech_classic.git, the address its workspace shows) in a browser now goes to the fleet's code on Keyfleet, instead of saying there is no code at this address. Git still copies from the same address.
+- Why: Sean 20 October 14:41Z: following the address the workspace gives showed "There is no code at this address."

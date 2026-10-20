@@ -6,7 +6,8 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   the fleet's keys now.
 
   Git asks at `/<fleet id>.git` for the three things it needs, and nothing
-  else is answered: what the repository holds (`info/refs`), a copy
+  else is answered, but for a browser opening `/<fleet id>.git` itself, which
+  is sent to the fleet's code on the site: what the repository holds (`info/refs`), a copy
   (`git-upload-pack`) and changes sent (`git-receive-pack`). Who sent it:
 
     * An agent signs every request with its own sign-in (SIWA, as on
@@ -77,6 +78,19 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
       |> put_resp_header("cache-control", "no-store")
       |> put_resp_header("retry-after", "3600")
       |> refuse(503, "not_open_yet")
+    end
+  end
+
+  # A browser opening a fleet's address, as its workspace shows it, is sent
+  # to the fleet's code on the site.
+  defp serve_open(%Plug.Conn{method: "GET", path_info: [repository]} = conn) do
+    with {:ok, fleet_id} <- fleet(repository),
+         true <- fleet_id in Keyfleet.Fleets.catalog_ids() do
+      conn
+      |> put_resp_header("location", KeyfleetWeb.Endpoint.url() <> Code.files_path(fleet_id, ""))
+      |> send_resp(302, "")
+    else
+      _other -> refuse(conn, 404, "code_not_found")
     end
   end
 
