@@ -2996,3 +2996,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
   change to sign-in, the wallet or the side panel wait for the founder.
 - Why: Sean, 19 October 21:09Z: "why does every action need me to rubberstamp
   it?"; his 20 October 00:02Z "1. a" asked for the rule to be written down.
+
+## 2026-10-20 — Credits: Approve looks like the other wallet buttons and shows when it is done
+
+- What: in the Buy Credits window, Approve is drawn like Buy and the Key purchase buttons, the same size as Buy. Once the chain lets REGENT staking take the amount, it reads "✓ Approved", greyed with a green cut-corner edge. It is never switched off; a press still reaches the wallet. The browser tests' stand-in chain now answers contract reads, so the window's approval can be tested.
+- Why: Sean asked that every Approve and Buy pair follow one rule: same size, and Approve grey with a green border after it succeeds.

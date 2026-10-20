@@ -258,3 +258,27 @@
   }
 }
 }
+
+/* A finished Approve stays in view, greyed with a green edge. The button's own
+   look sits outside this file's layer, so these rules do too. */
+:root .credits-panel .credits-panel__step .rg-button.rg-button[data-onchain-step][data-done] {
+  color: var(--color-fg-muted);
+}
+
+:root .credits-panel .credits-panel__step .rg-button.rg-button[data-onchain-step][data-done]::before {
+  --rg-button-edge-ink: var(--color-success);
+  --rg-button-cut-ink: var(--color-success);
+  --rg-button-cut-gap: 0px;
+  background-color: color-mix(in srgb, var(--color-fg) 12%, var(--color-surface));
+  background-size:
+    var(--rg-cut-control) var(--rg-cut-control),
+    var(--rg-cut-control) var(--rg-cut-control),
+    calc(100% - var(--rg-cut-control) + 1px) 1px,
+    1px calc(100% - var(--rg-cut-control) + 1px),
+    calc(100% - var(--rg-cut-control) + 1px) 1px,
+    1px calc(100% - var(--rg-cut-control) + 1px);
+}
+
+:root .credits-panel .credits-panel__step .rg-button.rg-button[data-onchain-step][data-done]::after {
+  content: none;
+}

@@ -473,8 +473,8 @@ defmodule KeyfleetWeb.CreditsPanel do
 
       <ol class="credits-panel__steps">
         <li class="credits-panel__step" data-state={@approve.state}>
-          <P.button variant="secondary" data-onchain-step="approve">
-            <span data-press-label>Approve</span>
+          <P.button data-onchain-step="approve" data-done={@approve.state == :done}>
+            <span data-press-label>{if @approve.state == :done, do: "✓ Approved", else: "Approve"}</span>
           </P.button>
           <div class="credits-panel__step-words">
             <strong>

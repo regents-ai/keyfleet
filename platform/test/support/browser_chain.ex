@@ -137,6 +137,8 @@ defmodule Keyfleet.BrowserChain do
       calls: &answer/3
     )
 
+    TestChainNode.answer_calls(&answer/3)
+
     # Read now, so the first page opened already finds the fleet on sale.
     FleetNow.read(fleet_id)
     reread()
