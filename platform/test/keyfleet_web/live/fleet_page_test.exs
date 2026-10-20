@@ -106,15 +106,19 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert Enum.drop(holders(view), 1) == [main, loose]
     assert text(view, "#fleet-members-holder-#{main} .member-card__count") == "3 Keys"
-    assert text(view, "#fleet-members-holder-#{main} strong") == RegentFormat.short_address(main)
+    refute has_element?(view, "#fleet-members-holder-#{main} strong")
+
+    assert text(view, "#fleet-members-holder-#{main} .rg-address__label") ==
+             RegentFormat.short_address(main)
+
     assert shown_keys(view, main) == [7, 9, 10]
     refute render(view) =~ RegentFormat.short_address(first)
     assert shown_keys(view, loose) == [8]
   end
 
-  # A typed name could read like an ENS name, so the short main address sits
-  # under it; an ENS name read from the chain stands alone.
-  test "the Member List shows a typed name over its address and an ENS name alone", %{
+  # A typed name could read like an ENS name, so the main address sits beside
+  # it; an ENS name read from the chain stands in for the address it points to.
+  test "the Member List shows a typed name beside its address and an ENS name alone", %{
     conn: conn
   } do
     deploy!()
@@ -149,15 +153,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert text(view, "#fleet-members-holder-#{typed} strong") == "vitalik.eth"
 
-    assert text(view, "#fleet-members-holder-#{typed} strong + span") ==
+    assert text(view, "#fleet-members-holder-#{typed} .rg-address__label") ==
              RegentFormat.short_address(typed)
 
-    assert text(view, "#fleet-members-holder-#{ens} strong") == "crew.eth"
-
-    refute has_element?(
-             view,
-             "#fleet-members-holder-#{ens} strong + span:not(.member-card__count)"
-           )
+    refute has_element?(view, "#fleet-members-holder-#{ens} strong")
+    assert text(view, "#fleet-members-holder-#{ens} .rg-address__label") == "crew.eth"
+    assert text(view, "#fleet-members-holder-#{ens} .rg-address__full") == ens
   end
 
   test "a visitor is listed General alone, never another room's name", %{conn: conn} do

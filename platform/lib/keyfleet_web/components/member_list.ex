@@ -97,7 +97,7 @@ defmodule KeyfleetWeb.Components.MemberList do
 
     for %{account_id: account_id, wallets: own, count: count} <- holders do
       account = accounts[account_id]
-      {name, address} = who(account, own)
+      {name, address, label} = who(account, own)
 
       shown =
         own |> Enum.flat_map(&Map.get(held, &1, [])) |> Enum.sort() |> Enum.take(@cards_shown)
@@ -107,6 +107,7 @@ defmodule KeyfleetWeb.Components.MemberList do
         count: count,
         name: name,
         address: address,
+        label: label,
         connections: Map.get(connections, account_id, []),
         present?: Enum.any?(own, &MapSet.member?(present, &1)),
         last_active:
@@ -157,20 +158,21 @@ defmodule KeyfleetWeb.Components.MemberList do
 
   defp card_id(_account, [wallet | _rest]), do: wallet
 
-  # A name the person typed is shown over their short main address, so it never
-  # passes for an ENS name; an ENS name, or a bare address, is shown alone.
+  # A name the person typed is shown beside their main address, so it never
+  # passes for an ENS name; an ENS name stands in for the address it points to.
+  # Returns the typed name, the main address and the ENS name.
   defp who(account, own) do
-    address = RegentFormat.short_address(card_id(account, own))
+    address = card_id(account, own)
 
     cond do
       chosen = account && PublicIdentity.name(%{display_name: account.display_name}) ->
-        {chosen, address}
+        {chosen, address, nil}
 
       ens = account && PublicIdentity.name(%{ens_name: account.ens_name}) ->
-        {ens, nil}
+        {nil, address, ens}
 
       true ->
-        {address, nil}
+        {nil, address, nil}
     end
   end
 
@@ -206,8 +208,13 @@ defmodule KeyfleetWeb.Components.MemberList do
           class="member-card"
         >
           <p class="member-card__who">
-            <strong>{holder.name}</strong>
-            <span :if={holder.address}>{holder.address}</span>
+            <strong :if={holder.name}>{holder.name}</strong>
+            <Regent.Primitives.address
+              id={"#{@id}-holder-#{holder.id}-address"}
+              class={!holder.name && "member-card__identity"}
+              address={holder.address}
+              label={holder.label}
+            />
             <span class="member-card__count">{Rules.keys(holder.count)}</span>
           </p>
           <p class="member-card__status" data-present={holder.present? && "true"}>

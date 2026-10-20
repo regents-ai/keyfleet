@@ -55,6 +55,12 @@
   margin-inline-start: auto;
 }
 
+/* With no typed name, the address or ENS name is the card's name. */
+.member-card__who > .member-card__identity {
+  color: var(--color-fg);
+  font-weight: 600;
+}
+
 .member-card__status[data-present="true"] {
   color: var(--color-fg);
 }

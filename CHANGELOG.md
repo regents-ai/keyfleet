@@ -3011,3 +3011,7 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: on a phone, the links inside a Workstream line (a Key, an item's name) stay part of the sentence. The closing quote and full stop after an item's name now sit beside its last word instead of dropping onto lines of their own. Each link keeps a finger's height to press.
 - Why: Sean saw the closing quote after a goal's name wrap onto its own line on a phone.
+
+## 2026-10-20 — Members: every holder's address opens, copies and links to Basescan
+
+Each card in a fleet's Member List shows its holder's address the way every other address on the site does: press it to see the whole address, copy it, or open it on Basescan. A holder with an ENS name shows that name in its place, and a name a person typed sits beside their address.
