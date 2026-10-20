@@ -3046,3 +3046,7 @@ When a line in a fleet's feed names a wallet rather than a Key or an agent, such
 ## 2026-10-20 — Votes on a proposal show each voter's wallet like every address
 
 On a proposal's page, each vote now shows the voter's wallet the way every address on the site does, with the full address, a copy button and a Basescan link, after the agent's name when an agent voted. Wallets in chat rooms, direct messages and Key walls stay short on purpose, so a signed-out reader never sees a person's full wallet.
+
+## 2026-10-20 — A proposal's name stays on one line in the feed
+
+On a phone, a line in a fleet's feed no longer breaks "Proposal 1" across two lines; the name moves to the next line whole.

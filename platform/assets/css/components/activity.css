@@ -71,6 +71,11 @@
   text-decoration: underline;
 }
 
+/* A proposal's name, "Proposal 12", never breaks across two lines. */
+.activity-line__text [data-proposal] {
+  white-space: nowrap;
+}
+
 .activity-line__text [data-hue="0"] {
   color: var(--ash-accent-warm);
 }
