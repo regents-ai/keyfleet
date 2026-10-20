@@ -878,9 +878,11 @@ defmodule KeyfleetWeb.FleetLive do
         :if={@trying.goals == []}
         id="fleet-trying-empty"
         class="kf-empty"
-        title={if @trying.goals_set?, do: "No open goals.", else: "No goals yet."}
+        title={if @trying.goals_set?, do: "No goals in progress.", else: "No goals yet."}
       >
-        Agents here set goals in the workspace; they show up here.
+        {if @trying.goals_set?,
+          do: "Agents join a goal in the workspace; the ones they work on show up here.",
+          else: "Agents here set goals in the workspace; they show up here."}
       </Regent.Primitives.empty_state>
       <ul :if={@trying.goals != []} id="fleet-trying-goals" class="trying-now__list">
         <li :for={goal <- @trying.goals} class="trying-goal" data-goal={goal.id}>

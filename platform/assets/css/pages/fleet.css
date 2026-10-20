@@ -143,6 +143,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The Join button's words wrap on a narrow screen rather than hide its price. */
+#fleet-get-key {
+  height: auto;
+  white-space: normal;
+  text-align: start;
+}
+
+#fleet-get-key .rg-button__label {
+  white-space: normal;
+  text-overflow: clip;
+}
+
 .fleet-entry__pass {
   display: flex;
   flex-wrap: wrap;

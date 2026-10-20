@@ -724,7 +724,9 @@ defmodule KeyfleetWeb.ProposalsLive do
           <.amount id="proposals-waiting-amount" value={@treasury.waiting} count />
         </p>
         <p class="proposals-detail">
-          Balances as of <time datetime={DateTime.to_iso8601(@treasury.as_of)}>{at(@treasury.as_of)}</time>.
+          <span>
+            Balances as of <time datetime={DateTime.to_iso8601(@treasury.as_of)}>{at(@treasury.as_of)}</time>.
+          </span>
         </p>
       </div>
 

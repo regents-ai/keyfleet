@@ -209,8 +209,9 @@ defmodule KeyfleetWeb.ProposalsPage do
   @doc """
   An amount of an asset as every page shows it, `%{text: text, token: address
   | nil, symbol?: boolean}`, grouped: in its own units with its symbol when
-  the token has reported both, and otherwise as the whole number the chain
-  holds. `symbol?` says whether `text` ends in the symbol the token chose.
+  the token has reported both, cut to four decimal places (below one token,
+  to its first four significant digits), and otherwise as the whole number
+  the chain holds. `symbol?` says whether `text` ends in the symbol the token chose.
   Every asset but the ones the fleet's deployment names (ETH, its USDC and
   REGENT), known by their addresses, comes with its address as `token`, so a
   token calling itself USDC is never taken for it. `assets` is as `Keyfleet.Treasury.assets/1`
@@ -220,7 +221,7 @@ defmodule KeyfleetWeb.ProposalsPage do
     {text, symbol?} =
       case details[asset] do
         {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
-          {"#{units(atoms, decimals)} #{symbol}", true}
+          {"#{shown(atoms, decimals)} #{symbol}", true}
 
         _unknown ->
           {"#{units(atoms, 0)} in the smallest units of token", false}
@@ -538,6 +539,20 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp seq!(nil), do: 0
   defp seq!(value), do: number!(value)
+
+  # Cut, never rounded up, so a page never shows more than there is.
+  defp shown(atoms, decimals) do
+    digits = atoms |> Integer.to_string() |> String.length()
+
+    if atoms > 0 and digits <= decimals,
+      do: cut(atoms, decimals, min(decimals, decimals - digits + 4)),
+      else: cut(atoms, decimals, min(decimals, 4))
+  end
+
+  defp cut(atoms, decimals, kept) do
+    step = Integer.pow(10, decimals - kept)
+    units(atoms - rem(atoms, step), decimals)
+  end
 
   @doc """
   `atoms` of a token with `decimals` places, in whole tokens, thousands

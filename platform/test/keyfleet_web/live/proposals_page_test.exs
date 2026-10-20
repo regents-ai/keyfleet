@@ -337,14 +337,25 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       end
     end
 
-    # The contract holds any uint256, which is shown to the last digit.
+    test "a balance shows four decimal places, and below one token its first four digits",
+         %{conn: conn} do
+      ProposalHelpers.treasury_reading!(@fleet, [
+        balance(@usdc, held: 27_864_999, backed: 4_321)
+      ])
+
+      {:ok, view, _html} = open(conn, @treasury_page)
+      assert cells(view, @usdc) == ["27.8649 USDC", "0.004321 USDC"]
+    end
+
+    # The contract holds any uint256, which is shown to its last whole digit
+    # and four decimal places.
     test "the largest amount the contract can hold is shown whole", %{conn: conn} do
       max = 2 ** 256 - 1
       ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: max, backed: max)])
 
       whole =
         "115,792,089,237,316,195,423,570,985,008,687,907,853,269,984,665,640,564,039,457,584," <>
-          "007,913,129.639935 USDC"
+          "007,913,129.6399 USDC"
 
       {:ok, view, _html} = open(conn, @treasury_page)
       assert cells(view, @usdc) == [whole, whole]

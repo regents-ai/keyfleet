@@ -3001,3 +3001,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: in the Buy Credits window, Approve is drawn like Buy and the Key purchase buttons, the same size as Buy. Once the chain lets REGENT staking take the amount, it reads "✓ Approved", greyed with a green cut-corner edge. It is never switched off; a press still reaches the wallet. The browser tests' stand-in chain now answers contract reads, so the window's approval can be tested.
 - Why: Sean asked that every Approve and Buy pair follow one rule: same size, and Approve grey with a green border after it succeeds.
+
+## 2026-10-20 — Treasury amounts to four decimals; Join shows its price on phones; "No goals in progress"
+
+- What: token amounts on the Treasury, proposals and Key pages are cut to four decimal places (below one token, to its first four digits), so REGENT no longer shows eighteen. On a phone the "Join this Keyfleet by purchasing the next Key" button wraps instead of hiding its price. A fleet's "Trying now" says "No goals in progress." when its goals exist but nobody has joined one, rather than "No open goals." beside a workspace listing them as Open; the agents' fleet page says the same. "Balances as of …" reads as one sentence.
+- Why: overnight walk of keyfleet.ai on desktop and phone (Sean 20 October 03:20Z: "keep working on improvements overnight").

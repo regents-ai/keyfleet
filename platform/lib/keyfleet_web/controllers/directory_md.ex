@@ -214,7 +214,7 @@ defmodule KeyfleetWeb.DirectoryMD do
   defp last_contribution(%{last_contribution_at: at, last_contribution: kind}),
     do: " · last contribution #{time(at)} (#{kind})"
 
-  defp goals([]), do: "No open goals."
+  defp goals([]), do: "No goals in progress."
 
   defp goals(goals),
     do: Enum.map_join(goals, "\n", &"- #{&1.id} · #{title(&1.title)}")

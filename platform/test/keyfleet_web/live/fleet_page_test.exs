@@ -1671,7 +1671,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       read_now()
 
       refute has_element?(view, ~s(#fleet-trying li[data-goal="#{goal}"]))
-      assert has_element?(view, "#fleet-trying-empty")
+      assert text(view, "#fleet-trying-empty") =~ "No goals in progress."
     end
 
     test "what members wrote shows as text, with nothing that can't be seen", %{conn: conn} do
