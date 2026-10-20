@@ -12,6 +12,13 @@ revision at build time, and the attribution and licence text live in the design 
 `THIRD_PARTY_NOTICES.md`. The renderer runs on the `vgpu` this repository pins in
 `package.json`.
 
+## Geist — share pictures
+
+The share pictures in `priv/static/images/keyfleet-share.png` and `priv/share/`
+are drawn in Geist, Geist Mono and Geist Pixel, which the Regent design system
+ships under the SIL Open Font License 1.1. They are pictures made with the
+fonts; no font file is copied into this repository.
+
 ## thiings-grid — key map camera
 
 The key map's drag and coast began as the camera in Charlie Clark's `thiings-grid`.
