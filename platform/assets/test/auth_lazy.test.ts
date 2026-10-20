@@ -85,11 +85,13 @@ function accountDocument({
   signedIn = false,
   bridgeSource = "/assets/js/privy_bridge.js",
   appId = "public-app-id",
-}: {signedIn?: boolean; bridgeSource?: string | null; appId?: string | null} = {}) {
+  search = "",
+}: {signedIn?: boolean; bridgeSource?: string | null; appId?: string | null; search?: string} = {}) {
   let status = new AccountElement()
   let signInControls = [new AccountElement("sign-in")]
   const listeners = new Map<string, (event: Event) => void>()
   const documentRoot = {
+    location: {search},
     querySelector(selector: string) {
       if (selector === "meta[name='privy-app-id']") {
         return appId === null ? null : {content: appId}
@@ -142,6 +144,29 @@ function accountDocument({
 }
 
 describe("lazy browser authentication", () => {
+  // Google and the other redirect sign-ins leave the page and come back with
+  // Privy's code in the address. Privy finishes that sign-in only once it runs.
+  it("a page Privy returns to from Google starts the bridge at once", async () => {
+    const page = accountDocument({search: "?privy_oauth_code=code&privy_oauth_state=state"})
+    const request = vi.fn(async () => undefined)
+    const startPrivyBridge = vi.fn(async () => ({request}))
+    const stop = installAccountAuthLazyLoader(page.documentRoot, async () => ({startPrivyBridge}))
+
+    await vi.waitFor(() => expect(request).toHaveBeenCalledWith("sync"))
+    expect(startPrivyBridge).toHaveBeenCalledOnce()
+    stop()
+  })
+
+  it("an ordinary signed-out page waits for a press before starting the bridge", async () => {
+    const page = accountDocument({search: "?ref=home"})
+    const importer = vi.fn(async () => ({startPrivyBridge: vi.fn(async () => ({request: async () => undefined}))}))
+    const stop = installAccountAuthLazyLoader(page.documentRoot, importer)
+
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(importer).not.toHaveBeenCalled()
+    stop()
+  })
+
   it("an explicit retry replaces failed startup without reloading or stacking a bridge", async () => {
     vi.stubGlobal("Element", AccountElement)
     const page = accountDocument()

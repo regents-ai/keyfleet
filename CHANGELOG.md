@@ -3071,3 +3071,8 @@ A fleet page with a Buy or wallet panel no longer downloads sign-in for a visito
 ## 2026-10-20 — Each Key purchase gets its own line in the fleet feed
 
 The feed used to fold every Key bought in a row into one line, so a single purchase could read "Keys 1–18 were bought". Each purchase now has its own line naming only the Keys it bought, for example "Key 18 was bought".
+
+## 2026-10-20 — Sign in with email, a phone number, Google or a wallet (protected: sign-in)
+
+- What: the sign-in window offers every way to sign in that is turned on for Regents in Privy, the same window Techtree shows: email, a text message, Google and the other social accounts, and "Continue with a wallet". Someone who signs in without a wallet gets a Privy wallet of their own at once, and Keyfleet signs them in as soon as that wallet is ready. Google brings the person back to the page they started on, and the sign-in finishes there. A person who brings their own wallet signs in as before.
+- Why: Sean asked for Techtree's sign-in window on Keyfleet. The site had limited the window to wallets, so the choices turned on in Privy never showed. Keyfleet and Techtree share one Privy app, so nothing changes in Privy's settings.
