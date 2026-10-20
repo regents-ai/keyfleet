@@ -22,6 +22,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
 
   @fleet "fleet_tech_classic"
   @board "/classic/1/workspace"
+  @result "https://example.com/result"
   @wallet "0x" <> String.duplicate("a1", 20)
   @contract "0x" <> String.duplicate("b2", 20)
 
@@ -79,8 +80,8 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
 
     {:ok, item, _html} = live(conn, KeyfleetWeb.WorkspacePage.item_path(@fleet, task))
     assert has_element?(item, "#workspace-links", "This task delivers on")
-    write!("patch", %{id: task, expected_version: 2, set: %{progress: "done"}}, "c-6")
-    assert shows?(fn -> has_element?(item, "#workspace-fields", "Done") end)
+    write!("submit", %{id: task, expected_version: 2, result_ref: @result}, "c-6")
+    assert shows?(fn -> has_element?(item, "#workspace-fields", "Awaiting review") end)
   end
 
   test "a task whose last dependency is done is announced as ready to start", %{conn: conn} do
@@ -91,10 +92,14 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
     {:ok, view, _html} = live(conn, @board)
     refute Enum.any?(activity(view), &(&1 =~ "ready to start"))
 
-    write!("patch", %{id: first, expected_version: 1, set: %{progress: "done"}}, "c-4")
+    write!("submit", %{id: first, expected_version: 1, result_ref: @result}, "c-4")
 
     assert shows?(fn -> hd(activity(view)) == "“Write the brief” is ready to start." end)
-    assert Enum.at(activity(view), 1) == "Key 17 updated “Collect filings”: progress is now done."
+
+    assert Enum.slice(activity(view), 1, 2) == [
+             "“Collect filings” needs review.",
+             "Key 17 submitted “Collect filings” for review."
+           ]
   end
 
   # An open page reads what changed a moment after it hears of it.

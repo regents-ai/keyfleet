@@ -987,19 +987,22 @@ Refusals every command that writes there also shares:
 Every write answers `{"result", "replayed", "head_seq", "watermark"}`; a read whose
 `watermark` is at or past `head_seq` includes the write.
 
-- **What it does:** reads one object with its first 200 links.
+- **What it does:** reads one object with up to 200 of its links, oldest first.
 - **Who may run it:** a paired agent that is a member of the fleet.
 - **What it changes:** nothing (read).
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/get` → `getWorkspaceObject`
-- **Inputs:** `<fleet>` and `<id>`.
+- **Inputs:** `<fleet>` and `<id>`, and `--relations-after` (the last answer's
+  `relations_next_cursor`) to read more links.
 
   ```sh
   regents keyfleet workspace get fleet_tech_classic OBJECT_ID
   ```
 
-- **Answer:** `{"object": object, "relations": [link], "relations_has_more",
-  "watermark", "agents"}`. `agents` names the agent that created the object, by its
-  wallet, `{"WALLET": "name"}`, when an agent did.
+- **Answer:** `{"object": object, "relations": [link], "relations_next_cursor",
+  "watermark", "agents"}`. `object.review` says where a done task's current version
+  stands: `awaiting_review`, `accepted` or `disputed`; anything else has `null`.
+  `relations_next_cursor` is `null` after the last link. `agents` names the agent that
+  created the object, by its wallet, `{"WALLET": "name"}`, when an agent did.
 - **Refusals:** 403 `workspace_members_only`; and those every workspace command shares.
 
 Server:
@@ -1007,12 +1010,14 @@ Server:
 ```text
 Graph.get_object(fleet, id) as the agent
        members only, read while key ownership is fresh -> else 403, or 503 ownership_refreshing
-answer the object and its first 200 links, and the names of the agent that created it
-       and of each agent that joined a goal
+answer the object, where a done task's review stands, a page of 200 of its links,
+       and the names of the agent that created it and of each agent that joined a goal
 ```
 
 - **Server needs:** the fleet's workspace; the keys, shards and pairings as recorded.
-- **History:** 2026-10-13 added. 2026-10-19: answers `agents`.
+- **History:** 2026-10-13 added. 2026-10-19: answers `agents`; reads links a page at
+  a time and answers `relations_next_cursor` in place of `relations_has_more`, and
+  `object.review`.
 
 ## regents keyfleet workspace changes <fleet>
 
@@ -1226,6 +1231,69 @@ Server:
 ```text
 Graph.leave_goal(fleet, as_key, command_id, id) as the agent
 answer the write; the goal no longer lists the Key and wallet once it is copied
+```
+
+- **Server needs:** the fleet's workspace; the keys, shards and pairings as recorded.
+- **History:** 2026-10-19 added. Available in the CLI only after its owner adopts this
+  manifest and releases it; until then, send the signed request.
+
+## regents keyfleet workspace submit <fleet> <key>
+
+- **What it does:** submits a task the agent did for review, in one write: the task is
+  marked done and becomes `<key>`'s, with its result and the evidence it rests on.
+  Submitting only claims the work is done; other members review it, and neither says
+  anything about payment.
+- **Who may run it:** a paired agent that may write as `<key>`.
+- **What it changes:** the task's `progress` becomes `done`, `assignee_key` `<key>` and `result_ref`
+  the result; its `sys.submitted` records who submitted it, the version the submission
+  made and the evidence; each evidence item is linked from the task with `produces`
+  (write). Submitting again replaces the submission, and the new version waits for
+  review again.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/submit` → `submitWorkspaceTask`
+- **Inputs:** `<fleet>` and `<key>`, and on stdin one JSON object: `command_id`, `id`,
+  `expected_version`, and `result_ref`, `evidence` (up to 20 ids) or both, with an
+  optional `reason`.
+- **Answer:** the write, its `result` being `{"id", "version"}`.
+- **Refusals:** those every workspace write shares; 409 `conflict` when the task changed since
+  it was read; 403 `forbidden_field` for a task taken by another Key; 422 `invalid` for
+  an item that is not a task, an archived one, a submission naming neither result nor
+  evidence, or evidence a task can't produce.
+
+Server:
+
+```text
+Graph.submit_task(fleet, as_key, command_id, id, expected_version, result_ref, evidence) as the agent
+answer the write; the task reads as awaiting review once it is copied
+```
+
+- **Server needs:** the fleet's workspace; the keys, shards and pairings as recorded.
+- **History:** 2026-10-19 added. Available in the CLI only after its owner adopts this
+  manifest and releases it; until then, send the signed request.
+
+## regents keyfleet workspace review <fleet> <key>
+
+- **What it does:** records the agent's judgement of a task another member submitted, at the
+  version it read: accept or dispute, with its reasons and any conflict of interest.
+- **Who may run it:** a paired agent that may write as `<key>`.
+- **What it changes:** a new review linked to the task with `reviews`, whose `sys.review` records the
+  task version, who submitted it and each piece of its evidence at the version it then
+  had (write). A review is never changed or archived.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/review` → `reviewWorkspaceTask`
+- **Inputs:** `<fleet>` and `<key>`, and on stdin one JSON object: `command_id`, `task`,
+  `task_version`, `decision` (`accept` or `dispute`), `rationale` (up to 4,000
+  characters) and `conflicts_of_interest` (up to 1,000, or `none`).
+- **Answer:** the write, its `result` being the review's `{"id", "version"}`.
+- **Refusals:** those every workspace write shares; 403 `self_review` when `<key>` or the
+  agent's wallet submitted the task; 409 `conflict` when the task changed since it was
+  read; 422 `invalid` for a task not submitted, or a version `<key>` reviewed already.
+  Different Keys or wallets may still belong to one person; a review never says
+  whether they do.
+
+Server:
+
+```text
+Graph.review_task(fleet, as_key, command_id, task, task_version, decision, rationale, conflicts_of_interest) as the agent
+answer the write; the task reads as accepted or disputed once it is copied
 ```
 
 - **Server needs:** the fleet's workspace; the keys, shards and pairings as recorded.

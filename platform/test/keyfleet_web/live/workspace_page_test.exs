@@ -166,12 +166,18 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     test "a card shows when it last changed, and changing it brings it to the top", %{conn: conn} do
       first = create(@fleet, "task", %{"title" => "First", "progress" => "todo"})
       second = create(@fleet, "note", %{"title" => "Second", "body" => "b"})
-      edit(@fleet, first, %{"progress" => "done"}, by: 9)
+      submit(@fleet, first, "https://example.com/first", by: 9)
 
       {:ok, view, _html} = live(conn, @board)
 
       assert cards(view) == [first, second]
-      assert facts(view, first) == [{"Progress", "Done"}, {"Taken by", "No one yet"}]
+
+      assert facts(view, first) == [
+               {"Progress", "Submitted"},
+               {"Review", "Awaiting review"},
+               {"Taken by", "Key 9"}
+             ]
+
       assert card_text(view, first) =~ "Last changed 22 September 2026 at 12:05 UTC"
       assert card_text(view, first) =~ "Added by Key 17"
     end
@@ -217,7 +223,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     test "one kind of item at a time", %{conn: conn} do
       task = create(@fleet, "task", %{"title" => "A task", "progress" => "todo"})
       create(@fleet, "note", %{"title" => "A note", "body" => "b"})
-      archived = create(@fleet, "task", %{"title" => "Old task", "progress" => "done"})
+      archived = create(@fleet, "task", %{"title" => "Old task", "progress" => "todo"})
+      submit(@fleet, archived, "https://example.com/old")
       archive(@fleet, archived)
 
       {:ok, view, _html} = live(conn, @board)
@@ -566,6 +573,31 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              ]
     end
 
+    test "a review is told once, as its decision on the task", %{conn: conn} do
+      task = create(@fleet, "task", %{"title" => "Draft", "progress" => "doing"})
+      submit(@fleet, task, "https://example.com/draft", by: 9)
+      review = review(@fleet, task, "dispute", by: 4)
+
+      {:ok, board, _html} = live(conn, @board)
+
+      assert Enum.take(activity(board), 2) == [
+               "Key 4 disputed “Draft”.",
+               "Key 9 submitted “Draft” for review."
+             ]
+
+      {:ok, item, _html} = live(conn, item_path(task))
+      assert has_element?(item, "#workspace-fields", "Disputed")
+
+      assert history(item) == [
+               "Key 4 disputed “Draft”.",
+               "Key 9 submitted “Draft” for review.",
+               "Key 17 added the task “Draft”."
+             ]
+
+      {:ok, item, _html} = live(conn, item_path(review))
+      assert history(item) == ["Key 4 disputed “Draft”."]
+    end
+
     test "links and history come fifty at a time", %{conn: conn} do
       hub = create(@fleet, "goal", %{"title" => "Hub", "outcome" => "o", "status" => "open"})
 
@@ -647,7 +679,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       task = create(@fleet, "task", %{"title" => "Draft", "progress" => "todo"})
       goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
       relation = link(@fleet, task, goal, "implements", by: 3)
-      edit(@fleet, task, %{"progress" => "done", "next_step" => "Send it."}, by: 4)
+      submit(@fleet, task, "https://example.com/draft", by: 4)
       edit(@fleet, task, %{"assignee_key" => nil})
       edit(@fleet, goal, %{"title" => "More revenue"})
       unlink(@fleet, relation)
@@ -672,7 +704,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "Key 17 unlinked “Draft” from “More revenue”, which it no longer delivers on.",
                "Key 17 updated “More revenue”: title.",
                "Key 17 updated “Draft”: now taken by no one.",
-               "Key 4 updated “Draft”: progress is now done, next step.",
+               "Key 4 submitted “Draft” for review.",
                "Key 3 linked “Draft” to “More revenue”, which it delivers on.",
                "Key 17 added the goal “More revenue”.",
                "Key 17 added the task “Draft”."
@@ -842,7 +874,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       open_log(@fleet)
       open_log(@other)
       ours = create(@fleet, "task", %{"title" => "Ours", "progress" => "todo"}, id: "task#1")
-      create(@other, "task", %{"title" => "Theirs", "progress" => "done"}, id: "task#1")
+      create(@other, "task", %{"title" => "Theirs", "progress" => "todo"}, id: "task#1")
+      submit(@other, "task#1", "https://example.com/theirs")
 
       create(@other, "goal", %{"title" => "Their goal", "outcome" => "o", "status" => "open"},
         id: "goal#7"
