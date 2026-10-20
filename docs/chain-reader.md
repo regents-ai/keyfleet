@@ -83,7 +83,10 @@ The reading is Oban work:
   pass that fails is retried after a wait that doubles up to a minute; after
   20 failures the job is given up, and the watch starts a fresh one within a
   minute.
-- `Keyfleet.Chain.ReadBalances` takes one balance reading per fleet.
+- `Keyfleet.Chain.ReadBalances` takes one balance reading per fleet. It is
+  also queued at once when a step sent from the site goes through, and when
+  someone presses the Treasury's refresh (each person once every 30 seconds).
+  Only one reading of a fleet waits to start at a time.
 
 Seeing that these ran, running them again and stopping them is in
 `docs/recurring-jobs.md`.

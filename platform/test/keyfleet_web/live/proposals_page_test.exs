@@ -1,8 +1,10 @@
 defmodule KeyfleetWeb.Live.ProposalsPageTest do
   use KeyfleetWeb.ConnCase, async: false
+  use Oban.Testing, repo: Keyfleet.Repo
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors
+  alias Keyfleet.Chain.ReadBalances
   alias Keyfleet.Chain.StubClient
   alias Keyfleet.ChainHelpers
   alias Keyfleet.ChainViews
@@ -1094,6 +1096,70 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       })
 
       assert send.data == Call.encode("sendProtocolShare()", [])
+    end
+
+    # The treasury's figures follow what was just done on its page (Sean,
+    # 20 October 2026): a step that goes through reads the balances at once,
+    # and the figures beside the other buttons are read again with them.
+    test "a step that goes through reads the treasury's balances at once, and the split's figures with them",
+         %{conn: conn} do
+      ChainViews.put!(list_views(owed: 2_500_000, usdc_held: 250_000_000))
+      {:ok, view, _html} = open(signed_in_as(conn, @holder), @treasury_page)
+      active!(view, "#proposals-regents-share", @holder)
+
+      assert preview(view, @usdc) |> Enum.at(1) == "250 USDC"
+
+      assert_push_event(view, "onchain-steps:review", %{
+        component_id: "proposals-regents-share",
+        review: %{steps: [send_share]} = review
+      })
+
+      ChainViews.put!(list_views(owed: 0, usdc_held: 247_500_000))
+      hash = "0x" <> String.duplicate("5", 64)
+      TestChainNode.land!(hash, review, send_share, "0x1")
+
+      view
+      |> with_target("#proposals-regents-share")
+      |> render_hook("step_sent", %{
+        "review_id" => review.id,
+        "step" => "send_share",
+        "transaction_hash" => hash
+      })
+
+      assert shows?(fn ->
+               render_async(view, @async_wait)
+               preview(view, @usdc) |> Enum.at(1) == "247.5 USDC"
+             end)
+
+      assert_enqueued(worker: ReadBalances, args: %{fleet_id: @fleet})
+    end
+
+    # Anyone may ask for fresh figures, each person once every 30 seconds
+    # (Sean, 20 October 2026); here the allowance lasts a second.
+    test "the refresh reads the treasury's balances at once, then rests until that person may press it again",
+         %{conn: conn} do
+      limits = Application.fetch_env!(:keyfleet, :limits)
+      on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
+
+      Application.put_env(
+        :keyfleet,
+        :limits,
+        Keyword.put(limits, :treasury_refresh, limit: 1, window_seconds: 1)
+      )
+
+      ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 3_000_000)])
+      ChainViews.put!(list_views())
+      {:ok, view, _html} = open(conn, @treasury_page)
+
+      assert has_element?(view, "#proposals-refresh[aria-label='Refresh balances']")
+      refute has_element?(view, "#proposals-refresh[disabled]")
+      refute_enqueued(worker: ReadBalances, args: %{fleet_id: @fleet})
+
+      view |> element("#proposals-refresh") |> render_click()
+
+      assert_enqueued(worker: ReadBalances, args: %{fleet_id: @fleet})
+      assert has_element?(view, "#proposals-refresh[disabled]")
+      assert shows?(fn -> not has_element?(view, "#proposals-refresh[disabled]") end)
     end
 
     # Buy REGENT starts over once the wallet has the press (Sean, 19 October

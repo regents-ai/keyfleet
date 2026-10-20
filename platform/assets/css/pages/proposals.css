@@ -389,3 +389,50 @@
     }
   }
 }
+
+/* The Treasury's refresh: an icon beside the time its balances were read,
+   resting dimmed for the 30 seconds before it may be pressed again. */
+.proposals-detail .proposals-refresh {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  min-width: 0;
+  min-height: 0;
+  margin: -0.25rem 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-fg-muted);
+  cursor: pointer;
+}
+
+.proposals-detail .proposals-refresh svg {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.proposals-detail .proposals-refresh:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+@media (hover: hover) {
+  .proposals-detail .proposals-refresh:not(:disabled):hover {
+    color: var(--color-fg);
+  }
+}
+
+@media (pointer: coarse) {
+  .proposals-detail .proposals-refresh {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+    margin: -0.625rem 0;
+  }
+}

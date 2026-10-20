@@ -18,7 +18,7 @@ long (see "Money nobody has moved" below).
 | --- | --- | --- | --- | --- |
 | `Keyfleet.Chain.Watch` | every minute | gives each deployed fleet a history reading and a balance reading | default | No node named while fleets are deployed: saved error, every minute |
 | `Keyfleet.Chain.ReadFleet` | one long-lived job per fleet, a pass every 4 s | records the fleet's history from the chain | chain | A failed pass: saved error (one per worker), retried up to 20 times. A stop or another chain: saved error, one per kind (`docs/chain-reader.md`) |
-| `Keyfleet.Chain.ReadBalances` | every minute, per fleet | reads the treasury's balances and split figures | chain | saved error, 3 tries; the next minute's reading follows |
+| `Keyfleet.Chain.ReadBalances` | every minute, per fleet, and at once after a step sent from the site goes through or the Treasury's refresh is pressed | reads the treasury's balances and split figures | chain | saved error, 3 tries; the next minute's reading follows |
 | `Keyfleet.Notebooks.Reconcile` | every 10 minutes | queues a notebook hub update for each fleet with a hub | default | saved error, 3 tries |
 | `Keyfleet.Notebooks.Roster` | queued by Reconcile and by Key changes | brings a hub's members in step with the Keys | notebook_hubs | saved error, 20 tries |
 | `Keyfleet.SharedReading.Heal` | every minute, two kinds | rereads fleet agents and Key agents | default | saved error; the next minute replaces it |

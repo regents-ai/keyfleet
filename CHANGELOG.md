@@ -3125,3 +3125,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the homepage's Price figure now shows what the next Classic Key costs (for example 10.46 USDC), instead of the 10–100 USDC range. Its info button explains: "Keys increase steadily in cost until 100 USDC for the last Key." Before sales open it shows Key 1's price; once every Key is sold it says Sold out.
 - Why: Sean 20 October 16:42Z: "in the hero, change from 10-100 USDC to show current price with a info icon on hover, that explains 'Keys increase linearly in cost until 100 USDC for the last Key'". The words say "steadily" rather than "linearly" because each Key costs the same share more than the one before, not the same amount.
+
+## 2026-10-20 — Treasury figures follow what you do, and a refresh button
+
+- What: on a fleet's Treasury, once something sent from the fleet's page goes through (Release, Send to REGENT staking, Buy REGENT, returning an advance, a vote carried out, a Key bought), the treasury's balances are read at once and the Daily Treasury Slice figures are read again, instead of waiting for the next minute's reading. A refresh icon beside "Balances as of" reads them at once too; each person may press it once every 30 seconds, and it rests dimmed until then.
+- Why: Sean 20 October 16:45Z: "the treasury numbers need to be refreshed after one of the page's onchain actions happen. also show a refresh icon that does a refresh pull, only can be clicked per user with a 30sec cooldown".

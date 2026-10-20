@@ -13,6 +13,10 @@ defmodule KeyfleetWeb.ProposalsLive do
   except one the chain's own state at the latest block makes certain to fail,
   whose button stays in view, disabled, with a few words saying why.
 
+  The treasury's figures are read again when a step sent from the fleet's
+  page goes through, and when someone presses its refresh, which each
+  person may do once every 30 seconds (`refresh_treasury/2`).
+
   Everything shown is what `KeyfleetWeb.ProposalsPage` read. The pages most
   visitors open, the first page of the list, the Treasury page and the first
   page of each proposal on that list, are the ones every open page shares
@@ -25,7 +29,9 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   import KeyfleetWeb.Components.LoadFailed
 
+  alias Keyfleet.Chain.ReadBalances
   alias Keyfleet.Fleets.Rules
+  alias Keyfleet.Limits
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.PresenceCard
@@ -682,6 +688,8 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :page, :map, required: true
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
+  attr :reread, :integer, required: true, doc: "counts the times its figures were asked for again"
+  attr :resting?, :boolean, required: true, doc: "whether its refresh waits to be pressed again"
 
   @doc """
   The shared money: the treasury's address on Base, to check and to send to;
@@ -739,10 +747,28 @@ defmodule KeyfleetWeb.ProposalsLive do
           <span>
             Balances as of <time datetime={DateTime.to_iso8601(@treasury.as_of)}>{at(@treasury.as_of)}</time>.
           </span>
+          <button
+            type="button"
+            id="proposals-refresh"
+            class="proposals-refresh"
+            phx-click="refresh_treasury"
+            disabled={@resting?}
+            aria-label="Refresh balances"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M13.25 8A5.25 5.25 0 1 1 11.7 4.3M13.25 2.25V5h-2.75" />
+            </svg>
+          </button>
         </p>
       </div>
 
-      <.split_preview page={@page} treasury={@treasury} actor={@actor} lease={@lease} />
+      <.split_preview
+        page={@page}
+        treasury={@treasury}
+        actor={@actor}
+        lease={@lease}
+        reread={@reread}
+      />
 
       <h3 :if={@treasury.advances != []} id="proposals-advances-title">Advances out</h3>
       <ol :if={@treasury.advances != []} id="proposals-advances" class="proposals-lines">
@@ -813,6 +839,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
+        refresh={@reread}
       >
         <:buttons :let={panel}>
           <WalletPanel.step_button panel={panel} step="send_share" id="proposals-send-share">
@@ -837,6 +864,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
+        refresh={@reread}
         inputs={%{"amount" => @treasury.convert_typed}}
       >
         <:fields :let={panel}>
@@ -892,6 +920,7 @@ defmodule KeyfleetWeb.ProposalsLive do
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
   attr :treasury, :map, required: true
+  attr :reread, :integer, required: true
 
   # What the daily split would share now, per asset, as the treasury works it
   # out at the latest block, and the button that runs it once it is due.
@@ -906,6 +935,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       fleet={fleet(@page)}
       actor={@actor}
       lease={@lease}
+      refresh={@reread}
     >
       <:notes :let={panel}>
         <h3 id="proposals-split-title">
@@ -1202,6 +1232,53 @@ abstain, of {keys(@proposal.counted)} counted</span>|
   defp key_list(token_ids), do: "Keys #{Enum.map_join(token_ids, ", ", &Rules.grouped/1)}"
 
   defp at(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M UTC")
+
+  @doc """
+  A press of the Treasury's refresh: the open fleet's balances are read at
+  once, and the figures its wallet buttons show are read again. Each person,
+  `who` (their account, or a visitor's visit), may press it once every 30
+  seconds (`:treasury_refresh` in `Keyfleet.Limits`); the button rests
+  until then, and a press it refuses rests it for what is left.
+  """
+  def refresh_treasury(
+        %{assigns: %{proposals: %{fleet_id: fleet_id, treasury: %{}}}} = socket,
+        who
+      ) do
+    case Limits.admit(:treasury_refresh, who) do
+      :ok ->
+        ReadBalances.now(fleet_id)
+        socket |> reread_treasury() |> rest(Limits.window(:treasury_refresh))
+
+      {:limited, seconds} ->
+        rest(socket, seconds)
+    end
+  end
+
+  def refresh_treasury(socket, _who), do: socket
+
+  @doc """
+  A step sent from the open fleet's page went through
+  (`KeyfleetWeb.WalletPanel`), which read its balances again: the figures
+  its other wallet buttons show are read again too.
+  """
+  def onchain_landed(%{assigns: %{proposals: %{fleet_id: fleet_id}}} = socket, fleet_id),
+    do: reread_treasury(socket)
+
+  def onchain_landed(socket, _fleet_id), do: socket
+
+  @doc "The refresh may be pressed again, unless a later press rested it anew."
+  def refresh_ready(%{assigns: %{treasury_resting: rest}} = socket, rest),
+    do: assign(socket, treasury_resting: nil)
+
+  def refresh_ready(socket, _rest), do: socket
+
+  defp reread_treasury(socket), do: update(socket, :treasury_reread, &(&1 + 1))
+
+  defp rest(socket, seconds) do
+    rest = make_ref()
+    Process.send_after(self(), {:treasury_refresh_ready, rest}, :timer.seconds(seconds))
+    assign(socket, treasury_resting: rest)
+  end
 
   @doc """
   A wait begun for a proposals page the page has since left reads nothing. A

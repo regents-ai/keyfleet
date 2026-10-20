@@ -19,6 +19,8 @@ defmodule KeyfleetWeb.TreasuryLive do
   attr :page, :any, required: true, doc: "the Treasury page as read, or `:unreadable`"
   attr :actor, :any, required: true, doc: "the signed-in person, or nil"
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
+  attr :reread, :integer, required: true, doc: "counts the times its figures were asked for again"
+  attr :resting?, :boolean, required: true, doc: "whether its refresh waits to be pressed again"
 
   # Drawn inside the fleet's page, under its name and bar (`KeyfleetWeb.FleetLive`).
   def page(%{page: :unreadable} = assigns) do
@@ -52,6 +54,8 @@ defmodule KeyfleetWeb.TreasuryLive do
         page={@page}
         actor={@actor}
         lease={@lease}
+        reread={@reread}
+        resting?={@resting?}
       />
 
       <%!-- A fleet not yet on chain has no treasury to show. --%>

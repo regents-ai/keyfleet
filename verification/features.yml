@@ -364,3 +364,31 @@ features:
       - platform/assets/test/auth_lazy.test.ts
     gaps:
       - Privy's own email code, text message and Google pages cannot be reached from a test; a real sign-in with each is checked by hand on keyfleet.ai after release.
+
+  - id: treasury-refresh
+    what: >-
+      A fleet's Treasury figures follow what is done on its page: once a step
+      sent from the fleet's page goes through, the treasury's balances are read
+      at once and the figures beside its other buttons are read again. A refresh
+      icon beside "Balances as of" reads them at once too; each person may press
+      it once every 30 seconds (by account, or by visit when signed out), and it
+      rests dimmed until then.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/proposals_live.ex
+      - platform/lib/keyfleet_web/live/treasury_live.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/lib/keyfleet_web/wallet/wallet_panel.ex
+      - platform/lib/keyfleet/chain/read_balances.ex
+      - platform/lib/keyfleet/limits.ex
+      - platform/config/config.exs
+      - platform/assets/css/pages/proposals.css
+    entry:
+      - route: GET /:fleet/:number/treasury
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/proposals_page_test.exs
+    gaps:
+      - The allowance is kept on each machine, as every Keyfleet allowance is; Keyfleet runs on one.
+      - A real wallet's step going through is checked by hand on keyfleet.ai after release.

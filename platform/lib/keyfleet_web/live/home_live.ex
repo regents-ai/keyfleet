@@ -334,6 +334,10 @@ defmodule KeyfleetWeb.HomeLive do
   def handle_info({:shared_reading, _club_key}, socket),
     do: {:noreply, assign(socket, :club, fleet(@club))}
 
+  # A Key bought here moves Classic's sales, which its reading already
+  # follows; the homepage shows no other figure a purchase changes.
+  def handle_info({:onchain_landed, _fleet_id}, socket), do: {:noreply, socket}
+
   # The ships on the fleet's sea, from its activity in the reading as anyone
   # reads it, so none is the reader's own.
   defp ships(fleet_id, reading) do

@@ -122,6 +122,8 @@ defmodule KeyfleetWeb.ShellLive do
        proposals_params: nil,
        proposals_topic: nil,
        proposals_refresh?: false,
+       treasury_reread: 0,
+       treasury_resting: nil,
        polls: nil,
        polls_topics: [],
        polls_clock: nil,
@@ -377,6 +379,18 @@ defmodule KeyfleetWeb.ShellLive do
   defp press(event, params, socket) when event in @poll_events,
     do: PollsLive.handle_event(event, params, socket)
 
+  # The Treasury's refresh, once every 30 seconds for each person: by
+  # account when signed in, by visit when not.
+  defp press("refresh_treasury", _params, socket) do
+    who =
+      case current_account(socket.assigns.access_context) do
+        nil -> {:visit, socket.id}
+        account -> {:account, account.id}
+      end
+
+    {:noreply, ProposalsLive.refresh_treasury(socket, who)}
+  end
+
   # A press no page sends changes nothing.
   defp press(_event, _params, socket), do: {:noreply, socket}
 
@@ -386,6 +400,10 @@ defmodule KeyfleetWeb.ShellLive do
     account = current_account(socket.assigns.access_context)
     {:noreply, read_credits(socket, account)}
   end
+
+  # The Treasury's refresh may be pressed again, whatever the page shows now.
+  defp notice({:treasury_refresh_ready, rest}, socket),
+    do: {:noreply, ProposalsLive.refresh_ready(socket, rest)}
 
   # A page that couldn't be loaded shows nothing else that a notice could
   # change; the header's balance still follows.
@@ -554,6 +572,9 @@ defmodule KeyfleetWeb.ShellLive do
   defp notice(:refresh_proposals = message, socket),
     do: ProposalsLive.handle_info(message, socket)
 
+  defp notice({:onchain_landed, fleet_id}, socket),
+    do: {:noreply, ProposalsLive.onchain_landed(socket, fleet_id)}
+
   # A reading every page shares has changed: the part of the page showing it
   # draws it again.
   defp notice({:shared_reading, key}, socket),
@@ -702,6 +723,8 @@ defmodule KeyfleetWeb.ShellLive do
             page={@proposals}
             actor={actor(@access_context)}
             lease={@session_lease}
+            reread={@treasury_reread}
+            resting?={@treasury_resting != nil}
           />
           <ProposalsLive.list
             :if={@route_spec.route_id == :proposals}
