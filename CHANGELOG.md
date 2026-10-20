@@ -3086,3 +3086,7 @@ The feed used to fold every Key bought in a row into one line, so a single purch
 
 - What: a fleet page's tabs now read Chat, Workspace, Treasury, Keys, Proposals.
 - Why: Sean asked for that order (13:48Z).
+
+## 2026-10-20 — Members are signed back in on every page
+
+A member whose sign-in here had lapsed was signed back in by itself only on a fleet's main page. Now any page they open (chat, workspace, proposals, the homepage) signs them back in without a press, as long as this browser still remembers their sign-in. First-time visitors still get the light page.

@@ -405,10 +405,24 @@ const privyConnectionsKey = "privy:connections"
  */
 export function privyRemembersVisitor(storage: Pick<Storage, "getItem"> | null): boolean {
   if (!storage) return false
+  if (privyHoldsSession(storage)) return true
   try {
-    if (privySessionKeys.some(key => storage.getItem(key) !== null)) return true
     const connections: unknown = JSON.parse(storage.getItem(privyConnectionsKey) ?? "[]")
     return Array.isArray(connections) && connections.length > 0
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Whether Privy still holds a sign-in of its own in this browser. A member
+ * whose sign-in here has lapsed is then signed back in on whatever page they
+ * open, without pressing anything.
+ */
+export function privyHoldsSession(storage: Pick<Storage, "getItem"> | null): boolean {
+  if (!storage) return false
+  try {
+    return privySessionKeys.some(key => storage.getItem(key) !== null)
   } catch {
     return false
   }
@@ -1137,10 +1151,14 @@ export function installAccountAuthLazyLoader(
     })
   } else if (documentRoot.querySelector("#account-control [data-account-target='profile']")) {
     reconcileSignedInStartup()
-  } else if (returnedFromOAuth(documentRoot.location?.search ?? "")) {
+  } else if (
+    returnedFromOAuth(documentRoot.location?.search ?? "") ||
+    privyHoldsSession(localStorageOrNull())
+  ) {
     // Privy finishes a redirect sign-in only once it is running on the page.
     // The visitor pressed Sign in on the page before, so it loads now even
-    // though Privy holds no session for them yet.
+    // though Privy holds no session for them yet. A member whose sign-in here
+    // lapsed while Privy still holds theirs is signed back in on any page.
     void loader.request("sync").catch(() => undefined)
   }
   return () => {

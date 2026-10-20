@@ -9,6 +9,7 @@ import {
   createSessionMutationCoordinator,
   consumeSignOutHandoff,
   installAccountAuthLazyLoader,
+  privyHoldsSession,
   privyRemembersVisitor,
   proveAnonymousSession,
   reloadDocumentOnce,
@@ -154,6 +155,31 @@ describe("lazy browser authentication", () => {
 
     await vi.waitFor(() => expect(request).toHaveBeenCalledWith("sync"))
     expect(startPrivyBridge).toHaveBeenCalledOnce()
+    stop()
+  })
+
+  // A member whose sign-in here lapsed while Privy kept its own is signed
+  // back in on whatever page they open, not only on a page with a wallet.
+  it("a signed-out page Privy holds a sign-in for starts the bridge at once", async () => {
+    const storage = memoryStorage()
+    storage.setItem("privy:refresh_token", '"r"')
+    vi.stubGlobal("window", {location: {origin: "https://regents.sh"}, localStorage: storage})
+    const request = vi.fn(async () => undefined)
+    const startPrivyBridge = vi.fn(async () => ({request}))
+    const stop = installAccountAuthLazyLoader(accountDocument().documentRoot, async () => ({startPrivyBridge}))
+
+    await vi.waitFor(() => expect(request).toHaveBeenCalledWith("sync"))
+    expect(startPrivyBridge).toHaveBeenCalledOnce()
+    stop()
+  })
+
+  it("a signed-out page Privy only remembers a wallet for waits for a press", async () => {
+    rememberedByPrivy()
+    const importer = vi.fn<() => Promise<PrivyBridgeModule>>()
+    const stop = installAccountAuthLazyLoader(accountDocument().documentRoot, importer)
+
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(importer).not.toHaveBeenCalled()
     stop()
   })
 
@@ -1595,6 +1621,14 @@ describe("whether Privy remembers this visitor", () => {
     expect(privyRemembersVisitor(storage({"privy:token": '"t"'}))).toBe(true)
     expect(privyRemembersVisitor(storage({"privy:refresh_token": '"r"'}))).toBe(true)
     expect(privyRemembersVisitor(storage({"privy:connections": '[{"address":"0x1111111111111111111111111111111111111111"}]'}))).toBe(true)
+  })
+
+  it("holds a sign-in only when it keeps a session, not a connected wallet alone", () => {
+    expect(privyHoldsSession(storage({"privy:token": '"t"'}))).toBe(true)
+    expect(privyHoldsSession(storage({"privy:refresh_token": '"r"'}))).toBe(true)
+    expect(privyHoldsSession(storage({"privy:connections": '[{"address":"0x1111111111111111111111111111111111111111"}]'}))).toBe(false)
+    expect(privyHoldsSession(storage({}))).toBe(false)
+    expect(privyHoldsSession(null)).toBe(false)
   })
 
   // An upgrade that moves these keys would quietly stop a returning visitor's
