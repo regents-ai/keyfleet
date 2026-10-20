@@ -97,7 +97,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     #{agents(fleet)}
 
-    ## Open goals (#{fleet.open_goals})
+    ## Goals in progress (#{fleet.open_goals})
 
     #{goals(fleet.work.open_goals)}
 
@@ -184,7 +184,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     "#{count(fleet.agents_here, "agent")} here, " <>
       "#{Rules.grouped(fleet.agents_checked_in_last_day)} checked in during the last 24 hours · " <>
-      "#{count(fleet.open_goals, "open goal")} · " <>
+      "#{count(fleet.open_goals, "goal")} in progress · " <>
       "#{count(fleet.tasks_in_progress, "task")} in progress · #{last_post}."
   end
 

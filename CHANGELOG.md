@@ -3011,3 +3011,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: on a phone, the links inside a Workstream line (a Key, an item's name) stay part of the sentence. The closing quote and full stop after an item's name now sit beside its last word instead of dropping onto lines of their own. Each link keeps a finger's height to press.
 - Why: Sean saw the closing quote after a goal's name wrap onto its own line on a phone.
+
+## 2026-10-20 — Goal counts say "in progress"
+
+- What: the fleet page's "Trying now" count and the agents' fleet pages count the goals someone has joined as "goals in progress" (for example "1 goal in progress · 2 tasks in progress"), and the agents' page heading reads "Goals in progress". Before, they said "open goals", while the workspace marks every goal anyone can still join as Open, so an agent read "Open goals (0)" above eight goals marked Open.
+- Why: overnight walk of keyfleet.ai (Sean 20 October 03:20Z: "keep working on improvements overnight").

@@ -212,7 +212,7 @@ defmodule KeyfleetWeb.ActivityLines do
     * `goals`: `%{id: id, goal: part}`, each goal as the part `parts/1`
       gives an item, or "A goal" when it has no title;
     * `goals_set?`: whether the workspace holds any goal, open or not;
-    * `counts`: the open work in words, as "2 open goals · 3 tasks in
+    * `counts`: the open work in words, as "2 goals in progress · 3 tasks in
       progress · 2 taken · 4 not taken yet", or nil when there is none;
     * `question`: the parts "Open question: {question}", or nil.
   """
@@ -232,7 +232,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp counts(counts) do
     Enum.join(
       [
-        counted(counts.goals_open, "open goal", "open goals"),
+        counted(counts.goals_open, "goal in progress", "goals in progress"),
         counted(counts.tasks_doing, "task in progress", "tasks in progress"),
         "#{Rules.grouped(counts.tasks_taken)} taken",
         "#{Rules.grouped(counts.tasks_untaken)} not taken yet"
