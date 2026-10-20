@@ -195,8 +195,19 @@ defmodule KeyfleetWeb.ProposalsLive do
     <article id="proposal-page" class="proposals-page">
       <.detail_heading page={@page} />
       <section id="proposal-missing" class="proposals-panel">
-        <h2>There is no proposal {@page.number} in this fleet yet.</h2>
-        <.link patch={ProposalsPage.list_path(@page.fleet_id)}>See every proposal</.link>
+        <Regent.Primitives.empty_state
+          class="kf-empty"
+          title={"There is no proposal #{@page.number} in this fleet yet."}
+        >
+          <:action>
+            <.link
+              class="rg-button rg-button--secondary"
+              patch={ProposalsPage.list_path(@page.fleet_id)}
+            >
+              <span class="rg-button__label">See every proposal</span>
+            </.link>
+          </:action>
+        </Regent.Primitives.empty_state>
       </section>
     </article>
     """

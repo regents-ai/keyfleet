@@ -3054,3 +3054,7 @@ On a phone, a line in a fleet's feed no longer breaks "Proposal 1" across two li
 ## 2026-10-20 — The "page not found" page matches the rest of the site
 
 A missing page or a server fault now shows the same calm message page as the template: a heading, a line on what to do next, a button home (and Try again when it was our fault) and a row of links, in the visitor's light or dark theme.
+
+## 2026-10-20 — A proposal that doesn't exist shows a proper message
+
+Opening a proposal number a fleet doesn't have yet now shows the same message box as the site's other empty states, with a button back to every proposal.
