@@ -70,12 +70,7 @@ defmodule Keyfleet.WorkspaceFixtures do
 
       sys = %{
         "scope" => Keyword.get(opts, :scope, "fleet"),
-        "created_by" => %{
-          "key" => %{"chain_id" => 1, "contract" => @contract, "token_id" => by(opts)},
-          "ownership_epoch" => 3,
-          "kind" => "agent",
-          "wallet" => @wallet
-        },
+        "created_by" => member(opts),
         "archived" => false
       }
 
@@ -126,19 +121,103 @@ defmodule Keyfleet.WorkspaceFixtures do
   def join(fleet_id, id, opts \\ []) do
     append(fleet_id, fn seq ->
       [object] = Graph.read_objects!(fleet_id, [id], actor: @system)
-
-      member = %{
-        "key" => %{"chain_id" => 1, "contract" => @contract, "token_id" => by(opts)},
-        "ownership_epoch" => 3,
-        "kind" => "agent",
-        "wallet" => @wallet
-      }
-
-      sys = Map.put(object.sys, "joined", Map.get(object.sys, "joined", []) ++ [member])
+      sys = Map.put(object.sys, "joined", Map.get(object.sys, "joined", []) ++ [member(opts)])
       project(fleet_id, seq, object, object.data, sys)
       payload = patch_payload(seq, object, %{"sys" => object.sys}, %{"sys" => sys})
       {id, "patch.applied", principal(opts), payload}
     end)
+  end
+
+  @doc """
+  Submits a task for review as a member's submit does: the task is done and
+  the key `:by`'s, with `result_ref` as its result.
+  """
+  def submit(fleet_id, id, result_ref, opts \\ []) do
+    append(fleet_id, fn seq ->
+      [object] = Graph.read_objects!(fleet_id, [id], actor: @system)
+      submitted = Map.merge(member(opts), %{"version" => object.version + 1, "evidence" => []})
+
+      set =
+        %{"progress" => "done", "assignee_key" => by(opts), "result_ref" => result_ref}
+        |> Enum.reject(fn {field, value} -> object.data[field] == value end)
+        |> Map.new()
+
+      data = Map.merge(object.data, set)
+      sys = Map.put(object.sys, "submitted", submitted)
+      project(fleet_id, seq, object, data, sys)
+
+      payload =
+        patch_payload(
+          seq,
+          object,
+          Map.put(object.data, "sys", object.sys),
+          Map.put(set, "sys", sys)
+        )
+
+      {id, "patch.applied", principal(opts), payload}
+    end)
+  end
+
+  @doc """
+  Reviews a submitted task's current version as a member's review does,
+  "accept" or "dispute", and answers the review's id. The review is added,
+  then linked to the task.
+  """
+  def review(fleet_id, task, decision, opts \\ []) do
+    [object] = Graph.read_objects!(fleet_id, [task], actor: @system)
+
+    receipt = %{
+      "task" => task,
+      "task_version" => object.version,
+      "submitted_by" => Map.drop(object.sys["submitted"], ["version", "evidence"]),
+      "evidence" => []
+    }
+
+    data = %{
+      "decision" => decision,
+      "rationale" => Keyword.get(opts, :rationale, "Checked the result."),
+      "conflicts_of_interest" => "none"
+    }
+
+    id =
+      append(fleet_id, fn seq ->
+        id = "review##{seq}"
+
+        sys = %{
+          "scope" => "fleet",
+          "created_by" => member(opts),
+          "archived" => false,
+          "review" => receipt
+        }
+
+        Graph.project_objects!(
+          [
+            %{
+              fleet_id: fleet_id,
+              id: id,
+              type: "review",
+              data: data,
+              sys: sys,
+              version: 1,
+              changed_seq: seq,
+              changed_at: timestamp(seq)
+            }
+          ],
+          actor: @system
+        )
+
+        object = %{
+          "id" => id,
+          "type" => "review",
+          "data" => Map.put(data, "sys", sys),
+          "version" => 1
+        }
+
+        {id, "object.created", principal(opts), %{"object" => object, "id" => id}}
+      end)
+
+    link(fleet_id, id, task, "reviews", opts)
+    id
   end
 
   @doc "Links two objects and answers the link's id."
@@ -280,6 +359,15 @@ defmodule Keyfleet.WorkspaceFixtures do
   end
 
   defp by(opts), do: Keyword.get(opts, :by, 17)
+
+  defp member(opts) do
+    %{
+      "key" => %{"chain_id" => 1, "contract" => @contract, "token_id" => by(opts)},
+      "ownership_epoch" => 3,
+      "kind" => "agent",
+      "wallet" => @wallet
+    }
+  end
 
   defp principal(opts), do: "member:8453:#{@contract}:#{by(opts)}@3/agent:#{@wallet}"
 end

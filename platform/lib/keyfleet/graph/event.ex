@@ -105,10 +105,16 @@ defmodule Keyfleet.Graph.Event do
 
     # The fleet's latest changes, newest first, for its workspace page. The
     # record each write leaves of itself is left out: the changes it made are
-    # listed on their own.
+    # listed on their own. So is a review's link to its task, which the
+    # review's own creation already tells.
     read :activity do
       argument :fleet_id, :string, allow_nil?: false
-      filter expr(fleet_id == ^arg(:fleet_id) and type != "keyfleet.command")
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and type != "keyfleet.command" and
+                 not (type == "relation.created" and
+                        fragment("(? #>> '{relation,type}') = 'reviews'", payload))
+             )
 
       prepare fn query, _context ->
         query
@@ -136,7 +142,8 @@ defmodule Keyfleet.Graph.Event do
     end
 
     # The latest disagreement (`:contradiction`, a `contradicts` link) or the
-    # latest finished work (`:completion`, a goal achieved or a task done)
+    # latest finished work (`:completion`, a goal achieved or a review that
+    # accepts a task)
     # among the fleet's 200 latest notable changes, or none.
     read :latest_mark do
       argument :fleet_id, :string, allow_nil?: false
@@ -167,7 +174,9 @@ defmodule Keyfleet.Graph.Event do
     # Every change to one object up to `through_seq`, newest first, one more
     # than a page so the reader knows whether more come before: its creation,
     # its edits and archiving, and the links made to or from it and removed
-    # again. Each kind of change is looked up on its own index and cut to that
+    # again. A task's reviews are told by their links to it; a review's own
+    # link to its task is left out of the review's history, which its
+    # creation already tells. Each kind of change is looked up on its own index and cut to that
     # many before they are merged, so a page reads only the object's own rows:
     # a removed link is found from each link the object ever had, one lookup
     # apiece, since a link is removed at most once.
@@ -194,7 +203,7 @@ defmodule Keyfleet.Graph.Event do
                       ORDER BY e.seq DESC LIMIT ?)
                      UNION ALL
                      (SELECT e.seq FROM keyfleet_app.graph_events AS e
-                      WHERE e.fleet_id = ? AND (e.payload ->> 'source') = ? AND e.type = 'relation.created' AND e.seq <= ?
+                      WHERE e.fleet_id = ? AND (e.payload ->> 'source') = ? AND e.type = 'relation.created' AND (e.payload #>> '{relation,type}') <> 'reviews' AND e.seq <= ?
                       ORDER BY e.seq DESC LIMIT ?)
                      UNION ALL
                      (SELECT d.seq
@@ -284,11 +293,14 @@ defmodule Keyfleet.Graph.Event do
   calculations do
     # What a line about the event needs from it, read in the database so a
     # page of lines never loads the text the event carries:
-    #   object.created   object, object_type
+    #   object.created   object, object_type, and for a review its
+    #                    decision and the task it reviews
     #   patch.applied    object, fields (the names changed), archived, joins
-    #                    (members who joined the goal, less those who left)
+    #                    (members who joined the goal, less those who left),
+    #                    submitted (the patch submitted a task for review),
     #                    and values: {old, new} of the few short fields shown
-    #   relation.created relation_type, source, target
+    #   relation.created relation_type, source, target, and for a review's
+    #                    link to its task the review's decision
     #   relation.removed the same, from the event that made the link
     #   keyfleet.attention kind, object
     # Any other event answers an empty map.
@@ -298,7 +310,7 @@ defmodule Keyfleet.Graph.Event do
                 fragment(
                   """
                   CASE ?
-                  WHEN 'object.created' THEN jsonb_build_object('object', ? #>> '{object,id}', 'object_type', ? #>> '{object,type}')
+                  WHEN 'object.created' THEN jsonb_strip_nulls(jsonb_build_object('object', ? #>> '{object,id}', 'object_type', ? #>> '{object,type}', 'decision', ? #>> '{object,data,decision}', 'task', ? #>> '{object,data,sys,review,task}'))
                   WHEN 'patch.applied' THEN jsonb_build_object(
                     'object', (? ->> 'target'),
                     'fields', CASE WHEN jsonb_typeof(? -> 'diff') = 'object'
@@ -306,12 +318,17 @@ defmodule Keyfleet.Graph.Event do
                       ELSE '[]'::jsonb END,
                     'archived', COALESCE((? #> '{diff,sys,new,archived}') = 'true'::jsonb, false),
                     'joins', jsonb_array_length(COALESCE(? #> '{diff,sys,new,joined}', '[]'::jsonb)) - jsonb_array_length(COALESCE(? #> '{diff,sys,old,joined}', '[]'::jsonb)),
+                    'submitted', (? #> '{diff,sys,new,submitted,version}') IS NOT NULL AND (? #> '{diff,sys,new,submitted,version}') IS DISTINCT FROM (? #> '{diff,sys,old,submitted,version}'),
                     'values', jsonb_strip_nulls(jsonb_build_object(
                       'status', ? #> '{diff,status}',
                       'progress', ? #> '{diff,progress}',
                       'confidence', ? #> '{diff,confidence}',
                       'assignee_key', ? #> '{diff,assignee_key}')))
-                  WHEN 'relation.created' THEN jsonb_build_object('relation_type', ? #>> '{relation,type}', 'source', (? ->> 'source'), 'target', (? ->> 'target'))
+                  WHEN 'relation.created' THEN jsonb_strip_nulls(jsonb_build_object('relation_type', ? #>> '{relation,type}', 'source', (? ->> 'source'), 'target', (? ->> 'target'),
+                    'decision', CASE WHEN (? #>> '{relation,type}') = 'reviews' THEN
+                      (SELECT o.payload #>> '{object,data,decision}' FROM keyfleet_app.graph_events AS o
+                       WHERE o.fleet_id = ? AND (o.payload ->> 'id') = (? ->> 'source') AND o.type = 'object.created'
+                       ORDER BY o.seq LIMIT 1) END))
                   WHEN 'relation.removed' THEN
                     (SELECT jsonb_build_object('relation_type', r.payload #>> '{relation,type}', 'source', (r.payload ->> 'source'), 'target', (r.payload ->> 'target'))
                      FROM keyfleet_app.graph_events AS r
@@ -336,6 +353,14 @@ defmodule Keyfleet.Graph.Event do
                   payload,
                   payload,
                   payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  payload,
+                  fleet_id,
                   payload,
                   fleet_id,
                   payload,
@@ -373,14 +398,18 @@ defmodule Keyfleet.Graph.Event do
   defp mark(query, :completion) do
     Ash.Query.filter(
       query,
-      type == "patch.applied" and
-        fragment(
-          "((split_part(? ->> 'target', '#', 1) = 'goal' AND (? #>> '{diff,status,new}') = 'achieved') OR (split_part(? ->> 'target', '#', 1) = 'task' AND (? #>> '{diff,progress,new}') = 'done'))",
-          payload,
-          payload,
-          payload,
-          payload
-        )
+      (type == "patch.applied" and
+         fragment(
+           "split_part(? ->> 'target', '#', 1) = 'goal' AND (? #>> '{diff,status,new}') = 'achieved'",
+           payload,
+           payload
+         )) or
+        (type == "object.created" and
+           fragment(
+             "(? #>> '{object,type}') = 'review' AND (? #>> '{object,data,decision}') = 'accept'",
+             payload,
+             payload
+           ))
     )
   end
 

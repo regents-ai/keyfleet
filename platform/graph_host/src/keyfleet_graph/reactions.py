@@ -4,9 +4,9 @@ A reaction only asks members to look at something. It emits
 `keyfleet.attention` events and never changes an object or a link:
 
 - `task_unblocked`: a task no longer waits on anything, because the last of
-  its unfinished `depends_on` targets was marked done, archived or unlinked;
+  its unfinished `depends_on` targets was submitted, archived or unlinked;
 - `needs_review`: new evidence supports or contradicts an object, a task
-  produces something new, or a task gets a result reference.
+  produces something new, or a task is submitted.
 
 A target is finished once it is archived, or when it is a task marked done;
 other types have no finished state of their own. A task waits while it is
@@ -101,18 +101,11 @@ class Reactions:
         self._work = 0
         self.attention: list[dict[str, Any]] = []
 
-    def created(self, obj, cause: str) -> None:
-        if obj.type == "task" and obj.data.get("result_ref") is not None:
-            self._ask("needs_review", obj.id, cause)
-
-    def patched(self, obj, updates: dict[str, Any], cause: str) -> None:
-        """`updates` holds only the fields the patch changed."""
-        if obj.type != "task":
-            return
-        if updates.get("result_ref") is not None:
-            self._ask("needs_review", obj.id, cause)
-        if updates.get("progress") == "done":
-            self._dependents_of(obj.id, cause)
+    def submitted(self, task, was_done: bool, cause: str) -> None:
+        """`was_done` says the task was already done, so its dependents were already told."""
+        self._ask("needs_review", task.id, cause)
+        if not was_done:
+            self._dependents_of(task.id, cause)
 
     def archived(self, obj, cause: str) -> None:
         # Archiving leaves the rest of the object as it was, so a task that was
