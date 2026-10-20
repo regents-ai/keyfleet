@@ -1,3 +1,5 @@
+import {readdirSync, readFileSync} from "node:fs"
+
 import {afterEach, describe, expect, it, vi} from "vitest"
 
 import {
@@ -7,6 +9,7 @@ import {
   createSessionMutationCoordinator,
   consumeSignOutHandoff,
   installAccountAuthLazyLoader,
+  privyRemembersVisitor,
   proveAnonymousSession,
   reloadDocumentOnce,
   reportSignInFailure,
@@ -69,6 +72,13 @@ function memoryStorage(initial?: string) {
     setItem: vi.fn((key: string, value: string) => void values.set(key, value)),
     removeItem: vi.fn((key: string) => void values.delete(key)),
   }
+}
+
+// A browser Privy holds a connected wallet for.
+function rememberedByPrivy() {
+  const storage = memoryStorage()
+  storage.setItem("privy:connections", '[{"address":"0x1111111111111111111111111111111111111111"}]')
+  vi.stubGlobal("window", {location: {origin: "https://regents.sh"}, localStorage: storage})
 }
 
 function accountDocument({
@@ -702,6 +712,7 @@ describe("lazy browser authentication", () => {
   })
 
   it("synchronizes Privy's wallets when a wallet page mounts, without starting sign in", async () => {
+    rememberedByPrivy()
     const page = accountDocument()
     const handleRequest = vi.fn(async () => undefined)
     const startPrivyBridge = vi.fn(async () => ({request: handleRequest}))
@@ -717,7 +728,21 @@ describe("lazy browser authentication", () => {
     expect(page.status.hidden).toBe(true)
   })
 
+  it("leaves Privy unloaded when a visitor it has never seen opens a wallet page", async () => {
+    vi.stubGlobal("window", {location: {origin: "https://regents.sh"}, localStorage: memoryStorage()})
+    const page = accountDocument()
+    const importer = vi.fn(async () => ({startPrivyBridge: vi.fn(async () => ({request: async () => undefined}))}))
+
+    installAccountAuthLazyLoader(page.documentRoot, importer)
+    page.dispatch("ash:wallet-sync")
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(importer).not.toHaveBeenCalled()
+    expect(page.status.hidden).toBe(true)
+  })
+
   it("keeps a wallet page quiet when its mount synchronization cannot start", async () => {
+    rememberedByPrivy()
     const page = accountDocument()
     const failed = vi.fn()
     page.documentRoot.addEventListener("ash:wallet-connect-failed", failed)
@@ -1526,5 +1551,35 @@ describe("lazy browser authentication", () => {
     await signOut
     expect(request).not.toHaveBeenCalled()
     expect(finishSignOutOnly).toHaveBeenCalledOnce()
+  })
+})
+
+// A wallet page loads Privy as it opens only for a visitor Privy could already
+// name a wallet for; everyone else loads it with their first Sign in or press.
+describe("whether Privy remembers this visitor", () => {
+  const storage = (items: Record<string, string>) => ({getItem: (key: string) => items[key] ?? null})
+
+  it("does not for a browser it has never been loaded in, or one it holds no wallet for", () => {
+    expect(privyRemembersVisitor(storage({}))).toBe(false)
+    expect(privyRemembersVisitor(storage({"privy:caid": '"a1b2"', "privy:connections": "[]"}))).toBe(false)
+    expect(privyRemembersVisitor(storage({"privy:connections": "not-json"}))).toBe(false)
+    expect(privyRemembersVisitor(null)).toBe(false)
+  })
+
+  it("does when it holds a session or a wallet connected through it", () => {
+    expect(privyRemembersVisitor(storage({"privy:token": '"t"'}))).toBe(true)
+    expect(privyRemembersVisitor(storage({"privy:refresh_token": '"r"'}))).toBe(true)
+    expect(privyRemembersVisitor(storage({"privy:connections": '[{"address":"0x1111111111111111111111111111111111111111"}]'}))).toBe(true)
+  })
+
+  // An upgrade that moves these keys would quietly stop a returning visitor's
+  // wallet from showing before they press anything.
+  it("reads the keys the installed Privy writes", () => {
+    const dist = new URL("../../node_modules/@privy-io/react-auth/dist/esm/", import.meta.url)
+    const source = readdirSync(dist).filter(name => name.endsWith(".mjs"))
+      .map(name => readFileSync(new URL(name, dist), "utf8")).join("\n")
+    for (const key of ["privy:token", "privy:refresh_token", "privy:connections"]) {
+      expect(source).toContain(`"${key}"`)
+    }
   })
 })

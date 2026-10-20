@@ -3058,3 +3058,7 @@ A missing page or a server fault now shows the same calm message page as the tem
 ## 2026-10-20 — A proposal that doesn't exist shows a proper message
 
 Opening a proposal number a fleet doesn't have yet now shows the same message box as the site's other empty states, with a button back to every proposal.
+
+## 2026-10-20 — Fleet pages open faster for first-time visitors
+
+A fleet page with a Buy or wallet panel no longer downloads sign-in for a visitor who has never signed in or connected a wallet here; it loads when they press Sign in or a wallet button. On Classic #1 that takes a first visit from about 2.5 MB to about 0.5 MB. Returning visitors and signed-in members see their wallet straight away, as before.

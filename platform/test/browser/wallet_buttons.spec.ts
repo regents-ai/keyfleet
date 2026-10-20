@@ -246,6 +246,46 @@ test("a press the wallet declines says so, and the next press still reaches the 
   expect(errors).toEqual([])
 })
 
+const bridgePattern = /\/assets\/js\/privy_bridge(?:-[a-f0-9]{32})?\.js\?(?:vsn=d&)?regent_retry=\d+$/
+
+// The Buy panel asks for the wallet Privy holds as the page opens. A visitor
+// Privy has never seen holds none, so their page leaves sign-in unloaded until
+// they press something.
+test("signed out, a visitor Privy has never seen opens the Buy panel without loading sign-in", async ({page}) => {
+  const bridgeRequests: string[] = []
+  page.on("request", request => {
+    if (bridgePattern.test(request.url())) bridgeRequests.push(request.url())
+  })
+  const errors = await openBuying(page, null)
+  await expect(page.locator("#buy-key-button")).toBeVisible()
+  await page.waitForLoadState("networkidle")
+
+  expect(bridgeRequests).toEqual([])
+  expect(errors).toEqual([])
+})
+
+// A visitor who connected a wallet through Privy before is asked for it as the
+// page opens, so its figures show without a press.
+test("signed out, a visitor Privy remembers has their wallet asked for as the Buy panel opens", async ({page}) => {
+  await page.addInitScript(address => {
+    localStorage.setItem("privy:connections", JSON.stringify([{address}]))
+  }, me)
+  await page.route(bridgePattern, route =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: `export async function startPrivyBridge() {
+        return {async request(request) { window.__bridgeCalls = [...(window.__bridgeCalls || []), request] }}
+      }`,
+    }),
+  )
+  const errors = await openBuying(page, null)
+
+  await expect
+    .poll(() => page.evaluate(() => (window as Window & {__bridgeCalls?: string[]}).__bridgeCalls ?? []))
+    .toEqual(["sync"])
+  expect(errors).toEqual([])
+})
+
 // Signed out, a press opens sign-in. Sign-in's own code, standing in for
 // Privy, notes what it is asked.
 test("signed out, a press opens sign-in and sends nothing, whatever wallet is open", async ({page}) => {

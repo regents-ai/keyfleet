@@ -387,6 +387,36 @@ export function retireRefusedSession(
 
 type SignOutHandoff = {version: 1; issuedAtMs: number}
 
+// Where Privy 3.49 keeps, in this browser, a session of its own and the wallets
+// connected through it (`@privy-io/react-auth`, pinned in package.json).
+const privySessionKeys = ["privy:token", "privy:refresh_token"]
+const privyConnectionsKey = "privy:connections"
+
+/**
+ * Whether Privy could name an active wallet here before anyone presses
+ * anything: it holds a session, or a wallet connected through it before. A
+ * visitor it has never seen has no active wallet to show, so the bridge waits
+ * for their first Sign in or wallet button instead of loading with the page.
+ */
+export function privyRemembersVisitor(storage: Pick<Storage, "getItem"> | null): boolean {
+  if (!storage) return false
+  try {
+    if (privySessionKeys.some(key => storage.getItem(key) !== null)) return true
+    const connections: unknown = JSON.parse(storage.getItem(privyConnectionsKey) ?? "[]")
+    return Array.isArray(connections) && connections.length > 0
+  } catch {
+    return false
+  }
+}
+
+function localStorageOrNull(): Pick<Storage, "getItem"> | null {
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
 function handoffStorageOrNull(
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem">,
 ) {
@@ -1076,7 +1106,11 @@ export function installAccountAuthLazyLoader(
   // A wallet page asks for the wallets Privy already holds as soon as it
   // mounts, so a returning customer sees their wallet without a click. Nothing
   // is shown when that cannot happen: the page still offers the connection.
-  const onWalletSync = () => void loader.request("sync").catch(() => undefined)
+  // A visitor Privy has never seen holds none, so their page never loads it.
+  const onWalletSync = () => {
+    if (!privyRemembersVisitor(localStorageOrNull())) return
+    void loader.request("sync").catch(() => undefined)
+  }
   const reconcileSignedInStartup = () => {
     clearStatus()
     void withinWindow(
