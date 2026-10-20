@@ -27,6 +27,11 @@ defmodule Keyfleet.Keys do
         args: [:fleet_id, :owner_wallets],
         not_found_error?: false
 
+      define :newest_key_change,
+        action: :newest_in_fleet,
+        args: [:fleet_id],
+        not_found_error?: false
+
       define :keys_in_fleet, action: :current_in_fleet, args: [:fleet_id]
       define :idle_keys_in_fleet, action: :idle_in_fleet, args: [:fleet_id]
       define :keys_held_in_fleet, action: :held_in_fleet, args: [:fleet_id, :owner_wallets]

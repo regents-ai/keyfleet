@@ -164,15 +164,18 @@ defmodule KeyfleetWeb.PublicDocuments do
   end
 
   # The homepage and the early-access page carry the site's name in their own title.
+  # The share picture is its fleet's on a fleet's pages (`KeyfleetWeb.ShareCard`).
   def metadata(path, title, description) do
     suffix = if path in ["/", "/early"], do: "", else: " · Keyfleet"
+    {image, image_alt} = KeyfleetWeb.ShareCard.image(path)
 
     %{
       title: title <> suffix,
       suffix: suffix,
       description: description,
       canonical: url(path),
-      image: url(KeyfleetWeb.Endpoint.static_path("/images/keyfleet-share.png")),
+      image: image,
+      image_alt: image_alt,
       markdown?: path in @documents or path in KeyfleetWeb.AgentGuides.paths(),
       site_type: @site_type
     }
