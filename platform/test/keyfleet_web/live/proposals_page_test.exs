@@ -259,6 +259,20 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              ]
     end
 
+    # The fleets' shared reading names a fleet with no record by its id alone;
+    # the Treasury says so, as the proposals pages do, instead of failing.
+    test "the Treasury of a fleet with no record says the fleet doesn't exist" do
+      html =
+        render_component(&KeyfleetWeb.TreasuryLive.page/1,
+          page: %{fleet_id: @fleet, fleet_name: nil},
+          actor: nil,
+          lease: nil
+        )
+
+      assert html =~ ~s(id="treasury-page")
+      assert html =~ "This fleet doesn’t exist."
+    end
+
     test "a proposal whose standing can't be read from the network says so", %{conn: conn} do
       ProposalHelpers.proposal!(@fleet, 1)
 

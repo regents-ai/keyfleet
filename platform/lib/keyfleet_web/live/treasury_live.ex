@@ -31,6 +31,9 @@ defmodule KeyfleetWeb.TreasuryLive do
     """
   end
 
+  def page(%{page: %{fleet_name: nil}} = assigns),
+    do: ~H|<ProposalsLive.missing_fleet id="treasury-page" />|
+
   def page(assigns) do
     ~H"""
     <article id="treasury-page" class="proposals-page">

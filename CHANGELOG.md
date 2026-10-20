@@ -3034,3 +3034,7 @@ On a narrow phone, the "i" at the end of the small print in a room and on the po
 
 - What: on a fleet's Member List, a holder whose Keys are all new now reads "Waiting to start" instead of "Idle". A new Key starts voting on its own 2 days after it is sold, so it has not lost a vote; "Idle" is kept for Keys whose 48 hours ran out, matching the Idle count on the Proposals page.
 - Why: overnight copy pass (Sean 20 October 03:20Z: "keep working on improvements overnight"). On Classic #1 every holder read "Idle" while the Proposals page counted 0 idle Keys, because all 16 Keys were still in their first 2 days.
+
+## 2026-10-20 — Fleet pages show which page is open
+
+On a fleet's pages, the tab for the page on show (Chat, Treasury, Proposals, Workspace or Keys) now carries its underline; before, the button's own fill hid it, so no tab looked chosen. The sidebar also marks the fleet on every one of its pages, not only its first.

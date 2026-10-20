@@ -116,8 +116,9 @@
   gap: 0.25rem;
 }
 
-/* The view on show is marked under its button. */
-.fleet-bar__nav [aria-current="page"] {
+/* The view on show is marked under its button, on the button's fill so the
+   fill does not cover it. */
+.fleet-bar__nav [aria-current="page"]::before {
   box-shadow: inset 0 -3px 0 var(--ash-accent);
 }
 

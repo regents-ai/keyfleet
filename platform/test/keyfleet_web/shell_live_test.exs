@@ -25,6 +25,16 @@ defmodule KeyfleetWeb.ShellLiveTest do
     refute has_element?(view, "#route-content .verified-connections")
   end
 
+  test "the sidebar marks a fleet on every one of its pages", %{conn: conn} do
+    Fleets.bootstrap_catalog!()
+    ChainHelpers.deploy!("fleet_tech_classic")
+    Rooms.bootstrap_rooms!(Fleets.catalog_ids())
+    {:ok, view, _html} = live(conn, "/classic/1/rooms/general")
+
+    assert has_element?(view, "#shell-sidebar a[aria-current=page]", "Classic #1")
+    refute has_element?(view, "#shell-sidebar a[aria-current=page]", "Regents Club")
+  end
+
   test "an anonymous socket rejects a forged verified connection request", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/account")
 

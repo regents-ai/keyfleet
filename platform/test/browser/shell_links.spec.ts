@@ -176,6 +176,20 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   await walk.settled()
 })
 
+// The tab of the page on show carries its mark on the tab's own fill, where
+// the fill cannot cover it; the other tabs carry none.
+test("a fleet's current tab is marked", async ({page}) => {
+  await page.goto(`${fleetPath}/proposals`)
+  const marks = await page.locator("#fleet-tabs a").evaluateAll(tabs =>
+    tabs.map(tab => [tab.id, getComputedStyle(tab, "::before").boxShadow]),
+  )
+
+  for (const [id, mark] of marks) {
+    if (id === "fleet-tab-proposals") expect(mark).toContain("inset")
+    else expect(mark).toBe("none")
+  }
+})
+
 // On a phone a Workstream line's links stay part of their sentence: the
 // closing quote and full stop after an item never wrap onto a line alone.
 test("on a phone, a Workstream item keeps its closing quote beside its name", async ({page}) => {

@@ -372,13 +372,20 @@ defmodule KeyfleetWeb.Components.Shell do
     """
   end
 
-  # A destination with tabs stays current on every one of its tabs.
+  # A destination with tabs stays current on every one of its tabs, and a fleet
+  # on every one of its pages.
   defp current?(target, route_spec),
     do:
       Enum.any?(
-        [route_spec.destination | Enum.map(route_spec.tabs, & &1.path)],
+        [
+          route_spec.destination,
+          fleet_path(route_spec.fleet_id) | Enum.map(route_spec.tabs, & &1.path)
+        ],
         &(&1 == target.path)
       )
+
+  defp fleet_path(nil), do: nil
+  defp fleet_path(fleet_id), do: Keyfleet.Fleets.path(fleet_id)
 
   # Signed out, the account page is named as the header's button names it.
   defp sidebar_label(%RouteTarget{route_id: :account}, %{kind: :sign_in, label: label}),
