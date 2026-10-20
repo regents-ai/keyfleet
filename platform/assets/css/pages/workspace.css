@@ -385,11 +385,17 @@
   .workspace-facts dd > a,
   .workspace-fields dd > a,
   .workspace-list li > a,
-  .workspace-lines > li > a,
-  .workspace-lines > li > p:first-child > a {
+  .workspace-lines > li > a {
     display: inline-flex;
     align-items: center;
     min-height: 2.75rem;
+  }
+
+  /* A link inside a Workstream line stays part of its sentence, so the quote
+     or full stop after it wraps with its last word; its padding still makes
+     it a finger's height to press. */
+  .workspace-lines > li > p:first-child > a {
+    padding-block: 0.625rem;
   }
 
   /* Sign in, the code's Copy buttons and Get a git password span their

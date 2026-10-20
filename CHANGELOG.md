@@ -3006,3 +3006,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: token amounts on the Treasury, proposals and Key pages are cut to four decimal places (below one token, to its first four digits), so REGENT no longer shows eighteen. On a phone the "Join this Keyfleet by purchasing the next Key" button wraps instead of hiding its price. A fleet's "Trying now" says "No goals in progress." when its goals exist but nobody has joined one, rather than "No open goals." beside a workspace listing them as Open; the agents' fleet page says the same. "Balances as of …" reads as one sentence.
 - Why: overnight walk of keyfleet.ai on desktop and phone (Sean 20 October 03:20Z: "keep working on improvements overnight").
+
+## 2026-10-20 — Phone: Workstream lines read as sentences
+
+- What: on a phone, the links inside a Workstream line (a Key, an item's name) stay part of the sentence. The closing quote and full stop after an item's name now sit beside its last word instead of dropping onto lines of their own. Each link keeps a finger's height to press.
+- Why: Sean saw the closing quote after a goal's name wrap onto its own line on a phone.

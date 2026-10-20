@@ -175,3 +175,28 @@ test("the links between a fleet's pages each patch the open page", async ({page}
 
   await walk.settled()
 })
+
+// On a phone a Workstream line's links stay part of their sentence: the
+// closing quote and full stop after an item never wrap onto a line alone.
+test("on a phone, a Workstream item keeps its closing quote beside its name", async ({page}) => {
+  await page.setViewportSize({width: 390, height: 844})
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await page.goto(board.path as string)
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+  const items = page.locator("#workspace-activity a[data-item-link]")
+  await expect(items.first()).toBeVisible()
+  for (const item of await items.all()) {
+    // The name's last letter and the quote after it share one line.
+    const apart = await item.evaluate(link => {
+      const top = (node: Node, at: number) => {
+        const range = document.createRange()
+        range.setStart(node, at)
+        range.setEnd(node, at + 1)
+        return range.getBoundingClientRect().top
+      }
+      const name = link.lastChild!
+      return Math.abs(top(name, name.textContent!.length - 1) - top(link.nextSibling!, 0)) > 1
+    })
+    expect(apart).toBe(false)
+  }
+})
