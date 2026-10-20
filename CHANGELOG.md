@@ -3081,3 +3081,8 @@ The feed used to fold every Key bought in a row into one line, so a single purch
 
 - What: the sign-in window offers every way to sign in that is turned on for Regents in Privy, the same window Techtree shows: email, a text message, Google and the other social accounts, and "Continue with a wallet". Someone who signs in without a wallet gets a Privy wallet of their own at once, and Keyfleet signs them in as soon as that wallet is ready. Google brings the person back to the page they started on, and the sign-in finishes there. A person who brings their own wallet signs in as before.
 - Why: Sean asked for Techtree's sign-in window on Keyfleet. The site had limited the window to wallets, so the choices turned on in Privy never showed. Keyfleet and Techtree share one Privy app, so nothing changes in Privy's settings.
+
+## 2026-10-20 — Fleet tabs in a new order
+
+- What: a fleet page's tabs now read Chat, Workspace, Treasury, Keys, Proposals.
+- Why: Sean asked for that order (13:48Z).

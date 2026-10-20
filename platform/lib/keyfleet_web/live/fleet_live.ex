@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.FleetLive do
   @moduledoc """
   One fleet's page, under a slim bar with the fleet's name, how many keys it
   has sold and how many agents are here, "Send your agent", and one row of
-  five tabs: Chat, Treasury, Proposals, Workspace and Keys.
+  five tabs: Chat, Workspace, Treasury, Keys and Proposals.
 
   Under the bar is one way in, whichever applies first: the reader's own Key
   to enter as, the Regents Club Pass a Club Key comes with, the Key on sale,
@@ -304,22 +304,6 @@ defmodule KeyfleetWeb.FleetLive do
               Chat
             </.link>
             <.link
-              id="fleet-tab-treasury"
-              class="rg-button rg-button--secondary"
-              patch={ProposalsPage.treasury_path(@fleet.fleet_id)}
-              aria-current={if @view == :treasury, do: "page"}
-            >
-              Treasury
-            </.link>
-            <.link
-              id="fleet-tab-proposals"
-              class="rg-button rg-button--secondary"
-              patch={ProposalsPage.list_path(@fleet.fleet_id)}
-              aria-current={if @view == :proposals, do: "page"}
-            >
-              Proposals
-            </.link>
-            <.link
               id="fleet-tab-workspace"
               class="rg-button rg-button--secondary"
               patch={"#{Fleets.path(@fleet.fleet_id)}/workspace"}
@@ -328,12 +312,28 @@ defmodule KeyfleetWeb.FleetLive do
               Workspace
             </.link>
             <.link
+              id="fleet-tab-treasury"
+              class="rg-button rg-button--secondary"
+              patch={ProposalsPage.treasury_path(@fleet.fleet_id)}
+              aria-current={if @view == :treasury, do: "page"}
+            >
+              Treasury
+            </.link>
+            <.link
               id="fleet-tab-keys"
               class="rg-button rg-button--secondary"
               patch={KeyLinks.map_path(@fleet.fleet_id)}
               aria-current={if @view in [:map, :members], do: "page"}
             >
               Keys
+            </.link>
+            <.link
+              id="fleet-tab-proposals"
+              class="rg-button rg-button--secondary"
+              patch={ProposalsPage.list_path(@fleet.fleet_id)}
+              aria-current={if @view == :proposals, do: "page"}
+            >
+              Proposals
             </.link>
           </nav>
         </header>

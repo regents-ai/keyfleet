@@ -222,7 +222,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     {:ok, view, _html} = live(conn, @path)
 
-    assert text(view, ".fleet-bar__nav") == "Chat Treasury Proposals Workspace Keys"
+    assert text(view, ".fleet-bar__nav") == "Chat Workspace Treasury Keys Proposals"
     assert has_element?(view, ~s(#fleet-tab-hall[href="#{@path}"][aria-current="page"]), "Chat")
     assert has_element?(view, ~s(#fleet-tab-workspace[href="#{@path}/workspace"]), "Workspace")
 
