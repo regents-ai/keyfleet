@@ -3115,3 +3115,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the Buy Key window has an Unlimited box right above Approve USDC, unticked. Ticked, Approve allows the fleet's sale to take any amount of USDC, so later Keys need no new approval; unticked, it approves the Key's price with 5% room, as before. The line "Small amount extra is approved to buy the next Key…" is gone; the room is still there.
 - Why: Sean 20 October 16:15Z: "add a checkbox above this that says "<checkbox> Unlimited' 2. remove the 'Small amount extra is approved…' line".
+
+## 2026-10-20 — No box around the orange buttons after a window closes
+
+- What: closing the Buy Key window with the mouse (the X or Close) puts focus back on the button that opened it without drawing a ring. Closing it with a key (Escape) still shows where focus is, and on the orange cut-corner buttons that ring now follows their cut corners instead of a square box. This holds for Purchase Key in the header, Buy Next Key and Buy Key on the homepage, and every other window.
+- Why: Sean 20 October 16:16Z: "If I open the buy modal, and press escape or X, the button has this black border, its wrong".

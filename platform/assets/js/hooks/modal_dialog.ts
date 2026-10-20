@@ -16,14 +16,25 @@ const focusable =
 // starts afresh.
 let pressed: string | undefined
 
+// Whether the last press was a pointer's, not a key's: focus handed back
+// after a pointer closes a dialog shows no ring, and after a key it does.
+let pointerPress = false
+
 export function watchPresses(doc: Document) {
   doc.addEventListener("click", notePress, true)
-  doc.addEventListener("keydown", forgetPress, true)
+  doc.addEventListener("keydown", noteKey, true)
   doc.defaultView?.addEventListener("popstate", forgetPress)
 }
 
+// A click a key made, Enter or Space on a button, counts no presses.
 function notePress(event: MouseEvent) {
   pressed = (event.target as Element | null)?.closest?.("a[id], button[id], [tabindex][id]")?.id
+  pointerPress = event.detail > 0
+}
+
+function noteKey() {
+  forgetPress()
+  pointerPress = false
 }
 
 function forgetPress() {
@@ -53,7 +64,8 @@ export function stepTab(event: KeyboardEvent, controls: HTMLElement[], active: E
 // something else. Closing it asks the page to take it away: by going back when
 // `data-close` is "back", or else by sending `data-close-event` to whichever
 // part of the page drew it. Once it has
-// gone, focus returns to whatever opened it. Signing in from inside it
+// gone, focus returns to whatever opened it, with its ring only when a key
+// closed it. Signing in from inside it
 // lets the sign-in window above it be used, and a press back inside makes it
 // modal again.
 export const ModalDialog: Hook = {
@@ -97,7 +109,7 @@ export const ModalDialog: Hook = {
   },
 
   destroyed(this: ModalDialogHook) {
-    if (this.opener) document.getElementById(this.opener)?.focus()
+    if (this.opener) document.getElementById(this.opener)?.focus({focusVisible: !pointerPress})
   },
 }
 

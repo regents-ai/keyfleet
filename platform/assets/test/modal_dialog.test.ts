@@ -90,13 +90,35 @@ it("asks the page to close it in place when the visitor arrived on it", () => {
   expect(back).not.toHaveBeenCalled()
 })
 
-it("hands focus back to whatever opened it once it has gone", () => {
+it("hands focus back to whatever opened it once it has gone, with its ring after a key", () => {
   const opener = control("fleet-key-link-12")
   const {hook} = mountDialog({close: "back", closeEvent: "close_key"}, {active: opener})
 
+  presses.get("keydown")!()
   ModalDialog.destroyed!.call(hook)
 
-  expect(opener.focus).toHaveBeenCalledOnce()
+  expect(opener.focus).toHaveBeenCalledExactlyOnceWith({focusVisible: true})
+})
+
+it("hands focus back with no ring when a pointer closed it", () => {
+  const opener = control("home-buy-next-key")
+  const {hook} = mountDialog({close: "replace", closeEvent: "close_buy_key"}, {active: opener})
+
+  press("home-buy-key-close")
+  ModalDialog.destroyed!.call(hook)
+
+  expect(opener.focus).toHaveBeenCalledExactlyOnceWith({focusVisible: false})
+})
+
+it("counts a click a key made, Enter on the close button, as the key's", () => {
+  const opener = control("home-buy-next-key")
+  const {hook} = mountDialog({close: "replace", closeEvent: "close_buy_key"}, {active: opener})
+
+  presses.get("keydown")!()
+  presses.get("click")!({target: {closest: () => ({id: "home-buy-key-close"})}, detail: 0})
+  ModalDialog.destroyed!.call(hook)
+
+  expect(opener.focus).toHaveBeenCalledExactlyOnceWith({focusVisible: true})
 })
 
 it("lets the sign-in window above it be used, and is modal again on a press back inside", () => {
