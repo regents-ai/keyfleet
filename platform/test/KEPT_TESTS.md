@@ -116,3 +116,15 @@ each proves.
 | PP-LIST: following next_before lists every proposal once, newest first | `Keyfleet.ProposalPagingPropertyTest` | Whatever numbers a fleet's proposals have, paging the list visits each once. |
 | PP-VOTES: following votes_after reads every vote once, in the order it was recorded | `Keyfleet.ProposalPagingPropertyTest` | However many votes a proposal has, and however few a page holds, paging reads each once. |
 | RF-HINT: any body sent to a signed route here gets a documented answer, and a refusal a hint | `KeyfleetWeb.SignedAgentContractTest` | On the 39 signed routes that module drives, no body an agent sends gets an answer the contract doesn't describe, or a refusal without a hint. |
+
+## The Account page
+
+Added on 20 October 2026 for Sean's ask that Keyfleet's Account page manage an
+account as fully as regents.sh does (Credits left for later, his word at 18:57Z).
+
+| Test | Module | Protects |
+| --- | --- | --- |
+| the Account page looks at, renames and unpairs a paired agent | `KeyfleetWeb.ShellLiveTest` | A person manages their agents on Keyfleet: a refused name changes nothing, a new name shows at once, and an unpaired agent leaves the list and the account. |
+| Account says whether World ID has verified the person | `KeyfleetWeb.ShellLiveTest` | The World ID row follows the account's own record. |
+| Account shows the wallet's ENS name, or why there is none | `KeyfleetWeb.ShellLiveTest` | An ENS name shows with its copy icon, a wallet with no name says so, and a name read for a wallet the account no longer uses never shows. |
+| opening Account asks Ethereum again after a failed lookup | `KeyfleetWeb.ShellLiveTest` | "Refresh to try again" is true: opening the page asks again and says it is checking. |

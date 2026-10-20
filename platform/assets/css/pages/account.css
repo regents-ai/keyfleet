@@ -394,6 +394,7 @@ div.verified-connections__notice p {
    product layer, so they win over the shared account sections' own padding
    and open ground. */
 .account-grid > .rg-account,
+.account-agents > .rg-account,
 .account-page > .rg-account--signed-out {
   padding: var(--rg-panel-padding);
   border: 1px solid var(--color-border);
@@ -424,12 +425,10 @@ div.verified-connections__notice p {
     row-gap: 0;
   }
 
-  /* Each Key, each fleet's name above its Keys, the link under the agents
-     and under Credits, and each connected account are a full finger's
-     height. */
+  /* Each Key, each fleet's name above its Keys, the link under Credits and
+     each connected account are a full finger's height. */
   .account-keys__fleet h3 a,
   .account-keys__list a,
-  #account-agents .rg-account__footer > a,
   #account-credits > a,
   .verified-connections__list a {
     display: inline-flex;
@@ -437,7 +436,6 @@ div.verified-connections__notice p {
     min-height: 2.75rem;
   }
 
-  #account-agents .rg-account__footer > a,
   #account-credits > a,
   .verified-connections__list a {
     justify-self: start;

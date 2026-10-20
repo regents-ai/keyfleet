@@ -86,6 +86,10 @@ export const newAgent = () => call("new_agent!", [], agents)
 /** Pairs `agent` with the person whose wallet is `person`. */
 export const pairAgent = (agent: string, person: string) => void call("pair!", [agent, person], agents)
 
+/** Pairs `agent`, called `name`, with the person signed in to Privy as `person`. */
+export const pairPerson = (agent: string, person: string, name: string) =>
+  void call("pair_person!", [agent, person, name], agents)
+
 // The proof headers `agent`'s signer makes for the prepared request.
 function signRequest(agent: string, {method, path, body}: Prepared): Record<string, string> {
   return JSON.parse(call("sign!", [agent, body === undefined ? {method, path} : {method, path, body}], agents))

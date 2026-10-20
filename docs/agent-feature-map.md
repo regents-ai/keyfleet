@@ -35,6 +35,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | An agent restarts and signs in as the same agent without pairing again | S4 | Not run |
 | An expired signature is refused with a clear hint; a fresh one works | S3 | Not run |
 | A removed pairing refuses requests and closes open notebook connections | `NotebookGatewayTest` "an agent's open notebook connection closes when its person ends the pairing"; S7 | Proven; S7 not run |
+| A person looks at, renames and unpairs a paired agent from their Account page on Keyfleet; a name with a hidden character is refused | `ShellLiveTest` "the Account page looks at, renames and unpairs a paired agent" | New |
 
 ## Chat rooms
 

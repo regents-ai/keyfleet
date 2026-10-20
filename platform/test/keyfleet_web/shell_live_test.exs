@@ -1,5 +1,6 @@
 defmodule KeyfleetWeb.ShellLiveTest do
   use KeyfleetWeb.ConnCase, async: false
+  use Oban.Testing, repo: Keyfleet.Repo, prefix: "keyfleet_app"
 
   alias Keyfleet.AccessContext.AccountControl
   alias Keyfleet.Accounts
@@ -536,6 +537,111 @@ defmodule KeyfleetWeb.ShellLiveTest do
            ]
   end
 
+  test "the Account page looks at, renames and unpairs a paired agent", %{conn: conn} do
+    account = register_account("agent-manage", "0x3434343434343434343434343434343434343434")
+
+    %{code: code} =
+      RegentAgents.issue_pairing_code!(
+        actor: %RegentAgents.Person{privy_user_id: "did:privy:agent-manage"}
+      )
+
+    RegentAgents.pair_agent!(code, "Astra", :hermes,
+      actor: %RegentAgents.Agent{wallet: "0x4545454545454545454545454545454545454545"}
+    )
+
+    {view, _html} = open_account(conn, account)
+
+    view |> element("#account-agents button", "See what it has done") |> render_click()
+    render_async(view)
+
+    assert has_element?(view, "#account-agent-dialog h2", "Astra")
+    assert has_element?(view, "#account-agent-dialog", "spent for you on Regent sites.")
+
+    view
+    |> form("#account-agent-dialog form.rg-account__name", %{"name" => "Sol​"})
+    |> render_submit()
+
+    assert has_element?(view, "#account-agent-dialog [role=alert]", "That name can’t be used.")
+    assert has_element?(view, "#account-agents li", "Astra")
+
+    view
+    |> form("#account-agent-dialog form.rg-account__name", %{"name" => "Sol"})
+    |> render_submit()
+
+    assert has_element?(
+             view,
+             "#account-agent-dialog [role=status]",
+             "Saved. This agent is now called Sol on every Regent site."
+           )
+
+    assert has_element?(view, "#account-agents li", "Sol")
+
+    view |> element("#account-agent-dialog button", "Unpair") |> render_click()
+
+    refute has_element?(view, "#account-agent-dialog")
+    refute has_element?(view, "#account-agents li")
+    assert has_element?(view, "#account-agents [role=status]", "Sol is unpaired.")
+
+    assert {:ok, []} =
+             RegentAgents.list_my_agents(
+               actor: %RegentAgents.Person{privy_user_id: "did:privy:agent-manage"}
+             )
+  end
+
+  test "Account says whether World ID has verified the person", %{conn: conn} do
+    account = register_account("world-id", "0x5656565656565656565656565656565656565656")
+
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, "#account-world-id dd", "Not verified")
+
+    Keyfleet.Repo.query!(
+      "UPDATE regent_names.platform_human_users SET world_verified_at = '2026-10-18 09:30:00' WHERE id = $1",
+      [account.id]
+    )
+
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, "#account-world-id dd", "Verified on 18 October 2026")
+  end
+
+  test "Account shows the wallet's ENS name, or why there is none", %{conn: conn} do
+    wallet = "0x6767676767676767676767676767676767676767"
+    account = register_account("ens-states", wallet)
+
+    ens_row!(account, wallet, nil, "done")
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, "#account-ens-name dd", "No primary name set for this wallet")
+
+    ens_row!(account, wallet, "crew.eth", "done")
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, "#account-ens .rg-address__label", "crew.eth")
+    assert has_element?(view, "#account-ens-copy[data-copy-text='#{wallet}']")
+
+    # A name read for a wallet the account no longer uses is never shown.
+    ens_row!(account, "0x" <> String.duplicate("8", 40), "old.eth", "done")
+    {view, _html} = open_account(conn, account)
+    refute render(view) =~ "old.eth"
+  end
+
+  test "opening Account asks Ethereum again after a failed lookup", %{conn: conn} do
+    wallet = "0x7878787878787878787878787878787878787878"
+    account = register_account("ens-retry", wallet)
+    ens_row!(account, wallet, nil, "failed")
+
+    rpc = Application.get_env(:keyfleet, :ethereum_read_rpc_url)
+    Application.put_env(:keyfleet, :ethereum_read_rpc_url, "http://127.0.0.1:1")
+    on_exit(fn -> Application.put_env(:keyfleet, :ethereum_read_rpc_url, rpc) end)
+
+    {view, _html} = open_account(conn, account)
+
+    assert_enqueued(worker: Keyfleet.Accounts.EnsIdentity.Workers.LookUp)
+
+    assert has_element?(
+             view,
+             "#account-ens-name dd[role=status]",
+             "Checking Ethereum for a primary name…"
+           )
+  end
+
   defp topics(view), do: Keyfleet.PubSub |> Registry.keys(view.pid) |> Enum.sort()
 
   defp open_account(conn, account, path \\ "/account") do
@@ -568,6 +674,17 @@ defmodule KeyfleetWeb.ShellLiveTest do
         log_index: 0
       },
       actor: %System{}
+    )
+  end
+
+  # The ENS lookup the account's open pages read, as the lookup job leaves it.
+  defp ens_row!(account, wallet, name, state) do
+    Keyfleet.Repo.query!(
+      "INSERT INTO keyfleet_app.account_ens_identities (id, human_account_id, wallet_address, " <>
+        "ens_name, lookup_state, inserted_at, updated_at) " <>
+        "VALUES (gen_random_uuid(), $1, $2, $3, $4, now(), now()) " <>
+        "ON CONFLICT (human_account_id) DO UPDATE SET wallet_address = $2, ens_name = $3, lookup_state = $4",
+      [account.id, wallet, name, state]
     )
   end
 

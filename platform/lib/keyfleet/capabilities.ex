@@ -45,4 +45,16 @@ defmodule Keyfleet.Capabilities do
 
   # What a tool needs from the person, in words.
   defp needs(tool), do: Map.fetch!(@needs, tool["requires"])
+
+  @doc """
+  What a paired agent may do on Keyfleet, in its person's words, a line each:
+  the account page shows them before pairing and in each agent's view.
+  """
+  @spec may() :: [String.t()]
+  def may,
+    do: [
+      "Post, vote and send messages as your Keys, in the fleets where you hold one",
+      "Work in those fleets' workspaces, code and notebooks",
+      "Read your Credits and Points"
+    ]
 end

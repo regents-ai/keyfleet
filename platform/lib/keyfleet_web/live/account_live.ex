@@ -1,8 +1,9 @@
 defmodule KeyfleetWeb.AccountLive do
   @moduledoc """
   The signed-in person's account, one tab each: Profile (who the site knows
-  them as, the keys their wallets hold, the agents paired with their account,
-  their Credits and this browser's session), Wallets (the wallets their sign-in
+  them as, their ENS name and World ID, the keys their wallets hold, the agents
+  paired with their account, which they may open, rename and unpair
+  (`KeyfleetWeb.AgentsPanel`), their Credits and this browser's session), Wallets (the wallets their sign-in
   verified) and Connections (the accounts they have connected, which each
   fleet's Member List shows beside their address). Points has its
   own page (`KeyfleetWeb.PointsLive`).
@@ -15,20 +16,18 @@ defmodule KeyfleetWeb.AccountLive do
 
   import KeyfleetWeb.Components.VerifiedConnections
 
-  alias Keyfleet.Actors.Human
+  alias Keyfleet.Accounts
+  alias Keyfleet.Accounts.EnsIdentity
+  alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.PublicIdentity
   alias KeyfleetWeb.KeyLinks
-  alias KeyfleetWeb.Read
 
   attr :account, :map, default: nil
   attr :signed_out_reason, :atom, default: :signed_out
   attr :account_control, :map, required: true
-
-  attr :paired_agents, KeyfleetWeb.Read,
-    default: %KeyfleetWeb.Read{},
-    doc: "the read of the agents paired with the account, most recent first"
+  attr :lease, :map, default: nil, doc: "the page's `session_lease`, which the agents list checks"
 
   attr :credits, KeyfleetWeb.Read,
     default: %KeyfleetWeb.Read{},
@@ -76,9 +75,20 @@ defmodule KeyfleetWeb.AccountLive do
         <section class="account-panel account-details" aria-labelledby="account-details-title">
           <h2 id="account-details-title">Details</h2>
           <dl>
+            <div id="account-ens-name">
+              <dt>ENS name</dt>
+              <.ens_name account={@account} />
+            </div>
             <div>
               <dt>Display name</dt>
               <dd>{@account.display_name || "Not set"}</dd>
+            </div>
+            <div id="account-world-id">
+              <dt>World ID</dt>
+              <dd :if={@account.world_verified_at}>
+                Verified on {Calendar.strftime(@account.world_verified_at, "%-d %B %Y")}
+              </dd>
+              <dd :if={is_nil(@account.world_verified_at)}>Not verified</dd>
             </div>
           </dl>
         </section>
@@ -110,17 +120,12 @@ defmodule KeyfleetWeb.AccountLive do
           </div>
         </section>
 
-        <Regent.Account.agents id="account-agents" agents={agent_rows(@paired_agents)}>
-          <:about>
-            An agent you pair with your account can post in the rooms of fleets where you hold a Key. It posts as your Key, with its name on every post.
-          </:about>
-          <:footer>
-            <Regent.Primitives.button type="button" variant="secondary" data-aside-open>
-              Pair New Agent
-            </Regent.Primitives.button>
-            <a href="https://regents.sh/account#account-agents">Unpair agents on regents.sh</a>
-          </:footer>
-        </Regent.Account.agents>
+        <.live_component
+          module={KeyfleetWeb.AgentsPanel}
+          id="account-agents"
+          account={@account}
+          lease={@lease}
+        />
 
         <Regent.Account.credits_summary
           id="account-credits"
@@ -140,6 +145,46 @@ defmodule KeyfleetWeb.AccountLive do
         </section>
       </div>
     </.settings_page>
+    """
+  end
+
+  attr :account, :map, required: true
+
+  # The primary name Ethereum publishes for the account's wallet. A wallet whose
+  # name is still being read is never shown as having none.
+  defp ens_name(%{account: %{ens_name: name}} = assigns) when is_binary(name) do
+    ~H"""
+    <dd class="account-wallet">
+      <Regent.Primitives.address
+        id="account-ens"
+        address={@account.wallet_address}
+        label={@account.ens_name}
+      />
+    </dd>
+    """
+  end
+
+  defp ens_name(%{account: %{wallet_address: nil}} = assigns) do
+    ~H"""
+    <dd>No wallet linked</dd>
+    """
+  end
+
+  defp ens_name(%{account: %{ens_lookup_state: :done}} = assigns) do
+    ~H"""
+    <dd>No primary name set for this wallet</dd>
+    """
+  end
+
+  defp ens_name(%{account: %{ens_lookup_state: :pending}} = assigns) do
+    ~H"""
+    <dd role="status">Checking Ethereum for a primary name…</dd>
+    """
+  end
+
+  defp ens_name(assigns) do
+    ~H"""
+    <dd role="status">Couldn’t check Ethereum right now. Refresh to try again.</dd>
     """
   end
 
@@ -266,34 +311,22 @@ defmodule KeyfleetWeb.AccountLive do
   defp summary_state(:empty), do: :ready
   defp summary_state(state), do: state
 
-  # Still being read shows as loading; a failed read shows as unavailable,
-  # never as no agents. A re-read keeps the agents already listed on screen.
-  defp agent_rows(%Read{state: state}) when state in [:error, :stale], do: :unavailable
-  defp agent_rows(%Read{value: nil}), do: :loading
+  @doc """
+  Asks Ethereum again for the primary name of the account's wallet when it was
+  never answered for that wallet or the last asking failed, so opening the page
+  is what "Refresh to try again" means. Asking, and its answer, each reach the
+  open pages through the account's lookup notice (`EnsIdentity.topic/1`), which
+  reads the account again.
+  """
+  def check_ens(%{wallet_address: wallet, ens_lookup_state: state} = account)
+      when is_binary(wallet) and state in [nil, :failed] do
+    if EnsIdentity.looking_up?(),
+      do: Accounts.request_ens_lookup(account.id, wallet, actor: %System{})
 
-  defp agent_rows(%Read{value: agents}) do
-    now = DateTime.utc_now()
-
-    Enum.map(
-      agents,
-      &%{
-        id: &1.id,
-        name: &1.name,
-        kind: to_string(&1.harness),
-        harness: RegentAgents.Harness.label(&1.harness),
-        backed: not is_nil(&1.human_id),
-        last_contact_iso: DateTime.to_iso8601(&1.last_contact_at),
-        last_contact: RegentFormat.relative_time(&1.last_contact_at, now)
-      }
-    )
+    :ok
   end
 
-  @doc """
-  Reads the agents paired with the signed-in person's account, most recent
-  first: `{:ok, agents}` or `{:error, reason}`.
-  """
-  def paired_agents(%{privy_user_id: person}),
-    do: RegentAgents.list_my_agents(actor: %RegentAgents.Person{privy_user_id: person})
+  def check_ens(_account), do: :ok
 
   @doc "Reads the signed-in person's Credits balance, kept once for every Regent site."
   def credits(%{privy_user_id: person}), do: {:ok, RegentCredits.balance(person)}

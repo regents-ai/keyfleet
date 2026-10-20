@@ -15,7 +15,8 @@ buttons a person presses with their own wallet.
 
 The homepage is where a visitor chooses a fleet. Each fleet's page is its map
 of keys, with links to its rooms, workspace and proposals. A signed-in
-person's keys are on the Account page. The homepage's hex tiles light under a
+person's keys, agents, ENS name and World ID are on the Account page, where
+they rename and unpair their agents. The homepage's hex tiles light under a
 mouse; on a phone or tablet, or with less motion asked for, they stay still.
 
 Behind every page but the homepage is the harbour: a blueprint sea with an inn,

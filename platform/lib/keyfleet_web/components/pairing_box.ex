@@ -141,5 +141,5 @@ defmodule KeyfleetWeb.PairingBox do
 
   # What the person pastes to their agent.
   defp agent_message(code, harness),
-    do: PairingMessage.text(code, "Keyfleet", KeyfleetWeb.Endpoint.url(), harness)
+    do: PairingMessage.text(code, KeyfleetWeb.Endpoint.url(), harness)
 end

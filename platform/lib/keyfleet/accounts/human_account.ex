@@ -19,6 +19,9 @@ defmodule Keyfleet.Accounts.HumanAccount do
     attribute :wallet_address, :string, sensitive?: true
     attribute :wallet_addresses, {:array, :string}, default: [], sensitive?: true
     attribute :avatar, :map
+    # When the person last proved with World ID that they are a unique human, on
+    # regents.sh, which writes it.
+    attribute :world_verified_at, :utc_datetime, writable?: false
     create_timestamp :created_at
     update_timestamp :updated_at
   end
@@ -50,6 +53,16 @@ defmodule Keyfleet.Accounts.HumanAccount do
                   ens_identity.ens_avatar_url
                 end
               )
+
+    # Where asking Ethereum for the current wallet's name stands: pending, done
+    # or failed, and nil before it was ever asked for this wallet.
+    calculate :ens_lookup_state,
+              :atom,
+              expr(
+                if ens_identity.wallet_address == wallet_address do
+                  ens_identity.lookup_state
+                end
+              )
   end
 
   identities do
@@ -67,7 +80,7 @@ defmodule Keyfleet.Accounts.HumanAccount do
       get? true
       argument :privy_did, :string, allow_nil?: false
       filter expr(privy_user_id == ^arg(:privy_did))
-      prepare build(load: [:display_name, :ens_name, :ens_avatar_url])
+      prepare build(load: [:display_name, :ens_name, :ens_avatar_url, :ens_lookup_state])
     end
 
     read :points_account do
@@ -80,7 +93,7 @@ defmodule Keyfleet.Accounts.HumanAccount do
       get? true
       argument :id, :integer, allow_nil?: false
       filter expr(id == ^arg(:id))
-      prepare build(load: [:display_name, :ens_name, :ens_avatar_url])
+      prepare build(load: [:display_name, :ens_name, :ens_avatar_url, :ens_lookup_state])
     end
 
     read :by_ids do
@@ -116,7 +129,7 @@ defmodule Keyfleet.Accounts.HumanAccount do
       accept [:wallet_address, :wallet_addresses]
       require_atomic? false
       validate present(:wallet_addresses)
-      change load([:display_name, :ens_name, :ens_avatar_url])
+      change load([:display_name, :ens_name, :ens_avatar_url, :ens_lookup_state])
     end
   end
 

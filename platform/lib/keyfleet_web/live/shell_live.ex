@@ -89,7 +89,6 @@ defmodule KeyfleetWeb.ShellLive do
        code_notice: nil,
        connection_outcome: nil,
        held_keys: [],
-       paired_agents: %Read{},
        agents_topic: nil,
        credits: %Read{},
        credits_topic: nil,
@@ -443,12 +442,10 @@ defmodule KeyfleetWeb.ShellLive do
     send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
     send_update(KeyfleetWeb.PanelAgents, id: "shell-agents", agents_changed: true)
 
-    if socket.assigns.route_spec.route_id == :account do
-      account = current_account(socket.assigns.access_context)
-      {:noreply, read_paired_agents(socket, account)}
-    else
-      {:noreply, socket}
-    end
+    if socket.assigns.route_spec.route_id == :account,
+      do: send_update(KeyfleetWeb.AgentsPanel, id: "account-agents", agents_changed: true)
+
+    {:noreply, socket}
   end
 
   # A Points award or correction landed for this account; the Points page follows.
@@ -641,7 +638,7 @@ defmodule KeyfleetWeb.ShellLive do
           signed_out_reason={@signed_out_reason}
           account_control={@account_control}
           held_keys={@held_keys}
-          paired_agents={@paired_agents}
+          lease={@session_lease}
           credits={@credits}
         />
 
@@ -1236,19 +1233,19 @@ defmodule KeyfleetWeb.ShellLive do
 
     socket
     |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
-    |> read_paired_agents(account)
+    |> check_ens(account)
     |> read_credits(account)
   end
 
   defp load_account_page(socket, _route_spec),
     do: socket |> assign(:held_keys, []) |> Read.clear(:credits)
 
-  # The agents are read beside the page, so a failed read leaves the rest of
-  # the account page working.
-  defp read_paired_agents(socket, %{privy_user_id: person} = account),
-    do: Read.start(socket, :paired_agents, person, fn -> AccountLive.paired_agents(account) end)
-
-  defp read_paired_agents(socket, nil), do: Read.clear(socket, :paired_agents)
+  # Only the connected page asks, so the first render does not ask again a
+  # moment before it.
+  defp check_ens(socket, account) do
+    if connected?(socket), do: AccountLive.check_ens(account)
+    socket
+  end
 
   # Hears when the person's agents change, for the side panel on every page.
   defp follow_agents(%{assigns: %{agents_topic: nil}} = socket, %{privy_user_id: person}) do
