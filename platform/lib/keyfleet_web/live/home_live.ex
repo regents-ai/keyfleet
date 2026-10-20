@@ -425,6 +425,8 @@ defmodule KeyfleetWeb.HomeLive do
 
   # The headline is the tagline, with its last words in the accent colour.
   defp hero(assigns) do
+    assigns = assign(assigns, offer(assigns.classic))
+
     ~H"""
     <section id="home-hero" class="rl-hero" aria-labelledby="home-title" data-field-scope>
       <.hex_field id="home-hero-field" class="rl-hero__field" cell={40} />
@@ -443,10 +445,10 @@ defmodule KeyfleetWeb.HomeLive do
             <dt>
               Price
               <Regent.Primitives.tip id="home-price-tip" label="About the price">
-                Each Key costs a little more than the one before: 10 USDC for the first, 100 USDC for the last.
+                Keys increase steadily in cost until 100 USDC for the last Key.
               </Regent.Primitives.tip>
             </dt>
-            <dd>10–100 USDC</dd>
+            <dd id="home-classic-price">{@cost}</dd>
           </div>
           <div>
             <dt>{if @classic.coming_soon?, do: "Sales", else: "Sold"}</dt>
@@ -603,27 +605,34 @@ defmodule KeyfleetWeb.HomeLive do
 
   # Classic as the catalog has it, when its record couldn't be read.
   defp offer(%{failed?: true, sales: nil} = classic),
-    do: %{offer(%{classic | failed?: false}) | why: "Couldn’t read sales just now"}
+    do: %{offer(%{classic | failed?: false}) | cost: "—", why: "Couldn’t read sales just now"}
 
   defp offer(%{coming_soon?: true}) do
-    %{state: :soon, price: price(Presets.progress(@classic, 0)), why: "Sales open soon"}
+    %{next_token_id: token_id, next_price: price} = Presets.progress(@classic, 0)
+
+    %{
+      state: :soon,
+      cost: FleetLive.usdc(price),
+      price: price(token_id, price),
+      why: "Sales open soon"
+    }
   end
 
   defp offer(%{sales: %{buy: %{price: nil}}}) do
     max = grouped(Presets.max_supply(@classic))
-    %{state: :sold_out, price: nil, why: "#{max}/#{max} Keys sold"}
+    %{state: :sold_out, cost: "Sold out", price: nil, why: "#{max}/#{max} Keys sold"}
   end
 
   defp offer(%{sales: %{buy: buy}}) do
     %{
       state: :open,
-      price: "Key #{grouped(buy.token_id)} · #{FleetLive.usdc(buy.price)}",
+      cost: FleetLive.usdc(buy.price),
+      price: price(buy.token_id, buy.price),
       why: nil
     }
   end
 
-  defp price(%{next_token_id: token_id, next_price: price}),
-    do: "Key #{grouped(token_id)} · #{FleetLive.usdc(price)}"
+  defp price(token_id, price), do: "Key #{grouped(token_id)} · #{FleetLive.usdc(price)}"
 
   attr :classic, :map, required: true
   attr :buy_open, :boolean, required: true

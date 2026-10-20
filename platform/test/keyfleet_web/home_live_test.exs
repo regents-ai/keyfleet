@@ -131,6 +131,11 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-buy-price") == "Key 1 · 10 USDC"
     assert text(view, "#home-buy-tag") == "Key 1 · 10 USDC"
     assert text(view, "#home-buy-why") == "Sales open soon"
+    assert text(view, "#home-classic-price") == "10 USDC"
+
+    assert text(view, "#home-price-tip") =~
+             "Keys increase steadily in cost until 100 USDC for the last Key."
+
     refute html =~ "?buy"
     refute has_element?(view, "#shell-get-key")
   end
@@ -147,6 +152,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-buy-price") == "Key 4 · #{KeyfleetWeb.FleetLive.usdc(price)}"
     assert text(view, "#home-buy-tag") == "Key 4 · #{KeyfleetWeb.FleetLive.usdc(price)}"
     assert text(view, "#home-buy-why") == ""
+    assert text(view, "#home-classic-price") == KeyfleetWeb.FleetLive.usdc(price)
     assert text(view, "#home-classic-sold") == "3"
 
     view |> element("button#home-buy-next-key") |> render_click()
@@ -202,6 +208,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert has_element?(view, ~s(button#home-buy-next-key[aria-disabled="true"]))
     assert text(view, "#home-buy-why") == "1,024/1,024 Keys sold"
+    assert text(view, "#home-classic-price") == "Sold out"
   end
 
   test "the Club's card says how many Keys it has and who holds them, not who is online",
@@ -324,6 +331,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
       assert has_element?(view, "#public-home")
       assert has_element?(view, "#home-club [data-fleet-failed]")
       refute has_element?(view, "#home-club [data-fleet-soon]")
+      assert text(view, "#home-classic-price") == "—"
       assert text(view, "#home-classic-sold") == "—"
       assert text(view, "#home-buy-why") == "Couldn’t read sales just now"
     end)

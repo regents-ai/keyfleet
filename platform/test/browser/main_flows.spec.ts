@@ -33,7 +33,7 @@ test("the homepage shows Classic #1, its price, and Buy waiting for the sale", a
   await expect(page.locator("#home-hero-fleet")).toHaveText("Classic #1")
   const facts = page.locator("#home-classic-facts")
   await expect(facts).toContainText("1,024")
-  await expect(facts).toContainText("10–100 USDC")
+  await expect(page.locator("#home-classic-price")).toHaveText(/^[0-9][0-9.]* USDC$/)
   await expectOnFirstScreen(page, facts, "Classic #1's Keys and price")
 
   const buy = page.locator("#home-buy-next-key")

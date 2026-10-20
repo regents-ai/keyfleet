@@ -3120,3 +3120,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: closing the Buy Key window with the mouse (the X or Close) puts focus back on the button that opened it without drawing a ring. Closing it with a key (Escape) still shows where focus is, and on the orange cut-corner buttons that ring now follows their cut corners instead of a square box. This holds for Purchase Key in the header, Buy Next Key and Buy Key on the homepage, and every other window.
 - Why: Sean 20 October 16:16Z: "If I open the buy modal, and press escape or X, the button has this black border, its wrong".
+
+## 2026-10-20 — The homepage shows the next Key's price
+
+- What: the homepage's Price figure now shows what the next Classic Key costs (for example 10.46 USDC), instead of the 10–100 USDC range. Its info button explains: "Keys increase steadily in cost until 100 USDC for the last Key." Before sales open it shows Key 1's price; once every Key is sold it says Sold out.
+- Why: Sean 20 October 16:42Z: "in the hero, change from 10-100 USDC to show current price with a info icon on hover, that explains 'Keys increase linearly in cost until 100 USDC for the last Key'". The words say "steadily" rather than "linearly" because each Key costs the same share more than the one before, not the same amount.
