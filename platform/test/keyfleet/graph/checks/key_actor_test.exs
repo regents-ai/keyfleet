@@ -153,4 +153,77 @@ defmodule Keyfleet.Graph.Checks.KeyActorTest do
       actor: %Actors.System{}
     )
   end
+
+  # R-20261020-graph-current-standing: a stale delegation cannot preserve the
+  # old acting Key; valid person-paired fallback remains fleet-local.
+  test "ended and expired shards lose their Key and restore valid person-paired fallback" do
+    sell(@fleet, 1..2)
+    paired = Keyfleet.PairingHelpers.pair!(agent("9"), owner(1).wallet_addresses)
+    ChainHelpers.issue_shard!(@fleet, 2, paired.wallet_address)
+    assert {:ok, _} = KeyActor.command(paired, @fleet, 2, "before", 1_000)
+    assert {:error, %NotKeyHolderError{}} = KeyActor.command(paired, @fleet, 1, "blocked", 1_000)
+
+    ChainHelpers.end_shard!(@fleet, 2, paired.wallet_address, wallet(2))
+    assert {:error, %NotKeyHolderError{}} = KeyActor.command(paired, @fleet, 2, "ended", 1_000)
+    assert {:ok, _} = KeyActor.command(paired, @fleet, 1, "fallback", 1_000)
+
+    Keys.record_shard_event!(
+      %{
+        fleet_id: @fleet,
+        token_id: 2,
+        wallet: paired.wallet_address,
+        kind: :issued,
+        expires_at: DateTime.add(DateTime.utc_now(:second), -86_400),
+        ownership_epoch: 1,
+        block_number: 1_000,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash: "0x" <> String.duplicate("e", 64),
+        log_index: 0
+      },
+      actor: %Actors.System{}
+    )
+
+    assert {:error, %NotKeyHolderError{}} = KeyActor.command(paired, @fleet, 2, "expired", 1_000)
+    assert {:ok, _} = KeyActor.command(paired, @fleet, 1, "fallback-again", 1_000)
+  end
+
+  test "a shard in another fleet neither grants this fleet's Key nor hides its paired membership" do
+    sell(@fleet, 1..2)
+    other = "fibonacci_cascade"
+    sell(other, 1..1)
+    paired = Keyfleet.PairingHelpers.pair!(agent("9"), owner(2).wallet_addresses)
+    ChainHelpers.issue_shard!(other, 1, paired.wallet_address)
+
+    assert {:ok, _} = KeyActor.command(paired, other, 1, "other", 1_000)
+    assert {:ok, _} = KeyActor.command(paired, @fleet, 2, "person", 1_000)
+
+    assert {:error, %NotKeyHolderError{}} =
+             KeyActor.command(paired, @fleet, 1, "foreign-key", 1_000)
+  end
+
+  test "edits-restricted owners and shards remain readers but receive no write command" do
+    sell(@fleet, 1..2)
+    paired = Keyfleet.PairingHelpers.pair!(agent("9"), owner(2).wallet_addresses)
+    ChainHelpers.issue_shard!(@fleet, 1, paired.wallet_address)
+
+    Keys.record_edits_restriction!(
+      %{
+        fleet_id: @fleet,
+        token_id: 1,
+        restricted: true,
+        block_number: 1_000,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash: "0x" <> String.duplicate("f", 64),
+        log_index: 0
+      },
+      actor: %Actors.System{}
+    )
+
+    for actor <- [owner(1), paired] do
+      assert KeyActor.member(actor, @fleet, 1_000) == {:ok, true}
+
+      assert {:error, %Keyfleet.Graph.Errors.EditsRestrictedError{}} =
+               KeyActor.command(actor, @fleet, 1, "restricted", 1_000)
+    end
+  end
 end

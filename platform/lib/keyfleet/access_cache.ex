@@ -29,6 +29,13 @@ defmodule Keyfleet.AccessCache do
     :ok
   end
 
+  @doc "The invalidation generation before an admission's canonical read."
+  def generation, do: GenServer.call(__MODULE__, :generation)
+
+  @doc "Records an admission only if no invalidation completed during its read."
+  def admit_if_current(place, fleet_id, subject, found, ttl_ms, generation),
+    do: GenServer.call(__MODULE__, {:admit, place, fleet_id, subject, found, ttl_ms, generation})
+
   @doc "Ends `subject`'s admission to `place` of the fleet on every node now."
   def end_access(place, fleet_id, subject),
     do: Phoenix.PubSub.broadcast(Keyfleet.PubSub, @topic, {:end_access, place, fleet_id, subject})
@@ -41,19 +48,33 @@ defmodule Keyfleet.AccessCache do
   def init(nil) do
     :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
     :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, @topic)
-    {:ok, nil}
+    {:ok, new_generation()}
   end
 
   @impl GenServer
-  def handle_info({:end_access, place, fleet_id, subject}, state) do
-    :ets.delete(@table, {place, fleet_id, subject})
-    {:noreply, state}
+  def handle_call(:generation, _from, generation), do: {:reply, generation, generation}
+
+  def handle_call({:admit, place, fleet_id, subject, found, ttl_ms, expected}, _from, generation) do
+    if expected == generation do
+      :ok = admit(place, fleet_id, subject, found, ttl_ms)
+      {:reply, :ok, generation}
+    else
+      {:reply, :stale, generation}
+    end
   end
 
-  def handle_info({:end_fleet, place, fleet_id}, state) do
-    :ets.match_delete(@table, {{place, fleet_id, :_}, :_, :_})
-    {:noreply, state}
+  @impl GenServer
+  def handle_info({:end_access, place, fleet_id, subject}, _generation) do
+    :ets.delete(@table, {place, fleet_id, subject})
+    {:noreply, new_generation()}
   end
+
+  def handle_info({:end_fleet, place, fleet_id}, _generation) do
+    :ets.match_delete(@table, {{place, fleet_id, :_}, :_, :_})
+    {:noreply, new_generation()}
+  end
+
+  defp new_generation, do: System.unique_integer([:positive, :monotonic])
 
   defp now, do: System.monotonic_time(:millisecond)
 end

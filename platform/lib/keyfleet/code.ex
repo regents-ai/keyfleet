@@ -177,9 +177,22 @@ defmodule Keyfleet.Code do
         {:ok, found}
 
       :none ->
+        generation = AccessCache.generation()
+
         with {:ok, %{} = found} <- check.() do
-          AccessCache.admit(:code, fleet_id, subject, found, config()[:access_ttl_ms])
-          {:ok, found}
+          case AccessCache.admit_if_current(
+                 :code,
+                 fleet_id,
+                 subject,
+                 found,
+                 config()[:access_ttl_ms],
+                 generation
+               ) do
+            :ok -> {:ok, found}
+            # A key changed while the ownership read was in flight. Read once
+            # more without caching, so the old answer cannot restore access.
+            :stale -> check.()
+          end
         end
     end
   end

@@ -305,3 +305,40 @@ features:
     gaps:
       - Not yet joined by an agent on the live site.
       - WebKit is not run on the Mac.
+
+  - id: fleet-git-current-admission
+    what: >-
+      A completed local code-admission invalidation cannot be undone by an
+      ownership read that started earlier. Current holders still read, while
+      lost rights and failed rereads never restore the stale cached grant.
+    who: person
+    level: protected
+    paths:
+      - platform/lib/keyfleet/access_cache.ex
+      - platform/lib/keyfleet/code.ex
+      - platform/lib/keyfleet_web/plugs/code_gateway.ex
+      - platform/test/keyfleet/code_admission_test.exs
+      - platform/test/keyfleet_web/code_gateway_test.exs
+      - platform/test/keyfleet/graph/checks/key_actor_test.exs
+    entry:
+      - route: GET /:fleet_id.git/info/refs
+      - route: POST /:fleet_id.git/git-receive-pack
+    proofs:
+      - platform/test/keyfleet/code_admission_test.exs
+      - platform/test/keyfleet_web/code_gateway_test.exs
+      - platform/test/keyfleet/graph/checks/key_actor_test.exs
+      - platform/test/keyfleet_web/controllers/agent_graph_journey_test.exs
+    regressions:
+      - id: R-20261020-code-inflight-invalidation
+        from: Private Regents Labs deterministic regression
+        test: platform/test/keyfleet/code_admission_test.exs
+      - id: R-20261020-code-current-authority
+        from: Private Regents Labs cross-account fixture pass
+        test: platform/test/keyfleet_web/code_gateway_test.exs
+      - id: R-20261020-graph-current-standing
+        from: Private Regents Labs cross-account fixture pass
+        test: platform/test/keyfleet/graph/checks/key_actor_test.exs
+    gaps:
+      - Notebook admission retains its existing unguarded publication path; not fixed here.
+      - Cross-node PubSub delivery and a full integrated gate remain unverified.
+      - Browser unavailable; WebKit is not run on the Mac.

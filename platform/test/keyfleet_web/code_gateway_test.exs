@@ -450,4 +450,165 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     {:ok, {_ip, port}} = ThousandIsland.listener_info(pid)
     "http://127.0.0.1:#{port}"
   end
+
+  # R-20261020-code-current-authority: signed Git must not reuse a prior
+  # admission after delegation or ownership changes.
+  test "a shard's next signed Git request rechecks revocation and ownership epoch" do
+    agent = regression_agent!()
+    path = "/#{@fleet}.git/info/refs?service=git-upload-pack"
+    ChainHelpers.issue_shard!(@fleet, 1, agent.wallet)
+    assert regression_read(agent, path).status == 200
+    assert_receive {:store, "GET", _path, _claims, ""}
+
+    ChainHelpers.end_shard!(@fleet, 1, agent.wallet, @holder_wallet)
+    assert regression_read(agent, path).status == 403
+    refute_received {:store, _method, _path, _claims, _body}
+
+    ChainHelpers.issue_shard!(@fleet, 1, agent.wallet)
+    assert regression_read(agent, path).status == 200
+    assert_receive {:store, "GET", _path, _claims, ""}
+
+    epoch!(1, 2, @buyer_wallet)
+    assert regression_read(agent, path).status == 403
+    refute_received {:store, _method, _path, _claims, _body}
+  end
+
+  test "an expired shard cannot reuse an earlier signed Git admission" do
+    agent = regression_agent!()
+    path = "/#{@fleet}.git/info/refs?service=git-upload-pack"
+    ChainHelpers.issue_shard!(@fleet, 1, agent.wallet)
+    assert regression_read(agent, path).status == 200
+    assert_receive {:store, "GET", _path, _claims, ""}
+
+    # A later indexed historical issue has expired; no live clock is advanced.
+    regression_expired_shard!(agent.wallet)
+    assert regression_read(agent, path).status == 403
+    refute_received {:store, _method, _path, _claims, _body}
+  end
+
+  test "a person-paired agent reads only its person's fleet and loses it after transfer" do
+    agent = regression_agent!("did:privy:code-holder")
+    path = "/#{@fleet}.git/info/refs?service=git-upload-pack"
+    assert regression_read(agent, path).status == 200
+    sub = "did:pkh:eip155:8453:" <> @holder_wallet
+    assert_receive {:store, "GET", _path, %{"sub" => ^sub}, ""}
+
+    ChainHelpers.seed_cursor!(@other_fleet)
+
+    assert regression_read(agent, "/#{@other_fleet}.git/info/refs?service=git-upload-pack").status ==
+             403
+
+    refute_received {:store, _method, _path, _claims, _body}
+
+    epoch!(1, 2, @buyer_wallet)
+    assert regression_read(agent, path).status == 403
+    refute_received {:store, _method, _path, _claims, _body}
+  end
+
+  test "restricted Key owners and shards may fetch code but cannot push it", c do
+    agent = regression_agent!()
+    ChainHelpers.issue_shard!(@fleet, 1, agent.wallet)
+    regression_restrict!()
+    read = "/#{@fleet}.git/info/refs?service=git-upload-pack"
+    push = "/#{@fleet}.git/git-receive-pack"
+
+    assert regression_read(agent, read).status == 200
+    assert_receive {:store, "GET", _path, %{"scope" => "read"}, ""}
+    assert signed(agent, push, "0000").status == 403
+    refute_received {:store, _method, _path, _claims, _body}
+
+    password = person_password!(c.holder)
+    assert git(:get, read, password).status == 200
+    assert_receive {:store, "GET", _path, %{"scope" => "read"}, ""}
+    assert git(:post, push, password, "0000").status == 403
+    refute_received {:store, _method, _path, _claims, _body}
+  end
+
+  test "ending pairing stops signed Git even while the agent still owns its Key" do
+    agent = regression_agent!()
+    epoch!(2, 1, agent.wallet)
+    path = "/#{@fleet}.git/info/refs?service=git-upload-pack"
+    assert regression_read(agent, path).status == 200
+    assert_receive {:store, "GET", _path, _claims, ""}
+
+    person = %RegentAgents.Person{privy_user_id: agent.actor.privy_user_id}
+    {:ok, pairing} = RegentAgents.get_my_agent(agent.actor.pairing_id, actor: person)
+    :ok = RegentAgents.unpair_agent(pairing, actor: person)
+
+    assert regression_read(agent, path).status == 403
+    refute_received {:store, _method, _path, _claims, _body}
+  end
+
+  defp regression_agent!(person_did \\ nil) do
+    {:ok, signer} = Siwa.LocalSigner.new()
+    secret = :crypto.strong_rand_bytes(32)
+    SignedAgentHelpers.start_broker!(self(), secret)
+    wallet = String.downcase(signer.address)
+
+    actor =
+      if person_did do
+        person = %RegentAgents.Person{privy_user_id: person_did}
+        %{code: code} = RegentAgents.issue_pairing_code!(actor: person)
+
+        RegentAgents.pair_agent!(code, "Regression agent", :codex,
+          actor: %RegentAgents.Agent{wallet: wallet}
+        )
+
+        {:ok, paired} =
+          Keyfleet.Agents.with_pairing(%Keyfleet.Actors.Agent{
+            wallet_address: wallet,
+            chain_id: 8453,
+            verification_method: :eoa_recovery,
+            audience: "keyfleet"
+          })
+
+        paired
+      else
+        Keyfleet.PairingHelpers.pair_wallet!(wallet)
+      end
+
+    %{signer: signer, secret: secret, wallet: wallet, actor: actor}
+  end
+
+  defp regression_read(agent, path) do
+    request = SignedAgentHelpers.sign(agent.signer, agent.secret, "GET", path, "")
+
+    Enum.reduce(request.headers, %{build_conn() | host: @host}, fn {name, value}, conn ->
+      put_req_header(conn, name, value)
+    end)
+    |> dispatch(@endpoint, :get, path, "")
+  end
+
+  defp regression_expired_shard!(wallet) do
+    Keys.record_shard_event!(
+      %{
+        fleet_id: @fleet,
+        token_id: 1,
+        wallet: wallet,
+        kind: :issued,
+        expires_at: DateTime.add(DateTime.utc_now(:second), -86_400),
+        ownership_epoch: 1,
+        block_number: 1_000,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash: "0x" <> String.duplicate("e", 64),
+        log_index: 0
+      },
+      actor: %System{}
+    )
+  end
+
+  defp regression_restrict! do
+    Keys.record_edits_restriction!(
+      %{
+        fleet_id: @fleet,
+        token_id: 1,
+        restricted: true,
+        block_number: 1_000,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash: "0x" <> String.duplicate("f", 64),
+        log_index: 0
+      },
+      actor: %System{}
+    )
+  end
 end

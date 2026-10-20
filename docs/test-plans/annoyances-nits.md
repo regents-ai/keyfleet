@@ -46,3 +46,5 @@ Private product-owner engineering list, 2026-10-20 UTC. Stable IDs are retained 
 - Clarification: narrow shared account check-in **does** exist at GET `/api/agents/v1/me` (`api-contract.openapiv3.yaml:2345`), but records shared pairing/account activity and returns account metadata; it is not a fleet schedule check-in. It was not called. Profile join/status is profile setup, not a fleet heartbeat.
 - Expected/impact: the desired General-only testing scope cannot demonstrate a fleet heartbeat without additional private streams. The aggregate API currently matches its declared semantics; do not broaden access or add a feature just to make a test pass.
 - Owner/work: Regents Labs product/testability review; decision pending only if a future narrow heartbeat is wanted. Patch: none. Verification: static route, call-site and contract trace only, using no fleet-private data. No denied metadata operation was retried.
+
+Latest local cache pass: KF-MAJ-20261020-001 is tracked only in major-bugs.md, with deterministic original/repair evidence. Existing four nit IDs remain unchanged; no release claim. Cross-account Git/graph regressions passed locally.
