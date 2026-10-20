@@ -109,6 +109,11 @@ defmodule Keyfleet.Keys do
         args: [:fleet_id, :from_block, :to_block]
     end
 
+    resource Keyfleet.Keys.PostingKey do
+      define :choose_posting_key, action: :choose, args: [:fleet_id, :token_id]
+      define :posting_key, action: :in_fleet, args: [:fleet_id], not_found_error?: false
+    end
+
     resource Keyfleet.Keys.EditsRestriction do
       define :record_edits_restriction, action: :record
 
@@ -183,17 +188,19 @@ defmodule Keyfleet.Keys do
   or `nil` when it neither holds one of the fleet's keys nor has a shard of one.
 
   Keys rank by the order they were sold, the first key sold ranking highest. A
-  person is the highest-ranked key their wallets hold, and `wallet` is the one
-  holding it. An agent is the highest-ranked key its wallet holds, or else the
-  highest-ranked key it holds an active shard of, and `wallet` is its own. Everything
-  either writes in the fleet is written as that key.
+  person is the key they chose to write as on the Account page while their
+  wallets hold it (`Keyfleet.Keys.PostingKey`), else the highest-ranked key
+  their wallets hold, and `wallet` is the one holding it. An agent is the
+  highest-ranked key its wallet holds, or else the highest-ranked key it holds
+  an active shard of, and `wallet` is its own. Everything either writes in the
+  fleet is written as that key.
 
   An agent with neither, paired with a person whose account is here (`Keyfleet.Actors.Agent`'s `pairing`), is that person's key, with
   `for_person: true`: what it writes there is the person's, marked as the
   agent's.
   """
   def identity(%Human{wallet_addresses: [_ | _] = wallets} = actor, fleet_id) do
-    case held_identity_key!(fleet_id, wallets, actor: actor) do
+    case chosen_key(actor, fleet_id) || held_identity_key!(fleet_id, wallets, actor: actor) do
       nil -> nil
       key -> %{token_id: key.token_id, wallet: key.owner_wallet}
     end
@@ -213,6 +220,17 @@ defmodule Keyfleet.Keys do
   end
 
   def identity(_actor, _fleet_id), do: nil
+
+  # The key the person chose to write as, while one of their wallets holds it.
+  defp chosen_key(%Human{wallet_addresses: wallets} = actor, fleet_id) do
+    with %{token_id: token_id} <- posting_key!(fleet_id, actor: actor),
+         %{owner_wallet: owner} = key <- current_key!(fleet_id, token_id, actor: actor),
+         true <- owner in wallets do
+      key
+    else
+      _not_held -> nil
+    end
+  end
 
   defp for_person(%Human{} = person, fleet_id) do
     case identity(person, fleet_id) do

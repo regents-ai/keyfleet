@@ -1,7 +1,9 @@
 defmodule KeyfleetWeb.AccountLive do
   @moduledoc """
   The signed-in person's account, one tab each: Profile (who the site knows
-  them as, their ENS name and World ID, the keys their wallets hold, the agents
+  them as, their ENS name and World ID, the keys their wallets hold and, in a
+  fleet where they hold several, the one they post as
+  (`KeyfleetWeb.PostingKeyChoice`), the agents
   paired with their account, which they may open, rename and unpair
   (`KeyfleetWeb.AgentsPanel`), their Credits and this browser's session), Wallets (the wallets their sign-in
   verified) and Connections (the accounts they have connected, which each
@@ -117,6 +119,15 @@ defmodule KeyfleetWeb.AccountLive do
                 <.link patch={KeyLinks.key_path(fleet.fleet_id, token_id)}>Key {token_id}</.link>
               </li>
             </ul>
+            <.live_component
+              :if={length(fleet.token_ids) > 1}
+              module={KeyfleetWeb.PostingKeyChoice}
+              id={"account-posting-key-#{fleet.fleet_id}"}
+              fleet_id={fleet.fleet_id}
+              token_ids={fleet.token_ids}
+              account={@account}
+              lease={@lease}
+            />
           </div>
         </section>
 

@@ -1,0 +1,80 @@
+defmodule Keyfleet.Keys.PostingKey do
+  @moduledoc """
+  The Key a person writes as in one fleet, chosen on the Account page. While
+  their wallets hold it, everything they write in the fleet is written as it,
+  and so is everything their agents write there for them
+  (`Keyfleet.Keys.identity/2`). A person who has chosen none, or whose chosen
+  Key has since left their wallets, writes as the first Key their wallets hold.
+
+  Only its own person sets it and reads it, and only a Key their wallets hold
+  now is chosen (`Keyfleet.Keys.Validations.HeldByPerson`). Choosing again
+  replaces the choice.
+  """
+  use Ash.Resource,
+    domain: Keyfleet.Keys,
+    data_layer: AshPostgres.DataLayer,
+    authorizers: [Ash.Policy.Authorizer]
+
+  @max_bigint 9_223_372_036_854_775_807
+
+  postgres do
+    table "posting_keys"
+    repo(Keyfleet.Repo)
+
+    check_constraints do
+      check_constraint(:token_id, "posting_keys_positive_token", check: "token_id > 0")
+    end
+  end
+
+  actions do
+    create :choose do
+      accept [:fleet_id, :token_id]
+      change set_attribute(:human_account_id, actor(:human_account_id))
+      upsert? true
+      upsert_identity :one_per_fleet
+      upsert_fields [:token_id, :updated_at]
+      validate Keyfleet.Graph.Validations.KnownFleet
+      # Checked once the policy has let a person through.
+      validate Keyfleet.Keys.Validations.HeldByPerson, before_action?: true
+    end
+
+    # The person's own choice in a fleet, if they have made one.
+    read :in_fleet do
+      argument :fleet_id, :string, allow_nil?: false
+
+      filter expr(fleet_id == ^arg(:fleet_id) and human_account_id == ^actor(:human_account_id))
+
+      get? true
+    end
+  end
+
+  policies do
+    policy action([:choose, :in_fleet]) do
+      authorize_if actor_attribute_equals(:role, :human)
+    end
+  end
+
+  attributes do
+    uuid_primary_key :id
+    attribute :human_account_id, :integer, allow_nil?: false, public?: true
+
+    attribute :token_id, :integer,
+      allow_nil?: false,
+      public?: true,
+      constraints: [min: 1, max: @max_bigint]
+
+    update_timestamp :updated_at, public?: true
+  end
+
+  relationships do
+    belongs_to :fleet, Keyfleet.Fleets.Fleet do
+      attribute_type :string
+      allow_nil? false
+      public? true
+    end
+  end
+
+  identities do
+    identity :one_per_fleet, [:human_account_id, :fleet_id]
+  end
+end

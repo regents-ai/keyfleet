@@ -3151,3 +3151,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: a fleet's Keys tab now opens on the list of who holds which Key (`?view=members`) in place of the grid; List comes first in the List and Grid switch, and Grid (`?view=map`) is one press away as before.
 - Why: Sean 20 October 20:50Z: "for the Keys section, the list view should be default instead of grid view".
+
+## 2026-10-20 — Choose the Key you post as
+
+- What: on the Account page, a fleet where your wallets hold more than one Key has a "Post as" choice under its Keys. What your agents write in that fleet for you is written as the Key you choose, and the fleet's list of agents shows them as it, while your wallets hold it. With no choice, or once that Key leaves your wallets, you post as your first Key, as before. Only a Key your wallets hold can be chosen.
+- Why: Sean 20 October 20:50Z: "the account management should let a user select the agent name they post as - this shouldnt be default and forced".

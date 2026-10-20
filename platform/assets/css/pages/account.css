@@ -168,6 +168,32 @@
   border-color: var(--ash-line-strong);
 }
 
+/* The Key a person posts as where they hold several. Its line under the
+   choice keeps its height whether or not it says anything. */
+.account-keys__posting {
+  display: grid;
+  gap: 0.25rem;
+  max-inline-size: 18rem;
+}
+
+.account-keys__posting select {
+  inline-size: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: inherit;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-keys__notice {
+  min-block-size: 1lh;
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+}
+
 /* Details */
 
 .account-details dl {

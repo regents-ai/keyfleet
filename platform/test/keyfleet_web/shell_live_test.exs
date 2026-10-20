@@ -395,6 +395,41 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert_patch(view, "/cascade/1?key=5")
   end
 
+  test "where a person holds several Keys of a fleet, Account sets the one they post as", %{
+    conn: conn
+  } do
+    wallet = "0x6666666666666666666666666666666666666666"
+    Fleets.bootstrap_catalog!()
+    ChainHelpers.open_cursor!("fibonacci_cascade")
+    ChainHelpers.open_cursor!("fleet_tech_classic")
+
+    assert {:ok, account} =
+             Accounts.register_verified("did:privy:posting-key", wallet, [wallet],
+               actor: %System{}
+             )
+
+    issue!("fleet_tech_classic", 2, wallet)
+    issue!("fibonacci_cascade", 25, wallet)
+    issue!("fibonacci_cascade", 41, wallet)
+
+    {view, _html} = open_account(conn, account)
+    choice = "#account-posting-key-fibonacci_cascade"
+
+    refute has_element?(view, "#account-posting-key-fleet_tech_classic")
+    assert has_element?(view, "#{choice} option[selected]", "Key 25")
+
+    view |> element(choice) |> render_change(%{"token_id" => "41"})
+
+    assert has_element?(view, "#{choice} [role=status]", "Saved.")
+    assert has_element?(view, "#{choice} option[selected]", "Key 41")
+
+    person = Keyfleet.Actors.Human.for_account(account)
+    assert %{token_id: 41} = Keys.identity(person, "fibonacci_cascade")
+
+    {view, _html} = open_account(conn, account)
+    assert has_element?(view, "#{choice} option[selected]", "Key 41")
+  end
+
   test "a connection is only called connected once the account's own record says so", %{
     conn: conn
   } do

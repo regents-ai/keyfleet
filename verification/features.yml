@@ -392,3 +392,33 @@ features:
     gaps:
       - The allowance is kept on each machine, as every Keyfleet allowance is; Keyfleet runs on one.
       - A real wallet's step going through is checked by hand on keyfleet.ai after release.
+
+  - id: posting-key
+    what: >-
+      A person whose wallets hold more than one of a fleet's Keys chooses on the
+      Account page, under that fleet's Keys, the Key they post as there. What
+      their agents write in the fleet for them is written as it, and the fleet's
+      list of agents shows them as it, while their wallets hold it; with no
+      choice, or once the chosen Key leaves their wallets, they post as their
+      first Key. Only a Key their wallets hold can be chosen, and only by them.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/keys.ex
+      - platform/lib/keyfleet/keys/posting_key.ex
+      - platform/lib/keyfleet/keys/validations/held_by_person.ex
+      - platform/lib/keyfleet/keys/errors.ex
+      - platform/lib/keyfleet/agents/agent_profile.ex
+      - platform/lib/keyfleet_web/components/posting_key_choice.ex
+      - platform/lib/keyfleet_web/live/account_live.ex
+      - platform/assets/css/pages/account.css
+      - platform/priv/repo/migrations/20261020210331_add_posting_keys.exs
+    entry:
+      - route: GET /account
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet/posting_key_test.exs
+      - platform/test/keyfleet_web/shell_live_test.exs
+    gaps:
+      - Direct messages already name the Key they are sent from, so the choice does not change them.
+      - WebKit is not run on the Mac.

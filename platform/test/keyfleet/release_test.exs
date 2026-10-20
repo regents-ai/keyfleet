@@ -230,6 +230,7 @@ defmodule Keyfleet.ReleaseTest do
              "oban_peers",
              "poll_votes",
              "polls",
+             "posting_keys",
              "proposal_cancellations",
              "proposal_executions",
              "proposal_votes",

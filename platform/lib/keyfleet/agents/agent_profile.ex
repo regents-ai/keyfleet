@@ -368,7 +368,7 @@ defmodule Keyfleet.Agents.AgentProfile do
     # The key the agent acts as in the fleet, by the same rule as `:here`:
     # the lowest-numbered key its wallet holds, else the key of the active
     # shard it holds (a wallet holds one shard in a fleet at a time), else the
-    # lowest-numbered key of the person it is paired with.
+    # key the person it is paired with writes as.
     calculate :key,
               :integer,
               expr(
@@ -406,9 +406,10 @@ defmodule Keyfleet.Agents.AgentProfile do
       argument :fleet_ids, {:array, :string}, allow_nil?: false
     end
 
-    # The lowest-numbered of the fleets' keys held now by any wallet of the
-    # person this agent is paired with
-    # (`Keyfleet.Agents.Pairing`). Read in SQL because the pairing and the
+    # The key the person this agent is paired with writes as
+    # (`Keyfleet.Agents.Pairing`): the one they chose on the Account page while
+    # any of their wallets holds it (`Keyfleet.Keys.PostingKey`), else the
+    # lowest-numbered of the fleets' keys their wallets hold now. Read in SQL because the pairing and the
     # person's wallets are for trusted code only (their policies admit the
     # system actor alone); only the key's number leaves here. Each of the
     # person's wallets is looked up on its own: matched as a set, every key in
@@ -418,7 +419,9 @@ defmodule Keyfleet.Agents.AgentProfile do
               expr(
                 fragment(
                   """
-                  (SELECT min(held.token_id)
+                  (SELECT coalesce(
+                     min(held.token_id) FILTER (WHERE chosen.token_id IS NOT NULL),
+                     min(held.token_id))
                    FROM regent_agents.paired_agents AS pairing
                    JOIN regent_names.platform_human_users AS account
                      ON account.privy_user_id = pairing.privy_user_id
@@ -432,6 +435,10 @@ defmodule Keyfleet.Agents.AgentProfile do
                        FROM keyfleet_app.key_attachments AS epoch
                        WHERE epoch.fleet_id = held.fleet_id AND epoch.token_id = held.token_id
                      )
+                   LEFT JOIN keyfleet_app.posting_keys AS chosen
+                     ON chosen.human_account_id = account.id
+                     AND chosen.fleet_id = held.fleet_id
+                     AND chosen.token_id = held.token_id
                    WHERE pairing.wallet = ? AND held.fleet_id = ANY(?))
                   """,
                   wallet_address,
