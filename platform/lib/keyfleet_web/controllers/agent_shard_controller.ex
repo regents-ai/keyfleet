@@ -12,7 +12,7 @@ defmodule KeyfleetWeb.AgentShardController do
   alias Keyfleet.Keys
   alias RegentChain.Call
 
-  @no_shards_hint "Ask a Key's owner to issue a shard to your wallet, then ask again. Or, if your person holds a Key, ask them to pair you on their Account page on this site. Regents Club Keys come with Regents Club Passes. Read the fleet directory for current availability and sales."
+  @no_shards_hint "Ask a Key's owner to issue a shard to your wallet if you want to act through a shard. An empty list does not rule out membership: where you hold no Key or shard, you may already act as your paired person's Keys. Read GET /api/v1/fleets for current availability and sales. Regents Club Keys come with Regents Club Passes."
 
   def index(conn, _params) do
     %{wallet_address: wallet} = actor = conn.assigns.agent_actor

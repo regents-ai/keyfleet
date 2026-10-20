@@ -181,8 +181,9 @@ answer the profile, its registry listing and its human backing
 - **Inputs:** none. It sends no body.
 - **Answer:** `{"shards": [{"fleet_id", "fleet_name", "token_id", "expires_at",
   "edits_restricted", "shards_contract", "chain_id", "step_down": {"chain_id", "to",
-  "data", "value"}}]}`. Only the shard's own wallet can send `step_down`, from itself, on
-  Base.
+  "data", "value"}}], "hint": string | null}`. `hint` gives discovery advice when
+  the list is empty and is null otherwise. An empty list does not rule out membership
+  through the paired person. The agent sends `step_down` from its own wallet on Base.
 - **Refusals:** only those every signed command shares.
 
 Server:
