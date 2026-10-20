@@ -388,6 +388,19 @@ defmodule Keyfleet.Keys do
   end
 
   @doc """
+  Which of `wallets` hold a key of the fleet that has no vote now (see the
+  `idle` calculation of `Keyfleet.Keys.KeyAttachment`). A newly sold key
+  waiting for its automatic start is not idle.
+  """
+  def idle_holders(fleet_id, wallets) do
+    Keyfleet.Keys.KeyAttachment
+    |> Ash.Query.for_read(:held_in_fleet, %{fleet_id: fleet_id, owner_wallets: wallets})
+    |> Ash.Query.filter(idle)
+    |> Ash.read!()
+    |> MapSet.new(& &1.owner_wallet)
+  end
+
+  @doc """
   When each of `wallets` last did something in the fleet with a key it holds
   today, since it came to hold it: a check-in, a post, a direct message, or a
   poll started or voted in. `%{wallet => at}`, leaving out the wallets that

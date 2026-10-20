@@ -91,6 +91,7 @@ defmodule KeyfleetWeb.Components.MemberList do
     held = Keys.lowest_held(fleet_id, wallets, @cards_shown)
     pictures = pictures(deck, held |> Map.values() |> List.flatten())
     present = Keys.present_holders(fleet_id, wallets)
+    idle = Keys.idle_holders(fleet_id, wallets)
     last_active = Keys.last_active(fleet_id, wallets)
     accounts = accounts(holders)
     connections = connections(Map.keys(accounts))
@@ -109,7 +110,7 @@ defmodule KeyfleetWeb.Components.MemberList do
         address: address,
         label: label,
         connections: Map.get(connections, account_id, []),
-        present?: Enum.any?(own, &MapSet.member?(present, &1)),
+        status: status(own, present, idle),
         last_active:
           own
           |> Enum.map(&last_active[&1])
@@ -217,8 +218,8 @@ defmodule KeyfleetWeb.Components.MemberList do
             />
             <span class="member-card__count">{Rules.keys(holder.count)}</span>
           </p>
-          <p class="member-card__status" data-present={holder.present? && "true"}>
-            {if holder.present?, do: "Active", else: "Idle"} · {seen(holder.last_active, @now)}
+          <p class="member-card__status" data-present={holder.status == :active && "true"}>
+            {status_words(holder.status)} · {seen(holder.last_active, @now)}
           </p>
           <p class="member-card__connections">
             <span class="member-card__label">Connections</span>
@@ -271,6 +272,21 @@ defmodule KeyfleetWeb.Components.MemberList do
     </section>
     """
   end
+
+  # Active when one of the holder's Keys has a vote now, Idle when none has and
+  # one has lost it, and otherwise waiting: every Key is new and its
+  # automatic start, 2 days after its sale, is still to come.
+  defp status(wallets, present, idle) do
+    cond do
+      Enum.any?(wallets, &MapSet.member?(present, &1)) -> :active
+      Enum.any?(wallets, &MapSet.member?(idle, &1)) -> :idle
+      true -> :waiting
+    end
+  end
+
+  defp status_words(:active), do: "Active"
+  defp status_words(:idle), do: "Idle"
+  defp status_words(:waiting), do: "Waiting to start"
 
   defp seen(nil, _now), do: "never active"
 

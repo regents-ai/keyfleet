@@ -82,6 +82,30 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     refute has_element?(view, "#fleet-members-previous")
   end
 
+  # A holder is Active while one of their Keys has a vote, Idle once their
+  # Keys' votes have lapsed, and waiting while every Key is new and its
+  # automatic start is still to come.
+  test "each holder's status says whether their Keys vote, lapsed or wait to start", %{
+    conn: conn
+  } do
+    deploy!()
+    ChainHelpers.seed_cursor!(@fleet)
+    [active, waiting] = for _ <- 1..2, do: unclaimed_wallet()
+    move!(7, active)
+    move!(8, waiting)
+    now = DateTime.utc_now()
+    ProposalHelpers.presence!(@fleet, 7, DateTime.add(now, -3600))
+    ProposalHelpers.scheduled!(@fleet, 8, DateTime.add(now, 2, :day))
+
+    {:ok, view, _html} = live(conn, @members_path)
+
+    assert text(view, "#fleet-members-holder-#{active} .member-card__status") =~ ~r/^Active · /
+    assert text(view, "#fleet-members-holder-#{@owner} .member-card__status") =~ ~r/^Idle · /
+
+    assert text(view, "#fleet-members-holder-#{waiting} .member-card__status") ==
+             "Waiting to start · never active"
+  end
+
   # Every address a person's account links is counted as one card under their
   # main address; an address no account links keeps a card of its own.
   test "the Member List shows each person once with the Keys of all their addresses", %{
