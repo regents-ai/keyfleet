@@ -52,7 +52,7 @@ defmodule Keyfleet.Activity do
     * `:linked`: `by`, `relation` ("supports", "contradicts" or "produces"),
       `source` and `target` (items): the source supports, contradicts or
       produces the target.
-    * `:sale`: `token_ids`, the keys bought one after another, lowest first.
+    * `:sale`: `token_ids`, the keys one purchase bought, lowest first.
     * `:given`: the same, for a fleet whose Keys are given rather than sold
       (`Keyfleet.Fleets.Presets.given?/1`).
     * `:transfer`: `token_id`, a key that changed hands.
@@ -448,14 +448,18 @@ defmodule Keyfleet.Activity do
   defp author(line),
     do: %{token_id: line.as_key, agent: line.agent_profile && line.agent_profile.name}
 
-  # Keys: consecutive first owners are one item, fifty at most, of `kind`:
-  # `:sale`, or `:given` where the fleet's Keys are given. The item is named
-  # for its earliest Key, so a Key bought after it joins the same line.
+  # Keys: the first owners one transaction made are one item, fifty at most,
+  # of `kind`: `:sale`, or `:given` where the fleet's Keys are given. The item
+  # is named for its earliest Key.
   defp group_epochs([], _kind), do: []
 
   defp group_epochs([%{ownership_epoch: 1} = first | _] = epochs, kind) do
     {sold, rest} =
-      epochs |> Enum.take(@group_cap) |> Enum.split_while(&(&1.ownership_epoch == 1))
+      epochs
+      |> Enum.take(@group_cap)
+      |> Enum.split_while(
+        &(&1.ownership_epoch == 1 and &1.transaction_hash == first.transaction_hash)
+      )
 
     rest = rest ++ Enum.drop(epochs, @group_cap)
     last = List.last(sold)

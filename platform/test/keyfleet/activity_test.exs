@@ -258,6 +258,16 @@ defmodule Keyfleet.ActivityTest do
              [{:transfer, %{token_id: 1}}, {:sale, %{token_ids: [1]}}]
   end
 
+  test "each purchase is its own line, naming only the Keys it bought" do
+    Enum.each(2..18, &epoch!(&1, 1, "a"))
+    epoch!(19, 1, "b", "0x" <> String.duplicate("c", 64), 0)
+    epoch!(20, 1, "b", "0x" <> String.duplicate("c", 64), 1)
+
+    sales = for %{kind: :sale} = item <- page(nil).items, do: item.facts.token_ids
+
+    assert sales == [[19, 20] | Enum.map(18..1//-1, &[&1])]
+  end
+
   test "keys that abstained are counted apart from those that voted yes or no" do
     proposal!(@fleet, 1, %{})
     vote!(@fleet, 1, wallet("a"), :yes, [1, 2])
@@ -498,6 +508,16 @@ defmodule Keyfleet.ActivityTest do
   end
 
   defp epoch!(token_id, ownership_epoch, owner) do
+    transaction_hash =
+      "0x" <>
+        Base.encode16(:crypto.hash(:sha256, "#{@fleet}/#{token_id}/#{ownership_epoch}"),
+          case: :lower
+        )
+
+    epoch!(token_id, ownership_epoch, owner, transaction_hash, 0)
+  end
+
+  defp epoch!(token_id, ownership_epoch, owner, transaction_hash, log_index) do
     Keys.record_epoch!(
       %{
         fleet_id: @fleet,
@@ -506,12 +526,8 @@ defmodule Keyfleet.ActivityTest do
         owner_wallet: wallet(owner),
         block_number: 10 + ownership_epoch,
         block_hash: "0x" <> String.duplicate("a", 64),
-        transaction_hash:
-          "0x" <>
-            Base.encode16(:crypto.hash(:sha256, "#{@fleet}/#{token_id}/#{ownership_epoch}"),
-              case: :lower
-            ),
-        log_index: 0
+        transaction_hash: transaction_hash,
+        log_index: log_index
       },
       actor: @system
     )

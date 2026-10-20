@@ -42,7 +42,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     Fleets.bootstrap_catalog!()
     ChainHelpers.open_cursor!(@fleet)
 
-    for token_id <- 1..@issued, do: issue!(@fleet, token_id)
+    # Cascade's Keys were bought in one purchase.
+    issue!(@fleet, Enum.to_list(1..@issued))
     # A chain that answers no reads until a test says what it holds.
     StubClient.put_chain(chain_head(1_000), [])
     # No fleet's reading is left from another test: a hall shown to anyone
@@ -1744,21 +1745,32 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     do:
       ChainHelpers.deploy!(fleet_id, %{manager_address: @contract, deployed_block: deployed_block})
 
-  defp issue!(fleet_id, token_id, owner \\ @owner) do
-    Keys.record_epoch!(
-      %{
-        fleet_id: fleet_id,
-        token_id: token_id,
-        ownership_epoch: 1,
-        owner_wallet: owner,
-        block_number: 10 + token_id,
-        block_hash: "0x" <> String.duplicate("a", 64),
-        transaction_hash:
-          "0x" <> Base.encode16(:crypto.hash(:sha256, "#{fleet_id}/#{token_id}"), case: :lower),
-        log_index: 0
-      },
-      actor: %Actors.System{}
-    )
+  # Keys `token_ids` of `fleet_id` bought by `owner` in one purchase; a
+  # single number is a purchase of that Key alone.
+  defp issue!(fleet_id, token_ids, owner \\ @owner)
+
+  defp issue!(fleet_id, token_id, owner) when is_integer(token_id),
+    do: issue!(fleet_id, [token_id], owner)
+
+  defp issue!(fleet_id, [first | _] = token_ids, owner) do
+    transaction_hash =
+      "0x" <> Base.encode16(:crypto.hash(:sha256, "#{fleet_id}/#{first}"), case: :lower)
+
+    for token_id <- token_ids do
+      Keys.record_epoch!(
+        %{
+          fleet_id: fleet_id,
+          token_id: token_id,
+          ownership_epoch: 1,
+          owner_wallet: owner,
+          block_number: 10 + first,
+          block_hash: "0x" <> String.duplicate("a", 64),
+          transaction_hash: transaction_hash,
+          log_index: token_id
+        },
+        actor: %Actors.System{}
+      )
+    end
   end
 
   # Key `token_id` of Cascade changes hands to `owner`.

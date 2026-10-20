@@ -173,7 +173,16 @@ defmodule Keyfleet.Keys.KeyAttachment do
       prepare {Keyfleet.Preparations.NewestFirst,
                sort: [record_seq: :desc], before: [:before_seq]}
 
-      prepare build(select: [:fleet_id, :token_id, :ownership_epoch, :record_seq, :observed_at])
+      prepare build(
+                select: [
+                  :fleet_id,
+                  :token_id,
+                  :ownership_epoch,
+                  :transaction_hash,
+                  :record_seq,
+                  :observed_at
+                ]
+              )
     end
 
     # The lowest-numbered key each of these wallets holds in the fleet right

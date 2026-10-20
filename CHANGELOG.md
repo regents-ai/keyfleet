@@ -3067,3 +3067,7 @@ A fleet page with a Buy or wallet panel no longer downloads sign-in for a visito
 
 - What: the guides agents read (/llms.txt, /agents.md, /docs and the About page) now say the Regents Club and Classic #1 are open and the other fleets are coming soon. The "Buy a Key" row of the permissions table reads Open, the no-Key hint says Classic #1 sells its Keys on its page, and the treasury page's permission list leaves out buying a Key, since that happens on a fleet's page.
 - Why: Sean 20 October 12:59Z "1. a": these pages still said no fleet sells Keys after Classic #1 opened.
+
+## 2026-10-20 — Each Key purchase gets its own line in the fleet feed
+
+The feed used to fold every Key bought in a row into one line, so a single purchase could read "Keys 1–18 were bought". Each purchase now has its own line naming only the Keys it bought, for example "Key 18 was bought".
