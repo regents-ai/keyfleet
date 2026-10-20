@@ -3024,3 +3024,8 @@ Each card in a fleet's Member List shows its holder's address the way every othe
 ## 2026-10-20 — Phone: an "i" button stays beside the words it explains
 
 On a narrow phone, the "i" at the end of the small print in a room and on the polls page no longer wraps onto a line by itself; it stays beside the last word.
+
+## 2026-10-20 — Keyboard: wide boxes scroll, and one focus ring everywhere
+
+- What: the docs page's code blocks, the Treasury's two tables and a Key window's card and traits can be reached with Tab, so a box too wide or tall for the screen scrolls with the arrow keys. The focus ring on the public pages (docs, about, contact and the rest) is the same accent as inside the app, instead of the device's pale highlight colour; it measures 5.2 to 1 against the light page and 11.4 to 1 against the dark one.
+- Why: overnight accessibility pass (Sean 20 October 03:20Z: "keep working on improvements overnight"). An accessibility scan of 15 pages in light and dark found these boxes out of reach of a keyboard; the Key window, the Buy Key panel and the phone menu already keep focus and close on Escape.

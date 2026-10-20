@@ -21,6 +21,14 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     refute body =~ "INSERT"
   end
 
+  test "every code block on the docs page can take keyboard focus, so a wide one can be scrolled" do
+    blocks = build_conn() |> get("/docs") |> html_response(200) |> LazyHTML.from_document()
+    blocks = LazyHTML.query(blocks, ".public-document pre")
+
+    assert Enum.count(blocks) > 0
+    assert blocks |> LazyHTML.attribute("tabindex") |> Enum.uniq() == ["0"]
+  end
+
   # Each page names itself in the tab and describes itself for search, from
   # the one list in PublicDocuments; the site name is added once.
   test "every reading page has its own title and description" do

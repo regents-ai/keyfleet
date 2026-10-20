@@ -24,6 +24,8 @@
   margin: auto;
 }
 
+/* The card and its traits scroll on their own when taller than the window,
+   and take keyboard focus so they can be scrolled without a pointer. */
 .key-profile__card {
   position: sticky;
   top: 0;

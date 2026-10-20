@@ -107,11 +107,12 @@ button:not(.rg-button) {
   cursor: pointer;
 }
 
+/* The same ring as inside the app, so focus looks alike on every page. */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--color-focus-ring, Highlight);
+  outline: 2px solid var(--ash-accent);
   outline-offset: 2px;
 }
 

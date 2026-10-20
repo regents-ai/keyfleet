@@ -65,7 +65,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       data-shown={@profile.token_id}
       aria-labelledby="key-profile-title"
     >
-      <div class="key-profile__card">
+      <div class="key-profile__card" tabindex="0">
         <.card profile={@profile} />
         <.traits :if={@profile.issued?} profile={@profile} />
       </div>

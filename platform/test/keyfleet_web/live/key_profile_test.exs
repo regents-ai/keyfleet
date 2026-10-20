@@ -66,6 +66,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
            )
 
     assert has_element?(view, ".key-profile__card #key-profile-traits-title", "Traits")
+    assert has_element?(view, ".key-profile__card[tabindex='0']")
     assert text(view, ".key-profile__card .key-profile__traits p") == "Revealing"
     assert text(view, "#key-profile-holder .rg-address__label") == "0xeeee..eeee"
     holder = wallet("e")

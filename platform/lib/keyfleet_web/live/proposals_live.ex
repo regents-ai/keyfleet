@@ -698,7 +698,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         phx-hook="MotionCount"
         data-variant={Motion.standard("count")}
       >
-        <table id="proposals-balances" class="proposals-table">
+        <table id="proposals-balances" class="proposals-table" tabindex="0">
           <thead>
             <tr>
               <th scope="col">In the treasury</th>
@@ -923,6 +923,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           :if={split(panel)[:assets] not in [nil, []]}
           id="proposals-split-preview"
           class="proposals-table"
+          tabindex="0"
         >
           <thead>
             <tr>

@@ -469,6 +469,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert shows?(fn -> has_element?(view, "#proposals-balances [data-asset='#{@usdc}']") end)
       assert cells(view, @usdc) == ["3 USDC", "0 USDC"]
+      assert has_element?(view, "#proposals-balances[tabindex='0']")
     end
 
     test "the treasury tab shows the USDC from Key sales waiting to become REGENT", %{
@@ -941,6 +942,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert preview(view, @usdc) == ["USDC", "250 USDC", "100 USDC", "0.625 USDC"]
       assert preview(view, @eth) == ["ETH", "0.1 ETH", "0.05 ETH", "0.00025 ETH"]
+      assert has_element?(view, "#proposals-split-preview[tabindex='0']")
       assert text(view, "#proposals-split-last") == "6 October 2026 at 16:00 UTC"
       assert text(view, "#proposals-split-opens") == "7 October 2026 at 13:00 UTC"
 

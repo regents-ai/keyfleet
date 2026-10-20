@@ -278,7 +278,8 @@
 }
 
 /* A table of figures per asset; it scrolls inside its panel on a narrow
-   screen rather than widening the page. */
+   screen rather than widening the page, and takes keyboard focus so it can
+   be scrolled without a pointer. */
 .proposals-table {
   display: block;
   width: 100%;
