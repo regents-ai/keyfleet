@@ -182,21 +182,6 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert card_text(view, first) =~ "Added by Key 17"
     end
 
-    test "an item kept to one level says which level", %{conn: conn} do
-      level =
-        create(@fleet, "task", %{"title" => "Level work", "progress" => "todo"}, scope: "level:3")
-
-      fleet_wide = create(@fleet, "task", %{"title" => "Fleet work", "progress" => "todo"})
-
-      {:ok, view, _html} = live(conn, @board)
-
-      assert has_element?(view, ~s(#{card(level)} [data-level="3"]), "Level 3")
-      refute has_element?(view, ~s(#{card(fleet_wide)} [data-level]))
-
-      {:ok, item, _html} = live(conn, item_path(level))
-      assert has_element?(item, ~s(#workspace-item-page [data-level="3"]), "Level 3")
-    end
-
     test "archived items are hidden until asked for", %{conn: conn} do
       kept = create(@fleet, "note", %{"title" => "Kept", "body" => "b"})
       gone = create(@fleet, "note", %{"title" => "Gone", "body" => "b"})
@@ -573,6 +558,24 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              ]
     end
 
+    test "a fork reads as the task being forked, and the copy names the task it copies", %{
+      conn: conn
+    } do
+      task = create(@fleet, "task", %{"title" => "Draft", "progress" => "doing"})
+      fork = create(@fleet, "task", %{"title" => "Draft", "progress" => "doing"}, by: 9)
+      link(@fleet, fork, task, "forks", by: 9)
+
+      {:ok, view, _html} = live(conn, item_path(fork))
+
+      assert has_element?(
+               view,
+               ~s(#workspace-links [data-direction="from"]),
+               "This task copies"
+             )
+
+      assert history(view) == ["Key 9 forked “Draft”.", "Key 9 added the task “Draft”."]
+    end
+
     test "a review is told once, as its decision on the task", %{conn: conn} do
       task = create(@fleet, "task", %{"title" => "Draft", "progress" => "doing"})
       submit(@fleet, task, "https://example.com/draft", by: 9)
@@ -727,11 +730,6 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       event(@fleet, "patch.applied", %{
         "target" => task,
-        "diff" => %{"sys" => %{"old" => sys, "new" => Map.put(sys, "scope", "level:2")}}
-      })
-
-      event(@fleet, "patch.applied", %{
-        "target" => task,
         "diff" => %{
           "progress" => %{"old" => "todo", "new" => "blocked"},
           "sys" => %{"old" => sys, "new" => sys}
@@ -740,12 +738,11 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       {:ok, view, _html} = live(conn, @board)
 
-      assert Enum.take(activity(view), 2) == [
-               "Keyfleet updated “Draft”: progress is now blocked.",
-               "Keyfleet updated “Draft”."
+      assert Enum.take(activity(view), 1) == [
+               "Keyfleet updated “Draft”: progress is now blocked."
              ]
 
-      assert has_element?(view, "#workspace-activity .workspace-detail", "at 12:05 UTC")
+      assert has_element?(view, "#workspace-activity .workspace-detail", "at 12:03 UTC")
     end
 
     test "a change made by Keyfleet itself names no key", %{conn: conn} do

@@ -37,7 +37,7 @@ class Fleet:
         return reply
 
     def create(self, type_, **data):
-        return self.send("create", {"type": type_, "scope": "fleet", "data": {"title": type_, **data}})["result"]["id"]
+        return self.send("create", {"type": type_, "data": {"title": type_, **data}})["result"]["id"]
 
     def patch(self, object_id, **fields):
         obj = self.host.graph.get_object(object_id)
@@ -346,7 +346,7 @@ protocol.write_frame = write_frame
 
 def test_a_retry_after_a_crash_between_commit_and_reply_asks_nothing_twice(db):
     create = [
-        request("create", {"type": "task", "scope": "fleet", "data": {"title": title}}, command(title))
+        request("create", {"type": "task", "data": {"title": title}}, command(title))
         for title in ("blocker", "waiting")
     ]
     link = request("link", {"source": "task#2", "target": "task#1", "type": "depends_on"}, command("l"))
@@ -488,17 +488,17 @@ def test_an_unlink_check_is_bounded_by_the_work_bound_too(fleet):
     assert asked(fleet.unlink(rel.id)) == [("task_unblocked", waiting)]
 
 
-# ---------- nothing a member sends asks for attention or moves a scope ----------
+# ---------- nothing a member sends asks for attention or changes sys ----------
 
 
 MEMBER_ATTEMPTS = [
-    ("create", {"type": "note", "scope": "fleet", "data": {"title": "keyfleet.attention", "body": "kind: needs_review"}}),
-    ("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "b", "kind": "needs_review"}}),
-    ("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "b", "dedupe_key": "x"}}),
-    ("create", {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "b", "cause": {"event_id": "evt_001"}}}),
-    ("create", {"type": "keyfleet.attention", "scope": "fleet", "data": {"title": "t"}}),
+    ("create", {"type": "note", "data": {"title": "keyfleet.attention", "body": "kind: needs_review"}}),
+    ("create", {"type": "note", "data": {"title": "t", "body": "b", "kind": "needs_review"}}),
+    ("create", {"type": "note", "data": {"title": "t", "body": "b", "dedupe_key": "x"}}),
+    ("create", {"type": "note", "data": {"title": "t", "body": "b", "cause": {"event_id": "evt_001"}}}),
+    ("create", {"type": "keyfleet.attention", "data": {"title": "t"}}),
     ("patch", {"id": "task#1", "expected_version": 1, "set": {"kind": "task_unblocked"}}),
-    ("patch", {"id": "task#1", "expected_version": 1, "set": {"sys": {"scope": "level:1"}}}),
+    ("patch", {"id": "task#1", "expected_version": 1, "set": {"sys": {"archived": True}}}),
     ("link", {"source": "task#1", "target": "task#2", "type": "keyfleet.attention"}),
     ("keyfleet.attention", {"kind": "needs_review", "object_id": "task#1"}),
     ("emit", {"type": "keyfleet.attention", "payload": {}}),
@@ -506,7 +506,7 @@ MEMBER_ATTEMPTS = [
 
 
 @pytest.mark.parametrize(("op", "body"), MEMBER_ATTEMPTS)
-def test_no_member_request_writes_an_attention_event_or_moves_a_scope(fleet, op, body):
+def test_no_member_request_writes_an_attention_event_or_changes_sys(fleet, op, body):
     fleet.create("task")
     fleet.create("task")
 
@@ -520,7 +520,7 @@ def test_no_member_request_writes_an_attention_event_or_moves_a_scope(fleet, op,
 
 @pytest.mark.parametrize("principal", [GATEWAY, "keyfleet:reactions", "system", "runtime"])
 def test_a_command_cannot_be_made_in_the_gateway_name(fleet, principal):
-    body = {"type": "note", "scope": "fleet", "data": {"title": "t", "body": "b"}}
+    body = {"type": "note", "data": {"title": "t", "body": "b"}}
 
     reply = fleet.host.handle(json.dumps(request("create", body, {**command("x"), "principal": principal})).encode())
 

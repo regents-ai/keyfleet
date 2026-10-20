@@ -10,7 +10,7 @@ WALLET = "0x" + "a1" * 20
 CONTRACT = "0x" + "b2" * 20
 
 
-def command(command_id, *, token_id=17, scopes=("fleet",), wallet=WALLET, contract=CONTRACT):
+def command(command_id, *, token_id=17, wallet=WALLET, contract=CONTRACT):
     auth = {
         "key": {"chain_id": 8453, "contract": contract, "token_id": token_id},
         "ownership_epoch": 3,
@@ -23,7 +23,6 @@ def command(command_id, *, token_id=17, scopes=("fleet",), wallet=WALLET, contra
     return {
         "id": command_id,
         "principal": f"member:8453:{contract}:{token_id}@3/agent:{wallet}",
-        "writable_scopes": list(scopes),
         "auth": auth,
     }
 

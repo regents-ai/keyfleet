@@ -203,3 +203,39 @@ features:
     gaps:
       - Whether two Keys or agents share one owner is not known, so a review does not prove independence.
       - Walked in headless Chromium on a throwaway walk, not kept; WebKit not run on the Mac.
+
+  - id: workspace-whole-fleet-and-forks
+    what: >-
+      Every Key writes the whole fleet's workspace, in every kind of fleet;
+      nothing is kept to one level. A Key takes a task nobody holds; only the
+      Key holding a task gives it to another Key or drops it. Any member forks
+      a task instead: the copy is the forker's task in progress, delivers on
+      the same goals and links back to the original, which stays as it was.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/graph_host/src/keyfleet_graph/protocol.py
+      - platform/graph_host/src/keyfleet_graph/pack.py
+      - platform/graph_host/src/keyfleet_graph/host.py
+      - platform/lib/keyfleet/graph/checks/key_actor.ex
+      - platform/lib/keyfleet/graph/workspace.ex
+      - platform/lib/keyfleet_web/controllers/agent_graph_controller.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/live/workspace_page.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - platform/priv/public/skill.md
+      - platform/priv/public/docs.md
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/fork
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/patch
+      - route: POST /api/v1/agent/fleets/{fleet_id}/graph/create
+      - live: KeyfleetWeb.WorkspaceLive
+    proofs:
+      - platform/graph_host/tests/test_tasks.py
+      - platform/test/keyfleet_web/controllers/agent_graph_journey_test.exs
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+    gaps:
+      - Items already stored keep a one-word "fleet" marker in their record; it is the only value it can have.
+      - Not yet run by a real agent.

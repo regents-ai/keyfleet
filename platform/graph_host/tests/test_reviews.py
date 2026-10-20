@@ -40,9 +40,9 @@ REVIEWER = {"token_id": 18, "wallet": OTHER_WALLET}
 @pytest.fixture
 def host(db):
     host = Host("fleet_a", str(db))
-    _ok(host, "create", {"type": "task", "scope": "fleet", "data": {"title": "Draft"}}, command("t"))
-    _ok(host, "create", {"type": "evidence", "scope": "fleet", "data": EVIDENCE}, command("e1"))
-    _ok(host, "create", {"type": "evidence", "scope": "fleet", "data": EVIDENCE}, command("e2"))
+    _ok(host, "create", {"type": "task", "data": {"title": "Draft"}}, command("t"))
+    _ok(host, "create", {"type": "evidence", "data": EVIDENCE}, command("e1"))
+    _ok(host, "create", {"type": "evidence", "data": EVIDENCE}, command("e2"))
     return host
 
 
@@ -145,7 +145,7 @@ def test_a_review_stays_as_written(host):
         ("unlink", {"relation_id": rel.id}),
         ("link", {"source": review, "target": "task#1", "type": "references"}),
         ("link", {"source": review, "target": "task#1", "type": "reviews"}),
-        ("create", {"type": "review", "scope": "fleet", "data": {"decision": "accept", "rationale": "r", "conflicts_of_interest": "none"}}),
+        ("create", {"type": "review", "data": {"decision": "accept", "rationale": "r", "conflicts_of_interest": "none"}}),
     ]
     for n, (op, body) in enumerate(attempts):
         reply = _call(host, op, body, command(f"a{n}", **REVIEWER))
