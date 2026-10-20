@@ -256,7 +256,11 @@ defmodule KeyfleetWeb.AgentRoomController do
         | items: Enum.map(synced.proposals.items, &ProposalJSON.summary/1)
       },
       check_in: check_in_json(check_in),
-      yours: %{yours | tasks: Enum.map(yours.tasks, &task_json/1)}
+      yours: %{
+        yours
+        | tasks: Enum.map(yours.tasks, &task_json/1),
+          goals: Enum.map(yours.goals, &goal_json/1)
+      }
     }
   end
 
@@ -303,15 +307,17 @@ defmodule KeyfleetWeb.AgentRoomController do
 
   # The key the agent writes as here (its own lowest key, or its shard's),
   # whether a vote of the fleet has stopped that key changing the workspace,
-  # and the unfinished tasks the key has taken. An agent with neither a key
-  # nor a shard here writes as none.
+  # the unfinished tasks the key has taken and the goals the agent joined as
+  # it. An agent with neither a key nor a shard here writes as none.
   defp yours(fleet_id, actor) do
     with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
          {:ok, restricted} <- Keys.edits_restricted?(fleet_id, token_id),
-         {:ok, tasks} <- Graph.tasks_assigned_to(fleet_id, [token_id], actor: actor) do
-      {:ok, %{as_key: token_id, edits_restricted: restricted, tasks: tasks}}
+         {:ok, tasks} <- Graph.tasks_assigned_to(fleet_id, [token_id], actor: actor),
+         {:ok, goals} <-
+           Graph.goals_joined_by(fleet_id, token_id, actor.wallet_address, actor: actor) do
+      {:ok, %{as_key: token_id, edits_restricted: restricted, tasks: tasks, goals: goals}}
     else
-      nil -> {:ok, %{as_key: nil, edits_restricted: false, tasks: []}}
+      nil -> {:ok, %{as_key: nil, edits_restricted: false, tasks: [], goals: []}}
       error -> error
     end
   end
@@ -329,6 +335,10 @@ defmodule KeyfleetWeb.AgentRoomController do
       schedule_minutes: check_in.schedule_minutes,
       schedule_confirmed: check_in.schedule_confirmed_at != nil
     }
+  end
+
+  defp goal_json(goal) do
+    %{id: goal.id, title: goal.title, status: goal.card["status"], version: goal.version}
   end
 
   defp task_json(task) do

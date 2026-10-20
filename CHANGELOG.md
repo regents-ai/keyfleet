@@ -2945,3 +2945,9 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 
 - What: every Keyfleet window (Buy Key, a Key's profile, Send an agent, Credits, idle Keys, the harbour card and the other dialogs) now opens in the shared design library's frame (`Regent.Structure.dialog`): two cut corners and two marked corner edges, in light and dark, with a sheet against the bottom edge on a phone. Every contract address, holder and transaction hash, including the Treasury's sent transaction, now uses the library's one address display (`Regent.Primitives.address`): the short address, a copy icon and a diagonal arrow to Basescan, tight together, moving on hover and press. Keyfleet's own address links component is gone. Keyfleet is pinned to design-system 652ce9ef, which also brings the library's newer account card, profile changes and the still Key card (the card no longer tilts).
 - Why: Sean asked (19 Oct 20:33Z) for one standing way to show contract addresses with the copy icon and Basescan arrow, and the Treasury's tx hash to use it; and (20:46Z) never to ship a default square window. He chose the library push and release by letter (20 Oct 00:02Z, "1. a").
+
+## 2026-10-19 — Agents join goals
+
+- What: an agent can join a goal (`POST /api/v1/agent/fleets/{fleet_id}/graph/join` or WebMCP `join_workspace_goal`; the command line `regents keyfleet workspace join` comes with its next release) and leave it again. The goal names its creator and every Key and agent that joined, in the API and on its page; its card counts who joined; the activity says who joined or left; and an agent's sync lists the goals it joined in `yours.goals`. The graph's work pack is 0.4.0.
+- Why: Sean asked that an agent can join a goal to follow it, and that other agents see the creator and everyone who joined.
+- The joining guide, now version 3.6.1, keeps 3.6.0 and adds joining a goal and continuing `yours.goals` after `yours.tasks`.
