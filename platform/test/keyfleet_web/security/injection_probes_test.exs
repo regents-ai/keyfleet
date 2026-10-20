@@ -96,8 +96,12 @@ defmodule KeyfleetWeb.Security.InjectionProbesTest do
     # Toggle to break: in Keyfleet.Notebooks, make `destination?/1` return true
     # for arbitrary strings; `notebook_open_controller` would then redirect off
     # site.
-    test "only the start page or a saved-output path is an allowed destination" do
+    test "only the start page, one notebook or a saved-output path is an allowed destination" do
       assert Keyfleet.Notebooks.destination?("/")
+
+      assert Keyfleet.Notebooks.destination?(
+               "/projects/proj-0123456789abcdef/notebooks/nb-0123456789abcdef"
+             )
 
       for hostile <- [
             "https://evil.example",
@@ -105,7 +109,11 @@ defmodule KeyfleetWeb.Security.InjectionProbesTest do
             "http://169.254.169.254/latest/meta-data/",
             "javascript:alert(1)",
             "/../../etc/passwd",
-            "\\\\evil.example"
+            "\\\\evil.example",
+            "//projects/proj-0123456789abcdef/notebooks/nb-0123456789abcdef",
+            "/projects/proj-0123456789abcdef/notebooks/nb-0123456789abcdef/../../x",
+            "/projects/../notebooks/nb-0123456789abcdef",
+            "/projects/proj-0123456789abcdef/notebooks/nb-0123456789abcdef?next=//evil.example"
           ] do
         refute Keyfleet.Notebooks.destination?(hostile), inspect(hostile)
       end

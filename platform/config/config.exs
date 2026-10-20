@@ -256,6 +256,8 @@ config :keyfleet, :notebooks,
   max_request_bytes: 32 * 1024 * 1024,
   saved_page_max_bytes: 16 * 1024 * 1024,
   hub_timeout_ms: 30_000,
+  # A workspace page lists a goal's notebooks, waiting this long for the hub.
+  page_timeout_ms: 5_000,
   # The Fly runner allows 120 seconds to boot, plus creation and notebook setup.
   session_start_timeout_ms: 180_000,
   # Notebook sessions a fleet may have open at once; its refusal and the docs say ten.
@@ -281,6 +283,10 @@ config :keyfleet, :code,
   body_idle_ms: 15_000,
   body_timeout_ms: 600_000,
   node_timeout_ms: 120_000,
+  # A workspace page shows a folder or a file of the code; it waits this long
+  # for the store, and shows files up to this size.
+  page_timeout_ms: 5_000,
+  file_max_bytes: 512 * 1024,
   req_options: []
 
 # A sign-in lasts 30 days: the cookie expires then, and

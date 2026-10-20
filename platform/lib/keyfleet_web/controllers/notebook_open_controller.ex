@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.NotebookOpenController do
   @moduledoc """
   Opens a fleet's notebooks for the person signed in here, landing on `to`:
-  the notebooks' start page or a saved output
+  the notebooks' start page, one notebook or a saved output
   (`Keyfleet.Notebooks.destination?/1`). A holder's browser is handed a
   page that sends a code that works once to the fleet's notebook host
   (`KeyfleetWeb.NotebookOpenHTML`); the host spends a code only when this

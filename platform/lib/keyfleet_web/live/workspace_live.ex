@@ -445,13 +445,145 @@ defmodule KeyfleetWeb.WorkspaceLive do
     """
   end
 
+  attr :files, :any, required: true, doc: "the folder or file as read, or `:unreadable`"
+
+  attr :signed_out?, :boolean,
+    default: false,
+    doc: "whether nobody is signed in, so the members-only page offers Sign in"
+
+  def files(%{files: :unreadable} = assigns), do: ~H|<.unreadable id="workspace-files-page" />|
+
+  def files(%{files: %{members_only?: true}} = assigns) do
+    ~H"""
+    <article id="workspace-files-page" class="workspace-page">
+      <header class="workspace-heading">
+        <h2>Code</h2>
+        <p id="workspace-files-members-only" class="workspace-lede">
+          This is {@files.fleet_name}’s shared code. Its Key holders and their paired agents can read it.
+        </p>
+        <.link patch={KeyLinks.members_path(@files.fleet_id)}>See this fleet’s Keys</.link>
+        <Regent.Primitives.button
+          :if={@signed_out?}
+          id="workspace-files-sign-in"
+          type="button"
+          variant="secondary"
+          data-account-target="sign-in"
+        >
+          Sign in
+        </Regent.Primitives.button>
+      </header>
+    </article>
+    """
+  end
+
+  def files(assigns) do
+    ~H"""
+    <article id="workspace-files-page" class="workspace-page">
+      <header class="workspace-heading">
+        <p class="workspace-kicker">
+          <.link patch={"#{Keyfleet.Fleets.path(@files.fleet_id)}/workspace"}>Workspace</.link>
+        </p>
+        <h2>{if @files.path == "", do: "Code", else: Path.basename(@files.path)}</h2>
+        <nav
+          :if={@files.path != ""}
+          id="workspace-files-crumbs"
+          class="workspace-crumbs"
+          aria-label="Folders"
+        >
+          <.link patch={Keyfleet.Code.files_path(@files.fleet_id, "")}>Code</.link>
+          <%= for crumb <- @files.crumbs do %>
+            <span aria-hidden="true">/</span>
+            <.link patch={crumb.link}>{crumb.name}</.link>
+          <% end %>
+        </nav>
+      </header>
+
+      <div class="workspace-item-grid">
+        <section
+          id="workspace-files"
+          class="workspace-panel workspace-wide"
+          aria-label={if @files.path == "", do: "Code", else: @files.path}
+        >
+          <p :if={@files.listing == :unreadable} id="workspace-files-unreadable">
+            The code can’t be read right now. Try again in a minute.
+          </p>
+          <.folder :if={match?({:folder, _}, @files.listing)} listing={@files.listing} />
+          <.file :if={match?({:file, _}, @files.listing)} listing={@files.listing} />
+        </section>
+
+        <section class="workspace-panel" aria-labelledby="workspace-files-get-title">
+          <h2 id="workspace-files-get-title">Get it</h2>
+          <p id="workspace-files-clone"><code>git clone {@files.clone_url}</code></p>
+        </section>
+
+        <section class="workspace-panel" aria-labelledby="workspace-files-pushes-title">
+          <h2 id="workspace-files-pushes-title">Sent lately</h2>
+          <Regent.Primitives.empty_state
+            :if={@files.pushes == []}
+            id="workspace-files-no-pushes"
+            class="kf-empty"
+            title="No changes have been sent yet."
+          />
+          <ol :if={@files.pushes != []} id="workspace-files-pushes" class="workspace-lines">
+            <li :for={push <- @files.pushes} data-push={push.id}>
+              <p>
+                <.key fleet_id={@files.fleet_id} token_id={push.token_id} agent={push.agent} />
+                sent {push.what}, ending at <.value value={push.commit} fleet_id={@files.fleet_id} />
+              </p>
+              <p class="workspace-detail">{push.at}</p>
+            </li>
+          </ol>
+        </section>
+      </div>
+    </article>
+    """
+  end
+
+  attr :listing, :any, required: true
+
+  defp folder(%{listing: {:folder, entries}} = assigns) do
+    assigns = assign(assigns, :entries, entries)
+
+    ~H"""
+    <Regent.Primitives.empty_state
+      :if={@entries == []}
+      id="workspace-files-empty"
+      class="kf-empty"
+      title="No code has been sent yet."
+    />
+    <ol :if={@entries != []} id="workspace-file-rows" class="workspace-rows">
+      <li :for={entry <- @entries} class="workspace-row" data-file={entry.name}>
+        <span class="workspace-kind">{if entry.folder?, do: "Folder", else: "File"}</span>
+        <.link class="workspace-row-title" patch={entry.link}>{entry.name}</.link>
+        <span :if={entry.size} class="workspace-row-meta">{size(entry.size)}</span>
+      </li>
+    </ol>
+    """
+  end
+
+  attr :listing, :any, required: true
+
+  defp file(%{listing: {:file, contents}} = assigns) do
+    assigns = assign(assigns, :contents, contents)
+
+    ~H"""
+    <p :if={@contents == :too_large} id="workspace-file-too-large">
+      This file is too large to show here. Copy the code to read it.
+    </p>
+    <p :if={@contents == :not_text} id="workspace-file-not-text">
+      This file isn’t text, so it isn’t shown here. Copy the code to open it.
+    </p>
+    <pre :if={is_binary(@contents)} id="workspace-file" class="workspace-file"><code>{@contents}</code></pre>
+    """
+  end
+
   attr :fleet_id, :string, required: true
   attr :code, :map, required: true
   attr :password, :map, default: nil
   attr :notice, :string, default: nil
 
   # The fleet's shared code: where git copies it from, a password for a key
-  # holder, and the changes sent lately. The code itself never shows here.
+  # holder, a link to its files, and the changes sent lately.
   defp code(assigns) do
     ~H"""
     <section id="workspace-code" class="workspace-panel" aria-labelledby="workspace-code-title">
@@ -490,6 +622,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
         </div>
       </div>
       <p :if={@notice} id="code-notice" class="workspace-notebooks-notice">{@notice}</p>
+
+      <p>
+        <.link id="workspace-code-files" patch={Keyfleet.Code.files_path(@fleet_id, "")}>
+          Browse the code
+        </.link>
+      </p>
 
       <h3>Sent lately</h3>
       <Regent.Primitives.empty_state
@@ -821,14 +959,34 @@ defmodule KeyfleetWeb.WorkspaceLive do
       aria-labelledby="workspace-goal-notebooks-title"
     >
       <h2 id="workspace-goal-notebooks-title">Notebooks</h2>
+      <p class="workspace-detail">Tagged {@goal.name}, then the results cited for it.</p>
+      <p :if={is_nil(@goal.notebooks)} id="workspace-goal-notebooks-none" class="workspace-detail">
+        Notebooks aren’t connected for this fleet yet.
+      </p>
+      <p :if={@goal.notebooks == :unreadable} id="workspace-goal-notebooks-unreadable">
+        The notebooks can’t be read right now. Try again in a minute.
+      </p>
       <Regent.Primitives.empty_state
-        :if={@goal.results == []}
+        :if={@goal.notebooks == [] and @goal.results == []}
         id="workspace-goal-notebooks-empty"
         class="kf-empty"
-        title="No notebook results are cited for this goal yet."
+        title="Nothing here yet."
       />
-      <ol :if={@goal.results != []} id="workspace-goal-results" class="workspace-rows">
+      <ol
+        :if={tagged(@goal.notebooks) != [] or @goal.results != []}
+        id="workspace-goal-notebook-rows"
+        class="workspace-rows"
+      >
+        <li
+          :for={notebook <- tagged(@goal.notebooks)}
+          class="workspace-row"
+          data-notebook={notebook.id}
+        >
+          <span class="workspace-kind">Notebook</span>
+          <a class="workspace-row-title" href={notebook.open}>{notebook.title}</a>
+        </li>
         <li :for={result <- @goal.results} class="workspace-row" data-item={result.id}>
+          <span class="workspace-kind">Result</span>
           <a
             class="workspace-row-title"
             href={result.uri}
@@ -851,14 +1009,40 @@ defmodule KeyfleetWeb.WorkspaceLive do
       aria-labelledby="workspace-goal-code-title"
     >
       <h2 id="workspace-goal-code-title">Code</h2>
+      <p class="workspace-detail">
+        <span>
+          In
+          <.link
+            :if={entries(@goal.code) != []}
+            id="workspace-goal-folder"
+            patch={@goal.folder.link}
+          >{@goal.folder.path}</.link><code
+            :if={entries(@goal.code) == []}
+            id="workspace-goal-folder-name"
+          >{@goal.folder.path}</code>, then the commits cited for it.
+        </span>
+      </p>
+      <p :if={@goal.code == :unreadable} id="workspace-goal-code-unreadable">
+        The code can’t be read right now. Try again in a minute.
+      </p>
       <Regent.Primitives.empty_state
-        :if={@goal.commits == []}
+        :if={@goal.code == [] and @goal.commits == []}
         id="workspace-goal-code-empty"
         class="kf-empty"
-        title="No commits are cited for this goal yet."
+        title="Nothing here yet."
       />
-      <ol :if={@goal.commits != []} id="workspace-goal-commits" class="workspace-rows">
+      <ol
+        :if={entries(@goal.code) != [] or @goal.commits != []}
+        id="workspace-goal-code-rows"
+        class="workspace-rows"
+      >
+        <li :for={entry <- entries(@goal.code)} class="workspace-row" data-file={entry.name}>
+          <span class="workspace-kind">{if entry.folder?, do: "Folder", else: "File"}</span>
+          <.link class="workspace-row-title" patch={entry.link}>{entry.name}</.link>
+          <span :if={entry.size} class="workspace-row-meta">{size(entry.size)}</span>
+        </li>
         <li :for={commit <- @goal.commits} class="workspace-row" data-item={commit.id}>
+          <span class="workspace-kind">Commit</span>
           <.link class="workspace-row-title" patch={commit.path} data-commit={commit.hash}>
             {commit.title}
           </.link>
@@ -871,6 +1055,17 @@ defmodule KeyfleetWeb.WorkspaceLive do
     </section>
     """
   end
+
+  defp tagged(notebooks) when is_list(notebooks), do: notebooks
+  defp tagged(_none_or_unreadable), do: []
+
+  defp entries(entries) when is_list(entries), do: entries
+  defp entries(:unreadable), do: []
+
+  # A file's size the way a person reads it.
+  defp size(bytes) when bytes < 1024, do: "#{bytes} B"
+  defp size(bytes) when bytes < 1024 * 1024, do: "#{Float.round(bytes / 1024, 1)} KB"
+  defp size(bytes), do: "#{Float.round(bytes / (1024 * 1024), 1)} MB"
 
   attr :card, :map, required: true
   attr :fleet_id, :string, required: true
@@ -1040,6 +1235,17 @@ defmodule KeyfleetWeb.WorkspaceLive do
       params["fleet_id"],
       params["repository"],
       params["commit"],
+      ShellLive.human_actor(socket)
+    )
+  end
+
+  defp workspace(%{assigns: %{route_spec: %{route_id: :code_files}}} = socket) do
+    params = socket.assigns.workspace_params
+
+    WorkspacePage.files(
+      params["fleet_id"],
+      params["repository"],
+      params,
       ShellLive.human_actor(socket)
     )
   end
