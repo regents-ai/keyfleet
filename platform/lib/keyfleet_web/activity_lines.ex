@@ -13,6 +13,7 @@ defmodule KeyfleetWeb.ActivityLines do
       alone, in the site's own words: "a task", "some evidence";
     * `{:room, slug, name}`: a room, by the name it was given if any;
     * `{:agent, name}`: an agent, by the name it gave itself;
+    * `{:address, wallet}`: a wallet that acted with no Key or agent to name it;
     * `{:quote, text}`: words a member wrote;
     * `{:proposal, number}`: a proposal.
 
@@ -264,7 +265,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp room(room), do: {:room, room.slug, visible(room.topic || room.name)}
 
   # A shard's agent by name, or its wallet while no agent has signed in with it.
-  defp shard_holder(%{agent: nil, wallet: wallet}), do: RegentFormat.short_address(wallet)
+  defp shard_holder(%{agent: nil, wallet: wallet}), do: {:address, wallet}
   defp shard_holder(%{agent: agent}), do: {:agent, visible(agent.name)}
 
   defp words(text), do: {:quote, visible(text)}
@@ -284,7 +285,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp holder(%{token_id: token_id}) when is_integer(token_id),
     do: "The holder of Key #{Rules.grouped(token_id)}"
 
-  defp holder(%{wallet: wallet}), do: RegentFormat.short_address(wallet)
+  defp holder(%{wallet: wallet}), do: {:address, wallet}
 
   defp voted(%{count: 0}, _word), do: nil
 
@@ -322,6 +323,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp shown({:item, _id, title}), do: "“#{title}”"
   defp shown({:room, _slug, name}), do: name
   defp shown({:agent, name}), do: name
+  defp shown({:address, wallet}), do: RegentFormat.short_address(wallet)
   defp shown({:quote, text}), do: "“#{text}”"
   defp shown({:proposal, number}), do: proposal_name(number)
 
@@ -334,6 +336,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp marked({:item, _id, title}), do: said(title, :item)
   defp marked({:room, _slug, name}), do: said(name, :room)
   defp marked({:agent, name}), do: said(name, :agent)
+  defp marked({:address, wallet}), do: RegentFormat.short_address(wallet)
   defp marked({:quote, text}), do: said(text, :quote)
   defp marked({:proposal, number}), do: proposal_name(number)
 

@@ -11,6 +11,8 @@ defmodule KeyfleetWeb.ActivityLinesTest do
   # - an item read without its title is named by its type, never linked
   # - a key's number is written the one way every page writes it, and a
   #   proposal is a part of its own, so a page can link it
+  # - a wallet with no Key or agent to name it is a part of its own, so a
+  #   page can show it as every address is shown
 
   @post %{
     id: "post:1",
@@ -55,6 +57,21 @@ defmodule KeyfleetWeb.ActivityLinesTest do
              for({:item, _, _} = item <- ActivityLines.parts(goal), do: item)
 
     assert title != ""
+  end
+
+  test "a wallet with no Key to name it is a part of its own, shown short" do
+    wallet = "0x1234567890abcdef1234567890abcdef12345678"
+
+    proposed = %{
+      id: "proposed:1",
+      at: ~U[2026-09-25 12:00:00Z],
+      kind: :proposed,
+      facts: %{number: 1, proposer: %{token_id: nil, wallet: wallet}}
+    }
+
+    assert [{:address, ^wallet} | _] = ActivityLines.parts(proposed)
+    assert ActivityLines.text(proposed) == "0x1234..5678 put Proposal 1 to a vote."
+    assert ActivityLines.markdown(proposed) == "0x1234..5678 put Proposal 1 to a vote."
   end
 
   test "a dead end added to the workspace is told as one recorded" do

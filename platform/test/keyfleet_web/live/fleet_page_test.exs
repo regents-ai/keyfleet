@@ -1482,7 +1482,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, ~s(#fleet-feed-elsewhere a[href="#{@path}/proposals"]))
     end
 
-    test "a proposal carried out shows, linked to the proposal", %{conn: conn} do
+    test "a proposal carried out shows, linked to the proposal, its proposer's wallet as every address shows",
+         %{conn: conn} do
       ProposalHelpers.proposal!(@fleet, 1)
       ProposalHelpers.execution!(@fleet, 1, @owner)
 
@@ -1491,6 +1492,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       line = ~s(#fleet-feed-list li[data-kind="executed"])
       assert has_element?(view, ~s(#{line} a[data-proposal="1"]))
       assert text(view, "#{line} .activity-line__text") =~ "Proposal 1 was carried out."
+
+      proposed = ~s(#fleet-feed-list li[data-kind="proposed"])
+      wallet = ProposalHelpers.wallet("f")
+      assert has_element?(view, ~s(#{proposed} .rg-address [data-copy-text="#{wallet}"]))
+      assert text(view, "#{proposed} .activity-line__text") =~ "put Proposal 1 to a vote."
     end
 
     test "a goal shows by its title to anyone, other items by their titles to Key holders only",

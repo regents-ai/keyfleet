@@ -900,7 +900,8 @@ defmodule KeyfleetWeb.FleetLive do
       </p>
       <p :if={@trying.question} id="fleet-trying-question">
         <.activity_part
-          :for={part <- @trying.question}
+          :for={{part, i} <- Enum.with_index(@trying.question)}
+          id={"fleet-trying-question-#{i}"}
           part={part}
           fleet_id={@fleet_id}
           params={@params}
@@ -969,7 +970,8 @@ defmodule KeyfleetWeb.FleetLive do
       <span class="activity-line__tag">{@tag}</span>
       <p class="activity-line__text">
         <.activity_part
-          :for={part <- @parts}
+          :for={{part, i} <- Enum.with_index(@parts)}
+          id={"#{@id}-#{i}"}
           part={part}
           fleet_id={@fleet.fleet_id}
           params={@params}
@@ -982,12 +984,14 @@ defmodule KeyfleetWeb.FleetLive do
   defp tone(%{kind: :linked, facts: %{relation: "contradicts"}}), do: "disagreement"
   defp tone(_item), do: nil
 
+  attr :id, :string, required: true
   attr :part, :any, required: true
   attr :fleet_id, :string, required: true
   attr :params, :map, required: true
 
   # A key opens its profile over this page, in one of four colours so each
-  # Key's lines are easy to follow; an item or a room opens its own page.
+  # Key's lines are easy to follow; an item or a room opens its own page, and
+  # a wallet shows as every address does.
   # Everything a member wrote is text, never markup.
   defp activity_part(%{part: {:key, token_id, agent}} = assigns) do
     assigns = assign(assigns, token_id: token_id, agent: agent)
@@ -1016,6 +1020,11 @@ defmodule KeyfleetWeb.FleetLive do
   defp activity_part(%{part: {:agent, name}} = assigns) do
     assigns = assign(assigns, :name, name)
     ~H|<span class="activity-line__agent">{@name}</span>|
+  end
+
+  defp activity_part(%{part: {:address, wallet}} = assigns) do
+    assigns = assign(assigns, :wallet, wallet)
+    ~H|<Regent.Primitives.address id={@id} address={@wallet} />|
   end
 
   defp activity_part(%{part: {:quote, text}} = assigns) do

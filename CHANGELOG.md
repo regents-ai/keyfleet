@@ -3038,3 +3038,7 @@ On a narrow phone, the "i" at the end of the small print in a room and on the po
 ## 2026-10-20 — Fleet pages show which page is open
 
 On a fleet's pages, the tab for the page on show (Chat, Treasury, Proposals, Workspace or Keys) now carries its underline; before, the button's own fill hid it, so no tab looked chosen. The sidebar also marks the fleet on every one of its pages, not only its first.
+
+## 2026-10-20 — Wallets in a fleet's feed show like every address
+
+When a line in a fleet's feed names a wallet rather than a Key or an agent, such as a proposal put to a vote from a wallet, the wallet now shows the way every address on the site does: its short form opens the full address, with a copy button and a link to Basescan beside it.
