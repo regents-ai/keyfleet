@@ -26,6 +26,9 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   @purchase_headroom_percent 5
   # The most a purchase may cost is rounded up to a whole cent.
   @cent 10_000
+  # The approval a buyer who ticks Unlimited gives: the most a USDC allowance
+  # can hold.
+  @unlimited 2 ** 256 - 1
   # A key's seed before its random draw arrives.
   @no_seed "0x" <> String.duplicate("0", 64)
   # How long a renewed shard lasts, in days.
@@ -322,26 +325,33 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   # the Key on offer gets the next one left, as long as its price is within
   # the most the purchase names, the price plus @purchase_headroom_percent;
   # past that it is refused and no USDC is taken. The wallet approves that
-  # most when its USDC allowance to the manager is below it, and until it does
-  # the purchase is certain to fail, as it is before the fleet's sales open.
+  # most when its USDC allowance to the manager is below it, or without limit
+  # when the buyer ticks Unlimited, and until it does the purchase is certain
+  # to fail, as it is before the fleet's sales open.
   # Founding fleets ask nothing of buyers, so the purchase carries no proof.
   # A visitor sees the same figures, with no allowance and nothing to send.
-  defp buy(%{fleet: fleet, signer: signer}) do
+  defp buy(%{fleet: fleet, signer: signer, inputs: inputs}) do
+    unlimited? = Build.field(inputs, "unlimited") == "true"
     manager = &Reads.one(&1, fleet.manager_address, &2, [], {:uint, 256})
 
     with {:ok, reads} <- Reads.at_head(),
          {:ok, minted} <- manager.(reads, "totalMinted()") do
       case manager.(reads, "nextPrice()") do
-        {:ok, price} -> offer(reads, fleet, signer, %{token_id: minted + 1, price: price})
-        {:error, :reverted} -> {:problem, :sold_out, %{max_supply: minted}}
-        {:error, _unread} -> {:problem, :unread, %{approve?: nil}}
+        {:ok, price} ->
+          offer(reads, fleet, signer, unlimited?, %{token_id: minted + 1, price: price})
+
+        {:error, :reverted} ->
+          {:problem, :sold_out, %{max_supply: minted}}
+
+        {:error, _unread} ->
+          {:problem, :unread, %{approve?: nil}}
       end
     else
       _unread -> {:problem, :unread, %{approve?: nil}}
     end
   end
 
-  defp offer(reads, fleet, signer, %{price: price} = figures) do
+  defp offer(reads, fleet, signer, unlimited?, %{price: price} = figures) do
     with {:ok, opens_at} <-
            Reads.one(
              reads,
@@ -367,7 +377,9 @@ defmodule Keyfleet.WalletSteps.KeySteps do
             %{}
         end
 
-      {:ok, purchase(fleet, signer, max_price, now + @purchase_seconds, approve?),
+      approval = if unlimited?, do: @unlimited, else: max_price
+
+      {:ok, purchase(fleet, signer, approval, max_price, now + @purchase_seconds, approve?),
        Map.merge(figures, %{max_price: max_price, approve?: approve?, blocked: blocked})}
     else
       _unread -> {:problem, :unread, Map.put(figures, :approve?, nil)}
@@ -392,14 +404,14 @@ defmodule Keyfleet.WalletSteps.KeySteps do
         {:uint, 256}
       )
 
-  defp purchase(_fleet, nil, _max_price, _deadline, _approve?), do: []
+  defp purchase(_fleet, nil, _approval, _max_price, _deadline, _approve?), do: []
 
-  defp purchase(fleet, signer, max_price, deadline, approve?) do
+  defp purchase(fleet, signer, approval, max_price, deadline, approve?) do
     approve =
       Review.step(
         "approve",
         fleet.usdc_address,
-        Call.encode("approve(address,uint256)", [fleet.manager_address, max_price])
+        Call.encode("approve(address,uint256)", [fleet.manager_address, approval])
       )
 
     buy =

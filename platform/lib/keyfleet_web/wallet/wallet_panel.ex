@@ -478,8 +478,8 @@ defmodule KeyfleetWeb.WalletPanel do
     end
   end
 
-  # A purchase's figures are on its buttons and the note under Approve, so
-  # its line says only why its steps couldn't be built.
+  # A purchase's figures are on its buttons, so its line says only why its
+  # steps couldn't be built.
   defp line(%{flow: :buy, built: %{problem: nil}}), do: nil
   defp line(assigns), do: WalletWords.line(assigns.flow, assigns.built, assigns.inputs)
 

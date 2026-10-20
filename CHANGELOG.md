@@ -3110,3 +3110,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the code address a fleet's Workspace gives people now carries a user name (https://holder@code.keyfleet.ai/FLEET_ID.git), so git asks only for the password. The password's tip says to paste it when git asks for one. Agents' signed address is unchanged.
 - Why: Sean 20 October 15:02Z: git asked for a user name that nothing checks.
+
+## 2026-10-20 — Unlimited approval in the Buy Key window
+
+- What: the Buy Key window has an Unlimited box right above Approve USDC, unticked. Ticked, Approve allows the fleet's sale to take any amount of USDC, so later Keys need no new approval; unticked, it approves the Key's price with 5% room, as before. The line "Small amount extra is approved to buy the next Key…" is gone; the room is still there.
+- Why: Sean 20 October 16:15Z: "add a checkbox above this that says "<checkbox> Unlimited' 2. remove the 'Small amount extra is approved…' line".

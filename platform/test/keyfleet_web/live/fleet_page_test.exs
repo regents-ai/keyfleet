@@ -454,12 +454,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert buy.to == @contract
       assert "0x" <> _calldata = buy.data
 
-      # The figures are on the buttons and the note under Approve, not in a line above.
+      # The figures are on the buttons, not in a line above, with the choice
+      # to approve without limit right above Approve, not ticked.
       assert has_element?(view, "#buy-key-order-line[hidden]")
       assert text(view, "#buy-key-approve [data-press-label]") == "Approve USDC"
-
-      assert text(view, "#buy-key-approve-note") ==
-               "Small amount extra is approved to buy the next Key in case the current Key 151 is bought first."
+      assert text(view, "#buy-key-unlimited-form") == "Unlimited"
+      refute has_element?(view, "#buy-key-unlimited-form[hidden]")
+      refute has_element?(view, "#buy-key-unlimited[checked]")
 
       assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 151"
 
@@ -471,6 +472,42 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, "#buy-key-order [data-account-target]")
       assert has_element?(view, "#buy-key-button[disabled][aria-describedby=buy-key-button-why]")
       assert text(view, "#buy-key-button-why") == "Approve USDC first"
+    end
+
+    test "ticking Unlimited approves without limit, and unticking it goes back to the price", %{
+      conn: conn
+    } do
+      deploy!()
+      ChainHelpers.seed_cursor!(@fleet)
+      chain!(allowance: 0)
+
+      {:ok, view, _html} = live(conn, @path)
+      active!(view, @owner)
+      assert_push_event(view, "onchain-steps:review", %{review: %{steps: [_approve, _buy]}})
+
+      view |> element("#buy-key-unlimited-form") |> render_change(%{"unlimited" => "true"})
+      render_async(view, 3_000)
+
+      assert_push_event(view, "onchain-steps:review", %{
+        review: %{steps: [approve, buy], inputs: %{"unlimited" => "true"}}
+      })
+
+      assert approve.data ==
+               Call.encode("approve(address,uint256)", [@contract, 2 ** 256 - 1])
+
+      # The purchase still costs no more than the price with its room.
+      assert buy.to == @contract
+      assert has_element?(view, "#buy-key-unlimited[checked]")
+
+      view |> element("#buy-key-unlimited-form") |> render_change(%{"unlimited" => "false"})
+      render_async(view, 3_000)
+
+      assert_push_event(view, "onchain-steps:review", %{
+        review: %{steps: [approve, _buy], inputs: %{"unlimited" => "false"}}
+      })
+
+      assert approve.data == Call.encode("approve(address,uint256)", [@contract, 45_150_000])
+      refute has_element?(view, "#buy-key-unlimited[checked]")
     end
 
     # A pending transaction is never a reason: Buy can be pressed as soon as
@@ -529,7 +566,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-approve .fleet-step-mark") == "✓"
       refute has_element?(view, "#buy-key-approve[aria-describedby]")
 
-      assert has_element?(view, "#buy-key-approve-note[hidden]")
+      assert has_element?(view, "#buy-key-unlimited[disabled]")
       assert has_element?(view, "#buy-key-order-line[hidden]")
       assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 151"
     end

@@ -108,7 +108,7 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   await expect(sentLine(page, first.hash)).toHaveAttribute("data-state", "confirmed")
   await expect(sentLine(page, first.hash)).toContainText("Approved. Now press the next button.")
   await shownDone(page.locator("#buy-key-approve"))
-  await expect(page.locator("#buy-key-approve-note")).toBeHidden()
+  await expect(page.locator("#buy-key-unlimited")).toBeDisabled()
   await sameSize(page.locator("#buy-key-approve"), page.locator("#buy-key-button"))
 
   await page.locator("#buy-key-button").click()
@@ -170,10 +170,8 @@ test("on the homepage, Approve and Buy are pressed inside the Buy Key window, si
   await expect(window.locator("#home-buy-key-button-why")).toHaveText("Approve USDC first")
   await expect(window.locator("#home-buy-key-approve")).toHaveText("1 Approve USDC")
   await sameSize(window.locator("#home-buy-key-approve"), window.locator("#home-buy-key-button"))
-  const onSale = (await window.locator("#home-buy-key-button [data-press-label]").innerText()).replace("Buy Key ", "")
-  await expect(window.locator("#home-buy-key-approve-note")).toHaveText(
-    `Small amount extra is approved to buy the next Key in case the current Key ${onSale} is bought first.`,
-  )
+  await expect(window.locator("#home-buy-key-unlimited")).toBeVisible()
+  await expect(window.locator("#home-buy-key-unlimited")).not.toBeChecked()
 
   await window.locator("#home-buy-key-approve").click()
   await expect.poll(async () => (await sentByStandIn(page)).length).toBe(1)
@@ -185,7 +183,7 @@ test("on the homepage, Approve and Buy are pressed inside the Buy Key window, si
   allowUsdc(me, Number(BigInt(`0x${approval.transaction.data.slice(-64)}`)))
   landStep(approval.hash, approval.transaction, true)
   await shownDone(window.locator("#home-buy-key-approve"))
-  await expect(window.locator("#home-buy-key-approve-note")).toBeHidden()
+  await expect(window.locator("#home-buy-key-unlimited")).toBeDisabled()
 
   await window.locator("#home-buy-key-button").click()
   await expect.poll(async () => (await sentByStandIn(page)).length).toBe(2)

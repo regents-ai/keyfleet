@@ -673,32 +673,35 @@
   line-height: 1;
 }
 
-/* Under Approve, on a line of its own: why a little more than the price is
-   allowed. */
-.fleet-approve-note {
-  display: flex;
+/* Right above Approve, on a line of its own: the choice to approve without
+   limit. */
+.fleet-unlimited {
   flex: 1 1 100%;
-  align-items: flex-start;
-  gap: 0.4rem;
   margin: 0;
-  color: var(--color-fg-muted);
-  font-size: 0.8125rem;
-  line-height: 1.4;
+  font-size: 0.875rem;
 }
 
-.fleet-approve-note[hidden] {
+.fleet-unlimited[hidden] {
   display: none;
 }
 
-.fleet-approve-note svg {
-  flex: none;
-  inline-size: 1em;
-  block-size: 1em;
-  margin-block-start: 0.15em;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
+.fleet-unlimited label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.fleet-unlimited input {
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin: 0;
+  accent-color: var(--color-fg);
+}
+
+.fleet-unlimited label:has(input:disabled) {
+  cursor: default;
+  color: var(--color-fg-muted);
 }
 
 /* The list of keys, and a missing fleet */

@@ -1331,10 +1331,33 @@ defmodule KeyfleetWeb.FleetLive do
       actor={@actor}
       lease={@lease}
       refresh={@fleet.progress.total_minted}
+      inputs={%{"unlimited" => "false"}}
       heading={@heading}
       details={@details}
     >
       <:buttons :let={panel}>
+        <%!-- A form of its own, so the box sits right above Approve, outside
+        the buttons; the approval is built from it. --%>
+        <form
+          id={"#{@id}-unlimited-form"}
+          class="fleet-unlimited"
+          phx-change="change"
+          phx-target={"##{@id}-order"}
+          hidden={not approve_shown?(panel)}
+        >
+          <input type="hidden" name="unlimited" value="false" />
+          <label>
+            <input
+              type="checkbox"
+              id={"#{@id}-unlimited"}
+              name="unlimited"
+              value="true"
+              checked={panel.inputs["unlimited"] == "true"}
+              disabled={approve_done?(panel)}
+              data-onchain-input="unlimited"
+            /> Unlimited
+          </label>
+        </form>
         <%!-- Only the network fee ever holds Approve back, and it holds Buy
         back with it, so the one note beside Buy says why for both. --%>
         <Regent.Primitives.button
@@ -1344,7 +1367,7 @@ defmodule KeyfleetWeb.FleetLive do
           data-done={approve_done?(panel)}
           hidden={not approve_shown?(panel)}
           disabled={WalletPanel.blocked(panel, "approve") != nil or approve_done?(panel)}
-          aria-describedby={approve_described_by(@id, panel)}
+          aria-describedby={WalletPanel.blocked(panel, "approve") && "#{@id}-button-why"}
         >
           <span class="fleet-step-mark" aria-hidden="true">
             {if approve_done?(panel), do: "✓", else: "1"}
@@ -1353,20 +1376,6 @@ defmodule KeyfleetWeb.FleetLive do
             {if approve_done?(panel), do: "USDC approved", else: "Approve USDC"}
           </span>
         </Regent.Primitives.button>
-        <p
-          id={"#{@id}-approve-note"}
-          class="fleet-approve-note"
-          hidden={not approval_needed?(panel)}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="8" cy="8" r="7" />
-            <path d="M8 7v4.5M8 4.5v.01" />
-          </svg>
-          <span>
-            Small amount extra is approved to buy the next Key in case the current
-            Key {key_on_sale(panel)} is bought first.
-          </span>
-        </p>
         <Regent.Primitives.button
           id={"#{@id}-button"}
           data-onchain-step="buy"
@@ -1397,20 +1406,6 @@ defmodule KeyfleetWeb.FleetLive do
   defp key_on_sale(panel) do
     token_id = on_sale(panel, :token_id)
     token_id && grouped(token_id)
-  end
-
-  # Approve is described by the note under it while it is needed, and by the
-  # reason beside Buy while the network fee holds both back.
-  defp approve_described_by(id, panel) do
-    ids =
-      for {shown?, part} <- [
-            {approval_needed?(panel), "approve-note"},
-            {WalletPanel.blocked(panel, "approve") != nil, "button-why"}
-          ],
-          shown?,
-          do: "#{id}-#{part}"
-
-    if ids != [], do: Enum.join(ids, " ")
   end
 
   # Approve shows while the wallet the figures are for needs an approval, and

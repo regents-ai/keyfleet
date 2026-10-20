@@ -123,6 +123,25 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert uint!(url, lab.manager, "totalMinted()") == 3
     end
 
+    test "Unlimited approves once, and every later purchase needs no approval",
+         %{url: url, lab: lab} do
+      send!(url, @second, lab.usdc, Call.encode("mint(address,uint256)", [@second, 100_000_000]))
+
+      built = build!(:buy, @second, inputs: %{"unlimited" => "true"})
+      assert names(built) == ["approve", "buy"]
+      assert pressed(url, built, "approve") == {:ok, :confirmed}
+
+      assert uint!(url, lab.usdc, "allowance(address,address)", [@second, lab.manager]) ==
+               2 ** 256 - 1
+
+      for key <- [3, 4] do
+        built = build!(:buy, @second)
+        assert names(built) == ["buy"]
+        assert pressed(url, built, "buy") == {:ok, :confirmed}
+        assert owner!(url, lab, key) == @second
+      end
+    end
+
     test "an allowance already there leaves only the purchase", %{url: url, lab: lab} do
       built = build!(:buy, @buyer)
       assert names(built) == ["buy"]
