@@ -145,6 +145,51 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
+    # The work around one goal that is still in the workspace, the most
+    # recently changed first: every object linked to the goal either way, and
+    # what the tasks that deliver on it produced. Each comes with what its card
+    # shows. One more than a goal's page lists is read, to tell there are more.
+    read :around_goal do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :goal_id, :string, allow_nil?: false, constraints: @text
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 fragment(
+                   """
+                   ? IN (
+                     SELECT link.source FROM keyfleet_app.graph_relations AS link
+                     WHERE link.fleet_id = ? AND link.target = ?
+                     UNION
+                     SELECT link.target FROM keyfleet_app.graph_relations AS link
+                     WHERE link.fleet_id = ? AND link.source = ?
+                     UNION
+                     SELECT made.target FROM keyfleet_app.graph_relations AS link
+                     JOIN keyfleet_app.graph_relations AS made
+                       ON made.fleet_id = link.fleet_id AND made.source = link.source
+                         AND made.type = 'produces'
+                     WHERE link.fleet_id = ? AND link.target = ? AND link.type = 'implements'
+                   )
+                   """,
+                   id,
+                   ^arg(:fleet_id),
+                   ^arg(:goal_id),
+                   ^arg(:fleet_id),
+                   ^arg(:goal_id),
+                   ^arg(:fleet_id),
+                   ^arg(:goal_id)
+                 ) and
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys)
+             )
+
+      prepare build(
+                sort: [changed_seq: :desc],
+                limit: 101,
+                select: [:fleet_id, :id, :type, :sys, :changed_seq, :changed_at],
+                load: [:title, :card, :standing]
+              )
+    end
+
     # The unfinished tasks taken by these keys of the fleet, newest change
     # first, each with what its card shows.
     read :assigned_to_keys do
@@ -236,7 +281,7 @@ defmodule Keyfleet.Graph.Object do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:in_fleet, :cards, :assigned_to_keys, :joined_by, :citing]) do
+    policy action([:in_fleet, :cards, :around_goal, :assigned_to_keys, :joined_by, :citing]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 

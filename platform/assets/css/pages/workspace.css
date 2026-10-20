@@ -177,6 +177,52 @@
   gap: 0.25rem;
 }
 
+/* Goals, and the work around one, read as a list of pages: one line each,
+   hairlines between them and no box around any. The title takes the room it
+   needs; what stands out about it follows, and wraps under it when narrow. */
+.workspace-rows {
+  display: grid;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.workspace-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  min-width: 0;
+  padding-block: 0.6rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.workspace-row .workspace-kind {
+  flex: 0 0 6rem;
+}
+
+.workspace-row-title {
+  flex: 1 1 16rem;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.workspace-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  color: var(--color-fg-muted);
+  font-size: 0.9rem;
+}
+
+.workspace-wide {
+  grid-column: 1 / -1;
+}
+
+.workspace-card {
 .workspace-card {
   display: grid;
   gap: 0.6rem;
@@ -315,6 +361,8 @@
   .workspace-heading > a,
   .workspace-panel > a,
   .workspace-card h3 a,
+  .workspace-row-title,
+  .workspace-row-meta > a,
   .workspace-facts dd > a,
   .workspace-fields dd > a,
   .workspace-list li > a,
