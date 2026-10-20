@@ -1,4 +1,5 @@
 import "../css/app.css"
+import "../vendor/regent_ui/tip.mjs"
 
 // Asks before any element carrying data-confirm acts, such as ending a poll.
 import "phoenix_html"

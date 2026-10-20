@@ -57,6 +57,15 @@ test.describe("on a touch phone", () => {
   })
 
   // A finger gets the pass as it is: tapping the card shows no shuffle and loads none.
+  // A finger opens the price's "i" with a tap; there is no hover to open it.
+  test("a tap opens the price's info tip", async ({page}) => {
+    await page.goto("/")
+    await live(page)
+    const words = page.locator("#home-price-tip")
+    await page.getByRole("button", {name: "About the price"}).tap()
+    await expect(words).toBeVisible()
+  })
+
   test("tapping the next Key's card leaves it the pass", async ({page}) => {
     await page.goto("/")
     await live(page)
@@ -112,6 +121,24 @@ test.describe("on a desktop", () => {
 
   // The headline takes the hero's left half and the next Key sits in the middle of
   // its right half (as the template's Keyfleet hero does since 16 Oct).
+  // The price's "i" opens while a mouse rests on it and closes once the mouse
+  // leaves; a click keeps it open (the shared tip script, loaded in app.ts).
+  test("the price's info tip opens under a mouse and a click keeps it", async ({page}) => {
+    await page.goto("/")
+    await live(page)
+    const button = page.getByRole("button", {name: "About the price"})
+    const words = page.locator("#home-price-tip")
+    await button.hover()
+    await expect(words).toBeVisible()
+    await page.mouse.move(0, 0)
+    await expect(words).toBeHidden()
+    await button.hover()
+    await button.click()
+    await page.mouse.move(0, 0)
+    await page.waitForTimeout(300)
+    await expect(words).toBeVisible()
+  })
+
   test("the next Key sits in the middle of the hero's right half", async ({page}) => {
     for (const width of [1024, 1280, 1440]) {
       await page.setViewportSize({width, height: 900})

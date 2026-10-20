@@ -2,9 +2,9 @@ defmodule KeyfleetWeb.PairingBox do
   @moduledoc """
   Pairing an agent (`RegentAgents`), under "Pair New Agent" in the side panel on
   every page, in the shared pairing box (`Regent.Account.pairing`): the message to
-  paste with its code in a short box with icons to copy it, make a new code and
-  open the chosen agent's page (`KeyfleetWeb.AgentGuides`), then the ten agents
-  in `RegentAgents.Harness.featured/0` to choose from by their pictures. Once the
+  paste with its code in a short box with icons to copy it and make a new code,
+  then the ten agents in `RegentAgents.Harness.featured/0` to choose from by
+  their pictures. Once the
   agent uses the code, the box names it.
 
   The parent passes `account` (the signed-in account), its `session_lease` as
@@ -14,7 +14,6 @@ defmodule KeyfleetWeb.PairingBox do
   use KeyfleetWeb, :live_component
 
   alias Keyfleet.Limits
-  alias KeyfleetWeb.AgentGuides
   alias KeyfleetWeb.Live.Session
   alias RegentAgents.{Harness, PairingCode, PairingMessage, Person}
 
@@ -90,7 +89,6 @@ defmodule KeyfleetWeb.PairingBox do
   defp pairing(%{harness: harness, code: %PairingCode.Issued{} = code}) do
     %{
       chosen: to_string(harness),
-      guide: AgentGuides.path(harness),
       message: agent_message(code.code, harness),
       expires_iso: DateTime.to_iso8601(code.expires_at),
       expires: Calendar.strftime(code.expires_at, "%H:%M UTC")
@@ -100,12 +98,11 @@ defmodule KeyfleetWeb.PairingBox do
   defp pairing(%{harness: harness, code: {:paired, agent}}),
     do: %{
       chosen: to_string(harness),
-      guide: AgentGuides.path(harness),
       outcome: {:paired, agent.name}
     }
 
   defp pairing(%{harness: harness, code: :unavailable}),
-    do: %{chosen: to_string(harness), guide: AgentGuides.path(harness), outcome: :unavailable}
+    do: %{chosen: to_string(harness), outcome: :unavailable}
 
   defp pairing(nil), do: %{}
 

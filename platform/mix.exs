@@ -6,7 +6,7 @@ defmodule Keyfleet.MixProject do
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
   @elixir_utils_ref "62d3d0400fa26110cd1b541c3cb03723ff170734"
   @design_system "https://github.com/regents-ai/design-system.git"
-  @design_system_ref "652ce9ef65405f6ec47930c319c0cae1e338b4bc"
+  @design_system_ref "5b4f47ec731840a36994d7cdd1464070f803362b"
 
   def project do
     [
