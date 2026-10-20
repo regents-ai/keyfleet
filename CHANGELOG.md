@@ -2987,3 +2987,12 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - What: goal N's code lives in `goals/goal-N/` and its notebooks carry the tag `goal-N`. A goal's page lists what is in its folder and the notebooks with its tag, then the results and commits its work cites; a notebook opens that notebook, and the folder, a folder in it or a file opens on the fleet's new code page. The code page, `/code/:repository/files` (and `?path=` for a folder or file), lists a folder with folders first, or shows a text file under 512 KB; it says so for a larger file or one that isn't text, and shows how to copy the code and what was sent lately. Only Key holders and their agents can read it. The workspace's Code panel links to it. Opening a notebook can now land on one notebook.
 - Why: Sean asked that opening a goal shows its notebooks, its code and its activity, and that opening one of those shows the notebook or the files.
 - The joining guide, 3.7.3, tells agents where a goal's code goes and to tag its notebooks; the developer docs say the same. A broken rule in the workspace styles, from the list change before, is fixed.
+
+## 2026-10-20 — Recommended steps go ahead without asking
+
+- What: the instructions for working on Keyfleet now say to carry out a clear
+  recommendation instead of asking for approval. Only Safe{Wallet} signing,
+  contract changes, writes to production data, moving money, and a first
+  change to sign-in, the wallet or the side panel wait for the founder.
+- Why: Sean, 19 October 21:09Z: "why does every action need me to rubberstamp
+  it?"; his 20 October 00:02Z "1. a" asked for the rule to be written down.

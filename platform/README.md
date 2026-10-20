@@ -441,8 +441,9 @@ does not contain the live one. To roll back, `fly releases -a keyfleet
 the monorepo root runs it again.
 
 Anything signed in Safe{Wallet}, a contract change, a write to production
-data, and a first change to sign-in or the wallet waits for the founder's go,
-and runs `make check` in place of `make check-change`.
+data, moving money, and a first change to sign-in, the wallet or the side
+panel waits for the founder's go, and runs `make check` in place of
+`make check-change`. Everything else ships without asking.
 
 ## Release
 

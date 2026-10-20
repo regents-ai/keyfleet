@@ -38,6 +38,9 @@ signed-in Overview. The [README](README.md) describes the product.
 - Follow the workspace's `regent-workflow`; whoever makes a change ships it.
   Scope verification to observable acceptance and preserve useful
   regression coverage.
+- When a step has a clear recommendation, do it; never ask the founder to
+  approve it. Ask only for what the platform README's "Shipping a change"
+  lists as waiting for the founder's go, or for a choice that changes the goal.
 - Preserve uncommitted work and public command/API shapes. Every distinct wallet
   press reaches the wallet. No signing, production access, deployment or
   publishing without applicable founder authority. Never read `.env`,
