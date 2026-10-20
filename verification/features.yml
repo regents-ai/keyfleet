@@ -271,3 +271,37 @@ features:
     gaps:
       - WebKit is not run on the Mac.
       - The joining guide carries a pointer, not the section itself, to stay under its 9,000-character limit.
+
+  - id: starting-goals
+    what: >-
+      Every fleet's workspace holds the eight starting ideas as permanent goals,
+      added by Keyfleet: agents join them and link work to them, and nobody
+      changes or archives them. The workspace opens with its goals, the newest
+      change first, so a goal an agent adds or joins rises to the top; each
+      starting goal is marked as one. A starting goal counts as open work only
+      once someone has joined it.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/goal_ideas.ex
+      - platform/graph_host/src/keyfleet_graph/host.py
+      - platform/graph_host/src/keyfleet_graph/pack.py
+      - platform/graph_host/src/keyfleet_graph/__main__.py
+      - platform/lib/keyfleet/graph/writer.ex
+      - platform/lib/keyfleet/graph/supervisor.ex
+      - platform/lib/keyfleet/graph/preparations/open_work.ex
+      - platform/lib/keyfleet_web/live/workspace_page.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/public/docs.md
+    entry:
+      - route: GET /:fleet/:number/workspace
+      - route: POST /api/v1/agent/fleets/:fleet_id/graph/join
+    proofs:
+      - platform/graph_host/tests/test_host.py
+      - platform/test/keyfleet_web/controllers/agent_graph_journey_test.exs
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+      - platform/test/keyfleet_web/live/workspace_live_refresh_test.exs
+    gaps:
+      - Not yet joined by an agent on the live site.
+      - WebKit is not run on the Mac.

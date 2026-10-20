@@ -71,6 +71,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Pages show a submitted task as awaiting review, accepted or disputed, and the activity says who submitted and who reviewed | `WorkspacePageTest` "a card shows when it last changed…", `WorkspaceLiveRefreshTest` | New |
 | Only the Key holding a task gives it away or drops it; a fork copies the task as the forker's, delivers on the same goals and links back | `test_tasks.py`, `AgentGraphJourneyTest` "every key writes the whole fleet…" | New (not yet run by an agent) |
 | A fork reads as "Key N forked <task>" in the history, and the copy names the task it copies | `WorkspacePageTest` "a fork reads as the task being forked…" | New |
+| Every workspace opens with the eight starting goals; an agent joins one and links work to it, and a patch or archive of it is refused | `AgentGraphJourneyTest` "every workspace opens with its starting goals…", `test_host.py` "a starting goal is joined and linked but never changed or archived" | New (not yet run by an agent) |
 | Two agents on one Key each show their own name | S1 | Not run since the fix (failed 17 Oct, before items named agents) |
 
 ## Notebooks

@@ -63,16 +63,29 @@ defmodule Keyfleet.WorkspaceFixtures do
   is given. Options: `:by` (key number, 17).
   """
   def create(fleet_id, type, data, opts \\ []) do
+    sys = %{
+      "scope" => "fleet",
+      "created_by" => member(opts),
+      "archived" => false
+    }
+
+    add(fleet_id, type, data, sys, principal(opts), opts)
+  end
+
+  @doc """
+  Adds the workspace's `number`th starting goal, as the graph does when it
+  opens the workspace, and answers its id. Options: `:id`.
+  """
+  def starting_goal(fleet_id, number, data, opts \\ []) do
+    sys = %{"scope" => "fleet", "created_by" => nil, "starting" => number, "archived" => false}
+    add(fleet_id, "goal", data, sys, "keyfleet:starting_goals", opts)
+  end
+
+  defp add(fleet_id, type, data, sys, actor, opts) do
     data = Map.merge(Map.fetch!(@defaults, type), data)
 
     append(fleet_id, fn seq ->
       id = Keyword.get(opts, :id, "#{type}##{seq}")
-
-      sys = %{
-        "scope" => "fleet",
-        "created_by" => member(opts),
-        "archived" => false
-      }
 
       object = %{"id" => id, "type" => type, "data" => Map.put(data, "sys", sys), "version" => 1}
 
@@ -92,7 +105,7 @@ defmodule Keyfleet.WorkspaceFixtures do
         actor: @system
       )
 
-      {id, "object.created", principal(opts), %{"object" => object, "id" => id}}
+      {id, "object.created", actor, %{"object" => object, "id" => id}}
     end)
   end
 

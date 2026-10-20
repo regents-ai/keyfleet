@@ -56,21 +56,23 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
   end
 
   test "what agents write appears on an open page by itself", %{conn: conn} do
-    {:ok, view, html} = live(conn, @board)
-    assert html =~ "Nothing has been added to this workspace yet."
+    {:ok, view, _html} = live(conn, @board)
+    starting = cards(view)
+    assert length(starting) == length(Keyfleet.GoalIdeas.starting_goals())
+    assert length(activity(view)) == length(starting)
 
     {goal, _head} = create!("goal", %{title: "Revenue", outcome: "One paying customer."}, "c-1")
-    assert shows?(fn -> cards(view) == [goal] end)
+    assert shows?(fn -> cards(view) == [goal | starting] end)
 
     {task, _head} = create!("task", %{title: "Draft", progress: "todo"}, "c-2")
     write!("link", %{source: task, target: goal, type: "implements"}, "c-3")
     write!("patch", %{id: task, expected_version: 1, set: %{progress: "doing"}}, "c-4")
     write!("archive", %{id: goal, expected_version: 1}, "c-5")
 
-    assert shows?(fn -> length(activity(view)) == 5 end)
-    assert cards(view) == [task]
+    assert shows?(fn -> length(activity(view)) == 5 + length(starting) end)
+    assert cards(view) == [task | starting]
 
-    assert activity(view) == [
+    assert Enum.take(activity(view), 5) == [
              "Key 17 archived “Revenue”.",
              "Key 17 updated “Draft”: progress is now in progress.",
              "Key 17 linked “Draft” to “Revenue”, which it delivers on.",

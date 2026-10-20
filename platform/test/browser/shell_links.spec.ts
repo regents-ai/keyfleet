@@ -107,7 +107,7 @@ test("the walk from home through every page, back, forward and the sidebar keeps
     [page.locator("#proposal-page .proposals-kicker a"), proposals],
     [page.locator("#fleet-tab-hall"), fleetPage],
     [page.locator("#fleet-tab-workspace"), board],
-    [page.locator("#workspace-page h3 a", {hasText: "Research plan"}), plan],
+    [page.locator("#workspace-goals h3 a", {hasText: "Research plan"}), plan],
     [page.locator("#workspace-discussion a"), general],
     // Other specs may have posted in General too; this one's Key is the one to open.
     [page.locator(`#rooms-page .rooms-author a[href$="?key=${key}"]`).first(), keyProfile],
@@ -163,7 +163,7 @@ test("the links between a fleet's pages each patch the open page", async ({page}
 
   // A goal on the workspace opens on its own page. A proposal's heading leads
   // to every proposal, and the Chat tab back to the hall.
-  await walk.follow(page.locator("#workspace-page h3 a", {hasText: "Research plan"}), plan)
+  await walk.follow(page.locator("#workspace-goals h3 a", {hasText: "Research plan"}), plan)
   await page.goBack()
   await walk.arrive(board)
   await walk.follow(page.locator("#fleet-tab-hall"), fleetPage)
