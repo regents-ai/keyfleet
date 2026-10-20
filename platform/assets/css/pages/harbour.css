@@ -236,19 +236,18 @@ body.sea-lifted .harbour-sea .harbour-sea__lift {
 /* Below 392px the theme switch gives way sooner than the shell's own 360px,
    as the shell does: the device's setting applies until the screen is wider. */
 @media (max-width: 24.49rem) {
-  body:has(> .harbour-sea) #shell-header:has(.shell-get-key, .shell-credits) .theme-control {
+  body:has(> .harbour-sea) #shell-header:has(.shell-get-key) .theme-control {
     display: none;
   }
 }
 
-/* On a 320px phone, signed in beside the Credits balance, the buttons drop
-   their arrows and the balance and name tighten. */
+/* On a 320px phone the buttons drop their arrows and the name tightens. */
 @media (max-width: 22.49rem) {
   body:has(> .harbour-sea) #shell-header .rg-button:not(.rg-button--quiet)::after {
     display: none;
   }
 
-  body:has(> .harbour-sea) #app-shell #shell-header :is(.shell-credits, .account-chip) {
+  body:has(> .harbour-sea) #app-shell #shell-header .account-chip {
     padding-inline: 0.35rem;
   }
 }

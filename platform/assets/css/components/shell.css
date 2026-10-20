@@ -374,64 +374,6 @@ span.account-chip {
   box-shadow: inset 0 -2px var(--palette-tangerine-tango);
 }
 
-/* The header's Credits balance, which opens Buy Credits. It sits here, outside
-   the product layer, so it wins over the site's plain button rules. */
-#app-shell .shell-credits {
-  min-width: 2.75rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25em;
-  align-self: center;
-  min-height: 2.75rem;
-  margin-inline-end: var(--space-1);
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--color-border);
-  border-radius: 0;
-  background: transparent;
-  color: var(--color-fg);
-  font: inherit;
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-@media (hover: hover) {
-  #app-shell .shell-credits:hover {
-    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
-  }
-}
-
-/* The Buy Credits dialog's close button, square in the dialog's top right
-   corner, and kept there while the dialog scrolls. Its margins give back the
-   room it takes, so the panel keeps its place. It sits here, outside the
-   product layer, so it wins over the shared button's padding. */
-.shell-credits-dialog__close {
-  position: sticky;
-  inset-block-start: calc(-1 * var(--shell-credits-pad-top));
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  min-height: 0;
-  margin-block: calc(-1 * var(--shell-credits-pad-top))
-    calc(var(--shell-credits-pad-top) - 2.75rem);
-  margin-inline: auto calc(-1 * var(--shell-credits-pad-side));
-  padding: 0;
-  border: 0;
-  border-radius: 0 calc(1.25rem - 1px) 0 0.75rem;
-}
-
-.shell-credits-dialog__close svg {
-  width: 1.5rem;
-  height: 1.5rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
 #route-content {
   width: 100%;
   min-height: 100%;
@@ -594,10 +536,9 @@ span.account-chip {
   /* The name keeps its 6rem cap and shrinks to an ellipsis, so the picture
      stays inside the cap instead of spilling past the screen edge. */
   #shell-header .account-chip .account-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  /* With a picture, or beside the Credits balance, the name is for screen
-     readers only; the account page shows it. */
-  #shell-header .account-chip .account-avatar + .account-name,
-  #shell-header:has(.shell-credits) .account-chip .account-name {
+  /* With a picture, the name is for screen readers only; the account page
+     shows it. */
+  #shell-header .account-chip .account-avatar + .account-name {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -605,8 +546,6 @@ span.account-chip {
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  /* With nothing left to show, the chip takes no room. */
-  #shell-header:has(.shell-credits) .account-chip:not(:has(.account-avatar)) { padding-inline: 0; border-inline-start: 0; }
   /* Header buttons stand 3rem tall in the 3.5rem row, 0.5rem apart, and the last
      keeps the same 0.5rem from the frame's right edge as the crown keeps from its
      left. */
@@ -614,14 +553,6 @@ span.account-chip {
   .shell-get-key > .rg-button { font-size: .75rem; margin: 4px var(--space-1) 4px 0; padding: var(--space-1) .5rem; gap: .375rem; }
   /* The crown keeps its size; only the name beside it gives way. */
   #shell-header .shell-brand__mark { flex: none; }
-  /* Signed in, the Credits balance joins the row without its unit: the
-     controls keep their size and the brand's name gives way first. */
-  #app-shell .shell-credits {
-    flex: 0 0 auto;
-    padding-inline: 0.5rem;
-    font-size: 0.8rem;
-  }
-  #app-shell .shell-credits__unit { display: none; }
   #shell-header .theme-control,
   #shell-header .shell-get-key,
   #shell-header .account-control,
@@ -629,10 +560,9 @@ span.account-chip {
   #shell-header button.account-chip { padding-inline: 0.5rem; }
 }
 @media (max-width: 22.49rem) {
-  /* A 320px phone has no room for the theme switch beside Purchase Key or the
-     balance; the device's own light or dark setting applies until the screen
-     is wider. */
-  #shell-header:has(.shell-get-key, .shell-credits) .theme-control { display: none; }
+  /* A 320px phone has no room for the theme switch beside Purchase Key; the
+     device's own light or dark setting applies until the screen is wider. */
+  #shell-header:has(.shell-get-key) .theme-control { display: none; }
 }
 
 /* ---- Side panel ---- */

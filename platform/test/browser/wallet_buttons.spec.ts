@@ -195,41 +195,6 @@ test("on the homepage, Approve and Buy are pressed inside the Buy Key window, si
   expect(errors).toEqual([])
 })
 
-test("in the Credits window, Approve and Buy are one size, and an approval that covers the amount shows Approve done", async ({
-  page,
-}) => {
-  const errors: string[] = []
-  page.on("pageerror", error => errors.push(error.message))
-  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
-  await page.goto("/classic/1")
-  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
-  await page.locator("#shell-credits-button").click()
-  const window = page.locator("#shell-credits")
-  await expect(window).toBeVisible()
-  await useStandInWallet(page, me)
-  await window.locator("#credits-panel-amount").fill("5")
-
-  const approve = window.locator('[data-onchain-step="approve"]')
-  const buy = window.locator('[data-onchain-step="buy"]')
-  await expect(approve).toHaveText("Approve")
-  await expect(approve).not.toHaveAttribute("data-done")
-  await sameSize(approve, buy)
-
-  // Staking may now take the 5 USDC, read when the window opens again.
-  allowUsdc(me, 5_000_000)
-  await page.keyboard.press("Escape")
-  await expect(window).toBeHidden()
-  await page.locator("#shell-credits-button").click()
-  await expect(approve).toHaveAttribute("data-done", "")
-  await expect(approve).toHaveText("✓ Approved")
-  await expect.poll(async () => {
-    const {edge, green} = await edgeAndGreen(approve)
-    return edge === green
-  }).toBe(true)
-  await sameSize(approve, buy)
-  expect(errors).toEqual([])
-})
-
 test("a press the wallet declines says so, and the next press still reaches the wallet", async ({page}) => {
   const errors = await openBuying(page)
   await useStandInWallet(page, me, "decline")

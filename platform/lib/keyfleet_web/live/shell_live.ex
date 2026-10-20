@@ -134,7 +134,6 @@ defmodule KeyfleetWeb.ShellLive do
        pass_note: nil,
        quotes: nil
      )
-     |> read_credits(current_account(socket.assigns.access_context))
      |> follow_credits(current_account(socket.assigns.access_context))
      |> follow_agents(current_account(socket.assigns.access_context))}
   end
@@ -395,11 +394,11 @@ defmodule KeyfleetWeb.ShellLive do
   defp press(_event, _params, socket), do: {:noreply, socket}
 
   # The person's Credits balance changed on any Regent site: a purchase, a
-  # gift, a hold or its close.
-  defp notice(:credits_changed, socket) do
-    account = current_account(socket.assigns.access_context)
-    {:noreply, read_credits(socket, account)}
-  end
+  # gift, a hold or its close. The Account page's balance follows.
+  defp notice(:credits_changed, %{assigns: %{route_spec: %{route_id: :account}}} = socket),
+    do: {:noreply, read_credits(socket, current_account(socket.assigns.access_context))}
+
+  defp notice(:credits_changed, socket), do: {:noreply, socket}
 
   # The Treasury's refresh may be pressed again, whatever the page shows now.
   defp notice({:treasury_refresh_ready, rest}, socket),
@@ -605,17 +604,7 @@ defmodule KeyfleetWeb.ShellLive do
       account_control={@account_control}
       shell_instance={@shell_instance}
       get_key={@get_key}
-      credits={signed_in_credits(@access_context, @credits)}
     >
-      <:credits_panel :if={signed_in_credits(@access_context, @credits)}>
-        <.live_component
-          module={KeyfleetWeb.CreditsPanel}
-          id="credits-panel"
-          lease={@session_lease}
-          account={current_account(@access_context)}
-          credits={@credits}
-        />
-      </:credits_panel>
       <:agents :if={current_account(@access_context)}>
         <.live_component
           module={KeyfleetWeb.PanelAgents}
@@ -802,12 +791,6 @@ defmodule KeyfleetWeb.ShellLive do
   # is left out rather than the page.
   defp get_key?,
     do: match?({%{coming_soon?: false}, _degraded?}, FleetNow.fetch(get_key_fleet()))
-
-  # A sign-in that ends while the page is open withdraws the account, and its
-  # balance and the Buy Credits panel go with it. While signed in, the panel and
-  # its wallet buttons are there whatever the reading.
-  defp signed_in_credits(access_context, credits),
-    do: current_account(access_context) && credits
 
   # The page starts listening for changed keys before it reads, so a change
   # that lands while it loads still reaches it. The map is told when the key
@@ -1254,9 +1237,11 @@ defmodule KeyfleetWeb.ShellLive do
     socket
     |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
     |> read_paired_agents(account)
+    |> read_credits(account)
   end
 
-  defp load_account_page(socket, _route_spec), do: assign(socket, :held_keys, [])
+  defp load_account_page(socket, _route_spec),
+    do: socket |> assign(:held_keys, []) |> Read.clear(:credits)
 
   # The agents are read beside the page, so a failed read leaves the rest of
   # the account page working.
@@ -1279,9 +1264,7 @@ defmodule KeyfleetWeb.ShellLive do
   defp follow_agents(socket, _account), do: socket
 
   # Credits and Points are read beside the page too, each with its own loading
-  # and could-not-be-read state. Credits are read on every page: the header's
-  # balance and the Buy Credits panel behind it go wherever a signed-in person
-  # goes.
+  # and could-not-be-read state.
   defp read_credits(socket, %{privy_user_id: person} = account),
     do: Read.start(socket, :credits, person, fn -> AccountLive.credits(account) end)
 

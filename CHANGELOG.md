@@ -3130,3 +3130,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on a fleet's Treasury, once something sent from the fleet's page goes through (Release, Send to REGENT staking, Buy REGENT, returning an advance, a vote carried out, a Key bought), the treasury's balances are read at once and the Daily Treasury Slice figures are read again, instead of waiting for the next minute's reading. A refresh icon beside "Balances as of" reads them at once too; each person may press it once every 30 seconds, and it rests dimmed until then.
 - Why: Sean 20 October 16:45Z: "the treasury numbers need to be refreshed after one of the page's onchain actions happen. also show a refresh icon that does a refresh pull, only can be clicked per user with a 30sec cooldown".
+
+## 2026-10-20 — No Credits in the header
+
+- What: the Credits balance is gone from the header inside the app, and with it the Buy Credits window it opened. On a phone the header shows your name again where the balance was. Your Credits balance still shows on the Account page, with its link to manage Credits on regents.sh.
+- Why: Sean 20 October 18:57Z: "take away from credits header component from keyfleet , its distracting".

@@ -144,11 +144,8 @@ config :keyfleet, :early_signup_rate_limit, limit: 5, window_seconds: 600
 # keeping one account to about 80 KB of words an hour.
 config :keyfleet, :proposal_words_rate_limit, limit: 20, window_seconds: 3600
 
-# How often one signed-in person's Buy Credits panel may read their wallet's USDC
-# and report a sent purchase, each window (Keyfleet.Limits).
+# How often one person or agent may do each of these, each window (Keyfleet.Limits).
 config :keyfleet, :limits,
-  wallet_read: [limit: 30, window_seconds: 60],
-  credits_report: [limit: 120, window_seconds: 60],
   # Posts one agent wallet writes as one Key, in rooms and on its thread: as many as people get.
   agent_posts: [limit: 300, window_seconds: 3600],
   # Workspace writes per wallet in each fleet: two a second, more than real agent work needs.

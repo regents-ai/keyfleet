@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.Components.Shell do
   @moduledoc """
   The app shell: the header, the sidebar, the page and, for someone signed in,
-  the side panel on the right, plus the Buy Credits dialog.
+  the side panel on the right.
 
   The side panel is the same on every page that has it, the app's pages and the
   homepage: Sign out, Manage Account on regents.sh, the agents paired with the
@@ -33,13 +33,7 @@ defmodule KeyfleetWeb.Components.Shell do
   attr(:shell_instance, :integer, required: true)
   attr(:get_key, :boolean, required: true)
 
-  attr(:credits, :map,
-    default: nil,
-    doc: "The account's Credits reading (`state` and `value`); nil when signed out."
-  )
-
   slot(:content, required: true)
-  slot(:credits_panel, doc: "The Buy Credits panel, opened from the header's balance.")
   slot(:agents, doc: "The agents paired with the account, in the side panel.")
   slot(:pairing, doc: "The box to pair an agent, in the side panel.")
 
@@ -62,7 +56,6 @@ defmodule KeyfleetWeb.Components.Shell do
         account_control={@account_control}
         get_key={@get_key}
         get_key_link={:patch}
-        credits={@credits}
         menu
         theme
       />
@@ -126,25 +119,6 @@ defmodule KeyfleetWeb.Components.Shell do
         <:agents>{render_slot(@agents)}</:agents>
         <:pairing :if={@pairing != []}>{render_slot(@pairing)}</:pairing>
       </.aside>
-
-      <Regent.Structure.dialog
-        :if={@credits_panel != []}
-        id="shell-credits"
-        class="shell-credits-dialog"
-        aria-label="Buy Credits"
-        phx-mounted={JS.ignore_attributes(["open"])}
-      >
-        <Regent.Primitives.button
-          variant="quiet"
-          type="button"
-          class="shell-credits-dialog__close"
-          aria-label="Close"
-          data-credits-close
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-        </Regent.Primitives.button>
-        {render_slot(@credits_panel)}
-      </Regent.Structure.dialog>
     </div>
     """
   end
@@ -167,11 +141,6 @@ defmodule KeyfleetWeb.Components.Shell do
 
   attr :theme, :boolean, required: true, doc: "whether the page offers the theme switch"
 
-  attr :credits, :map,
-    default: nil,
-    doc:
-      "The account's Credits reading, shown as the balance that opens Buy Credits; nil hides it."
-
   attr :fleets, :boolean,
     default: false,
     doc: "whether a Fleets link to Classic's page follows the signed-in name (the homepage)"
@@ -179,8 +148,7 @@ defmodule KeyfleetWeb.Components.Shell do
   @doc """
   The site header: brand, Menu (only where there is a sidebar), the theme
   switch (not on the always-dark homepage), links, "Purchase Key" (once Classic
-  is open), the Credits balance (inside the app, signed in) and the account
-  control. It fits one line on a phone.
+  is open) and the account control. It fits one line on a phone.
   """
   def header(assigns) do
     ~H"""
@@ -222,19 +190,6 @@ defmodule KeyfleetWeb.Components.Shell do
       <div :if={@get_key} class="shell-get-key">
         <.get_key id="shell-get-key" link={@get_key_link} />
       </div>
-      <button
-        :if={@credits}
-        id="shell-credits-button"
-        class="shell-credits"
-        type="button"
-        aria-haspopup="dialog"
-        aria-controls="shell-credits"
-        aria-label={credits_label(@credits)}
-        phx-hook="MotionCount"
-        data-variant="flash"
-      >
-        <.credits_amount amount={@credits} />
-      </button>
       <.account_control account_control={@account_control} fleets={@fleets} />
       <button
         :if={@account_control.kind == :signed_in}
@@ -308,33 +263,6 @@ defmodule KeyfleetWeb.Components.Shell do
         {render_slot(@pairing)}
       </section>
     </aside>
-    """
-  end
-
-  defp credits_label(%{state: :ready, value: balance}),
-    do: RegentCredits.Amount.format(balance.available)
-
-  defp credits_label(%{state: state}) when state in [:error, :stale], do: "Credits unavailable"
-  defp credits_label(_reading), do: "Credits loading"
-
-  attr :amount, :map, required: true
-
-  # "12.40 Credits", whose unit a phone's header leaves out for room. Only a
-  # balance just read shows; while it is read again, or when it can't be, the
-  # figure is a dash. The button and the Buy Credits panel behind it are there
-  # either way.
-  defp credits_amount(%{amount: %{state: :ready, value: balance}} = assigns) do
-    [number, unit] = String.split(RegentCredits.Amount.format(balance.available), " ", parts: 2)
-    assigns = assign(assigns, number: number, unit: unit)
-
-    ~H"""
-    <span data-count>{@number}</span> <span class="shell-credits__unit">{@unit}</span>
-    """
-  end
-
-  defp credits_amount(assigns) do
-    ~H"""
-    <span data-count>—</span> <span class="shell-credits__unit">Credits</span>
     """
   end
 
