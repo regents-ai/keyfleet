@@ -11,7 +11,6 @@ defmodule KeyfleetWeb.TreasuryLive do
 
   alias Keyfleet.Authority
   alias Keyfleet.Fleets.Rules
-  alias KeyfleetWeb.Components.AddressLinks
   alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.ProposalsLive
   alias KeyfleetWeb.ProposalsPage
@@ -114,40 +113,7 @@ defmodule KeyfleetWeb.TreasuryLive do
         <p class="proposals-detail">Each action asks the acting wallet to approve and send it.</p>
         <div :if={@page.manager_address} class="proposals-address">
           <span>Manager</span>
-          <code title={@page.manager_address}>{RegentFormat.short_address(@page.manager_address)}</code>
-          <Regent.Primitives.copy_button
-            id="fleet-manager-copy"
-            text={@page.manager_address}
-            variant="quiet"
-            aria-label="Copy manager address"
-            title="Copy manager address"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              aria-hidden="true"
-            ><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V4H4v12h4" /></svg>
-          </Regent.Primitives.copy_button>
-          <a
-            id="fleet-contract-link"
-            href={AddressLinks.basescan(@page.manager_address)}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="View manager on BaseScan"
-            title="View verified manager on BaseScan"
-          ><svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            aria-hidden="true"
-          ><path d="M6 18 18 6M6 6h12v12" /></svg></a>
+          <Regent.Primitives.address id="fleet-manager" address={@page.manager_address} />
         </div>
         <Regent.Primitives.disclosure
           id="treasury-fleet-details"
@@ -235,9 +201,10 @@ defmodule KeyfleetWeb.TreasuryLive do
             <div>
               <dt>Token</dt>
               <dd>
-                <code title={WalletPanel.figures(panel).token}>
-                  {RegentFormat.short_address(WalletPanel.figures(panel).token)}
-                </code>
+                <Regent.Primitives.address
+                  id="fleet-launch-token"
+                  address={WalletPanel.figures(panel).token}
+                />
               </dd>
             </div>
             <div>

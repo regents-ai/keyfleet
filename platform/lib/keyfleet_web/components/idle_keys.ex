@@ -92,7 +92,7 @@ defmodule KeyfleetWeb.Components.IdleKeys do
         <strong id={"#{@id}-count"}>{figure(@count)}</strong>
       </button>
 
-      <dialog
+      <Regent.Structure.dialog
         :if={@open?}
         id={"#{@id}-dialog"}
         class="idle-keys__dialog"
@@ -117,7 +117,13 @@ defmodule KeyfleetWeb.Components.IdleKeys do
             >
               Key {Rules.grouped(key.token_id)}
             </.link>
-            <span>Held by {RegentFormat.short_address(key.owner_wallet)}</span>
+            <span>
+              Held by
+              <Regent.Primitives.address
+                id={"#{@id}-key-#{key.token_id}-holder"}
+                address={key.owner_wallet}
+              />
+            </span>
           </li>
         </ol>
         <div class="idle-keys__actions">
@@ -137,7 +143,7 @@ defmodule KeyfleetWeb.Components.IdleKeys do
             </Regent.Primitives.button>
           </form>
         </div>
-      </dialog>
+      </Regent.Structure.dialog>
     </div>
     """
   end

@@ -453,7 +453,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   # opens as it is rendered and closes with its X, Escape or a new page.
   defp agent_card(assigns) do
     ~H"""
-    <dialog
+    <Regent.Structure.dialog
       id="harbour-agent"
       class="harbour-card"
       phx-hook="ModalDialog"
@@ -492,7 +492,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
       <.link class="harbour-card__key" patch={KeyLinks.key_path(@ship.fleet_id, @ship.token_id)}>
         Open {ActivityLines.key_name(@ship.token_id, nil)}
       </.link>
-    </dialog>
+    </Regent.Structure.dialog>
     """
   end
 end

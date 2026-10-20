@@ -274,9 +274,21 @@ defmodule KeyfleetWeb.ShellLiveTest do
     view |> element("#shell-tabs a", "Wallets") |> render_click()
     assert_patch(view, "/account/wallets")
     assert has_element?(view, "#shell-sidebar a[aria-current=page]", "Account")
-    assert has_element?(view, ".account-details code", wallet)
-    assert has_element?(view, "#account-wallet-copy[data-copy-text='#{wallet}']", "Copy")
-    assert has_element?(view, ".account-wallet-list code", other)
+
+    assert has_element?(
+             view,
+             "#account-wallet .rg-address__label",
+             RegentFormat.short_address(wallet)
+           )
+
+    assert has_element?(view, "#account-wallet-copy[data-copy-text='#{wallet}']")
+
+    assert has_element?(
+             view,
+             "#account-wallet-explorer[href='https://basescan.org/address/#{wallet}']"
+           )
+
+    assert has_element?(view, "#account-wallet-#{other}-copy[data-copy-text='#{other}']")
 
     view |> element("#shell-tabs a", "Connections") |> render_click()
     assert_patch(view, "/account/connections")

@@ -67,6 +67,6 @@ test("a key's page copies the wallet of an agent with a shard of it", async ({pa
   const errors = await signIn(page)
   await open(page, `/classic/1/keys/${key}`)
 
-  await copies(page, `key-shard-address-${agentWallet}`, agentWallet)
+  await copies(page, `key-shard-address-${agentWallet}-copy`, agentWallet)
   expect(errors).toEqual([])
 })

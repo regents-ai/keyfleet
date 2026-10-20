@@ -37,5 +37,5 @@ defmodule KeyfleetWeb.TreasuryController do
   end
 
   defp explorer(nil), do: nil
-  defp explorer(address), do: KeyfleetWeb.Components.AddressLinks.basescan(address)
+  defp explorer(address), do: "https://basescan.org/address/#{address}"
 end

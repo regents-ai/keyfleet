@@ -181,7 +181,12 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert has_element?(view, "#proposal-rule", @rule)
       assert has_element?(view, "#proposal-proposer", "Key 1,")
-      assert has_element?(view, "#proposal-proposer code[title='#{ProposalHelpers.wallet("f")}']")
+
+      assert has_element?(
+               view,
+               "#proposal-proposer-wallet-copy[data-copy-text='#{ProposalHelpers.wallet("f")}']"
+             )
+
       assert has_element?(view, "#proposal-content-tip", "0x" <> String.duplicate("d", 64))
 
       # Each call in a few words, with the wallet or code it names in full.
@@ -296,17 +301,18 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       {:ok, view, _html} = open(conn, @treasury_page)
 
-      assert cells(view, fake) == ["1 USDC 0xdddd..dddd", "3 USDC 0xdddd..dddd"]
+      assert cells(view, fake) == ["1 USDC 0xdddd..dddd #{fake}", "3 USDC 0xdddd..dddd #{fake}"]
       assert cells(view, @usdc) == ["1 USDC", "0 USDC"]
 
       tokens =
         view
         |> render()
         |> LazyHTML.from_fragment()
-        |> LazyHTML.query("#proposals-history .proposals-token")
-        |> Enum.map(&{text(&1), &1 |> LazyHTML.attribute("title") |> hd()})
+        |> LazyHTML.query("#proposals-history .proposals-token .rg-address__label")
+        |> Enum.map(&text/1)
 
-      assert tokens == [{"0xdddd..dddd", fake}]
+      assert tokens == ["0xdddd..dddd"]
+      assert has_element?(view, "#proposals-history .proposals-token [data-copy-text='#{fake}']")
     end
 
     # A token that will not tell its symbol or its decimals is never guessed at.
@@ -327,7 +333,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       for asset <- [no_symbol, no_decimals] do
         assert hd(cells(view, asset)) ==
-                 "1,234,000 in the smallest units of token #{RegentFormat.short_address(asset)}"
+                 "1,234,000 in the smallest units of token #{RegentFormat.short_address(asset)} #{asset}"
       end
     end
 
@@ -438,14 +444,11 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              )
 
       # The treasury's whole address is there before any balance is read.
-      assert has_element?(view, ~s(#proposals-treasury-address code[title="#{@treasury}"]))
-
       assert has_element?(
                view,
-               ~s(#proposals-treasury-link[href="https://basescan.org/address/#{@treasury}"])
+               ~s(#proposals-treasury-explorer[href="https://basescan.org/address/#{@treasury}"])
              )
 
-      assert has_element?(view, ~s(#proposals-treasury-address code[title="#{@treasury}"]))
       assert has_element?(view, ~s(#proposals-treasury-copy[data-copy-text="#{@treasury}"]))
 
       ProposalHelpers.treasury_reading!(@fleet, [balance(@usdc, held: 3_000_000)])
@@ -544,7 +547,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert cells(view, @eth) == ["1 ETH", "0 ETH"]
       assert cells(view, @usdc) == ["100 USDC", "30 USDC"]
-      assert cells(view, weth) == ["2 WETH 0xcccc..cccc", "0 WETH 0xcccc..cccc"]
+      assert cells(view, weth) == ["2 WETH 0xcccc..cccc #{weth}", "0 WETH 0xcccc..cccc #{weth}"]
 
       assert has_element?(
                view,
@@ -559,7 +562,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                "Next release: 21 September 2026 at 12:00 UTC."
 
       assert text(view, "#proposals-advances li > span") ==
-               "Advance 1: 3 USDC of 4 USDC, 0xdddd..dddd"
+               "Advance 1: 3 USDC of 4 USDC, 0xdddd..dddd #{ProposalHelpers.wallet("d")}"
 
       # Signed out, the advance shows without its Return; signed in, the
       # return of all that is still out is typed already.
@@ -569,9 +572,9 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       # Newest first; an advance coming back changes only what is still out.
       assert lines(view, "#proposals-history li") == [
-               "Advanced 4 USDC to 0xdddd..dddd",
+               "Advanced 4 USDC to 0xdddd..dddd #{ProposalHelpers.wallet("d")}",
                "Sent to REGENT staking 1 USDC",
-               "Paid 0.5 WETH 0xcccc..cccc to 0xbbbb..bbbb",
+               "Paid 0.5 WETH 0xcccc..cccc #{weth} to 0xbbbb..bbbb #{ProposalHelpers.wallet("b")}",
                "Shared with Key holders 1 USDC",
                "Received 10 USDC"
              ]
@@ -680,8 +683,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       view |> element("#proposals-present-idle-open") |> render_click()
 
       assert lines(view, "#proposals-present-idle-list li") == [
-               "Key 2 Held by #{RegentFormat.short_address(@holder)}",
-               "Key 3 Held by #{RegentFormat.short_address(@other)}"
+               "Key 2 Held by #{RegentFormat.short_address(@holder)} #{@holder}",
+               "Key 3 Held by #{RegentFormat.short_address(@other)} #{@other}"
              ]
 
       assert has_element?(
@@ -1149,7 +1152,10 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       end
 
       assert text(view, "#proposal-vote-action-line") == "With Keys 1, 2, 3."
-      assert text(view, "#proposal-vote-action-from") == "Sending from 0x1111..1111 on Base."
+
+      assert text(view, "#proposal-vote-action-from") ==
+               "Sending from 0x1111..1111 #{@holder} on Base."
+
       assert ballot_pressable?(view)
 
       # Moved to another proposal, this one's ballot leaves the page at once,

@@ -2940,3 +2940,8 @@ Do not edit, reorder, or remove existing entries; append corrections separately.
 - Why: Sean asked for an audit of the on-chain presses around buying Keys and the treasury (20:50Z): sign-in on the first press, Approve and Buy the same size, Approve greyed with a green border after it succeeds.
 
 - Released 2839078b as Fly v106 (19 Oct 2026 21:26Z).
+
+## 2026-10-20 — Every window has the cut-corner frame; every address and tx has copy and Basescan
+
+- What: every Keyfleet window (Buy Key, a Key's profile, Send an agent, Credits, idle Keys, the harbour card and the other dialogs) now opens in the shared design library's frame (`Regent.Structure.dialog`): two cut corners and two marked corner edges, in light and dark, with a sheet against the bottom edge on a phone. Every contract address, holder and transaction hash, including the Treasury's sent transaction, now uses the library's one address display (`Regent.Primitives.address`): the short address, a copy icon and a diagonal arrow to Basescan, tight together, moving on hover and press. Keyfleet's own address links component is gone. Keyfleet is pinned to design-system 652ce9ef, which also brings the library's newer account card, profile changes and the still Key card (the card no longer tilts).
+- Why: Sean asked (19 Oct 20:33Z) for one standing way to show contract addresses with the copy icon and Basescan arrow, and the Treasury's tx hash to use it; and (20:46Z) never to ship a default square window. He chose the library push and release by letter (20 Oct 00:02Z, "1. a").

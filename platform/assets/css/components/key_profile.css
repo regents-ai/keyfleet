@@ -1,24 +1,18 @@
 /* One key's profile, open over its fleet's page. Laptops see the card beside
    everything else, tablets above it, and phones the whole screen. */
 .key-profile {
-  width: min(1200px, 94vw);
-  max-width: none;
-  height: min(860px, 92svh);
-  max-height: none;
-  padding: 0;
-  border: 1px solid var(--ash-line-strong);
-  background: var(--color-surface);
+  --rg-dialog-size: 1200px;
+  block-size: min(860px, 92svh);
+  max-block-size: none;
   color: var(--color-fg);
-  overflow: hidden;
 }
 
-.key-profile[open] {
+.key-profile .rg-dialog__body {
   display: grid;
+  flex: 1;
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-}
-
-.key-profile::backdrop {
-  background: var(--ash-scrim);
+  padding: 0;
+  overflow: hidden;
 }
 
 /* While the visitor signs in, the profile stays where it was, above the page
@@ -121,22 +115,14 @@
   gap: 0.5rem 0.75rem;
 }
 
-.address-links {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-}
-
 .key-profile__section a {
   color: inherit;
 }
 
-/* On a phone OpenSea, Basescan and Manage shards are a full finger's height,
-   level with Copy address. */
+/* On a phone OpenSea and Manage shards are a full finger's height, level with
+   the address's icons. */
 @media (max-width: 47.99rem) {
-  .address-links a,
+  #key-profile-holder-opensea,
   #key-profile-manage {
     display: inline-flex;
     align-items: center;
@@ -264,7 +250,7 @@
 /* Tablets and phones: one column, the title and Close first and kept at the
    top while the card and the rest scroll under them. */
 @media (max-width: 959px) {
-  .key-profile[open] {
+  .key-profile .rg-dialog__body {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
@@ -306,13 +292,9 @@
 @media (max-width: 47.99rem) {
   .key-profile,
   .key-profile[open]:not(:modal) {
-    width: 100vw;
-    height: calc(100dvh - 3rem);
-    max-width: 100vw;
-    max-height: none;
+    inline-size: 100vw;
+    block-size: calc(100dvh - 3rem);
     margin: auto 0 0;
-    border: 0;
-    border-block-start: 1px solid var(--ash-line-strong);
     padding-block-end: env(safe-area-inset-bottom);
   }
 

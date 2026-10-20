@@ -525,7 +525,8 @@ defmodule KeyfleetWeb.WalletPanel do
       </p>
       <p :if={@names_sender} id={"#{@id}-from"} class="wallet-panel-note" hidden={!@signer}>
         <%= if @signer do %>
-          Sending from <code>{RegentFormat.short_address(@signer)}</code> on {@chain}.
+          Sending from <Regent.Primitives.address id={"#{@id}-signer"} address={@signer} />
+          on {@chain}.
         <% end %>
       </p>
       <p id={"#{@id}-mismatch"} class="wallet-panel-note" hidden={!@mismatch}>
@@ -561,7 +562,7 @@ defmodule KeyfleetWeb.WalletPanel do
         >
           <strong>{WalletWords.title(entry)}</strong>
           <span>{shown.words}</span>
-          <code title={entry.hash}>{RegentFormat.short_hash(entry.hash)}</code>
+          <Regent.Primitives.address id={"#{@id}-sent-#{entry.hash}"} address={entry.hash} kind="tx" />
           <Regent.Primitives.button
             :if={shown.state == :stalled}
             variant="quiet"

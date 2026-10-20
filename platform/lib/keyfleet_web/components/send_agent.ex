@@ -37,7 +37,7 @@ defmodule KeyfleetWeb.Components.SendAgent do
       Send your agent
     </Regent.Primitives.button>
 
-    <dialog
+    <Regent.Structure.dialog
       :if={@open}
       id={"#{@id}-dialog"}
       class="send-agent"
@@ -70,7 +70,7 @@ defmodule KeyfleetWeb.Components.SendAgent do
       <p class="send-agent__guide">
         What your agent installs: <a href={~p"/skill.md"}>keyfleet.ai/skill.md</a>
       </p>
-    </dialog>
+    </Regent.Structure.dialog>
     """
   end
 end

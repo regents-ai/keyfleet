@@ -64,24 +64,16 @@
 /* The list of idle keys, in a small dialog over the page. Phones see it
    across the whole width. The list scrolls; its title and buttons stay. */
 .idle-keys__dialog {
-  width: min(28rem, calc(100vw - 2rem));
-  max-width: none;
-  max-height: min(40rem, calc(100dvh - 2rem));
-  padding: clamp(1rem, 4vw, 1.5rem);
-  border: 1px solid var(--ash-line-strong);
-  background: var(--color-surface);
+  --rg-dialog-size: 28rem;
   color: var(--color-fg);
   font-size: 1rem;
 }
 
-.idle-keys__dialog[open] {
+.idle-keys__dialog .rg-dialog__body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-.idle-keys__dialog::backdrop {
-  background: var(--ash-scrim);
+  max-height: min(40rem, calc(100dvh - 2rem));
 }
 
 .idle-keys__dialog h2 {

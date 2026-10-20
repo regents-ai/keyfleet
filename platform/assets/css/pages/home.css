@@ -258,13 +258,8 @@
      traits, how many are sold, then Approve and Buy. Phones see it across the
      whole width. Each row keeps its full height, so on a short screen the
      window scrolls and nothing overlaps. */
-  .rl-buy-key {
-    inline-size: min(26rem, calc(100vw - 2rem)); max-inline-size: none; max-block-size: calc(100dvh - 2rem);
-    padding: clamp(1rem, 4vw, 1.5rem); font-size: 1rem;
-    border: 1px solid var(--ash-line-strong); background: var(--color-surface); color: var(--color-fg);
-  }
-  .rl-buy-key[open] { display: grid; grid-auto-rows: max-content; gap: var(--space-3); }
-  .rl-buy-key::backdrop { background: var(--ash-scrim); }
+  .rl-buy-key { --rg-dialog-size: 26rem; font-size: 1rem; color: var(--color-fg); }
+  .rl-buy-key .rg-dialog__body { display: grid; grid-auto-rows: max-content; gap: var(--space-3); }
   .rl-buy-key h2 { margin: 0; font-size: 1.5rem; line-height: 1.1; }
   .rl-buy-key h2:focus { outline: none; }
   .rl-buy-key .rl-cards { justify-self: center; inline-size: min(100%, 12rem); }

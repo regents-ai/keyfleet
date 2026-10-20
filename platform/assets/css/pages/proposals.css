@@ -333,7 +333,6 @@
   .treasury-permissions > div { display: grid; grid-template-columns: minmax(12rem, 1fr) minmax(14rem, 1fr); gap: 1rem; padding-block: .8rem; border-bottom: 1px solid var(--color-border); }
   .treasury-permissions dd { margin: 0; }
   .treasury-history { display: grid; gap: 1rem; border-top: 1px solid var(--color-border); padding-block-start: 1.25rem; }
-  #treasury-page .proposals-address a { display: inline-flex; padding: .5rem; }
   @media (max-width: 40rem) { .treasury-permissions > div { grid-template-columns: 1fr; gap: .25rem; } }
 }
 
@@ -375,13 +374,6 @@
 
     .proposals-lines > li > a {
       justify-self: start;
-    }
-
-    #treasury-page .proposals-address a {
-      align-items: center;
-      justify-content: center;
-      min-width: 2.75rem;
-      min-height: 2.75rem;
     }
 
     /* The Treasury's tables break only between words, and a table still too

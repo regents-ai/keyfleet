@@ -13,11 +13,11 @@ function control(id: string) {
 function mountDialog(dataset: Record<string, string>, page: Record<string, ReturnType<typeof control>> = {}) {
   const listeners = new Map<string, Listener>()
   const title = {focus: vi.fn()}
+  const body = {scrollTo: vi.fn()}
   const dialog = {
     open: false,
     modal: false,
     dataset,
-    scrollTop: 40,
     showModal: vi.fn(() => {
       dialog.open = true
       dialog.modal = true
@@ -30,7 +30,8 @@ function mountDialog(dataset: Record<string, string>, page: Record<string, Retur
       dialog.open = false
     }),
     matches: (selector: string) => selector === ":modal" && dialog.modal,
-    querySelector: (selector: string) => (selector === "[data-modal-title]" ? title : null),
+    querySelector: (selector: string) =>
+      ({"[data-modal-title]": title, ".rg-dialog__body": body})[selector] ?? null,
     querySelectorAll: () => [],
     addEventListener: vi.fn((name: string, listener: Listener) => listeners.set(name, listener)),
   }
@@ -50,7 +51,7 @@ function mountDialog(dataset: Record<string, string>, page: Record<string, Retur
     listeners.get("close")?.()
   }
   const fire = (name: string, event?: unknown) => listeners.get(name)?.(event)
-  return {dialog, hook, title, pushEvent, back, closeBy, fire}
+  return {dialog, body, hook, title, pushEvent, back, closeBy, fire}
 }
 
 // The page-wide listeners that note each press, as `watchPresses` adds them.
@@ -119,7 +120,7 @@ it("lets the sign-in window above it be used, and is modal again on a press back
 })
 
 it("focuses its title again when it comes to show another key", () => {
-  const {dialog, hook, title} = mountDialog({close: "back", closeEvent: "close_key", shown: "12"})
+  const {dialog, body, hook, title} = mountDialog({close: "back", closeEvent: "close_key", shown: "12"})
 
   ModalDialog.updated!.call(hook)
   expect(title.focus).toHaveBeenCalledOnce()
@@ -127,7 +128,7 @@ it("focuses its title again when it comes to show another key", () => {
   dialog.dataset.shown = "3"
   ModalDialog.updated!.call(hook)
   expect(title.focus).toHaveBeenCalledTimes(2)
-  expect(dialog.scrollTop).toBe(0)
+  expect(body.scrollTo).toHaveBeenCalledExactlyOnceWith({top: 0})
 })
 
 it("steps Tab and Shift+Tab through the dialog's controls, going round at either end", () => {

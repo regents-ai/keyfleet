@@ -91,7 +91,7 @@ export const ModalDialog: Hook = {
   updated(this: ModalDialogHook) {
     if (this.el.dataset.shown === this.shown) return
     this.shown = this.el.dataset.shown
-    this.el.scrollTop = 0
+    this.el.querySelector(".rg-dialog__body")?.scrollTo({top: 0})
     this.el.querySelector<HTMLElement>("[data-modal-scroll]")?.scrollTo({top: 0})
     focusTitle(this.el)
   },

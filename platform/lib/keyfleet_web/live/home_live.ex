@@ -648,7 +648,7 @@ defmodule KeyfleetWeb.HomeLive do
       assigns |> assign(offer(assigns.classic)) |> assign(:sold, sold_count(assigns.classic))
 
     ~H"""
-    <dialog
+    <Regent.Structure.dialog
       id="home-buy-key"
       class="rl-buy-key"
       phx-hook="ModalDialog"
@@ -699,7 +699,7 @@ defmodule KeyfleetWeb.HomeLive do
           </Regent.Primitives.button>
         </form>
       </div>
-    </dialog>
+    </Regent.Structure.dialog>
     """
   end
 

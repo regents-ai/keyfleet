@@ -27,7 +27,6 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   alias Keyfleet.Fleets.Rules
   alias KeyfleetWeb.ActivityLines
-  alias KeyfleetWeb.Components.AddressLinks
   alias KeyfleetWeb.Components.Count
   alias KeyfleetWeb.Components.PresenceCard
   alias KeyfleetWeb.FleetProposals
@@ -356,7 +355,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           </ol>
           <p id="proposal-proposer" class="proposals-detail">
             {ActivityLines.key_name(@page.proposal.author_key, @page.agents[@page.proposal.proposer])},
-            <.wallet address={@page.proposal.proposer} />
+            <.wallet id="proposal-proposer-wallet" address={@page.proposal.proposer} />
             <Regent.Primitives.tip id="proposal-content-tip" label="About the proposal’s text">
               {if @page.proposal.text,
                 do: "Its words match the fingerprint recorded on Base:",
@@ -364,10 +363,11 @@ defmodule KeyfleetWeb.ProposalsLive do
             </Regent.Primitives.tip>
           </p>
           <p :if={@page.proposal.executor} id="proposal-executor" class="proposals-detail">
-            Carried out by <.wallet address={@page.proposal.executor} />
+            Carried out by <.wallet id="proposal-executor-wallet" address={@page.proposal.executor} />
           </p>
           <p :if={@page.proposal.cancelled_by} id="proposal-canceller" class="proposals-detail">
-            Cancelled by <.wallet address={@page.proposal.cancelled_by} />
+            Cancelled by
+            <.wallet id="proposal-canceller-wallet" address={@page.proposal.cancelled_by} />
           </p>
         </section>
 
@@ -685,40 +685,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
       <div id="proposals-treasury-address" class="proposals-address">
         <span>Treasury · Base</span>
-        <code title={@treasury.address}>{RegentFormat.short_address(@treasury.address)}</code>
-        <Regent.Primitives.copy_button
-          id="proposals-treasury-copy"
-          text={@treasury.address}
-          variant="quiet"
-          aria-label="Copy treasury address"
-          title="Copy treasury address"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            aria-hidden="true"
-          ><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V4H4v12h4" /></svg>
-        </Regent.Primitives.copy_button>
-        <a
-          id="proposals-treasury-link"
-          href={AddressLinks.basescan(@treasury.address)}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="View treasury on BaseScan"
-          title="View treasury on BaseScan"
-        ><svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          aria-hidden="true"
-        ><path d="M6 18 18 6M6 6h12v12" /></svg></a>
+        <Regent.Primitives.address id="proposals-treasury" address={@treasury.address} />
       </div>
       <p :if={not @treasury.read?} id="proposals-budget-pending" class="proposals-detail">
         Balances usually show up within a minute.
@@ -745,13 +712,16 @@ defmodule KeyfleetWeb.ProposalsLive do
           </thead>
           <tbody>
             <tr :for={balance <- @treasury.balances} data-asset={balance.asset}>
-              <td><.amount value={balance.held} count /></td>
-              <td><.amount value={balance.backed} count /></td>
+              <td><.amount id={"proposals-held-#{balance.asset}"} value={balance.held} count /></td>
+              <td>
+                <.amount id={"proposals-backed-#{balance.asset}"} value={balance.backed} count />
+              </td>
             </tr>
           </tbody>
         </table>
         <p id="proposals-waiting">
-          Key sales waiting to become REGENT: <.amount value={@treasury.waiting} count />
+          Key sales waiting to become REGENT:
+          <.amount id="proposals-waiting-amount" value={@treasury.waiting} count />
         </p>
         <p class="proposals-detail">
           Balances as of <time datetime={DateTime.to_iso8601(@treasury.as_of)}>{at(@treasury.as_of)}</time>.
@@ -764,8 +734,10 @@ defmodule KeyfleetWeb.ProposalsLive do
       <ol :if={@treasury.advances != []} id="proposals-advances" class="proposals-lines">
         <li :for={advance <- @treasury.advances} data-advance={advance.id}>
           <span>
-            Advance {advance.id}: <.amount value={advance.outstanding} /> of
-            <.amount value={advance.amount} />, <.wallet address={advance.operator} />
+            Advance {advance.id}:
+            <.amount id={"proposals-advance-#{advance.id}-outstanding"} value={advance.outstanding} />
+            of <.amount id={"proposals-advance-#{advance.id}-amount"} value={advance.amount} />,
+            <.wallet id={"proposals-advance-#{advance.id}-operator"} address={advance.operator} />
           </span>
           <.live_component
             :if={@actor}
@@ -883,12 +855,15 @@ defmodule KeyfleetWeb.ProposalsLive do
         />
         <ol :if={@treasury.history != []} id="proposals-history" class="proposals-lines">
           <li :for={line <- @treasury.history} data-history={line.id}>
-            <span>{history_word(line.kind)} <.amount value={line.amount} /></span>
+            <span>
+              {history_word(line.kind)}
+              <.amount id={"proposals-history-#{line.id}-amount"} value={line.amount} />
+            </span>
             <span :if={line.account} class="proposals-detail">
-              to <.wallet address={line.account} />
+              to <.wallet id={"proposals-history-#{line.id}-account"} address={line.account} />
             </span>
             <span :if={line.spent} class="proposals-detail">
-              with <.amount value={line.spent} />
+              with <.amount id={"proposals-history-#{line.id}-spent"} value={line.spent} />
             </span>
           </li>
         </ol>
@@ -1069,32 +1044,29 @@ defmodule KeyfleetWeb.ProposalsLive do
     """
   end
 
+  attr :id, :string, required: true
   attr :value, :map, required: true
   attr :count, :boolean, default: false, doc: "whether the amount rolls when it changes"
 
-  # An amount, with its token's address beside it, shortened and in full on
-  # hover, unless it is the fleet's own USDC. Kept on one line, since it sits
-  # inside text.
+  # An amount, with its token's address beside it, unless it is the fleet's own
+  # USDC. Only the figure rolls; the address stays still beside it.
   defp amount(%{value: %{token: nil}} = assigns),
     do: ~H|<span class="proposals-amount" data-count={@count}>{@value.text}</span>|
 
   defp amount(assigns) do
     ~H"""
-    <span class="proposals-amount" data-count={@count}>{@value.text} <.token address={@value.token} /></span>
+    <span class="proposals-amount">
+      <span data-count={@count}>{@value.text}</span>
+      <Regent.Primitives.address id={"#{@id}-token"} class="proposals-token" address={@value.token} />
+    </span>
     """
   end
 
+  attr :id, :string, required: true
   attr :address, :string, required: true
 
-  defp token(assigns),
-    do:
-      ~H|<code class="proposals-token" title={@address}>{RegentFormat.short_address(@address)}</code>|
-
-  attr :address, :string, required: true
-
-  # A wallet shortened, in full on hover.
   defp wallet(assigns),
-    do: ~H|<code title={@address}>{RegentFormat.short_address(@address)}</code>|
+    do: ~H|<Regent.Primitives.address id={@id} address={@address} />|
 
   attr :page, :map, required: true
 

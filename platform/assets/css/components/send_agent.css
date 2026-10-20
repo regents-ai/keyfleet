@@ -2,22 +2,14 @@
    small dialog over the page. Phones see it across the whole width. It keeps
    its own text size, whatever the bar or hero holding its button uses. */
 .send-agent {
-  width: min(36rem, calc(100vw - 2rem));
+  --rg-dialog-size: 36rem;
   font-size: 1rem;
-  max-width: none;
-  padding: clamp(1rem, 4vw, 1.5rem);
-  border: 1px solid var(--ash-line-strong);
-  background: var(--color-surface);
   color: var(--color-fg);
 }
 
-.send-agent[open] {
+.send-agent .rg-dialog__body {
   display: grid;
   gap: 1rem;
-}
-
-.send-agent::backdrop {
-  background: var(--ash-scrim);
 }
 
 .send-agent h2 {

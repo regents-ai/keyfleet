@@ -466,7 +466,7 @@ defmodule KeyfleetWeb.CreditsPanel do
            appearing never replaces the button a person has just pressed. --%>
       <div class="credits-panel__wallet" hidden={!@wallet}>
         <span class="credits-panel__muted">{if @signer, do: "Paying from", else: "Wallet"}</span>
-        <code>{@wallet && RegentFormat.short_address(@wallet)}</code>
+        <Regent.Primitives.address :if={@wallet} id={"#{@id}-wallet"} address={@wallet} />
         <span class="credits-panel__usdc">{usdc(@usdc)}</span>
       </div>
       <p class="credits-panel__note" hidden={!@mismatch}>{@mismatch}</p>

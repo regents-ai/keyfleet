@@ -108,7 +108,7 @@ defmodule KeyfleetWeb.Components.Shell do
         </main>
       </div>
 
-      <dialog
+      <Regent.Structure.dialog
         :if={@credits_panel != []}
         id="shell-credits"
         class="shell-credits-dialog"
@@ -125,7 +125,7 @@ defmodule KeyfleetWeb.Components.Shell do
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </Regent.Primitives.button>
         {render_slot(@credits_panel)}
-      </dialog>
+      </Regent.Structure.dialog>
     </div>
     """
   end

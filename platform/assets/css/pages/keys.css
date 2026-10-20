@@ -132,19 +132,6 @@
   color: var(--color-fg-muted);
 }
 
-.key-address {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
-  max-width: 100%;
-}
-
-.key-address code {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
 .key-shard-actions {
   display: flex;
   flex-wrap: wrap;

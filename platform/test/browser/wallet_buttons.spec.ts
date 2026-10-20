@@ -33,7 +33,7 @@ async function openBuying(page: Page, bearer: string | null = "valid") {
   return errors
 }
 
-const sentLine = (page: Page, hash: string) => page.locator(`#buy-key-order-sent li:has(code[title="${hash}"])`)
+const sentLine = (page: Page, hash: string) => page.locator(`#buy-key-order-sent li:has(#buy-key-order-sent-${hash})`)
 const pressNote = (page: Page) => page.locator("#buy-key-order-press-note")
 
 // Approve and Buy are drawn the same size.
@@ -78,7 +78,7 @@ test("an approval, then the purchase: every press reaches the wallet, and each i
   const errors = await openBuying(page)
   await useStandInWallet(page, me)
 
-  await expect(page.locator("#buy-key-order-from")).toHaveText("Sending from 0x1111..1111 on Base.")
+  await expect(page.locator("#buy-key-order-from")).toHaveText("Sending from 0x1111..1111 on Base.", {useInnerText: true})
   await expect(page.locator("#buy-key-approve")).toBeVisible()
   await expect(page.locator("#buy-key-button")).toBeDisabled()
   await expect(page.locator("#buy-key-button-why")).toHaveText("Approve USDC first")
@@ -165,7 +165,7 @@ test("on the homepage, Approve and Buy are pressed inside the Buy Key window, si
   await expect(window).toBeVisible()
   await useStandInWallet(page, me)
 
-  await expect(window.locator("#home-buy-key-order-from")).toHaveText("Sending from 0x1111..1111 on Base.")
+  await expect(window.locator("#home-buy-key-order-from")).toHaveText("Sending from 0x1111..1111 on Base.", {useInnerText: true})
   await expect(window.locator("#home-buy-key-button")).toBeDisabled()
   await expect(window.locator("#home-buy-key-button-why")).toHaveText("Approve USDC first")
   await expect(window.locator("#home-buy-key-approve")).toHaveText("1 Approve USDC")
@@ -255,7 +255,7 @@ test("a key's income is claimed to the wallet that holds it, and the claim is fo
   expect(claimed.transaction.to.toLowerCase()).toBe(rewardsContract)
 
   landStep(claimed.hash, claimed.transaction, true)
-  await expect(page.locator(`#key-profile-claim-action-sent li:has(code[title="${claimed.hash}"])`)).toContainText(
+  await expect(page.locator(`#key-profile-claim-action-sent li:has(#key-profile-claim-action-sent-${claimed.hash})`)).toContainText(
     "Done.",
   )
   expect(errors).toEqual([])
@@ -288,7 +288,7 @@ test("a key whose draw was turned down can be asked again: every press reaches t
   // The first is accepted; the server reads that the draw is on its way.
   refuseDraw(fleet, key, false)
   landStep(first.hash, first.transaction, true)
-  await expect(page.locator(`#key-profile-reveal-action-sent li:has(code[title="${first.hash}"])`)).toContainText(
+  await expect(page.locator(`#key-profile-reveal-action-sent li:has(#key-profile-reveal-action-sent-${first.hash})`)).toContainText(
     "Done.",
   )
   // The chain now has the request, so another is certain to be refused: the
@@ -298,7 +298,7 @@ test("a key whose draw was turned down can be asked again: every press reaches t
 
   // The repeat reaches the chain, which refuses it.
   landStep(second.hash, second.transaction, false)
-  await expect(page.locator(`#key-profile-reveal-action-sent li:has(code[title="${second.hash}"])`)).toContainText(
+  await expect(page.locator(`#key-profile-reveal-action-sent li:has(#key-profile-reveal-action-sent-${second.hash})`)).toContainText(
     "Nothing asked. The draw may be on its way.",
   )
   expect(errors).toEqual([])

@@ -165,10 +165,7 @@ defmodule KeyfleetWeb.AccountLive do
           <div>
             <dt>Wallet</dt>
             <dd :if={@account.wallet_address} class="account-wallet">
-              <code>{@account.wallet_address}</code>
-              <Regent.Primitives.copy_button id="account-wallet-copy" text={@account.wallet_address}>
-                Copy
-              </Regent.Primitives.copy_button>
+              <Regent.Primitives.address id="account-wallet" address={@account.wallet_address} />
             </dd>
             <dd :if={is_nil(@account.wallet_address)}>No wallet linked</dd>
           </div>
@@ -176,7 +173,9 @@ defmodule KeyfleetWeb.AccountLive do
             <dt>Other linked wallets</dt>
             <dd>
               <ul class="account-wallet-list">
-                <li :for={wallet <- other_wallets(@account)}><code>{wallet}</code></li>
+                <li :for={wallet <- other_wallets(@account)}>
+                  <Regent.Primitives.address id={"account-wallet-#{wallet}"} address={wallet} />
+                </li>
               </ul>
             </dd>
           </div>

@@ -32,7 +32,7 @@ async function openKey(page: Page, key: number) {
 const days = (data: string) => Number(BigInt(`0x${data.slice(10 + 2 * 64, 10 + 3 * 64)}`))
 
 const sentLine = (page: Page, panel: string, hash: string) =>
-  page.locator(`#${panel}-sent li:has(code[title="${hash}"])`)
+  page.locator(`#${panel}-sent li:has(#${panel}-sent-${hash})`)
 
 test("an owner issues a shard, renews it and ends it, and every press reaches the wallet", async ({page}) => {
   const key = sellKey(fleet, me)

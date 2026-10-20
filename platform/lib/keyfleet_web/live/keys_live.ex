@@ -15,7 +15,6 @@ defmodule KeyfleetWeb.KeysLive do
 
   use KeyfleetWeb, :html
 
-  import KeyfleetWeb.Components.AddressLinks
   import KeyfleetWeb.Components.AgentPicture
 
   alias Keyfleet.Actors.Human
@@ -70,9 +69,16 @@ defmodule KeyfleetWeb.KeysLive do
         <section class="key-panel" aria-labelledby="key-owner-title">
           <h2 id="key-owner-title">Held by</h2>
           <p class="key-wallet">
-            <code title={@key.owner_wallet}>{RegentFormat.short_address(@key.owner_wallet)}</code>
+            <Regent.Primitives.address id="key-owner-address" address={@key.owner_wallet} />
             <span :if={@key.owner?} id="key-owner-you" class="key-detail">You</span>
-            <.address_links id="key-owner-links" address={@key.owner_wallet} />
+            <a
+              id="key-owner-opensea"
+              href={"https://opensea.io/#{@key.owner_wallet}"}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              OpenSea
+            </a>
           </p>
         </section>
 
@@ -290,7 +296,7 @@ defmodule KeyfleetWeb.KeysLive do
           <p :if={is_nil(shard.agent)} class="key-name">No agent yet</p>
           <span :if={shard.agent}>{shard.agent.harness}</span>
           <span>Until {date(shard.expires_at)}</span>
-          <.address id={"key-shard-address-#{shard.wallet}"} wallet={shard.wallet} />
+          <Regent.Primitives.address id={"key-shard-address-#{shard.wallet}"} address={shard.wallet} />
         </div>
 
         <div :if={@panel} class="key-shard-actions">
@@ -312,21 +318,6 @@ defmodule KeyfleetWeb.KeysLive do
         </div>
       </li>
     </ul>
-    """
-  end
-
-  attr :id, :string, required: true
-  attr :wallet, :string, required: true
-
-  # A shard's wallet in full, so its owner can check it character for character.
-  defp address(assigns) do
-    ~H"""
-    <p class="key-address">
-      <code>{@wallet}</code>
-      <Regent.Primitives.copy_button id={@id} text={@wallet} aria-label="Copy address">
-        Copy address
-      </Regent.Primitives.copy_button>
-    </p>
     """
   end
 

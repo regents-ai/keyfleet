@@ -263,10 +263,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     assert has_element?(
              view,
-             ~s(#treasury-rules a#fleet-contract-link[href="https://basescan.org/address/#{@contract}"])
+             ~s(#treasury-rules a#fleet-manager-explorer[href="https://basescan.org/address/#{@contract}"])
            )
 
-    assert has_element?(view, ~s(#treasury-rules code[title="#{@contract}"]))
+    assert has_element?(
+             view,
+             ~s(#treasury-rules #fleet-manager-copy[data-copy-text="#{@contract}"])
+           )
   end
 
   test "a Member List page that is not one of its pages is a page that doesn't exist", %{
@@ -434,7 +437,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert text(view, "#buy-key-button [data-press-label]") == "Buy Key 151"
 
-      assert text(view, "#buy-key-order-from") == "Sending from 0xaaaa..aaaa on Base."
+      assert text(view, "#buy-key-order-from") ==
+               "Sending from 0xaaaa..aaaa #{@owner} on Base."
+
       refute has_element?(view, "#buy-key-approve[hidden]")
       refute has_element?(view, "#buy-key-approve[data-done]")
       refute has_element?(view, "#buy-key-order [data-account-target]")
@@ -483,7 +488,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
                "Approve"
              )
 
-      assert text(view, "#buy-key-order-sent span") == "Approved. Now press the next button."
+      assert text(view, "#buy-key-order-sent li > strong + span") ==
+               "Approved. Now press the next button."
+
       refute has_element?(view, "#buy-key-button[disabled]")
 
       # Built again for the allowance now in place: the purchase alone, with
@@ -525,7 +532,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       render_async(view, 3_000)
       assert has_element?(view, "#buy-key-order-sent li[data-state=reverted] strong", "Buy Key")
 
-      assert text(view, "#buy-key-order-sent span") == "Not bought. No USDC was taken."
+      assert text(view, "#buy-key-order-sent li > strong + span") ==
+               "Not bought. No USDC was taken."
 
       refute has_element?(view, "#buy-key-button[disabled]")
     end
@@ -707,7 +715,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#buy-key-button-why") == "Sold out"
       assert has_element?(view, "#buy-key-button[disabled]")
       assert has_element?(view, "#buy-key-order-sent li[data-state=confirmed] strong", "Buy Key")
-      assert text(view, "#buy-key-order-sent span") =~ "Done. The Key is yours"
+      assert text(view, "#buy-key-order-sent li > strong + span") =~ "Done. The Key is yours"
     end
 
     test "a fleet not yet deployed offers nothing to buy", %{conn: conn} do

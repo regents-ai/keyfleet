@@ -283,18 +283,12 @@ body.sea-lifted:has(> .harbour-sea) > .regent-footer {
 /* ---- An agent's card: who it is, its Key and its last few actions ---- */
 
 .harbour-card {
-  width: min(24rem, calc(100vw - 2rem));
-  max-height: calc(100dvh - 2rem);
-  padding: 0;
-  border: 1px solid var(--ash-line-strong);
-  background: var(--color-surface);
+  --rg-dialog-size: 24rem;
   color: var(--color-fg);
-  overflow-y: auto;
 }
 
-/* The sea stays in sight behind it. */
-.harbour-card::backdrop {
-  background: color-mix(in oklch, var(--palette-charcoal) 30%, transparent);
+.harbour-card .rg-dialog__body {
+  padding: 0;
 }
 
 .harbour-card__head {

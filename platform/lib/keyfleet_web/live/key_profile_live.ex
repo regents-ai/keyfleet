@@ -14,7 +14,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   use KeyfleetWeb, :html
 
-  import KeyfleetWeb.Components.AddressLinks
   import KeyfleetWeb.Components.AgentPicture
   import KeyfleetWeb.Components.SentFrom
 
@@ -56,7 +55,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   def dialog(assigns) do
     ~H"""
-    <dialog
+    <Regent.Structure.dialog
       id="key-profile"
       class="key-profile"
       phx-hook="ModalDialog"
@@ -129,7 +128,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <.recent_posts profile={@profile} params={@params} />
         <% end %>
       </div>
-    </dialog>
+    </Regent.Structure.dialog>
     """
   end
 
@@ -229,7 +228,14 @@ defmodule KeyfleetWeb.KeyProfileLive do
         </div>
         <div>
           <dt>Held by</dt>
-          <dd id="key-profile-holder">{held_by(@profile)}</dd>
+          <dd id="key-profile-holder">
+            {held_by(@profile)}
+            <Regent.Primitives.address
+              :if={is_nil(held_by(@profile))}
+              id="key-profile-holder-wallet"
+              address={@profile.holder}
+            />
+          </dd>
         </div>
         <div>
           <dt>Changed hands</dt>
@@ -282,7 +288,8 @@ defmodule KeyfleetWeb.KeyProfileLive do
   # The agent holding a shard, as its check-ins say, or its wallet while no
   # agent has signed in with it.
   defp shard_agent(%{shard: %{agent: nil}} = assigns),
-    do: ~H"<code>{RegentFormat.short_address(@shard.wallet)}</code>"
+    do:
+      ~H|<Regent.Primitives.address id={"key-profile-shard-#{@shard.wallet}"} address={@shard.wallet} />|
 
   defp shard_agent(assigns) do
     ~H"""
@@ -501,7 +508,15 @@ defmodule KeyfleetWeb.KeyProfileLive do
     <section class="key-profile__section" aria-labelledby="key-profile-holder-title">
       <div class="key-profile-holder">
         <h3 id="key-profile-holder-title">Held by {held_by(@profile)}</h3>
-        <.address_links id="key-profile-holder-links" address={@profile.holder} />
+        <Regent.Primitives.address id="key-profile-holder-address" address={@profile.holder} />
+        <a
+          id="key-profile-holder-opensea"
+          href={"https://opensea.io/#{@profile.holder}"}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          OpenSea
+        </a>
       </div>
       <dl class="key-profile-facts">
         <div>
@@ -714,7 +729,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp held_by(%{held_for_pass?: true, token_id: token_id}),
     do: "Regents Club, for Pass #{Rules.grouped(token_id)}"
 
-  defp held_by(%{holder: wallet}), do: RegentFormat.short_address(wallet)
+  defp held_by(_profile), do: nil
 
   attr :rewards, :any, required: true
 
