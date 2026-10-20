@@ -48,7 +48,8 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
                    ~w(/classic/1 /syndicate/1 /cascade/1 /accelerant/1 /app/fleets/regents_club),
                  page <-
                    ["", "/rooms/:slug", "/workspace", "/workspace/:object_id"] ++
-                     ["/code/:repository/commits/:commit", "/proposals"] ++
+                     ["/code/:repository/commits/:commit", "/code/:repository/files"] ++
+                     ["/proposals"] ++
                      ["/proposals/:number", "/treasury", "/polls", "/polls/:poll_id"] ++
                      ["/keys/:token_id"] ++
                      ["/keys/:token_id/dms", "/keys/:token_id/dms/:other_token_id"],

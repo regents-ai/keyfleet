@@ -17,6 +17,19 @@ defmodule Keyfleet.Notebooks.HubClient do
   @doc "Every project in the hub."
   def projects(fleet_id), do: fleet_id |> request(:get, "/api/v1/projects") |> page()
 
+  @doc """
+  The project's 50 newest notebooks tagged `tag`, each with `id` and
+  `title`, waiting `page_timeout_ms` at most, for a page that shows them.
+  """
+  def tagged_notebooks(fleet_id, project_id, tag) do
+    fleet_id
+    |> request(:get, "/api/v1/projects/#{segment(project_id)}/notebooks",
+      params: [tag: tag, limit: 50],
+      receive_timeout: Notebooks.config()[:page_timeout_ms]
+    )
+    |> page()
+  end
+
   @doc "Makes a project the provisioner owns."
   def create_project(fleet_id, name) do
     fleet_id
@@ -78,15 +91,18 @@ defmodule Keyfleet.Notebooks.HubClient do
     {:ok, address} = Notebooks.hub_address(fleet_id)
 
     Req.request(
-      [
-        method: method,
-        base_url: address,
-        url: path,
-        headers: [{"x-keyfleet-assertion", Pass.mint(fleet_id, provisioner(fleet_id))}],
-        retry: false,
-        redirect: false,
-        receive_timeout: Notebooks.config()[:hub_timeout_ms]
-      ] ++ options
+      Keyword.merge(
+        [
+          method: method,
+          base_url: address,
+          url: path,
+          headers: [{"x-keyfleet-assertion", Pass.mint(fleet_id, provisioner(fleet_id))}],
+          retry: false,
+          redirect: false,
+          receive_timeout: Notebooks.config()[:hub_timeout_ms]
+        ],
+        options
+      )
     )
   end
 

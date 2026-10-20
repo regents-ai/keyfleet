@@ -22,7 +22,7 @@ defmodule Keyfleet.Code do
 
   alias Keyfleet.AccessCache
   alias Keyfleet.Actors.System
-  alias Keyfleet.Code.{Push, Repository, Setup}
+  alias Keyfleet.Code.{NodeClient, Push, Repository, Setup}
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Errors.{EditsRestrictedError, NotKeyHolderError}
   alias Keyfleet.Keys
@@ -62,6 +62,63 @@ defmodule Keyfleet.Code do
   """
   def commit_path(fleet_id, hash),
     do: "#{Keyfleet.Fleets.path(fleet_id)}/code/#{fleet_id}/commits/#{hash}"
+
+  @doc """
+  The path of a file or folder in the fleet's code on this site, `""` for
+  the top folder, as it stands on the default branch now.
+  """
+  def files_path(fleet_id, ""), do: "#{Keyfleet.Fleets.path(fleet_id)}/code/#{fleet_id}/files"
+
+  def files_path(fleet_id, path),
+    do: files_path(fleet_id, "") <> "?" <> URI.encode_query(path: path)
+
+  @doc """
+  Whether `path` names a place in the code: names joined by `/`, none of
+  them empty, `.` or `..`.
+  """
+  def code_path?(path) do
+    is_binary(path) and path != "" and String.valid?(path) and
+      Enum.all?(String.split(path, "/"), &(&1 not in ["", ".", ".."]))
+  end
+
+  @doc """
+  What the folder `path` holds on the default branch now, `""` for the top:
+  `{:ok, entries}`, folders first, each `%{name:, folder?:, size:}`; nothing
+  while the fleet has no repository, and nothing for a folder that isn't
+  there or a file. `{:error, error}` when the store can't be read.
+  """
+  def folder(fleet_id, path) do
+    with {:ok, owner} when is_binary(owner) <- stored_owner(fleet_id),
+         {:ok, entries} <- NodeClient.tree(fleet_id, owner, path) do
+      {:ok,
+       entries
+       |> Enum.map(&%{name: &1["path"], folder?: &1["kind"] == "tree", size: &1["size"]})
+       |> Enum.sort_by(&{not &1.folder?, &1.name})}
+    else
+      {:ok, nil} -> {:ok, []}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  The file at `path` on the default branch now: `{:ok, bytes}`, `{:ok,
+  :too_large}` past `file_max_bytes`, `:not_found` (no repository yet
+  included), or `{:error, error}` when the store can't be read.
+  """
+  def file(fleet_id, path) do
+    case stored_owner(fleet_id) do
+      {:ok, nil} -> :not_found
+      {:ok, owner} -> NodeClient.blob(fleet_id, owner, path)
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  # A page reads the code only once the repository is made: it never asks
+  # for one to be made.
+  defp stored_owner(fleet_id) do
+    with {:ok, repository} <- get_repository(fleet_id, actor: %System{}),
+         do: {:ok, repository && repository.owner}
+  end
 
   @doc "Whether `hash` is a commit's full hash, as git writes it: 40 or 64 lowercase hex digits."
   def full_hash?(hash),

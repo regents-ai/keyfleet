@@ -35,8 +35,11 @@ defmodule KeyfleetWeb.WorkspacePage do
   or a damaged page position, is a page that doesn't exist.
   """
 
+  require Logger
+
   alias Keyfleet.{Activity, Agents, Code, Fleets, Notebooks}
   alias Keyfleet.Graph
+  alias Keyfleet.Notebooks.HubClient
   alias Keyfleet.Rooms
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.DirectoryMD
@@ -271,18 +274,7 @@ defmodule KeyfleetWeb.WorkspacePage do
           Map.put(base, :object, nil)
 
         object ->
-          # A goal's page lists the work around it in place of its links.
-          {links, goal} =
-            if object.type == "goal" do
-              {nil, goal_work(fleet_id, object_id, opts)}
-            else
-              {page!(
-                 Graph.object_links(fleet_id, object_id,
-                   page: links_at ++ [limit: 50],
-                   actor: actor
-                 )
-               ), nil}
-            end
+          {links, goal} = around(object.type, fleet_id, object_id, links_at, opts)
 
           {history, earlier} =
             fleet_id
@@ -290,8 +282,12 @@ defmodule KeyfleetWeb.WorkspacePage do
             |> page!()
             |> Enum.split(50)
 
-          others = if links, do: Enum.map(links.results, &other_end(&1, object_id)), else: []
-          titles = titles(fleet_id, others ++ Enum.flat_map(history, &mentions/1), opts)
+          titles =
+            titles(
+              fleet_id,
+              other_ends(links, object_id) ++ Enum.flat_map(history, &mentions/1),
+              opts
+            )
 
           agents =
             agent_names(
@@ -304,16 +300,7 @@ defmodule KeyfleetWeb.WorkspacePage do
           Map.merge(base, %{
             object: detail(object, fleet_id, agents, opts),
             goal: goal,
-            links:
-              links &&
-                %{
-                  rows: Enum.map(links.results, &link_row(&1, object, titles)),
-                  more:
-                    if(links.more?,
-                      do: path.("links", List.last(links.results).__metadata__.keyset)
-                    ),
-                  first: if(links_at != [], do: path.("links", nil))
-                },
+            links: links && link_rows(links, object, titles, path, links_at != []),
             history: %{
               lines: Enum.map(history, &line(&1, titles, agents)),
               more: if(earlier != [], do: path.("history", List.last(history).seq - 1)),
@@ -325,6 +312,25 @@ defmodule KeyfleetWeb.WorkspacePage do
       {:missing, name} -> %{fleet_id: fleet_id, fleet_name: name, ready?: false, seen: nil}
       {:members_only, name} -> members_only(fleet_id, name, actor, object_id)
     end
+  end
+
+  # A goal's page lists the work around it in place of its links.
+  defp around("goal", fleet_id, object_id, _links_at, opts),
+    do: {nil, goal_work(fleet_id, object_id, opts)}
+
+  defp around(_type, fleet_id, object_id, links_at, opts) do
+    {page!(Graph.object_links(fleet_id, object_id, [page: links_at ++ [limit: 50]] ++ opts)), nil}
+  end
+
+  defp other_ends(nil, _object_id), do: []
+  defp other_ends(links, object_id), do: Enum.map(links.results, &other_end(&1, object_id))
+
+  defp link_rows(links, object, titles, path, later?) do
+    %{
+      rows: Enum.map(links.results, &link_row(&1, object, titles)),
+      more: if(links.more?, do: path.("links", List.last(links.results).__metadata__.keyset)),
+      first: if(later?, do: path.("links", nil))
+    }
   end
 
   defp members_only(fleet_id, name, actor, object_id) do
@@ -422,6 +428,90 @@ defmodule KeyfleetWeb.WorkspacePage do
       {:members_only, name} ->
         %{fleet_id: fleet_id, fleet_name: name, hash: hash, members_only?: true}
     end
+  end
+
+  @doc """
+  One folder or file of the fleet's code as it stands on the default branch
+  now, named by its repository and the `path` asked for (none for the top
+  folder): a folder's names, folders first, or a file's text, beside the
+  latest changes sent to the code. A file that isn't text, or is past
+  `file_max_bytes`, is named but not shown; `listing` is `:unreadable`
+  when the code store doesn't answer. An address naming another repository,
+  a path that can't name a place in the code, or a file that isn't there is
+  a page that doesn't exist.
+  """
+  def files(fleet_id, repository, params, actor) do
+    path =
+      case params["path"] do
+        nil -> ""
+        path -> if Code.code_path?(path), do: path, else: raise(NotFoundError)
+      end
+
+    if repository != fleet_id, do: raise(NotFoundError)
+    opts = [actor: actor]
+
+    with {:ok, fleet} <- fleet(fleet_id, opts),
+         {:ok, pushes} <- members_read(fleet, Code.recent_pushes(fleet_id, opts)) do
+      %{
+        fleet_id: fleet_id,
+        fleet_name: fleet.name,
+        path: path,
+        crumbs: crumbs(fleet_id, path),
+        clone_url: Code.clone_url(fleet_id),
+        pushes: pushes(pushes, fleet_id),
+        listing: listing(fleet_id, path)
+      }
+    else
+      {:missing, _name} ->
+        raise NotFoundError
+
+      {:members_only, name} ->
+        %{fleet_id: fleet_id, fleet_name: name, path: path, members_only?: true}
+    end
+  end
+
+  # Each folder above the place shown, from the top, as a link.
+  defp crumbs(_fleet_id, ""), do: []
+
+  defp crumbs(fleet_id, path) do
+    names = String.split(path, "/")
+
+    for depth <- 0..(length(names) - 2)//1 do
+      above = names |> Enum.take(depth + 1) |> Enum.join("/")
+      %{name: Enum.at(names, depth), link: Code.files_path(fleet_id, above)}
+    end
+  end
+
+  # A folder holds something: git keeps no empty folder. So a place that
+  # holds nothing is a file, or nothing at all.
+  defp listing(fleet_id, path) do
+    case Code.folder(fleet_id, path) do
+      {:ok, []} when path != "" -> file(fleet_id, path)
+      {:ok, entries} -> {:folder, Enum.map(entries, &entry_row(&1, fleet_id, path))}
+      {:error, error} -> unreadable_code(fleet_id, error)
+    end
+  end
+
+  defp entry_row(entry, fleet_id, ""),
+    do: Map.put(entry, :link, Code.files_path(fleet_id, entry.name))
+
+  defp entry_row(entry, fleet_id, path),
+    do: Map.put(entry, :link, Code.files_path(fleet_id, path <> "/" <> entry.name))
+
+  defp file(fleet_id, path) do
+    case Code.file(fleet_id, path) do
+      {:ok, :too_large} -> {:file, :too_large}
+      {:ok, bytes} -> {:file, if(text?(bytes), do: bytes, else: :not_text)}
+      :not_found -> raise NotFoundError
+      {:error, error} -> unreadable_code(fleet_id, error)
+    end
+  end
+
+  defp text?(bytes), do: String.valid?(bytes) and not String.contains?(bytes, <<0>>)
+
+  defp unreadable_code(fleet_id, error) do
+    Logger.warning("The code of #{fleet_id} could not be read: #{reason(error)}")
+    :unreadable
   end
 
   # The tasks that produced each piece of evidence, by the evidence's id.
@@ -574,9 +664,15 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # What a goal's page lists of the work around it (`Keyfleet.Graph.Object`,
   # `:around_goal`): each item one line, and of the evidence among them, the
-  # saved notebook results and the commits of the fleet's code it cites.
+  # saved notebook results and the commits of the fleet's code it cites;
+  # beside them the goal's own place in the code, the folder `goals/goal-N`,
+  # and the notebooks tagged `goal-N`. `code` and `notebooks` are
+  # `:unreadable` when the code store or the notebook hub doesn't answer,
+  # and `notebooks` is nil for a fleet without notebooks.
   defp goal_work(fleet_id, goal_id, opts) do
     {objects, more} = fleet_id |> Graph.goal_work!(goal_id, opts) |> Enum.split(@goal_items)
+    name = String.replace(goal_id, "#", "-")
+    folder = "goals/" <> name
 
     sources =
       for %{type: "evidence"} = object <- objects,
@@ -607,9 +703,50 @@ defmodule KeyfleetWeb.WorkspacePage do
             path: path,
             changed_on: on(object.changed_at)
           }
-        end
+        end,
+      name: name,
+      folder: %{path: folder, link: Code.files_path(fleet_id, folder)},
+      code: folder_entries(fleet_id, folder),
+      notebooks: tagged_notebooks(fleet_id, name)
     }
   end
+
+  defp folder_entries(fleet_id, folder) do
+    case Code.folder(fleet_id, folder) do
+      {:ok, entries} -> Enum.map(entries, &entry_row(&1, fleet_id, folder))
+      {:error, error} -> unreadable_code(fleet_id, error)
+    end
+  end
+
+  defp tagged_notebooks(fleet_id, tag) do
+    with true <- Notebooks.hub?(fleet_id),
+         {:ok, project_id} when is_binary(project_id) <- Notebooks.project_id(fleet_id),
+         {:ok, notebooks} <- HubClient.tagged_notebooks(fleet_id, project_id, tag) do
+      for notebook <- notebooks do
+        to = Notebooks.notebook_path(project_id, notebook["id"])
+
+        %{
+          id: notebook["id"],
+          title: notebook["title"],
+          open: "/fleets/#{fleet_id}/notebooks/open?" <> URI.encode_query(to: to)
+        }
+      end
+    else
+      false ->
+        nil
+
+      {:ok, nil} ->
+        []
+
+      {:error, error} ->
+        Logger.warning("The notebooks of #{fleet_id} could not be read: #{reason(error)}")
+        :unreadable
+    end
+  end
+
+  # Only the kind of failure is logged: a database error carries its query.
+  defp reason(%module{}), do: inspect(module)
+  defp reason(reason), do: inspect(reason)
 
   defp card(object, fleet_id, agents) do
     %{
