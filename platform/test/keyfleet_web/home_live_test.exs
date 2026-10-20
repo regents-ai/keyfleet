@@ -39,6 +39,10 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # - the page ends with the starting ideas for a shared goal as Sean wrote
   #   them, each link to another site opening in a new tab, and the Markdown
   #   homepage carries the same section
+  # - signed in, the header opens the side panel, covering the page, with Sign
+  #   out, the account's agents and the box to pair one, and an agent paired
+  #   while the page is open shows in it; Fleets beside the name opens Classic;
+  #   signed out there is neither
 
   @classic "fleet_tech_classic"
   @club "regents_club"
@@ -67,6 +71,50 @@ defmodule KeyfleetWeb.HomeLiveTest do
     {:ok, view, _html} = live(conn, "/")
     assert has_element?(view, "#public-home")
     refute has_element?(view, "#app-shell")
+  end
+
+  test "signed in, the homepage has the side panel and Fleets; signed out, neither",
+       %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+    refute has_element?(view, "#shell-aside")
+    refute has_element?(view, "[data-aside-toggle]")
+    refute has_element?(view, "#shell-fleets")
+
+    wallet = "0x" <> String.duplicate("b", 40)
+
+    account =
+      Keyfleet.Accounts.register_verified("did:privy:home-panel", wallet, [wallet],
+        actor: %Actors.System{}
+      )
+      |> then(fn {:ok, account} -> account end)
+
+    {:ok, view, _html} = conn |> init_test_session(%{human_account_id: account.id}) |> live("/")
+
+    assert has_element?(view, "#public-home[phx-hook=SidePanel]")
+    assert has_element?(view, "#shell-header #shell-aside-button[data-aside-toggle]")
+    assert has_element?(view, "#shell-header #account-chip[data-aside-toggle]")
+    assert has_element?(view, "#account-control a#shell-fleets[href='/classic/1']", "Fleets")
+    refute has_element?(view, "#shell-header [data-account-target=sign-out]")
+    assert has_element?(view, "#shell-aside[data-covers] #shell-account", "Sign out")
+    assert has_element?(view, "#shell-aside #shell-pairing h2", "Pair New Agent")
+    assert has_element?(view, "#shell-pairing-box input[name=harness][value=hermes]")
+    refute has_element?(view, "#shell-agents li")
+
+    %{code: code} =
+      RegentAgents.issue_pairing_code!(
+        actor: %RegentAgents.Person{privy_user_id: "did:privy:home-panel"}
+      )
+
+    RegentAgents.pair_agent!(code, "Astra", :hermes,
+      actor: %RegentAgents.Agent{wallet: "0x" <> String.duplicate("c", 40)}
+    )
+
+    # Announced after the pairing's commit (`RegentAgents.channel/0`), which the
+    # test's transaction never makes. The page passes it on to the panel, which
+    # draws after the render that follows.
+    send(view.pid, :agents_changed)
+    render(view)
+    assert has_element?(view, "#shell-agents li", "Astra")
   end
 
   @tag :classic_undeployed

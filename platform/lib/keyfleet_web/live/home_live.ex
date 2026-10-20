@@ -39,6 +39,11 @@ defmodule KeyfleetWeb.HomeLive do
   latest item, as anyone reads them (`Keyfleet.Activity`). A coming-soon
   fleet shows that it is coming soon and nothing it would have to read.
 
+  Signed in, the header's account name and panel button open the side panel
+  (`KeyfleetWeb.Components.Shell.aside/1`), as on the app's pages: Sign out,
+  Manage Account, the account's agents and the box to pair a new one. Here it
+  covers the page beside the header.
+
   The page reads nothing itself. Each fleet is read once for every open page
   (`KeyfleetWeb.FleetNow`), the ships on its sea with it, and the Club's
   holders come from the agents here (`Keyfleet.Agents.Here`); the page draws what those hold and draws
@@ -190,6 +195,7 @@ defmodule KeyfleetWeb.HomeLive do
     # Heard before they are read, so a change that lands in between still
     # reaches the page.
     if connected?(socket), do: Enum.each(keys(), &SharedReading.subscribe/1)
+    if connected?(socket), do: follow_agents(current_account(socket.assigns.access_context))
 
     {:ok,
      socket
@@ -306,7 +312,22 @@ defmodule KeyfleetWeb.HomeLive do
     end
   end
 
+  # Hears when the person's agents change on any Regent site, for the side panel.
+  defp follow_agents(%{privy_user_id: person}),
+    do: :ok = Phoenix.PubSub.subscribe(Keyfleet.PubSub, RegentAgents.topic(person))
+
+  defp follow_agents(nil), do: :ok
+
+  defp current_account(%{principal: {:human, account}}), do: account
+  defp current_account(_access_context), do: nil
+
   @impl true
+  def handle_info(:agents_changed, socket) do
+    send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
+    send_update(KeyfleetWeb.PanelAgents, id: "shell-agents", agents_changed: true)
+    {:noreply, socket}
+  end
+
   def handle_info({:shared_reading, {:fleet_now, @classic}}, socket),
     do: {:noreply, assign(socket, :classic, fleet(@classic))}
 
@@ -340,18 +361,39 @@ defmodule KeyfleetWeb.HomeLive do
     assigns =
       assign(assigns,
         integrations: @integrations,
-        actor: ShellLive.human_actor(%{assigns: assigns})
+        actor: ShellLive.human_actor(%{assigns: assigns}),
+        account: current_account(assigns.access_context)
       )
 
     ~H"""
-    <Regent.Structure.frame id="public-home" class="rl-root">
+    <Regent.Structure.frame id="public-home" class="rl-root" phx-hook="SidePanel">
       <Shell.header
         account_control={@account_control}
         get_key={not @classic.coming_soon?}
         get_key_link={:buy_key}
         menu={false}
         theme={true}
+        fleets
       />
+
+      <Shell.aside account_control={@account_control} covers>
+        <:agents :if={@account}>
+          <.live_component
+            module={KeyfleetWeb.PanelAgents}
+            id="shell-agents"
+            lease={@session_lease}
+            account={@account}
+          />
+        </:agents>
+        <:pairing :if={@account}>
+          <.live_component
+            module={KeyfleetWeb.PairingBox}
+            id="shell-pairing-box"
+            lease={@session_lease}
+            account={@account}
+          />
+        </:pairing>
+      </Shell.aside>
 
       <main>
         <Regent.Structure.row rail={false}>

@@ -1,10 +1,10 @@
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:19,1442AEF
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:44,60EDD38
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:57,6B466AB
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:73,77C6F76
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:98,FE726B
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:129,20479D2
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:136,1506EF7
+Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:20,482F4A6
+Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:45,2A72B3B
+Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:58,1A68E9B
+Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:74,2C3A640
+Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:99,192EBFD
+Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:130,306DE8
+Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:137,AC642B
 XSS.SendResp: XSS in `send_resp`,lib/keyfleet_web/controllers/public_pages_controller.ex:75,3E5A3B2
 XSS.SendResp: XSS in `send_resp`,lib/keyfleet_web/plugs/notebook_gateway.ex:734,3EC4F6E
 XSS.SendResp: XSS in `send_resp`,lib/keyfleet_web/plugs/notebook_gateway.ex:742,279F597

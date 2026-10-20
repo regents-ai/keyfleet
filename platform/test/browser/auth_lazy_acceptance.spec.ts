@@ -438,7 +438,8 @@ test("ORDINARY_SIGNED_IN_STARTUP_IS_STABLE: a same-account load writes no sessio
     ),
   ).toBe(false)
   await expect(page.locator("[data-phx-session]").first()).toBeVisible()
-  await expect(page.locator("#account-control").getByRole("button", {name: "Sign out"})).toBeVisible()
+  await expect(page.locator("#account-control [data-account-target='profile']")).toBeVisible()
+  await expect(page.locator("#shell-account [data-account-target='sign-out']")).toBeAttached()
   // Exercise the same live session on the Account page.
   await page.locator("#shell-sidebar a[href='/account']").click()
   await expect(page.locator("#account-page")).toBeVisible()
@@ -650,7 +651,9 @@ test("sign out replaces pending sync and runs once after the bridge is ready", a
 
   await page.goto("/account")
   await expect(page.locator("#account-control [data-account-target='profile']")).toBeVisible()
-  await page.locator("#account-control").getByRole("button", {name: "Sign out"}).click()
+  await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
+  await page.locator("#account-chip").click()
+  await page.locator("#shell-account").getByRole("button", {name: "Sign out"}).click()
   await expect.poll(() => sessionDeletes).toBe(1)
 
   await expect.poll(() => documentRequests.length).toBe(2)
@@ -783,7 +786,8 @@ test("Privy's logout finished on the page pressed leaves the next page without P
   await page.goto("/account")
   await expect.poll(() => bridgeLoads).toBe(1)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
-  await page.locator("#account-control").getByRole("button", {name: "Sign out"}).click()
+  await page.locator("#account-chip").click()
+  await page.locator("#shell-account").getByRole("button", {name: "Sign out"}).click()
 
   await expect.poll(() => sessionDeletes).toBe(1)
   await expect.poll(() => documentRequests.length).toBe(2)
@@ -838,7 +842,7 @@ for (const failure of [
     await expect(page.locator("#account-auth-status")).toBeHidden()
     await expect(page.locator("#account-auth-status")).toHaveText("")
     await expect(
-      page.locator("#account-control [data-account-target='sign-out']"),
+      page.locator("#shell-account [data-account-target='sign-out']"),
     ).toBeAttached()
     const finalSession = await page.request.get("/auth/session")
     expect((await finalSession.json()).authenticated).toBe(true)

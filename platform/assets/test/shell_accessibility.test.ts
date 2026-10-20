@@ -17,6 +17,11 @@ vi.mock("../js/auth_lazy", () => ({
 }))
 vi.mock("../js/motion", () => ({mountMotion: vi.fn()}))
 vi.mock("../js/page_progress", () => ({installPageProgress: vi.fn()}))
+// The side panel is walked in the browser (test/browser/side_panel.spec.ts).
+vi.mock("../js/shell_panels", () => ({
+  asideOpen: () => false,
+  installShellPanels: () => ({sync: vi.fn(), cleanup: vi.fn()}),
+}))
 vi.mock("../js/hooks/motion/press", () => ({deny: vi.fn()}))
 vi.mock("../js/hooks/motion/moments", () => ({MotionCount: {}, MotionList: {}, MotionRefusal: {}}))
 vi.mock("../js/hooks/motion/reveals", () => ({MotionCascade: {}, ShellViews: {}}))

@@ -51,6 +51,9 @@ defmodule KeyfleetWeb.AgentGuides do
       "/agents/compatibility" | Enum.map(@guides, fn {slug, _guide} -> "/agents/" <> slug end)
     ]
 
+  @doc "The page of the agent on `harness`."
+  def path(harness), do: "/agents/" <> String.replace(to_string(harness), "_", "-")
+
   @doc "The page at `path` as Markdown, or nil when it names no runtime."
   def document("/agents"), do: %{markdown: fill(index())}
   def document("/agents/compatibility"), do: %{markdown: fill(AgentCompatibility.markdown())}

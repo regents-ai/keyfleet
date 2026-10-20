@@ -55,6 +55,9 @@ defmodule Keyfleet.MixProject do
       {:ash_phoenix, "~> 2.3.25"},
       {:ash_postgres, "== 2.13.0"},
       {:oban, "~> 2.24"},
+      # Each paired agent's activity, kept a few minutes for the side panel.
+      {:nebulex, "~> 3.0"},
+      {:nebulex_local, "~> 3.0"},
       # The notebook gateway's connection to a fleet hub's live notebook sockets.
       {:mint_web_socket, "~> 1.0"},
       # The code gateway's connection to the fleets' code store.

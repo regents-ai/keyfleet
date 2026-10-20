@@ -25,7 +25,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     blocks = build_conn() |> get("/docs") |> html_response(200) |> LazyHTML.from_document()
     blocks = LazyHTML.query(blocks, ".public-document pre")
 
-    assert Enum.count(blocks) > 0
+    refute Enum.empty?(blocks)
     assert blocks |> LazyHTML.attribute("tabindex") |> Enum.uniq() == ["0"]
   end
 

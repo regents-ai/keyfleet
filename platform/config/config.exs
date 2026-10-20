@@ -54,6 +54,12 @@ config :regent_points,
 # load pictures from. Each environment names its bucket.
 config :keyfleet, :avatar_bucket, req_options: []
 
+# Paired agents' activity readings kept for the side panel
+# (`Keyfleet.Agents.ActivityReading`), swept of expired ones every ten minutes.
+config :keyfleet, Keyfleet.Agents.ActivityReading,
+  gc_interval: :timer.minutes(10),
+  max_size: 10_000
+
 # The key-art service that draws revealed keys' cards (`key-art/`).
 config :keyfleet, Keyfleet.Keys.KeyArt, req_options: []
 

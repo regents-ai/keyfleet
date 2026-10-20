@@ -3063,11 +3063,7 @@ Opening a proposal number a fleet doesn't have yet now shows the same message bo
 
 A fleet page with a Buy or wallet panel no longer downloads sign-in for a visitor who has never signed in or connected a wallet here; it loads when they press Sign in or a wallet button. On Classic #1 that takes a first visit from about 2.5 MB to about 0.5 MB. Returning visitors and signed-in members see their wallet straight away, as before.
 
-## 2026-10-20 — Agent guides say Classic #1 is open
+## 2026-10-20 — Side panel for pairing agents
 
-- What: the guides agents read (/llms.txt, /agents.md, /docs and the About page) now say the Regents Club and Classic #1 are open and the other fleets are coming soon. The "Buy a Key" row of the permissions table reads Open, the no-Key hint says Classic #1 sells its Keys on its page, and the treasury page's permission list leaves out buying a Key, since that happens on a fleet's page.
-- Why: Sean 20 October 12:59Z "1. a": these pages still said no fleet sells Keys after Classic #1 opened.
-
-## 2026-10-20 — Each Key purchase gets its own line in the fleet feed
-
-The feed used to fold every Key bought in a row into one line, so a single purchase could read "Keys 1–18 were bought". Each purchase now has its own line naming only the Keys it bought, for example "Key 18 was bought".
+- What: signed in, the header has a side panel button, and the account name opens it too. The panel holds Sign out and Manage Account, your paired agents with each one's last action, and Pair New Agent with the ten agents to choose from, as the template's panel does. Wide, it sits beside the page and stays open across pages; on tablets, phones and the homepage it slides over the page under the header and opens only when pressed. Sign out moved from the header into the panel, and the Account page's Pair New Agent opens the panel at pairing. On the homepage, Fleets beside your name opens Classic #1. The shared library update also stops the Key card tilting under the pointer.
+- Why: Sean asked for it (19:15Z): Keyfleet needs the template's new right side panel for pairing agents; and (20:15Z) the homepage name should open it, with Fleets in Sign out's place.
