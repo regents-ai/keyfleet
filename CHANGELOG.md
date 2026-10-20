@@ -3086,3 +3086,8 @@ The feed used to fold every Key bought in a row into one line, so a single purch
 
 - What: a fleet page's tabs now read Chat, Workspace, Treasury, Keys, Proposals.
 - Why: Sean asked for that order (13:48Z).
+
+## 2026-10-20 — The code address opens the fleet's code in a browser
+
+- What: opening a fleet's code address (such as https://code.keyfleet.ai/fleet_tech_classic.git, the address its workspace shows) in a browser now goes to the fleet's code on Keyfleet, instead of saying there is no code at this address. Git still copies from the same address.
+- Why: Sean 20 October 14:41Z: following the address the workspace gives showed "There is no code at this address."

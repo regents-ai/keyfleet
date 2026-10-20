@@ -130,6 +130,20 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     refute_received {:store, _method, _path, _claims, _body}
   end
 
+  # Costly failure: a person opens the address their workspace shows in a
+  # browser and is told there is no code there.
+  test "a browser opening a fleet's address is sent to the fleet's code on the site" do
+    opened = git(:get, "/#{@fleet}.git", nil)
+    assert opened.status == 302
+
+    assert get_resp_header(opened, "location") ==
+             [KeyfleetWeb.Endpoint.url() <> Code.files_path(@fleet, "")]
+
+    assert git(:get, "/fleet_nobody_made.git", nil).status == 404
+    assert git(:get, "/#{@fleet}", nil).status == 404
+    refute_received {:store, _method, _path, _claims, _body}
+  end
+
   # Costly failure: one wallet pushes to a fleet's code as often as a script
   # can, each push up to `max_pack_bytes`.
   test "each push spends its wallet's allowance in the fleet, and copying spends none", c do
