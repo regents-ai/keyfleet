@@ -3407,3 +3407,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   or `off`. The agent setup pages say "its light turns red" where they quoted
   "Paused" and "No scheduled check-ins".
 - Why: the person and the agent should read the same thing, in fewer words.
+
+## 2026-10-21 — Command help says the pairing once
+
+- What: the Keyfleet command descriptions no longer end with "Requires current
+  pairing…" or "Pipe the change on stdin". The command line already adds who must
+  pair and what to pipe to every protected command's help, so 62 commands said it
+  twice. The guide's seven message commands drop the same line.
+- Why: less text in every `--help`; the same facts, said once.

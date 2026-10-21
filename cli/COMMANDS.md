@@ -1836,7 +1836,7 @@ History: source descriptor added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms send <fleet> <key> <other>
 
-Send a private message from the first Key to the other Key of the same fleet. The first message opens their conversation. Requires current pairing and existing Key/shard permissions. This is a write.
+Send a private message from the first Key to the other Key of the same fleet. The first message opens their conversation. This is a write.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/send`. Fleet and exact decimal Key ids are path arguments. Pipe a JSON object with required `body` (1–4,000 characters, trimmed) and `idempotency_key` (1–128 characters), and optional `parts` (up to eight). Parts are text (1–1,000 characters), HTTPS links with optional names (1–200 characters), or JSON data objects (at most 2,048 encoded bytes). A link URL is at most 2,048 bytes. No files are uploaded.
 
@@ -1848,7 +1848,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms block <fleet> <key> <other>
 
-Block the other Key for the first Key. Messages still arrive, but their conversation moves to the blocked inbox and changes omit that sender. The block follows the Key if sold. Requires current pairing and existing Key/shard permissions. This is a write.
+Block the other Key for the first Key. Messages still arrive, but their conversation moves to the blocked inbox and changes omit that sender. The block follows the Key if sold. This is a write.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/block`. Fleet and exact decimal Key ids are path arguments. Send `{}`.
 
@@ -1860,7 +1860,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms unblock <fleet> <key> <other>
 
-Remove the first Key's block of the other Key. Requires current pairing and existing Key/shard permissions. This is a write.
+Remove the first Key's block of the other Key. This is a write.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/unblock`. Fleet and exact decimal Key ids are path arguments. Send `{}`.
 
@@ -1872,7 +1872,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms delete <fleet> <key> <other>
 
-Delete the conversation from your Key's side only: every message so far leaves your view, and the other Key keeps its own. This cannot be undone for you. Use only when deletion of that conversation is intended. Requires current pairing and existing Key/shard permissions. This is a write.
+Delete the conversation from your Key's side only: every message so far leaves your view, and the other Key keeps its own. This cannot be undone for you. Use only when deletion of that conversation is intended. This is a write.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/delete`. Fleet and exact decimal Key ids are path arguments. Send `{}`.
 
@@ -1884,7 +1884,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms auto-delete <fleet> <key> <other> <days>
 
-Set automatic removal of messages from your Key's side once they reach the selected age; the other Key keeps its own setting. Existing old messages are included; deleted messages cannot be restored. Requires current pairing and existing Key/shard permissions. This is a write.
+Set automatic removal of messages from your Key's side once they reach the selected age; the other Key keeps its own setting. Existing old messages are included; deleted messages cannot be restored. This is a write.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/auto_delete`. Fleet and exact decimal Key ids are path arguments. `days` is an integer: 1, 7, 30 or 90. The server refuses every other value. No default duration.
 
@@ -1896,7 +1896,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms keep <fleet> <key> <other>
 
-Turn off automatic message removal for your Key's side. This does not restore deleted messages or prevent a future deletion or setting change. Requires current pairing and existing Key/shard permissions. This is a write.
+Turn off automatic message removal for your Key's side. This does not restore deleted messages or prevent a future deletion or setting change. This is a write.
 
 Route: `POST /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/auto_delete`. Fleet and exact decimal Key ids are path arguments. Fixed body `{"days":null}`. There is no days flag; this is the existing auto-delete operation's keep mode.
 
@@ -1908,7 +1908,7 @@ History: source definition added for the existing route, 15 October 2026.
 
 ## regents keyfleet dms blocks <fleet> <key>
 
-Read the Keys blocked by the selected Key, lowest number first. Requires current pairing and existing Key/shard permissions. Read only: no messages, blocks or read markers change.
+Read the Keys blocked by the selected Key, lowest number first. Read only: no messages, blocks or read markers change.
 
 Route: `GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks`. Fleet and exact decimal Key token id are path arguments. No body, query or pagination. Answers `{"blocked":[KEY_ID,...]}`, with an empty array when no Keys are blocked. Preserve exact returned token ids; never round them.
 
