@@ -3752,3 +3752,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - The entrance added earlier today never played, because the Member List is
   already on screen when the members view opens. Nothing on screen changes.
+
+## 2026-10-21 — A missing page offers one way home
+
+- What: the "We can't find that page" screen drops its sentence telling people
+  to use the homepage or the links, and drops "Home" from the links under the
+  button, since the button already goes home. It now shows the headline, one
+  homepage button and the other ways on: docs, guides and the sitemap.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the
+  guideline".

@@ -9,6 +9,13 @@ defmodule KeyfleetWeb.ErrorHTMLTest do
              "We can’t find that page</h1>"
   end
 
+  test "a missing page offers the homepage once, as its button, then the other ways on" do
+    page = render_to_string(KeyfleetWeb.ErrorHTML, "404", "html", []) |> LazyHTML.from_document()
+
+    assert page |> LazyHTML.query("a[href='/']") |> Enum.count() == 1
+    assert page |> LazyHTML.query(".rg-utility__links a[href='/docs']") |> Enum.count() == 1
+  end
+
   test "renders 500.html" do
     assert render_to_string(KeyfleetWeb.ErrorHTML, "500", "html", []) =~
              "Something went wrong</h1>"

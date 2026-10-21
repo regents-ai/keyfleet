@@ -615,6 +615,22 @@ features:
     gaps:
       - axe read live after release.
 
+  - id: missing-page-one-step
+    what: >-
+      A page that cannot be found shows its headline, one button to the
+      homepage and the other ways on (docs, guides, sitemap), with no second
+      homepage link and no sentence repeating what the button says.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/controllers/error_html.ex
+    entry:
+      - route: GET /no-such-page
+    proofs:
+      - platform/test/keyfleet_web/controllers/error_html_test.exs
+    gaps:
+      - Look checked live after release.
+
   - id: posting-key
     what: >-
       A person whose wallets hold more than one of a fleet's Keys chooses on the

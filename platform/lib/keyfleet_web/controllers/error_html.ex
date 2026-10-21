@@ -36,7 +36,6 @@ defmodule KeyfleetWeb.ErrorHTML do
       <body>
         <Regent.Utility.page title={@title} context="Keyfleet" id="error-page">
           <p :if={@retry}>It’s on our side. Try again in a moment.</p>
-          <p :if={!@retry}>Use the homepage or one of the links below to continue.</p>
           <:actions>
             <a :if={@retry} class="rg-button rg-button--primary" href="">Try again</a>
             <a class={["rg-button", @retry && "rg-button--secondary"]} href="/">Go to the homepage</a>
@@ -44,7 +43,7 @@ defmodule KeyfleetWeb.ErrorHTML do
           <:note>
             <nav aria-label="Recovery links">
               <ul class="rg-utility__links">
-                <li :for={{label, path} <- KeyfleetWeb.PublicDocuments.recovery_links()}>
+                <li :for={{label, path} <- links()}>
                   <a href={path}>{label}</a>
                 </li>
               </ul>
@@ -55,6 +54,9 @@ defmodule KeyfleetWeb.ErrorHTML do
     </html>
     """
   end
+
+  # The homepage is the button, so the links under it are the other ways on.
+  defp links, do: Enum.reject(KeyfleetWeb.PublicDocuments.recovery_links(), &match?({_, "/"}, &1))
 
   defp headline("404" <> _format), do: "We can’t find that page"
   defp headline(_template), do: "Something went wrong"
