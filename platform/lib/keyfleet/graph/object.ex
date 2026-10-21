@@ -81,8 +81,8 @@ defmodule Keyfleet.Graph.Object do
     end
 
     # The work still open in the fleet's workspace, the most recently changed
-    # first: its open goals, the tasks in progress or the tasks nobody has
-    # taken yet, as `kind` says (`Keyfleet.Graph.Preparations.OpenWork`).
+    # first: its open goals, or its tasks in progress, taken or not taken
+    # yet, as `kind` says (`Keyfleet.Graph.Preparations.OpenWork`).
     # Anyone may read it, so each object comes with its title alone. Callers
     # bound it with a limit, or count it.
     read :open_work do

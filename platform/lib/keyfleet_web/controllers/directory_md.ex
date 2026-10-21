@@ -223,8 +223,8 @@ defmodule KeyfleetWeb.DirectoryMD do
   defp title(title), do: inline(title, @title_length)
 
   defp tasks(%{tasks_in_progress: doing, work: work}) do
-    "#{count(doing, "task")} in progress, #{Rules.grouped(work.tasks_taken)} of them taken · " <>
-      "#{count(work.tasks_untaken, "task")} nobody has taken yet. " <>
+    "#{count(work.tasks_taken, "task")} taken · #{count(work.tasks_untaken, "task")} nobody has taken yet · " <>
+      "#{count(doing, "task")} in progress. " <>
       "The workspace itself is for Key holders."
   end
 

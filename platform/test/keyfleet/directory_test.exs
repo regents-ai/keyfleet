@@ -27,7 +27,7 @@ defmodule Keyfleet.DirectoryTest do
     :ok
   end
 
-  test "open work leaves out what is finished, dropped, archived or already taken" do
+  test "open work leaves out what is finished, dropped or archived" do
     Workspace.open_log(@fleet)
     open = Workspace.create(@fleet, "goal", %{"title" => "Map the first paid service"})
     Workspace.create(@fleet, "goal", %{"title" => "Done", "status" => "achieved"})
@@ -60,8 +60,8 @@ defmodule Keyfleet.DirectoryTest do
     # The goals by title, and how much work there is; never the work itself.
     assert %{
              open_goals: [%{id: ^open, title: "Map the first paid service"} = goal],
-             tasks_taken: 1,
-             tasks_untaken: 1
+             tasks_taken: 2,
+             tasks_untaken: 3
            } = fleet.work
 
     assert goal |> Map.keys() |> Enum.sort() == [:changed_at, :id, :title]

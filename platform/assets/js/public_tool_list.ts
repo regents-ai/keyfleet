@@ -95,14 +95,9 @@ export const tools: ModelContextTool[] = entries.filter(entry => entry.scope ===
         const data = await response.json()
         return response.ok ? {ok: true, status: response.status, data} : {ok: false, status: response.status, error: data.error}
       } catch (error) {
-        // fetch fails with a TypeError, or an AbortError when cancelled; every
-        // other error is the transport refusing the call before anything is sent.
-        const sent = error instanceof TypeError || (error as Error).name === "AbortError"
-        if (!sent) return {ok: false, error: {code: "signed_call_refused", message: String(error),
-          hint: "Nothing was sent. Prepare this exact request with prepare_agent_request, sign it with your SIWA signer, then call again with input, request and proof. If you have no signer, report that as a blocker."}}
         return {ok: false, error: {code: "signed_request_failed", message: String(error),
           hint: entry.state_changing ? "Check what happened before you send it again. Keep the same idempotency_key or command_id, and sign the request again."
-            : "Try again in a moment."}}
+            : "Prepare this exact request with prepare_agent_request and sign it with your SIWA signer, then call again. If you have no signer, report that as a blocker."}}
       }
     }
     const problem = inputProblem(input, entry.input_schema)

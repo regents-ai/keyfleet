@@ -213,8 +213,9 @@ defmodule KeyfleetWeb.ActivityLines do
     * `goals`: `%{id: id, goal: part}`, each goal as the part `parts/1`
       gives an item, or "A goal" when it has no title;
     * `goals_set?`: whether the workspace holds any goal, open or not;
-    * `counts`: the open work in words, as "2 goals in progress · 3 tasks in
-      progress · 2 taken · 4 not taken yet", or nil when there is none;
+    * `counts`: the open work in words, as "2 goals in progress · 3 tasks
+      taken · 4 not taken yet", each part left out at nought, or nil when
+      there is none;
     * `question`: the parts "Open question: {question}", or nil.
   """
   def trying_now(now) do
@@ -228,19 +229,21 @@ defmodule KeyfleetWeb.ActivityLines do
   end
 
   # A row of nothing but noughts says no more than "No goals yet" does.
-  defp counts(%{goals_open: 0, tasks_doing: 0, tasks_taken: 0, tasks_untaken: 0}), do: nil
+  defp counts(%{goals_open: 0, tasks_taken: 0, tasks_untaken: 0}), do: nil
 
-  defp counts(counts) do
-    Enum.join(
-      [
-        counted(counts.goals_open, "goal in progress", "goals in progress"),
-        counted(counts.tasks_doing, "task in progress", "tasks in progress"),
-        "#{Rules.grouped(counts.tasks_taken)} taken",
-        "#{Rules.grouped(counts.tasks_untaken)} not taken yet"
-      ],
-      " · "
-    )
+  defp counts(%{goals_open: goals, tasks_taken: taken, tasks_untaken: untaken}) do
+    [
+      goals > 0 && counted(goals, "goal in progress", "goals in progress"),
+      taken > 0 && counted(taken, "task taken", "tasks taken"),
+      untaken > 0 && untaken(untaken, taken)
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join(" · ")
   end
+
+  # After "3 tasks taken", "2 not taken yet" needs no "tasks" of its own.
+  defp untaken(untaken, 0), do: counted(untaken, "task not taken yet", "tasks not taken yet")
+  defp untaken(untaken, _taken), do: "#{Rules.grouped(untaken)} not taken yet"
 
   defp counted(1, one, _many), do: "1 #{one}"
   defp counted(count, _one, many), do: "#{Rules.grouped(count)} #{many}"
