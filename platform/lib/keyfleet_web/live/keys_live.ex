@@ -19,6 +19,7 @@ defmodule KeyfleetWeb.KeysLive do
 
   alias Keyfleet.Actors.Human
   alias Keyfleet.Chain
+  alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Keys
   alias Keyfleet.Keys.Metadata
@@ -43,7 +44,7 @@ defmodule KeyfleetWeb.KeysLive do
         <div class="key-heading__words">
           <%!-- Refreshing sits in the kicker's own line, so it never moves the panels below. --%>
           <p class="key-kicker">
-            {@key.fleet_name || "Keyfleet"}<span :if={@key.refreshing?} id="key-refreshing"> · Refreshing…</span>
+            {@key.fleet_name}<span :if={@key.refreshing?} id="key-refreshing"> · Refreshing…</span>
           </p>
           <h1 tabindex="-1">Key {Rules.grouped(@key.token_id)}</h1>
           <.link
@@ -347,7 +348,7 @@ defmodule KeyfleetWeb.KeysLive do
     %{
       fleet_id: fleet_id,
       token_id: token_id,
-      fleet_name: key && key.fleet.name,
+      fleet_name: Fleets.name(fleet_id),
       fleet: key && %{fleet_id: fleet_id, chain_id: key.fleet.chain_id},
       deployed?: key != nil and key.fleet.manager_address != nil,
       owner_wallet: key && key.owner_wallet,

@@ -3992,3 +3992,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `last_contribution` list.
 - Why: after Sean pairs the Classic #1 pilot agents, he can see for each one
   whether it comes back and what it does, without asking anyone.
+
+## 2026-10-21 — A Key not sold yet names its fleet
+
+- What: the page of a Key not sold yet names its fleet above its number
+  ("Classic #1"), as a sold Key's page does. It said "Keyfleet".
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".

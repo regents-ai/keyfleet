@@ -91,6 +91,16 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     assert title.("/syndicate/1/treasury") == "Treasury · Syndicate #1 · Keyfleet"
     assert title.("/syndicate/1/keys/1") == "Key 1 · Syndicate #1 · Keyfleet"
     assert title.("/about") == "About · Keyfleet"
+
+    # A Key not sold yet still names its fleet above its number.
+    assert build_conn()
+           |> get("/syndicate/1/keys/1")
+           |> html_response(200)
+           |> LazyHTML.from_document()
+           |> LazyHTML.query(".key-kicker")
+           |> LazyHTML.text()
+           |> String.trim()
+           |> String.starts_with?("Syndicate #1")
   end
 
   test "reading and home first renders honor the saved theme" do
