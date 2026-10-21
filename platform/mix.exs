@@ -49,6 +49,8 @@ defmodule Keyfleet.MixProject do
   defp deps do
     [
       {:phoenix, "~> 1.8.9"},
+      # Production's site and graph machines join one cluster (fly.toml).
+      {:dns_cluster, "~> 0.3.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.6", override: true},
       {:ash, "~> 3.36"},

@@ -47,10 +47,7 @@ defmodule KeyfleetWeb.Live.WorkspaceLiveRefreshTest do
 
     await_ready()
 
-    start_supervised!(
-      {Keyfleet.Graph.Projectors,
-       fleets: [@fleet], projection_wait: 30_000, catch_up_interval: 60_000}
-    )
+    start_supervised!({Keyfleet.Graph.Projectors, fleets: [@fleet], catch_up_interval: 60_000})
 
     %{conn: holder_conn()}
   end

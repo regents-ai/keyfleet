@@ -778,7 +778,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     do: "0x" <> String.pad_leading(Integer.to_string(token_id), 40, "0")
 
   defp writer do
-    [{pid, _timeout}] = Registry.lookup(Keyfleet.Graph.Registry, @fleet)
+    [pid] = :pg.get_members(Keyfleet.Graph.Processes, {Keyfleet.Graph.Writer, @fleet})
     pid
   end
 

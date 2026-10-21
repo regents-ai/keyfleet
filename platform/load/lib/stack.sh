@@ -3,7 +3,9 @@
 # What local.sh and faults.sh share, sourced by both: the release image `make
 # release` built (keyfleet:<commit>), started on this computer as
 # scripts/release.sh starts it, against a throwaway PostgreSQL 17 on a Docker
-# network of its own, with production's processors, memory and database pool.
+# network of its own, with production's two machines (platform/fly.toml): the
+# graph machine holding the volume and the site machine serving the pages, with
+# production's processors, memory and database pool.
 #
 # The database is created and seeded as staging's is, with the release's own
 # commands (bootstrap-staging, migrate, seed-deployment with the Regents Club's
@@ -33,17 +35,25 @@ database_url="postgres://load:load@regents-staging-db.internal/keyfleet_load"
 # Every server of a run shares one secret, as every machine of a Fly app shares
 # its SECRET_KEY_BASE: a page drawn by the first server must join the second.
 secret_key_base="$(openssl rand -base64 48)"
-# The server containers started so far, for their logs and the teardown.
+# The containers started so far, for their logs and the teardown.
 servers=()
+# The network's own private IPv6 range, as Fly gives each machine a private
+# IPv6 address that names its node in the cluster (rel/env.sh.eex). The graph
+# machine is ::2, a release command ::9, and the site servers ::3 onwards.
+subnet="fd4c:6b66:$(printf '%x' $(($$ % 65536)))"
+next_server=3
 
-# Production's machine (platform/fly.toml [[vm]]): two dedicated processors and
-# 4 GB with no swap. The database pool is production's too: the image's own
-# Keyfleet.DatabaseConfig sets five, which stack_check_server confirms.
+# Production's site machine (platform/fly.toml [[vm]]): two dedicated
+# processors and 4 GB with no swap. The database pool is production's too: the
+# image's own Keyfleet.DatabaseConfig sets five, which stack_check_server
+# confirms. The graph machine has two processors and 2 GB.
 server_size=(--cpus 2 --memory 4g --memory-swap 4g)
+graph_size=(--cpus 2 --memory 2g --memory-swap 2g)
 
 release_env=(
   --env KEYFLEET_DEPLOYMENT_ROLE=staging
   --env KEYFLEET_APP_SURFACES=on
+  --env RELEASE_COOKIE="$(openssl rand -hex 32)"
 )
 
 # scripts/release.sh's stand-ins for the server's required settings, word for
@@ -61,6 +71,9 @@ server_env=(
   --env PICTURES_PUBLIC_URL=https://pictures.invalid
   --env KEY_ART_URL=http://key-art.invalid
   --env LIGHTHOUSE_API_KEY=smoke
+  --env DATABASE_POOLED_URL="$database_url"
+  --network-alias keyfleet.internal
+  --env DNS_CLUSTER_QUERY=keyfleet.internal
 )
 
 fail() {
@@ -138,15 +151,15 @@ stack_preflight() {
   } >"$out/versions.txt"
 }
 
-# The network, the server's volume and PostgreSQL 17, answering on the network
-# as `alias`.
+# The network, the graph machine's volume and PostgreSQL 17, answering on the
+# network as `alias`.
 stack_start_database() {
   local alias="$1"
   # IPv6, since the server's database connection uses it (socket_options: [:inet6]).
-  docker network create --ipv6 "$run" >/dev/null
+  docker network create --ipv6 --subnet "$subnet::/64" "$run" >/dev/null
   # The volume stands in for the Fly volume at /data: empty and owned by the app
-  # user as deploying leaves it, and handed from one server to the next as Fly
-  # hands the volume to the replacement machine.
+  # user as deploying leaves it, and handed from one graph machine to the next
+  # as Fly hands the volume to the replacement machine.
   docker volume create "$run-data" >/dev/null
   docker run --rm --volume "$run-data:/data" --entrypoint chown "$postgres_image" 1001:1001 /data
   docker run --detach --name "$run-db" --network "$run" --network-alias "$alias" \
@@ -159,7 +172,8 @@ stack_start_database() {
 # One release command against the database, as Fly runs one on a machine of
 # its own.
 stack_release_command() {
-  docker run --rm --network "$run" "${release_env[@]}" --env DATABASE_DIRECT_URL="$database_url" "$@"
+  docker run --rm --network "$run" "${release_env[@]}" --env DATABASE_DIRECT_URL="$database_url" \
+    --ip6 "$subnet::9" --env FLY_PRIVATE_IP="$subnet::9" "$@"
 }
 
 stack_prepare_database() {
@@ -169,17 +183,29 @@ stack_prepare_database() {
     "$image" /app/bin/seed-deployment /tmp/base.deployed.json
 }
 
-# Starts one server named `name` on 127.0.0.1:$port and waits for its health.
-# Its metrics port is published on a free port of its own; `metrics` is its
-# address.
-stack_start_server() {
+# Starts the graph machine named `name`, with the volume at /data. It serves no
+# pages; the site servers reach its graph writers over the cluster.
+stack_start_graph() {
   local name="$1"
   servers+=("$name")
   docker run --detach --name "$name" --network "$run" "${release_env[@]}" "${server_env[@]}" \
-    "${server_size[@]}" \
-    --publish "127.0.0.1:$port:4000" --publish 127.0.0.1::9091 \
+    "${graph_size[@]}" \
+    --ip6 "$subnet::2" --env FLY_PRIVATE_IP="$subnet::2" \
     --volume "$run-data:/data" \
-    --env DATABASE_POOLED_URL="$database_url" \
+    "$image" /app/bin/graph >/dev/null
+}
+
+# Starts one site server named `name` on 127.0.0.1:$port and waits for its
+# health. Its metrics port is published on a free port of its own; `metrics` is
+# its address.
+stack_start_server() {
+  local name="$1" address="$subnet::$next_server"
+  next_server=$((next_server + 1))
+  servers+=("$name")
+  docker run --detach --name "$name" --network "$run" "${release_env[@]}" "${server_env[@]}" \
+    "${server_size[@]}" \
+    --ip6 "$address" --env FLY_PRIVATE_IP="$address" \
+    --publish "127.0.0.1:$port:4000" --publish 127.0.0.1::9091 \
     "$image" >/dev/null
   metrics="http://$(docker port "$name" 9091/tcp | head -n 1)"
   wait_for "the health endpoint of $name" 120 curl --silent --fail "http://127.0.0.1:$port/healthz"

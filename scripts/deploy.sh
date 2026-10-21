@@ -12,6 +12,11 @@
 # graph host's sealed Python supply, checked against its checksums. Fly's remote
 # builder builds the image from it, labelled with the short commit. Every deploy
 # runs /app/bin/migrate as its release command (platform/README.md, Deployment).
+#
+# The app has two machines (platform/fly.toml). The graph machine, which holds
+# the volume, takes the image first: it stops and starts again, and for those
+# seconds a workspace write answers "try again". The site machine then takes
+# the same image bluegreen, so a page is answered throughout.
 set -euo pipefail
 
 case "${1:-}" in
@@ -60,11 +65,20 @@ trap cleanup EXIT
 echo "==> Assembling the build context from commit ${commit:0:7}"
 platform/scripts/build-release-context.sh "$context" amd64
 
-echo "==> Deploying ${commit:0:7} with $config"
+echo "==> Deploying ${commit:0:7} to the graph machine with $config"
 fly deploy "$context" \
   --config "$context/$config" \
   --dockerfile "$context/Dockerfile" \
   --ignorefile "$context/Dockerfile.dockerignore" \
   --remote-only \
   --ha=false \
-  --image-label "${commit:0:7}"
+  --image-label "${commit:0:7}" \
+  --process-groups graph
+
+echo "==> Deploying ${commit:0:7} to the site machine, bluegreen"
+fly deploy \
+  --config "$context/$config" \
+  --image "registry.fly.io/$app:${commit:0:7}" \
+  --ha=false \
+  --process-groups site \
+  --strategy bluegreen

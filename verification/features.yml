@@ -588,3 +588,40 @@ features:
       - Proven against a local hub that keeps files as the real one does; not yet run against a real notebook host.
       - While someone has the notebook open in a live session, adding and writing answer 409; the log is read through a run's page.
       - Not yet run by a real agent.
+
+  - id: release-without-gap
+    what: >-
+      A release of keyfleet.ai answers every page throughout. The site machine
+      takes a release bluegreen, the new one answering before the old one
+      stops, while the graph machine, which keeps the fleets' graph logs on its
+      volume, stops and starts again; for those seconds a workspace write
+      answers "try again" and nothing is written twice. A workspace write on the
+      site machine is made by its fleet's writer on the graph machine.
+    who: person
+    level: protected
+    paths:
+      - platform/fly.toml
+      - platform/fly.staging.toml
+      - platform/rel/env.sh.eex
+      - platform/rel/overlays/bin/site
+      - platform/rel/overlays/bin/graph
+      - platform/Dockerfile
+      - platform/config/runtime.exs
+      - platform/config/prod.exs
+      - platform/lib/keyfleet/application.ex
+      - platform/lib/keyfleet/graph/writer.ex
+      - platform/lib/keyfleet/graph/projector.ex
+      - platform/lib/keyfleet/graph/projectors.ex
+      - platform/lib/keyfleet/graph/supervisor.ex
+      - scripts/deploy.sh
+      - scripts/release.sh
+    entry:
+      - route: GET /healthz
+    proofs:
+      - platform/test/keyfleet/graph/cluster_test.exs
+      - platform/test/keyfleet/graph/writer_test.exs
+      - platform/test/keyfleet/runtime_config_test.exs
+      - scripts/release.sh
+    gaps:
+      - The two-step release was tried on a throwaway Fly app with a stand-in server, not yet on keyfleet.ai.
+      - For the minute a site release takes, two site machines run, so announcements from other Regent sites reach open pages twice.
