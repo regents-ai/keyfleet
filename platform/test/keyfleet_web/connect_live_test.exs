@@ -13,7 +13,7 @@ defmodule KeyfleetWeb.ConnectLiveTest do
   # - signed out, pairing starts with a sign-in and no step shows done
   # - signed in, Pair New Agent opens the side panel; once an agent pairs,
   #   the step shows done with its name, and a Key the account holds shows
-  #   the Key step done with the Key
+  #   the Key step done with the Key; a done step says "Done" to screen readers
 
   @classic "fleet_tech_classic"
   @privy "did:privy:connect-page"
@@ -98,6 +98,8 @@ defmodule KeyfleetWeb.ConnectLiveTest do
     send(view.pid, :agents_changed)
 
     assert has_element?(view, "#connect-pair[data-done] #connect-paired", "Paired: Astra")
+    assert has_element?(view, "#connect-pair .connect-step__mark .visually-hidden", "Done:")
+    refute has_element?(view, "#connect-key .connect-step__mark .visually-hidden")
     refute has_element?(view, "#connect-pair-new")
 
     ChainHelpers.deploy!(@classic)

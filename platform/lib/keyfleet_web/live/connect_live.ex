@@ -148,9 +148,13 @@ defmodule KeyfleetWeb.ConnectLive do
   attr :n, :integer, required: true
   attr :done, :boolean, default: false
 
+  # The tick is drawn; a screen reader hears "Done" before the step's name.
   defp mark(assigns) do
     ~H"""
-    <span class="connect-step__mark" aria-hidden="true">{if @done, do: "✓", else: @n}</span>
+    <span class="connect-step__mark">
+      <span aria-hidden="true">{if @done, do: "✓", else: @n}</span>
+      <span :if={@done} class="visually-hidden">Done:</span>
+    </span>
     """
   end
 

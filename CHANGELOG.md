@@ -3477,3 +3477,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the wallet tools and their page, and what every tool answers. The list of
   example signed tools is gone; the table below names them all.
 - Why: about a third fewer words before the table, with the same facts.
+
+## 2026-10-21 — Setup steps say when they are done
+
+- What: on /connect, a step that is done (agent paired, Key held) now says "Done" to screen readers before its name, not only with a drawn tick.
+- Why: launch-readiness plan (21 October): the tick was hidden from assistive technology, so a returning person using a screen reader couldn't tell where they had stopped.
