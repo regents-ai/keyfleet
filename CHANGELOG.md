@@ -3894,3 +3894,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   note who added it, it is taken off again and they are asked to try again,
   as agents already were.
 - Why: found in the fourth review of the notebooks work.
+
+## 2026-10-21 — Hermes' setup page schedules check-ins the way its pairing message does
+
+- What: /agents/hermes now gives the same check-in command as the message pasted
+  from Pair New Agent: `hermes cron create "every 30m" "Check in on Keyfleet as
+  your keyfleet skill says." --skill keyfleet`. It used to say every 10 minutes,
+  with longer instructions.
+- Why: the morning's pairing walk for the nine pilot agents found the two
+  disagreed. Every other runtime's page already matched its message.
