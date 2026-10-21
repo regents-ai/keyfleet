@@ -43,6 +43,53 @@
   overflow-wrap: anywhere;
 }
 
+/* Inside the app, About and Opportunities open as the other pages do: the
+   title and its one line on the ground, the rest in one panel below them,
+   all along the page's left edge. */
+.reading {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+  max-width: 48rem;
+}
+
+.reading__head {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.reading__head h1 {
+  margin: 0;
+  font-family: var(--font-family-title);
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.reading__head h1:focus {
+  outline: none;
+}
+
+.reading__head p {
+  margin: 0;
+  color: var(--color-fg-muted);
+}
+
+.reading .legal-page {
+  max-width: none;
+  margin: 0;
+  padding: var(--rg-panel-padding);
+}
+
+.reading .legal-page > :first-child {
+  margin-block-start: 0;
+}
+
+.reading .legal-page > :last-child {
+  margin-block-end: 0;
+}
+
 .public-document pre {
   max-width: 100%;
   overflow-x: auto;
@@ -132,13 +179,7 @@
   font-weight: 600;
 }
 
-/* Inside the app on a phone, About and Opportunities are a panel like every
-   other page's, padded as the panels are, instead of a second wide gutter. */
 @media (max-width: 47.99rem) {
-  #route-content .legal-page {
-    padding: var(--rg-panel-padding);
-  }
-
   /* On a phone a two-column table reads as a list: each row is its first
      cell, muted, over its second, with a line between rows, so no word is
      cut and nothing scrolls sideways. The header row is kept out of sight.

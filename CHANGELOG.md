@@ -4124,3 +4124,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   backslash, and `_` at the edge of a word.
 - Why: coordinator, 21 Oct 13:01Z: member text read with stray backslashes
   in the agents' pages; escape only where Markdown would really break.
+## 2026-10-21 — About and Opportunities open like the other pages
+
+- What: https://keyfleet.ai/about and https://keyfleet.ai/opportunities now
+  open as Connect and Account do: the title in the large title face with its
+  one line under it on the page's ground, and the rest in one panel below,
+  along the page's left edge. They were a small title inside a narrow panel
+  centred in the page. The words are unchanged.
+- Why: Sean, 21 Oct 10:16Z: "more elegant, less text, simplify is the guideline".
