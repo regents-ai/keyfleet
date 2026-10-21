@@ -3549,3 +3549,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the fleet feed reads "Key 3 archived 4 tasks." where it listed "archived a task" four times; the same for tasks submitted for review and items revised, while they are one Key's, of one type and in a row.
 - Why: a Key tidying up its work filled the feed with identical lines.
+
+## 2026-10-21 — Treasury money lines keep "with" and "to" beside their amount
+
+- What: on a fleet's Treasury tab, "with 61.317 USDC" and "to 0xbbbb..bbbb" now sit one space apart, as one phrase, instead of with a wide gap after the word.
+- Why: the live Treasury tab showed the gap after the morning's one-line change; Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline".

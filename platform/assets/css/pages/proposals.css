@@ -266,6 +266,11 @@
   column-gap: 0.35em;
 }
 
+/* "with 61.317 USDC" reads as one phrase, one space apart. */
+.treasury-history .proposals-lines .proposals-detail {
+  display: inline;
+}
+
 .proposals-lines li:last-child {
   padding-block-end: 0;
   border-bottom: 0;
