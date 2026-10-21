@@ -4053,3 +4053,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   screen. 45 runs in a row now succeed. The page itself is unchanged.
 - Why: the coordinator, 21 Oct 12:44Z: find the cause of the flaky "closing
   sign-in on a Key's page" check and fix it without a retry.
+
+## 2026-10-21 — Two code-quality warnings in rooms and home are gone
+
+- What: the rooms side panel check matches the list of rooms instead of
+  counting it, and the home page's aliases are in order. Nothing changes on
+  screen.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".

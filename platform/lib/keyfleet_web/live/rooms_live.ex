@@ -307,7 +307,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   # The side holds the list of rooms when there is a choice, and the Keys the
   # reader muted.
-  defp side?(room), do: length(room.rooms) > 1 or MapSet.size(room.muted) > 0
+  defp side?(room), do: match?([_, _ | _], room.rooms) or MapSet.size(room.muted) > 0
 
   @doc "What a room is called wherever it is shown: by its topic once it has one, and by its name otherwise."
   def room_label(%{topic: nil, name: name}), do: name

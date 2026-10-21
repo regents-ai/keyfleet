@@ -55,11 +55,11 @@ defmodule KeyfleetWeb.HomeLive do
   alias KeyfleetWeb.{
     FleetNow,
     HarbourCrew,
-    SharedFigures,
     KeyLinks,
     Motion,
     PublicDocuments,
     RouteCatalog,
+    SharedFigures,
     ShellLive
   }
 
