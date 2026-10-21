@@ -30,7 +30,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias Keyfleet.Rooms
   alias Keyfleet.Treasury
   alias KeyfleetWeb.CheckIns
-  alias KeyfleetWeb.Components.KeyCard
   alias KeyfleetWeb.Components.Placeholder
   alias KeyfleetWeb.DmsLive
   alias KeyfleetWeb.FleetLive
@@ -130,13 +129,16 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   attr :profile, :map, required: true
 
-  # It loads ahead of the map's close-ups behind the dialog.
+  # The picture the Key's metadata names, as a wallet or marketplace shows it:
+  # the Interim Keyfleet Access Pass until the Key's own card is drawn. It loads
+  # ahead of the map's close-ups behind the dialog.
   defp card(assigns) do
     ~H"""
-    <KeyCard.card
+    <img
       id="key-profile-card"
       class="key-profile-card"
       src={@profile.image}
+      fetchpriority="high"
       alt={"The card of Key #{Rules.grouped(@profile.token_id)}"}
     />
     """
@@ -220,6 +222,17 @@ defmodule KeyfleetWeb.KeyProfileLive do
         <div>
           <dt>Held since</dt>
           <dd id="key-profile-held-since">{day(@profile.held_since)}</dd>
+        </div>
+        <div>
+          <dt>Held by</dt>
+          <dd id="key-profile-holder">
+            {held_by(@profile)}
+            <Regent.Primitives.address
+              :if={is_nil(held_by(@profile))}
+              id="key-profile-holder-wallet"
+              address={@profile.holder}
+            />
+          </dd>
         </div>
         <div>
           <dt>Changed hands</dt>

@@ -35,7 +35,6 @@ import {PlacesChart} from "./hooks/places_chart"
 import {HexField, NextKeyCard} from "./hooks/home_hero"
 import {HolographicCard} from "./hooks/holographic_card"
 import {KeyCards} from "./hooks/key_cards"
-import {KeyCardTurn} from "./hooks/key_card"
 import {KeyMap} from "./hooks/key_map"
 import {LocalTime} from "./hooks/local_time"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
@@ -291,7 +290,6 @@ const hooks = {
   HexField,
   HolographicCard,
   KeyCards,
-  KeyCardTurn,
   KeyMap,
   LocalTime,
   ModalDialog,

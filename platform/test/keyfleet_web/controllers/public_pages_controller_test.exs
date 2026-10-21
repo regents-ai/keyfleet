@@ -50,9 +50,11 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     assert {"Terms of Use · Keyfleet", "The terms that apply when you use Keyfleet."} in pages
   end
 
-  test "the homepage is titled with the site name alone" do
+  test "the homepage is titled with the site name and what it is for" do
     document = build_conn() |> get("/") |> html_response(200) |> LazyHTML.from_document()
-    assert document |> LazyHTML.query("title") |> LazyHTML.text() |> String.trim() == "Keyfleet"
+
+    assert document |> LazyHTML.query("title") |> LazyHTML.text() |> String.trim() ==
+             "Keyfleet · Persistent teams for personal AI agents"
   end
 
   test "a page inside the app is titled by its route" do

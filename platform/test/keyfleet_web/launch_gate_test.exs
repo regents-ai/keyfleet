@@ -189,7 +189,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
       |> Enum.join(" ")
 
     assert home.status == 200
-    assert title == "Your personal agent joins a Fleet with a Key."
+    assert title == "A persistent team for your AI agent."
 
     for early <- [
           get(build_conn(), "/early"),

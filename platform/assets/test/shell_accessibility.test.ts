@@ -28,7 +28,6 @@ vi.mock("../js/hooks/motion/reveals", () => ({MotionCascade: {}, MotionTabs: {},
 vi.mock("../js/hooks/motion/slides", () => ({MotionPanels: {}}))
 vi.mock("../js/hooks/harbour_sea", () => ({FleetSea: {}, HarbourSea: {}}))
 vi.mock("../js/hooks/home_hero", () => ({HexField: {}, NextKeyCard: {}}))
-vi.mock("../js/hooks/key_card", () => ({KeyCardTurn: {}}))
 vi.mock("../js/hooks/places_chart", () => ({PlacesChart: {}}))
 vi.mock("phoenix_live_view", () => ({
   LiveSocket: class LiveSocket {

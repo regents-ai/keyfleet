@@ -31,9 +31,9 @@ test("the homepage shows Classic #1, its price, and Buy waiting for the sale", a
   const errors = watchErrors(page)
   await visit(page, "/")
 
-  await expect(page.locator("#home-hero-fleet")).toHaveText("Classic #1")
+  await expect(page.locator("#home-hero-fleet")).toHaveText("Classic #1 now")
   const facts = page.locator("#home-classic-facts")
-  await expect(facts).toContainText("1,024")
+  await expect(facts).toContainText("Open soon")
   await expect(page.locator("#home-classic-price")).toHaveText(/^[0-9][0-9.]* USDC$/)
   await expectOnFirstScreen(page, facts, "Classic #1's Keys and price")
 

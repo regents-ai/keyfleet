@@ -21,10 +21,8 @@ defmodule KeyfleetWeb.KeysLive do
   alias Keyfleet.Chain
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Keys
-  alias Keyfleet.Keys.Metadata
   alias Keyfleet.Keys.Profile
   alias KeyfleetWeb.Components.FleetRisks
-  alias KeyfleetWeb.Components.KeyCard
   alias KeyfleetWeb.Components.PresenceCard
   alias KeyfleetWeb.DmsLive
   alias KeyfleetWeb.ShellLive
@@ -40,27 +38,19 @@ defmodule KeyfleetWeb.KeysLive do
     ~H"""
     <article id="key-page" class="key-page">
       <header class="key-heading">
-        <div class="key-heading__words">
-          <%!-- Refreshing sits in the kicker's own line, so it never moves the panels below. --%>
-          <p class="key-kicker">
-            {@key.fleet_name || "Keyfleet"}<span :if={@key.refreshing?} id="key-refreshing"> · Refreshing…</span>
-          </p>
-          <h1 tabindex="-1">Key {Rules.grouped(@key.token_id)}</h1>
-          <.link
-            :if={@key.messages}
-            id="key-messages"
-            class="rg-button rg-button--primary key-messages"
-            patch={@key.messages.path}
-          >
-            <span class="rg-button__label">{@key.messages.label}</span>
-          </.link>
-        </div>
-        <KeyCard.card
-          id="key-card"
-          class="key-heading__card"
-          src={@key.image}
-          alt={"The card of Key #{Rules.grouped(@key.token_id)}"}
-        />
+        <%!-- Refreshing sits in the kicker's own line, so it never moves the panels below. --%>
+        <p class="key-kicker">
+          {@key.fleet_name || "Keyfleet"}<span :if={@key.refreshing?} id="key-refreshing"> · Refreshing…</span>
+        </p>
+        <h1 tabindex="-1">Key {Rules.grouped(@key.token_id)}</h1>
+        <.link
+          :if={@key.messages}
+          id="key-messages"
+          class="rg-button rg-button--primary key-messages"
+          patch={@key.messages.path}
+        >
+          <span class="rg-button__label">{@key.messages.label}</span>
+        </.link>
       </header>
 
       <section :if={is_nil(@key.owner_wallet)} id="key-not-sold" class="key-panel">
@@ -351,7 +341,6 @@ defmodule KeyfleetWeb.KeysLive do
       fleet: key && %{fleet_id: fleet_id, chain_id: key.fleet.chain_id},
       deployed?: key != nil and key.fleet.manager_address != nil,
       owner_wallet: key && key.owner_wallet,
-      image: if(key, do: Metadata.image(key.fleet, token_id), else: Metadata.pass()),
       owner?: owns_key?(actor, key),
       refreshing?: not Chain.fresh?(fleet_id),
       edits_restricted?:

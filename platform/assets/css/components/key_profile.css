@@ -243,8 +243,10 @@
 
 /* The Key's picture, the same one its metadata names. */
 .key-profile-card {
+  display: block;
   width: min(100%, 26rem);
   aspect-ratio: 5 / 7;
+  object-fit: contain;
 }
 
 /* Tablets and phones: one column, the title and Close first and kept at the

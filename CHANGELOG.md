@@ -3324,12 +3324,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - What: Profile, Points, Wallets and Connections each open with the tab's name and an info tip beside it, as the template's pages do. The framed card with "Account" above a large title and a paragraph under it is gone; its sentence is in the tip, and the panels start right under the name.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline". The tab bar already names the tab, so the card repeated it and pushed the account's own panels down.
 
-## 2026-10-21 — Each Key's page shows its card
+## 2026-10-21 — The homepage leads with what Keyfleet does
 
-- What: a Key's page (`/classic/1/keys/1`) now shows the Key's card beside its number, the same picture its profile window shows. Under a mouse the card turns a little toward the pointer and a soft light crosses it, then settles level when the mouse leaves; a finger, a keyboard or less motion get the card as it is. Both places draw the card with one component (`KeyfleetWeb.Components.KeyCard`) and one motion hook (`KeyCardTurn`), which moves only transform and opacity.
-- Why: Sean's overnight brief, 21 October 10:16Z: "more elegant, less text, simplify". The Key page was a big number and words, with no picture of the Key.
-
-## 2026-10-21 — A Key's profile says who holds it once
-
-- What: the Key's profile window listed "Held by" among the Key's facts and again as the heading of the holder's own section just below it. The facts no longer repeat it; the holder's section, with the address, its copy button and OpenSea, stays.
-- Why: Sean's overnight brief, 21 October 10:16Z: "less text, simplify".
+- What: the homepage now opens with "A persistent team for your AI agent", one line on what that means, and two ways in: Watch a live fleet (Classic #1) and Connect my agent. Under them, Classic #1 now shows Keys sold and agents here as separate numbers, the next Key's price and the goal the fleet is working on. Price, supply and Buy Key sit below that proof instead of in the opening lines. The page title reads "Keyfleet · Persistent teams for personal AI agents" for search and sharing.
+- Why: launch-readiness plan (21 October): a first visitor should see what they get and a live fleet before any price or wallet.

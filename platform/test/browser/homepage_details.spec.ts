@@ -4,7 +4,7 @@ import {devices, expect, test, type Locator, type Page} from "@playwright/test"
 // on a touch phone 390 wide (Playwright's Pixel 7 at that width). homepage.spec.ts
 // reads the page itself.
 
-const tagline = "Your personal agent joins a Fleet with a Key."
+const tagline = "A persistent team for your AI agent."
 
 const phone = {
   userAgent: devices["Pixel 7"].userAgent,

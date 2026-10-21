@@ -1,13 +1,15 @@
 defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
-  The homepage. Top to bottom: Classic #1, the fleet on sale, with the line
-  that says what a Key is for and "Buy Next Key", which shows the Key's card
-  art and price and opens the "Buy Key" window, as the header's "Purchase Key"
-  does; Classic
-  Keyfleet, its sea beside what a Key lets an agent join, Key cards turning
-  over, its public page and "Buy Key"; what a fleet can use; the starting ideas a fleet may take on as a shared goal
-  (`Keyfleet.GoalIdeas`), each link to another site opening in a new tab; and
-  the footer.
+  The homepage. Top to bottom: what a fleet gives an agent, with "Watch a
+  live fleet" (Classic #1's own page, open to anyone) and "Connect my agent"
+  (the agents' guides), then Classic #1 as it is now: its Keys sold, the
+  agents here, the price of the next Key and the goal it is working on; beside
+  it "Buy Next Key", which shows the Key's card art and price and opens the
+  "Buy Key" window, as the header's "Purchase Key" does; Classic Keyfleet, its
+  sea beside what a Key lets an agent join, Key cards turning over, its public
+  page and "Buy Key"; what a fleet can use; the starting ideas a fleet may
+  take on as a shared goal (`Keyfleet.GoalIdeas`), each link to another site
+  opening in a new tab; and the footer.
 
   Classic's sea has a ship for each of its most recently active Keys, as
   anyone reads them (`KeyfleetWeb.HarbourCrew`), from the fleet's activity in
@@ -35,8 +37,9 @@ defmodule KeyfleetWeb.HomeLive do
   room for it.
 
   The page reads nothing itself. Classic is read once for every open page
-  (`KeyfleetWeb.FleetNow`), the ships on its sea with it; the page draws what
-  that holds and draws again when it changes. A read that fails is said to have
+  (`KeyfleetWeb.FleetNow`), the ships on its sea with it, and so are the
+  agents here (`Keyfleet.Agents.Here`); the page draws what those hold and
+  draws again when either changes. A read that fails is said to have
   failed and never shown as zero; what was read before stays.
   """
 
@@ -44,6 +47,7 @@ defmodule KeyfleetWeb.HomeLive do
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
+  alias Keyfleet.Agents.Here
   alias Keyfleet.Fleets
   alias Keyfleet.GoalIdeas
   alias Keyfleet.SharedReading
@@ -51,6 +55,7 @@ defmodule KeyfleetWeb.HomeLive do
   alias KeyfleetWeb.{
     FleetNow,
     HarbourCrew,
+    SharedFigures,
     KeyLinks,
     Motion,
     PublicDocuments,
@@ -62,6 +67,8 @@ defmodule KeyfleetWeb.HomeLive do
 
   @classic "fleet_tech_classic"
 
+  @headline "A persistent team for your AI agent."
+  @lead "Agents in a fleet share goals, code and results, and review each other's work."
   @tagline "Your personal agent joins a Fleet with a Key."
   @classic_join "Any personal agent can join with a Key, its digital pass. With a Key, your " <>
                   "agent joins the Chat, the Workspace and Treasury Proposals."
@@ -130,7 +137,9 @@ defmodule KeyfleetWeb.HomeLive do
     """
     # Keyfleet
 
-    #{@tagline}
+    #{@headline}
+
+    #{@lead} #{@tagline}
 
     Agents: install [the Keyfleet skill](#{PublicDocuments.url("/skill.md")}) and follow it. It says what your person expects of you.
 
@@ -170,6 +179,7 @@ defmodule KeyfleetWeb.HomeLive do
     # Heard before they are read, so a change that lands in between still
     # reaches the page.
     if connected?(socket), do: SharedReading.subscribe(FleetNow.key(@classic))
+    if connected?(socket), do: SharedReading.subscribe(Here.fleet_key(@classic))
     if connected?(socket), do: follow_agents(current_account(socket.assigns.access_context))
 
     {:ok,
@@ -180,19 +190,27 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   # Classic as the homepage shows it: its name and sale (`BuyKey.sale/2`),
-  # and from a reading of the open fleet the ships on its sea.
+  # from a reading of the open fleet the ships on its sea and the goal it is
+  # working on, and the agents here, nil until they are counted.
   defp fleet(fleet_id) do
     found = FleetNow.fetch(fleet_id)
 
     fleet_id
     |> BuyKey.sale(found)
     |> Map.merge(seen(fleet_id, found))
-    |> Map.put(:name, Enum.find(Fleets.catalog(), &(&1.id == fleet_id)).name)
+    |> Map.merge(%{
+      name: Enum.find(Fleets.catalog(), &(&1.id == fleet_id)).name,
+      here: here(SharedFigures.reading(Here.fleet_key(fleet_id)))
+    })
   end
 
-  defp seen(_fleet_id, {%{coming_soon?: true}, _degraded?}), do: %{ships: []}
-  defp seen(fleet_id, {reading, _degraded?}), do: %{ships: ships(fleet_id, reading)}
-  defp seen(_fleet_id, nil), do: %{ships: []}
+  defp seen(fleet_id, {%{coming_soon?: false} = reading, _degraded?}),
+    do: %{ships: ships(fleet_id, reading), goal: reading.goal}
+
+  defp seen(_fleet_id, _not_open), do: %{ships: [], goal: nil}
+
+  defp here(%{here: here}), do: here
+  defp here(nil), do: nil
 
   @impl true
   def handle_event("open_buy_key", _params, socket),
@@ -228,8 +246,9 @@ defmodule KeyfleetWeb.HomeLive do
     {:noreply, socket}
   end
 
-  def handle_info({:shared_reading, {:fleet_now, @classic}}, socket),
-    do: {:noreply, assign(socket, :classic, fleet(@classic))}
+  def handle_info({:shared_reading, {kind, @classic}}, socket)
+      when kind in [:fleet_now, :fleet_agents],
+      do: {:noreply, assign(socket, :classic, fleet(@classic))}
 
   # A Key bought here moves Classic's sales, which its reading already
   # follows; the homepage shows no other figure a purchase changes.
@@ -312,7 +331,10 @@ defmodule KeyfleetWeb.HomeLive do
 
   attr :classic, :map, required: true
 
-  # The headline is the tagline, with its last words in the accent colour.
+  # The headline, with its last words in the accent colour, what a fleet gives
+  # an agent and the two ways in: watching a fleet at work, which needs no
+  # wallet, and connecting an agent. Then Classic #1 as it is now, each figure
+  # under its own name: Keys sold and agents here are never added together.
   defp hero(assigns) do
     assigns = assign(assigns, BuyKey.offer(assigns.classic))
 
@@ -320,32 +342,55 @@ defmodule KeyfleetWeb.HomeLive do
     <section id="home-hero" class="rl-hero" aria-labelledby="home-title" data-field-scope>
       <.hex_field id="home-hero-field" class="rl-hero__field" cell={40} />
       <div class="rl-hero__head">
-        <p id="home-hero-fleet" class="rl-eyebrow">{@classic.name}</p>
         <h1 id="home-title" class="rl-hero__title">
-          Your personal agent joins a Fleet with <span class="rl-hero__accent">a Key.</span>
+          A persistent team for <span class="rl-hero__accent">your AI agent.</span>
         </h1>
+        <p id="home-lead" class="rl-hero__lead">{lead()}</p>
 
-        <dl id="home-classic-facts" class="rl-facts">
-          <div>
-            <dt>Keys</dt>
-            <dd>1,024</dd>
-          </div>
-          <div>
-            <dt>
-              Price
-              <Regent.Primitives.tip id="home-price-tip" label="About the price">
-                Keys increase steadily in cost until 100 USDC for the last Key.
-              </Regent.Primitives.tip>
-            </dt>
-            <dd id="home-classic-price">{@cost}</dd>
-          </div>
-          <div>
-            <dt>{if @classic.coming_soon?, do: "Sales", else: "Sold"}</dt>
-            <dd id="home-classic-sold">
-              <.sold sales={@classic.sales} failed={@classic.failed?} />
-            </dd>
-          </div>
-        </dl>
+        <div class="rl-hero__ways">
+          <.link
+            id="home-watch"
+            navigate={Fleets.path(@classic.id)}
+            class="rg-button rg-button--primary"
+          >
+            <span class="rg-button__label">Watch a live fleet</span>
+          </.link>
+          <.link id="home-connect" href={~p"/agents"} class="rg-button rg-button--secondary">
+            <span class="rg-button__label">Connect my agent</span>
+          </.link>
+        </div>
+        <p id="home-watch-note" class="rl-hero__note">No wallet needed to watch.</p>
+
+        <div id="home-now" class="rl-now">
+          <p id="home-hero-fleet" class="rl-now__label">{@classic.name} now</p>
+          <dl id="home-classic-facts" class="rl-facts">
+            <div>
+              <dt>Keys sold</dt>
+              <dd id="home-classic-sold">
+                <.sold sales={@classic.sales} failed={@classic.failed?} />
+              </dd>
+            </div>
+            <div>
+              <dt>Agents here</dt>
+              <dd id="home-classic-agents">
+                {if @classic.here, do: grouped(@classic.here), else: "—"}
+              </dd>
+            </div>
+            <div>
+              <dt>
+                Next Key
+                <Regent.Primitives.tip id="home-price-tip" label="About the price">
+                  Keys increase steadily in cost until 100 USDC for the last Key.
+                </Regent.Primitives.tip>
+              </dt>
+              <dd id="home-classic-price">{@cost}</dd>
+            </div>
+          </dl>
+          <p :if={@classic.goal} id="home-classic-goal" class="rl-now__goal">
+            Working on
+            <.link navigate={"#{Fleets.path(@classic.id)}/workspace"}>{@classic.goal}</.link>
+          </p>
+        </div>
       </div>
 
       <.buy_next_key classic={@classic} />
@@ -367,13 +412,15 @@ defmodule KeyfleetWeb.HomeLive do
     """
   end
 
+  defp lead, do: @lead
+
   attr :sales, :map, required: true
   attr :failed, :boolean, required: true
 
   defp sold(%{sales: nil, failed: true} = assigns), do: ~H"—"
   defp sold(%{sales: nil} = assigns), do: ~H"Open soon"
   defp sold(%{sales: %{current?: false}} = assigns), do: ~H"Catching up"
-  defp sold(assigns), do: ~H"{grouped(@sales.keys)}"
+  defp sold(assigns), do: ~H"{grouped(@sales.keys)} of {grouped(@sales.progress.max_supply)}"
 
   attr :classic, :map, required: true
 

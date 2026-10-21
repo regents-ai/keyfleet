@@ -30,10 +30,16 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   reaches the open page, and pressing a ship opens its Key
   # - the command box shows the homepage instruction whole and copies exactly
   #   what it shows
-  # - the Markdown homepage carries the tagline as Sean wrote it, says Classic
-  #   opens soon until it does, then links its page
-  # - launch-gate: internal links stay on the fleets' maps, the account page,
-  #   the public documents, or anchors that exist
+  # - the page leads with the headline and what a fleet gives an agent; the
+  #   Markdown homepage carries them with the tagline as Sean wrote it, says
+  #   Classic opens soon until it does, then links its page
+  # - "Watch a live fleet" opens Classic #1's own page and "Connect my agent"
+  #   the agents' guides; Classic #1's figures each keep their own name: Keys
+  #   sold out of all, the agents here, the next Key's price and the goal it
+  #   is working on, which links its workspace
+  # - launch-gate: internal links stay on the fleets' maps and workspaces, the
+  #   account page, the agents' guides, the public documents, or anchors that
+  #   exist
   # - the page ends with the starting ideas for a shared goal as Sean wrote
   #   them, each link to another site opening in a new tab, and the Markdown
   #   homepage carries the same section
@@ -147,7 +153,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-buy-tag") == "Key 4 · #{KeyfleetWeb.FleetLive.usdc(price)}"
     assert text(view, "#home-buy-why") == ""
     assert text(view, "#home-classic-price") == KeyfleetWeb.FleetLive.usdc(price)
-    assert text(view, "#home-classic-sold") == "3"
+    assert text(view, "#home-classic-sold") == "3 of 1,024"
 
     view |> element("button#home-buy-next-key") |> render_click()
 
@@ -306,14 +312,21 @@ defmodule KeyfleetWeb.HomeLiveTest do
     end
   end
 
-  test "the page and the Markdown homepage carry the tagline as written", %{conn: conn} do
+  test "the page and the Markdown homepage lead with the headline, and the Markdown with Sean's tagline",
+       %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
-    assert text(view, "#home-title") == "Your personal agent joins a Fleet with a Key."
+    assert text(view, "#home-title") == "A persistent team for your AI agent."
+
+    assert text(view, "#home-lead") ==
+             "Agents in a fleet share goals, code and results, and review each other's work."
 
     markdown =
       conn |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
-    assert markdown =~ "\nYour personal agent joins a Fleet with a Key.\n"
+    assert String.starts_with?(markdown, "# Keyfleet\n\nA persistent team for your AI agent.\n")
+
+    assert markdown =~
+             " review each other's work. Your personal agent joins a Fleet with a Key.\n"
 
     assert Regex.scan(~r/^## (.+)$/m, markdown, capture: :all_but_first) == [
              ["Classic Keyfleet"],
@@ -326,6 +339,42 @@ defmodule KeyfleetWeb.HomeLiveTest do
     [_, path] = Regex.run(~r{\[What it’s doing right now\]\(https?://[^/]+(/[^)]+)\)}, section)
     assert path == "/fleets/fleet_tech_classic.md"
     assert build_conn() |> get(path) |> response(200) =~ "Classic #1"
+  end
+
+  test "the ways in open Classic #1 and the agents' guides, over Classic #1's figures",
+       %{conn: conn} do
+    for token_id <- 1..2, do: issue!(@classic, token_id)
+    Workspace.create(@classic, "goal", %{"title" => "Chart the bay", "outcome" => "O"}, by: 1)
+    read_fleets()
+    Keyfleet.Agents.Here.read(@classic)
+
+    {:ok, view, html} = live(conn, "/")
+
+    assert attribute(html, "a#home-watch", "href") == ["/classic/1"]
+    assert text(view, "#home-watch") == "Watch a live fleet"
+    assert attribute(html, "a#home-connect", "href") == ["/agents"]
+    assert text(view, "#home-connect") == "Connect my agent"
+    assert text(view, "#home-watch-note") == "No wallet needed to watch."
+
+    assert text(view, "#home-hero-fleet") == "Classic #1 now"
+
+    assert ["Keys sold", "Agents here", "Next Key" <> _tip] =
+             html
+             |> LazyHTML.from_document()
+             |> LazyHTML.query("#home-classic-facts dt")
+             |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+    assert text(view, "#home-classic-sold") == "2 of 1,024"
+    assert text(view, "#home-classic-agents") == "0"
+    assert text(view, "#home-classic-goal") == "Working on Chart the bay"
+    assert attribute(html, "#home-classic-goal a", "href") == ["/classic/1/workspace"]
+  end
+
+  test "agents not yet counted show a dash, never none", %{conn: conn} do
+    SharedReading.delete(Keyfleet.Agents.Here.fleet_key(@classic))
+    {:ok, view, _html} = live(conn, "/")
+    assert text(view, "#home-classic-agents") == "—"
+    refute has_element?(view, "#home-classic-goal")
   end
 
   @tag :classic_undeployed
@@ -398,14 +447,16 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert section =~ "\n**Find your collective edge.** Each agent brings"
   end
 
-  @open_paths ~w(/account /llms.txt /agents.md /skill.md /docs /about /contact /privacy /terms)
+  @open_paths ~w(/account /agents /llms.txt /agents.md /skill.md /docs /about /contact /privacy /terms)
 
   test "the public homepage links only to known pages and to anchors that exist",
        %{conn: conn} do
     {:ok, _view, html} = live(conn, "/")
 
     anchors = attribute(html, "[id]", "id")
-    fleet_paths = Enum.map(Fleets.catalog_ids(), &"#{Keyfleet.Fleets.path(&1)}")
+
+    fleet_paths =
+      Enum.flat_map(Fleets.catalog_ids(), &[Fleets.path(&1), "#{Fleets.path(&1)}/workspace"])
 
     for href <- attribute(html, "a", "href"),
         href != "/",
