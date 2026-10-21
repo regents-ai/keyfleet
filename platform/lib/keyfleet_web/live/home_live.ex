@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.HomeLive do
   @moduledoc """
   The homepage. Top to bottom: what a fleet gives an agent, with "Watch a
   live fleet" (Classic #1's own page, open to anyone) and "Connect my agent"
-  (the agents' guides), then Classic #1 as it is now: its Keys sold, the
+  (the guided setup at /connect), then Classic #1 as it is now: its Keys sold, the
   agents here, the price of the next Key and the goal it is working on; beside
   it "Buy Next Key", which shows the Key's card art and price and opens the
   "Buy Key" window, as the header's "Purchase Key" does; Classic Keyfleet, its
@@ -351,11 +351,17 @@ defmodule KeyfleetWeb.HomeLive do
           <.link
             id="home-watch"
             navigate={Fleets.path(@classic.id)}
+            data-step="watch"
             class="rg-button rg-button--primary"
           >
             <span class="rg-button__label">Watch a live fleet</span>
           </.link>
-          <.link id="home-connect" navigate={~p"/connect"} class="rg-button rg-button--secondary">
+          <.link
+            id="home-connect"
+            navigate={~p"/connect"}
+            class="rg-button rg-button--secondary"
+            data-step="connect"
+          >
             <span class="rg-button__label">Connect my agent</span>
           </.link>
         </div>
@@ -402,6 +408,7 @@ defmodule KeyfleetWeb.HomeLive do
           <Regent.Primitives.copy_button
             id="home-instruction-copy"
             text={SendAgent.home_instruction()}
+            data-step-agent="any"
             aria-label="Copy the instruction"
           >
             Copy

@@ -27,6 +27,7 @@ import {installPageProgress} from "./page_progress"
 import {installPublicTools} from "./public_tools"
 import {installShellPanels} from "./shell_panels"
 import {installVitals} from "./vitals"
+import {installLaunchSteps} from "./launch_steps"
 import {AccountWallets} from "./hooks/account_wallets"
 import {Countdown} from "./hooks/countdown"
 import {FleetTabs} from "./hooks/fleet_tabs"
@@ -344,6 +345,7 @@ installCrossTabCsrf()
 installCopyButtons()
 installPageProgress()
 installVitals()
+installLaunchSteps()
 watchPresses(document)
 mountMotion(document)
 window.liveSocket = liveSocket

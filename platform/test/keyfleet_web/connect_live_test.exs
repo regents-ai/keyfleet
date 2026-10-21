@@ -46,6 +46,7 @@ defmodule KeyfleetWeb.ConnectLiveTest do
              "Install the Keyfleet skill from keyfleet.ai/agents/dots/skill.md and follow it."
 
     assert has_element?(view, ~s(#connect-copy[data-copy-text="#{instruction(view)}"]))
+    assert has_element?(view, ~s(#connect-copy[data-step-agent="dots"]))
     assert has_element?(view, ~s(#connect-standing a[href="/agents/dots"]), "Dots guide")
 
     view |> element("#connect-runtime-hermes") |> render_click()
@@ -58,6 +59,7 @@ defmodule KeyfleetWeb.ConnectLiveTest do
              "Install the Keyfleet skill from keyfleet.ai/agents/hermes/skill.md and follow it."
 
     assert has_element?(view, ~s(#connect-copy[data-copy-text="#{instruction(view)}"]))
+    assert has_element?(view, ~s(#connect-copy[data-step-agent="hermes"]))
   end
 
   test "a runtime the guides don't have is no page", %{conn: conn} do

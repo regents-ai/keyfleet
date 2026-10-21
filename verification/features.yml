@@ -868,3 +868,34 @@ features:
       - id: R-20261021-excerpt-whole-characters
         from: overnight simplify pass
         test: platform/test/keyfleet/directory_test.exs
+  - id: launch-step-counters
+    what: >-
+      The site counts, in running totals only, how many visits open the
+      homepage, press "Watch a live fleet" or "Connect my agent", and copy a
+      setup line, by the agent it is for ("any" for the homepage's line). The
+      browser reports each step once as it happens; a reconnect is not a new
+      visit and a browser a program drives reports nothing. A report names only
+      the step and the agent, never a person, address, wallet or Key, and the
+      totals are read in Fly's metrics dashboard.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/launch_steps.ex
+      - platform/lib/keyfleet_web/controllers/launch_steps_controller.ex
+      - platform/lib/keyfleet_web/telemetry.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/assets/js/launch_steps.ts
+      - platform/assets/js/copy_buttons.ts
+      - platform/assets/js/app.ts
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/lib/keyfleet_web/live/connect_live.ex
+      - platform/priv/public/privacy.md
+    entry:
+      - route: POST /steps
+    proofs:
+      - platform/test/keyfleet_web/controllers/launch_steps_controller_test.exs
+      - platform/test/keyfleet_web/metrics_test.exs
+      - platform/test/browser/launch_steps.spec.ts
+    gaps:
+      - Pairing an agent and buying a Key are already saved, so they are read from the database, not counted here.
+      - Checked in headless Chromium only; WebKit is not run on the Mac.
