@@ -343,6 +343,7 @@ span.account-chip {
   color: var(--color-fg);
 }
 
+/* The page fills the screen and scrolls as one, with the footer after it. */
 #app-shell-scroller {
   min-width: 0;
   min-height: 0;
@@ -503,12 +504,6 @@ span.account-chip {
 
   #route-content {
     padding: 1rem;
-  }
-
-  /* At the end of the page a swipe carries on to the footer below it, which
-     holds the links the phone's header leaves out. */
-  #app-shell-scroller {
-    overscroll-behavior-y: auto;
   }
 }
 

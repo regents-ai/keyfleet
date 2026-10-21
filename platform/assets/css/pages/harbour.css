@@ -116,14 +116,9 @@ body:has(> .harbour-sea) #route-content .legal-page {
   background: var(--color-surface);
 }
 
-/* The footer is drawn above the sea, on the same ground as the header. */
-body:has(> .harbour-sea) > .regent-footer {
-  position: relative;
-  z-index: 1;
+/* The footer at the end of the page stands on the same ground as the header. */
+body:has(> .harbour-sea) #app-shell-scroller > .regent-footer {
   background: var(--color-bg);
-  transition:
-    opacity var(--sea-lift) ease,
-    visibility 0s;
 }
 
 /* The sea never takes a press meant for the page: it lies behind it and lets
@@ -296,14 +291,6 @@ body.sea-lifted:has(> .harbour-sea) #app-shell {
     visibility 0s var(--sea-lift);
 }
 
-body.sea-lifted:has(> .harbour-sea) > .regent-footer {
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity var(--sea-lift) ease,
-    visibility 0s var(--sea-lift);
-}
-
 /* ---- An agent's card: who it is, its Key and its last few actions ---- */
 
 .harbour-card {
@@ -441,9 +428,7 @@ body.sea-lifted:has(> .harbour-sea) > .regent-footer {
 @media (prefers-reduced-motion: reduce) {
   .harbour-sea__stage canvas,
   body:has(> .harbour-sea) #app-shell,
-  body:has(> .harbour-sea) > .regent-footer,
-  body.sea-lifted:has(> .harbour-sea) #app-shell,
-  body.sea-lifted:has(> .harbour-sea) > .regent-footer {
+  body.sea-lifted:has(> .harbour-sea) #app-shell {
     transition: none;
   }
 

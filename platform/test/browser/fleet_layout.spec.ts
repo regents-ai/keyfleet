@@ -51,9 +51,36 @@ test("on a tall screen the hall fills the box to the screen's foot and scrolls o
   const margin = await page.locator("#route-content").evaluate(el => parseFloat(getComputedStyle(el).paddingBottom))
   expect(Math.abs(900 - margin - view)).toBeLessThanOrEqual(1)
   expect(view - hall).toBeLessThanOrEqual(2)
-  const scroller = page.locator("#app-shell-scroller")
-  expect(await scroller.evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true)
+  // The page itself scrolls only as far as the footer after it.
+  const below = await page.locator("#app-shell-scroller").evaluate(el => ({
+    extra: el.scrollHeight - el.clientHeight,
+    footer: el.querySelector(":scope > .regent-footer")!.getBoundingClientRect().height,
+  }))
+  expect(Math.abs(below.extra - below.footer)).toBeLessThanOrEqual(1)
 })
+
+// The window never scrolls under an app page: the page scrolls on its own
+// under the header, and the footer is the last thing in it, reached by
+// scrolling the page from anywhere on it.
+for (const [width, height] of [
+  [1440, 900],
+  [390, 844],
+]) {
+  test(`at ${width}×${height} the page scrolls once, to the footer at its end`, async ({page}) => {
+    await page.setViewportSize({width, height})
+    await page.goto(`/classic/1/workspace`)
+    await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(height)
+    await expect(page.locator("body > .regent-footer")).toHaveCount(0)
+    const footer = page.locator("#app-shell-scroller > .regent-footer")
+    await expect(footer).toHaveCount(1)
+
+    await page.locator("#app-shell-scroller").evaluate(el => el.scrollTo(0, el.scrollHeight))
+    const box = (await footer.boundingBox())!
+    expect(Math.abs(box.y + box.height - height)).toBeLessThanOrEqual(1)
+  })
+}
 
 for (const scheme of ["light", "dark"] as const) {
   test(`"Purchase Key" is filled Tangerine with Charcoal words in ${scheme}`, async ({page, baseURL}) => {

@@ -67,6 +67,6 @@
   <body>
     {@inner_content}
     {if assigns[:harbour_sea], do: KeyfleetWeb.HarbourSeaLive.sea(@conn)}
-    <.product_links :if={!home?} />
+    <.product_links :if={!home? and !assigns[:harbour_sea]} />
   </body>
 </html>

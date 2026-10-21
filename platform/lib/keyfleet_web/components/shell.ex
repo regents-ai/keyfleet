@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.Components.Shell do
   @moduledoc """
-  The app shell: the header, the sidebar, the page and, for someone signed in,
-  the side panel on the right.
+  The app shell: the header, the sidebar, the page with the site's footer at its
+  end and, for someone signed in, the side panel on the right.
 
   Every page that has the header holds the "Buy Key" window its "Purchase Key"
   opens (`KeyfleetWeb.Components.BuyKey`): the app's pages draw it in the
@@ -119,6 +119,7 @@ defmodule KeyfleetWeb.Components.Shell do
         <main id="route-content" tabindex="-1">
           {render_slot(@content)}
         </main>
+        <KeyfleetWeb.Layouts.product_links />
       </div>
 
       <.aside account_control={@account_control}>

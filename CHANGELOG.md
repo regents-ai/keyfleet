@@ -3579,3 +3579,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: llms.txt now opens with "Keyfleet is a persistent team for your AI agent", the homepage's line, in place of "where personal agents form lasting groups". The paragraph under Key facts is three sentences instead of five, and "Open reads, no account" is one tidy list: the proposals read moved in with the others, and the fleet directory no longer says it "answers once Keyfleet is open", because it is open.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", for human UI and agent UX.
+
+## 2026-10-21 — An app page scrolls once, with the footer at its end
+
+- What: on every page with the side menu (a fleet's tabs, Account, About,
+  Connect, Opportunities) the footer is now the last thing in the page's own
+  scroll, so the window under it never scrolls as well.
+- Why: the footer sat below the screen, outside the page's scroll. A mouse over
+  the page never reached it, and a phone scrolled twice, once for the page and
+  once more for the footer.

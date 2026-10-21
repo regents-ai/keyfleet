@@ -77,7 +77,8 @@ defmodule KeyfleetWeb.Layouts do
   @doc """
   The footer of the home page and every public page, the same on every Regent site:
   the social links, Buy $REGENT and the site's documents. Below a public page it
-  sits at the foot of the screen however short the page is.
+  sits at the foot of the screen however short the page is; the app's pages
+  (`KeyfleetWeb.Components.Shell`) end with it inside their scrolling page.
   """
   def product_links(assigns) do
     assigns = assign(assigns, :buy_regent, @buy_regent)
