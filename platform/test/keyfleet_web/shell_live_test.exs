@@ -207,6 +207,30 @@ defmodule KeyfleetWeb.ShellLiveTest do
            )
 
     assert has_element?(view, "#account-agents li", "Hermes")
+    assert has_element?(view, "#account-agents li .rg-account__wallet", "0x4444..4444")
+
+    # An agent that never came to Keyfleet has no check-in light; once it has,
+    # Account and the side panel show it.
+    refute has_element?(view, "#account-agents .rg-account__light")
+
+    {:ok, agent} =
+      Keyfleet.Agents.with_pairing(%Keyfleet.Actors.Agent{
+        wallet_address: "0x4444444444444444444444444444444444444444",
+        chain_id: 8453,
+        verification_method: :eoa_recovery,
+        audience: "keyfleet"
+      })
+
+    Keyfleet.Agents.ensure_profile!(%{name: "Astra", declared_harness: "hermes"}, actor: agent)
+
+    {view, _html} = open_account(conn, account)
+
+    for list <- ["#account-agents", "#shell-agents"] do
+      assert has_element?(
+               view,
+               ~s(#{list} li .rg-account__light[data-light="off"][aria-label="Hasn’t checked in"])
+             )
+    end
   end
 
   test "stale wallet evidence cannot retain protected human shell access", %{conn: conn} do

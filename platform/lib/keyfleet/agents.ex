@@ -37,7 +37,7 @@ defmodule Keyfleet.Agents do
     end
   end
 
-  alias Keyfleet.Agents.{Avatar, AvatarBucket, CheckIn, DeleteAvatar}
+  alias Keyfleet.Agents.{Avatar, AvatarBucket, CheckIn, CheckInStatus, DeleteAvatar}
 
   @doc """
   The names agents gave themselves, as `%{wallet => name}`, for the agents
@@ -54,6 +54,37 @@ defmodule Keyfleet.Agents do
         |> Enum.flat_map(&agents_by_wallets!/1)
         |> Map.new(&{&1.wallet_address, &1.name})
     end
+  end
+
+  @doc """
+  Each agent's check-in light, as `%{wallet => %{light: "on" | "late" | "off" |
+  nil, light_label: words | nil}}`, for every wallet in `wallets`: the best
+  light of its check-ins with any fleet (on, then late, then off) and that
+  light's words (`CheckInStatus`). An agent that never came to Keyfleet has no
+  light, both nil.
+  """
+  def check_in_lights(wallets, now) do
+    seen =
+      wallets
+      |> Enum.chunk_every(100)
+      |> Enum.flat_map(&agents_by_wallets!(&1, load: [:check_ins]))
+      |> Map.new(&{&1.wallet_address, best_light(&1.check_ins, now)})
+
+    Map.new(wallets, &{&1, Map.get(seen, &1, %{light: nil, light_label: nil})})
+  end
+
+  @light_rank %{on: 0, late: 1, off: 2}
+
+  defp best_light(check_ins, now) do
+    {light, {_status, label}} =
+      check_ins
+      |> Enum.map(&{CheckInStatus.light(&1, now), CheckInStatus.derive(&1, now)})
+      |> Enum.min_by(
+        fn {light, _status} -> @light_rank[light] end,
+        fn -> {:off, CheckInStatus.derive(nil, now)} end
+      )
+
+    %{light: Atom.to_string(light), light_label: label}
   end
 
   @doc """

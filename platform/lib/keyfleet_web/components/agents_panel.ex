@@ -1,7 +1,8 @@
 defmodule KeyfleetWeb.AgentsPanel do
   @moduledoc """
   The agents a person has paired with their account (`RegentAgents`), on the
-  Account page, in the shared agents list (`Regent.Account.agents`), with Pair
+  Account page, in the shared agents list (`Regent.Account.agents`), each with
+  its check-in light (`Keyfleet.Agents.check_in_lights/2`), with Pair
   New Agent opening the side panel's pairing box (`KeyfleetWeb.PairingBox`),
   and a larger view of one agent with where it has been active across the Regent
   sites, a line for each site and day (`Keyfleet.Agents.ActivityReading`), its
@@ -155,7 +156,7 @@ defmodule KeyfleetWeb.AgentsPanel do
     <div class="account-agents">
       <Regent.Account.agents
         id={@id}
-        agents={rows(@agents, @now)}
+        agents={rows(@agents, @lights, @now)}
         notice={if is_nil(@detail), do: notice_text(@notice)}
       >
         <:about>Once paired, an agent may: {may_words()}.</:about>
@@ -224,20 +225,24 @@ defmodule KeyfleetWeb.AgentsPanel do
     """
   end
 
-  @doc "Each agent as the shared list shows it, newest first as the account reads them."
-  def rows(:unavailable, _now), do: :unavailable
+  @doc """
+  Each agent as the shared list shows it, newest first as the account reads
+  them, with its wallet and its check-in light from `lights`, by wallet.
+  """
+  def rows(:unavailable, _lights, _now), do: :unavailable
 
-  def rows(agents, now) do
+  def rows(agents, lights, now) do
     Enum.map(agents, fn agent ->
-      %{
+      Map.merge(lights[agent.wallet], %{
         id: agent.id,
         name: agent.name,
+        wallet: agent.wallet,
         kind: to_string(agent.harness),
         harness: Harness.label(agent.harness),
         backed: HumanBacking.describe(agent).human_backed,
         last_contact_iso: DateTime.to_iso8601(agent.last_contact_at),
         last_contact: RegentFormat.relative_time(agent.last_contact_at, now)
-      }
+      })
     end)
   end
 
@@ -292,6 +297,12 @@ defmodule KeyfleetWeb.AgentsPanel do
 
   # The open agent is read again with the list, so its dialog closes on its own
   # once the agent is unpaired.
+  # Each agent's check-in light, by wallet (`Keyfleet.Agents.check_in_lights/2`).
+  defp lights(agents, now) when is_list(agents),
+    do: Keyfleet.Agents.check_in_lights(Enum.map(agents, & &1.wallet), now)
+
+  defp lights(:unavailable, _now), do: %{}
+
   defp read_agents(socket) do
     agents =
       case RegentAgents.list_my_agents(actor: socket.assigns.person) do
@@ -299,7 +310,8 @@ defmodule KeyfleetWeb.AgentsPanel do
         {:error, _error} -> :unavailable
       end
 
-    socket = assign(socket, agents: agents, now: DateTime.utc_now())
+    now = DateTime.utc_now()
+    socket = assign(socket, agents: agents, lights: lights(agents, now), now: now)
 
     case socket.assigns.detail do
       %{agent: %{id: id}} -> show_agent(socket, id)

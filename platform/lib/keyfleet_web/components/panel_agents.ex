@@ -2,8 +2,8 @@ defmodule KeyfleetWeb.PanelAgents do
   @moduledoc """
   The three most recently active agents paired with the person's account
   (`RegentAgents`), first in the side panel on every page, in the shared short
-  list (`Regent.Account.agents_brief`): each agent's picture and name over the
-  Regent site it was last active on and how long ago. Pairing is shared by every
+  list (`Regent.Account.agents_brief`): each agent's picture and name over its
+  check-in light and the Regent site it was last active on and how long ago. Pairing is shared by every
   Regent site, so an agent paired on another one is listed too. Manage beside the
   heading opens the agents on Keyfleet's own Account page, where every agent is
   listed.
@@ -66,7 +66,7 @@ defmodule KeyfleetWeb.PanelAgents do
       <Regent.Account.agents_brief
         id={@id}
         manage_href="/account#account-agents"
-        agents={rows(@agents, @last_actions, @now)}
+        agents={rows(@agents, @lights, @last_actions, @now)}
       />
     </div>
     """
@@ -79,8 +79,15 @@ defmodule KeyfleetWeb.PanelAgents do
         {:error, _error} -> :unavailable
       end
 
-    assign(socket, agents: agents, now: DateTime.utc_now())
+    now = DateTime.utc_now()
+    assign(socket, agents: agents, lights: lights(agents, now), now: now)
   end
+
+  # Each agent's check-in light, by wallet (`Keyfleet.Agents.check_in_lights/2`).
+  defp lights(agents, now) when is_list(agents),
+    do: Keyfleet.Agents.check_in_lights(Enum.map(agents, & &1.wallet), now)
+
+  defp lights(:unavailable, _now), do: %{}
 
   defp read_last_actions(%{assigns: %{reading: false, agents: agents}} = socket)
        when is_list(agents),
@@ -116,16 +123,15 @@ defmodule KeyfleetWeb.PanelAgents do
     end
   end
 
-  defp rows(:unavailable, _last_actions, _now), do: :unavailable
+  defp rows(:unavailable, _lights, _last_actions, _now), do: :unavailable
 
-  defp rows(agents, last_actions, now) do
+  defp rows(agents, lights, last_actions, now) do
     agents
     |> shown(last_actions)
     |> Enum.map(fn agent ->
-      Map.merge(
-        %{id: agent.id, name: agent.name, kind: to_string(agent.harness)},
-        last_line(last_actions[agent.id], now)
-      )
+      lights[agent.wallet]
+      |> Map.merge(%{id: agent.id, name: agent.name, kind: to_string(agent.harness)})
+      |> Map.merge(last_line(last_actions[agent.id], now))
     end)
   end
 

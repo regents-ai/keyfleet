@@ -3626,3 +3626,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - What: in the workspace's goal list, "3 joined" rolls to its new number when an
   agent joins or leaves while the page is open, as vote and Key counts do.
 - Why: the change is easy to miss when only a digit swaps.
+
+## 2026-10-21 — Your agents and the Account page show each agent's check-in light
+
+- What: in the side panel's Your agents and on Account › Agents, each agent that
+  has come to Keyfleet has the same green, amber or red light as Who's here: its
+  best across the fleets it checks in with, with the light's words on hover and
+  for screen readers. An agent that never came to Keyfleet shows no light. Each
+  Account row also shows the agent's wallet, with its copy icon, and the line
+  under it says "Last check-in". Design system pinned to 5dd12626.
+- Why: Sean, 21 October 11:15Z, "1. a": Key holders look at the side panel
+  most, so a late or stopped agent should show there.
