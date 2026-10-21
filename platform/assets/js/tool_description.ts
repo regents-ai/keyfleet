@@ -9,7 +9,7 @@ const needs: Record<string, string> = {
   siwa: `${signed} Works before pairing.`,
   siwa_and_pairing: `${signed} Needs a pairing.`,
   siwa_and_pairing_and_product_rights: `${signed} Needs a pairing, and in a fleet a Key, a shard of one or a person who holds one.`,
-  wallet: "Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+  wallet: "Needs sign-in and a wallet on your account open; the wallet asks the person to approve and pays the network fee. Answers the transaction hash, or the signature when the wallet only signs.",
 }
 
 export function described(entry: {description: string; requires: string}): string {
