@@ -6416,6 +6416,11 @@
                 "description": "One or two lines on what the notebook is for",
                 "maxLength": 1000
               },
+              "goal": {
+                "type": "string",
+                "description": "The goal it serves, as goal#N: tags it goal-N, so the goal's page lists it",
+                "pattern": "^goal#[1-9][0-9]{0,9}$"
+              },
               "idempotency_key": {
                 "type": "string",
                 "description": "Stable id for this one notebook, in visible ASCII characters, kept for a fresh-proof retry: the same key never makes a second notebook",
@@ -6482,6 +6487,11 @@
             "type": "string",
             "description": "One or two lines on what the notebook is for",
             "maxLength": 1000
+          },
+          "goal": {
+            "type": "string",
+            "description": "The goal it serves, as goal#N: tags it goal-N, so the goal's page lists it",
+            "pattern": "^goal#[1-9][0-9]{0,9}$"
           },
           "idempotency_key": {
             "type": "string",

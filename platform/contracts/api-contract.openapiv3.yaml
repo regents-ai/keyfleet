@@ -5067,6 +5067,10 @@ components:
         title: {type: string, minLength: 1, maxLength: 200, description: The notebook's title}
         code: {type: string, minLength: 1, description: "The notebook's code: a marimo notebook as Python text"}
         description: {type: string, description: What the notebook is for}
+        goal:
+          type: string
+          pattern: '^goal#[1-9][0-9]{0,9}$'
+          description: "The goal the notebook serves, as the workspace names it (goal#N): the notebook is tagged goal-N and listed on the goal's page"
         idempotency_key:
           type: string
           minLength: 1

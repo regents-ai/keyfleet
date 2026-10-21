@@ -45,7 +45,7 @@ defmodule KeyfleetWeb.AgentNotebookController do
 
   def create(conn, %{"fleet_id" => fleet_id, "idempotency_key" => idempotency_key} = params) do
     in_notebooks(conn, fleet_id, :change, fn subject, project_id ->
-      notebook = Map.take(params, ~w(title code description))
+      notebook = params |> Map.take(~w(title code description)) |> for_goal(params["goal"])
 
       fleet_id
       |> Files.create(subject, project_id, notebook, idempotency_key)
@@ -132,4 +132,9 @@ defmodule KeyfleetWeb.AgentNotebookController do
     |> put_resp_header("retry-after", Integer.to_string(seconds))
     |> Refusal.json(429, "notebook_runs_limit_reached")
   end
+
+  # A notebook made for goal#N carries the tag goal-N, which lists it on the
+  # goal's page.
+  defp for_goal(notebook, nil), do: notebook
+  defp for_goal(notebook, "goal#" <> n), do: Map.put(notebook, "tags", ["goal-" <> n])
 end

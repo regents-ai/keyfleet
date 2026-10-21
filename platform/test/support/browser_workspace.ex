@@ -108,12 +108,20 @@ defmodule Keyfleet.BrowserWorkspace do
   defp route("DELETE", ["api", "v1", "admin", "users", _user, "suspension"], conn, _request),
     do: json(conn, 200, %{})
 
-  # Notebooks made here carry no tags, so none is listed under one.
+  # A tag lists the notebooks tagged with it, or with a tag under it.
   defp route("GET", ["api", "v1", "projects", @project, "notebooks"], conn, request) do
+    notebooks = Agent.get(request.state, & &1.notebooks)
+
     items =
-      if Map.has_key?(conn.query_params, "tag"),
-        do: [],
-        else: Agent.get(request.state, & &1.notebooks)
+      case conn.query_params do
+        %{"tag" => tag} ->
+          Enum.filter(notebooks, fn notebook ->
+            Enum.any?(notebook.tags, &(&1 == tag or String.starts_with?(&1, tag <> "/")))
+          end)
+
+        _all ->
+          notebooks
+      end
 
     json(conn, 200, %{items: Enum.map(items, &Map.delete(&1, :meta))})
   end
@@ -125,6 +133,7 @@ defmodule Keyfleet.BrowserWorkspace do
       id: "nb-" <> random(16),
       title: title,
       description: fields["description"] || "",
+      tags: fields["tags"] || [],
       created_at: DateTime.to_iso8601(DateTime.utc_now()),
       meta: %{author: request.subject}
     }

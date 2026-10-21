@@ -250,6 +250,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "title" => "Log",
        "code" => "import marimo",
        "description" => "d",
+       "goal" => "goal#1",
        "idempotency_key" => "n-1"
      }},
     {"POST", @notebook_files <> "list", [], %{"path" => "log", "cursor" => "c"}},

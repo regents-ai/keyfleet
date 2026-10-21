@@ -82,6 +82,7 @@ test("one member's agent sets a goal and its task, writes and runs a notebook, s
     title: "Boat count",
     code: "import marimo\napp = marimo.App()\n",
     description: "Counts the boats in the harbour.",
+    goal: made.goal,
     idempotency_key: randomUUID(),
   })
   made.notebook = notebook.notebook_id

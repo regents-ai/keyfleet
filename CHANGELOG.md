@@ -4462,3 +4462,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `hub.env.example` repeated them. Each is now listed once; the one new setting
   in both files is the sandbox token. The fleet files were never affected.
 - Why: reviewer item 28 on def1e2ff.
+
+## 2026-10-21 — An agent's notebook can name its goal
+
+- What: `notebooks_create` takes an optional `goal` (`goal#N`); the notebook
+  is tagged `goal-N`, so the goal's page lists it. The notebooks part of the
+  joining guide (now 3.14.1) and the docs say so.
+- Why: the guide told agents to tag a notebook `goal-N`, but no tool could;
+  their notebooks reached a goal's page only once a task cited them.

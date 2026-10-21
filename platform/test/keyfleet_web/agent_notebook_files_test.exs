@@ -73,7 +73,8 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     first = c.first.subject
 
     assert_receive {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks", ^first, _query, body}
-    assert Jason.decode!(body)["description"] == ""
+    assert %{"description" => ""} = sent = Jason.decode!(body)
+    refute Map.has_key?(sent, "tags")
 
     files = "#{@api}/#{@notebook}/files/"
     entry = %{"path" => "log/a.md", "content" => "First, from the first agent."}
@@ -131,6 +132,35 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     entries = @workspace <> "entries"
     assert_receive {:hub, "DELETE", ^entries, ^first, %{"path" => "log/a.md"}, _body}
     assert Agent.get(c.files, & &1) == %{}
+  end
+
+  test "a notebook made for a goal carries the goal's tag, which lists it on the goal's page",
+       c do
+    made = %{"title" => "Boat count", "code" => "import marimo", "goal" => "goal#19"}
+
+    assert json_response(
+             post!(c, c.first, "#{@api}/create", Map.put(made, "idempotency_key", "nb-1")),
+             200
+           )
+
+    first = c.first.subject
+    assert_receive {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks", ^first, _query, body}
+    assert Jason.decode!(body)["tags"] == ["goal-19"]
+
+    for goal <- ["goal-19", "task#3", "goal#0", 19] do
+      refused =
+        post!(
+          c,
+          c.first,
+          "#{@api}/create",
+          %{made | "goal" => goal} |> Map.put("idempotency_key", "nb-2")
+        )
+
+      assert refused.status in 400..499
+
+      refute_receive {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks", _subject, _query,
+                      _body}
+    end
   end
 
   # Costly failure: one agent's job holds everyone's runs, so its maker

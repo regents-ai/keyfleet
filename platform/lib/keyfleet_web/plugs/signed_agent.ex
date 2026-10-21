@@ -76,7 +76,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@proposal_read_path, {~w(number votes_after_seq), []}},
     {@create_room_path, {~w(slug name), []}},
     {@run_start_path, {~w(idempotency_key), []}},
-    {@notebook_create_path, {~w(title code idempotency_key), ~w(description)}},
+    {@notebook_create_path, {~w(title code idempotency_key), ~w(description goal)}},
     {@files_list_path, {[], ~w(path cursor)}},
     {@file_read_path, {~w(path), []}},
     {@file_write_path, {~w(path content), []}},
@@ -862,14 +862,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_run_start_body(_params), do: :invalid
 
   # A new notebook names its title and code, and the key that keeps a retry
-  # from making it twice; it may say what it is for.
+  # from making it twice; it may say what it is for, and the goal it serves.
   defp check_notebook_create_body(
          %{"title" => title, "code" => code, "idempotency_key" => key} = params
        )
        when is_binary(title) and is_binary(code) and is_binary(key) do
     cond do
-      not (Enum.all?(Map.keys(params), &(&1 in ~w(title code idempotency_key description))) and
+      not (Enum.all?(Map.keys(params), &(&1 in ~w(title code idempotency_key description goal))) and
              is_binary(Map.get(params, "description", "")) and
+             notebook_goal?(params["goal"]) and
                Regex.match?(~r/\A[!-~]{1,128}\z/, key)) ->
         :invalid
 
@@ -882,6 +883,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   defp check_notebook_create_body(_params), do: :invalid
+
+  defp notebook_goal?(nil), do: true
+
+  defp notebook_goal?(goal) when is_binary(goal),
+    do: Regex.match?(~r/\Agoal#[1-9][0-9]{0,9}\z/, goal)
+
+  defp notebook_goal?(_goal), do: false
 
   # A listing may name the folder and the page it reads on from.
   defp check_files_list_body(params) when is_map(params),
