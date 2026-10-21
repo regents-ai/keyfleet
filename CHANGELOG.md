@@ -4219,3 +4219,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   /classic/1/rooms, offers "Go to Classic #1" instead of the homepage; the
   homepage is among the links below it.
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — A Key's OpenSea link is a whole thumb tall on a phone
+- What: on a Key's page at phone width, the holder's OpenSea link is 44px
+  tall, level with the address's icons (it was 25px). A browser check at
+  390px holds it there.
+- Why: the phone pass of member pages asked for tap targets of at least
+  44px; Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".

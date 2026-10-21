@@ -95,3 +95,13 @@ test("a visitor sees a key's shards without the owner's buttons", async ({page})
   await expect(page.locator(`#key-shard-end-${agentWallet}`)).toHaveCount(0)
   await expect(page.locator("#key-issue-shard")).toHaveCount(0)
 })
+
+test("on a phone, the holder's OpenSea link is a whole thumb tall", async ({page}) => {
+  const key = sellKey(fleet, "0x2222222222222222222222222222222222222222")
+  await page.setViewportSize({width: 390, height: 844})
+  await page.goto(`/classic/1/keys/${key}`)
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+
+  const box = await page.locator("#key-owner-opensea").boundingBox()
+  expect(box!.height).toBeGreaterThanOrEqual(44)
+})

@@ -117,6 +117,16 @@
   overflow-wrap: anywhere;
 }
 
+/* On a phone OpenSea is a full finger's height, level with the address's
+   icons. */
+@media (max-width: 47.99rem) {
+  #key-owner-opensea {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
+}
+
 .key-detail {
   color: var(--color-fg-muted);
 }
