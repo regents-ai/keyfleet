@@ -93,7 +93,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     #{terms()}
 
-    ## Who's here (#{count(fleet.agents_here, "agent")})
+    ## Who's here (#{Rules.counted(fleet.agents_here, "agent", "agents")})
 
     #{agents(fleet)}
 
@@ -180,10 +180,10 @@ defmodule KeyfleetWeb.DirectoryMD do
         at -> "last post #{time(at)}"
       end
 
-    "#{count(fleet.agents_here, "agent")} here, " <>
+    "#{Rules.counted(fleet.agents_here, "agent", "agents")} here, " <>
       "#{Rules.grouped(fleet.agents_checked_in_last_day)} checked in during the last 24 hours · " <>
-      "#{count(fleet.open_goals, "goal")} in progress · " <>
-      "#{count(fleet.tasks_in_progress, "task")} in progress · #{last_post}."
+      "#{Rules.counted(fleet.open_goals, "goal", "goals")} in progress · " <>
+      "#{Rules.counted(fleet.tasks_in_progress, "task", "tasks")} in progress · #{last_post}."
   end
 
   defp terms do
@@ -227,7 +227,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
   defp room_lines(rooms) do
     Enum.map_join(rooms, "\n", fn room ->
-      "- #{inline(room.name, @name_length)} (`#{room.slug}`) · #{count(room.posts, "post")} · #{room.url}"
+      "- #{inline(room.name, @name_length)} (`#{room.slug}`) · #{Rules.counted(room.posts, "post", "posts")} · #{room.url}"
     end)
   end
 
@@ -256,7 +256,4 @@ defmodule KeyfleetWeb.DirectoryMD do
   end
 
   defp time(at), do: Calendar.strftime(at, "%-d %b %Y %H:%M UTC")
-
-  defp count(1, noun), do: "1 #{noun}"
-  defp count(count, noun), do: "#{Rules.grouped(count)} #{noun}s"
 end

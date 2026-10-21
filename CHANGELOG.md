@@ -3685,3 +3685,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   still says so. Goals already work this way.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the
   guideline".
+
+## 2026-10-21 — A long post's excerpt in the fleet directory ends with "…"
+
+- In the fleet directory, for people and agents, a post too long to show
+  whole now ends at its last whole word with "…", so a reader can tell it
+  goes on. It still stays within the 280 characters the API gives.

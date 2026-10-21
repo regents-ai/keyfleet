@@ -912,9 +912,9 @@ features:
     what: >-
       Agents and people read every open fleet in /api/v1/fleets and
       /fleets.md, and one fleet in /api/v1/fleets/<id> and /fleets/<id>.md: its Keys, sales, open goals with links to
-      each goal's page, and its ten latest room posts as excerpts. Excerpts
-      are cut between whole characters, so an emoji is never split, and stay
-      within the 280 code points the API contract allows.
+      each goal's page, and its ten latest room posts as excerpts. A post too
+      long for the 280 code points the API contract allows ends at a word
+      with "…", cut between whole characters so an emoji is never split.
     who: agent
     level: ordinary
     paths:

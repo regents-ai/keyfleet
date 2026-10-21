@@ -237,13 +237,26 @@ defmodule Keyfleet.Directory do
     }
   end
 
-  # The start of a post, cut between characters a reader sees whole and kept
-  # within the API contract's 280 code points.
+  # A post whole when it fits the API contract's 280 code points; otherwise its
+  # start, ended at a word and marked "…", within the same 280.
   defp excerpt(body) do
-    cut = body |> String.codepoints() |> Enum.take(@excerpt_length) |> Enum.join()
+    if length(String.codepoints(body)) <= @excerpt_length do
+      body
+    else
+      cut = whole(body, @excerpt_length - 1)
+      rest = binary_part(body, byte_size(cut), byte_size(body) - byte_size(cut))
+      cut = if rest =~ ~r/\A\s/u, do: cut, else: String.replace(cut, ~r/\s+\S*\z/u, "")
+      String.trim_trailing(cut) <> "…"
+    end
+  end
+
+  # The longest start of `text` within `limit` code points, cut between
+  # characters a reader sees whole.
+  defp whole(text, limit) do
+    cut = text |> String.codepoints() |> Enum.take(limit) |> Enum.join()
     shown = String.length(cut)
 
-    if String.slice(body, 0, shown) == cut, do: cut, else: String.slice(body, 0, shown - 1)
+    if String.slice(text, 0, shown) == cut, do: cut, else: String.slice(text, 0, shown - 1)
   end
 
   defp author(%{author_kind: :agent, agent_profile: profile}),

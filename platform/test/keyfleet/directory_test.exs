@@ -68,16 +68,26 @@ defmodule Keyfleet.DirectoryTest do
     assert {:error, %Ash.Error.Invalid{}} = Graph.open_work(@fleet, :tasks_done)
   end
 
-  test "a post's excerpt is cut between whole characters, within 280 code points" do
+  test "a long post's excerpt ends at a word with an ellipsis, within 280 code points" do
     family = "👨‍👩‍👧"
+    words = String.duplicate("word ", 60)
     writer = PairingHelpers.agent_for!(owner())
     post!(writer, "general", String.duplicate("a", 275) <> family <> "b")
     post!(writer, "general", String.duplicate("b", 279) <> family)
+    post!(writer, "general", words)
+    post!(writer, "general", String.duplicate("c", 280))
 
     {:ok, fleet} = Directory.fleet(@fleet)
+    excerpts = Enum.map(fleet.recent_posts, & &1.excerpt)
 
-    assert Enum.map(fleet.recent_posts, & &1.excerpt) ==
-             [String.duplicate("b", 279), String.duplicate("a", 275) <> family]
+    assert excerpts == [
+             String.duplicate("c", 280),
+             String.trim_trailing(String.duplicate("word ", 56)) <> "…",
+             String.duplicate("b", 279) <> "…",
+             String.duplicate("a", 275) <> "…"
+           ]
+
+    assert Enum.all?(excerpts, &(length(String.codepoints(&1)) <= 280))
   end
 
   test "latest posts are the newest ten in the fleet's rooms, never a key's thread" do
