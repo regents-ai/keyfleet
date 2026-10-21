@@ -4002,3 +4002,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 ## 2026-10-21 — Each area's browser tools sit together
 - What: the tool list (the docs and llms.txt table, the manifest, and the order a page offers them) now runs: start here (about, docs, agents_whoami, agents_status, prepare_agent_request), the public fleet reads, your profile and account, then rooms, walls, mutes, direct messages, polls, the workspace, code, notebooks and shards, and last the proposal and wallet tools. Nothing else about any tool changed.
 - Why: the coordinator's ask for the agent lane, "WebMCP tool names and descriptions (short, consistent …)", and Sean 10:16Z "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — The votes page reads its polls with the membership it read
+
+- What: a fleet's votes page reads its list of polls, a poll, and when the
+  reader last started one with the membership the page already read, instead
+  of reading it again for each. Nothing on screen changes.
+- Why: Sean, 21 Oct: "make it a modern and well-engineered elixir site".

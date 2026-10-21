@@ -636,17 +636,18 @@ defmodule KeyfleetWeb.PollsLive do
         })
 
       poll_id ->
-        poll_page(page, actor)
+        poll_page(page, ShellLive.reads_as(socket, fleet.id))
 
       true ->
-        list_page(page, actor)
+        list_page(page, ShellLive.reads_as(socket, fleet.id))
     end
   end
 
-  defp list_page(page, actor) do
-    listed = Polls.list_polls!(page.fleet_id, actor: actor)
+  # The polls are read with the class the page already read (`read_as`).
+  defp list_page(page, read_as) do
+    listed = Polls.list_polls!(page.fleet_id, read_as)
     agents = WorkspacePage.agent_names(Enum.map(listed, & &1.acting_agent_wallet))
-    last = page.voter && Polls.last_started!(page.fleet_id, page.voter.key, actor: actor)
+    last = page.voter && Polls.last_started!(page.fleet_id, page.voter.key, read_as)
 
     Map.merge(page, %{
       kind: :list,
@@ -655,8 +656,8 @@ defmodule KeyfleetWeb.PollsLive do
     })
   end
 
-  defp poll_page(page, actor) do
-    case Polls.get_poll!(page.fleet_id, page.poll_id, actor: actor) do
+  defp poll_page(page, read_as) do
+    case Polls.get_poll!(page.fleet_id, page.poll_id, read_as) do
       nil ->
         Map.merge(page, %{kind: :poll, poll: nil, my_vote: nil, votes: []})
 
@@ -665,7 +666,7 @@ defmodule KeyfleetWeb.PollsLive do
 
         page
         |> Map.merge(%{kind: :poll, poll: shown(poll, page.now, agents)})
-        |> Map.merge(holders(page.voter, actor, page.fleet_id, page.poll_id))
+        |> Map.merge(holders(page.voter, read_as[:actor], page.fleet_id, page.poll_id))
     end
   end
 
