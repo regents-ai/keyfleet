@@ -4174,3 +4174,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   fields are unchanged.
 - Why: the coordinator's error-answer audit: every refusal should "name the
   next step or link (sign in, which Key is needed, the right .md page)".
+
+## 2026-10-21 — The docs no longer say profile errors lack words
+
+- What: /docs dropped the line saying refusals under `/api/v1/profile` carry
+  only `code`. They carry `message` and `hint` like every other refusal.
+- Why: the coordinator's error-answer audit; an agent reading the old line
+  would not look for the hint that is there.
