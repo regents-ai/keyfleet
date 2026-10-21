@@ -68,14 +68,15 @@ defmodule Keyfleet.Graph.ClusterTest do
   end
 
   # During a release the site machine can run code the graph machine does not
-  # have yet, or no longer has. A check written in such code cannot run there,
-  # so the write answers try again and nothing is written.
+  # have yet, or no longer has. A check named in such code cannot run there,
+  # so the write answers try again and nothing is written. This test module is
+  # loaded only on the site machine.
   test "a write whose check the graph machine's code lacks answers try again and writes nothing",
        ctx do
     {_peer, _graph_node} = GraphPeer.start(ctx.graph)
     await_ready()
 
-    test_only_check = fn _within -> {:error, :never_runs_on_the_graph_machine} end
+    test_only_check = {__MODULE__, :never_runs_on_the_graph_machine, []}
 
     assert Writer.command(@fleet, "create", @note, test_only_check) == {:error, :unavailable}
 
@@ -84,6 +85,9 @@ defmodule Keyfleet.Graph.ClusterTest do
 
     refute Enum.any?(events, &(&1["type"] == "object.created"))
   end
+
+  @doc false
+  def never_runs_on_the_graph_machine(_within), do: {:error, :ran_on_the_graph_machine}
 
   defp await(condition, attempts \\ 750) do
     cond do

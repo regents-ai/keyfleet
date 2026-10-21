@@ -101,17 +101,24 @@ defmodule Keyfleet.Notebooks.Files do
   else's (`Keyfleet.Notebooks.Makers`).
   """
   def write(fleet_id, subject, project_id, notebook_id, path, content, :add) do
-    with {:ok, item} <- put(fleet_id, subject, project_id, notebook_id, path, content, true),
-         :ok <- Makers.record(fleet_id, notebook_id, Makers.file_key(path), subject),
+    with {:ok, key} <- file_key(path),
+         {:ok, item} <- put(fleet_id, subject, project_id, notebook_id, path, content, true),
+         :ok <- Makers.record(fleet_id, notebook_id, key, subject),
          do: {:ok, item}
   end
 
   def write(fleet_id, subject, project_id, notebook_id, path, content, :write) do
-    case Makers.overwrite(fleet_id, subject, project_id, notebook_id, Makers.file_key(path)) do
-      :ok -> put(fleet_id, subject, project_id, notebook_id, path, content, false)
-      {:error, :not_found} -> {:error, :file_not_found}
-      {:error, reason} -> {:error, reason}
+    with {:ok, key} <- file_key(path) do
+      case Makers.overwrite(fleet_id, subject, project_id, notebook_id, key) do
+        :ok -> put(fleet_id, subject, project_id, notebook_id, path, content, false)
+        {:error, :not_found} -> {:error, :file_not_found}
+        {:error, reason} -> {:error, reason}
+      end
     end
+  end
+
+  defp file_key(path) do
+    with :error <- Makers.file_key(path), do: {:error, :refused}
   end
 
   defp put(fleet_id, subject, project_id, notebook_id, path, content, create) do

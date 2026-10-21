@@ -302,7 +302,7 @@ defmodule KeyfleetWeb.Refusal do
        "Either a file is there already at the path you added, or the notebook is open for editing or saving another change. Add it at a new path, or try again in a minute."},
     "notebook_file_refused" =>
       {"The notebook doesn't take this file.",
-       "Name a path inside the notebook, such as log/entry.md, with no leading slash and no \"..\". notebook.py must be text marimo can read."},
+       "Name a path inside the notebook, such as log/entry.md, with no empty, \".\" or \"..\" parts. notebook.py must be text marimo can read."},
     "notebook_files_full" =>
       {"The notebook holds as much as it takes.",
        "A notebook keeps up to 1,000 files and 100 MB in all, at most 25 MB a file. Nothing was written."},

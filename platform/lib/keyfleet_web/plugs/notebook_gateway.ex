@@ -389,14 +389,19 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  # A saved output's address is shared in the workspace, so someone without a
+  # The notebooks' start page, a notebook's page and a saved output's address
+  # (`Notebooks.destination?/1`) are shared as links, so someone without a
   # notebook sign-in who opens one goes to Keyfleet, which signs them in to the
   # fleet's notebooks if they hold one of its keys and brings them back here.
-  defp sign_in(%Plug.Conn{method: method, request_path: "/results/" <> _ = path} = conn, fleet_id)
+  defp sign_in(%Plug.Conn{method: method, request_path: path} = conn, fleet_id)
        when method in ["GET", "HEAD"] do
-    conn
-    |> put_resp_header("location", open_url(fleet_id, path))
-    |> send_resp(303, "")
+    if Notebooks.destination?(path) do
+      conn
+      |> put_resp_header("location", open_url(fleet_id, path))
+      |> send_resp(303, "")
+    else
+      Refusal.json(conn, 401, "notebooks_sign_in")
+    end
   end
 
   defp sign_in(conn, _fleet_id), do: Refusal.json(conn, 401, "notebooks_sign_in")
@@ -754,17 +759,15 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # A new file is kept as its writer's; writing over one is its maker's.
   defp file_write(conn, [fleet_id, subject, _project_id, notebook_id] = ids, request) do
     case workspace_query(conn) do
-      {:ok, path, true} ->
-        key = Makers.file_key(path)
-
+      {:ok, key, true} ->
         {:ok, request,
          fn
            200 -> Makers.record(fleet_id, notebook_id, key, subject)
            _status -> :ok
          end}
 
-      {:ok, path, false} ->
-        only_maker(:overwrite, ids, [Makers.file_key(path)], request)
+      {:ok, key, false} ->
+        only_maker(:overwrite, ids, [key], request)
 
       :error ->
         {:error, :invalid}
@@ -772,26 +775,22 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   defp folder_made([fleet_id, subject, _project_id, notebook_id], {_headers, body} = request) do
-    case Jason.decode(body) do
-      {:ok, %{"path" => path}} when is_binary(path) ->
-        key = Makers.folder_key(path)
-
-        {:ok, request,
-         fn
-           201 -> Makers.record(fleet_id, notebook_id, key, subject)
-           _status -> :ok
-         end}
-
-      _unreadable ->
-        {:ok, request, &done/1}
+    with {:ok, %{"path" => path}} when is_binary(path) <- Jason.decode(body),
+         {:ok, key} <- Makers.folder_key(path) do
+      {:ok, request,
+       fn
+         201 -> Makers.record(fleet_id, notebook_id, key, subject)
+         _status -> :ok
+       end}
+    else
+      _unreadable -> {:error, :invalid}
     end
   end
 
   # Removing a path removes everything under it, so it is only for whoever
   # made all of that.
   defp removal(conn, [fleet_id, _subject, _project_id, notebook_id] = ids, request) do
-    with {:ok, path, false} <- workspace_query(conn),
-         key = Makers.file_key(path),
+    with {:ok, key, false} <- workspace_query(conn),
          {:ok, request, _done} <- only_maker(:removal, ids, [key], request) do
       {:ok, request,
        fn
@@ -804,14 +803,21 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  # The one `path` a workspace request names, and whether it only adds a new
-  # file: `create`, "true" or "false", named at most once.
+  # The key of the one `path` a workspace request names (`Makers.file_key/1`),
+  # and whether it only adds a new file: `create`, "true" or "false", named at
+  # most once.
   defp workspace_query(conn) do
     pairs = conn.query_string |> URI.query_decoder() |> Enum.to_list()
 
-    case {for({"path", path} <- pairs, do: path), for({"create", create} <- pairs, do: create)} do
-      {[path], []} -> {:ok, path, false}
-      {[path], [create]} when create in ["true", "false"] -> {:ok, path, create == "true"}
+    with {[path], creates} <-
+           {for({"path", path} <- pairs, do: path), for({"create", create} <- pairs, do: create)},
+         {:ok, key} <- Makers.file_key(path) do
+      case creates do
+        [] -> {:ok, key, false}
+        [create] when create in ["true", "false"] -> {:ok, key, create == "true"}
+        _creates -> :error
+      end
+    else
       _query -> :error
     end
   rescue
@@ -853,6 +859,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         conn -> prepend_resp_headers(conn, [{name, value}])
       end
 
+    conn = sandbox_saved_page(conn)
+
     cond do
       conn.method == "HEAD" or response.status in [204, 304] ->
         Req.cancel_async_response(response)
@@ -880,6 +888,19 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
       _other ->
         false
+    end
+  end
+
+  # A notebook's page routes answer with a page its members wrote, so it runs
+  # in a sandbox of its own, as a saved output's address does, and cannot act
+  # as whoever opened it on the fleet's notebook host.
+  defp sandbox_saved_page(conn) do
+    case saved_page_notebook(conn.path_info) do
+      {:ok, _notebook_id, _source_header} ->
+        prepend_resp_headers(conn, [{"content-security-policy", "sandbox allow-scripts"}])
+
+      :error ->
+        conn
     end
   end
 

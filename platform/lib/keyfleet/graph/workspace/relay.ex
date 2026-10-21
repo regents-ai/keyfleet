@@ -42,9 +42,8 @@ defmodule Keyfleet.Graph.Workspace.Relay do
 
     body = Map.take(arguments, Keyword.fetch!(opts, :body))
 
-    authorize = fn within ->
-      KeyActor.command(context.actor, fleet_id, arguments.as_key, arguments.command_id, within)
-    end
+    authorize =
+      {KeyActor, :command, [context.actor, fleet_id, arguments.as_key, arguments.command_id]}
 
     fleet_id |> Writer.command(op, body, authorize) |> write_reply(fleet_id, context.actor)
   end

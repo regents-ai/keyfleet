@@ -304,10 +304,7 @@ defmodule Keyfleet.Graph.WriterTest do
 
     pending =
       Task.async(fn ->
-        Writer.command(fleet, "create", @note, fn within ->
-          send(test, {:asked, self(), within})
-          {:error, :key_changed_hands}
-        end)
+        Writer.command(fleet, "create", @note, {__MODULE__, :ask_then_refuse, [test]})
       end)
 
     await(fn -> Process.info(writer, :message_queue_len) == {:message_queue_len, 1} end)
@@ -331,11 +328,7 @@ defmodule Keyfleet.Graph.WriterTest do
     await_ready(fleet)
     writer = writer(fleet)
 
-    check = fn _within ->
-      :ok = fn -> :ok end |> Task.async() |> Task.await()
-      {:ok, command("linked-1")}
-    end
-
+    check = {__MODULE__, :admit_after_task, ["linked-1"]}
     assert {:ok, %{"replayed" => false}} = Writer.command(fleet, "create", @note, check)
     assert {:ok, _hello} = Writer.request(fleet, "hello", %{})
     assert writer(fleet) == writer
@@ -348,7 +341,7 @@ defmodule Keyfleet.Graph.WriterTest do
     await_ready(fleet)
     writer = writer(fleet)
 
-    pool_down = fn _within -> exit({:noproc, {DBConnection.Holder, :checkout, []}}) end
+    pool_down = {__MODULE__, :pool_down, []}
 
     log =
       ExUnit.CaptureLog.capture_log(fn ->
@@ -374,7 +367,7 @@ defmodule Keyfleet.Graph.WriterTest do
     await_ready(fleet)
     writer = writer(fleet)
 
-    faulty = fn _within -> raise ArgumentError, "no such level" end
+    faulty = {__MODULE__, :faulty, []}
 
     log =
       ExUnit.CaptureLog.capture_log(fn ->
@@ -579,7 +572,29 @@ defmodule Keyfleet.Graph.WriterTest do
     port
   end
 
-  defp authorized(id), do: fn _within -> {:ok, command(id)} end
+  defp authorized(id), do: {__MODULE__, :admit, [id]}
+
+  # Ownership checks the writer calls, as it calls `KeyActor.command/5`.
+  @doc false
+  def admit(id, _within), do: {:ok, command(id)}
+
+  @doc false
+  def ask_then_refuse(test, within) do
+    send(test, {:asked, self(), within})
+    {:error, :key_changed_hands}
+  end
+
+  @doc false
+  def admit_after_task(id, _within) do
+    :ok = fn -> :ok end |> Task.async() |> Task.await()
+    {:ok, command(id)}
+  end
+
+  @doc false
+  def pool_down(_within), do: exit({:noproc, {DBConnection.Holder, :checkout, []}})
+
+  @doc false
+  def faulty(_within), do: raise(ArgumentError, "no such level")
 
   # Microseconds for one plain write to be answered.
   defp timed_note(fleet, id) do

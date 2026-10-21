@@ -85,13 +85,22 @@ defmodule Keyfleet.Notebooks.Makers do
 
   @doc """
   The path the hub keeps a workspace file under, for the `path` a request
-  names: without its one leading `/`.
+  names: `{:ok, key}`, the path without its one leading `/`, or `:error` for
+  any other spelling of a path (an empty, `.` or `..` part, a backslash or a
+  NUL), so each file has one key and one maker.
   """
-  def file_key("//" <> _ = path), do: path
-  def file_key(path), do: String.replace_prefix(path, "/", "")
+  def file_key("/" <> path), do: key(path)
+  def file_key(path), do: key(path)
 
-  @doc "The path the hub keeps a folder under: without one leading and one trailing `/`."
-  def folder_key(path), do: path |> file_key() |> String.replace_suffix("/", "")
+  @doc "The path the hub keeps a folder under, as `file_key/1`, with one trailing `/` allowed."
+  def folder_key(path), do: path |> String.replace_suffix("/", "") |> file_key()
+
+  defp key(path) do
+    if String.valid?(path) and not String.contains?(path, ["\\", <<0>>]) and
+         Enum.all?(String.split(path, "/"), &(&1 not in ["", ".", ".."])),
+       do: {:ok, path},
+       else: :error
+  end
 
   @doc "Whether `subject` may write over the file at `key`: its maker may."
   def overwrite(fleet_id, subject, project_id, notebook_id, key) do

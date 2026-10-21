@@ -626,7 +626,10 @@ defmodule Keyfleet.Graph.ProjectionTest do
   end
 
   defp command(op, body, id),
-    do: Writer.command(@fleet, op, body, fn _within -> {:ok, stamped(id)} end)
+    do: Writer.command(@fleet, op, body, {__MODULE__, :admit, [id]})
+
+  @doc false
+  def admit(id, _within), do: {:ok, stamped(id)}
 
   defp stamped(id) do
     %{

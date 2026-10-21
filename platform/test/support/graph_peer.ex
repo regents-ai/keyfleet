@@ -49,7 +49,10 @@ defmodule Keyfleet.GraphPeer do
   A write's ownership check that admits it as `id`, from code both machines
   share, as two machines on one release do.
   """
-  def authorized(id), do: fn _within -> {:ok, command(id)} end
+  def authorized(id), do: {__MODULE__, :admit, [id]}
+
+  @doc false
+  def admit(id, _within), do: {:ok, command(id)}
 
   @doc false
   # On the graph machine: its writers outlive the call that started them.

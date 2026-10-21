@@ -3696,3 +3696,22 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: a feed quote cut after "hassle." reads "hassle…", not "hassle.…".
 - Why: a stop followed by "…" reads as a slip.
+
+## 2026-10-21 — Task board writes keep working while a release is under way
+
+- What: a write to a fleet's task board names the check of who may make it,
+  instead of carrying it as a piece of code, so writes no longer all answer
+  "try again" while a release has the site and the board on different code.
+  An unused branch for old code-store passwords is gone.
+- Why: found in the review of the notebooks, task board and Git work.
+
+## 2026-10-21 — Notebook links sign people in; notebook pages run walled off
+
+- What: a person who isn't signed in to a fleet's notebooks and opens a link to
+  them, a notebook or a saved result goes to Keyfleet to sign in, then back.
+  Pages a notebook writes run walled off from the person viewing them, as saved
+  results already did. A file path spelled two ways (`a//b`, `./b`, `b/`) is
+  refused, so each file has one maker; the refusal now says so instead of "no
+  leading slash", which was wrong.
+- Why: found in the review of the notebooks, task board and Git work, and in
+  testing the notebooks live.

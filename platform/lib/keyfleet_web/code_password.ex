@@ -50,8 +50,6 @@ defmodule KeyfleetWeb.CodePassword do
     end
   end
 
-  defp actor(_old_or_invalid_password), do: :error
-
   defp holder(actor, fleet_id) do
     case Code.holder(actor, fleet_id) do
       {:ok, nil} -> {:error, :not_holder}

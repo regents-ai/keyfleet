@@ -51,7 +51,7 @@ defmodule Keyfleet.Graph.Writer do
   @host_env [{~c"LANG", ~c"C.UTF-8"}]
 
   @type reply :: {:ok, map()} | {:error, map() | :indeterminate | :unavailable | Exception.t()}
-  @type authorize :: (non_neg_integer() -> {:ok, map()} | {:error, Exception.t()})
+  @type authorize :: {module(), atom(), [term()]}
 
   def child_spec(opts) do
     %{id: {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, start: {__MODULE__, :start_link, [opts]}}
@@ -75,9 +75,11 @@ defmodule Keyfleet.Graph.Writer do
   @doc """
   Sends a write to the fleet's graph on behalf of a member.
 
-  `authorize` runs inside the writer when the write's turn comes, just before
-  the write reaches the host, and is given the milliseconds it may spend. It
-  answers `{:ok, command}`, the command's `:id`, `:principal` and `:auth` as
+  `authorize` is `{module, function, args}`, called inside the writer when the
+  write's turn comes, just before the write reaches the host, with the
+  milliseconds it may spend added to `args`. It is a named function, not an
+  anonymous one, so a write still works while a release has the site and graph
+  machines on different code. It answers `{:ok, command}`, the command's `:id`, `:principal` and `:auth` as
   they stand at that moment, or `{:error, error}`, which
   is returned as it is with nothing sent; one that exits or raises is
   answered `{:error, :unavailable}`, also with nothing sent.
@@ -171,8 +173,8 @@ defmodule Keyfleet.Graph.Writer do
   # A database pool that is down or out of time exits its caller, and a fault
   # in the check raises; either would stop the writer, so a check that exits
   # or raises is answered as unavailable, with nothing sent.
-  defp check(authorize, state) do
-    authorize.(state.check_timeout)
+  defp check({module, function, args}, state) do
+    apply(module, function, args ++ [state.check_timeout])
   rescue
     error ->
       Logger.warning(

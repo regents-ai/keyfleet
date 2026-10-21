@@ -120,9 +120,19 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert json_response(signed_out, 200) == %{"ok" => true}
     assert_receive %Phoenix.Socket.Broadcast{event: "disconnect"}
 
-    refused = get_notebook(@host, "/", cookie)
+    refused = get_notebook(@host, "/api/v1/me", cookie)
     assert json_response(refused, 401)["error"]["code"] == "notebooks_sign_in"
     assert Notebooks.open(c.holder, lineage, @fleet) == {:error, :signed_out}
+
+    # A link to the notebooks goes to Keyfleet to sign in again.
+    for page <- ["/", "/projects/proj-0000000000000001/notebooks/nb-0000000000000001"] do
+      again = get_notebook(@host, page, cookie)
+      assert again.status == 303
+
+      assert get_resp_header(again, "location") == [
+               KeyfleetWeb.Plugs.NotebookGateway.open_url(@fleet, page)
+             ]
+    end
   end
 
   # Costly failure: a sign-out or a Key changing hands between the gateway's
@@ -202,6 +212,24 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert_receive {:hub, "POST", ^notebooks, "u_" <> _, _body}
   end
 
+  # Costly failure: a page a member's notebook wrote runs on the fleet's
+  # notebook host as whoever opened it, and removes their files.
+  test "a notebook's own pages run in a sandbox", c do
+    cookie = enter!(c.holder)
+    notebook = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001"
+
+    for page <- ["/html", "/versions/ver_1/html", "/jobs/job-1/runs/run_1/html"] do
+      answer = send_notebook(:get, notebook <> page, cookie, "")
+      assert answer.status == 200
+      assert "sandbox allow-scripts" in get_resp_header(answer, "content-security-policy")
+    end
+
+    refute "sandbox allow-scripts" in get_resp_header(
+             send_notebook(:get, notebook, cookie, ""),
+             "content-security-policy"
+           )
+  end
+
   # Costly failure: one member deletes, stops or writes over another's
   # notebook work, which the group can no longer use.
   test "members open, copy and run each other's work, and only its maker removes or stops it",
@@ -256,6 +284,18 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
     twice = send_notebook(:put, files <> "?path=a&path=b&create=true", cookie, "a")
     assert json_response(twice, 400)["error"]["code"] == "invalid_request"
+
+    # Another spelling of a file's path would miss its maker, so it never
+    # reaches the hub.
+    for path <- ["./theirs.csv", "data//theirs.csv", "data/", "data\\theirs.csv", "//theirs.csv"] do
+      query = URI.encode_query(%{path: path})
+      written = send_notebook(:put, files <> "?" <> query, cookie, "c")
+      assert json_response(written, 400)["error"]["code"] == "invalid_request"
+      removed = send_notebook(:delete, entries <> "?" <> query, cookie, "")
+      assert json_response(removed, 400)["error"]["code"] == "invalid_request"
+    end
+
+    refute_received {:hub, _method, _path, _subject, "c"}
 
     # A version's saved result is its notebook's maker's to remove.
     version = "ver_" <> String.duplicate("0", 26)
@@ -376,9 +416,9 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   test "a sign-in cookie for one fleet signs no one in on another fleet's host", c do
     cookie = enter!(c.holder)
 
-    refused = get_notebook(@other_host, "/", cookie)
-    assert refused.status == 401
+    refused = get_notebook(@other_host, "/api/v1/me", cookie)
     assert json_response(refused, 401)["error"]["code"] == "notebooks_sign_in"
+    assert get_notebook(@other_host, "/", cookie).status == 303
     refute_received {:hub, _method, _path, _subject, _body}
 
     create = "/api/v1/projects/proj-fleet/notebooks"
