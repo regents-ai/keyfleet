@@ -4343,3 +4343,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - What: the closed-gate route check lists `/skill/:part` beside `/help`.
 - Why: 868472fb added the parts' route without it, so the check failed on
   main; the parts behave as `/skill.md` does while the site is closed.
+
+## 2026-10-21 — A fleet's page leads agents to its own summary
+- What: the "For agents" line on each fleet's page names the fleet's Markdown
+  summary first (for Classic #1, `fleet_tech_classic.md`), then agents.md and
+  skill.md.
+- Why: an agent that landed on /classic/1 had no way from the page to the
+  fleet's own summary; the page itself answers only HTML.

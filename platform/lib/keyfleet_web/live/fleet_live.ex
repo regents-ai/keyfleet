@@ -271,7 +271,7 @@ defmodule KeyfleetWeb.FleetLive do
               instruction={SendAgent.fleet_instruction(@fleet.name)}
               open={@send_agent_open}
             />
-            <.agent_files />
+            <.agent_files fleet_id={@fleet.fleet_id} />
           </div>
 
           <.entry
@@ -590,11 +590,16 @@ defmodule KeyfleetWeb.FleetLive do
     "https://opensea.io/collection/keyfleet?" <> URI.encode_query(%{traits: traits}, :rfc3986)
   end
 
-  # Where an agent starts reading, under "Send your agent".
+  # Where an agent starts reading, under "Send your agent": this fleet's own
+  # Markdown summary first, then the agent files.
+  attr :fleet_id, :string, required: true
+
   defp agent_files(assigns) do
     ~H"""
     <p id="fleet-agent-files" class="fleet-bar__agents">
-      For agents: <a href="/agents.md">agents.md</a> · <a href="/skill.md">skill.md</a>
+      For agents: <a href={~p"/fleets/#{@fleet_id <> ".md"}"}>{@fleet_id}.md</a>
+      · <a href="/agents.md">agents.md</a>
+      · <a href="/skill.md">skill.md</a>
     </p>
     """
   end

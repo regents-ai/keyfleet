@@ -232,6 +232,23 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     refute has_element?(view, ~s(#fleet-channels a[href*="/rooms/"]))
   end
 
+  test "an agent on a fleet's page is led to that fleet's own summary, which answers",
+       %{conn: conn} do
+    ChainHelpers.deploy!("fleet_tech_classic")
+    read_now("fleet_tech_classic")
+    {:ok, view, _html} = live(conn, "/classic/1")
+
+    [summary | _] =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#fleet-agent-files a")
+      |> LazyHTML.attribute("href")
+
+    assert summary == "/fleets/fleet_tech_classic.md"
+    assert build_conn() |> get(summary) |> response(200) =~ "Classic #1"
+  end
+
   test "the bar's one row of tabs leads to the hall, the Keys and the treasury", %{conn: conn} do
     deploy!()
     ChainHelpers.seed_cursor!(@fleet)
