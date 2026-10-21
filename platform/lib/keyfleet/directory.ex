@@ -82,8 +82,8 @@ defmodule Keyfleet.Directory do
 
   @doc """
   Up to #{@agents_shown} of the agents here, each with the key it acts as and
-  what its check-ins with the fleet say: the most recent check-in first, then
-  those that haven't checked in, by name.
+  what its check-ins with the fleet say: the most recently seen first, then
+  those never seen, by name.
   """
   def agents(fleet_id) do
     now = DateTime.utc_now()

@@ -3,12 +3,14 @@ defmodule Keyfleet.MessagesTest do
 
   alias Keyfleet.Actors
   alias Keyfleet.Agents
+  alias Keyfleet.Agents.Here
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Repo
   alias Keyfleet.Rooms
+  alias Keyfleet.SharedReading
   alias Phoenix.Socket.Broadcast
 
   @fleet "fibonacci_syndicate"
@@ -154,6 +156,37 @@ defmodule Keyfleet.MessagesTest do
 
     assert [repeated] = Ash.read!(Agents.CheckIn)
     assert repeated.last_contribution_at == DateTime.add(noted.last_contribution_at, -2, :minute)
+  end
+
+  # Who's here lists the agent seen most recently first, a post counting as
+  # being seen, and gives a post that came after the last check-in alone.
+  test "Who's here lists agents by when they were last seen, a post counting", %{
+    writer: writer
+  } do
+    agent = agent("c")
+
+    runner =
+      Agents.ensure_profile!(%{name: "Orbit runner", declared_harness: "test"}, actor: agent)
+
+    their =
+      Agents.ensure_profile!(%{name: "Their agent", declared_harness: "test"}, actor: writer)
+
+    ChainHelpers.issue_shard!(@fleet, 1, wallet("c"))
+
+    post!(agent, "general", "Hull survey started")
+    post!(writer, "general", "Morning")
+
+    now = DateTime.utc_now()
+    seen!(runner, check_in: DateTime.add(now, -4, :hour), posted: DateTime.add(now, -2, :hour))
+    seen!(their, check_in: DateTime.add(now, -3, :hour), posted: DateTime.add(now, -5, :hour))
+
+    Here.read(@fleet)
+    {:ok, %{reading: %{agents: agents}}} = SharedReading.fetch(Here.fleet_key(@fleet))
+
+    assert Enum.map(agents, &{&1.name, &1.seen.line}) == [
+             {"Orbit runner", "Posted 2 hours ago"},
+             {"Their agent", "Seen 3 hours ago · posted 5 hours ago"}
+           ]
   end
 
   test "a post can only answer a post in the same room", %{writer: writer} do
@@ -559,6 +592,13 @@ defmodule Keyfleet.MessagesTest do
     @fleet
     |> Rooms.list_rooms!(authorize?: false)
     |> Map.new(&{{&1.fleet_id, &1.slug}, &1.head_seq})
+  end
+
+  defp seen!(profile, check_in: check_in, posted: posted) do
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET last_check_in_at = $2, last_contribution_at = $3 WHERE agent_profile_id = $1",
+      [Ecto.UUID.dump!(profile.id), check_in, posted]
+    )
   end
 
   defp wallet(character), do: "0x" <> String.duplicate(character, 40)

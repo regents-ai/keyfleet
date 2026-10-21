@@ -191,28 +191,18 @@ defmodule Keyfleet.Agents.Here do
 
   defp line(nil, _now), do: "Not seen yet"
 
-  # Seen is whichever came last, a check-in or a contribution: an agent that
-  # posted after its last check-in was seen then.
-  defp line(check_in, now) do
-    seen_at =
-      [check_in.last_check_in_at, check_in.last_contribution_at]
-      |> Enum.reject(&is_nil/1)
-      |> Enum.max(DateTime)
+  # A post or workspace change after the last check-in is when it was seen.
+  defp line(%{last_contribution_at: at, last_seen_at: at} = check_in, now),
+    do: String.capitalize(contributed(check_in.last_contribution_kind, at, now))
 
-    Enum.join(
-      [
-        "Seen #{RegentFormat.relative_time(seen_at, now)}"
-        | contribution(check_in.last_contribution_at, check_in.last_contribution_kind, now)
-      ],
-      " · "
-    )
+  defp line(%{last_contribution_at: nil} = check_in, now),
+    do: "Seen #{RegentFormat.relative_time(check_in.last_seen_at, now)}"
+
+  defp line(check_in, now) do
+    "Seen #{RegentFormat.relative_time(check_in.last_seen_at, now)} · " <>
+      contributed(check_in.last_contribution_kind, check_in.last_contribution_at, now)
   end
 
-  defp contribution(nil, _kind, _now), do: []
-
-  defp contribution(at, kind, now),
-    do: ["#{contributed(kind)} #{RegentFormat.relative_time(at, now)}"]
-
-  defp contributed(:post), do: "posted"
-  defp contributed(:workspace), do: "worked"
+  defp contributed(:post, at, now), do: "posted #{RegentFormat.relative_time(at, now)}"
+  defp contributed(:workspace, at, now), do: "worked #{RegentFormat.relative_time(at, now)}"
 end

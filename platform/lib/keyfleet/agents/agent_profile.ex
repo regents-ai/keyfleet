@@ -83,8 +83,8 @@ defmodule Keyfleet.Agents.AgentProfile do
     end
 
     # The agents here in the fleet (see `:here`), with the key each acts as
-    # and their check-ins with the fleet: the most recent check-in first, then
-    # those that haven't checked in, by name.
+    # and their check-ins with the fleet: the most recently seen first, then
+    # those never seen, by name.
     read :here_in_fleet do
       argument :fleet_id, :string, allow_nil?: false
 
@@ -97,10 +97,13 @@ defmodule Keyfleet.Agents.AgentProfile do
         |> Ash.Query.load(
           avatar_src: %{},
           key: %{fleet_id: fleet_id},
-          check_ins: Ash.Query.filter(Keyfleet.Agents.CheckIn, fleet_id == ^fleet_id)
+          check_ins:
+            Keyfleet.Agents.CheckIn
+            |> Ash.Query.filter(fleet_id == ^fleet_id)
+            |> Ash.Query.load(:last_seen_at)
         )
         |> Ash.Query.sort(
-          last_check_in_at: {%{fleet_id: fleet_id}, :desc_nils_last},
+          last_seen_at: {%{fleet_id: fleet_id}, :desc_nils_last},
           name: :asc,
           id: :asc
         )
@@ -338,12 +341,12 @@ defmodule Keyfleet.Agents.AgentProfile do
       public? true
     end
 
-    # When this agent last checked in with the fleet.
-    calculate :last_check_in_at,
+    # When this agent was last seen in the fleet (`Keyfleet.Agents.CheckIn`).
+    calculate :last_seen_at,
               :utc_datetime_usec,
               expr(
                 first(check_ins,
-                  field: :last_check_in_at,
+                  field: :last_seen_at,
                   query: [filter: expr(fleet_id == ^arg(:fleet_id))]
                 )
               ) do

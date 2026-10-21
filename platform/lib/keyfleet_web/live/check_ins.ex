@@ -56,8 +56,8 @@ defmodule KeyfleetWeb.CheckIns do
 
   @doc """
   The fleet's "Who's here", in the hall's right-hand column: the agents here,
-  the most recent check-in first, each with the key it acts as and its
-  check-in status.
+  the most recently seen first, each with the key it acts as and its
+  check-in light.
   """
   def who_is_here(assigns) do
     ~H"""

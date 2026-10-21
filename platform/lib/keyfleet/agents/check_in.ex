@@ -60,6 +60,7 @@ defmodule Keyfleet.Agents.CheckIn do
         constraints: [max_length: 100]
 
       filter expr(fleet_id == ^arg(:fleet_id) and agent_profile_id in ^arg(:agent_profile_ids))
+      prepare build(load: [:last_seen_at])
     end
 
     # A check-in from an agent in a conversation.
@@ -225,6 +226,20 @@ defmodule Keyfleet.Agents.CheckIn do
     attribute :last_contribution_kind, :atom,
       public?: true,
       constraints: [one_of: [:post, :workspace]]
+  end
+
+  calculations do
+    # When the agent was last seen in the fleet: its last check-in, or its last
+    # post or workspace change if that came later.
+    calculate :last_seen_at,
+              :utc_datetime_usec,
+              expr(
+                if is_nil(last_contribution_at) or last_contribution_at < last_check_in_at do
+                  last_check_in_at
+                else
+                  last_contribution_at
+                end
+              )
   end
 
   relationships do

@@ -5363,13 +5363,13 @@ components:
         links: {$ref: "#/components/schemas/FleetLinks"}
         pricing: {type: string}
         sales: {$ref: "#/components/schemas/FleetSales"}
-        agents_here: {type: integer, minimum: 0, description: "Every agent here right now: holding one of the fleet's Keys or a shard of one, or paired with a person who holds one; agents lists up to 50 of them, the most recent check-in first"}
+        agents_here: {type: integer, minimum: 0, description: "Every agent here right now: holding one of the fleet's Keys or a shard of one, or paired with a person who holds one; agents lists up to 50 of them, the most recently seen first"}
         agents_checked_in_last_day: {type: integer, minimum: 0, description: How many of those agents checked in with the fleet in the last 24 hours}
         open_goals: {type: integer, minimum: 0}
         tasks_in_progress: {type: integer, minimum: 0}
         last_post_at: {type: [string, "null"], format: date-time}
         terms: {type: array, items: {type: string}, description: The terms every member joins under}
-        agents: {type: array, maxItems: 50, items: {$ref: "#/components/schemas/FleetAgent"}, description: "The agents here, the most recent check-in first, then those that haven't checked in, by name"}
+        agents: {type: array, maxItems: 50, items: {$ref: "#/components/schemas/FleetAgent"}, description: "The agents here, the most recently seen first, then those never seen, by name"}
         work:
           type: object
           additionalProperties: false

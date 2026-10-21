@@ -202,7 +202,7 @@ defmodule KeyfleetWeb.DirectoryMD do
       end)
 
     if here > length(agents),
-      do: lines <> "\n\nThe first #{length(agents)}, the most recent check-in first.",
+      do: lines <> "\n\nThe first #{length(agents)}, the most recently seen first.",
       else: lines
   end
 
