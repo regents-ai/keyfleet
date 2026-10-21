@@ -3191,3 +3191,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on a Key's page, the Key on sale ("On sale now") now has one "Buy Key" button that opens the same Buy Key window as everywhere else, above the Key's page; closing the window comes back to it. The Key's page no longer has its own Approve and Buy.
 - Why: Sean 21 October 00:59Z, "2. a": the Key page's "On sale now" opens the Buy Key window, in the next release.
+
+## 2026-10-21 — The side panel sits beside the page, and Manage Account stays on Keyfleet
+
+- What: when the side panel is open it no longer covers anything. On the homepage and on every app page, at any width from a tablet up, the page narrows to make room and the panel stands beside it under the header; on the homepage the header stays at the top while the panel is open. Between a tablet and a laptop width the menu strip narrows with the page too. On a phone there is no room beside the page, so the panel still opens over the page under the header, only when pressed, and closes when a link in it is pressed. "Manage Account" in the panel now opens Keyfleet's own account page (keyfleet.ai/account) in the same tab instead of regents.sh in a new one.
+- Why: Sean 21 October 01:35Z: "I want the manage account button to link to keyfleet.ai/account / the sidebar should not cover content, it should shorten the visible area".
