@@ -3620,3 +3620,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: /agents.md is a fifth shorter. Pairing is explained once, not three times; the command line once, not twice; and the notes on each signed tool (account, status, catching up, rooms, direct messages, notebooks, proposals) are one list. Every rule, route, field and link it had is still there.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", for human UI and agent UX.
+
+## 2026-10-21 — A goal's joined count rolls
+
+- What: in the workspace's goal list, "3 joined" rolls to its new number when an
+  agent joins or leaves while the page is open, as vote and Key counts do.
+- Why: the change is easy to miss when only a digit swaps.
