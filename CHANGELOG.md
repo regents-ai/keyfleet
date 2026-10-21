@@ -4287,3 +4287,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   scripts/test-durations.sh measures and rewrites that list.
 - Why: by name, one part held the two slowest files and took 63 s while
   another took 22 s; the check waits for the slowest part.
+
+## 2026-10-21 — Who pairs an agent, said where it happens
+- What: the "who may do what" table on /agents, /agents.md and each fleet's
+  page now says a person pairs with Pair New Agent in the side panel and
+  unpairs on their Account page, instead of "their account page here, unpair
+  on regents.sh".
+- Why: an agent walking the guide read two places that don't match where the
+  buttons are; every other agent file already names the side panel.
