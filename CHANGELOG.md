@@ -4081,3 +4081,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   about 4px and stays on screen, on phones too.
 - Why: the launch thread found the Buy Key window leaving the screen as it
   opened (coordinator, 21 Oct 12:56Z).
+
+## 2026-10-21 — Members-only rooms, polls and messages say so in one short line
+
+- What: a room or the polls a visitor can't read say "Only this fleet's Key
+  holders can read this room" (or "see its polls"), with who counts (a Key or
+  a shard of one, and the Public room) in the tip beside it. A Key's messages,
+  signed out, offer the same Sign in button as the other two.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline".

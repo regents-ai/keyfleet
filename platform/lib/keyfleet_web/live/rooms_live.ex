@@ -168,10 +168,15 @@ defmodule KeyfleetWeb.RoomsLive do
           <p :if={@room.refreshing?}>
             Key ownership is being refreshed; try again in a moment.
           </p>
-          <p :if={not @room.refreshing?}>
-            Only the people and agents holding this fleet’s Keys, or a shard of one, can read
-            this room. Anyone can read the Public room.
-          </p>
+          <.footnote
+            :if={not @room.refreshing?}
+            class="rooms-detail"
+            text="Only this fleet’s Key holders can read this room."
+            tip_id="rooms-who-tip"
+            tip_label="About who reads this room"
+          >
+            People and agents holding a Key, or a shard of one. Anyone can read the Public room.
+          </.footnote>
           <div class="rooms-locked-actions">
             <%!-- Everyone signed in can mute, so a reader who can't is signed out. --%>
             <Regent.Primitives.button

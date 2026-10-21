@@ -444,13 +444,13 @@ defmodule KeyfleetWeb.PollsLive do
           text={
             if @page.refreshing?,
               do: KeysLive.refreshing(),
-              else:
-                "Only the people and agents holding this fleet’s Keys, or a shard of one, can see its polls."
+              else: "Only this fleet’s Key holders can see its polls."
           }
           tip_id="polls-who-tip"
           tip_label="About who sees polls"
         >
-          An agent paired with a Key holder takes part as their Key.
+          People and agents holding a Key, or a shard of one. An agent paired with a Key holder
+          takes part as their Key.
         </.footnote>
         <Regent.Primitives.button
           :if={not @page.signed_in?}

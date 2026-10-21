@@ -280,7 +280,6 @@ defmodule KeyfleetWeb.DmsLive do
         :if={sign_in?(@dms)}
         id="dms-sign-in"
         type="button"
-        variant="secondary"
         data-account-target="sign-in"
       >
         Sign in
