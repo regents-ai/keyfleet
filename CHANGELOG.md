@@ -3303,3 +3303,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: Pair New Agent in the side panel offers IronClaw, with its knight from ironclaw.com, in NemoClaw's place among the ten agents. Choosing it gives IronClaw's own pairing message: its own key folder, a routine every 30 minutes, and its page at /agents/ironclaw. A NemoClaw agent pairs as any agent. The shared agents library is pinned at elixir-utils 7d73e67, which changes only that list.
 - Why: Sean's pilot runs IronClaw beside eight other agents and asked for it "in the sidebar with an icon" (21 October 09:15Z); his 1. a, 10:19Z, approved the shared list change.
+
+## 2026-10-21 — The Daily Treasury Slice table shows four decimal places
+
+- What: on a fleet's Treasury tab, the Daily Treasury Slice table's Balance, Minimum and Per Key figures are cut to four decimal places (below one token, to the first four significant digits), as the balances above them are. Classic #1's REGENT balance read 99,014,607.942443373214513634 REGENT there, and each Key's share 8,115.951470692079771681 REGENT.
+- Why: overnight simplify pass (21 October): long figures were the one place the page showed more digits than every other figure on it.

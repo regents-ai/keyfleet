@@ -978,9 +978,9 @@ defmodule KeyfleetWeb.ProposalsLive do
           <tbody>
             <tr :for={asset <- split(panel).assets} data-asset={asset.address}>
               <td>{asset_name(asset)}</td>
-              <td>{WalletWords.token_amount(Map.put(asset, :amount, asset.balance))}</td>
-              <td>{WalletWords.token_amount(Map.put(asset, :amount, asset.threshold))}</td>
-              <td>{WalletWords.token_amount(Map.put(asset, :amount, asset.per_key))}</td>
+              <td>{slice_amount(asset, asset.balance)}</td>
+              <td>{slice_amount(asset, asset.threshold)}</td>
+              <td>{slice_amount(asset, asset.per_key)}</td>
             </tr>
           </tbody>
         </table>
@@ -1013,6 +1013,13 @@ defmodule KeyfleetWeb.ProposalsLive do
   # for the preview, and as of the treasury's reading for the figures above it.
   defp opens(%{blocked: %{"run_split" => {:opens_at, opens_at}}}), do: at(opens_at)
   defp opens(_figures), do: "Open now"
+
+  # The slice's figures, cut as the balances above them are.
+  defp slice_amount(%{usdc?: false, known?: true, symbol: symbol, decimals: decimals}, atoms)
+       when is_binary(symbol) and is_integer(decimals),
+       do: "#{ProposalsPage.figure(atoms, decimals)} #{symbol}"
+
+  defp slice_amount(asset, atoms), do: WalletWords.token_amount(Map.put(asset, :amount, atoms))
 
   defp asset_name(%{usdc?: true}), do: "USDC"
   defp asset_name(%{symbol: symbol}) when is_binary(symbol), do: symbol

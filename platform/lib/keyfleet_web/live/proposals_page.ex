@@ -221,7 +221,7 @@ defmodule KeyfleetWeb.ProposalsPage do
     {text, symbol?} =
       case details[asset] do
         {symbol, decimals} when is_binary(symbol) and is_integer(decimals) ->
-          {"#{shown(atoms, decimals)} #{symbol}", true}
+          {"#{figure(atoms, decimals)} #{symbol}", true}
 
         _unknown ->
           {"#{units(atoms, 0)} in the smallest units of token", false}
@@ -540,8 +540,13 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp seq!(nil), do: 0
   defp seq!(value), do: number!(value)
 
-  # Cut, never rounded up, so a page never shows more than there is.
-  defp shown(atoms, decimals) do
+  @doc """
+  `atoms` of a token with `decimals` places as every page shows them: whole
+  tokens, thousands grouped, cut to four decimal places, or below one token
+  to its first four significant digits. Cut, never rounded up, so a page
+  never shows more than there is.
+  """
+  def figure(atoms, decimals) do
     digits = atoms |> Integer.to_string() |> String.length()
 
     if atoms > 0 and digits <= decimals,

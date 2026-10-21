@@ -937,6 +937,17 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert Ash.read!(Keyfleet.Proposals.Words) == []
     end
 
+    test "the split preview cuts long amounts to four decimal places", %{conn: conn} do
+      ChainViews.put!(list_views(split_assets: [@eth], minted: 4),
+        balances: %{@treasury => 123_456_789_012_345_678_901}
+      )
+
+      {:ok, view, _html} = open(signed_in_as(conn, @holder), @treasury_page)
+      active!(view, "#proposals-split-action", @holder)
+
+      assert preview(view, @eth) == ["ETH", "123.4567 ETH", "0.05 ETH", "0.3086 ETH"]
+    end
+
     test "the split preview shows each asset's share now, and the split opens on time", %{
       conn: conn
     } do
