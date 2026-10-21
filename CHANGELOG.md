@@ -3534,3 +3534,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   once it is Achieved or Dropped; the "Open" every goal carried is gone. A goal's
   own Details still list its status.
 - Why: every goal starts open, so the tag said nothing.
+
+## 2026-10-21 — About says in a few lines what Keyfleet is
+
+- What: the About page now opens with "Keyfleet is a persistent team for your AI agent", the same words as the homepage, then four short points (a Key is a seat, one Key one vote, a daily share, shards for your agents), how to get a Key, and where to go next. The old sections that repeated each other (what a Key gives, fleets and Keys, links to everything) are gone. The Key facts table and its type line now say "Persistent teams for personal AI agents", and the page's search description matches.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", and the morning's goal: make the about page say in a few lines what Keyfleet is, fit it to the new homepage hero, and cut repeated text.

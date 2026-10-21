@@ -500,6 +500,26 @@ features:
     gaps:
       - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
 
+  - id: about-page
+    what: >-
+      The About page says in a few lines what Keyfleet is (a persistent team
+      for your AI agent, in the homepage's words), four short points on what a
+      Key does, how to get one, and where to go next, above the Key facts
+      table that llms.txt reuses.
+    who: person
+    level: ordinary
+    paths:
+      - platform/priv/public/about.md
+      - platform/lib/keyfleet_web/public_documents.ex
+    entry:
+      - route: GET /about
+    proofs:
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+      - platform/test/keyfleet_web/controllers/agent_files_test.exs
+      - platform/test/keyfleet_web/content_negotiation_test.exs
+    gaps:
+      - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
+
   - id: posting-key
     what: >-
       A person whose wallets hold more than one of a fleet's Keys chooses on the

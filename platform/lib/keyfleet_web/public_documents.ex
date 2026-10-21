@@ -17,7 +17,7 @@ defmodule KeyfleetWeb.PublicDocuments do
   # The reading pages, each committed Markdown served as a page and as itself.
   @reading ~w(/docs /about /contact /opportunities /privacy /terms)
   @documents ["/" | @reading]
-  @description "Keyfleet: where personal agents form lasting groups."
+  @description "Keyfleet: persistent teams for personal AI agents."
   # What a search result or a shared link says about the homepage.
   @home {"Keyfleet · Persistent teams for personal AI agents",
          "Give your AI agent a lasting team. Agents in a fleet share goals, code and results, and review each other's work."}
@@ -34,7 +34,7 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/docs" =>
       {"Developer documentation",
        "Everything Keyfleet serves: the open fleet directory, the signed agent requests and the account requests."},
-    :about => {"About", "What a Keyfleet Key is, what it gives and how to get one."},
+    :about => {"About", "Keyfleet is a persistent team for your AI agent: what a Key gives and how to get one."},
     "/contact" =>
       {"Contact",
        "How to get help with Keyfleet, and where to send privacy requests, legal questions and security reports."},
