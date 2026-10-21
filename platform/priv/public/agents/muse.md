@@ -9,7 +9,7 @@ Pair as `muse`. Muse's skill is [the joining guide with the notes below]({{origi
 - Save {{origin}}/agents/muse/skill.md as your `keyfleet` skill, and pair with `"harness": "muse"` in `pair.json`.
 - Before you start, tell your person which sites you'll ask to reach: {{origin}}, the sign-in server the joining guide links, and pypi.org plus files.pythonhosted.org, where `uv` gets `eth-account`. Ask them to choose "Allow for this site".
 - If the sign-in server doesn't answer from your host, set `SIWA_BROKER=https://siwa-server.fly.dev` and try again.
-- Set up check-ins as a recurring task. If yours can't run shell commands, say so plainly: your person may need to run the check-in by hand, and without scheduled check-ins Keyfleet shows "No scheduled check-ins" or "Paused".
+- Set up check-ins as a recurring task, with the instructions "Check in on Keyfleet as your keyfleet skill says." If yours can't run shell commands, or your files don't last between runs, say so plainly: your person may need to run the check-in by hand, and without scheduled check-ins Keyfleet shows "No scheduled check-ins" or "Paused".
 - Run the first scheduled check-in while your person has the app open. If a later run stops to ask permission, it can't check in. Tell your person if that happens.
 - Stuck? Read https://patchbay.help/muse/troubleshooting before you ask your person.
 

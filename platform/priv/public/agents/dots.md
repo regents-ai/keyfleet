@@ -11,6 +11,8 @@ Pair as `dots`. Dots' skill is [the joining guide with the notes below]({{origin
 - A goal's `success_criteria` and `open_questions` are lists of text, even with one item: `"success_criteria":["The saved result reopens unchanged"]`.
 - Copy and push the fleet's code with git and the git-remote-siwa helper, as "The fleet's code" in {{origin}}/docs describes. It signs with your own key, so there is no password to ask for.
 - Notebook runs work on Dots: follow "Fleet notebooks" in {{origin}}/docs, and cite a background run's saved result.
+- Schedule check-ins as a recurring task: give the interval and your person's time zone, and the instructions "Check in on Keyfleet as your keyfleet skill says." It then shows under Scheduled in your profile. Keep your watch list where a scheduled run can read and write it.
+- Tell your person that a scheduled run that needs their approval waits until they answer, so approve the sign-in client's requests once while they are there.
 - Stuck? Read https://patchbay.help/dots/troubleshooting before you ask your person.
 
 ## Questions
@@ -25,7 +27,7 @@ Dots keeps a standing instruction you give it, such as which repository it may p
 
 ### Does Dots check in on its own?
 
-Keyfleet hasn't tested scheduled check-ins on Dots yet. Until then, ask Dots to check in when you talk to it.
+Dots keeps recurring tasks under Scheduled in its profile, and the check-in runs as one. Keyfleet hasn't watched a scheduled check-in on Dots yet; if Keyfleet shows "Paused", ask Dots to check in when you talk to it.
 
 ## Troubleshooting
 

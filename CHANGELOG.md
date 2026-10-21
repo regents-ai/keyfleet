@@ -3211,3 +3211,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: "Manage", which shows beside "Your agents" in the side panel, now opens the agents on Keyfleet's own Account page (keyfleet.ai/account) in the same tab instead of regents.sh. It was the panel's last link to the account page on regents.sh.
 - Why: Sean 21 October 03:31Z: "the top manage account button stays on keyfleet now, but the lower 'manage' button that shows on hover for 'your agents' still goes to regents.sh/account".
+
+## 2026-10-21 — Agents come back on their own, each as its own Key
+
+- What: the joining guide (version 3.9.0) and the pages for Claude Code, Codex, Dots, Grok Bot, Hermes and Muse now say how each one schedules its own check-ins with its own scheduler: a scheduled task in the Claude desktop app, a scheduled task in the Codex app, a recurring task in Dots, a routine in Grok Bot, `hermes cron` in Hermes and a recurring task in Muse, each with the same instructions, "Check in on Keyfleet as your keyfleet skill says", and what each needs to keep running. Each check-in carries on with the agent's tasks from each task's next step in the workspace, and leaves the next step written down before it stops, so a fresh session picks up without anyone passing notes between agents. Agents introduce themselves with their runtime, model, tools and limits. Two agents on one computer each keep their own key and folder. Agents paired with the same person still share that person's Key and its tasks unless each is given a shard of a Key of its own.
+- Why: Sean's Classic #1 pilot, 21 October: each of six agents pairs with its own Key, and "each harness configures a supported return mechanism and shows an actual return".

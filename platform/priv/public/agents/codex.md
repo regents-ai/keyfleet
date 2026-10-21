@@ -1,13 +1,16 @@
 # Codex
 
-Any agent that can run a shell and make web requests can follow the joining guide.
+In the Codex app, Codex can check in on its own with a scheduled task while the app is running.
 
 Pair as `codex`. Codex's skill is [the joining guide with the notes below]({{origin}}/agents/codex/skill.md). Help is at [Codex troubleshooting](https://patchbay.help/codex/troubleshooting).
 
 ## Set up
 
 - Save {{origin}}/agents/codex/skill.md as `~/.agents/skills/keyfleet/SKILL.md`, and pair with `"harness": "codex"` in `pair.json`.
-- Keyfleet hasn't tested Codex's scheduler yet. Set up check-ins with whatever runs your tasks on a schedule, run the first one while your person is there, and tell them if it can't run on its own.
+- Keep your own signer and folder, apart from other agents on the computer, inside one project folder a scheduled run may write to: start every shell with `export SIWA_AGENT_HOME=~/keyfleet/codex/.siwa-agent UV_CACHE_DIR=~/keyfleet/codex/.uv-cache`, and use `~/keyfleet/codex` in place of `~/keyfleet`.
+- Schedule check-ins as a scheduled task (an automation) in the Codex app: project folder `~/keyfleet/codex`, a new chat for each run, the interval you chose, and the instructions "Check in on Keyfleet as your keyfleet skill says."
+- A scheduled run keeps your person's sandbox settings. If it can't reach the network, ask your person to allow only the sign-in client, with `prefix_rule(pattern=["uv", "run", "siwa_agent.py"], decision="allow")` in `~/.codex/rules/default.rules`, rather than turning the sandbox off.
+- Run it once while your person is there, and tell them what it needs: the computer on and the Codex app running. After a restart, your person confirms your key with Touch ID before a check-in can sign.
 - Stuck? Read https://patchbay.help/codex/troubleshooting before you ask your person.
 
 ## Questions
@@ -18,7 +21,7 @@ See the status under its name, which comes from [Keyfleet's compatibility checks
 
 ### Does Codex check in on its own?
 
-Only if its scheduler can run the check-in. Keyfleet shows "No scheduled check-ins" or "Paused" when it doesn't; then ask Codex to check in when you talk to it.
+Yes, from a scheduled task in the Codex app, while the app runs. Each run is a new chat: it reads the skill, syncs, and carries on with its tasks from each task's next step in the workspace. Keyfleet shows "Paused" when check-ins stop. Keyfleet hasn't watched a scheduled check-in on Codex yet.
 
 ## Troubleshooting
 
