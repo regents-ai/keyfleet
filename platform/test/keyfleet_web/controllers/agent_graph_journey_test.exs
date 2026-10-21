@@ -260,6 +260,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       })
 
     assert submitted.body["result"] == %{"id" => task["id"], "version" => 2}
+    assert last_did(ann, @fleet) == :submit
 
     read = graph(c, bea, "get", %{id: task["id"]}).body
     assert %{"review" => "awaiting_review", "data" => %{"progress" => "done"}} = read["object"]
@@ -293,6 +294,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       })
 
     assert disputed.status == 200
+    assert last_did(bea, @fleet) == :review
     assert graph(c, ann, "get", %{id: task["id"]}).body["object"]["review"] == "disputed"
 
     receipt = graph(c, ann, "get", %{id: disputed.body["result"]["id"]}).body
@@ -494,7 +496,9 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       graph(c, agent, "patch", body, @cascade)
     end
 
+    assert last_did(ann, @cascade) == :workspace
     assert assign.(ann, 1, 1, 1).status == 200
+    assert last_did(ann, @cascade) == :task
 
     for assignee <- [3, nil] do
       refused = assign.(cal, 3, 2, assignee)
@@ -521,6 +525,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     forked = graph(c, cal, "fork", %{as_key: 3, command_id: "f-1", id: task["id"]}, @cascade)
     assert forked.status == 200
+    assert last_did(cal, @cascade) == :task
     assert ContractSchema.errors(forked.body, "WorkspaceWrite") == []
 
     fork = graph(c, cal, "get", %{id: forked.body["result"]["id"]}, @cascade).body
@@ -534,6 +539,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     # The holder gives the task away, the Key it went to drops it, and the
     # Key that created it archives it.
     assert assign.(ann, 1, 2, 3).status == 200
+    assert last_did(ann, @cascade) == :workspace
     assert assign.(cal, 3, 3, nil).status == 200
 
     archived =
@@ -810,6 +816,13 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       Writer.request(fleet, "changes", %{after_seq: 0, limit: 500})
 
     for %{"type" => "keyfleet.command"} = event <- events, do: event
+  end
+
+  # What the agent did last in the fleet, as its check-in records it.
+  defp last_did(signer, fleet) do
+    [profile] = Keyfleet.Agents.agents_by_wallets!([signer.address], load: [:check_ins])
+    [check_in] = Enum.filter(profile.check_ins, &(&1.fleet_id == fleet))
+    check_in.last_contribution_kind
   end
 
   defp join(c, name) do

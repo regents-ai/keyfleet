@@ -1,7 +1,8 @@
 defmodule Keyfleet.Agents.Changes.ScheduledCheckIn do
   @moduledoc """
-  Records a scheduled check-in and keeps the count that confirms the schedule,
-  all in the one statement that inserts or updates the row.
+  Records a scheduled check-in, counts it among the agent's scheduled
+  check-ins, and keeps the count that confirms the schedule, all in the one
+  statement that inserts or updates the row.
 
   With `I` the declared interval and `gap` the time since the counted
   scheduled check-in:
@@ -31,6 +32,8 @@ defmodule Keyfleet.Agents.Changes.ScheduledCheckIn do
     |> Ash.Changeset.atomic_set(:counted_scheduled_at, now())
     |> Ash.Changeset.atomic_update(:last_check_in_at, now())
     |> Ash.Changeset.atomic_update(:last_scheduled_at, now())
+    |> Ash.Changeset.atomic_set(:scheduled_check_ins, 1)
+    |> Ash.Changeset.atomic_update(:scheduled_check_ins, Ash.Expr.expr(scheduled_check_ins + 1))
     |> Ash.Changeset.atomic_update(
       :counted_scheduled_at,
       Ash.Expr.expr(

@@ -47,6 +47,16 @@ defmodule Keyfleet.Agents.Here do
 
   @kinds [:fleet_agents, :key_agents]
 
+  @did %{
+    post: "posted",
+    task: "took a task",
+    submit: "handed in a task",
+    review: "reviewed",
+    workspace: "worked",
+    notebook: "edited a notebook",
+    code: "pushed code"
+  }
+
   @doc "Where \"Who's here\" for `fleet_id` is held."
   def fleet_key(fleet_id), do: {:fleet_agents, fleet_id}
 
@@ -183,7 +193,8 @@ defmodule Keyfleet.Agents.Here do
   defp agent(profile, check_ins, now), do: seen(check_ins[profile.id], now)
 
   # What the agent's check-ins say: its light, what the light means, and one
-  # short line of when it was last seen and last did something.
+  # short line of when it was last seen, what it last did and how many times
+  # it came back on its own schedule.
   defp seen(check_in, now) do
     {_status, label} = CheckInStatus.derive(check_in, now)
     %{light: CheckInStatus.light(check_in, now), label: label, line: line(check_in, now)}
@@ -191,18 +202,25 @@ defmodule Keyfleet.Agents.Here do
 
   defp line(nil, _now), do: "Not seen yet"
 
-  # A post or workspace change after the last check-in is when it was seen.
-  defp line(%{last_contribution_at: at, last_seen_at: at} = check_in, now),
-    do: String.capitalize(contributed(check_in.last_contribution_kind, at, now))
+  defp line(check_in, now), do: last(check_in, now) <> returns(check_in.scheduled_check_ins)
 
-  defp line(%{last_contribution_at: nil} = check_in, now),
+  # A contribution after the last check-in is when it was seen.
+  defp last(%{last_contribution_at: at, last_seen_at: at} = check_in, now),
+    do: upcase_first(contributed(check_in.last_contribution_kind, at, now))
+
+  defp last(%{last_contribution_at: nil} = check_in, now),
     do: "Seen #{RegentFormat.relative_time(check_in.last_seen_at, now)}"
 
-  defp line(check_in, now) do
+  defp last(check_in, now) do
     "Seen #{RegentFormat.relative_time(check_in.last_seen_at, now)} · " <>
       contributed(check_in.last_contribution_kind, check_in.last_contribution_at, now)
   end
 
-  defp contributed(:post, at, now), do: "posted #{RegentFormat.relative_time(at, now)}"
-  defp contributed(:workspace, at, now), do: "worked #{RegentFormat.relative_time(at, now)}"
+  defp contributed(kind, at, now), do: "#{@did[kind]} #{RegentFormat.relative_time(at, now)}"
+
+  defp returns(0), do: ""
+  defp returns(1), do: " · came back once"
+  defp returns(times), do: " · came back #{times} times"
+
+  defp upcase_first(<<first::utf8, rest::binary>>), do: String.upcase(<<first::utf8>>) <> rest
 end

@@ -46,7 +46,10 @@ defmodule KeyfleetWeb.AgentNotebookController do
   def create(conn, %{"fleet_id" => fleet_id, "idempotency_key" => idempotency_key} = params) do
     in_notebooks(conn, fleet_id, :change, fn subject, project_id ->
       notebook = Map.take(params, ~w(title code description))
-      Files.create(fleet_id, subject, project_id, notebook, idempotency_key)
+
+      fleet_id
+      |> Files.create(subject, project_id, notebook, idempotency_key)
+      |> edited(conn, fleet_id)
     end)
   end
 
@@ -76,9 +79,19 @@ defmodule KeyfleetWeb.AgentNotebookController do
          mode
        ) do
     in_notebooks(conn, fleet_id, :change, fn subject, project_id ->
-      Files.write(fleet_id, subject, project_id, notebook_id, path, content, mode)
+      fleet_id
+      |> Files.write(subject, project_id, notebook_id, path, content, mode)
+      |> edited(conn, fleet_id)
     end)
   end
+
+  # A notebook made or a file written is the agent's latest contribution.
+  defp edited({:ok, _answer} = made, conn, fleet_id) do
+    Keyfleet.Agents.record_contribution(conn.assigns.agent_actor, fleet_id, :notebook)
+    made
+  end
+
+  defp edited(refused, _conn, _fleet_id), do: refused
 
   # A Key whose edits a vote of the fleet has restricted only reads.
   defp in_notebooks(conn, fleet_id, need, act) do

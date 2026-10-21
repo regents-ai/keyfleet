@@ -114,7 +114,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
       check = fn -> reported(fleet_id, current_holder(fleet_id, subject, actor)) end
 
       try do
-        send_checked(conn, fleet_id, "/#{owner}/#{fleet_id}/#{target}", need, check, body)
+        send_checked(conn, fleet_id, "/#{owner}/#{fleet_id}/#{target}", need, check, body, actor)
       after
         File.rm!(body.path)
       end
@@ -126,11 +126,11 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   # A body may take far longer to arrive than a pass lasts, and the key may
   # change hands meanwhile, so the key is checked again once the body is in
   # and the pass is made then.
-  defp send_checked(conn, fleet_id, path, need, check, body) do
+  defp send_checked(conn, fleet_id, path, need, check, body, actor) do
     with {:holder, {:ok, %{} = holder}} <- {:holder, check.()},
          {:allowed, :ok} <- {:allowed, allowed(holder, need)} do
       forward(conn, fleet_id, path, pass(fleet_id, holder, need), body, fn response ->
-        sent(conn, fleet_id, holder, body.head, response)
+        sent(conn, fleet_id, holder, actor, body.head, response)
       end)
     else
       refused -> refused(conn, refused)
@@ -199,19 +199,27 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
   defp spend_push(_conn, _fleet_id, _holder), do: :ok
 
-  # When the store took a push, what it moved is recorded under the holder.
+  # When the store took a push, what it moved is recorded under the holder,
+  # and an agent's push as its latest contribution.
   defp sent(
          %Plug.Conn{method: "POST", path_info: [_repository, "git-receive-pack"]},
          fleet_id,
          holder,
+         actor,
          request,
          response
        ) do
-    updates = request |> ReceivePack.updates(response) |> Enum.take(@recorded)
-    Code.record_pushes(fleet_id, holder, updates)
+    case request |> ReceivePack.updates(response) |> Enum.take(@recorded) do
+      [] ->
+        :ok
+
+      updates ->
+        Code.record_pushes(fleet_id, holder, updates)
+        Keyfleet.Agents.record_contribution(actor, fleet_id, :code)
+    end
   end
 
-  defp sent(_conn, _fleet_id, _holder, _request, _response), do: :ok
+  defp sent(_conn, _fleet_id, _holder, _actor, _request, _response), do: :ok
 
   ## What is asked
 

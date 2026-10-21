@@ -219,6 +219,7 @@ defmodule Keyfleet.Directory do
       light: CheckInStatus.light(check_in, now),
       last_check_in_at: check_in && check_in.last_check_in_at,
       schedule_minutes: check_in && check_in.schedule_minutes,
+      scheduled_check_ins: if(check_in, do: check_in.scheduled_check_ins, else: 0),
       last_contribution_at: check_in && check_in.last_contribution_at,
       last_contribution: check_in && check_in.last_contribution_kind
     }

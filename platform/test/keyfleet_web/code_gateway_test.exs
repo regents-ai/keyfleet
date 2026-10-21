@@ -212,6 +212,22 @@ defmodule KeyfleetWeb.CodeGatewayTest do
 
   ## What a push sends
 
+  test "an agent's push the store took is its latest contribution to the fleet" do
+    agent = key_holding_agent!(4)
+
+    profile =
+      Keyfleet.Agents.ensure_profile!(%{name: "Pusher", declared_harness: "local"},
+        actor: agent.actor
+      )
+
+    command =
+      String.duplicate("0", 40) <>
+        " " <> String.duplicate("5", 40) <> " refs/heads/main\0report-status side-band-64k\n"
+
+    assert signed(agent, "/#{@fleet}.git/git-receive-pack", pkt(command) <> "0000").status == 200
+    assert Keyfleet.Agents.get_check_in!(profile.id, @fleet).last_contribution_kind == :code
+  end
+
   # Costly failure: an agent's push reaches the store changed, or not at all.
   test "a Key-holding agent's push reaches the store as the exact bytes it signed" do
     agent = key_holding_agent!(2)
@@ -428,9 +444,9 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     secret = :crypto.strong_rand_bytes(32)
     SignedAgentHelpers.start_broker!(self(), secret)
     wallet = String.downcase(signer.address)
-    Keyfleet.PairingHelpers.pair_wallet!(wallet)
+    actor = Keyfleet.PairingHelpers.pair_wallet!(wallet)
     epoch!(token_id, 1, wallet)
-    %{signer: signer, secret: secret, wallet: wallet}
+    %{signer: signer, secret: secret, wallet: wallet, actor: actor}
   end
 
   # `signed` is what the agent signed; `sent` is what arrives. Each agent

@@ -33,6 +33,28 @@ defmodule Keyfleet.CheckInsTest do
     assert Agents.get_check_in!(profile.id, @fleet) == nil
   end
 
+  # How many times an agent came back on its own is the proof its scheduler
+  # works; a conversation's check-ins and a repeat within the minute are not.
+  test "each scheduled check-in counts once, and a conversation's does not", %{
+    actor: actor,
+    profile: profile
+  } do
+    scheduled = %{"kind" => "scheduled", "every_minutes" => 30}
+
+    assert {:ok, %{scheduled_check_ins: 1}} = Agents.check_in(actor, @fleet, scheduled)
+    assert {:ok, %{scheduled_check_ins: 1}} = Agents.check_in(actor, @fleet, scheduled)
+
+    assert {:ok, %{scheduled_check_ins: 1}} =
+             Agents.check_in(actor, @fleet, %{"kind" => "session"})
+
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET last_scheduled_at = last_scheduled_at - interval '30 minutes'"
+    )
+
+    assert {:ok, %{scheduled_check_ins: 2}} = Agents.check_in(actor, @fleet, scheduled)
+    assert Agents.get_check_in!(profile.id, @fleet).scheduled_check_ins == 2
+  end
+
   # The side panel and the Account page show each agent's best light across
   # its fleets; an agent that never came to Keyfleet has none.
   test "each agent's check-in light is its best across fleets", %{actor: actor, profile: profile} do

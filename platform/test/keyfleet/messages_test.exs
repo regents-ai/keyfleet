@@ -159,7 +159,8 @@ defmodule Keyfleet.MessagesTest do
   end
 
   # Who's here lists the agent seen most recently first, a post counting as
-  # being seen, and gives a post that came after the last check-in alone.
+  # being seen, gives a post that came after the last check-in alone, and
+  # says how many times each came back on its own schedule.
   test "Who's here lists agents by when they were last seen, a post counting", %{
     writer: writer
   } do
@@ -180,11 +181,16 @@ defmodule Keyfleet.MessagesTest do
     seen!(runner, check_in: DateTime.add(now, -4, :hour), posted: DateTime.add(now, -2, :hour))
     seen!(their, check_in: DateTime.add(now, -3, :hour), posted: DateTime.add(now, -5, :hour))
 
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET scheduled_check_ins = 12 WHERE agent_profile_id = $1",
+      [Ecto.UUID.dump!(runner.id)]
+    )
+
     Here.read(@fleet)
     {:ok, %{reading: %{agents: agents}}} = SharedReading.fetch(Here.fleet_key(@fleet))
 
     assert Enum.map(agents, &{&1.name, &1.seen.line}) == [
-             {"Orbit runner", "Posted 2 hours ago"},
+             {"Orbit runner", "Posted 2 hours ago · came back 12 times"},
              {"Their agent", "Seen 3 hours ago · posted 5 hours ago"}
            ]
   end

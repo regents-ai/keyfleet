@@ -7,11 +7,13 @@ defmodule Keyfleet.Agents.CheckIn do
   An agent checks in each time it syncs with the fleet, saying whether it is
   in a conversation (`session`) or running on a schedule it names
   (`scheduled`, every so many minutes). A schedule is confirmed once two
-  scheduled check-ins arrive about one interval apart. The row also keeps
-  when the agent last posted or wrote in the workspace here.
+  scheduled check-ins arrive about one interval apart, and the row counts
+  every scheduled check-in, the times the agent came back on its own. The row
+  also keeps when the agent last did something here, and what: a post, a task
+  taken or handed in, a review, another workspace write, a notebook edit or a push.
 
   Every time is the database's, and each kind of write happens at most once a
-  minute, in one statement that inserts the row or updates it. Anyone may
+  minute (a contribution of a new kind at once), in one statement that inserts the row or updates it. Anyone may
   read; only the agent itself writes its own rows.
   """
   use Ash.Resource,
@@ -20,6 +22,8 @@ defmodule Keyfleet.Agents.CheckIn do
     authorizers: [Ash.Policy.Authorizer]
 
   alias Keyfleet.Agents.CheckInStatus
+
+  @contribution_kinds [:post, :task, :submit, :review, :workspace, :notebook, :code]
 
   postgres do
     table "agent_check_ins"
@@ -36,7 +40,8 @@ defmodule Keyfleet.Agents.CheckIn do
       )
 
       check_constraint(:last_contribution_kind, "agent_check_ins_contribution_kind",
-        check: "last_contribution_kind IN ('post', 'workspace')"
+        check:
+          "last_contribution_kind IN ('post', 'task', 'submit', 'review', 'workspace', 'notebook', 'code')"
       )
 
       # A contribution has both its time and its kind, or neither.
@@ -143,15 +148,17 @@ defmodule Keyfleet.Agents.CheckIn do
       change Keyfleet.Agents.Changes.ScheduledCheckIn, only_when_valid?: true
     end
 
-    # The agent posted, or wrote in the workspace. An agent that contributes
-    # has just made a signed request, so a first row counts it as checking in.
+    # The agent did something here (`@contribution_kinds`): something new is
+    # written at once, a repeat of the last kind at most once a minute. An
+    # agent that contributes has just made a signed request, so a first row
+    # counts it as checking in.
     create :note_contribution do
       change Keyfleet.Agents.Changes.RecordAuthority
       change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
       public? false
       accept [:agent_profile_id, :fleet_id]
 
-      argument :kind, :atom, allow_nil?: false, constraints: [one_of: [:post, :workspace]]
+      argument :kind, :atom, allow_nil?: false, constraints: [one_of: @contribution_kinds]
 
       upsert? true
 
@@ -164,6 +171,7 @@ defmodule Keyfleet.Agents.CheckIn do
 
       upsert_condition expr(
                          is_nil(last_contribution_at) or
+                           last_contribution_kind != ^arg(:kind) or
                            last_contribution_at <
                              fragment(
                                "(statement_timestamp() AT TIME ZONE 'utc') - make_interval(secs => ?)",
@@ -225,12 +233,19 @@ defmodule Keyfleet.Agents.CheckIn do
 
     attribute :last_contribution_kind, :atom,
       public?: true,
-      constraints: [one_of: [:post, :workspace]]
+      constraints: [one_of: @contribution_kinds]
+
+    # Every scheduled check-in it has made here.
+    attribute :scheduled_check_ins, :integer,
+      allow_nil?: false,
+      default: 0,
+      public?: true,
+      constraints: [min: 0]
   end
 
   calculations do
     # When the agent was last seen in the fleet: its last check-in, or its last
-    # post or workspace change if that came later.
+    # contribution if that came later.
     calculate :last_seen_at,
               :utc_datetime_usec,
               expr(

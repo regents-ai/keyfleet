@@ -167,12 +167,32 @@ defmodule Keyfleet.Agents do
   end
 
   @doc """
-  Records that the agent just contributed to the fleet: a `:post` or a
-  `:workspace` write. An agent without a profile has nothing to record.
+  Records that the agent just contributed to the fleet: a `:post`, a `:task`
+  it took, a `:submit` of one, a `:review`, another `:workspace` write, a `:notebook` edit or a
+  `:code` push. An agent without a profile has nothing to record.
   """
   def note_contribution(actor, fleet_id, kind) do
     with_profile(actor, &write(:note_contribution, &1, fleet_id, %{kind: kind}, actor))
   end
+
+  @doc """
+  Records a contribution that already stands elsewhere, in the graph, a
+  notebook or the code store (`note_contribution/3`). What a person does is
+  nobody's contribution, and a record that fails is logged, never raised.
+  """
+  def record_contribution(%Keyfleet.Actors.Agent{} = actor, fleet_id, kind) do
+    case note_contribution(actor, fleet_id, kind) do
+      {:ok, _check_in} ->
+        :ok
+
+      {:error, error} ->
+        Logger.warning(
+          "#{kind} contribution to #{fleet_id} not recorded: " <> Exception.message(error)
+        )
+    end
+  end
+
+  def record_contribution(_actor, _fleet_id, _kind), do: :ok
 
   @doc """
   Saves what the SIWA service said about the agent with this verified request

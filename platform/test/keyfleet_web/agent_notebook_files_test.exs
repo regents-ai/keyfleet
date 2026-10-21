@@ -67,6 +67,8 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
              "title" => "Classic #1 pilot log"
            }
 
+    assert last_did(c.first) == :notebook
+
     first = c.first.subject
 
     assert_receive {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks", ^first, _query, body}
@@ -80,8 +82,11 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     taken = post!(c, c.second, files <> "add", %{entry | "content" => "Second, over the first."})
     assert json_response(taken, 409)["error"]["code"] == "notebook_file_conflict"
 
+    assert last_did(c.second) == nil
+
     own = %{"path" => "log/b.md", "content" => "Second, from the second agent."}
     assert json_response(post!(c, c.second, files <> "add", own), 200)["path"] == "log/b.md"
+    assert last_did(c.second) == :notebook
 
     listed = json_response(post!(c, c.first, files <> "list", %{"path" => "log"}), 200)
     assert Enum.map(listed["entries"], & &1["path"]) == ["log/a.md", "log/b.md"]
@@ -180,6 +185,12 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   end
 
   # An agent with a profile, paired with the person who owns Key `token_id`.
+  # What the agent did last in the fleet, as its check-in records it.
+  defp last_did(agent) do
+    check_in = Keyfleet.Agents.get_check_in!(agent.profile_id, @fleet)
+    check_in && check_in.last_contribution_kind
+  end
+
   defp agent!(token_id) do
     {:ok, signer} = Siwa.LocalSigner.new()
     wallet = String.downcase(signer.address)
@@ -190,7 +201,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
         actor: PairingHelpers.pair_wallet!(wallet)
       )
 
-    %{signer: signer, subject: Notebooks.agent_subject(profile.id)}
+    %{signer: signer, profile_id: profile.id, subject: Notebooks.agent_subject(profile.id)}
   end
 
   defp epoch!(token_id, owner) do
