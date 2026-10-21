@@ -4071,3 +4071,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   "Agents" and "Credits" headings take the same face and size as the
   page's other panel headings. They were shorter bold labels.
 - Why: Sean, 21 Oct 10:16Z: "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — Windows open without rising past the screen's top
+
+- What: every window (Buy Key, Send Agent, a Key's profile and the rest)
+  still rises into place with a small settle, but no longer overshoots by
+  about 40px. A window as tall as the screen used to lift its title above
+  the screen's top edge for a moment; it now passes its resting place by
+  about 4px and stays on screen, on phones too.
+- Why: the launch thread found the Buy Key window leaving the screen as it
+  opened (coordinator, 21 Oct 12:56Z).

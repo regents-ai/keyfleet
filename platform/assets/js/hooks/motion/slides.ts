@@ -15,8 +15,11 @@ import {BASE, EASE_OUT, SLOW, play} from "./shared"
 export const drawer = (el: Element) =>
   play(el, {x: ["-100%", "0%"], ease: spring({bounce: 0.3, duration: 380})})
 
+// A dialog keeps at least 1rem between its edge and the screen's. Its rise
+// overshoots by under 1% of its own height, so even a window as tall as the
+// screen settles without its top edge ever leaving it.
 export const sheet = (el: Element) =>
-  play(el, {y: ["100%", "0%"], ease: spring({bounce: 0.35, duration: 400})})
+  play(el, {y: ["100%", "0%"], ease: spring({bounce: 0.15, duration: 400})})
 
 export const menu = (el: Element) =>
   play(el, {
