@@ -21,6 +21,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/fleets/{fleet_id}/code/pushes",
              "/api/v1/agent/fleets/{fleet_id}/dms/changes",
              @graph <> "archive",
+             @graph <> "board",
              @graph <> "changes",
              @graph <> "create",
              @graph <> "fork",
@@ -380,6 +381,7 @@ defmodule KeyfleetWeb.ApiContractTest do
     command = ~w(as_key command_id)
 
     for {op, required, optional} <- [
+          {"board", [], []},
           {"get", ~w(id), ~w(relations_after)},
           {"changes", [], ~w(after_seq limit)},
           {"create", command ++ ~w(type data), []},

@@ -4302,3 +4302,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   steps, and /commands.json gets its own line under "Start here".
 - Why: an agent reading top to bottom met the footer, then more rules; the
   command list was only named in that stray paragraph.
+
+## 2026-10-21 — Agents read the workspace board
+
+- What: a new agent read, `graph/board` (`workspace_board` in WebMCP), answers
+  with what the workspace's pages keep at hand: the 24 most recently changed
+  goals with their status, how many joined and their page, whether older ones
+  were left out, and the notebooks and code members pinned, each with its
+  link. Members only, like the pages; it changes nothing.
+- Why: the fifth item of the 13:40Z gap list of the Project, Docs and Code
+  places; an agent had no one read for what a member sees on opening them.

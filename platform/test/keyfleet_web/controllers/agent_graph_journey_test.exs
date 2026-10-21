@@ -187,6 +187,49 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert String.ends_with?(actors["patch.applied"], "/agent:" <> bea.address)
   end
 
+  test "the board lists the newest goals as the Project place does, and what members pinned, to members only",
+       c do
+    start_graph(c)
+    [ann, bea] = shard_agents(c)
+    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
+    assert graph(c, bea, "join", %{as_key: 2, command_id: "j-1", id: goal["id"]}).status == 200
+
+    holder = %Actors.Human{human_account_id: 1, wallet_addresses: [@owners[1]]}
+    pin = %{fleet_id: @fleet, place: :code, target: "goals", title: "goals", folder?: true}
+    Graph.pin!(pin, actor: holder)
+
+    Graph.pin!(
+      %{pin | place: :docs, target: "nb-0123456789abcdef", title: "Plan", folder?: false},
+      actor: holder
+    )
+
+    board = graph(c, bea, "board", %{}).body
+    assert ContractSchema.errors(board, "WorkspaceBoard") == []
+
+    # The newest first: the goal just made, then the starting goals.
+    assert [newest | starting] = board["goals"]
+    assert %{"title" => "First paying customer", "status" => "open", "joined" => 1} = newest
+    assert newest["id"] == goal["id"]
+
+    assert String.ends_with?(
+             newest["url"],
+             KeyfleetWeb.WorkspacePage.item_path(@fleet, goal["id"])
+           )
+
+    assert starting != [] and Enum.all?(starting, & &1["starting"])
+    assert board["more_goals"] == false
+    assert [%{"path" => "goals", "folder" => true, "url" => code_url}] = board["pinned_code"]
+    assert String.ends_with?(code_url, Keyfleet.Code.files_path(@fleet, "goals"))
+
+    assert [%{"notebook_id" => "nb-0123456789abcdef", "title" => "Plan"}] =
+             board["pinned_notebooks"]
+
+    stranger = join(c, "Stranger")
+    refused = graph(c, stranger, "board", %{})
+    assert {refused.status, refused.body["error"]["code"]} == {403, "workspace_members_only"}
+    assert graph(c, bea, "board", %{}, "no_such_fleet").status == 404
+  end
+
   test "an agent joins a goal to follow it: the goal names who joined, and the agent's sync lists it",
        c do
     start_graph(c)

@@ -1,7 +1,8 @@
 defmodule KeyfleetWeb.AgentGraphController do
   use KeyfleetWeb, :controller
 
-  alias Keyfleet.Graph
+  alias Keyfleet.Actors.System
+  alias Keyfleet.{Code, Fleets, Graph, Notebooks}
   alias Keyfleet.Graph.Errors.EditsRestrictedError
   alias Keyfleet.Graph.Errors.IndeterminateError
   alias Keyfleet.Graph.Errors.NotKeyHolderError
@@ -10,7 +11,7 @@ defmodule KeyfleetWeb.AgentGraphController do
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
   alias Keyfleet.Limits
-  alias KeyfleetWeb.Refusal
+  alias KeyfleetWeb.{Endpoint, Refusal, WorkspacePage}
 
   # The workspace's own refusals: the status each is answered with, and what
   # to do next. The workspace's reason is the message.
@@ -39,6 +40,9 @@ defmodule KeyfleetWeb.AgentGraphController do
 
   @command ~w(as_key command_id)
 
+  # As many goals as the workspace reads in one page.
+  @board_goals 24
+
   def get_object(conn, %{"fleet_id" => fleet_id, "id" => id} = params) do
     fleet_id
     |> Graph.get_object(id, Map.take(params, ~w(relations_after)),
@@ -51,6 +55,48 @@ defmodule KeyfleetWeb.AgentGraphController do
     fleet_id
     |> Graph.list_changes(Map.take(params, ~w(after_seq limit)), actor: conn.assigns.agent_actor)
     |> read(conn, fleet_id)
+  end
+
+  # What the workspace's pages keep at hand: its newest goals, as its Project
+  # lists them, and what its members pinned in its Docs and its Code.
+  def board(conn, %{"fleet_id" => fleet_id}) do
+    opts = [actor: conn.assigns.agent_actor]
+
+    with {:ok, %{}} <- Fleets.get_fleet(fleet_id, actor: %System{}),
+         {:ok, goals} <-
+           Graph.workspace_cards(
+             fleet_id,
+             %{type: "goal"},
+             Keyword.put(opts, :page, limit: @board_goals)
+           ),
+         {:ok, notebooks} <- Graph.pins(fleet_id, :docs, opts),
+         {:ok, code} <- Graph.pins(fleet_id, :code, opts),
+         {:ok, project_id} <- project_id(fleet_id) do
+      json(conn, %{
+        goals: Enum.map(goals.results, &goal(&1, fleet_id)),
+        more_goals: goals.more?,
+        pinned_notebooks:
+          for pin <- notebooks do
+            %{
+              notebook_id: pin.target,
+              title: pin.title,
+              notebook_url: project_id && Notebooks.notebook_url(fleet_id, project_id, pin.target)
+            }
+          end,
+        pinned_code:
+          for pin <- code do
+            %{
+              path: pin.target,
+              title: pin.title,
+              folder: pin.folder?,
+              url: Endpoint.url() <> Code.files_path(fleet_id, pin.target)
+            }
+          end
+      })
+    else
+      {:ok, nil} -> answer(conn, refusal(404, "fleet_unknown"))
+      result -> read(result, conn, fleet_id)
+    end
   end
 
   def create(conn, params), do: write(conn, &Graph.create_object/3, params, ~w(type data))
@@ -107,6 +153,23 @@ defmodule KeyfleetWeb.AgentGraphController do
   end
 
   defp read({:error, error}, conn, _fleet_id), do: refuse(conn, error)
+
+  defp goal(object, fleet_id) do
+    %{
+      id: object.id,
+      title: object.title,
+      status: object.card["status"],
+      starting: is_integer(object.sys["starting"]),
+      joined: length(Map.get(object.sys, "joined", [])),
+      changed_at: object.changed_at,
+      url: Endpoint.url() <> WorkspacePage.item_path(fleet_id, object.id)
+    }
+  end
+
+  # The project a fleet's notebooks are in, nil for a fleet without them.
+  defp project_id(fleet_id) do
+    if Notebooks.hub?(fleet_id), do: Notebooks.project_id(fleet_id), else: {:ok, nil}
+  end
 
   # Each wallet has its own allowance of writes in each fleet, spent before
   # the write takes the fleet's one writer. It is kept by wallet, not by the

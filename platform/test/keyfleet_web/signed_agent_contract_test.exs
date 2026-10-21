@@ -176,6 +176,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @dm <> "block", [], %{}},
     {"POST", @dm <> "unblock", [], %{}},
     {"POST", @dm_changes, [], %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]}},
+    {"POST", @graph <> "board", [], %{}},
     {"POST", @graph <> "get", [], %{"id" => "goal#1", "relations_after" => 0}},
     {"POST", @graph <> "changes", [], %{"after_seq" => 0, "limit" => 1}},
     {"POST", @graph <> "create", [],

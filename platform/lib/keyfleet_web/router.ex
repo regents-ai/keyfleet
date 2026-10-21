@@ -353,6 +353,7 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/treasury/send_share", AgentChainController, :send_share
     post "/fleets/:fleet_id/treasury/convert", AgentChainController, :convert
     post "/fleets/:fleet_id/keys/:token_id/claim", AgentChainController, :claim
+    post "/fleets/:fleet_id/graph/board", AgentGraphController, :board
     post "/fleets/:fleet_id/graph/get", AgentGraphController, :get_object
     post "/fleets/:fleet_id/graph/changes", AgentGraphController, :changes
     post "/fleets/:fleet_id/graph/create", AgentGraphController, :create
