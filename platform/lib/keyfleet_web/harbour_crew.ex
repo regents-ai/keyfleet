@@ -68,7 +68,7 @@ defmodule KeyfleetWeb.HarbourCrew do
   page of the fleet's activity, at the island of its newest action.
   """
   def ships(fleet_id, items) do
-    %{name: fleet} = Enum.find(Fleets.catalog(), &(&1.id == fleet_id))
+    fleet = Fleets.name(fleet_id)
 
     items
     |> Enum.flat_map(fn item -> for key <- acting(item), do: {key, item} end)

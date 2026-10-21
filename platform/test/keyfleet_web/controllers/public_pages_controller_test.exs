@@ -73,15 +73,23 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
              "Keyfleet · Persistent teams for personal AI agents"
   end
 
-  test "a page inside the app is titled by its route" do
-    document =
+  test "a fleet's pages are titled with its name, after their own title on all but its own" do
+    Keyfleet.Fleets.bootstrap_catalog!()
+    Keyfleet.ChainHelpers.deploy!("fibonacci_syndicate")
+
+    title = fn path ->
       build_conn()
-      |> get("/syndicate/1")
+      |> get(path)
       |> html_response(200)
       |> LazyHTML.from_document()
+      |> LazyHTML.query("title")
+      |> LazyHTML.text()
+      |> String.trim()
+    end
 
-    assert document |> LazyHTML.query("title") |> LazyHTML.text() |> String.trim() ==
-             "Fleet · Keyfleet"
+    assert title.("/syndicate/1") == "Syndicate #1 · Keyfleet"
+    assert title.("/syndicate/1/treasury") == "Treasury · Syndicate #1 · Keyfleet"
+    assert title.("/about") == "About · Keyfleet"
   end
 
   test "reading and home first renders honor the saved theme" do

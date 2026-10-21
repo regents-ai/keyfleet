@@ -199,7 +199,7 @@ defmodule KeyfleetWeb.HomeLive do
     |> BuyKey.sale(found)
     |> Map.merge(seen(fleet_id, found))
     |> Map.merge(%{
-      name: Enum.find(Fleets.catalog(), &(&1.id == fleet_id)).name,
+      name: Fleets.name(fleet_id),
       here: here(SharedFigures.reading(Here.fleet_key(fleet_id)))
     })
   end

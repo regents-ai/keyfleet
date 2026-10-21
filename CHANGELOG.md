@@ -3933,3 +3933,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the turning Key cards stand on the same dark ground as a Key's card in its
   own window, reaching the window's edges, in light and dark.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — A fleet's pages carry its name in their title
+
+- What: a fleet's pages are titled with the fleet's name, in the browser tab
+  and when a link is shared: "Classic #1 · Keyfleet" for the fleet's page,
+  "Treasury · Classic #1 · Keyfleet" for its Treasury, and the same for its
+  Workspace, rooms, Keys and votes. They were "Fleet · Keyfleet" and
+  "Treasury · Keyfleet" for every fleet.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".

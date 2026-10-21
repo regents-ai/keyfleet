@@ -172,6 +172,19 @@ defmodule KeyfleetWeb.PublicDocuments do
     [page_title: title, page_description: description]
   end
 
+  @doc """
+  The assigns of a page inside the app, by its route and the fleet it shows,
+  if any: the fleet's own page is titled with its name alone (`Classic #1`),
+  its other pages with their own title and its name (`Treasury · Classic #1`).
+  """
+  def page(route_id, nil), do: page(route_id)
+
+  def page(:fleet, fleet_id),
+    do: Keyword.put(page(:fleet), :page_title, Keyfleet.Fleets.name(fleet_id))
+
+  def page(route_id, fleet_id),
+    do: Keyword.update!(page(route_id), :page_title, &"#{&1} · #{Keyfleet.Fleets.name(fleet_id)}")
+
   # The homepage and the early-access page carry the site's name in their own title.
   # The share picture is its fleet's on a fleet's pages (`KeyfleetWeb.ShareCard`).
   def metadata(path, title, description) do
