@@ -176,9 +176,10 @@ defmodule KeyfleetWeb.PublicDocuments do
   @doc """
   The assigns of a page inside the app, by its route and its address's
   parameters. A fleet's own page is titled with the fleet's name alone
-  (`Classic #1`), a Key's page with the Key and the fleet (`Key 62 · Classic
-  #1`), and the fleet's other pages with their own title and the fleet's name
-  (`Treasury · Classic #1`). Each one's description names the fleet.
+  (`Classic #1`), a Key's or a proposal's page with its number and the fleet
+  (`Key 62 · Classic #1`, `Proposal 3 · Classic #1`), and the fleet's other
+  pages with their own title and the fleet's name (`Treasury · Classic #1`).
+  Each one's description names the fleet.
   """
   def page(%{route_id: route_id, fleet_id: nil}, _params), do: page(route_id)
 
@@ -196,6 +197,9 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   defp fleet_title(:keys, _title, fleet, %{"token_id" => token_id}),
     do: "Key #{Rules.grouped(String.to_integer(token_id))} · #{fleet}"
+
+  defp fleet_title(:proposal, _title, fleet, %{"number" => number}),
+    do: "Proposal #{number} · #{fleet}"
 
   defp fleet_title(_route_id, title, fleet, _params), do: "#{title} · #{fleet}"
 

@@ -252,6 +252,12 @@ defmodule KeyfleetWeb.RouteCatalogTest do
       assert title =~ fleet, entry.path_pattern
       assert description =~ fleet, entry.path_pattern
     end
+
+    assert [page_title: "Proposal 3 · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(
+               RouteCatalog.fetch!("/classic/1/proposals/:number", %{"number" => "3"}),
+               %{"number" => "3"}
+             )
   end
 
   defp sample_params(%{parameter_schema: schema}) do

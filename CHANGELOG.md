@@ -4393,3 +4393,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - What: a room's browser tab reads its name, such as "Public · Classic #1",
   as its heading does, instead of "Rooms · Classic #1".
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — A proposal's browser tab carries its number
+
+- What: a proposal's browser tab and link preview read "Proposal 3 · Classic #1",
+  as its heading does, instead of "Proposal · Classic #1".
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
