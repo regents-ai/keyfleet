@@ -170,6 +170,8 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # How many items of the work around a goal its page lists.
   @goal_items 100
+  # How many of the notebooks its work cites a goal's page asks the hub for.
+  @cited_notebooks 20
   # The fields by which a goal's tasks and evidence cite their results,
   # notebooks and commits.
   @cites ["source_uri", "result_ref", "notebook_ref", "commit_ref"]
@@ -798,6 +800,13 @@ defmodule KeyfleetWeb.WorkspacePage do
           is_binary(uri),
           do: {object, uri, source(uri, fleet_id)}
 
+    {notebooks, unshown} =
+      goal_notebooks(
+        fleet_id,
+        name,
+        for({_object, uri, {:notebook, _open}} <- cited, uniq: true, do: Path.basename(uri))
+      )
+
     %{
       items:
         for object <- objects do
@@ -836,49 +845,66 @@ defmodule KeyfleetWeb.WorkspacePage do
       name: name,
       folder: %{path: folder, link: Code.files_path(fleet_id, folder)},
       code: folder_entries(fleet_id, folder),
-      notebooks:
-        goal_notebooks(
-          fleet_id,
-          name,
-          for({_object, uri, {:notebook, _open}} <- cited, uniq: true, do: Path.basename(uri))
-        )
+      notebooks: notebooks,
+      notebooks_unshown: unshown
     }
   end
 
   # The notebooks tagged with the goal's name, then the ones its work cites
-  # that aren't tagged.
+  # that aren't tagged, with how many of those aren't shown.
   defp goal_notebooks(fleet_id, name, cited) do
-    with tagged when is_list(tagged) <- notebooks(fleet_id, tag: name, limit: 50),
-         found when is_list(found) <-
-           cited_notebooks(fleet_id, cited -- Enum.map(tagged, & &1.id)) do
-      tagged ++ found
+    case notebooks(fleet_id, tag: name, limit: 50) do
+      tagged when is_list(tagged) ->
+        {found, unshown} = cited_notebooks(fleet_id, cited -- Enum.map(tagged, & &1.id))
+        {tagged ++ found, unshown}
+
+      none_or_unreadable ->
+        {none_or_unreadable, 0}
     end
   end
 
-  # Each asked for by its id, however old; one since deleted is left out.
-  defp cited_notebooks(_fleet_id, []), do: []
+  # The most recently cited, each asked for by its id at once, however old,
+  # all within one page wait. One since deleted is left out; one the hub
+  # doesn't answer in time, and those past the first @cited_notebooks, are
+  # counted as not shown.
+  defp cited_notebooks(_fleet_id, []), do: {[], 0}
 
   defp cited_notebooks(fleet_id, ids) do
     case project_id!(fleet_id) do
       nil ->
-        []
+        {[], 0}
 
       project_id ->
+        {asked, rest} = Enum.split(ids, @cited_notebooks)
+
         answers =
-          ids
-          |> Task.async_stream(&HubClient.notebook(fleet_id, project_id, &1), timeout: :infinity)
-          |> Enum.map(fn {:ok, answer} -> answer end)
+          Task.async_stream(asked, &HubClient.notebook(fleet_id, project_id, &1),
+            max_concurrency: @cited_notebooks,
+            timeout: Notebooks.config()[:page_timeout_ms],
+            on_timeout: :kill_task
+          )
 
-        case Enum.find(answers, &match?({:error, _error}, &1)) do
-          nil ->
-            for {:ok, %{"status" => status} = notebook} <- answers,
-                status != "deleted",
-                do: notebook_row(fleet_id, project_id, notebook)
+        {found, unanswered} =
+          Enum.reduce(answers, {[], 0}, fn
+            {:ok, {:ok, %{"status" => "deleted"}}}, acc ->
+              acc
 
-          {:error, error} ->
-            Logger.warning("A notebook of #{fleet_id} could not be read: #{reason(error)}")
-            :unreadable
-        end
+            {:ok, {:ok, nil}}, acc ->
+              acc
+
+            {:ok, {:ok, notebook}}, {found, unanswered} ->
+              {[notebook_row(fleet_id, project_id, notebook) | found], unanswered}
+
+            {:ok, {:error, error}}, {found, unanswered} ->
+              Logger.warning("A notebook of #{fleet_id} could not be read: #{reason(error)}")
+              {found, unanswered + 1}
+
+            {:exit, :timeout}, {found, unanswered} ->
+              Logger.warning("A notebook of #{fleet_id} could not be read: timeout")
+              {found, unanswered + 1}
+          end)
+
+        {Enum.reverse(found), unanswered + length(rest)}
     end
   end
 

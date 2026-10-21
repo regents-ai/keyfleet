@@ -1011,40 +1011,30 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
 
     # Cited notebooks were looked for among the fleet's newest 50 only, so an
-    # older one vanished from the goal's page.
-    test "a goal's page asks for each cited notebook by its id, leaving out deleted ones",
+    # older one vanished from the goal's page; then each was asked for with no
+    # cap or deadline, and one failed answer blanked the list.
+    test "a goal's page asks for each cited notebook by its id, keeping what the hub answers in time",
          %{conn: conn} do
       goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
       project = "proj-0123456789abcdef"
-      [old, deleted, gone] = ~w(nb-00000000000000a1 nb-00000000000000d2 nb-00000000000000e3)
 
-      for {notebook, title} <- [{old, "Old model"}, {deleted, "Deleted"}, {gone, "Gone"}] do
-        task =
-          create(@fleet, "task", %{
-            "title" => title,
-            "progress" => "doing",
-            "notebook_ref" => Keyfleet.Notebooks.notebook_url(@fleet, project, notebook)
-          })
+      [old, deleted, gone, down, slow] =
+        ~w(nb-00000000000000a1 nb-00000000000000d2 nb-00000000000000e3 nb-00000000000000f4 nb-00000000000000b5)
 
-        link(@fleet, task, goal, "implements")
-      end
-
-      meta = fn id, title, status ->
-        %{
-          "id" => id,
-          "title" => title,
-          "description" => "",
-          "status" => status,
-          "created_at" => "2025-01-02T09:00:00Z"
-        }
-      end
+      cite!(goal, project, [old, deleted, gone, down, slow])
+      meta = &meta(&1, &2, "active")
 
       hub!(project, fn
         %{"tag" => _tag} -> []
-        {:notebook, ^old} -> meta.(old, "Old model", "active")
-        {:notebook, ^deleted} -> meta.(deleted, "Deleted", "deleted")
+        {:notebook, ^old} -> meta.(old, "Old model")
+        {:notebook, ^deleted} -> meta(deleted, "Deleted", "deleted")
         {:notebook, ^gone} -> nil
+        {:notebook, ^down} -> :down
+        {:notebook, ^slow} -> {:slow, meta.(slow, "Slow")}
       end)
+
+      notebooks = Application.fetch_env!(:keyfleet, :notebooks)
+      Application.put_env(:keyfleet, :notebooks, Keyword.put(notebooks, :page_timeout_ms, 200))
 
       {:ok, view, _html} = live(conn, item_path(goal))
 
@@ -1054,9 +1044,35 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "Old model"
              )
 
-      refute has_element?(view, ~s(#workspace-goal-notebook-rows [data-notebook="#{deleted}"]))
-      refute has_element?(view, ~s(#workspace-goal-notebook-rows [data-notebook="#{gone}"]))
+      for id <- [deleted, gone, down, slow] do
+        refute has_element?(view, ~s(#workspace-goal-notebook-rows [data-notebook="#{id}"]))
+      end
+
+      assert has_element?(view, "#workspace-goal-notebooks-unshown", "2 more not shown.")
       refute has_element?(view, "#workspace-goal-notebooks-unreadable")
+    end
+
+    test "a goal's page asks the hub for the 20 most recently cited notebooks only",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+      project = "proj-0123456789abcdef"
+      ids = for n <- 1..21, do: "nb-" <> String.pad_leading(Integer.to_string(n), 16, "0")
+      cite!(goal, project, ids)
+      test = self()
+
+      hub!(project, fn
+        %{"tag" => _tag} ->
+          []
+
+        {:notebook, id} ->
+          send(test, {:asked, id})
+          meta(id, "Notebook " <> id, "active")
+      end)
+
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      assert has_element?(view, "#workspace-goal-notebooks-unshown", "1 more not shown.")
+      assert collect_asked() |> Enum.uniq() |> length() == 20
     end
 
     test "a goal's page says so when the notebooks can't be read", %{conn: conn} do
@@ -2084,6 +2100,38 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
   # The fleet's notebook hub, answering a listing of the project's notebooks
   # with what `answer` makes of its query, or nothing at all when `:down`.
+  # Tasks of the goal, each citing one of the notebooks, the last made first.
+  defp cite!(goal, project, notebooks) do
+    for notebook <- notebooks do
+      task =
+        create(@fleet, "task", %{
+          "title" => "Uses " <> notebook,
+          "progress" => "doing",
+          "notebook_ref" => Keyfleet.Notebooks.notebook_url(@fleet, project, notebook)
+        })
+
+      link(@fleet, task, goal, "implements")
+    end
+  end
+
+  defp meta(id, title, status) do
+    %{
+      "id" => id,
+      "title" => title,
+      "description" => "",
+      "status" => status,
+      "created_at" => "2025-01-02T09:00:00Z"
+    }
+  end
+
+  defp collect_asked(asked \\ []) do
+    receive do
+      {:asked, id} -> collect_asked([id | asked])
+    after
+      0 -> asked
+    end
+  end
+
   defp hub!(project_id, answer) do
     hub =
       KeyfleetWeb.SignedAgentHelpers.serve!(:hub, fn conn, _opts ->
@@ -2104,8 +2152,18 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
               # One notebook, asked for by its id.
               "/api/v1/projects/" <> ^project_id <> "/notebooks/" <> id ->
                 case answer.({:notebook, id}) do
-                  nil -> conn |> Plug.Conn.put_status(404) |> Req.Test.json(%{"success" => false})
-                  meta -> Req.Test.json(conn, %{"success" => true, "data" => %{"meta" => meta}})
+                  nil ->
+                    conn |> Plug.Conn.put_status(404) |> Req.Test.json(%{"success" => false})
+
+                  :down ->
+                    Plug.Conn.send_resp(conn, 503, "")
+
+                  {:slow, meta} ->
+                    Process.sleep(500)
+                    Req.Test.json(conn, %{"success" => true, "data" => %{"meta" => meta}})
+
+                  meta ->
+                    Req.Test.json(conn, %{"success" => true, "data" => %{"meta" => meta}})
                 end
             end
         end

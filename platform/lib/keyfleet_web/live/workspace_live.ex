@@ -1378,6 +1378,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <p :if={@goal.notebooks == :unreadable} id="workspace-goal-notebooks-unreadable">
         The notebooks can’t be read right now. Try again in a minute.
       </p>
+      <p
+        :if={@goal.notebooks_unshown > 0}
+        id="workspace-goal-notebooks-unshown"
+        class="workspace-detail"
+      >
+        {@goal.notebooks_unshown} more not shown.
+      </p>
       <Regent.Primitives.empty_state
         :if={@goal.notebooks == [] and @goal.results == []}
         id="workspace-goal-notebooks-empty"

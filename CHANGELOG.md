@@ -4490,3 +4490,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the wallet may claim for, and turns a token with nothing waiting off with
   "Nothing to claim".
 - Why: Sean held 30 Keys in Classic #1 and could only claim one Key at a time.
+## 2026-10-21 — A goal's page asks for at most 20 cited notebooks, within one wait
+
+- What: a goal's page asks the hub for the 20 notebooks its work cited most
+  recently, all at once and within one page wait. Notebooks it can't show,
+  past those 20 or not answered in time, are counted ("2 more not shown.");
+  the ones the hub did answer stay listed.
+- Why: reviewer item 29 on the previous entry: one call per notebook with no
+  cap or deadline could hold a goal's page for minutes, and one failed answer
+  blanked the list.
