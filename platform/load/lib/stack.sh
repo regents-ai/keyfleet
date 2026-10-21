@@ -7,8 +7,7 @@
 #
 # The database is created and seeded as staging's is, with the release's own
 # commands (bootstrap-staging, migrate, seed-deployment with the Regents Club's
-# deployment record, seed-load-staging for the poll), so every page a visitor
-# opens exists. The role is staging because that role admits only the staging
+# deployment record), so every page a visitor opens exists. The role is staging because that role admits only the staging
 # database hostnames, which the throwaway database (or faults.sh's proxy in
 # front of it) answers to on its network; nothing here can reach a real
 # database, and nothing leaves this computer.
@@ -168,7 +167,6 @@ stack_prepare_database() {
   stack_release_command "$image" /app/bin/migrate
   stack_release_command --volume "$KEYFLEET_DEPLOYED_RECORD:/tmp/base.deployed.json:ro" \
     "$image" /app/bin/seed-deployment /tmp/base.deployed.json
-  stack_release_command "$image" /app/bin/seed-load-staging
 }
 
 # Starts one server named `name` on 127.0.0.1:$port and waits for its health.

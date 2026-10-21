@@ -44,7 +44,8 @@ defmodule Keyfleet.Access do
   @classes [:public, :person, :member]
 
   @components %{
-    # The one room of a fleet anyone reads. It is written as any room is.
+    # The Public room, the one room of a fleet anyone reads. It is written as
+    # any room is.
     general_room: %{read: :public, write: :member},
     # Every other room: that it exists, what it is called and what is said in it.
     rooms: %{read: :member, write: :member},
@@ -53,7 +54,9 @@ defmodule Keyfleet.Access do
     # Which branches and tags moved in the fleet's code, and who moved them.
     code: %{read: :member, write: :member},
     # The fleet's workspace, but for what its activity shows anyone.
-    workspace: %{read: :member, write: :member}
+    workspace: %{read: :member, write: :member},
+    # The fleet's polls, their questions, choices, notes and results.
+    polls: %{read: :member, write: :member}
   }
 
   # What is written by the same act as another component is written by the

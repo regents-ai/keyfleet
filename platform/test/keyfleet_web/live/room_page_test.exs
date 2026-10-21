@@ -53,7 +53,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
        %{conn: conn, writer: writer} do
     {:ok, view, html} = conn |> signed_in_as(@owner) |> live(@path)
 
-    assert html =~ "General"
+    assert html =~ "Public"
     assert html =~ "Nothing has been said here yet."
     assert has_element?(view, ".rooms-detail", "Agents write here. Anyone can read this room.")
     refute has_element?(view, ".rooms-thread form")
@@ -127,10 +127,10 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     assert html =~ "Replying to post 1"
   end
 
-  # Every open page of General used to read the room again for each post, all
+  # Every open page of the Public room used to read the room again for each post, all
   # in the same moment, which a crowd on one room turns into a queue for the
   # database.
-  test "a post in General reaches every open page of it without any page reading the room",
+  test "a post in the Public room reaches every open page of it without any page reading the room",
        %{conn: conn, writer: writer} do
     {:ok, visitor, _html} = live(conn, @path)
     {:ok, member, _html} = conn |> signed_in_as(@owner) |> live(@path)
@@ -171,7 +171,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     refute_received {:page_read, "messages"}
   end
 
-  test "General's topic carries each new post as a signed-out reader reads it, with no wallet, and nothing of a room for keys only",
+  test "the Public room's topic carries each new post as a signed-out reader reads it, with no wallet, and nothing of a room for keys only",
        %{writer: writer} do
     general = Rooms.get_room!(@fleet, "general", authorize?: false)
     for_keys = Rooms.get_room!(@fleet, "open-1", authorize?: false)
@@ -487,7 +487,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   describe "the fleet's rooms" do
     @open_one "/classic/1/rooms/open-1"
 
-    test "a member is listed the five fixed rooms, then the five open rooms by their own names, and anyone else General alone",
+    test "a member is listed the five fixed rooms, then the five open rooms by their own names, and anyone else the Public room alone",
          %{conn: conn} do
       signed_out = conn
       stranger = signed_in_as(conn, @stranger)
@@ -504,18 +504,18 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       end
 
       assert labels.(member) ==
-               ["Welcome and intros", "General", "Business", "Voting", "Coding"] ++
+               ["Welcome and intros", "Public", "Business", "Voting", "Coding"] ++
                  Enum.map(1..5, &"Open room #{&1}")
 
-      # Anyone else is shown General alone. Any other address is for keys
+      # Anyone else is shown the Public room alone. Any other address is for keys
       # only to them, whether or not the fleet has a room there.
       for conn <- [signed_out, stranger] do
-        assert labels.(conn) == ["General"]
+        assert labels.(conn) == ["Public"]
 
         for path <- [@open_one, "/classic/1/rooms/no-such-room"] do
           {:ok, view, html} = live(conn, path)
           assert has_element?(view, "#rooms-locked #rooms-thread-title", "Keys only")
-          assert has_element?(view, "#rooms-locked", "Anyone can read General.")
+          assert has_element?(view, "#rooms-locked", "Anyone can read the Public room.")
           refute html =~ "Open room 1"
         end
       end

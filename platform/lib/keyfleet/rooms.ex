@@ -132,9 +132,9 @@ defmodule Keyfleet.Rooms do
   Where a reader of `class` (`Keyfleet.Access.class/2`) hears what changed in
   the fleet's rooms, posts and keys' threads: "room_head", "key_activity" and
   "rooms_changed". Whoever reads every room hears of every room. Anyone else
-  hears of General and the keys' threads alone, and of no room made or named.
-  A listener is on one of the two, never both. General's new posts are also
-  published whole, on `Keyfleet.Rooms.Message.topic/2`.
+  hears of the Public room and the keys' threads alone, and of no room made
+  or named. A listener is on one of the two, never both. The Public room's
+  new posts are also published whole, on `Keyfleet.Rooms.Message.topic/2`.
   """
   def topic(fleet_id, class) do
     if Access.enough?(class, :read, :rooms),
@@ -157,8 +157,8 @@ defmodule Keyfleet.Rooms do
   caller has read that room. Every room the caller may read answers with the
   posts after that point, the cursor those posts reach, and the room's own
   head, so a caller that is behind knows to come back for the rest. Anyone who
-  is not a member of the fleet reads General alone: any other room they name,
-  whether or not the fleet has it, answers with its slug alone and
+  is not a member of the fleet reads the Public room alone: any other room
+  they name, whether or not the fleet has it, answers with its slug alone and
   `refused: true`, and the rest of the answer stands. A caller that names
   rooms and may read none of them is refused (`Ash.Error.Forbidden`).
 
@@ -448,8 +448,8 @@ defmodule Keyfleet.Rooms do
   end
 
   # A member is shown every room, so one it names and is not shown is a room
-  # the fleet does not have. Anyone else is shown General alone, and is not
-  # told which other rooms there are: those are refused, further on.
+  # the fleet does not have. Anyone else is shown the Public room alone, and
+  # is not told which other rooms there are: those are refused, further on.
   defp known_rooms(_fleet_id, [], _class), do: :ok
 
   defp known_rooms(fleet_id, [%{slug: slug} | _], class) do

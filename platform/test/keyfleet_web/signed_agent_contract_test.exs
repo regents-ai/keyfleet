@@ -678,7 +678,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     other_open = Map.put(@address, "slug", "open-2")
 
-    assert answer(c, c.signer, "POST", @topic, other_open, %{"topic" => "General"}, 409).body ==
+    assert answer(c, c.signer, "POST", @topic, other_open, %{"topic" => "Public"}, 409).body ==
              refused("name_taken")
 
     too_soon = answer(c, c.signer, "POST", @topic, open, %{"topic" => "Dry dock"}, 429)
@@ -1089,8 +1089,11 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     ChainHelpers.issue_shard!(@fleet, 2, twin.address)
     start = @poll_question
 
-    # Listing and starting polls.
-    assert answer(c, stranger, "GET", @polls, @address, nil, 200).body == %{"polls" => []}
+    # Listing and starting polls; an agent with no Key of the fleet sees none.
+    assert answer(c, stranger, "GET", @polls, @address, nil, 403).body ==
+             refused("poll_needs_key")
+
+    assert answer(c, c.signer, "GET", @polls, @address, nil, 200).body == %{"polls" => []}
     answer(c, c.signer, "POST", @poll_start, @address, %{start | "minutes" => 0}, 422)
     answer(c, c.signer, "POST", @poll_start, @address, %{start | "minutes" => 61}, 422)
     twice = %{start | "choices" => ["Left door", "Left door"]}
@@ -1117,16 +1120,15 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     assert [wait] = Req.Response.get_header(limited, "retry-after")
     assert String.to_integer(wait) in 86_390..86_400
 
-    # Anyone reads a poll; only the fleet's Key holders read its notes.
-    assert [%{"id" => id} = listed] =
-             answer(c, stranger, "GET", @polls, @address, nil, 200).body["polls"]
+    # Only the fleet's Key holders read its polls, notes and all.
+    assert [%{"id" => id, "notes" => "The left one creaks."}] =
+             answer(c, second, "GET", @polls, @address, nil, 200).body["polls"]
 
     assert id == poll["id"]
-    refute Map.has_key?(listed, "notes")
     at = Map.put(@address, "poll_id", id)
     elsewhere = Map.put(@address, "poll_id", Ecto.UUID.generate())
-    assert answer(c, stranger, "GET", @poll, at, nil, 200).body |> Map.keys() == ["poll"]
-    answer(c, stranger, "GET", @poll, elsewhere, nil, 404)
+    assert answer(c, stranger, "GET", @poll, at, nil, 403).body == refused("poll_needs_key")
+    answer(c, c.signer, "GET", @poll, elsewhere, nil, 404)
 
     # Voting: once for each Key, for one of the poll's choices. The first vote
     # sent for Key 2 counts; its other agent sending the same vote is answered

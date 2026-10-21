@@ -67,7 +67,7 @@ checks:
     passes: Starts a run, reads the result, saves it and reopens it unchanged; opens another member's saved result.
   - id: C4
     name: Chat
-    passes: Lists rooms and reads General; posts once, syncs and sees its post exactly once with nothing missing; reports what is unread.
+    passes: Lists rooms and reads the Public room; posts once, syncs and sees its post exactly once with nothing missing; reports what is unread.
   - id: C5
     name: Poll
     passes: Starts a poll or votes in an open one; a second vote from the same Key is refused with `409 vote_conflict`; reads the result.

@@ -236,7 +236,7 @@ defmodule Keyfleet.ActivityTest do
                ]
   end
 
-  test "someone holding none of the fleet's keys sees only General's posts" do
+  test "someone holding none of the fleet's keys sees only the Public room's posts" do
     owner = human("a")
     writer = PairingHelpers.agent_for!(owner)
     post!(writer, "general", "For everyone")

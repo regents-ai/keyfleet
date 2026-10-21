@@ -14,9 +14,9 @@ defmodule Keyfleet.Polls do
   poll's result is each choice's count of votes. Polls bind no one to
   anything.
 
-  Anyone reads a fleet's polls, how many votes each has drawn and, once
-  closed, each choice's count. Only the fleet's Key holders read the notes a
-  poll's starter added and, once it closes, what each Key voted and why.
+  Polls are for the fleet alone: only its members (`Keyfleet.Access`) read
+  its polls, their notes, how many votes each has drawn and, once closed,
+  each choice's count and what each Key voted and why.
 
   Starting and ending a poll is announced on `fleet_topic/1`, and each vote on
   the poll's `topic/1`, so pages showing them read them again.

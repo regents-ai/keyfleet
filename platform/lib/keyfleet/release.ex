@@ -6,11 +6,6 @@ defmodule Keyfleet.Release do
   @staging_role "staging"
   @platform_schema "regent_names"
   @bootstrap_role_error "bootstrap-staging requires #{@deployment_role_variable} to be exactly staging"
-  @load_seed_role_error "seed-load-staging requires #{@deployment_role_variable} to be exactly staging"
-  @club_closed_error "the Regents Club is not open here: record its deployment with bin/seed-deployment first"
-  # The one poll the visitor load test opens (platform/load/README.md), found
-  # again by its question so a second run adds nothing.
-  @load_poll_question "Which room should the Club open next?"
   @missing_migration_table_error "no schema_migrations table: run bootstrap-staging first"
 
   @table_exists """
@@ -163,62 +158,6 @@ defmodule Keyfleet.Release do
 
       repo.migrate!(path)
     end)
-  end
-
-  @doc """
-  Gives a staging database the pages the visitor load test opens
-  (`platform/load/README.md`) that nothing else puts there: one finished poll
-  in the Regents Club, and prints its address. The Club itself, its rooms
-  among them, opens only by recording its deployment (`seed_deployment/1`),
-  so this refuses while the Club is still coming soon rather than inventing a
-  deployment for it.
-
-  The role is read before anything opens a connection, as `bootstrap_staging/1`
-  reads it, and the staging role admits only the staging database hosts, so no
-  configuration mistake can seed production. Running it again changes nothing.
-  The deployed launcher passes no options; `:getenv` and `:config` aim it at a
-  disposable database under test.
-  """
-  def seed_load_staging(opts \\ []) when is_list(opts) do
-    getenv = Keyword.get(opts, :getenv, &System.get_env/1)
-
-    if getenv.(@deployment_role_variable) != @staging_role do
-      raise @load_seed_role_error
-    end
-
-    load_app()
-    Application.put_env(@app, Keyfleet.Repo, configuration!(opts, getenv))
-
-    {:ok, poll_path, _started} =
-      Ecto.Migrator.with_repo(Keyfleet.Repo, fn _repo -> seed_load!() end)
-
-    IO.puts("poll: #{poll_path}")
-  end
-
-  defp seed_load! do
-    unless "regents_club" in Keyfleet.Fleets.open_fleet_ids(), do: raise(@club_closed_error)
-
-    existing =
-      "regents_club"
-      |> Keyfleet.Polls.list_polls!(actor: nil)
-      |> Enum.find(&(&1.question == @load_poll_question))
-
-    # Starting a poll takes a Key holder's paired agent, which staging has
-    # none of, so the poll is written as it stands once it has closed: started
-    # two hours ago by Key 1, open for its full hour, with no votes.
-    poll =
-      existing ||
-        Ash.Seed.seed!(Keyfleet.Polls.Poll, %{
-          fleet_id: "regents_club",
-          question: @load_poll_question,
-          choices: ["Business", "Coding", "Voting"],
-          started_by_key: 1,
-          started_by_wallet: "0x" <> String.duplicate("0", 40),
-          inserted_at: DateTime.add(DateTime.utc_now(), -2, :hour),
-          closes_at: DateTime.add(DateTime.utc_now(), -1, :hour)
-        })
-
-    Keyfleet.Fleets.path("regents_club") <> "/polls/" <> poll.id
   end
 
   @doc """

@@ -107,7 +107,6 @@ export const settings = {
   rejoinDeadlineMs: integer("REJOIN_DEADLINE_S", 120) * 1000,
   // The reconnect storm: when every open page drops its connection at once.
   stormAt: SCENARIO === "storm" ? seconds(env("STORM_RAMP", "5m")) + seconds(env("STORM_WAIT", "2m")) : null,
-  pollPath: env("POLL_PATH", ""),
 }
 if (settings.dwellMax < settings.dwellMin) throw new Error("DWELL_MAX_S must not be below DWELL_MIN_S")
 if (["first", "every"].indexOf(settings.assets) === -1) throw new Error("ASSETS must be first or every")

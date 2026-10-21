@@ -40,7 +40,6 @@ defmodule Keyfleet.Application do
         here_child(),
         fleet_now_child(),
         fleet_proposals_child(),
-        fleet_polls_child(),
         # Agent requests held open waiting for news, by client address.
         KeyfleetWeb.AgentWaits,
         # Start a worker by calling: Keyfleet.Worker.start_link(arg)
@@ -120,14 +119,10 @@ defmodule Keyfleet.Application do
     if serving?(), do: KeyfleetWeb.FleetNow
   end
 
-  # The fleets' proposals, treasuries and polls are read only where pages are
+  # The fleets' proposals and treasuries are read only where pages are
   # served, as each fleet's activity is.
   defp fleet_proposals_child do
     if serving?(), do: KeyfleetWeb.FleetProposals
-  end
-
-  defp fleet_polls_child do
-    if serving?(), do: KeyfleetWeb.FleetPolls
   end
 
   defp serving?, do: Phoenix.Endpoint.server?(:keyfleet, KeyfleetWeb.Endpoint)

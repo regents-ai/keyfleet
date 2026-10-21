@@ -5,8 +5,8 @@ defmodule Keyfleet.Polls.Checks.Standing do
   agent paired with a person.
 
     * `role: :member`: anyone holding one of the fleet's Keys, or an active
-      shard of one, starts polls, votes, and reads polls' notes and, once a
-      poll closes, each Key's vote.
+      shard of one, starts polls, votes, and once a poll closes reads each
+      Key's vote.
     * `role: :starter`: only the Key that started a poll ends it early.
 
   Standing is read from the Keys and their shards every time, so a Key

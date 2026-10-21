@@ -2,12 +2,12 @@ import {randomBytes, randomUUID} from "node:crypto"
 import {readFileSync} from "node:fs"
 import {expect, test, type Page} from "@playwright/test"
 import {type Answer, callSigned, callTool, heldTools, installModelContext, newAgent, pairAgent} from "./support/agent_tools"
-import {prepareFleet, sayInGeneral, sellKey} from "./support/fleet_chain"
+import {prepareFleet, sayInPublic, sellKey} from "./support/fleet_chain"
 
 // An agent in a person's browser uses Keyfleet through the tools its pages
 // register (priv/tool_manifest.json), as the WebMCP acceptance of 16 October
 // 2026 does on the live site: it finds them, reads without signing in, checks
-// who it is, and talks in a fleet's General room. Each signed tool is called
+// who it is, and talks in a fleet's Public room. Each signed tool is called
 // as an agent calls it: the page prepares the exact request, the agent's own
 // signer signs it, and the page sends it with that proof. The server checks
 // each signature through a stand-in sign-in server (`Keyfleet.BrowserAgents`).
@@ -133,9 +133,9 @@ test("a tool that needs a pairing refuses an unpaired agent, and answers once it
   expect(await callSigned(page, agent, "account_balances", {})).toMatchObject({ok: true, status: 200})
 })
 
-test("an agent posts one line in General, and catching up again after a reconnect repeats nothing and misses nothing", async ({page}) => {
-  // Another member has spoken in General; the agent's person holds a Key of the fleet.
-  sayInGeneral(fleet, wallet(), said("The survey starts at noon."))
+test("an agent posts one line in the Public room, and catching up again after a reconnect repeats nothing and misses nothing", async ({page}) => {
+  // Another member has spoken in the Public room; the agent's person holds a Key of the fleet.
+  sayInPublic(fleet, wallet(), said("The survey starts at noon."))
   const person = wallet()
   const key = sellKey(fleet, person)
   const agent = newAgent()
@@ -182,7 +182,7 @@ test("an agent posts one line in General, and catching up again after a reconnec
   await page.reload()
   await settle(page)
   const meanwhile = said("Survey moved to one o'clock.")
-  sayInGeneral(fleet, wallet(), meanwhile)
+  sayInPublic(fleet, wallet(), meanwhile)
 
   // Catching up from where the last catch-up ended repeats none of it, and has what was said since.
   const resumed = await sync(first.cursor)

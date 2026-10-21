@@ -13,7 +13,7 @@ defmodule Keyfleet.SharedReadingPropertyTest do
 
   # Kinds with room for a key no producer writes; the size check is the same
   # function for every kind.
-  @kinds [:key_agents, :proposal, :poll]
+  @kinds [:key_agents, :proposal]
   @id "property-probe"
   @held %{"held" => 1}
 

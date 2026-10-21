@@ -8,7 +8,7 @@ defmodule KeyfleetWeb.DirectoryController do
   anything the directory gives can't be read, it answers 503 and says so.
 
   A browser that opens `/fleets/<id>` or `/fleets/<id>/rooms` is sent to the
-  fleet's page or its General room; any other request there is sent to the
+  fleet's page or its Public room; any other request there is sent to the
   fleet's Markdown. An unknown fleet is the site's not-found page for a browser
   and 404 `fleet_unknown`, as the API answers it, for anything else.
   """

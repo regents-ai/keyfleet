@@ -109,7 +109,7 @@ test("the walk from home through every page, back, forward and the sidebar keeps
     [page.locator("#fleet-tab-workspace"), board],
     [page.locator("#workspace-goals .workspace-row-title", {hasText: "Research plan"}), plan],
     [page.locator("#workspace-discussion a"), general],
-    // Other specs may have posted in General too; this one's Key is the one to open.
+    // Other specs may have posted in the Public room too; this one's Key is the one to open.
     [page.locator(`#rooms-page .rooms-author a[href$="?key=${key}"]`).first(), keyProfile],
     [page.locator("#key-profile-recent a").first(), general],
     [sidebar.getByRole("link", {name: "Account"}), account],
@@ -144,7 +144,7 @@ test("the links between a fleet's pages each patch the open page", async ({page}
 
   // The fleet's rooms, workspace and proposals.
   // The sidebar has no link to this fleet, so the way back from a room is the browser's own.
-  await walk.follow(page.locator("#fleet-channels").getByRole("link", {name: "General"}), general)
+  await walk.follow(page.locator("#fleet-channels").getByRole("link", {name: "Public"}), general)
   await page.goBack()
   await walk.arrive(fleetPage)
   await walk.follow(page.locator("#fleet-tab-workspace"), board)

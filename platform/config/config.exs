@@ -252,9 +252,7 @@ config :keyfleet, Oban,
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_proposals"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_treasury"}},
       {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "share_card"}},
-      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "proposal"}},
-      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "fleet_polls"}},
-      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "poll"}}
+      {"* * * * *", Keyfleet.SharedReading.Heal, args: %{kind: "proposal"}}
     ]
   ],
   pruner: [max_age: {7, :days}],

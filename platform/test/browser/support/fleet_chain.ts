@@ -82,7 +82,7 @@ export const allowUsdc = (owner: string, atoms: number) => void call("allow!", [
 
 /**
  * Gives a deployed fleet a key sold to `owner` that says something in the
- * General room, a goal discussing it and a task assigned to the key in the
+ * Public room, a goal discussing it and a task assigned to the key in the
  * workspace, and proposal 1. Returns the key.
  */
 export const furnishFleet = (fleet: string, owner: string) => Number(call("furnish!", [fleet, owner]))
@@ -97,9 +97,6 @@ export type SentTransaction = {from: string; to: string; data: string; value: st
 export const landStep = (hash: string, transaction: SentTransaction, succeeded: boolean) =>
   void call("land!", [hash, transaction, succeeded])
 
-/** Sells the fleet's next key to `owner`, who says `body` in the General room; returns the key. */
-export const sayInGeneral = (fleet: string, owner: string, body: string) =>
+/** Sells the fleet's next key to `owner`, who says `body` in the Public room; returns the key. */
+export const sayInPublic = (fleet: string, owner: string, body: string) =>
   Number(call("say!", [fleet, owner, body]))
-
-/** The holder of a Key, by its wallet `owner`, asks the fleet `question` in an hour-long poll; returns the poll's id. */
-export const startPoll = (fleet: string, owner: string, question: string) => call("poll!", [fleet, owner, question])

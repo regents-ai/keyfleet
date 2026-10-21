@@ -186,7 +186,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert text(view, "#fleet-members-holder-#{ens} .rg-address__full") == ens
   end
 
-  test "a visitor is listed General alone, never another room's name", %{conn: conn} do
+  test "a visitor is listed the Public room alone, never another room's name", %{conn: conn} do
     deploy!()
     Keyfleet.Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
@@ -199,7 +199,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     read_now()
     {:ok, view, _html} = live(conn, @path)
 
-    assert has_element?(view, ~s(#fleet-channels a[href="#{@path}/rooms/general"]), "General")
+    assert has_element?(view, ~s(#fleet-channels a[href="#{@path}/rooms/general"]), "Public")
     refute has_element?(view, ~s(#fleet-channels a[href="#{@path}/rooms/open-1"]))
     refute has_element?(view, ~s(#fleet-channels a[href="#{@path}/rooms/open-2"]))
     refute render(view) =~ "Hull survey"

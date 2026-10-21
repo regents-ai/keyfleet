@@ -1,6 +1,6 @@
 import {expect, test, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
-import {prepareFleet, sayInGeneral} from "./support/fleet_chain"
+import {prepareFleet, sayInPublic} from "./support/fleet_chain"
 
 // Someone signed in mutes a key from one of its posts in a room. Its posts
 // leave that page and every other page they have open, the key is listed
@@ -29,8 +29,8 @@ async function openRoom(page: Page) {
 test("a key muted on one page is hidden on every page of the same person, and comes back when unmuted", async ({page, context}) => {
   const loudText = said("Buy my fan art, every hour.")
   const quietText = said("Survey notes are in the workspace.")
-  const loudKey = sayInGeneral(fleet, loud, loudText)
-  sayInGeneral(fleet, quiet, quietText)
+  const loudKey = sayInPublic(fleet, loud, loudText)
+  sayInPublic(fleet, quiet, quietText)
 
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
   const errors = await openRoom(page)
@@ -64,7 +64,7 @@ test("a key muted on one page is hidden on every page of the same person, and co
 
 test("a visitor who is not signed in is offered no mute", async ({page}) => {
   const text = said("Buy my fan art, every hour.")
-  sayInGeneral(fleet, loud, text)
+  sayInPublic(fleet, loud, text)
   const errors = await openRoom(page)
 
   await expect(page.getByText(text)).toBeVisible()

@@ -148,7 +148,7 @@ defmodule Keyfleet.Activity do
   `cursor` is nil for the newest page, or the cursor a page answered to read
   the one after it. Options: `:limit`, the most items a page holds (1 to
   #{@page}, #{@page} by default), and `:actor`, who reads it. Posts in rooms
-  other than General, and the titles of items other than goals (see Items),
+  other than the Public room, and the titles of items other than goals (see Items),
   show only to the people and agents holding the fleet's keys or a shard of one.
   """
   @spec page(String.t(), cursor() | nil, keyword()) :: %{items: [item()], cursor: cursor() | nil}

@@ -90,7 +90,7 @@ defmodule KeyfleetWeb.AgentRoomController do
     # The posts are read before the room's head, so the head answered is never
     # behind the posts answered with it. Posts written as a key the agent has
     # muted are left out, and the cursor still counts them, so reading on from
-    # it never reads them again. Any room other than General is refused to an
+    # it never reads them again. Any room other than the Public room is refused to an
     # agent that is not one of the fleet's members, whether or not the fleet
     # has it; a member is told when the fleet has no such room.
     with {:ok, messages} <-
@@ -351,7 +351,7 @@ defmodule KeyfleetWeb.AgentRoomController do
     }
   end
 
-  # Who reads beyond General, posts, names and creates rooms is the fleet's
+  # Who reads beyond the Public room, posts, names and creates rooms is the fleet's
   # keys, which cannot be told while the fleet's key ownership is not fresh.
   defp refuse_forbidden(conn, fleet_id, error),
     do: if(Keyfleet.Chain.fresh?(fleet_id), do: refuse(conn, error), else: refreshing(conn))

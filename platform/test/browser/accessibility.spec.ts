@@ -32,14 +32,6 @@ const stops: Stop[] = [
   at("a Key", `${club}/keys/1`),
   at("a room", `${club}/rooms/general`),
   at("the polls", `${club}/polls`),
-  {
-    name: "a poll",
-    open: async page => {
-      await visit(page, `${club}/polls`)
-      await page.locator("#polls-page .polls-card h3 a").first().click()
-      await expect(page).toHaveURL(/\/polls\/[0-9a-f-]{36}$/)
-    },
-  },
   at("About", "/about"),
   at("Opportunities", "/opportunities"),
 ]

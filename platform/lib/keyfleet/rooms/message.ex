@@ -67,7 +67,7 @@ defmodule Keyfleet.Rooms.Message do
       )
 
       # One room's newest lines, without keys' threads: what the fleet's
-      # lines are to anyone without one of its keys, who reads only General.
+      # lines are to anyone without one of its keys, who reads only the Public room.
       index(["fleet_id", "room_id", "inserted_at DESC", "id"],
         name: "messages_fleet_room_lines_index",
         where: "NOT in_key_thread"
@@ -391,7 +391,7 @@ defmodule Keyfleet.Rooms.Message do
     # keys' threads. Ties in time come in id order. Each line comes with its
     # room and author but only the start of its words. It reads the fleet's
     # lines index (`messages_fleet_lines_index`) from the given line down, or
-    # General's (`messages_fleet_room_lines_index`) for anyone without a key.
+    # the Public room's (`messages_fleet_room_lines_index`) for anyone without a key.
     read :fleet_lines_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_at, :utc_datetime_usec
@@ -489,11 +489,11 @@ defmodule Keyfleet.Rooms.Message do
 
   # Delivered after the transaction commits, as `%Phoenix.Socket.Broadcast{}`.
   #
-  # A post in General goes first, whole, on General's own topic (`topic/2`):
-  # "post" with `public/2`, what a signed-out reader of General is shown of
-  # it, so every open page of General shows it without reading the room. Its
+  # A post in the Public room goes first, whole, on the Public room's own topic (`topic/2`):
+  # "post" with `public/2`, what a signed-out reader of the Public room is shown of
+  # it, so every open page of the Public room shows it without reading the room. Its
   # order marker is `seq`, the place the database gave it under the room's
-  # lock (`Keyfleet.Rooms.Sequence`). General is read by anyone
+  # lock (`Keyfleet.Rooms.Sequence`). The Public room is read by anyone
   # (`Keyfleet.Access`, `:general_room` read `:public`, checked for posts by
   # `Keyfleet.Rooms.Checks.PublicRoom`); if that read ever narrows, this
   # publication goes in the same change, since the policy does not guard it.
@@ -502,11 +502,11 @@ defmodule Keyfleet.Rooms.Message do
   # `%{room_id, seq}` for every new line, and "key_activity" with
   # `%{fleet_id, token_ids}` for a new post, naming the key it was written as
   # and the key whose thread it went to. The members' topic takes every line.
-  # The other takes a line of General or of a key's thread, which anyone
+  # The other takes a line of the Public room or of a key's thread, which anyone
   # reads, and nothing of any other room.
   #
   # Publications are sent in the order written here, from the one process
-  # that posted, so a page of General hears a post before the room's head
+  # that posted, so a page of the Public room hears a post before the room's head
   # that counts it: a page that showed the post is level with the head and
   # does nothing more, and a page that missed it reads the room from the head.
   # A repeat the database handed back is not announced. Best effort: a page
@@ -554,13 +554,13 @@ defmodule Keyfleet.Rooms.Message do
 
   @doc """
   The topic on which each new post of the fleet's room `room_id` is published
-  whole, when anyone may read that room: General alone.
+  whole, when anyone may read that room: the Public room alone.
   """
   def topic(fleet_id, room_id), do: "public:room:#{fleet_id}:#{room_id}"
 
   @doc """
   What anyone is shown of a line, named one by one: what a room's page draws
-  of it, and what General's topic carries for each new post (`topic/2`).
+  of it, and what the Public room's topic carries for each new post (`topic/2`).
   `reply_to_seq` is the place of the post it answers, nil when it answers
   none: a calculation, on the line when the page reads it with
   `load: [:reply_to_seq]` and from the publication's own load when it is
@@ -646,7 +646,7 @@ defmodule Keyfleet.Rooms.Message do
 
   policies do
     # Spec section 7, by the classes of `Keyfleet.Access`: the fleet's members
-    # read every room and thread of it, and anyone else only General and the
+    # read every room and thread of it, and anyone else only the Public room and the
     # keys' threads. Posting is for members alone, and in the rooms for their
     # agents alone: people write on keys' threads.
     policy action([:read_key_thread, :catch_up_walls]) do
@@ -661,7 +661,7 @@ defmodule Keyfleet.Rooms.Message do
     end
 
     # The reads across the fleet's rooms, which leave the keys' threads out,
-    # show anyone else only General.
+    # show anyone else only the Public room.
     policy action([
              :read,
              :posts_as_key,

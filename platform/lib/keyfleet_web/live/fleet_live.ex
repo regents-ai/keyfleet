@@ -769,7 +769,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :fleet, :map, required: true
 
   # Like a chat app's sidebar: the feed's kinds of line, then the fleet's
-  # rooms, its polls and, for a holder, their direct messages.
+  # rooms and, for a member, its polls and their direct messages.
   defp channels(assigns) do
     assigns = assign(assigns, :shown, @shown)
 
@@ -801,7 +801,7 @@ defmodule KeyfleetWeb.FleetLive do
           </.link>
         </li>
         <li :if={@fleet.rooms == []} class="fleet-channels__empty">No rooms yet.</li>
-        <li>
+        <li :if={@fleet.polls?}>
           <.link
             id="fleet-polls-link"
             class="fleet-channel"
@@ -1607,6 +1607,7 @@ defmodule KeyfleetWeb.FleetLive do
       progress: progress,
       buy: if(deployed?, do: FleetPage.next_sale(fleet_id, progress)),
       rooms: Rooms.list_rooms!(fleet_id, actor: actor),
+      polls?: ShellLive.may_read?(socket, fleet_id, :polls),
       layout: Presets.preset(fleet_id),
       chosen_key: if(deployed?, do: FleetPage.chosen_key(progress, params["key"])),
       levels: if(deployed?, do: KeyMap.levels(progress), else: []),
@@ -2002,14 +2003,18 @@ defmodule KeyfleetWeb.FleetLive do
   A hall shown to someone who is no longer a member is drawn from the
   fleet's reading from now on, in place of what they read as one; one
   shown to a new member stops hearing the reading, and its next notice
-  reads the feed as theirs.
+  reads the feed as theirs. The polls show in the sidebar for a member only.
   """
   def class_changed(
-        %{assigns: %{fleet: %{fleet_id: fleet_id, coming_soon?: false}}} = socket,
+        %{assigns: %{fleet: %{fleet_id: fleet_id, coming_soon?: false} = fleet}} = socket,
         fleet_id
       ) do
     %{fleet_place: place, fleet_params: params} = socket.assigns
-    socket = follow_shared(socket, fleet_id, view(place, params))
+
+    socket =
+      socket
+      |> assign(:fleet, %{fleet | polls?: ShellLive.may_read?(socket, fleet_id, :polls)})
+      |> follow_shared(fleet_id, view(place, params))
 
     with true <- from_reading?(socket),
          {%{coming_soon?: false} = reading, _degraded?} <- FleetNow.fetch(fleet_id) do

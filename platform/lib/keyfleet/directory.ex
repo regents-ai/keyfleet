@@ -101,7 +101,7 @@ defmodule Keyfleet.Directory do
     end
   end
 
-  # The rooms are read as nobody, so they are the ones anyone reads: General.
+  # The rooms are read as nobody, so they are the ones anyone reads: the Public room.
   defp more(id, posts, work) do
     %{
       terms: Rules.membership_terms(),
@@ -195,7 +195,7 @@ defmodule Keyfleet.Directory do
     }
   end
 
-  # Read as nobody, so only General's posts: the other rooms are the keys' own.
+  # Read as nobody, so only the Public room's posts: the other rooms are the keys' own.
   defp recent_posts(fleet_id, limit), do: Rooms.recent_posts!(fleet_id, %{limit: limit})
 
   defp open_goals(fleet_id) do

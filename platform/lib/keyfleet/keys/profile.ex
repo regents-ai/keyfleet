@@ -78,7 +78,7 @@ defmodule Keyfleet.Keys.Profile do
   What changes when the key, or a key its holder holds, has written or been
   written to, or a post has come off its wall: how many posts its wall shows
   (`messages`) and the place of the last one written to it (`wall_head`), its
-  posts in General, and its holder's.
+  posts in the Public room, and its holder's.
   Read as nobody, so the fleet's other rooms, which only its keys read, never
   show here.
   """

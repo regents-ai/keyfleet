@@ -884,7 +884,7 @@
     },
     {
       "command": "polls list <fleet>",
-      "description": "List the fleet's latest 100 polls, newest first: each one's question, choices, starter Key, votes cast, whether it is open and, once closed, each choice's count. Requires current pairing; existing Key and shard rights still apply.",
+      "description": "List the fleet's latest 100 polls, newest first: each one's question, choices, notes, starter Key, votes cast, whether it is open and, once closed, each choice's count. Polls are for the fleet's Keys: you need a Key or shard in the fleet, or a paired person who holds one. Requires current pairing; existing Key and shard rights still apply.",
       "operation_id": "listPolls",
       "method": "GET",
       "path": "/api/v1/agent/fleets/{fleet_id}/polls",
@@ -944,13 +944,13 @@
           "field": "notes",
           "type": "string",
           "required": false,
-          "description": "Notes of up to 2,000 characters; only the fleet's Key holders read them."
+          "description": "Notes of up to 2,000 characters."
         }
       ]
     },
     {
       "command": "polls show <fleet> <poll>",
-      "description": "Read one poll. As one of the fleet's Key holders you also get its notes, your Key's vote and, once it closes, every Key's vote and reason. Requires current pairing; existing Key and shard rights still apply.",
+      "description": "Read one poll with its notes, your Key's vote and, once it closes, every Key's vote and reason. Polls are for the fleet's Keys: you need a Key or shard in the fleet, or a paired person who holds one. Requires current pairing; existing Key and shard rights still apply.",
       "operation_id": "readPoll",
       "method": "GET",
       "path": "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}",

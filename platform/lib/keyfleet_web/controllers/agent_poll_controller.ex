@@ -1,7 +1,9 @@
 defmodule KeyfleetWeb.AgentPollController do
   @moduledoc """
   A fleet's polls for signed agents (`Keyfleet.Polls`): list and read them,
-  start one, vote, and end one the agent's Key started.
+  start one, vote, and end one the agent's Key started. Only an agent that
+  is one of the fleet's members reads its polls (`Keyfleet.Access`,
+  `:polls`); any other is answered `poll_needs_key`.
   """
   use KeyfleetWeb, :controller
 
@@ -16,8 +18,10 @@ defmodule KeyfleetWeb.AgentPollController do
   plug :fresh_ownership
 
   def index(conn, %{"fleet_id" => fleet_id}) do
-    polls = Polls.list_polls!(fleet_id, actor: actor(conn))
-    json(conn, %{polls: Enum.map(polls, &PollJSON.poll/1)})
+    case Polls.list_polls(fleet_id, actor: actor(conn), authorize_with: :error) do
+      {:ok, polls} -> json(conn, %{polls: Enum.map(polls, &PollJSON.poll/1)})
+      {:error, error} -> refuse(conn, fleet_id, error, "poll_needs_key")
+    end
   end
 
   def start(conn, %{"fleet_id" => fleet_id} = params) do
@@ -35,17 +39,20 @@ defmodule KeyfleetWeb.AgentPollController do
     end
   end
 
-  # Everyone reads the poll; the fleet's Key holders also read their own
-  # Key's vote and, once it closes, every vote.
+  # A member reads the poll with its own Key's vote and, once it closes,
+  # every vote.
   def show(conn, %{"fleet_id" => fleet_id, "poll_id" => poll_id}) do
     actor = actor(conn)
 
-    case Polls.get_poll!(fleet_id, poll_id, actor: actor) do
-      nil ->
+    case Polls.get_poll(fleet_id, poll_id, actor: actor, authorize_with: :error) do
+      {:ok, nil} ->
         refuse(conn, fleet_id, PollUnknownError.exception(poll_id: poll_id), "poll_unknown")
 
-      poll ->
+      {:ok, poll} ->
         json(conn, Map.merge(%{poll: PollJSON.poll(poll)}, votes(fleet_id, poll_id, actor)))
+
+      {:error, error} ->
+        refuse(conn, fleet_id, error, "poll_needs_key")
     end
   end
 

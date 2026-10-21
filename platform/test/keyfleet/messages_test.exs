@@ -313,7 +313,7 @@ defmodule Keyfleet.MessagesTest do
     assert [%{cursor: 50, head_seq: 51}, %{cursor: 1, head_seq: 1}] = synced.rooms
     assert synced.graph.has_more == false
 
-    # The one read across rooms shows anyone without a key General alone.
+    # The one read across rooms shows anyone without a key the Public room alone.
     stranger = human("e")
     assert {:ok, [_ | _]} = Rooms.catch_up(@fleet, ["general"], [0], 50, actor: stranger)
 

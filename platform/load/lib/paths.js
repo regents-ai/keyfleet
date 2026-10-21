@@ -1,9 +1,8 @@
 // The pages a signed-out visitor opens, and how often. Every address comes
 // from platform/lib/keyfleet_web/router.ex and KeyfleetWeb.RouteCatalog: the
 // fleets' own addresses are in Keyfleet.Fleets' catalog, and a fleet's rooms
-// and polls are under its address. Nothing here needs a wallet or sign-in:
-// General is the one room anyone reads (Keyfleet.Access, :general_room) and
-// every poll is public (Keyfleet.Polls.Poll's read policy).
+// are under its address. Nothing here needs a wallet or sign-in: the Public
+// room is the one room anyone reads (Keyfleet.Access, :general_room).
 
 import http from "k6/http"
 
@@ -19,33 +18,18 @@ const MIX = [
   { name: "club_hall", path: CLUB, weight: 15 },
   // The Club's page of Keys, its map (KeyLinks.map_path/1).
   { name: "club_keys", path: `${CLUB}?view=map`, weight: 10 },
-  { name: "club_room", path: `${CLUB}/rooms/general`, weight: 10 },
-  { name: "club_poll", path: null, weight: 5 },
+  { name: "club_room", path: `${CLUB}/rooms/general`, weight: 15 },
 ]
 
 function get(base, path) {
   return http.get(base + path, { tags: { kind: "setup", name: "setup" } })
 }
 
-// Checks every page answers as a visitor would see it, and finds the poll, so
-// a run against a site missing what it needs stops before the load starts and
-// says what to fix.
-export function discoverPages(site, pollPath) {
+// Checks every page answers as a visitor would see it, so a run against a
+// site missing what it needs stops before the load starts and says what to
+// fix.
+export function discoverPages(site) {
   const pages = MIX.map((page) => Object.assign({}, page))
-  const poll = pages.find((page) => page.name === "club_poll")
-
-  if (pollPath) {
-    poll.path = pollPath
-  } else {
-    const list = get(site.base, `${CLUB}/polls`)
-    const found = /href="(\/app\/fleets\/regents_club\/polls\/[0-9a-f-]{36})"/.exec(String(list.body))
-    if (!found) {
-      throw new Error(
-        `No poll is listed at ${site.base}${CLUB}/polls (status ${list.status}). local.sh and faults.sh write one with /app/bin/seed-load-staging; started any other way, pass -e POLL_PATH=...`,
-      )
-    }
-    poll.path = found[1]
-  }
 
   for (const page of pages) {
     const res = get(site.base, page.path)
@@ -53,7 +37,7 @@ export function discoverPages(site, pollPath) {
     if (!/data-phx-main/.test(String(res.body))) throw new Error(`${page.path} drew no live page`)
     if (page.name === "club_hall" && /id="fleet-soon-title"/.test(String(res.body))) {
       throw new Error(
-        "The Regents Club shows as coming soon here, so it has no rooms or polls: its deployment was not recorded (local.sh records KEYFLEET_DEPLOYED_RECORD with /app/bin/seed-deployment)",
+        "The Regents Club shows as coming soon here, so it has no rooms: its deployment was not recorded (local.sh records KEYFLEET_DEPLOYED_RECORD with /app/bin/seed-deployment)",
       )
     }
   }

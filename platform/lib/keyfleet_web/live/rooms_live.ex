@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.RoomsLive do
   One fleet's rooms: the rooms it has and everything said in the open one.
   Agents write in rooms and name them; people read them here.
 
-  Anyone can read General. The fleet's other rooms are read only by the people
+  Anyone can read the Public room. The fleet's other rooms are read only by the people
   and agents holding its keys or a shard of one; everyone else sees their
   names, marked as for keys only. What somebody is offered to read is decided
   by the keys themselves, and the page is drawn from what the room holds
@@ -13,8 +13,8 @@ defmodule KeyfleetWeb.RoomsLive do
   owner or its shards, from them alone, and unmute it again.
 
   A post on the page is `Keyfleet.Rooms.Message.public/2`, the same map
-  General's topic carries for each new post, so a post read and a post
-  published are drawn alike. General is read as a signed-out visitor reads
+  the Public room's topic carries for each new post, so a post read and a post
+  published are drawn alike. The Public room is read as a signed-out visitor reads
   it, and its new posts arrive whole: no open page of it reads the room for
   them. Any other room is read as the reader, and read again from the last
   place shown when its head moves. Which posts a reader sees is theirs alone
@@ -116,7 +116,6 @@ defmodule KeyfleetWeb.RoomsLive do
                   aria-current={if room.slug == @room.slug, do: "page"}
                 >
                   {room_label(room)}
-                  <small :if={room.public and @room.key?} class="rooms-access">Public</small>
                   <span
                     class="rooms-unread"
                     data-unread={to_string(unread?(@room, room))}
@@ -171,7 +170,7 @@ defmodule KeyfleetWeb.RoomsLive do
           </p>
           <p :if={not @room.refreshing?}>
             Only the people and agents holding this fleet’s Keys, or a shard of one, can read
-            this room. Anyone can read General.
+            this room. Anyone can read the Public room.
           </p>
           <div class="rooms-locked-actions">
             <%!-- Everyone signed in can mute, so a reader who can't is signed out. --%>
@@ -184,11 +183,11 @@ defmodule KeyfleetWeb.RoomsLive do
               Sign in
             </Regent.Primitives.button>
             <.link
-              id="rooms-locked-general"
+              id="rooms-locked-public"
               class="rg-button rg-button--secondary"
               patch={"#{Keyfleet.Fleets.path(@room.fleet_id)}/rooms/#{Room.public_slug()}"}
             >
-              <span class="rg-button__label">Read General</span>
+              <span class="rg-button__label">Go to Public</span>
             </.link>
           </div>
         </section>
@@ -552,7 +551,7 @@ defmodule KeyfleetWeb.RoomsLive do
   defp list_rooms!(fleet_id, opts), do: Rooms.list_rooms!(fleet_id, [load: [:fleet]] ++ opts)
 
   # The rooms the reader is shown, and what the page shows of the one it is
-  # on. A member is shown every room; anyone else General alone, so any other
+  # on. A member is shown every room; anyone else the Public room alone, so any other
   # address is a room for keys only to them, whether or not the fleet has it.
   defp show_rooms(%{slug: slug} = shown, rooms) do
     room = Enum.find(rooms, &(&1.slug == slug))
@@ -611,7 +610,7 @@ defmodule KeyfleetWeb.RoomsLive do
     |> Enum.map(&public/1)
   end
 
-  # General is read the way a signed-out visitor reads it, so the page shows
+  # The Public room is read the way a signed-out visitor reads it, so the page shows
   # of it what its topic carries, the same for every reader. Any other room
   # is read as the reader, with the class read once for the page.
   defp read_as(%{public: true}, _opts), do: [actor: nil, load: [:reply_to_seq]]
@@ -660,7 +659,7 @@ defmodule KeyfleetWeb.RoomsLive do
   Who the reader is in the fleet, read afresh rather than carried over from
   what the page showed, when the fleet's Keys change and after a refusal: a
   Key arriving opens the fleet's rooms to them, and a Key leaving leaves them
-  General alone, with any other room cleared and shown as for keys only. When
+  the Public room alone, with any other room cleared and shown as for keys only. When
   the Keys that changed hands leave the reader where they stood, the open
   room stays as it is and nothing more is read.
   """
@@ -677,7 +676,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   # The rooms the reader is shown with the standing just read, and the room on
   # show carried on from the last place shown when it is still the one open.
-  # General's posts arrive whole, so it is not read again.
+  # The Public room's posts arrive whole, so it is not read again.
   defp show_standing(
          %{assigns: %{room: %{fleet_id: fleet_id} = room}} = socket,
          actor,

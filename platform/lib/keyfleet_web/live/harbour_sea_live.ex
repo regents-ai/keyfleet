@@ -19,7 +19,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   A fleet's ships are drawn from what every visitor who isn't a member sees
   alike, `KeyfleetWeb.FleetNow`, read once for every open page. Only a
   member's ships are read as the visitor, since a member sees more (rooms
-  other than General, every item's title). Which ships are the visitor's own
+  other than the Public room, every item's title). Which ships are the visitor's own
   is read as the visitor, when the fleet comes on show and when its Keys
   change hands.
   """

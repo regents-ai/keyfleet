@@ -1,7 +1,7 @@
 defmodule Keyfleet.Rooms.Checks.PublicRoom do
   @moduledoc """
-  Whether a room's posts are read in the fleet's General room
-  (`Keyfleet.Rooms.Room.public_slug/0`) by someone who may read General
+  Whether a room's posts are read in the fleet's Public room
+  (`Keyfleet.Rooms.Room.public_slug/0`) by someone who may read the Public room
   (`Keyfleet.Access`, `:general_room`): the room `slug` names, or every room
   `slugs` names in a catch-up across rooms.
   """
@@ -11,7 +11,7 @@ defmodule Keyfleet.Rooms.Checks.PublicRoom do
   alias Keyfleet.Rooms.Room
 
   @impl true
-  def describe(_opts), do: "the room is the fleet's General room"
+  def describe(_opts), do: "the room is the fleet's Public room"
 
   @impl true
   def match?(actor, %{subject: %Ash.Query{} = query}, _opts),

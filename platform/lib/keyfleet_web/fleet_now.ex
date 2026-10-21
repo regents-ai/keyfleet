@@ -20,7 +20,7 @@ defmodule KeyfleetWeb.FleetNow do
   Pages showing a fleet to a reader who isn't a member draw it from here: the
   homepage, the fleet hall and the harbour's sea; the header's "Purchase Key"
   reads from it whether its fleet is open. A member's reading differs
-  (rooms other than General, every item's title), so a member's page still
+  (rooms other than the Public room, every item's title), so a member's page still
   reads under its own scope.
 
   This is a reread on notice, the second of the two shapes the `elixir-stack`

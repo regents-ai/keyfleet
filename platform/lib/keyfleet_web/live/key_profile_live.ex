@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   One key's profile, open over its fleet's page while the address names the
   key: its card, what is known about it and the wallet holding it, the
   messages written to it with a box to write one, and what it has said in the
-  fleet's General room, which anyone can read.
+  fleet's Public room, which anyone can read.
 
   Closing it takes the key out of the address: by going back when the page
   opened it, so Back and Close agree, and by replacing the address when the
@@ -248,7 +248,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </dd>
         </div>
         <div>
-          <dt>Posts in General</dt>
+          <dt>Posts in Public</dt>
           <dd id="key-profile-posts">{Rules.grouped(@profile.posts)}</dd>
         </div>
         <div>
@@ -542,7 +542,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </dd>
         </div>
         <div>
-          <dt>Posts in General</dt>
+          <dt>Posts in Public</dt>
           <dd id="key-profile-holder-posts">{Rules.grouped(@profile.holder_posts)}</dd>
         </div>
       </dl>
@@ -678,12 +678,12 @@ defmodule KeyfleetWeb.KeyProfileLive do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-posts-title">
       <h3 id="key-profile-posts-title">
-        Recent posts in General by Key {Rules.grouped(@profile.token_id)}
+        Recent posts in Public by Key {Rules.grouped(@profile.token_id)}
       </h3>
       <Regent.Primitives.empty_state
         :if={@profile.recent_posts == []}
         class="kf-empty"
-        title="This Key hasn’t posted in General yet."
+        title="This Key hasn’t posted in Public yet."
       />
       <ol :if={@profile.recent_posts != []} id="key-profile-recent" class="rooms-thread-list">
         <li :for={post <- @profile.recent_posts} id={"key-profile-recent-#{post.id}"}>

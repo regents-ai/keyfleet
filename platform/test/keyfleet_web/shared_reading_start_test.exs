@@ -8,13 +8,13 @@ defmodule KeyfleetWeb.SharedReadingStartTest do
   @moduletag :capture_log
 
   alias Keyfleet.Repo
-  alias KeyfleetWeb.{FleetNow, FleetPolls, FleetProposals}
+  alias KeyfleetWeb.{FleetNow, FleetProposals}
 
   # The first read's own wait is 5 s; a start any longer waited for more than
   # one fleet in turn.
   @start_within 6_000
 
-  for producer <- [FleetNow, FleetProposals, FleetPolls] do
+  for producer <- [FleetNow, FleetProposals] do
     test "#{inspect(producer)} starts within one wait while every read hangs" do
       holding = hold_database(7_000)
 

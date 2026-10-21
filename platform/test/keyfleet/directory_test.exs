@@ -105,7 +105,7 @@ defmodule Keyfleet.DirectoryTest do
     rooms = Rooms.list_rooms!(@fleet, authorize?: false, load: [:post_count])
     assert %{topic: "Dry dock", post_count: 2} = Enum.find(rooms, &(&1.slug == "open-1"))
 
-    # The directory, read by anyone, lists General alone.
+    # The directory, read by anyone, lists the Public room alone.
     {:ok, fleet} = Directory.fleet(@fleet)
     assert [%{slug: "general", posts: 0}] = fleet.rooms
   end

@@ -20,9 +20,9 @@ defmodule Keyfleet.PollsTest do
     :ok
   end
 
-  # Anyone reads a poll and, once it closes, each choice's count; only the
-  # fleet's Key holders read the starter's notes and each Key's vote.
-  test "anyone reads the totals once a poll closes; only Key holders read notes and votes" do
+  # Only the fleet's Key holders read its polls; anyone else, signed in or
+  # not, is refused them. Each Key's vote shows once the poll closes.
+  test "only Key holders read a poll, its notes and, once it closes, its votes" do
     starter = human("a")
     voter = human("b")
 
@@ -48,21 +48,26 @@ defmodule Keyfleet.PollsTest do
       )
     end
 
-    assert %{totals: nil, votes_cast: 2} = Polls.get_poll!(@fleet, poll.id, actor: nil)
+    assert %{totals: nil, votes_cast: 2} = Polls.get_poll!(@fleet, poll.id, actor: voter)
     assert [] = Polls.votes_in_poll!(@fleet, poll.id, actor: voter)
 
     Polls.end_poll!(poll, @fleet, actor: starter)
 
     for outsider <- [nil, human("c")] do
-      read = Polls.get_poll!(@fleet, poll.id, actor: outsider)
-      assert read.totals == [%{choice: "Left door", votes: 2}, %{choice: "Right door", votes: 0}]
-      assert %Ash.ForbiddenField{} = read.notes
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Polls.list_polls(@fleet, actor: outsider, authorize_with: :error)
+
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Polls.get_poll(@fleet, poll.id, actor: outsider, authorize_with: :error)
 
       assert {:error, %Ash.Error.Forbidden{}} =
                Polls.votes_in_poll(@fleet, poll.id, actor: outsider, authorize_with: :error)
     end
 
-    assert %{notes: "The left one creaks."} = Polls.get_poll!(@fleet, poll.id, actor: voter)
+    assert %{notes: "The left one creaks.", totals: totals} =
+             Polls.get_poll!(@fleet, poll.id, actor: voter)
+
+    assert totals == [%{choice: "Left door", votes: 2}, %{choice: "Right door", votes: 0}]
 
     assert [%{token_id: 1, reason: "open"}, %{token_id: 2}] =
              @fleet |> Polls.votes_in_poll!(poll.id, actor: voter) |> Enum.sort_by(& &1.token_id)

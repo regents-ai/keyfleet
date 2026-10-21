@@ -245,7 +245,7 @@ defmodule Keyfleet.FleetRoomsTest do
             "Hull \u2066survey",
             # Invisible and format characters, and line and paragraph
             # separators, whether inside a name or all of it.
-            "General\u200B",
+            "Public\u200B",
             "\u200B",
             "Hull\u200Esurvey",
             "Hull\u200Fsurvey",
@@ -290,8 +290,8 @@ defmodule Keyfleet.FleetRoomsTest do
       # topic and a created room's name, in any case and in any Unicode form
       # that comes to the same name.
       for topic <- [
-            "General",
-            "Ｇｅｎｅｒａｌ",
+            "Public",
+            "Ｐｕｂｌｉｃ",
             "ｈｕｌｌ ＳＵＲＶＥＹ",
             " welcome AND intros ",
             "VOTING",
@@ -411,7 +411,7 @@ defmodule Keyfleet.FleetRoomsTest do
 
       # An open room's topic, a fixed room's name, an unnamed open room's name
       # and another created room's name.
-      for name <- ["hull", "GENERAL", "Open Room 2", "DECK"] do
+      for name <- ["hull", "PUBLIC", "Open Room 2", "DECK"] do
         assert {:error, %Postgrex.Error{postgres: %{code: :unique_violation}}} =
                  created.("lounge", name),
                name
@@ -505,8 +505,8 @@ defmodule Keyfleet.FleetRoomsTest do
       # A fixed room's name, an unnamed open room's name, an open room's topic
       # and another created room's name, in any case.
       for name <- [
-            "General",
-            "Ｇｅｎｅｒａｌ",
+            "Public",
+            "Ｐｕｂｌｉｃ",
             " welcome AND intros ",
             "open ROOM 2",
             "DRY dock",
@@ -526,7 +526,7 @@ defmodule Keyfleet.FleetRoomsTest do
       # Names that only start like another room's are free, and so is any
       # language and a name an open room had before it was named.
       for {slug, name} <- [
-            {"store", "General store"},
+            {"store", "Public store"},
             {"open-6", "Open room 6"},
             {"kai", "Kāi"},
             {"deck", "Open room 1"}

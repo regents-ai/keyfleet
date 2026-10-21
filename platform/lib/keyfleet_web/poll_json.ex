@@ -5,9 +5,9 @@ defmodule KeyfleetWeb.PollJSON do
   alias Keyfleet.Polls.Vote
 
   @doc """
-  A poll as its reader may read it (`Keyfleet.Polls.Poll`): everyone gets its
-  question, choices, how many votes it has drawn and, once closed, `totals`;
-  only the fleet's Key holders get its `notes`.
+  A poll as the fleet's members read it (`Keyfleet.Polls.Poll`): its
+  question, choices, notes, how many votes it has drawn and, once closed,
+  `totals`.
   """
   def poll(poll) do
     %{
@@ -20,14 +20,11 @@ defmodule KeyfleetWeb.PollJSON do
       ended_at: poll.ended_at,
       open: Polls.open?(poll),
       votes_cast: poll.votes_cast,
-      totals: poll.totals
+      totals: poll.totals,
+      notes: poll.notes
     }
-    |> put_readable(:notes, poll.notes)
   end
 
   @doc "A vote, as its Key's agents and the fleet's Key holders read it."
   def vote(vote), do: Vote.to_map(vote)
-
-  defp put_readable(map, _field, %Ash.ForbiddenField{}), do: map
-  defp put_readable(map, field, value), do: Map.put(map, field, value)
 end

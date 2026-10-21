@@ -197,6 +197,7 @@ defmodule Keyfleet.MixProject do
         # Names add two: the EnsIdentity and SharedProfile records, each with its domain.
         # The table of who reads and writes what a fleet shares adds four: its
         # Check on code pushes, messages and rooms, and rooms' InGeneral check.
+        # Members-only polls add one: the Poll record's Check.
         # Quote requests add one: their domain.
         # Wall removals add two: their domain and the KeyHolder check.
         # The router adds two more: the saved-errors page is a plug it sets up as
@@ -206,7 +207,7 @@ defmodule Keyfleet.MixProject do
         # Main itself counted 79 on 16 Oct, one above the 78 recorded here; these
         # three records bring it to 82. The Key a person posts as adds one: the
         # PostingKey record, with its domain.
-        "xref graph --label compile-connected --fail-above 83",
+        "xref graph --label compile-connected --fail-above 84",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

@@ -63,7 +63,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
   @doc """
   One fleet: its rules, who's here, its open work, its rooms and its latest
-  posts in General, or for a coming-soon fleet, that it is coming soon, and
+  posts in the Public room, or for a coming-soon fleet, that it is coming soon, and
   for Classic #1, its sale's terms.
   """
   def show(assigns) do
@@ -111,7 +111,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     The fleet's other rooms are for Key holders.
 
-    ## Latest posts in General
+    ## Latest posts in the Public room
 
     #{posts(fleet.recent_posts)}
 

@@ -427,15 +427,15 @@ defmodule KeyfleetWeb.ShellLive do
 
   # A new post of the room anyone reads, published whole on that room's own
   # topic (`Keyfleet.Rooms.Message.topic/2`), which the rooms page listens to
-  # while General is open, and shows as it came.
+  # while the Public room is open, and shows as it came.
   defp notice(%Broadcast{topic: "public:room:" <> _} = notice, socket),
     do: RoomsLive.handle_info(notice, socket)
 
   # A notice that the open room has taken a post it is not showing yet is only a
   # nudge to look again. The new posts are read back from the room itself, and
   # a room shown as for keys only looks again at whether the reader may read
-  # it; the place the notice names is never shown. General's posts come whole
-  # just before their head, so a page of General is level with the head when
+  # it; the place the notice names is never shown. The Public room's posts come whole
+  # just before their head, so a page of the Public room is level with the head when
   # it arrives and reads nothing; only a post whose notice was lost leaves it
   # behind.
   defp notice(
@@ -598,7 +598,6 @@ defmodule KeyfleetWeb.ShellLive do
        |> FleetLive.shared_changed(key)
        |> KeyProfileLive.shared_changed(key)
        |> ProposalsLive.shared_changed(key)
-       |> PollsLive.shared_changed(key)
        |> buy_key_changed(key)}
 
   defp notice({:refresh_activity, _fleet_id} = message, socket),
@@ -998,6 +997,19 @@ defmodule KeyfleetWeb.ShellLive do
     do: true
 
   def member?(_socket, _fleet_id), do: false
+
+  @doc """
+  Whether the reader may read `component` (`Keyfleet.Access`) of `fleet_id`,
+  the fleet in the address, as last read.
+  """
+  def may_read?(
+        %{assigns: %{fleet_class: %{fleet_id: fleet_id, class: class}}},
+        fleet_id,
+        component
+      ),
+      do: Access.enough?(class, :read, component)
+
+  def may_read?(_socket, _fleet_id, _component), do: false
 
   # The fleet whose keys the page on show follows: the fleet's own page, one
   # of its keys' pages, one of its rooms, its workspace, or its polls.

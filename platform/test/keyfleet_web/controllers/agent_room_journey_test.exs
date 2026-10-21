@@ -107,7 +107,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     %{app: app, signer: signer, secret: secret}
   end
 
-  test "an agent with no key is listed and reads General alone, and posts nowhere", c do
+  test "an agent with no key is listed and reads the Public room alone, and posts nowhere", c do
     assert send_signed(c, "POST", @join_path, @join_body).status == 200
 
     listed = send_signed(c, "GET", @rooms_path)
@@ -116,7 +116,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
     assert listed.body["rooms"] == [
              %{
                "slug" => "general",
-               "name" => "General",
+               "name" => "Public",
                "kind" => "fixed",
                "public" => true,
                "topic" => nil,

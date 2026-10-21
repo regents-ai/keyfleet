@@ -23,7 +23,7 @@ defmodule Keyfleet.RoomsTest do
     assert length(Rooms.bootstrap_rooms!(Fleets.catalog_ids())) == 50
     first = persisted_rooms()
     assert length(first) == 50
-    assert Enum.any?(first, &(&1 == {existing.id, existing.fleet_id, "general", "General"}))
+    assert Enum.any?(first, &(&1 == {existing.id, existing.fleet_id, "general", "Public"}))
 
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     assert persisted_rooms() == first
@@ -34,7 +34,7 @@ defmodule Keyfleet.RoomsTest do
 
       assert Enum.map(rooms, &{&1.slug, &1.name, &1.kind, &1.topic}) == [
                {"welcome", "Welcome and intros", :fixed, nil},
-               {"general", "General", :fixed, nil},
+               {"general", "Public", :fixed, nil},
                {"business", "Business", :fixed, nil},
                {"voting", "Voting", :fixed, nil},
                {"coding", "Coding", :fixed, nil},

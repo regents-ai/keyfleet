@@ -218,7 +218,7 @@ defmodule Keyfleet.KeyThreadsTest do
              {"general", "Morning"}
            ]
 
-    # Anyone else reads only what the key said in General.
+    # Anyone else reads only what the key said in the Public room.
     assert Enum.map(Rooms.posts_as_key!(@fleet, 1), &{&1.room.slug, &1.body}) == [
              {"general", "Anyone on the hull survey?"},
              {"general", "Morning"}
@@ -235,7 +235,7 @@ defmodule Keyfleet.KeyThreadsTest do
 
   test "a post tells the keys it concerns once, and a repeat tells nobody",
        %{first: first, fifth: fifth, first_agent: first_agent} do
-    # Keys' threads and General are told to anyone.
+    # Keys' threads and the Public room are told to anyone.
     Phoenix.PubSub.subscribe(Keyfleet.PubSub, Rooms.topic(@fleet, :public))
 
     {:ok, opening} = send_to_key(first, 5, "Welcome aboard", "k-1")

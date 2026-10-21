@@ -273,12 +273,13 @@ pages draw with, Geist Regular and Geist Pixel Square.
 ## Capacity and visitors' timings
 
 A crowd on one page costs about what one visitor costs. What every visitor
-who isn't a member sees of a fleet, its proposals, its Treasury and its polls
-is read once for every open page and held in `Keyfleet.SharedReading`
-(`KeyfleetWeb.FleetNow`, `FleetProposals`, `FleetPolls`); each producer reads
+who isn't a member sees of a fleet, its proposals and its Treasury is read
+once for every open page and held in `Keyfleet.SharedReading`
+(`KeyfleetWeb.FleetNow`, `FleetProposals`); each producer reads
 again at most once a second after a notice and heals every minute. Each new
-post in a fleet's General room reaches every open page of it whole, on
-`Keyfleet.Rooms.Message.topic/2`. A member's pages still read as the member.
+post in a fleet's Public room reaches every open page of it whole, on
+`Keyfleet.Rooms.Message.topic/2`. A member's pages still read as the member, and polls, which only members see,
+are read on each member's page.
 `/healthz` checks the database over a connection of its own, so a busy pool
 never fails the machine's health check. After a deploy, open pages reconnect
 spread over a moment rather than all at once (`assets/js/app.ts`).
@@ -407,10 +408,7 @@ opens its rooms and turns its key sales on, all at once; a coming-soon fleet
 opens with it. It refuses a fleet whose chain, USDC or trait table differs
 from a fleet already recorded.
 
-`/app/bin/seed-load-staging` gives a staging database the one finished
-Regents Club poll the load runs visit and prints its address; it refuses any
-role but staging and refuses while the Club is still coming soon, and running
-it again changes nothing. Load, deploy-during-load and database-fault runs
+Load, deploy-during-load and database-fault runs
 start the release image and a throwaway database on one computer
 ([load/README.md](load/README.md)).
 

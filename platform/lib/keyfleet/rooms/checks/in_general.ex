@@ -1,11 +1,11 @@
 defmodule Keyfleet.Rooms.Checks.InGeneral do
   @moduledoc """
-  The fleet's General room (`Keyfleet.Rooms.Room.public_slug/0`) and the lines
+  The fleet's Public room (`Keyfleet.Rooms.Room.public_slug/0`) and the lines
   written in it, for reads that name their fleet and for whoever may read
-  General (`Keyfleet.Access`, `:general_room`). A read without a fleet has
+  the Public room (`Keyfleet.Access`, `:general_room`). A read without a fleet has
   none.
 
-  For lines, General's id is found once, in the same statement, so the read
+  For lines, the Public room's id is found once, in the same statement, so the read
   keeps to its index on the fleet's room and time
   (`messages_fleet_room_lines_index`) rather than joining every line to its
   room.
@@ -17,7 +17,7 @@ defmodule Keyfleet.Rooms.Checks.InGeneral do
   alias Keyfleet.Rooms.Room
 
   @impl true
-  def describe(_opts), do: "it is the fleet's General room, or a line in it"
+  def describe(_opts), do: "it is the fleet's Public room, or a line in it"
 
   @impl true
   def filter(actor, %{query: %Ash.Query{} = query}, _opts) do

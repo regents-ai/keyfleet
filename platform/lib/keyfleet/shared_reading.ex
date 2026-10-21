@@ -96,7 +96,7 @@ defmodule Keyfleet.SharedReading do
       open:
         "a fleet's activity, what it is trying and how far it has sold, as a signed-out " <>
           "visitor reads them, are open to a signed-out read: Keyfleet.Activity.page/3 and " <>
-          "headline/2 with no actor (General, the Keys' threads and goal titles, under the " <>
+          "headline/2 with no actor (the Public room, the Keys' threads and goal titles, under the " <>
           "Keyfleet.Rooms.Message and Keyfleet.Graph.Object :titled read policies), " <>
           "Keyfleet.Graph.trying_now/1 and :open_work, the fleet's record, and the Keys sold " <>
           "(Keyfleet.Chain.minted/2), which the chain shows anyone; if any of these tightens, " <>
@@ -163,28 +163,6 @@ defmodule Keyfleet.SharedReading do
       # Up to 4,000 bytes of words, fifty votes and the calls; a larger one is
       # refused, counted, and read for each visit instead.
       bytes: 131_072,
-      within: 120
-    },
-    fleet_polls: %{
-      open:
-        "a fleet's latest hundred polls are open to a signed-out read (Keyfleet.Polls.Poll " <>
-          ":listed read policy and its fields but :notes); a poll's notes and each Key's vote " <>
-          "are for Key holders only (Poll's :notes field policy, Keyfleet.Polls.Vote :in_poll " <>
-          "and :mine) and are never held here; if any of these changes, this kind changes with it",
-      keys: 5,
-      # Not yet measured: a hundred polls, each with a question of up to 200
-      # characters and up to ten choices' counts.
-      bytes: 196_608,
-      within: 120
-    },
-    poll: %{
-      open:
-        "one poll on a fleet's list, with its choices, as anyone reads it: the read policies " <>
-          "of fleet_polls, with notes and votes left out",
-      # A hundred for each catalog fleet, with room for a pass to put new polls
-      # before it deletes the ones they pushed off.
-      keys: 1_000,
-      bytes: 16_384,
       within: 120
     }
   }

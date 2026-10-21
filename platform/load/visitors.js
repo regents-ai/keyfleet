@@ -16,7 +16,7 @@ import { visit } from "./lib/live.js"
 export const options = buildOptions()
 
 export function setup() {
-  return { pages: discoverPages(site, settings.pollPath) }
+  return { pages: discoverPages(site) }
 }
 
 export default function (data) {

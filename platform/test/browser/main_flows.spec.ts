@@ -10,7 +10,8 @@ import {
 
 // The walk a first-time visitor takes, signed out, on the device in their
 // hand: the homepage and Classic #1's sale, Classic #1's own page, the
-// Regents Club and its five tabs, a room anyone can read, and a poll. Each
+// Regents Club and its five tabs, a room anyone can read, and its polls, which
+// are for its Keys. Each
 // step must fit the screen, keep its controls big enough to press, raise no
 // error and stay connected.
 //
@@ -110,36 +111,27 @@ test("the Regents Club opens on its hall, and each of its five tabs opens", asyn
   await expectComfortable(page, errors)
 })
 
-test("General opens from the hall, and anyone can read it", async ({page}) => {
+test("the Public room opens from the hall, and anyone can read it", async ({page}) => {
   const errors = watchErrors(page)
   await openClub(page)
 
-  await page.locator("#fleet-channels").getByRole("link", {name: "General", exact: true}).click()
+  await page.locator("#fleet-channels").getByRole("link", {name: "Public", exact: true}).click()
   await expect(page).toHaveURL(/\/rooms\/general$/)
-  const title = page.getByRole("heading", {level: 1, name: "General", exact: true})
+  const title = page.getByRole("heading", {level: 1, name: "Public", exact: true})
   await expectOnFirstScreen(page, title, "the room's name")
   await expect(page.locator("#rooms-thread-list [data-post]").first()).toBeVisible()
   await expect(page.locator("#rooms-page")).toContainText("Anyone can read this room.")
   await expectComfortable(page, errors)
 })
 
-test("a poll opens from the hall, with its question and choices", async ({page}) => {
+test("the polls are for the fleet's Keys: the hall doesn't list them, and their address says so", async ({page}) => {
   const errors = watchErrors(page)
   await openClub(page)
+  await expect(page.locator("#fleet-polls-link")).toHaveCount(0)
 
-  await page.locator("#fleet-polls-link").click()
-  await expect(page).toHaveURL(/\/polls$/)
-  await expect(page.getByRole("heading", {level: 1, name: "Polls"})).toBeVisible()
-  await expectComfortable(page, errors)
-
-  const poll = page.locator("#polls-page .polls-card h3 a").first()
-  const question = (await poll.textContent())!.trim()
-  await poll.click()
-  await expect(page).toHaveURL(/\/polls\/[0-9a-f-]{36}$/)
-  await expectOnFirstScreen(page, page.getByRole("heading", {level: 1, name: question, exact: true}), "the poll's question")
-  await expect(page.locator("#poll-choices .polls-options li, #poll-results li").first()).toBeVisible()
-  // Signed out, a visitor follows along; holding a Key is what lets someone vote.
-  await expect(page.locator("#poll-vote-form")).toHaveCount(0)
-  await expect(page.locator("#poll-choices")).toContainText("Anyone can follow along.")
+  await visit(page, `${club}/polls`)
+  await expectOnFirstScreen(page, page.locator("#polls-locked"), "who the polls are for")
+  await expect(page.locator("#polls-locked")).toContainText("Keys only")
+  await expect(page.locator("#polls-sign-in")).toBeVisible()
   await expectComfortable(page, errors)
 })

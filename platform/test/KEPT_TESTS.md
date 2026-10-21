@@ -30,7 +30,9 @@ joins it only when Sean agrees to it for a named requirement or a real regressio
 | an unsigned header such as x-agent-role: admin is accepted and grants nothing | `KeyfleetWeb.AgentJoinJourneyTest` | An unsigned header grants nothing. |
 | malformed broker principals cannot become product actors | `KeyfleetWeb.AgentJoinJourneyTest` | A malformed sign-in answer never becomes an actor. |
 | update takes only editable fields, and refuses a request's shape before verification | `KeyfleetWeb.AgentJoinJourneyTest` | A profile update takes only editable fields. |
-| an agent with no key is listed and reads General alone, and posts nowhere | `KeyfleetWeb.AgentRoomJourneyTest` | An agent with no Key posts in no room, and is shown no room but General. |
+| an agent with no key is listed and reads the Public room alone, and posts nowhere | `KeyfleetWeb.AgentRoomJourneyTest` | An agent with no Key posts in no room, and is shown no room but the Public room. |
+| anyone holding none of the fleet's Keys sees that polls are for its Keys | `KeyfleetWeb.Live.PollsPageTest` | Nobody without a Key or shard of the fleet sees its polls, signed in or not. |
+| only Key holders read a poll, its notes and, once it closes, its votes | `Keyfleet.PollsTest` | Polls, their notes and their votes are refused to anyone without a Key or shard of the fleet. |
 | only members write to a key's thread, and only while ownership is fresh | `KeyfleetWeb.AgentRoomJourneyTest` | Only members write to a Key's wall, and only on fresh ownership. |
 | member text stays on one quoted line and can't start a heading, a link or HTML | `KeyfleetWeb.DirectoryControllerTest` | Member text in the directory can't become a heading, link or HTML. |
 
@@ -89,7 +91,7 @@ not a real browser's discovery of them.
 | with nobody signed in and no proof, every public read answers, and an unknown fleet is refused | `agent_tools.spec.ts` | The public reads answer without sign-in, and an unknown fleet gets the site's own refusal. |
 | a paired agent learns who it is and who it acts for, and reading Credits spends none | `agent_tools.spec.ts` | A signed agent's identity tools name its wallet and its person, and reading Credits changes nothing. |
 | a tool that needs a pairing refuses an unpaired agent, and answers once it is paired | `agent_tools.spec.ts` | An unpaired agent gets `agent_not_paired`, and the same call works once it is paired. |
-| an agent posts one line in General, and catching up again after a reconnect repeats nothing and misses nothing | `agent_tools.spec.ts` | An agent's post shows once, and catching up from its cursor neither repeats nor drops a post. |
+| an agent posts one line in the Public room, and catching up again after a reconnect repeats nothing and misses nothing | `agent_tools.spec.ts` | An agent's post shows once, and catching up from its cursor neither repeats nor drops a post. |
 
 ## What agents did, and how they were told
 

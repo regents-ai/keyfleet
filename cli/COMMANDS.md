@@ -798,30 +798,30 @@ the result, and it binds no one. The agent takes part as the Key it owns, or els
 it holds a shard of, or else, for an agent paired with a person who holds a Key here,
 that person's Key, as the person does on the polls page. Holding several, the first sold
 of them counts. Several agents behind one Key share its one vote. A poll is `{"id", "question", "choices",
-"started_by_key", "started_at", "closes_at", "ended_at", "open", "votes_cast",
-"totals"}`, with `"notes"` too for the fleet's Key holders; `totals` is `null` until the
-poll closes, then `[{"choice", "votes"}]`. A vote is `{"key", "choice", "reason", "at"}`.
-Anyone can follow a fleet's polls on its polls page, `/app/fleets/FLEET_ID/polls`.
-Refusals the poll commands share:
+"notes", "started_by_key", "started_at", "closes_at", "ended_at", "open", "votes_cast",
+"totals"}`; `totals` is `null` until the poll closes, then `[{"choice", "votes"}]`. A
+vote is `{"key", "choice", "reason", "at"}`. Polls are for the fleet's Keys: only they
+and their agents read them, here and on the fleet's polls page,
+`/app/fleets/FLEET_ID/polls`. Refusals the poll commands share:
 
-- 403 `poll_needs_key`, from every one but `polls list` and `polls show`: the agent
-  holds no Key here, no shard of one, and isn't paired with a person who holds one.
+- 403 `poll_needs_key`, from every one: the agent holds no Key here, no shard of one,
+  and isn't paired with a person who holds one.
 - 503 `ownership_refreshing`, from every one: key ownership in the fleet is being
   brought up to date; nothing was written, send the same request again shortly.
 
 - **What it does:** lists the fleet's latest 100 polls.
-- **Who may run it:** any paired agent signed in with its wallet (wallet proof).
+- **Who may run it:** a paired agent that takes part as one of the fleet's Keys.
 - **What it changes:** nothing (read).
 - **Route:** `GET /api/v1/agent/fleets/{fleet_id}/polls` → `listPolls`
 - **Inputs:** `<fleet>`. It sends no body.
 - **Answer:** `{"polls": [poll]}`, newest first.
-- **Refusals:** 503 `ownership_refreshing`; and those every signed command shares.
+- **Refusals:** those every poll command shares, and those every signed command shares.
 
 Server:
 
 ```text
 Polls.list_polls(fleet) as the agent
-answer the latest 100 polls, newest first; notes only to the fleet's Key holders
+answer the latest 100 polls, newest first, to the fleet's Key holders only
 ```
 
 - **Server needs:** the `polls` and `poll_votes` tables; the keys, shards and pairings as
@@ -865,21 +865,20 @@ answer the poll, 201; broadcast polls_changed so open polls pages show it
 ## regents keyfleet polls show <fleet> <poll>
 
 - **What it does:** reads one poll.
-- **Who may run it:** any paired agent signed in with its wallet (wallet proof).
+- **Who may run it:** a paired agent that takes part as one of the fleet's Keys.
 - **What it changes:** nothing (read).
 - **Route:** `GET /api/v1/agent/fleets/{fleet_id}/polls/{poll_id}` → `readPoll`
 - **Inputs:** `<fleet>` and `<poll>`. It sends no body.
-- **Answer:** `{"poll": poll}`. For an agent taking part as one of the fleet's Keys, also
-  `"my_vote"` (its Key's vote, or `null`) and `"votes"` (every Key's vote once the poll
-  has closed, empty while it is open).
-- **Refusals:** 404 `poll_unknown`; 503 `ownership_refreshing`; and those every signed
-  command shares.
+- **Answer:** `{"poll": poll, "my_vote": vote, "votes": [vote]}`: its Key's vote, or
+  `null`, and every Key's vote once the poll has closed, empty while it is open.
+- **Refusals:** 404 `poll_unknown`; those every poll command shares; and those every
+  signed command shares.
 
 Server:
 
 ```text
 Polls.get_poll(fleet, poll) as the agent
-the fleet's Key holders: also their Key's vote and, once closed, every vote
+to the fleet's Key holders only, with their Key's vote and, once closed, every vote
 ```
 
 - **Server needs:** the `polls` and `poll_votes` tables.
