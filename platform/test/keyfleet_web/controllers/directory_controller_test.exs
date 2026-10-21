@@ -127,9 +127,9 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     assert DirectoryMD.inline("say “hi”", 120) == ~S'“say "hi"”'
   end
 
-  # An agent reading a fleet the site doesn't have gets the API's own refusal,
-  # from the Markdown as from the JSON.
-  test "a fleet outside the catalog answers 404 fleet_unknown", %{conn: conn} do
+  # The API refuses a fleet the site doesn't have; its Markdown addresses answer
+  # a Markdown not-found page that points to the fleet list.
+  test "a fleet outside the catalog answers 404", %{conn: conn} do
     unknown = conn |> get("/api/v1/fleets/fleet_unknown") |> json_response(404)
     assert unknown == refused("fleet_unknown")
 
@@ -142,12 +142,12 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
           "/fleets/fleet_unknown",
           "/fleets/fleet_unknown/rooms"
         ] do
-      assert conn |> get(path) |> json_response(404) == refused("fleet_unknown"), path
+      answer = get(conn, path)
+      assert response_content_type(answer, :md) =~ "text/markdown", path
+      assert response(answer, 404) =~ "(#{KeyfleetWeb.PublicDocuments.url("/fleets.md")})", path
     end
   end
 
-  # A fleet's address works for whoever opens it: a person reaches the fleet's
-  # page or rooms, an agent the fleet's Markdown.
   test "a browser opening a fleet's address is sent to its page or rooms, an agent to its Markdown" do
     browser = fn path ->
       build_conn()

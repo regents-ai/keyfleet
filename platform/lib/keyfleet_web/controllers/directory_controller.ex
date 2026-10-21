@@ -9,13 +9,13 @@ defmodule KeyfleetWeb.DirectoryController do
 
   A browser that opens `/fleets/<id>` or `/fleets/<id>/rooms` is sent to the
   fleet's page or its Public room; any other request there is sent to the
-  fleet's Markdown. An unknown fleet is the site's not-found page for a browser
-  and 404 `fleet_unknown`, as the API answers it, for anything else.
+  fleet's Markdown. An unknown fleet is the site's not-found page, in HTML for a
+  browser and in Markdown, pointing to `/fleets.md`, for anything else.
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.{Directory, Fleets}
-  alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorHTML, PageRead, Refusal}
+  alias KeyfleetWeb.{DirectoryJSON, DirectoryMD, ErrorHTML, ErrorMD, PageRead, Refusal}
 
   @unavailable "The fleet directory can't be read right now. Try again in a moment."
 
@@ -41,7 +41,7 @@ defmodule KeyfleetWeb.DirectoryController do
   defp fleet_md(conn, fleet_id) do
     case read(fn -> Directory.fleet(fleet_id) end) do
       {:ok, fleet} -> markdown(conn, DirectoryMD.show(%{fleet: fleet, generated_at: now()}))
-      :unknown -> Refusal.json(conn, 404, "fleet_unknown")
+      :unknown -> not_found(conn, "md")
       {:error, _failure} -> unavailable_md(conn)
     end
   end
@@ -84,16 +84,16 @@ defmodule KeyfleetWeb.DirectoryController do
     case {fleet_id in Fleets.catalog_ids(), browser?(conn)} do
       {true, true} -> redirect(conn, to: Fleets.path(fleet_id) <> under)
       {true, false} -> redirect(conn, to: ~p"/fleets/#{fleet_id <> ".md"}")
-      {false, true} -> not_found_html(conn)
-      {false, false} -> Refusal.json(conn, 404, "fleet_unknown")
+      {false, true} -> not_found(conn, "html")
+      {false, false} -> not_found(conn, "md")
     end
   end
 
-  defp not_found_html(conn) do
+  defp not_found(conn, format) do
     conn
     |> put_status(404)
-    |> put_format("html")
-    |> put_view(html: ErrorHTML)
+    |> put_format(format)
+    |> put_view(html: ErrorHTML, md: ErrorMD)
     |> render(:"404")
   end
 

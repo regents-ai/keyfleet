@@ -187,4 +187,20 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     [name, value] = String.split(line, ": ", parts: 2)
     {name, value}
   end
+
+  test "a Markdown address that isn't here answers in Markdown and points to the agent guide" do
+    guide = "(#{PublicDocuments.url("/llms.txt")})"
+
+    for path <- ["/nope.md", "/docs/nope.md"] do
+      answer = get(build_conn(), path)
+      assert response_content_type(answer, :md) =~ "text/markdown", path
+      assert response(answer, 404) =~ guide, path
+    end
+
+    {404, headers, body} =
+      assert_error_sent(404, fn -> get(build_conn(), "/agents/nope/skill.md") end)
+
+    assert {"content-type", "text/markdown; charset=utf-8"} in headers
+    assert body =~ guide
+  end
 end

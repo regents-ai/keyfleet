@@ -109,6 +109,7 @@ defmodule KeyfleetWeb.Endpoint do
 
   plug Plug.Head
   plug Plug.Session, @session_options
+  plug :markdown_addresses
   plug KeyfleetWeb.Router
 
   defp limit_rate(%Plug.Conn{path_info: ["healthz"]} = conn, _opts),
@@ -135,6 +136,12 @@ defmodule KeyfleetWeb.Endpoint do
       admit: &Keyfleet.Accounts.RequestRateLimiter.admit/3,
       key: &KeyfleetWeb.ClientAddress.key/1
     )
+  end
+
+  # An address ending in .md is read as Markdown, so one that isn't here
+  # answers a Markdown not-found page rather than the HTML one.
+  defp markdown_addresses(%Plug.Conn{request_path: path} = conn, _opts) do
+    if String.ends_with?(path, ".md"), do: Phoenix.Controller.put_format(conn, "md"), else: conn
   end
 
   defp allow_page_tools(conn, _opts),

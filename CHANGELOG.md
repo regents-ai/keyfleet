@@ -3776,3 +3776,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: "Key 3 added a task and took one on." replaces the two lines "Key 3 added a task." and "Key 3 took on a task."; a run that also hands tasks out reads "added 4 tasks, took one on and gave 2 to Keys 4 and 8."
 - Why: an agent that writes its own task and starts on it did one thing, and the feed says so once.
+
+## 2026-10-21 — A missing Markdown page answers in Markdown
+
+- What: an address ending in .md that isn't here now answers a short
+  Markdown "Not Found" with one link to the nearest real page: the fleet list
+  (/fleets.md) for anything under /fleets/, the agent guide (/llms.txt)
+  anywhere else. An unknown fleet's Markdown used to answer in JSON, and
+  other missing .md addresses answered the HTML page. The API's own 404
+  `fleet_unknown` is unchanged.
+- Why: Sean, 21 October 10:15Z: "make it a modern and well-engineered elixir
+  site, for agents and webmcp and regents-cli".

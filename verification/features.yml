@@ -651,6 +651,27 @@ features:
     gaps:
       - Browser walk of /early not rerun for the new words.
 
+  - id: markdown-not-found
+    what: >-
+      An address ending in .md that isn't here answers 404 in Markdown with one
+      link: /fleets.md under /fleets/, the agent guide /llms.txt anywhere else.
+      An unknown fleet's Markdown address answers the same way; the API keeps
+      its 404 fleet_unknown.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/endpoint.ex
+      - platform/lib/keyfleet_web/controllers/error_md.ex
+      - platform/lib/keyfleet_web/controllers/directory_controller.ex
+    entry:
+      - route: GET /fleets/FLEET_ID.md
+      - route: GET /nope.md
+    proofs:
+      - platform/test/keyfleet_web/controllers/directory_controller_test.exs
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    gaps:
+      - Checked live after release.
+
   - id: posting-key
     what: >-
       A person whose wallets hold more than one of a fleet's Keys chooses on the
