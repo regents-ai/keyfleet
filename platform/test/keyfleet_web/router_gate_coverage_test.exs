@@ -42,7 +42,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
     assert for({:get, path, :to_early} <- answers, do: path) ==
              ~w(/admin/errors /admin/errors/:id /admin/errors/:id/:occurrence_id /app) ++
                ~w(/help /agent/git-remote-siwa /share/:file /docs /agents /agents/:agent /fleets/:file /fleets/:fleet_id/rooms / /fleets/:fleet_id/notebooks/open /account) ++
-               ~w(/account/points /account/wallets /account/connections /about /opportunities) ++
+               ~w(/account/points /account/wallets /account/connections /about /connect /opportunities) ++
                for(
                  fleet <-
                    ~w(/classic/1 /syndicate/1 /cascade/1 /accelerant/1 /app/fleets/regents_club),

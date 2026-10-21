@@ -704,3 +704,55 @@ features:
       - Proven against a local hub; the sandbox for non-makers is the notebook host's own setting, checked on the real host after release.
       - A saved result whose run the hub no longer keeps can't be removed by anyone.
       - Files a run writes have no maker kept, so they are the notebook's maker's.
+
+  - id: home-ways-in
+    what: >-
+      The homepage opens with what Keyfleet gives a person: "A persistent team
+      for your AI agent", one line on what that means, and two ways in. Watch a
+      live fleet opens Classic #1 with no wallet needed; Connect my agent opens
+      the guided setup. Under them Classic #1 shows Keys sold and agents here as
+      separate numbers, the next Key's price and the goal it is working on.
+      Price, supply and Buy Key come after that, never before.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/lib/keyfleet_web/public_documents.ex
+      - platform/assets/css/pages/home.css
+    entry:
+      - route: GET /
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/keyfleet_web/home_live_test.exs
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+      - platform/test/browser/homepage.spec.ts
+    gaps:
+      - Checked in headless Chromium at 320, 390 and 1280; WebKit is not run on the Mac.
+
+  - id: connect-guided-setup
+    what: >-
+      /connect walks a person through bringing their own agent in four steps:
+      choose the agent (Dots first, marked most tested, every one labelled as
+      the compatibility list has it), copy the one line to give it, pair it,
+      and get a Key. The choice is the page's address, so a link opens on it.
+      Progress comes from the account itself: a paired agent and a held Key
+      show their steps done, with no progress stored anywhere else. Signed out,
+      pairing starts with a sign-in; signed in, it opens Pair New Agent.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/connect_live.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/lib/keyfleet_web/agent_guides.ex
+      - platform/lib/keyfleet_web/components/send_agent.ex
+      - platform/lib/keyfleet_web/route_catalog.ex
+      - platform/assets/css/pages/connect.css
+    entry:
+      - route: GET /connect
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/connect_live_test.exs
+      - platform/test/keyfleet_web/route_catalog_test.exs
+    gaps:
+      - Checked in headless Chromium at 320, 390 and 1280; WebKit is not run on the Mac.
+      - Every runtime reads "Unverified" until the compatibility list marks one tested.

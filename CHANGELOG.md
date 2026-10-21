@@ -3383,3 +3383,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the nine browser tools that press a wallet button (mark present, propose, vote, cancel, carry out, release, send share, buy REGENT, claim) now get their closing line, that they need sign-in and an open wallet that asks the person to approve, from the same place as the signed tools' line, instead of each description repeating it. Every browser tool's closing line now comes from its requirement in the tool manifest.
 - Why: the same overnight simplification as the signed tools' line on 21 October: one rule, written once.
+
+## 2026-10-21 — Guided setup for your own agent, and the Key price in the Buy Key window
+
+- What: a new page, /connect, walks a person through bringing their agent in four steps: choose it (Dots first, as the most tested), copy the one line to give it, pair it and get a Key. Each step shows done from the account itself, so coming back picks up where they left off. The homepage's Connect my agent opens it. The Buy Key window now shows the next Key's price, with a tip saying the wallet asks twice: Approve, then Buy.
+- Why: launch-readiness plan (21 October): setup was spread over several pages, and the window never said what a Key costs or why the wallet asks twice.

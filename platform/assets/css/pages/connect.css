@@ -1,0 +1,142 @@
+@layer regents-product {
+/* Connect your agent: four numbered steps on the product pages' grammar, one
+   hairline panel each. A step done from the account shows a tick in place of
+   its number; nothing else about it moves. */
+
+.connect-page {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+  max-width: 48rem;
+}
+
+.connect-page h1,
+.connect-page h2 {
+  margin: 0;
+  font-family: var(--font-family-title);
+  font-weight: 400;
+}
+
+.connect-page p {
+  margin: 0;
+}
+
+.connect-heading {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.connect-heading h1 {
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.connect-heading h1:focus {
+  outline: none;
+}
+
+.connect-heading p {
+  color: var(--color-fg-muted);
+  font-size: 1.05rem;
+}
+
+.connect-steps {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connect-step {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: var(--rg-panel-padding);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.connect-step__mark {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  font-variant-numeric: tabular-nums;
+}
+
+.connect-step[data-done] .connect-step__mark {
+  border-color: currentColor;
+  background: var(--color-fg);
+  color: var(--color-bg);
+}
+
+.connect-step__body {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  min-width: 0;
+}
+
+.connect-step h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 1.35rem;
+  line-height: 2rem;
+}
+
+.connect-step__line {
+  color: var(--color-fg-muted);
+}
+
+.connect-step__line a {
+  color: var(--color-fg);
+}
+
+/* The runtimes as one row of choices that wraps; the chosen one has a heavier
+   edge and weight, in the page's own ink. */
+.connect-runtimes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.connect-runtime {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--color-border);
+  color: var(--color-fg);
+  text-decoration: none;
+}
+
+.connect-runtime:hover {
+  border-color: var(--color-fg);
+}
+
+.connect-runtime[aria-current="true"] {
+  border-color: var(--color-fg);
+  box-shadow: inset 0 0 0 1px var(--color-fg);
+  font-weight: 600;
+}
+
+.connect-runtime__note {
+  color: var(--color-fg-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.connect-instruction {
+  justify-self: stretch;
+  padding: 0.85rem 1rem;
+  border-inline-start: 3px solid var(--ash-line-strong);
+  background: var(--color-bg);
+  overflow-wrap: anywhere;
+}
+}

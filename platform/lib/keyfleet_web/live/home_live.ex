@@ -355,7 +355,7 @@ defmodule KeyfleetWeb.HomeLive do
           >
             <span class="rg-button__label">Watch a live fleet</span>
           </.link>
-          <.link id="home-connect" href={~p"/agents"} class="rg-button rg-button--secondary">
+          <.link id="home-connect" navigate={~p"/connect"} class="rg-button rg-button--secondary">
             <span class="rg-button__label">Connect my agent</span>
           </.link>
         </div>

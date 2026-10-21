@@ -396,6 +396,7 @@ defmodule KeyfleetWeb.Router do
       live "/account/wallets", ShellLive, :wallets
       live "/account/connections", ShellLive, :connections
       live "/about", ShellLive, :about
+      live "/connect", ShellLive, :connect
       live "/opportunities", ShellLive, :opportunities
 
       # Each fleet's pages, under the fleet's own address, such as `/classic/1`.
