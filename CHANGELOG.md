@@ -3927,3 +3927,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   is taken off again, so a folder that was already there keeps everyone's
   files in it.
 - Why: found in the fifth review of the notebooks work.
+## 2026-10-21 — The Buy Key window's cards turn on the Key's own ground
+
+- What: in the "Buy Key" window (Purchase Key on https://keyfleet.ai/classic/1)
+  the turning Key cards stand on the same dark ground as a Key's card in its
+  own window, reaching the window's edges, in light and dark.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline".

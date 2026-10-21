@@ -2,11 +2,17 @@
    cards turning, a note on their traits, how many are sold, then Approve and
    Buy. Phones see it across the whole width. Each row keeps its full height,
    so on a short screen the window scrolls and nothing overlaps. */
-.buy-key { --rg-dialog-size: 26rem; font-size: 1rem; color: var(--color-fg); }
-.buy-key .rg-dialog__body { display: grid; grid-auto-rows: max-content; gap: var(--space-3); }
+.buy-key {
+  --rg-dialog-size: 26rem; --buy-key-pad: clamp(var(--space-2), 4vw, var(--space-4));
+  font-size: 1rem; color: var(--color-fg);
+}
+.buy-key .rg-dialog__body { display: grid; grid-auto-rows: max-content; gap: var(--space-3); padding: var(--buy-key-pad); }
 .buy-key h2 { margin: 0; font-size: 1.5rem; line-height: 1.1; }
 .buy-key h2:focus { outline: none; }
-.buy-key .key-cards { justify-self: center; inline-size: min(100%, 12rem); }
+/* The cards turn on the same charcoal stage as a Key's own card, reaching the
+   window's edges. */
+.buy-key__stage { margin-inline: calc(-1 * var(--buy-key-pad)); padding-block: clamp(1.25rem, 4vw, 2rem); }
+.buy-key .key-cards { inline-size: min(100%, 12rem); }
 .buy-key__note { margin: 0; font-size: .875rem; text-align: center; color: var(--color-fg-muted); }
 .buy-key__facts { display: grid; margin: 0; border-block-start: 1px solid var(--hairline); }
 .buy-key__facts > div {

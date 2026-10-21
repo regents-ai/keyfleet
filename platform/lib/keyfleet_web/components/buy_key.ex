@@ -140,7 +140,9 @@ defmodule KeyfleetWeb.Components.BuyKey do
       aria-labelledby="buy-key-title"
     >
       <h2 id="buy-key-title" tabindex="-1" data-modal-title>Buy Key</h2>
-      <.cards id="buy-key-cards" />
+      <div class="key-card buy-key__stage">
+        <.cards id="buy-key-cards" />
+      </div>
       <p id="buy-key-traits" class="buy-key__note">Your Key’s traits are randomized</p>
       <dl class="buy-key__facts">
         <div>
