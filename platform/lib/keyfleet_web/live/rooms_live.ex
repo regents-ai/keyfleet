@@ -501,9 +501,17 @@ defmodule KeyfleetWeb.RoomsLive do
         ),
       room_notice: nil
     )
+    |> name_tab()
     |> stream(:posts, unmuted, reset: true, limit: -@thread_kept)
     |> mark_read()
   end
+
+  # The browser tab names the room on show, as its heading does.
+  defp name_tab(%{assigns: %{room: %{name: name, fleet_name: fleet}}} = socket)
+       when is_binary(name),
+       do: assign(socket, :page_title, "#{name} · #{fleet}")
+
+  defp name_tab(socket), do: socket
 
   # The room on show, when anyone may read it, has each new post published
   # whole on a topic of its own, which the page listens to until it leaves.

@@ -4387,3 +4387,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   no sideways scroll, no page errors. Why: the coordinator's 16:35Z walk of
   every main page; Sean, 21 October 10:16Z: "more elegant, less text,
   simplify is the guideline".
+
+## 2026-10-21 — The browser tab names the open room
+
+- What: a room's browser tab reads its name, such as "Public · Classic #1",
+  as its heading does, instead of "Rooms · Classic #1".
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".

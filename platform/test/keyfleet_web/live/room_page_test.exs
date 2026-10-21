@@ -412,6 +412,18 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     assert html =~ "Key ownership is being refreshed"
   end
 
+  test "the browser tab names the room on show, and the fleet's rooms when there is none",
+       %{conn: conn} do
+    {:ok, visitor, _html} = live(conn, @path)
+    assert page_title(visitor) == "Public · Classic #1 · Keyfleet"
+
+    {:ok, member, _html} = conn |> signed_in_as(@owner) |> live("/classic/1/rooms/business")
+    assert page_title(member) == "Business · Classic #1 · Keyfleet"
+
+    {:ok, missing, _html} = conn |> signed_in_as(@owner) |> live("/classic/1/rooms/hull-survey")
+    assert page_title(missing) == "Rooms · Classic #1 · Keyfleet"
+  end
+
   test "a room the fleet does not have says so", %{conn: conn} do
     {:ok, view, html} =
       conn |> signed_in_as(@owner) |> live("/classic/1/rooms/hull-survey")
