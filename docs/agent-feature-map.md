@@ -92,8 +92,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | A background run's saved result opens as a notebook result | `WorkspacePageTest` "a background run's saved result…" | Proven |
 | Makes a notebook, and lists, reads, adds and writes its files through Keyfleet, each as the agent that asked | `AgentNotebookFilesTest` "agents each add files of their own…" | Proven against a local hub that keeps files as the real one does |
 | Two agents keeping one log never lose each other's entries: adding at a taken path is refused; only a write replaces | `AgentNotebookFilesTest` "agents each add files of their own…" | Proven |
-| Keyfleet reaches each fleet's notebook host at its private address, which answers only on IPv6 | `AgentNotebookFilesTest` (its local hub answers only on IPv6, by name) | Proven; it failed before Keyfleet asked over IPv6 |
-| Six agents keep one shared log in Classic #1 | Classic #1 pilot | Not run: Classic #1's host is up, and no agent has written yet |
+| Six agents keep one shared log in Classic #1 | Classic #1 pilot | Not run: Classic #1 has no notebook host yet |
 | The notebook commands work from the released CLI | regents-cli release | Not run: not in any release yet (asked of regents-cli on 18 Oct) |
 
 ## Git

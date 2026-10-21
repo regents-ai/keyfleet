@@ -23,8 +23,6 @@ defmodule Keyfleet.Notebooks.MemberRequest do
         headers: [{"x-keyfleet-assertion", Pass.mint(fleet_id, subject)} | headers],
         retry: false,
         redirect: false,
-        # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
-        connect_options: [transport_opts: [inet6: true]],
         receive_timeout: Notebooks.config()[:hub_timeout_ms]
       ] ++ options
     )
