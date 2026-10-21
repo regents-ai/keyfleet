@@ -28,7 +28,6 @@ defmodule Keyfleet.Graph.Writer do
 
   require Logger
 
-  alias Keyfleet.Graph.Registry, as: GraphRegistry
   alias Keyfleet.Graph.StalledError
 
   @read_ops ~w(hello changes)
@@ -58,13 +57,7 @@ defmodule Keyfleet.Graph.Writer do
     %{id: {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, start: {__MODULE__, :start_link, [opts]}}
   end
 
-  def start_link(opts) do
-    fleet_id = Keyword.fetch!(opts, :fleet_id)
-    # The longest the writer spends on one request once it is that request's turn.
-    turn = Keyword.fetch!(opts, :check_timeout) + Keyword.fetch!(opts, :reply_timeout)
-    name = {:via, Registry, {GraphRegistry, fleet_id, turn}}
-    GenServer.start_link(__MODULE__, opts, name: name)
-  end
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
 
   @doc """
   Sends a read of the log itself (`hello` or `changes`) to the fleet's graph.
@@ -102,21 +95,19 @@ defmodule Keyfleet.Graph.Writer do
     with {:error, _reason} <- Jason.encode(term), do: {:error, @unencodable}
   end
 
+  # The writer may run on another machine: it joins its fleet's group in the
+  # `Keyfleet.Graph.Processes` scope, which every machine of the site shares.
   defp send_to_writer(fleet_id, request) do
-    case lookup(fleet_id) do
-      {:ok, pid, turn} -> call_writer(pid, request, turn + @reap_ms + 1_000)
-      :error -> {:error, :unavailable}
+    case :pg.get_members(Keyfleet.Graph.Processes, {__MODULE__, fleet_id}) do
+      [pid] -> call_writer(pid, request, turn() + @reap_ms + 1_000)
+      [] -> {:error, :unavailable}
     end
   end
 
-  defp lookup(fleet_id) do
-    case Registry.lookup(GraphRegistry, fleet_id) do
-      [{pid, turn}] -> {:ok, pid, turn}
-      [] -> :error
-    end
-  rescue
-    # The registry is absent while the graph is switched off or restarting.
-    ArgumentError -> :error
+  # The longest a writer spends on one request once it is that request's turn.
+  defp turn do
+    graph = Application.fetch_env!(:keyfleet, :graph)
+    Keyword.fetch!(graph, :check_timeout) + Keyword.fetch!(graph, :reply_timeout)
   end
 
   # A writer that is gone before the call reaches it has done nothing; one
@@ -131,6 +122,9 @@ defmodule Keyfleet.Graph.Writer do
   @impl true
   def init(opts) do
     Process.flag(:trap_exit, true)
+
+    :ok =
+      :pg.join(Keyfleet.Graph.Processes, {__MODULE__, Keyword.fetch!(opts, :fleet_id)}, self())
 
     state = %{
       fleet_id: Keyword.fetch!(opts, :fleet_id),

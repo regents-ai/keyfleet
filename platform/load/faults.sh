@@ -135,7 +135,8 @@ proxy_api POST /proxies '{"name":"postgres","listen":"[::]:5432","upstream":"fau
 echo "==> Creating, migrating and seeding the database through the proxy"
 stack_prepare_database
 
-echo "==> Starting $image on $base"
+echo "==> Starting $image: the graph machine, then the site on $base"
+stack_start_graph "$run-graph"
 stack_start_server "$run-app"
 stack_check_server "$run-app"
 

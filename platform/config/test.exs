@@ -134,6 +134,11 @@ config :keyfleet, Keyfleet.Repo,
   # plenty.
   queue_target: 1_000
 
+# A write waits for its change to be readable before it answers. Tests that
+# write share the machine with the whole suite, so they wait far longer than
+# production's two seconds before reading.
+config :keyfleet, :graph, projection_wait: 30_000
+
 config :ash, :disable_async?, true
 config :ash, :missed_notifications, :ignore
 

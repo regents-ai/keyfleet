@@ -34,7 +34,9 @@ defmodule Keyfleet.RuntimeConfigTest do
       "BUCKET_NAME",
       "PICTURES_PUBLIC_URL",
       "KEY_ART_URL",
-      "LIGHTHOUSE_API_KEY"
+      "LIGHTHOUSE_API_KEY",
+      "KEYFLEET_MACHINE",
+      "DNS_CLUSTER_QUERY"
     ]
 
     previous = Map.new(names, &{&1, System.get_env(&1)})
@@ -96,6 +98,8 @@ defmodule Keyfleet.RuntimeConfigTest do
     config = read_runtime_config(:prod)
 
     assert get_in(config, [:keyfleet, :database_startup_enabled])
+    assert get_in(config, [:keyfleet, :machine]) == :site
+    assert get_in(config, [:keyfleet, :dns_cluster_query]) == "keyfleet.internal"
 
     assert get_in(config, [:keyfleet, Keyfleet.Repo]) == [
              ssl: [
@@ -126,6 +130,16 @@ defmodule Keyfleet.RuntimeConfigTest do
     assert endpoint[:url][:scheme] == "https"
     assert endpoint[:http][:port] == 4000
     assert endpoint[:http][:ip] == {0, 0, 0, 0, 0, 0, 0, 0}
+  end
+
+  test "PKG-RUNTIME the graph machine boots as the graph machine" do
+    put_production_role()
+    put_pooled_url()
+    System.put_env("PHX_HOST", "shadow.example.test")
+    System.put_env("SECRET_KEY_BASE", String.duplicate("s", 64))
+    System.put_env("KEYFLEET_MACHINE", "graph")
+
+    assert get_in(read_runtime_config(:prod), [:keyfleet, :machine]) == :graph
   end
 
   test "PKG-RUNTIME serving uses the host without its surrounding whitespace" do
@@ -166,6 +180,12 @@ defmodule Keyfleet.RuntimeConfigTest do
 
     assert File.read!(@fly_production_config) =~ ~s(app = "keyfleet"\n)
     assert File.read!(@fly_staging_config) =~ ~s(app = "keyfleet-staging"\n)
+
+    assert env_section(@fly_production_config) =~
+             ~s(\n  DNS_CLUSTER_QUERY = "keyfleet.internal"\n)
+
+    assert env_section(@fly_staging_config) =~
+             ~s(\n  DNS_CLUSTER_QUERY = "keyfleet-staging.internal"\n)
   end
 
   # Staging reviews the image production will receive, so the machine it runs on
@@ -176,6 +196,7 @@ defmodule Keyfleet.RuntimeConfigTest do
     assert staging =~ ~s(primary_region = "iad"\n)
     assert staging =~ ~s(  release_command = "/app/bin/migrate"\n)
     assert staging =~ "  memory_mb = 1024\n"
+    assert staging =~ ~s([processes]\n  site = "/app/bin/site"\n  graph = "/app/bin/graph"\n)
   end
 
   test "production runtime fails closed without pooled access" do
@@ -332,6 +353,8 @@ defmodule Keyfleet.RuntimeConfigTest do
     System.put_env("PICTURES_PUBLIC_URL", "https://keyfleet-avatars.storage.example.test")
     System.put_env("KEY_ART_URL", "http://key-art.example.test")
     System.put_env("LIGHTHOUSE_API_KEY", "lighthouse-api-key")
+    System.put_env("KEYFLEET_MACHINE", "site")
+    System.put_env("DNS_CLUSTER_QUERY", "keyfleet.internal")
   end
 
   defp put_pooled_url do

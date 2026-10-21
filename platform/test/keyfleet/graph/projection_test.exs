@@ -782,13 +782,10 @@ defmodule Keyfleet.Graph.ProjectionTest do
   end
 
   defp start_projector(opts),
-    do:
-      start_supervised!(
-        {Keyfleet.Graph.Projectors, [fleets: [@fleet], projection_wait: 30_000] ++ opts}
-      )
+    do: start_supervised!({Keyfleet.Graph.Projectors, [fleets: [@fleet]] ++ opts})
 
   defp writer do
-    [{pid, _timeout}] = Registry.lookup(Keyfleet.Graph.Registry, @fleet)
+    [pid] = :pg.get_members(Keyfleet.Graph.Processes, {Keyfleet.Graph.Writer, @fleet})
     pid
   end
 

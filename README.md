@@ -68,7 +68,8 @@ updates when a ship moves.
 
 ## Status
 
-- The site is live at keyfleet.ai on Fly (app `keyfleet`, one machine),
+- The site is live at keyfleet.ai on Fly (app `keyfleet`: a site machine and
+  a graph machine),
   released from `main` by `scripts/deploy.sh`
   ([deploy checklist](docs/deploy-checklist.md#6-deploy)).
 - The Regents Club is deployed on Base and open. Classic #1, Syndicate #1,

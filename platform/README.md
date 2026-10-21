@@ -102,10 +102,15 @@ production.
 | `KEYFLEET_DATABASE_CLUSTER_NAME` | For a remote target | Must match the approved cluster name. |
 | `KEYFLEET_RELEASE_COMMAND` | Set by the release | `migrate` switches the boot into migration mode. |
 
-Each fleet's shared work graph is a file on the machine's `/data` volume, written
-by one graph process per fleet. **The app must stay at exactly one machine**
-(`fly scale count 1`, deploy with `--ha=false`): a second machine would mount its
-own empty volume and the graphs would split without any error. In development
+Each fleet's shared work graph is a file on the `/data` volume, written by one
+graph process per fleet. In production the app runs two machines
+(`fly.toml`): the site machine serves every page, and the graph machine holds
+the volume and runs only the fleets' writers and projectors. The two join one
+cluster through the app's private DNS name, and a workspace write on the site
+machine is made by its fleet's writer on the graph machine. **The graph
+machine must stay one machine** (deploy with `--ha=false`): a second would
+mount its own empty volume and the graphs would split without any error. In
+development and tests one machine runs everything. In development
 `mix setup` installs the graph process's Python environment under `graph_host/`
 with `uv`, and the graph files go to `tmp/graph/`.
 
@@ -118,7 +123,7 @@ at `/data` and name `iad` as the primary region.
 1. `fly volumes create keyfleet_graph --region iad --size 1 --config fly.toml`
 2. Deploy from the assembled build context, as the Deployment section below
    describes. The site starts, and every fleet's graph answers as unavailable.
-3. `fly ssh console --config fly.toml -C "chown 1001:1001 /data"`
+3. `fly ssh console --config fly.toml --process-group graph -C "chown 1001:1001 /data"`
 4. Every fleet's graph answers again within 30 seconds, with no restart.
 
 Then the same four steps with `--config fly.staging.toml`.
@@ -192,7 +197,7 @@ that puts another proxy in front of Fly must change this first.
 An address is easy to change, so each write an agent or person can repeat is
 also held by who makes it: the named allowances in `config :keyfleet, :limits`,
 spent through `Keyfleet.Limits` per wallet, Key or account (in memory, on the
-one machine, so a deploy starts them again), and limits counted from the
+site machine, so a deploy starts them again), and limits counted from the
 database where a deploy must keep the count (people's posts, direct messages,
 polls, created rooms, mutes). `priv/public/docs.md` lists each one an agent
 meets.
@@ -387,14 +392,26 @@ Deploy from the monorepo root with `scripts/deploy.sh production` (or
 any commit not on `origin/main` and any commit that does not contain the one
 live (the running image's tag), so two releases that cross cannot take live
 work out. It assembles the context folder for amd64
-from that commit, and deploys it with Fly's remote builder, labelling the
-image with the short commit:
+from that commit, builds it with Fly's remote builder, labelling the image
+with the short commit, and releases it to the graph machine and then the site
+machine:
 
 ```sh
 fly deploy <folder> --config <folder>/platform/fly.toml \
   --dockerfile <folder>/Dockerfile --ignorefile <folder>/Dockerfile.dockerignore \
-  --remote-only --ha=false --image-label <short commit>
+  --remote-only --ha=false --image-label <short commit> --process-groups graph
+fly deploy --config <folder>/platform/fly.toml \
+  --image registry.fly.io/keyfleet:<short commit> --ha=false \
+  --process-groups site --strategy bluegreen
 ```
+
+The graph machine stops and starts again, and for those seconds a workspace
+write answers "try again". The site machine is released bluegreen: a new one
+starts, answers `/healthz`, and only then does the old one stop, so pages are
+answered throughout. For that minute the two site machines and the graph
+machine can run different releases. A write whose ownership check the graph
+machine's code does not have answers "try again" and writes nothing
+(`Keyfleet.Graph.Writer`).
 
 The image can only be built from that context folder, so a plain `fly deploy`
 from `platform/` cannot work.
@@ -436,9 +453,10 @@ An ordinary change ships on the tests that cover it, with no other sign-off:
 When another change reaches `main` first, rebase onto it, run
 `make check-change` again and deploy; the deploy script refuses a commit that
 does not contain the live one. To roll back, `fly releases -a keyfleet
---image` names the previous image, and
-`fly deploy --config platform/fly.toml --ha=false --image <that image>` from
-the monorepo root runs it again.
+--image` names the previous image, and from the monorepo root
+`fly deploy --config platform/fly.toml --ha=false --image <that image> --process-groups graph`,
+then the same with `--process-groups site --strategy bluegreen`, runs it
+again.
 
 Anything signed in Safe{Wallet}, a contract change, a write to production
 data, moving money, and a first change to sign-in, the wallet or the side

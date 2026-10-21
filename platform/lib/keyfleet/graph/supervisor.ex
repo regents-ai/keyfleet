@@ -1,11 +1,10 @@
 defmodule Keyfleet.Graph.Supervisor do
   @moduledoc """
-  Runs one graph writer per catalog fleet beside the registry that names them.
+  Runs one graph writer per catalog fleet.
 
   A writer replaces its own failed host with backoff and never exits because a
   host failed, so one fleet's failing host leaves the other fleets alone. The
-  registry starts first under `rest_for_one`, so a writer crash never takes it
-  down, and the writers share a `one_for_one` supervisor.
+  writers share a `one_for_one` supervisor.
 
   Every level restarts what it runs, so a burst of writer crashes can never
   leave the graph stopped while the site keeps serving. The writers'
@@ -61,14 +60,13 @@ defmodule Keyfleet.Graph.Supervisor do
 
     Supervisor.init(
       [
-        {Registry, keys: :unique, name: Keyfleet.Graph.Registry},
         %{
           id: :writers,
           type: :supervisor,
           start: {Supervisor, :start_link, [writers, writers_options(writers)]}
         }
       ],
-      strategy: :rest_for_one
+      strategy: :one_for_one
     )
   end
 

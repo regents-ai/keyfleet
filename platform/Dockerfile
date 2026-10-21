@@ -128,4 +128,5 @@ USER app
 
 EXPOSE 4000
 
-CMD ["/app/bin/keyfleet", "start"]
+# The site machine; fly.toml starts the graph machine with /app/bin/graph.
+CMD ["/app/bin/site"]
