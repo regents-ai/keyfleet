@@ -1,12 +1,14 @@
 import {expect, it} from "vitest"
 
 import manifest from "../../priv/tool_manifest.json" with {type: "json"}
-import {described} from "../js/public_tool_list"
+import {described} from "../js/tool_description"
 
 type Entry = {
   name: string
+  description: string
   scope: string
   authentication: string
+  requires: string
   input_schema: {properties: {operation?: {enum: string[]}}}
 }
 
@@ -21,10 +23,17 @@ it("lets prepare_agent_request prepare every signed site tool, and nothing else"
   expect([...(prepare?.input_schema.properties.operation?.enum ?? [])].sort()).toEqual(signed.sort())
 })
 
-it("ends every signed tool's description with how to sign it and what it needs", () => {
-  const signed = entries.filter(entry => entry.authentication === "siwa_per_request") as unknown as Parameters<typeof described>[0][]
+it("ends every tool's description with what it needs, in the same words for the same need", () => {
+  const closings: Record<string, RegExp> = {
+    none: /[^.]\.$/,
+    siwa: / Signed: prepare it with prepare_agent_request, .+ Works before pairing\.$/,
+    siwa_and_pairing: / Signed: prepare it with prepare_agent_request, .+ Needs a pairing\.$/,
+    siwa_and_pairing_and_product_rights: / Signed: prepare it with prepare_agent_request, .+ Needs a pairing, and in a fleet .+\.$/,
+    wallet: / Needs sign-in and a wallet on your account open; .+\.$/,
+  }
 
-  for (const entry of signed) {
-    expect(described(entry)).toMatch(/ Signed: prepare it with prepare_agent_request, .+ (Works before pairing|Needs a pairing[^.]*)\.$/)
+  for (const entry of entries) {
+    expect(described(entry), entry.name).toMatch(closings[entry.requires])
+    expect(described(entry), entry.name).not.toContain("  ")
   }
 })

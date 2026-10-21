@@ -130,7 +130,7 @@
     {
       "name": "mark_present",
       "title": "Mark keys present",
-      "description": "Press this page's Mark present: marks present for 48 hours every Key the wallet holds, or holds an active shard of while the Key's agent voting is on. A Key present when a proposal opens is counted in its vote. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "description": "Press this page's Mark present: marks present for 48 hours every Key the wallet holds, or holds an active shard of while the Key's agent voting is on. A Key present when a proposal opens is counted in its vote.",
       "input_schema": {
         "type": "object",
         "properties": {},
@@ -229,7 +229,7 @@
     {
       "name": "propose",
       "title": "Propose",
-      "description": "Fill this page's proposal form with these fields and press Propose: opens a vote of every Key on what the proposal does. Fields left out keep what the form shows. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "description": "Fill this page's proposal form with these fields and press Propose: opens a vote of every Key on what the proposal does. Fields left out keep what the form shows.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -338,7 +338,7 @@
     {
       "name": "run_split",
       "title": "Release the Daily Treasury Slice to Keys",
-      "description": "Press this page's Release: releases the Daily Treasury Slice to Keys, which shares each asset at or above its minimum, its balance times the rate, equally across every Key sold. Anyone may, 24 hours after the last release; the preview on the page shows what it shares. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "description": "Press this page's Release: releases the Daily Treasury Slice to Keys, which shares each asset at or above its minimum, its balance times the rate, equally across every Key sold. Anyone may, 24 hours after the last release; the preview on the page shows what it shares.",
       "input_schema": {
         "type": "object",
         "properties": {},
@@ -361,7 +361,7 @@
     {
       "name": "send_share",
       "title": "Send to REGENT staking",
-      "description": "Press this page's Send to REGENT staking: sends the share of Key sales the fleet owes REGENT staking. Anyone may; it moves no one's own money. Held back \"Nothing owed\" when nothing is owed. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "description": "Press this page's Send to REGENT staking: sends the share of Key sales the fleet owes REGENT staking. Anyone may; it moves no one's own money. Held back \"Nothing owed\" when nothing is owed.",
       "input_schema": {
         "type": "object",
         "properties": {},
@@ -384,7 +384,7 @@
     {
       "name": "convert_to_regent",
       "title": "Turn USDC into REGENT",
-      "description": "Press this page's Buy REGENT: turns USDC waiting from Key sales into REGENT, at most the amount typed and at most 250 USDC a press. Every fleet shares one line, so the USDC may be another fleet's. Anyone may. Held back \"Nothing waiting to turn into REGENT\" when no fleet is in line, or \"Opens <time>\" before the next piece may run. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "description": "Press this page's Buy REGENT: turns USDC waiting from Key sales into REGENT, at most the amount typed and at most 250 USDC a press. Every fleet shares one line, so the USDC may be another fleet's. Anyone may. Held back \"Nothing waiting to turn into REGENT\" when no fleet is in line, or \"Opens <time>\" before the next piece may run.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -412,7 +412,7 @@
     {
       "name": "vote",
       "title": "Vote",
-      "description": "Press one of this proposal's vote buttons: votes with every Key the wallet holds, or holds an active shard of while the Key's agent voting is on. Voting again changes the vote until voting closes. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "description": "Press one of this proposal's vote buttons: votes with every Key the wallet holds, or holds an active shard of while the Key's agent voting is on. Voting again changes the vote until voting closes.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -447,7 +447,7 @@
     {
       "name": "cancel_proposal",
       "title": "Cancel proposal",
-      "description": "Press this proposal's Cancel proposal: cancels it while it is open or approved. Whoever may vote the Key it was made with may cancel it. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "description": "Press this proposal's Cancel proposal: cancels it while it is open or approved. Whoever may vote the Key it was made with may cancel it.",
       "input_schema": {
         "type": "object",
         "properties": {},
@@ -470,7 +470,7 @@
     {
       "name": "carry_out",
       "title": "Carry it out",
-      "description": "Press this proposal's Carry it out: makes exactly the calls the proposal shows. Anyone may, once it is approved and voting has closed, for 48 hours. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "description": "Press this proposal's Carry it out: makes exactly the calls the proposal shows. Anyone may, once it is approved and voting has closed, for 48 hours.",
       "input_schema": {
         "type": "object",
         "properties": {},
@@ -493,7 +493,7 @@
     {
       "name": "claim",
       "title": "Claim",
-      "description": "Press one of the open Key's Claim buttons: claims what the Daily Treasury Slice to Keys shared with the Key in one asset. It is always paid to the Key's holder. Needs sign-in and a wallet on your account open; the wallet asks the person to approve the transaction, and the network fee is paid from it.",
+      "description": "Press one of the open Key's Claim buttons: claims what the Daily Treasury Slice to Keys shared with the Key in one asset. It is always paid to the Key's holder.",
       "input_schema": {
         "type": "object",
         "properties": {

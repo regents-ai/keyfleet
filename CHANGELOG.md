@@ -3378,3 +3378,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on Account › Profile, the ENS name line now reads "Not set" (as Display name does) instead of "No primary name set for this wallet", "Checking…" instead of "Checking Ethereum for a primary name…", and "Couldn’t check. Refresh to try again." instead of "Couldn’t check Ethereum right now. Refresh to try again."
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline". The row is already labelled ENS name, so the longer lines repeated it.
+
+## 2026-10-21 — Wallet browser tools share one closing line too
+
+- What: the nine browser tools that press a wallet button (mark present, propose, vote, cancel, carry out, release, send share, buy REGENT, claim) now get their closing line, that they need sign-in and an open wallet that asks the person to approve, from the same place as the signed tools' line, instead of each description repeating it. Every browser tool's closing line now comes from its requirement in the tool manifest.
+- Why: the same overnight simplification as the signed tools' line on 21 October: one rule, written once.

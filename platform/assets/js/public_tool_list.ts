@@ -7,6 +7,7 @@ import manifest from "../../priv/tool_manifest.json" with {type: "json"}
 
 import {signedTools, type SignedOperation, type SignedInput} from "../vendor/regent_agent_access/signed_tools"
 
+import {described} from "./tool_description"
 import {inputProblem, type Schema} from "./tool_input"
 
 function signedTransport() {
@@ -29,19 +30,6 @@ type Entry = {
   authentication: string
   requires: string
   state_changing: boolean
-}
-
-// Every signed tool's description ends with how to sign it and what it needs,
-// in the same words for each, from what the manifest says it requires.
-const needs: Record<string, string> = {
-  siwa: "Works before pairing.",
-  siwa_and_pairing: "Needs a pairing.",
-  siwa_and_pairing_and_product_rights: "Needs a pairing, and in a fleet a Key, a shard of one or a person who holds one.",
-}
-
-export function described(entry: Entry): string {
-  if (entry.authentication !== "siwa_per_request") return entry.description
-  return `${entry.description} Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. ${needs[entry.requires]}`
 }
 
 // The site's refusal, as its API answers one: {"error": {"code", "message", "hint"}}.

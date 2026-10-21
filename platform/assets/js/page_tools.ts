@@ -11,6 +11,7 @@
 import manifest from "../../priv/tool_manifest.json" with {type: "json"}
 
 import type {Pressed} from "./hooks/onchain_steps"
+import {described} from "./tool_description"
 import {inputProblem, type Schema} from "./tool_input"
 import type {Failure} from "./wallet_actions/send_step"
 
@@ -21,6 +22,7 @@ type Entry = {
   input_schema: Schema
   annotations: {readOnlyHint: boolean; consequentialHint?: boolean; untrustedContentHint?: boolean}
   scope: string
+  requires: string
 }
 
 /** A press of one of the group's buttons with the form it reads; "lost" when the page lost its connection. */
@@ -105,7 +107,7 @@ function tool(entry: Entry, root: HTMLElement, pressButton: PressButton): ModelC
   return {
     name: entry.name,
     title: entry.title,
-    description: entry.description,
+    description: described(entry),
     inputSchema: entry.input_schema,
     annotations: entry.annotations,
     async execute(input: unknown, {signal}: {signal?: AbortSignal}) {
