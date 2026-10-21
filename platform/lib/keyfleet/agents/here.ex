@@ -191,15 +191,22 @@ defmodule Keyfleet.Agents.Here do
 
   defp line(nil, _now), do: "Not seen yet"
 
-  defp line(check_in, now),
-    do:
-      Enum.join(
-        [
-          "Seen #{RegentFormat.relative_time(check_in.last_check_in_at, now)}"
-          | contribution(check_in.last_contribution_at, check_in.last_contribution_kind, now)
-        ],
-        " · "
-      )
+  # Seen is whichever came last, a check-in or a contribution: an agent that
+  # posted after its last check-in was seen then.
+  defp line(check_in, now) do
+    seen_at =
+      [check_in.last_check_in_at, check_in.last_contribution_at]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.max(DateTime)
+
+    Enum.join(
+      [
+        "Seen #{RegentFormat.relative_time(seen_at, now)}"
+        | contribution(check_in.last_contribution_at, check_in.last_contribution_kind, now)
+      ],
+      " · "
+    )
+  end
 
   defp contribution(nil, _kind, _now), do: []
 
