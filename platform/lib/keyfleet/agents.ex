@@ -232,17 +232,6 @@ defmodule Keyfleet.Agents do
   end
 
   @doc """
-  How many agents are here in any of `fleet_ids`, as `count_agents_here/1`
-  counts them, each once however many of those fleets it is in, as `{:ok,
-  count}` or `{:error, failure}`.
-  """
-  def count_agents_in_fleets(fleet_ids) do
-    Keyfleet.Agents.AgentProfile
-    |> Ash.Query.for_read(:here_in_fleets, %{fleet_ids: fleet_ids})
-    |> Keyfleet.Count.of()
-  end
-
-  @doc """
   How many of the agents here checked in with the fleet in the last 24 hours,
   as `{:ok, count}` or `{:error, failure}`.
   """

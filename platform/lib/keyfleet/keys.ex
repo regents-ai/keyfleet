@@ -296,17 +296,6 @@ defmodule Keyfleet.Keys do
   end
 
   @doc """
-  How many of the fleet's keys have a vote now, the ones a proposal opening
-  now would count, as `{:ok, count}`, or `{:error, failure}` when the database
-  doesn't answer (see `Keyfleet.Count`).
-  """
-  def count_present_keys(fleet_id) do
-    Keyfleet.Keys.KeyAttachment
-    |> Ash.Query.for_read(:present_in_fleet, %{fleet_id: fleet_id})
-    |> Keyfleet.Count.of()
-  end
-
-  @doc """
   How many addresses hold at least one of the fleet's keys today
   (`holders`), and how many of them hold a key that did something since
   `since` (`online`): a post in a room or on a key's wall, a direct message,

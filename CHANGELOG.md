@@ -3460,3 +3460,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   later of its last check-in and its last post or workspace change, so a row no
   longer reads "Seen 15 hours ago · posted 8 hours ago".
 - Why: the check-in light rows read live showed agents seen before they posted.
+
+## 2026-10-21 — Code tidy: Ash's own input helper, unused code removed
+- What: the access, Key-holder and standing checks and the issued-Key validation read their inputs with Ash's own helper instead of four hand-written copies; two functions nothing called and five unused style names are gone.
+- Why: less code to read, and nothing a person or agent sees changes.

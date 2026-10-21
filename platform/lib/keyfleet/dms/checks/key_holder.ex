@@ -27,8 +27,12 @@ defmodule Keyfleet.Dms.Checks.KeyHolder do
 
   @impl true
   def match?(actor, %{subject: subject}, opts) do
-    fleet_id = value(subject, :fleet_id)
-    named = opts |> Keyword.fetch!(:keys) |> Enum.flat_map(&List.wrap(value(subject, &1)))
+    fleet_id = Ash.Subject.get_argument_or_attribute(subject, :fleet_id)
+
+    named =
+      opts
+      |> Keyword.fetch!(:keys)
+      |> Enum.flat_map(&List.wrap(Ash.Subject.get_argument_or_attribute(subject, &1)))
 
     named != [] and is_binary(fleet_id) and
       held?(named, held(actor, fleet_id), Keyword.get(opts, :match, :all))
@@ -46,9 +50,4 @@ defmodule Keyfleet.Dms.Checks.KeyHolder do
 
   defp held?(named, held, :all), do: Enum.all?(named, &(&1 in held))
   defp held?(named, held, :any), do: Enum.any?(named, &(&1 in held))
-
-  defp value(%Ash.Query{} = query, name), do: Ash.Query.get_argument(query, name)
-
-  defp value(%Ash.Changeset{} = changeset, name),
-    do: Ash.Changeset.get_argument_or_attribute(changeset, name)
 end

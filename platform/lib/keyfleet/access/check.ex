@@ -24,7 +24,7 @@ defmodule Keyfleet.Access.Check do
   @impl true
   def match?(actor, %{subject: subject}, opts) do
     {action, component} = named(opts)
-    scope = value(subject, Keyword.fetch!(opts, :scope))
+    scope = Ash.Subject.get_argument_or_attribute(subject, Keyword.fetch!(opts, :scope))
 
     case subject.context do
       %{shared: %{access: %{actor: ^actor, scope: ^scope, class: class}}} ->
@@ -41,11 +41,4 @@ defmodule Keyfleet.Access.Check do
       {:error, {:ok, component}} -> {:write, component}
     end
   end
-
-  defp value(%Ash.Query{} = query, name), do: Ash.Query.get_argument(query, name)
-
-  defp value(%Ash.Changeset{} = changeset, name),
-    do: Ash.Changeset.get_argument_or_attribute(changeset, name)
-
-  defp value(%Ash.ActionInput{} = input, name), do: Ash.ActionInput.get_argument(input, name)
 end

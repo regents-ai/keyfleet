@@ -18,8 +18,11 @@ defmodule Keyfleet.Rooms.Validations.IssuedKey do
 
   @impl true
   def validate(input, opts, _context) do
-    fleet_id = value(input, :fleet_id)
-    token_ids = value(input, Keyword.get(opts, :argument, :token_id))
+    fleet_id = Ash.Subject.get_argument_or_attribute(input, :fleet_id)
+
+    token_ids =
+      Ash.Subject.get_argument_or_attribute(input, Keyword.get(opts, :argument, :token_id))
+
     {:ok, minted} = Keyfleet.Chain.minted(fleet_id)
 
     case Enum.find(List.wrap(token_ids), &(&1 > minted)) do
@@ -27,9 +30,4 @@ defmodule Keyfleet.Rooms.Validations.IssuedKey do
       token_id -> {:error, KeyUnknownError.exception(fleet_id: fleet_id, token_id: token_id)}
     end
   end
-
-  defp value(%Ash.Changeset{} = changeset, name),
-    do: Ash.Changeset.get_argument_or_attribute(changeset, name)
-
-  defp value(%Ash.Query{} = query, name), do: Ash.Query.get_argument(query, name)
 end

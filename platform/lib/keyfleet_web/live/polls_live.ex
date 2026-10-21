@@ -496,7 +496,7 @@ defmodule KeyfleetWeb.PollsLive do
       :if={@notice}
       id="polls-notice"
       role={@notice.tone == :error && "alert"}
-      class={["polls-notice", @notice.tone == :error && "polls-notice--error"]}
+      class="polls-notice"
       phx-hook="MotionRefusal"
       data-refused={@notice.tone == :error}
     >

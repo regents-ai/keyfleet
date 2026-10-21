@@ -22,7 +22,7 @@ defmodule Keyfleet.Polls.Checks.Standing do
 
   @impl true
   def match?(actor, %{subject: subject}, opts) do
-    fleet_id = value(subject, :fleet_id)
+    fleet_id = Ash.Subject.get_argument_or_attribute(subject, :fleet_id)
 
     with true <- is_binary(fleet_id) and Keyfleet.Chain.fresh?(fleet_id),
          %{key: key} <- Polls.voter(actor, fleet_id) do
@@ -40,9 +40,4 @@ defmodule Keyfleet.Polls.Checks.Standing do
        do: true
 
   defp standing?(:starter, _key, _fleet_id, _subject), do: false
-
-  defp value(%Ash.Changeset{} = changeset, name),
-    do: Ash.Changeset.get_argument_or_attribute(changeset, name)
-
-  defp value(%Ash.Query{} = query, name), do: Ash.Query.get_argument(query, name)
 end

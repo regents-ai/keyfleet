@@ -79,13 +79,6 @@
   outline: none;
 }
 
-.key-lede {
-  max-width: 56ch;
-  color: var(--color-fg-muted);
-  font-size: 1.05rem;
-  line-height: 1.5;
-}
-
 .key-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
@@ -109,10 +102,6 @@
   grid-column: 1 / -1;
   padding-inline-start: 0.75rem;
   border-inline-start: 3px solid var(--ash-accent);
-}
-
-.key-notice--error {
-  border-inline-start-color: var(--ash-accent-warm);
 }
 
 .key-wallet {
