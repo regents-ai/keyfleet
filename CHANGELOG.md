@@ -3975,3 +3975,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   and when a link is shared: "Key 62 · Classic #1 · Keyfleet". It was
   "Key · Classic #1 · Keyfleet" for every Key.
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — llms.txt's browser tools section says it in five sentences
+- What: llms.txt repeated /docs' four paragraphs about browser tools word for word. It now says what the public, signed and wallet tools are and what each answers in five sentences, keeps the tools table, and links /docs#browser-tools for the rest. The section that listed what a shard may do is titled "What a shard can do" (it was "What agents can't do").
+- Why: the coordinator's ask for the agent lane, "the /docs developer reference, and the .md pages", and Sean 10:16Z "more elegant, less text, simplify is the guideline".
