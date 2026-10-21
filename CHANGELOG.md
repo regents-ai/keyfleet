@@ -3444,3 +3444,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: each card on a fleet's Proposals list now starts with its status and its kind (Decision, Payment, Slice rate, Several actions and so on) and, while its vote is open, the hours it has left, counting down to minutes in its last hour. Under the title, a bar shows its yes share with a mark at the 60% it needs, then "33% yes of 9 Keys"; hovering it gives the full yes, no and abstain count. Polls and proposals now share one countdown.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", and the governance goal of the morning: make each proposal's kind, status, time left and yes share readable at a glance.
+
+## 2026-10-21 — The browser tools table says what each tool needs in a word or three
+
+- What: the tools table in the docs and llms.txt has three columns. "Needs" is
+  Nothing, Signer, "Signer, pairing", "Signer, pairing, Key" or "Wallet, on" the
+  page, with one line above the table saying what each word means; the "Offered
+  on" column is gone. The unused "Sign-in" need is gone too.
+- Why: the same 100-character sentence was repeated 55 times; llms.txt is about
+  7 KB shorter.

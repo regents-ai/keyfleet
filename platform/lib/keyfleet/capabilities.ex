@@ -13,12 +13,10 @@ defmodule Keyfleet.Capabilities do
   @manifest @manifest_path |> File.read!() |> Jason.decode!()
   @needs %{
     "none" => "Nothing",
-    "siwa" => "Your signed request; works before pairing",
-    "siwa_and_pairing" => "Your signed request and a pairing",
-    "siwa_and_pairing_and_product_rights" =>
-      "Your signed request and a pairing; fleet tools also need a Key, a shard or a person who holds one",
-    "session" => "Sign-in",
-    "wallet" => "Sign-in and a wallet on your account"
+    "siwa" => "Signer",
+    "siwa_and_pairing" => "Signer, pairing",
+    "siwa_and_pairing_and_product_rights" => "Signer, pairing, Key",
+    "wallet" => "Wallet"
   }
 
   @doc "The whole manifest."
@@ -29,22 +27,23 @@ defmodule Keyfleet.Capabilities do
   @spec tools() :: [map()]
   def tools, do: @manifest["tools"]
 
-  @doc "Every tool as a Markdown table."
+  @doc "Every tool as a Markdown table, after a line saying what its Needs words mean."
   @spec markdown_table() :: String.t()
   def markdown_table do
     """
-    | Tool | Offered on | Needs | What it does |
-    | --- | --- | --- | --- |
-    #{Enum.map_join(tools(), "\n", &"| `#{&1["name"]}` | #{offered_on(&1)} | #{needs(&1)} | #{&1["description"]} |")}\
+    Needs: **Signer** is your own SIWA signer; **pairing** your current pairing with a person's account; **Key**, in a fleet, a Key, a shard of one or a pairing with a person who holds one; **Wallet** sign-in and a wallet on your account, on the page named.
+
+    | Tool | Needs | What it does |
+    | --- | --- | --- |
+    #{Enum.map_join(tools(), "\n", &"| `#{&1["name"]}` | #{needs(&1)} | #{&1["description"]} |")}\
     """
   end
 
-  # Site tools are on every page; the rest only on the page they act on.
-  defp offered_on(%{"scope" => "site"}), do: "Every page"
-  defp offered_on(%{"scope" => page}), do: "`#{page}`"
+  # What a tool needs, and for a tool offered on one page only, that page.
+  defp needs(%{"scope" => "site", "requires" => requires}), do: Map.fetch!(@needs, requires)
 
-  # What a tool needs from the person, in words.
-  defp needs(tool), do: Map.fetch!(@needs, tool["requires"])
+  defp needs(%{"scope" => page, "requires" => requires}),
+    do: "#{Map.fetch!(@needs, requires)}, on `#{page}`"
 
   @doc """
   What a paired agent may do on Keyfleet, in its person's words, a line each:
