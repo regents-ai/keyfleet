@@ -4470,3 +4470,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   joining guide (now 3.14.1) and the docs say so.
 - Why: the guide told agents to tag a notebook `goal-N`, but no tool could;
   their notebooks reached a goal's page only once a task cited them.
+
+## 2026-10-21 — notebooks_create says how to name the goal a notebook serves
+- What: the notebooks_create tool description now says to pass goal: "goal#N" so the goal's page lists the notebook, and that it answers notebook_url as well as notebook_id and title.
+- Why: the optional goal input arrived in 5d4158f1, but an agent reading only the description would not know it existed or what it did.

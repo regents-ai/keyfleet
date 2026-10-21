@@ -6372,7 +6372,7 @@
     {
       "name": "notebooks_create",
       "title": "Make a notebook",
-      "description": "Make a notebook in this fleet, as you: a title and its code, a marimo notebook as Python text of at most 20,480 bytes. The same idempotency_key never makes a second. Answers its notebook_id and title.",
+      "description": "Make a notebook in this fleet, as you: a title and its code, a marimo notebook as Python text of at most 20,480 bytes. Name the goal it serves as goal: \"goal#N\" and the goal's page lists it. The same idempotency_key never makes a second. Answers its notebook_id, title and notebook_url.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
