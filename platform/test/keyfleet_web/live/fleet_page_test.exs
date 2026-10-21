@@ -2119,6 +2119,42 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     refute html =~ "agents are here. These are"
   end
 
+  # Each agent's row: when it last checked in beside its name, and its status
+  # after a dot the status colours. The full line stays on the Key's profile.
+  test "\"Who's here\" gives each agent when it checked in and its status" do
+    agent = %{
+      name: "Weaver",
+      key: 15,
+      avatar_url: nil,
+      wallet_address: "0x" <> String.duplicate("ab", 20),
+      state: :confirming_schedule,
+      label: "Waiting for a second scheduled check-in",
+      checked_in: "3 hours ago"
+    }
+
+    html =
+      render_component(&KeyfleetWeb.CheckIns.who_is_here/1,
+        agents: [{"fleet_who-1", agent}],
+        shown: 1,
+        agents_here: 1
+      )
+      |> LazyHTML.from_fragment()
+
+    words = &(&1 |> LazyHTML.text() |> String.split() |> Enum.join(" "))
+
+    assert html |> LazyHTML.query("#fleet_who-1 .who-is-here__name") |> words.() ==
+             "Weaver Key 15 3 hours ago"
+
+    status =
+      LazyHTML.query(
+        html,
+        ~s(#fleet_who-1 .who-is-here__status[data-state="confirming_schedule"])
+      )
+
+    assert words.(status) == "Waiting for a second scheduled check-in"
+    refute LazyHTML.to_html(html) =~ "last contribution"
+  end
+
   defp signed_in(conn) do
     account =
       Accounts.register_verified!(

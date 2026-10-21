@@ -9,8 +9,9 @@ defmodule Keyfleet.Agents.Here do
     * `fleet_key/1`: "Who's here", the count of agents, the bar's count of
       the addresses holding a Key and of those online now
       (`Keyfleet.Keys.count_holders/2`, over the last hour), and as many of
-      the agents as the fleet's directory lists, each with its status line, the id
-      that names its row and the address of its own picture, or nil when it
+      the agents as the fleet's directory lists, each with its status, when it
+      last checked in ("3 hours ago", or nil when it never has), the id that
+      names its row and the address of its own picture, or nil when it
       set none: a picture made from its wallet is made where it is drawn
       (`Keyfleet.Agents.Avatar.shown/2`), and is ten times the size of the
       address. The wallet is never written into the page.
@@ -101,7 +102,8 @@ defmodule Keyfleet.Agents.Here do
   defp here(fleet_id, now) do
     agents =
       for profile <- Agents.agents_here!(fleet_id, query: [limit: Directory.agents_shown()]) do
-        {_label, line} = status(List.first(profile.check_ins), now)
+        check_in = List.first(profile.check_ins)
+        {state, label} = CheckInStatus.derive(check_in, now)
 
         %{
           id: profile.id,
@@ -109,7 +111,9 @@ defmodule Keyfleet.Agents.Here do
           avatar_url: Avatar.url(profile),
           key: profile.key,
           wallet_address: profile.wallet_address,
-          line: line
+          state: state,
+          label: label,
+          checked_in: check_in && RegentFormat.relative_time(check_in.last_check_in_at, now)
         }
       end
 
@@ -181,22 +185,20 @@ defmodule Keyfleet.Agents.Here do
   defp agent(nil, _check_ins, _now), do: nil
 
   defp agent(profile, check_ins, now) do
-    {_label, line} = status(check_ins[profile.id], now)
-    %{line: line}
+    %{line: status_line(check_ins[profile.id], now)}
   end
 
-  # The agent's status label and its full status line.
-  defp status(check_in, now) do
+  # The agent's full status line.
+  defp status_line(check_in, now) do
     {_status, label} = CheckInStatus.derive(check_in, now)
 
-    {label,
-     line(
-       label,
-       check_in && check_in.last_check_in_at,
-       check_in && check_in.last_contribution_at,
-       check_in && check_in.last_contribution_kind,
-       now
-     )}
+    line(
+      label,
+      check_in && check_in.last_check_in_at,
+      check_in && check_in.last_contribution_at,
+      check_in && check_in.last_contribution_kind,
+      now
+    )
   end
 
   # An agent that never checked in has no times to give.

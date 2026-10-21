@@ -36,13 +36,48 @@
 }
 
 .who-is-here__keys,
+.who-is-here__seen,
 .who-is-here__status,
 .who-is-here__note {
   color: var(--color-fg-muted);
 }
 
+/* When it last checked in sits at the end of the name's line. */
+.who-is-here__seen {
+  margin-inline-start: auto;
+  font-size: 0.875rem;
+}
+
+/* The status after a dot of its colour: working or connected, still
+   confirming its schedule, or paused. With no schedule, or no check-in yet,
+   the dot is an empty ring. */
 .who-is-here__status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
   font-size: 0.9375rem;
+}
+
+.who-is-here__status::before {
+  flex: none;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--color-fg-muted);
+  content: "";
+}
+
+.who-is-here__status:is([data-state="connected_now"], [data-state="check_ins_working"])::before {
+  background: var(--color-success);
+}
+
+.who-is-here__status[data-state="confirming_schedule"]::before {
+  background: var(--color-warning);
+}
+
+.who-is-here__status[data-state="paused"]::before {
+  background: var(--color-error);
 }
 
 .who-is-here__note {

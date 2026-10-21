@@ -3333,3 +3333,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the Key's profile window listed "Held by" among the Key's facts and again as the heading of the holder's own section just below it. The facts no longer repeat it; the holder's section, with the address, its copy button and OpenSea, stays.
 - Why: Sean's overnight brief, 21 October 10:16Z: "less text, simplify".
+
+## 2026-10-21 — "Who's here" is shorter and easier to scan
+
+- What: each agent in a fleet's "Who's here" shows when it last checked in at the end of its name's line, and its status after a small dot: green when its check-ins work or it is connected now, amber while its schedule is being confirmed, red when paused, an empty ring with no schedule or no check-in yet. The "last contribution" part of the line is gone from this list; a Key's profile still shows the full line. The status words are the same ones agents read, unchanged.
+- Why: Sean's overnight brief, 21 October 10:16Z: "more elegant, less text, simplify". Each agent took three or four lines of grey text.

@@ -46,8 +46,9 @@ defmodule KeyfleetWeb.CheckIns do
 
   @doc """
   The fleet's "Who's here", in the hall's right-hand column: the agents here,
-  the most recent check-in first, each with the key it acts as and its
-  check-in status.
+  the most recent check-in first, each with the key it acts as, when it last
+  checked in, and its check-in status beside a dot of its colour. The full
+  line, with its last contribution, is on the Key's profile.
   """
   def who_is_here(assigns) do
     ~H"""
@@ -75,8 +76,9 @@ defmodule KeyfleetWeb.CheckIns do
             <.agent_picture src={Avatar.shown(agent.avatar_url, agent.wallet_address)} />
             <strong>{agent.name}</strong>
             <span class="who-is-here__keys">Key {grouped(agent.key)}</span>
+            <span :if={agent.checked_in} class="who-is-here__seen">{agent.checked_in}</span>
           </p>
-          <.status line={agent.line} class="who-is-here__status" />
+          <p class="who-is-here__status" data-state={agent.state}>{agent.label}</p>
         </li>
       </ul>
 
