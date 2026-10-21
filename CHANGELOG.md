@@ -4452,3 +4452,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   descriptions as data, like titles.
 - Why: b39fd125 added both fields to the list; the tool still named only the
   old ones.
+
+## 2026-10-21 — Correction: the hub template lists each setting once
+
+- What: the "Fleet notebook hubs move to the latest marimohub" entry above said
+  the hub template and `hub.env.example` gained four settings. Three of them
+  (background runs, 100 runs per notebook, one editor at a time) were already
+  there, so `hub/fly.hub.toml` listed them twice and no longer read as TOML, and
+  `hub.env.example` repeated them. Each is now listed once; the one new setting
+  in both files is the sandbox token. The fleet files were never affected.
+- Why: reviewer item 28 on def1e2ff.
