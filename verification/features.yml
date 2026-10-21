@@ -631,6 +631,26 @@ features:
     gaps:
       - Look checked live after release.
 
+  - id: form-errors-say-what-to-do
+    what: >-
+      The early-access email box and the Account page's choice of posting Key
+      say what to do when they refuse: enter an address like name@example.com,
+      or reload to see the Keys the wallets hold. A refused choice keeps the
+      Key chosen before.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/controllers/early_controller.ex
+      - platform/lib/keyfleet_web/components/posting_key_choice.ex
+    entry:
+      - route: POST /early
+      - route: GET /account
+    proofs:
+      - platform/test/keyfleet_web/controllers/early_controller_test.exs
+      - platform/test/keyfleet_web/shell_live_test.exs
+    gaps:
+      - Browser walk of /early not rerun for the new words.
+
   - id: posting-key
     what: >-
       A person whose wallets hold more than one of a fleet's Keys chooses on the

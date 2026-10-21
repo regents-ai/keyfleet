@@ -14,7 +14,7 @@ defmodule KeyfleetWeb.EarlyController do
   alias KeyfleetWeb.{ClientAddress, PublicDocuments}
 
   @joined "You're on the list. We'll email you when Keyfleet opens."
-  @unreadable "That doesn't look like an email address."
+  @unreadable "Enter an email address, like name@example.com."
   @too_many "Too many tries from here. Wait a few minutes and try again."
   @not_saved "We couldn't save that just now. Try again in a moment."
 

@@ -53,7 +53,8 @@ defmodule KeyfleetWeb.PostingKeyChoice do
              ) do
         {:status, "Saved."}
       else
-        _refused -> {:alert, "That Key couldn’t be chosen. Nothing changed."}
+        _refused ->
+          {:alert, "That Key couldn’t be chosen. Reload to see the Keys your wallets hold."}
       end
 
     {:noreply, socket |> read_choice() |> assign(notice: notice)}

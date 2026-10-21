@@ -3761,3 +3761,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   homepage button and the other ways on: docs, guides and the sitemap.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the
   guideline".
+
+## 2026-10-21 — Form errors say what to do
+
+- What: the early-access form now answers a mistyped address with "Enter an
+  email address, like name@example.com." instead of only saying it looked
+  wrong, and the Account page's posting-Key choice, when refused, says to
+  reload to see the Keys your wallets hold. A refused choice keeps the Key
+  chosen before. Every other form on the site already named its next step.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for
+  human UI and agent UX".

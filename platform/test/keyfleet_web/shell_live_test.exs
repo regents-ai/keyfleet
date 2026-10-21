@@ -508,6 +508,11 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#{choice} [role=status]", "Saved.")
     assert has_element?(view, "#{choice} option[selected]", "Key 41")
 
+    view |> element(choice) |> render_change(%{"token_id" => "7"})
+
+    assert has_element?(view, "#{choice} [role=alert]", "Reload")
+    assert has_element?(view, "#{choice} option[selected]", "Key 41")
+
     person = Keyfleet.Actors.Human.for_account(account)
     assert %{token_id: 41} = Keys.identity(person, "fibonacci_cascade")
 
