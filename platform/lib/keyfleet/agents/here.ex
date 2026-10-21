@@ -9,12 +9,14 @@ defmodule Keyfleet.Agents.Here do
     * `fleet_key/1`: "Who's here", the count of agents, the bar's count of
       the addresses holding a Key and of those online now
       (`Keyfleet.Keys.count_holders/2`, over the last hour), and as many of
-      the agents as the fleet's directory lists, each with its status line, the id
+      the agents as the fleet's directory lists, each with what its check-ins
+      say (its light, the light's meaning and when it was last seen), the id
       that names its row and the address of its own picture, or nil when it
       set none: a picture made from its wallet is made where it is drawn
       (`Keyfleet.Agents.Avatar.shown/2`), and is ten times the size of the
       address. The wallet is never written into the page.
-    * `lines_key/2`: the agents' full status lines, for the open Key.
+    * `lines_key/2`: what each agent's check-ins say, by wallet, for the open
+      Key.
 
   A Key holds the second only while it has an active shard, and up to as
   many shards as a Key's page lists.
@@ -27,7 +29,7 @@ defmodule Keyfleet.Agents.Here do
 
   A status ages with the clock, and a check-in sends no notice, so each minute
   `Keyfleet.SharedReading.Heal` asks for every fleet to be read again. The words
-  ("last check-in 3 minutes ago") are written here with one moment for the
+  ("Seen 3 minutes ago") are written here with one moment for the
   whole pass, never on the page, so a page wakes only when what it shows has
   changed (`ash-frontend`, `references/public-figures.md`).
 
@@ -48,7 +50,7 @@ defmodule Keyfleet.Agents.Here do
   @doc "Where \"Who's here\" for `fleet_id` is held."
   def fleet_key(fleet_id), do: {:fleet_agents, fleet_id}
 
-  @doc "Where the full status lines of the agents on one Key are held."
+  @doc "Where what the check-ins of the agents on one Key say is held."
   def lines_key(fleet_id, token_id), do: {:key_agents, "#{fleet_id}:#{token_id}"}
 
   def start_link(_opts), do: GenServer.start_link(__MODULE__, nil)
@@ -101,15 +103,13 @@ defmodule Keyfleet.Agents.Here do
   defp here(fleet_id, now) do
     agents =
       for profile <- Agents.agents_here!(fleet_id, query: [limit: Directory.agents_shown()]) do
-        {_label, line} = status(List.first(profile.check_ins), now)
-
         %{
           id: profile.id,
           name: profile.name,
           avatar_url: Avatar.url(profile),
           key: profile.key,
           wallet_address: profile.wallet_address,
-          line: line
+          seen: seen(List.first(profile.check_ins), now)
         }
       end
 
@@ -151,7 +151,7 @@ defmodule Keyfleet.Agents.Here do
   defp put_key(fleet_id, token_id, shards) do
     SharedReading.put(
       lines_key(fleet_id, token_id),
-      for({wallet, %{line: line}} <- shards, do: {wallet, line})
+      for({wallet, %{} = seen} <- shards, do: {wallet, seen})
     )
   end
 
@@ -180,44 +180,32 @@ defmodule Keyfleet.Agents.Here do
 
   defp agent(nil, _check_ins, _now), do: nil
 
-  defp agent(profile, check_ins, now) do
-    {_label, line} = status(check_ins[profile.id], now)
-    %{line: line}
-  end
+  defp agent(profile, check_ins, now), do: seen(check_ins[profile.id], now)
 
-  # The agent's status label and its full status line.
-  defp status(check_in, now) do
+  # What the agent's check-ins say: its light, what the light means, and one
+  # short line of when it was last seen and last did something.
+  defp seen(check_in, now) do
     {_status, label} = CheckInStatus.derive(check_in, now)
-
-    {label,
-     line(
-       label,
-       check_in && check_in.last_check_in_at,
-       check_in && check_in.last_contribution_at,
-       check_in && check_in.last_contribution_kind,
-       now
-     )}
+    %{light: CheckInStatus.light(check_in, now), label: label, line: line(check_in, now)}
   end
 
-  # An agent that never checked in has no times to give.
-  defp line(label, nil, _contribution_at, _kind, _now), do: label
+  defp line(nil, _now), do: "Not seen yet"
 
-  defp line(label, check_in_at, contribution_at, kind, now) do
-    Enum.join(
-      [
-        label,
-        "last check-in #{RegentFormat.relative_time(check_in_at, now)}",
-        contribution(contribution_at, kind, now)
-      ],
-      " · "
-    )
-  end
+  defp line(check_in, now),
+    do:
+      Enum.join(
+        [
+          "Seen #{RegentFormat.relative_time(check_in.last_check_in_at, now)}"
+          | contribution(check_in.last_contribution_at, check_in.last_contribution_kind, now)
+        ],
+        " · "
+      )
 
-  defp contribution(nil, _kind, _now), do: "no contributions yet"
+  defp contribution(nil, _kind, _now), do: []
 
   defp contribution(at, kind, now),
-    do: "last contribution #{RegentFormat.relative_time(at, now)} (#{contribution_kind(kind)})"
+    do: ["#{contributed(kind)} #{RegentFormat.relative_time(at, now)}"]
 
-  defp contribution_kind(:post), do: "a post"
-  defp contribution_kind(:workspace), do: "in the workspace"
+  defp contributed(:post), do: "posted"
+  defp contributed(:workspace), do: "worked"
 end

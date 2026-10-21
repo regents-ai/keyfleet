@@ -245,7 +245,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <dd :if={@profile.shards != []} id="key-profile-shards">
             <ul class="key-profile-shards">
               <li :for={shard <- @profile.shards} id={"key-profile-shard-#{shard.wallet}"}>
-                <.shard_agent shard={shard} line={@profile.lines[shard.wallet]} />
+                <.shard_agent shard={shard} seen={@profile.seen[shard.wallet]} />
                 · until {day(shard.expires_at)}
               </li>
             </ul>
@@ -265,7 +265,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   attr :shard, :map, required: true
 
-  attr :line, :string,
+  attr :seen, :map,
     default: nil,
     doc: "what the agent's check-ins say, as every page shares it"
 
@@ -292,7 +292,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
     <CheckIns.status
       id={"key-profile-check-in-#{@shard.wallet}"}
       class="key-profile-status"
-      line={@line}
+      seen={@seen}
     />
     <span :if={@shard.agent.status != ""} class="key-profile-status">
       “{@shard.agent.status}”, {day(@shard.agent.status_updated_at)}
@@ -842,7 +842,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         send_key: Ash.UUID.generate()
       })
     )
-    |> follow_lines()
+    |> follow_seen()
     |> read_rewards(before)
     |> stream(:key_thread, key_thread(profile), reset: true, limit: -@key_thread_kept)
   end
@@ -941,7 +941,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         |> Map.merge(Map.take(shown, [:close, :news, :notice, :draft, :send_key]))
         |> Map.put(:dms, dms(profile, actor))
       )
-      |> follow_lines()
+      |> follow_seen()
       |> read_rewards(%{key_profile: shown})
       |> stream(:key_thread, key_thread(profile), limit: -@key_thread_kept)
     else
@@ -1103,27 +1103,26 @@ defmodule KeyfleetWeb.KeyProfileLive do
   # What the issued Key's agents' check-ins say comes from the readings every
   # page shares (`Keyfleet.Agents.Here`), heard from before it is read; a Key
   # not yet issued has no agents.
-  defp follow_lines(%{assigns: %{key_profile: %{issued?: true} = profile}} = socket) do
+  defp follow_seen(%{assigns: %{key_profile: %{issued?: true} = profile}} = socket) do
     key = Here.lines_key(profile.fleet_id, profile.token_id)
 
     socket
     |> SharedFigures.follow(:key, [key])
-    |> assign(:key_profile, Map.put(profile, :lines, lines(key)))
+    |> assign(:key_profile, Map.put(profile, :seen, seen(key)))
   end
 
-  defp follow_lines(socket),
-    do:
-      socket |> SharedFigures.follow(:key, []) |> update(:key_profile, &Map.put(&1, :lines, %{}))
+  defp follow_seen(socket),
+    do: socket |> SharedFigures.follow(:key, []) |> update(:key_profile, &Map.put(&1, :seen, %{}))
 
-  defp lines(key), do: Map.new(SharedFigures.reading(key) || [])
+  defp seen(key), do: Map.new(SharedFigures.reading(key) || [])
 
-  @doc "The open Key's agents' lines, drawn again when their shared reading changes."
+  @doc "The open Key's agents' lights and lines, drawn again when their shared reading changes."
   def shared_changed(
         %{assigns: %{key_profile: %{issued?: true} = profile}} = socket,
         {:key_agents, _id} = key
       ) do
     if key == Here.lines_key(profile.fleet_id, profile.token_id),
-      do: assign(socket, :key_profile, %{profile | lines: lines(key)}),
+      do: assign(socket, :key_profile, %{profile | seen: seen(key)}),
       else: socket
   end
 

@@ -15,22 +15,32 @@ defmodule KeyfleetWeb.CheckIns do
 
   alias Keyfleet.Agents.Avatar
 
-  attr :line, :string,
+  attr :seen, :map,
     default: nil,
     doc:
-      "the status, when the agent last checked in and when it last posted or wrote in the workspace"
+      "what the agent's check-ins say (`Keyfleet.Agents.Here`): its light, the light's " <>
+        "meaning, and a line of when it was last seen and last posted or worked"
 
   attr :class, :string, default: nil
   attr :rest, :global
 
   @doc """
-  One agent's check-in status line, as every page shares it
-  (`Keyfleet.Agents.Here`). Before its first reading the line keeps its
-  place, empty.
+  One agent's check-in light and when it was last seen, as every page shares
+  them (`Keyfleet.Agents.Here`). The light's meaning shows on hover and is read
+  out before the line. Before its first reading the line keeps its place,
+  empty.
   """
   def status(assigns) do
     ~H"""
-    <span class={["check-in-status", @class]} {@rest}>{@line}</span>
+    <span
+      class={["check-in-status", @class]}
+      data-light={@seen && @seen.light}
+      title={@seen && @seen.label}
+      {@rest}
+    >
+      <span :if={@seen} class="visually-hidden">{@seen.label}.</span>
+      {@seen && @seen.line}
+    </span>
     """
   end
 
@@ -76,7 +86,7 @@ defmodule KeyfleetWeb.CheckIns do
             <strong>{agent.name}</strong>
             <span class="who-is-here__keys">Key {grouped(agent.key)}</span>
           </p>
-          <.status line={agent.line} class="who-is-here__status" />
+          <.status seen={agent.seen} class="who-is-here__status" />
         </li>
       </ul>
 

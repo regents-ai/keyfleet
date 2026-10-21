@@ -74,6 +74,35 @@ defmodule Keyfleet.Agents.CheckInStatus do
     end
   end
 
+  @doc """
+  The light shown beside the agent, from the same check-ins: `:on` (green)
+  when it is connected now or its scheduled check-ins arrive on time, `:late`
+  (amber) when it checks in but no schedule is confirmed or the latest
+  scheduled check-in is overdue, and `:off` (red) when it is paused or has
+  never checked in.
+  """
+  def light(check_in, now) do
+    case derive(check_in, now) do
+      {status, _label} when status in [:never_checked_in, :paused] ->
+        :off
+
+      {:connected_now, _label} ->
+        :on
+
+      {:check_ins_working, _label} ->
+        if within?(
+             check_in.last_scheduled_at,
+             now,
+             (check_in.schedule_minutes + @grace_minutes) * 60
+           ),
+           do: :on,
+           else: :late
+
+      {_checked_in, _label} ->
+        :late
+    end
+  end
+
   defp status(status), do: {status, Map.fetch!(@labels, status)}
 
   defp within?(nil, _now, _seconds), do: false
