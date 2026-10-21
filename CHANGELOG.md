@@ -4232,3 +4232,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   right edge, so every signed-in page could be nudged a pixel sideways. The
   hairline now goes once the panel has slid shut, and comes back at once when
   it opens. Checked at 1440 and 900 px wide, shut, open and closing.
+
+## 2026-10-21 — Code and Docs say only what is there
+
+- What: Code shows "Browse the code" only when there are files to browse, and
+  no longer says no code has been sent beside changes that were; when changes
+  were sent but main has no files, it says so. Docs hides its Pinned box and
+  its notebooks box while a fleet's notebooks aren't connected, and that box
+  is now headed "Write and run" instead of repeating "Notebooks".
+- Why: the 13:40Z gap list of the Project, Docs and Code places; Sean, 21
+  October 10:16Z: "more elegant, less text, simplify is the guideline".

@@ -332,25 +332,26 @@ defmodule KeyfleetWeb.WorkspaceLive do
       </div>
       <div class="workspace-side">
         <.pins
+          :if={@board.hub? or @board.pins != []}
           id="workspace-docs-pins"
           place={:docs}
           pins={@board.pins}
           empty="Pin a notebook to keep it here."
         />
         <section
+          :if={@board.hub?}
           id="workspace-docs-info"
           class="rg-panel workspace-info"
           aria-labelledby="workspace-docs-info-title"
         >
           <div class="rg-panel__body">
             <h3 id="workspace-docs-info-title">
-              Notebooks
+              Write and run
               <Regent.Primitives.tip id="workspace-docs-tip" label="About the notebooks">
                 This fleet’s marimo notebooks. Key holders open them as themselves, and their agents read and run them too.
               </Regent.Primitives.tip>
             </h3>
             <Regent.Primitives.button
-              :if={@board.hub?}
               id="open-notebooks"
               phx-click="open_notebooks"
             >
@@ -381,10 +382,16 @@ defmodule KeyfleetWeb.WorkspaceLive do
             The code can’t be read right now. Try again in a minute.
           </p>
           <Regent.Primitives.empty_state
-            :if={@board.files == []}
+            :if={@board.files == [] and @board.pushes == []}
             id="workspace-code-empty"
             class="kf-empty"
             title="No code has been sent yet."
+          />
+          <Regent.Primitives.empty_state
+            :if={@board.files == [] and @board.pushes != []}
+            id="workspace-code-main-empty"
+            class="kf-empty"
+            title="No files on main yet."
           />
           <ol :if={entries(@board.files) != []} id="workspace-code-rows" class="workspace-rows">
             <li
@@ -404,7 +411,11 @@ defmodule KeyfleetWeb.WorkspaceLive do
               />
             </li>
           </ol>
-          <.link id="workspace-code-files" patch={Keyfleet.Code.files_path(@board.fleet_id, "")}>
+          <.link
+            :if={entries(@board.files) != []}
+            id="workspace-code-files"
+            patch={Keyfleet.Code.files_path(@board.fleet_id, "")}
+          >
             Browse the code
           </.link>
         </section>

@@ -1251,7 +1251,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     test "Docs says so when the notebooks aren't connected, or can't be read", %{conn: conn} do
       {:ok, view, _html} = live(conn, @board <> "?place=docs")
       assert has_element?(view, "#workspace-notebooks-none")
-      refute has_element?(view, "#open-notebooks")
+      refute has_element?(view, "#workspace-docs-pins")
+      refute has_element?(view, "#workspace-docs-info")
 
       hub!("proj-0123456789abcdef", :down)
       {:ok, view, _html} = live(conn, @board <> "?place=docs")
@@ -1277,6 +1278,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert text(view, "#workspace-code-address") == Keyfleet.Code.clone_url(@fleet)
       assert has_element?(view, ~s(#workspace-code-address-copy))
       assert has_element?(view, "#code-pushes-empty")
+      assert has_element?(view, "#workspace-code-files")
 
       view |> element(~s(#workspace-code-rows [data-file="goals"] button)) |> render_click()
       view |> element(~s(#workspace-code-rows [data-file="README.md"] button)) |> render_click()
@@ -1303,6 +1305,23 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       {:ok, view, _html} = live(conn, @board <> "?place=code")
       refute has_element?(view, ~s(#workspace-code-pins-rows [data-pin="README.md"]))
       assert has_element?(view, ~s(#workspace-code-pins-rows [data-pin="goals"]))
+    end
+
+    test "Code offers nothing to browse before files reach main, even after changes were sent",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, @board <> "?place=code")
+      assert has_element?(view, "#workspace-code-empty")
+      refute has_element?(view, "#workspace-code-files")
+
+      Keyfleet.Code.record_pushes(@fleet, %{token_id: 1, wallet: @holder}, [
+        %{ref: "refs/heads/draft", head: String.duplicate("6", 40)}
+      ])
+
+      {:ok, view, _html} = live(conn, @board <> "?place=code")
+      assert has_element?(view, "#code-pushes")
+      assert has_element?(view, "#workspace-code-main-empty")
+      refute has_element?(view, "#workspace-code-empty")
+      refute has_element?(view, "#workspace-code-files")
     end
 
     test "Code gives a holder a git password, and says until when in the reader's own time",
