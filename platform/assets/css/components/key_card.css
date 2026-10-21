@@ -1,6 +1,8 @@
 @layer regents-product {
 /* A Key's card. The tilt turns in 3D under a mouse (key_card.ts); the light
-   is twice the card's size and rests unseen until a mouse is over it. */
+   is twice the card's size and rests unseen until a mouse is over it. It
+   overlays the picture, so it brightens the foil and leaves the charcoal
+   around the card dark. */
 .key-card {
   perspective: 900px;
 }
@@ -25,7 +27,7 @@
   width: 200%;
   height: 200%;
   background: radial-gradient(closest-side, rgb(255 255 255 / 0.28), rgb(255 255 255 / 0));
-  mix-blend-mode: screen;
+  mix-blend-mode: overlay;
   opacity: 0;
   pointer-events: none;
 }
