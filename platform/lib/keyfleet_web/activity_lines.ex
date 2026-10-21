@@ -75,7 +75,7 @@ defmodule KeyfleetWeb.ActivityLines do
   @channels %{
     chat: ~w(post posts room_named)a,
     work:
-      ~w(created claimed unclaimed submitted progress status reviewed revised joined left archived linked open_question)a,
+      ~w(created tasks claimed unclaimed submitted progress status reviewed revised joined left archived linked open_question)a,
     keys: ~w(sale given transfer shard_issued shard_ended)a,
     votes: ~w(proposed votes executed)a
   }
@@ -104,6 +104,17 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp sentence(%{kind: :room_named, facts: f}),
     do: [key(f.by), " named a room ", words(f.topic), "."]
+
+  defp sentence(%{kind: :tasks, facts: %{given: 0} = f}),
+    do: [who(f.by), " added #{tasks(f.added)}."]
+
+  defp sentence(%{kind: :tasks, facts: %{added: 0} = f}),
+    do: [who(f.by), " gave #{tasks(f.given)} to " | keys(f.to, f.others)] ++ ["."]
+
+  defp sentence(%{kind: :tasks, facts: f}) do
+    given = if f.given == 1, do: "one", else: Rules.grouped(f.given)
+    [who(f.by), " added #{tasks(f.added)} and gave #{given} to " | keys(f.to, f.others)] ++ ["."]
+  end
 
   defp sentence(%{kind: :created, facts: %{by: by, item: item}}) do
     case {Map.fetch(@created, item.type), item.title} do
@@ -159,13 +170,16 @@ defmodule KeyfleetWeb.ActivityLines do
   defp sentence(%{kind: kind, facts: %{token_ids: [token_id]}}) when kind in [:sale, :given],
     do: ["Key #{Rules.grouped(token_id)} was #{@first_owner[kind]}."]
 
-  defp sentence(%{kind: kind, facts: %{token_ids: [first | _] = token_ids}})
+  defp sentence(%{kind: kind, facts: %{token_ids: [first | _] = token_ids} = f})
        when kind in [:sale, :given] do
     last = List.last(token_ids)
 
-    if token_ids == Enum.to_list(first..last),
-      do: ["Keys #{Rules.grouped(first)}–#{Rules.grouped(last)} were #{@first_owner[kind]}."],
-      else: ["#{Rules.keys(length(token_ids))} were #{@first_owner[kind]}."]
+    keys =
+      if token_ids == Enum.to_list(first..last),
+        do: "Keys #{Rules.grouped(first)}–#{Rules.grouped(last)}",
+        else: Rules.keys(length(token_ids))
+
+    ["#{keys} were #{@first_owner[kind]}#{purchases(kind, f.purchases)}."]
   end
 
   defp sentence(%{kind: :transfer, facts: f}),
@@ -292,11 +306,23 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp voted(%{count: 0}, _word), do: nil
 
-  defp voted(%{count: count, token_ids: token_ids}, side) do
-    named = Enum.map(token_ids, &Rules.grouped/1)
-    lead = if count == 1, do: "Key ", else: "Keys "
-    [lead | listing(named, count - length(token_ids))] ++ [did(side, count)]
+  defp voted(%{count: count, token_ids: token_ids}, side),
+    do: keys(token_ids, count - length(token_ids)) ++ [did(side, count)]
+
+  # "Key 4", "Keys 4, 5 and 8", "Keys 4, 5, 8 and 2 others".
+  defp keys(token_ids, others) do
+    lead = if length(token_ids) + others == 1, do: "Key ", else: "Keys "
+    [lead | listing(Enum.map(token_ids, &Rules.grouped/1), others)]
   end
+
+  defp tasks(1), do: "a task"
+  defp tasks(count), do: "#{Rules.grouped(count)} tasks"
+
+  # Keys given away are never counted in purchases.
+  defp purchases(:sale, purchases) when purchases > 1,
+    do: " in #{Rules.grouped(purchases)} purchases"
+
+  defp purchases(_kind, _purchases), do: ""
 
   defp did(:yes, _count), do: " voted yes"
   defp did(:no, _count), do: " voted no"

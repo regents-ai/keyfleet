@@ -450,6 +450,13 @@ An ordinary change ships on the tests that cover it, with no other sign-off:
    force), and run `scripts/deploy.sh production`. Fly waits for `/healthz`
    on the new machine and reports a failed deploy when it does not answer.
 
+Just before the push, `git fetch origin main` and read
+`git diff --stat origin/main <your commit>`: it lists only the files you
+changed. Any other file means the commit holds an older main's copy of it
+and would take another change back out, even though the push itself is an
+ordinary fast-forward (21 October 2026); rebuild the commit on the newest
+`main` and check again.
+
 When another change reaches `main` first, rebase onto it, run
 `make check-change` again and deploy; the deploy script refuses a commit that
 does not contain the live one. To roll back, `fly releases -a keyfleet

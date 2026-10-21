@@ -255,17 +255,49 @@ defmodule Keyfleet.ActivityTest do
     %{items: items} = page(nil)
 
     assert for(%{kind: kind} = item <- items, kind in [:sale, :transfer], do: {kind, item.facts}) ==
-             [{:transfer, %{token_id: 1}}, {:sale, %{token_ids: [1]}}]
+             [{:transfer, %{token_id: 1}}, {:sale, %{token_ids: [1], purchases: 1}}]
   end
 
-  test "each purchase is its own line, naming only the Keys it bought" do
-    Enum.each(2..18, &epoch!(&1, 1, "a"))
-    epoch!(19, 1, "b", "0x" <> String.duplicate("c", 64), 0)
-    epoch!(20, 1, "b", "0x" <> String.duplicate("c", 64), 1)
+  test "purchases in a row are one line that counts them; a change of hands splits them" do
+    Enum.each(2..4, &epoch!(&1, 1, "a"))
+    epoch!(5, 1, "b", "0x" <> String.duplicate("c", 64), 0)
+    epoch!(6, 1, "b", "0x" <> String.duplicate("c", 64), 1)
+    epoch!(3, 2, "b")
+    epoch!(7, 1, "a")
 
-    sales = for %{kind: :sale} = item <- page(nil).items, do: item.facts.token_ids
+    %{items: items} = page(nil)
 
-    assert sales == [[19, 20] | Enum.map(18..1//-1, &[&1])]
+    assert for(%{kind: kind} = item <- items, kind in [:sale, :transfer], do: {kind, item.facts}) ==
+             [
+               {:sale, %{token_ids: [7], purchases: 1}},
+               {:transfer, %{token_id: 3}},
+               {:sale, %{token_ids: [1, 2, 3, 4, 5, 6], purchases: 5}}
+             ]
+  end
+
+  test "tasks one Key adds and gives to other Keys are one line" do
+    Workspace.create(@fleet, "note", %{"title" => "Plates"})
+
+    for key <- [4, 8] do
+      task = Workspace.create(@fleet, "task", %{"title" => "Map plate #{key}"})
+      Workspace.edit(@fleet, task, %{"assignee_key" => key})
+    end
+
+    Workspace.create(@fleet, "task", %{"title" => "Paint the hull"}, by: 5)
+    own = Workspace.create(@fleet, "task", %{"title" => "Check the rivets"})
+    Workspace.edit(@fleet, own, %{"assignee_key" => 17})
+
+    %{items: items} = page(nil)
+
+    assert for(
+             %{kind: kind} = item <- items,
+             kind in [:created, :claimed, :tasks],
+             do: {kind, item.facts.by.token_id}
+           ) ==
+             [{:claimed, 17}, {:created, 17}, {:created, 5}, {:tasks, 17}, {:created, 17}]
+
+    assert [%{added: 2, given: 2, to: [4, 8], others: 0}] =
+             for(%{kind: :tasks} = item <- items, do: item.facts)
   end
 
   test "keys that abstained are counted apart from those that voted yes or no" do

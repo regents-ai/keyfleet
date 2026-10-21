@@ -52,7 +52,13 @@ defmodule Keyfleet.Activity do
     * `:linked`: `by`, `relation` ("supports", "contradicts" or "produces"),
       `source` and `target` (items): the source supports, contradicts or
       produces the target.
-    * `:sale`: `token_ids`, the keys one purchase bought, lowest first.
+    * `:tasks`: a run of tasks one key added, or gave to other keys, by
+      the same rules as `:posts`: `by`, `added` (how many it added), `given`
+      (how many it gave), `to` (up to three of the keys given tasks, lowest
+      first) and `others` (how many more keys were given tasks).
+    * `:sale`: `token_ids`, the keys bought, lowest first, and `purchases`,
+      how many purchases bought them: consecutive purchases are one item, by
+      the same rules as `:posts`.
     * `:given`: the same, for a fleet whose Keys are given rather than sold
       (`Keyfleet.Fleets.Presets.given?/1`).
     * `:transfer`: `token_id`, a key that changed hands.
@@ -134,6 +140,7 @@ defmodule Keyfleet.Activity do
   # A source is read at most this many times for one page.
   @reads_per_page 2
   @posts_read 200
+  @graph_read 200
   @votes_read 100
   @keys_read 100
   @group_cap 50
@@ -329,9 +336,11 @@ defmodule Keyfleet.Activity do
     {group_lines(lines), length(lines) == @posts_read, nil}
   end
 
-  defp read(:graph, fleet_id, seq, limit, _actor) do
-    events = Graph.notable_before!(fleet_id, seq, limit + 1)
-    {Enum.map(events, &graph_entry/1), length(events) > limit, top(events, :seq)}
+  defp read(:graph, fleet_id, seq, _limit, _actor) do
+    events = Graph.notable_before!(fleet_id, seq, @graph_read)
+
+    {events |> Enum.map(&graph_entry/1) |> group_work(), length(events) == @graph_read,
+     top(events, :seq)}
   end
 
   defp read(:keys, fleet_id, seq, _limit, _actor) do
@@ -391,8 +400,23 @@ defmodule Keyfleet.Activity do
   defp entry(id, at, kind, position, facts),
     do: %{id: id, at: at, kind: kind, position: position, facts: facts}
 
-  # Posts: a run of posts in one room, each at most an hour after the one
-  # before, six hours at most from the first and fifty in all, is one item.
+  # A run: from the head of `rest`, the entries `joins?` lets follow
+  # `first`, each at most an hour before the one after it, six hours at most
+  # from `first` and fifty in all, by the time `at` gives. The run comes
+  # newest first, `first` at its head.
+  defp take_run(rest, first, joins?, at), do: take_run(rest, first, [first], joins?, at)
+
+  defp take_run([next | rest], first, [last | _] = run, joins?, at) do
+    if joins?.(next) and length(run) < @group_cap and
+         DateTime.diff(at.(last), at.(next), :microsecond) <= @post_gap and
+         DateTime.diff(at.(first), at.(next), :microsecond) <= @post_span,
+       do: take_run(rest, first, [next | run], joins?, at),
+       else: {Enum.reverse(run), [next | rest]}
+  end
+
+  defp take_run([], _first, run, _joins?, _at), do: {Enum.reverse(run), []}
+
+  # Posts: a run of posts in one room is one item.
   defp group_lines([]), do: []
 
   defp group_lines([%{kind: :room_named} = line | rest]) do
@@ -407,19 +431,11 @@ defmodule Keyfleet.Activity do
   end
 
   defp group_lines([first | rest]) do
-    {run, rest} = take_run(rest, first, [first])
-    [posts_entry(Enum.reverse(run)) | group_lines(rest)]
-  end
+    {run, rest} =
+      take_run(rest, first, &(&1.kind == :post and &1.room_id == first.room_id), & &1.inserted_at)
 
-  defp take_run([next | rest], first, [last | _] = run) do
-    if next.kind == :post and next.room_id == first.room_id and length(run) < @group_cap and
-         DateTime.diff(last.inserted_at, next.inserted_at, :microsecond) <= @post_gap and
-         DateTime.diff(first.inserted_at, next.inserted_at, :microsecond) <= @post_span,
-       do: take_run(rest, first, [next | run]),
-       else: {run, [next | rest]}
+    [posts_entry(run) | group_lines(rest)]
   end
-
-  defp take_run([], _first, run), do: {run, []}
 
   defp posts_entry([newest] = _run) do
     entry("posts:#{newest.id}", newest.inserted_at, :post, line_position(newest), %{
@@ -448,25 +464,19 @@ defmodule Keyfleet.Activity do
   defp author(line),
     do: %{token_id: line.as_key, agent: line.agent_profile && line.agent_profile.name}
 
-  # Keys: the first owners one transaction made are one item, fifty at most,
-  # of `kind`: `:sale`, or `:given` where the fleet's Keys are given. The item
-  # is named for its earliest Key.
+  # Keys: a run of first owners, from one purchase or several, is one item of
+  # `kind`: `:sale`, or `:given` where the fleet's Keys are given. The item is
+  # named for its earliest Key.
   defp group_epochs([], _kind), do: []
 
-  defp group_epochs([%{ownership_epoch: 1} = first | _] = epochs, kind) do
-    {sold, rest} =
-      epochs
-      |> Enum.take(@group_cap)
-      |> Enum.split_while(
-        &(&1.ownership_epoch == 1 and &1.transaction_hash == first.transaction_hash)
-      )
-
-    rest = rest ++ Enum.drop(epochs, @group_cap)
+  defp group_epochs([%{ownership_epoch: 1} = first | rest], kind) do
+    {sold, rest} = take_run(rest, first, &(&1.ownership_epoch == 1), & &1.observed_at)
     last = List.last(sold)
 
     item =
       entry("#{kind}:#{last.record_seq}", first.observed_at, kind, last.record_seq, %{
-        token_ids: sold |> Enum.map(& &1.token_id) |> Enum.sort()
+        token_ids: sold |> Enum.map(& &1.token_id) |> Enum.sort(),
+        purchases: sold |> Enum.uniq_by(& &1.transaction_hash) |> length()
       })
 
     [item | group_epochs(rest, kind)]
@@ -550,7 +560,46 @@ defmodule Keyfleet.Activity do
     %{count: length(token_ids), token_ids: Enum.take(token_ids, @listed_keys)}
   end
 
-  # Workspace changes.
+  # Workspace changes: a run of tasks one key added, or gave to other keys,
+  # is one item.
+  defp group_work([]), do: []
+
+  defp group_work([first | rest]) do
+    if handing_out?(first, first.facts.by) do
+      {run, rest} = take_run(rest, first, &handing_out?(&1, first.facts.by), & &1.at)
+      [tasks_entry(run) | group_work(rest)]
+    else
+      [first | group_work(rest)]
+    end
+  end
+
+  # A task `by` added, or gave to a key other than its own.
+  defp handing_out?(%{kind: :created, facts: %{by: by, item: {:item, "task#" <> _}}}, by),
+    do: by != nil
+
+  defp handing_out?(%{kind: :claimed, facts: %{by: by, to: %{token_id: to}}}, by),
+    do: by != nil and to != token_id(by)
+
+  defp handing_out?(_entry, _by), do: false
+
+  defp token_id({:actor, token_id, _wallet}), do: token_id
+  defp token_id(%{token_id: token_id}), do: token_id
+
+  defp tasks_entry([only]), do: only
+
+  defp tasks_entry([newest | _] = run) do
+    given = for %{kind: :claimed, facts: %{to: to}} <- run, do: to.token_id
+    keys = given |> Enum.uniq() |> Enum.sort()
+
+    entry("tasks:#{newest.position}", newest.at, :tasks, List.last(run).position, %{
+      by: newest.facts.by,
+      added: Enum.count(run, &(&1.kind == :created)),
+      given: length(given),
+      to: Enum.take(keys, @listed_keys),
+      others: max(length(keys) - @listed_keys, 0)
+    })
+  end
+
   defp graph_entry(event) do
     {kind, facts} = change(event.type, event.brief)
 

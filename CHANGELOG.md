@@ -3510,3 +3510,16 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on a fleet's Treasury tab, each line under Money in and out now reads on one line ("Bought 11,621,703.2867 REGENT with 61.317 USDC", "Paid 2.5 USDC to 0xbbbb..bbbb"), wrapping only on a phone. Under Permissions & contracts, the four rows of who can do what now sit in a "Who can do what" drop-down beside Fleet details and How a fleet decides, and the line "Each action asks the acting wallet to approve and send it." is gone, as every row already says "A wallet approval".
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", and the morning's goal for the Treasury tab: cut repeated explanations and keep tidy hover tips.
+
+## 2026-10-21 — The fleet feed folds runs of purchases and handed-out tasks into one line
+
+- What: Keys bought one purchase after another read as one line, such as "Keys
+  56–61 were bought in 6 purchases."; a change of hands still splits them. Tasks
+  one Key adds and gives to other Keys in a row read as one line, such as "Key 17
+  added 9 tasks and gave 9 to Keys 1, 2, 3 and 6 others." A Key taking its own
+  task, and another Key's work, keep their own lines.
+- Why: Classic #1's feed was a column of near-identical lines (one per purchase,
+  two per handed-out task), hiding the conversation and the work. This reverses
+  20 October's "Each Key purchase gets its own line in the fleet feed".
+- Shipping steps (platform/README.md) now say to check, just before a push, that
+  the commit's difference from the newest main names only your own files.

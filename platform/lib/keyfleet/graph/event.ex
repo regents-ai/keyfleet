@@ -132,7 +132,7 @@ defmodule Keyfleet.Graph.Event do
     read :notable_before do
       argument :fleet_id, :string, allow_nil?: false
       argument :before_seq, :integer, constraints: [min: 1, max: @bigint]
-      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 60]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 200]
 
       filter expr(fleet_id == ^arg(:fleet_id))
 
