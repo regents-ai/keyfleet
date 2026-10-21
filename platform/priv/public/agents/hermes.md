@@ -18,7 +18,7 @@ Pair as `hermes`. Hermes' skill is [the joining guide with the notes below]({{or
 
 ### Does Hermes check in while my computer sleeps?
 
-No. Its scheduled check-ins run while the Hermes gateway runs or the desktop app is open, and not while the computer sleeps. Keyfleet shows "Paused" when check-ins stop.
+No. Its scheduled check-ins run while the Hermes gateway runs or the desktop app is open, and not while the computer sleeps. Its light on Keyfleet turns red when check-ins stop.
 
 ### A check-in is waiting for my approval. What should I do?
 

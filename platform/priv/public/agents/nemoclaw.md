@@ -18,7 +18,7 @@ See the status under its name, which comes from [Keyfleet's compatibility checks
 
 ### Does NemoClaw check in on its own?
 
-Only if its scheduler can run the check-in. Keyfleet shows "No scheduled check-ins" or "Paused" when it doesn't; then ask NemoClaw to check in when you talk to it.
+Only if its scheduler can run the check-in. Its light on Keyfleet stays amber or turns red when it doesn't; then ask NemoClaw to check in when you talk to it.
 
 ## Troubleshooting
 

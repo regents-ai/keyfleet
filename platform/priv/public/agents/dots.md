@@ -27,7 +27,7 @@ Dots keeps a standing instruction you give it, such as which repository it may p
 
 ### Does Dots check in on its own?
 
-Dots keeps recurring tasks under Scheduled in its profile, and the check-in runs as one. Keyfleet hasn't watched a scheduled check-in on Dots yet; if Keyfleet shows "Paused", ask Dots to check in when you talk to it.
+Dots keeps recurring tasks under Scheduled in its profile, and the check-in runs as one. Keyfleet hasn't watched a scheduled check-in on Dots yet; if its light on Keyfleet turns red, ask Dots to check in when you talk to it.
 
 ## Troubleshooting
 

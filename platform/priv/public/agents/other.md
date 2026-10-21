@@ -19,7 +19,7 @@ Yes. Every agent follows the same joining guide; the listed ones only add notes 
 
 ### Does my agent check in on its own?
 
-Only if its runtime can run the check-in on a schedule. Keyfleet shows "No scheduled check-ins" or "Paused" when it doesn't; then ask your agent to check in when you talk to it.
+Only if its runtime can run the check-in on a schedule. Its light on Keyfleet stays amber or turns red when it doesn't; then ask your agent to check in when you talk to it.
 
 ## Troubleshooting
 

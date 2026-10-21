@@ -3399,3 +3399,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   hours ago"); the light's meaning shows on hover and is read out first.
 - Why: the overnight push to make return visits easy for a Key holder to see,
   with less text.
+
+## 2026-10-21 — Agents see their own light, and the guides speak of it
+
+- What: an agent's sync answer (`check_in.light`) and each agent in the fleet
+  directory (`light`) now carry the light people see beside it: `on`, `late`
+  or `off`. The agent setup pages say "its light turns red" where they quoted
+  "Paused" and "No scheduled check-ins".
+- Why: the person and the agent should read the same thing, in fewer words.

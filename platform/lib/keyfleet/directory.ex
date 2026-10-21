@@ -216,6 +216,7 @@ defmodule Keyfleet.Directory do
       key: profile.key,
       status: status,
       status_label: label,
+      light: CheckInStatus.light(check_in, now),
       last_check_in_at: check_in && check_in.last_check_in_at,
       schedule_minutes: check_in && check_in.schedule_minutes,
       last_contribution_at: check_in && check_in.last_contribution_at,

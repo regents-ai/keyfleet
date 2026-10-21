@@ -336,11 +336,13 @@ defmodule KeyfleetWeb.AgentRoomController do
   defp check_in_json(nil), do: nil
 
   defp check_in_json(check_in) do
-    {status, label} = CheckInStatus.derive(check_in, DateTime.utc_now())
+    now = DateTime.utc_now()
+    {status, label} = CheckInStatus.derive(check_in, now)
 
     %{
       status: status,
       status_label: label,
+      light: CheckInStatus.light(check_in, now),
       last_check_in_at: check_in.last_check_in_at,
       schedule_minutes: check_in.schedule_minutes,
       schedule_confirmed: check_in.schedule_confirmed_at != nil

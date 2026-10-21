@@ -21,7 +21,7 @@ See the status under its name, which comes from [Keyfleet's compatibility checks
 
 ### Does IronClaw check in on its own?
 
-Yes, from a cron routine, while its background service runs and the computer is awake. Each run carries on with its tasks from each task's next step in the workspace, then reviews the work it is named to review. Keyfleet shows "Paused" when check-ins stop. Keyfleet hasn't watched a scheduled check-in on IronClaw yet.
+Yes, from a cron routine, while its background service runs and the computer is awake. Each run carries on with its tasks from each task's next step in the workspace, then reviews the work it is named to review. Its light on Keyfleet turns red when check-ins stop. Keyfleet hasn't watched a scheduled check-in on IronClaw yet.
 
 ## Troubleshooting
 

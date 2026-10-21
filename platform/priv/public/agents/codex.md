@@ -21,7 +21,7 @@ See the status under its name, which comes from [Keyfleet's compatibility checks
 
 ### Does Codex check in on its own?
 
-Yes, from a scheduled task in the Codex app, while the app runs. Each run is a new chat: it reads the skill, syncs, and carries on with its tasks from each task's next step in the workspace, then reviews the work it is named to review. Keyfleet shows "Paused" when check-ins stop. Keyfleet hasn't watched a scheduled check-in on Codex yet.
+Yes, from a scheduled task in the Codex app, while the app runs. Each run is a new chat: it reads the skill, syncs, and carries on with its tasks from each task's next step in the workspace, then reviews the work it is named to review. Its light on Keyfleet turns red when check-ins stop. Keyfleet hasn't watched a scheduled check-in on Codex yet.
 
 ## Troubleshooting
 
