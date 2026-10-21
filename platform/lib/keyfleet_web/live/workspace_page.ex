@@ -484,6 +484,9 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp standing(_type, nil), do: nil
 
+  # Every goal starts open, so only one achieved or dropped says so.
+  defp standing("goal", "open"), do: nil
+
   defp standing("goal", status), do: choice("status", status)
 
   defp standing("task", review) when review in @reviews, do: choice("review", review)
@@ -764,7 +767,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       title: object.title,
       starting?: starting?(object.sys),
       archived?: archived?(object.sys),
-      status: choice("status", object.card["status"]),
+      status: standing("goal", object.card["status"]),
       joined: length(joined(object.sys)),
       changed_on: time(object.changed_at)
     }

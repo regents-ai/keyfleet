@@ -1159,7 +1159,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
       >
         <p class="workspace-kicker">{String.capitalize(@fleet.focus.type_name)}</p>
         <h2 id="workspace-public-item-title">{@fleet.focus.title}</h2>
-        <p><span class="workspace-badge">{@fleet.focus.standing}</span></p>
+        <p :if={@fleet.focus.standing}>
+          <span class="workspace-badge">{@fleet.focus.standing}</span>
+        </p>
         <p :if={@fleet.focus.summary} class="workspace-text">{@fleet.focus.summary}</p>
       </section>
       <.outline
@@ -1237,7 +1239,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <li :for={item <- @items} data-item={item.id}>
           <p>
             <strong>{item.title}</strong>
-            <span class="workspace-badge">{item.standing}</span>
+            <span :if={item.standing} class="workspace-badge">{item.standing}</span>
           </p>
           <p :if={item.summary} class="workspace-text">{item.summary}</p>
         </li>
@@ -1322,7 +1324,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <span class="workspace-row-meta">
           <span :if={row.starting?} class="workspace-badge">Starting idea</span>
           <span :if={row.archived?} class="workspace-badge">Archived</span>
-          <span>{row.status}</span>
+          <span :if={row.status}>{row.status}</span>
           <span :if={row.joined > 0}>{row.joined} joined</span>
           <KeyfleetWeb.Time.local id={"#{@id}-#{row.id}-on"} at={row.changed_on} as={:date} />
         </span>

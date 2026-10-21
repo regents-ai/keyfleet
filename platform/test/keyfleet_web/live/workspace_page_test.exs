@@ -314,7 +314,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert html =~ @notice
       assert goals(board) == [goal, first, second]
       assert has_element?(board, ~s(#workspace-goals [data-item="#{first}"]), "Starting idea")
-      assert has_element?(board, ~s(#workspace-goals [data-item="#{first}"]), "Open")
+      refute has_element?(board, ~s(#workspace-goals [data-item="#{first}"]), "Open")
       refute has_element?(board, ~s(#workspace-goals [data-item="#{goal}"]), "Starting idea")
       refute has_element?(board, ~s(#workspace-goals [data-item="#{second}"]), "joined")
       assert has_element?(board, ~s(#workspace-all-goals[href="#{@board}?type=goal"]))
@@ -1826,6 +1826,9 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         "public_summary" => "Finding a first customer."
       })
 
+    won =
+      create(@fleet, "goal", %{"title" => "Launch", "outcome" => "Live.", "status" => "achieved"})
+
     task =
       create(@fleet, "task", %{
         "title" => "Draft the brief",
@@ -1852,7 +1855,17 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              )
 
       assert has_element?(view, ~s(#workspace-public-goals [data-item="#{goal}"]), "Revenue")
-      assert has_element?(view, ~s(#workspace-public-goals [data-item="#{goal}"]), "Open")
+
+      refute has_element?(
+               view,
+               ~s(#workspace-public-goals [data-item="#{goal}"] .workspace-badge)
+             )
+
+      assert has_element?(
+               view,
+               ~s(#workspace-public-goals [data-item="#{won}"] .workspace-badge),
+               "Achieved"
+             )
 
       assert has_element?(
                view,
