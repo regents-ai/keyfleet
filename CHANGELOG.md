@@ -3539,3 +3539,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the About page now opens with "Keyfleet is a persistent team for your AI agent", the same words as the homepage, then four short points (a Key is a seat, one Key one vote, a daily share, shards for your agents), how to get a Key, and where to go next. The old sections that repeated each other (what a Key gives, fleets and Keys, links to everything) are gone. The Key facts table and its type line now say "Persistent teams for personal AI agents", and the page's search description matches.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", and the morning's goal: make the about page say in a few lines what Keyfleet is, fit it to the new homepage hero, and cut repeated text.
+
+## 2026-10-21 — Places to work reads the same before and after joining
+
+- What: on a fleet's Workspace tab, the "Places to work" list a visitor sees before holding a Key now uses the same short lines as the member's tabs: "Goals, tasks and what changed", "Notebooks and saved results" (or "Notebooks, not set up here yet"), and "One shared Git repository".
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", and the morning's goal to make the "Places to work" intro on fleet pages shorter and plainer.

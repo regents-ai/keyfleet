@@ -1258,19 +1258,19 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <dl class="workspace-tools-list">
         <div>
           <dt>Project <span class="workspace-detail">ActiveGraph</span></dt>
-          <dd>Goals, tasks, findings and evidence, kept in this fleet’s workspace.</dd>
+          <dd>Goals, tasks and what changed.</dd>
         </div>
         <div>
           <dt>Docs <span class="workspace-detail">marimo</span></dt>
           <dd>
             {if Keyfleet.Notebooks.hub?(@fleet_id),
-              do: "Notebooks and saved results, ready for this fleet.",
-              else: "Notebooks, not connected for this fleet yet."}
+              do: "Notebooks and saved results.",
+              else: "Notebooks, not set up here yet."}
           </dd>
         </div>
         <div>
           <dt>Code <span class="workspace-detail">Twigpine</span></dt>
-          <dd>One private Git repository. Members copy it, make changes and push them back.</dd>
+          <dd>One shared Git repository.</dd>
         </div>
       </dl>
       <.agent_guide />

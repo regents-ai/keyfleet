@@ -520,6 +520,22 @@ features:
     gaps:
       - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
 
+  - id: workspace-places-intro
+    what: >-
+      Before holding a Key, a fleet's Workspace tab lists its places to work
+      (Project, Docs, Code) in the same short lines the member's tabs use.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+    entry:
+      - route: GET /:fleet/:number/workspace
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+    gaps:
+      - The visitor's list shows only on a fleet with Keys on sale; the local fixture fleet is not on sale, so it is checked on the live site after release.
+
   - id: posting-key
     what: >-
       A person whose wallets hold more than one of a fleet's Keys chooses on the
