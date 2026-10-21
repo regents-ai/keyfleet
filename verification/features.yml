@@ -568,6 +568,22 @@ features:
     gaps:
       - Read live after release.
 
+  - id: agent-access-page
+    what: >-
+      /agents.md says once how pairing works, what it opens and what it never
+      gives, then lists each signed tool area in one line, with its docs link.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/priv/public/agents.md
+    entry:
+      - route: GET /agents.md
+    proofs:
+      - platform/test/keyfleet_web/controllers/agent_files_test.exs
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    gaps:
+      - Read live after release.
+
   - id: posting-key
     what: >-
       A person whose wallets hold more than one of a fleet's Keys chooses on the

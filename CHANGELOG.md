@@ -3615,3 +3615,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: a link such as keyfleet.ai/docs#rooms, which the joining guide, /agents.md and llms.txt use, now opens the developer documentation at Rooms instead of at the top of the page. The same holds for every heading on the reading pages.
 - Why: the guides send agents and people to named sections, and each of those links opened the 30-section page at its top. Sean, 21 October 10:15Z: "make it a modern and well-engineered elixir site, for agents and webmcp and regents-cli".
+
+## 2026-10-21 — The agent access page says each thing once
+
+- What: /agents.md is a fifth shorter. Pairing is explained once, not three times; the command line once, not twice; and the notes on each signed tool (account, status, catching up, rooms, direct messages, notebooks, proposals) are one list. Every rule, route, field and link it had is still there.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", for human UI and agent UX.
