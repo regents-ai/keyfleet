@@ -237,4 +237,16 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     assert {"content-type", "text/markdown; charset=utf-8"} in headers
     assert body =~ guide
   end
+
+  test "a Markdown address under a fleet's pages points to the fleet's Markdown" do
+    fleet = "(#{PublicDocuments.url("/fleets/fleet_tech_classic.md")})"
+
+    for path <- ["/classic/1.md", "/classic/1/workspace.md"] do
+      answer = get(build_conn(), path)
+      assert response_content_type(answer, :md) =~ "text/markdown", path
+      assert response(answer, 404) =~ fleet, path
+    end
+
+    assert get(build_conn(), "/classic/10.md") |> response(404) =~ "/llms.txt"
+  end
 end

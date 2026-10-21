@@ -4016,3 +4016,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   phone), the row fades out at an edge while more of it waits past that edge,
   and runs crisp to an edge it has reached. A row that fits has no fade.
 - Why: Sean, 21 Oct 10:16Z: "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — A missing Markdown address under a fleet points to the fleet
+
+- What: an agent asking for a Markdown address under a fleet's pages that
+  isn't here, such as /classic/1.md, is pointed to that fleet's own Markdown
+  (/fleets/fleet_tech_classic.md) instead of the general agent guide.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".

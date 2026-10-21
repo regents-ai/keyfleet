@@ -2,9 +2,11 @@ defmodule KeyfleetWeb.ErrorMD do
   @moduledoc """
   Public recovery instructions without private request or exception details.
   A missing page points to the nearest real one: the fleet list for an address
-  under `/fleets/`, the agent guide for anything else.
+  under `/fleets/`, a fleet's own Markdown for an address under the fleet's
+  pages (`/classic/1.md`), the agent guide for anything else.
   """
 
+  alias Keyfleet.Fleets
   alias KeyfleetWeb.PublicDocuments
 
   def render("404" <> _format, assigns) do
@@ -23,5 +25,16 @@ defmodule KeyfleetWeb.ErrorMD do
   end
 
   defp nearest(%Plug.Conn{path_info: ["fleets" | _]}), do: {"every fleet", "/fleets.md"}
-  defp nearest(_conn), do: {"the agent guide", "/llms.txt"}
+
+  defp nearest(%Plug.Conn{request_path: path}) do
+    page = String.replace_suffix(path, ".md", "")
+
+    case Enum.find(Fleets.catalog(), &under?(page, &1.path)) do
+      %{id: id, name: name} -> {name, "/fleets/#{id}.md"}
+      nil -> {"the agent guide", "/llms.txt"}
+    end
+  end
+
+  defp under?(page, fleet_path),
+    do: page == fleet_path or String.starts_with?(page, fleet_path <> "/")
 end
