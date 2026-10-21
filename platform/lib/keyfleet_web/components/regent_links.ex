@@ -4,8 +4,8 @@ defmodule KeyfleetWeb.Components.RegentLinks do
   hairline between the menu and the marks.
 
   The site header and the footer render the same controls; the header also
-  has the Regents crown beside the menu. The crown and the X and GitHub marks
-  point at Regents, which runs Keyfleet.
+  has the Regents crown beside the menu, which opens the $REGENT menu. The X
+  and GitHub marks point at Regents, which runs Keyfleet.
   """
 
   use Phoenix.Component
@@ -36,25 +36,55 @@ defmodule KeyfleetWeb.Components.RegentLinks do
     """
   end
 
+  # REGENT on Base, and the Uniswap pool it trades in, as regents.sh names them.
+  @regent_address "0x6f89bcA4eA5931EdFCB09786267b251DeE752b07"
+  @regent_pool "0x4ed3b69ac263ad86482f609b2c2105f64bcfd3a7e02e8e078ec9fec1f0324bed"
+
   attr :id, :string, required: true
 
   @doc """
-  The Regents crown on its charcoal tile, as the template's header has it,
-  linking to Regents.
+  The Regents crown on its charcoal tile, opening the $REGENT menu as regents.sh's
+  crown does: "$REGENT" copies the token's address, then Buy on Uniswap and View
+  Chart. A mouse opens it on hover; a press, a tap or the keyboard opens and
+  shuts it; Escape, a press elsewhere or focus leaving it shuts it
+  (`assets/js/hooks/token_menu.ts`).
   """
-  def regents_crown(assigns) do
+  def token_menu(assigns) do
+    assigns =
+      assign(assigns,
+        address: @regent_address,
+        buy: "https://app.uniswap.org/explore/tokens/base/#{@regent_address}",
+        chart: "https://dexscreener.com/base/#{@regent_pool}"
+      )
+
     ~H"""
-    <a
-      id={@id}
-      class="shell-tool shell-regents-crown"
-      href="https://regents.sh"
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label="Regents"
-    >
-      <span class="shell-apps__tile" data-tone="protocol"><.crown /></span>
-      <span class="shell-tool__tip" aria-hidden="true">Regents</span>
-    </a>
+    <details id={@id} class="rl-token-menu" phx-hook="TokenMenu">
+      <summary class="shell-tool shell-regents-crown" aria-label="$REGENT links">
+        <span class="shell-apps__tile" data-tone="protocol"><.crown /></span>
+      </summary>
+      <div class="rl-token-menu-panel">
+        <nav class="rl-token-menu-content" aria-label="$REGENT">
+          <Regent.Primitives.copy_button
+            id={"#{@id}-copy"}
+            text={@address}
+            variant="quiet"
+            class="rl-token-copy"
+            aria-label="Copy $REGENT contract address"
+          >
+            <span class="rl-token-copy__label">$REGENT</span>
+            <span class="rl-token-copy__icon" aria-hidden="true">
+              <.source_icon kind={:copy} />
+            </span>
+          </Regent.Primitives.copy_button>
+          <a class="rg-button rl-token-link" href={@buy} target="_blank" rel="noopener noreferrer">
+            Buy on Uniswap
+          </a>
+          <a class="rg-button rl-token-link" href={@chart} target="_blank" rel="noopener noreferrer">
+            View Chart
+          </a>
+        </nav>
+      </div>
+    </details>
     """
   end
 
@@ -131,6 +161,14 @@ defmodule KeyfleetWeb.Components.RegentLinks do
     ~H"""
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+    """
+  end
+
+  def source_icon(%{kind: :copy} = assigns) do
+    ~H"""
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z" />
     </svg>
     """
   end

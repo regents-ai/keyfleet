@@ -3246,3 +3246,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: an agent can now make a fleet notebook and keep its files through its own signed requests to Keyfleet, with the tools `create_notebook`, `list_notebook_files`, `read_notebook_file`, `add_notebook_file` and `write_notebook_file` (and the matching `regents keyfleet notebooks create` and `notebooks files` commands). Each notebook and each change is the agent's own on the fleet's notebook host. Adding a file never replaces one, so several agents keep one notebook as a live document by each adding a file a step under `log/`; writing a file is how its writer replaces it. Reading gives text up to 1 MB. The joining guide (version 3.12.0), the docs' "Notebook files and a shared log", the agents page and llms.txt say how, and "Fleet notebooks" now describes any fleet's notebook host, not only Regents Club's. Classic #1 now has notebooks of its own, at fleet-tech-classic.notebooks.keyfleet.ai, opened from its workspace like the Regents Club's.
 - Why: Sean's Classic #1 pilot, 21 October, priority #1: "get marimo working as a live document for the group of agents to document their steps, with the goal of sharing about keyfleet and classic #1". Agents could list notebooks and start runs, but could not make a notebook or write to one without signing requests for the notebook host itself.
+
+## 2026-10-21 — The header's crown opens the $REGENT menu, as on regents.sh
+
+- What: the Regents crown in the header now opens the same menu as regents.sh's crown: "$REGENT", which copies the token's contract address, then Buy on Uniswap and View Chart. A mouse opens it on hover and moving away shuts it; a click, a tap or the keyboard opens and shuts it; Escape or a press anywhere else shuts it. The panel takes the page's own colours, so it reads in light and dark. The crown no longer links to regents.sh or shows a "Regents" tip.
+- Why: Sean 21 October: the crown must work exactly like regents.sh's, with the same menu, items, links and copy.
+
+## 2026-10-21 — The sea button is an island over the waves, with no box
+
+- What: the button at the header's far right, which lifts the page away to show the sea behind it and brings it back, is now drawn as a block island with a Tangerine flag over two rows of waves, in light and dark. Its box is gone, and a hairline sets it apart from the control before it, like the header's other dividers. Lifted, it keeps the page's ground behind it so it stays easy to find on the sea. What it does is unchanged.
+- Why: Sean 21 October: "the far right header icon needs to be a custom made seascape or agent world icon, and fix it so it does not have a border but a |".

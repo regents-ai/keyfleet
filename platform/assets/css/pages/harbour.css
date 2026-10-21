@@ -139,11 +139,12 @@ body.sea-lifted .harbour-sea__harbour {
 /* ---- The lift button ---- */
 
 /* It stands at the header's top right, in a slot the header
-   leaves empty for it, so it never covers a header control. It is centred on
-   the header's row, which its buttons make 4.75rem high (3.875rem on a
-   phone). */
+   leaves empty for it, so it never covers a header control: the button, and
+   before it a hairline like the header's others, a space either side. It is
+   centred on the header's row, which its buttons make 4.75rem high (3.875rem
+   on a phone). */
 body:has(> .harbour-sea) #shell-header {
-  padding-inline-end: calc(2.75rem + 2 * var(--space-1));
+  padding-inline-end: calc(2.75rem + 3 * var(--space-1) + 1px);
 }
 
 /* It rides with the header, so once the page scrolls it never covers what
@@ -159,15 +160,35 @@ body:has(> .harbour-sea) #shell-header {
   height: 2.75rem;
   min-height: 0;
   padding: 0;
-  border: 1px solid var(--ash-line-strong);
+  border: 0;
   border-radius: 0;
-  background: var(--color-bg);
+  background: transparent;
   color: var(--color-fg);
   cursor: pointer;
 }
 
+/* The hairline between it and the control before it, midway between the two:
+   that control keeps a space of its own (var(--space-1)) after it, and the
+   slot two more. */
+.harbour-sea .harbour-sea__lift::before {
+  content: "";
+  position: absolute;
+  inset-block-start: calc(50% - 0.625rem);
+  inset-inline-start: calc(-1.5 * var(--space-1) - 1px);
+  width: 1px;
+  height: 1.25rem;
+  background: var(--hairline-strong);
+}
+
+/* With the page lifted it stands alone on the sea, on the page's ground so it
+   stays easy to find, with nothing before it to set apart. */
 body.sea-lifted .harbour-sea .harbour-sea__lift {
   position: fixed;
+  background: var(--color-bg);
+}
+
+body.sea-lifted .harbour-sea .harbour-sea__lift::before {
+  content: none;
 }
 
 @media (hover: hover) {
@@ -182,19 +203,23 @@ body.sea-lifted .harbour-sea .harbour-sea__lift {
 }
 
 .harbour-sea .harbour-sea__lift svg {
-  width: 1.1rem;
-  height: 1.1rem;
-  transition: rotate 300ms ease;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
-.harbour-sea .harbour-sea__lift[aria-pressed="true"] svg {
-  rotate: 180deg;
+.harbour-sea .harbour-sea__lift-flag {
+  fill: var(--palette-tangerine-tango);
 }
 
-/* A phone's header is one short row; the slot is the button and a hair more. */
+/* A phone's header is one short row; the slot is the button, its hairline and
+   a hair more. */
 @media (max-width: 47.99rem) {
   body:has(> .harbour-sea) #shell-header {
-    padding-inline-end: calc(2.75rem + 2 * 4px);
+    padding-inline-end: calc(2.75rem + 3 * 4px + 1px);
+  }
+
+  .harbour-sea .harbour-sea__lift::before {
+    inset-inline-start: calc(-0.5 * var(--space-1) - 4px - 1px);
   }
 
   /* The row's controls draw a little tighter to make that room. */
@@ -415,16 +440,11 @@ body.sea-lifted:has(> .harbour-sea) > .regent-footer {
 
 @media (prefers-reduced-motion: reduce) {
   .harbour-sea__stage canvas,
-  .harbour-sea .harbour-sea__lift svg,
   body:has(> .harbour-sea) #app-shell,
   body:has(> .harbour-sea) > .regent-footer,
   body.sea-lifted:has(> .harbour-sea) #app-shell,
   body.sea-lifted:has(> .harbour-sea) > .regent-footer {
     transition: none;
-  }
-
-  .harbour-sea .harbour-sea__lift[aria-pressed="true"] svg {
-    rotate: none;
   }
 
   /* No slide: the page simply goes. */

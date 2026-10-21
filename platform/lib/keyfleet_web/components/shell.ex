@@ -188,7 +188,7 @@ defmodule KeyfleetWeb.Components.Shell do
       <span class="shell-spacer" />
       <.theme_toggle :if={@theme} id="theme-control" />
       <div class="rl-header-links">
-        <RegentLinks.regents_crown id="shell-regents-crown" />
+        <RegentLinks.token_menu id="shell-regents-crown" />
         <RegentLinks.header_links id="shell-token-menu" />
       </div>
 

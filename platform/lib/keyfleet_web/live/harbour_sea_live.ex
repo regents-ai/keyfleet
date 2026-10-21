@@ -433,8 +433,9 @@ defmodule KeyfleetWeb.HarbourSeaLive do
         |> JS.toggle_attribute({"title", "Bring the page back", "Show the sea"})
       }
     >
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <path d="M4 12l6-6 6 6M4 16h12" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <svg viewBox="0 0 20 18" fill="currentColor" aria-hidden="true">
+        <rect :for={{x, y, w} <- sea_island()} x={x} y={y} width={w} height="2" />
+        <rect class="harbour-sea__lift-flag" x="10" y="0" width="4" height="4" />
       </svg>
     </button>
     <.agent_card
@@ -442,6 +443,26 @@ defmodule KeyfleetWeb.HarbourSeaLive do
       ship={ship}
     />
     """
+  end
+
+  # The lift button's picture, drawn in blocks like the Regents crown: an island
+  # with its mast over two rows of waves. Each block row is {x, y, width}; the
+  # flag on the mast is drawn apart, in Tangerine.
+  defp sea_island do
+    [
+      {8, 0, 2},
+      {8, 2, 2},
+      {8, 4, 2},
+      {5, 6, 8},
+      {3, 8, 12},
+      {2, 10, 14},
+      {2, 14, 4},
+      {10, 14, 4},
+      {18, 14, 2},
+      {0, 16, 2},
+      {6, 16, 4},
+      {14, 16, 4}
+    ]
   end
 
   attr :ship, :map, required: true

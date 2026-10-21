@@ -44,6 +44,7 @@ import {PollCountdown} from "./hooks/poll_countdown"
 import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
 import {MotionCascade, MotionTabs, ShellViews} from "./hooks/motion/reveals"
 import {SidePanel} from "./hooks/side_panel"
+import {TokenMenu} from "./hooks/token_menu"
 import {VerifiedConnections} from "./hooks/verified_connections"
 import {mountMotion} from "./motion"
 
@@ -304,6 +305,7 @@ const hooks = {
   PollCountdown,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
   SidePanel,
+  TokenMenu,
   VerifiedConnections,
 }
 if (!browserCsrfToken()) throw new Error("Missing CSRF token")
