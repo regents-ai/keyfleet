@@ -37,8 +37,34 @@
 
 .key-heading {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1.5rem;
+  align-items: center;
   padding: var(--rg-panel-padding);
+}
+
+.key-heading__words {
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+}
+
+/* The Key's own card, beside its number. */
+.key-heading__card {
+  width: clamp(9rem, 22vw, 15rem);
+  aspect-ratio: 767 / 959;
+}
+
+/* Phones: the card under the number, as tall as half the screen at most. */
+@media (max-width: 599px) {
+  .key-heading {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .key-heading__card {
+    justify-self: center;
+    width: min(70vw, 40svh * 767 / 959);
+  }
 }
 
 .key-heading h1 {

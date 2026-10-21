@@ -27,6 +27,7 @@ export default defineConfig({
     "early_page.spec.ts",
     "agent_tools.spec.ts",
     "account_agents.spec.ts",
+    "key_card.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

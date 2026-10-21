@@ -30,6 +30,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias Keyfleet.Rooms
   alias Keyfleet.Treasury
   alias KeyfleetWeb.CheckIns
+  alias KeyfleetWeb.Components.KeyCard
   alias KeyfleetWeb.Components.Placeholder
   alias KeyfleetWeb.DmsLive
   alias KeyfleetWeb.FleetLive
@@ -129,16 +130,13 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   attr :profile, :map, required: true
 
-  # The picture the Key's metadata names, as a wallet or marketplace shows it:
-  # the Interim Keyfleet Access Pass until the Key's own card is drawn. It loads
-  # ahead of the map's close-ups behind the dialog.
+  # It loads ahead of the map's close-ups behind the dialog.
   defp card(assigns) do
     ~H"""
-    <img
+    <KeyCard.card
       id="key-profile-card"
       class="key-profile-card"
       src={@profile.image}
-      fetchpriority="high"
       alt={"The card of Key #{Rules.grouped(@profile.token_id)}"}
     />
     """

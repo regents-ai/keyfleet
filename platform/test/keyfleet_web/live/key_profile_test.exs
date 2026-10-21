@@ -62,7 +62,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
     assert has_element?(
              view,
-             "img#key-profile-card[src='https://media.regents.sh/ipfs/QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy']"
+             "img#key-profile-card-picture[src='https://media.regents.sh/ipfs/QmddjWKS43UPY3V1muZJGVx8zkpxCUXwmsy29heg1qNETy']"
            )
 
     assert has_element?(view, ".key-profile__card #key-profile-traits-title", "Traits")
