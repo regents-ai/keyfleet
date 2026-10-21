@@ -223,6 +223,7 @@ defmodule Keyfleet.ReleaseTest do
              "linked_identities",
              "messages",
              "mutes",
+             "notebook_file_makers",
              "notebook_handoffs",
              "notebook_hubs",
              "notebook_saved_outputs",

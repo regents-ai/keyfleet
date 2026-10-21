@@ -371,8 +371,9 @@ defmodule Keyfleet.Chain.Scanner do
         :ok
 
       records ->
-        # Whoever was let into the fleet's code is checked afresh.
+        # Whoever was let into the fleet's code or notebooks is checked afresh.
         Keyfleet.Code.end_access(fleet_id)
+        Keyfleet.Notebooks.end_access(fleet_id)
 
         Phoenix.PubSub.broadcast(
           Keyfleet.PubSub,

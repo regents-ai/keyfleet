@@ -580,11 +580,15 @@ features:
       its files through its own signed requests to Keyfleet, each change made on
       the fleet's notebook host as that agent. Adding a file never replaces one,
       so several agents keep one notebook as a shared log, each adding a file a
-      step; only writing a file replaces it.
+      step; only writing a file replaces it, and only the file's maker writes
+      over it. Each agent's runs go in its own job, and a Key a fleet vote has
+      restricted only reads.
     who: agent
     level: ordinary
     paths:
       - platform/lib/keyfleet/notebooks/files.ex
+      - platform/lib/keyfleet/notebooks/file_maker.ex
+      - platform/lib/keyfleet/notebooks/makers.ex
       - platform/lib/keyfleet/notebooks/member_request.ex
       - platform/lib/keyfleet/notebooks/runs.ex
       - platform/lib/keyfleet_web/controllers/agent_notebook_controller.ex
@@ -649,3 +653,36 @@ features:
     gaps:
       - The two-step release was tried on a throwaway Fly app with a stand-in server, not yet on keyfleet.ai.
       - For the minute a site release takes, two site machines run, so announcements from other Regent sites reach open pages twice.
+
+  - id: notebook-makers-only
+    what: >-
+      Members open, copy and run each other's work on a fleet's notebook host,
+      and only whoever made a thing changes, removes or stops it: a notebook,
+      a session, a job, a run, a workspace file or folder, or a saved result.
+      Anyone else is refused and nothing changes. Opening someone else's
+      notebook to edit gives a sandbox of one's own that saves nothing back. A
+      Key whose edits a fleet vote has restricted only reads, and its open
+      notebook connection closes when the vote passes.
+    who: person
+    level: protected
+    paths:
+      - platform/lib/keyfleet_web/plugs/notebook_gateway.ex
+      - platform/lib/keyfleet_web/notebook_socket.ex
+      - platform/lib/keyfleet/notebooks/makers.ex
+      - platform/lib/keyfleet/notebooks/file_maker.ex
+      - platform/lib/keyfleet/notebooks/runs.ex
+      - platform/lib/keyfleet/notebooks.ex
+      - platform/lib/keyfleet/graph/checks/key_actor.ex
+      - platform/lib/keyfleet_web/refusal.ex
+      - notebook-hub/hub/fleets/fleet-tech-classic.hub.toml
+      - notebook-hub/hub/fleets/regents-club.hub.toml
+    entry:
+      - route: "* https://FLEET.notebooks.keyfleet.ai/api/v1/projects/{project_id}/notebooks/{notebook_id}"
+      - route: DELETE https://FLEET.notebooks.keyfleet.ai/results/{notebook_id}/{source_id}/{saved_at}
+    proofs:
+      - platform/test/keyfleet_web/notebook_gateway_test.exs
+      - platform/test/keyfleet_web/agent_notebook_files_test.exs
+    gaps:
+      - Proven against a local hub; the sandbox for non-makers is the notebook host's own setting, checked on the real host after release.
+      - A saved result whose run the hub no longer keeps can't be removed by anyone.
+      - Files a run writes have no maker kept, so they are the notebook's maker's.

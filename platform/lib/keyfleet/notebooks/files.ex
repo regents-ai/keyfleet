@@ -10,17 +10,22 @@ defmodule Keyfleet.Notebooks.Files do
   A notebook's files sit beside its code, `notebook.py`, which its runs and
   sessions see. Writing `notebook.py` or `pyproject.toml` saves a new version
   of the notebook. Adding a file never replaces one, so many writers can each
-  add files of their own to one notebook without losing any.
+  add files of their own to one notebook without losing any, and only a
+  file's maker writes over it.
 
   Each answer is `{:ok, answer}` or `{:error, reason}`: `:file_not_found` for a
   notebook or file the hub doesn't have; `:conflict` when a file added is
-  there already, or the notebook is open for editing or saving another change; `:refused` for a path or file the hub doesn't take;
+  there already, or the notebook is open for editing or saving another change;
+  `:not_maker` for writing over another member's file; `:refused` for a path
+  or file the hub doesn't take;
   `:files_full` when the notebook holds as much as it takes; `:too_large` or
   `:not_text` for a file this site doesn't read out; or `:unavailable` when
   the hub didn't answer.
   """
 
   import Keyfleet.Notebooks.MemberRequest
+
+  alias Keyfleet.Notebooks.Makers
 
   # A file read out here is text, at most this many bytes.
   @read_max_bytes 1024 * 1024
@@ -90,16 +95,30 @@ defmodule Keyfleet.Notebooks.Files do
 
   @doc """
   Writes `content` to the file at `path` in `notebook_id`, as `subject`,
-  making its folders as needed: `:add` makes a new file and leaves one
-  already there as it is, answering `:conflict`; `:write` makes the file or
-  replaces it.
+  making its folders as needed: `:add` makes a new file, kept as
+  `subject`'s, and leaves one already there as it is, answering `:conflict`;
+  `:write` replaces a file `subject` made, answering `:not_maker` for anyone
+  else's (`Keyfleet.Notebooks.Makers`).
   """
-  def write(fleet_id, subject, project_id, notebook_id, path, content, mode)
-      when mode in [:add, :write] do
+  def write(fleet_id, subject, project_id, notebook_id, path, content, :add) do
+    with {:ok, item} <- put(fleet_id, subject, project_id, notebook_id, path, content, true),
+         :ok <- Makers.record(fleet_id, notebook_id, Makers.file_key(path), subject),
+         do: {:ok, item}
+  end
+
+  def write(fleet_id, subject, project_id, notebook_id, path, content, :write) do
+    case Makers.overwrite(fleet_id, subject, project_id, notebook_id, Makers.file_key(path)) do
+      :ok -> put(fleet_id, subject, project_id, notebook_id, path, content, false)
+      {:error, :not_found} -> {:error, :file_not_found}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp put(fleet_id, subject, project_id, notebook_id, path, content, create) do
     with {:ok, item} <-
            fleet_id
            |> request(subject, :put, notebook_path(project_id, notebook_id) <> "/workspace/files",
-             params: [path: path, create: mode == :add],
+             params: [path: path, create: create],
              headers: [{"content-type", "application/octet-stream"}],
              body: content
            )

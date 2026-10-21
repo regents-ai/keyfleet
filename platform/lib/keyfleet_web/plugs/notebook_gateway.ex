@@ -44,8 +44,11 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   `:notebook_run_starts`, whoever asks (`Keyfleet.Limits`).
 
   Each one's key ownership is read at most every `access_ttl_ms`
-  (`Keyfleet.AccessCache`); the first time in that span, they are
-  made an editor of the fleet's project in the hub. The token routes, with
+  (`Keyfleet.AccessCache`), and afresh whenever the fleet's Keys change; the
+  first time in that span, they are made an editor of the fleet's project in
+  the hub. A Key whose edits a vote of the fleet has restricted
+  (`Keyfleet.Notebooks.membership/2`) only reads: anything else it sends is
+  refused, until a vote allows its edits again. The token routes, with
   which a hub would hand out credentials that skip this check, are refused
   for everyone.
 
@@ -72,6 +75,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   alias Keyfleet.Notebooks.{
     HubSilentError,
+    Makers,
     Pass,
     RecordsDownError,
     ResultNotKeptError,
@@ -473,17 +477,29 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp admit(conn, fleet_id, subject, actor) do
     case AccessCache.lookup(:notebooks, fleet_id, subject) do
-      {:ok, true} -> forward(conn, fleet_id, subject)
+      {:ok, access} -> admitted(conn, fleet_id, subject, access)
       :none -> check(conn, fleet_id, subject, actor)
     end
   end
 
   defp check(conn, fleet_id, subject, actor) do
     case Notebooks.admit(actor, fleet_id, subject) do
-      {:ok, _project_id} -> forward(conn, fleet_id, subject)
+      {:ok, access} -> admitted(conn, fleet_id, subject, access)
       {:error, reason} -> refuse(conn, reason)
     end
   end
+
+  # A Key whose edits a vote of the fleet has restricted opens and reads the
+  # notebooks, and changes nothing: it sends only reads, and opens no live
+  # connection.
+  defp admitted(conn, fleet_id, subject, %{restricted?: true}) do
+    if conn.method in ["GET", "HEAD"] and not websocket?(conn),
+      do: forward(conn, fleet_id, subject),
+      else: Refusal.json(conn, 403, "notebooks_edits_restricted")
+  end
+
+  defp admitted(conn, fleet_id, subject, %{restricted?: false}),
+    do: forward(conn, fleet_id, subject)
 
   defp refuse(conn, :not_holder), do: Refusal.json(conn, 403, "notebooks_not_holder")
   defp refuse(conn, :catching_up), do: Refusal.json(conn, 503, "notebooks_catching_up")
@@ -495,9 +511,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   defp forward(
          %Plug.Conn{method: "DELETE", request_path: "/results/" <> _ = path} = conn,
          fleet_id,
-         _subject
+         subject
        ),
-       do: remove_saved_output(conn, fleet_id, path)
+       do: remove_saved_output(conn, fleet_id, subject, path)
 
   defp forward(%Plug.Conn{request_path: "/results/" <> _ = path} = conn, fleet_id, _subject),
     do: send_saved_output(conn, fleet_id, path)
@@ -526,7 +542,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
     if websocket?(conn),
       do: forward_socket(conn, address, fleet_id, subject, headers),
-      else: forward_http(conn, address, fleet_id, headers)
+      else: forward_http(conn, address, fleet_id, subject, headers)
   end
 
   # A saved page is asked for unencoded, so the copy kept of it is the page.
@@ -547,7 +563,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     [{"x-keyfleet-assertion", Pass.mint(fleet_id, subject)} | kept]
   end
 
-  defp forward_http(conn, address, fleet_id, headers) do
+  defp forward_http(conn, address, fleet_id, subject, headers) do
     {body, conn} = request_body(conn)
 
     cond do
@@ -558,22 +574,36 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
         Refusal.json(conn, 403, "notebooks_schedules_refused")
 
       true ->
-        Req.request(
-          method: conn.method,
-          url: address <> target(conn),
-          headers: headers,
-          body: body,
-          into: :self,
-          raw: true,
-          redirect: false,
-          retry: false,
-          # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
-          connect_options: [transport_opts: [inet6: true]],
-          receive_timeout: http_timeout(conn)
-        )
-        |> stream_back(conn, fleet_id)
+        case made(conn, fleet_id, subject, {headers, body}) do
+          {:ok, {headers, body}, done} ->
+            Req.request(
+              method: conn.method,
+              url: address <> target(conn),
+              headers: headers,
+              body: body,
+              into: :self,
+              raw: true,
+              redirect: false,
+              retry: false,
+              # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
+              connect_options: [transport_opts: [inet6: true]],
+              receive_timeout: http_timeout(conn)
+            )
+            |> answered(done)
+            |> stream_back(conn, fleet_id)
+
+          {:error, reason} ->
+            maker_refusal(conn, reason)
+        end
     end
   end
+
+  defp answered({:ok, %Req.Response{status: status}} = answer, done) do
+    done.(status)
+    answer
+  end
+
+  defp answered(answer, _done), do: answer
 
   defp http_timeout(%{
          method: "POST",
@@ -613,6 +643,184 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
       _ -> false
     end
   end
+
+  ## Makers
+
+  # Members open, copy and run each other's work, and only whoever made a
+  # thing removes, changes or stops it (`Keyfleet.Notebooks.Makers`). Anyone
+  # else editing a notebook gets a sandbox of their own that saves nothing.
+  # `{:ok, {headers, body}, done}` for what goes to the hub, where `done` runs
+  # with the status it answered, or `{:error, reason}`.
+  defp made(
+         %Plug.Conn{
+           path_info: ["api", "v1", "projects", project_id, "notebooks", notebook_id | rest]
+         } = conn,
+         fleet_id,
+         subject,
+         request
+       ),
+       do: made(conn.method, rest, [fleet_id, subject, project_id, notebook_id], conn, request)
+
+  defp made(_conn, _fleet_id, _subject, request), do: {:ok, request, &done/1}
+
+  defp made(method, [], ids, _conn, request) when method in ["PATCH", "DELETE"],
+    do: only_maker(:notebook, ids, [], request)
+
+  defp made("PATCH", ["source"], ids, _conn, request),
+    do: only_maker(:notebook, ids, [], request)
+
+  defp made("POST", ["source", "sync"], ids, _conn, request),
+    do: only_maker(:notebook, ids, [], request)
+
+  defp made("POST", ["versions", _version, "restore"], ids, _conn, request),
+    do: only_maker(:notebook, ids, [], request)
+
+  defp made("POST", ["editor-session", "takeover"], ids, _conn, request),
+    do: only_maker(:notebook, ids, [], request)
+
+  defp made("POST", ["sessions"], ids, conn, request), do: session_start(conn, ids, request)
+
+  defp made("DELETE", ["sessions", session_id], ids, _conn, request),
+    do: only_maker(:session, ids, [session_id], request)
+
+  defp made("DELETE", ["sessions", session_id, "surfaces", _surface], ids, _conn, request),
+    do: only_maker(:session, ids, [session_id], request)
+
+  defp made(method, ["jobs", job_id], ids, _conn, request) when method in ["PATCH", "DELETE"],
+    do: only_maker(:job, ids, [job_id], request)
+
+  defp made("POST", ["jobs", job_id, "runs", run_id, "cancel"], ids, _conn, request),
+    do: only_maker(:run, ids, [job_id, run_id], request)
+
+  defp made("PUT", ["workspace", "files"], ids, conn, request), do: file_write(conn, ids, request)
+
+  defp made("POST", ["workspace", "directories"], ids, _conn, request),
+    do: folder_made(ids, request)
+
+  defp made("DELETE", ["workspace", "entries"], ids, conn, request),
+    do: removal(conn, ids, request)
+
+  defp made(_method, _rest, _ids, _conn, request), do: {:ok, request, &done/1}
+
+  defp done(_status), do: :ok
+
+  # The hub answers for itself about what it doesn't have.
+  defp only_maker(check, ids, more, request) do
+    case apply(Makers, check, ids ++ more) do
+      :ok -> {:ok, request, &done/1}
+      {:error, :not_found} -> {:ok, request, &done/1}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # Starting an app session in place of another stops that one, so only its
+  # starter does; editing another member's notebook opens a sandbox of one's
+  # own that saves nothing (the hub's temporary sandbox).
+  defp session_start(conn, ids, {headers, body} = request) do
+    with {:ok, start} <- session_body(conn, body) do
+      case start do
+        %{"mode" => "app", "replace_app_session_id" => session_id} ->
+          only_maker(:session, ids, [session_id], request)
+
+        %{"mode" => mode} when mode != "edit" ->
+          {:ok, request, &done/1}
+
+        _edit ->
+          case apply(Makers, :notebook, ids) do
+            {:error, :not_maker} ->
+              copy = Jason.encode!(Map.put(start, "edit_intent", "temporary"))
+
+              {:ok,
+               {List.keystore(headers, "content-type", 0, {"content-type", "application/json"}),
+                copy}, &done/1}
+
+            _maker_or_hub ->
+              only_maker(:notebook, ids, [], request)
+          end
+      end
+    end
+  end
+
+  # A start with no body is an edit session.
+  defp session_body(conn, body) do
+    with [] <- get_req_header(conn, "content-encoding"),
+         {:ok, %{} = start} <- if(body == "", do: {:ok, %{}}, else: Jason.decode(body)) do
+      {:ok, start}
+    else
+      _unreadable -> {:error, :invalid}
+    end
+  end
+
+  # A new file is kept as its writer's; writing over one is its maker's.
+  defp file_write(conn, [fleet_id, subject, _project_id, notebook_id] = ids, request) do
+    case workspace_query(conn) do
+      {:ok, path, true} ->
+        key = Makers.file_key(path)
+
+        {:ok, request,
+         fn
+           200 -> Makers.record(fleet_id, notebook_id, key, subject)
+           _status -> :ok
+         end}
+
+      {:ok, path, false} ->
+        only_maker(:overwrite, ids, [Makers.file_key(path)], request)
+
+      :error ->
+        {:error, :invalid}
+    end
+  end
+
+  defp folder_made([fleet_id, subject, _project_id, notebook_id], {_headers, body} = request) do
+    case Jason.decode(body) do
+      {:ok, %{"path" => path}} when is_binary(path) ->
+        key = Makers.folder_key(path)
+
+        {:ok, request,
+         fn
+           201 -> Makers.record(fleet_id, notebook_id, key, subject)
+           _status -> :ok
+         end}
+
+      _unreadable ->
+        {:ok, request, &done/1}
+    end
+  end
+
+  # Removing a path removes everything under it, so it is only for whoever
+  # made all of that.
+  defp removal(conn, [fleet_id, _subject, _project_id, notebook_id] = ids, request) do
+    with {:ok, path, false} <- workspace_query(conn),
+         key = Makers.file_key(path),
+         {:ok, request, _done} <- only_maker(:removal, ids, [key], request) do
+      {:ok, request,
+       fn
+         200 -> Makers.forget(fleet_id, notebook_id, key)
+         _status -> :ok
+       end}
+    else
+      {:error, reason} -> {:error, reason}
+      _query -> {:error, :invalid}
+    end
+  end
+
+  # The one `path` a workspace request names, and whether it only adds a new
+  # file: `create`, "true" or "false", named at most once.
+  defp workspace_query(conn) do
+    pairs = conn.query_string |> URI.query_decoder() |> Enum.to_list()
+
+    case {for({"path", path} <- pairs, do: path), for({"create", create} <- pairs, do: create)} do
+      {[path], []} -> {:ok, path, false}
+      {[path], [create]} when create in ["true", "false"] -> {:ok, path, create == "true"}
+      _query -> :error
+    end
+  rescue
+    ArgumentError -> :error
+  end
+
+  defp maker_refusal(conn, :not_maker), do: Refusal.json(conn, 403, "notebooks_maker_only")
+  defp maker_refusal(conn, :invalid), do: Refusal.json(conn, 400, "invalid_request")
+  defp maker_refusal(conn, :unavailable), do: refuse(conn, :unavailable)
 
   # An agent's body was read to check its signature.
   defp request_body(%Plug.Conn{assigns: %{raw_body: raw}} = conn), do: {raw, conn}
@@ -745,19 +953,26 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  # Any of the fleet's members may remove a saved output: its copy is deleted
-  # and the address is gone.
-  defp remove_saved_output(conn, fleet_id, path) do
+  # Whoever made a saved output removes it (`Keyfleet.Notebooks.Makers.result/4`):
+  # its copy is deleted and the address is gone.
+  defp remove_saved_output(conn, fleet_id, subject, path) do
     {:ok, {notebook_id, source_id, saved_at}} = Notebooks.result(path)
     system = %Keyfleet.Actors.System{}
 
     with {:ok, %SavedOutput{} = kept} <-
            Notebooks.saved_output(fleet_id, notebook_id, source_id, saved_at, actor: system),
+         {:maker, :ok} <- {:maker, Makers.result(fleet_id, subject, notebook_id, source_id)},
          :ok <- Notebooks.remove_saved_output(kept, actor: system) do
       send_resp(conn, 204, "")
     else
       {:ok, nil} ->
         Refusal.json(conn, 404, "notebooks_not_found")
+
+      {:maker, {:error, :unavailable}} ->
+        refuse(conn, :unavailable)
+
+      {:maker, {:error, _not_maker}} ->
+        Refusal.json(conn, 403, "notebooks_maker_only")
 
       {:error, error} ->
         RecordsDownError.report(

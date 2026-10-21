@@ -95,6 +95,28 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
     end
   end
 
+  @doc """
+  As `member/3`, and also whether a vote of the fleet has restricted the
+  edits of the key the actor is in the fleet as: `{:ok, %{token_id:,
+  restricted?:}}` when it is in the fleet, `{:ok, nil}` when it is not, and
+  `{:error, error}` when either can't be read right now. Read within
+  `within` milliseconds, as `member/3` is.
+  """
+  def membership(actor, fleet_id, within) do
+    deadline = System.monotonic_time(:microsecond) + within * 1_000
+
+    with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
+         {:ok, _reading} <- fresh_reading(fleet_id, deadline),
+         {:ok, _standing} <- standing(actor, fleet_id, token_id, deadline),
+         {:ok, restricted?} <- restricted(fleet_id, token_id, deadline) do
+      {:ok, %{token_id: token_id, restricted?: restricted?}}
+    else
+      nil -> {:ok, nil}
+      {:error, %NotKeyHolderError{}} -> {:ok, nil}
+      {:error, error} -> {:error, error}
+    end
+  end
+
   defp authority(actor, fleet_id, token_id, deadline) do
     with {:ok, reading} <- fresh_reading(fleet_id, deadline),
          {:ok, key} <- key_coordinate(fleet_id, token_id, deadline),
@@ -219,18 +241,21 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
     }
 
   defp unrestricted(fleet_id, token_id, deadline) do
-    with {:ok, opts} <- within(deadline, fleet_id) do
-      case Keys.edits_restricted?(fleet_id, token_id, opts) do
-        {:ok, false} ->
-          :ok
+    case restricted(fleet_id, token_id, deadline) do
+      {:ok, false} ->
+        :ok
 
-        {:ok, true} ->
-          {:error, EditsRestrictedError.exception(fleet_id: fleet_id, token_id: token_id)}
+      {:ok, true} ->
+        {:error, EditsRestrictedError.exception(fleet_id: fleet_id, token_id: token_id)}
 
-        error ->
-          error
-      end
+      error ->
+        error
     end
+  end
+
+  defp restricted(fleet_id, token_id, deadline) do
+    with {:ok, opts} <- within(deadline, fleet_id),
+         do: Keys.edits_restricted?(fleet_id, token_id, opts)
   end
 
   # What is left of the check's budget, as the database's time limit for the

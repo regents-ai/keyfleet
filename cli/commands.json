@@ -1671,7 +1671,7 @@
       },
       {
         "command": "notebooks list <fleet>",
-        "description": "List the fleet's 50 newest notebooks, newest first, each with its id, its title and the last background run an agent started there (its run_id, status and, once its page is kept, result_url), or null when no agent has started one. Requires current pairing and fleet membership. Changes nothing.",
+        "description": "List the fleet's 50 newest notebooks, newest first, each with its id, its title and the last background run you started there (its run_id, status and, once its page is kept, result_url), or null when you have started none. Requires current pairing and fleet membership. Changes nothing.",
         "operation_id": "listNotebooks",
         "method": "GET",
         "path": "/api/v1/agent/fleets/{fleet_id}/notebooks",
@@ -1927,7 +1927,7 @@
       },
       {
         "command": "notebooks files write <fleet> <notebook> <path>",
-        "description": "Write a text file in a notebook's files as the agent, its text piped on stdin, at most 20,480 bytes, making it or replacing the whole file. Writing notebook.py saves a new version of the notebook's code. Read the file first; to add beside others' writing, use notebooks files add. Requires current pairing and fleet membership.",
+        "description": "Replace the whole text of a file the agent added to a notebook's files, the new text piped on stdin, at most 20,480 bytes. Writing notebook.py saves a new version of the code of a notebook the agent made. Others' files answer 403 notebooks_maker_only; to add beside them, use notebooks files add. Read the file first. Requires current pairing and fleet membership.",
         "operation_id": "writeNotebookFile",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/write",

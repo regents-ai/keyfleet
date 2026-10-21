@@ -6,17 +6,16 @@ defmodule Keyfleet.Notebooks.Runs do
   the notebook host itself.
 
   The hub is asked as the agent (`Keyfleet.Notebooks.MemberRequest`), so a
-  run is the agent's, in the notebook's job kept for agents' runs, "Agent
-  runs", made the first time an agent starts a run there. A run works through the notebook's
-  saved code, top to bottom, in a fresh sandbox, and never changes the
-  notebook.
+  run is the agent's, in its own job for the notebook, "Agent runs", made the
+  first time it starts a run there. A run works through the notebook's saved
+  code, top to bottom, in a fresh sandbox, and never changes the notebook.
 
   Reading a finished run keeps its page and answers the saved result's
   address (`Keyfleet.Notebooks.result_url/4`), as reading that page on the
   notebook host does (`KeyfleetWeb.Plugs.NotebookGateway`): an address is
   never handed out for a page Keyfleet hasn't kept. Listing the notebooks
-  keeps no page: it answers each one's newest run in "Agent runs" with
-  `result_url` once that run's page has been kept.
+  keeps no page: it answers each one's newest run in the agent's own "Agent
+  runs" with `result_url` once that run's page has been kept.
 
   Each answer is `{:ok, run}`, with the notebook, the run and its status and,
   once its page is kept, `result_url`, or `{:ok, notebooks}` for a listing;
@@ -33,6 +32,8 @@ defmodule Keyfleet.Notebooks.Runs do
   import Keyfleet.Notebooks.MemberRequest
 
   @job "Agent runs"
+  # The most jobs a notebook holds on the hub, so one page lists them all.
+  @jobs 100
   # A finished run has made its page, unless it was cancelled or skipped.
   @with_page ~w(succeeded failed timed_out)
   # A listing asks after this many notebooks' runs at once.
@@ -40,8 +41,7 @@ defmodule Keyfleet.Notebooks.Runs do
 
   @doc """
   The fleet's 50 newest notebooks, newest first, as `subject`: each with its
-  title and the newest run in its job for agents' runs, or nil when no agent
-  has started one there.
+  title and `subject`'s newest run there, or nil when they have started none.
   """
   def list(fleet_id, subject, project_id) do
     with {:ok, %{"items" => notebooks}} <-
@@ -82,27 +82,45 @@ defmodule Keyfleet.Notebooks.Runs do
   a finished run's page is fetched from the hub once.
   """
   def read(fleet_id, subject, project_id, notebook_id, run_id) do
-    notebook = notebook_path(project_id, notebook_id)
-
-    with {:ok, %{"items" => jobs}} <-
-           fleet_id |> request(subject, :get, notebook <> "/jobs") |> answer(200),
-         {:ok, run_path, run} <- find_run(fleet_id, subject, notebook, jobs, run_id),
+    with {:ok, run_path, run} <- find(fleet_id, subject, project_id, notebook_id, run_id),
          {:ok, result_url} <- result_url(fleet_id, subject, notebook_id, run_id, run, run_path) do
       {:ok, view(notebook_id, run, result_url)}
     end
   end
 
-  # The notebook's job for agents' runs. Two agents making it at once make
-  # two, and every later run uses the first.
+  @doc """
+  Run `run_id` of `notebook_id` as `subject`, in whichever of the notebook's
+  jobs it is: `{:ok, run_path, run}`.
+  """
+  def find(fleet_id, subject, project_id, notebook_id, run_id) do
+    notebook = notebook_path(project_id, notebook_id)
+
+    with {:ok, %{"items" => jobs}} <-
+           fleet_id
+           |> request(subject, :get, notebook <> "/jobs", params: [limit: @jobs])
+           |> answer(200),
+         do: find_run(fleet_id, subject, notebook, own_first(jobs, subject), run_id)
+  end
+
+  # The agent's own jobs are asked first: most runs it reads are its own.
+  defp own_first(jobs, subject), do: Enum.sort_by(jobs, &(&1["created_by"] != subject))
+
+  # The agent's own job for its runs of the notebook, so only it stops them
+  # (`Keyfleet.Notebooks.Makers`).
   defp job(fleet_id, subject, notebook) do
     with {:ok, %{"items" => jobs}} <-
-           fleet_id |> request(subject, :get, notebook <> "/jobs") |> answer(200) do
-      case Enum.find(jobs, &(&1["name"] == @job)) do
+           fleet_id
+           |> request(subject, :get, notebook <> "/jobs", params: [limit: @jobs])
+           |> answer(200) do
+      case own_job(jobs, subject) do
         %{"id" => id} -> {:ok, id}
         nil -> create_job(fleet_id, subject, notebook)
       end
     end
   end
+
+  defp own_job(jobs, subject),
+    do: Enum.find(jobs, &(&1["name"] == @job and &1["created_by"] == subject))
 
   # Runs start only when asked, and several may wait at once.
   defp create_job(fleet_id, subject, notebook) do
@@ -110,14 +128,14 @@ defmodule Keyfleet.Notebooks.Runs do
            fleet_id
            |> request(subject, :post, notebook <> "/jobs",
              json: %{name: @job, concurrency_policy: "allow"},
-             headers: [{"idempotency-key", "keyfleet-agent-runs"}]
+             headers: [{"idempotency-key", "keyfleet-agent-runs:" <> subject}]
            )
            |> answer(201) do
       {:ok, id}
     end
   end
 
-  # Each notebook's newest agent run, in the notebooks' order. A notebook the
+  # Each notebook's newest run of the agent's, in the notebooks' order. A notebook the
   # hub doesn't answer for leaves the whole listing unanswered.
   defp last_runs(fleet_id, subject, project_id, notebooks) do
     answers =
@@ -139,8 +157,10 @@ defmodule Keyfleet.Notebooks.Runs do
 
   defp last_run(fleet_id, subject, notebook) do
     with {:ok, %{"items" => jobs}} <-
-           fleet_id |> request(subject, :get, notebook <> "/jobs") |> answer(200) do
-      case Enum.find(jobs, &(&1["name"] == @job)) do
+           fleet_id
+           |> request(subject, :get, notebook <> "/jobs", params: [limit: @jobs])
+           |> answer(200) do
+      case own_job(jobs, subject) do
         %{"id" => id} -> newest_run(fleet_id, subject, "#{notebook}/jobs/#{segment(id)}/runs")
         nil -> {:ok, nil}
       end
@@ -195,7 +215,7 @@ defmodule Keyfleet.Notebooks.Runs do
     }
   end
 
-  # A notebook has at most a handful of jobs, so each is asked in turn.
+  # Each job is asked in turn until one has the run.
   defp find_run(fleet_id, subject, notebook, jobs, run_id) do
     Enum.reduce_while(jobs, {:error, :not_found}, fn %{"id" => job_id}, not_found ->
       path = "#{notebook}/jobs/#{segment(job_id)}/runs/#{segment(run_id)}"

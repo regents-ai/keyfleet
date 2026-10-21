@@ -17,6 +17,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   @notebook "nb-0123456789abcdef"
   @api "/api/v1/agent/fleets/#{@fleet}/notebooks"
   @workspace "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/workspace/"
+  @jobs "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/jobs"
 
   setup do
     owner = Ecto.Adapters.SQL.Sandbox.start_owner!(Keyfleet.Repo, shared: true)
@@ -51,7 +52,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   end
 
   # Costly failure: agents keeping one shared log lose each other's entries,
-  # because one agent's writing silently replaces another's at the same path.
+  # because one agent's writing replaces another's at the same path.
   test "agents each add files of their own to one notebook, and adding never replaces a file",
        c do
     created =
@@ -94,11 +95,57 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert_receive {:hub, "PUT", @workspace <> "files", ^first, %{"create" => "false"}, _body}
     assert read.("log/a.md", 200)["content"] == "First, corrected."
 
+    # Only a file's maker writes over it.
+    over = post!(c, c.second, files <> "write", %{entry | "content" => "Second, over the first."})
+    assert json_response(over, 403)["error"]["code"] == "notebooks_maker_only"
+    assert read.("log/a.md", 200)["content"] == "First, corrected."
+
     assert read.("log/none.md", 404)["error"]["code"] == "notebook_file_not_found"
     Agent.update(c.files, &Map.put(&1, "chart.png", <<0xFF, 0xD8, 0xFF>>))
     assert read.("chart.png", 422)["error"]["code"] == "notebook_file_not_text"
     Agent.update(c.files, &Map.put(&1, "big.md", String.duplicate("a", 1024 * 1024 + 1)))
     assert read.("big.md", 422)["error"]["code"] == "notebook_file_too_large"
+  end
+
+  # Costly failure: one agent's job holds everyone's runs, so its maker
+  # deleting it stops and loses the others' runs.
+  test "each agent's runs go in a job of its own, and each lists its own last run", c do
+    runs = "#{@api}/#{@notebook}/runs/start"
+    first = c.first.subject
+    second = c.second.subject
+
+    started = post!(c, c.first, runs, %{"idempotency_key" => "run-1"})
+    assert json_response(started, 200)["run_id"] == "run_1"
+    assert_receive {:hub, "POST", @jobs, ^first, _query, _body}
+
+    again = post!(c, c.first, runs, %{"idempotency_key" => "run-2"})
+    assert json_response(again, 200)["run_id"] == "run_2"
+    refute_receive {:hub, "POST", @jobs, _subject, _query, _body}
+
+    post!(c, c.second, runs, %{"idempotency_key" => "run-3"})
+    assert_receive {:hub, "POST", @jobs, ^second, _query, _body}
+
+    jobs = Agent.get(c.files, & &1["jobs"])
+    assert Enum.map(jobs, & &1["created_by"]) == [first, second]
+    assert Enum.map(jobs, &length(&1["runs"])) == [2, 1]
+
+    listed =
+      &(json_response(get!(c, &1, @api), 200)["notebooks"]
+        |> hd()
+        |> get_in(["last_run", "run_id"]))
+
+    assert listed.(c.first) == "run_2"
+    assert listed.(c.second) == "run_3"
+  end
+
+  defp get!(c, agent, path) do
+    request = SignedAgentHelpers.sign(agent.signer, c.secret, "GET", path, nil)
+
+    request.headers
+    |> Enum.reduce(%{build_conn() | remote_ip: {198, 51, 100, 150}}, fn {name, value}, conn ->
+      put_req_header(conn, name, value)
+    end)
+    |> dispatch(@endpoint, :get, path)
   end
 
   defp post!(c, agent, path, body) do
@@ -144,6 +191,62 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   end
 
   ## The hub
+
+  # Jobs and their runs are kept under "jobs", newest run first, as the hub
+  # lists them.
+  defp hub_answer(%Plug.Conn{method: "GET", request_path: @jobs} = conn, files, _body) do
+    jobs = for job <- Agent.get(files, &Map.get(&1, "jobs", [])), do: Map.delete(job, "runs")
+    json(conn, 200, %{success: true, data: %{items: jobs}})
+  end
+
+  defp hub_answer(%Plug.Conn{method: "POST", request_path: @jobs} = conn, files, body) do
+    [pass] = get_req_header(conn, "x-keyfleet-assertion")
+    maker = JOSE.JWT.peek_payload(pass).fields["sub"]
+    jobs = Agent.get(files, &Map.get(&1, "jobs", []))
+    job = %{"id" => "job_#{length(jobs) + 1}", "created_by" => maker, "runs" => []}
+    job = Map.merge(job, Map.take(Jason.decode!(body), ["name"]))
+    Agent.update(files, &Map.put(&1, "jobs", jobs ++ [job]))
+    json(conn, 201, %{success: true, data: Map.delete(job, "runs")})
+  end
+
+  defp hub_answer(
+         %Plug.Conn{method: "POST", request_path: @jobs <> "/" <> runs} = conn,
+         files,
+         _body
+       ) do
+    [job_id, "runs"] = String.split(runs, "/")
+
+    run =
+      Agent.get_and_update(files, fn kept ->
+        all = Enum.flat_map(kept["jobs"], & &1["runs"])
+        run = %{"run_id" => "run_#{length(all) + 1}", "status" => "queued"}
+
+        jobs =
+          for job <- kept["jobs"],
+              do: if(job["id"] == job_id, do: %{job | "runs" => [run | job["runs"]]}, else: job)
+
+        {run, %{kept | "jobs" => jobs}}
+      end)
+
+    json(conn, 201, %{success: true, data: run})
+  end
+
+  defp hub_answer(
+         %Plug.Conn{method: "GET", request_path: @jobs <> "/" <> runs} = conn,
+         files,
+         _body
+       ) do
+    [job_id, "runs"] = String.split(runs, "/")
+    job = Enum.find(Agent.get(files, & &1["jobs"]), &(&1["id"] == job_id))
+    json(conn, 200, %{success: true, data: %{items: Enum.take(job["runs"], 1)}})
+  end
+
+  defp hub_answer(
+         %Plug.Conn{method: "GET", request_path: "/api/v1/projects/proj-fleet/notebooks"} = conn,
+         _files,
+         _body
+       ),
+       do: json(conn, 200, %{success: true, data: %{items: [%{id: @notebook, title: "Log"}]}})
 
   defp hub_answer(
          %Plug.Conn{method: "POST", request_path: "/api/v1/projects/proj-fleet/notebooks"} = conn,

@@ -264,6 +264,12 @@ defmodule KeyfleetWeb.Refusal do
     "notebooks_tokens_refused" =>
       {"This notebook address isn't open to members.",
        "Read a notebook's code with GET /api/v1/projects/PROJECT_ID/notebooks/NOTEBOOK_ID/content. Tokens, app connections and run logs stay closed."},
+    "notebooks_edits_restricted" =>
+      {"A vote of this fleet has stopped this Key changing its work, so it can open and read the notebooks but not change them.",
+       "Nothing was changed. Make changes once the fleet's vote allows this Key's edits again."},
+    "notebooks_maker_only" =>
+      {"Only whoever made this removes, changes or stops it.",
+       "Nothing was changed. Open it, copy it or run it instead."},
     "notebooks_schedules_refused" =>
       {"These notebooks don't run on a schedule.",
        "Leave out the schedule, then start each run when you want it."},

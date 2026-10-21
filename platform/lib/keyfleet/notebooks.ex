@@ -34,6 +34,14 @@ defmodule Keyfleet.Notebooks do
 
     resource Keyfleet.Notebooks.Handoff
 
+    resource Keyfleet.Notebooks.FileMaker do
+      define :record_file_maker, action: :record, args: [:fleet_id, :notebook_id, :path, :maker]
+
+      define :file_makers_at_or_under,
+        action: :at_or_under,
+        args: [:fleet_id, :notebook_id, :path]
+    end
+
     resource Keyfleet.Notebooks.SavedOutput do
       define :keep_saved_output,
         action: :keep,
@@ -208,23 +216,40 @@ defmodule Keyfleet.Notebooks do
   end
 
   @doc """
+  Whether `actor` is one of the fleet's members now (`member?/2`), and
+  whether a vote of the fleet has restricted the edits of the Key it is in
+  the fleet as: `{:ok, %{restricted?: boolean}}`, `{:ok, nil}` when it is
+  not a member, or `{:error, error}` when either can't be read right now. A
+  restricted Key opens and reads the notebooks but changes nothing in them.
+  """
+  def membership(actor, fleet_id) do
+    within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
+
+    with {:ok, %{restricted?: restricted?}} <- KeyActor.membership(actor, fleet_id, within),
+         do: {:ok, %{restricted?: restricted?}}
+  end
+
+  @doc """
   Lets `actor`, known to the hubs as `subject`, into the fleet's notebooks
-  now: `{:ok, project_id}` once it is one of the fleet's members
-  (`member?/2`) and an editor of the fleet's project in the hub, or
+  now: `{:ok, %{project_id:, restricted?:}}` once it is one of the fleet's
+  members (`membership/2`, which says whether its Key's edits are
+  restricted) and an editor of the fleet's project in the hub, or
   `{:error, reason}`: `:not_holder`, `:catching_up` while key ownership can't
   be read, `:setting_up` while the hub has no project yet (a job is booked
   to make it), or `:unavailable` when the hub didn't answer. Someone who lost
   a key and holds one again was suspended in the hub, and is let back in.
   """
   def admit(actor, fleet_id, subject) do
-    with {:holder, {:ok, true}} <- {:holder, member?(actor, fleet_id)},
+    with {:holder, {:ok, %{restricted?: restricted?}}} <-
+           {:holder, membership(actor, fleet_id)},
          {:project, {:ok, project_id}} when is_binary(project_id) <-
            {:project, project_id(fleet_id)},
          {:hub, :ok} <- {:hub, make_editor(fleet_id, project_id, subject)} do
-      AccessCache.admit(:notebooks, fleet_id, subject, true, config()[:access_ttl_ms])
-      {:ok, project_id}
+      access = %{project_id: project_id, restricted?: restricted?}
+      AccessCache.admit(:notebooks, fleet_id, subject, access, config()[:access_ttl_ms])
+      {:ok, access}
     else
-      {:holder, {:ok, false}} ->
+      {:holder, {:ok, nil}} ->
         {:error, :not_holder}
 
       {:holder, {:error, _error}} ->
@@ -374,6 +399,13 @@ defmodule Keyfleet.Notebooks do
       {:error, error} -> {:error, error}
     end
   end
+
+  @doc """
+  Ends everyone's admission to the fleet's notebooks on every node now, so
+  each one's next request is checked afresh (from `Keyfleet.Chain.Scanner`,
+  when the fleet's Keys change).
+  """
+  def end_access(fleet_id), do: AccessCache.end_fleet(:notebooks, fleet_id)
 
   @doc """
   Ends `subject`'s access to the fleet's notebooks on every node now: its open
