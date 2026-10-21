@@ -4257,3 +4257,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Checked at 390, 768 and 1440 px wide in light and dark, with no sideways
   scroll. Why: the Agent UX phone pass, and Sean, 21 October 10:16Z:
   "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — Pages paint sooner again
+
+- What: pages no longer fetch the bold face early alongside the stylesheet;
+  they still fetch the scripts early, which keeps them ready to answer
+  presses sooner.
+- How: measured on the live site in headless Chromium on a slow phone link,
+  seven interleaved runs per page. Fetching the bold face early made the
+  first paint about 100 ms later on the home page and 50 ms later on
+  Classic #1, only to have headings in their bold face about 400 ms sooner.
+- Why: the coordinator asked to win back the later first paint from release
+  285 and keep the change only if the numbers improve.
