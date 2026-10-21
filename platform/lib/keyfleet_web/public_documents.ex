@@ -179,7 +179,8 @@ defmodule KeyfleetWeb.PublicDocuments do
   (`Classic #1`), a Key's, a proposal's or a workspace item's page with its
   number and the fleet (`Key 62 · Classic #1`, `Proposal 3 · Classic #1`,
   `Goal 1 · Classic #1`), a commit's or a file's as its heading names it
-  (`Commit 3f2a9c81d0e4 · Classic #1`, `README.md · Classic #1`), and the
+  (`Commit 3f2a9c81d0e4 · Classic #1`, `README.md · Classic #1`), two Keys'
+  messages by both Keys (`Key 12 and Key 40 · Classic #1`), and the
   fleet's other pages with their own title and the fleet's name
   (`Treasury · Classic #1`).
   Each one's description names the fleet.
@@ -199,7 +200,7 @@ defmodule KeyfleetWeb.PublicDocuments do
   defp fleet_title(:fleet, _title, fleet, _params), do: fleet
 
   defp fleet_title(:keys, _title, fleet, %{"token_id" => token_id}),
-    do: "Key #{Rules.grouped(String.to_integer(token_id))} · #{fleet}"
+    do: "Key #{grouped(token_id)} · #{fleet}"
 
   defp fleet_title(:proposal, _title, fleet, %{"number" => number}),
     do: "Proposal #{number} · #{fleet}"
@@ -210,6 +211,9 @@ defmodule KeyfleetWeb.PublicDocuments do
     "#{String.capitalize(name)} #{number} · #{fleet}"
   end
 
+  defp fleet_title(:dm, _title, fleet, %{"token_id" => key, "other_token_id" => other}),
+    do: "Key #{grouped(key)} and Key #{grouped(other)} · #{fleet}"
+
   defp fleet_title(:code_commit, _title, fleet, %{"commit" => commit}),
     do: "Commit #{String.slice(commit, 0, 12)} · #{fleet}"
 
@@ -217,6 +221,8 @@ defmodule KeyfleetWeb.PublicDocuments do
     do: "#{Path.basename(path)} · #{fleet}"
 
   defp fleet_title(_route_id, title, fleet, _params), do: "#{title} · #{fleet}"
+
+  defp grouped(token_id), do: token_id |> String.to_integer() |> Rules.grouped()
 
   # The homepage and the early-access page carry the site's name in their own title.
   # The share picture is its fleet's on a fleet's pages (`KeyfleetWeb.ShareCard`).

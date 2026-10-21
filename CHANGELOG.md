@@ -4411,3 +4411,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - What: a commit's browser tab and link preview read "Commit 3f2a9c81d0e4 · Classic #1",
   and a file's or folder's its name, such as "README.md · Classic #1", as their headings do.
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — Two Keys' messages are tabbed by both Keys
+
+- What: a message thread's browser tab reads "Key 12 and Key 40 · Classic #1",
+  as its heading does, instead of "Messages · Classic #1".
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
