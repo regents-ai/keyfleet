@@ -6,6 +6,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
   use Oban.Testing, repo: Keyfleet.Repo
   use ExUnitProperties
 
+  import Ecto.Query
   import Phoenix.ConnTest
   import Plug.Conn
 
@@ -307,6 +308,62 @@ defmodule KeyfleetWeb.CodeGatewayTest do
 
     assert {:ok, "HTTP/1.1 408" <> _answer} = :gen_tcp.recv(socket, 0, 3_000)
     refute_received {:store, _method, _path, _claims, _body}
+  end
+
+  # Costly failure: a large push on a slow link uploads in full, then fails
+  # because the store's pass ran out while it arrived.
+  test "a push slower than a pass lasts reaches the store with a pass made once it is in", c do
+    password = person_password!(c.holder)
+    socket = open_site!()
+
+    :ok =
+      :gen_tcp.send(socket, [
+        "POST /#{@fleet}.git/git-receive-pack HTTP/1.1\r\n",
+        "host: #{@host}\r\n",
+        "authorization: #{Plug.BasicAuth.encode_basic_auth("git", password)}\r\n",
+        "content-type: application/x-git-receive-pack-request\r\n",
+        "content-length: 4\r\n\r\n",
+        "00"
+      ])
+
+    Process.sleep(2_100)
+    finished = Elixir.System.os_time(:second)
+    :ok = :gen_tcp.send(socket, "00")
+
+    assert {:ok, "HTTP/1.1 200" <> _answer} = :gen_tcp.recv(socket, 0, 5_000)
+    assert_receive {:store, "POST", _path, claims, "0000"}
+    assert claims["iat"] >= finished
+  end
+
+  # Costly failure: the site can't record a push the store took, and git is
+  # told the push failed though it landed.
+  test "a push the site can't record still gets the store's answer, and the failure is saved",
+       c do
+    password = person_password!(c.holder)
+
+    command =
+      String.duplicate("0", 40) <>
+        " " <> String.duplicate("5", 40) <> " refs/heads/main\0report-status side-band-64k\n"
+
+    # Renamed inside the test's own transaction, so recording fails the way it
+    # does while the database can't be reached; the rename ends with the test.
+    prefix = Keyfleet.Repo.default_prefix()
+    Keyfleet.Repo.query!("ALTER TABLE #{prefix}.code_pushes RENAME TO code_pushes_away")
+
+    pushed = git(:post, "/#{@fleet}.git/git-receive-pack", password, pkt(command) <> "0000")
+
+    Keyfleet.Repo.query!("ALTER TABLE #{prefix}.code_pushes_away RENAME TO code_pushes")
+
+    assert pushed.status == 200
+    assert pushed.resp_body == report()
+    assert_receive {:store, "POST", _path, _claims, _body}
+    assert spooled() == []
+
+    assert Keyfleet.Repo.exists?(
+             from(error in ErrorTracker.Error,
+               where: like(error.reason, ^"A push to #{@fleet} could not be recorded%")
+             )
+           )
   end
 
   ## The fleet and its people

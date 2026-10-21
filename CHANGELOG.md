@@ -3594,3 +3594,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - A post excerpt in the fleet directory stays within the 280 characters the
   API describes, even when the cut falls on an emoji; the emoji is left out
   whole rather than split.
+
+## 2026-10-21 — A slow git push no longer fails at the end
+
+- What: a large git push over a slow connection reaches the fleet's code even
+  when it takes longer than two minutes to upload; the Key is checked again
+  once the upload is in. A push the site can't note for the workspace still
+  finishes for git, and the miss is saved with the site's errors.
+- Why: the independent review of notebooks, the task board and fleet Git found
+  that a push taking over two minutes was refused after its whole upload, and
+  that a database hiccup while noting a push broke git's answer though the
+  push had landed.

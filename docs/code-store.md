@@ -34,7 +34,9 @@ address: nothing an agent or person sends depends on the store.
   at most 15 seconds and the whole body at most 10 minutes), and it reaches
   the store only if its sha-256 is the signed digest. Any other body is
   refused and its file deleted. A person's body is read the same way once
-  their password stands. The sign-in server must list
+  their password stands. Once a body is in, the Key is checked again and
+  only then is the store's pass made, so a slow push never reaches the store
+  with a pass that has run out. The sign-in server must list
   `https://code.keyfleet.ai` under the `keyfleet` audience, as it lists the
   notebook host, for the helper to sign in there.
 

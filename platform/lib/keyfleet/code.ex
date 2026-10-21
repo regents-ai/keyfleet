@@ -22,7 +22,7 @@ defmodule Keyfleet.Code do
 
   alias Keyfleet.AccessCache
   alias Keyfleet.Actors.System
-  alias Keyfleet.Code.{NodeClient, Push, Repository, Setup}
+  alias Keyfleet.Code.{NodeClient, Push, RecordsDownError, Repository, Setup}
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Errors.{EditsRestrictedError, NotKeyHolderError}
   alias Keyfleet.Keys
@@ -212,7 +212,9 @@ defmodule Keyfleet.Code do
 
   @doc """
   Records the branches and tags `holder` moved in one push, each `%{ref:,
-  head:}`, and tells the fleet's open pages.
+  head:}`, and tells the fleet's open pages. The store has already taken the
+  push and git has its answer, so a push that can't be recorded is saved with
+  the site's errors (`Keyfleet.Code.RecordsDownError`) and never raises.
   """
   def record_pushes(_fleet_id, _holder, []), do: :ok
 
@@ -227,12 +229,22 @@ defmodule Keyfleet.Code do
         )
       )
     )
-    |> Ash.bulk_create!(Push, :record,
+    |> Ash.bulk_create(Push, :record,
       actor: %System{},
       return_errors?: true,
       stop_on_error?: true
     )
+    |> case do
+      %Ash.BulkResult{status: :success} ->
+        Phoenix.PubSub.broadcast(Keyfleet.PubSub, topic(fleet_id), {:code_pushed, fleet_id})
 
-    Phoenix.PubSub.broadcast(Keyfleet.PubSub, topic(fleet_id), {:code_pushed, fleet_id})
+      %Ash.BulkResult{errors: errors} ->
+        RecordsDownError.report(
+          "A push to #{fleet_id} could not be recorded: " <>
+            Enum.map_join(errors, ", ", &inspect(&1.__struct__))
+        )
+
+        :ok
+    end
   end
 end

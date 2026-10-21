@@ -24,6 +24,9 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   body at most `body_timeout_ms`, so a sender trickling bytes is cut off. An
   agent's body reaches the store only if it is the one its signature declared;
   any other is refused and its file deleted, and nothing was sent to the store.
+  Once the body is in, the key is checked again and only then is the store's
+  pass made, so a body that arrives slowly still carries a pass that holds,
+  and a key that changed hands meanwhile is refused.
 
   A key changing hands clears the fleet's admissions at once.
 
@@ -33,8 +36,9 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   (`Keyfleet.Limits`), before its body is read. When the store reports changes
   done, each branch or tag moved, up to `@recorded` of them, is recorded for
   the fleet's workspace, under the key and, for an agent, the agent too. A
-  store that cannot be reached, stops mid-exchange or answers with a fault of
-  its own is saved with the site's errors (`Keyfleet.Code.StoreDownError`).
+  store that cannot be reached, stops mid-exchange, answers with a fault of
+  its own or refuses the pass is saved with the site's errors
+  (`Keyfleet.Code.StoreDownError`).
   """
   @behaviour Plug
   @behaviour Siwa.AgentAuthPlug.Hooks
@@ -103,62 +107,70 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
          {:signed_in, {:ok, conn, subject, actor}} <- {:signed_in, identify(conn, fleet_id)},
          {:holder, {:ok, %{} = holder}} <-
            {:holder, reported(fleet_id, current_holder(fleet_id, subject, actor))},
-         {:allowed, {:ok, pass}} <- {:allowed, pass(fleet_id, holder, need)},
+         {:allowed, :ok} <- {:allowed, allowed(holder, need)},
          {:owner, {:ok, owner}} <- {:owner, Code.owner(fleet_id)},
          {:pushes, :ok} <- {:pushes, spend_push(conn, fleet_id, holder)},
          {:body, {:ok, conn, body}} <- {:body, spool(conn)} do
-      conn
-      |> forward(fleet_id, "/#{owner}/#{fleet_id}/#{target}", pass, body, fn response ->
-        sent(conn, fleet_id, holder, body.head, response)
-      end)
-      |> tap(fn _conn -> File.rm!(body.path) end)
+      check = fn -> reported(fleet_id, current_holder(fleet_id, subject, actor)) end
+
+      try do
+        send_checked(conn, fleet_id, "/#{owner}/#{fleet_id}/#{target}", need, check, body)
+      after
+        File.rm!(body.path)
+      end
     else
-      {:route, :error} ->
-        refuse(conn, 404, "code_not_found")
-
-      {:body, {:too_large, conn}} ->
-        refuse(conn, 413, "code_too_large")
-
-      {:body, {:error, conn}} ->
-        refuse(conn, 400, "invalid_request")
-
-      {:body, {:not_signed, conn}} ->
-        refuse(conn, 400, "code_body_not_signed")
-
-      {:signed_in, {:refused, conn}} ->
-        conn
-
-      {:holder, {:ok, nil}} ->
-        refuse(conn, 403, "code_not_holder")
-
-      {:holder, {:error, _error}} ->
-        refuse(conn, 503, "code_catching_up")
-
-      {:allowed, :restricted} ->
-        refuse(conn, 403, "code_edits_restricted")
-
-      {:pushes, {:limited, seconds}} ->
-        conn
-        |> put_resp_header("retry-after", Integer.to_string(seconds))
-        |> refuse(429, "code_pushes_limit_reached")
-
-      {:owner, {:setting_up, seconds}} ->
-        # The next try, and a minute for it to finish.
-        wait = seconds + 60
-
-        conn
-        |> put_resp_header("retry-after", Integer.to_string(wait))
-        |> refuse(503, Refusal.code_setting_up(wait))
-
-      {:owner, :setup_restarted} ->
-        conn
-        |> put_resp_header("retry-after", "180")
-        |> refuse(503, "code_setup_restarted")
-
-      {:owner, {:error, _error}} ->
-        refuse(conn, 503, "code_unavailable")
+      refused -> refused(conn, refused)
     end
   end
+
+  # A body may take far longer to arrive than a pass lasts, and the key may
+  # change hands meanwhile, so the key is checked again once the body is in
+  # and the pass is made then.
+  defp send_checked(conn, fleet_id, path, need, check, body) do
+    with {:holder, {:ok, %{} = holder}} <- {:holder, check.()},
+         {:allowed, :ok} <- {:allowed, allowed(holder, need)} do
+      forward(conn, fleet_id, path, pass(fleet_id, holder, need), body, fn response ->
+        sent(conn, fleet_id, holder, body.head, response)
+      end)
+    else
+      refused -> refused(conn, refused)
+    end
+  end
+
+  defp refused(conn, {:route, :error}), do: refuse(conn, 404, "code_not_found")
+  defp refused(_conn, {:body, {:too_large, conn}}), do: refuse(conn, 413, "code_too_large")
+  defp refused(_conn, {:body, {:error, conn}}), do: refuse(conn, 400, "invalid_request")
+
+  defp refused(_conn, {:body, {:not_signed, conn}}),
+    do: refuse(conn, 400, "code_body_not_signed")
+
+  defp refused(_conn, {:signed_in, {:refused, conn}}), do: conn
+  defp refused(conn, {:holder, {:ok, nil}}), do: refuse(conn, 403, "code_not_holder")
+  defp refused(conn, {:holder, {:error, _error}}), do: refuse(conn, 503, "code_catching_up")
+  defp refused(conn, {:allowed, :restricted}), do: refuse(conn, 403, "code_edits_restricted")
+
+  defp refused(conn, {:pushes, {:limited, seconds}}) do
+    conn
+    |> put_resp_header("retry-after", Integer.to_string(seconds))
+    |> refuse(429, "code_pushes_limit_reached")
+  end
+
+  defp refused(conn, {:owner, {:setting_up, seconds}}) do
+    # The next try, and a minute for it to finish.
+    wait = seconds + 60
+
+    conn
+    |> put_resp_header("retry-after", Integer.to_string(wait))
+    |> refuse(503, Refusal.code_setting_up(wait))
+  end
+
+  defp refused(conn, {:owner, :setup_restarted}) do
+    conn
+    |> put_resp_header("retry-after", "180")
+    |> refuse(503, "code_setup_restarted")
+  end
+
+  defp refused(conn, {:owner, {:error, _error}}), do: refuse(conn, 503, "code_unavailable")
 
   # A key that could not be checked is saved with the site's errors; the sender
   # is told to try again shortly.
@@ -362,9 +374,11 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   end
 
   # A key whose edits a vote restricted may still copy the code.
-  defp pass(fleet_id, %{restricted?: true}, :read), do: {:ok, Pass.read(fleet_id)}
-  defp pass(_fleet_id, %{restricted?: true}, :push), do: :restricted
-  defp pass(fleet_id, %{wallet: wallet}, _need), do: {:ok, Pass.push(fleet_id, wallet)}
+  defp allowed(%{restricted?: true}, :push), do: :restricted
+  defp allowed(_holder, _need), do: :ok
+
+  defp pass(fleet_id, %{restricted?: true}, :read), do: Pass.read(fleet_id)
+  defp pass(fleet_id, %{wallet: wallet}, _need), do: Pass.push(fleet_id, wallet)
 
   # Git shows a plain-text answer to the person running it, and the signing
   # helper reads the same.
@@ -410,6 +424,11 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
 
         {:done, conn, %{status: status}} when status in 500..599 ->
           StoreDownError.report("The code store answered #{status} for #{fleet_id}")
+          conn
+
+        # Only a pass this site made reaches the store, so its refusal is a fault.
+        {:done, conn, %{status: status}} when status in [401, 403] ->
+          StoreDownError.report("The code store refused the pass for #{fleet_id} (#{status})")
           conn
 
         {:failed, conn, _answer} ->
