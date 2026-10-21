@@ -1614,7 +1614,7 @@ defmodule KeyfleetWeb.FleetLive do
       current?: current?,
       progress: progress,
       buy: if(deployed?, do: FleetPage.next_sale(fleet_id, progress)),
-      rooms: Rooms.list_rooms!(fleet_id, actor: actor),
+      rooms: Rooms.list_rooms!(fleet_id, ShellLive.reads_as(socket, fleet_id)),
       polls?: ShellLive.may_read?(socket, fleet_id, :polls),
       layout: Presets.preset(fleet_id),
       chosen_key: if(deployed?, do: FleetPage.chosen_key(progress, params["key"])),

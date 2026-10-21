@@ -346,14 +346,20 @@ defmodule Keyfleet.Keys.KeyAttachment do
       prepare build(select: [:token_id, :ownership_epoch, :owner_wallet], sort: [token_id: :asc])
     end
 
-    # Every key one wallet holds right now, in every fleet.
-    read :held_by_wallet do
-      argument :owner_wallet, :string, allow_nil?: false
+    # Every key a person's wallets hold right now, in every fleet, by fleet
+    # and number.
+    read :held_everywhere do
+      argument :owner_wallets, {:array, :string}, allow_nil?: false
 
       filter expr(
-               owner_wallet == ^arg(:owner_wallet) and
+               owner_wallet in ^arg(:owner_wallets) and
                  ownership_epoch == current_ownership_epoch
              )
+
+      prepare build(
+                select: [:fleet_id, :token_id, :ownership_epoch, :owner_wallet],
+                sort: [fleet_id: :asc, token_id: :asc]
+              )
     end
 
     # Every record of one wallet holding any of some of the fleet's keys, then

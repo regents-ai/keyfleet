@@ -3826,3 +3826,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   else's notebook.
 - Why: Sean, 21 October 2026: only whoever made a thing removes, changes or
   stops it.
+
+## 2026-10-21 — Account and fleet pages read the database less
+
+- What: Account reads every Key a person's wallets hold in one query, not one
+  per fleet, and a fleet's page reads its rooms with the membership it already
+  read for the page instead of reading it again. Nothing on screen changes.
+- Why: Sean, 21 Oct: "make it a modern and well-engineered elixir site".

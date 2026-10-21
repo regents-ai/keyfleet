@@ -341,8 +341,10 @@ defmodule KeyfleetWeb.AccountLive do
   def held_keys(nil), do: []
 
   def held_keys(%Human{wallet_addresses: wallets} = actor) do
+    held = wallets |> Keys.keys_held_everywhere!(actor: actor) |> Enum.group_by(& &1.fleet_id)
+
     for %{id: fleet_id, name: name} <- Fleets.catalog(),
-        keys = Keys.keys_held_in_fleet!(fleet_id, wallets, actor: actor),
+        keys = Map.get(held, fleet_id, []),
         keys != [],
         do: %{fleet_id: fleet_id, name: name, token_ids: Enum.map(keys, & &1.token_id)}
   end

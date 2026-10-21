@@ -35,6 +35,7 @@ defmodule Keyfleet.Keys do
       define :keys_in_fleet, action: :current_in_fleet, args: [:fleet_id]
       define :idle_keys_in_fleet, action: :idle_in_fleet, args: [:fleet_id]
       define :keys_held_in_fleet, action: :held_in_fleet, args: [:fleet_id, :owner_wallets]
+      define :keys_held_everywhere, action: :held_everywhere, args: [:owner_wallets]
 
       define :recorded_in_blocks,
         action: :recorded_in_blocks,

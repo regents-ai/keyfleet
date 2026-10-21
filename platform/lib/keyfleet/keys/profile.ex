@@ -168,7 +168,7 @@ defmodule Keyfleet.Keys.Profile do
       holder_keys: held,
       holder_key_count:
         count(KeyAttachment, :held_in_fleet, %{fleet_id: fleet_id, owner_wallets: [holder]}),
-      holder_keys_everywhere: count(KeyAttachment, :held_by_wallet, %{owner_wallet: holder}),
+      holder_keys_everywhere: count(KeyAttachment, :held_everywhere, %{owner_wallets: [holder]}),
       composer: composer(viewer, fleet_id)
     }
     |> Map.merge(activity)

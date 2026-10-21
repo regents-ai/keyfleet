@@ -1020,6 +1020,15 @@ defmodule KeyfleetWeb.ShellLive do
   defp class(%{assigns: %{fleet_class: %{fleet_id: fleet_id, class: class}}}, fleet_id),
     do: class
 
+  @doc """
+  The options that read `fleet_id`, the fleet in the address, as the reader
+  with the class last read, so its policies don't read the class again.
+  """
+  def reads_as(socket, fleet_id) do
+    actor = human_actor(socket)
+    [actor: actor, context: Access.context(actor, fleet_id, class(socket, fleet_id))]
+  end
+
   @doc "Whether the reader is a member of `fleet_id`, the fleet in the address, as last read."
   def member?(%{assigns: %{fleet_class: %{fleet_id: fleet_id, class: :member}}}, fleet_id),
     do: true
