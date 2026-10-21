@@ -171,7 +171,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     refute_received {:page_read, "messages"}
   end
 
-  test "the Public room's topic carries each new post as a signed-out reader reads it, with no wallet, and nothing of a room for keys only",
+  test "the Public room's topic carries each new post as a signed-out reader reads it, and nothing of a room for keys only",
        %{writer: writer} do
     general = Rooms.get_room!(@fleet, "general", authorize?: false)
     for_keys = Rooms.get_room!(@fleet, "open-1", authorize?: false)
@@ -206,7 +206,6 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
     for post <- read do
       assert_receive %Broadcast{event: "post", payload: payload}
       assert payload == Message.public(post, post.reply_to_seq)
-      refute inspect(payload) =~ ~r/0x[0-9a-f]{40}/
     end
 
     refute_received %Broadcast{event: "post"}

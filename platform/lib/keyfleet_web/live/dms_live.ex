@@ -205,7 +205,13 @@ defmodule KeyfleetWeb.DmsLive do
                   Key {Rules.grouped(message.from_token_id)}
                 </.link>
                 <small class="rooms-writer">
-                  <.sent_from via={arrival(message)} /> {writer(message)}
+                  <.sent_from via={arrival(message)} />
+                  <span :if={message.via_agent}>{message.via_agent.name}</span>
+                  <Regent.Primitives.address
+                    :if={!message.via_agent}
+                    id={"#{dom_id}-writer"}
+                    address={message.author_wallet}
+                  />
                 </small>
               </p>
               <div :if={message.body} class="rooms-body">{RoomsLive.body_html(message.body)}</div>
@@ -376,10 +382,6 @@ defmodule KeyfleetWeb.DmsLive do
 
   defp preview(%{last_from_token_id: token_id, last_body: body}, token_id), do: "You: #{body}"
   defp preview(%{last_body: body}, _token_id), do: body
-
-  # Who wrote as the Key: the agent that wrote it, or the holder's wallet.
-  defp writer(%{via_agent: %{name: name}}), do: name
-  defp writer(%{author_wallet: wallet}), do: RegentFormat.short_address(wallet)
 
   # How a message reached Keyfleet: an agent's signed request, or the website.
   defp arrival(%{via_agent_id: nil}), do: :web

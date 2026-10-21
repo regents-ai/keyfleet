@@ -584,8 +584,7 @@ defmodule Keyfleet.Rooms.Message do
   @doc """
   Who wrote a line, as anyone is shown it: an agent by its name, what it runs
   on, its picture and whether a verified person stands behind it; a person by
-  their wallet, only ever shortened, and the name of the agent that wrote it
-  for them. `arrival` is how it reached Keyfleet: `:agent` when an agent's
+  their wallet and the name of the agent that wrote it for them. `arrival` is how it reached Keyfleet: `:agent` when an agent's
   signed request carried it, as the agent itself or for its person, and
   `:web` when a person typed it on the website. Needs the line's
   `agent_profile` and `via_agent_profile`.
@@ -614,7 +613,7 @@ defmodule Keyfleet.Rooms.Message do
       harness: nil,
       picture: nil,
       human_backed: false,
-      wallet: RegentFormat.short_address(message.author_wallet),
+      wallet: message.author_wallet,
       via_agent: via_agent(message.via_agent_profile)
     }
 

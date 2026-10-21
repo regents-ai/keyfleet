@@ -330,9 +330,7 @@ defmodule KeyfleetWeb.RoomsLive do
       Key {Rules.grouped(@message.as_key)}
     </.link>
     <.agent_picture :if={@message.author.picture} src={@message.author.picture} />
-    <small class="rooms-writer">
-      <.sent_from via={@message.author.arrival} /> {written_by(@message.author)}
-    </small>
+    <.writer id={"rooms-writer-#{@message.id}"} author={@message.author} />
     <small :if={@message.quoting?} class="rooms-writer">Quoting its person</small>
     <.verified_human :if={@message.author.human_backed} id={"rooms-human-#{@message.id}"} />
     """
@@ -356,22 +354,34 @@ defmodule KeyfleetWeb.RoomsLive do
   @doc "Whether a verified person stands behind the agent that wrote a line read with its author."
   def human_backed?(message), do: Message.author(message).human_backed
 
-  @doc """
-  Who wrote a line read with its author: the agent's name and what it runs
-  on, or the person's wallet, with the name of the agent that wrote it for
-  them.
-  """
-  def writer(message), do: message |> Message.author() |> written_by()
-
-  @doc "How a line read with its author reached Keyfleet (`Message.author/1`)."
-  def arrival(message), do: Message.author(message).arrival
-
   @doc "The picture beside an agent's name on a line it wrote; nil for a person's line."
   def writer_picture(message), do: Message.author(message).picture
 
-  defp written_by(%{kind: :agent, name: name, harness: harness}), do: "#{name} · #{harness}"
-  defp written_by(%{via_agent: nil, wallet: wallet}), do: wallet
-  defp written_by(%{via_agent: name, wallet: wallet}), do: "#{name} for #{wallet}"
+  attr :id, :string, required: true
+  attr :author, :map, required: true, doc: "who wrote the line (`Message.author/1`)"
+
+  @doc """
+  Who wrote a line, after the mark for how it arrived: an agent by its name and
+  what it runs on, a person by their wallet, and the agent that wrote it for
+  them.
+  """
+  def writer(%{author: %{kind: :agent}} = assigns) do
+    ~H"""
+    <small class="rooms-writer">
+      <.sent_from via={@author.arrival} /> {@author.name} · {@author.harness}
+    </small>
+    """
+  end
+
+  def writer(assigns) do
+    ~H"""
+    <small class="rooms-writer">
+      <.sent_from via={@author.arrival} />
+      <span :if={@author.via_agent}>{@author.via_agent} for</span>
+      <Regent.Primitives.address id={@id} address={@author.wallet} />
+    </small>
+    """
+  end
 
   @doc """
   A post's words as the page shows them. They are the writer's own, escaped

@@ -4153,3 +4153,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   fix every break; "more elegant, less text, simplify". The walk is now a
   browser test, `platform/test/browser/group_flow.spec.ts`, with the fleet's
   work graph running and a stand-in notebook hub.
+
+## 2026-10-21 — A writer's address on a post has its copy icon
+
+- What: in rooms, on a Key's post wall and in a Key's messages, the address
+  of the person who wrote a post shows its copy icon and Basescan arrow, and
+  opens the full address, like every other address on the site. It was plain
+  short text.
+- Why: Sean, 19 October: "anywhere an ens name or a 0xaddress or abbreviated 0xaddress is shown, to show a copy icon to get the full address".
