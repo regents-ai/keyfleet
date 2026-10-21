@@ -258,6 +258,14 @@ defmodule KeyfleetWeb.RouteCatalogTest do
                RouteCatalog.fetch!("/classic/1/proposals/:number", %{"number" => "3"}),
                %{"number" => "3"}
              )
+
+    assert [page_title: "Dead end 4 · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(
+               RouteCatalog.fetch!("/classic/1/workspace/:object_id", %{
+                 "object_id" => "dead_end#4"
+               }),
+               %{"object_id" => "dead_end#4"}
+             )
   end
 
   defp sample_params(%{parameter_schema: schema}) do

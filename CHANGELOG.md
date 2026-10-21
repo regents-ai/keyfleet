@@ -4399,3 +4399,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - What: a proposal's browser tab and link preview read "Proposal 3 · Classic #1",
   as its heading does, instead of "Proposal · Classic #1".
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — A workspace item's browser tab carries its type and number
+
+- What: a goal's, task's or finding's browser tab and link preview read
+  "Goal 1 · Classic #1" instead of "Workspace · Classic #1".
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
