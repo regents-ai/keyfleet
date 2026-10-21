@@ -391,6 +391,29 @@ defmodule Keyfleet.BrowserChain do
     token_id
   end
 
+  @doc "Opens the fleet's workspace log, once per fleet, before `work!/2`."
+  def open_workspace!(fleet_id) do
+    WorkspaceFixtures.open_log(fleet_id)
+    :ok
+  end
+
+  @doc """
+  Has Key `key` add a task called `title` to the fleet's workspace and tells
+  the pages that show the fleet's work to anyone, as the graph's copier does
+  after a change. Returns its id.
+  """
+  def work!(fleet_id, key, title) do
+    id = WorkspaceFixtures.create(fleet_id, "task", %{"title" => title}, by: key)
+
+    Phoenix.PubSub.broadcast(
+      Keyfleet.PubSub,
+      Keyfleet.Graph.notable_topic(fleet_id),
+      {:graph_notable, fleet_id}
+    )
+
+    id
+  end
+
   @doc "Opens the product pages when `open?`, and closes them behind the launch gate otherwise."
   def surfaces!(open?), do: Application.put_env(:keyfleet, :app_surfaces, open?)
 

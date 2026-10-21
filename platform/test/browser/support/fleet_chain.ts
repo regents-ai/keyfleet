@@ -87,6 +87,12 @@ export const allowUsdc = (owner: string, atoms: number) => void call("allow!", [
  */
 export const furnishFleet = (fleet: string, owner: string) => Number(call("furnish!", [fleet, owner]))
 
+/** Opens a fleet's workspace log, once, before `addWork`. */
+export const openWorkspace = (fleet: string) => void call("open_workspace!", [fleet])
+
+/** Has a Key add a task to a fleet's workspace and tells the pages showing its work. */
+export const addWork = (fleet: string, key: number, title: string) => call("work!", [fleet, key, title])
+
 /** Opens the product pages, or closes them behind the launch gate. */
 export const setSurfaces = (open: boolean) => void call("surfaces!", [open])
 

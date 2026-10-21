@@ -28,6 +28,7 @@ export default defineConfig({
     "agent_tools.spec.ts",
     "account_agents.spec.ts",
     "key_card.spec.ts",
+    "workspace_motion.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,
