@@ -450,6 +450,31 @@ features:
       - The allowance is kept on each machine, as every Keyfleet allowance is; Keyfleet runs on one.
       - A real wallet's step going through is checked by hand on keyfleet.ai after release.
 
+  - id: proposals-at-a-glance
+    what: >-
+      Each card on a fleet's Proposals list starts with its status and its kind
+      (Decision, Payment, Slice rate, Several actions and so on), the time its
+      vote has left while it is open (hours, then minutes in the last hour,
+      counting down in the browser), and a bar of its yes share with a mark at
+      the 60% it needs. Hovering the bar gives the full yes, no and abstain
+      count of the Keys counted.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/proposals_live.ex
+      - platform/lib/keyfleet_web/live/proposals_page.ex
+      - platform/lib/keyfleet_web/components/countdown.ex
+      - platform/assets/js/hooks/countdown.ts
+      - platform/assets/css/pages/proposals.css
+    entry:
+      - route: GET /:fleet/:number/proposals
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/proposals_page_test.exs
+      - platform/assets/test/countdown.test.ts
+    gaps:
+      - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
+
   - id: posting-key
     what: >-
       A person whose wallets hold more than one of a fleet's Keys chooses on the

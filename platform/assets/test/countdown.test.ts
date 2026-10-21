@@ -1,12 +1,12 @@
 import {afterEach, beforeEach, expect, it, vi} from "vitest"
 
-import {PollCountdown} from "../js/hooks/poll_countdown"
+import {Countdown} from "../js/hooks/countdown"
 
 // Vitest here runs without a document, so the countdown is the small surface
 // the hook touches: its data attributes and its words.
 function mount(dataset: Record<string, string>) {
   const hook = {el: {dataset, textContent: ""}}
-  PollCountdown.mounted?.call(hook)
+  Countdown.mounted?.call(hook)
   return hook
 }
 
@@ -52,10 +52,24 @@ it("writes the list's minutes in the page's own words", () => {
   expect(vi.getTimerCount()).toBe(0)
 })
 
+it("writes a proposal's hours, then its last hour in minutes", () => {
+  vi.setSystemTime(0)
+  const hook = mount({closesAt: String(7_200_000), now: "0", format: "hours"})
+
+  expect(hook.el.textContent).toBe("2 hours left")
+  vi.advanceTimersByTime(1_000)
+  expect(hook.el.textContent).toBe("1 hour left")
+  vi.advanceTimersByTime(3_600_000)
+  expect(hook.el.textContent).toBe("59 minutes left")
+  vi.advanceTimersByTime(3_540_000)
+  expect(hook.el.textContent).toBe("Less than a minute left")
+  expect(vi.getTimerCount()).toBe(0)
+})
+
 it("stops counting when the poll leaves the page", () => {
   vi.setSystemTime(0)
   const hook = mount({closesAt: String(30_000), now: "0", format: "seconds"})
 
-  PollCountdown.destroyed?.call(hook)
+  Countdown.destroyed?.call(hook)
   expect(vi.getTimerCount()).toBe(0)
 })

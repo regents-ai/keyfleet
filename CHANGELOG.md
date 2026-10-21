@@ -3439,3 +3439,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   was counted nowhere, and a blocked one was left out too.
 - Why: the overnight push for less text that tells the truth at a glance; the
   two counts now add up to every unfinished task.
+
+## 2026-10-21 — Proposals list shows where each one stands at a glance
+
+- What: each card on a fleet's Proposals list now starts with its status and its kind (Decision, Payment, Slice rate, Several actions and so on) and, while its vote is open, the hours it has left, counting down to minutes in its last hour. Under the title, a bar shows its yes share with a mark at the 60% it needs, then "33% yes of 9 Keys"; hovering it gives the full yes, no and abstain count. Polls and proposals now share one countdown.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", and the governance goal of the morning: make each proposal's kind, status, time left and yes share readable at a glance.

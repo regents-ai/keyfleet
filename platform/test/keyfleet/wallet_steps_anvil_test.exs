@@ -768,7 +768,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     |> Enum.map(fn card ->
       {card |> LazyHTML.attribute("data-proposal") |> hd(),
        card |> LazyHTML.query(".proposals-badge") |> words(),
-       card |> LazyHTML.query(".proposals-detail") |> words()}
+       card |> LazyHTML.query(".proposals-share") |> LazyHTML.attribute("title") |> hd()}
     end)
   end
 

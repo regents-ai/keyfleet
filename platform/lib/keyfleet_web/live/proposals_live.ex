@@ -27,6 +27,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.Countdown
   import KeyfleetWeb.Components.LoadFailed
 
   alias Keyfleet.Chain.ReadBalances
@@ -148,8 +149,18 @@ defmodule KeyfleetWeb.ProposalsLive do
               <span class="proposals-badge" data-status={proposal.status}>
                 {status_word(proposal)}
               </span>
-              <span :if={proposal.status == :waiting} class="proposals-detail">
-                from {at(proposal.carry_out_from)}
+              <span class="proposals-type">{proposal.kind}</span>
+              <span class="proposals-when">
+                <.countdown
+                  :if={proposal.status == :open}
+                  id={"proposals-left-#{proposal.number}"}
+                  closes_at={proposal.closes_at}
+                  now={DateTime.utc_now()}
+                  format="hours"
+                />
+                <span :if={proposal.status == :waiting}>
+                  From {at(proposal.carry_out_from)}
+                </span>
               </span>
             </p>
             <h3>
@@ -160,9 +171,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             <p :if={proposal.text} class="proposals-words proposals-words--short">
               {proposal.text}
             </p>
-            <p class="proposals-detail">
-              <.tally proposal={proposal} />
-            </p>
+            <.yes_share proposal={proposal} />
           </li>
         </ol>
 
@@ -1210,14 +1219,26 @@ defmodule KeyfleetWeb.ProposalsLive do
 
   attr :proposal, :map, required: true
 
-  # How a proposal's votes stand; the yes and no figures roll when votes arrive.
-  defp tally(assigns) do
-    assigns = assign(assigns, :id, "proposals-tally-#{assigns.proposal.number}")
+  # How a proposal's vote stands at a glance: the share of the Keys counted
+  # that voted yes, as a bar with the 60% it needs marked on it, and the
+  # whole tally on hover. The share rolls when votes arrive.
+  defp yes_share(assigns) do
+    %{yes: yes, no: no, abstain: abstain, counted: counted} = assigns.proposal
 
-    ~H|<span id={@id} phx-hook="MotionCount" data-variant={Motion.standard("count")}><span data-count>{@proposal.yes}</span>
-yes, <span data-count>{@proposal.no}</span>
-no, <span data-count>{@proposal.abstain}</span>
-abstain, of {keys(@proposal.counted)} counted</span>|
+    assigns =
+      assign(assigns,
+        id: "proposals-share-#{assigns.proposal.number}",
+        share: if(counted > 0, do: min(div(yes * 100, counted), 100), else: 0),
+        tally: "#{yes} yes, #{no} no, #{abstain} abstain, of #{keys(counted)} counted"
+      )
+
+    ~H"""
+    <div class="proposals-share" title={@tally}>
+      <span class="proposals-share__bar" style={"--yes: #{@share}%"} aria-hidden="true"></span>
+      <span id={@id} phx-hook="MotionCount" data-variant={Motion.standard("count")}><span data-count>{@share}</span>% yes</span>
+      <span class="proposals-detail">of {keys(@proposal.counted)}</span>
+    </div>
+    """
   end
 
   defp keys(1), do: "1 Key"

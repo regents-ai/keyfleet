@@ -111,8 +111,17 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
                {"1", "Open"}
              ]
 
-      assert text(view, ~s([data-proposal="3"] .proposals-detail)) ==
-               "3 yes, 1 no, 1 abstain, of 5 Keys counted"
+      # Each card says its kind, and how its vote stands as a share of the Keys counted.
+      assert text(view, ~s([data-proposal="3"] .proposals-type)) == "Decision"
+      assert text(view, ~s([data-proposal="3"] #proposals-share-3)) == "60% yes"
+      assert text(view, ~s([data-proposal="3"] .proposals-share .proposals-detail)) == "of 5 Keys"
+
+      assert has_element?(
+               view,
+               ~s([data-proposal="3"] .proposals-share[title="3 yes, 1 no, 1 abstain, of 5 Keys counted"])
+             )
+
+      assert has_element?(view, ~s([data-proposal="3"] .proposals-when), "hours left")
 
       ChainViews.put!(on_chain(2, :approved))
       view |> element(~s([data-proposal="2"] a)) |> render_click()
@@ -166,6 +175,10 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         on_chain(1, :open, e0: 60, late: 0, yes: 51, no: 1, abstain: 2) ++
           on_chain(2, :open)
       )
+
+      # A proposal of more than one kind of call says so on the list.
+      {:ok, list, _html} = open(conn, @list)
+      assert text(list, ~s([data-proposal="1"] .proposals-type)) == "Several actions"
 
       {:ok, view, _html} = open(conn, "#{@list}/1")
 
@@ -457,7 +470,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert shows?(fn -> has_element?(view, "#proposal-yes", "2 Keys") end)
 
       assert shows?(fn ->
-               text(list, ~s([data-proposal="1"] .proposals-detail)) =~ "2 yes, 0 no"
+               has_element?(list, ~s([data-proposal="1"] .proposals-share[title^="2 yes, 0 no"]))
              end)
     end
 

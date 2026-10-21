@@ -22,6 +22,7 @@ defmodule KeyfleetWeb.PollsLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.Countdown
   import KeyfleetWeb.Components.Footnote
   import KeyfleetWeb.Components.LoadFailed
   import Phoenix.LiveView, only: [connected?: 1, push_patch: 2]
@@ -426,30 +427,6 @@ defmodule KeyfleetWeb.PollsLive do
   end
 
   attr :id, :string, required: true
-  attr :closes_at, DateTime, required: true
-  attr :now, DateTime, required: true, doc: "when the page read the poll"
-  attr :format, :string, required: true, values: ~w(minutes seconds)
-
-  # The time an open poll has left. The page writes it as of when it read
-  # the poll; the browser writes it again as it changes, from the poll's
-  # closing time and the gap between its own clock and the site's
-  # (`assets/js/hooks/poll_countdown.ts`), in the same words.
-  defp countdown(assigns) do
-    ~H"""
-    <span
-      id={@id}
-      phx-hook="PollCountdown"
-      data-closes-at={DateTime.to_unix(@closes_at, :millisecond)}
-      data-now={DateTime.to_unix(@now, :millisecond)}
-      data-format={@format}
-    >{left(@format, @closes_at, @now)}</span>
-    """
-  end
-
-  defp left("minutes", closes_at, now), do: time_left(closes_at, now)
-  defp left("seconds", closes_at, now), do: seconds_left(closes_at, now)
-
-  attr :id, :string, required: true
   attr :page, :map, required: true
 
   # What anyone who isn't one of the fleet's members is shown of its polls.
@@ -772,9 +749,9 @@ defmodule KeyfleetWeb.PollsLive do
   end
 
   # The page's one timer. The countdown is drawn in the browser
-  # (`PollCountdown`); the server looks at the clock only for the next poll on
-  # show to close, each page at a moment of its own up to two seconds after
-  # it, so a crowd on one poll never reads at once.
+  # (`KeyfleetWeb.Components.Countdown`); the server looks at the clock only
+  # for the next poll on show to close, each page at a moment of its own up to
+  # two seconds after it, so a crowd on one poll never reads at once.
   defp start_clock(socket) do
     socket = stop_clock(socket)
 
@@ -996,23 +973,6 @@ defmodule KeyfleetWeb.PollsLive do
       most -> for %{choice: choice, votes: ^most} <- totals, do: choice
     end
   end
-
-  defp time_left(closes_at, now) do
-    case DateTime.diff(closes_at, now, :second) do
-      seconds when seconds < 60 -> "Less than a minute left"
-      seconds -> "#{count(div(seconds, 60), "minute", "minutes")} left"
-    end
-  end
-
-  defp seconds_left(closes_at, now) do
-    case DateTime.diff(closes_at, now, :second) do
-      seconds when seconds <= 0 -> "Closing…"
-      seconds when seconds < 60 -> "#{count(seconds, "second", "seconds")} left"
-      seconds -> "#{div(seconds, 60)}:#{seconds |> rem(60) |> pad()} left"
-    end
-  end
-
-  defp pad(number), do: number |> Integer.to_string() |> String.pad_leading(2, "0")
 
   defp count(1, one, _many), do: "1 #{one}"
   defp count(number, _one, many), do: "#{number} #{many}"

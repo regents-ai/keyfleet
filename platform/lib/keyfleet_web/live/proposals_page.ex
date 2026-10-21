@@ -48,7 +48,7 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp listed(fleet, reading, before, {proposals, older?}) do
     Map.merge(reading, %{
-      proposals: Enum.map(proposals, &summary/1),
+      proposals: Enum.map(proposals, &summary(&1, fleet)),
       first_page?: is_nil(before),
       older: if(older?, do: list_path(fleet.id, before: List.last(proposals).number)),
       propose: reading.deployed? && propose(fleet)
@@ -72,7 +72,10 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp treasury_shown(fleet, reading, assets, treasury_reading) do
     Map.merge(reading, %{
       treasury: reading.deployed? && treasury(fleet, treasury_reading, assets),
-      carried: fleet.id |> Proposals.latest_carried_out(@carried) |> Enum.map(&summary/1),
+      carried:
+        fleet.id
+        |> Proposals.latest_carried_out(@carried)
+        |> Enum.map(&summary(&1, fleet)),
       progress: reading.deployed? && Chain.progress(fleet.id),
       manager_address: fleet.manager_address
     })
@@ -179,7 +182,7 @@ defmodule KeyfleetWeb.ProposalsPage do
   defp shown(proposal, fleet, reading, assets, balances) do
     Map.merge(reading, %{
       number: Integer.to_string(proposal.number),
-      proposal: Map.merge(summary(proposal), details(proposal, fleet, assets, balances))
+      proposal: Map.merge(summary(proposal, fleet), details(proposal, fleet, assets, balances))
     })
   end
 
@@ -271,9 +274,10 @@ defmodule KeyfleetWeb.ProposalsPage do
 
   defp pay_name(%{address: address}), do: "Token #{RegentFormat.short_address(address)}"
 
-  defp summary(proposal) do
+  defp summary(proposal, fleet) do
     %{
       number: proposal.number,
+      kind: kind(proposal.calls, fleet),
       status: Proposals.status(proposal),
       yes: proposal.yes_keys,
       no: proposal.no_keys,
@@ -284,6 +288,27 @@ defmodule KeyfleetWeb.ProposalsPage do
       text: words(proposal.words)
     }
   end
+
+  # What kind of proposal it is, in a word or two, from what its calls do:
+  # the kinds the form makes, and the calls only an agent could have sent.
+  defp kind([], _fleet), do: "Decision"
+
+  defp kind(calls, fleet) do
+    case calls |> Enum.map(&(&1 |> Actions.decode(fleet) |> kind_of())) |> Enum.uniq() do
+      [kind] -> kind
+      _several -> "Several actions"
+    end
+  end
+
+  defp kind_of({:pay, _asset, _to, _share}), do: "Payment"
+  defp kind_of({:advance, _id, _operator, _asset, _share, _purpose}), do: "Advance"
+  defp kind_of({:rate, _bps}), do: "Slice rate"
+  defp kind_of({:signature, _change, _issued_at}), do: "Signature"
+  defp kind_of({:edits, _token_id, _restricted?}), do: "Key edits"
+  defp kind_of({:launch, _launch}), do: "Token launch"
+  defp kind_of(:voted_split), do: "Slice release"
+  defp kind_of({:admit_ousd, _token}), do: "New slice token"
+  defp kind_of({:other, _target, _data}), do: "Unknown call"
 
   # A proposal's words, shown only as saved under its own fingerprint.
   defp words(nil), do: nil

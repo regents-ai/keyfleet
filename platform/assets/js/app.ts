@@ -28,6 +28,7 @@ import {installPublicTools} from "./public_tools"
 import {installShellPanels} from "./shell_panels"
 import {installVitals} from "./vitals"
 import {AccountWallets} from "./hooks/account_wallets"
+import {Countdown} from "./hooks/countdown"
 import {CurrentTab} from "./hooks/current_tab"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {FleetSea, HarbourSea} from "./hooks/harbour_sea"
@@ -41,7 +42,6 @@ import {LocalTime} from "./hooks/local_time"
 import {ModalDialog, watchPresses} from "./hooks/modal_dialog"
 import {OnchainSteps} from "./hooks/onchain_steps"
 import {PanelAgents} from "./hooks/panel_agents"
-import {PollCountdown} from "./hooks/poll_countdown"
 import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
 import {MotionCascade, MotionTabs, ShellViews} from "./hooks/motion/reveals"
 import {SidePanel} from "./hooks/side_panel"
@@ -284,6 +284,7 @@ const hooks = {
   ...labHooks,
   ...colocatedHooks,
   AccountWallets,
+  Countdown,
   CurrentTab,
   FleetPreview,
   FleetSea,
@@ -304,7 +305,6 @@ const hooks = {
   OnchainSteps,
   PanelAgents,
   PlacesChart,
-  PollCountdown,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
   SidePanel,
   TokenMenu,
