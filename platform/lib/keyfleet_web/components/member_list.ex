@@ -219,12 +219,16 @@ defmodule KeyfleetWeb.Components.MemberList do
             <span class="member-card__count">{Rules.keys(holder.count)}</span>
           </p>
           <p class="member-card__status" data-present={holder.status == :active && "true"}>
-            {status_words(holder.status)} ·
-            <.seen id={"#{@id}-holder-#{holder.id}-seen"} at={holder.last_active} now={@now} />
+            {status_words(holder.status)}
+            <.seen
+              :if={holder.last_active}
+              id={"#{@id}-holder-#{holder.id}-seen"}
+              at={holder.last_active}
+              now={@now}
+            />
           </p>
-          <p class="member-card__connections">
+          <p :if={holder.connections != []} class="member-card__connections">
             <span class="member-card__label">Connections</span>
-            <span :if={holder.connections == []}>None</span>
             <a
               :for={link <- holder.connections}
               href={link.url}
@@ -290,15 +294,14 @@ defmodule KeyfleetWeb.Components.MemberList do
   defp status_words(:waiting), do: "Waiting to start"
 
   attr :id, :string, required: true
-  attr :at, :any, required: true, doc: "when the holder was last active, or nil"
+  attr :at, DateTime, required: true
   attr :now, DateTime, required: true
-
-  defp seen(%{at: nil} = assigns), do: ~H"never active"
 
   defp seen(assigns) do
     assigns = assign(assigns, :online?, DateTime.diff(assigns.now, assigns.at) < @online_for)
 
     ~H"""
+    ·
     <%= if @online? do %>
       online now
     <% else %>

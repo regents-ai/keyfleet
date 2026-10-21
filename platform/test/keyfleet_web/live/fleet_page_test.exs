@@ -85,7 +85,8 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
   # A holder is Active while one of their Keys has a vote, Idle once their
   # Keys' votes have lapsed, and waiting while every Key is new and its
-  # automatic start is still to come.
+  # automatic start is still to come. "last active" follows only when the
+  # holder has done something with a Key they hold today.
   test "each holder's status says whether their Keys vote, lapsed or wait to start", %{
     conn: conn
   } do
@@ -97,14 +98,18 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     now = DateTime.utc_now()
     ProposalHelpers.presence!(@fleet, 7, DateTime.add(now, -3600))
     ProposalHelpers.scheduled!(@fleet, 8, DateTime.add(now, 2, :day))
+    Rooms.bootstrap_rooms!([@fleet])
+    line!("general", 0, now)
 
     {:ok, view, _html} = live(conn, @members_path)
 
-    assert text(view, "#fleet-members-holder-#{active} .member-card__status") =~ ~r/^Active · /
-    assert text(view, "#fleet-members-holder-#{@owner} .member-card__status") =~ ~r/^Idle · /
+    assert text(view, "#fleet-members-holder-#{active} .member-card__status") == "Active"
+
+    assert text(view, "#fleet-members-holder-#{@owner} .member-card__status") ==
+             "Idle · online now"
 
     assert text(view, "#fleet-members-holder-#{waiting} .member-card__status") ==
-             "Waiting to start · never active"
+             "Waiting to start"
   end
 
   # Every address a person's account links is counted as one card under their

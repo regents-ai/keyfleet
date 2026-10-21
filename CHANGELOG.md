@@ -3415,3 +3415,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   pair and what to pipe to every protected command's help, so 62 commands said it
   twice. The guide's seven message commands drop the same line.
 - Why: less text in every `--help`; the same facts, said once.
+
+## 2026-10-21 — Member List cards drop lines that say nothing
+- What: a Member List card shows its Connections line only when the holder has connected accounts, and adds "last active" or "online now" after the status only when the holder has done something with a Key they hold today.
+- Why: "Connections None" and "never active" were noise, and a Key that started on its own read "Active · never active".
