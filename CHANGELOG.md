@@ -3879,3 +3879,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   https://keyfleet.ai/classic/1. A fleet still coming soon is left out until
   it opens.
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+## 2026-10-21 — Posts run one under the other
+
+- What: posts in a room (https://keyfleet.ai/classic/1/rooms/general), on a
+  Key's wall and in direct messages sit one under the other with a hairline
+  between them, instead of each in its own box. On a wide screen each post's
+  time sits at the end of its author's line. A room's posts take about a
+  tenth less height.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline".
