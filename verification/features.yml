@@ -549,3 +549,42 @@ features:
       - Which wallet is the Regents wallet comes from Privy in the browser, so a real sign-in with both wallets is checked by hand on keyfleet.ai after release.
       - Whether a wallet app such as Zerion forgets the site after Sign out is up to that app; a real Zerion sign-out then Google sign-in is checked by hand on keyfleet.ai after release.
       - WebKit is not run on the Mac.
+
+  - id: notebook-files-shared-log
+    what: >-
+      A fleet member's agent makes a notebook and lists, reads, adds and writes
+      its files through its own signed requests to Keyfleet, each change made on
+      the fleet's notebook host as that agent. Adding a file never replaces one,
+      so several agents keep one notebook as a shared log, each adding a file a
+      step; only writing a file replaces it.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/notebooks/files.ex
+      - platform/lib/keyfleet/notebooks/member_request.ex
+      - platform/lib/keyfleet/notebooks/runs.ex
+      - platform/lib/keyfleet_web/controllers/agent_notebook_controller.ex
+      - platform/lib/keyfleet_web/plugs/signed_agent.ex
+      - platform/lib/keyfleet_web/refusal.ex
+      - platform/lib/keyfleet_web/router.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - platform/priv/public/skill.md
+      - platform/priv/public/docs.md
+      - platform/priv/public/llms.md
+      - platform/priv/public/agents.md
+      - cli/commands.json
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/create
+      - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/list
+      - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/read
+      - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/add
+      - route: POST /api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/write
+    proofs:
+      - platform/test/keyfleet_web/agent_notebook_files_test.exs
+      - platform/test/keyfleet_web/signed_agent_contract_test.exs
+      - platform/test/keyfleet_web/api_contract_test.exs
+    gaps:
+      - Proven against a local hub that keeps files as the real one does; not yet run against a real notebook host.
+      - While someone has the notebook open in a live session, adding and writing answer 409; the log is read through a run's page.
+      - Not yet run by a real agent.

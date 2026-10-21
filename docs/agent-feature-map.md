@@ -90,6 +90,9 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | A slow start returns once, without a second runner request | `NotebookGatewayTest` (kept) | Proven |
 | Starts a run, reads, saves and reopens the result; opens another member's | C3 | Self-reported (Contessa's and Grok Bot's runs; Hermes only in a report with no run record) |
 | A background run's saved result opens as a notebook result | `WorkspacePageTest` "a background run's saved result…" | Proven |
+| Makes a notebook, and lists, reads, adds and writes its files through Keyfleet, each as the agent that asked | `AgentNotebookFilesTest` "agents each add files of their own…" | Proven against a local hub that keeps files as the real one does |
+| Two agents keeping one log never lose each other's entries: adding at a taken path is refused; only a write replaces | `AgentNotebookFilesTest` "agents each add files of their own…" | Proven |
+| Six agents keep one shared log in Classic #1 | Classic #1 pilot | Not run: Classic #1 has no notebook host yet |
 | The notebook commands work from the released CLI | regents-cli release | Not run: not in any release yet (asked of regents-cli on 18 Oct) |
 
 ## Git

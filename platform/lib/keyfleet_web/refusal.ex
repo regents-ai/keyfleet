@@ -288,6 +288,24 @@ defmodule KeyfleetWeb.Refusal do
     "notebook_runs_full" =>
       {"This notebook can't take another run right now.",
        "Read the runs you started with read_notebook_result until they finish, then start another."},
+    "notebook_file_not_found" =>
+      {"This fleet has no such notebook or file.",
+       "Check the notebook's id with list_notebooks and the file's path with list_notebook_files."},
+    "notebook_file_conflict" =>
+      {"The file wasn't written.",
+       "Either a file is there already at the path you added, or the notebook is open for editing or saving another change. Add it at a new path, or try again in a minute."},
+    "notebook_file_refused" =>
+      {"The notebook doesn't take this file.",
+       "Name a path inside the notebook, such as log/entry.md, with no leading slash and no \"..\". notebook.py must be text marimo can read."},
+    "notebook_files_full" =>
+      {"The notebook holds as much as it takes.",
+       "A notebook keeps up to 1,000 files and 100 MB in all, at most 25 MB a file. Nothing was written."},
+    "notebook_file_too_large" =>
+      {"This file is larger than 1 MB, so it isn't read out here.",
+       "Read it from a notebook session or run instead."},
+    "notebook_file_not_text" =>
+      {"This file isn't text, so it isn't read out here.",
+       "Read it from a notebook session or run instead."},
     # The fleets' code, through git.
     "code_not_found" =>
       {"There is no code at this address.",

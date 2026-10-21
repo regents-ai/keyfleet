@@ -43,6 +43,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @notebooks_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks\z"
   @run_start_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/runs/start\z"
   @run_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/runs/#{@run}\z"
+  @notebook_create_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/create\z"
+  @files_list_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/files/list\z"
+  @file_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/files/read\z"
+  @file_write_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/files/(add|write)\z"
 
   # A poll is named by its id as the API answers it.
   @poll ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
@@ -72,6 +76,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@proposal_read_path, {~w(number votes_after_seq), []}},
     {@create_room_path, {~w(slug name), []}},
     {@run_start_path, {~w(idempotency_key), []}},
+    {@notebook_create_path, {~w(title code idempotency_key), ~w(description)}},
+    {@files_list_path, {[], ~w(path cursor)}},
+    {@file_read_path, {~w(path), []}},
+    {@file_write_path, {~w(path content), []}},
     {@topic_path, {~w(topic), []}},
     {@read_path, {[], ~w(after_seq limit)}},
     {@key_read_path, {[], ~w(after_seq limit)}},
@@ -94,6 +102,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # A workspace write holds a few thousand characters of text at most, and
   # fits the broker's envelope the same way a post does.
   @graph_write_max_body @send_max_body
+  # A new notebook's code and a file written to a notebook fit the broker's
+  # envelope the same way a profile does.
+  @notebook_write_max_body @update_max_body
+  @max_notebook_title 200
   # A proposal holds its text, up to 4,000 bytes, and a launch's fields
   # beside it, escaped the same way.
   @propose_max_body 4_000 * 12 + 8 * 1024
@@ -479,6 +491,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @sync_path,
         @proposal_read_path,
         @run_start_path,
+        @notebook_create_path,
+        @files_list_path,
+        @file_read_path,
+        @file_write_path,
         @chain_path,
         @graph_path,
         @dm_path,
@@ -500,6 +516,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       catch_up?(path) -> @sync_max_body
       limit = poll_body_limit(path) -> limit
       chain_op(path) == "proposals/create" -> @propose_max_body
+      fleet_op(path) in [:notebook_create, :file_write] -> @notebook_write_max_body
       graph_op(path) in ~w(create patch link unlink archive join leave) -> @graph_write_max_body
       true -> 4096
     end
@@ -582,11 +599,19 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
-  # Catching up, reading a proposal and starting a notebook run each name
-  # fields of their own.
+  # Catching up, reading a proposal, starting a notebook run, making a
+  # notebook and working with its files each name fields of their own.
   defp fleet_op(path) do
     Enum.find_value(
-      [sync: @sync_path, proposal_read: @proposal_read_path, run_start: @run_start_path],
+      [
+        sync: @sync_path,
+        proposal_read: @proposal_read_path,
+        run_start: @run_start_path,
+        notebook_create: @notebook_create_path,
+        files_list: @files_list_path,
+        file_read: @file_read_path,
+        file_write: @file_write_path
+      ],
       fn {op, pattern} -> if Regex.match?(pattern, path), do: op end
     )
   end
@@ -594,6 +619,19 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp check_fleet_body(:sync, params), do: check_sync_body(params)
   defp check_fleet_body(:proposal_read, params), do: check_proposal_read_body(params)
   defp check_fleet_body(:run_start, params), do: check_run_start_body(params)
+  defp check_fleet_body(:notebook_create, params), do: check_notebook_create_body(params)
+  defp check_fleet_body(:files_list, params), do: check_files_list_body(params)
+
+  defp check_fleet_body(:file_read, %{"path" => path} = params),
+    do: admit(map_size(params) == 1 and is_binary(path))
+
+  defp check_fleet_body(:file_read, _params), do: :invalid
+
+  # Adding or writing a file names the file and its whole text.
+  defp check_fleet_body(:file_write, %{"path" => path, "content" => content} = params),
+    do: admit(map_size(params) == 2 and is_binary(path) and is_binary(content))
+
+  defp check_fleet_body(:file_write, _params), do: :invalid
 
   defp chain_op(path) do
     case Regex.run(@chain_path, path, capture: :all_but_first) do
@@ -813,6 +851,35 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        do: admit(Regex.match?(~r/\A[!-~]{1,128}\z/, key))
 
   defp check_run_start_body(_params), do: :invalid
+
+  # A new notebook names its title and code, and the key that keeps a retry
+  # from making it twice; it may say what it is for.
+  defp check_notebook_create_body(
+         %{"title" => title, "code" => code, "idempotency_key" => key} = params
+       )
+       when is_binary(title) and is_binary(code) and is_binary(key) do
+    cond do
+      not (Enum.all?(Map.keys(params), &(&1 in ~w(title code idempotency_key description))) and
+             is_binary(Map.get(params, "description", "")) and
+               Regex.match?(~r/\A[!-~]{1,128}\z/, key)) ->
+        :invalid
+
+      String.length(title) in 1..@max_notebook_title ->
+        :ok
+
+      true ->
+        :out_of_range
+    end
+  end
+
+  defp check_notebook_create_body(_params), do: :invalid
+
+  # A listing may name the folder and the page it reads on from.
+  defp check_files_list_body(params) when is_map(params),
+    do:
+      admit(Enum.all?(params, fn {key, value} -> key in ~w(path cursor) and is_binary(value) end))
+
+  defp check_files_list_body(_params), do: :invalid
 
   defp poll_write?(path),
     do: Regex.match?(@poll_start_path, path) or Regex.match?(@poll_vote_path, path)

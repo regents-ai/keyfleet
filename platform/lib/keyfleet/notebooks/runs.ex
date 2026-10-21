@@ -5,9 +5,9 @@ defmodule Keyfleet.Notebooks.Runs do
   (`KeyfleetWeb.AgentNotebookController`), so it never signs a request for
   the notebook host itself.
 
-  The hub is asked as the agent (`Keyfleet.Notebooks.Pass`), so a run is the
-  agent's, in the notebook's job kept for agents' runs, "Agent runs", made the
-  first time an agent starts a run there. A run works through the notebook's
+  The hub is asked as the agent (`Keyfleet.Notebooks.MemberRequest`), so a
+  run is the agent's, in the notebook's job kept for agents' runs, "Agent
+  runs", made the first time an agent starts a run there. A run works through the notebook's
   saved code, top to bottom, in a fresh sandbox, and never changes the
   notebook.
 
@@ -28,7 +28,9 @@ defmodule Keyfleet.Notebooks.Runs do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Notebooks
-  alias Keyfleet.Notebooks.{Pass, RecordsDownError}
+  alias Keyfleet.Notebooks.RecordsDownError
+
+  import Keyfleet.Notebooks.MemberRequest
 
   @job "Agent runs"
   # A finished run has made its page, unless it was cancelled or skipped.
@@ -255,32 +257,10 @@ defmodule Keyfleet.Notebooks.Runs do
     }
   end
 
-  defp notebook_path(project_id, notebook_id),
-    do: "/api/v1/projects/#{segment(project_id)}/notebooks/#{segment(notebook_id)}"
-
-  defp request(fleet_id, subject, method, path, options \\ []) do
-    {:ok, address} = Notebooks.hub_address(fleet_id)
-    {headers, options} = Keyword.pop(options, :headers, [])
-
-    Req.request(
-      [
-        method: method,
-        base_url: address,
-        url: path,
-        headers: [{"x-keyfleet-assertion", Pass.mint(fleet_id, subject)} | headers],
-        retry: false,
-        redirect: false,
-        receive_timeout: Notebooks.config()[:hub_timeout_ms]
-      ] ++ options
-    )
-  end
-
   defp answer({:ok, %Req.Response{status: status, body: %{"data" => data}}}, status),
     do: {:ok, data}
 
   defp answer({:ok, %Req.Response{status: 404}}, _status), do: {:error, :not_found}
   defp answer({:ok, %Req.Response{status: 429}}, _status), do: {:error, :runs_full}
   defp answer(_response, _status), do: {:error, :unavailable}
-
-  defp segment(value), do: URI.encode(value, &URI.char_unreserved?/1)
 end

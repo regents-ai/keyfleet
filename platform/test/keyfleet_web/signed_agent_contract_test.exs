@@ -62,13 +62,16 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @dm_blocks "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks"
   @dm "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/"
   @dm_changes "/api/v1/agent/fleets/{fleet_id}/dms/changes"
+  @notebook_create "/api/v1/agent/fleets/{fleet_id}/notebooks/create"
+  @notebook_files "/api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/"
 
   @address %{
     "fleet_id" => @fleet,
     "token_id" => "1",
     "other_token_id" => "2",
     "slug" => "general",
-    "poll_id" => "00000000-0000-4000-8000-000000000000"
+    "poll_id" => "00000000-0000-4000-8000-000000000000",
+    "notebook_id" => "nb-0123456789abcdef"
   }
   @poll_question %{
     "question" => "Which door next?",
@@ -240,7 +243,18 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @poll_start, [], @poll_question},
     {"GET", @poll, [], nil},
     {"POST", @poll_vote, [], %{"choice" => "Left door", "reason" => "r"}},
-    {"POST", @poll_end, [], %{}}
+    {"POST", @poll_end, [], %{}},
+    {"POST", @notebook_create, [],
+     %{
+       "title" => "Log",
+       "code" => "import marimo",
+       "description" => "d",
+       "idempotency_key" => "n-1"
+     }},
+    {"POST", @notebook_files <> "list", [], %{"path" => "log", "cursor" => "c"}},
+    {"POST", @notebook_files <> "read", [], %{"path" => "log/a.md"}},
+    {"POST", @notebook_files <> "add", [], %{"path" => "log/a.md", "content" => "Seen"}},
+    {"POST", @notebook_files <> "write", [], %{"path" => "log/a.md", "content" => "Seen"}}
   ]
 
   # Where each body's fields go once admitted, less the ones its address supplies.
@@ -689,12 +703,15 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     dm_routes(c, stranger)
 
     # A fleet outside the catalog is not found on every route that names one,
-    # with the answer the workspace gives.
+    # with the answer the workspace gives; a notebook route answers as for any
+    # fleet without notebooks.
     nowhere = Map.put(@address, "fleet_id", "hull_survey")
 
     for {method, template, [], body} <- @bodies, String.contains?(template, "{fleet_id}") do
+      code = if template =~ "/notebooks/", do: "notebooks_not_found", else: "fleet_unknown"
+
       assert answer(c, c.signer, method, template, nowhere, body, 404).body["error"]["code"] ==
-               "fleet_unknown",
+               code,
              "#{method} #{template}"
     end
 

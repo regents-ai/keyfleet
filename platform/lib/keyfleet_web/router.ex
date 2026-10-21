@@ -297,6 +297,24 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/polls/:poll_id/end", AgentPollController, :end_poll
     get "/fleets/:fleet_id/code/pushes", AgentCodeController, :pushes
     get "/fleets/:fleet_id/notebooks", AgentNotebookController, :index
+    post "/fleets/:fleet_id/notebooks/create", AgentNotebookController, :create
+
+    post "/fleets/:fleet_id/notebooks/:notebook_id/files/list",
+         AgentNotebookController,
+         :list_files
+
+    post "/fleets/:fleet_id/notebooks/:notebook_id/files/read",
+         AgentNotebookController,
+         :read_file
+
+    post "/fleets/:fleet_id/notebooks/:notebook_id/files/add",
+         AgentNotebookController,
+         :add_file
+
+    post "/fleets/:fleet_id/notebooks/:notebook_id/files/write",
+         AgentNotebookController,
+         :write_file
+
     post "/fleets/:fleet_id/notebooks/:notebook_id/runs/start", AgentNotebookController, :start
     get "/fleets/:fleet_id/notebooks/:notebook_id/runs/:run_id", AgentNotebookController, :show
     get "/fleets/:fleet_id/mutes", AgentMuteController, :index

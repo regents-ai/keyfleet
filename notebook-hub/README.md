@@ -125,14 +125,15 @@ For four fleets, setting this up means:
   - notebook machines, charged only while sessions run;
   - Tigris storage.
 
-The Regents Club's is being set up (13 October 2026). The other fleets have
-none of this yet, and nothing here creates it.
+The Regents Club's was set up on 13 October 2026 and Classic #1's on 21 October
+2026 (Sean's go in Classic #1's pilot). The other fleets have none of this yet,
+and nothing here creates it.
 
 ## Setting up one fleet
 
 Each step names the command. The flags were checked against the help text of
-flyctl v0.4.107. Steps 1 to 3, 5, 8 and 9 have run on real Fly for the Regents
-Club; the bucket and the hub's deploy have not yet.
+flyctl v0.4.107. Every step has run on real Fly, for the Regents Club and for
+Classic #1 (Classic #1's with flyctl v0.4.120).
 
 Each fleet's hub and runner apps share a private network of their own,
 `kf-nb-<fleet>-net`. Notebook machines therefore cannot reach the shared
@@ -198,7 +199,7 @@ Keyfleet's server puts on each request, which the hub checks.
    `hub/fly.runner.toml` into `hub/fleets/` as `<fleet>.hub.toml` and
    `<fleet>.runner.toml`, and replace every `<…>` placeholder
    (`hub/hub.env.example` says what each setting means). The Regents Club's
-   copies are there.
+   and Classic #1's copies are there.
 7. **Deploy the hub, private, as one machine**:
    `fly deploy --config notebook-hub/hub/fleets/<fleet>.hub.toml --no-public-ips --ha=false`.
    Nothing is deployed to `kf-nbk-<fleet>`: the hub starts its machines there.
@@ -208,8 +209,11 @@ Keyfleet's server puts on each request, which the hub checks.
    the `keyfleet` app is on and which has no name to pass, not on the fleet's
    own network.
 9. **Give the fleet's notebooks their web address.** In Vercel DNS, point
-   `<fleet, hyphenated>.notebooks.keyfleet.ai` at the `keyfleet` app as a CNAME
-   to `keyfleet.fly.dev`, then
+   `<fleet, hyphenated>.notebooks.keyfleet.ai` at the `keyfleet` app's own
+   addresses, as `regents-club.notebooks` is: an A record and an AAAA record
+   with the addresses `fly ips list --app keyfleet` shows
+   (`vercel dns add keyfleet.ai <fleet, hyphenated>.notebooks A <v4>`, and the
+   same with `AAAA <v6>`), then
    `fly certs add <fleet, hyphenated>.notebooks.keyfleet.ai --app keyfleet` and
    `fly certs check` until it is issued.
 10. **Point Keyfleet's server at the hub**: add
@@ -226,6 +230,7 @@ its listed ID.
 | Fleet | Token name | Listed ID | Made | Last day |
 | --- | --- | --- | --- | --- |
 | Regents Club | `kf-nb-regents-club-hub` | `60XMXnbzk4eybuLoxgj02GxemnCgP23j2v2DXkMFZ7` | 13 October 2026 | 13 October 2027, 17:48 UTC |
+| Classic #1 | `kf-nb-fleet-tech-classic-hub` | `3KZ2ZnjxkaoyjCw9k7lMKRko8OCavNkxlpywokgS8` | 21 October 2026 | 21 October 2027, 07:09 UTC |
 
 ## Things to know
 

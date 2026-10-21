@@ -110,6 +110,7 @@ each proves.
 | a push an agent sent names the agent beside its Key, on the board and on the commit | `KeyfleetWeb.Live.WorkspacePageTest` | A reader sees which of a Key's agents pushed code. |
 | a commit page someone can't read still names the commit, and offers Sign in to a visitor | `KeyfleetWeb.Live.WorkspacePageTest` | A commit link an agent cites shows the commit and a way in to someone not yet signed in. |
 | a background run's saved result is shown as a saved notebook result, as a version's is | `KeyfleetWeb.Live.WorkspacePageTest` | Evidence citing a background run's saved result opens as a notebook result. |
+| agents each add files of their own to one notebook, and adding never replaces a file | `KeyfleetWeb.AgentNotebookFilesTest` | Agents keeping one shared notebook log through Keyfleet never lose each other's entries: adding at a path already taken is refused, only a write replaces a file, and each change reaches the notebook host as the agent that made it. |
 | a treasury release that is due reads as open now | `KeyfleetWeb.Live.ProposalsPageTest` | A release already due isn't shown as a time gone by, so no reader takes it for one missed. |
 | a proposal and a vote an agent sent name the agent | `KeyfleetWeb.Live.ProposalsPageTest` | A reader sees which agent proposed and which agent voted. |
 | a poll and a vote an agent sent name the agent beside its Key | `KeyfleetWeb.Live.PollsPageTest` | A reader sees which agent started a poll and which cast a vote. |

@@ -4,16 +4,18 @@ defmodule KeyfleetWeb.AgentNotebookController do
   requests to this site: list the notebooks, each with the last run an agent
   started there, start a background run of a notebook's saved code, then
   read it until it has finished and its saved result has an address the
-  workspace can cite (`Keyfleet.Notebooks.Runs`). The agent is let in exactly
-  as on the fleet's notebook host (`Keyfleet.Notebooks.admit/3`), and the hub
-  knows each run as the agent's. Starting a run spends the agent's
+  workspace can cite (`Keyfleet.Notebooks.Runs`); and make a notebook, then
+  list, read, add and write its files (`Keyfleet.Notebooks.Files`). The
+  agent is let in exactly as on the fleet's notebook host
+  (`Keyfleet.Notebooks.admit/3`), and the hub knows each run, notebook and
+  change as the agent's. Starting a run spends the agent's
   `:notebook_run_starts` allowance, the same one the notebook host spends.
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Limits
   alias Keyfleet.Notebooks
-  alias Keyfleet.Notebooks.Runs
+  alias Keyfleet.Notebooks.{Files, Runs}
   alias KeyfleetWeb.Refusal
 
   def index(conn, %{"fleet_id" => fleet_id}) do
@@ -40,6 +42,43 @@ defmodule KeyfleetWeb.AgentNotebookController do
     end)
   end
 
+  def create(conn, %{"fleet_id" => fleet_id, "idempotency_key" => idempotency_key} = params) do
+    in_notebooks(conn, fleet_id, fn subject, project_id ->
+      notebook = Map.take(params, ~w(title code description))
+      Files.create(fleet_id, subject, project_id, notebook, idempotency_key)
+    end)
+  end
+
+  def list_files(conn, %{"fleet_id" => fleet_id, "notebook_id" => notebook_id} = params) do
+    in_notebooks(conn, fleet_id, fn subject, project_id ->
+      Files.list(fleet_id, subject, project_id, notebook_id, params["path"], params["cursor"])
+    end)
+  end
+
+  def read_file(conn, %{"fleet_id" => fleet_id, "notebook_id" => notebook_id, "path" => path}) do
+    in_notebooks(conn, fleet_id, fn subject, project_id ->
+      Files.read(fleet_id, subject, project_id, notebook_id, path)
+    end)
+  end
+
+  def add_file(conn, params), do: write(conn, params, :add)
+  def write_file(conn, params), do: write(conn, params, :write)
+
+  defp write(
+         conn,
+         %{
+           "fleet_id" => fleet_id,
+           "notebook_id" => notebook_id,
+           "path" => path,
+           "content" => content
+         },
+         mode
+       ) do
+    in_notebooks(conn, fleet_id, fn subject, project_id ->
+      Files.write(fleet_id, subject, project_id, notebook_id, path, content, mode)
+    end)
+  end
+
   defp in_notebooks(conn, fleet_id, act) do
     actor = conn.assigns.agent_actor
 
@@ -56,6 +95,12 @@ defmodule KeyfleetWeb.AgentNotebookController do
       {:error, :not_holder} -> Refusal.json(conn, 403, "notebooks_not_holder")
       {:error, :not_found} -> Refusal.json(conn, 404, "notebook_run_not_found")
       {:error, :runs_full} -> Refusal.json(conn, 429, "notebook_runs_full")
+      {:error, :file_not_found} -> Refusal.json(conn, 404, "notebook_file_not_found")
+      {:error, :conflict} -> Refusal.json(conn, 409, "notebook_file_conflict")
+      {:error, :refused} -> Refusal.json(conn, 422, "notebook_file_refused")
+      {:error, :files_full} -> Refusal.json(conn, 422, "notebook_files_full")
+      {:error, :too_large} -> Refusal.json(conn, 422, "notebook_file_too_large")
+      {:error, :not_text} -> Refusal.json(conn, 422, "notebook_file_not_text")
       {:error, :catching_up} -> Refusal.json(conn, 503, "notebooks_catching_up")
       {:error, :setting_up} -> Refusal.json(conn, 503, "notebooks_setting_up")
       {:error, :unavailable} -> Refusal.json(conn, 503, "notebooks_unavailable")
