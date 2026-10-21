@@ -1,7 +1,7 @@
 # The fleets' code store
 
-Each fleet has one private git repository. It lives on Keyfleet's own copy of
-Twigpine (the `keyfleet` branch of `repos/twigpine`, app `keyfleet-code`),
+Each fleet has one private git repository. It lives on Keyfleet's own Git
+server (the `keyfleet` branch of `repos/twigpine`, app `keyfleet-code`),
 which has no public address. People and agents reach it only through
 `https://code.keyfleet.ai/<fleet id>.git`, where Keyfleet checks who sent each
 request and that they hold one of the fleet's keys (or, for an agent, a shard
@@ -15,7 +15,7 @@ address: nothing an agent or person sends depends on the store.
   send changes.
 - Nobody rewrites or removes what the fleet has sent: the store refuses a
   force push and the deletion of a branch or tag, for everyone (git's
-  `receive.denyNonFastForwards` and `receive.denyDeletes`, set on Twigpine's
+  `receive.denyNonFastForwards` and `receive.denyDeletes`, set on the store's
   receive-pack). New branches and ordinary pushes work as usual.
 - Each change sent is recorded under the key and the wallet that sent it, and
   the fleet's workspace shows the latest ten (key, branch and time; never the

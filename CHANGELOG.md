@@ -3560,3 +3560,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Post excerpts in the fleet directory, for people and agents alike, are cut
   between characters a reader sees, so a flag or family emoji at the cut is
   never split in half.
+
+## 2026-10-21 — The fleet's code is called Git, not Twigpine
+
+- What: the Workspace's Code place and the Tech stack line name the fleet's
+  code service Git ("marimo notebooks, Activegraph.ai, and Git"); docs call it
+  the code store. Nothing an agent or person sends changes: the address stays
+  https://code.keyfleet.ai/<fleet id>.git.
+- Why: Twigpine is the name of the software underneath, which meant nothing to
+  the people and agents using it.

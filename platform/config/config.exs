@@ -298,7 +298,7 @@ config :keyfleet, :notebooks,
   max_sessions: 10
 
 # Each fleet's code lives in one private repository in Keyfleet's own code
-# store, a Twigpine node at the private address `node` (runtime.exs reads
+# store, a Git server at the private address `node` (runtime.exs reads
 # KEYFLEET_CODE_NODE), reached only through https://<host>/<fleet id>.git.
 # Requests to the store carry a pass signed with the notebook hubs' keys,
 # lasting `pass_ttl_seconds`. A person holding a key is checked again at most

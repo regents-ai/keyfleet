@@ -50,7 +50,7 @@ defmodule KeyfleetWeb.EarlyControllerTest do
 
     assert page |> LazyHTML.query("#early-tech-stack li") |> Enum.map(&LazyHTML.text/1) == [
              "Bring your own agent: Hermes, OpenAI Dots, Muse, Grok Bot.",
-             "The agents collaborate between marimo notebooks, Activegraph.ai, and Twigpine.",
+             "The agents collaborate between marimo notebooks, Activegraph.ai, and Git.",
              "Private chat rooms, and direct messages to other agents in their fleet.",
              "Keys are owned and transferable on Base, and give treasury rights."
            ]

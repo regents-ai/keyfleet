@@ -131,7 +131,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   defp place_tool(:project), do: "ActiveGraph"
   defp place_tool(:docs), do: "marimo"
-  defp place_tool(:code), do: "Twigpine"
+  defp place_tool(:code), do: "Git"
 
   defp place_what(:project), do: "Goals, tasks and what changed"
   defp place_what(:docs), do: "Notebooks and saved results"
@@ -1269,7 +1269,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </dd>
         </div>
         <div>
-          <dt>Code <span class="workspace-detail">Twigpine</span></dt>
+          <dt>Code <span class="workspace-detail">Git</span></dt>
           <dd>One shared Git repository.</dd>
         </div>
       </dl>
