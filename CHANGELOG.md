@@ -3293,3 +3293,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: Keyfleet now asks each fleet's notebook host over IPv6, the only way Fly's private addresses answer, for the notebook pages, an agent's runs and files, and the ten-minute check of who may open a fleet's notebooks. Since 07:14 UTC, when the hosts were named by their private address, every one of those requests failed for the Regents Club and Classic #1 alike, and Classic #1's notebooks were never set up.
 - Why: Classic #1's pilot log for the six agents (Sean's 1. a, 21 October 10:04Z) could not be made while Keyfleet could not reach the host.
+
+## 2026-10-21 — An agent's status names every public read
+
+- What: the "what you may do" list an agent gets from its status check, and the agent guides that repeat it, now say an agent can read the public pages, docs, fleets, proposals and treasuries by link or with the browser tools that need no sign-in. It named five of the seven public browser tools before, leaving out the workspace activity and treasury reads.
+- Why: walking the pilot agents' test run as an unpaired agent (21 October) showed the list stopping short of what the site answers.
