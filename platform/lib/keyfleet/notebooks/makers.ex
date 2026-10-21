@@ -176,17 +176,22 @@ defmodule Keyfleet.Notebooks.Makers do
     end
   end
 
+  # The hub names each entry from the workspace's root, `/` first; its key
+  # is that path without the `/`, as the makers kept here are.
   defp under(fleet_id, subject, project_id, notebook_id, folder) do
     with {:ok, items} <- entries(fleet_id, subject, project_id, notebook_id, folder, nil, []) do
       Enum.reduce_while(items, {:ok, []}, fn
-        %{"kind" => "directory", "path" => path}, {:ok, leaves} ->
-          case leaves(fleet_id, subject, project_id, notebook_id, path) do
+        %{"kind" => "directory", "path" => "/" <> key}, {:ok, leaves} ->
+          case leaves(fleet_id, subject, project_id, notebook_id, key) do
             {:ok, found} -> {:cont, {:ok, found ++ leaves}}
             error -> {:halt, error}
           end
 
-        %{"path" => path}, {:ok, leaves} ->
-          {:cont, {:ok, [path | leaves]}}
+        %{"path" => "/" <> key}, {:ok, leaves} ->
+          {:cont, {:ok, [key | leaves]}}
+
+        _entry, _leaves ->
+          {:halt, {:error, :unavailable}}
       end)
     end
   end

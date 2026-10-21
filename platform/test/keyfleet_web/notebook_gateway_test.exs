@@ -297,6 +297,21 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
     refute_received {:hub, _method, _path, _subject, "c"}
 
+    # A folder is its adder's to remove when they made all of it, and never
+    # the notebook's maker's while another member's file is in it.
+    assert send_notebook(:put, files <> "?path=kept/mine.csv&create=true", cookie, "a").status ==
+             200
+
+    assert send_notebook(:delete, entries <> "?path=kept", cookie, "").status == 200
+
+    {:ok, _maker} =
+      Notebooks.record_file_maker(@fleet, "nb-0000000000000002", "shared/theirs.csv", "u_other",
+        actor: %System{}
+      )
+
+    shared = send_notebook(:delete, mine <> "/workspace/entries?path=shared", cookie, "")
+    assert json_response(shared, 403)["error"]["code"] == "notebooks_maker_only"
+
     # A version's saved result is its notebook's maker's to remove.
     version = "ver_" <> String.duplicate("0", 26)
 
@@ -938,10 +953,12 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       ["nb-0000000000000001", "jobs", _job, "runs", _run] ->
         json(conn, 200, %{success: true, data: %{triggered_by: "u_other"}})
 
-      ["nb-0000000000000001", "workspace", "entries"] ->
+      [_notebook, "workspace", "entries"] ->
         items =
           case fetch_query_params(conn).query_params["path"] do
-            "data" -> [%{path: "data/theirs.csv", kind: "file"}]
+            "data" -> [%{path: "/data/theirs.csv", kind: "file"}]
+            "kept" -> [%{path: "/kept/mine.csv", kind: "file"}]
+            "shared" -> [%{path: "/shared/theirs.csv", kind: "file"}]
             _file -> []
           end
 
