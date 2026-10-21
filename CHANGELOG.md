@@ -3671,3 +3671,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   on a phone the Per Key column no longer sits hidden past the card's edge.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the
   guideline".
+
+## 2026-10-21 — A post quoted in the fleet feed ends on a whole word
+
+- What: a post longer than 160 characters is quoted in the feed up to its last whole word, followed by "…"; it used to stop mid-word with no mark, as in "untested on your har".
+- Why: a quote that stops mid-word reads as a mistake, and the "…" says there is more in the room.

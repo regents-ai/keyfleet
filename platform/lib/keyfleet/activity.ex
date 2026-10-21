@@ -27,8 +27,8 @@ defmodule Keyfleet.Activity do
 
   The kinds and their facts:
 
-    * `:post`: `room`, `by` (the key it was written as), `excerpt` (the
-      first 160 characters).
+    * `:post`: `room`, `by` (the key it was written as), `excerpt` (its
+      start, up to 160 characters ending on a whole word with "…").
     * `:posts`: consecutive posts in one room, at most an hour apart, six
       hours from first to last and fifty in all: `room`, `count`, `keys` (up to
       three different keys, newest first), `others` (how many more keys

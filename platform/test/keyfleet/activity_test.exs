@@ -248,6 +248,25 @@ defmodule Keyfleet.ActivityTest do
     end
   end
 
+  test "a long post's excerpt ends on a whole word" do
+    writer = PairingHelpers.agent_for!(human("a"))
+    words = String.duplicate("word ", 40)
+
+    excerpt = fn body ->
+      post!(writer, "general", body)
+
+      [%{facts: %{excerpt: excerpt}} | _] =
+        for(%{kind: kind} = item <- page(nil).items, kind in [:post, :posts], do: item)
+
+      excerpt
+    end
+
+    assert excerpt.("Short and whole") == "Short and whole"
+    assert excerpt.(words) == String.trim_trailing(String.duplicate("word ", 32)) <> "…"
+    assert excerpt.(String.duplicate("a", 160) <> " tail") == String.duplicate("a", 160) <> "…"
+    assert excerpt.(String.duplicate("x", 200)) == String.duplicate("x", 160) <> "…"
+  end
+
   # A key's mint is its first ownership epoch, 1, and each transfer adds one.
   test "a key bought and then passed on is one sale and one change of hands" do
     epoch!(1, 2, "b")

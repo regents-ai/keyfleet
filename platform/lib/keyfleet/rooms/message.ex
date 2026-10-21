@@ -810,8 +810,19 @@ defmodule Keyfleet.Rooms.Message do
   end
 
   calculations do
-    # The first 160 characters of the line's words, cut in the database.
-    calculate :excerpt, :string, expr(fragment("left(?, 160)", body)), public?: true
+    # The line's words as they start, cut in the database: a line longer than
+    # 160 characters ends at its last whole word within them, with "…".
+    calculate :excerpt,
+              :string,
+              expr(
+                fragment(
+                  "CASE WHEN length(?) <= 160 THEN ? ELSE left(regexp_replace(left(?, 161), '\\s+\\S*$', ''), 160) || '…' END",
+                  body,
+                  body,
+                  body
+                )
+              ),
+              public?: true
 
     # Whether the holder of the Key whose wall the post is on has taken it off.
     calculate :removed_from_wall, :boolean, expr(exists(wall_removal, true))
