@@ -3236,3 +3236,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: once you are signed in, Keyfleet uses and shows only the wallets your account is linked to. A wallet app left connected from before, such as Zerion before a Google sign-in, is no longer listed in the side panel or on Account and is never the active wallet; your Regents wallet is the active one, so Buy Key and every other wallet button use it. Sign out now lets go of every wallet Privy holds, wallet apps included, before Privy signs out, so the next sign-in starts with none of them. The "Not linked to this account" row is gone.
 - Why: Sean 21 October 06:46Z: "I signed in with google, it should not show my zerion account that was already logged in. only the google one. signing out zerion should 100% drop that account".
+
+## 2026-10-21 — Closing sign-in puts the Buy Key window back
+
+- What: signed out, pressing Buy in the Buy Key window opens sign-in. Closing sign-in without signing in now puts the Buy Key window back as it was: dimmed page behind it, nothing on the page drawn over it, and Buy ready to press again with focus on it. Before, the window stayed without its dimmed backdrop and parts of the homepage drew over it. On a Key's page, where the Buy Key window opens above the Key's own window, sign-in can now be used at all; before, the Key's window kept it out of reach.
+- Why: Sean 21 October 06:32Z: "check for UI issues here, it happened when canceling a buy on a non-signed in account".

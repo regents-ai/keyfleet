@@ -811,6 +811,24 @@ describe("lazy browser authentication", () => {
     expect(page.status.hidden).toBe(true)
   })
 
+  it("says the sign-in window has gone whenever a sign-in ends without a reload, and only then", () => {
+    for (const failure of ["closed", "provider", "session", "startup"] as const) {
+      const page = accountDocument()
+      const gone = vi.fn()
+      page.documentRoot.addEventListener("ash:sign-in-closed", gone)
+
+      showAccountAuthFailure("sign-in", page.documentRoot, failure)
+
+      expect(gone).toHaveBeenCalledOnce()
+    }
+
+    const page = accountDocument({signedIn: true})
+    const gone = vi.fn()
+    page.documentRoot.addEventListener("ash:sign-in-closed", gone)
+    showAccountAuthFailure("sign-out", page.documentRoot)
+    expect(gone).not.toHaveBeenCalled()
+  })
+
   it("announces a wallet connection failure to the active route", async () => {
     vi.stubGlobal("Element", AccountElement)
     const page = accountDocument()

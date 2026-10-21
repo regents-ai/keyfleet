@@ -537,15 +537,22 @@ export function consumeSignOutHandoff(
   return captured !== null && validSignOutHandoff(captured, nowMs)
 }
 
+export const SIGN_IN_CLOSED_EVENT = "ash:sign-in-closed"
+
 // The one place account-action failure copy lives, so a failure raised inside
 // the Privy bridge's own login callbacks says exactly what a failure raised here
-// says.
+// says. Every sign-in that ends without a reload ends here, closed by the
+// visitor or failed, so this also says the sign-in window has gone: a window
+// the page opened sign-in from (`ModalDialog`) takes the page back then.
 export function showAccountAuthFailure(
   request: AccountRequest,
   documentRoot: Document | undefined = globalThis.document,
   signInFailure: SignInFailureKind = "startup",
 ): void {
   if (!documentRoot) return
+  if (request === "sign-in") {
+    ;(documentRoot.defaultView ?? documentRoot).dispatchEvent(new Event(SIGN_IN_CLOSED_EVENT))
+  }
   if (request === "sign-in" && signInFailure !== "closed") {
     terminalSignInFailures.set(documentRoot, signInFailure)
     disableSignInControls(documentRoot)

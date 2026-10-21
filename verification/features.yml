@@ -398,17 +398,27 @@ features:
       text message, Google and the other social accounts, or a wallet. Someone
       who signs in without a wallet gets a Privy wallet at once, and the site
       signs them in when it is ready. Google brings the person back to the page
-      they started on, where the sign-in finishes.
+      they started on, where the sign-in finishes. Sign-in started from inside a
+      window, such as Buy in the Buy Key window or over a Key's page, can be
+      used above every window; closed without signing in, the windows are back
+      above the page as they were, ready to press again.
     who: person
     level: protected
     paths:
       - platform/assets/js/privy_bridge.tsx
       - platform/assets/js/auth_lazy.ts
+      - platform/assets/js/hooks/modal_dialog.ts
     entry:
       - route: GET /
     proofs:
       - platform/assets/test/privy_bridge.test.ts
       - platform/assets/test/auth_lazy.test.ts
+      - platform/assets/test/modal_dialog.test.ts
+      - platform/test/browser/wallet_buttons.spec.ts
+    regressions:
+      - id: R-20261021-closed-sign-in-window-back
+        from: Sean, 21 October 2026 06:32Z, signed out on the homepage
+        test: platform/test/browser/wallet_buttons.spec.ts
     gaps:
       - Privy's own email code, text message and Google pages cannot be reached from a test; a real sign-in with each is checked by hand on keyfleet.ai after release.
 

@@ -274,6 +274,117 @@ test("signed out, a press opens sign-in and sends nothing, whatever wallet is op
   expect(errors).toEqual([])
 })
 
+// Sign-in's own code, standing in for Privy: asked to sign in, it opens a
+// window of its own over the page, and when the visitor closes it without
+// signing in it says so, as the real sign-in does.
+async function standInSignIn(page: Page) {
+  await page.route(bridgePattern, route =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: `export async function startPrivyBridge() {
+        return {async request(request) {
+          window.__bridgeCalls = [...(window.__bridgeCalls || []), request]
+          const window_ = document.createElement("button")
+          window_.id = "stand-in-sign-in"
+          window_.textContent = "Sign in"
+          window_.style.cssText = "position: fixed; inset: 45% 45%; z-index: 2147483647"
+          window_.onclick = () => { window.__signInPressed = true }
+          document.body.append(window_)
+        }}
+      }`,
+    }),
+  )
+}
+
+const bridgeCalls = (page: Page) =>
+  page.evaluate(() => (window as Window & {__bridgeCalls?: string[]}).__bridgeCalls ?? [])
+
+// The visitor uses the sign-in window, then closes it without signing in.
+async function useThenCloseSignIn(page: Page) {
+  await page.locator("#stand-in-sign-in").click()
+  expect(await page.evaluate(() => (window as Window & {__signInPressed?: boolean}).__signInPressed)).toBe(true)
+  await page.evaluate(() => {
+    document.getElementById("stand-in-sign-in")!.remove()
+    window.dispatchEvent(new Event("ash:sign-in-closed"))
+  })
+}
+
+// Whether each dialog is a modal, and whether nothing on the page draws over
+// the Buy Key window: the middle of Buy and each corner of the window belong
+// to the window.
+const windowsNow = (page: Page) =>
+  page.evaluate(() => {
+    const dialogs = Array.from(document.querySelectorAll("dialog"))
+    const buyKey = document.getElementById("buy-key")!
+    const box = buyKey.getBoundingClientRect()
+    const button = buyKey.querySelector("#buy-key-button")!.getBoundingClientRect()
+    return {
+      modal: dialogs.map(dialog => `${dialog.id} ${dialog.matches(":modal")}`),
+      onTop: [
+        [button.x + button.width / 2, button.y + button.height / 2],
+        [box.left + 2, box.top + 2],
+        [box.right - 2, box.top + 2],
+        [box.left + 2, box.bottom - 2],
+        [box.right - 2, box.bottom - 2],
+      ].every(([x, y]) => buyKey.contains(document.elementFromPoint(x, y))),
+    }
+  })
+
+// Sean, 21 October 2026: signed out, he pressed Buy in the Buy Key window and
+// closed the sign-in window without signing in. The Buy Key window stayed
+// without its dimmed backdrop and the homepage drew over it.
+for (const path of ["/", "/classic/1"]) {
+  test(`signed out on ${path}, sign-in from the Buy Key window can be used, and closing it puts the window back above the page`, async ({page}) => {
+    await standInSignIn(page)
+    const errors: string[] = []
+    page.on("pageerror", error => errors.push(error.message))
+    await page.goto(path)
+    await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+    await page.locator("#shell-get-key").click()
+    const buy = page.locator("#buy-key-button")
+    await expect(buy).toBeVisible()
+    expect((await windowsNow(page)).modal).toEqual(["buy-key true"])
+
+    await buy.click()
+    await expect.poll(() => bridgeCalls(page)).toEqual(["sign-in"])
+    await useThenCloseSignIn(page)
+
+    expect(await windowsNow(page)).toEqual({modal: ["buy-key true"], onTop: true})
+    await expect(buy).toBeFocused()
+    await expect(buy).toBeEnabled()
+    await buy.click()
+    await expect.poll(() => bridgeCalls(page)).toEqual(["sign-in", "sign-in"])
+    expect(errors).toEqual([])
+  })
+}
+
+// A Key's page is a window of its own, with the Buy Key window above it.
+test("signed out on a Key's page, sign-in from the Buy Key window can be used, and closing it puts both windows back", async ({page}) => {
+  const next = sellKey(fleet, me) + 1
+  await standInSignIn(page)
+  const errors: string[] = []
+  page.on("pageerror", error => errors.push(error.message))
+  // The page reads the sale it was just made.
+  await expect
+    .poll(async () => {
+      await page.goto(`/classic/1?key=${next}`)
+      await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+      return page.locator("#key-profile-buy").count()
+    })
+    .toBe(1)
+  await page.locator("#key-profile-buy").click()
+  const buy = page.locator("#buy-key-button")
+  await expect(buy).toBeVisible()
+
+  await buy.click()
+  await expect.poll(() => bridgeCalls(page)).toEqual(["sign-in"])
+  await useThenCloseSignIn(page)
+
+  expect(await windowsNow(page)).toEqual({modal: ["key-profile true", "buy-key true"], onTop: true})
+  await expect(buy).toBeFocused()
+  expect(errors).toEqual([])
+})
+
 test("a key's income is claimed to the wallet that holds it, and the claim is followed until it lands", async ({
   page,
 }) => {
