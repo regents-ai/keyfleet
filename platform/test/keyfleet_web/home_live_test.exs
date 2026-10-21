@@ -4,7 +4,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
   import ExUnit.CaptureLog
 
   alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, SharedReading}
-  alias Keyfleet.Agents.Here
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.{FleetNow, KeyLinks}
@@ -20,15 +19,14 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   and the button and the card's tag name the Key on offer and its price
   #   after the Keys sold
   # - once every Classic Key is sold, the button can't be pressed and says so
-  # - the Club shows its newest open goal and featured item from the first
-  #   render; a coming-soon Club reads nothing
-  # - an open page draws again when the homepage's reading changes
-  # - a Club read that fails is said to have failed and never shown as zero
+  # - top to bottom the page holds Classic's hero, Classic Keyfleet, what a
+  #   fleet can use and the starting ideas, and the Markdown homepage the same
+  # - a Classic read that fails is said to have failed and never shown as zero
   # - a burst of notices is answered by one read of each fleet it names, for
   #   every open homepage at once, and a post taken off a wall reads its fleet
   #   again
-  # - each sea draws the ships of the one reading every open page shares, from
-  #   the first render; the page reads no ships of its own, a new reading
+  # - Classic's sea draws the ships of the one reading every open page shares,
+  #   from the first render; the page reads no ships of its own, a new reading
   #   reaches the open page, and pressing a ship opens its Key
   # - the command box shows the homepage instruction whole and copies exactly
   #   what it shows
@@ -54,11 +52,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
     unless context[:classic_undeployed] do
       ChainHelpers.deploy!(@classic)
       ChainHelpers.seed_cursor!(@classic)
-    end
-
-    unless context[:club_undeployed] do
-      ChainHelpers.deploy!(@club)
-      ChainHelpers.seed_cursor!(@club)
     end
 
     Enum.each(Fleets.catalog_ids(), &Workspace.open_log/1)
@@ -212,113 +205,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-classic-price") == "Sold out"
   end
 
-  test "the Club's card says how many Keys it has and who holds them, not who is online",
-       %{conn: conn} do
-    here = Here.fleet_key(@club)
-    :ok = SharedReading.put(here, %{here: 3, agents: [], holders: %{holders: 247, online: 5}})
-    on_exit(fn -> SharedReading.delete(here) end)
-    read_fleets()
-
-    {:ok, view, _html} = live(conn, "/")
-
-    assert text(view, "#home-club [data-fleet-who]") == "0 total Keys for 247 accounts"
-  end
-
-  test "the Club shows its newest open goal and what it features, from the first render",
-       %{conn: conn} do
-    goal("Sell the first audit", %{"open_questions" => ["Who pays for it?"]})
-    Workspace.edit(@club, goal("Ship the site"), %{"status" => "dropped"})
-    read_fleets()
-
-    static = conn |> get("/") |> html_response(200)
-    assert static =~ "Trying: Sell the first audit"
-
-    {:ok, view, _html} = live(conn, "/")
-
-    assert text(view, "#home-club [data-fleet-trying]") == "Trying: Sell the first audit"
-
-    assert has_element?(
-             view,
-             ~s(#home-club [data-fleet-featured][data-kind="open_question"]),
-             "Who pays for it?"
-           )
-
-    assert has_element?(
-             view,
-             ~s(#home-club [data-fleet-latest][data-kind="status"]),
-             "Ship the site"
-           )
-
-    assert has_element?(view, ~s(#home-club-public[href="/app/fleets/regents_club"]))
-  end
-
-  @tag :club_undeployed
-  test "a coming-soon Club says so and reads nothing", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/")
-
-    assert text(view, "#home-club [data-fleet-soon]") == "Opens soon"
-    refute has_element?(view, "#home-club [data-fleet-who]")
-
-    # Sean, 19 Oct: the Club's public page and its Keys on OpenSea show even
-    # before it opens, and its section has no turning cards.
-    assert has_element?(
-             view,
-             ~s(#home-club-public[href="/app/fleets/regents_club"]),
-             "Public View"
-           )
-
-    assert has_element?(
-             view,
-             ~s(#home-club-opensea[href^="https://opensea.io/collection/keyfleet?"]),
-             "Buy Key on OpenSea"
-           )
-
-    refute has_element?(view, "#home-club .key-cards")
-  end
-
-  test "an open homepage draws again when the Club's reading changes", %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/")
-    assert text(view, "#home-club [data-fleet-trying]") == "No goal set yet"
-
-    goal("Sell the first audit")
-    FleetNow.read(@club)
-
-    assert text(view, "#home-club [data-fleet-trying]") == "Trying: Sell the first audit"
-  end
-
-  test "a Club read that fails is said to have failed, never zero, and the page stays up",
-       %{conn: conn} do
-    {:ok, view, _html} = live(conn, "/")
-    refute has_element?(view, "[data-fleet-failed]")
-
-    # Renamed inside the test's own transaction, so the next reads fail the way
-    # a database that refuses them does; the rename ends with the test.
-    Keyfleet.Repo.query!(
-      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.graph_events RENAME TO graph_events_away"
-    )
-
-    log = capture_log(fn -> FleetNow.read(@club) end)
-
-    assert text(view, "#home-club [data-fleet-failed]") == "Couldn’t load this fleet just now."
-    assert log =~ "failed"
-    assert Process.alive?(view.pid)
-  end
-
-  test "a first Club read that fails shows the failure, never zero", %{conn: conn} do
-    Keyfleet.Repo.query!(
-      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.graph_events RENAME TO graph_events_away"
-    )
-
-    capture_log(fn ->
-      first_read(@club)
-      {:ok, view, _html} = live(conn, "/")
-
-      assert has_element?(view, "#home-club [data-fleet-failed]")
-      assert text(view, "#home-club [data-fleet-who]") == ""
-    end)
-  end
-
-  test "fleets that can't be read leave the homepage drawn, saying so for each",
+  test "a Classic that can't be read leaves the homepage drawn, saying so",
        %{conn: conn} do
     Keyfleet.Repo.query!(
       "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.fleets RENAME TO fleets_away"
@@ -326,12 +213,9 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     capture_log(fn ->
       first_read(@classic)
-      first_read(@club)
       {:ok, view, _html} = live(conn, "/")
 
       assert has_element?(view, "#public-home")
-      assert has_element?(view, "#home-club [data-fleet-failed]")
-      refute has_element?(view, "#home-club [data-fleet-soon]")
       assert text(view, "#home-classic-price") == "—"
       assert text(view, "#home-classic-sold") == "—"
       assert text(view, "#home-buy-why") == "Couldn’t read sales just now"
@@ -388,27 +272,23 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert_receive {:trace, ^producer, :call, {FleetNow, :read, [@club]}}, 2_000
   end
 
-  # R-20261019-home-ships-shared: each open homepage read both fleets' ships
+  # R-20261019-home-ships-shared: each open homepage read the fleets' ships
   # again for every burst of notices, and drew its seas empty until it had.
-  describe "the fleets' seas" do
-    test "draw the ships of the one shared reading from the first render", %{conn: conn} do
+  describe "Classic's sea" do
+    test "draws the ships of the one shared reading from the first render", %{conn: conn} do
       Workspace.create(@classic, "goal", %{"title" => "Chart the bay", "outcome" => "O"}, by: 7)
-      Workspace.create(@club, "goal", %{"title" => "Ship the site", "outcome" => "O"}, by: 12)
       read_fleets()
 
       static = conn |> get("/") |> html_response(200)
       assert crew(static, "#home-classic-sea") == [7]
-      assert crew(static, "#home-club-sea") == [12]
 
       {:ok, _view, html} = live(conn, "/")
       assert crew(html, "#home-classic-sea") == [7]
-      assert crew(html, "#home-club-sea") == [12]
     end
 
-    test "take new ships only from the shared reading, and a ship opens its Key",
+    test "takes new ships only from the shared reading, and a ship opens its Key",
          %{conn: conn} do
       Workspace.create(@classic, "goal", %{"title" => "Chart the bay", "outcome" => "O"}, by: 7)
-      Workspace.create(@club, "goal", %{"title" => "Ship the site", "outcome" => "O"}, by: 12)
       read_fleets()
       {:ok, view, _html} = live(conn, "/")
 
@@ -418,12 +298,11 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
       FleetNow.read(@classic)
       assert crew(render(view), "#home-classic-sea") == [9, 7]
-      assert crew(render(view), "#home-club-sea") == [12]
 
       assert {:error, {:live_redirect, %{to: to}}} =
-               render_hook(view, "open_ship", %{"id" => "#{@club}:12"})
+               render_hook(view, "open_ship", %{"id" => "#{@classic}:9"})
 
-      assert to == KeyLinks.key_path(@club, 12)
+      assert to == KeyLinks.key_path(@classic, 9)
     end
   end
 
@@ -435,6 +314,14 @@ defmodule KeyfleetWeb.HomeLiveTest do
       conn |> put_req_header("accept", "text/markdown") |> get("/") |> response(200)
 
     assert markdown =~ "\nYour personal agent joins a Fleet with a Key.\n"
+
+    assert Regex.scan(~r/^## (.+)$/m, markdown, capture: :all_but_first) == [
+             ["Classic Keyfleet"],
+             ["What a fleet can use"],
+             ["Initial Ideas for a Keyfleet to Pursue as a Shared Goal"],
+             ["More"]
+           ]
+
     [_, section] = String.split(markdown, "\n## Classic Keyfleet\n", parts: 2)
     [_, path] = Regex.run(~r{\[What it’s doing right now\]\(https?://[^/]+(/[^)]+)\)}, section)
     assert path == "/fleets/fleet_tech_classic.md"
@@ -477,8 +364,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
        %{conn: conn} do
     {:ok, view, html} = live(conn, "/")
 
-    sections = attribute(html, "main section[id]", "id")
-    assert List.last(sections) == "home-goal-ideas"
+    assert attribute(html, "main section[id]", "id") ==
+             ~w(home-hero home-classic home-integrations home-goal-ideas)
 
     assert text(view, "#home-goal-ideas-title") ==
              "Initial Ideas for a Keyfleet to Pursue as a Shared Goal"
@@ -548,7 +435,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   end
 
   # What the homepage's producer does as the site starts and on each pass.
-  defp read_fleets, do: Enum.each([@classic, @club], &FleetNow.read/1)
+  defp read_fleets, do: FleetNow.read(@classic)
 
   # A fleet the site has never read, as just after it starts, then read once.
   defp first_read(fleet_id) do
@@ -567,9 +454,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
     for %{"id" => id} <- Jason.decode!(json),
         do: id |> String.split(":") |> List.last() |> String.to_integer()
   end
-
-  defp goal(title, data \\ %{}),
-    do: Workspace.create(@club, "goal", Map.merge(%{"title" => title, "outcome" => "O"}, data))
 
   defp text(view, selector) do
     view

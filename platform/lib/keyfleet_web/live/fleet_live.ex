@@ -171,19 +171,16 @@ defmodule KeyfleetWeb.FleetLive do
     required: true,
     doc: "how many addresses hold a Key, as `headcount/1` takes them, or nil"
 
-  @doc """
-  How many Keys a fleet whose Keys are given has and how many accounts hold
-  them, as the homepage's Regents Club card says it.
-  """
-  def given(%{sales: %{current?: false}} = assigns), do: ~H"Figures are catching up"
+  # How many Keys a fleet whose Keys are given has and how many accounts hold them.
+  defp given(%{sales: %{current?: false}} = assigns), do: ~H"Figures are catching up"
 
-  def given(%{holders: nil} = assigns) do
+  defp given(%{holders: nil} = assigns) do
     ~H"""
     <Count.count id={@id} value={@sales.keys} one="total Key" many="total Keys" />
     """
   end
 
-  def given(assigns) do
+  defp given(assigns) do
     ~H"""
     <Count.count id={@id} value={@sales.keys} one="total Key" many="total Keys" /> for
     <Count.count id={"#{@id}-holders"} value={@holders.holders} one="account" many="accounts" />

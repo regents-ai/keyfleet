@@ -201,7 +201,7 @@ test("a signed-in account shows its account menu", async ({page}) => {
 })
 
 // Signed out, the account page is named as the header's button names it.
-test("the sidebar links Classic and the Regents Club, then the Account page", async ({page}) => {
+test("the sidebar links Classic, then the Account page", async ({page}) => {
   await page.goto(fleetPath)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await expect(page.getByRole("heading", {level: 1, name: "Syndicate #1"})).toBeVisible()
@@ -212,7 +212,6 @@ test("the sidebar links Classic and the Regents Club, then the Account page", as
   )
   expect(items).toEqual([
     ["Classic #1", "/classic/1"],
-    ["Regents Club", "/app/fleets/regents_club"],
     ["Sign in", "/account"],
   ])
 
@@ -310,8 +309,8 @@ test("a page picked with the mouse slides in solid", async ({page}) => {
     }
     requestAnimationFrame(look)
   })
-  await page.getByRole("navigation", {name: "Context navigation"}).getByRole("link", {name: "Regents Club"}).click()
-  await expect(page).toHaveURL(/\/app\/fleets\/regents_club$/)
+  await page.getByRole("navigation", {name: "Context navigation"}).getByRole("link", {name: "Classic #1"}).click()
+  await expect(page).toHaveURL(/\/classic\/1$/)
   await page.waitForTimeout(1600)
 
   const frames = await page.evaluate(

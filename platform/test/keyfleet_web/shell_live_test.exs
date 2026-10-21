@@ -33,7 +33,6 @@ defmodule KeyfleetWeb.ShellLiveTest do
     {:ok, view, _html} = live(conn, "/classic/1/rooms/general")
 
     assert has_element?(view, "#shell-sidebar a[aria-current=page]", "Classic #1")
-    refute has_element?(view, "#shell-sidebar a[aria-current=page]", "Regents Club")
   end
 
   test "an anonymous socket rejects a forged verified connection request", %{conn: conn} do

@@ -127,9 +127,9 @@ test("the walk from home through every page, back, forward and the sidebar keeps
     await walk.arrive(visited[visited.length - 1 - back])
   }
 
-  // The sidebar's links: the Regents Club and the Account page.
-  await walk.follow(sidebar.getByRole("link", {name: "Regents Club"}), {
-    path: "/app/fleets/regents_club",
+  // The sidebar's links: Classic and the Account page.
+  await walk.follow(sidebar.getByRole("link", {name: "Classic #1"}), {
+    path: "/classic/1",
     shows: "#fleet-page",
   })
   await walk.follow(sidebar.getByRole("link", {name: "Account"}), account)

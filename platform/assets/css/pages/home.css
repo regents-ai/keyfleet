@@ -1,5 +1,5 @@
 /* Homepage-only composition: Classic #1 with "Buy Next Key", the box saying
-   how a fleet runs itself, the Regents Club and what a fleet can use. The
+   how a fleet runs itself and what a fleet can use. The
    legal pages share the .rl-root colours and spacing. */
 @layer regents-product {
   .rl-root {
@@ -29,7 +29,6 @@
     .rl-header-links > a:not(.rg-button) { min-width: 2.75rem; min-height: 2.75rem; }
   }
 
-  .rl-overline { font-family: var(--font-family-ui); font-size: .6875rem; letter-spacing: .16em; text-transform: uppercase; }
   .rl-eyebrow { color: var(--rl-muted); font-family: var(--font-family-ui); font-size: .8125rem; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; }
 
   /* The hero. Wide: the headline, the facts and the instruction in the left
@@ -202,8 +201,8 @@
     .rl-hero .rl-give { animation-delay: 240ms; }
   }
 
-  /* Classic Keyfleet and the Regents Club: each fleet's sea beside what it
-     is, the cards turning over and its buttons. */
+  /* Classic Keyfleet: its sea beside what it is, the cards turning over and
+     its buttons. */
   .rl-fleet {
     display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4);
     padding: var(--rg-panel-padding);
@@ -220,10 +219,8 @@
     background: var(--harbour-haze) var(--rl-sea-still) 50% 50% / cover no-repeat;
   }
   .rl-sea--classic { --rl-sea-still: url("/images/home/sea-classic-night.webp"); }
-  .rl-sea--club { --rl-sea-still: url("/images/home/sea-club-night.webp"); }
   :root[data-theme="light"] .rl-sea { --harbour-haze: #f6f4ea; }
   :root[data-theme="light"] .rl-sea--classic { --rl-sea-still: url("/images/home/sea-classic-day.webp"); }
-  :root[data-theme="light"] .rl-sea--club { --rl-sea-still: url("/images/home/sea-club-day.webp"); }
   .rl-sea__stage { position: absolute; inset: 0; color: var(--color-fg); }
   .rl-sea__stage canvas {
     position: absolute; inset: 0; display: block; inline-size: 100%; block-size: 100%;
@@ -240,22 +237,6 @@
   .rl-fleet__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-block-start: var(--space-2); }
   .rl-fleet__why { margin: 0; color: var(--rl-muted); font-size: .875rem; }
 
-  /* Room for its count, its goal, one featured item and its latest, each
-     clamped, so the button under them never moves. */
-  .rl-club__now {
-    display: grid; align-content: start; gap: var(--space-1); min-block-size: 10rem;
-    padding-block-start: var(--space-2); border-block-start: 1px solid var(--rl-line);
-  }
-  .rl-club__now p { font-size: .9375rem; line-height: 1.45; overflow-wrap: anywhere; }
-  .rl-club__who { min-block-size: 1.45em; color: var(--rl-muted); font-variant-numeric: tabular-nums; }
-  .rl-club__trying, .rl-club__featured, .rl-club__latest > span {
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden;
-  }
-  .rl-club__featured { -webkit-line-clamp: 3; }
-  .rl-club__featured .rl-overline { display: block; margin-block-end: .125rem; color: var(--rl-muted); }
-  .rl-club__latest { display: grid; gap: .125rem; color: var(--rl-muted); }
-  .rl-club__latest time { font-size: .8125rem; font-variant-numeric: tabular-nums; }
-  .rl-club__failed { color: var(--rl-muted); }
   @media (min-width: 64rem) {
     .rl-fleet { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
   }

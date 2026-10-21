@@ -32,9 +32,8 @@ export type Layout = {
 }
 
 /**
- * The harbours: the sea behind the app's pages, and one for each fleet on the
- * homepage, its islands set a little apart from the others and its buildings
- * turned another way.
+ * The harbours: the sea behind the app's pages, and Classic's on the homepage,
+ * its islands set a little apart and its buildings turned another way.
  */
 export const LAYOUTS = {
   sea: {
@@ -60,18 +59,6 @@ export const LAYOUTS = {
       {x: -7.2, z: -1.4, radius: 0.55},
     ],
     spins: {castle: 0.4, inn: -0.55, forge: 0.7},
-  },
-  club: {
-    places: {
-      castle: {x: -4.2, z: -2.6, radius: 2.2},
-      inn: {x: -0.6, z: 5.3, radius: 1.8},
-      forge: {x: 3.9, z: -3.4, radius: 1.7},
-    },
-    islets: [
-      {x: 5.5, z: 2.6, radius: 0.7},
-      {x: -6.6, z: 2.2, radius: 0.55},
-    ],
-    spins: {castle: -0.35, inn: 0.5, forge: -0.6},
   },
 } as const satisfies Record<string, Layout>
 

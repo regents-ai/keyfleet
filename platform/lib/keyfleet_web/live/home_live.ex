@@ -5,16 +5,14 @@ defmodule KeyfleetWeb.HomeLive do
   art and price and opens the "Buy Key" window, as the header's "Purchase Key"
   does; Classic
   Keyfleet, its sea beside what a Key lets an agent join, Key cards turning
-  over, its public page and "Buy Key"; the Regents Club, its sea, what it is
-  doing right now, its public page and its Keys on OpenSea; what a fleet can
-  use; the starting ideas a fleet may take on as a shared goal
+  over, its public page and "Buy Key"; what a fleet can use; the starting ideas a fleet may take on as a shared goal
   (`Keyfleet.GoalIdeas`), each link to another site opening in a new tab; and
   the footer.
 
-  Each fleet's sea has a ship for each of its most recently active Keys, as
+  Classic's sea has a ship for each of its most recently active Keys, as
   anyone reads them (`KeyfleetWeb.HarbourCrew`), from the fleet's activity in
-  the one reading every open page shares (`KeyfleetWeb.FleetNow`), its islands and buildings placed a little differently from the other's.
-  Pressing a ship opens its Key's profile on the fleet's page. The cards are
+  the one reading every open page shares (`KeyfleetWeb.FleetNow`). Pressing a
+  ship opens its Key's profile on the fleet's page. The cards are
   thirty Keys of no fleet, a fifth of a second each, turning only while on
   screen.
 
@@ -30,23 +28,15 @@ defmodule KeyfleetWeb.HomeLive do
   whose sales are still being read keeps the button working: the fleet's own
   page reads the price again before anything reaches the wallet.
 
-  The Regents Club shows how many Keys it has and who they went to, its
-  public page and its Keys on OpenSea (in a new tab), even while it is coming
-  soon, the addresses holding them (as `KeyfleetWeb.FleetLive.given/1` says
-  it), the goal it is trying and its
-  latest item, as anyone reads them (`Keyfleet.Activity`). A coming-soon
-  fleet shows that it is coming soon and nothing it would have to read.
-
   Signed in, the header's account name and panel button open the side panel
   (`KeyfleetWeb.Components.Shell.aside/1`), as on the app's pages: Sign out,
   Manage Account, the account's wallets, its agents and the box to pair a new
   one. Open, it sits under the header beside the page, which narrows to make
   room for it.
 
-  The page reads nothing itself. Each fleet is read once for every open page
-  (`KeyfleetWeb.FleetNow`), the ships on its sea with it, and the Club's
-  holders come from the agents here (`Keyfleet.Agents.Here`); the page draws what those hold and draws
-  again when any of them changes. A read that fails is said to have
+  The page reads nothing itself. Classic is read once for every open page
+  (`KeyfleetWeb.FleetNow`), the ships on its sea with it; the page draws what
+  that holds and draws again when it changes. A read that fails is said to have
   failed and never shown as zero; what was read before stays.
   """
 
@@ -54,35 +44,28 @@ defmodule KeyfleetWeb.HomeLive do
 
   import Keyfleet.Fleets.Rules, only: [grouped: 1]
 
-  alias Keyfleet.Agents.Here
   alias Keyfleet.Fleets
   alias Keyfleet.GoalIdeas
   alias Keyfleet.SharedReading
 
   alias KeyfleetWeb.{
-    ActivityLines,
-    FleetLive,
     FleetNow,
     HarbourCrew,
     KeyLinks,
     Motion,
     PublicDocuments,
     RouteCatalog,
-    SharedFigures,
-    ShellLive,
-    Time
+    ShellLive
   }
 
   alias KeyfleetWeb.Components.{BuyKey, SendAgent, Shell}
 
   @classic "fleet_tech_classic"
-  @club "regents_club"
 
   @tagline "Your personal agent joins a Fleet with a Key."
   @classic_join "Any personal agent can join with a Key, its digital pass. With a Key, your " <>
                   "agent joins the Chat, the Workspace and Treasury Proposals."
   @split "90% to Keyfleet Treasury | 10% to $REGENT stakers"
-  @airdrop "Keys were airdropped to early Regents users."
 
   # What a fleet can use, one line each.
   @integrations [
@@ -134,13 +117,12 @@ defmodule KeyfleetWeb.HomeLive do
   ]
 
   @doc """
-  The homepage for agents, in Markdown. It says whether the two fleets are
-  coming soon, from the homepage's own reading of them, so it costs a visit no
-  read. When a fleet hasn't been read it says so rather than failing the page.
+  The homepage for agents, in Markdown. It says whether Classic is coming
+  soon, from the homepage's own reading of it, so it costs a visit no read.
+  When it hasn't been read it says so rather than failing the page.
   """
   def agent_markdown do
     classic = state(@classic, "Sales open soon.")
-    club = state(@club, "Coming soon.")
 
     integrations =
       Enum.map_join(@integrations, "\n", &"- **#{&1.name}**: #{&1.line}")
@@ -155,10 +137,6 @@ defmodule KeyfleetWeb.HomeLive do
     ## Classic Keyfleet
 
     #{@classic_join} A fixed set of 1,024 Keys, from 10 USDC for the first to 100 USDC for the last. Each sale: #{@split}. #{classic}
-
-    ## Regents Club
-
-    1,998 Keys, one for each Regents Club Pass. #{@airdrop} [Buy one on OpenSea](#{FleetLive.opensea_set(@club)}). #{club}
 
     ## What a fleet can use
 
@@ -191,22 +169,18 @@ defmodule KeyfleetWeb.HomeLive do
   def mount(_params, _session, socket) do
     # Heard before they are read, so a change that lands in between still
     # reaches the page.
-    if connected?(socket), do: Enum.each(keys(), &SharedReading.subscribe/1)
+    if connected?(socket), do: SharedReading.subscribe(FleetNow.key(@classic))
     if connected?(socket), do: follow_agents(current_account(socket.assigns.access_context))
 
     {:ok,
      socket
      |> assign(PublicDocuments.page("/"))
      |> assign(route_spec: RouteCatalog.fetch!("/"), buy_open: false)
-     |> assign(classic: fleet(@classic), club: fleet(@club))}
+     |> assign(classic: fleet(@classic))}
   end
 
-  # Each fleet's reading, and the Club's agents here.
-  defp keys, do: [FleetNow.key(@classic), FleetNow.key(@club), Here.fleet_key(@club)]
-
-  # A fleet as the homepage shows it: its name and sale (`BuyKey.sale/2`),
-  # and from a reading of an open fleet the ships on its sea and what it is
-  # doing right now.
+  # Classic as the homepage shows it: its name and sale (`BuyKey.sale/2`),
+  # and from a reading of the open fleet the ships on its sea.
   defp fleet(fleet_id) do
     found = FleetNow.fetch(fleet_id)
 
@@ -216,35 +190,9 @@ defmodule KeyfleetWeb.HomeLive do
     |> Map.put(:name, Enum.find(Fleets.catalog(), &(&1.id == fleet_id)).name)
   end
 
-  defp seen(_fleet_id, {%{coming_soon?: true}, _degraded?}), do: %{now: nil, ships: []}
-
-  defp seen(fleet_id, {reading, _degraded?}),
-    do: %{now: now(fleet_id, reading), ships: ships(fleet_id, reading)}
-
-  defp seen(_fleet_id, nil), do: %{now: nil, ships: []}
-
-  # What the Club is doing right now: the title of its most recently changed
-  # open goal, the item it features and its latest item, beside who's here.
-  # Classic's part of the homepage shows only its sales.
-  defp now(@classic, _reading), do: nil
-
-  defp now(fleet_id, reading) do
-    latest = List.first(reading.feed.items)
-
-    Map.merge(
-      %{trying: reading.goal, featured: reading.headline || latest, latest: latest},
-      here(fleet_id)
-    )
-  end
-
-  # How many addresses hold the fleet's Keys, as the fleet's own page shows
-  # them from the one shared reading every open page uses.
-  defp here(fleet_id) do
-    case SharedFigures.reading(Here.fleet_key(fleet_id)) do
-      %{holders: holders} -> %{holders: holders}
-      nil -> %{holders: nil}
-    end
-  end
+  defp seen(_fleet_id, {%{coming_soon?: true}, _degraded?}), do: %{ships: []}
+  defp seen(fleet_id, {reading, _degraded?}), do: %{ships: ships(fleet_id, reading)}
+  defp seen(_fleet_id, nil), do: %{ships: []}
 
   @impl true
   def handle_event("open_buy_key", _params, socket),
@@ -253,9 +201,9 @@ defmodule KeyfleetWeb.HomeLive do
   def handle_event("close_buy_key", _params, socket),
     do: {:noreply, assign(socket, :buy_open, false)}
 
-  # A ship on either sea: its Key's profile on its fleet's page.
+  # A ship on Classic's sea: its Key's profile on the fleet's page.
   def handle_event("open_ship", %{"id" => id}, socket) when is_binary(id) do
-    case Enum.find(socket.assigns.classic.ships ++ socket.assigns.club.ships, &(&1.id == id)) do
+    case Enum.find(socket.assigns.classic.ships, &(&1.id == id)) do
       %{fleet_id: fleet_id, token_id: token_id} ->
         {:noreply, push_navigate(socket, to: KeyLinks.key_path(fleet_id, token_id))}
 
@@ -283,9 +231,6 @@ defmodule KeyfleetWeb.HomeLive do
   def handle_info({:shared_reading, {:fleet_now, @classic}}, socket),
     do: {:noreply, assign(socket, :classic, fleet(@classic))}
 
-  def handle_info({:shared_reading, _club_key}, socket),
-    do: {:noreply, assign(socket, :club, fleet(@club))}
-
   # A Key bought here moves Classic's sales, which its reading already
   # follows; the homepage shows no other figure a purchase changes.
   def handle_info({:onchain_landed, _fleet_id}, socket), do: {:noreply, socket}
@@ -298,19 +243,6 @@ defmodule KeyfleetWeb.HomeLive do
     |> Enum.map(&Map.put(&1, :own?, false))
     |> HarbourCrew.sea()
   end
-
-  # What the featured item is, in a word or two.
-  defp label(%{kind: :linked, facts: %{relation: "contradicts"}}), do: "Problem raised"
-  defp label(%{kind: :status, facts: %{status: "achieved"}}), do: "Done"
-  defp label(%{kind: :progress, facts: %{progress: "done"}}), do: "Done"
-  defp label(%{kind: :executed}), do: "Done"
-  defp label(%{kind: :open_question}), do: "Open question"
-  defp label(_item), do: "Latest"
-
-  # The latest item, unless it is the one featured.
-  defp latest(%{latest: nil}), do: nil
-  defp latest(%{latest: %{id: id}, featured: %{id: id}}), do: nil
-  defp latest(%{latest: latest}), do: latest
 
   @impl true
   def render(assigns) do
@@ -365,7 +297,6 @@ defmodule KeyfleetWeb.HomeLive do
             lease={@session_lease}
           />
         </Regent.Structure.row>
-        <Regent.Structure.row rail={false}><.club club={@club} /></Regent.Structure.row>
         <Regent.Structure.row rail={false}>
           <.integrations integrations={@integrations} />
         </Regent.Structure.row>
@@ -618,68 +549,8 @@ defmodule KeyfleetWeb.HomeLive do
 
   defp classic_join, do: @classic_join
 
-  attr :club, :map, required: true
-
-  defp club(assigns) do
-    ~H"""
-    <section id="home-club" class="rl-fleet" aria-labelledby="home-club-title">
-      <.sea id="home-club-sea" layout="club" fleet={@club} />
-
-      <div class="rl-fleet__copy">
-        <h2 id="home-club-title">{@club.name}</h2>
-        <p class="rl-fleet__line">1,998 Keys, one for each Regents Club Pass.</p>
-        <p id="home-club-airdrop" class="rl-fleet__line">{airdrop()}</p>
-
-        <p :if={@club.coming_soon? and !@club.failed?} class="rl-club__who" data-fleet-soon>
-          Opens soon
-        </p>
-        <%!-- Its room is kept while the Club is read, so the button below
-              never moves. --%>
-        <div :if={!@club.coming_soon? or @club.failed?} class="rl-club__now">
-          <p class="rl-club__who" data-fleet-who>
-            <FleetLive.given
-              :if={@club.now}
-              id="home-club-keys"
-              sales={@club.sales}
-              holders={@club.now.holders}
-            />
-          </p>
-          <.right_now :if={@club.now} now={@club.now} />
-          <p :if={@club.failed?} class="rl-club__failed" data-fleet-failed>
-            Couldn’t load this fleet just now.
-          </p>
-        </div>
-
-        <div class="rl-fleet__actions">
-          <.link
-            id="home-club-public"
-            navigate={Fleets.path(@club.id)}
-            class="rg-button rg-button--secondary"
-          >
-            <span class="rg-button__label">Public View</span>
-          </.link>
-          <a
-            id="home-club-opensea"
-            href={FleetLive.opensea_set(@club.id)}
-            class="rg-button rg-button--primary rl-fleet__out"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span class="rg-button__label">
-              Buy Key on OpenSea <span aria-hidden="true">↗</span>
-              <span class="visually-hidden">, opens in a new tab</span>
-            </span>
-          </a>
-        </div>
-      </div>
-    </section>
-    """
-  end
-
-  defp airdrop, do: @airdrop
-
   attr :id, :string, required: true
-  attr :layout, :string, required: true, values: ~w(classic club)
+  attr :layout, :string, required: true, values: ~w(classic)
   attr :fleet, :map, required: true
 
   # A fleet's sea: a ship for each of its most recently active Keys, circling
@@ -701,31 +572,6 @@ defmodule KeyfleetWeb.HomeLive do
         <span class="harbour-sea__tag" data-harbour-tag hidden></span>
       </div>
     </div>
-    """
-  end
-
-  attr :now, :map, required: true
-
-  defp right_now(assigns) do
-    assigns = assign(assigns, :latest, latest(assigns.now))
-
-    ~H"""
-    <p class="rl-club__trying" data-fleet-trying>
-      {if @now.trying, do: "Trying: #{@now.trying}", else: "No goal set yet"}
-    </p>
-    <p
-      :if={@now.featured}
-      class="rl-club__featured"
-      data-fleet-featured
-      data-kind={@now.featured.kind}
-    >
-      <span class="rl-overline">{label(@now.featured)}</span>
-      {ActivityLines.text(@now.featured)}
-    </p>
-    <p :if={@latest} class="rl-club__latest" data-fleet-latest data-kind={@latest.kind}>
-      <span>Latest: {ActivityLines.text(@latest)}</span>
-      <Time.local id="home-club-latest-at" at={@latest.at} as={:moment} />
-    </p>
     """
   end
 

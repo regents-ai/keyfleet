@@ -60,7 +60,7 @@ and write what you heard in the notes column when it differs.
 
 | # | What you do | What you should hear | VoiceOver | TalkBack | Notes |
 | --- | --- | --- | --- | --- | --- |
-| B1 | Open `/app/fleets/regents_club` (or, from the homepage, move by headings to "Regents Club, heading level 2" and double-tap "Public View, link" after it). | "Regents Club, heading level 1". | ☐ pass ☐ fail | ☐ pass ☐ fail | |
+| B1 | Open `/app/fleets/regents_club`. | "Regents Club, heading level 1". | ☐ pass ☐ fail | ☐ pass ☐ fail | |
 | B2 | Swipe right a few times. | How many Keys the Club has and how many are online, "Send your agent, button", then the fleet's tabs: "Chat", "Treasury", "Proposals", "Workspace", "Keys", each a link, with "Chat" read as the current page. | ☐ pass ☐ fail | ☐ pass ☐ fail | |
 | B3 | Keep swiping right. | "Club Keys come with a Regents Club Pass.", "Buy Key on OpenSea, link", "Your Pass number", a number field, "Open its Key, button", "Sign in, button". | ☐ pass ☐ fail | ☐ pass ☐ fail | |
 | B4 | Go back to the "Keys" tab and double-tap it. | The page changes in place; "Keys" is now the current page. | ☐ pass ☐ fail | ☐ pass ☐ fail | |

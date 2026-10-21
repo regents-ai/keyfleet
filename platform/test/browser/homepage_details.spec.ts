@@ -252,7 +252,7 @@ test.describe("on a desktop", () => {
     expect(shows).toEqual(Array(100).fill(100))
   })
 
-  // Classic's deck turns only while it is on screen; the Club has none.
+  // Classic's deck turns only while it is on screen.
   test("Classic's deck of Key cards turns only while on screen", async ({page}) => {
     await page.setViewportSize({width: 1280, height: 700})
     await page.goto("/")
@@ -261,7 +261,6 @@ test.describe("on a desktop", () => {
     await expect(deck).not.toHaveAttribute("data-cards-turning")
     await deck.scrollIntoViewIfNeeded()
     await expect(deck).toHaveAttribute("data-cards-turning")
-    await expect(page.locator("#home-club .key-cards")).toHaveCount(0)
     await page.evaluate(() => window.scrollTo(0, 0))
     await expect(deck).not.toHaveAttribute("data-cards-turning")
   })

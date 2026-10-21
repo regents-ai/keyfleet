@@ -1,8 +1,8 @@
 import {expect, test, type Page} from "@playwright/test"
 
 // The homepage leads with Classic #1: the tagline, its figures and "Buy Next Key" with the
-// Key's card art and price, then Classic Keyfleet with "Buy Key", the Regents Club,
-// what a fleet can use and the starting ideas for a fleet's shared goal.
+// Key's card art and price, then Classic Keyfleet with "Buy Key", what a fleet can use
+// and the starting ideas for a fleet's shared goal.
 
 // No fleet in the test data is deployed, so Classic's sale is closed: "Buy Next Key" says it
 // can't be pressed, with the reason beside it.
@@ -28,7 +28,6 @@ test("the homepage reads without scripts, top to bottom", async ({browser}) => {
   await expect(page.locator("#home-buy-price")).toHaveText("Key 1 · 10 USDC")
   await expect(page.locator("#home-buy-tag")).toHaveText("Key 1 · 10 USDC")
   await expect(page.locator("#home-buy-why")).toHaveText("Sales open soon")
-  await expect(page.getByRole("heading", {name: "Regents Club", level: 2})).toBeVisible()
   await expect(page.locator("#home-integration-tiles > li")).toHaveCount(9)
   await expect(page.getByRole("heading", {name: "Initial Ideas for a Keyfleet to Pursue as a Shared Goal", level: 2}))
     .toBeVisible()
