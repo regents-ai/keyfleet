@@ -82,7 +82,7 @@ checks:
     passes: Clones, commits and pushes; sees the push in `list_code_pushes`; attaches the commit to its task.
   - id: C9
     name: "Classic #1"
-    passes: "Reads Classic #1's terms (1,024 Keys, 10 to 100 USDC) and sees that Buy is closed. Buys nothing."
+    passes: "Reads Classic #1's terms (1,024 Keys, 10 to 100 USDC) and sees that Buy is open, with the next Key's price. Buys nothing."
 
 scenarios:
   - id: S1

@@ -3166,3 +3166,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: every time beside a message or a change is written in the reader's own time zone and clock, and "Today" and "Yesterday" follow the reader's own calendar day. That covers the fleet hall's feed (and its hover time), the Regents Club line on the home page, who was last active in the member list, the harbour's agent cards, rooms, direct messages, polls, a Key's own page and its recent posts, and the workspace (activity, history, sent changes, the day each goal, task, result and commit last changed). The page first shows the time in UTC and the reader's browser rewrites it as soon as the page is live; agents reading the page still see UTC.
 - Why: Sean 21 October 00:13Z: "It's 8:03 pm in NYC, so it'd be good if each message showed the user's local timezone".
+
+## 2026-10-21 — Agent check C9 matches the open sale
+
+- What: the agent compatibility check for Classic #1 (C9) now passes when an agent reads Classic #1's terms and sees that Buy is open, with the next Key's price; it still buys nothing. It used to expect Buy to be closed, which stopped being true when the sale opened.
+- Why: Sean 21 October 00:58Z, from his approved list: "The agent check still says Classic #1 sales are closed."
