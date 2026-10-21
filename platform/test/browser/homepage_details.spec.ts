@@ -261,7 +261,7 @@ test.describe("on a desktop", () => {
     await expect(deck).not.toHaveAttribute("data-cards-turning")
     await deck.scrollIntoViewIfNeeded()
     await expect(deck).toHaveAttribute("data-cards-turning")
-    await expect(page.locator("#home-club .rl-cards")).toHaveCount(0)
+    await expect(page.locator("#home-club .key-cards")).toHaveCount(0)
     await page.evaluate(() => window.scrollTo(0, 0))
     await expect(deck).not.toHaveAttribute("data-cards-turning")
   })

@@ -12,8 +12,8 @@ import {
 } from "./support/motion"
 
 // A fleet page's motion: presses squish and dialogs rise only for a pointer,
-// "Purchase Key" simply opens, a sale rolls its numbers and its line
-// joins the hall's feed, and everything ends clean. Nothing moves for a reader
+// a sale rolls its numbers and its line joins the hall's feed, and everything
+// ends clean. Nothing moves for a reader
 // who asked for less motion.
 const fleet = "fleet_tech_classic"
 const buyer = "0x2222222222222222222222222222222222222222"
@@ -40,10 +40,11 @@ test("a pointer press squishes its control and rises a dialog, all ending clean"
   await expect.poll(() => moved(page, "#fleet-show-chat")).toBe(true)
 
   await page.locator("#fleet-get-key").click()
-  await expect(page.locator("#fleet-about")).toBeVisible()
+  await expect(page.locator("dialog#buy-key")).toBeVisible()
   await expect.poll(() => moved(page, "#fleet-get-key")).toBe(true)
-  await page.waitForTimeout(600)
-  expect(await moved(page, "#fleet-about")).toBe(false)
+  await expect.poll(() => moved(page, "dialog#buy-key")).toBe(true)
+  await page.keyboard.press("Escape")
+  await expect(page.locator("dialog#buy-key")).toHaveCount(0)
 
   await page.locator("#fleet-send-agent").click()
   await expect(page.locator("dialog.send-agent")).toBeVisible()
@@ -60,11 +61,9 @@ test("a keyboard press picks a channel and opens panels and dialogs at once, wit
   await expect(page.locator("#fleet-show-chat")).toHaveAttribute("aria-pressed", "true")
   await page.locator("#fleet-get-key").focus()
   await page.keyboard.press("Enter")
-  await expect(page.locator("#fleet-about")).toBeVisible()
-  // Opening a panel takes the reader to its heading, and again two frames later.
-  await page.evaluate(
-    () => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(done)))),
-  )
+  await expect(page.locator("dialog#buy-key")).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(page.locator("dialog#buy-key")).toHaveCount(0)
   await page.locator("#fleet-send-agent").focus()
   await page.keyboard.press("Enter")
   await expect(page.locator("dialog.send-agent")).toBeVisible()
@@ -138,29 +137,6 @@ test("a sale rolls the count, each digit clipped by class, and its line joins th
   await expect.poll(() => leftovers(page)).toEqual([])
 })
 
-test("a panel closed while its key number rolls shows the new number whole", async ({page}) => {
-  await openFleet(page)
-  await page.locator("#fleet-get-key").click()
-  await expect(page.locator("#buy-key-number")).toBeVisible()
-  const next = String(Number(await plainNumber(page, "buy-key-number")) + 1)
-
-  // The moment the number splits to roll, the reader closes the panel.
-  await page.evaluate(() => {
-    const number = document.querySelector("#buy-key-number [data-count]") as HTMLElement
-    const closeMidRoll = new MutationObserver(() => {
-      if (number.children.length === 0) return
-      closeMidRoll.disconnect()
-      ;(document.querySelector("#fleet-about-close") as HTMLElement).click()
-    })
-    closeMidRoll.observe(number, {childList: true})
-  })
-  sellKey(fleet, buyer)
-
-  await expect(page.locator("#fleet-about")).toBeHidden({timeout: 10_000})
-  expect(await rolled(page, "buy-key-number")).toBe(true)
-  await expect.poll(() => plainNumber(page, "buy-key-number")).toBe(next)
-})
-
 test("a reader who asked for less motion sees presses, panels and a sale without movement", async ({browser}) => {
   const context = await browser.newContext({reducedMotion: "reduce"})
   const page = await context.newPage()
@@ -169,6 +145,9 @@ test("a reader who asked for less motion sees presses, panels and a sale without
 
   await page.locator("#fleet-show-chat").click()
   await page.locator("#fleet-get-key").click()
+  await expect(page.locator("dialog#buy-key")).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(page.locator("dialog#buy-key")).toHaveCount(0)
   await page.locator("#fleet-send-agent").click()
   await expect(page.locator("dialog.send-agent")).toBeVisible()
   await page.keyboard.press("Escape")

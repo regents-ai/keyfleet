@@ -3176,3 +3176,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the phone-size first-visit walk (main_flows) now expects what the site says before a sale opens: Classic #1's page heading reads "Sales open soon", and the homepage's Classic #1 "Buy Key" waits with "Sales open soon" beside it rather than opening the sale's window. Only tests change; the site does not.
 - Why: Sean 21 October 00:58Z, from his approved list: "Two phone-size tests on main fail because of pre-launch wording."
+
+## 2026-10-21 — One Buy Key window everywhere, your Keys above the tabs, and the Regents crown
+
+- What: "Purchase Key" in the header now opens the same Buy Key window on every page, fleet pages included, as it already did on the homepage; a fleet page's "Join this Keyfleet" opens that window too, for its own fleet. The Purchase Key panel that slid open over a fleet page is gone, so the window is the one way to buy a Key here. On a fleet page your Keys (or the Join button) now sit above the tabs, and each Key card is twice the size, with its "Key N" shown only under the pointer or keyboard focus. The header has the Regents crown beside the nine-dot menu, linking to regents.sh. The window keeps Approve and Buy in view after the last Key sells, with the reason Buy can't be pressed beside it, so a buyer still sees how their purchase went. Closing the window no longer stops the page behind it hearing new sales: a page now hears a reading once however many of its parts show it, and keeps hearing it while any part still does.
+- Why: Sean asked for these five changes (20 October 14:02Z).

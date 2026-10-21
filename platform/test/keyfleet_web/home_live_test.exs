@@ -120,7 +120,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   @tag :classic_undeployed
   test "while Classic is coming soon, Buy Next Key can't be pressed and says why",
        %{conn: conn} do
-    {:ok, view, html} = live(conn, "/")
+    {:ok, view, _html} = live(conn, "/")
 
     assert has_element?(
              view,
@@ -136,7 +136,6 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-price-tip") =~
              "Keys increase steadily in cost until 100 USDC for the last Key."
 
-    refute html =~ "?buy"
     refute has_element?(view, "#shell-get-key")
   end
 
@@ -159,15 +158,15 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert has_element?(
              view,
-             ~s(dialog#home-buy-key button#home-buy-key-button[data-onchain-step="buy"])
+             ~s(dialog#buy-key button#buy-key-button[data-onchain-step="buy"])
            )
 
     assert has_element?(
              view,
-             ~s(dialog#home-buy-key button#home-buy-key-approve[data-onchain-step="approve"])
+             ~s(dialog#buy-key button#buy-key-approve[data-onchain-step="approve"])
            )
 
-    refute has_element?(view, "#home-buy-key-go")
+    refute has_element?(view, "#buy-key-go")
   end
 
   test "once Classic is on sale, the header's Purchase Key opens the Buy Key window", %{
@@ -179,7 +178,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     {:ok, view, _html} = live(conn, "/")
     view |> element("button#shell-get-key") |> render_click()
 
-    assert has_element?(view, "dialog#home-buy-key")
+    assert has_element?(view, "dialog#buy-key")
   end
 
   test "once Classic is on sale, Buy Key opens its window: the Key cards turning, how many are sold, Buy and Close",
@@ -190,13 +189,13 @@ defmodule KeyfleetWeb.HomeLiveTest do
     {:ok, view, _html} = live(conn, "/")
     view |> element("button#home-classic-buy") |> render_click()
 
-    assert text(view, "#home-buy-key-title") == "Buy Key"
-    assert has_element?(view, "dialog#home-buy-key #home-buy-key-cards.rl-cards")
-    assert text(view, "#home-buy-key-traits") == "Your Key’s traits are randomized"
-    assert text(view, "dialog#home-buy-key dl dt") == "Sold"
-    assert text(view, "#home-buy-key-sold") == "1 of 1,024"
-    assert has_element?(view, "dialog#home-buy-key #home-buy-key-button")
-    assert has_element?(view, "dialog#home-buy-key #home-buy-key-close", "Close")
+    assert text(view, "#buy-key-title") == "Buy Key"
+    assert has_element?(view, "dialog#buy-key #buy-key-cards.key-cards")
+    assert text(view, "#buy-key-traits") == "Your Key’s traits are randomized"
+    assert text(view, "dialog#buy-key dl dt") == "Sold"
+    assert text(view, "#buy-key-sold") == "1 of 1,024"
+    assert has_element?(view, "dialog#buy-key #buy-key-button")
+    assert has_element?(view, "dialog#buy-key #buy-key-close", "Close")
   end
 
   test "once every Classic Key is sold, Buy Next Key can't be pressed and says so",
@@ -272,7 +271,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
              "Buy Key on OpenSea"
            )
 
-    refute has_element?(view, "#home-club .rl-cards")
+    refute has_element?(view, "#home-club .key-cards")
   end
 
   test "an open homepage draws again when the Club's reading changes", %{conn: conn} do

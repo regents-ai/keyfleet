@@ -10,6 +10,7 @@
 @import "./components/activity.css";
 @import "./components/agent_picture.css";
 @import "./components/send_agent.css";
+@import "./components/buy_key.css";
 @import "./components/wallet_panel.css";
 @import "./components/presence_card.css";
 @import "./components/fleet_risks.css";

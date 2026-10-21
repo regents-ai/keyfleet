@@ -1,0 +1,55 @@
+/* The "Buy Key" window, the one place a Key is bought, on every page: the Key
+   cards turning, a note on their traits, how many are sold, then Approve and
+   Buy. Phones see it across the whole width. Each row keeps its full height,
+   so on a short screen the window scrolls and nothing overlaps. */
+.buy-key { --rg-dialog-size: 26rem; font-size: 1rem; color: var(--color-fg); }
+.buy-key .rg-dialog__body { display: grid; grid-auto-rows: max-content; gap: var(--space-3); }
+.buy-key h2 { margin: 0; font-size: 1.5rem; line-height: 1.1; }
+.buy-key h2:focus { outline: none; }
+.buy-key .key-cards { justify-self: center; inline-size: min(100%, 12rem); }
+.buy-key__note { margin: 0; font-size: .875rem; text-align: center; color: var(--color-fg-muted); }
+.buy-key__facts { display: grid; margin: 0; border-block-start: 1px solid var(--hairline); }
+.buy-key__facts > div {
+  display: flex; justify-content: space-between; gap: var(--space-2); padding-block: var(--space-1);
+  border-block-end: 1px solid var(--hairline);
+}
+.buy-key__facts dt { color: var(--color-fg-muted); }
+.buy-key__facts dd { margin: 0; font-variant-numeric: tabular-nums; text-align: end; }
+.buy-key__actions { display: grid; justify-items: start; gap: var(--space-2); }
+.buy-key__actions form { margin: 0; }
+/* Approve and Buy, with the line saying where a purchase is sent from. */
+#buy-key-order {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  min-width: 0;
+}
+
+.buy-key__why { min-block-size: 1.5em; margin: 0; color: var(--color-fg-muted); font-size: .875rem; }
+
+/* While the sale is closed the button's edge takes the same inert grey as its
+   fill, in both themes. */
+:root .buy-key [aria-disabled="true"]::after {
+  --rg-button-edge-ink: color-mix(in srgb, var(--color-fg) 22%, var(--color-surface));
+  --rg-button-cut-ink: transparent;
+}
+
+/* Close goes nowhere, so it carries no chevron. */
+.buy-key .buy-key__close::after { content: none; }
+
+/* Thirty Key cards turning over, a fifth of a second each, only while they
+   are on screen (`KeyCards` marks them turning). The sheet holds them six
+   across and five down: the rows step down one every six cards while the
+   sheet steps across one each card, so they show in order, and the rows and
+   the sheet stop and start together. Less motion shows the first card
+   alone. */
+.key-cards { inline-size: 9rem; aspect-ratio: 4 / 5; overflow: hidden; }
+.key-cards__rows { inline-size: 600%; block-size: 500%; }
+.key-cards__sheet { display: block; inline-size: 100%; block-size: 100%; }
+@keyframes key-cards-down { to { translate: 0 -100%; } }
+@keyframes key-cards-across { to { translate: -100% 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  .key-cards__rows { animation: key-cards-down 6s steps(5, jump-end) infinite paused; }
+  .key-cards__sheet { animation: key-cards-across 1.2s steps(6, jump-end) infinite paused; }
+  .key-cards[data-cards-turning] :is(.key-cards__rows, .key-cards__sheet) { animation-play-state: running; }
+}

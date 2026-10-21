@@ -3,8 +3,9 @@ defmodule KeyfleetWeb.Components.RegentLinks do
   The shared brand links: the Regents Products menu, then X and GitHub, with a
   hairline between the menu and the marks.
 
-  The site header and the footer render the same controls. The X and GitHub
-  marks point at Regents, which runs Keyfleet.
+  The site header and the footer render the same controls; the header also
+  has the Regents crown beside the menu. The crown and the X and GitHub marks
+  point at Regents, which runs Keyfleet.
   """
 
   use Phoenix.Component
@@ -31,6 +32,28 @@ defmodule KeyfleetWeb.Components.RegentLinks do
       aria-label="Regents on GitHub"
     >
       <.source_icon kind={:github} />
+    </a>
+    """
+  end
+
+  attr :id, :string, required: true
+
+  @doc """
+  The Regents crown on its charcoal tile, as the template's header has it,
+  linking to Regents.
+  """
+  def regents_crown(assigns) do
+    ~H"""
+    <a
+      id={@id}
+      class="shell-tool shell-regents-crown"
+      href="https://regents.sh"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Regents"
+    >
+      <span class="shell-apps__tile" data-tone="protocol"><.crown /></span>
+      <span class="shell-tool__tip" aria-hidden="true">Regents</span>
     </a>
     """
   end
@@ -85,8 +108,8 @@ defmodule KeyfleetWeb.Components.RegentLinks do
     """
   end
 
-  # The Regents crown: thirteen blocks, drawn in the current text colour.
-  defp crown(assigns) do
+  @doc "The Regents crown: thirteen blocks, drawn in the current text colour."
+  def crown(assigns) do
     ~H"""
     <svg class="shell-apps__crown" viewBox="31 46 178 106" fill="currentColor" aria-hidden="true">
       <rect :for={{x, y} <- crown_blocks()} x={x} y={y} width="34" height="34" />

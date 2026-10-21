@@ -1,16 +1,16 @@
 defmodule KeyfleetWeb.FleetLive do
   @moduledoc """
   One fleet's page, under a slim bar with the fleet's name, how many keys it
-  has sold and how many agents are here, "Send your agent", and one row of
-  five tabs: Chat, Workspace, Treasury, Keys and Proposals.
+  has sold and how many agents are here, "Send your agent", one way in, and
+  one row of five tabs: Chat, Workspace, Treasury, Keys and Proposals.
 
-  Under the bar is one way in, whichever applies first: the reader's own Key
-  to enter as, the Regents Club Pass a Club Key comes with, the Key on sale,
-  or signing in. A fleet that sells Keys offers the next one by its price
-  to someone holding none of its Keys; it opens "Purchase Key"
-  over the page, with the Key on offer and its Buy button at its top. Opened
-  with `?buy`, the page is drawn with it already pressed. Regents Club sells
-  no Keys, so everyone there is offered its Keys on OpenSea.
+  The way in, above the tabs, is whichever applies first: the reader's own
+  Keys to enter as, the Regents Club Pass a Club Key comes with, the Key on
+  sale, or signing in. A fleet that sells Keys offers the next one by its
+  price to someone holding none of its Keys; it opens the "Buy Key" window
+  (`KeyfleetWeb.Components.BuyKey`), as "Purchase Key" in the header does.
+  Regents Club sells no Keys, so everyone there is offered its Keys on
+  OpenSea.
 
   "Chat" is the hall, the page's first view: the fleet's channels down the left, everything
   happening in it as one live feed in the middle, which its channels narrow
@@ -242,11 +242,7 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   def page(assigns) do
-    assigns =
-      assign(assigns,
-        view: view(assigns.place, assigns.params),
-        buying?: buying?(assigns.params, assigns.fleet)
-      )
+    assigns = assign(assigns, :view, view(assigns.place, assigns.params))
 
     ~H"""
     <article id="fleet-page" class="fleet-page">
@@ -264,14 +260,6 @@ defmodule KeyfleetWeb.FleetLive do
         class="fleet-view"
         data-view={@view}
       >
-        <span
-          :if={@buying?}
-          id="fleet-get-key-on-arrival"
-          hidden
-          phx-mounted={
-            get_key() |> JS.patch(KeyLinks.closed_path(@fleet.fleet_id, @params), replace: true)
-          }
-        />
         <header class="fleet-bar">
           <div class="fleet-bar__title">
             <h1 tabindex="-1">{@fleet.name}</h1>
@@ -293,6 +281,15 @@ defmodule KeyfleetWeb.FleetLive do
             />
             <.agent_files />
           </div>
+
+          <.entry
+            :if={@view not in [:workspace, :proposals, :treasury]}
+            fleet={@fleet}
+            actor={@actor}
+            params={@params}
+            profile={@profile}
+            pass_note={@pass_note}
+          />
 
           <nav id="fleet-tabs" class="fleet-bar__nav" aria-label="This fleet" phx-hook="CurrentTab">
             <.link
@@ -338,15 +335,6 @@ defmodule KeyfleetWeb.FleetLive do
           </nav>
         </header>
 
-        <.entry
-          :if={@view not in [:workspace, :proposals, :treasury]}
-          fleet={@fleet}
-          actor={@actor}
-          params={@params}
-          profile={@profile}
-          pass_note={@pass_note}
-        />
-
         <div class="fleet-stage">
           {render_slot(@inner_block)}
           <.hall
@@ -371,7 +359,6 @@ defmodule KeyfleetWeb.FleetLive do
             params={@params}
             profile_open?={@profile != nil}
           />
-          <.get_a_key :if={@fleet.buy} fleet={@fleet} actor={@actor} lease={@lease} buying={@buying?} />
         </div>
       </div>
 
@@ -424,36 +411,16 @@ defmodule KeyfleetWeb.FleetLive do
   defp view(:fleet, _params), do: :hall
   defp view(place, _params), do: place
 
-  # "Buy Key" opens "Purchase Key" and takes the reader to the Key on offer. An
-  # address ending in `?buy` is drawn that way; on arrival it then drops
-  # `?buy` from the address so the next press of "Buy Key" opens it again.
-  defp get_key do
-    %JS{}
-    |> JS.remove_attribute("hidden", to: "#fleet-about")
-    |> JS.set_attribute({"aria-expanded", "true"}, to: "#fleet-get-key")
-    |> JS.focus(to: "#buy-key-title")
-  end
-
-  # Whether the address asks for the page with "Purchase Key" pressed, on a
-  # fleet with a Key to buy.
-  defp buying?(params, fleet), do: Map.has_key?(params, "buy") and Map.get(fleet, :buy) != nil
-
-  defp close(panel, button) do
-    %JS{}
-    |> JS.set_attribute({"hidden", "hidden"}, to: panel)
-    |> JS.set_attribute({"aria-expanded", "false"}, to: button)
-    |> JS.focus(to: button)
-  end
-
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
   attr :params, :map, required: true
   attr :profile, :any, required: true, doc: "the Key profile open over the page, or nil"
   attr :pass_note, :string, default: nil
 
-  # The one way in, under the bar: the reader's own Keys, the Club Pass a Club
+  # The one way in, above the tabs: the reader's own Keys, the Club Pass a Club
   # Key comes with, the Key on sale, or signing in, whichever applies first.
-  # A holder's cards sit in a row that scrolls sideways, each opening its Key.
+  # A holder's cards sit in a row that scrolls sideways, each opening its Key
+  # and naming it under a pointer or keyboard focus.
   defp entry(%{fleet: %{held: %{first: token_id, count: count, cards: cards}}} = assigns) do
     assigns = assign(assigns, token_id: token_id, count: count, more: count - length(cards))
 
@@ -470,18 +437,19 @@ defmodule KeyfleetWeb.FleetLive do
             patch={KeyLinks.key_path(@fleet.fleet_id, card.token_id, @params)}
             replace={@profile != nil}
             aria-current={card.token_id == @fleet.chosen_key && "true"}
+            aria-label={"Key #{grouped(card.token_id)}"}
           >
             <img
               :if={card.image}
               src={card.image}
               alt=""
-              width="48"
-              height="60"
+              width="96"
+              height="120"
               loading="lazy"
               decoding="async"
             />
             <span :if={!card.image} class="fleet-entry__blank"></span>
-            Key {grouped(card.token_id)}
+            <span class="fleet-entry__name" aria-hidden="true">Key {grouped(card.token_id)}</span>
           </.link>
         </li>
         <li :if={@more > 0} id="fleet-entry-more" class="fleet-entry__more">
@@ -535,7 +503,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp entry(%{fleet: %{buy: %{price: price}}} = assigns) when price != nil do
     ~H"""
     <section id="fleet-entry" class="fleet-entry" data-entry="buy" aria-label="Purchase Key">
-      <.buy_key_button buy={@fleet.buy} />
+      <.buy_key_button fleet_id={@fleet.fleet_id} buy={@fleet.buy} />
     </section>
     """
   end
@@ -559,18 +527,19 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
+  attr :fleet_id, :string, required: true
   attr :buy, :map, required: true
 
-  # Opens "Purchase Key" at the Key on sale; the panel holds the wallet's button.
+  # Opens the "Buy Key" window for the fleet; the window holds the wallet's
+  # buttons.
   defp buy_key_button(assigns) do
     ~H"""
     <Regent.Primitives.button
       id="fleet-get-key"
       type="button"
-      aria-controls="fleet-about"
-      aria-expanded="false"
-      phx-mounted={JS.ignore_attributes(["aria-expanded"])}
-      phx-click={get_key()}
+      phx-click="open_buy_key"
+      phx-value-fleet={@fleet_id}
+      aria-haspopup="dialog"
     >
       Join this Keyfleet by purchasing the next Key: {usdc(@buy.price)}
     </Regent.Primitives.button>
@@ -1045,43 +1014,6 @@ defmodule KeyfleetWeb.FleetLive do
   defp activity_part(assigns), do: ~H"{@part}"
 
   attr :fleet, :map, required: true
-  attr :actor, :any, required: true
-  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
-
-  attr :buying, :boolean,
-    required: true,
-    doc: "whether the page opens with \"Purchase Key\" pressed"
-
-  # Opens over the hall, the map or the list of Keys on a fleet with a Key to
-  # buy: the Key on offer with its Buy button, then the fleet's pricing.
-  defp get_a_key(assigns) do
-    ~H"""
-    <aside
-      id="fleet-about"
-      class="fleet-about"
-      aria-labelledby="fleet-about-title"
-      hidden={not @buying}
-    >
-      <div class="fleet-about__heading">
-        <h2 id="fleet-about-title" tabindex="-1">Purchase Key</h2>
-        <Regent.Primitives.button
-          id="fleet-about-close"
-          class="fleet-about__close"
-          variant="secondary"
-          phx-click={close("#fleet-about", "#fleet-get-key")}
-        >
-          Close
-        </Regent.Primitives.button>
-      </div>
-
-      <.buy_key fleet={@fleet} actor={@actor} lease={@lease} />
-
-      <p>{Rules.pricing(@fleet.fleet_id)}</p>
-    </aside>
-    """
-  end
-
-  attr :fleet, :map, required: true
 
   # A fleet not yet on Base shows a still picture of its map as it will open,
   # while the bar above says it isn't on Base yet.
@@ -1214,9 +1146,6 @@ defmodule KeyfleetWeb.FleetLive do
           also under List.
         </Regent.Primitives.tip>
         <p id="key-map-selected" role="status">
-          <span :if={@fleet.buy && @fleet.buy.price} class="key-map-selected__offer">
-            Key {grouped(@fleet.buy.token_id)} · {usdc(@fleet.buy.price)}
-          </span>
           <span class="key-map-selected__chosen">
             {if @fleet.chosen_key,
               do: "Key #{grouped(@fleet.chosen_key)} chosen.",
@@ -1236,65 +1165,6 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
-  attr :fleet, :map, required: true
-  attr :actor, :any, required: true
-  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
-
-  # The top of the panel: the Key on offer and its price, with Approve and Buy
-  # straight under it, then what a buyer should know. The heading and the lines
-  # under the buttons read the same figures as the buttons, so all of them name
-  # the Key and price a press sends.
-  defp buy_key(assigns) do
-    ~H"""
-    <section id="buy-key" aria-labelledby="buy-key-title">
-      <.buy_order id="buy-key" fleet={@fleet} actor={@actor} lease={@lease}>
-        <:heading :let={panel}>
-          <h3 id="buy-key-title" class="fleet-buy-title" tabindex="-1">
-            <span id="buy-key-offer" class="fleet-buy-offer" hidden={!on_sale(panel, :price)}>
-              Key
-              <span
-                id="buy-key-number"
-                phx-hook="MotionCount"
-                data-variant={Motion.standard("count")}
-              >
-                <span data-count>
-                  {key_on_sale(panel)}
-                </span>
-              </span>
-              ·
-              <span id="buy-key-price" phx-hook="MotionCount" data-variant={Motion.standard("count")}>
-                <span data-count>{on_sale(panel, :price) && usdc(on_sale(panel, :price))}</span>
-              </span>
-              <span :if={level(@fleet, panel)} id="buy-key-level">
-                · Level {level(@fleet, panel)}
-              </span>
-            </span>
-            <span :if={!on_sale(panel, :price)}>Buying a Key</span>
-            <Regent.Primitives.tip :if={on_sale(panel, :price)} id="buy-key-tip" label="About paying">
-              Paid in USDC on Base from your wallet. If someone buys this Key first, you get the
-              next one, as long as it costs no more than {usdc(on_sale(panel, :max_price))}, and
-              you pay only its price. If your wallet hasn’t already allowed that much USDC, press
-              Approve first.
-            </Regent.Primitives.tip>
-          </h3>
-        </:heading>
-        <:details :let={panel}>
-          <p :if={buy_blocked(panel) == :sold_out} id="buy-key-elsewhere" class="fleet-detail">
-            You can still get a Key from someone who holds one: it moves like any other token on
-            Base.
-          </p>
-        </:details>
-      </.buy_order>
-    </section>
-    """
-  end
-
-  # The level the Key on sale opens, on a fleet whose Keys come in levels.
-  defp level(fleet, panel) do
-    token_id = on_sale(panel, :token_id)
-    if token_id && Presets.levelled?(fleet.fleet_id), do: Presets.fibonacci_level_of(token_id)
-  end
-
   attr :id, :string, required: true, doc: "names the group and prefixes its buttons' ids"
 
   attr :fleet, :map,
@@ -1303,12 +1173,10 @@ defmodule KeyfleetWeb.FleetLive do
 
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
-  slot :heading, doc: "above the buttons, given the panel's state"
-  slot :details, doc: "under the buttons and what was sent, given the panel's state"
 
   @doc """
   Approve and Buy for the Key on sale, with the steps built on the server, in
-  "Buying a Key" and in the window of the Key on sale.
+  the "Buy Key" window and in the window of the Key on sale.
 
   The Key's number, its price and whether the fleet is sold out come from
   the figures the steps were built from, read from the chain at the latest
@@ -1334,8 +1202,6 @@ defmodule KeyfleetWeb.FleetLive do
       lease={@lease}
       refresh={@fleet.progress.total_minted}
       inputs={%{"unlimited" => "false"}}
-      heading={@heading}
-      details={@details}
     >
       <:buttons :let={panel}>
         <%!-- A form of its own, so the box sits right above Approve, outside

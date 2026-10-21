@@ -43,7 +43,7 @@ defmodule KeyfleetWeb.ShellLive do
     WorkspaceLive
   }
 
-  alias KeyfleetWeb.Components.Reading
+  alias KeyfleetWeb.Components.{BuyKey, Reading}
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.{PublicDocuments, RouteCatalog}
   alias Phoenix.Socket.Broadcast
@@ -129,6 +129,7 @@ defmodule KeyfleetWeb.ShellLive do
        poll_form: nil,
        polls_notice: nil,
        shared: %{},
+       buy_key: nil,
        send_agent_open: false,
        pass_note: nil,
        quotes: nil
@@ -362,6 +363,23 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
+  # "Purchase Key" in the header and a fleet page's "Join this Keyfleet" open
+  # the "Buy Key" window for a fleet that sells its Keys, drawn from the
+  # fleet's reading every page shares and drawn again as it changes.
+  defp press("open_buy_key", %{"fleet" => fleet_id}, socket) do
+    if fleet_id in Fleets.catalog_ids() and not Presets.given?(fleet_id) do
+      {:noreply,
+       socket
+       |> SharedFigures.follow(:buy_key, [FleetNow.key(fleet_id)])
+       |> assign(:buy_key, BuyKey.sale(fleet_id))}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  defp press("close_buy_key", _params, socket),
+    do: {:noreply, socket |> SharedFigures.follow(:buy_key, []) |> assign(:buy_key, nil)}
+
   defp press(event, params, socket) when event in @room_events,
     do: RoomsLive.handle_event(event, params, socket)
 
@@ -580,10 +598,16 @@ defmodule KeyfleetWeb.ShellLive do
        |> FleetLive.shared_changed(key)
        |> KeyProfileLive.shared_changed(key)
        |> ProposalsLive.shared_changed(key)
-       |> PollsLive.shared_changed(key)}
+       |> PollsLive.shared_changed(key)
+       |> buy_key_changed(key)}
 
   defp notice({:refresh_activity, _fleet_id} = message, socket),
     do: FleetLive.handle_info(message, socket)
+
+  defp buy_key_changed(%{assigns: %{buy_key: %{id: fleet_id}}} = socket, {:fleet_now, fleet_id}),
+    do: assign(socket, :buy_key, BuyKey.sale(fleet_id))
+
+  defp buy_key_changed(socket, _key), do: socket
 
   @impl true
   def handle_async({Read, _name, _generation} = name, result, socket) do
@@ -618,6 +642,9 @@ defmodule KeyfleetWeb.ShellLive do
           account={current_account(@access_context)}
         />
       </:pairing>
+      <:buy_key :if={@buy_key}>
+        <BuyKey.window sale={@buy_key} actor={actor(@access_context)} lease={@session_lease} />
+      </:buy_key>
       <:content :if={@load_failed?}>
         <article id="page-load-failed" class="fleet-page">
           <section class="fleet-panel">

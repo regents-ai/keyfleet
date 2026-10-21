@@ -817,6 +817,19 @@ span.account-chip {
   height: 1.5rem;
 }
 
+/* The Regents crown beside the nine dots, on its charcoal tile, the size of
+   the marks beside it. */
+.shell-regents-crown .shell-apps__tile {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.rl-header-links .shell-regents-crown .shell-apps__crown {
+  display: block;
+  width: 70%;
+  height: auto;
+}
+
 @media (hover: hover) {
   .shell-tool:hover {
     background: color-mix(in oklch, var(--color-fg) 6%, transparent);

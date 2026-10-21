@@ -1,9 +1,10 @@
 import {expect, test, type Page} from "@playwright/test"
-import {prepareFleet} from "./support/fleet_chain"
+import {installAuthenticatedPrivy} from "./support/authenticated_privy"
+import {prepareFleet, sellKey} from "./support/fleet_chain"
 
 // A fleet page's layout: the hall's columns scroll inside the fleet's box and
-// never run past its edge, and the way in is a filled Tangerine button with
-// Charcoal words in both themes.
+// never run past its edge, the way in sits in the bar above the tabs, and it
+// is a filled Tangerine button with Charcoal words in both themes.
 const fleet = "fleet_tech_classic"
 
 test.beforeAll(() => {
@@ -71,41 +72,51 @@ for (const scheme of ["light", "dark"] as const) {
   })
 }
 
-// Nothing in the fleet's box sits under the open "Purchase Key" panel (Sean, 19
-// October 2026): on a wide screen what the box holds moves over to leave the
-// panel its own column, and narrower the panel covers the whole box.
-const underPanel = (page: Page) =>
-  page.evaluate(() => {
-    const panel = document.querySelector("#fleet-about")!.getBoundingClientRect()
-    return [...document.querySelectorAll(".fleet-stage *")]
-      .filter(el => !el.closest("#fleet-about") && el.children.length === 0 && el.textContent!.trim())
-      .filter(el => {
-        const box = el.getBoundingClientRect()
-        return box.width > 0 && box.right > panel.left + 1 && box.left < panel.left && box.bottom > panel.top && box.top < panel.bottom
-      })
-      .map(el => el.textContent!.trim().slice(0, 40))
-  })
+// The way in sits in the fleet's bar, above its tabs, and opens the "Buy Key"
+// window, as the header's "Purchase Key" does (Sean, 20 October 2026).
+test("the way in sits above the tabs and opens the Buy Key window, as Purchase Key does", async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900})
+  await openFleet(page)
 
-for (const width of [1440, 1280, 1024]) {
-  test(`at ${width} wide nothing in the box sits under the open "Purchase Key"`, async ({page}) => {
-    await page.setViewportSize({width, height: 900})
-    await page.goto(`/classic/1?buy`)
-    await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
-    await expect(page.locator("#fleet-about")).toBeVisible()
+  const [entry, tabs] = await Promise.all(["#fleet-entry", "#fleet-tabs"].map(id => page.locator(id).boundingBox()))
+  expect(entry!.y + entry!.height).toBeLessThanOrEqual(tabs!.y + 1)
+  expect(await page.locator("header.fleet-bar #fleet-entry + #fleet-tabs").count()).toBe(1)
 
-    for (const tab of ["hall", "treasury"]) {
-      if (tab === "treasury") {
-        await page.locator("#fleet-tab-treasury").click()
-        await expect(page.locator("#fleet-view")).toHaveAttribute("data-view", "treasury")
-        await expect(page.locator("#fleet-about")).toBeVisible()
-      }
-      expect(await underPanel(page)).toEqual([])
-      if (width < 1120) {
-        const [panel, stage] = await Promise.all(
-          ["#fleet-about", "#fleet-view > .fleet-stage"].map(selector => page.locator(selector).boundingBox()),
-        )
-        expect(Math.abs(panel!.x - stage!.x)).toBeLessThanOrEqual(1)
-      }
-    }
-  })
-}
+  for (const opener of ["#fleet-get-key", "#shell-get-key"]) {
+    await page.locator(opener).click()
+    const window = page.locator("dialog#buy-key")
+    await expect(window).toBeVisible()
+    await expect(window.locator("#buy-key-button")).toBeVisible()
+    await window.locator("#buy-key-close").click()
+    await expect(window).toHaveCount(0)
+  }
+})
+
+// A holder's Keys show as cards twice the old size, each naming its Key only
+// under the pointer (Sean, 20 October 2026). The Key is sold on a fleet of its
+// own, so the Classic fleet the other walks open stays as they expect it.
+test("a holder's cards are 96 wide and name their Key under the pointer", async ({page}) => {
+  prepareFleet("fibonacci_cascade")
+  sellKey("fibonacci_cascade", "0x1111111111111111111111111111111111111111")
+  await page.setViewportSize({width: 1440, height: 900})
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await page.goto(`/cascade/1`)
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+
+  const card = page.locator("#fleet-entry-cards .fleet-entry__card").first()
+  await expect(card).toBeVisible()
+  expect(Math.round((await card.locator("img, .fleet-entry__blank").first().boundingBox())!.width)).toBe(96)
+  const name = card.locator(".fleet-entry__name")
+  await expect(name).toHaveCSS("opacity", "0")
+  await card.hover()
+  await expect(name).toHaveCSS("opacity", "1")
+  await expect(name).toHaveText(/^Key [0-9,]+$/)
+
+  // Keyboard focus shows the name at once, with nothing fading.
+  await page.mouse.move(0, 0)
+  await expect(name).toHaveCSS("opacity", "0")
+  await card.evaluate(el => (el as HTMLElement).blur())
+  await page.keyboard.press("Tab")
+  await card.focus()
+  expect(await name.evaluate(el => [getComputedStyle(el).opacity, el.getAnimations().length])).toEqual(["1", 0])
+})

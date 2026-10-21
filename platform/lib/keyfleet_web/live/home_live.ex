@@ -18,13 +18,11 @@ defmodule KeyfleetWeb.HomeLive do
   thirty Keys of no fleet, a fifth of a second each, turning only while on
   screen.
 
-  "Buy Key" opens a window with the same cards turning, where its price goes,
-  how many of the 1,024 Keys have sold, the next Key's price and the one after
-  it. It follows the same sale as "Buy Next Key": closed, with the reason
-  beside it, until the sale opens, then the fleet's own Approve and Buy
-  (`KeyfleetWeb.FleetLive.buy_order/1`), so a Key is bought without leaving
-  the homepage. The page holds the sign-in the way the fleet's pages do, so
-  those steps act for whoever is signed in.
+  "Buy Key" opens the "Buy Key" window (`KeyfleetWeb.Components.BuyKey`),
+  the one every page opens to buy a Key, so a Key is bought without leaving
+  the homepage. It follows the same sale as "Buy Next Key". The page holds
+  the sign-in the way the fleet's pages do, so its Approve and Buy act for
+  whoever is signed in.
 
   "Buy Next Key" names the Key on offer and its price, read from the fleet's
   sales. While Classic is coming soon, or once it has sold every Key, the
@@ -57,7 +55,6 @@ defmodule KeyfleetWeb.HomeLive do
 
   alias Keyfleet.Agents.Here
   alias Keyfleet.Fleets
-  alias Keyfleet.Fleets.Presets
   alias Keyfleet.GoalIdeas
   alias Keyfleet.SharedReading
 
@@ -65,7 +62,6 @@ defmodule KeyfleetWeb.HomeLive do
     ActivityLines,
     FleetLive,
     FleetNow,
-    FleetPage,
     HarbourCrew,
     KeyLinks,
     Motion,
@@ -76,7 +72,7 @@ defmodule KeyfleetWeb.HomeLive do
     Time
   }
 
-  alias KeyfleetWeb.Components.{SendAgent, Shell}
+  alias KeyfleetWeb.Components.{BuyKey, SendAgent, Shell}
 
   @classic "fleet_tech_classic"
   @club "regents_club"
@@ -207,69 +203,24 @@ defmodule KeyfleetWeb.HomeLive do
   # Each fleet's reading, and the Club's agents here.
   defp keys, do: [FleetNow.key(@classic), FleetNow.key(@club), Here.fleet_key(@club)]
 
-  # A fleet as the homepage shows it: its name, the ships on its sea, and what
-  # was last read of it. A fleet whose last read failed keeps what was read
-  # before and says the read failed; one never read shows as the catalog has
-  # it.
+  # A fleet as the homepage shows it: its name and sale (`BuyKey.sale/2`),
+  # and from a reading of an open fleet the ships on its sea and what it is
+  # doing right now.
   defp fleet(fleet_id) do
-    {shown, failed?} =
-      case FleetNow.fetch(fleet_id) do
-        {reading, degraded?} -> {shown(fleet_id, reading), degraded?}
-        nil -> {unread(fleet_id), true}
-      end
+    found = FleetNow.fetch(fleet_id)
 
-    Map.merge(shown, %{
-      id: fleet_id,
-      name: Enum.find(Fleets.catalog(), &(&1.id == fleet_id)).name,
-      failed?: failed?
-    })
+    fleet_id
+    |> BuyKey.sale(found)
+    |> Map.merge(seen(fleet_id, found))
+    |> Map.put(:name, Enum.find(Fleets.catalog(), &(&1.id == fleet_id)).name)
   end
 
-  defp shown(_fleet_id, %{coming_soon?: true}),
-    do: %{coming_soon?: true, sales: nil, now: nil, ships: []}
+  defp seen(_fleet_id, {%{coming_soon?: true}, _degraded?}), do: %{now: nil, ships: []}
 
-  defp shown(fleet_id, reading),
-    do: %{
-      coming_soon?: false,
-      sales: sales(fleet_id, reading),
-      now: now(fleet_id, reading),
-      ships: ships(fleet_id, reading)
-    }
+  defp seen(fleet_id, {reading, _degraded?}),
+    do: %{now: now(fleet_id, reading), ships: ships(fleet_id, reading)}
 
-  # A fleet before its first read: a coming-soon one as the catalog has it,
-  # any other with nothing sold.
-  defp unread(fleet_id) do
-    if Fleets.coming_soon?(fleet_id, nil),
-      do: %{coming_soon?: true, sales: nil, now: nil, ships: []},
-      else: %{
-        coming_soon?: false,
-        sales: sales(fleet_id, %{deployed?: false, chain_id: nil, current?: false, minted: 0}),
-        now: nil,
-        ships: []
-      }
-  end
-
-  # How far a fleet has sold. A fleet not yet deployed has sold nothing; one
-  # whose sales are still being read isn't current. The Key on offer is the
-  # one its fleet page's Buy button names.
-  defp sales(fleet_id, %{
-         deployed?: deployed?,
-         chain_id: chain_id,
-         current?: current?,
-         minted: minted
-       }) do
-    progress = Presets.progress(fleet_id, minted)
-
-    %{
-      deployed?: deployed?,
-      current?: current?,
-      chain_id: chain_id,
-      progress: progress,
-      keys: minted,
-      given?: Presets.given?(fleet_id),
-      buy: if(deployed?, do: FleetPage.next_sale(fleet_id, progress))
-    }
-  end
+  defp seen(_fleet_id, nil), do: %{now: nil, ships: []}
 
   # What the Club is doing right now: the title of its most recently changed
   # open goal, the item it features and its latest item, beside who's here.
@@ -374,7 +325,6 @@ defmodule KeyfleetWeb.HomeLive do
       <Shell.header
         account_control={@account_control}
         get_key={not @classic.coming_soon?}
-        get_key_link={:buy_key}
         menu={false}
         theme={true}
         fleets
@@ -429,7 +379,7 @@ defmodule KeyfleetWeb.HomeLive do
 
   # The headline is the tagline, with its last words in the accent colour.
   defp hero(assigns) do
-    assigns = assign(assigns, offer(assigns.classic))
+    assigns = assign(assigns, BuyKey.offer(assigns.classic))
 
     ~H"""
     <section id="home-hero" class="rl-hero" aria-labelledby="home-title" data-field-scope>
@@ -500,7 +450,7 @@ defmodule KeyfleetWeb.HomeLive do
   # hundred real Keys over the pass (NextKeyCard draws both); the shuffle's
   # picture loads only once the dust shows.
   defp buy_next_key(assigns) do
-    assigns = assign(assigns, offer(assigns.classic))
+    assigns = assign(assigns, BuyKey.offer(assigns.classic))
 
     ~H"""
     <div id="home-buy" class="rl-buy" data-buy={@state} data-key-preview>
@@ -607,37 +557,6 @@ defmodule KeyfleetWeb.HomeLive do
     """
   end
 
-  # Classic as the catalog has it, when its record couldn't be read.
-  defp offer(%{failed?: true, sales: nil} = classic),
-    do: %{offer(%{classic | failed?: false}) | cost: "—", why: "Couldn’t read sales just now"}
-
-  defp offer(%{coming_soon?: true}) do
-    %{next_token_id: token_id, next_price: price} = Presets.progress(@classic, 0)
-
-    %{
-      state: :soon,
-      cost: FleetLive.usdc(price),
-      price: price(token_id, price),
-      why: "Sales open soon"
-    }
-  end
-
-  defp offer(%{sales: %{buy: %{price: nil}}}) do
-    max = grouped(Presets.max_supply(@classic))
-    %{state: :sold_out, cost: "Sold out", price: nil, why: "#{max}/#{max} Keys sold"}
-  end
-
-  defp offer(%{sales: %{buy: buy}}) do
-    %{
-      state: :open,
-      cost: FleetLive.usdc(buy.price),
-      price: price(buy.token_id, buy.price),
-      why: nil
-    }
-  end
-
-  defp price(token_id, price), do: "Key #{grouped(token_id)} · #{FleetLive.usdc(price)}"
-
   attr :classic, :map, required: true
   attr :buy_open, :boolean, required: true
   attr :actor, :any, required: true
@@ -647,7 +566,7 @@ defmodule KeyfleetWeb.HomeLive do
   # over, its public page and "Buy Key". "Buy Key" follows the same sale as
   # "Buy Next Key": closed, with the reason under it, until the sale opens.
   defp classic(assigns) do
-    assigns = assign(assigns, :offer, offer(assigns.classic))
+    assigns = assign(assigns, :offer, BuyKey.offer(assigns.classic))
 
     ~H"""
     <section id="home-classic" class="rl-fleet" aria-labelledby="home-classic-title">
@@ -656,7 +575,7 @@ defmodule KeyfleetWeb.HomeLive do
       <div class="rl-fleet__copy">
         <h2 id="home-classic-title">Classic Keyfleet</h2>
         <p id="home-classic-join" class="rl-fleet__line">{classic_join()}</p>
-        <.cards id="home-classic-cards" />
+        <BuyKey.cards id="home-classic-cards" />
         <div class="rl-fleet__actions">
           <.link
             id="home-classic-public"
@@ -688,94 +607,12 @@ defmodule KeyfleetWeb.HomeLive do
         <p :if={@offer.why} id="home-classic-why" class="rl-fleet__why">{@offer.why}</p>
       </div>
 
-      <.buy_key :if={@buy_open} classic={@classic} actor={@actor} lease={@lease} />
+      <BuyKey.window :if={@buy_open} sale={@classic} actor={@actor} lease={@lease} />
     </section>
     """
   end
 
   defp classic_join, do: @classic_join
-
-  attr :classic, :map, required: true
-  attr :actor, :any, required: true
-  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
-
-  # The window "Buy Key" opens: the Key cards turning, how far the sale has
-  # gone, and once the sale is open the fleet's own Approve and Buy. Until
-  # then its Buy is closed, with the reason right under it, so a phone that
-  # scrolls the window sees both together.
-  defp buy_key(assigns) do
-    assigns =
-      assigns |> assign(offer(assigns.classic)) |> assign(:sold, sold_count(assigns.classic))
-
-    ~H"""
-    <Regent.Structure.dialog
-      id="home-buy-key"
-      class="rl-buy-key"
-      phx-hook="ModalDialog"
-      phx-mounted={JS.ignore_attributes(["open", "style"])}
-      data-close-event="close_buy_key"
-      aria-labelledby="home-buy-key-title"
-    >
-      <h2 id="home-buy-key-title" tabindex="-1" data-modal-title>Buy Key</h2>
-      <.cards id="home-buy-key-cards" />
-      <p id="home-buy-key-traits" class="rl-buy-key__note">Your Key’s traits are randomized</p>
-      <dl class="rl-buy-key__facts">
-        <div>
-          <dt>Sold</dt>
-          <dd id="home-buy-key-sold">{@sold}</dd>
-        </div>
-      </dl>
-      <FleetLive.buy_order
-        :if={@state == :open}
-        id="home-buy-key"
-        fleet={
-          %{
-            fleet_id: @classic.id,
-            chain_id: @classic.sales.chain_id,
-            progress: @classic.sales.progress
-          }
-        }
-        actor={@actor}
-        lease={@lease}
-      />
-      <div class="rl-buy-key__actions">
-        <Regent.Primitives.button
-          :if={@state != :open}
-          id="home-buy-key-go"
-          aria-disabled="true"
-          aria-describedby="home-buy-key-why"
-        >
-          Buy Key
-        </Regent.Primitives.button>
-        <p :if={@state != :open} id="home-buy-key-why" class="rl-buy-key__why">{@why}</p>
-        <form method="dialog">
-          <Regent.Primitives.button
-            id="home-buy-key-close"
-            class="rl-buy-key__close"
-            type="submit"
-            variant="secondary"
-          >
-            Close
-          </Regent.Primitives.button>
-        </form>
-      </div>
-    </Regent.Structure.dialog>
-    """
-  end
-
-  # How many of the 1,024 Keys have sold, and the price of the Key after the
-  # one on offer. Before the sale opens nothing has sold and the first Key is
-  # on offer.
-  defp sold_count(classic) do
-    max = Presets.max_supply(@classic)
-
-    case classic do
-      %{failed?: true, sales: nil} -> "—"
-      %{sales: nil} -> "0 of #{grouped(max)}"
-      %{sales: %{current?: false}} -> "Catching up"
-      %{sales: %{keys: keys}} -> "#{grouped(keys)} of #{grouped(max)}"
-    end
-  end
 
   attr :club, :map, required: true
 
@@ -858,36 +695,6 @@ defmodule KeyfleetWeb.HomeLive do
       <div id={"#{@id}-stage"} class="rl-sea__stage" phx-update="ignore" data-harbour-stage>
         <canvas id={"#{@id}-canvas"} data-harbour-canvas></canvas>
         <span class="harbour-sea__tag" data-harbour-tag hidden></span>
-      </div>
-    </div>
-    """
-  end
-
-  attr :id, :string, required: true
-
-  # Thirty Key cards of no fleet, one after another, a fifth of a second each,
-  # from one sheet of six across and five down: the frame steps across a row
-  # while the sheet steps down a row each time it has crossed one. They turn
-  # only while on screen; the browser marks them turning.
-  defp cards(assigns) do
-    ~H"""
-    <div
-      id={@id}
-      class="rl-cards"
-      phx-hook="KeyCards"
-      phx-mounted={JS.ignore_attributes(["data-cards-turning"])}
-      aria-hidden="true"
-    >
-      <div class="rl-cards__rows">
-        <img
-          class="rl-cards__sheet"
-          src={~p"/images/home/key-cards.webp"}
-          width="1920"
-          height="2000"
-          alt=""
-          loading="lazy"
-          decoding="async"
-        />
       </div>
     </div>
     """

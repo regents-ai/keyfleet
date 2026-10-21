@@ -3,6 +3,10 @@ defmodule KeyfleetWeb.Components.Shell do
   The app shell: the header, the sidebar, the page and, for someone signed in,
   the side panel on the right.
 
+  Every page that has the header holds the "Buy Key" window its "Purchase Key"
+  opens (`KeyfleetWeb.Components.BuyKey`): the app's pages draw it in the
+  `buy_key` slot, the homepage in its own Classic section.
+
   The side panel is the same on every page that has it, the app's pages and the
   homepage: Sign out, Manage Account on regents.sh, the agents paired with the
   account (the `agents` slot) and the box to pair an agent (the `pairing` slot).
@@ -20,9 +24,8 @@ defmodule KeyfleetWeb.Components.Shell do
   alias Phoenix.LiveView.JS
 
   # Classic is the fleet that sells Keys: once it is open, "Purchase Key" in the
-  # header opens its page with its own "Purchase Key" pressed
-  # (`KeyfleetWeb.FleetLive`), or on the homepage its "Buy Key" window. Until
-  # then the header has no "Purchase Key".
+  # header opens the "Buy Key" window for it. Until then the header has no
+  # "Purchase Key".
   @get_key_fleet "fleet_tech_classic"
 
   @doc "The fleet the header's \"Purchase Key\" opens, shown only while it is open."
@@ -36,6 +39,7 @@ defmodule KeyfleetWeb.Components.Shell do
   slot(:content, required: true)
   slot(:agents, doc: "The agents paired with the account, in the side panel.")
   slot(:pairing, doc: "The box to pair an agent, in the side panel.")
+  slot(:buy_key, doc: "The \"Buy Key\" window, while it is open.")
 
   def shell(assigns) do
     ~H"""
@@ -55,7 +59,6 @@ defmodule KeyfleetWeb.Components.Shell do
       <.header
         account_control={@account_control}
         get_key={@get_key}
-        get_key_link={:patch}
         menu
         theme
       />
@@ -119,6 +122,8 @@ defmodule KeyfleetWeb.Components.Shell do
         <:agents>{render_slot(@agents)}</:agents>
         <:pairing :if={@pairing != []}>{render_slot(@pairing)}</:pairing>
       </.aside>
+
+      {render_slot(@buy_key)}
     </div>
     """
   end
@@ -128,12 +133,6 @@ defmodule KeyfleetWeb.Components.Shell do
   attr :get_key, :boolean,
     required: true,
     doc: "whether the fleet \"Purchase Key\" opens is open, so the header shows it"
-
-  attr :get_key_link, :atom,
-    required: true,
-    values: [:patch, :navigate, :buy_key],
-    doc:
-      "`:patch` inside the app shell, `:buy_key` on the homepage, `:navigate` from any other page"
 
   attr :menu, :boolean,
     required: true,
@@ -147,8 +146,9 @@ defmodule KeyfleetWeb.Components.Shell do
 
   @doc """
   The site header: brand, Menu (only where there is a sidebar), the theme
-  switch (not on the always-dark homepage), links, "Purchase Key" (once Classic
-  is open) and the account control. It fits one line on a phone.
+  switch (not on the always-dark homepage), the Regents crown and links,
+  "Purchase Key" (once Classic is open) and the account control. It fits one
+  line on a phone.
   """
   def header(assigns) do
     ~H"""
@@ -184,11 +184,12 @@ defmodule KeyfleetWeb.Components.Shell do
       <span class="shell-spacer" />
       <.theme_toggle :if={@theme} id="theme-control" />
       <div class="rl-header-links">
+        <RegentLinks.regents_crown id="shell-regents-crown" />
         <RegentLinks.header_links id="shell-token-menu" />
       </div>
 
       <div :if={@get_key} class="shell-get-key">
-        <.get_key id="shell-get-key" link={@get_key_link} />
+        <.get_key id="shell-get-key" />
       </div>
       <.account_control account_control={@account_control} fleets={@fleets} />
       <button
@@ -268,39 +269,24 @@ defmodule KeyfleetWeb.Components.Shell do
 
   attr :id, :string, required: true
 
-  attr :link, :atom,
-    required: true,
-    values: [:patch, :navigate, :buy_key],
-    doc:
-      "`:patch` from the app's own pages, `:buy_key` on the homepage, which opens its \"Buy Key\" window, `:navigate` from any other"
-
   @doc """
   "Purchase Key" in the site header, for everyone, signed in or not, once Classic
-  is open: it opens Classic's page with its buying panel open, or on the
-  homepage its "Buy Key" window.
+  is open: it opens the "Buy Key" window for Classic.
   """
-  def get_key(%{link: :buy_key} = assigns) do
+  def get_key(assigns) do
+    assigns = assign(assigns, :fleet_id, @get_key_fleet)
+
     ~H"""
     <button
       id={@id}
       type="button"
       class="rg-button rg-button--primary"
       phx-click="open_buy_key"
+      phx-value-fleet={@fleet_id}
       aria-haspopup="dialog"
     >
       <span class="rg-button__label">Purchase Key</span>
     </button>
-    """
-  end
-
-  def get_key(assigns) do
-    assigns =
-      assign(assigns, :to, [{assigns.link, Keyfleet.Fleets.path(@get_key_fleet) <> "?buy"}])
-
-    ~H"""
-    <.link id={@id} class="rg-button rg-button--primary" {@to}>
-      <span class="rg-button__label">Purchase Key</span>
-    </.link>
     """
   end
 
