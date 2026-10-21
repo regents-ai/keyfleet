@@ -9,13 +9,14 @@ defmodule Keyfleet.Graph.Preparations.OpenWork do
       with, is open work only once someone has joined it.
     * `:tasks_doing`: tasks whose `progress` is `doing`, whether or not a
       key has taken them.
-    * `:tasks_taken`: the tasks of `:tasks_doing` that a key has taken: an
-      `assignee_key` is set.
-    * `:tasks_untaken`: tasks nobody has taken yet: `progress` is `todo` and
-      no `assignee_key` is set.
+    * `:tasks_taken`: unfinished tasks a key has taken: an `assignee_key` is
+      set and `progress` is `todo`, `doing` or `blocked`, so a task given to a
+      key counts before the key starts it.
+    * `:tasks_untaken`: unfinished tasks nobody has taken: no `assignee_key`.
 
-  Archived objects are never open work, whatever their fields say. The work
-  pack gives every goal a `status` and every task a `progress`.
+  Every unfinished task is either taken or not taken yet. Archived objects
+  are never open work, whatever their fields say. The work pack gives every
+  goal a `status` and every task a `progress`.
   """
   use Ash.Resource.Preparation
 
@@ -50,14 +51,19 @@ defmodule Keyfleet.Graph.Preparations.OpenWork do
   defp open(query, :tasks_taken),
     do:
       query
-      |> open(:tasks_doing)
+      |> unfinished_tasks()
       |> Ash.Query.filter(fragment("(? ->> 'assignee_key') IS NOT NULL", data))
 
   defp open(query, :tasks_untaken),
     do:
+      query
+      |> unfinished_tasks()
+      |> Ash.Query.filter(fragment("(? ->> 'assignee_key') IS NULL", data))
+
+  defp unfinished_tasks(query),
+    do:
       Ash.Query.filter(
         query,
-        type == "task" and fragment("(? ->> 'progress') = 'todo'", data) and
-          fragment("(? ->> 'assignee_key') IS NULL", data)
+        type == "task" and fragment("(? ->> 'progress') IN ('todo', 'doing', 'blocked')", data)
       )
 end

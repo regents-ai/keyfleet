@@ -3408,10 +3408,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   "Paused" and "No scheduled check-ins".
 - Why: the person and the agent should read the same thing, in fewer words.
 
-## 2026-10-21 — Command help says the pairing once
+## 2026-10-21 — Trying now counts every task given to a Key
 
-- What: the Keyfleet command descriptions no longer end with "Requires current
-  pairing…" or "Pipe the change on stdin". The command line already adds who must
-  pair and what to pipe to every protected command's help, so 62 commands said it
-  twice. The guide's seven message commands drop the same line.
-- Why: less text in every `--help`; the same facts, said once.
+- What: a fleet's Trying now line, its directory page and its Markdown page
+  count a task as taken as soon as it is given to a Key, started or not, and
+  every other unfinished task as not taken yet ("2 goals in progress · 3 tasks
+  taken · 4 not taken yet"). Before, a task given to a Key but not yet started
+  was counted nowhere, and a blocked one was left out too.
+- Why: the overnight push for less text that tells the truth at a glance; the
+  two counts now add up to every unfinished task.

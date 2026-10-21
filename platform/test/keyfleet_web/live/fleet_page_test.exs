@@ -1692,7 +1692,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert has_element?(view, ~s(#{row} a[data-item-link="#{goal}"][href="#{item_path(goal)}"]))
 
       assert text(view, "#fleet-trying-counts") ==
-               "1 goal in progress · 2 tasks in progress · 1 taken · 1 not taken yet"
+               "1 goal in progress · 1 task taken · 2 not taken yet"
 
       refute html =~ "Draft the price"
       refute has_element?(view, "#fleet-trying-empty")

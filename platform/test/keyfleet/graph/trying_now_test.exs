@@ -29,6 +29,8 @@ defmodule Keyfleet.Graph.TryingNowTest do
     assert [%{id: ^open, title: "Sell the first audit"}] = Graph.trying_now(@fleet).goals
   end
 
+  # A task given to a Key counts as taken before the Key starts it, so every
+  # unfinished task is either taken or not taken yet.
   test "the open work is counted, and finished, archived or another fleet's work isn't" do
     goal("Sell the first audit")
     task("Draft the price", %{"progress" => "doing", "assignee_key" => 12})
@@ -43,9 +45,8 @@ defmodule Keyfleet.Graph.TryingNowTest do
 
     assert Graph.trying_now(@fleet).counts == %{
              goals_open: 1,
-             tasks_doing: 2,
-             tasks_taken: 1,
-             tasks_untaken: 1
+             tasks_taken: 2,
+             tasks_untaken: 2
            }
   end
 

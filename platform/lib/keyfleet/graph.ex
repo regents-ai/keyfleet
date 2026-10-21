@@ -13,7 +13,7 @@ defmodule Keyfleet.Graph do
   use Ash.Domain
 
   @goals_shown 3
-  @open_work [:goals_open, :tasks_doing, :tasks_taken, :tasks_untaken]
+  @trying_counts [:goals_open, :tasks_taken, :tasks_untaken]
   @tables [
     Keyfleet.Graph.Cursor,
     Keyfleet.Graph.Event,
@@ -119,9 +119,9 @@ defmodule Keyfleet.Graph do
       each with its `title`.
     * `goals_set?`: whether the workspace holds any goal, open or not, that
       is not archived.
-    * `counts`: how many of each kind of open work the workspace holds, as
-      `count_open_work/2` counts them: `goals_open`, `tasks_doing`,
-      `tasks_taken` and `tasks_untaken`.
+    * `counts`: how many open goals and unfinished tasks the workspace
+      holds, as `count_open_work/2` counts them: `goals_open`, `tasks_taken`
+      and `tasks_untaken`.
     * `question`: the question `open_question/1` gives, or nil.
 
   Never call it inside a transaction: its snapshot has to be its
@@ -139,7 +139,7 @@ defmodule Keyfleet.Graph do
     goals = open_goals(fleet_id, @goals_shown)
 
     counts =
-      Map.new(@open_work, fn kind ->
+      Map.new(@trying_counts, fn kind ->
         case count_open_work(fleet_id, kind) do
           {:ok, count} -> {kind, count}
           {:error, failure} -> raise failure
