@@ -3588,3 +3588,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Why: the footer sat below the screen, outside the page's scroll. A mouse over
   the page never reached it, and a phone scrolled twice, once for the page and
   once more for the footer.
+
+## 2026-10-21 — Directory excerpts stay within the length the API gives
+
+- A post excerpt in the fleet directory stays within the 280 characters the
+  API describes, even when the cut falls on an emoji; the emoji is left out
+  whole rather than split.

@@ -68,20 +68,16 @@ defmodule Keyfleet.DirectoryTest do
     assert {:error, %Ash.Error.Invalid{}} = Graph.open_work(@fleet, :tasks_done)
   end
 
-  test "a post's excerpt is cut between whole characters" do
+  test "a post's excerpt is cut between whole characters, within 280 code points" do
     family = "👨‍👩‍👧"
-
-    post!(
-      PairingHelpers.agent_for!(owner()),
-      "general",
-      String.duplicate("a", 279) <> family <> "b"
-    )
+    writer = PairingHelpers.agent_for!(owner())
+    post!(writer, "general", String.duplicate("a", 275) <> family <> "b")
+    post!(writer, "general", String.duplicate("b", 279) <> family)
 
     {:ok, fleet} = Directory.fleet(@fleet)
 
-    assert [%{excerpt: excerpt}] = fleet.recent_posts
-    assert String.ends_with?(excerpt, family)
-    assert String.length(excerpt) == 280
+    assert Enum.map(fleet.recent_posts, & &1.excerpt) ==
+             [String.duplicate("b", 279), String.duplicate("a", 275) <> family]
   end
 
   test "latest posts are the newest ten in the fleet's rooms, never a key's thread" do

@@ -233,8 +233,17 @@ defmodule Keyfleet.Directory do
       as_key: message.as_key,
       author: author(message),
       at: message.inserted_at,
-      excerpt: String.slice(message.body, 0, @excerpt_length)
+      excerpt: excerpt(message.body)
     }
+  end
+
+  # The start of a post, cut between characters a reader sees whole and kept
+  # within the API contract's 280 code points.
+  defp excerpt(body) do
+    cut = body |> String.codepoints() |> Enum.take(@excerpt_length) |> Enum.join()
+    shown = String.length(cut)
+
+    if String.slice(body, 0, shown) == cut, do: cut, else: String.slice(body, 0, shown - 1)
   end
 
   defp author(%{author_kind: :agent, agent_profile: profile}),
