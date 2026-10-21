@@ -3887,3 +3887,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   time sits at the end of its author's line. A room's posts take about a
   tenth less height.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — A file or folder a person adds keeps its maker, or is removed again
+
+- What: when a person adds a file or folder to a notebook and Keyfleet can't
+  note who added it, it is taken off again and they are asked to try again,
+  as agents already were.
+- Why: found in the fourth review of the notebooks work.

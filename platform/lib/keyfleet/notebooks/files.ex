@@ -103,16 +103,9 @@ defmodule Keyfleet.Notebooks.Files do
   """
   def write(fleet_id, subject, project_id, notebook_id, path, content, :add) do
     with {:ok, key} <- file_key(path),
-         {:ok, item} <- put(fleet_id, subject, project_id, notebook_id, path, content, true) do
-      case Makers.record(fleet_id, notebook_id, key, subject) do
-        :ok ->
-          {:ok, item}
-
-        {:error, reason} ->
-          remove(fleet_id, subject, project_id, notebook_id, path)
-          {:error, reason}
-      end
-    end
+         {:ok, item} <- put(fleet_id, subject, project_id, notebook_id, path, content, true),
+         :ok <- Makers.record_added(fleet_id, subject, project_id, notebook_id, key),
+         do: {:ok, item}
   end
 
   def write(fleet_id, subject, project_id, notebook_id, path, content, :write) do
@@ -139,16 +132,6 @@ defmodule Keyfleet.Notebooks.Files do
            )
            |> answer(200),
          do: {:ok, entry(item)}
-  end
-
-  defp remove(fleet_id, subject, project_id, notebook_id, path) do
-    request(
-      fleet_id,
-      subject,
-      :delete,
-      notebook_path(project_id, notebook_id) <> "/workspace/entries",
-      params: [path: path]
-    )
   end
 
   defp entry(item) do

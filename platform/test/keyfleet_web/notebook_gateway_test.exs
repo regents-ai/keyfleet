@@ -334,6 +334,31 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert removed.status == 204
   end
 
+  # Costly failure: a file a person adds while its maker can't be kept stays
+  # as the notebook maker's, out of its adder's reach.
+  test "a file or folder whose maker can't be kept is removed again", c do
+    cookie = enter!(c.holder)
+    theirs = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001"
+    entries = theirs <> "/workspace/entries"
+
+    # Renamed inside the test's own transaction, so keeping the maker fails the
+    # way it does while the database can't be reached; the rename ends with the test.
+    prefix = Keyfleet.Repo.default_prefix()
+    Keyfleet.Repo.query!("ALTER TABLE #{prefix}.notebook_file_makers RENAME TO makers_away")
+
+    added =
+      send_notebook(:put, theirs <> "/workspace/files?path=/mine.csv&create=true", cookie, "a")
+
+    made = send_notebook(:post, theirs <> "/workspace/directories", cookie, ~s({"path":"notes/"}))
+
+    Keyfleet.Repo.query!("ALTER TABLE #{prefix}.makers_away RENAME TO notebook_file_makers")
+
+    for answer <- [added, made] do
+      assert json_response(answer, 502)["error"]["code"] == "notebooks_unavailable"
+      assert_receive {:hub, "DELETE", ^entries, "u_" <> _, _body}
+    end
+  end
+
   # Costly failure: a copied or replayed sign-in code opens the notebooks again.
   test "an Open notebooks code works once", c do
     {:ok, entry} = Notebooks.open(c.holder, signed_in!(c.holder), @fleet)

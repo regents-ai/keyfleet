@@ -595,7 +595,10 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
               receive_timeout: http_timeout(conn)
             )
             |> answered(done)
-            |> stream_back(conn, fleet_id)
+            |> case do
+              {:refused, reason} -> maker_refusal(conn, reason)
+              answer -> stream_back(answer, conn, fleet_id)
+            end
 
           {:error, reason} ->
             maker_refusal(conn, reason)
@@ -603,9 +606,17 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  defp answered({:ok, %Req.Response{status: status}} = answer, done) do
-    done.(status)
-    answer
+  # What the hub did is undone when its maker can't be kept (`done`), and the
+  # person is told to try again instead.
+  defp answered({:ok, %Req.Response{status: status} = response} = answer, done) do
+    case done.(status) do
+      :ok ->
+        answer
+
+      {:error, reason} ->
+        Req.cancel_async_response(response)
+        {:refused, reason}
+    end
   end
 
   defp answered(answer, _done), do: answer
@@ -766,12 +777,12 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   # A new file is kept as its writer's; writing over one is its maker's.
-  defp file_write(conn, [fleet_id, subject, _project_id, notebook_id] = ids, request) do
+  defp file_write(conn, [fleet_id, subject, project_id, notebook_id] = ids, request) do
     case workspace_query(conn) do
       {:ok, key, true} ->
         {:ok, request,
          fn
-           200 -> Makers.record(fleet_id, notebook_id, key, subject)
+           200 -> Makers.record_added(fleet_id, subject, project_id, notebook_id, key)
            _status -> :ok
          end}
 
@@ -783,12 +794,12 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  defp folder_made([fleet_id, subject, _project_id, notebook_id], {_headers, body} = request) do
+  defp folder_made([fleet_id, subject, project_id, notebook_id], {_headers, body} = request) do
     with {:ok, %{"path" => path}} when is_binary(path) <- Jason.decode(body),
          {:ok, key} <- Makers.folder_key(path) do
       {:ok, request,
        fn
-         201 -> Makers.record(fleet_id, notebook_id, key, subject)
+         201 -> Makers.record_added(fleet_id, subject, project_id, notebook_id, key)
          _status -> :ok
        end}
     else
@@ -801,10 +812,16 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   defp removal(conn, [fleet_id, _subject, _project_id, notebook_id] = ids, request) do
     with {:ok, key, false} <- workspace_query(conn),
          {:ok, request, _done} <- only_maker(:removal, ids, [key], request) do
+      # The path is gone either way: a maker still kept for it is replaced
+      # when something is added there again.
       {:ok, request,
        fn
-         200 -> Makers.forget(fleet_id, notebook_id, key)
-         _status -> :ok
+         200 ->
+           Makers.forget(fleet_id, notebook_id, key)
+           :ok
+
+         _status ->
+           :ok
        end}
     else
       {:error, reason} -> {:error, reason}

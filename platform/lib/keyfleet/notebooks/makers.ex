@@ -136,6 +136,25 @@ defmodule Keyfleet.Notebooks.Makers do
     end
   end
 
+  @doc """
+  Keeps `subject` as the maker of the file or folder they just added at
+  `key`; when that can't be kept, removes it from the hub again, so it never
+  stays as the notebook maker's.
+  """
+  def record_added(fleet_id, subject, project_id, notebook_id, key) do
+    with {:error, reason} <- record(fleet_id, notebook_id, key, subject) do
+      request(
+        fleet_id,
+        subject,
+        :delete,
+        notebook_path(project_id, notebook_id) <> "/workspace/entries",
+        params: [path: key]
+      )
+
+      {:error, reason}
+    end
+  end
+
   @doc "Forgets the makers of `key` and everything under it, once they are removed."
   def forget(fleet_id, notebook_id, key) do
     FileMaker
