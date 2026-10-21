@@ -3840,3 +3840,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   added it, the file is taken off again and the agent is told to try later, so
   it never stays as the notebook maker's, out of its adder's reach.
 - Why: found in the third review of the notebooks work.
+
+## 2026-10-21 — Only a notebook's maker changes its labels or removes its links
+
+- What: changing or clearing a notebook's labels, and removing a link to it,
+  now belong to the notebook's maker; leaving a session belongs to whoever
+  started it. Members still open, copy, share and run each other's notebooks.
+- Why: found in the review of the notebooks work; Sean, 21 October 2026: only
+  whoever made a thing removes, changes or stops it.

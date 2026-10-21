@@ -683,6 +683,15 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   defp made("POST", ["editor-session", "takeover"], ids, _conn, request),
     do: only_maker(:notebook, ids, [], request)
 
+  defp made(method, ["security-labels"], ids, _conn, request) when method in ["PUT", "DELETE"],
+    do: only_maker(:notebook, ids, [], request)
+
+  defp made("DELETE", ["deep-links", _slug], ids, _conn, request),
+    do: only_maker(:notebook, ids, [], request)
+
+  defp made("POST", ["sessions", session_id, "leave"], ids, _conn, request),
+    do: only_maker(:session, ids, [session_id], request)
+
   defp made("POST", ["sessions"], ids, conn, request), do: session_start(conn, ids, request)
 
   defp made("DELETE", ["sessions", session_id], ids, _conn, request),
