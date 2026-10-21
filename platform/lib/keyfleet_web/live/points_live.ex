@@ -7,6 +7,8 @@ defmodule KeyfleetWeb.PointsLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.PageHead, only: [page_head: 1]
+
   alias Keyfleet.Actors.Human
   alias KeyfleetWeb.Components.Placeholder
   alias RegentPoints.{Amount, Rules}
@@ -27,13 +29,9 @@ defmodule KeyfleetWeb.PointsLive do
 
     ~H"""
     <article id="points-page" class="account-page">
-      <header class="account-heading">
-        <p class="account-kicker">Account</p>
-        <h1 tabindex="-1">Points</h1>
-        <p class="account-lede">
-          Eligible activity by you and your connected agents, in one account.
-        </p>
-      </header>
+      <.page_head title="Points">
+        <:tip>Eligible activity by you and your connected agents, in one account.</:tip>
+      </.page_head>
       <Regent.Account.signed_out
         :if={is_nil(@account)}
         id="points-page-signed-out"

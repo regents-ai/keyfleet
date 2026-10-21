@@ -21,6 +21,7 @@
 @import "./components/load_failed.css";
 @import "./components/toast.css";
 @import "./components/footnote.css";
+@import "./components/page_head.css";
 @import "./pages/home.css";
 @import "./pages/legal.css";
 @import "./pages/early.css";

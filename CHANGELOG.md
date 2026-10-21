@@ -3318,3 +3318,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: scripts/deploy.sh now holds a lock for its app while it runs, so a second deploy started on this Mac, from any checkout, stops straight away with "another deploy of keyfleet is running" instead of building. The system lets go of the lock when the deploy ends, however it ends. It also refuses a commit that does not contain the code on every machine, not only on the first one it finds, since the site and graph machines can carry different commits.
 - Why: two overnight deploys crossed at 10:31Z on 21 October and left the graph machine on a5248373 and the site machine on fbf22d88; the coordinator asked for a simple lock so two threads cannot deploy at the same time.
+
+## 2026-10-21 — Account tabs open with a title row, not a title card
+
+- What: Profile, Points, Wallets and Connections each open with the tab's name and an info tip beside it, as the template's pages do. The framed card with "Account" above a large title and a paragraph under it is gone; its sentence is in the tip, and the panels start right under the name.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline". The tab bar already names the tab, so the card repeated it and pushed the account's own panels down.

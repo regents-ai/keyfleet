@@ -98,7 +98,7 @@ test("page headings use canonical Pixel Square", async ({page}) => {
 
   expect(
     await page
-      .locator(".account-heading h1")
+      .locator(".page-head h1")
       .evaluate(element => getComputedStyle(element).fontFamily),
   ).toContain("Geist Pixel Square")
 })

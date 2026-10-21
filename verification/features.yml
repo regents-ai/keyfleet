@@ -514,6 +514,30 @@ features:
       - A pin shows on other members' open pages when they next open or switch a place, not the moment it is set.
       - The chart above the switch is checked by eye in headless Chromium; WebKit is not run on the Mac.
 
+  - id: account-page-head
+    what: >-
+      Each Account tab (Profile, Points, Wallets, Connections) opens with one
+      title row, the tab's name and a tip beside it that says what the tab is
+      for, as the template's pages do; the panels start right under it.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/page_head.ex
+      - platform/lib/keyfleet_web/live/account_live.ex
+      - platform/lib/keyfleet_web/live/points_live.ex
+      - platform/assets/css/components/page_head.css
+    entry:
+      - route: GET /account
+      - route: GET /account/points
+      - route: GET /account/wallets
+      - route: GET /account/connections
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/test/browser/app_shell.spec.ts
+    gaps:
+      - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
+
   - id: account-wallets
     what: >-
       A signed-in person sees their wallets in the side panel and on the Account

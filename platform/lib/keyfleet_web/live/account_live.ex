@@ -17,6 +17,7 @@ defmodule KeyfleetWeb.AccountLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.PageHead, only: [page_head: 1]
   import KeyfleetWeb.Components.VerifiedConnections
 
   alias Keyfleet.Accounts
@@ -48,7 +49,7 @@ defmodule KeyfleetWeb.AccountLive do
       account={@account}
       signed_out_reason={@signed_out_reason}
     >
-      <:lede>Who Keyfleet knows you as, your Keys, your agents and your Credits.</:lede>
+      <:tip>Who Keyfleet knows you as, your Keys, your agents and your Credits.</:tip>
       <div class="account-grid">
         <Regent.HolographicCard.card
           id="account-identity"
@@ -224,7 +225,7 @@ defmodule KeyfleetWeb.AccountLive do
       account={@account}
       signed_out_reason={@signed_out_reason}
     >
-      <:lede>The wallets your sign-in verified.</:lede>
+      <:tip>The wallets your sign-in verified.</:tip>
       <.live_component
         module={KeyfleetWeb.AccountWallets}
         id="wallets-list"
@@ -248,10 +249,10 @@ defmodule KeyfleetWeb.AccountLive do
       account={@account}
       signed_out_reason={@signed_out_reason}
     >
-      <:lede>
+      <:tip>
         The accounts you have connected, such as X, GitHub and Farcaster. They are shown
         beside your address on each fleet's Member List.
-      </:lede>
+      </:tip>
       <.verified_connections
         id="account-verified-connections"
         class="account-panel"
@@ -267,18 +268,16 @@ defmodule KeyfleetWeb.AccountLive do
   attr :title, :string, required: true
   attr :account, :map, default: nil
   attr :signed_out_reason, :atom, required: true
-  slot :lede, required: true
+  slot :tip, required: true
   slot :inner_block, required: true
 
   @doc "One account view: its heading, then its panels, or a sign-in when signed out."
   def settings_page(assigns) do
     ~H"""
     <article id={@id} class="account-page">
-      <header class="account-heading">
-        <p class="account-kicker">Account</p>
-        <h1 tabindex="-1">{@title}</h1>
-        <p class="account-lede">{render_slot(@lede)}</p>
-      </header>
+      <.page_head title={@title}>
+        <:tip>{render_slot(@tip)}</:tip>
+      </.page_head>
 
       <Regent.Account.signed_out
         :if={is_nil(@account)}
