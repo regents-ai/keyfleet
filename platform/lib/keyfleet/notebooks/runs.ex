@@ -41,8 +41,9 @@ defmodule Keyfleet.Notebooks.Runs do
 
   @doc """
   The fleet's 50 newest notebooks, newest first, as `subject`: each with its
-  title, its address (`Keyfleet.Notebooks.notebook_url/3`) and `subject`'s
-  newest run there, or nil when they have started none.
+  title, description and when it was added, as the Docs place lists them;
+  its address (`Keyfleet.Notebooks.notebook_url/3`); and `subject`'s newest
+  run there, or nil when they have started none.
   """
   def list(fleet_id, subject, project_id) do
     with {:ok, %{"items" => notebooks}} <-
@@ -205,6 +206,8 @@ defmodule Keyfleet.Notebooks.Runs do
     %{
       notebook_id: notebook["id"],
       title: notebook["title"],
+      description: notebook["description"],
+      created_at: notebook["created_at"],
       notebook_url: Notebooks.notebook_url(fleet_id, project_id, notebook["id"]),
       last_run:
         if run do

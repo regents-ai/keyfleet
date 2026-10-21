@@ -5096,7 +5096,7 @@ components:
           type: array
           maxItems: 200
           items: {$ref: "#/components/schemas/NotebookFileEntry"}
-        cursor: {type: [string, "null"], description: The cursor for the next page, or null after the last}
+        cursor: {type: [string, "null"], description: "The cursor for the next page, or null after the last"}
     NotebookFileReadRequest:
       type: object
       additionalProperties: false
@@ -5109,7 +5109,7 @@ components:
       required: [path, content]
       properties:
         path: {type: string}
-        content: {type: string, description: The file's whole text, as a member wrote it}
+        content: {type: string, description: "The file's whole text, as a member wrote it"}
     NotebookFileWriteRequest:
       type: object
       additionalProperties: false
@@ -5203,10 +5203,12 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [notebook_id, title, notebook_url, last_run]
+            required: [notebook_id, title, description, created_at, notebook_url, last_run]
             properties:
               notebook_id: {type: string, pattern: '^nb-[0-9a-z]{16}$'}
-              title: {type: string, description: The notebook's title, as a member wrote it}
+              title: {type: string, description: "The notebook's title, as a member wrote it"}
+              description: {type: string, description: "What the notebook is for, as a member wrote it; empty when they wrote nothing"}
+              created_at: {type: string, format: date-time, description: When the notebook was added}
               notebook_url: {type: string, format: uri, description: "The notebook's address; a task cites it as notebook_ref"}
               last_run:
                 oneOf:

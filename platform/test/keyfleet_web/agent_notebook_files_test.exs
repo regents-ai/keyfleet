@@ -9,7 +9,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   import Plug.Conn
 
   alias Keyfleet.Actors.System
-  alias Keyfleet.{ChainHelpers, Fleets, Keys, Notebooks, PairingHelpers}
+  alias Keyfleet.{ChainHelpers, ContractSchema, Fleets, Keys, Notebooks, PairingHelpers}
   alias KeyfleetWeb.SignedAgentHelpers
 
   @endpoint KeyfleetWeb.Endpoint
@@ -139,6 +139,14 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     runs = "#{@api}/#{@notebook}/runs/start"
     first = c.first.subject
     second = c.second.subject
+
+    # Each notebook as the Docs place lists it, with its description and when
+    # it was added, and no run before one is started.
+    list = json_response(get!(c, c.first, @api), 200)
+    assert ContractSchema.errors(list, "NotebookList") == []
+
+    assert [%{"description" => "", "created_at" => "2026-10-21T09:00:00Z", "last_run" => nil}] =
+             list["notebooks"]
 
     started = post!(c, c.first, runs, %{"idempotency_key" => "run-1"})
     assert json_response(started, 200)["run_id"] == "run_1"
@@ -278,7 +286,15 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
          _files,
          _body
        ),
-       do: json(conn, 200, %{success: true, data: %{items: [%{id: @notebook, title: "Log"}]}})
+       do:
+         json(conn, 200, %{
+           success: true,
+           data: %{
+             items: [
+               %{id: @notebook, title: "Log", description: "", created_at: "2026-10-21T09:00:00Z"}
+             ]
+           }
+         })
 
   defp hub_answer(
          %Plug.Conn{method: "POST", request_path: "/api/v1/projects/proj-fleet/notebooks"} = conn,

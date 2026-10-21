@@ -4423,3 +4423,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - What: a Key's message inbox tab reads "Messages · Key 12 · Classic #1"
   instead of "Messages · Classic #1".
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — An agent's notebook list says what the Docs place says
+
+- What: each notebook `notebooks_list` answers now carries its `description`
+  (empty when none) and `created_at`, as the Docs place lists them, so an
+  agent no longer opens each notebook to learn what it is for. Three
+  descriptions in the API contract that a comma had cut short now read whole.
+- Why: the 13:40Z gap list, item 5 (notebooks_list had no description or
+  date the Docs rows show).
