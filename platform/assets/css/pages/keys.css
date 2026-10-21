@@ -48,24 +48,13 @@
   padding: var(--rg-panel-padding);
 }
 
-/* The Key's own card, on a stage beside its number. Every Key's picture is
-   drawn on the same charcoal, so the stage carries that ground out to the
-   panel's edges and the picture's own edges fade into it. */
+/* The Key's own card, its stage reaching the panel's edges beside the number. */
 .key-heading__card {
-  display: grid;
-  place-items: center;
   padding: clamp(1.25rem, 3vw, 2rem) clamp(1.5rem, 4vw, 3.5rem);
-  background: radial-gradient(ellipse 60% 55% at 50% 48%, rgb(35 37 42), rgb(27 28 33));
 }
 
 .key-heading__card .key-card__tilt {
   width: clamp(9rem, 22vw, 15rem);
-  height: auto;
-  aspect-ratio: 767 / 959;
-  mask-image:
-    linear-gradient(to right, transparent, #000 7%, #000 93%, transparent),
-    linear-gradient(transparent, #000 3%, #000 96%, transparent);
-  mask-composite: intersect;
 }
 
 /* Phones: the stage under the number, the card as tall as half the screen

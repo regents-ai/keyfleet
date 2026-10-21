@@ -27,13 +27,15 @@
 /* The card and its traits scroll on their own when taller than the window,
    and take keyboard focus so they can be scrolled without a pointer. */
 .key-profile__card {
+  --key-profile-card-pad: clamp(1rem, 3vw, 2rem);
+
   position: sticky;
   top: 0;
   display: grid;
   align-content: start;
   justify-items: center;
   gap: 1.5rem;
-  padding: clamp(1rem, 3vw, 2rem);
+  padding: var(--key-profile-card-pad);
   border-inline-end: 1px solid var(--color-border);
   overflow: auto;
 }
@@ -241,10 +243,16 @@
   white-space: nowrap;
 }
 
-/* The Key's picture, the same one its metadata names. */
+/* The Key's picture, the same one its metadata names, its stage reaching
+   the column's edges. */
 .key-profile-card {
+  justify-self: stretch;
+  margin: calc(-1 * var(--key-profile-card-pad)) calc(-1 * var(--key-profile-card-pad)) 0;
+  padding: clamp(1.25rem, 3vw, 2rem) var(--key-profile-card-pad);
+}
+
+.key-profile-card .key-card__tilt {
   width: min(100%, 26rem);
-  aspect-ratio: 5 / 7;
 }
 
 /* Tablets and phones: one column, the title and Close first and kept at the
@@ -267,13 +275,20 @@
   }
 
   .key-profile__card {
+    --key-profile-card-pad: 1rem;
+
     position: static;
-    padding: 0 1rem;
+    padding: 0 var(--key-profile-card-pad);
     border-inline-end: 0;
     overflow: visible;
   }
 
+  /* The stage starts right under the title bar, closing the gap above it. */
   .key-profile-card {
+    margin-block-start: -1.5rem;
+  }
+
+  .key-profile-card .key-card__tilt {
     width: auto;
     height: min(46svh, 36rem);
   }
@@ -300,7 +315,7 @@
 
   /* The card is never taller than about half the screen, as on a tablet,
      so on a phone held sideways it doesn't fill the sheet. */
-  .key-profile-card {
+  .key-profile-card .key-card__tilt {
     width: min(58vw, 33svh);
     height: auto;
   }

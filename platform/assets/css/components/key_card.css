@@ -1,17 +1,28 @@
 @layer regents-product {
-/* A Key's card. The tilt turns in 3D under a mouse (key_card.ts); the light
-   is twice the card's size and rests unseen until a mouse is over it. It
-   overlays the picture, so it brightens the foil and leaves the charcoal
-   around the card dark. */
+/* A Key's card on its stage. Every Key's picture is drawn on the same
+   charcoal, so the stage carries that ground out to whatever edges the page
+   gives it, and the picture's own edges fade into it. The page sets the
+   card's size and the stage's padding.
+
+   The tilt turns in 3D under a mouse (key_card.ts); the light is twice the
+   card's size and rests unseen until a mouse is over it. It overlays the
+   picture, so it brightens the foil and leaves the charcoal dark. */
 .key-card {
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse 60% 55% at 50% 48%, rgb(35 37 42), rgb(27 28 33));
   perspective: 900px;
 }
 
 .key-card__tilt {
   position: relative;
-  height: 100%;
+  aspect-ratio: 767 / 959;
   overflow: hidden;
   transform-style: preserve-3d;
+  mask-image:
+    linear-gradient(to right, transparent, #000 7%, #000 93%, transparent),
+    linear-gradient(transparent, #000 3%, #000 96%, transparent);
+  mask-composite: intersect;
 }
 
 .key-card__tilt img {

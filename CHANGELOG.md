@@ -3815,7 +3815,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 ## 2026-10-21 — A Key's card stands on its own ground
 
-- What: on a Key's page (https://keyfleet.ai/classic/1/keys/1) the card stands on a charcoal stage that fills the side of the header, in the same charcoal every Key's picture is drawn on, so the picture no longer shows as a dark box on a light page. The light that follows a mouse over the card now brightens the foil only, not the charcoal around it.
+- What: on a Key's page (https://keyfleet.ai/classic/1/keys/1) the card stands on a charcoal stage that fills the side of the header, in the same charcoal every Key's picture is drawn on, so the picture no longer shows as a dark box on a light page. The Key window over a fleet's page (https://keyfleet.ai/classic/1?key=3) sets its card on the same stage. The light that follows a mouse over the card now brightens the foil only, not the charcoal around it.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline".
 
 ## 2026-10-21 — A notebook folder is removed only by whoever made all of it
