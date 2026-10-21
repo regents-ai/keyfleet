@@ -45,8 +45,11 @@
     <link rel="icon" type="image/svg+xml" sizes="any" href={~p"/favicon.svg?v=2"} />
     <link rel="apple-touch-icon" href={~p"/apple-touch-icon.png"} />
     <meta name="theme-color" content={if @theme == "dark", do: "#161616", else: "#e5e3d2"} />
-    <%!-- The body and heading faces every page draws with, fetched alongside the stylesheet. --%>
+    <%!-- The body and heading faces every page draws with, fetched alongside the stylesheet.
+         The homepage leaves them to the stylesheet, so a slow phone draws the Key picture
+         first (Sean, 21 October 2026). --%>
     <link
+      :if={!home?}
       rel="preload"
       href={~p"/fonts/regent-ui/Geist-Regular.woff2"}
       as="font"
@@ -54,6 +57,7 @@
       crossorigin
     />
     <link
+      :if={!home?}
       rel="preload"
       href={~p"/fonts/regent-ui/GeistPixel-Square.woff2"}
       as="font"
