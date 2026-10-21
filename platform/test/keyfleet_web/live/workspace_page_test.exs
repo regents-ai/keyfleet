@@ -1130,8 +1130,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       refute Map.has_key?(query, "tag")
 
       assert rows(view, "#workspace-notebook-rows") == [
-               ["Notebook", "Launch plan", "20 Oct 2026"],
-               ["Notebook", "Price model", "19 Oct 2026"]
+               ["Launch plan", "20 Oct 2026"],
+               ["Price model", "19 Oct 2026"]
              ]
 
       assert has_element?(

@@ -3735,3 +3735,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   already had the setting.
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for
   human UI and agent UX".
+
+## 2026-10-21 — Notebooks say less; a push glides into Sent lately
+
+- What: the Workspace's Notebooks list drops its "Newest first." line and the
+  "Notebook" tag on every row, as the list's title and dates already say both;
+  the goals' line keeps only "Ask your agent to join one, or to add its own."
+  A new push slides into the Code place's Sent lately the way new lines join
+  the workstream, and its lines take the workstream's time column.
+- Why: less text on screen, and one motion for every list that grows while
+  someone watches.
+- Checked: a browser test in Chromium watches each list grow and end clean;
+  it fails with the motion taken off.

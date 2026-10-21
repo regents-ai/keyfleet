@@ -414,6 +414,18 @@ defmodule Keyfleet.BrowserChain do
     id
   end
 
+  @doc """
+  Records that `wallet`, holding Key `key`, sent the fleet's code a change
+  ending at `head`, as the code store's gateway does after git has its answer.
+  """
+  def push!(fleet_id, key, wallet, head) do
+    Keyfleet.Code.record_pushes(fleet_id, %{token_id: key, wallet: wallet}, [
+      %{ref: "refs/heads/main", head: head}
+    ])
+
+    :ok
+  end
+
   @doc "Opens the product pages when `open?`, and closes them behind the launch gate otherwise."
   def surfaces!(open?), do: Application.put_env(:keyfleet, :app_surfaces, open?)
 

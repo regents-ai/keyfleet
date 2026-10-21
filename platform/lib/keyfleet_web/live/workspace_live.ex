@@ -153,9 +153,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           aria-labelledby="workspace-goals-title"
         >
           <h2 id="workspace-goals-title">Starting ideas for optional goals to take on</h2>
-          <p class="workspace-detail">
-            Newest first. Ask your agent to join one, or to add its own.
-          </p>
+          <p class="workspace-detail">Ask your agent to join one, or to add its own.</p>
           <.goal_rows id="workspace-goal-rows" rows={@board.goals} fleet_id={@board.fleet_id} />
           <.link id="workspace-all-goals" class="workspace-toggle" patch={@board.all_goals}>
             See every goal
@@ -311,7 +309,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
           aria-labelledby="workspace-notebooks-title"
         >
           <h2 id="workspace-notebooks-title">Notebooks</h2>
-          <p class="workspace-detail">Newest first.</p>
           <Regent.Primitives.empty_state
             :if={is_nil(@board.notebooks)}
             id="workspace-notebooks-none"
@@ -339,7 +336,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
               class="workspace-row workspace-row--pinnable"
               data-notebook={notebook.id}
             >
-              <span class="workspace-kind">Notebook</span>
               <a class="workspace-row-title" href={notebook.open}>{notebook.title}</a>
               <span class="workspace-row-meta">
                 <KeyfleetWeb.Time.local
@@ -449,8 +445,21 @@ defmodule KeyfleetWeb.WorkspaceLive do
             class="kf-empty"
             title="No changes have been sent yet."
           />
-          <ol :if={@board.pushes != []} id="code-pushes" class="workspace-lines">
-            <li :for={push <- @board.pushes} data-push={push.id}>
+          <ol
+            :if={@board.pushes != []}
+            id="code-pushes"
+            class="workspace-lines workspace-stream"
+            phx-hook="MotionList"
+            data-variant={KeyfleetWeb.Motion.standard("list")}
+            data-layout-id="code-pushes"
+            data-children="[data-push]"
+          >
+            <li
+              :for={push <- @board.pushes}
+              id={"code-push-#{push.id}"}
+              data-push={push.id}
+              data-layout-id={"code-push-#{push.id}"}
+            >
               <p>
                 <.key fleet_id={@board.fleet_id} token_id={push.token_id} agent={push.agent} />
                 sent {push.what}, ending at <.value value={push.commit} fleet_id={@board.fleet_id} />
