@@ -1001,6 +1001,7 @@ defmodule KeyfleetWeb.ShellLive do
         |> assign(:fleet_class, now)
         |> hear_as_class(fleet_id)
         |> FleetLive.class_changed(fleet_id)
+        |> KeyProfileLive.class_changed(fleet_id)
     end
   end
 

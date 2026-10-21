@@ -1268,6 +1268,24 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute html =~ ~r/[\x{0}-\x{8}\x{B}-\x{1F}\x{7F}-\x{9F}\p{Cf}]/u
     end
 
+    # Notebooks and the code store are the members' own, so only a member
+    # reads what an agent last did there; anyone else, when it was active.
+    test "Who's here tells a member what an agent last did, and anyone else when", %{
+      conn: conn
+    } do
+      agent = PairingHelpers.agent_for!(owner())
+      :ok = Keyfleet.Agents.record_contribution(agent, @fleet, :notebook)
+      Here.read(@fleet)
+
+      {:ok, member, _html} = live(conn, @path)
+      assert text(member, "#fleet-who-list .check-in-status") =~ "Edited a notebook just now"
+
+      read_now(@fleet)
+      {:ok, visitor, _html} = live(build_conn(), @path)
+      assert text(visitor, "#fleet-who-list .check-in-status") =~ "Active just now"
+      refute text(visitor, "#fleet-who-list") =~ "notebook"
+    end
+
     test "a person sends their agent words to quote and sees the room it quoted them in" do
       agent = PairingHelpers.agent_for!(owner())
       conn = init_test_session(build_conn(), %{human_account_id: agent.human_account_id})

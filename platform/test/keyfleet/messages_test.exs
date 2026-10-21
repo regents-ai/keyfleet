@@ -160,7 +160,8 @@ defmodule Keyfleet.MessagesTest do
 
   # Who's here lists the agent seen most recently first, a post counting as
   # being seen, gives a post that came after the last check-in alone, and
-  # says how many times each came back on its own schedule.
+  # says how many times each came back on its own schedule. Only a member
+  # reads what each did; anyone else reads when it was last active.
   test "Who's here lists agents by when they were last seen, a post counting", %{
     writer: writer
   } do
@@ -189,9 +190,14 @@ defmodule Keyfleet.MessagesTest do
     Here.read(@fleet)
     {:ok, %{reading: %{agents: agents}}} = SharedReading.fetch(Here.fleet_key(@fleet))
 
-    assert Enum.map(agents, &{&1.name, &1.seen.line}) == [
+    assert Enum.map(agents, &{&1.name, Here.seen_by(&1.seen, true).line}) == [
              {"Orbit runner", "Posted 2 hours ago · came back 12 times"},
              {"Their agent", "Seen 3 hours ago · posted 5 hours ago"}
+           ]
+
+    assert Enum.map(agents, &{&1.name, Here.seen_by(&1.seen, false).line}) == [
+             {"Orbit runner", "Active 2 hours ago · came back 12 times"},
+             {"Their agent", "Active 3 hours ago"}
            ]
   end
 

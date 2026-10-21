@@ -1842,14 +1842,18 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   # Before the fleet's first reading, the agents and holders are said to be uncounted,
-  # never shown as none. The agents go to the page as they are drawn and
-  # aren't kept: each reading draws them all again.
+  # never shown as none. The agents go to the page as they are drawn, each
+  # line as the reader's class reads it (`Here.seen_by/2`), and aren't kept:
+  # each reading draws them all again.
   defp show_agents(%{assigns: %{fleet: %{fleet_id: fleet_id} = fleet}} = socket) do
     {agents, here, holders} =
       case SharedFigures.reading(Here.fleet_key(fleet_id)) do
         %{agents: agents, here: here, holders: holders} -> {agents, here, holders}
         nil -> {[], nil, nil}
       end
+
+    member? = ShellLive.member?(socket, fleet_id)
+    agents = Enum.map(agents, &%{&1 | seen: Here.seen_by(&1.seen, member?)})
 
     socket
     |> assign(
@@ -1898,6 +1902,7 @@ defmodule KeyfleetWeb.FleetLive do
       socket
       |> assign(:fleet, %{fleet | polls?: ShellLive.may_read?(socket, fleet_id, :polls)})
       |> follow_shared(fleet_id, view(place, params))
+      |> show_agents()
 
     with true <- from_reading?(socket),
          {%{coming_soon?: false} = reading, _degraded?} <- FleetNow.fetch(fleet_id) do

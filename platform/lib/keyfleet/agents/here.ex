@@ -10,7 +10,7 @@ defmodule Keyfleet.Agents.Here do
       the addresses holding a Key and of those online now
       (`Keyfleet.Keys.count_holders/2`, over the last hour), and as many of
       the agents as the fleet's directory lists, each with what its check-ins
-      say (its light, the light's meaning and when it was last seen), the id
+      say (its light, the light's meaning and its two lines, `seen_by/2`), the id
       that names its row and the address of its own picture, or nil when it
       set none: a picture made from its wallet is made where it is drawn
       (`Keyfleet.Agents.Avatar.shown/2`), and is ten times the size of the
@@ -192,17 +192,38 @@ defmodule Keyfleet.Agents.Here do
 
   defp agent(profile, check_ins, now), do: seen(check_ins[profile.id], now)
 
-  # What the agent's check-ins say: its light, what the light means, and one
-  # short line of when it was last seen, what it last did and how many times
-  # it came back on its own schedule.
+  @doc """
+  What one agent's check-ins say to a reader: its light, what the light
+  means, and one short line. A member of the fleet reads when the agent was
+  last seen, what it last did and how many times it came back on its own
+  schedule; anyone else reads when it was last active and how many times it
+  came back, since what it did may be in the fleet's own places.
+  """
+  def seen_by(%{members_line: members_line} = seen, true),
+    do: seen |> Map.delete(:members_line) |> Map.put(:line, members_line)
+
+  def seen_by(seen, false), do: Map.delete(seen, :members_line)
+
+  # Both lines are written once for the whole pass; each page picks its
+  # reader's with `seen_by/2`.
   defp seen(check_in, now) do
     {_status, label} = CheckInStatus.derive(check_in, now)
-    %{light: CheckInStatus.light(check_in, now), label: label, line: line(check_in, now)}
+
+    %{
+      light: CheckInStatus.light(check_in, now),
+      label: label,
+      line: line(check_in, now, &active/2),
+      members_line: line(check_in, now, &last/2)
+    }
   end
 
-  defp line(nil, _now), do: "Not seen yet"
+  defp line(nil, _now, _last), do: "Not seen yet"
 
-  defp line(check_in, now), do: last(check_in, now) <> returns(check_in.scheduled_check_ins)
+  defp line(check_in, now, last),
+    do: last.(check_in, now) <> returns(check_in.scheduled_check_ins)
+
+  defp active(check_in, now),
+    do: "Active #{RegentFormat.relative_time(check_in.last_seen_at, now)}"
 
   # A contribution after the last check-in is when it was seen.
   defp last(%{last_contribution_at: at, last_seen_at: at} = check_in, now),

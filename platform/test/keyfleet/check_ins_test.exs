@@ -47,12 +47,27 @@ defmodule Keyfleet.CheckInsTest do
     assert {:ok, %{scheduled_check_ins: 1}} =
              Agents.check_in(actor, @fleet, %{"kind" => "session"})
 
-    Repo.query!(
-      "UPDATE keyfleet_app.agent_check_ins SET last_scheduled_at = last_scheduled_at - interval '30 minutes'"
-    )
+    earlier!(30)
 
     assert {:ok, %{scheduled_check_ins: 2}} = Agents.check_in(actor, @fleet, scheduled)
     assert Agents.get_check_in!(profile.id, @fleet).scheduled_check_ins == 2
+  end
+
+  # Checking in more often than its schedule, or naming a new interval each
+  # time, is still one return per step of the schedule.
+  test "a scheduled check-in that comes too soon is not a return", %{actor: actor} do
+    assert {:ok, %{scheduled_check_ins: 1}} =
+             Agents.check_in(actor, @fleet, %{"kind" => "scheduled", "every_minutes" => 30})
+
+    earlier!(2)
+
+    assert {:ok, %{scheduled_check_ins: 1}} =
+             Agents.check_in(actor, @fleet, %{"kind" => "scheduled", "every_minutes" => 30})
+
+    earlier!(2)
+
+    assert {:ok, %{scheduled_check_ins: 1}} =
+             Agents.check_in(actor, @fleet, %{"kind" => "scheduled", "every_minutes" => 10})
   end
 
   # The side panel and the Account page show each agent's best light across
@@ -81,6 +96,14 @@ defmodule Keyfleet.CheckInsTest do
                wallet("c") => %{light: "off", light_label: "Hasn’t checked in"},
                wallet("d") => %{light: nil, light_label: nil}
              }
+  end
+
+  # As if the last scheduled check-in came `minutes` earlier.
+  defp earlier!(minutes) do
+    Repo.query!(
+      "UPDATE keyfleet_app.agent_check_ins SET last_scheduled_at = last_scheduled_at - make_interval(mins => $1), counted_scheduled_at = counted_scheduled_at - make_interval(mins => $1)",
+      [minutes]
+    )
   end
 
   defp wallet(character), do: "0x" <> String.duplicate(character, 40)

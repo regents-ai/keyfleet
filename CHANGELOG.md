@@ -4089,3 +4089,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   a shard of one, and the Public room) in the tip beside it. A Key's messages,
   signed out, offer the same Sign in button as the other two.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — Returns count once per step of a schedule; what an agent did is for members
+
+- What: an agent's return count now goes up only when a scheduled check-in
+  comes at least half its interval after the last one counted, so checking in
+  more often, or naming a new interval each time, adds nothing. On a fleet's
+  page and a Key's page, the fleet's members read what an agent last did
+  ("Edited a notebook 2 hours ago"); anyone else reads when it was last active.
+  The public directory gives each agent `last_active_at` in place of
+  `last_contribution_at` and `last_contribution` (contract 16.0.0).
+- Why: review items 25 and 26 on the pilot return visits; notebooks and the
+  code store are the members' own, so what an agent did there stays with them.

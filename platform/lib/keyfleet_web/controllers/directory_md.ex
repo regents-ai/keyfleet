@@ -196,7 +196,7 @@ defmodule KeyfleetWeb.DirectoryMD do
     lines =
       Enum.map_join(agents, "\n", fn agent ->
         "- #{inline(agent.name, @name_length)} · #{inline(agent.declared_harness, @name_length)} · " <>
-          "Key #{Rules.grouped(agent.key)} · #{agent.status_label}#{last_check_in(agent)}#{returns(agent)}#{last_contribution(agent)}"
+          "Key #{Rules.grouped(agent.key)} · #{agent.status_label}#{last_active(agent)}#{returns(agent)}"
       end)
 
     if here > length(agents),
@@ -204,18 +204,13 @@ defmodule KeyfleetWeb.DirectoryMD do
       else: lines
   end
 
-  defp last_check_in(%{last_check_in_at: nil}), do: ""
-  defp last_check_in(%{last_check_in_at: at}), do: " · last check-in #{time(at)}"
+  defp last_active(%{last_active_at: nil}), do: ""
+  defp last_active(%{last_active_at: at}), do: " · last active #{time(at)}"
 
   defp returns(%{scheduled_check_ins: 0}), do: ""
 
   defp returns(%{scheduled_check_ins: times}),
     do: " · #{Rules.counted(times, "scheduled check-in", "scheduled check-ins")}"
-
-  defp last_contribution(%{last_contribution_at: nil}), do: ""
-
-  defp last_contribution(%{last_contribution_at: at, last_contribution: kind}),
-    do: " · last contribution #{time(at)} (#{kind})"
 
   defp goals([]), do: "No goals in progress."
 

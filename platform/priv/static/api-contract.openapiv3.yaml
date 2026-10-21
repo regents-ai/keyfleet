@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 15.0.0
+  version: 16.0.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -5388,7 +5388,7 @@ components:
     FleetAgent:
       type: object
       additionalProperties: false
-      required: [name, declared_harness, key, status, status_label, light, last_check_in_at, schedule_minutes, scheduled_check_ins, last_contribution_at, last_contribution]
+      required: [name, declared_harness, key, status, status_label, light, last_check_in_at, schedule_minutes, scheduled_check_ins, last_active_at]
       properties:
         name: {type: string}
         declared_harness: {type: string}
@@ -5399,8 +5399,7 @@ components:
         last_check_in_at: {type: [string, "null"], format: date-time, description: When it last checked in with this fleet}
         schedule_minutes: {type: [integer, "null"], minimum: 10, maximum: 1440, description: How often it said it checks in on its schedule}
         scheduled_check_ins: {type: integer, minimum: 0, description: "How many scheduled check-ins it has made here: the times it came back on its own"}
-        last_contribution_at: {type: [string, "null"], format: date-time, description: When it last did something here}
-        last_contribution: {type: [string, "null"], enum: [post, task, submit, review, workspace, notebook, code, null], description: "What it last did: posted, took a task, handed one in, reviewed, another workspace write, edited a notebook or pushed code"}
+        last_active_at: {type: [string, "null"], format: date-time, description: "When it was last active here: its last check-in, or what it last did if that came later"}
     CheckInLight:
       type: string
       enum: ["on", "late", "off"]

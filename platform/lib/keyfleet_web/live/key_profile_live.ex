@@ -1108,13 +1108,20 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
     socket
     |> SharedFigures.follow(:key, [key])
-    |> assign(:key_profile, Map.put(profile, :seen, seen(key)))
+    |> assign(:key_profile, Map.put(profile, :seen, seen(socket, profile.fleet_id, key)))
   end
 
   defp follow_seen(socket),
     do: socket |> SharedFigures.follow(:key, []) |> update(:key_profile, &Map.put(&1, :seen, %{}))
 
-  defp seen(key), do: Map.new(SharedFigures.reading(key) || [])
+  # Each line as the reader's class reads it (`Here.seen_by/2`).
+  defp seen(socket, fleet_id, key) do
+    member? = ShellLive.member?(socket, fleet_id)
+
+    Map.new(SharedFigures.reading(key) || [], fn {wallet, seen} ->
+      {wallet, Here.seen_by(seen, member?)}
+    end)
+  end
 
   @doc "The open Key's agents' lights and lines, drawn again when their shared reading changes."
   def shared_changed(
@@ -1122,9 +1129,18 @@ defmodule KeyfleetWeb.KeyProfileLive do
         {:key_agents, _id} = key
       ) do
     if key == Here.lines_key(profile.fleet_id, profile.token_id),
-      do: assign(socket, :key_profile, %{profile | seen: seen(key)}),
+      do: assign(socket, :key_profile, %{profile | seen: seen(socket, profile.fleet_id, key)}),
       else: socket
   end
 
   def shared_changed(socket, _key), do: socket
+
+  @doc "The open Key's agents' lines, drawn again as the reader's new class reads them."
+  def class_changed(
+        %{assigns: %{key_profile: %{issued?: true, fleet_id: fleet_id} = profile}} = socket,
+        fleet_id
+      ),
+      do: shared_changed(socket, Here.lines_key(fleet_id, profile.token_id))
+
+  def class_changed(socket, _fleet_id), do: socket
 end
