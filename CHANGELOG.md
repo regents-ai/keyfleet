@@ -3691,3 +3691,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - In the fleet directory, for people and agents, a post too long to show
   whole now ends at its last whole word with "…", so a reader can tell it
   goes on. It still stays within the 280 characters the API gives.
+
+## 2026-10-21 — A quoted post's "…" takes the place of a stop or comma
+
+- What: a feed quote cut after "hassle." reads "hassle…", not "hassle.…".
+- Why: a stop followed by "…" reads as a slip.

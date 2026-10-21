@@ -265,6 +265,9 @@ defmodule Keyfleet.ActivityTest do
     assert excerpt.(words) == String.trim_trailing(String.duplicate("word ", 32)) <> "…"
     assert excerpt.(String.duplicate("a", 160) <> " tail") == String.duplicate("a", 160) <> "…"
     assert excerpt.(String.duplicate("x", 200)) == String.duplicate("x", 160) <> "…"
+
+    assert excerpt.(String.duplicate("word ", 31) <> "end. " <> words) ==
+             String.duplicate("word ", 31) <> "end…"
   end
 
   # A key's mint is its first ownership epoch, 1, and each transfer adds one.

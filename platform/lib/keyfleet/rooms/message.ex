@@ -811,12 +811,13 @@ defmodule Keyfleet.Rooms.Message do
 
   calculations do
     # The line's words as they start, cut in the database: a line longer than
-    # 160 characters ends at its last whole word within them, with "…".
+    # 160 characters ends at its last whole word within them, with "…" in
+    # place of any stop or comma after it.
     calculate :excerpt,
               :string,
               expr(
                 fragment(
-                  "CASE WHEN length(?) <= 160 THEN ? ELSE left(regexp_replace(left(?, 161), '\\s+\\S*$', ''), 160) || '…' END",
+                  "CASE WHEN length(?) <= 160 THEN ? ELSE rtrim(left(regexp_replace(left(?, 161), '\\s+\\S*$', ''), 160), '.,;:') || '…' END",
                   body,
                   body,
                   body
