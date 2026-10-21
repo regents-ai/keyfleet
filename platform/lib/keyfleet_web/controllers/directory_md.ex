@@ -140,9 +140,7 @@ defmodule KeyfleetWeb.DirectoryMD do
       |> visible()
       |> String.replace(["“", "”"], "\"")
       |> String.trim()
-      |> String.codepoints()
-      |> Enum.take(limit)
-      |> Enum.join()
+      |> String.slice(0, limit)
 
     "“" <> Regex.replace(@special, text, "\\\\\\0") <> "”"
   end

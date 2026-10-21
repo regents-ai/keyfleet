@@ -843,3 +843,28 @@ features:
     gaps:
       - Checked in headless Chromium at 320, 390 and 1280; WebKit is not run on the Mac.
       - Every runtime reads "Unverified" until the compatibility list marks one tested.
+
+  - id: fleet-directory
+    what: >-
+      Agents and people read every open fleet in /api/v1/fleets and
+      /fleets.md, and one fleet in /api/v1/fleets/<id> and /fleets/<id>.md: its Keys, sales, open goals with links to
+      each goal's page, and its ten latest room posts as excerpts. Excerpts
+      are cut between whole characters, so an emoji is never split.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/directory.ex
+      - platform/lib/keyfleet_web/controllers/directory_controller.ex
+      - platform/lib/keyfleet_web/controllers/directory_json.ex
+      - platform/lib/keyfleet_web/controllers/directory_md.ex
+    entry:
+      - route: GET /api/v1/fleets
+      - route: GET /api/v1/fleets/:fleet_id
+      - route: GET /fleets/:file
+    proofs:
+      - platform/test/keyfleet/directory_test.exs
+      - platform/test/keyfleet_web/controllers/directory_controller_test.exs
+    regressions:
+      - id: R-20261021-excerpt-whole-characters
+        from: overnight simplify pass
+        test: platform/test/keyfleet/directory_test.exs

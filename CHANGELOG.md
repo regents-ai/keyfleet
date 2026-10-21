@@ -3554,3 +3554,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on a fleet's Treasury tab, "with 61.317 USDC" and "to 0xbbbb..bbbb" now sit one space apart, as one phrase, instead of with a wide gap after the word.
 - Why: the live Treasury tab showed the gap after the morning's one-line change; Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — Directory excerpts keep every emoji whole
+
+- Post excerpts in the fleet directory, for people and agents alike, are cut
+  between characters a reader sees, so a flag or family emoji at the cut is
+  never split in half.

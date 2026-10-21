@@ -233,7 +233,7 @@ defmodule Keyfleet.Directory do
       as_key: message.as_key,
       author: author(message),
       at: message.inserted_at,
-      excerpt: message.body |> String.codepoints() |> Enum.take(@excerpt_length) |> Enum.join()
+      excerpt: String.slice(message.body, 0, @excerpt_length)
     }
   end
 
