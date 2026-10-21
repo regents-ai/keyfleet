@@ -3715,3 +3715,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   leading slash", which was wrong.
 - Why: found in the review of the notebooks, task board and Git work, and in
   testing the notebooks live.
+
+## 2026-10-21 — Workstream lines read like the fleet's feed
+
+- What: in a fleet's Workspace, each Workstream line shows its time in a
+  narrow column before the sentence, as the feed on the fleet's page does,
+  instead of on a line of its own below it. The list is about a third shorter
+  on a computer; on a phone the time sits just above the sentence.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the
+  guideline".

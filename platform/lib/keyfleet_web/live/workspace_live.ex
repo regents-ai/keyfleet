@@ -169,7 +169,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <h2 id="workspace-activity-title">Workstream</h2>
           <ol
             id="workspace-activity"
-            class="workspace-lines"
+            class="workspace-lines workspace-stream"
             phx-hook="MotionList"
             data-variant={KeyfleetWeb.Motion.standard("list")}
             data-layout-id="workspace-activity"
@@ -1187,7 +1187,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <ol
           :if={@fleet.work != []}
           id="workspace-public-activity"
-          class="workspace-lines"
+          class="workspace-lines workspace-stream"
           phx-hook="MotionList"
           data-variant={KeyfleetWeb.Motion.standard("list")}
           data-layout-id="workspace-public-activity"

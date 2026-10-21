@@ -326,6 +326,36 @@
   border-bottom: 0;
 }
 
+/* A Workstream line reads like a line of the fleet's feed: its time in a
+   narrow column before the sentence, and above it on a phone. */
+.workspace-stream > li {
+  grid-template-columns: 5.25rem minmax(0, 1fr);
+  column-gap: 0.5rem;
+  align-items: baseline;
+}
+
+.workspace-stream > li > * {
+  grid-column: 2;
+}
+
+.workspace-stream > li > .workspace-detail {
+  grid-row: 1;
+  grid-column: 1;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 47.99rem) {
+  .workspace-stream > li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-stream > li > * {
+    grid-column: 1;
+  }
+}
+
 .workspace-pages {
   display: flex;
   flex-wrap: wrap;
