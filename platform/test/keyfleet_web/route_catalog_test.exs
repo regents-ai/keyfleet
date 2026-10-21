@@ -290,6 +290,11 @@ defmodule KeyfleetWeb.RouteCatalogTest do
 
     assert [page_title: "Key 12 and Key 1,000 · Classic #1"] ++ _description =
              KeyfleetWeb.PublicDocuments.page(dm, dm_params)
+
+    inbox = RouteCatalog.fetch!("/classic/1/keys/:token_id/dms", dm_params)
+
+    assert [page_title: "Messages · Key 12 · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(inbox, dm_params)
   end
 
   defp sample_params(%{parameter_schema: schema}) do

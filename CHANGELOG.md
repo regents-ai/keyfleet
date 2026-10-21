@@ -4417,3 +4417,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - What: a message thread's browser tab reads "Key 12 and Key 40 · Classic #1",
   as its heading does, instead of "Messages · Classic #1".
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — A Key's message inbox tab names the Key
+
+- What: a Key's message inbox tab reads "Messages · Key 12 · Classic #1"
+  instead of "Messages · Classic #1".
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".

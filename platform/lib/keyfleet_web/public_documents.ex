@@ -179,11 +179,11 @@ defmodule KeyfleetWeb.PublicDocuments do
   (`Classic #1`), a Key's, a proposal's or a workspace item's page with its
   number and the fleet (`Key 62 · Classic #1`, `Proposal 3 · Classic #1`,
   `Goal 1 · Classic #1`), a commit's or a file's as its heading names it
-  (`Commit 3f2a9c81d0e4 · Classic #1`, `README.md · Classic #1`), two Keys'
-  messages by both Keys (`Key 12 and Key 40 · Classic #1`), and the
-  fleet's other pages with their own title and the fleet's name
-  (`Treasury · Classic #1`).
-  Each one's description names the fleet.
+  (`Commit 3f2a9c81d0e4 · Classic #1`, `README.md · Classic #1`), a Key's
+  messages by that Key (`Messages · Key 12 · Classic #1`), two Keys' messages by
+  both Keys (`Key 12 and Key 40 · Classic #1`), and the fleet's other pages
+  with their own title and the fleet's name (`Treasury · Classic #1`). Each
+  one's description names the fleet.
   """
   def page(%{route_id: route_id, fleet_id: nil}, _params), do: page(route_id)
 
@@ -210,6 +210,9 @@ defmodule KeyfleetWeb.PublicDocuments do
     {name, _plural} = KeyfleetWeb.WorkspacePage.type_name(type)
     "#{String.capitalize(name)} #{number} · #{fleet}"
   end
+
+  defp fleet_title(:dms, title, fleet, %{"token_id" => key}),
+    do: "#{title} · Key #{grouped(key)} · #{fleet}"
 
   defp fleet_title(:dm, _title, fleet, %{"token_id" => key, "other_token_id" => other}),
     do: "Key #{grouped(key)} and Key #{grouped(other)} · #{fleet}"
