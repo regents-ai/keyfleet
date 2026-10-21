@@ -103,9 +103,9 @@ defmodule KeyfleetWeb.PublicDocuments do
     url_schemes: ~w(http https mailto),
     url_relative: :deny,
     link_rel: "noopener noreferrer",
-    # A code block too wide for the screen scrolls sideways, so a keyboard can
-    # focus it to scroll it.
-    set_tag_attribute_values: %{"pre" => %{"tabindex" => "0"}}
+    # A code block or table too wide for the screen scrolls sideways, so a
+    # keyboard can focus it to scroll it.
+    set_tag_attribute_values: %{"pre" => %{"tabindex" => "0"}, "table" => %{"tabindex" => "0"}}
   ]
 
   def url(path), do: KeyfleetWeb.Endpoint.url() <> path

@@ -600,6 +600,21 @@ features:
     gaps:
       - Width at 390 px checked on the live page, not in a browser test.
 
+  - id: docs-keyboard-scroll
+    what: >-
+      Every code block and table on the reading pages takes keyboard focus, so
+      one too wide for the screen can be scrolled sideways without a pointer.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/public_documents.ex
+    entry:
+      - route: GET /docs
+    proofs:
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    gaps:
+      - axe read live after release.
+
   - id: posting-key
     what: >-
       A person whose wallets hold more than one of a fleet's Keys chooses on the

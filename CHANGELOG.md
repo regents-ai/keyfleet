@@ -3724,3 +3724,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   on a computer; on a phone the time sits just above the sentence.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the
   guideline".
+
+## 2026-10-21 — Docs tables can be scrolled from the keyboard
+
+- What: the tables on /docs and the other reading pages take keyboard focus,
+  as their code blocks already do, so a table wider than the screen can be
+  scrolled sideways with the arrow keys. axe found these tables were the only
+  serious accessibility fault on the public pages, light and dark, desktop and
+  phone. The test now checks every code block and table, not just those that
+  already had the setting.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for
+  human UI and agent UX".

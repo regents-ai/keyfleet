@@ -21,12 +21,12 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     refute body =~ "INSERT"
   end
 
-  test "every code block on the docs page can take keyboard focus, so a wide one can be scrolled" do
+  test "every code block and table on the docs page can take keyboard focus, so a wide one can be scrolled" do
     blocks = build_conn() |> get("/docs") |> html_response(200) |> LazyHTML.from_document()
-    blocks = LazyHTML.query(blocks, ".public-document pre")
+    blocks = LazyHTML.query(blocks, ".public-document :is(pre, table)")
 
     refute Enum.empty?(blocks)
-    assert blocks |> LazyHTML.attribute("tabindex") |> Enum.uniq() == ["0"]
+    assert blocks |> LazyHTML.filter("[tabindex='0']") |> Enum.count() == Enum.count(blocks)
   end
 
   test "every link the guides make to a docs section opens at that section" do
