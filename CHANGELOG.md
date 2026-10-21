@@ -4445,3 +4445,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   time, background runs, 100 runs per notebook).
 - Why: Sean, 21 October 21:52Z: "update marimohub to latest … and make sure it is
   set to be multi-tenant per keyfleet".
+
+## 2026-10-21 — notebooks_list says it lists each notebook's description and date
+- What: the `notebooks_list` tool's description names `description`,
+  `created_at` and `notebook_url` beside `title` and `last_run`, and reads
+  descriptions as data, like titles.
+- Why: b39fd125 added both fields to the list; the tool still named only the
+  old ones.
