@@ -307,7 +307,14 @@ defmodule KeyfleetWeb.WorkspacePage do
         pins:
           for pin <- pins do
             open = if is_binary(project_id), do: notebook_link(fleet_id, project_id, pin.target)
-            %{id: pin.id, target: pin.target, title: pin.title, folder?: false, link: open}
+            %{
+              id: pin.id,
+              target: pin.target,
+              title: pin.title,
+              folder?: false,
+              link: open,
+              whose: whose(pin, actor)
+            }
           end
       }
     else
@@ -315,6 +322,10 @@ defmodule KeyfleetWeb.WorkspacePage do
       {:members_only, name} -> members_only(fleet_id, name, actor, nil)
     end
   end
+
+  # Whose a pin is to the member reading: only its pinner lifts it.
+  defp whose(pin, actor),
+    do: if(pin.human_account_id == actor.human_account_id, do: :mine, else: :theirs)
 
   # The fleet's code: how to copy it, its top folder, the changes sent to it
   # lately, and what its members pinned in it.
@@ -337,7 +348,8 @@ defmodule KeyfleetWeb.WorkspacePage do
               target: pin.target,
               title: pin.title,
               folder?: pin.folder?,
-              link: Code.files_path(fleet_id, pin.target)
+              link: Code.files_path(fleet_id, pin.target),
+              whose: whose(pin, actor)
             }
           end
       }
@@ -550,7 +562,7 @@ defmodule KeyfleetWeb.WorkspacePage do
         fleet_id: fleet_id,
         fleet_name: fleet.name,
         path: path,
-        pinned: fleet_id |> Graph.pins!(:code, opts) |> MapSet.new(& &1.target),
+        pinned: fleet_id |> Graph.pins!(:code, opts) |> Map.new(&{&1.target, whose(&1, actor)}),
         crumbs: crumbs(fleet_id, path),
         clone_url: Code.clone_url(fleet_id),
         pushes: pushes(pushes, fleet_id),

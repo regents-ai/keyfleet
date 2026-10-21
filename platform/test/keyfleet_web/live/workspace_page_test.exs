@@ -19,6 +19,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   @board "/syndicate/1/workspace"
   @notice "Every Key holder can read this. Never put passwords or private data here."
   @holder "0x" <> String.duplicate("d", 40)
+  @member "0x" <> String.duplicate("c", 40)
 
   # The fleet is recorded as deployed, because a fleet still coming soon
   # has no workspace to show. Each page is read by the owner of one of its
@@ -1158,7 +1159,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(view, ~s(#workspace-notebook-#{price}-pin[aria-pressed="true"]))
 
-      # Another holder of one of the fleet's Keys sees the same pin, and lifts it.
+      # Another holder of one of the fleet's Keys sees the same pin, but only
+      # its pinner lifts it.
       other = "0x" <> String.duplicate("b", 40)
       hold!(2, other)
       {:ok, theirs, _html} = live(signed_in_as(visitor, other), @board <> "?place=docs")
@@ -1169,12 +1171,17 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "Price model"
              )
 
-      theirs
+      assert has_element?(
+               theirs,
+               ~s(#workspace-docs-pins-rows [data-pin="#{price}"] button[disabled])
+             )
+
+      view
       |> element(~s(#workspace-docs-pins-rows [data-pin="#{price}"] button))
       |> render_click()
 
-      assert has_element?(theirs, "#workspace-docs-pins-empty")
-      assert has_element?(theirs, ~s(#workspace-notebook-#{price}-pin[aria-pressed="false"]))
+      assert has_element?(view, "#workspace-docs-pins-empty")
+      assert has_element?(view, ~s(#workspace-notebook-#{price}-pin[aria-pressed="false"]))
     end
 
     test "Docs says so when the notebooks aren't connected, or can't be read", %{conn: conn} do
@@ -1278,13 +1285,52 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert {:error, %Ash.Error.Forbidden{}} = Graph.pins(@fleet, :code, actor: outsider)
       assert {:error, %Ash.Error.Forbidden{}} = Graph.pin(pin, actor: %Actors.System{})
 
+      # A pin is its pinner's: another member neither lifts nor retitles it.
+      hold!(2, @member)
+      member = %Actors.Human{human_account_id: 2, wallet_addresses: [@member]}
+      assert {:error, %Ash.Error.Forbidden{}} = Graph.unpin(first, actor: member)
+      assert {:ok, kept} = Graph.pin(%{pin | title: "Mine now"}, actor: member)
+      assert {kept.id, kept.human_account_id} == {first.id, 1}
+
+      assert [%{title: "Read me", human_account_id: 1}] =
+               Graph.pins!(@fleet, :code, actor: member)
+
       assert :ok = Graph.unpin(first, actor: holder)
       assert [] = Graph.pins!(@fleet, :code, actor: holder)
 
-      # Lifting a pin another member lifted first finds nothing to lift, and
-      # the page then reads afresh.
-      assert {:error, %Ash.Error.Invalid{errors: [%Ash.Error.Changes.StaleRecord{}]}} =
-               Graph.unpin(first, actor: holder)
+      # Lifting a pin already lifted, from another tab, finds no pin of theirs
+      # to lift, and the page then reads afresh.
+      assert {:error, %Ash.Error.Forbidden{}} = Graph.unpin(first, actor: holder)
+    end
+
+    test "another member's pin shows pinned, but only its pinner lifts it", %{conn: conn} do
+      store!(%{"README.md" => "Hello"})
+      hold!(2, @member)
+      member = %Actors.Human{human_account_id: 2, wallet_addresses: [@member]}
+
+      Graph.pin!(%{fleet_id: @fleet, place: :code, target: "README.md", title: "README.md"},
+        actor: member
+      )
+
+      {:ok, view, _html} = live(conn, @board <> "?place=code")
+
+      for pin <- [
+            ~s(#workspace-code-rows [data-file="README.md"] button),
+            ~s(#workspace-code-pins-rows [data-pin="README.md"] button)
+          ] do
+        assert has_element?(
+                 view,
+                 pin <>
+                   ~s([aria-pressed="true"][disabled][title="Pinned by another member"])
+               )
+      end
+
+      {:ok, files, _html} = live(conn, Keyfleet.Code.files_path(@fleet, ""))
+
+      assert has_element?(
+               files,
+               ~s(#workspace-file-rows [data-file="README.md"] button[aria-pressed="true"][disabled])
+             )
     end
   end
 

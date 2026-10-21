@@ -14,7 +14,9 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
   hands moves the right to write with it, ends its shards, and an unknown
   owner grants nothing.
 
-  Every key writes the whole fleet's workspace, whatever kind of fleet it is.
+  Every key adds to the whole fleet's workspace, whatever kind of fleet it is;
+  which objects a key may change is the fleet's writer's to answer
+  (`Keyfleet.Graph.Workspace`).
   The policy asks first; the fleet's writer asks again when the write's turn
   comes, and only that answer lets the write through.
 

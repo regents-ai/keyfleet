@@ -21,8 +21,12 @@ defmodule Keyfleet.Graph.Workspace do
   Each write is one operation on the fleet's graph, answered by its writer. A
   write names the key it acts as (`as_key`) and a command id of the caller's
   choosing; the same command id with the same body answers the original result
-  instead of writing twice. Every object belongs to the whole fleet, and every
-  member writes all of it; see `Keyfleet.Graph.Checks.KeyActor`.
+  instead of writing twice. Every member reads every object and builds on it,
+  but an object belongs to one Key: the Key holding it, for a held task, and
+  otherwise the Key that created it. Only that Key changes it or links from
+  it, and only the Key that created it archives it; the fleet's writer
+  answers `not_owner` to anyone else. Who may act as a Key at all: see
+  `Keyfleet.Graph.Checks.KeyActor`.
 
   Only the fleet's members read a workspace: whoever owns one of its keys
   today, an agent holding an active shard of one, or an agent paired with a

@@ -216,6 +216,7 @@ class Host:
         _check_version(obj, body.expected_version)
         _check_not_starting(obj)
         _check_fields(MEMBER_MODELS[obj.type], set(body.set) | set(body.unset), body.set, command, obj)
+        _check_owner(obj, command, taking=_taking(obj, body, command))
         merged = {**obj.data, **body.set}
         for field in body.unset:
             merged.pop(field, None)
@@ -240,6 +241,7 @@ class Host:
         obj = self._editable(body.id)
         _check_version(obj, body.expected_version)
         _check_not_starting(obj)
+        _check_archiver(obj, command)
         archived = {**obj.data["sys"], "archived": True}
 
         def apply(reactions: Reactions) -> dict:
@@ -261,6 +263,7 @@ class Host:
             raise _invalid("type", f"{body.type} cannot link a {source.type} to a {target.type}")
         if body.type == "depends_on" and source.id == target.id:
             raise _invalid("target", "an object cannot depend on itself")
+        _check_owner(source, command)
         data = _validate(RelationData, {"note": body.note}, exclude_none=True)
 
         def apply(reactions: Reactions) -> dict:
@@ -282,6 +285,7 @@ class Host:
             raise _invalid("relation_id", "a review stays linked to the task it judged")
         if rel.type == "forks":
             raise _invalid("relation_id", "a fork stays linked to the task it was copied from")
+        _check_owner(self.graph.get_object(rel.source), command)
         target = self.graph.get_object(rel.target)
 
         def apply(reactions: Reactions) -> dict:
@@ -714,6 +718,53 @@ def _check_holder(task, assignee: Optional[int], key: int) -> None:
             "forbidden_field",
             "an untaken task is taken only by the acting Key",
             {"fields": ["assignee_key"]},
+        )
+
+
+# An item belongs to the Key holding it, for a held task, and otherwise to the
+# Key that created it. Only its owner changes it or links from it; anyone else
+# forks it, or links their own item to it. The one change anyone may make is
+# taking an untaken task as their own.
+def _owner(obj) -> Optional[int]:
+    holder = obj.data.get("assignee_key") if obj.type == "task" else None
+    return _creator(obj) if holder is None else holder
+
+
+def _creator(obj) -> Optional[int]:
+    created_by = obj.data["sys"]["created_by"]
+    return None if created_by is None else created_by["key"]["token_id"]
+
+
+def _taking(obj, body: protocol.PatchBody, command: Command) -> bool:
+    return (
+        obj.type == "task"
+        and obj.data.get("assignee_key") is None
+        and set(body.set) == {"assignee_key"}
+        and not body.unset
+        and body.set["assignee_key"] == command.auth.key.token_id
+    )
+
+
+def _check_owner(obj, command: Command, *, taking: bool = False) -> None:
+    owner = _owner(obj)
+    if owner != command.auth.key.token_id and not taking:
+        raise Refusal(
+            "not_owner",
+            "only the Key this belongs to changes it or links from it: fork it, or link your own item to it",
+            {"id": obj.id, "owner_key": owner},
+        )
+
+
+# Archiving takes an item away from everyone, so only the Key that created it
+# archives it, and a task only once no other Key holds it.
+def _check_archiver(obj, command: Command) -> None:
+    key = command.auth.key.token_id
+    holder = obj.data.get("assignee_key") if obj.type == "task" else None
+    if _creator(obj) != key or holder not in (None, key):
+        raise Refusal(
+            "not_owner",
+            "only the Key that created this archives it, once no other Key holds it: fork it instead",
+            {"id": obj.id, "owner_key": _owner(obj)},
         )
 
 

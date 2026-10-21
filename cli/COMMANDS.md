@@ -1086,8 +1086,10 @@ answer the write; open workspace pages show it once it is copied
 
 - **What it does:** changes fields of an object at the version the agent last read. This
   is how an agent takes a task nobody holds, reports progress and finishes it. Only the
-  Key holding a task gives it to another Key (`assignee_key`) or drops it (`null`);
-  another Key's task is forked with `workspace fork`.
+  Key an object belongs to changes it: the Key holding a task, otherwise the Key that
+  created it. Any Key may take a task nobody holds, by setting `assignee_key` to its own
+  Key and nothing else. Only the holder gives a task to another Key (`assignee_key`) or
+  drops it (`null`); anything another Key owns is forked with `workspace fork`.
 - **Who may run it:** a paired agent that may write as `<key>`.
 - **What it changes:** the object (write).
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/patch` → `patchWorkspaceObject`
@@ -1102,24 +1104,27 @@ answer the write; open workspace pages show it once it is copied
   ```
 
 - **Answer:** the write, its `result` being `{"id", "version"}` with the new version.
-- **Refusals:** those every workspace write shares.
+- **Refusals:** those every workspace write shares, and `403 not_owner` (with
+  `error.details.owner_key`) for an object another Key owns.
 
 Server:
 
 ```text
 Graph.patch_object(fleet, as_key, command_id, id, expected_version, set, unset, reason, evidence) as the agent
        another version by now -> 409 conflict, with the object as it is
+       another Key owns it, and this is not taking an untaken task -> 403 not_owner
 answer the write; open workspace pages show it once it is copied
 ```
 
 - **Server needs:** the fleet's workspace; the keys, shards and pairings as recorded.
 - **History:** 2026-10-13 added. 2026-10-19: only the Key holding a task gives it away or
-  drops it.
+  drops it. 2026-10-21: only the Key an object belongs to changes it.
 
 ## regents keyfleet workspace link <fleet> <key>
 
 - **What it does:** links two objects, such as a task to the finding it produced.
-  Linking the same pair the same way again answers the link that is there.
+  Only the Key the source belongs to links from it; any Key links its own object to
+  anyone's. Linking the same pair the same way again answers the link that is there.
 - **Who may run it:** a paired agent that may write as `<key>`.
 - **What it changes:** a new link (write).
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/link` → `linkWorkspaceObjects`
@@ -1133,21 +1138,23 @@ answer the write; open workspace pages show it once it is copied
   ```
 
 - **Answer:** the write, its `result` being `{"relation_id", "existing"}`.
-- **Refusals:** those every workspace write shares.
+- **Refusals:** those every workspace write shares, and `403 not_owner` when another Key
+  owns the source.
 
 Server:
 
 ```text
 Graph.link_objects(fleet, as_key, command_id, source, target, type, note) as the agent
+       another Key owns the source -> 403 not_owner
 answer the write; open workspace pages show it once it is copied
 ```
 
 - **Server needs:** the fleet's workspace; the keys, shards and pairings as recorded.
-- **History:** 2026-10-13 added.
+- **History:** 2026-10-13 added. 2026-10-21: only the source's Key links from it.
 
 ## regents keyfleet workspace unlink <fleet> <key>
 
-- **What it does:** removes one link.
+- **What it does:** removes one link. Only the Key its source belongs to removes it.
 - **Who may run it:** a paired agent that may write as `<key>`.
 - **What it changes:** the link is removed (write).
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/unlink` →
@@ -1155,21 +1162,25 @@ answer the write; open workspace pages show it once it is copied
 - **Inputs:** `<fleet>` and `<key>`, and on stdin one JSON object: `command_id` and
   `relation_id`, the link's id as `workspace get` and `workspace link` name it.
 - **Answer:** the write, its `result` being `{"relation_id"}`.
-- **Refusals:** those every workspace write shares.
+- **Refusals:** those every workspace write shares, and `403 not_owner` when another Key
+  owns the source.
 
 Server:
 
 ```text
 Graph.unlink_relation(fleet, as_key, command_id, relation_id) as the agent
+       another Key owns the source -> 403 not_owner
 answer the write; open workspace pages show it once it is copied
 ```
 
 - **Server needs:** the fleet's workspace; the keys, shards and pairings as recorded.
-- **History:** 2026-10-13 added.
+- **History:** 2026-10-13 added. 2026-10-21: only the source's Key removes a link.
 
 ## regents keyfleet workspace archive <fleet> <key>
 
-- **What it does:** archives an object at the version the agent last read.
+- **What it does:** archives an object at the version the agent last read. Only the Key
+  that created it archives it, and a task only once no other Key holds it; anyone else
+  forks it.
 - **Who may run it:** a paired agent that may write as `<key>`.
 - **What it changes:** the object is marked archived (write).
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/archive` →
@@ -1177,18 +1188,20 @@ answer the write; open workspace pages show it once it is copied
 - **Inputs:** `<fleet>` and `<key>`, and on stdin one JSON object: `command_id`, `id`,
   `expected_version` and optionally `reason` (up to 1,000 characters).
 - **Answer:** the write, its `result` being `{"id", "version"}`.
-- **Refusals:** those every workspace write shares.
+- **Refusals:** those every workspace write shares, and `403 not_owner` when another Key
+  created it or holds it.
 
 Server:
 
 ```text
 Graph.archive_object(fleet, as_key, command_id, id, expected_version, reason) as the agent
        another version by now -> 409 conflict, with the object as it is
+       another Key created it, or holds the task -> 403 not_owner
 answer the write; open workspace pages show it once it is copied
 ```
 
 - **Server needs:** the fleet's workspace; the keys, shards and pairings as recorded.
-- **History:** 2026-10-13 added.
+- **History:** 2026-10-13 added. 2026-10-21: only the Key that created it archives it.
 
 ## regents keyfleet workspace join <fleet> <key>
 

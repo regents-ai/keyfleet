@@ -1,4 +1,4 @@
-"""Who holds a task: a Key takes an untaken task, only its holder gives it away or drops it, and anyone forks it."""
+"""Who a task belongs to: a Key takes an untaken task, only its holder changes it, gives it away or drops it, only its creator archives it, and anyone forks it."""
 
 import json
 
@@ -73,12 +73,74 @@ def test_a_key_cannot_take_or_drop_a_task_another_key_holds(host, assignee):
     assert _holder(host) == 17
 
 
-def test_a_key_still_edits_a_task_another_key_holds(host):
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"set": {"progress": "blocked"}},
+        {"set": {"next_step": "Ask the customer"}},
+        {"set": {"title": "Another task"}},
+        {"unset": ["deliverable"]},
+    ],
+)
+def test_a_key_cannot_change_a_task_another_key_holds(host, change):
     _assign(host, "take", HOLDER, 17)
 
-    _ok(host, "patch", {"id": "task#2", "expected_version": 2, "set": {"next_step": "Ask the customer"}}, command("e", **OTHER))
+    reply = _call(host, "patch", {"id": "task#2", "expected_version": 2, **change}, command("e", **OTHER))
 
-    assert (_holder(host), host.graph.get_object("task#2").data["next_step"]) == (17, "Ask the customer")
+    assert reply["error"]["code"] == "not_owner"
+    assert reply["error"]["details"] == {"id": "task#2", "owner_key": 17}
+    assert host.graph.get_object("task#2").version == 2
+
+
+def test_the_holder_changes_the_task_they_hold(host):
+    _assign(host, "take", OTHER, 18)
+
+    _ok(host, "patch", {"id": "task#2", "expected_version": 2, "set": {"progress": "blocked", "next_step": "Ask the customer"}}, command("e", **OTHER))
+
+    task = host.graph.get_object("task#2")
+    assert (task.data["progress"], task.data["next_step"]) == ("blocked", "Ask the customer")
+
+
+def test_an_untaken_task_is_changed_only_by_the_key_that_created_it(host):
+    reply = _call(host, "patch", {"id": "task#2", "expected_version": 1, "set": {"progress": "doing", "assignee_key": 18}}, command("e", **OTHER))
+
+    assert reply["error"]["code"] == "not_owner"
+    assert _ok(host, "patch", {"id": "task#2", "expected_version": 1, "set": {"next_step": "Start"}}, command("e2"))["version"] == 2
+
+
+@pytest.mark.parametrize("holder", [HOLDER, OTHER])
+def test_a_held_task_is_not_archived_by_another_key(host, holder):
+    _assign(host, "take", holder, holder["token_id"])
+    archiver = OTHER if holder is HOLDER else HOLDER
+
+    reply = _call(host, "archive", {"id": "task#2", "expected_version": 2}, command("a", **archiver))
+
+    assert reply["error"]["code"] == "not_owner"
+    assert not host.graph.get_object("task#2").data["sys"]["archived"]
+
+
+def test_the_holder_drops_a_task_and_its_creator_archives_it(host):
+    _assign(host, "take", OTHER, 18)
+    refused = _call(host, "archive", {"id": "task#2", "expected_version": 2}, command("a", **OTHER))
+    assert refused["error"]["code"] == "not_owner"
+
+    assert _assign(host, "drop", OTHER, None)["ok"]
+    _ok(host, "archive", {"id": "task#2", "expected_version": 3}, command("a2"))
+
+    assert host.graph.get_object("task#2").data["sys"]["archived"]
+
+
+def test_links_from_a_task_are_its_holders_to_make_and_remove(host):
+    _ok(host, "create", {"type": "goal", "data": {"title": "Another", "outcome": "More"}}, command("g2", **OTHER))
+    [implements] = host.graph.relations(source="task#2", type="implements")
+
+    linked = _call(host, "link", {"source": "task#2", "target": "goal#3", "type": "implements"}, command("l", **OTHER))
+    unlinked = _call(host, "unlink", {"relation_id": implements.id}, command("u", **OTHER))
+
+    assert (linked["error"]["code"], unlinked["error"]["code"]) == ("not_owner", "not_owner")
+    assert [rel.target for rel in host.graph.relations(source="task#2", type="implements")] == ["goal#1"]
+    _ok(host, "create", {"type": "task", "data": {"title": "Theirs"}}, command("t2", **OTHER))
+    _ok(host, "link", {"source": "task#4", "target": "task#2", "type": "depends_on"}, command("l2", **OTHER))
 
 
 def test_a_fork_is_the_forking_keys_task_in_progress_beside_the_one_it_copied(host):
@@ -127,3 +189,18 @@ def test_only_a_live_task_is_forked(host, setup, target):
 
     assert reply["error"]["code"] in {"invalid", "not_found"}
     assert len(host.graph.all_objects()) == objects
+
+
+@pytest.mark.parametrize(("op", "body"), [
+    ("patch", {"id": "goal#1", "expected_version": 1, "set": {"status": "dropped"}}),
+    ("archive", {"id": "goal#1", "expected_version": 1}),
+    ("patch", {"id": "note#3", "expected_version": 1, "set": {"body": "Overwritten"}}),
+    ("archive", {"id": "note#3", "expected_version": 1}),
+])
+def test_another_keys_goal_or_note_is_left_as_its_creator_wrote_it(host, op, body):
+    _ok(host, "create", {"type": "note", "data": {"title": "Mine", "body": "Kept"}}, command("n"))
+
+    reply = _call(host, op, body, command("x", **OTHER))
+
+    assert reply["error"]["code"] == "not_owner"
+    assert host.graph.get_object(body["id"]).version == 1

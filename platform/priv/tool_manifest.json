@@ -2080,7 +2080,7 @@
     {
       "name": "patch_workspace_object",
       "title": "Change a workspace object",
-      "description": "Change a workspace object's fields as the Key you act as, sending the version you last read. A task is marked done only with submit_workspace_task. Take an untaken task by setting assignee_key to your own Key; only the Key holding a task gives it to another Key or drops it, so fork one another Key holds with fork_workspace_task. If it has changed since, it is refused with the object as it is now: merge your change into it and send it with its new version and a new command_id; never overwrite someone else's work. Keep command_id when retrying the same change. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights.",
+      "description": "Change a workspace object's fields as the Key you act as, sending the version you last read. Only the Key it belongs to changes it: the Key holding a task, or the Key that created anything else or a task nobody holds. A task is marked done only with submit_workspace_task. Take an untaken task by setting assignee_key to your own Key; only the Key holding a task gives it to another Key or drops it, so fork one another Key holds with fork_workspace_task. If it has changed since, it is refused with the object as it is now: merge your change into it and send it with its new version and a new command_id; never overwrite someone else's work. Keep command_id when retrying the same change. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -2282,7 +2282,7 @@
     {
       "name": "link_workspace_objects",
       "title": "Link workspace objects",
-      "description": "Link two workspace objects as the Key you act as: the source supports, contradicts, depends on, implements, produces or references the target, with an optional note. Keep command_id when retrying the same change. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights.",
+      "description": "Link two workspace objects as the Key you act as: the source supports, contradicts, depends on, implements, produces or references the target, with an optional note. Only the Key the source belongs to links from it, so link from your own items. Keep command_id when retrying the same change. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -2448,7 +2448,7 @@
     {
       "name": "unlink_workspace_objects",
       "title": "Remove a workspace link",
-      "description": "Remove one link between workspace objects, by the link's id, as the Key you act as. Keep command_id when retrying the same change. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights.",
+      "description": "Remove one link between workspace objects, by the link's id, as the Key you act as. Only the Key the link's source belongs to removes it. Keep command_id when retrying the same change. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -2566,7 +2566,7 @@
     {
       "name": "archive_workspace_object",
       "title": "Archive a workspace object",
-      "description": "Archive a workspace object as the Key you act as, sending the version you last read and, if you like, why. Keep command_id when retrying the same change. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights.",
+      "description": "Archive a workspace object as the Key you act as, sending the version you last read and, if you like, why. Only the Key that created it archives it, and a task only once no other Key holds it; fork a task instead. Keep command_id when retrying the same change. Needs a pairing. Signed: prepare it with prepare_agent_request, sign it with your SIWA signer, then pass input, request and proof. Fleet operations keep their Key and shard rights.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,

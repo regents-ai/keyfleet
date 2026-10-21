@@ -3,11 +3,13 @@ defmodule Keyfleet.Graph.Pin do
   Something a fleet's members keep at hand in their workspace: a notebook in
   its Docs (`place: :docs`, `target` the notebook's id) or a file or folder of
   its code in its Code (`place: :code`, `target` the path from the top of the
-  repository). Every member sees the same pins, and any member pins or unpins.
+  repository). Every member sees the same pins, and any member pins; a pin is
+  its pinner's, so only they unpin it.
 
   The title is what the page showed when it was pinned, so a pin still reads
   sensibly after the notebook or file it names is gone. Pinning what is
-  already pinned keeps the one pin, with the newer title.
+  already pinned keeps the one pin: the pinner's press takes the newer title,
+  and anyone else's leaves the pin as its pinner made it.
   """
   use Ash.Resource,
     domain: Keyfleet.Graph,
@@ -31,6 +33,8 @@ defmodule Keyfleet.Graph.Pin do
       upsert? true
       upsert_identity :one_per_target
       upsert_fields [:title]
+      upsert_condition expr(human_account_id == ^actor(:human_account_id))
+      return_skipped_upsert? true
       validate Keyfleet.Graph.Validations.KnownFleet
     end
 
@@ -51,6 +55,10 @@ defmodule Keyfleet.Graph.Pin do
     policy action_type([:create, :destroy]) do
       forbid_unless actor_attribute_equals(:role, :human)
       authorize_if {Keyfleet.Access.Check, write: :workspace, scope: :fleet_id}
+    end
+
+    policy action_type(:destroy) do
+      authorize_if expr(human_account_id == ^actor(:human_account_id))
     end
   end
 

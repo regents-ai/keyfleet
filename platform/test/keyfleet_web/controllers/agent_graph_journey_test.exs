@@ -50,19 +50,20 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     %{app: app, secret: secret, data_dir: Path.join(tmp_dir, "graph"), sandbox: owner}
   end
 
-  test "two agents patching one version at once get one success and one conflict", c do
+  test "two agents of one key patching one version at once get one success and one conflict",
+       c do
     start_graph(c)
-    [ann, bea] = shard_agents(c)
+    [ann, bea] = for name <- ["Ann", "Bea"], do: tap(join(c, name), &shard(&1, 1))
     goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
 
     answers =
-      [{ann, 1, "achieved"}, {bea, 2, "dropped"}]
-      |> Enum.map(fn {agent, key, status} ->
+      [{ann, "achieved"}, {bea, "dropped"}]
+      |> Enum.map(fn {agent, status} ->
         Task.async(fn ->
           {status,
            graph(c, agent, "patch", %{
-             as_key: key,
-             command_id: "race-#{key}",
+             as_key: 1,
+             command_id: "race-#{status}",
              id: goal["id"],
              expected_version: 1,
              set: %{status: status}
@@ -170,19 +171,11 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     [ann, bea] = shard_agents(c)
     goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
 
-    patched =
-      graph(c, bea, "patch", %{
-        as_key: 2,
-        command_id: "p-1",
-        id: goal["id"],
-        expected_version: 1,
-        set: %{status: "achieved"}
-      })
-
-    assert patched.status == 200
+    joined = graph(c, bea, "join", %{as_key: 2, command_id: "j-1", id: goal["id"]})
+    assert joined.status == 200
 
     read = graph(c, bea, "get", %{id: goal["id"]}).body
-    assert read["agents"] == %{ann.address => "Ann"}
+    assert read["agents"] == %{ann.address => "Ann", bea.address => "Bea"}
     assert ContractSchema.errors(read, "WorkspaceObjectView") == []
 
     changes = graph(c, ann, "changes", %{}).body
@@ -479,9 +472,9 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   end
 
   # Levels decide nothing about the workspace: every Key of a Fibonacci fleet
-  # writes all of it, as in every other fleet. Syndicate keys other suites
+  # adds to all of it, as in every other fleet. Syndicate keys other suites
   # commit outside the sandbox would count as sold, so this runs on Cascade.
-  test "every key writes the whole fleet, and a task another key holds is forked rather than taken",
+  test "every key adds to the whole fleet, and a task another key holds is forked rather than taken, changed or archived",
        c do
     sell_cascade(1..3)
     start_graph(c, fleets: [@fleet, @cascade])
@@ -513,11 +506,18 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     end
 
     edit = %{as_key: 3, command_id: "e-1", id: task["id"], expected_version: 2}
+    archive = %{as_key: 3, command_id: "x-1", id: task["id"], expected_version: 2}
 
-    edited =
-      graph(c, cal, "patch", Map.put(edit, :set, %{next_step: "Ask the customer"}), @cascade)
+    for refused <- [
+          graph(c, cal, "patch", Map.put(edit, :set, %{progress: "blocked"}), @cascade),
+          graph(c, cal, "archive", archive, @cascade)
+        ] do
+      assert {refused.status, refused.body["error"]["code"],
+              refused.body["error"]["details"]["owner_key"]} == {403, "not_owner", 1}
 
-    assert edited.status == 200
+      assert refused.body["error"]["hint"] =~ "Fork"
+      assert ContractSchema.errors(refused.body, "WorkspaceError") == []
+    end
 
     forked = graph(c, cal, "fork", %{as_key: 3, command_id: "f-1", id: task["id"]}, @cascade)
     assert forked.status == 200
@@ -531,13 +531,16 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert Enum.map(fork["relations"], &{&1["type"], &1["target"]}) == [{"forks", task["id"]}]
     assert ContractSchema.errors(fork, "WorkspaceObjectView") == []
 
-    # The holder gives the task away, and the Key it went to drops it.
-    assert assign.(ann, 1, 3, 3).status == 200
-    assert assign.(cal, 3, 4, nil).status == 200
+    # The holder gives the task away, the Key it went to drops it, and the
+    # Key that created it archives it.
+    assert assign.(ann, 1, 2, 3).status == 200
+    assert assign.(cal, 3, 3, nil).status == 200
 
-    assert graph(c, ann, "get", %{id: task["id"]}, @cascade).body["object"]["data"][
-             "assignee_key"
-           ] == nil
+    archived =
+      graph(c, ann, "archive", %{archive | as_key: 1, command_id: "x-2", expected_version: 4}, @cascade)
+
+    assert archived.status == 200
+    assert graph(c, ann, "get", %{id: task["id"]}, @cascade).body["object"]["sys"]["archived"]
   end
 
   test "a wallet that neither owns nor holds a shard of the key it names is refused and nothing is written",

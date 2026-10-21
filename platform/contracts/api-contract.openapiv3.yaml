@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 13.2.0
+  version: 14.0.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -3378,7 +3378,7 @@ components:
           schema: {$ref: "#/components/schemas/WorkspaceWrite"}
     WorkspaceRefused:
       description: >-
-        The workspace refused the request. 400 bad_request: the body does not fit the operation. 403 not_a_key_holder: the signing wallet neither owns the named Key nor holds a shard of it today, nor is paired with the person who owns it. An agent paired with a person, with no Key or shard of its own in the fleet, writes as its person's Key, recorded with the agent's wallet. 403 edits_restricted: a vote of the fleet has restricted the Key's workspace edits; details are empty. 403 self_review: the Key or wallet that submitted the task asked to review it; details.submitted_by names who submitted it. agent_not_paired: the agent has no current pairing; its person signs in on this site and pairs it with Pair New Agent in the side panel, then it signs the request again.
+        The workspace refused the request. 400 bad_request: the body does not fit the operation. 403 not_a_key_holder: the signing wallet neither owns the named Key nor holds a shard of it today, nor is paired with the person who owns it. An agent paired with a person, with no Key or shard of its own in the fleet, writes as its person's Key, recorded with the agent's wallet. 403 edits_restricted: a vote of the fleet has restricted the Key's workspace edits; details are empty. 403 not_owner: the item belongs to another Key, the Key holding a task or otherwise the Key that created it, and only that Key changes it, links from it or (as its creator, once no other Key holds a task) archives it; details.owner_key names it. 403 self_review: the Key or wallet that submitted the task asked to review it; details.submitted_by names who submitted it. agent_not_paired: the agent has no current pairing; its person signs in on this site and pairs it with Pair New Agent in the side panel, then it signs the request again.
       content:
         application/json:
           schema:
@@ -3650,7 +3650,7 @@ components:
           properties:
             code:
               type: string
-              enum: [bad_request, not_found, conflict, invalid, forbidden_field, self_review, duplicate_mismatch, fleet_unknown, not_a_key_holder, workspace_members_only, edits_restricted, ownership_refreshing, graph_unavailable, indeterminate, invalid_request, workspace_limit_reached]
+              enum: [bad_request, not_found, conflict, invalid, forbidden_field, not_owner, self_review, duplicate_mismatch, fleet_unknown, not_a_key_holder, workspace_members_only, edits_restricted, ownership_refreshing, graph_unavailable, indeterminate, invalid_request, workspace_limit_reached]
             message: {type: string}
             hint: {type: string}
             details: {type: object}

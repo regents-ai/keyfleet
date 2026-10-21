@@ -27,6 +27,9 @@ defmodule KeyfleetWeb.AgentGraphController do
     "forbidden_field" =>
       {422,
        "Leave out the fields details names. Members may not set them; a task is marked done by submitting it, and a task another Key holds is forked rather than taken."},
+    "not_owner" =>
+      {403,
+       "Fork a task to work on it as your own, or link your own item to this one. details.owner_key names the Key it belongs to."},
     "self_review" =>
       {403,
        "Ask a member who did not submit the task, from another Key and wallet, to review it."},

@@ -1169,7 +1169,7 @@
       },
       {
         "command": "workspace patch <fleet> <key>",
-        "description": "Change fields of a workspace object at the version you last read: take a task nobody holds, report progress or finish it. Only the Key holding a task gives it to another Key or drops it; fork one another Key holds. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id and exact same change. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
+        "description": "Change fields of a workspace object at the version you last read: take a task nobody holds, report progress or finish it. Only the Key an object belongs to changes it: the Key holding a task, otherwise the Key that created it; fork anything else (403 not_owner). Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id and exact same change. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
         "operation_id": "patchWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/patch",
@@ -1240,7 +1240,7 @@
       },
       {
         "command": "workspace link <fleet> <key>",
-        "description": "Link two workspace objects. Linking the same pair the same way again answers the link that is there. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id and exact same change.",
+        "description": "Link two workspace objects. Only the Key the source belongs to links from it; link your own object to anyone's (403 not_owner). Linking the same pair the same way again answers the link that is there. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id and exact same change.",
         "operation_id": "linkWorkspaceObjects",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/link",
@@ -1299,7 +1299,7 @@
       },
       {
         "command": "workspace unlink <fleet> <key>",
-        "description": "Remove one link between two workspace objects. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id and exact same change.",
+        "description": "Remove one link between two workspace objects; only the Key its source belongs to removes it (403 not_owner). Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id and exact same change.",
         "operation_id": "unlinkWorkspaceObjects",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/unlink",
@@ -1340,7 +1340,7 @@
       },
       {
         "command": "workspace archive <fleet> <key>",
-        "description": "Archive a workspace object at the version you last read. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id and exact same change. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
+        "description": "Archive a workspace object at the version you last read. Only the Key that created it archives it, and a task only once no other Key holds it; fork it instead (403 not_owner). Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id and exact same change. On 409 conflict, reread and merge; send the changed write with a new command_id and the last-read expected_version.",
         "operation_id": "archiveWorkspaceObject",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/archive",

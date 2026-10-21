@@ -349,7 +349,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 place={:docs}
                 target={notebook.id}
                 name={notebook.title}
-                pinned?={pinned?(@board.pins, notebook.id)}
+                whose={whose(@board.pins, notebook.id)}
               />
             </li>
           </ol>
@@ -426,7 +426,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 place={:code}
                 target={entry.path}
                 name={entry.path}
-                pinned?={pinned?(@board.pins, entry.path)}
+                whose={whose(@board.pins, entry.path)}
               />
             </li>
           </ol>
@@ -538,7 +538,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
               place={@place}
               target={pin.target}
               name={pin.title}
-              pinned?={true}
+              whose={pin.whose}
             />
           </li>
         </ol>
@@ -551,19 +551,23 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :place, :atom, required: true
   attr :target, :string, required: true
   attr :name, :string, required: true, doc: "what a press pins, read out and shown on hover"
-  attr :pinned?, :boolean, required: true
+  attr :whose, :atom,
+    values: [nil, :mine, :theirs],
+    doc: "whose pin is on it, if any: only its pinner lifts a pin"
 
-  # A pin a press sets or lifts, for every member of the fleet to see.
+  # A pin a press sets or lifts, for every member of the fleet to see. Another
+  # member's pin shows pinned, but only they lift it.
   defp pin_toggle(assigns) do
     ~H"""
     <button
       id={@id}
       type="button"
       class="kf-pin"
-      aria-pressed={to_string(@pinned?)}
-      aria-label={if @pinned?, do: "Unpin #{@name}", else: "Pin #{@name}"}
-      title={if @pinned?, do: "Unpin", else: "Pin"}
-      phx-click={if @pinned?, do: "unpin", else: "pin"}
+      aria-pressed={to_string(@whose != nil)}
+      aria-label={pin_label(@whose, @name)}
+      title={pin_title(@whose)}
+      disabled={@whose == :theirs}
+      phx-click={if @whose == :mine, do: "unpin", else: "pin"}
       phx-value-place={@place}
       phx-value-target={@target}
     >
@@ -574,7 +578,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
     """
   end
 
-  defp pinned?(pins, target), do: Enum.any?(pins, &(&1.target == target))
+  defp whose(pins, target), do: Enum.find_value(pins, &(&1.target == target && &1.whose))
+
+  defp pin_title(nil), do: "Pin"
+  defp pin_title(:mine), do: "Unpin"
+  defp pin_title(:theirs), do: "Pinned by another member"
+
+  defp pin_label(:theirs, name), do: "#{name}, pinned by another member"
+  defp pin_label(whose, name), do: "#{pin_title(whose)} #{name}"
 
   # An element id made from a path or a notebook's id, which may hold
   # characters an id can't.
@@ -998,7 +1009,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
   end
 
   attr :listing, :any, required: true
-  attr :pinned, :any, required: true, doc: "the paths pinned in the fleet's code, as a MapSet"
+  attr :pinned, :map,
+    required: true,
+    doc: "whose each path pinned in the fleet's code is, `:mine` or `:theirs`"
 
   defp folder(%{listing: {:folder, entries}} = assigns) do
     assigns = assign(assigns, :entries, entries)
@@ -1024,7 +1037,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           place={:code}
           target={entry.path}
           name={entry.path}
-          pinned?={MapSet.member?(@pinned, entry.path)}
+          whose={@pinned[entry.path]}
         />
       </li>
     </ol>
@@ -1570,8 +1583,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
   @doc """
   A press of a pin on the workspace page on show. A pin names something the
   page lists, by its place and `target`, and keeps the title the page shows;
-  a press naming anything else changes nothing. Unpinning lifts the pin with
-  that place and target, wherever the page showed it. Either way the page
+  a press naming anything else changes nothing. Unpinning lifts the member's
+  own pin with that place and target, wherever the page showed it; another
+  member's pin stays. Either way the page
   reads afresh: a member who lost their Key meanwhile sees what they may read.
   """
   def handle_event("pin", %{"place" => place, "target" => target}, socket) do
@@ -1631,11 +1645,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   defp pressed(:ok, socket), do: {:noreply, read_workspace(socket)}
   defp pressed({:ok, _pin}, socket), do: {:noreply, read_workspace(socket)}
+  # A pin that isn't the member's, or that they lifted already from another tab.
   defp pressed({:error, %Ash.Error.Forbidden{}}, socket), do: {:noreply, read_workspace(socket)}
-
-  # Another member lifted the pin first.
-  defp pressed({:error, %Ash.Error.Invalid{errors: [%Ash.Error.Changes.StaleRecord{}]}}, socket),
-    do: {:noreply, read_workspace(socket)}
 
   defp pressed({:error, failure}, _socket), do: raise(failure)
 

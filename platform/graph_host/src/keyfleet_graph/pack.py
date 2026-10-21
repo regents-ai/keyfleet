@@ -198,7 +198,8 @@ class ReviewReceipt(_Model):
 
 
 class Sys(_Model):
-    # Every item belongs to the whole fleet, and every member may change it.
+    # Every item is the whole fleet's to read and build on; only the Key it
+    # belongs to changes or archives it.
     scope: Literal["fleet"]
     created_by: Member
     archived: bool
