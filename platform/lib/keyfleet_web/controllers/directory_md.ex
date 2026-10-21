@@ -11,7 +11,7 @@ defmodule KeyfleetWeb.DirectoryMD do
   """
 
   alias Keyfleet.Fleets.{Presets, Rules}
-  alias KeyfleetWeb.{DirectoryJSON, PublicDocuments}
+  alias KeyfleetWeb.{ActivityLines, DirectoryJSON, PublicDocuments}
 
   @special ~r/[\\`*_\[\]()#<>|!~]/
   # Control and format characters: escape codes, zero-width characters, byte
@@ -220,10 +220,9 @@ defmodule KeyfleetWeb.DirectoryMD do
   defp title(nil), do: "untitled"
   defp title(title), do: inline(title, @title_length)
 
-  defp tasks(%{tasks_in_progress: doing, work: work}) do
-    "#{count(work.tasks_taken, "task")} taken · #{count(work.tasks_untaken, "task")} nobody has taken yet · " <>
-      "#{count(doing, "task")} in progress. " <>
-      "The workspace itself is for Key holders."
+  defp tasks(%{work: work}) do
+    counts = ActivityLines.task_counts(work.tasks_taken, work.tasks_untaken) || "No tasks yet"
+    "#{counts}. The workspace itself is for Key holders."
   end
 
   defp room_lines(rooms) do

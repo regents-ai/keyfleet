@@ -265,17 +265,30 @@ defmodule KeyfleetWeb.ActivityLines do
     }
   end
 
-  # A row of nothing but noughts says no more than "No goals yet" does.
-  defp counts(%{goals_open: 0, tasks_taken: 0, tasks_untaken: 0}), do: nil
-
   defp counts(%{goals_open: goals, tasks_taken: taken, tasks_untaken: untaken}) do
-    [
+    joined_counts([
       goals > 0 && Rules.counted(goals, "goal in progress", "goals in progress"),
+      task_counts(taken, untaken)
+    ])
+  end
+
+  @doc """
+  A fleet's unfinished tasks in words, as "3 tasks taken · 4 not taken yet",
+  each part left out at nought, or nil when there are none.
+  """
+  def task_counts(taken, untaken) do
+    joined_counts([
       taken > 0 && Rules.counted(taken, "task taken", "tasks taken"),
       untaken > 0 && untaken(untaken, taken)
-    ]
-    |> Enum.filter(& &1)
-    |> Enum.join(" · ")
+    ])
+  end
+
+  # A row of nothing but noughts says no more than "No goals yet" does: nil.
+  defp joined_counts(parts) do
+    case Enum.filter(parts, & &1) do
+      [] -> nil
+      parts -> Enum.join(parts, " · ")
+    end
   end
 
   # After "3 tasks taken", "2 not taken yet" needs no "tasks" of its own.

@@ -78,6 +78,20 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     refute body =~ "<script>"
   end
 
+  test "the Tasks section counts unfinished tasks the way the fleet's page does", %{conn: conn} do
+    tasks = fn -> conn |> get("/fleets/#{@fleet}.md") |> response(200) |> section("## Tasks") end
+
+    assert tasks.() == "No tasks yet. The workspace itself is for Key holders."
+
+    taken = Workspace.create(@fleet, "task", %{"title" => "Map the plates"})
+    Workspace.edit(@fleet, taken, %{"assignee_key" => 4})
+    Workspace.create(@fleet, "task", %{"title" => "Paint the hull"})
+    Workspace.create(@fleet, "task", %{"title" => "Check the rivets"})
+
+    assert tasks.() ==
+             "1 task taken · 2 not taken yet. The workspace itself is for Key holders."
+  end
+
   test "each fleet's sales line gives the next key's price", %{conn: conn} do
     ChainHelpers.deploy!("fleet_tech_classic")
     ChainHelpers.seed_cursor!("fleet_tech_classic")
@@ -231,5 +245,11 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
       %{fleet_id: @fleet, slug: "general", body: body, idempotency_key: Ash.UUID.generate()},
       actor: PairingHelpers.agent_for!(owner())
     )
+  end
+
+  # The first paragraph under `heading`.
+  defp section(body, heading) do
+    [_before, after_heading] = String.split(body, heading <> "\n\n", parts: 2)
+    after_heading |> String.split("\n\n", parts: 2) |> hd()
   end
 end

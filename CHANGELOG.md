@@ -3605,3 +3605,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   that a push taking over two minutes was refused after its whole upload, and
   that a database hiccup while noting a push broke git's answer though the
   push had landed.
+
+## 2026-10-21 — A fleet's Markdown counts its tasks the way its page does
+
+- What: the Tasks section of /fleets/{fleet}.md reads "9 tasks taken." where it read "9 tasks taken · 0 tasks nobody has taken yet · 0 tasks in progress."; a count at nought is left out, and a fleet with none says "No tasks yet."
+- Why: agents read the same counts, in the same words, as people see under Trying now.
