@@ -371,7 +371,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         names_sender={false}
         id="key-profile-claim-action"
         flow={:claim}
-        tool="claim"
+        tool="keys_claim"
         fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
         actor={@actor}
         lease={@lease}

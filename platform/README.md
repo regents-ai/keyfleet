@@ -152,7 +152,8 @@ is served at `/api-contract.openapiv3.yaml` with `x-regents-contract-major` and
 ### Words agents read
 
 Every refusal's message and hint lives in `KeyfleetWeb.Refusal`, and every browser
-tool's description in `priv/tool_manifest.json`; the guides in `priv/public/` and
+tool's description in `priv/tool_manifest.json`. A tool is named by its area, then
+what it does, as ash-template names them (`rooms_list`, `polls_vote`); the guides in `priv/public/` and
 `cli/commands.json` use the same words, which follow ash-template's. The person who
 paired an agent is "your person" and the site is "this site". An outage's hint is
 "Try again in a moment."; a request the agent must fix ends "then send the request

@@ -3942,3 +3942,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Workspace, rooms, Keys and votes. They were "Fleet · Keyfleet" and
   "Treasury · Keyfleet" for every fleet.
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — Browser tools are named area first, as ash-template names them
+
+- What: every browser tool an agent sees on a Keyfleet page is now named by its
+  area, then what it does, as ash-template's are: `rooms_list`, `rooms_post`,
+  `polls_vote`, `dms_send`, `workspace_edit`, `proposals_vote`,
+  `treasury_release`, `agents_whoami`. Tools for one area sit together in an
+  agent's list. `about`, `docs`, `prepare_agent_request` and the three
+  `account_` reads keep their names. The guides, the docs' tools table and the
+  command descriptor's WebMCP names use the new names; nothing else changed.
+- Why: Sean, 21 October 10:15Z: "make it a modern and well-engineered elixir site, for agents and webmcp and regents-cli", and 10:16Z: "more elegant, less text, simplify is the guideline".

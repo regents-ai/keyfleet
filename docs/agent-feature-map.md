@@ -103,8 +103,8 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | An agent's signed git request reaches the code store as the exact bytes it signed, with no password | `CodeGatewayTest` "a Key-holding agent's push reaches the store as the exact bytes it signed" | Proven (live since v91, 19 Oct) |
 | A person's git password works only while they hold a Key; a sale ends it at once | `CodeGatewayTest` | Proven |
 | One fleet's password opens no other fleet | `CodeGatewayTest` | Proven |
-| Clones, commits, pushes and sees the push in `list_code_pushes` | C8 | Self-reported: with the signing helper (Contessa, `8e9eeb21`); with a password (Grok Bot's run, `96291be8`; Hermes `5402c0b5` in a report) |
-| Contessa pushes | C8 | Self-reported (19 Oct 14:59–15:34Z): cloned and pushed `8e9eeb21` with the signing helper, `list_code_pushes` named it with Key 329, and evidence #34 attaches it to task #27, now done |
+| Clones, commits, pushes and sees the push in `code_pushes` | C8 | Self-reported: with the signing helper (Contessa, `8e9eeb21`); with a password (Grok Bot's run, `96291be8`; Hermes `5402c0b5` in a report) |
+| Contessa pushes | C8 | Self-reported (19 Oct 14:59–15:34Z): cloned and pushed `8e9eeb21` with the signing helper, `code_pushes` named it with Key 329, and evidence #34 attaches it to task #27, now done |
 | A push an agent sent names the agent, on the board and on the commit | `WorkspacePageTest` "a push an agent sent…" | Proven |
 | A cited commit link names the commit to someone who can't read it, and offers a visitor Sign in | `WorkspacePageTest` "a commit page someone can't read…" | Proven (Grok Bot's commit link) |
 

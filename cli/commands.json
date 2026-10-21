@@ -43,7 +43,7 @@
       "operation_id": "listFleets",
       "method": "GET",
       "path": "/api/v1/fleets",
-      "webmcp": "list_fleets",
+      "webmcp": "fleets_list",
       "authority": "public",
       "effect": "read"
     },
@@ -53,7 +53,7 @@
       "operation_id": "getFleet",
       "method": "GET",
       "path": "/api/v1/fleets/{fleet_id}",
-      "webmcp": "read_fleet",
+      "webmcp": "fleets_show",
       "authority": "public",
       "effect": "read",
       "arguments": [
@@ -145,7 +145,7 @@
       "operation_id": "buildPresence",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/presence",
-      "webmcp": "mark_present",
+      "webmcp": "keys_mark_present",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -164,7 +164,7 @@
       "operation_id": "buildProposal",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/proposals/create",
-      "webmcp": "propose",
+      "webmcp": "proposals_create",
       "authority": "paired_agent",
       "effect": "write",
       "arguments": [
@@ -281,7 +281,7 @@
       "operation_id": "buildVote",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/proposals/vote",
-      "webmcp": "vote",
+      "webmcp": "proposals_vote",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -320,7 +320,7 @@
       "operation_id": "buildCancel",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/proposals/cancel",
-      "webmcp": "cancel_proposal",
+      "webmcp": "proposals_cancel",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -347,7 +347,7 @@
       "operation_id": "buildCarryOut",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/proposals/carry_out",
-      "webmcp": "carry_out",
+      "webmcp": "proposals_carry_out",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -374,7 +374,7 @@
       "operation_id": "buildSplit",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/split",
-      "webmcp": "run_split",
+      "webmcp": "treasury_release",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -393,7 +393,7 @@
       "operation_id": "buildSendShare",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/treasury/send_share",
-      "webmcp": "send_share",
+      "webmcp": "treasury_send_share",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -412,7 +412,7 @@
       "operation_id": "buildConvert",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/treasury/convert",
-      "webmcp": "convert_to_regent",
+      "webmcp": "treasury_buy_regent",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -439,7 +439,7 @@
       "operation_id": "buildClaim",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim",
-      "webmcp": "claim",
+      "webmcp": "keys_claim",
       "authority": "paired_agent",
       "effect": "read",
       "arguments": [
@@ -1678,7 +1678,7 @@
         "authority": "paired_agent",
         "conditions": ["member"],
         "effect": "read",
-        "webmcp": "list_notebooks",
+        "webmcp": "notebooks_list",
         "arguments": [
           {
             "name": "fleet",
@@ -1698,7 +1698,7 @@
         "authority": "paired_agent",
         "conditions": ["member"],
         "effect": "write",
-        "webmcp": "start_notebook_run",
+        "webmcp": "notebooks_run",
         "arguments": [
           {
             "name": "fleet",
@@ -1735,7 +1735,7 @@
         "authority": "paired_agent",
         "conditions": ["member"],
         "effect": "read",
-        "webmcp": "read_notebook_result",
+        "webmcp": "notebooks_result",
         "arguments": [
           {
             "name": "fleet",
@@ -1769,7 +1769,7 @@
         "authority": "paired_agent",
         "conditions": ["member"],
         "effect": "write",
-        "webmcp": "create_notebook",
+        "webmcp": "notebooks_create",
         "arguments": [
           {
             "name": "fleet",
@@ -1815,7 +1815,7 @@
         "authority": "paired_agent",
         "conditions": ["member"],
         "effect": "read",
-        "webmcp": "list_notebook_files",
+        "webmcp": "notebooks_files",
         "arguments": [
           {
             "name": "fleet",
@@ -1858,7 +1858,7 @@
         "authority": "paired_agent",
         "conditions": ["member"],
         "effect": "read",
-        "webmcp": "read_notebook_file",
+        "webmcp": "notebooks_read_file",
         "arguments": [
           {
             "name": "fleet",
@@ -1892,7 +1892,7 @@
         "authority": "paired_agent",
         "conditions": ["member"],
         "effect": "write",
-        "webmcp": "add_notebook_file",
+        "webmcp": "notebooks_add_file",
         "arguments": [
           {
             "name": "fleet",
@@ -1934,7 +1934,7 @@
         "authority": "paired_agent",
         "conditions": ["member"],
         "effect": "write",
-        "webmcp": "write_notebook_file",
+        "webmcp": "notebooks_write_file",
         "arguments": [
           {
             "name": "fleet",

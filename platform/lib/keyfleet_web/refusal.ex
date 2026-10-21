@@ -275,7 +275,7 @@ defmodule KeyfleetWeb.Refusal do
        "Leave out the schedule, then start each run when you want it."},
     "notebook_sessions_full" =>
       {"This fleet already has ten notebooks open.",
-       "End a session you no longer need, or wait for an idle one to close after 15 minutes, then try again. A background run (start_notebook_run) doesn't count."},
+       "End a session you no longer need, or wait for an idle one to close after 15 minutes, then try again. A background run (notebooks_run) doesn't count."},
     "notebook_requests_limit_reached" =>
       {"You've sent more requests to these notebooks this minute than they take.",
        "Wait the number of seconds in Retry-After, then try again."},
@@ -290,13 +290,13 @@ defmodule KeyfleetWeb.Refusal do
       {"This fleet's notebooks aren't answering right now.", "Try again in a moment."},
     "notebook_run_not_found" =>
       {"This fleet has no such notebook or run.",
-       "Check the notebook's id with list_notebooks. Read a run by the run_id start_notebook_run answered; runs are kept for 30 days."},
+       "Check the notebook's id with notebooks_list. Read a run by the run_id notebooks_run answered; runs are kept for 30 days."},
     "notebook_runs_full" =>
       {"This notebook can't take another run right now.",
-       "Read the runs you started with read_notebook_result until they finish, then start another."},
+       "Read the runs you started with notebooks_result until they finish, then start another."},
     "notebook_file_not_found" =>
       {"This fleet has no such notebook or file.",
-       "Check the notebook's id with list_notebooks and the file's path with list_notebook_files."},
+       "Check the notebook's id with notebooks_list and the file's path with notebooks_files."},
     "notebook_file_conflict" =>
       {"The file wasn't written.",
        "Either a file is there already at the path you added, or the notebook is open for editing or saving another change. Add it at a new path, or try again in a minute."},

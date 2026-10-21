@@ -100,7 +100,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
-        tool="mark_present"
+        tool="keys_mark_present"
       />
 
       <section class="proposals-panel" aria-labelledby="proposals-list-title">
@@ -249,7 +249,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             id="proposal-vote-action"
             class="proposals-action"
             flow={:ballot}
-            tool="vote"
+            tool="proposals_vote"
             fleet={fleet(@page)}
             actor={@actor}
             lease={@lease}
@@ -296,7 +296,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             id="proposal-carry-out-action"
             class="proposals-action"
             flow={:carry_out}
-            tool="carry_out"
+            tool="proposals_carry_out"
             fleet={fleet(@page)}
             actor={@actor}
             lease={@lease}
@@ -313,7 +313,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             id="proposal-cancel-action"
             class="proposals-action"
             flow={:cancel}
-            tool="cancel_proposal"
+            tool="proposals_cancel"
             fleet={fleet(@page)}
             actor={@actor}
             lease={@lease}
@@ -542,7 +542,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         id="propose-action"
         class="proposals-action"
         flow={:propose}
-        tool="propose"
+        tool="proposals_create"
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
@@ -852,7 +852,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         id="proposals-regents-share"
         class="proposals-action"
         flow={:send_share}
-        tool="send_share"
+        tool="treasury_send_share"
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
@@ -877,7 +877,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         id="proposals-convert"
         class="proposals-action"
         flow={:convert}
-        tool="convert_to_regent"
+        tool="treasury_buy_regent"
         fleet={fleet(@page)}
         actor={@actor}
         lease={@lease}
@@ -948,7 +948,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       id="proposals-split-action"
       class="proposals-action"
       flow={:run_split}
-      tool="run_split"
+      tool="treasury_release"
       fleet={fleet(@page)}
       actor={@actor}
       lease={@lease}

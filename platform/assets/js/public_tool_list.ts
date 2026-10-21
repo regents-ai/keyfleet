@@ -44,17 +44,17 @@ type Request = (input: Record<string, string>, signal: AbortSignal | undefined) 
 
 // Each tool reads the site's own public document, in the Markdown an agent
 // gets when it asks for that page: the About page, the docs, or the open
-// fleet directory. A refusal, such as 404 fleet_unknown, is passed on as the
-// site gives it: its error when it answers in JSON, and otherwise its words,
-// as the directory says it can't be read right now.
+// fleet directory. A refusal is passed on as the site gives it: its error when
+// it answers in JSON, and otherwise its words, such as a missing fleet's
+// Markdown 404 that links every fleet.
 const requests: Record<string, Request> = {
   about: (_input, signal) => read("/about", signal),
   docs: (_input, signal) => read("/docs", signal),
-  list_fleets: (_input, signal) => read("/fleets.md", signal),
-  read_fleet: (input, signal) => read(`/fleets/${encodeURIComponent(input.fleet_id)}.md`, signal),
-  list_proposals: (input, signal) => read(`/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/proposals${input.before === undefined ? "" : `?before=${encodeURIComponent(input.before)}`}`, signal, "application/json"),
-  read_treasury: (input, signal) => read(`/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/treasury`, signal, "application/json"),
-  read_workspace_pulse: (input, signal) => read(`/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/workspace/pulse`, signal, "application/json"),
+  fleets_list: (_input, signal) => read("/fleets.md", signal),
+  fleets_show: (input, signal) => read(`/fleets/${encodeURIComponent(input.fleet_id)}.md`, signal),
+  proposals_list: (input, signal) => read(`/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/proposals${input.before === undefined ? "" : `?before=${encodeURIComponent(input.before)}`}`, signal, "application/json"),
+  treasury_show: (input, signal) => read(`/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/treasury`, signal, "application/json"),
+  workspace_pulse: (input, signal) => read(`/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/workspace/pulse`, signal, "application/json"),
 }
 
 async function read(path: string, signal: AbortSignal | undefined, accept = "text/markdown"): Promise<Reply> {

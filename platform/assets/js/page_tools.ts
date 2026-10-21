@@ -34,15 +34,15 @@ type Fields = Record<string, string>
 // turning USDC into REGENT fill the group's form with what the agent named;
 // the others press with the form as it is.
 const presses: Record<string, (input: Fields) => {step: string; form?: Fields}> = {
-  mark_present: () => ({step: "present"}),
-  propose: input => ({step: "propose", form: input}),
-  run_split: () => ({step: "run_split"}),
-  send_share: () => ({step: "send_share"}),
-  convert_to_regent: input => ({step: "convert", form: input}),
-  vote: input => ({step: input.choice}),
-  cancel_proposal: () => ({step: "cancel"}),
-  carry_out: () => ({step: "carry_out"}),
-  claim: input => ({step: `claim-${input.asset}`}),
+  keys_mark_present: () => ({step: "present"}),
+  proposals_create: input => ({step: "propose", form: input}),
+  treasury_release: () => ({step: "run_split"}),
+  treasury_send_share: () => ({step: "send_share"}),
+  treasury_buy_regent: input => ({step: "convert", form: input}),
+  proposals_vote: input => ({step: input.choice}),
+  proposals_cancel: () => ({step: "cancel"}),
+  proposals_carry_out: () => ({step: "carry_out"}),
+  keys_claim: input => ({step: `claim-${input.asset}`}),
 }
 
 const failures: Record<Failure, {message: string; hint: string}> = {

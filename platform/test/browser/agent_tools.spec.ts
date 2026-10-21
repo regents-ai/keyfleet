@@ -77,26 +77,27 @@ test("the homepage and a fleet's pages offer every site tool, one set however th
 test("with nobody signed in and no proof, every public read answers, and an unknown fleet is refused", async ({page}) => {
   await open(page, fleetPath)
 
-  for (const name of ["about", "docs", "list_fleets"]) {
+  for (const name of ["about", "docs", "fleets_list"]) {
     const read = await callTool(page, name, {})
     expect(read, name).toMatchObject({ok: true, status: 200})
     expect(read.data.length, name).toBeGreaterThan(0)
   }
 
-  // The directory lists the fleet with the address read_fleet reads it at.
-  expect((await callTool(page, "list_fleets", {})).data).toContain(`/fleets/${fleet}.md`)
-  const fleetRead = await callTool(page, "read_fleet", {fleet_id: fleet})
+  // The directory lists the fleet with the address fleets_show reads it at.
+  expect((await callTool(page, "fleets_list", {})).data).toContain(`/fleets/${fleet}.md`)
+  const fleetRead = await callTool(page, "fleets_show", {fleet_id: fleet})
   expect(fleetRead).toMatchObject({ok: true, status: 200})
   expect(fleetRead.data.length).toBeGreaterThan(0)
 
-  for (const name of ["read_treasury", "list_proposals", "read_workspace_pulse"]) {
+  for (const name of ["treasury_show", "proposals_list", "workspace_pulse"]) {
     const read = await callTool(page, name, {fleet_id: fleet})
     expect(read, name).toMatchObject({ok: true, status: 200})
     expect(JSON.parse(read.data).fleet_id, name).toBe(fleet)
   }
 
-  const unknown = await callTool(page, "read_fleet", {fleet_id: "no_such_fleet"})
-  expect(unknown).toMatchObject({ok: false, status: 404, error: {code: "fleet_unknown"}})
+  const unknown = await callTool(page, "fleets_show", {fleet_id: "no_such_fleet"})
+  expect(unknown).toMatchObject({ok: false, status: 404})
+  expect(unknown.data).toContain("/fleets.md")
 })
 
 test("a paired agent learns who it is and who it acts for, and reading Credits spends none", async ({page}) => {
@@ -105,12 +106,12 @@ test("a paired agent learns who it is and who it acts for, and reading Credits s
   pairAgent(agent, person)
   await open(page, "/")
 
-  const whoami = await callSigned(page, agent, "agent_whoami", {})
+  const whoami = await callSigned(page, agent, "agents_whoami", {})
   expect(whoami).toMatchObject({ok: true, status: 200})
   expect(whoami.data.data.agent.wallet).toBe(agent)
   expect(whoami.data.data.status).toBe("paired")
 
-  const status = await callSigned(page, agent, "agent_status", {})
+  const status = await callSigned(page, agent, "agents_status", {})
   expect(status).toMatchObject({ok: true, status: 200})
   expect(status.data.data.wallet).toBe(agent)
   expect(status.data.data.account.wallet_address).toBe(person)
@@ -142,19 +143,19 @@ test("an agent posts one line in the Public room, and catching up again after a 
   pairAgent(agent, person)
   await open(page, fleetPath)
 
-  expect(await callSigned(page, agent, "join_as_agent", {name: "Browser tools agent", declared_harness: "test"}))
+  expect(await callSigned(page, agent, "agents_join", {name: "Browser tools agent", declared_harness: "test"}))
     .toMatchObject({ok: true, status: 200})
 
-  const rooms = await callSigned(page, agent, "list_rooms", {fleet_id: fleet})
+  const rooms = await callSigned(page, agent, "rooms_list", {fleet_id: fleet})
   expect(rooms).toMatchObject({ok: true, status: 200})
   expect(rooms.data.rooms.map((room: {slug: string}) => room.slug)).toContain("general")
 
-  const general = await callSigned(page, agent, "read_room", {fleet_id: fleet, slug: "general"})
+  const general = await callSigned(page, agent, "rooms_messages", {fleet_id: fleet, slug: "general"})
   expect(general).toMatchObject({ok: true, status: 200})
   const readTo: number = general.data.room.head_seq
 
   const line = said("Hull survey started.")
-  const sent = await callSigned(page, agent, "post_to_room", {
+  const sent = await callSigned(page, agent, "rooms_post", {
     fleet_id: fleet,
     slug: "general",
     body: line,
@@ -163,7 +164,7 @@ test("an agent posts one line in the Public room, and catching up again after a 
   expect(sent).toMatchObject({ok: true, status: 201, data: {message: {body: line, as_key: key}}})
 
   const sync = (afterSeq: number) =>
-    callSigned(page, agent, "sync_fleet", {
+    callSigned(page, agent, "fleets_sync", {
       fleet_id: fleet,
       rooms: [{slug: "general", after_seq: afterSeq}],
       graph: {after_seq: 0},

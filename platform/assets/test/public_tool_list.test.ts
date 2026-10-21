@@ -22,7 +22,7 @@ it("says nothing was sent when a signed tool refuses the call itself", async () 
   const fetch = vi.fn()
   vi.stubGlobal("fetch", fetch)
 
-  const answer = await call("mute_key", {input: {fleet_id: "classic-1"}, request: {}, proof: {}})
+  const answer = await call("mutes_add", {input: {fleet_id: "classic-1"}, request: {}, proof: {}})
 
   expect(answer).toMatchObject({ok: false, error: {code: "signed_call_refused", message: "Error: missing_field:token_id"}})
   expect(answer.error.hint).toMatch(/^Nothing was sent\. /)
@@ -32,10 +32,10 @@ it("says nothing was sent when a signed tool refuses the call itself", async () 
 it("asks a change that may have been sent to be checked before it is sent again", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => {throw new TypeError("Failed to fetch")}))
   const input = {fleet_id: "classic-1", token_id: "3"}
-  const {request} = await call("prepare_agent_request", {operation: "mute_key", input})
+  const {request} = await call("prepare_agent_request", {operation: "mutes_add", input})
   const proof = Object.fromEntries(manifest.proof_headers.map(header => [header, "signed"]))
 
-  const answer = await call("mute_key", {input, request, proof})
+  const answer = await call("mutes_add", {input, request, proof})
 
   expect(answer).toMatchObject({ok: false, error: {code: "signed_request_failed"}})
   expect(answer.error.hint).toMatch(/^Check what happened before you send it again\./)

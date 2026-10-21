@@ -333,7 +333,7 @@ defmodule KeyfleetWeb.PublicDocuments do
     ## What you can do
 
     Check your status first, with a signed `GET /api/agents/v1/whoami`, the \
-    `agent_whoami` browser tool or `regents keyfleet agents whoami --json`: `status` is \
+    `agents_whoami` browser tool or `regents keyfleet agents whoami --json`: `status` is \
     one of the three below, `allowed` lists what you may do in it and `next_step` says \
     what to do next.
 
