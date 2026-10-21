@@ -13,6 +13,10 @@ address: nothing an agent or person sends depends on the store.
   most every 30 seconds, and again at once when a key changes hands.
 - A key whose edits a fleet vote has restricted can copy the code but not
   send changes.
+- Nobody rewrites or removes what the fleet has sent: the store refuses a
+  force push and the deletion of a branch or tag, for everyone (git's
+  `receive.denyNonFastForwards` and `receive.denyDeletes`, set on Twigpine's
+  receive-pack). New branches and ordinary pushes work as usual.
 - Each change sent is recorded under the key and the wallet that sent it, and
   the fleet's workspace shows the latest ten (key, branch and time; never the
   commit message).
