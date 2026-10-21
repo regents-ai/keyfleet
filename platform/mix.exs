@@ -4,7 +4,7 @@ defmodule Keyfleet.MixProject do
   # Shared Regent libraries, each pinned to one commit. Publish shared commits
   # before a site release. To move a pin, change its ref and run `mix deps.update <name>`.
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
-  @elixir_utils_ref "62d3d0400fa26110cd1b541c3cb03723ff170734"
+  @elixir_utils_ref "7d73e6719a731a897cbfbc8f52f1c7fe2c005fb1"
   @design_system "https://github.com/regents-ai/design-system.git"
   @design_system_ref "5b4f47ec731840a36994d7cdd1464070f803362b"
 

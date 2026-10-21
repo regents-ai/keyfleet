@@ -3298,3 +3298,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the "what you may do" list an agent gets from its status check, and the agent guides that repeat it, now say an agent can read the public pages, docs, fleets, proposals and treasuries by link or with the browser tools that need no sign-in. It named five of the seven public browser tools before, leaving out the workspace activity and treasury reads.
 - Why: walking the pilot agents' test run as an unpaired agent (21 October) showed the list stopping short of what the site answers.
+
+## 2026-10-21 — IronClaw gets its own picture in Pair New Agent
+
+- What: Pair New Agent in the side panel offers IronClaw, with its knight from ironclaw.com, in NemoClaw's place among the ten agents. Choosing it gives IronClaw's own pairing message: its own key folder, a routine every 30 minutes, and its page at /agents/ironclaw. A NemoClaw agent pairs as any agent. The shared agents library is pinned at elixir-utils 7d73e67, which changes only that list.
+- Why: Sean's pilot runs IronClaw beside eight other agents and asked for it "in the sidebar with an icon" (21 October 09:15Z); his 1. a, 10:19Z, approved the shared list change.

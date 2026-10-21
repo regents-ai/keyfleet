@@ -175,12 +175,6 @@ defmodule KeyfleetWeb.PairingBox do
     After pairing, make a cron routine with your routine_create tool, every 30 minutes, with the prompt "#{@check_in}"\
     """
 
-  defp setup(:nemoclaw),
-    do: """
-    Use your own key: begin every shell with export SIWA_AGENT_HOME=~/.siwa-agent/nemoclaw, and work in ~/keyfleet/nemoclaw.
-    After pairing, set up check-ins as your full setup says.\
-    """
-
   defp setup(:pi),
     do: """
     Use your own key: begin every shell with export SIWA_AGENT_HOME=~/.siwa-agent/pi, and work in ~/keyfleet/pi. Save your skill as ~/keyfleet/pi/keyfleet/SKILL.md, never in ~/.agents/skills.
