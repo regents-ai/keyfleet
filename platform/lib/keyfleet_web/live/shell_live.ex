@@ -165,7 +165,7 @@ defmodule KeyfleetWeb.ShellLive do
         {:noreply,
          socket
          |> assign(route_spec: route_spec, load_failed?: true, send_agent_open: false)
-         |> assign(PublicDocuments.page(route_spec.route_id, route_spec.fleet_id))}
+         |> assign(PublicDocuments.page(route_spec, params))}
     end
   end
 
@@ -180,7 +180,7 @@ defmodule KeyfleetWeb.ShellLive do
        |> RoomsLive.leave()
        |> DmsLive.leave()
        |> assign(route_spec: route_spec, send_agent_open: false)
-       |> assign(PublicDocuments.page(route_spec.route_id, route_spec.fleet_id))
+       |> assign(PublicDocuments.page(route_spec, params))
        |> load_verified_connections(route_spec)
        |> load_account_page(route_spec)
        |> load_connect(route_spec, params)

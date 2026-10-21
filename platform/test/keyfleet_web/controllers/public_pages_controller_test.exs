@@ -89,6 +89,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
 
     assert title.("/syndicate/1") == "Syndicate #1 · Keyfleet"
     assert title.("/syndicate/1/treasury") == "Treasury · Syndicate #1 · Keyfleet"
+    assert title.("/syndicate/1/keys/1") == "Key 1 · Syndicate #1 · Keyfleet"
     assert title.("/about") == "About · Keyfleet"
   end
 

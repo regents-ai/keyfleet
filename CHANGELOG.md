@@ -3968,3 +3968,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 ## 2026-10-21 — The developer docs say each thing once, where it belongs
 - What: /docs ended with four sections added one at a time (Credits history, Shared account reads, Membership and catch-up tools, Public proposal discovery) that repeated what Sync, Shards and Proposals already said. Their facts now sit in those sections, Credits and Points have one short section of their own after the account requests, and the page is 2.7k characters shorter. /agents.md and the command list link to the new places.
 - Why: the coordinator's ask for the agent lane, "the /docs developer reference, and the .md pages", and Sean 10:16Z "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — A Key's page carries the Key in its title
+
+- What: a Key's page is titled with the Key and its fleet, in the browser tab
+  and when a link is shared: "Key 62 · Classic #1 · Keyfleet". It was
+  "Key · Classic #1 · Keyfleet" for every Key.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
