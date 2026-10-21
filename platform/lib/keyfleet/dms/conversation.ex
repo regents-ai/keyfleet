@@ -4,9 +4,12 @@ defmodule Keyfleet.Dms.Conversation do
   either sends the other. Its two Keys are kept lowest first (`key_a`,
   `key_b`), so a pair has exactly one.
 
-  Either Key's holder may delete it, which removes it and every message in it
-  for both, or have its messages removed after 1, 7, 30 or 90 days
-  (`auto_delete_days`, nil to keep them).
+  Each side keeps its own view of it. A Key's holder may clear it, which takes
+  every message so far out of that Key's view (`:clear`, up to its side's
+  `cleared_seq`), or have that Key's view drop messages older than 1, 7, 30 or
+  90 days (`:set_auto_delete`, its side's `auto_delete_days`, nil to keep
+  them). The other side's view is unchanged. A message leaves the database once
+  neither side keeps it (`Keyfleet.Dms.Message`'s `:remove_expired`).
 
   A Key reads a conversation only while it holds a message of it that its
   holder may see (`Keyfleet.Dms.Message`'s `shown_to`), and its last message
@@ -34,8 +37,12 @@ defmodule Keyfleet.Dms.Conversation do
     check_constraints do
       check_constraint(:key_a, "dm_conversations_key_order", check: "key_a > 0 AND key_a < key_b")
 
-      check_constraint(:auto_delete_days, "dm_conversations_auto_delete_days",
-        check: "auto_delete_days IS NULL OR auto_delete_days IN (1, 7, 30, 90)"
+      check_constraint(:key_a_auto_delete_days, "dm_conversations_key_a_auto_delete_days",
+        check: "key_a_auto_delete_days IS NULL OR key_a_auto_delete_days IN (1, 7, 30, 90)"
+      )
+
+      check_constraint(:key_b_auto_delete_days, "dm_conversations_key_b_auto_delete_days",
+        check: "key_b_auto_delete_days IS NULL OR key_b_auto_delete_days IN (1, 7, 30, 90)"
       )
     end
 
@@ -102,37 +109,98 @@ defmodule Keyfleet.Dms.Conversation do
       upsert_fields [:updated_at]
     end
 
+    # Key `token_id`'s view drops its messages older than `auto_delete_days`
+    # (nil keeps them). Answers with that view's last message and days loaded.
     update :set_auto_delete do
       change Keyfleet.Agents.Changes.RecordAuthority
       require_atomic? false
       change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
-      accept [:auto_delete_days]
-      validate one_of(:auto_delete_days, @auto_delete_days), where: present(:auto_delete_days)
+      accept []
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+      argument :auto_delete_days, :integer
+
+      validate one_of(:auto_delete_days, @auto_delete_days),
+        where: present(:auto_delete_days)
+
+      change atomic_update(
+               :key_a_auto_delete_days,
+               expr(
+                 if(key_a == ^arg(:token_id),
+                   do: ^arg(:auto_delete_days),
+                   else: key_a_auto_delete_days
+                 )
+               )
+             )
+
+      change atomic_update(
+               :key_b_auto_delete_days,
+               expr(
+                 if(key_b == ^arg(:token_id),
+                   do: ^arg(:auto_delete_days),
+                   else: key_b_auto_delete_days
+                 )
+               )
+             )
+
+      change Keyfleet.Dms.Changes.LoadSide
     end
 
-    # Everything in the conversation goes with it (`dm_messages`' foreign key).
-    destroy :delete do
+    # Takes every message so far out of Key `token_id`'s view, up to the
+    # conversation's newest message; the other side keeps its own.
+    update :clear do
+      change Keyfleet.Agents.Changes.RecordAuthority
       require_atomic? false
       change {RegentAgents.RequirePairing, repo: Keyfleet.Repo}
-      primary? true
+      accept []
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+
+      change atomic_update(
+               :key_a_cleared_seq,
+               expr(
+                 if(key_a == ^arg(:token_id),
+                   do:
+                     fragment(
+                       "(SELECT coalesce(max(m.seq), 0) FROM keyfleet_app.dm_messages AS m WHERE m.conversation_id = ?)",
+                       id
+                     ),
+                   else: key_a_cleared_seq
+                 )
+               )
+             )
+
+      change atomic_update(
+               :key_b_cleared_seq,
+               expr(
+                 if(key_b == ^arg(:token_id),
+                   do:
+                     fragment(
+                       "(SELECT coalesce(max(m.seq), 0) FROM keyfleet_app.dm_messages AS m WHERE m.conversation_id = ?)",
+                       id
+                     ),
+                   else: key_b_cleared_seq
+                 )
+               )
+             )
     end
   end
 
-  # Delivered after the deletion commits, as `%Phoenix.Socket.Broadcast{}` on
-  # `Keyfleet.Dms.inbox_topic/2` of both Keys: "dm_deleted" with
-  # `%{conversation_id}`.
+  # Delivered after a clearing commits, as `%Phoenix.Socket.Broadcast{}` on
+  # `Keyfleet.Dms.inbox_topic/2` of the Key that cleared it only: "dm_deleted"
+  # with `%{conversation_id}`.
   pub_sub do
     module Phoenix.PubSub
     name Keyfleet.PubSub
     prefix "dms"
     broadcast_type :phoenix_broadcast
 
-    publish :delete, [:fleet_id, :key_a],
+    publish :clear, [:fleet_id, :key_a],
       event: "dm_deleted",
+      filter: &(&1.changeset.arguments.token_id == &1.data.key_a),
       transform: &%{conversation_id: &1.data.id}
 
-    publish :delete, [:fleet_id, :key_b],
+    publish :clear, [:fleet_id, :key_b],
       event: "dm_deleted",
+      filter: &(&1.changeset.arguments.token_id == &1.data.key_b),
       transform: &%{conversation_id: &1.data.id}
   end
 
@@ -145,8 +213,9 @@ defmodule Keyfleet.Dms.Conversation do
       authorize_if {Keyfleet.Dms.Checks.KeyHolder, keys: [:token_id]}
     end
 
-    policy action([:set_auto_delete, :delete]) do
-      authorize_if {Keyfleet.Dms.Checks.KeyHolder, keys: [:key_a, :key_b], match: :any}
+    policy action([:set_auto_delete, :clear]) do
+      forbid_unless expr(key_a == ^arg(:token_id) or key_b == ^arg(:token_id))
+      authorize_if {Keyfleet.Dms.Checks.KeyHolder, keys: [:token_id]}
     end
   end
 
@@ -167,9 +236,20 @@ defmodule Keyfleet.Dms.Conversation do
       public?: true,
       constraints: [min: 1, max: @bigint]
 
-    attribute :auto_delete_days, :integer,
-      public?: true,
-      constraints: [min: 1, max: 90]
+    # Each side's view: the last message it cleared, and how many days it
+    # keeps messages for (nil keeps them).
+    attribute :key_a_cleared_seq, :integer,
+      allow_nil?: false,
+      default: 0,
+      constraints: [min: 0, max: @bigint]
+
+    attribute :key_b_cleared_seq, :integer,
+      allow_nil?: false,
+      default: 0,
+      constraints: [min: 0, max: @bigint]
+
+    attribute :key_a_auto_delete_days, :integer, constraints: [min: 1, max: 90]
+    attribute :key_b_auto_delete_days, :integer, constraints: [min: 1, max: 90]
 
     timestamps(public?: true)
   end
@@ -185,6 +265,26 @@ defmodule Keyfleet.Dms.Conversation do
   end
 
   calculations do
+    # Where Key `token_id`'s side last cleared the conversation.
+    calculate :cleared_seq,
+              :integer,
+              expr(if(key_a == ^arg(:token_id), do: key_a_cleared_seq, else: key_b_cleared_seq)) do
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+    end
+
+    # How many days Key `token_id`'s side keeps messages for; nil keeps them.
+    calculate :auto_delete_days,
+              :integer,
+              expr(
+                if(key_a == ^arg(:token_id),
+                  do: key_a_auto_delete_days,
+                  else: key_b_auto_delete_days
+                )
+              ) do
+      public? true
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+    end
+
     # The last message Key `token_id`, one side of the conversation, may see.
     # Read beside the conversation, which that Key was already allowed to
     # read; the messages are filtered to the ones its holder may see, so their

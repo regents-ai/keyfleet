@@ -119,7 +119,7 @@ defmodule KeyfleetWeb.DmsLive do
           </.link>
 
           <form id="dms-auto-delete" class="dms-auto-delete" phx-change="dm_auto_delete">
-            <Regent.Primitives.field :let={field} id="dms-auto-delete-days" label="Delete after">
+            <Regent.Primitives.field :let={field} id="dms-auto-delete-days" label="Delete mine after">
               <select
                 id={field.id}
                 name="days"
@@ -167,7 +167,7 @@ defmodule KeyfleetWeb.DmsLive do
             >
               Delete conversation
             </Regent.Primitives.button>
-            <p :if={@confirm_delete} class="rooms-detail">Delete for both Keys?</p>
+            <p :if={@confirm_delete} class="rooms-detail">Delete for you only?</p>
             <div :if={@confirm_delete} class="dms-delete-choices">
               <Regent.Primitives.button id="dms-delete" type="button" phx-click="dm_delete">
                 Delete
@@ -593,7 +593,9 @@ defmodule KeyfleetWeb.DmsLive do
     %{dms: dms} = socket.assigns
     days = if days == "", do: nil, else: days
 
-    case Dms.set_auto_delete(dms.conversation, days, actor: ShellLive.human_actor(socket)) do
+    case Dms.set_auto_delete(dms.conversation, dms.token_id, days,
+           actor: ShellLive.human_actor(socket)
+         ) do
       {:ok, conversation} ->
         {:noreply, assign(socket, dms: %{dms | conversation: conversation}, dm_notice: nil)}
 
@@ -620,8 +622,10 @@ defmodule KeyfleetWeb.DmsLive do
     do: {:noreply, assign(socket, :dm_confirm_delete, false)}
 
   def handle_event("dm_delete", _params, %{assigns: %{dms: %{conversation: %{}} = dms}} = socket) do
-    case Dms.delete_conversation(dms.conversation, actor: ShellLive.human_actor(socket)) do
-      :ok ->
+    case Dms.delete_conversation(dms.conversation, dms.token_id,
+           actor: ShellLive.human_actor(socket)
+         ) do
+      {:ok, _cleared} ->
         {:noreply, push_patch(socket, to: inbox_path(dms))}
 
       {:error, error} ->

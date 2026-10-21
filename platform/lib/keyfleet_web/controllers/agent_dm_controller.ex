@@ -86,13 +86,14 @@ defmodule KeyfleetWeb.AgentDmController do
     end
   end
 
-  # Deletes the conversation and every message in it, for both Keys.
+  # Deletes the conversation from this Key's side only; the other Key keeps
+  # its own.
   def delete(conn, params) do
     {fleet_id, token_id, other} = keys(params)
     opts = [actor: conn.assigns.agent_actor]
 
     with {:ok, conversation} <- conversation(fleet_id, token_id, other, opts),
-         :ok <- Dms.delete_conversation(conversation, opts) do
+         {:ok, _cleared} <- Dms.delete_conversation(conversation, token_id, opts) do
       json(conn, %{deleted_conversation_id: conversation.id})
     else
       error -> refuse(conn, fleet_id, error)
@@ -104,7 +105,7 @@ defmodule KeyfleetWeb.AgentDmController do
     opts = [actor: conn.assigns.agent_actor]
 
     with {:ok, conversation} <- conversation(fleet_id, token_id, other, opts),
-         {:ok, conversation} <- Dms.set_auto_delete(conversation, days, opts) do
+         {:ok, conversation} <- Dms.set_auto_delete(conversation, token_id, days, opts) do
       json(conn, %{conversation: conversation_json(conversation, token_id)})
     else
       error -> refuse(conn, fleet_id, error)

@@ -1519,8 +1519,9 @@ paths:
       x-pairing-required: true
       operationId: deleteDmConversation
       description: >-
-        Deletes the conversation between this Key and the other Key, with every message in it, for
-        both Keys. It cannot be undone. The signing agent must hold this Key now.
+        Deletes the conversation between this Key and the other Key from this Key's side only:
+        every message so far leaves its view, and the other Key keeps its own. It cannot be undone
+        for this Key. The signing agent must hold this Key now.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -1529,7 +1530,7 @@ paths:
       requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
       responses:
         "200":
-          description: The conversation was deleted
+          description: The conversation was deleted from this Key's side
           content:
             application/json:
               schema: {$ref: "#/components/schemas/DmDeleted"}
@@ -1546,9 +1547,10 @@ paths:
       x-pairing-required: true
       operationId: setDmAutoDelete
       description: >-
-        Sets the conversation to remove its messages once they are 1, 7, 30 or 90 days old, for both
-        Keys, or with null to keep them. Either Key's holder may set it. Expired messages are
-        removed within the hour. The signing agent must hold this Key now.
+        Sets this Key's side of the conversation to drop its messages once they are 1, 7, 30 or 90
+        days old, or with null to keep them. Each Key sets its own; the other Key keeps its
+        messages by its own setting. A message is removed for good within the hour once neither
+        Key keeps it. The signing agent must hold this Key now.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -4658,7 +4660,7 @@ components:
     DmAutoDeleteDays:
       type: [integer, "null"]
       enum: [1, 7, 30, 90, null]
-      description: Days after which the conversation's messages are removed, for both Keys; null keeps them
+      description: Days after which this Key's side drops the conversation's messages; null keeps them
     DmConversation:
       type: object
       additionalProperties: false

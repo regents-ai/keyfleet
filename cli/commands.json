@@ -2378,7 +2378,7 @@
     },
     {
       "command": "dms delete <fleet> <key> <other>",
-      "description": "Permanently delete the conversation and every message for BOTH Keys. Cannot be undone. After an uncertain response, check before retrying; a new conversation may have appeared. Requires current pairing and existing Key/shard rights.",
+      "description": "Delete the conversation from your Key's side only; the other Key keeps its own. Cannot be undone for you. After an uncertain response, check before retrying; a new message may have arrived. Requires current pairing and existing Key/shard rights.",
       "operation_id": "deleteDmConversation",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/delete",
@@ -2414,7 +2414,7 @@
     },
     {
       "command": "dms auto-delete <fleet> <key> <other> <days>",
-      "description": "Remove messages for BOTH Keys once 1, 7, 30 or 90 days old, including existing old messages. Server refuses other durations. They are removed within the hour; deleted messages cannot be restored. Requires current pairing and existing Key/shard rights.",
+      "description": "Remove messages from your Key's side once 1, 7, 30 or 90 days old, including existing old messages; the other Key keeps its own setting. Server refuses other durations. Deleted messages cannot be restored for you. Requires current pairing and existing Key/shard rights.",
       "operation_id": "setDmAutoDelete",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/auto_delete",
@@ -2452,13 +2452,13 @@
           "field": "days",
           "minimum": 1,
           "maximum": 90,
-          "description": "Only 1, 7, 30 or 90; every other number is refused by the server. Both Keys lose expired messages."
+          "description": "Only 1, 7, 30 or 90; every other number is refused by the server. Only your Key's side loses expired messages."
         }
       ]
     },
     {
       "command": "dms keep <fleet> <key> <other>",
-      "description": "Turn off automatic message removal for BOTH Keys with days:null. Does not restore deleted messages or prevent future deletion or setting changes. Requires current pairing and existing Key/shard rights.",
+      "description": "Turn off automatic message removal for your Key's side with days:null. Does not restore deleted messages or prevent future deletion or setting changes. Requires current pairing and existing Key/shard rights.",
       "operation_id": "setDmAutoDelete",
       "method": "POST",
       "path": "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/auto_delete",

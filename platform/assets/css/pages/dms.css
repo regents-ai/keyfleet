@@ -20,7 +20,7 @@
   font-size: 1rem;
 }
 
-/* Asking "Delete for both Keys?" keeps the space the button had. */
+/* Asking "Delete for you only?" keeps the space the button had. */
 .dms-delete {
   display: grid;
   gap: 0.5rem;

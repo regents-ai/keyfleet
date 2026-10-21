@@ -10,9 +10,10 @@ defmodule Keyfleet.Dms.Message do
   (`Keyfleet.Dms.Changes.SendMessage`), so within a fleet that order is the
   order they become readable.
 
-  Messages are never edited. They are removed with their conversation, or by
-  the hourly job when their conversation's auto-delete days have passed
-  (`:remove_expired`).
+  Messages are never edited. Each side of a conversation keeps its own view of
+  them (`kept_for/1`): a side drops what it cleared and what is older than its
+  auto-delete days (`Keyfleet.Dms.Conversation`). The hourly job removes a
+  message once neither side keeps it (`:remove_expired`).
 
   Each message keeps both Keys' ownership epochs from when it was sent. When a
   Key changes hands, its new holder sees only messages from then on: every
@@ -77,7 +78,7 @@ defmodule Keyfleet.Dms.Message do
 
   oban do
     scheduled_actions do
-      # Every hour, the messages past their conversation's auto-delete days.
+      # Every hour, the messages neither side keeps.
       schedule :remove_expired, "0 * * * *" do
         action :remove_expired
         queue(:default)
@@ -210,6 +211,7 @@ defmodule Keyfleet.Dms.Message do
                      ^arg(:after_seqs)
                    ) and
                  ((from_token_id in ^arg(:token_ids) and sent_in_current_epoch and
+                     kept_by_sender and
                      seq >
                        fragment(
                          "(?::bigint[])[array_position(?::bigint[], ?::bigint)]",
@@ -218,7 +220,7 @@ defmodule Keyfleet.Dms.Message do
                          from_token_id
                        )) or
                     (to_token_id in ^arg(:token_ids) and received_in_current_epoch and
-                       not sender_blocked and
+                       kept_by_recipient and not sender_blocked and
                        seq >
                          fragment(
                            "(?::bigint[])[array_position(?::bigint[], ?::bigint)]",
@@ -247,18 +249,11 @@ defmodule Keyfleet.Dms.Message do
       prepare build(select: [:id, :inserted_at], sort: [inserted_at: :desc])
     end
 
-    # The messages whose conversation's auto-delete days have passed.
+    # The messages neither side of their conversation keeps.
     read :expired do
       public? false
 
-      filter expr(
-               not is_nil(conversation.auto_delete_days) and
-                 fragment(
-                   "? < (now() AT TIME ZONE 'utc') - ? * interval '1 day'",
-                   inserted_at,
-                   conversation.auto_delete_days
-                 )
-             )
+      filter expr(not kept_by_sender and not kept_by_recipient)
     end
 
     destroy :expire do
@@ -426,16 +421,65 @@ defmodule Keyfleet.Dms.Message do
 
   calculations do
     # Whether Key `token_id`'s holder now may see the message: it is one side
-    # of it, and the message was sent or received in that Key's current
-    # ownership epoch.
+    # of it, the message was sent or received in that Key's current ownership
+    # epoch, and that Key's side still keeps it.
     calculate :shown_to,
               :boolean,
               expr(
-                (from_token_id == ^arg(:token_id) and sent_in_current_epoch) or
-                  (to_token_id == ^arg(:token_id) and received_in_current_epoch)
+                ((from_token_id == ^arg(:token_id) and sent_in_current_epoch) or
+                   (to_token_id == ^arg(:token_id) and received_in_current_epoch)) and
+                  kept_for(token_id: ^arg(:token_id))
               ) do
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
     end
+
+    # Whether Key `token_id`'s side of the conversation keeps the message.
+    calculate :kept_for,
+              :boolean,
+              expr(
+                if(conversation.key_a == ^arg(:token_id),
+                  do: kept_by_key_a,
+                  else: kept_by_key_b
+                )
+              ) do
+      argument :token_id, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
+    end
+
+    calculate :kept_by_sender,
+              :boolean,
+              expr(
+                if(conversation.key_a == from_token_id, do: kept_by_key_a, else: kept_by_key_b)
+              )
+
+    calculate :kept_by_recipient,
+              :boolean,
+              expr(if(conversation.key_a == to_token_id, do: kept_by_key_a, else: kept_by_key_b))
+
+    # Whether a side keeps the message: it came after where that side last
+    # cleared, and inside that side's auto-delete days.
+    calculate :kept_by_key_a,
+              :boolean,
+              expr(
+                seq > conversation.key_a_cleared_seq and
+                  (is_nil(conversation.key_a_auto_delete_days) or
+                     inserted_at >=
+                       fragment(
+                         "(now() AT TIME ZONE 'utc') - ? * interval '1 day'",
+                         conversation.key_a_auto_delete_days
+                       ))
+              )
+
+    calculate :kept_by_key_b,
+              :boolean,
+              expr(
+                seq > conversation.key_b_cleared_seq and
+                  (is_nil(conversation.key_b_auto_delete_days) or
+                     inserted_at >=
+                       fragment(
+                         "(now() AT TIME ZONE 'utc') - ? * interval '1 day'",
+                         conversation.key_b_auto_delete_days
+                       ))
+              )
 
     # Whether the sending Key still has the holder that sent it.
     calculate :sent_in_current_epoch,
