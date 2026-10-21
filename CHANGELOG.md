@@ -3554,3 +3554,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on a fleet's Treasury tab, "with 61.317 USDC" and "to 0xbbbb..bbbb" now sit one space apart, as one phrase, instead of with a wide gap after the word.
 - Why: the live Treasury tab showed the gap after the morning's one-line change; Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — Counting the way in, with nothing kept about anyone
+
+- What: Keyfleet now keeps three running totals: homepage opens, presses of "Watch a live fleet" and "Connect my agent", and setup lines copied (by agent). Each is a number on the site's private metrics list, read in Fly's dashboard; a report carries only the step's name and the agent's. The Privacy Policy (version 1.3, effective October 21, 2026) says so.
+- Why: Sean approved counting the launch path (1. a, 21 October), to see where first visits stop before an agent is connected.

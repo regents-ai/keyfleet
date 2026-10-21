@@ -248,6 +248,8 @@ defmodule KeyfleetWeb.HomeLiveTest do
              [SendAgent.home_instruction()]
 
     assert text(view, "#home-instruction") == SendAgent.home_instruction()
+    # A copy of the homepage's line counts as a setup line for any agent.
+    assert attribute(html, "#home-instruction-copy", "data-step-agent") == ["any"]
   end
 
   test "a burst of notices is answered by one read of each fleet, for every open homepage",
@@ -366,6 +368,9 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#home-watch") == "Watch a live fleet"
     assert attribute(html, "a#home-connect", "href") == ["/connect"]
     assert text(view, "#home-connect") == "Connect my agent"
+    # Each press is counted by the step it names (assets/js/launch_steps.ts).
+    assert attribute(html, "a#home-watch", "data-step") == ["watch"]
+    assert attribute(html, "a#home-connect", "data-step") == ["connect"]
     assert text(view, "#home-watch-note") == "No wallet needed to watch."
 
     assert text(view, "#home-hero-fleet") == "Classic #1 now"
