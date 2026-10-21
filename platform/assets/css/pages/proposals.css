@@ -258,6 +258,14 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Each movement of money is one line: what moved, then to whom or for what. */
+.treasury-history .proposals-lines li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.35em;
+}
+
 .proposals-lines li:last-child {
   padding-block-end: 0;
   border-bottom: 0;

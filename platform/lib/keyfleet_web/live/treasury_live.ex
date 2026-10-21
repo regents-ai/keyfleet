@@ -111,17 +111,18 @@ defmodule KeyfleetWeb.TreasuryLive do
 
       <section id="treasury-rules" class="proposals-panel" aria-labelledby="treasury-rules-title">
         <h2 id="treasury-rules-title">Permissions & contracts</h2>
-        <dl class="treasury-permissions">
-          <div :for={row <- Authority.treasury_rows()}>
-            <dt>{row.what}</dt>
-            <dd>{row.who}<span class="proposals-detail">{Authority.needs(row)}</span></dd>
-          </div>
-        </dl>
-        <p class="proposals-detail">Each action asks the acting wallet to approve and send it.</p>
         <div :if={@page.manager_address} class="proposals-address">
           <span>Manager</span>
           <Regent.Primitives.address id="fleet-manager" address={@page.manager_address} />
         </div>
+        <Regent.Primitives.disclosure id="treasury-permissions-more" summary="Who can do what">
+          <dl class="treasury-permissions">
+            <div :for={row <- Authority.treasury_rows()}>
+              <dt>{row.what}</dt>
+              <dd>{row.who}<span class="proposals-detail">{Authority.needs(row)}</span></dd>
+            </div>
+          </dl>
+        </Regent.Primitives.disclosure>
         <Regent.Primitives.disclosure
           id="treasury-fleet-details"
           summary="Fleet details & token launch"

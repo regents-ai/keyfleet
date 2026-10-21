@@ -3505,3 +3505,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 ## 2026-10-21 — A fleet's tabs share one mark that glides
 - What: the mark under a fleet's open tab (Chat, Workspace, Treasury, Keys, Proposals) glides to the next tab picked with a mouse or finger, the same way Workspace's places move. From the keyboard, or with less motion on, it is simply there. On a phone it stays under the open tab as the row scrolls.
 - Why: moving between a fleet's tabs reads as one place changing, not a new page.
+
+## 2026-10-21 — Treasury money moves read on one line; who can do what folds away
+
+- What: on a fleet's Treasury tab, each line under Money in and out now reads on one line ("Bought 11,621,703.2867 REGENT with 61.317 USDC", "Paid 2.5 USDC to 0xbbbb..bbbb"), wrapping only on a phone. Under Permissions & contracts, the four rows of who can do what now sit in a "Who can do what" drop-down beside Fleet details and How a fleet decides, and the line "Each action asks the acting wallet to approve and send it." is gone, as every row already says "A wallet approval".
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", and the morning's goal for the Treasury tab: cut repeated explanations and keep tidy hover tips.
