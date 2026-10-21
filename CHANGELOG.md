@@ -3328,3 +3328,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: a Key's page (`/classic/1/keys/1`) now shows the Key's card beside its number, the same picture its profile window shows. Under a mouse the card turns a little toward the pointer and a soft light crosses it, then settles level when the mouse leaves; a finger, a keyboard or less motion get the card as it is. Both places draw the card with one component (`KeyfleetWeb.Components.KeyCard`) and one motion hook (`KeyCardTurn`), which moves only transform and opacity.
 - Why: Sean's overnight brief, 21 October 10:16Z: "more elegant, less text, simplify". The Key page was a big number and words, with no picture of the Key.
+
+## 2026-10-21 — A Key's profile says who holds it once
+
+- What: the Key's profile window listed "Held by" among the Key's facts and again as the heading of the holder's own section just below it. The facts no longer repeat it; the holder's section, with the address, its copy button and OpenSea, stays.
+- Why: Sean's overnight brief, 21 October 10:16Z: "less text, simplify".

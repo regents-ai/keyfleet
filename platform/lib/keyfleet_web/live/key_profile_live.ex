@@ -222,17 +222,6 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <dd id="key-profile-held-since">{day(@profile.held_since)}</dd>
         </div>
         <div>
-          <dt>Held by</dt>
-          <dd id="key-profile-holder">
-            {held_by(@profile)}
-            <Regent.Primitives.address
-              :if={is_nil(held_by(@profile))}
-              id="key-profile-holder-wallet"
-              address={@profile.holder}
-            />
-          </dd>
-        </div>
-        <div>
           <dt>Changed hands</dt>
           <dd>{times(@profile.changed_hands)}</dd>
         </div>

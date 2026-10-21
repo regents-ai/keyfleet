@@ -68,7 +68,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     assert has_element?(view, ".key-profile__card #key-profile-traits-title", "Traits")
     assert has_element?(view, ".key-profile__card[tabindex='0']")
     assert text(view, ".key-profile__card .key-profile__traits p") == "Revealing"
-    assert text(view, "#key-profile-holder .rg-address__label") == "0xeeee..eeee"
+    assert text(view, "#key-profile-holder-address .rg-address__label") == "0xeeee..eeee"
     holder = wallet("e")
     assert has_element?(view, "#key-profile-holder-address-copy[data-copy-text='#{holder}']")
     assert has_element?(view, "#key-profile-holder-opensea[href='https://opensea.io/#{holder}']")
@@ -508,12 +508,12 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
   test "the key changing hands shows its new holder", %{conn: conn} do
     {:ok, view, _html} = live(conn, @path <> "?key=12")
-    assert text(view, "#key-profile-holder .rg-address__label") == "0xeeee..eeee"
+    assert text(view, "#key-profile-holder-address .rg-address__label") == "0xeeee..eeee"
 
     epoch!(12, 3, wallet("b"))
     keys_changed([12])
 
-    assert text(view, "#key-profile-holder .rg-address__label") == "0xbbbb..bbbb"
+    assert text(view, "#key-profile-holder-address .rg-address__label") == "0xbbbb..bbbb"
     assert render(view) =~ "2 times"
     refute has_element?(view, "#key-profile-key-3")
   end
@@ -556,7 +556,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       {:ok, view, _html} = live(conn, @path <> "?key=12")
       assert_receive {:reading, reader}
       assert text(view, "#key-profile-rewards") == "Loading rewards"
-      assert text(view, "#key-profile-holder .rg-address__label") == "0xeeee..eeee"
+      assert text(view, "#key-profile-holder-address .rg-address__label") == "0xeeee..eeee"
 
       send(reader, :answer)
       render_async(view)
@@ -594,7 +594,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
       assert text(view, "#key-profile-rewards") ==
                "Rewards aren’t showing right now. They update on their own."
 
-      assert text(view, "#key-profile-holder .rg-address__label") == "0xeeee..eeee"
+      assert text(view, "#key-profile-holder-address .rg-address__label") == "0xeeee..eeee"
 
       view
       |> form("#key-profile-composer", post: %{body: "Hull survey started"})
