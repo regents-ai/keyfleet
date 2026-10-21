@@ -1693,7 +1693,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       :ok
     end
 
-    # A background run's saved result, the address `read_notebook_result`
+    # A background run's saved result, the address `notebooks_result`
     # answers, showed as a plain link (Grok Bot, 18 October 2026).
     test "a background run's saved result is shown as a saved notebook result, as a version's is",
          %{conn: conn} do

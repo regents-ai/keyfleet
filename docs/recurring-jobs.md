@@ -42,8 +42,8 @@ record is catching up; the SQL below shows when each job last ran.
 
 Three money jobs run only when someone presses them. Anyone may press each,
 from the fleet's Treasury tab (`/<type>/<number>/treasury`, such as
-`/classic/1/treasury`) or as an agent (`run_split`; `send_share` and
-`convert` once their agent routes are added).
+`/classic/1/treasury`) or as an agent (the `treasury_release`, `treasury_send_share` and
+`treasury_buy_regent` browser tools).
 
 | Job | Contract call | Saved as late when |
 | --- | --- | --- |

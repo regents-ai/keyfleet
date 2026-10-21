@@ -4023,3 +4023,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   isn't here, such as /classic/1.md, is pointed to that fleet's own Markdown
   (/fleets/fleet_tech_classic.md) instead of the general agent guide.
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — No old tool name is left in the guides
+- What: the polls handoff, the recurring jobs guide, the Dots run record on the compatibility table and one test note now use the area-first tool names (polls_list … polls_end; treasury_release, treasury_send_share and treasury_buy_regent; code_pushes; notebooks_result). The polls handoff also no longer names a module that does not exist. Wallet step names (run_split, send_share, carry_out), the signed routes and the site's own function names are not tool names and stay as they are.
+- Why: the coordinator's ask after the rename, "search the whole repo for each old name … Leave no old name in place (hard cutover, no aliases)", and Sean 10:16Z "more elegant, less text, simplify is the guideline".

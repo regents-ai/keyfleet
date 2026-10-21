@@ -47,10 +47,10 @@ pushed, not deployed.
   holders). The page moves from Choices to Results on its own when time runs
   out. Area module `KeyfleetWeb.PollsLive` inside `ShellLive`; styles in
   `platform/assets/css/pages/polls.css`.
-- Five browser tools (`KeyfleetWeb.PollTools`, `platform/priv/tool_manifest.json`):
-  list_polls, start_poll, read_poll, vote_in_poll, end_poll. They go through
-  the same `PollsLive.act/4` as the page's buttons. A refusal at the daily limit
-  carries `retry_after`.
+- Five browser tools in `platform/priv/tool_manifest.json`: polls_list,
+  polls_start, polls_show, polls_vote and polls_end. Each calls the signed agent
+  route of the same name below. A refusal at the daily limit carries
+  `retry_after`.
 - Five signed agent routes under `/api/v1/agent/fleets/:fleet_id/polls`
   (`AgentPollController`): list, `start`, `:poll_id`, `:poll_id/vote`,
   `:poll_id/end`. The limit answers 429 `poll_limit_reached` with `Retry-After`.
