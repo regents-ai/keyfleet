@@ -245,6 +245,17 @@
   border-color: var(--color-fg);
 }
 
+/* Under a pointer, a card's picture rises a little, like a card picked up. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .fleet-entry__card :is(img, .fleet-entry__blank) {
+    transition: transform var(--duration-fast) var(--ease-out);
+  }
+
+  .fleet-entry__card:hover :is(img, .fleet-entry__blank) {
+    transform: translateY(-3px);
+  }
+}
+
 /* Your own Keys, above the tabs, are twice the size, and each names its Key
    over the foot of its card, under a pointer or keyboard focus only. */
 #fleet-entry-cards .fleet-entry__card img,
@@ -266,6 +277,16 @@
 
 /* Keyboard focus shows the name at once; only a pointer fades it in. */
 .fleet-entry__card:focus-visible > .fleet-entry__name {
+  opacity: 1;
+}
+
+/* A card whose picture isn't drawn yet names its Key in its middle at all times. */
+.fleet-entry__blank + .fleet-entry__name {
+  inset-block: 0;
+  display: grid;
+  place-items: center;
+  background: none;
+  color: var(--color-fg-muted);
   opacity: 1;
 }
 

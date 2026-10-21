@@ -4373,3 +4373,17 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   name it ("Classic #1's treasury: what it holds…") instead of "a Keyfleet
   fleet".
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — Empty panels sit level, and held Key cards answer the pointer
+
+- A panel with nothing in it yet (Shards, Points activity and the like) now
+  starts its line as close under its heading as a full panel does, and ends
+  as close to its edge.
+- A held Key card whose picture isn't drawn yet shows its Key number in the
+  middle, instead of an empty frame.
+- Under a mouse, a held Key card's picture rises a little; with less motion
+  set, it stays still.
+- Checked by walking 16 pages signed in at 390 and 1440 px, light and dark:
+  no sideways scroll, no page errors. Why: the coordinator's 16:35Z walk of
+  every main page; Sean, 21 October 10:16Z: "more elegant, less text,
+  simplify is the guideline".
