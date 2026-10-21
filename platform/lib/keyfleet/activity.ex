@@ -59,9 +59,8 @@ defmodule Keyfleet.Activity do
     * `:changes`: a run of one change (`change`: `:archived`, `:submitted`
       or `:revised`) one key made to items of one type, by the same rules as
       `:posts`: `by`, `change`, `type` and `count`.
-    * `:sale`: `token_ids`, the keys bought, lowest first, and `purchases`,
-      how many purchases bought them: consecutive purchases are one item, by
-      the same rules as `:posts`.
+    * `:sale`: `token_ids`, the keys bought, lowest first: consecutive
+      purchases are one item, by the same rules as `:posts`.
     * `:given`: the same, for a fleet whose Keys are given rather than sold
       (`Keyfleet.Fleets.Presets.given?/1`).
     * `:transfer`: `token_id`, a key that changed hands.
@@ -480,8 +479,7 @@ defmodule Keyfleet.Activity do
 
     item =
       entry("#{kind}:#{last.record_seq}", first.observed_at, kind, last.record_seq, %{
-        token_ids: sold |> Enum.map(& &1.token_id) |> Enum.sort(),
-        purchases: sold |> Enum.uniq_by(& &1.transaction_hash) |> length()
+        token_ids: sold |> Enum.map(& &1.token_id) |> Enum.sort()
       })
 
     [item | group_epochs(rest, kind)]

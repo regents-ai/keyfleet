@@ -193,7 +193,7 @@ defmodule KeyfleetWeb.ActivityLines do
   defp sentence(%{kind: kind, facts: %{token_ids: [token_id]}}) when kind in [:sale, :given],
     do: ["Key #{Rules.grouped(token_id)} was #{@first_owner[kind]}."]
 
-  defp sentence(%{kind: kind, facts: %{token_ids: [first | _] = token_ids} = f})
+  defp sentence(%{kind: kind, facts: %{token_ids: [first | _] = token_ids}})
        when kind in [:sale, :given] do
     last = List.last(token_ids)
 
@@ -202,7 +202,7 @@ defmodule KeyfleetWeb.ActivityLines do
         do: "Keys #{Rules.grouped(first)}–#{Rules.grouped(last)}",
         else: Rules.keys(length(token_ids))
 
-    ["#{keys} were #{@first_owner[kind]}#{purchases(kind, f.purchases)}."]
+    ["#{keys} were #{@first_owner[kind]}."]
   end
 
   defp sentence(%{kind: :transfer, facts: f}),
@@ -352,12 +352,6 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp tasks(1), do: "a task"
   defp tasks(count), do: "#{Rules.grouped(count)} tasks"
-
-  # Keys given away are never counted in purchases.
-  defp purchases(:sale, purchases) when purchases > 1,
-    do: " in #{Rules.grouped(purchases)} purchases"
-
-  defp purchases(_kind, _purchases), do: ""
 
   defp did(:yes, _count), do: " voted yes"
   defp did(:no, _count), do: " voted no"

@@ -255,13 +255,12 @@ defmodule Keyfleet.ActivityTest do
     %{items: items} = page(nil)
 
     assert for(%{kind: kind} = item <- items, kind in [:sale, :transfer], do: {kind, item.facts}) ==
-             [{:transfer, %{token_id: 1}}, {:sale, %{token_ids: [1], purchases: 1}}]
+             [{:transfer, %{token_id: 1}}, {:sale, %{token_ids: [1]}}]
   end
 
-  test "purchases in a row are one line that counts them; a change of hands splits them" do
+  test "purchases in a row are one line; a change of hands splits them" do
     Enum.each(2..4, &epoch!(&1, 1, "a"))
-    epoch!(5, 1, "b", "0x" <> String.duplicate("c", 64), 0)
-    epoch!(6, 1, "b", "0x" <> String.duplicate("c", 64), 1)
+    Enum.each(5..6, &epoch!(&1, 1, "b"))
     epoch!(3, 2, "b")
     epoch!(7, 1, "a")
 
@@ -269,9 +268,9 @@ defmodule Keyfleet.ActivityTest do
 
     assert for(%{kind: kind} = item <- items, kind in [:sale, :transfer], do: {kind, item.facts}) ==
              [
-               {:sale, %{token_ids: [7], purchases: 1}},
+               {:sale, %{token_ids: [7]}},
                {:transfer, %{token_id: 3}},
-               {:sale, %{token_ids: [1, 2, 3, 4, 5, 6], purchases: 5}}
+               {:sale, %{token_ids: [1, 2, 3, 4, 5, 6]}}
              ]
   end
 
@@ -566,10 +565,6 @@ defmodule Keyfleet.ActivityTest do
           case: :lower
         )
 
-    epoch!(token_id, ownership_epoch, owner, transaction_hash, 0)
-  end
-
-  defp epoch!(token_id, ownership_epoch, owner, transaction_hash, log_index) do
     Keys.record_epoch!(
       %{
         fleet_id: @fleet,
@@ -579,7 +574,7 @@ defmodule Keyfleet.ActivityTest do
         block_number: 10 + ownership_epoch,
         block_hash: "0x" <> String.duplicate("a", 64),
         transaction_hash: transaction_hash,
-        log_index: log_index
+        log_index: 0
       },
       actor: @system
     )

@@ -114,7 +114,7 @@ defmodule KeyfleetWeb.ActivityLinesTest do
 
   test "key numbers are grouped, and a proposal is a part a page can link" do
     at = ~U[2026-09-25 12:00:00Z]
-    sale = %{id: "sale:1", at: at, kind: :sale, facts: %{token_ids: [1234], purchases: 1}}
+    sale = %{id: "sale:1", at: at, kind: :sale, facts: %{token_ids: [1234]}}
 
     votes = %{
       id: "votes:1",
@@ -148,16 +148,15 @@ defmodule KeyfleetWeb.ActivityLinesTest do
              "Key 5 voted no and Keys 3 and 4 abstained on Proposal 12."
   end
 
-  test "purchases and handed-out tasks are counted in one sentence" do
+  test "a run of Keys bought and handed-out tasks are one sentence" do
     at = ~U[2026-09-25 12:00:00Z]
     by = %{token_id: 17, agent: nil}
     item = &%{id: "x:1", at: at, kind: &1, facts: &2}
 
-    assert ActivityLines.text(item.(:sale, %{token_ids: [56, 57, 58], purchases: 2})) ==
-             "Keys 56–58 were bought in 2 purchases."
+    assert ActivityLines.text(item.(:sale, %{token_ids: [56, 57, 58]})) ==
+             "Keys 56–58 were bought."
 
-    assert ActivityLines.text(item.(:sale, %{token_ids: [56, 57], purchases: 1})) ==
-             "Keys 56–57 were bought."
+    assert ActivityLines.text(item.(:sale, %{token_ids: [56, 58]})) == "2 Keys were bought."
 
     tasks = &item.(:tasks, Map.merge(%{by: by, to: [4, 8], others: 0}, &1))
 
