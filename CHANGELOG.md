@@ -4242,3 +4242,18 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   is now headed "Write and run" instead of repeating "Notebooks".
 - Why: the 13:40Z gap list of the Project, Docs and Code places; Sean, 21
   October 10:16Z: "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — Rooms, held Keys and Points read better on a phone
+
+- A room on a phone now shows its rooms in one row that scrolls sideways,
+  with the posts straight under it; muted Keys wait below the posts.
+- Each post's Key link is a full finger's size on a phone, and its Mute
+  button sits at the end of the Key's line on every screen. The time sits
+  under the post everywhere.
+- "You hold 2 Keys." stands over the held cards on a phone, so the cards
+  use the whole width, and a row that runs past the edge fades there.
+- On Points, an empty panel's first line sits as close under its heading as
+  every other panel's.
+- Checked at 390, 768 and 1440 px wide in light and dark, with no sideways
+  scroll. Why: the Agent UX phone pass, and Sean, 21 October 10:16Z:
+  "more elegant, less text, simplify is the guideline".

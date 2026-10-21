@@ -129,7 +129,7 @@ defmodule KeyfleetWeb.PointsLive do
               </a>
             </:action>
           </Regent.Primitives.empty_state>
-          <ol>
+          <ol :if={@points.value.entries != []}>
             <li :for={entry <- @points.value.entries}>
               <p>
                 {Rules.label(entry.rule_id)} · {actor_name(

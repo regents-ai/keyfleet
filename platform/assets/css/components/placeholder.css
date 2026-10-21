@@ -46,3 +46,8 @@
   padding: var(--space-3) 0;
   justify-items: start;
 }
+
+/* In an Account panel it starts as close under the heading as any other panel's line. */
+.account-panel > .kf-empty {
+  padding-block: 0;
+}

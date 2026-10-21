@@ -756,6 +756,12 @@
     padding-inline: var(--rg-panel-padding);
   }
 
+  /* "You hold 2 Keys." stands over the cards, so the row has the view's
+     whole width. */
+  .fleet-entry__line {
+    flex-basis: 100%;
+  }
+
   /* The way in's one action spans the view. */
   .fleet-entry > .rg-button {
     flex: 1 1 100%;
@@ -869,9 +875,10 @@
   }
 }
 
-/* Where the tabs or the feed's channels scroll sideways, they fade out at an
-   edge while more of the row waits past it, and run crisp to an edge they
-   have reached. A row that fits has no fade. */
+/* Where a row scrolls sideways (the tabs, the feed's channels, a holder's
+   cards, a phone's rooms), it fades out at an edge while more of the row
+   waits past it, and runs crisp to an edge it has reached. A row that fits
+   has no fade. */
 @property --fleet-fade-start {
   syntax: "<length>";
   inherits: false;
@@ -892,7 +899,9 @@
 
 @supports (animation-timeline: scroll()) {
   .fleet-bar__nav,
-  .fleet-channels {
+  .fleet-channels,
+  .fleet-entry__cards,
+  .rooms-list ul {
     mask-image: linear-gradient(
       to right,
       transparent,
