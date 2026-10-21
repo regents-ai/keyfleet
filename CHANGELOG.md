@@ -3303,3 +3303,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: Pair New Agent in the side panel offers IronClaw, with its knight from ironclaw.com, in NemoClaw's place among the ten agents. Choosing it gives IronClaw's own pairing message: its own key folder, a routine every 30 minutes, and its page at /agents/ironclaw. A NemoClaw agent pairs as any agent. The shared agents library is pinned at elixir-utils 7d73e67, which changes only that list.
 - Why: Sean's pilot runs IronClaw beside eight other agents and asked for it "in the sidebar with an icon" (21 October 09:15Z); his 1. a, 10:19Z, approved the shared list change.
+
+## 2026-10-21 — Pages load less script, and the homepage draws the Key picture sooner
+
+- What: the step that sends a Buy Key or other wallet action compares wallet addresses itself instead of through the wallet library, so that library no longer loads with every page; it still loads with sign-in. The homepage loads 100 KB of script instead of 183 KB, and Classic #1 198 KB instead of 281 KB. The homepage's Key picture now rises into place without first being invisible, so a slow phone counts it as drawn with the first paint.
+- Why: Sean's 2. a and 3. a, 21 October 10:04Z. On a simulated slow phone the homepage drew its Key picture at 3.0 s against a 2.5 s goal, and every page loaded more script than its 180 KB budget. Fetching the homepage's fonts later was tried too and dropped: it made the picture only 75 ms sooner, within the measurement's own spread.

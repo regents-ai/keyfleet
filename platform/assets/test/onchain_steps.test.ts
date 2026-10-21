@@ -139,6 +139,18 @@ describe("a press sends the server's step from the wallet it was built for", () 
     expect(pushed).toEqual([["step_failed", {step: "buy", reason: "wallet_unavailable"}]])
   })
 
+  it("sends when the wallet names the signer in other letter case", async () => {
+    const checksummed = "0xAbCdEf0123456789aBcDeF0123456789AbCdEf01"
+    const active = wallet({account: checksummed})
+    replaceActiveEthereumWallet({address: checksummed, provider: active.provider})
+    const {pushed, push} = pushes()
+
+    await press({...review, signer: checksummed.toLowerCase() as Review["signer"]}, "buy", push)
+
+    expect(active.sent).toHaveLength(1)
+    expect(pushed).toEqual([["step_sent", {review_id: "review-1", step: "buy", transaction_hash: hash}]])
+  })
+
   it("sends nothing when the wallet answers for another account", async () => {
     const active = wallet({account: other})
     replaceActiveEthereumWallet({address: signer, provider: active.provider})
