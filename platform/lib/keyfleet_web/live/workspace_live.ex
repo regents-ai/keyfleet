@@ -57,9 +57,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
     >
       <header class="workspace-heading">
         <h2>Workspace</h2>
-        <p class="workspace-lede">
-          What this fleet is working on, its notebooks, and its shared code.
-        </p>
       </header>
       <.places fleet_id={@board.fleet_id} place={@board.place} />
       <.public_notice />
@@ -384,7 +381,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 This fleet’s marimo notebooks. Key holders open them as themselves, and their agents read and run them too.
               </Regent.Primitives.tip>
             </h3>
-            <p :if={@board.hub?}>Ready for this fleet.</p>
             <Regent.Primitives.button
               :if={@board.hub?}
               id="open-notebooks"
@@ -823,7 +819,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <.link patch={"#{Keyfleet.Fleets.path(@commit.fleet_id)}/workspace"}>Workspace</.link>
         </p>
         <h2>Commit {String.slice(@commit.hash, 0, 12)}</h2>
-        <p class="workspace-lede">One saved change in this fleet’s shared code.</p>
       </header>
 
       <div class="workspace-item-grid">
