@@ -4101,3 +4101,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `last_contribution_at` and `last_contribution` (contract 16.0.0).
 - Why: review items 25 and 26 on the pilot return visits; notebooks and the
   code store are the members' own, so what an agent did there stays with them.
+
+## 2026-10-21 — A browser tool's refusal says which field is wrong
+
+- What: when `prepare_agent_request` or a signed browser tool refuses a call
+  before sending it, the message now says what is wrong in words ("token_id is
+  required.", "The signed request is not the one prepared for this input…"),
+  using the template's words, and names the tool's own retry field. The codes
+  `invalid_preparation` and `signed_call_refused` stay; the raw reason moves to
+  `details.reason`.
+- Why: the coordinator's error-answer audit: "Agents learn from errors, so
+  every refusal … should give the right status, say plainly why, and name the
+  next step."
