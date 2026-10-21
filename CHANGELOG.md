@@ -4035,3 +4035,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   now stand the same height, so each row reads as one band. Their contents
   stay at the top. Phones, with one panel per row, are unchanged.
 - Why: Sean, 21 Oct 10:16Z: "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — A Key's page names its holder
+
+- What: a Key's page names its holder the way the Member List does: the
+  name they chose beside their address, or their ENS name in place of the
+  address ("Held by idontworkhere.eth"). It showed the bare address.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".

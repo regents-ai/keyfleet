@@ -159,22 +159,10 @@ defmodule KeyfleetWeb.Components.MemberList do
 
   defp card_id(_account, [wallet | _rest]), do: wallet
 
-  # A name the person typed is shown beside their main address, so it never
-  # passes for an ENS name; an ENS name stands in for the address it points to.
   # Returns the typed name, the main address and the ENS name.
   defp who(account, own) do
-    address = card_id(account, own)
-
-    cond do
-      chosen = account && PublicIdentity.name(%{display_name: account.display_name}) ->
-        {chosen, address, nil}
-
-      ens = account && PublicIdentity.name(%{ens_name: account.ens_name}) ->
-        {nil, address, ens}
-
-      true ->
-        {nil, address, nil}
-    end
+    {chosen, ens} = PublicIdentity.holder(account)
+    {chosen, card_id(account, own), ens}
   end
 
   # A connection is shown only with the account name it links to.

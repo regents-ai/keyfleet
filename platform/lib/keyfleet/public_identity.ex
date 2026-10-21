@@ -15,6 +15,21 @@ defmodule Keyfleet.PublicIdentity do
   def name(account),
     do: present(Map.get(account, :display_name)) || present(Map.get(account, :ens_name))
 
+  @doc """
+  How a Key's holder is named beside their address, as `{chosen, ens}`: the
+  name they typed, shown beside the address so it never passes for an ENS
+  name, else their ENS name standing in for the address it points to. Both
+  are nil for an address no account links.
+  """
+  def holder(nil), do: {nil, nil}
+
+  def holder(account) do
+    case present(account.display_name) do
+      nil -> {nil, present(account.ens_name)}
+      chosen -> {chosen, nil}
+    end
+  end
+
   def avatar_src(account),
     do:
       present(Map.get(account, :ens_avatar_url)) ||

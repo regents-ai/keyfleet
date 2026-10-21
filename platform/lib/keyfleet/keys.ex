@@ -347,6 +347,15 @@ defmodule Keyfleet.Keys do
     |> Keyfleet.Repo.all()
   end
 
+  @doc "The id of the Regent account linking `wallet`, as `holders/4` counts it, or nil."
+  def holder_account_id(wallet) do
+    from(linked in subquery(linked_wallets()),
+      where: linked.wallet == ^String.downcase(wallet),
+      select: linked.account_id
+    )
+    |> Keyfleet.Repo.one()
+  end
+
   # Every address a Regent account links, lowercase, with the account it
   # belongs to; an address two accounts claim goes to the older one.
   defp linked_wallets do

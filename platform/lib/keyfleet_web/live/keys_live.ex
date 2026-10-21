@@ -17,13 +17,16 @@ defmodule KeyfleetWeb.KeysLive do
 
   import KeyfleetWeb.Components.AgentPicture
 
+  alias Keyfleet.Accounts
   alias Keyfleet.Actors.Human
+  alias Keyfleet.Actors.System
   alias Keyfleet.Chain
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Keys
   alias Keyfleet.Keys.Metadata
   alias Keyfleet.Keys.Profile
+  alias Keyfleet.PublicIdentity
   alias KeyfleetWeb.Components.FleetRisks
   alias KeyfleetWeb.Components.KeyCard
   alias KeyfleetWeb.Components.PresenceCard
@@ -80,7 +83,12 @@ defmodule KeyfleetWeb.KeysLive do
         <section class="key-panel" aria-labelledby="key-owner-title">
           <h2 id="key-owner-title">Held by</h2>
           <p class="key-wallet">
-            <Regent.Primitives.address id="key-owner-address" address={@key.owner_wallet} />
+            <strong :if={@key.holder_name} id="key-owner-name">{@key.holder_name}</strong>
+            <Regent.Primitives.address
+              id="key-owner-address"
+              address={@key.owner_wallet}
+              label={@key.holder_ens}
+            />
             <span :if={@key.owner?} id="key-owner-you" class="key-detail">You</span>
             <a
               id="key-owner-opensea"
@@ -344,6 +352,7 @@ defmodule KeyfleetWeb.KeysLive do
   def key_view(socket, fleet_id, token_id) do
     actor = ShellLive.human_actor(socket)
     key = Keys.current_key!(fleet_id, token_id, actor: actor, load: [:fleet])
+    {holder_name, holder_ens} = PublicIdentity.holder(holder(key))
 
     %{
       fleet_id: fleet_id,
@@ -352,6 +361,8 @@ defmodule KeyfleetWeb.KeysLive do
       fleet: key && %{fleet_id: fleet_id, chain_id: key.fleet.chain_id},
       deployed?: key != nil and key.fleet.manager_address != nil,
       owner_wallet: key && key.owner_wallet,
+      holder_name: holder_name,
+      holder_ens: holder_ens,
       image: if(key, do: Metadata.image(key.fleet, token_id), else: Metadata.pass()),
       owner?: owns_key?(actor, key),
       refreshing?: not Chain.fresh?(fleet_id),
@@ -374,6 +385,25 @@ defmodule KeyfleetWeb.KeysLive do
   end
 
   def refresh_key(socket, _fleet_id, _token_ids), do: socket
+
+  # The account linking the key's wallet, named as the Member List names it.
+  defp holder(nil), do: nil
+
+  defp holder(key) do
+    case Keys.holder_account_id(key.owner_wallet) do
+      nil ->
+        nil
+
+      account_id ->
+        [account] =
+          Accounts.accounts_by_ids!([account_id],
+            actor: %System{},
+            load: [:display_name, :ens_name]
+          )
+
+        account
+    end
+  end
 
   defp owns_key?(%Human{wallet_addresses: wallets}, %{owner_wallet: owner}),
     do: owner in wallets

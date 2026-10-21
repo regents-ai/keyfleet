@@ -148,9 +148,10 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
   # A typed name could read like an ENS name, so the main address sits beside
   # it; an ENS name read from the chain stands in for the address it points to.
-  test "the Member List shows a typed name beside its address and an ENS name alone", %{
-    conn: conn
-  } do
+  test "the Member List and a Key's page show a typed name beside its address and an ENS name alone",
+       %{
+         conn: conn
+       } do
     deploy!()
     ChainHelpers.seed_cursor!(@fleet)
     [typed, ens] = for _ <- 1..2, do: unclaimed_wallet()
@@ -189,6 +190,16 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     refute has_element?(view, "#fleet-members-holder-#{ens} strong")
     assert text(view, "#fleet-members-holder-#{ens} .rg-address__label") == "crew.eth"
     assert text(view, "#fleet-members-holder-#{ens} .rg-address__full") == ens
+
+    {:ok, typed_key, _html} = live(conn, @path <> "/keys/7")
+    assert text(typed_key, "#key-owner-name") == "vitalik.eth"
+
+    assert text(typed_key, "#key-owner-address .rg-address__label") ==
+             RegentFormat.short_address(typed)
+
+    {:ok, ens_key, _html} = live(conn, @path <> "/keys/8")
+    refute has_element?(ens_key, "#key-owner-name")
+    assert text(ens_key, "#key-owner-address .rg-address__label") == "crew.eth"
   end
 
   test "a visitor is listed the Public room alone, never another room's name", %{conn: conn} do
