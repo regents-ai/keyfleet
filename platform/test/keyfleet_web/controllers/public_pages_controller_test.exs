@@ -183,6 +183,21 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
            end)
   end
 
+  test "the sitemap lists the connect page and each open fleet's page, not one still coming soon" do
+    Keyfleet.Fleets.bootstrap_catalog!()
+    Keyfleet.ChainHelpers.deploy!("fibonacci_syndicate")
+
+    locations =
+      Regex.scan(~r{<loc>([^<]+)</loc>}, build_conn() |> get("/sitemap.xml") |> response(200),
+        capture: :all_but_first
+      )
+      |> List.flatten()
+
+    assert PublicDocuments.url("/connect") in locations
+    assert PublicDocuments.url("/syndicate/1") in locations
+    refute PublicDocuments.url("/cascade/1") in locations
+  end
+
   defp field(line) do
     [name, value] = String.split(line, ": ", parts: 2)
     {name, value}

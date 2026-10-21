@@ -3871,3 +3871,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   window's own module instead of the 2,000-line fleet page, which loses 125
   lines. Nothing on screen changes.
 - Why: Sean, 21 Oct: "make it a modern and well-engineered elixir site".
+
+## 2026-10-21 — The sitemap lists Connect and each open fleet
+
+- What: https://keyfleet.ai/sitemap.xml now lists https://keyfleet.ai/connect
+  and the page of every fleet that is open, such as
+  https://keyfleet.ai/classic/1. A fleet still coming soon is left out until
+  it opens.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".

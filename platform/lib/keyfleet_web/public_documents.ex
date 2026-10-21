@@ -202,13 +202,19 @@ defmodule KeyfleetWeb.PublicDocuments do
     |> put_in(["info", "termsOfService"], url("/terms"))
   end
 
-  @doc "Every public page, or while the site is closed only the pages still open."
+  @doc """
+  Every public page, each open fleet's page among them, or while the site is
+  closed only the pages still open.
+  """
   def sitemap do
     lastmod = DateTime.to_iso8601(@released_at)
 
     paths =
       if KeyfleetWeb.Plugs.LaunchGate.app_surfaces_enabled?(),
-        do: @documents ++ KeyfleetWeb.AgentGuides.paths(),
+        do:
+          @documents ++
+            ["/connect" | Enum.map(Keyfleet.Fleets.open_fleet_ids(), &Keyfleet.Fleets.path/1)] ++
+            KeyfleetWeb.AgentGuides.paths(),
         else: KeyfleetWeb.Plugs.LaunchGate.open_pages()
 
     locations =

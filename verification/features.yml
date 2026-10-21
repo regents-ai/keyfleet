@@ -1036,3 +1036,19 @@ features:
     gaps:
       - Pairing an agent and buying a Key are already saved, so they are read from the database, not counted here.
       - Checked in headless Chromium only; WebKit is not run on the Mac.
+
+  - id: sitemap-lists-fleets
+    what: >-
+      The sitemap lists the Connect page and every fleet that is open, and
+      leaves out a fleet still coming soon, beside the reading pages and the
+      agent guides.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/public_documents.ex
+    entry:
+      - route: GET /sitemap.xml
+    proofs:
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    gaps:
+      - Each entry's date is the release's, not the fleet's latest post.
