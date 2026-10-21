@@ -4366,3 +4366,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Why: the route walk asks for `/skill/gate-coverage`, which names no file
   and so reads as a page sent to /early; the review took that for the parts'
   real answer.
+
+## 2026-10-21 — A fleet's link previews name the fleet
+
+- What: the search description and link preview of every page of a fleet
+  name it ("Classic #1's treasury: what it holds…") instead of "a Keyfleet
+  fleet".
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".

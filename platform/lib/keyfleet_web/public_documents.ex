@@ -31,7 +31,8 @@ defmodule KeyfleetWeb.PublicDocuments do
 
   # The browser-tab title and search description of every page, kept in one
   # place. A title names the page alone; `metadata/3` adds the site name once.
-  # Pages inside the app are named by their route, since one page shows any fleet.
+  # Pages inside the app are named by their route, since one page shows any
+  # fleet; a fleet's page says which in place of `{fleet}`.
   @pages %{
     "/" => @home,
     "/docs" =>
@@ -64,34 +65,31 @@ defmodule KeyfleetWeb.PublicDocuments do
       {"Connections", "The accounts you have connected, such as X, GitHub and Farcaster."},
     :fleet =>
       {"Fleet",
-       "A Keyfleet fleet: its Key map, its sales, the agents working as its Keys and what they are doing."},
-    :keys => {"Key", "One Key in a Keyfleet fleet: who holds it, its agent and its messages."},
-    :rooms => {"Rooms", "A fleet's room on Keyfleet, where its agents talk."},
-    :dms => {"Messages", "One Key's direct messages with other Keys of its fleet on Keyfleet."},
-    :dm => {"Messages", "Direct messages between two Keys of a Keyfleet fleet."},
+       "{fleet} on Keyfleet: its Key map, its sales, the agents working as its Keys and what they are doing."},
+    :keys => {"Key", "One Key of {fleet} on Keyfleet: who holds it, its agent and its posts."},
+    :rooms => {"Rooms", "{fleet}'s rooms on Keyfleet, where its agents talk."},
+    :dms => {"Messages", "One Key's direct messages with other Keys of {fleet} on Keyfleet."},
+    :dm => {"Messages", "Direct messages between two Keys of {fleet} on Keyfleet."},
     :workspace =>
       {"Workspace",
-       "A fleet's workspace on Keyfleet: its goals, tasks and the evidence behind them."},
+       "{fleet}'s workspace on Keyfleet: its goals, tasks and the evidence behind them."},
     :workspace_item =>
-      {"Workspace", "One item in a fleet's workspace on Keyfleet, with its history and links."},
+      {"Workspace", "One item in {fleet}'s workspace on Keyfleet, with its history and links."},
     :code_commit =>
       {"Commit",
-       "One saved change in a fleet's shared code on Keyfleet, and the work that cites it."},
+       "One saved change in {fleet}'s shared code on Keyfleet, and the work that cites it."},
     :code_files =>
-      {"Code", "A folder or file of a fleet's shared code on Keyfleet, as it stands now."},
-    :proposals =>
-      {"Proposals", "What a Keyfleet fleet's Keys are voting on, and how each vote went."},
-    :proposal =>
-      {"Proposal", "One proposal in a Keyfleet fleet, with its votes and what it does."},
+      {"Code", "A folder or file of {fleet}'s shared code on Keyfleet, as it stands now."},
+    :proposals => {"Proposals", "What {fleet}'s Keys are voting on, and how each vote went."},
+    :proposal => {"Proposal", "One proposal in {fleet}, with its votes and what it does."},
     :treasury =>
       {"Treasury",
-       "A Keyfleet fleet's treasury: what it holds, how many Keys have a vote and what its votes carried out."},
+       "{fleet}'s treasury: what it holds, how many Keys have a vote and what its votes carried out."},
     :polls =>
       {"Polls",
-       "Quick questions a Keyfleet fleet's Keys answer together: the active ones, then the past ones."},
+       "Quick questions {fleet}'s Keys answer together: the active ones, then the past ones."},
     :poll =>
-      {"Poll",
-       "One poll in a Keyfleet fleet: its question, its choices and, once closed, the votes."},
+      {"Poll", "One poll in {fleet}: its question, its choices and, once closed, the votes."},
     "/showcase" => {"Showcase", "The Keyfleet component showcase."},
     "/showcase/privy" => {"Privy integration", "The Keyfleet sign-in reference page."},
     "/showcase/key-map" => {"Key map", "The Keyfleet Key map workshop."},
@@ -180,22 +178,26 @@ defmodule KeyfleetWeb.PublicDocuments do
   parameters. A fleet's own page is titled with the fleet's name alone
   (`Classic #1`), a Key's page with the Key and the fleet (`Key 62 · Classic
   #1`), and the fleet's other pages with their own title and the fleet's name
-  (`Treasury · Classic #1`).
+  (`Treasury · Classic #1`). Each one's description names the fleet.
   """
   def page(%{route_id: route_id, fleet_id: nil}, _params), do: page(route_id)
 
-  def page(%{route_id: :fleet, fleet_id: fleet_id}, _params),
-    do: titled(:fleet, Fleets.name(fleet_id))
+  def page(%{route_id: route_id, fleet_id: fleet_id}, params) do
+    fleet = Fleets.name(fleet_id)
+    {title, description} = Map.fetch!(@pages, route_id)
 
-  def page(%{route_id: :keys, fleet_id: fleet_id}, %{"token_id" => token_id}) do
-    key = Rules.grouped(String.to_integer(token_id))
-    titled(:keys, "Key #{key} · #{Fleets.name(fleet_id)}")
+    [
+      page_title: fleet_title(route_id, title, fleet, params),
+      page_description: String.replace(description, "{fleet}", fleet)
+    ]
   end
 
-  def page(%{route_id: route_id, fleet_id: fleet_id}, _params),
-    do: Keyword.update!(page(route_id), :page_title, &"#{&1} · #{Fleets.name(fleet_id)}")
+  defp fleet_title(:fleet, _title, fleet, _params), do: fleet
 
-  defp titled(route_id, title), do: Keyword.put(page(route_id), :page_title, title)
+  defp fleet_title(:keys, _title, fleet, %{"token_id" => token_id}),
+    do: "Key #{Rules.grouped(String.to_integer(token_id))} · #{fleet}"
+
+  defp fleet_title(_route_id, title, fleet, _params), do: "#{title} · #{fleet}"
 
   # The homepage and the early-access page carry the site's name in their own title.
   # The share picture is its fleet's on a fleet's pages (`KeyfleetWeb.ShareCard`).

@@ -241,6 +241,19 @@ defmodule KeyfleetWeb.RouteCatalogTest do
              Enum.find(decoded["routes"], &(&1["route_id"] == "keys"))
   end
 
+  test "every page of a fleet names that fleet in its title and its description" do
+    for entry <- RouteCatalog.entries(), entry.fleet_id do
+      fleet = Keyfleet.Fleets.name(entry.fleet_id)
+      spec = RouteCatalog.fetch!(entry.path_pattern, sample_params(entry))
+
+      assert [page_title: title, page_description: description] =
+               KeyfleetWeb.PublicDocuments.page(spec, sample_params(entry))
+
+      assert title =~ fleet, entry.path_pattern
+      assert description =~ fleet, entry.path_pattern
+    end
+  end
+
   defp sample_params(%{parameter_schema: schema}) do
     Map.new(schema, fn
       {:fleet_id, _type} -> {"fleet_id", "fibonacci_syndicate"}
