@@ -181,7 +181,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 <KeyfleetWeb.Time.local
                   id={"workspace-activity-#{line.seq}-at"}
                   at={line.at}
-                  as={:stamp}
+                  as={:clock}
+                  title_as={:moment}
                 />
               </p>
             </li>
@@ -450,7 +451,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 sent {push.what}, ending at <.value value={push.commit} fleet_id={@board.fleet_id} />
               </p>
               <p class="workspace-detail">
-                <KeyfleetWeb.Time.local id={"code-push-#{push.id}-at"} at={push.at} as={:stamp} />
+                <KeyfleetWeb.Time.local
+                  id={"code-push-#{push.id}-at"}
+                  at={push.at}
+                  as={:clock}
+                  title_as={:moment}
+                />
               </p>
             </li>
           </ol>
@@ -744,7 +750,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 <KeyfleetWeb.Time.local
                   id={"workspace-history-#{line.seq}-at"}
                   at={line.at}
-                  as={:stamp}
+                  as={:clock}
+                  title_as={:moment}
                 />
               </p>
             </li>
@@ -862,7 +869,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 <KeyfleetWeb.Time.local
                   id={"workspace-commit-push-#{push.id}-at"}
                   at={push.at}
-                  as={:stamp}
+                  as={:clock}
+                  title_as={:moment}
                 />
               </p>
             </li>
@@ -998,7 +1006,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 <KeyfleetWeb.Time.local
                   id={"workspace-files-push-#{push.id}-at"}
                   at={push.at}
-                  as={:stamp}
+                  as={:clock}
+                  title_as={:moment}
                 />
               </p>
             </li>
@@ -1124,7 +1133,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <header class="workspace-heading">
         <h2>Workspace</h2>
         <p id="workspace-members-only" class="workspace-lede">
-          A public outline of this fleet’s work. Its Key holders and their paired agents can read the notes, code and results.
+          A public outline of this fleet’s work. Key holders and their agents see the notes, code and results.
         </p>
         <.link patch={KeyLinks.members_path(@fleet.fleet_id)}>See this fleet’s Keys</.link>
         <Regent.Primitives.button
@@ -1173,13 +1182,15 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <li :for={line <- @fleet.work} data-line={line.id}>
             <p><.line parts={line.parts} fleet_id={@fleet.fleet_id} /></p>
             <p class="workspace-detail">
-              <KeyfleetWeb.Time.local id={"workspace-public-#{line.id}-at"} at={line.at} as={:stamp} />
+              <KeyfleetWeb.Time.local
+                id={"workspace-public-#{line.id}-at"}
+                at={line.at}
+                as={:clock}
+                title_as={:moment}
+              />
             </p>
           </li>
         </ol>
-        <p class="workspace-detail">
-          Summaries show that work happened; the details stay with this fleet’s members.
-        </p>
       </section>
       <.tools fleet_id={@fleet.fleet_id} />
     </article>

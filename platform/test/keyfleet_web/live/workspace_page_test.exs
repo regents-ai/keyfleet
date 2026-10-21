@@ -1404,7 +1404,12 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                "Keyfleet updated “Draft”: progress is now blocked."
              ]
 
-      assert has_element?(view, "#workspace-activity .workspace-detail", "at 12:03 UTC")
+      assert has_element?(
+               view,
+               ~s(#workspace-activity .workspace-detail time[datetime$="T12:03:00Z"])
+             )
+
+      assert has_element?(view, "#workspace-activity .workspace-detail time", "22 Sep")
     end
 
     test "a change made by Keyfleet itself names no key", %{conn: conn} do
