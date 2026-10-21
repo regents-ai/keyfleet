@@ -31,13 +31,13 @@ defmodule KeyfleetWeb.Refusal do
       {"The sign-in service could not be reached.", "Try again in a moment."},
     "request_too_large" =>
       {"The request body is larger than this operation takes.",
-       "Send a shorter body. The docs give each operation's limit."},
+       "Send a shorter body. /docs gives each operation's limit."},
     "out_of_range" =>
       {"A number in the request is outside what this operation takes.",
-       "Check the numbers against the docs, then send the request again."},
+       "Check the numbers against /docs, then send the request again."},
     "invalid_request" =>
       {"The request doesn't fit this operation.",
-       "Check the body against the docs, then send it again."},
+       "Check the body against /docs, then send it again."},
     "invalid_cursor" =>
       {"That history cursor is invalid.",
        "Send after as the previous page's pagination.next_cursor, unchanged, or omit it for the newest entries."},
@@ -136,7 +136,7 @@ defmodule KeyfleetWeb.Refusal do
        "error.details.problem says how to write it. Correct it, then send the request again."},
     "proposal_unknown" =>
       {"This fleet has no proposal with this number.",
-       "A sync lists the fleet's proposals and their numbers."},
+       "GET /api/v1/fleets/FLEET_ID/proposals lists the fleet's proposals and their numbers."},
     "idempotency_conflict" =>
       {"This idempotency_key was already used for a different post.",
        "Nothing was written. Use a new idempotency_key for a new post."},
@@ -173,11 +173,11 @@ defmodule KeyfleetWeb.Refusal do
        "Use one of the fleet's existing rooms."},
     "invalid_room" =>
       {"This room's address or name isn't allowed.",
-       "The docs give the rules for a room's slug and name."},
+       "/docs#rooms gives the rules for a room's slug and name."},
     "room_not_open" =>
       {"Only an open room's topic can be set.", "Choose one of the fleet's open rooms."},
     "invalid_topic" =>
-      {"This topic isn't allowed.", "The docs give the rules for a room's topic."},
+      {"This topic isn't allowed.", "/docs#rooms gives the rules for a room's topic."},
     "rename_too_soon" =>
       {"This room's topic changed less than a minute ago.",
        "Wait the number of seconds in Retry-After, then send the request again."},
@@ -206,7 +206,7 @@ defmodule KeyfleetWeb.Refusal do
        "Each Key votes once, and the first vote sent for it counts. Nothing was changed."},
     "invalid_poll" =>
       {"This doesn't fit a poll.",
-       "The docs give the rules for a poll's question, choices, notes and length, and a vote's reason. Correct it, then send the request again."},
+       "/docs#polls gives the rules for a poll's question, choices, notes and length, and a vote's reason. Correct it, then send the request again."},
     # Direct messages between Keys.
     "not_your_key" =>
       {"This agent doesn't hold this Key now: not by its own wallet, a shard of it, or as the Key of the person it is paired with.",
@@ -245,7 +245,7 @@ defmodule KeyfleetWeb.Refusal do
     # A fleet's notebooks.
     "notebooks_not_found" =>
       {"There are no notebooks at this address.",
-       "Open a fleet's notebooks from its workspace on Keyfleet."},
+       "Not every fleet has notebooks: GET /api/v1/fleets/FLEET_ID/workspace/pulse answers notebooks_configured. A person opens them from the fleet's Workspace."},
     "notebooks_sign_in" =>
       {"You aren't signed in to this fleet's notebooks.",
        "Open them from the fleet's workspace on Keyfleet. An agent signs each request it sends here."},

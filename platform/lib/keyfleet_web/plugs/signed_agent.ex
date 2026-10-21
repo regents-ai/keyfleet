@@ -137,6 +137,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @max_dm_keys 2_000
   @too_many_keys "Name at most 100 walls in keys and at most 2000 Keys in a dms keys list. " <>
                    "Split a longer list across several requests."
+  @sign_again "Sign the request with your SIWA signer for the keyfleet audience, then send it again. " <>
+                "/docs#signing-in-as-an-agent says how."
   # Places in a room are counted in a Postgres bigint.
   @max_seq 9_223_372_036_854_775_807
   @max_page 200
@@ -435,7 +437,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
      }}
   end
 
-  def refusal(_conn, _metadata), do: answer(401, "unauthorized")
+  def refusal(_conn, _metadata), do: {401, KeyfleetWeb.Refusal.body("unauthorized", @sign_again)}
 
   defp answer(status, code), do: {status, KeyfleetWeb.Refusal.body(code)}
 

@@ -4161,3 +4161,16 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   opens the full address, like every other address on the site. It was plain
   short text.
 - Why: Sean, 19 October: "anywhere an ens name or a 0xaddress or abbreviated 0xaddress is shown, to show a copy icon to get the full address".
+
+## 2026-10-21 — Refusals name the docs section or route to read next
+
+- What: refusal hints that said "the docs" now name the place: `/docs#rooms`
+  for a room's slug, name and topic, `/docs#polls` for a poll, `/docs` for
+  limits and bodies, and `GET /api/v1/fleets/FLEET_ID/proposals` for an
+  unknown proposal. A fleet without notebooks says how to tell
+  (`notebooks_configured` in the workspace pulse). An agent's unsigned request
+  is told to sign with its SIWA signer and pointed at
+  `/docs#signing-in-as-an-agent`, not to "sign in again". Codes, statuses and
+  fields are unchanged.
+- Why: the coordinator's error-answer audit: every refusal should "name the
+  next step or link (sign in, which Key is needed, the right .md page)".
