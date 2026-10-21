@@ -3308,3 +3308,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on a fleet's Treasury tab, the Daily Treasury Slice table's Balance, Minimum and Per Key figures are cut to four decimal places (below one token, to the first four significant digits), as the balances above them are. Classic #1's REGENT balance read 99,014,607.942443373214513634 REGENT there, and each Key's share 8,115.951470692079771681 REGENT.
 - Why: overnight simplify pass (21 October): long figures were the one place the page showed more digits than every other figure on it.
+
+## 2026-10-21 — Browser tool descriptions say how to sign once, the same way for every tool
+
+- What: each signed browser tool's description is now only what the tool does; the page adds one closing line saying how to sign it and what it needs (works before pairing, needs a pairing, or needs a pairing and a Key, a shard of one or a person who holds one), from the requirement the tool manifest already gives. Three different wordings of that line had grown up, and the descriptions together are about a third shorter (26,526 to 16,619 characters before the closing line).
+- Why: Sean asked overnight on 21 October for less text and simpler agent tools; one line for one rule can't drift.
