@@ -966,7 +966,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = open(signed_in_as(conn, @holder), @treasury_page)
       active!(view, "#proposals-split-action", @holder)
 
-      assert preview(view, @eth) == ["ETH", "123.4567 ETH", "0.05 ETH", "0.3086 ETH"]
+      assert preview(view, @eth) == ["123.4567 ETH", "0.05 ETH", "0.3086 ETH"]
     end
 
     test "the split preview shows each asset's share now, and the split opens on time", %{
@@ -990,8 +990,8 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = open(signed_in_as(conn, @holder), @treasury_page)
       active!(view, "#proposals-split-action", @holder)
 
-      assert preview(view, @usdc) == ["USDC", "250 USDC", "100 USDC", "0.625 USDC"]
-      assert preview(view, @eth) == ["ETH", "0.1 ETH", "0.05 ETH", "0.00025 ETH"]
+      assert preview(view, @usdc) == ["250 USDC", "100 USDC", "0.625 USDC"]
+      assert preview(view, @eth) == ["0.1 ETH", "0.05 ETH", "0.00025 ETH"]
       assert has_element?(view, "#proposals-split-preview[tabindex='0']")
       assert text(view, "#proposals-split-last") == "6 October 2026 at 16:00 UTC"
       assert text(view, "#proposals-split-opens") == "7 October 2026 at 13:00 UTC"
@@ -1139,7 +1139,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = open(signed_in_as(conn, @holder), @treasury_page)
       active!(view, "#proposals-regents-share", @holder)
 
-      assert preview(view, @usdc) |> Enum.at(1) == "250 USDC"
+      assert preview(view, @usdc) |> hd() == "250 USDC"
 
       assert_push_event(view, "onchain-steps:review", %{
         component_id: "proposals-regents-share",
@@ -1160,7 +1160,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
 
       assert shows?(fn ->
                render_async(view, @async_wait)
-               preview(view, @usdc) |> Enum.at(1) == "247.5 USDC"
+               preview(view, @usdc) |> hd() == "247.5 USDC"
              end)
 
       assert_enqueued(worker: ReadBalances, args: %{fleet_id: @fleet})
@@ -1235,7 +1235,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, treasury, _html} = open(conn, @treasury_page)
       render_async(treasury, @async_wait)
 
-      assert preview(treasury, @usdc) == ["USDC", "250 USDC", "100 USDC", "0.625 USDC"]
+      assert preview(treasury, @usdc) == ["250 USDC", "100 USDC", "0.625 USDC"]
       refute has_element?(treasury, "#proposals-split-action [data-onchain-step]")
       refute has_element?(treasury, "#proposals-regents-share")
       refute has_element?(treasury, "#proposals-convert")

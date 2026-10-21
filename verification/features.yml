@@ -584,6 +584,22 @@ features:
     gaps:
       - Read live after release.
 
+  - id: treasury-slice-table
+    what: >-
+      The Daily Treasury Slice table on a fleet's Treasury tab shows Balance,
+      Minimum and Per Key, each amount carrying its own asset name, so the
+      table fits a phone screen without hiding a column.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/proposals_live.ex
+    entry:
+      - route: GET /:fleet/:number/treasury
+    proofs:
+      - platform/test/keyfleet_web/live/proposals_page_test.exs
+    gaps:
+      - Width at 390 px checked on the live page, not in a browser test.
+
   - id: posting-key
     what: >-
       A person whose wallets hold more than one of a fleet's Keys chooses on the

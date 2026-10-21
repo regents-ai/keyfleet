@@ -3662,3 +3662,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - On a fleet's Member List, cards further down the page settle into place the
   first time they scroll into view, the same way the homepage's tiles do.
   Nothing moves for readers who ask for less motion.
+
+## 2026-10-21 — Treasury slice table fits a phone
+
+- What: the Daily Treasury Slice table on a fleet's Treasury tab drops its
+  Asset column. Every amount already names its asset ("0.05 ETH",
+  "8,115.9514 REGENT"), and the balances table above it has no such column, so
+  on a phone the Per Key column no longer sits hidden past the card's edge.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the
+  guideline".

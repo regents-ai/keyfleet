@@ -986,7 +986,6 @@ defmodule KeyfleetWeb.ProposalsLive do
         >
           <thead>
             <tr>
-              <th scope="col">Asset</th>
               <th scope="col">Balance</th>
               <th scope="col">Minimum</th>
               <th scope="col">Per Key</th>
@@ -994,7 +993,6 @@ defmodule KeyfleetWeb.ProposalsLive do
           </thead>
           <tbody>
             <tr :for={asset <- split(panel).assets} data-asset={asset.address}>
-              <td>{asset_name(asset)}</td>
               <td>{slice_amount(asset, asset.balance)}</td>
               <td>{slice_amount(asset, asset.threshold)}</td>
               <td>{slice_amount(asset, asset.per_key)}</td>
@@ -1037,10 +1035,6 @@ defmodule KeyfleetWeb.ProposalsLive do
        do: "#{ProposalsPage.figure(atoms, decimals)} #{symbol}"
 
   defp slice_amount(asset, atoms), do: WalletWords.token_amount(Map.put(asset, :amount, atoms))
-
-  defp asset_name(%{usdc?: true}), do: "USDC"
-  defp asset_name(%{symbol: symbol}) when is_binary(symbol), do: symbol
-  defp asset_name(%{address: address}), do: RegentFormat.short_address(address)
 
   # The fleet the wallet buttons act on, and the network they send on.
   defp fleet(page), do: %{fleet_id: page.fleet_id, chain_id: page.chain_id}
