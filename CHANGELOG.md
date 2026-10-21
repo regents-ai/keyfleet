@@ -3527,3 +3527,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 ## 2026-10-21 — Counts read the same on every page
 - What: a proposal's "of 1,024 Keys counted" and a poll's vote count group thousands with commas, as every other page does. Behind it, one helper writes every "1 thing / N things" count, and USDC amounts use the same helper as other token amounts.
 - Why: one way to write a number, and the two pages that printed "1024" now match the rest.
+
+## 2026-10-21 — Goals say only what stands out
+
+- What: in the workspace's goal list and the public outline, a goal shows a tag only
+  once it is Achieved or Dropped; the "Open" every goal carried is gone. A goal's
+  own Details still list its status.
+- Why: every goal starts open, so the tag said nothing.
