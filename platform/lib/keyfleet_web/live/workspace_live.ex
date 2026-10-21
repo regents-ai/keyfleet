@@ -1325,7 +1325,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <span :if={row.starting?} class="workspace-badge">Starting idea</span>
           <span :if={row.archived?} class="workspace-badge">Archived</span>
           <span :if={row.status}>{row.status}</span>
-          <span :if={row.joined > 0}>{row.joined} joined</span>
+          <span :if={row.joined > 0}>
+            <KeyfleetWeb.Components.Count.count
+              id={"#{@id}-#{row.id}-joined"}
+              value={row.joined}
+              one="joined"
+              many="joined"
+            />
+          </span>
           <KeyfleetWeb.Time.local id={"#{@id}-#{row.id}-on"} at={row.changed_on} as={:date} />
         </span>
       </li>
