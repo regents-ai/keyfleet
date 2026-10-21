@@ -3489,3 +3489,5 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   workstream) show a short time, with the full moment on hover, as the fleet feed does.
 - New workstream lines glide in as the fleet feed's do; the line restating the
   list's order and the public footnote are gone.
+- The workspace's lede, the Notebooks panel's "Ready for this fleet." and a commit
+  page's "One saved change…" line are gone: the tabs and headings already say it.
