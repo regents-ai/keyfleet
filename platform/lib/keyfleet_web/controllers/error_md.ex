@@ -27,14 +27,9 @@ defmodule KeyfleetWeb.ErrorMD do
   defp nearest(%Plug.Conn{path_info: ["fleets" | _]}), do: {"every fleet", "/fleets.md"}
 
   defp nearest(%Plug.Conn{request_path: path}) do
-    page = String.replace_suffix(path, ".md", "")
-
-    case Enum.find(Fleets.catalog(), &under?(page, &1.path)) do
+    case path |> String.replace_suffix(".md", "") |> Fleets.at_path() do
       %{id: id, name: name} -> {name, "/fleets/#{id}.md"}
       nil -> {"the agent guide", "/llms.txt"}
     end
   end
-
-  defp under?(page, fleet_path),
-    do: page == fleet_path or String.starts_with?(page, fleet_path <> "/")
 end

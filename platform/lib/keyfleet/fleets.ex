@@ -85,6 +85,10 @@ defmodule Keyfleet.Fleets do
   @doc "The fleet's name, such as `Classic #1`."
   def name(fleet_id), do: Enum.find(@catalog, &(&1.id == fleet_id)).name
 
+  @doc "The fleet whose pages hold the site path `path` (its own page or one under it), or nil."
+  def at_path(path),
+    do: Enum.find(@catalog, &(path == &1.path or String.starts_with?(path, &1.path <> "/")))
+
   @doc """
   A Key's name, on its card and in its metadata: the fleet's type, the
   fleet's number within its type and the Key's number, each number at least

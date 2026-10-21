@@ -4212,3 +4212,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   check holds both.
 - Why: the coordinator's phone pass: "Look for … tap targets smaller than
   44px".
+
+## 2026-10-21 — A missing page under a fleet leads back to that fleet
+
+- What: an address under a fleet's pages that isn't a page, such as
+  /classic/1/rooms, offers "Go to Classic #1" instead of the homepage; the
+  homepage is among the links below it.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
