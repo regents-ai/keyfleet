@@ -3171,3 +3171,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the agent compatibility check for Classic #1 (C9) now passes when an agent reads Classic #1's terms and sees that Buy is open, with the next Key's price; it still buys nothing. It used to expect Buy to be closed, which stopped being true when the sale opened.
 - Why: Sean 21 October 00:58Z, from his approved list: "The agent check still says Classic #1 sales are closed."
+
+## 2026-10-21 — Phone-size walk uses today's pre-sale words
+
+- What: the phone-size first-visit walk (main_flows) now expects what the site says before a sale opens: Classic #1's page heading reads "Sales open soon", and the homepage's Classic #1 "Buy Key" waits with "Sales open soon" beside it rather than opening the sale's window. Only tests change; the site does not.
+- Why: Sean 21 October 00:58Z, from his approved list: "Two phone-size tests on main fail because of pre-launch wording."

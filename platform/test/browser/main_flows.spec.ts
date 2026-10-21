@@ -14,7 +14,7 @@ import {
 // step must fit the screen, keep its controls big enough to press, raise no
 // error and stay connected.
 //
-// The site is as it launches (support/club_world.ts): Classic #1 is coming
+// The site is as it launches (support/club_world.ts): Classic #1's sales open
 // soon, so its sale waits and its page has no tabs yet; the Regents Club is
 // open. Everything below is reached through the pages' own links.
 
@@ -48,23 +48,13 @@ test("the homepage shows Classic #1, its price, and Buy waiting for the sale", a
   test.info().annotations.push({type: "Buy Next Key below the first screen", description: `${below}px`})
   await expectComfortable(page, errors)
 
-  // "Buy Key" opens the sale's window: nothing sold yet, and its Buy closed
-  // with the same reason.
-  await page.locator("#home-classic-buy").click()
-  const sale = page.getByRole("dialog", {name: "Buy Key"})
-  await expect(sale).toBeVisible()
-  await expect(sale.locator("#home-buy-key-traits")).toHaveText("Your Key’s traits are randomized")
-  await expect(sale.locator("#home-buy-key-sold")).toHaveText("0 of 1,024")
-  await expectOnFirstScreen(page, sale.locator("#home-buy-key-sold"), "how many Keys are sold")
-  await expect(sale.locator("#home-buy-key-go")).toBeDisabled()
-  await expect(sale.locator("#home-buy-key-why")).toHaveText("Sales open soon")
-  await expectComfortable(page, errors)
-  await sale.getByRole("button", {name: "Close", exact: true}).click()
-  await expect(sale).toBeHidden()
+  // Classic #1's own "Buy Key" waits for the sale too, with the same reason.
+  await expect(page.locator("#home-classic-buy")).toHaveAttribute("aria-disabled", "true")
+  await expect(page.locator("#home-classic-why")).toHaveText("Sales open soon")
   await expectConnected(page)
 })
 
-test("Classic #1's page says it is coming soon and leads back to the fleets", async ({page}) => {
+test("Classic #1's page says its sales open soon and leads back to the fleets", async ({page}) => {
   const errors = watchErrors(page)
   await visit(page, "/")
   await page.locator("#home-classic-public").click()
@@ -72,7 +62,7 @@ test("Classic #1's page says it is coming soon and leads back to the fleets", as
   await expect(page).toHaveURL(/\/classic\/1$/)
   await expectConnected(page)
   await expect(page.getByRole("heading", {level: 1, name: "Classic #1"})).toBeVisible()
-  await expect(page.locator("#fleet-soon-title")).toHaveText("Coming soon")
+  await expect(page.locator("#fleet-soon-title")).toHaveText("Sales open soon")
   // Until it opens there is nothing behind its tabs, so it shows none.
   await expect(page.locator("#fleet-tabs")).toHaveCount(0)
   const back = page.locator("#fleet-soon").getByRole("link", {name: "See the fleets"})
