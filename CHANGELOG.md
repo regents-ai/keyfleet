@@ -4009,3 +4009,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   reader last started one with the membership the page already read, instead
   of reading it again for each. Nothing on screen changes.
 - Why: Sean, 21 Oct: "make it a modern and well-engineered elixir site".
+
+## 2026-10-21 — A fleet's tabs fade at an edge with more past it
+
+- What: where a fleet's tabs or the feed's channels scroll sideways (on a
+  phone), the row fades out at an edge while more of it waits past that edge,
+  and runs crisp to an edge it has reached. A row that fits has no fade.
+- Why: Sean, 21 Oct 10:16Z: "more elegant, less text, simplify is the guideline".

@@ -869,6 +869,42 @@
   }
 }
 
+/* Where the tabs or the feed's channels scroll sideways, they fade out at an
+   edge while more of the row waits past it, and run crisp to an edge they
+   have reached. A row that fits has no fade. */
+@property --fleet-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fleet-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes fleet-row-fade {
+  0% { --fleet-fade-start: 0px; --fleet-fade-end: 2rem; }
+  20%, 80% { --fleet-fade-start: 2rem; --fleet-fade-end: 2rem; }
+  100% { --fleet-fade-start: 2rem; --fleet-fade-end: 0px; }
+}
+
+@supports (animation-timeline: scroll()) {
+  .fleet-bar__nav,
+  .fleet-channels {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--fleet-fade-start),
+      #000 calc(100% - var(--fleet-fade-end)),
+      transparent
+    );
+    animation: fleet-row-fade linear both;
+    animation-timeline: scroll(self inline);
+  }
+}
+
 /* On a phone the map's "i" opens its directions above it, centred across
    the screen, so they fit inside the screen's edges on the narrowest phone.
    This sits outside the product layer, so it wins over the tip's own place. */
