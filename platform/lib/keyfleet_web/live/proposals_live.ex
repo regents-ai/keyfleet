@@ -91,11 +91,6 @@ defmodule KeyfleetWeb.ProposalsLive do
   def list(assigns) do
     ~H"""
     <article id="proposals-page" class="proposals-page">
-      <header class="proposals-heading">
-        <h2 tabindex="-1">Proposals</h2>
-        <p>Decisions and payments put to this fleet’s Key holders.</p>
-      </header>
-
       <.catching_up :if={@page.catching_up?} />
 
       <PresenceCard.card
@@ -171,7 +166,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             <p :if={proposal.text} class="proposals-words proposals-words--short">
               {proposal.text}
             </p>
-            <.yes_share proposal={proposal} />
+            <.yes_share id={"proposals-share-#{proposal.number}"} votes={proposal} />
           </li>
         </ol>
 
@@ -458,6 +453,19 @@ defmodule KeyfleetWeb.ProposalsLive do
         <span :if={!is_map(@on_chain)} id="proposal-status">Standing</span>
         <.approval_rule id="proposal-rule" />
       </h2>
+      <p class="proposals-kind">
+        <span id="proposal-kind" class="proposals-type">{@proposal.kind}</span>
+        <span :if={is_map(@on_chain)} class="proposals-when">
+          <.countdown
+            :if={@on_chain.status == :open}
+            id="proposal-left"
+            closes_at={@proposal.closes_at}
+            now={DateTime.utc_now()}
+            format="hours"
+          />
+        </span>
+      </p>
+      <.yes_share :if={is_map(@on_chain)} id="proposal-share" votes={@on_chain} />
       <p :if={@on_chain == :unreadable} id="proposal-unread" class="proposals-notice" role="status">
         Can’t reach the network right now. Refresh to try again.
       </p>
@@ -1217,17 +1225,18 @@ defmodule KeyfleetWeb.ProposalsLive do
   # Where a proposal stands, in the words its pages use.
   defp status_word(%{status: status}), do: Map.fetch!(@status_words, status)
 
-  attr :proposal, :map, required: true
+  attr :id, :string, required: true
+  attr :votes, :map, required: true, doc: "a proposal's `yes`, `no`, `abstain` and `counted` Keys"
 
   # How a proposal's vote stands at a glance: the share of the Keys counted
   # that voted yes, as a bar with the 60% it needs marked on it, and the
   # whole tally on hover. The share rolls when votes arrive.
   defp yes_share(assigns) do
-    %{yes: yes, no: no, abstain: abstain, counted: counted} = assigns.proposal
+    %{yes: yes, no: no, abstain: abstain, counted: counted} = assigns.votes
 
     assigns =
       assign(assigns,
-        id: "proposals-share-#{assigns.proposal.number}",
+        counted: counted,
         share: if(counted > 0, do: min(div(yes * 100, counted), 100), else: 0),
         tally: "#{yes} yes, #{no} no, #{abstain} abstain, of #{keys(counted)} counted"
       )
@@ -1236,7 +1245,7 @@ defmodule KeyfleetWeb.ProposalsLive do
     <div class="proposals-share" title={@tally}>
       <span class="proposals-share__bar" style={"--yes: #{@share}%"} aria-hidden="true"></span>
       <span id={@id} phx-hook="MotionCount" data-variant={Motion.standard("count")}><span data-count>{@share}</span>% yes</span>
-      <span class="proposals-detail">of {keys(@proposal.counted)}</span>
+      <span class="proposals-detail">of {keys(@counted)}</span>
     </div>
     """
   end

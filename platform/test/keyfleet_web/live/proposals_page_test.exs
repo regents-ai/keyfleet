@@ -468,6 +468,14 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       FleetProposals.read(@fleet)
 
       assert shows?(fn -> has_element?(view, "#proposal-yes", "2 Keys") end)
+      assert text(view, "#proposal-kind") == "Decision"
+
+      assert has_element?(
+               view,
+               ~s(.proposals-share[title="2 yes, 0 no, 0 abstain, of 2 Keys counted"])
+             )
+
+      assert has_element?(view, "#proposal-left", "hours left")
 
       assert shows?(fn ->
                has_element?(list, ~s([data-proposal="1"] .proposals-share[title^="2 yes, 0 no"]))

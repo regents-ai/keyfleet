@@ -3464,3 +3464,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 ## 2026-10-21 — Code tidy: Ash's own input helper, unused code removed
 - What: the access, Key-holder and standing checks and the issued-Key validation read their inputs with Ash's own helper instead of four hand-written copies; two functions nothing called and five unused style names are gone.
 - Why: less code to read, and nothing a person or agent sees changes.
+
+## 2026-10-21 — A proposal's page shows its kind, time left and yes share too
+
+- What: a proposal's own page now shows, under its standing, the same kind, hours left and yes-share bar as its card on the list, from the vote contract's own figures. The Proposals list no longer opens with a "Proposals" card saying "Decisions and payments put to this fleet's Key holders."; the tab already names it, and the Treasury tab never had one.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", and the morning's goal of making each proposal's kind, status, time left and yes share readable at a glance.

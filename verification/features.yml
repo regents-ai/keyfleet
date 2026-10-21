@@ -457,7 +457,10 @@ features:
       vote has left while it is open (hours, then minutes in the last hour,
       counting down in the browser), and a bar of its yes share with a mark at
       the 60% it needs. Hovering the bar gives the full yes, no and abstain
-      count of the Keys counted.
+      count of the Keys counted. A proposal's own page shows the same kind,
+      time left and bar under its standing, from the vote contract's figures.
+      The list opens straight on the fleet's presence and every proposal, with
+      no title card repeating the Proposals tab.
     who: person
     level: ordinary
     paths:
