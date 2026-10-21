@@ -20,23 +20,24 @@ defmodule KeyfleetWeb.Vitals do
   0.2 s, CLS 0.1), so whether the 75th percentile meets a target is exact: the
   share of page views at or under it, which meets the target from 0.75 up.
 
-      sum(rate(keyfleet_vitals_lcp_seconds_bucket{app="keyfleet", device="phone", le="2.5"}[1h]))
-        / sum(rate(keyfleet_vitals_lcp_seconds_count{app="keyfleet", device="phone"}[1h]))
+      sum(rate(keyfleet_vitals_lcp_microseconds_bucket{app="keyfleet", device="phone", le="2.5e6"}[1h]))
+        / sum(rate(keyfleet_vitals_lcp_microseconds_count{app="keyfleet", device="phone"}[1h]))
 
   The 75th percentile itself, interpolated within its bucket, on phones and
   then by page and device:
 
       histogram_quantile(0.75,
-        sum by (le) (rate(keyfleet_vitals_lcp_seconds_bucket{app="keyfleet", device="phone"}[1h])))
+        sum by (le) (rate(keyfleet_vitals_lcp_microseconds_bucket{app="keyfleet", device="phone"}[1h])))
 
       histogram_quantile(0.75,
-        sum by (le, route, device) (rate(keyfleet_vitals_lcp_seconds_bucket{app="keyfleet"}[1h])))
+        sum by (le, route, device) (rate(keyfleet_vitals_lcp_microseconds_bucket{app="keyfleet"}[1h])))
 
-  The same with `keyfleet_vitals_inp_seconds` (`le="0.2"`), `keyfleet_vitals_cls`
-  (`le="0.1"`), `keyfleet_vitals_fcp_seconds` and `keyfleet_vitals_ttfb_seconds`.
+  The same with `keyfleet_vitals_inp_microseconds` (`le="2.0e5"`),
+  `keyfleet_vitals_cls_thousandths` (`le="100.0"`), `keyfleet_vitals_fcp_microseconds`
+  and `keyfleet_vitals_ttfb_microseconds`.
   How many page views stand behind each figure:
 
-      sum by (route, device) (increase(keyfleet_vitals_lcp_seconds_count{app="keyfleet"}[1h]))
+      sum by (route, device) (increase(keyfleet_vitals_lcp_microseconds_count{app="keyfleet"}[1h]))
 
   `keyfleet_vitals_reports_total` counts reports by device and connection
   type, and `keyfleet_vitals_refused_total` the reports refused, by reason.
@@ -128,7 +129,8 @@ defmodule KeyfleetWeb.Vitals do
 
   defp values(_none), do: :error
 
-  # The layout shift score has no unit; the times are exported in seconds.
-  defp measure(:cls, score), do: score
-  defp measure(_time, milliseconds), do: milliseconds / 1000
+  # The layout shift score has no unit and is exported in thousandths; the
+  # times are exported in microseconds.
+  defp measure(:cls, score), do: round(score * 1000)
+  defp measure(_time, milliseconds), do: round(milliseconds * 1000)
 end

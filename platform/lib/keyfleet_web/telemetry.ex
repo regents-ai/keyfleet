@@ -13,23 +13,36 @@ defmodule KeyfleetWeb.Telemetry do
   Visitors' browsers report each page's Core Web Vitals (`KeyfleetWeb.Vitals`,
   which also gives the queries for their 75th percentiles), one histogram for
   each with buckets around its targets, by page and device.
+  Every request the router sends to a page or controller is timed by its route
+  pattern (`[:phoenix, :router_dispatch, :stop]`), never by its path, and every
+  query by its whole time (`total_time` of the same Ecto event). Each fetch of
+  the agent guides (`/skill.md`, `/agents.md`) is one request under its route.
+  The engine's memory, run queues and process counts come from telemetry_poller's
+  default poller.
+
+  The reporter, Peep, keeps a fixed set of counters for each series and holds
+  no observation between scrapes. It adds each observation to a running total
+  as a whole number, so times are measured in whole microseconds, the layout
+  shift score in thousandths, and every total stays exact.
   """
 
   import Telemetry.Metrics
+
+  alias KeyfleetWeb.Telemetry.Buckets
 
   # The reasons the wallet hook reports (`Failure` in send_step.ts). Only these
   # are counted, so a label never holds whatever a browser chose to send.
   @wallet_failures ~w(step_unknown wallet_unavailable network_mismatch wallet_declined insufficient_funds send_unconfirmed)
 
+  @reporter :keyfleet_prometheus
+
   def child_spec(_arg) do
-    TelemetryMetricsPrometheus.Core.child_spec(
-      metrics: metrics(),
-      name: prometheus_reporter(),
-      start_async: false
-    )
+    Peep.child_spec(metrics: metrics(), name: @reporter)
   end
 
-  def prometheus_reporter, do: :keyfleet_prometheus
+  @doc "Every measurement as Prometheus text, as the metrics listener answers it."
+  def scrape,
+    do: @reporter |> Peep.get_all_metrics() |> Peep.Prometheus.export() |> IO.iodata_to_binary()
 
   @doc """
   Counts one press the browser reported as not sent or not confirmed, for the
@@ -58,12 +71,42 @@ defmodule KeyfleetWeb.Telemetry do
       counter("keyfleet.privy.session_refused.total", tags: [:stage, :reason]),
       counter("keyfleet.session_bootstrap.rate_limited.total", tags: [:source]),
       counter("keyfleet.session_authority.absent_row.total"),
-      distribution("health.db_queue.seconds",
+      distribution("health.db_queue.microseconds",
         event_name: [:keyfleet, :repo, :query],
         measurement: :queue_time,
-        unit: {:native, :second},
-        description: "Seconds a query waited for a database connection",
-        reporter_options: [buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]]
+        unit: {:native, :microsecond},
+        description: "Microseconds a query waited for a database connection",
+        reporter_options: [
+          peep_bucket_calculator: Buckets,
+          buckets:
+            [1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000] ++
+              [1_000_000, 2_500_000, 5_000_000]
+        ]
+      ),
+      distribution("keyfleet.repo.query.microseconds",
+        event_name: [:keyfleet, :repo, :query],
+        measurement: :total_time,
+        unit: {:native, :microsecond},
+        description: "Microseconds each query took, waiting for a connection included",
+        reporter_options: [
+          peep_bucket_calculator: Buckets,
+          buckets:
+            [1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000] ++
+              [1_000_000, 2_500_000, 5_000_000]
+        ]
+      ),
+      distribution("keyfleet.request.duration.microseconds",
+        event_name: [:phoenix, :router_dispatch, :stop],
+        measurement: :duration,
+        unit: {:native, :microsecond},
+        tags: [:route],
+        description: "Microseconds each request took, by its route pattern",
+        reporter_options: [
+          peep_bucket_calculator: Buckets,
+          buckets:
+            [5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000] ++
+              [2_500_000, 5_000_000, 10_000_000]
+        ]
       ),
       counter("health.chain_request_failures.total",
         event_name: [:keyfleet, :chain, :failure],
@@ -125,42 +168,64 @@ defmodule KeyfleetWeb.Telemetry do
       # target (LCP 2.5 s, INP 0.2 s, CLS 0.1) is a bucket bound, so the share
       # of page views within it is exact. Labels are only the site's route
       # patterns and two devices.
-      distribution("keyfleet.vitals.lcp.seconds",
+      distribution("keyfleet.vitals.lcp.microseconds",
         event_name: [:keyfleet, :vitals, :lcp],
         measurement: :value,
         tags: [:route, :device],
         description: "Largest Contentful Paint visitors' browsers measured",
-        reporter_options: [buckets: [0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 30]]
+        reporter_options: [
+          peep_bucket_calculator: Buckets,
+          buckets:
+            [500_000, 1_000_000, 1_500_000, 2_000_000, 2_500_000, 3_000_000, 4_000_000] ++
+              [5_000_000, 6_000_000, 8_000_000, 10_000_000, 15_000_000, 30_000_000]
+        ]
       ),
-      distribution("keyfleet.vitals.fcp.seconds",
+      distribution("keyfleet.vitals.fcp.microseconds",
         event_name: [:keyfleet, :vitals, :fcp],
         measurement: :value,
         tags: [:route, :device],
         description: "First Contentful Paint visitors' browsers measured",
-        reporter_options: [buckets: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.8, 2.25, 3, 4, 6, 10]]
+        reporter_options: [
+          peep_bucket_calculator: Buckets,
+          buckets:
+            [250_000, 500_000, 750_000, 1_000_000, 1_250_000, 1_500_000, 1_800_000] ++
+              [2_250_000, 3_000_000, 4_000_000, 6_000_000, 10_000_000]
+        ]
       ),
-      distribution("keyfleet.vitals.ttfb.seconds",
+      distribution("keyfleet.vitals.ttfb.microseconds",
         event_name: [:keyfleet, :vitals, :ttfb],
         measurement: :value,
         tags: [:route, :device],
         description: "Time to the first byte of the page visitors' browsers measured",
-        reporter_options: [buckets: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.65, 0.8, 1, 1.4, 1.8, 3, 5]]
+        reporter_options: [
+          peep_bucket_calculator: Buckets,
+          buckets:
+            [50_000, 100_000, 200_000, 300_000, 400_000, 500_000, 650_000, 800_000] ++
+              [1_000_000, 1_400_000, 1_800_000, 3_000_000, 5_000_000]
+        ]
       ),
-      distribution("keyfleet.vitals.inp.seconds",
+      distribution("keyfleet.vitals.inp.microseconds",
         event_name: [:keyfleet, :vitals, :inp],
         measurement: :value,
         tags: [:route, :device],
         description: "Interaction to Next Paint visitors' browsers measured",
         reporter_options: [
-          buckets: [0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 2]
+          peep_bucket_calculator: Buckets,
+          buckets:
+            [25_000, 50_000, 75_000, 100_000, 150_000, 200_000, 300_000, 400_000] ++
+              [500_000, 750_000, 1_000_000, 2_000_000]
         ]
       ),
-      distribution("keyfleet.vitals.cls",
+      distribution("keyfleet.vitals.cls.thousandths",
         event_name: [:keyfleet, :vitals, :cls],
         measurement: :value,
         tags: [:route, :device],
-        description: "Cumulative Layout Shift visitors' browsers measured, a score with no unit",
-        reporter_options: [buckets: [0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.25, 0.5, 1]]
+        description:
+          "Cumulative Layout Shift visitors' browsers measured, in thousandths of a score",
+        reporter_options: [
+          peep_bucket_calculator: Buckets,
+          buckets: [10, 25, 50, 75, 100, 150, 250, 500, 1_000]
+        ]
       ),
       counter("keyfleet.vitals.reports.total",
         event_name: [:keyfleet, :vitals, :report],
@@ -183,13 +248,39 @@ defmodule KeyfleetWeb.Telemetry do
         tags: [:queue, :worker, :state],
         description: "Job runs that failed; state says whether the job will retry"
       ),
-      distribution("keyfleet.jobs.duration.seconds",
+      distribution("keyfleet.jobs.duration.microseconds",
         event_name: [:oban, :job, :stop],
         measurement: :duration,
-        unit: {:native, :second},
+        unit: {:native, :microsecond},
         tags: [:queue, :worker],
-        reporter_options: [buckets: [0.01, 0.05, 0.1, 0.5, 1, 5, 15, 60]]
-      )
+        reporter_options: [
+          peep_bucket_calculator: Buckets,
+          buckets: [
+            10_000,
+            50_000,
+            100_000,
+            500_000,
+            1_000_000,
+            5_000_000,
+            15_000_000,
+            60_000_000
+          ]
+        ]
+      ),
+      last_value("vm.memory.total.bytes", event_name: [:vm, :memory], measurement: :total),
+      last_value("vm.memory.processes.bytes",
+        event_name: [:vm, :memory],
+        measurement: :processes
+      ),
+      last_value("vm.memory.binary.bytes", event_name: [:vm, :memory], measurement: :binary),
+      last_value("vm.memory.ets.bytes", event_name: [:vm, :memory], measurement: :ets),
+      last_value("vm.memory.code.bytes", event_name: [:vm, :memory], measurement: :code),
+      last_value("vm.memory.atom.bytes", event_name: [:vm, :memory], measurement: :atom),
+      last_value("vm.total_run_queue_lengths.total"),
+      last_value("vm.total_run_queue_lengths.cpu"),
+      last_value("vm.system_counts.process_count"),
+      last_value("vm.system_counts.atom_count"),
+      last_value("vm.system_counts.port_count")
     ]
   end
 end
