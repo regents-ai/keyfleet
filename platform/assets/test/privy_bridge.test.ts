@@ -69,6 +69,7 @@ import {
   disconnectEveryEthereumWallet,
   forgetWalletDisconnected,
   invalidateWalletWork,
+  regentsWallets,
   replaceActiveEthereumWallet,
   replaceConnectedEthereumWallets,
   selectConnectedEthereumWallet,
@@ -1563,6 +1564,37 @@ describe("Privy session bridge", () => {
     expect(activeEthereumWallet()).toBeNull()
   })
 
+  // The account's wallets say which one Privy made at sign-in: the Regents wallet.
+  it("tells the Regents wallet from the person's own wallet", async () => {
+    productionRootRender.mockReset()
+    replaceActiveEthereumWallet(null)
+    const renderAccountBridge = installAccountBridgeRenderer()
+    stubBrowserGlobals()
+    const own = ethereumWallet("0x1111111111111111111111111111111111111111")
+    const regents = ethereumWallet("0x9B2C414614AEE294202C1219520955EF3B596031", {
+      walletClientType: "privy",
+      connectorType: "embedded",
+    })
+    replaceConnectedEthereumWallets([])
+    expect(regentsWallets()).toBeNull()
+
+    const startup = bridge.startPrivyBridge({}, {
+      appId: "test-app",
+      authenticated: true,
+      getAccessToken: async () => "current-token",
+      logout: async () => undefined,
+      ready: true,
+      walletsReady: true,
+      wallets: [own, regents],
+      activeWallet: own,
+    } as unknown as bridge.PrivyBridgeProviderState)
+    renderAccountBridge(renderedAccountBridge())
+    await startup
+    await until(() => activeEthereumWallet()?.provider === own.provider)
+
+    expect(regentsWallets()).toEqual(["0x9b2c414614aee294202c1219520955ef3b596031"])
+  })
+
   // Privy can move the selection without changing the connected set. Stake reads
   // the selection, so that change has to reach the page as a wallet-state event.
   it("P1_ACTIVE_WALLET_ONLY: publishes the selection and announces a selection-only change", async () => {
@@ -2335,8 +2367,8 @@ describe("Privy session bridge", () => {
     const first = {request: vi.fn()}
     const expected = {request: vi.fn()}
     const wallets: Array<[string, ConnectedEthereumWallet]> = [
-      ["0x2222222222222222222222222222222222222222", {provider: first, disconnect: vi.fn()}],
-      ["0x1111111111111111111111111111111111111111", {provider: expected, disconnect: vi.fn()}],
+      ["0x2222222222222222222222222222222222222222", {provider: first, disconnect: vi.fn(), regents: false}],
+      ["0x1111111111111111111111111111111111111111", {provider: expected, disconnect: vi.fn(), regents: false}],
     ]
 
     expect(

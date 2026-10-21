@@ -927,7 +927,7 @@ describe("lazy browser authentication", () => {
     const clearSession = vi.fn(async () => void order.push("local"))
     const reload = vi.fn(() => void order.push("reload"))
 
-    const wallet = (name: string): [string, {provider: EthereumProvider; disconnect: () => void}] => {
+    const wallet = (name: string): [string, {provider: EthereumProvider; disconnect: () => void; regents: boolean}] => {
       const provider: EthereumProvider = {
         request: vi.fn(async () => {
           order.push(`revoke:${name}`)
@@ -939,7 +939,7 @@ describe("lazy browser authentication", () => {
 
       return [
         `0x${name === "first" ? "1" : "2"}`.padEnd(42, name === "first" ? "1" : "2"),
-        {provider, disconnect: vi.fn(() => void order.push(`disconnect:${name}`))},
+        {provider, disconnect: vi.fn(() => void order.push(`disconnect:${name}`)), regents: false},
       ]
     }
 

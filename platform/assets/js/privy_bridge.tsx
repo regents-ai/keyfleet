@@ -954,6 +954,7 @@ function AccountBridge({oauthReturn, mode, providerState, publishRequestHandler,
         // Privy's own way of letting go of this wallet, carried beside the
         // provider so Disconnect can release both without the bridge.
         disconnect: () => wallet.disconnect(),
+        regents: wallet.walletClientType === "privy" || wallet.walletClientType === "privy-v2",
       })),
     )
     if (walletSyncGeneration.current !== generation || lifetime.aborted || walletWorkEpoch() !== epoch) return
@@ -977,7 +978,10 @@ function AccountBridge({oauthReturn, mode, providerState, publishRequestHandler,
     if (walletDisconnected() || lifetime.aborted || walletWorkEpoch() !== epoch) return
 
     replaceConnectedEthereumWallets(
-      entries.map(entry => [entry.address, {provider: entry.provider, disconnect: entry.disconnect}]),
+      entries.map(entry => [
+        entry.address,
+        {provider: entry.provider, disconnect: entry.disconnect, regents: entry.regents},
+      ]),
     )
     replaceActiveEthereumWallet(
       selectedWallet && selectedProvider

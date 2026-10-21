@@ -1,12 +1,13 @@
 defmodule KeyfleetWeb.AccountLive do
   @moduledoc """
   The signed-in person's account, one tab each: Profile (who the site knows
-  them as, their ENS name and World ID, the keys their wallets hold and, in a
+  them as, their wallets and which one is active (`KeyfleetWeb.AccountWallets`),
+  their ENS name and World ID, the keys their wallets hold and, in a
   fleet where they hold several, the one they post as
   (`KeyfleetWeb.PostingKeyChoice`), the agents
   paired with their account, which they may open, rename and unpair
   (`KeyfleetWeb.AgentsPanel`), their Credits and this browser's session), Wallets (the wallets their sign-in
-  verified) and Connections (the accounts they have connected, which each
+  verified, the same list) and Connections (the accounts they have connected, which each
   fleet's Member List shows beside their address). Points has its
   own page (`KeyfleetWeb.PointsLive`).
 
@@ -66,13 +67,26 @@ defmodule KeyfleetWeb.AccountLive do
               alt=""
             />
             <div class="account-identity__name">
-              <h2>{@account_control.label}</h2>
-              <p :if={short_wallet(@account) not in [nil, @account_control.label]}>
-                <code>{short_wallet(@account)}</code>
-              </p>
+              <h2 :if={!name_is_wallet?(@account, @account_control.label)}>
+                {@account_control.label}
+              </h2>
+              <h2 :if={name_is_wallet?(@account, @account_control.label)}>
+                <Regent.Primitives.address
+                  id="account-name"
+                  address={@account.wallet_address}
+                  label={@account_control.label}
+                />
+              </h2>
             </div>
           </div>
         </Regent.HolographicCard.card>
+
+        <.live_component
+          module={KeyfleetWeb.AccountWallets}
+          id="account-wallets"
+          class="account-panel"
+          account={@account}
+        />
 
         <section class="account-panel account-details" aria-labelledby="account-details-title">
           <h2 id="account-details-title">Details</h2>
@@ -211,28 +225,12 @@ defmodule KeyfleetWeb.AccountLive do
       signed_out_reason={@signed_out_reason}
     >
       <:lede>The wallets your sign-in verified.</:lede>
-      <section class="account-panel account-details" aria-labelledby="account-wallets-title">
-        <h2 id="account-wallets-title">Your wallets</h2>
-        <dl>
-          <div>
-            <dt>Wallet</dt>
-            <dd :if={@account.wallet_address} class="account-wallet">
-              <Regent.Primitives.address id="account-wallet" address={@account.wallet_address} />
-            </dd>
-            <dd :if={is_nil(@account.wallet_address)}>No wallet linked</dd>
-          </div>
-          <div :if={other_wallets(@account) != []}>
-            <dt>Other linked wallets</dt>
-            <dd>
-              <ul class="account-wallet-list">
-                <li :for={wallet <- other_wallets(@account)}>
-                  <Regent.Primitives.address id={"account-wallet-#{wallet}"} address={wallet} />
-                </li>
-              </ul>
-            </dd>
-          </div>
-        </dl>
-      </section>
+      <.live_component
+        module={KeyfleetWeb.AccountWallets}
+        id="wallets-list"
+        class="account-panel"
+        account={@account}
+      />
     </.settings_page>
     """
   end
@@ -299,22 +297,12 @@ defmodule KeyfleetWeb.AccountLive do
     """
   end
 
-  defp other_wallets(%{wallet_address: primary, wallet_addresses: wallets}) do
-    primary = primary && String.downcase(primary)
+  # The card names the person the way the header does. A name that is the
+  # wallet itself, its ENS name or short address, opens and copies the address.
+  defp name_is_wallet?(%{wallet_address: wallet} = account, label) when is_binary(wallet),
+    do: label in [PublicIdentity.short_wallet(wallet), account.ens_name]
 
-    wallets
-    |> List.wrap()
-    |> Enum.map(&String.downcase/1)
-    |> Enum.uniq()
-    |> Enum.reject(&(&1 == primary))
-  end
-
-  # The card names the person the way the header does; the wallet is only
-  # repeated beneath when that name is something other than the wallet itself.
-  defp short_wallet(%{wallet_address: wallet}) when is_binary(wallet),
-    do: PublicIdentity.short_wallet(wallet)
-
-  defp short_wallet(_account), do: nil
+  defp name_is_wallet?(_account, _label), do: false
 
   # A read not yet answered shows as loading, and an answer with nothing in it
   # as current figures.

@@ -296,7 +296,12 @@ defmodule KeyfleetWeb.ShellLiveTest do
     {view, html} = open_account(conn, account)
 
     refute html =~ "Sign in to see your account"
-    assert has_element?(view, "#account-identity h2", "0x6666..6666")
+
+    assert has_element?(
+             view,
+             "#account-identity h2 #account-name-copy[data-copy-text='#{wallet}']"
+           )
+
     assert has_element?(view, "#account-identity canvas[data-holo-canvas]")
     assert has_element?(view, ".account-details dd", "Not set")
     assert has_element?(view, "#account-page button[data-account-target=sign-out]", "Sign out")
@@ -307,18 +312,18 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(
              view,
-             "#account-wallet .rg-address__label",
+             "#wallets-list-#{wallet} .rg-address__label",
              RegentFormat.short_address(wallet)
            )
 
-    assert has_element?(view, "#account-wallet-copy[data-copy-text='#{wallet}']")
+    assert has_element?(view, "#wallets-list-#{wallet}-address-copy[data-copy-text='#{wallet}']")
 
     assert has_element?(
              view,
-             "#account-wallet-explorer[href='https://basescan.org/address/#{wallet}']"
+             "#wallets-list-#{wallet}-address-explorer[href='https://basescan.org/address/#{wallet}']"
            )
 
-    assert has_element?(view, "#account-wallet-#{other}-copy[data-copy-text='#{other}']")
+    assert has_element?(view, "#wallets-list-#{other}-address-copy[data-copy-text='#{other}']")
 
     view |> element("#shell-tabs a", "Connections") |> render_click()
     assert_patch(view, "/account/connections")
@@ -355,6 +360,69 @@ defmodule KeyfleetWeb.ShellLiveTest do
              "#account-verified-connections [role=alert]",
              "That account is already connected to another account here."
            )
+  end
+
+  test "the side panel and Account say which wallet is the Regents wallet and which is active",
+       %{conn: conn} do
+    own = "0x8888888888888888888888888888888888888888"
+    regents = "0xabababababababababababababababababababab"
+    elsewhere = "0x1212121212121212121212121212121212121212"
+
+    assert {:ok, account} =
+             Accounts.register_verified("did:privy:account-wallets", own, [own, regents],
+               actor: %System{}
+             )
+
+    {view, _html} = open_account(conn, account)
+
+    # Until the browser says, each wallet shows and copies as linked, with no mark.
+    for list <- ~w(#shell-wallets #account-wallets), address <- [own, regents] do
+      assert has_element?(
+               view,
+               "#{list}-#{address} .account-wallets__label",
+               "Linked to this account"
+             )
+
+      assert has_element?(view, "#{list}-#{address}-address-copy[data-copy-text='#{address}']")
+    end
+
+    refute has_element?(view, "#shell-wallets .rg-status")
+
+    seen!(
+      view,
+      "#shell-wallets",
+      "0x" <> String.upcase("abababababababababababababababababababab"),
+      [regents]
+    )
+
+    assert has_element?(view, "#shell-wallets-#{own} .account-wallets__label", "Your wallet")
+    refute has_element?(view, "#shell-wallets-#{own} .rg-status")
+
+    assert has_element?(
+             view,
+             "#shell-wallets-#{regents} .account-wallets__label",
+             "Regents wallet"
+           )
+
+    assert has_element?(view, "#shell-wallets-#{regents} .rg-status", "Active")
+
+    # An active wallet the account isn't linked to is shown, and said to be one.
+    seen!(view, "#account-wallets", elsewhere, [regents])
+
+    assert has_element?(
+             view,
+             "#account-wallets-#{elsewhere} .account-wallets__label",
+             "Not linked to this account"
+           )
+
+    assert has_element?(view, "#account-wallets-#{elsewhere} .rg-status", "Active")
+
+    assert has_element?(
+             view,
+             "#account-wallets-#{elsewhere}-address-copy[data-copy-text='#{elsewhere}']"
+           )
+
+    refute has_element?(view, "#account-wallets-#{regents} .rg-status")
   end
 
   test "Account lists the keys the person's wallets hold, fleet by fleet", %{conn: conn} do
@@ -678,6 +746,13 @@ defmodule KeyfleetWeb.ShellLiveTest do
   end
 
   defp topics(view), do: Keyfleet.PubSub |> Registry.keys(view.pid) |> Enum.sort()
+
+  # What the page's wallet hook reports for the wallet list `list`.
+  defp seen!(view, list, active, regents),
+    do:
+      view
+      |> with_target(list)
+      |> render_hook("wallets_seen", %{"active" => active, "regents" => regents})
 
   defp open_account(conn, account, path \\ "/account") do
     {:ok, view, _html} =

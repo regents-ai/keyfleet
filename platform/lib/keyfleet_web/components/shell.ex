@@ -8,8 +8,9 @@ defmodule KeyfleetWeb.Components.Shell do
   `buy_key` slot, the homepage in its own Classic section.
 
   The side panel is the same on every page that has it, the app's pages and the
-  homepage: Sign out, Manage Account (the account page), the agents paired with the
-  account (the `agents` slot) and the box to pair an agent (the `pairing` slot).
+  homepage: Sign out, Manage Account (the account page), the account's wallets
+  (the `wallets` slot), the agents paired with the account (the `agents` slot)
+  and the box to pair an agent (the `pairing` slot).
   The account's name and the panel button in the header open and close it.
   Whether it is open is the browser's (`assets/js/shell_panels.ts` and the
   `keyfleet_aside` cookie, read into `<html data-aside>`), so the server never
@@ -38,6 +39,7 @@ defmodule KeyfleetWeb.Components.Shell do
   attr(:get_key, :boolean, required: true)
 
   slot(:content, required: true)
+  slot(:wallets, doc: "The account's wallets, in the side panel.")
   slot(:agents, doc: "The agents paired with the account, in the side panel.")
   slot(:pairing, doc: "The box to pair an agent, in the side panel.")
   slot(:buy_key, doc: "The \"Buy Key\" window, while it is open.")
@@ -120,6 +122,7 @@ defmodule KeyfleetWeb.Components.Shell do
       </div>
 
       <.aside account_control={@account_control}>
+        <:wallets>{render_slot(@wallets)}</:wallets>
         <:agents>{render_slot(@agents)}</:agents>
         <:pairing :if={@pairing != []}>{render_slot(@pairing)}</:pairing>
       </.aside>
@@ -224,12 +227,13 @@ defmodule KeyfleetWeb.Components.Shell do
 
   attr :account_control, Keyfleet.AccessContext.AccountControl, required: true
 
+  slot :wallets, doc: "The account's wallets."
   slot :agents, doc: "The agents paired with the account."
   slot :pairing, doc: "The box to pair an agent."
 
   @doc """
   The side panel, for someone signed in: Sign out and Manage Account, the
-  account's agents and the box to pair a new one.
+  account's wallets, its agents and the box to pair a new one.
   """
   def aside(assigns) do
     ~H"""
@@ -247,6 +251,8 @@ defmodule KeyfleetWeb.Components.Shell do
           <span class="rg-button__label">Manage Account</span>
         </.link>
       </div>
+
+      {render_slot(@wallets)}
 
       {render_slot(@agents)}
 

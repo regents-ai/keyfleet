@@ -39,8 +39,9 @@ defmodule KeyfleetWeb.HomeLive do
 
   Signed in, the header's account name and panel button open the side panel
   (`KeyfleetWeb.Components.Shell.aside/1`), as on the app's pages: Sign out,
-  Manage Account, the account's agents and the box to pair a new one. Open, it
-  sits under the header beside the page, which narrows to make room for it.
+  Manage Account, the account's wallets, its agents and the box to pair a new
+  one. Open, it sits under the header beside the page, which narrows to make
+  room for it.
 
   The page reads nothing itself. Each fleet is read once for every open page
   (`KeyfleetWeb.FleetNow`), the ships on its sea with it, and the Club's
@@ -331,6 +332,9 @@ defmodule KeyfleetWeb.HomeLive do
       />
 
       <Shell.aside account_control={@account_control}>
+        <:wallets :if={@account}>
+          <.live_component module={KeyfleetWeb.AccountWallets} id="shell-wallets" account={@account} />
+        </:wallets>
         <:agents :if={@account}>
           <.live_component
             module={KeyfleetWeb.PanelAgents}

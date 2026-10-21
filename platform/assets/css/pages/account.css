@@ -127,10 +127,6 @@
   overflow-wrap: anywhere;
 }
 
-.account-identity__name code {
-  color: color-mix(in srgb, var(--rg-holo-ink) 70%, transparent);
-}
-
 /* Your keys */
 
 .account-keys__fleet {
@@ -219,14 +215,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
-}
-
-.account-wallet-list {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
 /* Verified connections */

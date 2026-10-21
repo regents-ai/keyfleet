@@ -3201,3 +3201,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: when the side panel is open it no longer covers anything. On the homepage and on every app page, at any width from a tablet up, the page narrows to make room and the panel stands beside it under the header; on the homepage the header stays at the top while the panel is open. Between a tablet and a laptop width the menu strip narrows with the page too. On a phone there is no room beside the page, so the panel still opens over the page under the header, only when pressed, and closes when a link in it is pressed. "Manage Account" in the panel now opens Keyfleet's own account page (keyfleet.ai/account) in the same tab instead of regents.sh in a new one.
 - Why: Sean 21 October 01:35Z: "I want the manage account button to link to keyfleet.ai/account / the sidebar should not cover content, it should shorten the visible area".
+
+## 2026-10-21 — See and copy your active wallet in the side panel and on Account
+
+- What: the side panel and the Account page (its Profile and its Wallets tab) now list your wallets, each with its copy icon and the arrow that opens it on Basescan. Each one says what it is: "Your wallet" for the one you signed in with from your own wallet app, "Regents wallet" for the one made for you at sign-in. The wallet that is active right now is marked "Active", and an active wallet that isn't linked to your account shows too, said to be one. The Profile card no longer shows a short address you couldn't copy; when your name there is your address, it opens and copies it.
+- Why: Sean 21 October 02:35Z: "I want a user to see their active wallet and be able to copy it on both the sidebar view and the /account route".

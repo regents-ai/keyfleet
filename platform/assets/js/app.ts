@@ -27,6 +27,7 @@ import {installPageProgress} from "./page_progress"
 import {installPublicTools} from "./public_tools"
 import {installShellPanels} from "./shell_panels"
 import {installVitals} from "./vitals"
+import {AccountWallets} from "./hooks/account_wallets"
 import {CurrentTab} from "./hooks/current_tab"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {FleetSea, HarbourSea} from "./hooks/harbour_sea"
@@ -280,6 +281,7 @@ const hooks = {
   ...showcaseHooks,
   ...labHooks,
   ...colocatedHooks,
+  AccountWallets,
   CurrentTab,
   FleetPreview,
   FleetSea,

@@ -273,6 +273,7 @@ const ShowcaseWallet = {
                     disconnect: () => {
                       connected = false
                     },
+                    regents: false,
                   },
                 ],
               ]

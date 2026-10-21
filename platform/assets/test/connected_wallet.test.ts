@@ -21,7 +21,7 @@ function provider(): EthereumProvider {
 }
 
 function connected(walletProvider: EthereumProvider = provider()): ConnectedEthereumWallet {
-  return {provider: walletProvider, disconnect: vi.fn()}
+  return {provider: walletProvider, disconnect: vi.fn(), regents: false}
 }
 
 function memoryStorage() {

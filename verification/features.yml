@@ -309,7 +309,7 @@ features:
     what: >-
       A signed-in person opens the side panel from the header's panel button or
       their account name, on every page. It holds Sign out and Manage Account,
-      their paired agents with each one's last action, and Pair New Agent with
+      their wallets (account-wallets), their paired agents with each one's last action, and Pair New Agent with
       the ten agents to choose from. On a wide screen it sits beside the page and
       stays open across pages and reloads; on tablets, phones and the homepage it
       covers the page under the header and opens only when pressed. Escape
@@ -456,3 +456,36 @@ features:
     gaps:
       - A pin shows on other members' open pages when they next open or switch a place, not the moment it is set.
       - The chart above the switch is checked by eye in headless Chromium; WebKit is not run on the Mac.
+
+  - id: account-wallets
+    what: >-
+      A signed-in person sees their wallets in the side panel and on the Account
+      page's Profile and Wallets tab, each with a copy icon and a Basescan arrow.
+      Once their browser says so, each is named "Your wallet" or "Regents wallet"
+      (the one Privy made at sign-in), and the active wallet is marked "Active";
+      an active wallet the account isn't linked to is listed too and said to be
+      one. Showing and copying only: nothing here signs or changes a wallet.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/account_wallets.ex
+      - platform/lib/keyfleet_web/components/shell.ex
+      - platform/lib/keyfleet_web/live/account_live.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/lib/keyfleet_web/live/home_live.ex
+      - platform/assets/js/hooks/account_wallets.ts
+      - platform/assets/js/wallet_actions/connected_wallet.ts
+      - platform/assets/js/privy_bridge.tsx
+      - platform/assets/css/components/account_wallets.css
+    entry:
+      - route: GET /account
+      - route: GET /account/wallets
+      - live: KeyfleetWeb.ShellLive
+      - live: KeyfleetWeb.HomeLive
+    proofs:
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/assets/test/privy_bridge.test.ts
+      - platform/test/browser/copy_buttons.spec.ts
+    gaps:
+      - Which wallet is the Regents wallet comes from Privy in the browser, so a real sign-in with both wallets is checked by hand on keyfleet.ai after release.
+      - WebKit is not run on the Mac.

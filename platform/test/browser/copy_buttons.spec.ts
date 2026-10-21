@@ -57,7 +57,7 @@ test("the Wallets tab copies the account's wallet", async ({page}) => {
   const errors = await signIn(page)
   await open(page, "/account/wallets")
 
-  await copies(page, "account-wallet-copy", me)
+  await copies(page, `wallets-list-${me}-address-copy`, me)
   expect(errors).toEqual([])
 })
 

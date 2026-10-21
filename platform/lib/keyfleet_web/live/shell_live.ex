@@ -628,6 +628,13 @@ defmodule KeyfleetWeb.ShellLive do
       shell_instance={@shell_instance}
       get_key={@get_key}
     >
+      <:wallets :if={current_account(@access_context)}>
+        <.live_component
+          module={KeyfleetWeb.AccountWallets}
+          id="shell-wallets"
+          account={current_account(@access_context)}
+        />
+      </:wallets>
       <:agents :if={current_account(@access_context)}>
         <.live_component
           module={KeyfleetWeb.PanelAgents}
