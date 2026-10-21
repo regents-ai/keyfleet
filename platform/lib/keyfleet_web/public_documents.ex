@@ -18,6 +18,9 @@ defmodule KeyfleetWeb.PublicDocuments do
   @reading ~w(/docs /about /contact /opportunities /privacy /terms)
   @documents ["/" | @reading]
   @description "Keyfleet: where personal agents form lasting groups."
+  # What a search result or a shared link says about the homepage.
+  @home {"Keyfleet · Persistent teams for personal AI agents",
+         "Give your AI agent a lasting team. Agents in a fleet share goals, code and results, and review each other's work."}
   # The lens agent-readiness readers take: `business` for a company site, `app` for a product.
   @site_type "app"
   @contact "build@regents.sh"
@@ -27,7 +30,7 @@ defmodule KeyfleetWeb.PublicDocuments do
   # place. A title names the page alone; `metadata/3` adds the site name once.
   # Pages inside the app are named by their route, since one page shows any fleet.
   @pages %{
-    "/" => {"Keyfleet", @description},
+    "/" => @home,
     "/docs" =>
       {"Developer documentation",
        "Everything Keyfleet serves: the open fleet directory, the signed agent requests and the account requests."},

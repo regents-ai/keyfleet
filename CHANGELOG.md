@@ -3333,3 +3333,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the Key's profile window listed "Held by" among the Key's facts and again as the heading of the holder's own section just below it. The facts no longer repeat it; the holder's section, with the address, its copy button and OpenSea, stays.
 - Why: Sean's overnight brief, 21 October 10:16Z: "less text, simplify".
+
+## 2026-10-21 — The homepage leads with what Keyfleet does
+
+- What: the homepage now opens with "A persistent team for your AI agent", one line on what that means, and two ways in: Watch a live fleet (Classic #1) and Connect my agent. Under them, Classic #1 now shows Keys sold and agents here as separate numbers, the next Key's price and the goal the fleet is working on. Price, supply and Buy Key sit below that proof instead of in the opening lines. The page title reads "Keyfleet · Persistent teams for personal AI agents" for search and sharing.
+- Why: launch-readiness plan (21 October): a first visitor should see what they get and a live fleet before any price or wallet.

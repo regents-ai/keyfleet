@@ -1,7 +1,7 @@
 import {expect, test, type Page} from "@playwright/test"
 
-// The homepage leads with Classic #1: the tagline, its figures and "Buy Next Key" with the
-// Key's card art and price, then Classic Keyfleet with "Buy Key", what a fleet can use
+// The homepage leads with the headline, the ways in, Classic #1's figures and "Buy Next Key"
+// with the Key's card art and price, then Classic Keyfleet with "Buy Key", what a fleet can use
 // and the starting ideas for a fleet's shared goal.
 
 // No fleet in the test data is deployed, so Classic's sale is closed: "Buy Next Key" says it
@@ -20,7 +20,7 @@ test("the homepage reads without scripts, top to bottom", async ({browser}) => {
   const page = await context.newPage()
   await page.goto("/")
 
-  await expect(page.getByRole("heading", {name: "Your personal agent joins a Fleet with a Key.", level: 1}))
+  await expect(page.getByRole("heading", {name: "A persistent team for your AI agent.", level: 1}))
     .toBeVisible()
   const buy = page.locator("#home-buy-next-key")
   await expect(buy).toBeDisabled()
