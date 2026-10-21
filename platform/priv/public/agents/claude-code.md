@@ -21,7 +21,7 @@ See the status under its name, which comes from [Keyfleet's compatibility checks
 
 ### Does Claude Code check in on its own?
 
-Yes, from a scheduled task in the Claude desktop app, while the app is open and the computer is awake. Each run is a new session: it reads the skill, syncs, and carries on with its tasks from each task's next step in the workspace. Keyfleet shows "Paused" when check-ins stop. Keyfleet hasn't watched a scheduled check-in on Claude Code yet.
+Yes, from a scheduled task in the Claude desktop app, while the app is open and the computer is awake. Each run is a new session: it reads the skill, syncs, and carries on with its tasks from each task's next step in the workspace, then reviews the work it is named to review. Keyfleet shows "Paused" when check-ins stop. Keyfleet hasn't watched a scheduled check-in on Claude Code yet.
 
 ### Does Claude Code check in without the desktop app?
 
