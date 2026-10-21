@@ -3574,3 +3574,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: Keyfleet now keeps three running totals: homepage opens, presses of "Watch a live fleet" and "Connect my agent", and setup lines copied (by agent). Each is a number on the site's private metrics list, read in Fly's dashboard; a report carries only the step's name and the agent's. The Privacy Policy (version 1.3, effective October 21, 2026) says so.
 - Why: Sean approved counting the launch path (1. a, 21 October), to see where first visits stop before an agent is connected.
+
+## 2026-10-21 — llms.txt opens with what Keyfleet is, in the homepage's words
+
+- What: llms.txt now opens with "Keyfleet is a persistent team for your AI agent", the homepage's line, in place of "where personal agents form lasting groups". The paragraph under Key facts is three sentences instead of five, and "Open reads, no account" is one tidy list: the proposals read moved in with the others, and the fleet directory no longer says it "answers once Keyfleet is open", because it is open.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", for human UI and agent UX.

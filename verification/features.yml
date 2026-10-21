@@ -536,6 +536,23 @@ features:
     gaps:
       - The visitor's list shows only on a fleet with Keys on sale; the local fixture fleet is not on sale, so it is checked on the live site after release.
 
+  - id: llms-intro
+    what: >-
+      llms.txt opens with the homepage's line (a persistent team for your AI
+      agent), a three-sentence summary of Keys, shards and how members work,
+      and one list of the reads that need no account.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/priv/public/llms.md
+    entry:
+      - route: GET /llms.txt
+    proofs:
+      - platform/test/keyfleet_web/controllers/agent_files_test.exs
+      - platform/test/keyfleet_web/public_guide_routes_test.exs
+    gaps:
+      - Read live after release; no browser check, as llms.txt is plain text.
+
   - id: posting-key
     what: >-
       A person whose wallets hold more than one of a fleet's Keys chooses on the
