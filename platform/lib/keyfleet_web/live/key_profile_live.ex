@@ -8,8 +8,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
   Closing it takes the key out of the address: by going back when the page
   opened it, so Back and Close agree, and by replacing the address when the
   visitor arrived with the key already in it. The next key on sale shows its
-  number, level and price, with Approve and Buy. A Regents Club Key waiting
-  for whoever holds the Pass of its number shows Claim.
+  number, level and price, with Buy Key, which opens the fleet's Buy Key
+  window above the profile. A Regents Club Key waiting for whoever holds the
+  Pass of its number shows Claim.
   """
 
   use KeyfleetWeb, :html
@@ -92,13 +93,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </div>
         </header>
 
-        <.next_key
-          :if={not @profile.issued?}
-          profile={@profile}
-          fleet={@fleet}
-          actor={@actor}
-          lease={@lease}
-        />
+        <.next_key :if={not @profile.issued?} profile={@profile} />
 
         <%= if @profile.issued? do %>
           <.facts profile={@profile} />
@@ -167,11 +162,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
   end
 
   attr :profile, :map, required: true
-  attr :fleet, :map, required: true
-  attr :actor, :any, required: true
-  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
-  # The Key on sale, bought right here with the fleet's own Approve and Buy.
+  # The Key on sale. Buy Key opens the fleet's Buy Key window above the
+  # profile, and closing the window comes back to it.
   defp next_key(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-next-title">
@@ -186,12 +179,16 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <dd>{FleetLive.usdc(@profile.issue_price)}</dd>
         </div>
       </dl>
-      <FleetLive.buy_order
+      <Regent.Primitives.button
         id="key-profile-buy"
-        fleet={@fleet}
-        actor={@actor}
-        lease={@lease}
-      />
+        type="button"
+        variant="primary"
+        phx-click="open_buy_key"
+        phx-value-fleet={@profile.fleet_id}
+        aria-haspopup="dialog"
+      >
+        Buy Key
+      </Regent.Primitives.button>
     </section>
     """
   end

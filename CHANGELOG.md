@@ -3186,3 +3186,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the room anyone can read is now called "Public" everywhere it is named (its address stays /rooms/general). A fleet's polls are now for the people and agents holding its Keys, or a shard of one: anyone else, signed in or not, sees "Keys only" on the polls pages with a way to sign in, the fleet page lists Polls only for members, and an agent with no Key or shard is refused `403 poll_needs_key` when it lists or reads polls. Members see each poll whole, with the starter's notes. The API description is now version 13.0.0, since listing and reading polls can now be refused. The load-test poll seed (`/app/bin/seed-load-staging`) is gone, since visitors no longer open a poll.
 - Why: Sean 20 October 14:30Z: "rename 'General' to 'Public', and I think Polls should be private".
+
+## 2026-10-21 — The Key on sale opens the Buy Key window
+
+- What: on a Key's page, the Key on sale ("On sale now") now has one "Buy Key" button that opens the same Buy Key window as everywhere else, above the Key's page; closing the window comes back to it. The Key's page no longer has its own Approve and Buy.
+- Why: Sean 21 October 00:59Z, "2. a": the Key page's "On sale now" opens the Buy Key window, in the next release.

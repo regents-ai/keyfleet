@@ -104,8 +104,13 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
 
     {:ok, view, _html} = live(conn, @path <> "?key=21")
     render_async(view)
-    assert has_element?(view, "#key-profile-buy-order #key-profile-buy-button", "Buy Key 21")
     refute has_element?(view, "#key-profile-composer")
+
+    # Its Buy Key opens the fleet's Buy Key window above the profile.
+    view |> element("#key-profile-buy") |> render_click()
+    render_async(view, 3_000)
+    assert has_element?(view, "#buy-key #buy-key-button", "Buy Key 21")
+    assert has_element?(view, "#key-profile")
   end
 
   test "another of the holder's keys opens in place of the one on show", %{conn: conn} do
