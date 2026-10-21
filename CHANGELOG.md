@@ -3903,3 +3903,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   with longer instructions.
 - Why: the morning's pairing walk for the nine pilot agents found the two
   disagreed. Every other runtime's page already matched its message.
+
+## 2026-10-21 — A fleet's feed reads with the membership its page already read
+
+- What: the hall's feed reads a fleet's posts with the membership the page
+  already read, as its rooms do, instead of reading it again on each draw and
+  each "Show earlier". Nothing on screen changes.
+- Why: Sean, 21 Oct: "make it a modern and well-engineered elixir site".

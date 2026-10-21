@@ -1202,7 +1202,7 @@ defmodule KeyfleetWeb.FleetLive do
       )
       when cursor != nil and pages < @activity_pages do
     %{items: items, cursor: next} =
-      Activity.page(activity.fleet_id, cursor, actor: ShellLive.human_actor(socket))
+      Activity.page(activity.fleet_id, cursor, ShellLive.reads_as(socket, activity.fleet_id))
 
     {:noreply,
      socket
@@ -1723,7 +1723,7 @@ defmodule KeyfleetWeb.FleetLive do
   # they read them, with "Trying now".
   defp activity_pages(%{assigns: %{activity: %{fleet_id: fleet_id, pages: pages}}} = socket, nil) do
     {items, cursor, read} =
-      FleetPage.activity_pages(fleet_id, pages, ShellLive.human_actor(socket))
+      FleetPage.activity_pages(fleet_id, pages, ShellLive.reads_as(socket, fleet_id))
 
     {items,
      assign(socket, :activity, %{

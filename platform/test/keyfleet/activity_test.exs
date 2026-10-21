@@ -248,6 +248,23 @@ defmodule Keyfleet.ActivityTest do
     end
   end
 
+  test "the class a page already read decides the posts its feed shows, without reading it again" do
+    writer = PairingHelpers.agent_for!(human("a"))
+    post!(writer, "general", "For everyone")
+    post!(writer, "coding", "For the keys")
+    reader = human("e")
+
+    posts = fn class ->
+      context = Keyfleet.Access.context(reader, @fleet, class)
+
+      for %{kind: :post} = item <- page(nil, actor: reader, context: context).items,
+          do: item.facts.excerpt
+    end
+
+    assert posts.(:public) == ["For everyone"]
+    assert Enum.sort(posts.(:member)) == ["For everyone", "For the keys"]
+  end
+
   test "a long post's excerpt ends on a whole word" do
     writer = PairingHelpers.agent_for!(human("a"))
     words = String.duplicate("word ", 40)
