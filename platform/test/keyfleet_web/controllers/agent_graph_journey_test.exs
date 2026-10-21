@@ -537,7 +537,13 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert assign.(cal, 3, 3, nil).status == 200
 
     archived =
-      graph(c, ann, "archive", %{archive | as_key: 1, command_id: "x-2", expected_version: 4}, @cascade)
+      graph(
+        c,
+        ann,
+        "archive",
+        %{archive | as_key: 1, command_id: "x-2", expected_version: 4},
+        @cascade
+      )
 
     assert archived.status == 200
     assert graph(c, ann, "get", %{id: task["id"]}, @cascade).body["object"]["sys"]["archived"]

@@ -307,6 +307,7 @@ defmodule KeyfleetWeb.WorkspacePage do
         pins:
           for pin <- pins do
             open = if is_binary(project_id), do: notebook_link(fleet_id, project_id, pin.target)
+
             %{
               id: pin.id,
               target: pin.target,

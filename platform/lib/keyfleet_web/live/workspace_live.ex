@@ -551,6 +551,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :place, :atom, required: true
   attr :target, :string, required: true
   attr :name, :string, required: true, doc: "what a press pins, read out and shown on hover"
+
   attr :whose, :atom,
     values: [nil, :mine, :theirs],
     doc: "whose pin is on it, if any: only its pinner lifts a pin"
@@ -1009,6 +1010,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   end
 
   attr :listing, :any, required: true
+
   attr :pinned, :map,
     required: true,
     doc: "whose each path pinned in the fleet's code is, `:mine` or `:theirs`"
