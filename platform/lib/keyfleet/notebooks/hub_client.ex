@@ -33,6 +33,23 @@ defmodule Keyfleet.Notebooks.HubClient do
     |> page()
   end
 
+  @doc """
+  One notebook's `meta` (`id`, `title`, `description`, `status`,
+  `created_at`, ...), waiting `page_timeout_ms` at most, or nil when the hub
+  has none by that id.
+  """
+  def notebook(fleet_id, project_id, notebook_id) do
+    fleet_id
+    |> request(:get, "/api/v1/projects/#{segment(project_id)}/notebooks/#{segment(notebook_id)}",
+      receive_timeout: Notebooks.config()[:page_timeout_ms]
+    )
+    |> answer([200], [404])
+    |> case do
+      {:ok, %{"meta" => meta}} -> {:ok, meta}
+      other -> other
+    end
+  end
+
   @doc "Makes a project the provisioner owns."
   def create_project(fleet_id, name) do
     fleet_id

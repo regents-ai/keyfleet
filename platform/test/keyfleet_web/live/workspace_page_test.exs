@@ -979,15 +979,14 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         %{"tag" => _tag} ->
           []
 
-        %{"limit" => "50"} ->
-          [
-            %{
-              "id" => notebook,
-              "title" => "Price model",
-              "description" => "",
-              "created_at" => "2026-10-20T09:00:00Z"
-            }
-          ]
+        {:notebook, ^notebook} ->
+          %{
+            "id" => notebook,
+            "title" => "Price model",
+            "description" => "",
+            "status" => "active",
+            "created_at" => "2026-10-20T09:00:00Z"
+          }
       end)
 
       {:ok, view, _html} = live(conn, item_path(goal))
@@ -1009,6 +1008,55 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                ~s(#workspace-goal-code-rows [data-item="#{task}"] a[href="#{Keyfleet.Code.commit_path(@fleet, hash)}"]),
                "Price check"
              )
+    end
+
+    # Cited notebooks were looked for among the fleet's newest 50 only, so an
+    # older one vanished from the goal's page.
+    test "a goal's page asks for each cited notebook by its id, leaving out deleted ones",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+      project = "proj-0123456789abcdef"
+      [old, deleted, gone] = ~w(nb-00000000000000a1 nb-00000000000000d2 nb-00000000000000e3)
+
+      for {notebook, title} <- [{old, "Old model"}, {deleted, "Deleted"}, {gone, "Gone"}] do
+        task =
+          create(@fleet, "task", %{
+            "title" => title,
+            "progress" => "doing",
+            "notebook_ref" => Keyfleet.Notebooks.notebook_url(@fleet, project, notebook)
+          })
+
+        link(@fleet, task, goal, "implements")
+      end
+
+      meta = fn id, title, status ->
+        %{
+          "id" => id,
+          "title" => title,
+          "description" => "",
+          "status" => status,
+          "created_at" => "2025-01-02T09:00:00Z"
+        }
+      end
+
+      hub!(project, fn
+        %{"tag" => _tag} -> []
+        {:notebook, ^old} -> meta.(old, "Old model", "active")
+        {:notebook, ^deleted} -> meta.(deleted, "Deleted", "deleted")
+        {:notebook, ^gone} -> nil
+      end)
+
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-notebook-rows [data-notebook="#{old}"]),
+               "Old model"
+             )
+
+      refute has_element?(view, ~s(#workspace-goal-notebook-rows [data-notebook="#{deleted}"]))
+      refute has_element?(view, ~s(#workspace-goal-notebook-rows [data-notebook="#{gone}"]))
+      refute has_element?(view, "#workspace-goal-notebooks-unreadable")
     end
 
     test "a goal's page says so when the notebooks can't be read", %{conn: conn} do
@@ -2046,12 +2094,20 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
             Plug.Conn.send_resp(conn, 503, "")
 
           answer ->
-            "/api/v1/projects/" <> ^project_id <> "/notebooks" = conn.request_path
+            case conn.request_path do
+              "/api/v1/projects/" <> ^project_id <> "/notebooks" ->
+                Req.Test.json(conn, %{
+                  "success" => true,
+                  "data" => %{"items" => answer.(conn.query_params), "next_cursor" => nil}
+                })
 
-            Req.Test.json(conn, %{
-              "success" => true,
-              "data" => %{"items" => answer.(conn.query_params), "next_cursor" => nil}
-            })
+              # One notebook, asked for by its id.
+              "/api/v1/projects/" <> ^project_id <> "/notebooks/" <> id ->
+                case answer.({:notebook, id}) do
+                  nil -> conn |> Plug.Conn.put_status(404) |> Req.Test.json(%{"success" => false})
+                  meta -> Req.Test.json(conn, %{"success" => true, "data" => %{"meta" => meta}})
+                end
+            end
         end
       end)
 

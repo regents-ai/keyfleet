@@ -144,8 +144,17 @@ defmodule Keyfleet.BrowserWorkspace do
 
   defp route("GET", ["api", "v1", "projects", @project, "notebooks", id], conn, request) do
     case Enum.find(Agent.get(request.state, & &1.notebooks), &(&1.id == id)) do
-      nil -> not_found(conn)
-      notebook -> json(conn, 200, notebook)
+      nil ->
+        not_found(conn)
+
+      notebook ->
+        json(conn, 200, %{
+          meta:
+            notebook
+            |> Map.merge(notebook.meta)
+            |> Map.delete(:meta)
+            |> Map.put(:status, "active")
+        })
     end
   end
 

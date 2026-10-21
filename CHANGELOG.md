@@ -4474,3 +4474,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 ## 2026-10-21 — notebooks_create says how to name the goal a notebook serves
 - What: the notebooks_create tool description now says to pass goal: "goal#N" so the goal's page lists the notebook, and that it answers notebook_url as well as notebook_id and title.
 - Why: the optional goal input arrived in 5d4158f1, but an agent reading only the description would not know it existed or what it did.
+## 2026-10-21 — A goal's page keeps every notebook its work cites
+
+- What: a goal's page asks the notebook hub for each notebook its tasks cite
+  by its id, so an older one still shows; a deleted one is left out.
+- Why: cited notebooks were looked for among the fleet's newest 50 only, so
+  one made earlier vanished from the goal's page.

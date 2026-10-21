@@ -846,19 +846,39 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   # The notebooks tagged with the goal's name, then the ones its work cites
-  # that aren't tagged, found among the fleet's newest.
+  # that aren't tagged.
   defp goal_notebooks(fleet_id, name, cited) do
-    with tagged when is_list(tagged) <- notebooks(fleet_id, tag: name, limit: 50) do
-      case cited -- Enum.map(tagged, & &1.id) do
-        [] ->
-          tagged
+    with tagged when is_list(tagged) <- notebooks(fleet_id, tag: name, limit: 50),
+         found when is_list(found) <-
+           cited_notebooks(fleet_id, cited -- Enum.map(tagged, & &1.id)) do
+      tagged ++ found
+    end
+  end
 
-        missing ->
-          case notebooks(fleet_id, limit: 50) do
-            newest when is_list(newest) -> tagged ++ Enum.filter(newest, &(&1.id in missing))
-            unreadable -> unreadable
-          end
-      end
+  # Each asked for by its id, however old; one since deleted is left out.
+  defp cited_notebooks(_fleet_id, []), do: []
+
+  defp cited_notebooks(fleet_id, ids) do
+    case project_id!(fleet_id) do
+      nil ->
+        []
+
+      project_id ->
+        answers =
+          ids
+          |> Task.async_stream(&HubClient.notebook(fleet_id, project_id, &1), timeout: :infinity)
+          |> Enum.map(fn {:ok, answer} -> answer end)
+
+        case Enum.find(answers, &match?({:error, _error}, &1)) do
+          nil ->
+            for {:ok, %{"status" => status} = notebook} <- answers,
+                status != "deleted",
+                do: notebook_row(fleet_id, project_id, notebook)
+
+          {:error, error} ->
+            Logger.warning("A notebook of #{fleet_id} could not be read: #{reason(error)}")
+            :unreadable
+        end
     end
   end
 
@@ -877,17 +897,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     with true <- Notebooks.hub?(fleet_id),
          project_id when is_binary(project_id) <- project_id!(fleet_id),
          {:ok, notebooks} <- HubClient.notebooks(fleet_id, project_id, query) do
-      for notebook <- notebooks do
-        {:ok, added, _offset} = DateTime.from_iso8601(notebook["created_at"])
-
-        %{
-          id: notebook["id"],
-          title: notebook["title"],
-          description: notebook["description"],
-          added: added,
-          open: notebook_link(fleet_id, project_id, notebook["id"])
-        }
-      end
+      Enum.map(notebooks, &notebook_row(fleet_id, project_id, &1))
     else
       false ->
         nil
@@ -899,6 +909,18 @@ defmodule KeyfleetWeb.WorkspacePage do
         Logger.warning("The notebooks of #{fleet_id} could not be read: #{reason(error)}")
         :unreadable
     end
+  end
+
+  defp notebook_row(fleet_id, project_id, notebook) do
+    {:ok, added, _offset} = DateTime.from_iso8601(notebook["created_at"])
+
+    %{
+      id: notebook["id"],
+      title: notebook["title"],
+      description: notebook["description"],
+      added: added,
+      open: notebook_link(fleet_id, project_id, notebook["id"])
+    }
   end
 
   # The project the fleet's notebooks are in, or nil before it is made.
