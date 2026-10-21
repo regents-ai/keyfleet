@@ -4359,3 +4359,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   among the workspace reads' 503 codes. Writes are unchanged.
 - Why: such a failure reached no refusal and crashed the request with a 500
   (review item 27); the board's fleet and notebook reads made it likelier.
+
+## 2026-10-21 — The guide's parts are closed as the guide is, and a test says so
+- What: a gate test asks for /skill.md and its three parts by their real
+  file names while the site is closed; each answers 503, as before.
+- Why: the route walk asks for `/skill/gate-coverage`, which names no file
+  and so reads as a page sent to /early; the review took that for the parts'
+  real answer.

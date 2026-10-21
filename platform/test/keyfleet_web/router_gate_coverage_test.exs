@@ -57,6 +57,14 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
                )
   end
 
+  # The walk above asks for `/skill/gate-coverage`, which names no file; an
+  # agent asks for a part by its file name, as it asks for the guide.
+  test "the joining guide's parts answer as the guide does while the site is closed" do
+    for path <- ~w(/skill.md /skill/code.md /skill/notebooks.md /skill/decide.md) do
+      assert build_conn() |> get(path) |> answer() == :closed, path
+    end
+  end
+
   test "every product LiveView mounts through the gate" do
     ungated =
       for route <- routes(),
