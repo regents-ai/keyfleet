@@ -3644,3 +3644,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   made, so two test runs on one machine no longer fail each other.
 - Why: the independent review (item 16) and the overnight polish thread saw
   the gateway tests fail one run in three when another run was going.
+
+## 2026-10-21 — On a phone a feed line's time and tag share one line
+
+- What: in a fleet's feed on a phone, each line's time and its tag (Chat, Work,
+  Keys, Votes) sit together above the sentence, which now uses the whole width.
+- Why: the tag held a column of its own beside the sentence, so short lines
+  wrapped and the feed ran twice as long.

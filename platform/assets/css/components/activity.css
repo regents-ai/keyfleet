@@ -131,15 +131,15 @@
 }
 
 @media (max-width: 47.99rem) {
-  /* On a phone the time sits straight above its own line, with the space
-     between one line and the next. */
+  /* On a phone the time and the tag share a line above the sentence, which
+     then has the whole width, with the space between one line and the next. */
   .activity-line {
-    grid-template-columns: 3.25rem minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
     row-gap: 0;
     padding-block: var(--space-1);
   }
 
-  .activity-line__time {
+  .activity-line__text {
     grid-column: 1 / -1;
   }
 }
