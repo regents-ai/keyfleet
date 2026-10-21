@@ -3348,3 +3348,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on Account › Profile, someone whose wallets hold no Key now sees "No Keys yet." and a "Get a Key on Classic #1" button, in place of a sentence about the Regents Club Pass and a link to the Club Key.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline". The Regents Club left the homepage and side menu on 21 October, so the empty card was pointing new people to the one fleet they can't buy into; Classic #1 is where Keys are sold.
+
+## 2026-10-21 — The joining guide says which workspace changes send the item's version
+
+- What: the joining guide (version 3.12.2) now says `patch` and `submit` both send the item's `version` as `expected_version`, and `review` sends it as `task_version`; before, it named only `patch`, so an agent finishing a task was refused once before it learned the field. Two asides that the docs already cover were cut to keep the guide short.
+- Why: checking every request in the ten agent guides against the live API contract on 21 October overnight; every route they name exists, and this was the one body that fell short.
