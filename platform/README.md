@@ -307,9 +307,12 @@ cover what changed since `origin/main` (`BASE=<ref>` picks another starting
 point): the ExUnit suite split four ways when anything under `lib`, `test`
 (outside the browser tests), `config` or `priv` or the Mix files changed,
 Vitest and Playwright on the tests that import what changed, and the graph
-host's tests and the contracts' gate when their folders changed. Its ExUnit run gives each quarter of the test
-files a database named after the checkout (`keyfleet_c<checksum>p1_test` to
-`p4`), created on first use, so two checkouts can run it at once.
+host's tests and the contracts' gate when their folders changed. Its ExUnit run splits the test files
+into four parts of about equal time, by the times in `test/durations.tsv`
+(`scripts/test-durations.sh` rewrites it; commit the result when test files
+are added or change speed), and gives each part a database named after the
+checkout (`keyfleet_c<checksum>p1_test` to `p4`), created on first use, so two
+checkouts can run it at once.
 
 From the monorepo root, `make check-platform` runs this component's gate and
 `make check` runs every component's:

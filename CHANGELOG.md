@@ -4279,3 +4279,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   19 s instead of 28 s, SharedReadingStartTest about 7 s instead of 14 s.
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements"; the
   change check every thread runs should be fast and steady.
+
+## 2026-10-21 — The change check splits its tests by time
+- What: make check-change gives each of its four ExUnit parts about a quarter
+  of the suite's time, dealing test files longest first by the times in
+  platform/test/durations.tsv, instead of every fourth file by name.
+  scripts/test-durations.sh measures and rewrites that list.
+- Why: by name, one part held the two slowest files and took 63 s while
+  another took 22 s; the check waits for the slowest part.

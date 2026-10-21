@@ -4,7 +4,7 @@
 # then the tests that cover what changed since BASE (origin/main unless given)
 # run:
 #
-#   - the Elixir suite, split four ways, when anything it compiles or reads
+#   - the Elixir suite, split four ways by time, when anything it compiles or reads
 #     changed (the browser tests in test/browser are Playwright's);
 #   - Vitest and Playwright on the tests that import what changed, Playwright
 #     building the assets only when it has a test to run;
@@ -29,17 +29,23 @@ MIX_ENV=test mix compile --warnings-as-errors
 mix format --check-formatted
 
 if changed platform/lib platform/test ':(exclude)platform/test/browser' platform/config platform/priv platform/mix.exs platform/mix.lock; then
-  # Each part runs a quarter of the test files on its own database, named after
-  # this checkout: keyfleet_c<checksum>p<part>_test.
+  # Each part runs about a quarter of the suite's time on its own database,
+  # named after this checkout: keyfleet_c<checksum>p<part>_test. Test files are
+  # dealt longest first, each to the part with the least time so far, by the
+  # times in test/durations.tsv (scripts/test-durations.sh); a file not listed
+  # there counts as one second.
   checkout="_c$(printf %s "$root" | cksum | cut -d' ' -f1)"
-  files="$(find test -name '*_test.exs' | sort)"
+  parts="$(find test -name '*_test.exs' | sort |
+    awk -F'\t' 'NR == FNR { ms[$2] = $1; next } { print (($0 in ms) ? ms[$0] : 1000) "\t" $0 }' test/durations.tsv - |
+    sort -t$'\t' -k1,1rn -k2,2 |
+    awk -F'\t' '{ p = 1; for (i = 2; i <= 4; i++) if (load[i] < load[p]) p = i; load[p] += $1; print p "\t" $2 }')"
   logs="$(mktemp -d)"
   for n in 1 2 3 4; do
     (
       export MIX_TEST_PARTITION="${checkout}p$n"
       MIX_ENV=test mix ecto.create --quiet
       # shellcheck disable=SC2046
-      mix test --warnings-as-errors $(awk -v n="$n" 'NR % 4 == n % 4' <<<"$files")
+      mix test --warnings-as-errors $(awk -F'\t' -v n="$n" '$1 == n { print $2 }' <<<"$parts")
     ) >"$logs/$n.log" 2>&1 &
     echo $! >"$logs/$n.pid"
   done
