@@ -4187,3 +4187,19 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - What: two places that read without the usual permission check now say
   beside them why that is safe. Nothing changes for people or agents.
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — Pages answer presses sooner and paint in their own fonts
+
+- What: on a phone the page's script now fetches the five pieces it needs
+  alongside itself rather than one after the other, so buttons answer
+  presses sooner after a page opens. The semibold face every button label
+  uses loads with the stylesheet, so the first screen no longer redraws its
+  buttons about 0.4 seconds after it appears. The header's crown, the site
+  icons and the "page not found" page's styles load from fingerprinted
+  addresses, so browsers keep them instead of asking again on each visit.
+- How: esbuild records what it built (`--metafile`, to
+  `priv/esbuild-meta.json`, never served); `KeyfleetWeb.ScriptPreloads`
+  reads app.js's own imports from it once and the root layout lists them as
+  `modulepreload` links.
+- Why: coordinator, 21 Oct 13:01Z and 13:16Z: page speed on the busiest
+  pages, measured before and after in headless Chromium.

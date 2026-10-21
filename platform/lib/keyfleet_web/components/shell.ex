@@ -19,11 +19,10 @@ defmodule KeyfleetWeb.Components.Shell do
   beside the page, so there it opens over the page under the header.
   """
 
-  use Phoenix.Component
+  use KeyfleetWeb, :html
 
   alias KeyfleetWeb.Components.RegentLinks
   alias KeyfleetWeb.RouteCatalog.RouteTarget
-  alias Phoenix.LiveView.JS
 
   # Classic is the fleet that sells Keys: once it is open, "Purchase Key" in the
   # header opens the "Buy Key" window for it. Until then the header has no
@@ -162,12 +161,12 @@ defmodule KeyfleetWeb.Components.Shell do
         <span class="shell-brand__mark" aria-hidden="true">
           <img
             class="shell-brand__mark-light"
-            src="/images/brand/mark-flat-light.svg"
+            src={~p"/images/brand/mark-flat-light.svg"}
             alt=""
           />
           <img
             class="shell-brand__mark-dark"
-            src="/images/brand/mark-flat-dark.svg"
+            src={~p"/images/brand/mark-flat-dark.svg"}
             alt=""
           />
         </span>

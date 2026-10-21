@@ -31,7 +31,7 @@ defmodule KeyfleetWeb.ErrorHTML do
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{@title} · Keyfleet</title>
-        <link rel="stylesheet" href="/assets/js/app.css" />
+        <link rel="stylesheet" href={~p"/assets/js/app.css"} />
       </head>
       <body>
         <Regent.Utility.page title={@title} context="Keyfleet" id="error-page">
