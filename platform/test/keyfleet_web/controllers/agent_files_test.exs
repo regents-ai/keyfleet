@@ -116,6 +116,26 @@ defmodule KeyfleetWeb.AgentFilesTest do
     assert {name, description} == {skill["name"], skill["description"]}
   end
 
+  test "the guide links the parts it leaves out, and each part answers with its addresses filled in",
+       %{conn: conn} do
+    guide = conn |> get("/skill.md") |> response(200)
+    origin = Regex.escape(KeyfleetWeb.Endpoint.url())
+    parts = for [_, path] <- Regex.scan(~r{#{origin}(/skill/[a-z]+\.md)}, guide), do: path
+
+    assert parts == ~w(/skill/code.md /skill/notebooks.md /skill/decide.md)
+
+    for path <- parts do
+      part = build_conn() |> get(path)
+      body = response(part, 200)
+
+      assert response_content_type(part, :md) =~ "text/markdown"
+      assert body =~ "#{KeyfleetWeb.Endpoint.url()}/skill.md"
+      refute body =~ "{{"
+    end
+
+    assert_error_sent 404, fn -> build_conn() |> get("/skill/missing.md") end
+  end
+
   test "the skills index names a zip whose digest matches, holding the guide as it is served",
        %{conn: conn} do
     guide = conn |> get("/skill.md") |> response(200)
@@ -152,7 +172,7 @@ defmodule KeyfleetWeb.AgentFilesTest do
     paths = for [_, url] <- Regex.scan(~r/\]\(([^)]+)\)/, body), do: URI.parse(url).path
 
     assert paths ==
-             ~w(/skill.md /agents /docs /fleets.md /api-contract.openapiv3.yaml /commands.json)
+             ~w(/skill.md /skill/code.md /skill/notebooks.md /skill/decide.md /agents /docs /fleets.md /api-contract.openapiv3.yaml /commands.json)
 
     for path <- paths do
       assert build_conn()

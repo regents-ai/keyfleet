@@ -195,6 +195,7 @@ defmodule KeyfleetWeb.Router do
     get "/.well-known/api-catalog", PublicPagesController, :api_catalog
     get "/.well-known/hub-jwks.json", HubJwksController, :show
     get "/skill.md", AgentFilesController, :skill
+    get "/skill/:part", AgentFilesController, :part
     get "/commands.json", AgentFilesController, :commands
     get "/agent/git-remote-siwa", AgentFilesController, :git_helper
     get "/.well-known/agent-skills/index.json", AgentFilesController, :index
