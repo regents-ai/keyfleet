@@ -584,8 +584,11 @@ span.account-chip {
   color: var(--color-fg);
   font-family: var(--font-family-ui);
   line-height: 1.55;
-  /* Hidden only once it has slid shut. */
-  transition: visibility var(--duration-slow);
+  /* Hidden, and its hairline gone, only once it has slid shut, so a shut
+     panel takes no room past the screen's edge. */
+  transition:
+    visibility var(--duration-slow),
+    border-inline-start-width 0s var(--duration-slow);
 }
 
 /* Shown at once on opening, so focus can move into it. */
@@ -604,6 +607,7 @@ span.account-chip {
 
 :root:not([data-aside="open"]) #shell-aside {
   visibility: hidden;
+  border-inline-start-width: 0;
 }
 
 /* Sign out and Manage Account share one short row; the header's panel button
@@ -694,7 +698,8 @@ span.account-chip {
   container-type: normal;
   transition:
     transform var(--duration-slow) var(--ease-out),
-    visibility var(--duration-slow);
+    visibility var(--duration-slow),
+    border-inline-start-width 0s var(--duration-slow);
 }
 
 /* Opening, it is shown at once and slides in. */

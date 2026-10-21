@@ -4226,3 +4226,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   390px holds it there.
 - Why: the phone pass of member pages asked for tap targets of at least
   44px; Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+## 2026-10-21 — Signed-in pages no longer slide sideways
+
+- With the side panel shut, its hairline stood one pixel past the screen's
+  right edge, so every signed-in page could be nudged a pixel sideways. The
+  hairline now goes once the panel has slid shut, and comes back at once when
+  it opens. Checked at 1440 and 900 px wide, shut, open and closing.
