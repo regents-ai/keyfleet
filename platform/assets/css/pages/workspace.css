@@ -649,6 +649,7 @@
   .workspace-place-tab { padding: 0.65rem 0.6rem; }
   .workspace-place-name { font-size: 1rem; }
   .workspace-place-name::before { display: none; }
+  .workspace-place-tool { font-size: 0.62rem; letter-spacing: 0.04em; }
   .workspace-place-what { display: none; }
 }
 
@@ -656,6 +657,29 @@
   .kf-pin {
     width: 2.75rem;
     height: 2.75rem;
+  }
+
+  /* A notebook, file or folder keeps its pin beside it: its kind and its
+     size or date above the name, and what it says below. */
+  .workspace-row--pinnable {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "kind meta pin"
+      "title title pin"
+      "text text text";
+    align-items: center;
+    gap: 0 0.75rem;
+  }
+
+  .workspace-row--pinnable .workspace-kind { grid-area: kind; }
+  .workspace-row--pinnable .workspace-row-title { grid-area: title; }
+  .workspace-row--pinnable .workspace-row-meta { grid-area: meta; justify-self: end; }
+  .workspace-row--pinnable .workspace-row-text { grid-area: text; }
+
+  .workspace-row--pinnable .kf-pin {
+    grid-area: pin;
+    margin: 0;
   }
 }
 
@@ -683,6 +707,7 @@
   .workspace-card h3 a,
   .workspace-row-title,
   .workspace-row-meta > a,
+  .workspace-pins li > a,
   .workspace-facts dd > a,
   .workspace-fields dd > a,
   .workspace-list li > a,

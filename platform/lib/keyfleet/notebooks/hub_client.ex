@@ -28,6 +28,7 @@ defmodule Keyfleet.Notebooks.HubClient do
     fleet_id
     |> request(:get, "/api/v1/projects/#{segment(project_id)}/notebooks",
       params: query,
+      connect_options: [timeout: Notebooks.config()[:page_timeout_ms]],
       receive_timeout: Notebooks.config()[:page_timeout_ms]
     )
     |> page()
@@ -102,6 +103,7 @@ defmodule Keyfleet.Notebooks.HubClient do
           headers: [{"x-keyfleet-assertion", Pass.mint(fleet_id, provisioner(fleet_id))}],
           retry: false,
           redirect: false,
+          connect_options: [timeout: Notebooks.config()[:hub_timeout_ms]],
           receive_timeout: Notebooks.config()[:hub_timeout_ms]
         ],
         options

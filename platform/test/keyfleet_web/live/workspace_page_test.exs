@@ -1022,6 +1022,22 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       end
     end
 
+    test "a file a later change removed says so, and leads back to the top of the code",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, "README.md"))
+      assert has_element?(view, "#workspace-file")
+
+      serve_code(%{"goals/goal-1/notes/one.md" => "one"})
+      send(view.pid, :refresh_workspace)
+
+      assert has_element?(view, "#workspace-files-removed", "A later change removed this")
+      refute has_element?(view, "#workspace-file")
+
+      view |> element("#workspace-files-removed a") |> render_click()
+      assert_patch(view, Keyfleet.Code.files_path(@fleet, ""))
+      assert rows(view, "#workspace-file-rows") == [["Folder", "goals"]]
+    end
+
     test "says so when the code can't be read", %{conn: conn} do
       Req.Test.stub(Keyfleet.Code.NodeClient, &Plug.Conn.send_resp(&1, 503, ""))
       {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, "README.md"))
@@ -1218,6 +1234,31 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(view, ~s(#workspace-code-pins-rows [data-pin="goals"]))
     end
 
+    test "Code gives a holder a git password, and says until when in the reader's own time",
+         %{conn: conn} do
+      store!(%{"README.md" => "Hello"})
+      {:ok, view, _html} = live(conn, @board <> "?place=code")
+      refute has_element?(view, "#code-password")
+
+      view |> element("#get-code-password") |> render_click()
+
+      assert {:ok, _subject, %Actors.Human{}} =
+               view |> text("#code-password-text") |> KeyfleetWeb.CodePassword.read(@fleet)
+
+      ttl = Keyfleet.Code.config()[:password_ttl_seconds]
+
+      {:ok, until, 0} =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query(~s(#code-password-until[phx-hook="LocalTime"][data-as="stamp"]))
+        |> LazyHTML.attribute("datetime")
+        |> List.first()
+        |> DateTime.from_iso8601()
+
+      assert_in_delta DateTime.diff(until, DateTime.utc_now()), ttl, 5
+    end
+
     test "a pin is one per notebook or file, and only the fleet's members set or lift one" do
       holder = %Actors.Human{human_account_id: 1, wallet_addresses: [@holder]}
       pin = %{fleet_id: @fleet, place: :code, target: "README.md", title: "README.md"}
@@ -1239,6 +1280,11 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert :ok = Graph.unpin(first, actor: holder)
       assert [] = Graph.pins!(@fleet, :code, actor: holder)
+
+      # Lifting a pin another member lifted first finds nothing to lift, and
+      # the page then reads afresh.
+      assert {:error, %Ash.Error.Invalid{errors: [%Ash.Error.Changes.StaleRecord{}]}} =
+               Graph.unpin(first, actor: holder)
     end
   end
 
@@ -1797,6 +1843,11 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   # code store answers: a folder's names, or one file's bytes.
   defp store!(files) do
     Keyfleet.Code.record_repository!(@fleet, "z6MkOwner", actor: %Actors.System{})
+    serve_code(files)
+  end
+
+  # The code store, holding `files` from now on.
+  defp serve_code(files) do
     test = self()
 
     Req.Test.stub(Keyfleet.Code.NodeClient, fn conn ->

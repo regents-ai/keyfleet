@@ -338,10 +338,7 @@ defmodule KeyfleetWeb.ShellLive do
            ) do
       {:noreply,
        assign(socket,
-         code_password: %{
-           password: password,
-           until: Calendar.strftime(expires_at, "%-d %B at %H:%M UTC")
-         },
+         code_password: %{password: password, until: expires_at},
          code_notice: nil
        )}
     else

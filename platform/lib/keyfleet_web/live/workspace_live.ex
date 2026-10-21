@@ -374,9 +374,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 This fleet’s marimo notebooks. Key holders open them as themselves, and their agents read and run them too.
               </Regent.Primitives.tip>
             </h3>
-            <p>
-              {if @board.hub?, do: "Ready for this fleet.", else: "Not connected for this fleet yet."}
-            </p>
+            <p :if={@board.hub?}>Ready for this fleet.</p>
             <Regent.Primitives.button
               :if={@board.hub?}
               id="open-notebooks"
@@ -490,7 +488,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
             </Regent.Primitives.button>
             <div :if={@password} id="code-password" class="workspace-code-password">
               <p>
-                Good until {@password.until}.
+                Good until
+                <KeyfleetWeb.Time.local id="code-password-until" at={@password.until} as={:stamp} />.
                 <Regent.Primitives.tip id="code-password-tip" label="About the git password">
                   Paste it when git asks for a password. It stops working sooner if you sign out or no longer hold a Key.
                 </Regent.Primitives.tip>
@@ -951,6 +950,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
         >
           <p :if={@files.listing == :unreadable} id="workspace-files-unreadable">
             The code can’t be read right now. Try again in a minute.
+          </p>
+          <p :if={@files.listing == :removed} id="workspace-files-removed">
+            A later change removed this from the code.
+            <.link patch={Keyfleet.Code.files_path(@files.fleet_id, "")}>Open the code</.link>
           </p>
           <.folder
             :if={match?({:folder, _}, @files.listing)}
@@ -1629,11 +1632,17 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp pressed(:ok, socket), do: {:noreply, read_workspace(socket)}
   defp pressed({:ok, _pin}, socket), do: {:noreply, read_workspace(socket)}
   defp pressed({:error, %Ash.Error.Forbidden{}}, socket), do: {:noreply, read_workspace(socket)}
+
+  # Another member lifted the pin first.
+  defp pressed({:error, %Ash.Error.Invalid{errors: [%Ash.Error.Changes.StaleRecord{}]}}, socket),
+    do: {:noreply, read_workspace(socket)}
+
   defp pressed({:error, failure}, _socket), do: raise(failure)
 
   @doc """
   A wait begun for a workspace the page has since left reads nothing. A read
-  again that fails keeps what the page shows; the next notice reads again.
+  again that fails keeps what the page shows; the next notice reads again. A
+  file or folder a later change took out of the code says it was removed.
   """
   def handle_info(:refresh_workspace, %{assigns: %{workspace: %{}}} = socket) do
     socket = assign(socket, :workspace_refresh?, false)
@@ -1642,10 +1651,20 @@ defmodule KeyfleetWeb.WorkspaceLive do
       {:ok, workspace} -> {:noreply, assign(socket, :workspace, workspace)}
       {:error, _failure} -> {:noreply, socket}
     end
+  rescue
+    failure in KeyfleetWeb.NotFoundError ->
+      socket = assign(socket, :workspace_refresh?, false)
+      {:noreply, removed(socket, failure, __STACKTRACE__)}
   end
 
   def handle_info(:refresh_workspace, socket),
     do: {:noreply, assign(socket, :workspace_refresh?, false)}
+
+  # Only a code page's file or folder can go while the page is open.
+  defp removed(%{assigns: %{route_spec: %{route_id: :code_files}}} = socket, _failure, _trace),
+    do: update(socket, :workspace, &Map.put(&1, :listing, :removed))
+
+  defp removed(_socket, failure, trace), do: reraise(failure, trace)
 
   @doc "One read, a moment later, when the log has moved past what the page last read."
   def refresh_soon(socket, seen, run_id, watermark) do

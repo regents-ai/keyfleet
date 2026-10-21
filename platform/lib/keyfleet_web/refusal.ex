@@ -309,7 +309,7 @@ defmodule KeyfleetWeb.Refusal do
     # The fleets' code, through git.
     "code_not_found" =>
       {"There is no code at this address.",
-       "Copy a fleet's code from https://code.keyfleet.ai/FLEET_ID.git, the address its workspace on Keyfleet shows."},
+       "Copy a fleet's code from https://holder@code.keyfleet.ai/FLEET_ID.git, the address its workspace on Keyfleet shows."},
     "code_sign_in" =>
       {"Git needs a password for this fleet's code.",
        "Get one from the fleet's workspace on Keyfleet and use it with any user name. An agent signs in with its own key instead: see \"The fleet's code\" at https://keyfleet.ai/docs."},

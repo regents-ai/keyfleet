@@ -1968,7 +1968,14 @@
               "data": {
                 "type": "object",
                 "description": "The object's fields for its type. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
-                "additionalProperties": true
+                "additionalProperties": true,
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "description": "A note's text, up to 20,000 characters",
+                    "maxLength": 20000
+                  }
+                }
               }
             },
             "required": [
@@ -2040,7 +2047,14 @@
           "data": {
             "type": "object",
             "description": "The object's fields for its type. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "properties": {
+              "body": {
+                "type": "string",
+                "description": "A note's text, up to 20,000 characters",
+                "maxLength": 20000
+              }
+            }
           }
         },
         "required": [
@@ -2109,7 +2123,14 @@
               "set": {
                 "type": "object",
                 "description": "Fields to set, by name. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
-                "additionalProperties": true
+                "additionalProperties": true,
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "description": "A note's text, up to 20,000 characters",
+                    "maxLength": 20000
+                  }
+                }
               },
               "unset": {
                 "type": "array",
@@ -2204,7 +2225,14 @@
           "set": {
             "type": "object",
             "description": "Fields to set, by name. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "properties": {
+              "body": {
+                "type": "string",
+                "description": "A note's text, up to 20,000 characters",
+                "maxLength": 20000
+              }
+            }
           },
           "unset": {
             "type": "array",

@@ -288,8 +288,16 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     refused = graph(c, ann, "review", review)
     assert {refused.status, refused.body["error"]["code"]} == {403, "self_review"}
 
+    # The longest reasons a review gives fit in one write.
     disputed =
-      graph(c, bea, "review", %{review | as_key: 2, command_id: "r-2", decision: "dispute"})
+      graph(c, bea, "review", %{
+        review
+        | as_key: 2,
+          command_id: "r-2",
+          decision: "dispute",
+          rationale: String.duplicate("a", 4_000),
+          conflicts_of_interest: String.duplicate("b", 1_000)
+      })
 
     assert disputed.status == 200
     assert graph(c, ann, "get", %{id: task["id"]}).body["object"]["review"] == "disputed"

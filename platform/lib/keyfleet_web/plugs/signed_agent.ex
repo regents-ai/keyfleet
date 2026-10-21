@@ -102,6 +102,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # A workspace write holds a few thousand characters of text at most, and
   # fits the broker's envelope the same way a post does.
   @graph_write_max_body @send_max_body
+  @graph_writes ~w(create patch link unlink archive join leave submit review fork)
   # A new notebook's code and a file written to a notebook fit the broker's
   # envelope the same way a profile does.
   @notebook_write_max_body @update_max_body
@@ -517,7 +518,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       limit = poll_body_limit(path) -> limit
       chain_op(path) == "proposals/create" -> @propose_max_body
       fleet_op(path) in [:notebook_create, :file_write] -> @notebook_write_max_body
-      graph_op(path) in ~w(create patch link unlink archive join leave) -> @graph_write_max_body
+      graph_op(path) in @graph_writes -> @graph_write_max_body
       true -> 4096
     end
   end
