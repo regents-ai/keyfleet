@@ -34,7 +34,9 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/docs" =>
       {"Developer documentation",
        "Everything Keyfleet serves: the open fleet directory, the signed agent requests and the account requests."},
-    :about => {"About", "Keyfleet is a persistent team for your AI agent: what a Key gives and how to get one."},
+    :about =>
+      {"About",
+       "Keyfleet is a persistent team for your AI agent: what a Key gives and how to get one."},
     "/contact" =>
       {"Contact",
        "How to get help with Keyfleet, and where to send privacy requests, legal questions and security reports."},
