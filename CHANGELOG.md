@@ -4042,3 +4042,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   name they chose beside their address, or their ENS name in place of the
   address ("Held by idontworkhere.eth"). It showed the bare address.
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — The sign-in browser checks wait for nothing that moves
+
+- What: the three browser checks that close sign-in over the Buy Key window
+  (on the homepage, on Classic #1 and on a Key's page) now run with reduced
+  motion, so the window opens in place. One run in eight or so failed: the
+  window's rising entrance overshoots and settles back, and the check read
+  where the window sat while it was still moving, with its top edge above the
+  screen. 45 runs in a row now succeed. The page itself is unchanged.
+- Why: the coordinator, 21 Oct 12:44Z: find the cause of the flaky "closing
+  sign-in on a Key's page" check and fix it without a retry.
