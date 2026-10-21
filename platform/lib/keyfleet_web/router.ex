@@ -207,11 +207,13 @@ defmodule KeyfleetWeb.Router do
   end
 
   # A visitor's page timings, sent by `navigator.sendBeacon` as the page is
-  # left. No pipeline: the beacon cannot send a CSRF token, and nothing here
-  # reads a session; it only adds numbers to the timing histograms
-  # (KeyfleetWeb.VitalsController).
+  # left, and the steps a visitor takes into Keyfleet, sent as each happens.
+  # No pipeline: the beacon cannot send a CSRF token, and nothing here reads a
+  # session; it only adds numbers to the timing histograms and the step
+  # counters (KeyfleetWeb.VitalsController, KeyfleetWeb.LaunchStepsController).
   scope "/", KeyfleetWeb do
     post "/vitals", VitalsController, :create
+    post "/steps", LaunchStepsController, :create
   end
 
   scope "/", KeyfleetWeb do

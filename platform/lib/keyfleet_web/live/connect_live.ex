@@ -99,7 +99,12 @@ defmodule KeyfleetWeb.ConnectLive do
           <div class="connect-step__body">
             <h2>Give it this</h2>
             <p id="connect-instruction" class="connect-instruction">{@instruction}</p>
-            <Regent.Primitives.copy_button id="connect-copy" variant="primary" text={@instruction}>
+            <Regent.Primitives.copy_button
+              id="connect-copy"
+              variant="primary"
+              text={@instruction}
+              data-step-agent={@agent}
+            >
               Copy
             </Regent.Primitives.copy_button>
           </div>
