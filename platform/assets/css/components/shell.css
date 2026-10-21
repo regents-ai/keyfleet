@@ -365,7 +365,9 @@ span.account-chip {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
+  justify-content: center;
   min-height: 3rem;
+  min-inline-size: 2.75rem;
   color: var(--color-fg-muted);
   text-decoration: none;
 }

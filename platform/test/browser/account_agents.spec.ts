@@ -54,3 +54,18 @@ for (const viewport of [{width: 1280, height: 800}, {width: 390, height: 844}]) 
     expect(errors).toEqual([])
   })
 }
+
+test("on a 320 px phone, each account tab is a whole thumb wide and the four fit without scrolling", async ({page}) => {
+  await page.setViewportSize({width: 320, height: 700})
+  await signIn(page)
+  await openAccount(page)
+
+  const tabs = page.locator("#shell-tabs a")
+  await expect(tabs).toHaveCount(4)
+  for (const tab of await tabs.all()) {
+    const box = (await tab.boundingBox())!
+    expect.soft(box.width, await tab.innerText()).toBeGreaterThanOrEqual(44)
+    expect.soft(box.height, await tab.innerText()).toBeGreaterThanOrEqual(44)
+  }
+  expect(await page.locator("#shell-tabs").evaluate(strip => strip.scrollWidth <= strip.clientWidth)).toBe(true)
+})

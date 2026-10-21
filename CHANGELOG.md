@@ -4203,3 +4203,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `modulepreload` links.
 - Why: coordinator, 21 Oct 13:01Z and 13:16Z: page speed on the busiest
   pages, measured before and after in headless Chromium.
+
+## 2026-10-21 — Account tabs are a whole thumb wide on a phone
+
+- What: on a phone, Profile and Points in the Account page's tabs were about
+  40 pixels wide. Every tab is now at least 44 pixels wide and tall, and the
+  four still fit a 320-pixel screen without the strip scrolling. A browser
+  check holds both.
+- Why: the coordinator's phone pass: "Look for … tap targets smaller than
+  44px".
