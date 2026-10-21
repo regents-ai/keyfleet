@@ -14,6 +14,7 @@ defmodule KeyfleetWeb.PairingBox do
   use KeyfleetWeb, :live_component
 
   alias Keyfleet.Limits
+  alias KeyfleetWeb.AgentGuides
   alias KeyfleetWeb.Live.Session
   alias RegentAgents.{Harness, PairingCode, PairingMessage, Person}
 
@@ -136,7 +137,79 @@ defmodule KeyfleetWeb.PairingBox do
     assign(socket, pairing: %{harness: harness, code: code})
   end
 
-  # What the person pastes to their agent.
-  defp agent_message(code, harness),
-    do: PairingMessage.text(code, KeyfleetWeb.Endpoint.url(), harness)
+  @doc """
+  What the person pastes to their agent: the shared pairing words, then this
+  runtime's own setup from its page under /agents, so agents sharing one
+  computer each keep their own key and folder and each comes back on its own.
+  """
+  def agent_message(code, harness) do
+    origin = KeyfleetWeb.Endpoint.url()
+
+    PairingMessage.text(code, origin, harness) <>
+      "\n" <> setup(harness) <> "\nYour full setup: " <> origin <> AgentGuides.path(harness)
+  end
+
+  @check_in "Check in on Keyfleet as your keyfleet skill says."
+
+  defp setup(:claude_code),
+    do: """
+    Use your own key: begin every shell with export SIWA_AGENT_HOME=~/.siwa-agent/claude-code, and work in ~/keyfleet/claude-code.
+    After pairing, add a scheduled task in the Claude desktop app: folder ~/keyfleet/claude-code, every 30 minutes, instructions "#{@check_in}"\
+    """
+
+  defp setup(:codex),
+    do: """
+    Use your own key: begin every shell with export SIWA_AGENT_HOME=~/keyfleet/codex/.siwa-agent UV_CACHE_DIR=~/keyfleet/codex/.uv-cache, and work in ~/keyfleet/codex.
+    After pairing, add a scheduled task in the Codex app: project ~/keyfleet/codex, a new chat each run, every 30 minutes, instructions "#{@check_in}"\
+    """
+
+  defp setup(:openclaw),
+    do: """
+    Use your own key: begin every shell with export SIWA_AGENT_HOME=~/.siwa-agent/openclaw, and work in ~/keyfleet/openclaw.
+    After pairing, schedule check-ins: openclaw cron add --name keyfleet --every 30m --session isolated --message "#{@check_in}"\
+    """
+
+  defp setup(:ironclaw),
+    do: """
+    Use your own key: begin every shell with export SIWA_AGENT_HOME=~/.siwa-agent/ironclaw, and work in ~/keyfleet/ironclaw.
+    After pairing, make a cron routine with your routine_create tool, every 30 minutes, with the prompt "#{@check_in}"\
+    """
+
+  defp setup(:nemoclaw),
+    do: """
+    Use your own key: begin every shell with export SIWA_AGENT_HOME=~/.siwa-agent/nemoclaw, and work in ~/keyfleet/nemoclaw.
+    After pairing, set up check-ins as your full setup says.\
+    """
+
+  defp setup(:pi),
+    do: """
+    Use your own key: begin every shell with export SIWA_AGENT_HOME=~/.siwa-agent/pi, and work in ~/keyfleet/pi. Save your skill as ~/keyfleet/pi/keyfleet/SKILL.md, never in ~/.agents/skills.
+    After pairing, Pi has no scheduler: give me the one crontab line your setup page shows, every 30 minutes.\
+    """
+
+  defp setup(:hermes),
+    do: """
+    After pairing, schedule check-ins: hermes cron create "every 30m" "#{@check_in}" --skill keyfleet\
+    """
+
+  defp setup(:grok_bot),
+    do: """
+    After pairing, add a routine every 30 minutes with the instructions "#{@check_in}"\
+    """
+
+  defp setup(:muse),
+    do: """
+    After pairing, add a recurring task every 30 minutes with the instructions "#{@check_in}"\
+    """
+
+  defp setup(:dots),
+    do: """
+    After pairing, add a recurring task under Scheduled, every 30 minutes, with the instructions "#{@check_in}"\
+    """
+
+  defp setup(:other),
+    do: """
+    If other agents share your computer, use your own key: begin every shell with export SIWA_AGENT_HOME=~/.siwa-agent/YOUR-RUNTIME.
+    After pairing, set up check-ins as your runtime's page says, or the page below if yours has none.\
+    """
 end

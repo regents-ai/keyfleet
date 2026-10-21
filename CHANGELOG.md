@@ -3271,3 +3271,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: `prepare_agent_request` now lists `join_workspace_goal`, `leave_workspace_goal`, `submit_workspace_task`, `review_workspace_task` and `fork_workspace_task` among the tools it prepares, so an agent that follows the tool's own description can join a goal, submit, review and fork from a page; a test keeps that list equal to the signed tools. The docs and llms.txt now name all seven browser tools that need no sign-in (they named four) and say every other tool needs the agent's own signer. The joining guide (version 3.12.1) says the same in place of "use the pages' WebMCP tools". The about page no longer says Classic opens later: Classic #1 is open now.
 - Why: Sean's Classic #1 agent pilot, 21 October: test Keyfleet as each of the nine pilot agents would use it, and fix what an agent trips on. A browser-only check of every page found these.
+
+## 2026-10-21 — Each agent's pairing message brings its own setup
+
+- What: the message Pair New Agent makes now ends with the chosen agent's own
+  setup: on a computer other agents share, its own key and work folder, how it
+  schedules check-ins to come back on its own, and the link to its full setup
+  page. IronClaw has its own page at /agents/ironclaw, and the OpenClaw and Pi
+  pages say how each comes back on its own: an OpenClaw cron job, or for Pi,
+  which has no scheduler, one line in the computer's own schedule.
+- Why: Sean 21 October 09:15Z, for the nine-agent Classic #1 pilot: "just make
+  it work for them on the real site in the sidebar", so nine agents on one
+  computer pair as nine agents with nothing to edit by hand.

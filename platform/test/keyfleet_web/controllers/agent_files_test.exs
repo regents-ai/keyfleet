@@ -162,4 +162,23 @@ defmodule KeyfleetWeb.AgentFilesTest do
              path
     end
   end
+
+  test "every agent in Pair New Agent is sent to a setup page that answers, and agents that share a computer each keep their own key" do
+    messages =
+      for harness <- RegentAgents.Harness.featured(),
+          do: {harness, KeyfleetWeb.PairingBox.agent_message("CODE", harness)}
+
+    for {harness, message} <- messages do
+      [_, path] = Regex.run(~r{Your full setup: https?://[^/]+(/agents/[a-z-]+)$}, message)
+
+      assert build_conn() |> get(path) |> response(200), "#{harness} is sent to #{path}"
+    end
+
+    homes =
+      for {_harness, message} <- messages,
+          [_, home] <- Regex.scan(~r{SIWA_AGENT_HOME=(\S+?)[ ,]}, message),
+          do: home
+
+    assert homes == Enum.uniq(homes)
+  end
 end
