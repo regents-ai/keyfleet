@@ -353,6 +353,7 @@ defmodule Keyfleet.Keys do
       where: linked.wallet == ^String.downcase(wallet),
       select: linked.account_id
     )
+    # Every address a Regent account links is public, as in holders/4.
     |> Keyfleet.Repo.one()
   end
 

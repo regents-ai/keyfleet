@@ -11,6 +11,8 @@ defmodule Keyfleet.Dms.Changes.LoadSide do
     side = Keyfleet.Dms.Preparations.LastShown.side(changeset.arguments.token_id)
 
     Ash.Changeset.after_action(changeset, fn _changeset, conversation ->
+      # The action's policy has already admitted the holder of this Key to
+      # this conversation; this reads back that same Key's side of it.
       Ash.load(conversation, side, authorize?: false)
     end)
   end

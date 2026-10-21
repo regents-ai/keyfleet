@@ -4181,3 +4181,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   only `code`. They carry `message` and `hint` like every other refusal.
 - Why: the coordinator's error-answer audit; an agent reading the old line
   would not look for the hint that is there.
+
+## 2026-10-21 — Two reads that go around Ash say why
+
+- What: two places that read without the usual permission check now say
+  beside them why that is safe. Nothing changes for people or agents.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
