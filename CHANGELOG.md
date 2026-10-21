@@ -3318,3 +3318,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: scripts/deploy.sh now holds a lock for its app while it runs, so a second deploy started on this Mac, from any checkout, stops straight away with "another deploy of keyfleet is running" instead of building. The system lets go of the lock when the deploy ends, however it ends. It also refuses a commit that does not contain the code on every machine, not only on the first one it finds, since the site and graph machines can carry different commits.
 - Why: two overnight deploys crossed at 10:31Z on 21 October and left the graph machine on a5248373 and the site machine on fbf22d88; the coordinator asked for a simple lock so two threads cannot deploy at the same time.
+
+## 2026-10-21 — Pages load less script, and the homepage draws the Key picture sooner
+
+- What: the step that sends a Buy Key or other wallet action compares wallet addresses itself instead of through the wallet library, so that library no longer loads with every page; it still loads with sign-in. The homepage loads 100 KB of script instead of 183 KB, and Classic #1 198 KB instead of 281 KB. The homepage's Key picture now rises into place without first being invisible, so a slow phone counts it as drawn with the first paint.
+- Why: Sean's 2. a and 3. a, 21 October 10:04Z. On a simulated slow phone the homepage drew its Key picture at 3.0 s against a 2.5 s goal, and every page loaded more script than its 180 KB budget. Fetching the homepage's fonts later was tried too and dropped: it made the picture only 75 ms sooner, within the measurement's own spread.
