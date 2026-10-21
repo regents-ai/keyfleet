@@ -1837,6 +1837,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         "public_summary" => "Writing the first brief."
       })
 
+    waiting = create(@fleet, "task", %{"title" => "Find a fund", "progress" => "todo"})
+
     create(@fleet, "note", %{"title" => "Standup", "body" => "Ship it."})
 
     for conn <- [visitor, signed_in_as(visitor, "0x" <> String.duplicate("e", 40))],
@@ -1880,6 +1882,11 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              )
 
       assert has_element?(view, ~s(#workspace-public-tasks [data-item="#{task}"]), "In progress")
+
+      refute has_element?(
+               view,
+               ~s(#workspace-public-tasks [data-item="#{waiting}"] .workspace-badge)
+             )
 
       assert has_element?(
                view,

@@ -484,10 +484,13 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp standing(_type, nil), do: nil
 
-  # Every goal starts open, so only one achieved or dropped says so.
+  # Every goal starts open and every task to do, so only one that has moved
+  # on says so.
   defp standing("goal", "open"), do: nil
 
   defp standing("goal", status), do: choice("status", status)
+
+  defp standing("task", "todo"), do: nil
 
   defp standing("task", review) when review in @reviews, do: choice("review", review)
 

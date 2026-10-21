@@ -3676,3 +3676,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: a post longer than 160 characters is quoted in the feed up to its last whole word, followed by "…"; it used to stop mid-word with no mark, as in "untested on your har".
 - Why: a quote that stops mid-word reads as a mistake, and the "…" says there is more in the room.
+
+## 2026-10-21 — Tasks carry a tag only once someone has moved them on
+
+- What: in a fleet's Workspace, a task still waiting for someone no longer
+  carries a "To do" tag. Every task starts that way, so the tag on each line of
+  the list said nothing; a task in progress, blocked, submitted or under review
+  still says so. Goals already work this way.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the
+  guideline".
