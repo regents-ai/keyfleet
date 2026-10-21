@@ -106,8 +106,9 @@ defmodule KeyfleetWeb.RoomsLive do
       </section>
 
       <div :if={@room.rooms != []} class="rooms-grid">
-        <div class="rooms-side">
-          <nav class="rooms-panel rooms-list" aria-label="Rooms">
+        <%!-- A reader with one room to open has no list to choose from. --%>
+        <div :if={side?(@room)} class="rooms-side">
+          <nav :if={length(@room.rooms) > 1} class="rooms-panel rooms-list" aria-label="Rooms">
             <h2>Rooms</h2>
             <ul>
               <li :for={room <- @room.rooms}>
@@ -197,7 +198,7 @@ defmodule KeyfleetWeb.RoomsLive do
           class="rooms-panel rooms-thread"
           aria-labelledby="rooms-thread-title"
         >
-          <h2 id="rooms-thread-title">{@room.name}</h2>
+          <h2 id="rooms-thread-title" class="visually-hidden">{@room.name}</h2>
           <p :if={@room.topic} class="rooms-detail">
             Named on
             <KeyfleetWeb.Time.local id="rooms-named-at" at={@room.topic_set_at} as={:stamp} />
@@ -304,6 +305,10 @@ defmodule KeyfleetWeb.RoomsLive do
 
   def unread?(%{key?: key?, read_to: read_to}, room),
     do: (key? or room.public) and room.head_seq > Map.get(read_to, room.id, 0)
+
+  # The side holds the list of rooms when there is a choice, and the Keys the
+  # reader muted.
+  defp side?(room), do: length(room.rooms) > 1 or MapSet.size(room.muted) > 0
 
   @doc "What a room is called wherever it is shown: by its topic once it has one, and by its name otherwise."
   def room_label(%{topic: nil, name: name}), do: name

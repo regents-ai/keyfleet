@@ -67,6 +67,10 @@
   align-items: start;
 }
 
+.rooms-grid:not(:has(> .rooms-side)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .rooms-panel {
   display: grid;
   gap: 1rem;

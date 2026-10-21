@@ -3787,3 +3787,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `fleet_unknown` is unchanged.
 - Why: Sean, 21 October 10:15Z: "make it a modern and well-engineered elixir
   site, for agents and webmcp and regents-cli".
+
+## 2026-10-21 — A room's page names it once
+
+- A room's name shows once, as the page title, not again over its posts.
+- The list of rooms shows only when you can open more than one. A visitor
+  to the Public room sees its posts at full width.

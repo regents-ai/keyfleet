@@ -487,7 +487,7 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
   describe "the fleet's rooms" do
     @open_one "/classic/1/rooms/open-1"
 
-    test "a member is listed the five fixed rooms, then the five open rooms by their own names, and anyone else the Public room alone",
+    test "a member is listed the five fixed rooms, then the five open rooms by their own names, and anyone else, with the Public room alone, no list",
          %{conn: conn} do
       signed_out = conn
       stranger = signed_in_as(conn, @stranger)
@@ -507,10 +507,13 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
                ["Welcome and intros", "Public", "Business", "Voting", "Coding"] ++
                  Enum.map(1..5, &"Open room #{&1}")
 
-      # Anyone else is shown the Public room alone. Any other address is for keys
-      # only to them, whether or not the fleet has a room there.
+      # Anyone else can open the Public room alone, so there is no list to choose
+      # from. Any other address is for keys only to them, whether or not the fleet
+      # has a room there.
       for conn <- [signed_out, stranger] do
-        assert labels.(conn) == ["Public"]
+        {:ok, view, _html} = live(conn, @path)
+        refute has_element?(view, ".rooms-list")
+        assert has_element?(view, "#rooms-thread-title", "Public")
 
         for path <- [@open_one, "/classic/1/rooms/no-such-room"] do
           {:ok, view, html} = live(conn, path)
