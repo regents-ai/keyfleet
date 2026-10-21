@@ -81,15 +81,17 @@
   outline: none;
 }
 
+/* Panels side by side share one height, so each row reads as one band;
+   their contents stay at the top. */
 .key-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
   gap: 1.5rem;
-  align-items: start;
 }
 
 .key-panel {
   display: grid;
+  align-content: start;
   gap: 1rem;
   padding: var(--rg-panel-padding);
   justify-items: start;
