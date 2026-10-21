@@ -3469,3 +3469,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: a proposal's own page now shows, under its standing, the same kind, hours left and yes-share bar as its card on the list, from the vote contract's own figures. The Proposals list no longer opens with a "Proposals" card saying "Decisions and payments put to this fleet's Key holders."; the tab already names it, and the Treasury tab never had one.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", and the morning's goal of making each proposal's kind, status, time left and yes share readable at a glance.
+
+## 2026-10-21 — The browser tools introduction is shorter
+
+- What: the docs and llms.txt introduce the browser tools in four short
+  paragraphs: the seven public reads, the signed tools and how to sign once,
+  the wallet tools and their page, and what every tool answers. The list of
+  example signed tools is gone; the table below names them all.
+- Why: about a third fewer words before the table, with the same facts.
