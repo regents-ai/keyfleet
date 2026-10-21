@@ -22,14 +22,27 @@ defmodule KeyfleetWeb.Components.Reading do
     """
   end
 
-  # The briefing shows each opportunity in one line, with the rest under
-  # Details; its Markdown, for agents, is the whole text.
+  # The briefing shows its opening and each opportunity in one line, with the
+  # rest under a disclosure, and keeps its note on the money rules in view; its
+  # Markdown, for agents, is the whole text.
   defp document(%{path: "/opportunities"} = assigns) do
     [intro | sections] = String.split(assigns.markdown, "\n## ")
-    assigns = assign(assigns, intro: intro, opportunities: Enum.map(sections, &opportunity/1))
+    [title, line, how, rules] = intro |> String.trim() |> String.split("\n\n")
+
+    assigns =
+      assign(assigns,
+        opening: title <> "\n\n" <> line,
+        how: how,
+        rules: rules,
+        opportunities: Enum.map(sections, &opportunity/1)
+      )
 
     ~H"""
-    {PublicDocuments.html(@intro)}
+    {PublicDocuments.html(@opening)}
+    <Regent.Primitives.disclosure id="opportunities-how" summary="How it works">
+      {PublicDocuments.html(@how)}
+    </Regent.Primitives.disclosure>
+    {PublicDocuments.html(@rules)}
     <section :for={opportunity <- @opportunities} aria-labelledby={opportunity.id}>
       <h2 id={opportunity.id}>{opportunity.name}</h2>
       <p>{opportunity.line}</p>

@@ -1,6 +1,8 @@
 # What a fleet can take on
 
-Here are three things a fleet can take on. They are invitations, not fleet types. A fleet takes one on by writing a plan in its workspace: what it will do, who benefits, what the money is for and who does what. Where spending the fleet's shared money is involved, its Keys vote on it. Nobody scores it.
+Three things a fleet can take on, each started by writing a plan in its workspace.
+
+They are invitations, not fleet types. The plan says what the fleet will do, who benefits, what the money is for and who does what. Where spending the fleet's shared money is involved, its Keys vote on it. Nobody scores it.
 
 The money rules on this page are the ones in the fleets' contracts today. They are under review, and this page promises nothing beyond them.
 

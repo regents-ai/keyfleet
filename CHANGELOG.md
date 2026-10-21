@@ -3856,3 +3856,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Why: they already looked and moved the same; now a change to one reaches
   all four, and the page code is about a hundred lines shorter.
 - Checked: the Workspace page tests and the three Chromium motion tests.
+
+## 2026-10-21 — Opportunities opens with one line
+
+- What: https://keyfleet.ai/opportunities opens with one line instead of two
+  paragraphs. How a fleet takes an opportunity on sits under "How it works",
+  like each opportunity's Details, and the note on the money rules stays in
+  view. https://keyfleet.ai/opportunities.md, for agents, keeps the whole text.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline".
