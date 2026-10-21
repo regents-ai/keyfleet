@@ -49,9 +49,6 @@ defmodule KeyfleetWeb.FleetNow do
   alias KeyfleetWeb.{FleetPage, PageRead}
   alias Phoenix.Socket.Broadcast
 
-  # The longest the first read of every fleet may take as the site starts.
-  @first_read 5_000
-
   @doc "Where the reading of `fleet_id` is held."
   def key(fleet_id), do: {:fleet_now, fleet_id}
 
@@ -93,7 +90,7 @@ defmodule KeyfleetWeb.FleetNow do
     fleet_ids
     |> Task.async_stream(&__MODULE__.read/1,
       max_concurrency: length(fleet_ids),
-      timeout: @first_read,
+      timeout: Application.fetch_env!(:keyfleet, :first_read_ms),
       on_timeout: :kill_task
     )
     |> Enum.zip(fleet_ids)

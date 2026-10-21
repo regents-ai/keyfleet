@@ -1353,12 +1353,12 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       before = now_items(view)
 
       rename!("messages", "messages_away")
+      watch(view)
 
       log =
         capture_log(fn ->
           send(view.pid, {:proposals_changed, @fleet})
-          Process.sleep(2_200)
-          render(view)
+          await_feed_read(view)
         end)
 
       assert now_items(view) == before
@@ -1367,7 +1367,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       rename!("messages_away", "messages")
       line!("coding", 0, now)
       send(view.pid, {:proposals_changed, @fleet})
-      Process.sleep(2_200)
+      await_feed_read(view)
 
       assert [_new | ^before] = now_items(view)
     end
@@ -1398,6 +1398,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert one_read > 0
       line!("coding", 0, DateTime.utc_now())
+      watch(view)
 
       {burst, _} =
         lines_read_during(fn ->
@@ -1405,8 +1406,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
           send(view.pid, {:graph_head, @fleet, "log", 9})
           send(view.pid, {:keys_changed, @fleet, [7]})
           render(view)
-          Process.sleep(2_200)
-          render(view)
+          await_feed_read(view)
         end)
 
       assert burst == one_read
@@ -1419,10 +1419,11 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       line!("general", 0, DateTime.utc_now())
 
       other = "fleet_tech_classic"
+      watch(view)
       send(view.pid, {:proposals_changed, other})
       send(view.pid, {:graph_head, other, "log", 9})
       send(view.pid, {:keys_changed, other, [7]})
-      Process.sleep(2_200)
+      refute_feed_read(view)
       refute has_element?(view, ~s(#fleet-feed-list li[data-kind="post"]))
     end
 
@@ -1438,6 +1439,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, _html} = live(build_conn(), @path)
       before = now_items(view)
       general = Rooms.get_room!(@fleet, "general", authorize?: false)
+      watch(view)
 
       reads =
         page_reads_during(view.pid, fn ->
@@ -1445,9 +1447,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
           send(view.pid, {:graph_notable, @fleet})
           send(view.pid, {:proposals_changed, @fleet})
           send(view.pid, {:keys_changed, @fleet, [7]})
-          render(view)
-          Process.sleep(2_200)
-          render(view)
+          refute_feed_read(view)
         end)
 
       assert reads == 0
@@ -1493,8 +1493,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute has_element?(view, ~s(#fleet-feed-list li[data-kind="post"]))
 
       # The other fleet's own notice still starts its own wait.
+      watch(view)
       send(view.pid, {:proposals_changed, other})
-      Process.sleep(2_200)
+      await_feed_read(view, other)
       assert has_element?(view, ~s(#fleet-feed-list li[data-kind="post"]))
     end
 
@@ -2046,6 +2047,24 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   # What the fleet's producer does once it hears what a test changed
   # (`KeyfleetWeb.FleetNow`); it doesn't run under test.
   defp read_now(fleet_id \\ @fleet), do: FleetNow.read(fleet_id)
+
+  # Shows the test what reaches the page process, so it waits for the page's
+  # read after a pause instead of sleeping past it.
+  defp watch(view), do: :erlang.trace(view.pid, true, [:receive])
+
+  # Waits for the read after a pause for `fleet_id` to come due, then for the
+  # page to finish it.
+  defp await_feed_read(view, fleet_id \\ @fleet) do
+    assert_receive {:trace, _pid, :receive, {:refresh_activity, ^fleet_id}}, 5_000
+    render(view)
+  end
+
+  # Waits out a pause after a notice: no read comes due.
+  defp refute_feed_read(view) do
+    wait = Application.fetch_env!(:keyfleet, :fleet_feed_wait_ms)
+    refute_receive {:trace, _pid, :receive, {:refresh_activity, _fleet_id}}, wait + 100
+    render(view)
+  end
 
   # How many reads the page process `pid` makes while `fun` runs.
   defp page_reads_during(pid, fun) do

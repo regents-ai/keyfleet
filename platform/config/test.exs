@@ -82,6 +82,12 @@ config :keyfleet, :agent_wait_ms, 200
 config :keyfleet, :agent_waits_per_address, 1
 config :keyfleet, :agent_waits_total, 1
 
+# A fleet page reads its feed again soon after a notice.
+config :keyfleet, :fleet_feed_wait_ms, 200
+
+# And the first read of every fleet as the site starts gives up sooner.
+config :keyfleet, :first_read_ms, 2_000
+
 # Notebook hosts answer under .localhost here. The tests name each fleet's hub
 # themselves. This signing key is for the test suite only and signs nothing
 # anywhere else.

@@ -58,9 +58,6 @@ defmodule KeyfleetWeb.FleetProposals do
   alias Keyfleet.{Fleets, Keys, Proposals, SharedReading}
   alias KeyfleetWeb.{PageRead, ProposalsPage, ShareCard}
 
-  # The longest the first read of every fleet may take as the site starts.
-  @first_read 5_000
-
   @kinds [:fleet_proposals, :fleet_treasury, :proposal, :share_card]
 
   @doc "Where the first page of `fleet_id`'s proposals is held."
@@ -105,7 +102,7 @@ defmodule KeyfleetWeb.FleetProposals do
     fleet_ids
     |> Task.async_stream(&__MODULE__.read/1,
       max_concurrency: length(fleet_ids),
-      timeout: @first_read,
+      timeout: Application.fetch_env!(:keyfleet, :first_read_ms),
       on_timeout: :kill_task
     )
     |> Enum.zip(fleet_ids)

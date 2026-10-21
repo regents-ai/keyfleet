@@ -123,6 +123,15 @@ config :keyfleet, :chain_nodes, %{
 # keeps an idle request open.
 config :keyfleet, :agent_wait_ms, 20_000
 
+# How long a member's open fleet page waits after a notice that something
+# happened in the fleet before it reads the hall's feed again, so a burst of
+# changes is read once.
+config :keyfleet, :fleet_feed_wait_ms, 2_000
+
+# The longest the first read of every fleet's shared reading may take as the
+# site starts.
+config :keyfleet, :first_read_ms, 5_000
+
 # How many of those waiting requests one client address may hold open at once;
 # past that, a request answers straight away with what it has.
 config :keyfleet, :agent_waits_per_address, 4

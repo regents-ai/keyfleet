@@ -91,10 +91,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.Time
   alias KeyfleetWeb.WorkspacePage
 
-  # How long a member's open fleet page waits after a notice that something
-  # happened in the fleet before it reads the hall's feed again, so a burst
-  # of changes is read once; and how many pages of it the page shows at most.
-  @activity_refresh_after 2_000
+  # How many pages of the hall's feed the page shows at most.
   @activity_pages 5
 
   attr :id, :string, required: true, doc: "the start of each number's id"
@@ -1773,7 +1770,9 @@ defmodule KeyfleetWeb.FleetLive do
         fleet_id
       ) do
     if ShellLive.member?(socket, fleet_id) do
-      Process.send_after(self(), {:refresh_activity, fleet_id}, @activity_refresh_after)
+      # A burst of changes is read once, after `:fleet_feed_wait_ms`.
+      wait = Application.fetch_env!(:keyfleet, :fleet_feed_wait_ms)
+      Process.send_after(self(), {:refresh_activity, fleet_id}, wait)
       assign(socket, :activity_refresh, fleet_id)
     else
       socket

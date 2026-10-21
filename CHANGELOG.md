@@ -4269,3 +4269,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Classic #1, only to have headings in their bold face about 400 ms sooner.
 - Why: the coordinator asked to win back the later first paint from release
   285 and keep the change only if the numbers improve.
+
+## 2026-10-21 — Fleet page and start-up tests wait on the page, not the clock
+- What: the fleet page's pause before it reads its feed again, and the
+  longest first read of each fleet as the site starts, are settings (2 s and
+  5 s on the site, as before; 200 ms and 2 s in tests). The fleet page tests
+  wait for the page's own read instead of sleeping 2.2 s, and the start-up
+  test holds the database just past the shorter wait. FleetPageTest takes
+  19 s instead of 28 s, SharedReadingStartTest about 7 s instead of 14 s.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements"; the
+  change check every thread runs should be fast and steady.
