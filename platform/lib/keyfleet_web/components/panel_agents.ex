@@ -5,7 +5,8 @@ defmodule KeyfleetWeb.PanelAgents do
   list (`Regent.Account.agents_brief`): each agent's picture and name over the
   Regent site it was last active on and how long ago. Pairing is shared by every
   Regent site, so an agent paired on another one is listed too. Manage beside the
-  heading leads to the account page on regents.sh, where every agent is listed.
+  heading opens the agents on Keyfleet's own Account page, where every agent is
+  listed.
 
   Where each agent was last active comes from its shared reading
   (`Keyfleet.Agents.ActivityReading`), asked for only for an open panel: the
@@ -64,7 +65,7 @@ defmodule KeyfleetWeb.PanelAgents do
     <div id={"#{@id}-reader"} phx-hook="PanelAgents" data-read-on-open>
       <Regent.Account.agents_brief
         id={@id}
-        manage_href="https://regents.sh/account"
+        manage_href="/account#account-agents"
         agents={rows(@agents, @last_actions, @now)}
       />
     </div>

@@ -10,6 +10,9 @@ import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 //   the page, which narrows so nothing sits under the panel, and Manage Account
 //   opens the account page in the same tab (Sean, 21 October 2026: "the
 //   sidebar should not cover content, it should shorten the visible area")
+// - Manage beside Your agents opens the agents on Keyfleet's own Account page
+//   in the same tab (Sean, 21 October 2026: the lower "manage" button "still
+//   goes to regents.sh/account")
 // - between a phone and a wide screen the panel stands beside the menu strip
 //   and the page, which both narrow for it
 // - on a phone the panel covers the page under the header, and a panel left
@@ -93,6 +96,18 @@ test("on the homepage the side panel sits beside the page, and Manage Account op
   await expect(page).toHaveURL(/\/account$/)
   await expect(page.locator("#account-page")).toBeVisible()
   await expect(panel(page)).toBeVisible()
+})
+
+test("Manage beside Your agents opens the agents on the Account page", async ({page}) => {
+  await signIn(page)
+  await page.goto("/")
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+
+  await panelButton(page).click()
+  await panel(page).locator("#shell-agents").hover()
+  await panel(page).getByRole("link", {name: "Manage your agents"}).click()
+  await expect(page).toHaveURL(/\/account#account-agents$/)
+  await expect(page.locator("#account-agents")).toBeInViewport()
 })
 
 test("between a phone and a wide screen the side panel stands beside the menu strip and the page", async ({page}) => {

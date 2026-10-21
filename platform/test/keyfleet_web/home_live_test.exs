@@ -97,6 +97,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     refute has_element?(view, "#shell-header [data-account-target=sign-out]")
     assert has_element?(view, "#shell-aside #shell-account", "Sign out")
     assert has_element?(view, ~s(#shell-account a[href="/account"]), "Manage Account")
+    assert has_element?(view, ~s(#shell-agents a[href="/account#account-agents"]), "Manage")
     assert has_element?(view, "#shell-aside #shell-pairing h2", "Pair New Agent")
     assert has_element?(view, "#shell-pairing-box input[name=harness][value=hermes]")
     refute has_element?(view, "#shell-agents li")

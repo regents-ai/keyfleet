@@ -309,12 +309,15 @@ features:
     what: >-
       A signed-in person opens the side panel from the header's panel button or
       their account name, on every page. It holds Sign out and Manage Account,
-      their wallets (account-wallets), their paired agents with each one's last action, and Pair New Agent with
-      the ten agents to choose from. On a wide screen it sits beside the page and
-      stays open across pages and reloads; on tablets, phones and the homepage it
-      covers the page under the header and opens only when pressed. Escape
-      closes it, and the Account page's Pair New Agent opens it at pairing. On
-      the homepage, Fleets beside the name opens Classic #1's page.
+      their wallets (account-wallets), their paired agents with each one's last
+      action and a Manage link to the agents on the Account page, and Pair New
+      Agent with the ten agents to choose from. Manage Account and Manage stay on
+      Keyfleet in the same tab. From a tablet up it sits beside the page, which
+      narrows for it, on app pages and the homepage alike, and stays open across
+      pages and reloads; on a phone it covers the page under the header and
+      opens only when pressed. Escape closes it, and the Account page's Pair New
+      Agent opens it at pairing. On the homepage, Fleets beside the name opens
+      Classic #1's page.
     who: person
     level: ordinary
     paths:

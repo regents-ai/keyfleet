@@ -122,6 +122,12 @@ defmodule KeyfleetWeb.ShellLiveTest do
              "Manage Account"
            )
 
+    assert has_element?(
+             view,
+             ~s{#shell-agents a[href="/account#account-agents"]:not([target])},
+             "Manage"
+           )
+
     assert has_element?(view, "#shell-header #shell-aside-button[data-aside-toggle]")
     assert has_element?(view, "#theme-control button.theme-toggle[data-theme-toggle]")
     refute has_element?(view, "#account-control [phx-click]")

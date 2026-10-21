@@ -3206,3 +3206,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the side panel and the Account page (its Profile and its Wallets tab) now list your wallets, each with its copy icon and the arrow that opens it on Basescan. Each one says what it is: "Your wallet" for the one you signed in with from your own wallet app, "Regents wallet" for the one made for you at sign-in. The wallet that is active right now is marked "Active", and an active wallet that isn't linked to your account shows too, said to be one. The Profile card no longer shows a short address you couldn't copy; when your name there is your address, it opens and copies it.
 - Why: Sean 21 October 02:35Z: "I want a user to see their active wallet and be able to copy it on both the sidebar view and the /account route".
+
+## 2026-10-21 — Manage beside Your agents stays on Keyfleet
+
+- What: "Manage", which shows beside "Your agents" in the side panel, now opens the agents on Keyfleet's own Account page (keyfleet.ai/account) in the same tab instead of regents.sh. It was the panel's last link to the account page on regents.sh.
+- Why: Sean 21 October 03:31Z: "the top manage account button stays on keyfleet now, but the lower 'manage' button that shows on hover for 'your agents' still goes to regents.sh/account".
