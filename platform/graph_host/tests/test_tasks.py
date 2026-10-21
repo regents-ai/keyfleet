@@ -36,7 +36,7 @@ def host(db):
     """A goal, and an untaken task that implements it."""
     host = Host("fleet_a", str(db), [])
     _ok(host, "create", {"type": "goal", "data": GOAL}, command("g"))
-    _ok(host, "create", {"type": "task", "data": {"title": "Draft", "deliverable": "One page"}}, command("t"))
+    _ok(host, "create", {"type": "task", "data": {"title": "Draft", "deliverable": "One page", "acceptance_criteria": ["Fits on one page"]}}, command("t"))
     _ok(host, "link", {"source": "task#2", "target": "goal#1", "type": "implements"}, command("l"))
     return host
 
@@ -88,9 +88,11 @@ def test_a_fork_is_the_forking_keys_task_in_progress_beside_the_one_it_copied(ho
 
     copy = host.graph.get_object(fork["id"])
     assert fork == {"id": copy.id, "version": 1}
-    assert {field: copy.data.get(field) for field in ("title", "deliverable", "assignee_key", "progress", "result_ref")} == {
+    fields = ("title", "deliverable", "acceptance_criteria", "assignee_key", "progress", "result_ref")
+    assert {field: copy.data.get(field) for field in fields} == {
         "title": "Draft",
         "deliverable": "One page",
+        "acceptance_criteria": ["Fits on one page"],
         "assignee_key": 18,
         "progress": "doing",
         "result_ref": None,

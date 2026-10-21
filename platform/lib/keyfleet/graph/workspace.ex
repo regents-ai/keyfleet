@@ -9,7 +9,10 @@ defmodule Keyfleet.Graph.Workspace do
   A task is marked done only by submitting it (`submit`), with its result and
   the evidence it rests on. A submission claims the work is done; whether it
   is accepted is for other members' reviews (`review`) to say, each bound to
-  the task version it judged. Neither says anything about paying for it.
+  the task version it judged. A task may name the Key asked to review it,
+  its exact commit and its notebook; a review may say whether the reviewer
+  reproduced the work from that commit. Neither says anything about paying
+  for it.
 
   A member takes an untaken task by assigning it to their own Key. Only the
   Key holding a task gives it to another Key or drops it; any other member
@@ -149,12 +152,20 @@ defmodule Keyfleet.Graph.Workspace do
       argument :decision, :string, allow_nil?: false, constraints: @text
       argument :rationale, :string, allow_nil?: false, constraints: @text
       argument :conflicts_of_interest, :string, allow_nil?: false, constraints: @text
+      argument :reproduction, :string, constraints: @text
       validate KnownFleet
       validate FreshOwnership, only_when_valid?: true
 
       run {Relay,
            op: "review",
-           body: [:task, :task_version, :decision, :rationale, :conflicts_of_interest]}
+           body: [
+             :task,
+             :task_version,
+             :decision,
+             :rationale,
+             :conflicts_of_interest,
+             :reproduction
+           ]}
     end
 
     action :archive, :map do

@@ -386,7 +386,7 @@ defmodule KeyfleetWeb.ApiContractTest do
           {"leave", command ++ ~w(id), []},
           {"submit", command ++ ~w(id expected_version), ~w(result_ref evidence reason)},
           {"review", command ++ ~w(task task_version decision rationale conflicts_of_interest),
-           []},
+           ~w(reproduction)},
           {"fork", command ++ ~w(id), []}
         ] do
       assert %{"post" => operation} = path = contract["paths"][@graph <> op]

@@ -373,8 +373,9 @@ class Host:
     def _plan_review(self, command: Command, body: protocol.ReviewBody) -> Callable[[Reactions], dict]:
         """Records one member's decision on the task version they read.
 
-        A review binds itself to that version, to who submitted it and to each
-        piece of its evidence as it then stood. The Key or wallet that submitted
+        A review binds itself to that version, to who submitted it, to each
+        piece of its evidence as it then stood and to the commit the task then
+        named; it may say whether the reviewer reproduced the work from it. The Key or wallet that submitted
         the task cannot review it, and a Key reviews each version once. Whether
         two different Keys belong to different people is not something the
         graph knows, so a review never claims it.
@@ -404,11 +405,13 @@ class Host:
                 {"id": item_id, "version": self._object(item_id, "evidence").version}
                 for item_id in submitted["evidence"]
             ],
+            "commit_ref": task.data.get("commit_ref"),
         }
         member = {
             "decision": body.decision,
             "rationale": body.rationale,
             "conflicts_of_interest": body.conflicts_of_interest,
+            "reproduction": body.reproduction,
         }
         sys = {**_sys(command), "review": receipt}
         record = _validate(RECORD_MODELS["review"], {**member, "sys": sys})
@@ -423,13 +426,13 @@ class Host:
     def _plan_fork(self, command: Command, body: protocol.ForkBody) -> Callable[[Reactions], dict]:
         """Copies a task for the acting Key to work on, in progress and theirs.
 
-        The fork keeps the task's title, deliverable and discussion, implements
+        The fork keeps the task's title, deliverable, acceptance criteria and discussion, implements
         the same goals and services, and links to the task with `forks`. The
         task forked is left as it was, its holder included: forking is how a
         member works on a task another Key holds.
         """
         task = self._task(body.id, "id")
-        copied = {field: task.data[field] for field in ("title", "deliverable", "discussion") if task.data.get(field)}
+        copied = {field: task.data[field] for field in ("title", "deliverable", "acceptance_criteria", "discussion") if task.data.get(field)}
         member = {**copied, "assignee_key": command.auth.key.token_id, "progress": "doing"}
         record = _validate(RECORD_MODELS["task"], {**member, "sys": _sys(command)})
         implements = [

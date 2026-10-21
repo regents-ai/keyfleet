@@ -76,8 +76,12 @@ defmodule KeyfleetWeb.WorkspacePage do
     "task" => [
       {"progress", "Progress"},
       {"assignee_key", "Taken by"},
+      {"reviewer_key", "Reviewer"},
       {"deliverable", "Deliverable"},
+      {"acceptance_criteria", "Done when"},
       {"next_step", "Next step"},
+      {"notebook_ref", "Notebook"},
+      {"commit_ref", "Commit"},
       {"result_ref", "Result"},
       {"public_summary", "Public summary"}
     ],
@@ -107,6 +111,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     ],
     "review" => [
       {"decision", "Decision"},
+      {"reproduction", "Reproduced"},
       {"rationale", "Reasons"},
       {"conflicts_of_interest", "Conflicts of interest"}
     ]
@@ -125,6 +130,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       "disputed" => "Disputed"
     },
     "decision" => %{"accept" => "Accepted", "dispute" => "Disputed"},
+    "reproduction" => %{"passed" => "Yes", "failed" => "No"},
     "status" => %{"open" => "Open", "achieved" => "Achieved", "dropped" => "Dropped"},
     "confidence" => %{"low" => "Low", "medium" => "Medium", "high" => "High"},
     "payment_asset" => %{
@@ -484,10 +490,10 @@ defmodule KeyfleetWeb.WorkspacePage do
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
          {:ok, pushes} <- members_read(fleet, Code.pushes_of_commit(fleet_id, hash, opts)),
-         {:ok, evidence} <- members_read(fleet, Graph.evidence_citing(fleet_id, url, opts)) do
-      producers = producers(fleet_id, evidence, opts)
+         {:ok, citing} <- members_read(fleet, Graph.work_citing(fleet_id, url, opts)) do
+      producers = producers(fleet_id, Enum.filter(citing, &(&1.type == "evidence")), opts)
       titles = titles(fleet_id, producers |> Map.values() |> List.flatten(), opts)
-      agents = agent_names(Enum.map(evidence, &creator_wallet(&1.sys)))
+      agents = agent_names(Enum.map(citing, &creator_wallet(&1.sys)))
 
       %{
         fleet_id: fleet_id,
@@ -496,10 +502,11 @@ defmodule KeyfleetWeb.WorkspacePage do
         url: url,
         clone_url: Code.clone_url(fleet_id),
         pushes: pushes(pushes, fleet_id),
-        evidence:
-          for object <- evidence do
+        citing:
+          for object <- citing do
             %{
               id: object.id,
+              type: object.type,
               title: object.title,
               excerpt: object.card["gist"],
               archived?: archived?(object.sys),
@@ -846,10 +853,11 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  defp notebook_link(fleet_id, project_id, notebook_id) do
-    to = Notebooks.notebook_path(project_id, notebook_id)
-    "/fleets/#{fleet_id}/notebooks/open?" <> URI.encode_query(to: to)
-  end
+  defp notebook_link(fleet_id, project_id, notebook_id),
+    do: notebook_open(fleet_id, Notebooks.notebook_path(project_id, notebook_id))
+
+  defp notebook_open(fleet_id, to),
+    do: "/fleets/#{fleet_id}/notebooks/open?" <> URI.encode_query(to: to)
 
   # Only the kind of failure is logged: a database error carries its query.
   defp reason(%module{}), do: inspect(module)
@@ -925,7 +933,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       version: object.version,
       changed_at: time(object.changed_at),
       fields:
-        receipt(object) ++
+        receipt(object, fleet_id) ++
           Enum.flat_map(known ++ others, fn {field, label} ->
             case field_value(field, object.data[field], fleet_id) do
               nil -> []
@@ -938,24 +946,28 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # Where a submitted task's review stands, and what a review judged: the
   # task's version and who submitted it.
-  defp receipt(%{type: "task", review: review}) when is_binary(review),
+  defp receipt(%{type: "task", review: review}, _fleet_id) when is_binary(review),
     do: [{"Review", choice("review", review)}]
 
-  defp receipt(%{type: "review", sys: %{"review" => review}}) do
-    [
+  defp receipt(%{type: "review", sys: %{"review" => review}}, fleet_id) do
+    present([
       {"Version reviewed", Integer.to_string(review["task_version"])},
+      {"Commit reviewed", source(review["commit_ref"], fleet_id)},
       {"Submitted by", {:key, review["submitted_by"]["key"]["token_id"], nil}}
-    ]
+    ])
   end
 
-  defp receipt(_object), do: []
+  defp receipt(_object, _fleet_id), do: []
 
   defp field_value(_field, nil, _fleet_id), do: nil
   defp field_value(_field, [], _fleet_id), do: nil
-  defp field_value("assignee_key", token_id, _fleet_id), do: key_or(token_id, nil)
 
-  defp field_value(field, uri, fleet_id) when field in ["source_uri", "result_ref"],
-    do: source(uri, fleet_id)
+  defp field_value(field, token_id, _fleet_id) when field in ["assignee_key", "reviewer_key"],
+    do: key_or(token_id, nil)
+
+  defp field_value(field, uri, fleet_id)
+       when field in ["source_uri", "result_ref", "commit_ref", "notebook_ref"],
+       do: source(uri, fleet_id)
 
   defp field_value(field, value, _fleet_id) when is_map_key(@choices, field),
     do: choice(field, value)
@@ -963,18 +975,28 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp field_value(_field, value, _fleet_id), do: value(value)
 
   # A commit of the fleet's own code is shown as that commit, opened on this
-  # site; a saved result of one of the fleet's notebooks as that result; any
-  # other address as `value/1` shows it.
+  # site; a saved result of one of the fleet's notebooks as that result; one
+  # of its notebooks as that notebook, opened through this site; any other
+  # address as `value/1` shows it.
   defp source(nil, _fleet_id), do: nil
 
   defp source(uri, fleet_id) do
     hash = String.replace_prefix(uri, commit_url(fleet_id, ""), "")
     saved = String.replace_prefix(uri, Notebooks.url(fleet_id, "/results/"), "")
+    path = String.replace_prefix(uri, Notebooks.url(fleet_id, ""), "")
 
     cond do
-      hash != uri and Code.full_hash?(hash) -> {:commit, hash, Code.commit_path(fleet_id, hash)}
-      saved != uri and Regex.match?(@saved_result, saved) -> {:notebook_result, uri}
-      true -> value(uri)
+      hash != uri and Code.full_hash?(hash) ->
+        {:commit, hash, Code.commit_path(fleet_id, hash)}
+
+      saved != uri and Regex.match?(@saved_result, saved) ->
+        {:notebook_result, uri}
+
+      path != uri and Notebooks.notebook?(path) ->
+        {:notebook, notebook_open(fleet_id, path)}
+
+      true ->
+        value(uri)
     end
   end
 

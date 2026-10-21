@@ -90,7 +90,7 @@ defmodule KeyfleetWeb.AgentGraphController do
         conn,
         &Graph.review_task/3,
         params,
-        ~w(task task_version decision rationale conflicts_of_interest)
+        ~w(task task_version decision rationale conflicts_of_interest reproduction)
       )
 
   defp read({:ok, result}, conn, _fleet_id), do: json(conn, result)

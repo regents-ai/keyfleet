@@ -233,7 +233,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "task_version" => 2,
        "decision" => "accept",
        "rationale" => "r",
-       "conflicts_of_interest" => "none"
+       "conflicts_of_interest" => "none",
+       "reproduction" => "passed"
      }},
     {"GET", @polls, [], nil},
     {"POST", @poll_start, [], @poll_question},

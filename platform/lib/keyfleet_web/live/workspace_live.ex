@@ -858,28 +858,29 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </ol>
         </section>
 
-        <section class="workspace-panel" aria-labelledby="workspace-commit-evidence-title">
-          <h2 id="workspace-commit-evidence-title">Evidence that cites it</h2>
+        <section class="workspace-panel" aria-labelledby="workspace-commit-citing-title">
+          <h2 id="workspace-commit-citing-title">Work that cites it</h2>
           <Regent.Primitives.empty_state
-            :if={@commit.evidence == []}
-            id="workspace-commit-no-evidence"
+            :if={@commit.citing == []}
+            id="workspace-commit-no-citing"
             class="kf-empty"
-            title="No evidence in the workspace cites this commit yet."
+            title="No task or evidence in the workspace cites this commit yet."
           />
-          <ul :if={@commit.evidence != []} id="workspace-commit-evidence" class="workspace-lines">
-            <li :for={evidence <- @commit.evidence} data-item={evidence.id}>
+          <ul :if={@commit.citing != []} id="workspace-commit-citing" class="workspace-lines">
+            <li :for={work <- @commit.citing} data-item={work.id}>
               <p>
-                <.link patch={WorkspacePage.item_path(@commit.fleet_id, evidence.id)}>
-                  {evidence.title}
+                <span class="workspace-kind">{type_label(work.type)}</span>
+                <.link patch={WorkspacePage.item_path(@commit.fleet_id, work.id)}>
+                  {work.title}
                 </.link>
-                <span :if={evidence.archived?} class="workspace-badge">Archived</span>
+                <span :if={work.archived?} class="workspace-badge">Archived</span>
               </p>
-              <p :if={evidence.excerpt} class="workspace-text">{evidence.excerpt}</p>
-              <p :for={task <- evidence.tasks} class="workspace-detail">
+              <p :if={work.excerpt} class="workspace-text">{work.excerpt}</p>
+              <p :for={task <- work.tasks} class="workspace-detail">
                 Produced by <.item_link part={task} fleet_id={@commit.fleet_id} />
               </p>
               <p class="workspace-detail">
-                Added by <.part part={evidence.by} fleet_id={@commit.fleet_id} />
+                Added by <.part part={work.by} fleet_id={@commit.fleet_id} />
               </p>
             </li>
           </ul>
@@ -1525,6 +1526,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
     assigns = assign(assigns, :uri, uri)
 
     ~H|<a class="workspace-uri" href={@uri} rel="noopener noreferrer" data-notebook-result>Saved notebook result</a>|
+  end
+
+  defp value(%{value: {:notebook, path}} = assigns) do
+    assigns = assign(assigns, :path, path)
+
+    ~H|<a class="workspace-uri" href={@path} data-notebook>Open the notebook</a>|
   end
 
   defp value(%{value: {:key, _token_id, _agent}} = assigns),

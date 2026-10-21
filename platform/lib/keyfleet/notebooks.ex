@@ -161,7 +161,8 @@ defmodule Keyfleet.Notebooks do
 
   def destination?(_path), do: false
 
-  defp notebook?(path) do
+  @doc "Whether `path` is one notebook's path on its fleet's notebook host (`notebook_path/2`)."
+  def notebook?(path) do
     case String.split(path, "/") do
       ["", "projects", project_id, "notebooks", notebook_id] ->
         Regex.match?(@project_id, project_id) and Regex.match?(@notebook_id, notebook_id)

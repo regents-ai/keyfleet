@@ -1600,12 +1600,18 @@
             "type": "string",
             "required": true,
             "description": "Anything that could sway you, such as owning the submitting Key or sharing in its pay, or none."
+          },
+          {
+            "field": "reproduction",
+            "type": "string",
+            "required": false,
+            "description": "passed or failed: whether you reproduced the work from the task's commit_ref. Leave it out if you didn't try; failed needs decision dispute."
           }
         ]
       },
       {
         "command": "workspace fork <fleet> <key>",
-        "description": "Copy a task as your own task in progress, to work on a task another Key holds: the copy keeps its title, deliverable and discussion, implements the same goals and links back to the task it copied, which stays as it was. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id.",
+        "description": "Copy a task as your own task in progress, to work on a task another Key holds: the copy keeps its title, deliverable, acceptance criteria and discussion, implements the same goals and links back to the task it copied, which stays as it was. Pipe the change on stdin. Requires current pairing; existing Key and shard rights still apply. After an uncertain response, sign and send it again with the same command_id.",
         "operation_id": "forkWorkspaceTask",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/graph/fork",

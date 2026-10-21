@@ -728,6 +728,51 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert history(item) == ["Key 4 disputed “Draft”."]
     end
 
+    test "a task's page shows its reviewer, what must hold, its notebook and commit, and whether each review reproduced it",
+         %{conn: conn} do
+      hash = String.duplicate("cd", 20)
+      notebook = "/projects/proj-0123456789abcdef/notebooks/nb-0123456789abcdef"
+
+      task =
+        create(@fleet, "task", %{
+          "title" => "Fewer notices",
+          "progress" => "doing",
+          "reviewer_key" => 4,
+          "acceptance_criteria" => ["At most one notice a minute"],
+          "commit_ref" => KeyfleetWeb.WorkspacePage.commit_url(@fleet, hash),
+          "notebook_ref" => Keyfleet.Notebooks.url(@fleet, notebook)
+        })
+
+      submit(@fleet, task, "https://example.com/result", by: 9)
+      review = review(@fleet, task, "accept", by: 4, reproduction: "passed")
+      commit_path = Keyfleet.Code.commit_path(@fleet, hash)
+      open = "/fleets/#{@fleet}/notebooks/open?" <> URI.encode_query(to: notebook)
+
+      {:ok, item, _html} = live(conn, item_path(task))
+      assert has_element?(item, "#workspace-fields", "Key 4")
+      assert has_element?(item, "#workspace-fields", "At most one notice a minute")
+
+      assert has_element?(
+               item,
+               ~s(#workspace-fields a[data-commit="#{hash}"][href="#{commit_path}"])
+             )
+
+      assert has_element?(item, ~s(#workspace-fields a[data-notebook][href="#{open}"]))
+      assert has_element?(item, "#workspace-links", "Review: accepted, reproduced")
+
+      {:ok, item, _html} = live(conn, item_path(review))
+      assert has_element?(item, "#workspace-fields", "Yes")
+      assert has_element?(item, ~s(#workspace-fields a[href="#{commit_path}"]))
+
+      {:ok, commit, _html} = live(conn, commit_path)
+
+      assert has_element?(
+               commit,
+               ~s(#workspace-commit-citing [data-item="#{task}"]),
+               "Fewer notices"
+             )
+    end
+
     test "links and history come fifty at a time", %{conn: conn} do
       hub = create(@fleet, "task", %{"title" => "Hub", "progress" => "todo"})
 

@@ -304,6 +304,101 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert ContractSchema.errors(receipt, "WorkspaceObjectView") == []
   end
 
+  # Costly failure: a reviewer that never hears it was asked, or a review
+  # that says the work reproduced from a commit other than the one it judged,
+  # leaves the pilot's patches unchecked while they read as checked.
+  test "a task names its reviewer, commit and notebook; the reviewer's sync lists it until it says whether the work reproduced",
+       c do
+    start_graph(c)
+    [ann, bea] = shard_agents(c)
+    commit = KeyfleetWeb.WorkspacePage.commit_url(@fleet, String.duplicate("a", 40))
+
+    notebook =
+      Keyfleet.Notebooks.url(
+        @fleet,
+        "/projects/proj-0123456789abcdef/notebooks/nb-0123456789abcdef"
+      )
+
+    task =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "t-1",
+        type: "task",
+        data: %{
+          title: "Fewer notices",
+          acceptance_criteria: ["Each agent gets at most one notice a minute"],
+          reviewer_key: 2,
+          commit_ref: commit,
+          notebook_ref: notebook
+        }
+      })
+
+    assert sync(c, bea)["yours"]["reviews"] == []
+
+    submit = %{
+      as_key: 1,
+      command_id: "s-1",
+      id: task["id"],
+      expected_version: 1,
+      result_ref: commit
+    }
+
+    assert graph(c, ann, "submit", submit).status == 200
+
+    synced = sync(c, bea)
+
+    assert [%{"id" => id, "title" => "Fewer notices", "version" => 2}] =
+             synced["yours"]["reviews"]
+
+    assert id == task["id"]
+    assert ContractSchema.errors(synced, "FleetSync") == []
+    assert sync(c, ann)["yours"]["reviews"] == []
+
+    review = %{
+      as_key: 2,
+      command_id: "r-1",
+      task: task["id"],
+      task_version: 2,
+      decision: "accept",
+      rationale: "Ran the tests and the notebook from the commit.",
+      conflicts_of_interest: "none",
+      reproduction: "failed"
+    }
+
+    refused = graph(c, bea, "review", review)
+    assert {refused.status, refused.body["error"]["code"]} == {422, "invalid"}
+
+    reviewed = graph(c, bea, "review", %{review | command_id: "r-2", reproduction: "passed"})
+    assert reviewed.status == 200
+    assert sync(c, bea)["yours"]["reviews"] == []
+
+    receipt = graph(c, ann, "get", %{id: reviewed.body["result"]["id"]}).body
+    assert receipt["object"]["data"]["reproduction"] == "passed"
+    assert receipt["object"]["sys"]["review"]["commit_ref"] == commit
+    assert ContractSchema.errors(receipt, "WorkspaceObjectView") == []
+
+    read = graph(c, ann, "get", %{id: task["id"]}).body["object"]
+    assert read["review"] == "accepted"
+
+    assert read["data"]["acceptance_criteria"] == [
+             "Each agent gets at most one notice a minute"
+           ]
+
+    patched =
+      graph(c, ann, "patch", %{
+        as_key: 1,
+        command_id: "p-1",
+        id: task["id"],
+        expected_version: 2,
+        set: %{
+          commit_ref: KeyfleetWeb.WorkspacePage.commit_url(@fleet, String.duplicate("b", 40))
+        }
+      })
+
+    assert patched.status == 200
+    assert [%{"version" => 3}] = sync(c, bea)["yours"]["reviews"]
+  end
+
   test "every workspace opens with its starting goals, which agents join and link work to but never change or archive",
        c do
     start_graph(c)

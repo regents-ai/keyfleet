@@ -30,9 +30,13 @@ defmodule Keyfleet.WorkspaceFixtures do
     },
     "task" => %{
       "deliverable" => nil,
+      "acceptance_criteria" => [],
       "assignee_key" => nil,
+      "reviewer_key" => nil,
       "progress" => "todo",
       "next_step" => nil,
+      "commit_ref" => nil,
+      "notebook_ref" => nil,
       "result_ref" => nil,
       "public_summary" => nil,
       "discussion" => []
@@ -174,22 +178,29 @@ defmodule Keyfleet.WorkspaceFixtures do
   @doc """
   Reviews a submitted task's current version as a member's review does,
   "accept" or "dispute", and answers the review's id. The review is added,
-  then linked to the task.
+  then linked to the task. Options: `:by`, `:rationale` and `:reproduction`
+  ("passed" or "failed").
   """
   def review(fleet_id, task, decision, opts \\ []) do
     [object] = Graph.read_objects!(fleet_id, [task], actor: @system)
 
-    receipt = %{
-      "task" => task,
-      "task_version" => object.version,
-      "submitted_by" => Map.drop(object.sys["submitted"], ["version", "evidence"]),
-      "evidence" => []
-    }
+    receipt =
+      Map.reject(
+        %{
+          "task" => task,
+          "task_version" => object.version,
+          "submitted_by" => Map.drop(object.sys["submitted"], ["version", "evidence"]),
+          "evidence" => [],
+          "commit_ref" => object.data["commit_ref"]
+        },
+        fn {_field, value} -> is_nil(value) end
+      )
 
     data = %{
       "decision" => decision,
       "rationale" => Keyword.get(opts, :rationale, "Checked the result."),
-      "conflicts_of_interest" => "none"
+      "conflicts_of_interest" => "none",
+      "reproduction" => opts[:reproduction]
     }
 
     id =

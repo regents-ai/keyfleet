@@ -152,3 +152,29 @@ def test_a_review_stays_as_written(host):
         assert reply["error"]["code"] == "invalid", (op, reply)
 
     assert host.graph.get_object(review).version == 1
+
+
+COMMIT = "https://keyfleet.ai/classic/1/code/classic_1/commits/" + "a" * 40
+
+
+def test_a_review_says_whether_it_reproduced_the_work_from_the_commit_the_task_named(host):
+    _ok(host, "patch", {"id": "task#1", "expected_version": 1, "set": {"commit_ref": COMMIT}}, command("pin"))
+    _submit(host, "s1", 2, result_ref="https://example.com/result")
+
+    result = _ok(host, "review", _review(3, reproduction="passed"), command("r", **REVIEWER))
+
+    review = host.graph.get_object(result["id"])
+    assert review.data["reproduction"] == "passed"
+    assert review.data["sys"]["review"]["commit_ref"] == COMMIT
+
+
+def test_a_review_that_could_not_reproduce_the_work_disputes_it(host):
+    _submit(host, "s1", 1)
+
+    reply = _call(host, "review", _review(2, "accept", reproduction="failed"), command("r1", **REVIEWER))
+    assert reply["error"]["code"] == "invalid"
+
+    result = _ok(host, "review", _review(2, "dispute", reproduction="failed"), command("r2", **REVIEWER))
+    review = host.graph.get_object(result["id"])
+    assert review.data["reproduction"] == "failed"
+    assert "commit_ref" not in review.data["sys"]["review"]

@@ -126,15 +126,17 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
-    # The evidence that cites `uri` as its source, the most recently changed
-    # first, archived evidence included.
+    # The evidence that cites `uri` as its source and the tasks that name it
+    # as their commit, the most recently changed first, archived ones
+    # included.
     read :citing do
       argument :fleet_id, :string, allow_nil?: false
       argument :uri, :string, allow_nil?: false, constraints: @text
 
       filter expr(
-               fleet_id == ^arg(:fleet_id) and type == "evidence" and
-                 fragment("? ->> 'source_uri'", data) == ^arg(:uri)
+               fleet_id == ^arg(:fleet_id) and
+                 ((type == "evidence" and fragment("? ->> 'source_uri'", data) == ^arg(:uri)) or
+                    (type == "task" and fragment("? ->> 'commit_ref'", data) == ^arg(:uri)))
              )
 
       prepare build(
@@ -214,6 +216,47 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
+    # The submitted tasks that name one of these keys of the fleet as their
+    # reviewer and that key has not yet reviewed at their current version,
+    # newest change first.
+    read :review_asked_of do
+      argument :fleet_id, :string, allow_nil?: false
+
+      argument :token_ids, {:array, :integer},
+        allow_nil?: false,
+        constraints: [max_length: 100, items: [min: 1]]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and type == "task" and
+                 fragment("(? ->> 'reviewer_key')::bigint = ANY(?)", data, ^arg(:token_ids)) and
+                 fragment("(? ->> 'progress') = 'done'", data) and
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys) and
+                 fragment(
+                   """
+                   NOT EXISTS (
+                     SELECT 1 FROM keyfleet_app.graph_relations AS link
+                     JOIN keyfleet_app.graph_objects AS review
+                       ON review.fleet_id = link.fleet_id AND review.id = link.source
+                     WHERE link.fleet_id = ? AND link.target = ? AND link.type = 'reviews'
+                       AND (review.sys #>> '{review,task_version}')::bigint = ?
+                       AND (review.sys #>> '{created_by,key,token_id}') = (? ->> 'reviewer_key')
+                   )
+                   """,
+                   fleet_id,
+                   id,
+                   version,
+                   data
+                 )
+             )
+
+      prepare build(
+                sort: [changed_seq: :desc],
+                limit: 20,
+                select: [:fleet_id, :id, :type, :version],
+                load: [:title]
+              )
+    end
+
     # The goals a Key and wallet of the fleet joined and that are still in the
     # workspace, newest change first.
     read :joined_by do
@@ -281,7 +324,15 @@ defmodule Keyfleet.Graph.Object do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:in_fleet, :cards, :around_goal, :assigned_to_keys, :joined_by, :citing]) do
+    policy action([
+             :in_fleet,
+             :cards,
+             :around_goal,
+             :assigned_to_keys,
+             :review_asked_of,
+             :joined_by,
+             :citing
+           ]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
@@ -310,13 +361,20 @@ defmodule Keyfleet.Graph.Object do
   end
 
   calculations do
-    # A review has no title of its own; it is named by its decision.
+    # A review has no title of its own; it is named by its decision and, when
+    # the reviewer tried, whether the work reproduced.
     calculate :title,
               :string,
               expr(
                 fragment(
-                  "left(CASE ? WHEN 'review' THEN CASE ? ->> 'decision' WHEN 'accept' THEN 'Review: accepted' WHEN 'dispute' THEN 'Review: disputed' END ELSE ? ->> 'title' END, 200)",
+                  """
+                  left(CASE ? WHEN 'review' THEN
+                    CASE ? ->> 'decision' WHEN 'accept' THEN 'Review: accepted' WHEN 'dispute' THEN 'Review: disputed' END
+                    || CASE ? ->> 'reproduction' WHEN 'passed' THEN ', reproduced' WHEN 'failed' THEN ', didn’t reproduce' ELSE '' END
+                  ELSE ? ->> 'title' END, 200)
+                  """,
                   type,
+                  data,
                   data,
                   data
                 )

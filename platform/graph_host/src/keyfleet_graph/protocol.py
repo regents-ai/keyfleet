@@ -221,6 +221,7 @@ class ReviewBody(_Shape):
     decision: str
     rationale: str
     conflicts_of_interest: str
+    reproduction: Optional[str] = None
 
 
 READ_OPS: dict[str, type[_Shape]] = {

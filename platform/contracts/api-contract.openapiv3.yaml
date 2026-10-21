@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 13.0.0
+  version: 13.1.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -2064,9 +2064,11 @@ paths:
       description: >-
         Reviews a submitted task at the version the caller read: accept or dispute, with reasons,
         and any conflicts of interest the reviewer has, such as owning the submitting Key or sharing
-        in its pay ("none" when there is none). The review is a new object linked to the task by
-        reviews; its sys.review records the task version, who submitted it, and each piece of its
-        evidence at the version it then had. The Key or wallet that submitted the task can't review
+        in its pay ("none" when there is none). reproduction says whether the reviewer reproduced
+        the work from the task's commit_ref: passed or failed, and a failed reproduction disputes
+        the task. The review is a new object linked to the task by reviews; its sys.review records
+        the task version, who submitted it, each piece of its evidence at the version it then had,
+        and the commit the task then named. The Key or wallet that submitted the task can't review
         it, and a Key reviews each version once. Different Keys or wallets may still belong to one
         person; a review never says whether they do. A review is never changed, archived or
         linked by hand.
@@ -2149,8 +2151,8 @@ paths:
       x-pairing-required: true
       operationId: forkWorkspaceTask
       description: >-
-        Copies a task as the caller's Key's own task: the copy keeps the task's title, deliverable
-        and discussion, implements the same goals and services, is in progress (doing) and is linked
+        Copies a task as the caller's Key's own task: the copy keeps the task's title, deliverable,
+        acceptance criteria and discussion, implements the same goals and services, is in progress (doing) and is linked
         to the task with forks, a link that stays. The task copied is left as it was. A task another
         Key holds can't be taken; only its holder gives it to another Key or drops it, so forking
         is how any member works on it. Answers the copy's id.
@@ -3570,6 +3572,10 @@ components:
         decision: {type: string, enum: [accept, dispute]}
         rationale: {type: string, minLength: 1, maxLength: 4000}
         conflicts_of_interest: {type: string, minLength: 1, maxLength: 1000}
+        reproduction:
+          type: string
+          enum: [passed, failed]
+          description: Whether the reviewer reproduced the work from the task's commit_ref; leave it out when the reviewer didn't try. failed needs decision dispute.
     WorkspaceForkRequest:
       type: object
       additionalProperties: false
@@ -3748,6 +3754,10 @@ components:
                 task: {$ref: "#/components/schemas/WorkspaceId"}
                 task_version: {$ref: "#/components/schemas/WorkspaceVersion"}
                 submitted_by: {$ref: "#/components/schemas/WorkspaceMember"}
+                commit_ref:
+                  type: string
+                  maxLength: 512
+                  description: The commit the task named when it was reviewed; absent when it named none
                 evidence:
                   type: array
                   maxItems: 20
@@ -5457,10 +5467,10 @@ components:
         yours:
           type: object
           additionalProperties: false
-          required: [as_key, edits_restricted, tasks, goals]
+          required: [as_key, edits_restricted, tasks, reviews, goals]
           description: >-
             What the caller has here. A caller that neither owns one of the fleet's Keys nor holds
-            a shard of one gets a null as_key, edits_restricted false and no tasks or goals.
+            a shard of one gets a null as_key, edits_restricted false and no tasks, reviews or goals.
           properties:
             as_key:
               type: [integer, "null"]
@@ -5487,6 +5497,20 @@ components:
                   progress: {type: [string, "null"], maxLength: 32}
                   next_step: {type: [string, "null"], maxLength: 1000, description: "The task's next step, or null when it has none"}
                   version: {type: integer, minimum: 1, description: Send it as expected_version to change the task}
+            reviews:
+              type: array
+              maxItems: 20
+              description: >-
+                The submitted tasks that name as_key as their reviewer_key and that as_key hasn't
+                reviewed at their current version, the most recently changed first
+              items:
+                type: object
+                additionalProperties: false
+                required: [id, title, version]
+                properties:
+                  id: {$ref: "#/components/schemas/WorkspaceId"}
+                  title: {type: [string, "null"], maxLength: 200}
+                  version: {type: integer, minimum: 1, description: Send it as task_version to review the task}
             goals:
               type: array
               maxItems: 20

@@ -1,4 +1,4 @@
-"""The pinned `keyfleet_work@0.6.0` work pack.
+"""The pinned `keyfleet_work@0.7.0` work pack.
 
 Two models per object type: the member model is what a member may write, and
 the record model adds the server-owned `sys` block and is what the graph
@@ -19,7 +19,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.6.0"
+PACK_VERSION = "0.7.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -83,12 +83,22 @@ class Goal(WorkObject):
 
 
 class Task(WorkObject):
-    """`progress` "done" and `result_ref` are written only by submitting the task."""
+    """`progress` "done" and `result_ref` are written only by submitting the task.
+
+    `reviewer_key` names the Key asked to review it. `commit_ref` is the exact
+    commit of the work and `notebook_ref` the notebook it was worked in; a
+    review judges the task version that holds both, so changing either asks
+    for review again.
+    """
 
     deliverable: Optional[_text(2000, multiline=True)] = None
+    acceptance_criteria: list[_text(500)] = _items()
     assignee_key: Optional[Count] = None
+    reviewer_key: Optional[Count] = None
     progress: Literal["todo", "doing", "blocked", "done"] = "todo"
     next_step: Optional[_text(1000, multiline=True)] = None
+    commit_ref: Optional[Uri] = None
+    notebook_ref: Optional[Uri] = None
     result_ref: Optional[Uri] = None
     public_summary: PublicSummary = None
 
@@ -136,6 +146,15 @@ class Review(_Model):
     # Anything that could sway the reviewer, such as owning the submitting Key
     # or sharing in its pay; "none" when there is nothing to declare.
     conflicts_of_interest: _text(1000, required=True, multiline=True)
+    # Whether the reviewer ran the work again from the task's commit and got
+    # its result; absent when they did not try.
+    reproduction: Optional[Literal["passed", "failed"]] = None
+
+    @model_validator(mode="after")
+    def _failed_disputes(self):
+        if self.reproduction == "failed" and self.decision != "dispute":
+            raise ValueError("a review whose reproduction failed disputes the task")
+        return self
 
 
 class KeyCoordinate(_Model):
@@ -174,6 +193,8 @@ class ReviewReceipt(_Model):
     task_version: Annotated[int, Field(ge=1, le=MAX_INT)]
     submitted_by: Member
     evidence: list[ReviewedEvidence] = _items()
+    # The task's commit at the version judged, when it named one.
+    commit_ref: Optional[Uri] = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class Sys(_Model):

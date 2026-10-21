@@ -158,7 +158,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
          "decision" => :text,
          "rationale" => :text,
          "conflicts_of_interest" => :text
-       }), %{}}
+       }), %{"reproduction" => :text}}
   }
   @verification_methods %{
     "eoa_recovery" => :eoa_recovery,

@@ -259,6 +259,7 @@ defmodule KeyfleetWeb.AgentRoomController do
       yours: %{
         yours
         | tasks: Enum.map(yours.tasks, &task_json/1),
+          reviews: Enum.map(yours.reviews, &review_ask_json/1),
           goals: Enum.map(yours.goals, &goal_json/1)
       }
     }
@@ -307,17 +308,26 @@ defmodule KeyfleetWeb.AgentRoomController do
 
   # The key the agent writes as here (its own lowest key, or its shard's),
   # whether a vote of the fleet has stopped that key changing the workspace,
-  # the unfinished tasks the key has taken and the goals the agent joined as
-  # it. An agent with neither a key nor a shard here writes as none.
+  # the unfinished tasks the key has taken, the submitted tasks waiting for its
+  # review and the goals the agent joined as it. An agent with neither a key
+  # nor a shard here writes as none.
   defp yours(fleet_id, actor) do
     with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
          {:ok, restricted} <- Keys.edits_restricted?(fleet_id, token_id),
          {:ok, tasks} <- Graph.tasks_assigned_to(fleet_id, [token_id], actor: actor),
+         {:ok, reviews} <- Graph.reviews_asked_of(fleet_id, [token_id], actor: actor),
          {:ok, goals} <-
            Graph.goals_joined_by(fleet_id, token_id, actor.wallet_address, actor: actor) do
-      {:ok, %{as_key: token_id, edits_restricted: restricted, tasks: tasks, goals: goals}}
+      {:ok,
+       %{
+         as_key: token_id,
+         edits_restricted: restricted,
+         tasks: tasks,
+         reviews: reviews,
+         goals: goals
+       }}
     else
-      nil -> {:ok, %{as_key: nil, edits_restricted: false, tasks: [], goals: []}}
+      nil -> {:ok, %{as_key: nil, edits_restricted: false, tasks: [], reviews: [], goals: []}}
       error -> error
     end
   end
@@ -339,6 +349,10 @@ defmodule KeyfleetWeb.AgentRoomController do
 
   defp goal_json(goal) do
     %{id: goal.id, title: goal.title, status: goal.card["status"], version: goal.version}
+  end
+
+  defp review_ask_json(task) do
+    %{id: task.id, title: task.title, version: task.version}
   end
 
   defp task_json(task) do
