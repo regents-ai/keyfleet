@@ -1,9 +1,10 @@
 // The side panel, which the browser alone opens and closes. Whether it is open
 // lives on <html data-aside>, which the server first draws from the cookie
 // written here (KeyfleetWeb.Plugs.Panels), so LiveView never patches it away.
-// Where the panel covers the page (a narrower screen, and the homepage at every
-// width), it opens only when the person opens it on that page
-// (<html data-aside-here>), never from the remembered state.
+// Open, it sits beside the page, which narrows to make room for it. A phone has
+// no room beside the page, so there it covers the page and opens only when the
+// person opens it on that page (<html data-aside-here>), never from the
+// remembered state.
 
 const yearInSeconds = 60 * 60 * 24 * 365
 const cookie = "keyfleet_aside"
@@ -16,9 +17,8 @@ function remember(value: "open" | "closed") {
 }
 
 const root = () => document.documentElement
-const asideElement = () => document.getElementById("shell-aside")
-const covering = window.matchMedia("(max-width: 63.99rem)")
-const covers = () => covering.matches || asideElement()?.dataset.covers !== undefined
+const covering = window.matchMedia("(max-width: 47.99rem)")
+const covers = () => covering.matches
 export const asideOpen = () =>
   root().dataset.aside === "open" && (!covers() || root().dataset.asideHere !== undefined)
 

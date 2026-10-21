@@ -8,13 +8,14 @@ defmodule KeyfleetWeb.Components.Shell do
   `buy_key` slot, the homepage in its own Classic section.
 
   The side panel is the same on every page that has it, the app's pages and the
-  homepage: Sign out, Manage Account on regents.sh, the agents paired with the
+  homepage: Sign out, Manage Account (the account page), the agents paired with the
   account (the `agents` slot) and the box to pair an agent (the `pairing` slot).
   The account's name and the panel button in the header open and close it.
   Whether it is open is the browser's (`assets/js/shell_panels.ts` and the
   `keyfleet_aside` cookie, read into `<html data-aside>`), so the server never
-  stores it. On the app's pages on a wide screen the page beside it gives way;
-  on a narrower screen, and on the homepage, it covers the page.
+  stores it. Open, it sits beside the page, which narrows to make room for it,
+  on the app's pages and the homepage alike; on a phone there is no room
+  beside the page, so there it opens over the page under the header.
   """
 
   use Phoenix.Component
@@ -223,10 +224,6 @@ defmodule KeyfleetWeb.Components.Shell do
 
   attr :account_control, Keyfleet.AccessContext.AccountControl, required: true
 
-  attr :covers, :boolean,
-    default: false,
-    doc: "whether it covers the page at every width, as on the homepage"
-
   slot :agents, doc: "The agents paired with the account."
   slot :pairing, doc: "The box to pair an agent."
 
@@ -241,20 +238,14 @@ defmodule KeyfleetWeb.Components.Shell do
       id="shell-aside"
       aria-label="Your account and agents"
       tabindex="-1"
-      data-covers={@covers}
     >
       <div id="shell-account" class="shell-aside__head">
         <Regent.Primitives.button variant="secondary" type="button" data-account-target="sign-out">
           Sign out
         </Regent.Primitives.button>
-        <a
-          href="https://regents.sh/account"
-          class="rg-button rg-button--secondary"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Manage Account
-        </a>
+        <.link navigate="/account" class="rg-button rg-button--secondary">
+          <span class="rg-button__label">Manage Account</span>
+        </.link>
       </div>
 
       {render_slot(@agents)}

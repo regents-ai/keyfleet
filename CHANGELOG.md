@@ -3196,3 +3196,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: a fleet's Workspace opens with a switch of three places, each at its own address. Project holds the goals, tasks and what changed, with how a task moves between Keys beside it. Docs lists the fleet's newest notebooks with how to open them. Code shows the shared repository's top folder and what was sent lately, with its address to copy and a git password. Any member pins a notebook, file or folder, and every member sees the same pins beside the notebooks or the code. A small moving chart above the switch rises over the place you are in.
 - Why: Sean asked for the Workspace tab to have three clear parts, Project, Docs and Code, each with its feed, pinned items and an info panel.
+
+## 2026-10-21 — The side panel sits beside the page, and Manage Account stays on Keyfleet
+
+- What: when the side panel is open it no longer covers anything. On the homepage and on every app page, at any width from a tablet up, the page narrows to make room and the panel stands beside it under the header; on the homepage the header stays at the top while the panel is open. Between a tablet and a laptop width the menu strip narrows with the page too. On a phone there is no room beside the page, so the panel still opens over the page under the header, only when pressed, and closes when a link in it is pressed. "Manage Account" in the panel now opens Keyfleet's own account page (keyfleet.ai/account) in the same tab instead of regents.sh in a new one.
+- Why: Sean 21 October 01:35Z: "I want the manage account button to link to keyfleet.ai/account / the sidebar should not cover content, it should shorten the visible area".

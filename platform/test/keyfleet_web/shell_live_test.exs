@@ -118,7 +118,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(
              view,
-             ~s(#shell-account a[href="https://regents.sh/account"][target=_blank]),
+             ~s{#shell-account a[href="/account"]:not([target])},
              "Manage Account"
            )
 

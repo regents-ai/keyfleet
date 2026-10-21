@@ -522,8 +522,9 @@ span.account-chip {
 .shell-get-key { display: flex; align-items: center; }
 .shell-get-key > .rg-button { margin: var(--space-1); height: auto; white-space: nowrap; }
 @media (min-width: 48rem) and (max-width: 63.99rem) {
-  #app-shell { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr); }
-  #shell-sidebar { border-inline-end: 0; border-block-end: 1px solid var(--color-border); }
+  #app-shell { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr) var(--shell-aside); }
+  #shell-sidebar { grid-area: 2 / 1; border-inline-end: 0; border-block-end: 1px solid var(--color-border); }
+  #app-shell-scroller { grid-area: 3 / 1; }
   #shell-sidebar ul { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 47.99rem) {
@@ -658,77 +659,91 @@ span.account-chip {
   gap: 0;
 }
 
-/* Too narrow for both, and on the homepage at every width, the side panel
-   covers the page under the header: it slides in from the edge, and opens only
-   when opened on this page, never on arrival. On the homepage it lines up with
-   the header's right edge, and once the header has scrolled away it runs from
-   the top of the screen. */
-/* Open, the homepage's header stays at the top of the screen with the panel
-   under it, so the button that closes it never scrolls away. */
-:root[data-aside="open"][data-aside-here] #shell-header:has(~ #shell-aside[data-covers]) {
+/* Between a phone and a wide screen the menu is a strip under the header, and
+   the panel stands beside both the strip and the page. */
+@media (min-width: 48rem) and (max-width: 63.99rem) {
+  #shell-aside { grid-area: 2 / 2 / 4; }
+}
+
+/* The homepage scrolls as one sheet, so there the panel stands fixed under the
+   header at its right edge, and the page below the header narrows by the
+   panel's width, as the app's pages do. Open, the header stays at the top of
+   the screen, so the button that closes the panel never scrolls away. */
+.rl-root:has(> #shell-aside) {
+  --shell-aside-open: 20rem;
+  --shell-aside: var(--shell-aside-open);
+  transition: --shell-aside var(--duration-slow) var(--ease-out);
+}
+
+:root:not([data-aside="open"]) .rl-root:has(> #shell-aside) {
+  --shell-aside: 0px;
+}
+
+.rl-root:has(> #shell-aside) > :not(#shell-header, #shell-aside) {
+  margin-inline-end: var(--shell-aside);
+}
+
+:root[data-aside="open"] .rl-root:has(> #shell-aside) > #shell-header {
   position: sticky;
   inset-block-start: 0;
 }
 
-#shell-aside[data-covers] {
+.rl-root > #shell-aside {
   position: fixed;
   position-anchor: --shell-header;
   inset-block: anchor(bottom) 0;
   inset-inline-end: anchor(right);
-  z-index: 3;
-  inline-size: min(20rem, 100%);
+  inline-size: var(--shell-aside-open);
   container-type: normal;
-}
-
-#shell-aside[data-covers],
-#app-shell #shell-aside {
   transition:
     transform var(--duration-slow) var(--ease-out),
     visibility var(--duration-slow);
 }
 
 /* Opening, it is shown at once and slides in. */
-:root[data-aside="open"][data-aside-here] #shell-aside[data-covers],
-:root[data-aside="open"][data-aside-here] #app-shell #shell-aside {
+:root[data-aside="open"] .rl-root > #shell-aside {
   transition: transform var(--duration-slow) var(--ease-out);
 }
 
-:root:not([data-aside="open"]) #shell-aside[data-covers],
-:root:not([data-aside-here]) #shell-aside[data-covers] {
-  visibility: hidden;
+:root:not([data-aside="open"]) .rl-root > #shell-aside {
   transform: translateX(100%);
 }
 
-@media (max-width: 63.99rem) {
-  #app-shell #shell-aside {
-    position: fixed;
-    inset: anchor(--shell-header bottom) env(safe-area-inset-right) 0 auto;
-    z-index: 3;
-    inline-size: min(20rem, 100%);
-    padding-block-end: env(safe-area-inset-bottom);
-    container-type: normal;
+/* A phone has no room beside the page, so there the panel opens over the page
+   under the header, the full width of the screen. It slides in from the edge,
+   and opens only when opened on this page, never on arrival; a link inside it
+   closes it. */
+@media (max-width: 47.99rem) {
+  .rl-root:has(> #shell-aside) {
+    --shell-aside: 0px;
   }
 
-  :root:not([data-aside="open"]) #app-shell #shell-aside,
-  :root:not([data-aside-here]) #app-shell #shell-aside {
+  :root:not([data-aside-here]) .rl-root:has(> #shell-aside) > #shell-header {
+    position: relative;
+  }
+
+  #shell-aside,
+  .rl-root > #shell-aside {
+    position: fixed;
+    inset: anchor(--shell-header bottom) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    z-index: 3;
+    inline-size: auto;
+    padding-block-end: env(safe-area-inset-bottom);
+    border-inline-start: 0;
+    container-type: normal;
+    transition:
+      transform var(--duration-slow) var(--ease-out),
+      visibility var(--duration-slow);
+  }
+
+  :root[data-aside="open"][data-aside-here] #shell-aside {
+    transition: transform var(--duration-slow) var(--ease-out);
+  }
+
+  :root:not([data-aside="open"]) #shell-aside,
+  :root:not([data-aside-here]) #shell-aside {
     visibility: hidden;
     transform: translateX(100%);
-  }
-}
-
-@media (max-width: 47.99rem) {
-  #shell-aside[data-covers],
-  #app-shell #shell-aside {
-    inline-size: auto;
-    border-inline-start: 0;
-  }
-
-  #shell-aside[data-covers] {
-    inset-inline-start: anchor(left);
-  }
-
-  #app-shell #shell-aside {
-    inset-inline-start: env(safe-area-inset-left);
   }
 
   #shell-aside > * {
@@ -990,10 +1005,10 @@ span.account-chip {
   .shell-tool__tip,
   #app-shell,
   #shell-aside,
-  #app-shell #shell-aside,
-  #shell-aside[data-covers],
-  :root[data-aside="open"][data-aside-here] #shell-aside[data-covers],
-  :root[data-aside="open"][data-aside-here] #app-shell #shell-aside {
+  .rl-root:has(> #shell-aside),
+  .rl-root > #shell-aside,
+  :root[data-aside="open"] .rl-root > #shell-aside,
+  :root[data-aside="open"][data-aside-here] #shell-aside {
     transition: none;
   }
 }
