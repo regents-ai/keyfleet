@@ -3771,3 +3771,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   chosen before. Every other form on the site already named its next step.
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for
   human UI and agent UX".
+
+## 2026-10-21 — A Key taking on the tasks it adds is one feed line
+
+- What: "Key 3 added a task and took one on." replaces the two lines "Key 3 added a task." and "Key 3 took on a task."; a run that also hands tasks out reads "added 4 tasks, took one on and gave 2 to Keys 4 and 8."
+- Why: an agent that writes its own task and starts on it did one thing, and the feed says so once.

@@ -296,7 +296,7 @@ defmodule Keyfleet.ActivityTest do
              ]
   end
 
-  test "tasks one Key adds and gives to other Keys are one line" do
+  test "tasks one Key adds, takes on and gives to other Keys are one line" do
     Workspace.create(@fleet, "note", %{"title" => "Plates"})
 
     for key <- [4, 8] do
@@ -315,10 +315,12 @@ defmodule Keyfleet.ActivityTest do
              kind in [:created, :claimed, :tasks],
              do: {kind, item.facts.by.token_id}
            ) ==
-             [{:claimed, 17}, {:created, 17}, {:created, 5}, {:tasks, 17}, {:created, 17}]
+             [{:tasks, 17}, {:created, 5}, {:tasks, 17}, {:created, 17}]
 
-    assert [%{added: 2, given: 2, to: [4, 8], others: 0}] =
-             for(%{kind: :tasks} = item <- items, do: item.facts)
+    assert [
+             %{added: 1, taken: 1, given: 0, to: [], others: 0},
+             %{added: 2, taken: 0, given: 2, to: [4, 8], others: 0}
+           ] = for(%{kind: :tasks} = item <- items, do: item.facts)
   end
 
   test "one change a Key makes to items of one type in a row is one line" do

@@ -158,7 +158,7 @@ defmodule KeyfleetWeb.ActivityLinesTest do
 
     assert ActivityLines.text(item.(:sale, %{token_ids: [56, 58]})) == "2 Keys were bought."
 
-    tasks = &item.(:tasks, Map.merge(%{by: by, to: [4, 8], others: 0}, &1))
+    tasks = &item.(:tasks, Map.merge(%{by: by, taken: 0, to: [4, 8], others: 0}, &1))
 
     assert ActivityLines.text(tasks.(%{added: 3, given: 0, to: []})) == "Key 17 added 3 tasks."
 
@@ -170,6 +170,15 @@ defmodule KeyfleetWeb.ActivityLinesTest do
 
     assert ActivityLines.text(tasks.(%{added: 5, given: 5, to: [1, 2, 3], others: 2})) ==
              "Key 17 added 5 tasks and gave 5 to Keys 1, 2, 3 and 2 others."
+
+    assert ActivityLines.text(tasks.(%{added: 1, taken: 1, given: 0})) ==
+             "Key 17 added a task and took one on."
+
+    assert ActivityLines.text(tasks.(%{added: 4, taken: 1, given: 2})) ==
+             "Key 17 added 4 tasks, took one on and gave 2 to Keys 4 and 8."
+
+    assert ActivityLines.text(tasks.(%{added: 0, taken: 2, given: 0})) ==
+             "Key 17 took on 2 tasks."
   end
 
   test "a run of one change counts its items" do

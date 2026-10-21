@@ -52,10 +52,11 @@ defmodule Keyfleet.Activity do
     * `:linked`: `by`, `relation` ("supports", "contradicts" or "produces"),
       `source` and `target` (items): the source supports, contradicts or
       produces the target.
-    * `:tasks`: a run of tasks one key added, or gave to other keys, by
-      the same rules as `:posts`: `by`, `added` (how many it added), `given`
-      (how many it gave), `to` (up to three of the keys given tasks, lowest
-      first) and `others` (how many more keys were given tasks).
+    * `:tasks`: a run of tasks one key added, took on, or gave to other
+      keys, by the same rules as `:posts`: `by`, `added` (how many it added),
+      `taken` (how many it took on), `given` (how many it gave), `to` (up to
+      three of the keys given tasks, lowest first) and `others` (how many
+      more keys were given tasks).
     * `:changes`: a run of one change (`change`: `:archived`, `:submitted`
       or `:revised`) one key made to items of one type, by the same rules as
       `:posts`: `by`, `change`, `type` and `count`.
@@ -605,8 +606,7 @@ defmodule Keyfleet.Activity do
   defp handing_out?(%{kind: :created, facts: %{by: by, item: {:item, "task#" <> _}}}, by),
     do: by != nil
 
-  defp handing_out?(%{kind: :claimed, facts: %{by: by, to: %{token_id: to}}}, by),
-    do: by != nil and to != token_id(by)
+  defp handing_out?(%{kind: :claimed, facts: %{by: by}}, by), do: by != nil
 
   defp handing_out?(_entry, _by), do: false
 
@@ -616,12 +616,15 @@ defmodule Keyfleet.Activity do
   defp tasks_entry([only]), do: only
 
   defp tasks_entry([newest | _] = run) do
-    given = for %{kind: :claimed, facts: %{to: to}} <- run, do: to.token_id
+    by = token_id(newest.facts.by)
+    claimed = for %{kind: :claimed, facts: %{to: to}} <- run, do: to.token_id
+    {taken, given} = Enum.split_with(claimed, &(&1 == by))
     keys = given |> Enum.uniq() |> Enum.sort()
 
     entry("tasks:#{newest.position}", newest.at, :tasks, List.last(run).position, %{
       by: newest.facts.by,
       added: Enum.count(run, &(&1.kind == :created)),
+      taken: length(taken),
       given: length(given),
       to: Enum.take(keys, @listed_keys),
       others: max(length(keys) - @listed_keys, 0)

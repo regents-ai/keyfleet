@@ -123,15 +123,23 @@ defmodule KeyfleetWeb.ActivityLines do
   defp sentence(%{kind: :room_named, facts: f}),
     do: [key(f.by), " named a room ", words(f.topic), "."]
 
-  defp sentence(%{kind: :tasks, facts: %{given: 0} = f}),
-    do: [who(f.by), " added #{tasks(f.added)}."]
-
-  defp sentence(%{kind: :tasks, facts: %{added: 0} = f}),
-    do: [who(f.by), " gave #{tasks(f.given)} to " | keys(f.to, f.others)] ++ ["."]
-
+  # "added 4 tasks, took one on and gave 2 to Keys 4 and 8": once "added"
+  # has said tasks, the rest count them by number.
   defp sentence(%{kind: :tasks, facts: f}) do
-    given = if f.given == 1, do: "one", else: Rules.grouped(f.given)
-    [who(f.by), " added #{tasks(f.added)} and gave #{given} to " | keys(f.to, f.others)] ++ ["."]
+    count = if f.added > 0, do: &one/1, else: &tasks/1
+
+    did =
+      Enum.filter(
+        [
+          f.added > 0 && ["added #{tasks(f.added)}"],
+          f.taken > 0 && f.added > 0 && ["took #{one(f.taken)} on"],
+          f.taken > 0 && f.added == 0 && ["took on #{tasks(f.taken)}"],
+          f.given > 0 && ["gave #{count.(f.given)} to " | keys(f.to, f.others)]
+        ],
+        & &1
+      )
+
+    [who(f.by), " " | did |> joined() |> List.flatten()] ++ ["."]
   end
 
   defp sentence(%{kind: :created, facts: %{by: by, item: item}}) do
@@ -352,6 +360,9 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp tasks(1), do: "a task"
   defp tasks(count), do: "#{Rules.grouped(count)} tasks"
+
+  defp one(1), do: "one"
+  defp one(count), do: Rules.grouped(count)
 
   defp did(:yes, _count), do: " voted yes"
   defp did(:no, _count), do: " voted no"
