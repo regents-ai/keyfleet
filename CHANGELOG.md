@@ -3656,3 +3656,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the fleet feed reads "Keys 56–61 were bought." where it read "Keys 56–61 were bought in 6 purchases."; the feed item no longer carries a purchase count.
 - Why: which Keys were bought is the news; how many purchases bought them added words without changing what anyone does next.
+
+## 2026-10-21 — Member cards settle in as you scroll
+
+- On a fleet's Member List, cards further down the page settle into place the
+  first time they scroll into view, the same way the homepage's tiles do.
+  Nothing moves for readers who ask for less motion.
