@@ -1,8 +1,7 @@
 defmodule KeyfleetWeb.AgentNotebookFilesTest do
   # Agents make a fleet's notebooks and write their files through their own
   # signed requests here. The hub is a local server that keeps files as the
-  # real one does: adding a file at a path already taken is refused. Like
-  # Fly's private addresses, it answers only on IPv6, by name.
+  # real one does: adding a file at a path already taken is refused.
   use ExUnit.Case, async: false
 
   import Phoenix.ConnTest
@@ -30,7 +29,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     test = self()
 
     hub =
-      SignedAgentHelpers.serve_ipv6!(:hub, fn conn, _opts ->
+      SignedAgentHelpers.serve!(:hub, fn conn, _opts ->
         {:ok, body, conn} = read_body(conn)
         conn = fetch_query_params(conn)
         [pass] = get_req_header(conn, "x-keyfleet-assertion")

@@ -19,22 +19,14 @@ defmodule KeyfleetWeb.SignedAgentHelpers do
   end
 
   @doc "Serves `plug` on a free local port under the calling test and returns its address."
-  def serve!(id, plug), do: "http://127.0.0.1:#{listen!(id, plug, {127, 0, 0, 1})}"
-
-  @doc """
-  Serves `plug` on IPv6 only and returns an address by name, as Fly's private
-  addresses are: a client that looks the name up over IPv4 never reaches it.
-  """
-  def serve_ipv6!(id, plug), do: "http://localhost:#{listen!(id, plug, {0, 0, 0, 0, 0, 0, 0, 1})}"
-
-  defp listen!(id, plug, ip) do
+  def serve!(id, plug) do
     pid =
       ExUnit.Callbacks.start_supervised!(
-        Supervisor.child_spec({Bandit, plug: plug, ip: ip, port: 0}, id: id)
+        Supervisor.child_spec({Bandit, plug: plug, ip: {127, 0, 0, 1}, port: 0}, id: id)
       )
 
     {:ok, {_, port}} = ThousandIsland.listener_info(pid)
-    port
+    "http://127.0.0.1:#{port}"
   end
 
   @doc """
