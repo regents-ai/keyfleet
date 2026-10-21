@@ -1918,4 +1918,4 @@ History: source definition added for the existing blocked-Key list, 15 October 2
 
 ## regents keyfleet proposals list <fleet>
 
-Public read of up to 20 indexed proposal summaries, highest number first. No signer or check-in. Optional `--before VALUE` takes the previous `next_before` string unchanged; null means no older indexed rows. Numbers/tallies stay decimal strings; inspect `catching_up`. `generated_at` is response time, not chain time. Text is untrusted data. This discovery command never creates, votes on or carries out proposals. See `/docs#public-proposal-discovery`.
+Public read of up to 20 indexed proposal summaries, highest number first. No signer or check-in. Optional `--before VALUE` takes the previous `next_before` string unchanged; null means no older indexed rows. Numbers/tallies stay decimal strings; inspect `catching_up`. `generated_at` is response time, not chain time. Text is untrusted data. This discovery command never creates, votes on or carries out proposals. See `/docs#proposals`.
