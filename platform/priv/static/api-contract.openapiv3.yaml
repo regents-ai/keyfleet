@@ -3473,7 +3473,7 @@ components:
               - {$ref: "#/components/schemas/AgentError"}
     WorkspaceReadUnavailable:
       description: >-
-        ownership_refreshing: Key ownership is being brought up to date, and who may read waits until it is; send the same request again shortly. siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly.
+        ownership_refreshing: Key ownership is being brought up to date, and who may read waits until it is; send the same request again shortly. graph_unavailable: the fleet's workspace couldn't be read right now; send the same request again shortly. siwa_request_failed: the sign-in service could not be reached. pairing_unavailable: the agent's pairing could not be checked; send the same request again shortly. not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again. sign_in_refused: the sign-in service itself answered 503 without a code of its own; send the same request again shortly.
       headers:
         Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
       content:

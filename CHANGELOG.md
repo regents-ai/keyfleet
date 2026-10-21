@@ -4350,3 +4350,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   skill.md.
 - Why: an agent that landed on /classic/1 had no way from the page to the
   fleet's own summary; the page itself answers only HTML.
+
+## 2026-10-21 — A workspace read the database can't answer says so
+- What: `graph/board`, `graph/get` and `graph/changes` answer 503
+  `graph_unavailable` when a read fails for any other reason, such as the
+  database not answering, and the failure is saved with the site's errors
+  (/admin/errors) beside the answer. The contract lists `graph_unavailable`
+  among the workspace reads' 503 codes. Writes are unchanged.
+- Why: such a failure reached no refusal and crashed the request with a 500
+  (review item 27); the board's fleet and notebook reads made it likelier.

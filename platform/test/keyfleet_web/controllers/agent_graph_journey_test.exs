@@ -230,6 +230,27 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert graph(c, bea, "board", %{}, "no_such_fleet").status == 404
   end
 
+  test "a board the database can't read answers that the workspace is unavailable", c do
+    start_graph(c)
+    [_ann, bea] = shard_agents(c)
+
+    # Renamed inside the test's own transaction, so the pins read fails the
+    # way a database that refuses it does; the rename ends with the test.
+    Keyfleet.Repo.query!(
+      "ALTER TABLE #{Keyfleet.Repo.default_prefix()}.workspace_pins RENAME TO workspace_pins_away"
+    )
+
+    capture_log(fn ->
+      refused = graph(c, bea, "board", %{})
+      assert {refused.status, refused.body["error"]["code"]} == {503, "graph_unavailable"}
+
+      for pid <- Task.Supervisor.children(Keyfleet.ErrorSaves) do
+        ref = Process.monitor(pid)
+        assert_receive {:DOWN, ^ref, :process, ^pid, _reason}, 5_000
+      end
+    end)
+  end
+
   test "an agent joins a goal to follow it: the goal names who joined, and the agent's sync lists it",
        c do
     start_graph(c)

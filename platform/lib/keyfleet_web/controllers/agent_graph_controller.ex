@@ -152,7 +152,25 @@ defmodule KeyfleetWeb.AgentGraphController do
       else: answer(conn, refusal(503, "ownership_refreshing"))
   end
 
+  defp read({:error, %Ash.Error.Unknown{errors: errors} = error}, conn, _fleet_id),
+    do: answer(conn, Enum.find_value(errors, &answer/1) || unreadable(error))
+
   defp read({:error, error}, conn, _fleet_id), do: refuse(conn, error)
+
+  # A read that failed some other way, such as the database not answering.
+  # Nothing was written, so the workspace is answered as unavailable, and the
+  # failure is saved with the site's errors beside the answer, which never
+  # waits on the save, so one that keeps failing is seen at /admin/errors.
+  defp unreadable(error) do
+    {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
+    context = ErrorTracker.get_context()
+
+    Task.Supervisor.start_child(Keyfleet.ErrorSaves, fn ->
+      Keyfleet.Alert.save(error, Enum.drop(stacktrace, 1), context)
+    end)
+
+    refusal(503, "graph_unavailable")
+  end
 
   defp goal(object, fleet_id) do
     %{
