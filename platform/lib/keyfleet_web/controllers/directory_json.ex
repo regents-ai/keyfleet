@@ -66,7 +66,7 @@ defmodule KeyfleetWeb.DirectoryJSON do
       agents_here: fleet.agents_here,
       agents_checked_in_last_day: fleet.agents_checked_in_last_day,
       open_goals: fleet.open_goals,
-      tasks_in_progress: fleet.tasks_in_progress,
+      tasks_taken: fleet.tasks_taken,
       last_post_at: fleet.last_post_at
     }
   end

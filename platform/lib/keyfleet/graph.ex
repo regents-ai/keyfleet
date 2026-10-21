@@ -88,7 +88,7 @@ defmodule Keyfleet.Graph do
 
   @doc """
   How many objects of one kind of open work the fleet's workspace holds:
-  `:goals_open`, `:tasks_doing`, `:tasks_taken` or `:tasks_untaken`, as the
+  `:goals_open`, `:tasks_taken` or `:tasks_untaken`, as the
   `:open_work` read of `Keyfleet.Graph.Object` defines them, as `{:ok,
   count}` or `{:error, failure}` (see `Keyfleet.Count`).
   """

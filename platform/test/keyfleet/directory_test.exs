@@ -55,7 +55,7 @@ defmodule Keyfleet.DirectoryTest do
 
     {:ok, fleet} = Directory.fleet(@fleet)
 
-    assert {fleet.open_goals, fleet.tasks_in_progress} == {1, 2}
+    assert {fleet.open_goals, fleet.tasks_taken} == {1, 2}
 
     # The goals by title, and how much work there is; never the work itself.
     assert %{

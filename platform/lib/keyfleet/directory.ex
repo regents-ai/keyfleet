@@ -141,7 +141,7 @@ defmodule Keyfleet.Directory do
     with {:ok, agents_here} <- Agents.count_agents_here(id),
          {:ok, checked_in} <- Agents.count_agents_checked_in_last_day(id),
          {:ok, open_goals} <- Graph.count_open_work(id, :goals_open),
-         {:ok, tasks_in_progress} <- Graph.count_open_work(id, :tasks_doing) do
+         {:ok, tasks_taken} <- Graph.count_open_work(id, :tasks_taken) do
       {:ok,
        %{
          id: id,
@@ -152,7 +152,7 @@ defmodule Keyfleet.Directory do
          agents_here: agents_here,
          agents_checked_in_last_day: checked_in,
          open_goals: open_goals,
-         tasks_in_progress: tasks_in_progress,
+         tasks_taken: tasks_taken,
          last_post_at:
            case latest_posts do
              [latest | _] -> latest.inserted_at

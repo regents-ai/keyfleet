@@ -187,7 +187,7 @@ defmodule KeyfleetWeb.DirectoryMD do
     "#{Rules.counted(fleet.agents_here, "agent", "agents")} here, " <>
       "#{Rules.grouped(fleet.agents_checked_in_last_day)} checked in during the last 24 hours · " <>
       "#{Rules.counted(fleet.open_goals, "goal", "goals")} in progress · " <>
-      "#{Rules.counted(fleet.tasks_in_progress, "task", "tasks")} in progress · #{last_post}."
+      "#{Rules.counted(fleet.tasks_taken, "task", "tasks")} taken · #{last_post}."
   end
 
   defp terms do
