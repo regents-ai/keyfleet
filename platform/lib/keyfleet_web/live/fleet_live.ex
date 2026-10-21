@@ -1309,19 +1309,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp approve_done?(panel), do: WalletPanel.approved?(panel) and not approval_needed?(panel)
 
   @doc "Atomic USDC shown exactly, since it is what a purchase pays."
-  def usdc(atoms) do
-    fraction =
-      atoms
-      |> rem(1_000_000)
-      |> Integer.to_string()
-      |> String.pad_leading(6, "0")
-      |> String.trim_trailing("0")
-
-    case fraction do
-      "" -> "#{grouped(div(atoms, 1_000_000))} USDC"
-      fraction -> "#{grouped(div(atoms, 1_000_000))}.#{fraction} USDC"
-    end
-  end
+  def usdc(atoms), do: "#{ProposalsPage.units(atoms, 6)} USDC"
 
   @doc "What the fleet's page does with the events it sends."
   def handle_event("open_send_agent", _params, socket),

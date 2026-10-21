@@ -3523,3 +3523,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   20 October's "Each Key purchase gets its own line in the fleet feed".
 - Shipping steps (platform/README.md) now say to check, just before a push, that
   the commit's difference from the newest main names only your own files.
+
+## 2026-10-21 — Counts read the same on every page
+- What: a proposal's "of 1,024 Keys counted" and a poll's vote count group thousands with commas, as every other page does. Behind it, one helper writes every "1 thing / N things" count, and USDC amounts use the same helper as other token amounts.
+- Why: one way to write a number, and the two pages that printed "1024" now match the rest.

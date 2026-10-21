@@ -247,8 +247,8 @@ defmodule KeyfleetWeb.ActivityLines do
 
   defp counts(%{goals_open: goals, tasks_taken: taken, tasks_untaken: untaken}) do
     [
-      goals > 0 && counted(goals, "goal in progress", "goals in progress"),
-      taken > 0 && counted(taken, "task taken", "tasks taken"),
+      goals > 0 && Rules.counted(goals, "goal in progress", "goals in progress"),
+      taken > 0 && Rules.counted(taken, "task taken", "tasks taken"),
       untaken > 0 && untaken(untaken, taken)
     ]
     |> Enum.filter(& &1)
@@ -256,11 +256,10 @@ defmodule KeyfleetWeb.ActivityLines do
   end
 
   # After "3 tasks taken", "2 not taken yet" needs no "tasks" of its own.
-  defp untaken(untaken, 0), do: counted(untaken, "task not taken yet", "tasks not taken yet")
-  defp untaken(untaken, _taken), do: "#{Rules.grouped(untaken)} not taken yet"
+  defp untaken(untaken, 0),
+    do: Rules.counted(untaken, "task not taken yet", "tasks not taken yet")
 
-  defp counted(1, one, _many), do: "1 #{one}"
-  defp counted(count, _one, many), do: "#{Rules.grouped(count)} #{many}"
+  defp untaken(untaken, _taken), do: "#{Rules.grouped(untaken)} not taken yet"
 
   # A change the workspace itself made names no key.
   defp who(nil), do: "Keyfleet"

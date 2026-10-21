@@ -1238,20 +1238,17 @@ defmodule KeyfleetWeb.ProposalsLive do
       assign(assigns,
         counted: counted,
         share: if(counted > 0, do: min(div(yes * 100, counted), 100), else: 0),
-        tally: "#{yes} yes, #{no} no, #{abstain} abstain, of #{keys(counted)} counted"
+        tally: "#{yes} yes, #{no} no, #{abstain} abstain, of #{Rules.keys(counted)} counted"
       )
 
     ~H"""
     <div class="proposals-share" title={@tally}>
       <span class="proposals-share__bar" style={"--yes: #{@share}%"} aria-hidden="true"></span>
       <span id={@id} phx-hook="MotionCount" data-variant={Motion.standard("count")}><span data-count>{@share}</span>% yes</span>
-      <span class="proposals-detail">of {keys(@counted)}</span>
+      <span class="proposals-detail">of {Rules.keys(@counted)}</span>
     </div>
     """
   end
-
-  defp keys(1), do: "1 Key"
-  defp keys(count), do: "#{count} Keys"
 
   attr :id, :string, required: true
   attr :wallet, :string, required: true

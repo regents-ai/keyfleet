@@ -22,6 +22,7 @@ defmodule KeyfleetWeb.PollsLive do
 
   use KeyfleetWeb, :html
 
+  import Keyfleet.Fleets.Rules, only: [counted: 3]
   import KeyfleetWeb.Components.Countdown
   import KeyfleetWeb.Components.Footnote
   import KeyfleetWeb.Components.LoadFailed
@@ -226,11 +227,8 @@ defmodule KeyfleetWeb.PollsLive do
         <.link patch={poll_path(@page.fleet_id, @poll.id)}>{@poll.question}</.link>
       </h3>
       <p class="polls-detail">
-        Started by {ActivityLines.key_name(@poll.started_by_key, @poll.agent)} · {count(
-          @poll.votes_cast,
-          "vote",
-          "votes"
-        )}
+        Started by {ActivityLines.key_name(@poll.started_by_key, @poll.agent)} ·
+        <span>{counted(@poll.votes_cast, "vote", "votes")}</span>
       </p>
       <p class="polls-detail">
         <.countdown
@@ -370,7 +368,7 @@ defmodule KeyfleetWeb.PollsLive do
                 data-winner={to_string(total.choice in leaders(@poll.totals))}
               >
                 <span>{total.choice}</span>
-                <span>{count(total.votes, "vote", "votes")}</span>
+                <span>{counted(total.votes, "vote", "votes")}</span>
               </li>
             </ul>
           </div>
@@ -973,9 +971,6 @@ defmodule KeyfleetWeb.PollsLive do
       most -> for %{choice: choice, votes: ^most} <- totals, do: choice
     end
   end
-
-  defp count(1, one, _many), do: "1 #{one}"
-  defp count(number, _one, many), do: "#{number} #{many}"
 
   defp length_label(1), do: "1 minute"
   defp length_label(60), do: "1 hour"

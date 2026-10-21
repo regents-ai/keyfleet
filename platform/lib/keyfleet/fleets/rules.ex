@@ -68,17 +68,12 @@ defmodule Keyfleet.Fleets.Rules do
   def membership_terms, do: @membership_terms
 
   @doc "A number of keys in words, such as `1 Key` or `1,771 Keys`."
-  def keys(1), do: "1 Key"
-  def keys(count), do: "#{grouped(count)} Keys"
+  def keys(count), do: counted(count, "Key", "Keys")
+
+  @doc "`count` things in words, such as `1 vote` or `1,024 votes`."
+  def counted(1, one, _many), do: "1 #{one}"
+  def counted(count, _one, many), do: "#{grouped(count)} #{many}"
 
   @doc "A whole number with its thousands separated by commas."
-  def grouped(number) do
-    number
-    |> Integer.to_string()
-    |> String.reverse()
-    |> String.graphemes()
-    |> Enum.chunk_every(3)
-    |> Enum.map_join(",", &Enum.join/1)
-    |> String.reverse()
-  end
+  def grouped(number), do: number |> Integer.to_string() |> RegentFormat.add_delimiters()
 end
