@@ -3313,3 +3313,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: each signed browser tool's description is now only what the tool does; the page adds one closing line saying how to sign it and what it needs (works before pairing, needs a pairing, or needs a pairing and a Key, a shard of one or a person who holds one), from the requirement the tool manifest already gives. Three different wordings of that line had grown up, and the descriptions together are about a third shorter (26,526 to 16,619 characters before the closing line).
 - Why: Sean asked overnight on 21 October for less text and simpler agent tools; one line for one rule can't drift.
+
+## 2026-10-21 — One Keyfleet deploy at a time
+
+- What: scripts/deploy.sh now holds a lock for its app while it runs, so a second deploy started on this Mac, from any checkout, stops straight away with "another deploy of keyfleet is running" instead of building. The system lets go of the lock when the deploy ends, however it ends. It also refuses a commit that does not contain the code on every machine, not only on the first one it finds, since the site and graph machines can carry different commits.
+- Why: two overnight deploys crossed at 10:31Z on 21 October and left the graph machine on a5248373 and the site machine on fbf22d88; the coordinator asked for a simple lock so two threads cannot deploy at the same time.

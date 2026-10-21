@@ -5,7 +5,7 @@
 #   scripts/deploy.sh staging          # keyfleet-staging, from platform/fly.staging.toml
 #
 # It refuses a working tree with any change, a commit that is not on
-# origin/main, and a commit that does not contain the one already live, so what
+# origin/main, and a commit that does not contain what each machine runs, so what
 # runs is always what the repository holds and never takes live work out. The
 # build context is the one platform/scripts/build-release-context.sh assembles for
 # amd64, which Fly runs: `git archive` of this commit's platform/ folder plus the
@@ -17,6 +17,11 @@
 # the volume, takes the image first: it stops and starts again, and for those
 # seconds a workspace write answers "try again". The site machine then takes
 # the same image bluegreen, so a page is answered throughout.
+#
+# One deploy of an app runs at a time on this Mac, from any checkout: two at
+# once can leave the two machines on different commits (21 October 2026). The
+# script runs itself again under lockf(1), which the system lets go of when it
+# ends, however it ends.
 set -euo pipefail
 
 case "${1:-}" in
@@ -27,6 +32,16 @@ case "${1:-}" in
     exit 2
     ;;
 esac
+
+lock="/tmp/deploy-$app.lock"
+if [[ "${DEPLOY_LOCK:-}" != "$lock" ]]; then
+  status=0
+  DEPLOY_LOCK="$lock" lockf -s -t 0 "$lock" bash "$0" "$@" || status=$?
+  if [[ $status -eq 75 ]]; then
+    echo "Refusing to deploy: another deploy of $app is running on this Mac. Run this again once it finishes." >&2
+  fi
+  exit "$status"
+fi
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
@@ -43,15 +58,16 @@ if ! git merge-base --is-ancestor "$commit" origin/main; then
   exit 1
 fi
 
-# The running image is tagged with the short commit it was built from (the
-# --image-label below). A commit that does not contain it would take live work
-# back out, which happens when two releases cross: bring this checkout up to
-# origin/main and deploy again.
-live="$(fly image show --app "$app" --json | jq -r '.[0].Tag')"
-if ! git merge-base --is-ancestor "$live" "$commit"; then
-  echo "Refusing to deploy: ${commit:0:7} does not contain ${live:0:7}, which is live. Update to origin/main first." >&2
-  exit 1
-fi
+# Each machine's image is tagged with the short commit it was built from (the
+# --image-label below). A commit that does not contain every one would take
+# live work back out, which happens when two releases cross: bring this
+# checkout up to origin/main and deploy again.
+for live in $(fly image show --app "$app" --json | jq -r '.[].Tag' | sort -u); do
+  if ! git merge-base --is-ancestor "$live" "$commit"; then
+    echo "Refusing to deploy: ${commit:0:7} does not contain ${live:0:7}, which is live. Update to origin/main first." >&2
+    exit 1
+  fi
+done
 
 workspace="$(mktemp -d)"
 context="$workspace/context"
