@@ -455,9 +455,13 @@ defmodule KeyfleetWeb.CodeGatewayTest do
         Keyword.merge(Application.fetch_env!(:keyfleet, :code), settings)
       )
 
-  # The files bodies are written to while they arrive.
-  defp spooled,
-    do: Path.wildcard(Path.join([Elixir.System.tmp_dir!(), "plug-*", "keyfleet-code-*"]))
+  # The files this run's bodies are written to while they arrive. Plug ends each
+  # VM's folders with its own random suffix, so another test run on the same
+  # machine never counts.
+  defp spooled do
+    {roots, suffix} = :persistent_term.get(Plug.Upload)
+    Enum.flat_map(roots, &Path.wildcard(Path.join([&1, "plug-*-#{suffix}", "keyfleet-code-*"])))
+  end
 
   # The site, served on a real socket, so a body can arrive slowly.
   defp open_site! do

@@ -3637,3 +3637,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   under it says "Last check-in". Design system pinned to 5dd12626.
 - Why: Sean, 21 October 11:15Z, "1. a": Key holders look at the side panel
   most, so a late or stopped agent should show there.
+
+## 2026-10-21 — The git tests count only their own files
+
+- What: the code gateway's tests look only at the upload files their own run
+  made, so two test runs on one machine no longer fail each other.
+- Why: the independent review (item 16) and the overnight polish thread saw
+  the gateway tests fail one run in three when another run was going.
