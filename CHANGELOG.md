@@ -3348,3 +3348,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on Account › Profile, someone whose wallets hold no Key now sees "No Keys yet." and a "Get a Key on Classic #1" button, in place of a sentence about the Regents Club Pass and a link to the Club Key.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline". The Regents Club left the homepage and side menu on 21 October, so the empty card was pointing new people to the one fleet they can't buy into; Classic #1 is where Keys are sold.
+
+## 2026-10-21 — Pages load less script, and the homepage draws the Key picture sooner
+
+- What: the step that sends a Buy Key or other wallet action compares wallet addresses itself instead of through the wallet library, so that library no longer loads with every page; it still loads with sign-in. The homepage loads 100 KB of script instead of 183 KB, and Classic #1 198 KB instead of 281 KB. The homepage's Key picture now rises into place without first being invisible, so a slow phone counts it as drawn with the first paint.
+- Why: Sean's 2. a and 3. a, 21 October 10:04Z. On a simulated slow phone the homepage drew its Key picture at 3.0 s against a 2.5 s goal, and every page loaded more script than its 180 KB budget. Fetching the homepage's fonts later was tried too and dropped: it made the picture only 75 ms sooner, within the measurement's own spread.
