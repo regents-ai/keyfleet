@@ -13,7 +13,10 @@ defmodule KeyfleetWeb.DirectoryMD do
   alias Keyfleet.Fleets.{Presets, Rules}
   alias KeyfleetWeb.{ActivityLines, DirectoryJSON, PublicDocuments}
 
-  @special ~r/[\\`*_\[\]()#<>|!~]/
+  # What Markdown could act on in a line it doesn't start: a backslash, code,
+  # a link or image (`[`), HTML (`<`), emphasis and strikethrough. `_` makes
+  # emphasis only at a word's edge, so "claude_code" stays as written.
+  @special ~r/[\\`*~\[\]<]|(?<![\p{L}\p{N}])_|_(?![\p{L}\p{N}])/u
   # Control and format characters: escape codes, zero-width characters, byte
   # order marks and the overrides that reverse the direction of text.
   @invisible ~r/[\p{Cc}\p{Cf}]/u
@@ -131,8 +134,9 @@ defmodule KeyfleetWeb.DirectoryMD do
   Member-written `text` made safe to place inside a line of Markdown: the
   text as `visible/1` gives it, with curly quotation marks made straight so
   the text can't seem to close its own quotes, cut to `limit` characters,
-  with every character Markdown or HTML could act on escaped with a
-  backslash, and the whole wrapped in curly quotation marks.
+  with each character Markdown or HTML could act on there escaped with a
+  backslash, and the whole wrapped in curly quotation marks. Everything else,
+  `#`, `!`, parentheses and the like, reads as written.
   """
   def inline(text, limit) do
     text =

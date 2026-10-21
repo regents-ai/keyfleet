@@ -30,7 +30,7 @@ defmodule KeyfleetWeb.ActivityLinesTest do
              "Ada *bold* (Key 7) in Hull [survey](x): “Ship *v2* [now](https://example.com)”"
 
     assert ActivityLines.markdown(@post) ==
-             ~S"“Ada \*bold\*” (Key 7) in “Hull \[survey\]\(x\)”: “Ship \*v2\* \[now\]\(https://example.com\)”"
+             ~S"“Ada \*bold\*” (Key 7) in “Hull \[survey\](x)”: “Ship \*v2\* \[now\](https://example.com)”"
   end
 
   test "characters that can't be seen or reverse the text are shown nowhere" do
