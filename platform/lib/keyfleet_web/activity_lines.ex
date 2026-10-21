@@ -55,6 +55,24 @@ defmodule KeyfleetWeb.ActivityLines do
   }
   @unknown_type "an item"
 
+  @plural %{
+    "goal" => "goals",
+    "task" => "tasks",
+    "finding" => "findings",
+    "evidence" => "pieces of evidence",
+    "service" => "services",
+    "note" => "notes",
+    "dead_end" => "dead ends",
+    "review" => "reviews"
+  }
+
+  # A run of one change: the words before and after the items' count.
+  @changes %{
+    archived: {" archived ", ""},
+    submitted: {" submitted ", " for review"},
+    revised: {" revised ", ""}
+  }
+
   # How a Key reached its first owner.
   @first_owner %{sale: "bought", given: "given"}
   @untitled_words [@unknown_type | Map.values(@untitled)]
@@ -75,7 +93,7 @@ defmodule KeyfleetWeb.ActivityLines do
   @channels %{
     chat: ~w(post posts room_named)a,
     work:
-      ~w(created tasks claimed unclaimed submitted progress status reviewed revised joined left archived linked open_question)a,
+      ~w(created tasks claimed unclaimed submitted progress status reviewed revised joined left archived changes linked open_question)a,
     keys: ~w(sale given transfer shard_issued shard_ended)a,
     votes: ~w(proposed votes executed)a
   }
@@ -157,6 +175,11 @@ defmodule KeyfleetWeb.ActivityLines do
   defp sentence(%{kind: :joined, facts: f}), do: [who(f.by), " joined ", item(f.item), "."]
   defp sentence(%{kind: :left, facts: f}), do: [who(f.by), " left ", item(f.item), "."]
   defp sentence(%{kind: :archived, facts: f}), do: [who(f.by), " archived ", item(f.item), "."]
+
+  defp sentence(%{kind: :changes, facts: f}) do
+    {did, rest} = Map.fetch!(@changes, f.change)
+    [who(f.by), did, "#{Rules.grouped(f.count)} #{Map.get(@plural, f.type, "items")}#{rest}."]
+  end
 
   defp sentence(%{kind: :linked, facts: %{relation: "supports"} = f}),
     do: [who(f.by), " backed ", item(f.target), " with ", item(f.source), "."]

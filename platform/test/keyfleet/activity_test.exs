@@ -300,6 +300,26 @@ defmodule Keyfleet.ActivityTest do
              for(%{kind: :tasks} = item <- items, do: item.facts)
   end
 
+  test "one change a Key makes to items of one type in a row is one line" do
+    tasks = for n <- 1..3, do: Workspace.create(@fleet, "task", %{"title" => "Plate #{n}"})
+    note = Workspace.create(@fleet, "note", %{"title" => "Plates"})
+    other = Workspace.create(@fleet, "task", %{"title" => "Rivets"}, by: 5)
+
+    Enum.each(tasks, &Workspace.archive(@fleet, &1))
+    Workspace.archive(@fleet, note)
+    Workspace.archive(@fleet, other, by: 5)
+
+    archived =
+      for %{kind: kind} = item <- page(nil).items, kind in [:archived, :changes] do
+        {kind, item.facts.by.token_id, item.facts[:count]}
+      end
+
+    assert archived == [{:archived, 5, nil}, {:archived, 17, nil}, {:changes, 17, 3}]
+
+    assert [%{change: :archived, type: "task", count: 3}] =
+             for(%{kind: :changes} = item <- page(nil).items, do: item.facts)
+  end
+
   test "keys that abstained are counted apart from those that voted yes or no" do
     proposal!(@fleet, 1, %{})
     vote!(@fleet, 1, wallet("a"), :yes, [1, 2])

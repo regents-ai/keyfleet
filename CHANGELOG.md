@@ -3544,3 +3544,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on a fleet's Workspace tab, the "Places to work" list a visitor sees before holding a Key now uses the same short lines as the member's tabs: "Goals, tasks and what changed", "Notebooks and saved results" (or "Notebooks, not set up here yet"), and "One shared Git repository".
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline", and the morning's goal to make the "Places to work" intro on fleet pages shorter and plainer.
+
+## 2026-10-21 — One Key archiving, submitting or revising several items in a row is one line
+
+- What: the fleet feed reads "Key 3 archived 4 tasks." where it listed "archived a task" four times; the same for tasks submitted for review and items revised, while they are one Key's, of one type and in a row.
+- Why: a Key tidying up its work filled the feed with identical lines.

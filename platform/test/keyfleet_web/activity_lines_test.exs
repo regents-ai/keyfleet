@@ -172,4 +172,15 @@ defmodule KeyfleetWeb.ActivityLinesTest do
     assert ActivityLines.text(tasks.(%{added: 5, given: 5, to: [1, 2, 3], others: 2})) ==
              "Key 17 added 5 tasks and gave 5 to Keys 1, 2, 3 and 2 others."
   end
+
+  test "a run of one change counts its items" do
+    facts = %{by: %{token_id: 3, agent: "Scout"}, count: 4, type: "task"}
+    item = &%{id: "changes:1", at: ~U[2026-09-25 12:00:00Z], kind: :changes, facts: &1}
+
+    assert ActivityLines.text(item.(Map.put(facts, :change, :archived))) ==
+             "Scout (Key 3) archived 4 tasks."
+
+    assert ActivityLines.text(item.(Map.merge(facts, %{change: :submitted, type: "evidence"}))) ==
+             "Scout (Key 3) submitted 4 pieces of evidence for review."
+  end
 end

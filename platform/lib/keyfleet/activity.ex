@@ -56,6 +56,9 @@ defmodule Keyfleet.Activity do
       the same rules as `:posts`: `by`, `added` (how many it added), `given`
       (how many it gave), `to` (up to three of the keys given tasks, lowest
       first) and `others` (how many more keys were given tasks).
+    * `:changes`: a run of one change (`change`: `:archived`, `:submitted`
+      or `:revised`) one key made to items of one type, by the same rules as
+      `:posts`: `by`, `change`, `type` and `count`.
     * `:sale`: `token_ids`, the keys bought, lowest first, and `purchases`,
       how many purchases bought them: consecutive purchases are one item, by
       the same rules as `:posts`.
@@ -147,6 +150,8 @@ defmodule Keyfleet.Activity do
   @post_gap 3_600_000_000
   @post_span 21_600_000_000
   @listed_keys 3
+  # The changes a run of which, by one key to items of one type, is one item.
+  @repeated [:archived, :submitted, :revised]
   @recent 7 * 86_400
 
   @doc """
@@ -561,16 +566,41 @@ defmodule Keyfleet.Activity do
   end
 
   # Workspace changes: a run of tasks one key added, or gave to other keys,
-  # is one item.
+  # is one item, and so is a run of one change one key made to items of one
+  # type.
   defp group_work([]), do: []
 
   defp group_work([first | rest]) do
-    if handing_out?(first, first.facts.by) do
-      {run, rest} = take_run(rest, first, &handing_out?(&1, first.facts.by), & &1.at)
-      [tasks_entry(run) | group_work(rest)]
-    else
-      [first | group_work(rest)]
+    cond do
+      handing_out?(first, first.facts.by) ->
+        {run, rest} = take_run(rest, first, &handing_out?(&1, first.facts.by), & &1.at)
+        [tasks_entry(run) | group_work(rest)]
+
+      first.kind in @repeated ->
+        {run, rest} = take_run(rest, first, &same_change?(&1, first), & &1.at)
+        [changes_entry(run) | group_work(rest)]
+
+      true ->
+        [first | group_work(rest)]
     end
+  end
+
+  defp same_change?(entry, first),
+    do:
+      entry.kind == first.kind and entry.facts.by == first.facts.by and type(entry) == type(first)
+
+  # Every item's id starts with its type, as in "task#4".
+  defp type(%{facts: %{item: {:item, id}}}), do: id |> String.split("#") |> hd()
+
+  defp changes_entry([only]), do: only
+
+  defp changes_entry([newest | _] = run) do
+    entry("changes:#{newest.position}", newest.at, :changes, List.last(run).position, %{
+      by: newest.facts.by,
+      change: newest.kind,
+      type: type(newest),
+      count: length(run)
+    })
   end
 
   # A task `by` added, or gave to a key other than its own.
