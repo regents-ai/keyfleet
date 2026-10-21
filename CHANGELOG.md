@@ -3953,3 +3953,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `account_` reads keep their names. The guides, the docs' tools table and the
   command descriptor's WebMCP names use the new names; nothing else changed.
 - Why: Sean, 21 October 10:15Z: "make it a modern and well-engineered elixir site, for agents and webmcp and regents-cli", and 10:16Z: "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — The sea reads a member's fleets with the membership it read
+
+- What: the harbour's sea reads the ships of the fleets a person is a member
+  of with the membership it read for them, instead of reading it again for
+  each fleet. Nothing on screen changes. A test now covers a member's sea.
+- Why: Sean, 21 Oct: "make it a modern and well-engineered elixir site".

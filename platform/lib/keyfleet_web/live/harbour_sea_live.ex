@@ -345,8 +345,8 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   end
 
   # The ships of the fleets the visitor is a member of are read beside the
-  # page, as the visitor, after listening to those fleets, so a change that
-  # lands while they load still reaches them.
+  # page, as the visitor with the class already read, after listening to
+  # those fleets, so a change that lands while they load still reaches them.
   defp read_crew(socket) do
     actor = ShellLive.human_actor(socket)
 
@@ -358,7 +358,12 @@ defmodule KeyfleetWeb.HarbourSeaLive do
         Read.start(socket, :crew, reader(socket.assigns.access_context), fn ->
           {:ok,
            Map.new(fleet_ids, fn fleet_id ->
-             %{items: items} = Activity.page(fleet_id, nil, actor: actor)
+             %{items: items} =
+               Activity.page(fleet_id, nil,
+                 actor: actor,
+                 context: Access.context(actor, fleet_id, :member)
+               )
+
              {fleet_id, HarbourCrew.ships(fleet_id, items)}
            end)}
         end)

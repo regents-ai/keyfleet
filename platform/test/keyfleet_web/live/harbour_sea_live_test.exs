@@ -1,7 +1,8 @@
 defmodule KeyfleetWeb.HarbourSeaLiveTest do
   use KeyfleetWeb.ConnCase, async: false
 
-  alias Keyfleet.{ChainHelpers, Fleets, Graph, Keys, Proposals, Rooms}
+  alias Keyfleet.{Accounts, Actors, ChainHelpers, Fleets, Graph, Keys, Proposals, Rooms}
+  alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.{FleetNow, HarbourSeaLive}
 
@@ -11,8 +12,10 @@ defmodule KeyfleetWeb.HarbourSeaLiveTest do
   # - showing a fleet and hearing its new reading cost a signed-out visitor's
   #   sea no database read, and it hears none of the fleet's own notices, so a
   #   crowd of open pages doesn't read the fleet again on each of them
+  # - a member's sea reads the ships of its own fleet itself, as the member
 
   @club "regents_club"
+  @owner "0x" <> String.duplicate("c3", 20)
 
   setup do
     Fleets.bootstrap_catalog!()
@@ -73,10 +76,48 @@ defmodule KeyfleetWeb.HarbourSeaLiveTest do
         do: refute(topic in heard)
   end
 
+  test "a member's sea reads its own fleet's ships as the member", %{conn: conn} do
+    Keys.record_epoch!(
+      %{
+        fleet_id: @club,
+        token_id: 17,
+        ownership_epoch: 1,
+        owner_wallet: @owner,
+        block_number: 27,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash: "0x" <> String.duplicate("b", 64),
+        log_index: 0
+      },
+      actor: %Actors.System{}
+    )
+
+    goal()
+
+    account =
+      Accounts.register_verified!("did:privy:harbour-sea", @owner, [@owner],
+        actor: %Actors.System{}
+      )
+
+    view = signed_in_sea(conn, account)
+    show_club(view)
+    render_async(view)
+
+    assert [%{"id" => "regents_club:17", "place" => "forge"}] = crew(view)
+  end
+
   # The sea of a signed-out visitor, as the root layout renders it.
-  defp sea(conn) do
-    {:ok, view, _html} = live_isolated(conn, HarbourSeaLive, session: %{"render_route" => "/"})
+  defp sea(conn, rendered \\ %{}) do
+    {:ok, view, _html} =
+      live_isolated(conn, HarbourSeaLive, session: Map.put(rendered, "render_route", "/"))
+
     view
+  end
+
+  # The sea of `account` signed in, rendered for the topic of their sign-in.
+  defp signed_in_sea(conn, account) do
+    conn = init_test_session(conn, %{human_account_id: account.id})
+    claim = conn |> Plug.Conn.get_session() |> SessionAuthority.claim()
+    sea(conn, %{"render_topic" => SessionAuthority.topic(claim.lineage)})
   end
 
   # What the page tells the sea when the Club's page is on show.
