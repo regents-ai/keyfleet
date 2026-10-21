@@ -170,11 +170,20 @@ defmodule KeyfleetWeb.WorkspaceLive do
           aria-labelledby="workspace-activity-title"
         >
           <h2 id="workspace-activity-title">Workstream</h2>
-          <p class="workspace-detail">
-            Recorded changes, newest first. Open an item to read its notes and results.
-          </p>
-          <ol id="workspace-activity" class="workspace-lines">
-            <li :for={line <- @board.activity} data-seq={line.seq}>
+          <ol
+            id="workspace-activity"
+            class="workspace-lines"
+            phx-hook="MotionList"
+            data-variant={KeyfleetWeb.Motion.standard("list")}
+            data-layout-id="workspace-activity"
+            data-children="[data-seq]"
+          >
+            <li
+              :for={line <- @board.activity}
+              id={"workspace-activity-#{line.seq}"}
+              data-seq={line.seq}
+              data-layout-id={"workspace-activity-#{line.seq}"}
+            >
               <p><.line parts={line.parts} fleet_id={@board.fleet_id} /></p>
               <p :if={line.note} class="workspace-text">{line.note}</p>
               <p class="workspace-detail">
@@ -1178,8 +1187,21 @@ defmodule KeyfleetWeb.WorkspaceLive do
           class="kf-empty"
           title="No work has been recorded here yet."
         />
-        <ol :if={@fleet.work != []} id="workspace-public-activity" class="workspace-lines">
-          <li :for={line <- @fleet.work} data-line={line.id}>
+        <ol
+          :if={@fleet.work != []}
+          id="workspace-public-activity"
+          class="workspace-lines"
+          phx-hook="MotionList"
+          data-variant={KeyfleetWeb.Motion.standard("list")}
+          data-layout-id="workspace-public-activity"
+          data-children="[data-line]"
+        >
+          <li
+            :for={line <- @fleet.work}
+            id={"workspace-public-line-#{line.id}"}
+            data-line={line.id}
+            data-layout-id={"workspace-public-line-#{line.id}"}
+          >
             <p><.line parts={line.parts} fleet_id={@fleet.fleet_id} /></p>
             <p class="workspace-detail">
               <KeyfleetWeb.Time.local
