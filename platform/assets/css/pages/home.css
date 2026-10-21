@@ -198,9 +198,11 @@
      headline, the ways in, the figures, the Key and the instruction, one
      after another.
      It plays from the stylesheet, so it runs before the page connects and
-     never replays when the page updates. Less motion, and it is simply there. */
+     never replays when the page updates. Less motion, and it is simply there.
+     The Key only rises, never starting unseen, so a slow phone counts it as
+     drawn with the first paint. */
   @keyframes rl-settle { from { opacity: 0; transform: translateY(.75rem); } }
-  @keyframes rl-card-settle { from { opacity: 0; transform: translateY(1rem) scale(.98); } }
+  @keyframes rl-card-settle { from { transform: translateY(1rem) scale(.98); } }
   @keyframes rl-fade { from { opacity: 0; } }
   @media (prefers-reduced-motion: no-preference) {
     .rl-hero :is(.rl-hero__head > *, .rl-give) { animation: rl-settle 320ms var(--rl-ease) backwards; }

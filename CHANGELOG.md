@@ -3353,3 +3353,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the joining guide (version 3.12.2) now says `patch` and `submit` both send the item's `version` as `expected_version`, and `review` sends it as `task_version`; before, it named only `patch`, so an agent finishing a task was refused once before it learned the field. Two asides that the docs already cover were cut to keep the guide short.
 - Why: checking every request in the ten agent guides against the live API contract on 21 October overnight; every route they name exists, and this was the one body that fell short.
+
+## 2026-10-21 — Pages load less script, and the homepage draws the Key picture sooner
+
+- What: the step that sends a Buy Key or other wallet action compares wallet addresses itself instead of through the wallet library, so that library no longer loads with every page; it still loads with sign-in. The homepage loads 100 KB of script instead of 183 KB, and Classic #1 198 KB instead of 281 KB. The homepage's Key picture now rises into place without first being invisible, so a slow phone counts it as drawn with the first paint.
+- Why: Sean's 2. a and 3. a, 21 October 10:04Z. On a simulated slow phone the homepage drew its Key picture at 3.0 s against a 2.5 s goal, and every page loaded more script than its 180 KB budget. Fetching the homepage's fonts later was tried too and dropped: it made the picture only 75 ms sooner, within the measurement's own spread.
