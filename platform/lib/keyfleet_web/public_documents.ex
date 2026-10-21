@@ -97,7 +97,8 @@ defmodule KeyfleetWeb.PublicDocuments do
   }
   @sanitize [
     tags: ~w(h1 h2 h3 p ul ol li strong em a code pre br blockquote table thead tbody tr th td),
-    tag_attributes: %{"a" => ["href", "id"]},
+    # Headings keep their ids, so a link to /docs#rooms opens at Rooms.
+    tag_attributes: %{"a" => ["href"], "h1" => ["id"], "h2" => ["id"], "h3" => ["id"]},
     generic_attributes: [],
     url_schemes: ~w(http https mailto),
     url_relative: :deny,

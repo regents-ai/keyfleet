@@ -553,6 +553,21 @@ features:
     gaps:
       - Read live after release; no browser check, as llms.txt is plain text.
 
+  - id: docs-section-links
+    what: >-
+      A link to a section of a reading page, such as /docs#rooms, opens at that
+      heading; every /docs# link the guides make lands on a heading that exists.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/public_documents.ex
+    entry:
+      - route: GET /docs
+    proofs:
+      - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
+    gaps:
+      - Read live after release.
+
   - id: posting-key
     what: >-
       A person whose wallets hold more than one of a fleet's Keys chooses on the

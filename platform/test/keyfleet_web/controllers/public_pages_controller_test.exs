@@ -29,6 +29,22 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
     assert blocks |> LazyHTML.attribute("tabindex") |> Enum.uniq() == ["0"]
   end
 
+  test "every link the guides make to a docs section opens at that section" do
+    docs = build_conn() |> get("/docs") |> html_response(200) |> LazyHTML.from_document()
+
+    sections =
+      for file <- Path.wildcard("priv/public/*.md"),
+          [_, id] <- Regex.scan(~r{/docs#([a-z0-9-]+)}, File.read!(file)),
+          uniq: true,
+          do: id
+
+    refute sections == []
+
+    for id <- sections do
+      assert docs |> LazyHTML.query("##{id}") |> Enum.count() == 1, "/docs##{id} opens nowhere"
+    end
+  end
+
   # Each page names itself in the tab and describes itself for search, from
   # the one list in PublicDocuments; the site name is added once.
   test "every reading page has its own title and description" do
