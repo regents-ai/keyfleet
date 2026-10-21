@@ -98,13 +98,21 @@ defmodule Keyfleet.Notebooks.Files do
   making its folders as needed: `:add` makes a new file, kept as
   `subject`'s, and leaves one already there as it is, answering `:conflict`;
   `:write` replaces a file `subject` made, answering `:not_maker` for anyone
-  else's (`Keyfleet.Notebooks.Makers`).
+  else's (`Keyfleet.Notebooks.Makers`). A file added whose maker can't be
+  kept is removed again, so it never stays as the notebook maker's.
   """
   def write(fleet_id, subject, project_id, notebook_id, path, content, :add) do
     with {:ok, key} <- file_key(path),
-         {:ok, item} <- put(fleet_id, subject, project_id, notebook_id, path, content, true),
-         :ok <- Makers.record(fleet_id, notebook_id, key, subject),
-         do: {:ok, item}
+         {:ok, item} <- put(fleet_id, subject, project_id, notebook_id, path, content, true) do
+      case Makers.record(fleet_id, notebook_id, key, subject) do
+        :ok ->
+          {:ok, item}
+
+        {:error, reason} ->
+          remove(fleet_id, subject, project_id, notebook_id, path)
+          {:error, reason}
+      end
+    end
   end
 
   def write(fleet_id, subject, project_id, notebook_id, path, content, :write) do
@@ -131,6 +139,16 @@ defmodule Keyfleet.Notebooks.Files do
            )
            |> answer(200),
          do: {:ok, entry(item)}
+  end
+
+  defp remove(fleet_id, subject, project_id, notebook_id, path) do
+    request(
+      fleet_id,
+      subject,
+      :delete,
+      notebook_path(project_id, notebook_id) <> "/workspace/entries",
+      params: [path: path]
+    )
   end
 
   defp entry(item) do

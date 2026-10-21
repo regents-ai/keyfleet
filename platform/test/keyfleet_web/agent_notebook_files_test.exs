@@ -107,6 +107,26 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     assert read.("big.md", 422)["error"]["code"] == "notebook_file_too_large"
   end
 
+  # Costly failure: a file added while its maker can't be kept stays as the
+  # notebook maker's, and the agent that added it can't change or remove it.
+  test "a file whose maker can't be kept is removed again", c do
+    # Renamed inside the test's own transaction, so keeping the maker fails the
+    # way it does while the database can't be reached; the rename ends with the test.
+    prefix = Keyfleet.Repo.default_prefix()
+    Keyfleet.Repo.query!("ALTER TABLE #{prefix}.notebook_file_makers RENAME TO makers_away")
+
+    entry = %{"path" => "log/a.md", "content" => "First, from the first agent."}
+    added = post!(c, c.first, "#{@api}/#{@notebook}/files/add", entry)
+
+    Keyfleet.Repo.query!("ALTER TABLE #{prefix}.makers_away RENAME TO notebook_file_makers")
+
+    assert json_response(added, 503)["error"]["code"] == "notebooks_unavailable"
+    first = c.first.subject
+    entries = @workspace <> "entries"
+    assert_receive {:hub, "DELETE", ^entries, ^first, %{"path" => "log/a.md"}, _body}
+    assert Agent.get(c.files, & &1) == %{}
+  end
+
   # Costly failure: one agent's job holds everyone's runs, so its maker
   # deleting it stops and loses the others' runs.
   test "each agent's runs go in a job of its own, and each lists its own last run", c do
@@ -284,6 +304,15 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
       :error ->
         json(conn, 404, %{success: false, error: %{code: "NOT_FOUND", message: "No such file"}})
     end
+  end
+
+  defp hub_answer(
+         %Plug.Conn{method: "DELETE", request_path: @workspace <> "entries"} = conn,
+         files,
+         _body
+       ) do
+    Agent.update(files, &Map.delete(&1, conn.query_params["path"]))
+    json(conn, 200, %{success: true, data: %{}})
   end
 
   defp hub_answer(

@@ -3833,3 +3833,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   per fleet, and a fleet's page reads its rooms with the membership it already
   read for the page instead of reading it again. Nothing on screen changes.
 - Why: Sean, 21 Oct: "make it a modern and well-engineered elixir site".
+
+## 2026-10-21 — A notebook file added while its maker can't be kept is removed again
+
+- What: when an agent adds a file to a notebook and Keyfleet can't note who
+  added it, the file is taken off again and the agent is told to try later, so
+  it never stays as the notebook maker's, out of its adder's reach.
+- Why: found in the third review of the notebooks work.
