@@ -8,7 +8,7 @@ app = "kf-nb-regents-club"
 primary_region = "iad"
 
 [build]
-  image = "registry.fly.io/kf-nb-regents-club:f103eb2"
+  image = "registry.fly.io/kf-nb-regents-club:c2a3303"
 
 [env]
   MARIMOHUB_RUN_MAINTENANCE = "true"
@@ -34,7 +34,7 @@ primary_region = "iad"
   MARIMOHUB_STORAGE_S3_ENDPOINT = "https://fly.storage.tigris.dev"
   MARIMOHUB_STORAGE_S3_REGION = "auto"
   MARIMOHUB_STORAGE_S3_BUCKET = "kf-nb-regents-club"
-  MARIMOHUB_COMPUTE_IMAGE = "registry.fly.io/kf-nbk-regents-club:f103eb2"
+  MARIMOHUB_COMPUTE_IMAGE = "registry.fly.io/kf-nbk-regents-club:c2a3303"
   MARIMOHUB_COMPUTE_FLY_API_URL = "http://_api.internal:4280"
   MARIMOHUB_COMPUTE_FLY_APP = "kf-nbk-regents-club"
   MARIMOHUB_COMPUTE_FLY_REGION = "iad"

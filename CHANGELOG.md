@@ -4432,3 +4432,16 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   descriptions in the API contract that a comma had cut short now read whole.
 - Why: the 13:40Z gap list, item 5 (notebooks_list had no description or
   date the Docs rows show).
+
+## 2026-10-21 — Fleet notebook hubs move to the latest marimohub
+
+- What: each fleet's notebook hub and its runner now build from marimohub
+  `c2a3303` (release 0.5.2 plus its later security updates) instead of `f103eb2`,
+  and the runner carries marimo 0.25.2. Every fleet keeps its own hub, storage,
+  private network and machines. The new marimohub features (previews, notebook
+  imports, groups, source references, admin reclaim) stay closed at Keyfleet's
+  gateway. The hub template, `hub.env.example` and the local proof now carry the
+  four settings the live hubs already run with (sandbox tokens, one editor at a
+  time, background runs, 100 runs per notebook).
+- Why: Sean, 21 October 21:52Z: "update marimohub to latest … and make sure it is
+  set to be multi-tenant per keyfleet".

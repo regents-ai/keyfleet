@@ -22,7 +22,7 @@ them to the hub. That part is built separately, in `platform/`.
   one hub secret and the machine's id, and a time limit after which it shuts
   itself down even if the hub never asks.
 - **`runner/`**: the notebook machine's image. It is marimohub's own notebook
-  image at the pinned version (marimo 0.25.0 and its usual libraries), plus:
+  image at the pinned version (marimo 0.25.2 and its usual libraries), plus:
   - a small helper the hub uses to run commands and read and write the
     notebook's files on the machine;
   - a relay so the hub can reach the notebook over Fly's private network.
@@ -33,7 +33,7 @@ them to the hub. That part is built separately, in `platform/`.
   with `compute-fly` added), the two Fly app templates, and
   `hub.env.example`, which lists every hub setting with a one-line meaning.
 - **`marimohub/`**: the exact marimohub version used (`pin.env`) and the
-  one-entry lockfile change that adds `compute-fly` to marimohub's workspace.
+  lockfile change (`pnpm-lock.patch`, made by pnpm) that adds `compute-fly` to marimohub's workspace.
 - **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
@@ -55,9 +55,9 @@ things:
    first run only).
 2. Runs the type check, lint and tests for `compute-fly`, and bundles it.
 3. Builds the three images:
-   - `keyfleet/marimo-sandbox:f103eb2`, marimohub's notebook image, about 3 GB;
-   - `keyfleet/notebook-runner:f103eb2`;
-   - `keyfleet/notebook-hub:f103eb2`, about 440 MB.
+   - `keyfleet/marimo-sandbox:c2a3303`, marimohub's notebook image, about 3 GB;
+   - `keyfleet/notebook-runner:c2a3303`;
+   - `keyfleet/notebook-hub:c2a3303`, about 440 MB.
 4. Runs the helper's tests inside the runner image.
 
 The first image build takes a while; later runs reuse Docker's cache.
@@ -152,8 +152,8 @@ Keyfleet's server puts on each request, which the hub checks.
    Apple Silicon Mac the check above builds `arm64` images, so build again for
    Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
    (same tags). Then run `fly auth docker` and:
-   - tag `keyfleet/notebook-runner:f103eb2` as `registry.fly.io/kf-nbk-<fleet>:f103eb2` and push it;
-   - tag `keyfleet/notebook-hub:f103eb2` as `registry.fly.io/kf-nb-<fleet>:f103eb2` and push it.
+   - tag `keyfleet/notebook-runner:c2a3303` as `registry.fly.io/kf-nbk-<fleet>:c2a3303` and push it;
+   - tag `keyfleet/notebook-hub:c2a3303` as `registry.fly.io/kf-nb-<fleet>:c2a3303` and push it.
 4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:
    `fly storage create --app kf-nb-<fleet> --name <bucket>`. Fly sets the
    bucket's key on the hub app itself, as the secrets `AWS_ACCESS_KEY_ID` and

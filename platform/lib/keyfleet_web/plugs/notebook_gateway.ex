@@ -118,7 +118,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     x-dns-prefetch-control x-download-options x-permitted-cross-domain-policies x-xss-protection)
   @handshake ~w(sec-websocket-key sec-websocket-version sec-websocket-extensions)
 
-  # Notebook UI operations in marimohub f103eb2. Newly added routes stay closed
+  # Notebook UI operations in marimohub c2a3303. Newly added routes stay closed
   # until reviewed here; credentials, admin, OAuth, MCP and sync routes are absent.
   @api_routes [
     "GET /api/v1/me",
