@@ -4295,3 +4295,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   on regents.sh".
 - Why: an agent walking the guide read two places that don't match where the
   buttons are; every other agent file already names the side panel.
+
+## 2026-10-21 — The discovery index ends at its footer
+- What: /llms.txt had a paragraph below its footer links. Its two facts moved
+  in: "every protected request needs a current pairing" joins the pairing
+  steps, and /commands.json gets its own line under "Start here".
+- Why: an agent reading top to bottom met the footer, then more rules; the
+  command list was only named in that stray paragraph.
