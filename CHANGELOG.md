@@ -3802,3 +3802,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Why: every list of changes in the Workspace looks and moves the same way.
 - Checked: a signed-in browser test in Chromium watches History grow and end
   clean; it fails with the motion taken off.
+
+## 2026-10-21 — Unused wallet and level helpers removed
+
+- What: three public functions nothing called are gone: the old panel-wallet
+  chooser in the on-chain steps, and the Fibonacci level size and last-Key
+  helpers. Nothing a person or agent sees changes. A scan of every public
+  function in the app against every caller found no others; the build has no
+  warnings and no unused dependencies.
+- Why: Sean, 21 October 10:15Z: "make it a modern and well-engineered elixir
+  site".

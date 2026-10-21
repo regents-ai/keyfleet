@@ -98,14 +98,6 @@ defmodule Keyfleet.Fleets.Presets do
   def fibonacci_level_of(token_id) when is_integer(token_id) and token_id >= 1,
     do: level_ends() |> Enum.find_index(&(token_id <= &1)) |> Kernel.+(1)
 
-  @doc "How many keys a Fibonacci level has: 2, 3, 5, 8 and on."
-  def fibonacci_level_supply(level) when is_integer(level) and level >= 1,
-    do: level_supplies() |> Enum.at(level - 1)
-
-  @doc "The last token id of a Fibonacci level."
-  def fibonacci_level_end(level) when is_integer(level) and level >= 1,
-    do: level_ends() |> Enum.at(level - 1)
-
   @doc "A Fibonacci level's price: 10 USDC at level 1, then ×1.2 per level, rounded up at each step."
   def fibonacci_level_price(level) when is_integer(level) and level >= 1,
     do: step(@q_usdc, level - 1, 120)
