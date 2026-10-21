@@ -3864,3 +3864,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   like each opportunity's Details, and the note on the money rules stays in
   view. https://keyfleet.ai/opportunities.md, for agents, keeps the whole text.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline".
+
+## 2026-10-21 — Buy Key's buttons live in the Buy Key window
+
+- What: Approve and Buy, drawn only in the "Buy Key" window, now live in that
+  window's own module instead of the 2,000-line fleet page, which loses 125
+  lines. Nothing on screen changes.
+- Why: Sean, 21 Oct: "make it a modern and well-engineered elixir site".

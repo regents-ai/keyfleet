@@ -6,10 +6,9 @@ defmodule KeyfleetWeb.Components.BuyKey do
 
   It shows Key cards turning over, that a Key's traits are randomized, how
   many Keys have sold, what the next one costs (with a tip saying the wallet
-  asks twice) and, once the fleet is on Base, its Approve and Buy
-  (`KeyfleetWeb.FleetLive.buy_order/1`). They stay when the fleet sells out,
-  with why Buy can't be pressed beside it, so a buyer keeps the outcome of
-  every purchase they sent. Before then its Buy is closed, with the reason
+  asks twice) and, once the fleet is on Base, its Approve and Buy. They stay
+  when the fleet sells out, with why Buy can't be pressed beside it, so a
+  buyer keeps the outcome of every purchase they sent. Before then its Buy is closed, with the reason
   right under it, so a phone that scrolls the window sees both together.
 
   A fleet's sale is read from the one reading of the fleet every open page
@@ -23,7 +22,7 @@ defmodule KeyfleetWeb.Components.BuyKey do
 
   alias Keyfleet.Fleets
   alias Keyfleet.Fleets.Presets
-  alias KeyfleetWeb.{FleetLive, FleetNow, FleetPage}
+  alias KeyfleetWeb.{FleetLive, FleetNow, FleetPage, WalletPanel, WalletWords}
 
   @doc """
   A fleet's sale, as the window and the homepage show it:
@@ -158,7 +157,7 @@ defmodule KeyfleetWeb.Components.BuyKey do
           <dd id="buy-key-price">{@cost}</dd>
         </div>
       </dl>
-      <FleetLive.buy_order
+      <.order
         :if={@order?}
         id="buy-key"
         fleet={
@@ -195,6 +194,124 @@ defmodule KeyfleetWeb.Components.BuyKey do
     </Regent.Structure.dialog>
     """
   end
+
+  attr :id, :string, required: true, doc: "names the group and prefixes its buttons' ids"
+
+  attr :fleet, :map,
+    required: true,
+    doc: "the fleet, with its `progress`: a new sale reads the chain"
+
+  attr :actor, :any, required: true
+  attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
+
+  # Approve and Buy for the Key on sale, with the steps built on the server.
+  #
+  # The Key's number, its price and whether the fleet is sold out come from
+  # the figures the steps were built from, read from the chain at the latest
+  # block, so the buttons and the line above them always name what a press
+  # sends. Every press of Buy goes to the wallet, pending purchases or not.
+  # The exceptions are presses the chain's own state makes certain to fail: a
+  # sold-out fleet, sales not open yet, or an approval not made yet. Buy then
+  # stays in view but can't be pressed, with why beside it. Approve shows when
+  # the wallet's USDC allowance to the fleet is below the most a purchase may
+  # cost, the price with room for Keys sold first.
+  defp order(assigns) do
+    ~H"""
+    <.live_component
+      module={WalletPanel}
+      id={"#{@id}-order"}
+      class="fleet-buy-order"
+      flow={:buy}
+      fleet={%{fleet_id: @fleet.fleet_id, chain_id: @fleet.chain_id}}
+      actor={@actor}
+      lease={@lease}
+      refresh={@fleet.progress.total_minted}
+      inputs={%{"unlimited" => "false"}}
+    >
+      <:buttons :let={panel}>
+        <%!-- A form of its own, so the box sits right above Approve, outside
+        the buttons; the approval is built from it. --%>
+        <form
+          id={"#{@id}-unlimited-form"}
+          class="fleet-unlimited"
+          phx-change="change"
+          phx-target={"##{@id}-order"}
+          hidden={not approve_shown?(panel)}
+        >
+          <input type="hidden" name="unlimited" value="false" />
+          <label>
+            <input
+              type="checkbox"
+              id={"#{@id}-unlimited"}
+              name="unlimited"
+              value="true"
+              checked={panel.inputs["unlimited"] == "true"}
+              disabled={approve_done?(panel)}
+              data-onchain-input="unlimited"
+            /> Unlimited
+          </label>
+        </form>
+        <%!-- Only the network fee ever holds Approve back, and it holds Buy
+        back with it, so the one note beside Buy says why for both. --%>
+        <Regent.Primitives.button
+          id={"#{@id}-approve"}
+          data-onchain-step="approve"
+          data-account-target={panel.signed_out && "sign-in"}
+          data-done={approve_done?(panel)}
+          hidden={not approve_shown?(panel)}
+          disabled={WalletPanel.blocked(panel, "approve") != nil or approve_done?(panel)}
+          aria-describedby={WalletPanel.blocked(panel, "approve") && "#{@id}-button-why"}
+        >
+          <span class="fleet-step-mark" aria-hidden="true">
+            {if approve_done?(panel), do: "✓", else: "1"}
+          </span>
+          <span data-press-label>
+            {if approve_done?(panel), do: "USDC approved", else: "Approve USDC"}
+          </span>
+        </Regent.Primitives.button>
+        <Regent.Primitives.button
+          id={"#{@id}-button"}
+          data-onchain-step="buy"
+          data-account-target={panel.signed_out && "sign-in"}
+          disabled={buy_blocked(panel) != nil}
+          aria-describedby={buy_blocked(panel) && "#{@id}-button-why"}
+        >
+          <span :if={approve_shown?(panel)} class="fleet-step-mark" aria-hidden="true">2</span>
+          <span data-press-label>Buy Key {key_on_sale(panel)}</span>
+        </Regent.Primitives.button>
+        <span :if={buy_blocked(panel)} id={"#{@id}-button-why"} class="wallet-panel-why">
+          {WalletWords.blocked(buy_blocked(panel))}
+        </span>
+      </:buttons>
+    </.live_component>
+    """
+  end
+
+  # Why Buy is certain to fail now, as the chain read at the latest block
+  # says, or nil.
+  defp buy_blocked(%{built: %{problem: :sold_out}}), do: :sold_out
+  defp buy_blocked(panel), do: WalletPanel.blocked(panel, "buy")
+
+  # The Key on sale's number or price, as the steps were built from them.
+  defp on_sale(panel, figure), do: panel |> WalletPanel.figures() |> Map.get(figure)
+
+  # The Key on sale's number as the page writes it, or nil before the steps are built.
+  defp key_on_sale(panel) do
+    token_id = on_sale(panel, :token_id)
+    token_id && grouped(token_id)
+  end
+
+  # Approve shows while the wallet the figures are for needs an approval, and
+  # stays once an approval sent from here has landed, marked done.
+  defp approve_shown?(panel), do: approval_needed?(panel) or approve_done?(panel)
+
+  defp approval_needed?(%{built: %{figures: %{approve?: true}}}), do: true
+  defp approval_needed?(_panel), do: false
+
+  # Done once the figures read after it no longer ask for one. The chain then
+  # has the approval, so no approve step is built and Approve can't be
+  # pressed, as when it was hidden; it takes presses again once one is needed.
+  defp approve_done?(panel), do: WalletPanel.approved?(panel) and not approval_needed?(panel)
 
   # A fleet on Base has a Key on offer, or none once it has sold out.
   defp on_base?(sale), do: match?(%{sales: %{buy: %{}}}, sale)
