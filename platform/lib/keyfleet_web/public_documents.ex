@@ -178,8 +178,10 @@ defmodule KeyfleetWeb.PublicDocuments do
   parameters. A fleet's own page is titled with the fleet's name alone
   (`Classic #1`), a Key's, a proposal's or a workspace item's page with its
   number and the fleet (`Key 62 · Classic #1`, `Proposal 3 · Classic #1`,
-  `Goal 1 · Classic #1`), and the fleet's other pages with their own title and
-  the fleet's name (`Treasury · Classic #1`).
+  `Goal 1 · Classic #1`), a commit's or a file's as its heading names it
+  (`Commit 3f2a9c81d0e4 · Classic #1`, `README.md · Classic #1`), and the
+  fleet's other pages with their own title and the fleet's name
+  (`Treasury · Classic #1`).
   Each one's description names the fleet.
   """
   def page(%{route_id: route_id, fleet_id: nil}, _params), do: page(route_id)
@@ -207,6 +209,12 @@ defmodule KeyfleetWeb.PublicDocuments do
     {name, _plural} = KeyfleetWeb.WorkspacePage.type_name(type)
     "#{String.capitalize(name)} #{number} · #{fleet}"
   end
+
+  defp fleet_title(:code_commit, _title, fleet, %{"commit" => commit}),
+    do: "Commit #{String.slice(commit, 0, 12)} · #{fleet}"
+
+  defp fleet_title(:code_files, _title, fleet, %{"path" => path}) when path != "",
+    do: "#{Path.basename(path)} · #{fleet}"
 
   defp fleet_title(_route_id, title, fleet, _params), do: "#{title} · #{fleet}"
 

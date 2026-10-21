@@ -4405,3 +4405,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - What: a goal's, task's or finding's browser tab and link preview read
   "Goal 1 · Classic #1" instead of "Workspace · Classic #1".
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — A commit's or file's browser tab names it
+
+- What: a commit's browser tab and link preview read "Commit 3f2a9c81d0e4 · Classic #1",
+  and a file's or folder's its name, such as "README.md · Classic #1", as their headings do.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".

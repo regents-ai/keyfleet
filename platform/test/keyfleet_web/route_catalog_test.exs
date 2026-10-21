@@ -266,6 +266,24 @@ defmodule KeyfleetWeb.RouteCatalogTest do
                }),
                %{"object_id" => "dead_end#4"}
              )
+
+    commit = "3f2a9c81d0e4" <> String.duplicate("0", 28)
+    code_commit = "/classic/1/code/:repository/commits/:commit"
+    commit_params = %{"repository" => "fleet_tech_classic", "commit" => commit}
+
+    assert [page_title: "Commit 3f2a9c81d0e4 · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(
+               RouteCatalog.fetch!(code_commit, commit_params),
+               commit_params
+             )
+
+    files = RouteCatalog.fetch!("/classic/1/code/:repository/files", commit_params)
+
+    assert [page_title: "README.md · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(files, %{"path" => "docs/README.md"})
+
+    assert [page_title: "Code · Classic #1"] ++ _description =
+             KeyfleetWeb.PublicDocuments.page(files, %{})
   end
 
   defp sample_params(%{parameter_schema: schema}) do
