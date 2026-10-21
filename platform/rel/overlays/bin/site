@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+# Serves keyfleet.ai and reaches the fleets' graph writers on the graph machine.
+KEYFLEET_MACHINE=site exec "$(dirname "$0")/keyfleet" start

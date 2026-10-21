@@ -139,6 +139,18 @@ end
 
 if config_env() == :prod do
   unless migrating? do
+    # bin/site and bin/graph name the machine; the machines of one app find
+    # each other through its private DNS name (fly.toml).
+    machine =
+      case System.fetch_env!("KEYFLEET_MACHINE") do
+        "site" -> :site
+        "graph" -> :graph
+      end
+
+    config :keyfleet, :machine, machine
+
+    config :keyfleet, :dns_cluster_query, System.fetch_env!("DNS_CLUSTER_QUERY")
+
     host = String.trim(System.fetch_env!("PHX_HOST"))
     secret_key_base = System.fetch_env!("SECRET_KEY_BASE")
 

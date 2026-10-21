@@ -512,8 +512,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp body_limit(path) do
     cond do
-      Regex.match?(@send_path, path) or Regex.match?(@key_send_path, path) -> @send_max_body
-      dm_op(path) == "send" -> @send_max_body
+      send?(path) -> @send_max_body
       catch_up?(path) -> @sync_max_body
       limit = poll_body_limit(path) -> limit
       chain_op(path) == "proposals/create" -> @propose_max_body
@@ -522,6 +521,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       true -> 4096
     end
   end
+
+  # A room message, a Key's message or a direct message.
+  defp send?(path),
+    do:
+      Regex.match?(@send_path, path) or Regex.match?(@key_send_path, path) or
+        dm_op(path) == "send"
 
   # A sync, and catching up on direct messages alone.
   defp catch_up?(path), do: Regex.match?(@sync_path, path) or dm_op(path) == "changes"

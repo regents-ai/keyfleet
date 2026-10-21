@@ -16,9 +16,10 @@ config :keyfleet, :behind_fly_proxy, true
 # The private port fly.toml names under [metrics]; Fly routes no public traffic to it.
 config :keyfleet, :metrics_listener, ip: {0, 0, 0, 0, 0, 0, 0, 0}, port: 9091
 
-# The graph files sit on the machine's volume; the image carries the host.
+# The graph files sit on the graph machine's volume; the image carries the
+# host. Only the graph machine runs the writers (Keyfleet.Application), so the
+# site machine leaves the graph off.
 config :keyfleet, :graph,
-  enabled: true,
   data_dir: "/data/graph",
   python: "/opt/graph_host/.venv/bin/python"
 

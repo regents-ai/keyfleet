@@ -10,44 +10,8 @@ defmodule Keyfleet.Application do
     Keyfleet.ErrorHandlers.attach()
 
     children =
-      [
-        KeyfleetWeb.Telemetry,
-        {Keyfleet.Accounts.RequestRateLimiter, []},
-        database_child(),
-        health_child(),
-        {Phoenix.PubSub, name: Keyfleet.PubSub},
-        # Failures a page read rescued, saved beside the page; past this many at
-        # once, a failure is only logged.
-        {Task.Supervisor, name: Keyfleet.ErrorSaves, max_children: 20},
-        # Figures every visitor sees alike, read once for every open page; its
-        # producers start after it.
-        Keyfleet.SharedReading,
-        # Jobs announce what they change, so they start after PubSub.
-        oban_child(),
-        KeyfleetWeb.Telemetry.site_poller(),
-        # Who was let into a fleet's notebooks or code lately; a key changing
-        # hands clears its holder at once, through PubSub.
-        Keyfleet.AccessCache,
-        # Each paired agent's activity, kept a few minutes for the side panel,
-        # and the reads that fetch it.
-        Keyfleet.Agents.ActivityReading,
-        {Task.Supervisor, name: Keyfleet.Agents.Reads},
-        agents_listener_child(),
-        credits_listener_child(),
-        # A key's profile reads its rewards wherever the site runs.
-        Keyfleet.Chain.RewardsWaiting,
-        graph_children(),
-        here_child(),
-        fleet_now_child(),
-        fleet_proposals_child(),
-        # Agent requests held open waiting for news, by client address.
-        KeyfleetWeb.AgentWaits,
-        # Start a worker by calling: Keyfleet.Worker.start_link(arg)
-        # {Keyfleet.Worker, arg},
-        # Start to serve requests, typically the last entry
-        KeyfleetWeb.Endpoint,
-        metrics_child()
-      ]
+      Application.fetch_env!(:keyfleet, :machine)
+      |> children()
       |> List.flatten()
       |> Enum.reject(&is_nil/1)
 
@@ -56,6 +20,76 @@ defmodule Keyfleet.Application do
     opts = [strategy: :one_for_one, name: Keyfleet.Supervisor]
     Supervisor.start_link(children, opts)
   end
+
+  # In production the site runs on two kinds of machine (fly.toml). The graph
+  # machine keeps the fleets' graph logs on its volume and runs only their
+  # writers and projectors; the site machine runs everything else and reaches
+  # the writers over the cluster. Anywhere else, one machine runs the site.
+  defp children(:graph) do
+    [
+      database_child(),
+      cluster_child(),
+      {Phoenix.PubSub, name: Keyfleet.PubSub},
+      graph_processes_child(),
+      {Task.Supervisor, name: Keyfleet.ErrorSaves, max_children: 20},
+      Keyfleet.Graph.Supervisor,
+      Keyfleet.Graph.Projectors
+    ]
+  end
+
+  defp children(:site) do
+    [
+      KeyfleetWeb.Telemetry,
+      {Keyfleet.Accounts.RequestRateLimiter, []},
+      database_child(),
+      health_child(),
+      cluster_child(),
+      {Phoenix.PubSub, name: Keyfleet.PubSub},
+      graph_processes_child(),
+      # Failures a page read rescued, saved beside the page; past this many at
+      # once, a failure is only logged.
+      {Task.Supervisor, name: Keyfleet.ErrorSaves, max_children: 20},
+      # Figures every visitor sees alike, read once for every open page; its
+      # producers start after it.
+      Keyfleet.SharedReading,
+      # Jobs announce what they change, so they start after PubSub.
+      oban_child(),
+      KeyfleetWeb.Telemetry.site_poller(),
+      # Who was let into a fleet's notebooks or code lately; a key changing
+      # hands clears its holder at once, through PubSub.
+      Keyfleet.AccessCache,
+      # Each paired agent's activity, kept a few minutes for the side panel,
+      # and the reads that fetch it.
+      Keyfleet.Agents.ActivityReading,
+      {Task.Supervisor, name: Keyfleet.Agents.Reads},
+      agents_listener_child(),
+      credits_listener_child(),
+      # A key's profile reads its rewards wherever the site runs.
+      Keyfleet.Chain.RewardsWaiting,
+      graph_children(),
+      here_child(),
+      fleet_now_child(),
+      fleet_proposals_child(),
+      # Agent requests held open waiting for news, by client address.
+      KeyfleetWeb.AgentWaits,
+      # Start a worker by calling: Keyfleet.Worker.start_link(arg)
+      # {Keyfleet.Worker, arg},
+      # Start to serve requests, typically the last entry
+      KeyfleetWeb.Endpoint,
+      metrics_child()
+    ]
+  end
+
+  # The machines of one release find each other by their app's private DNS
+  # name, so PubSub and the graph's writers reach across them.
+  defp cluster_child do
+    if query = Application.get_env(:keyfleet, :dns_cluster_query),
+      do: {DNSCluster, query: query}
+  end
+
+  # The group the fleets' writers and projectors join, wherever they run.
+  defp graph_processes_child,
+    do: %{id: Keyfleet.Graph.Processes, start: {:pg, :start_link, [Keyfleet.Graph.Processes]}}
 
   defp database_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false),

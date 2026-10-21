@@ -127,7 +127,7 @@ defmodule Keyfleet.Graph.WriterTest do
     start_graph(ctx, [fleet, other], python: hooked_python(ctx.tmp_dir))
     await_ready(fleet)
     await_ready(other)
-    before = {writer(fleet), writer(other), Process.whereis(Keyfleet.Graph.Registry)}
+    before = {writer(fleet), writer(other)}
 
     for _ <- 1..10 do
       assert {:error, %{"code" => "bad_request"}} =
@@ -137,7 +137,7 @@ defmodule Keyfleet.Graph.WriterTest do
                Writer.command(fleet, "create", %{type: <<0xFF>>}, authorized("c1"))
     end
 
-    assert {writer(fleet), writer(other), Process.whereis(Keyfleet.Graph.Registry)} == before
+    assert {writer(fleet), writer(other)} == before
     assert {:ok, _hello} = Writer.request(fleet, "hello", %{})
 
     assert {:ok, _hello} = Writer.request(other, "hello", %{})
@@ -145,7 +145,7 @@ defmodule Keyfleet.Graph.WriterTest do
     assert length(launches(ctx.tmp_dir)) == 2
   end
 
-  test "a fleet whose host keeps crashing leaves the other fleets, the registry and the supervisors running",
+  test "a fleet whose host keeps crashing leaves the other fleets and the supervisors running",
        ctx do
     [crashing, healthy] = Enum.take(@fleets, 2)
     python = hooked_python(ctx.tmp_dir, crash_fleet: crashing)
@@ -154,14 +154,13 @@ defmodule Keyfleet.Graph.WriterTest do
       capture_host_failures(fn ->
         graph = start_graph(ctx, [crashing, healthy], python: python)
         await_ready(healthy)
-        before = {writer(crashing), writer(healthy), Process.whereis(Keyfleet.Graph.Registry)}
+        before = {writer(crashing), writer(healthy)}
 
         await(fn -> Enum.count(launches(ctx.tmp_dir), &(&1["fleet"] == crashing)) >= 8 end)
 
         assert Process.alive?(graph)
 
-        assert {writer(crashing), writer(healthy), Process.whereis(Keyfleet.Graph.Registry)} ==
-                 before
+        assert {writer(crashing), writer(healthy)} == before
 
         assert Writer.request(crashing, "hello", %{}) == {:error, :unavailable}
 
@@ -650,18 +649,15 @@ defmodule Keyfleet.Graph.WriterTest do
   end
 
   defp writer(fleet) do
-    [{pid, _timeout}] = Registry.lookup(Keyfleet.Graph.Registry, fleet)
+    [pid] = :pg.get_members(Keyfleet.Graph.Processes, {Writer, fleet})
     pid
   end
 
-  # The registry itself is briefly gone while the graph supervisor restarts.
   defp current_writer(fleet) do
-    case Registry.lookup(Keyfleet.Graph.Registry, fleet) do
-      [{pid, _timeout}] -> pid
+    case :pg.get_members(Keyfleet.Graph.Processes, {Writer, fleet}) do
+      [pid] -> pid
       [] -> nil
     end
-  rescue
-    ArgumentError -> nil
   end
 
   defp await_ready(fleet),

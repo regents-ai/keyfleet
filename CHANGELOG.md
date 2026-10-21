@@ -3283,3 +3283,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Why: Sean 21 October 09:15Z, for the nine-agent Classic #1 pilot: "just make
   it work for them on the real site in the sidebar", so nine agents on one
   computer pair as nine agents with nothing to edit by hand.
+
+## 2026-10-21 — Releases with no gap: a site machine and a graph machine
+
+- What: keyfleet.ai now runs on two machines in one Fly app. The site machine serves every page and is released bluegreen, like the other Regent sites: the new one starts and answers its health check before the old one stops, so pages stay up through a release. The graph machine keeps the fleets' work logs on its disk and runs only their writers; it stops and starts again on each release, and for those seconds a workspace write answers "try again". The two machines join one cluster over Fly's private network (`dns_cluster`, with a shared `RELEASE_COOKIE` secret), and the fleets' writers are found across it (`:pg`). `scripts/deploy.sh` releases the graph machine first and then the site machine, so a release is still one command. The release smoke check and the load tests start both machines. The one-time move of production is in the deploy checklist's "Two machines" section.
+- Why: Sean's 1. a, 21 October 07:26Z, approving the plan in /Users/sean/Documents/regent/docs/keyfleet/keyfleet-release-without-gap-plan-2026-10-21.md: each release stopped the one machine for 7 to 9 seconds, and nobody got a page.
