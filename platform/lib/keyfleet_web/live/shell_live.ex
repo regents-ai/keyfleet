@@ -693,6 +693,7 @@ defmodule KeyfleetWeb.ShellLive do
           account_control={@account_control}
           held_keys={@held_keys}
           lease={@session_lease}
+          actor={actor(@access_context)}
           credits={@credits}
         />
 

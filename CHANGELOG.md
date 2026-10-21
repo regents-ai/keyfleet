@@ -4480,3 +4480,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   by its id, so an older one still shows; a deleted one is left out.
 - Why: cited notebooks were looked for among the fleet's newest 50 only, so
   one made earlier vanished from the goal's page.
+
+## 2026-10-21 — Claim for every Key at once
+
+- What: the Account page's Your Keys has one Claim button per token for each
+  fleet, claiming what the daily split shared with every Key the wallet holds
+  or holds a shard of, in one transaction. Each Key's own Claim stays on its
+  page. The wallet panel builds the claim (`claim_all` flow), naming only Keys
+  the wallet may claim for, and turns a token with nothing waiting off with
+  "Nothing to claim".
+- Why: Sean held 30 Keys in Classic #1 and could only claim one Key at a time.

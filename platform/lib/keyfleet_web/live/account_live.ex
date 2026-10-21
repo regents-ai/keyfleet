@@ -2,8 +2,8 @@ defmodule KeyfleetWeb.AccountLive do
   @moduledoc """
   The signed-in person's account, one tab each: Profile (who the site knows
   them as, their wallets and which one is active (`KeyfleetWeb.AccountWallets`),
-  their ENS name and World ID, the keys their wallets hold and, in a
-  fleet where they hold several, the one they post as
+  their ENS name and World ID, the keys their wallets hold with one Claim per
+  fleet for all of them at once and, in a fleet where they hold several, the one they post as
   (`KeyfleetWeb.PostingKeyChoice`), the agents
   paired with their account, which they may open, rename and unpair
   (`KeyfleetWeb.AgentsPanel`), their Credits and this browser's session), Wallets (the wallets their sign-in
@@ -27,11 +27,18 @@ defmodule KeyfleetWeb.AccountLive do
   alias Keyfleet.Keys
   alias Keyfleet.PublicIdentity
   alias KeyfleetWeb.KeyLinks
+  alias KeyfleetWeb.WalletPanel
+  alias KeyfleetWeb.WalletWords
 
   attr :account, :map, default: nil
   attr :signed_out_reason, :atom, default: :signed_out
   attr :account_control, :map, required: true
-  attr :lease, :map, default: nil, doc: "the page's `session_lease`, which the agents list checks"
+
+  attr :lease, :map,
+    default: nil,
+    doc: "the page's `session_lease`, which the agents list and Claim check"
+
+  attr :actor, :any, default: nil, doc: "the signed-in person, or nil"
 
   attr :credits, KeyfleetWeb.Read,
     default: %KeyfleetWeb.Read{},
@@ -39,7 +46,8 @@ defmodule KeyfleetWeb.AccountLive do
 
   attr :held_keys, :list,
     default: [],
-    doc: "the keys the account's wallets hold, as `%{fleet_id, name, token_ids}` per fleet"
+    doc:
+      "the keys the account's wallets hold, as `%{fleet_id, chain_id, name, token_ids}` per fleet, `chain_id` nil for a fleet not on chain"
 
   def profile(assigns) do
     ~H"""
@@ -139,6 +147,28 @@ defmodule KeyfleetWeb.AccountLive do
                 <.link patch={KeyLinks.key_path(fleet.fleet_id, token_id)}>Key {token_id}</.link>
               </li>
             </ul>
+            <.live_component
+              :if={fleet.chain_id}
+              module={WalletPanel}
+              id={"account-claim-#{fleet.fleet_id}"}
+              class="account-keys__claim"
+              flow={:claim_all}
+              fleet={%{fleet_id: fleet.fleet_id, chain_id: fleet.chain_id}}
+              actor={@actor}
+              lease={@lease}
+              refresh={fleet.token_ids}
+            >
+              <:buttons :let={panel}>
+                <WalletPanel.step_button
+                  :for={waiting <- waiting(panel)}
+                  panel={panel}
+                  step={"claim-#{waiting.asset}"}
+                  id={"account-claim-#{fleet.fleet_id}-#{waiting.asset}"}
+                >
+                  Claim {WalletWords.token_amount(waiting)}
+                </WalletPanel.step_button>
+              </:buttons>
+            </.live_component>
             <.live_component
               :if={length(fleet.token_ids) > 1}
               module={KeyfleetWeb.PostingKeyChoice}
@@ -343,9 +373,19 @@ defmodule KeyfleetWeb.AccountLive do
   def held_keys(%Human{wallet_addresses: wallets} = actor) do
     held = wallets |> Keys.keys_held_everywhere!(actor: actor) |> Enum.group_by(& &1.fleet_id)
 
+    chain_ids = Map.new(Fleets.list_fleets!(), &{&1.id, &1.chain_id})
+
     for %{id: fleet_id, name: name} <- Fleets.catalog(),
         keys = Map.get(held, fleet_id, []),
         keys != [],
-        do: %{fleet_id: fleet_id, name: name, token_ids: Enum.map(keys, & &1.token_id)}
+        do: %{
+          fleet_id: fleet_id,
+          chain_id: chain_ids[fleet_id],
+          name: name,
+          token_ids: Enum.map(keys, & &1.token_id)
+        }
   end
+
+  # What every Key held in the fleet has waiting, in each token, together.
+  defp waiting(panel), do: panel |> WalletPanel.figures() |> Map.get(:waiting, [])
 end

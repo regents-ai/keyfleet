@@ -469,6 +469,27 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       assert pressed(url, stranger, "claim-#{@eth}") == {:ok, :reverted}
     end
 
+    test "Claim all pays every Key the wallet holds in one transaction", %{url: url, lab: lab} do
+      split = build!(:run_split, @third)
+      assert pressed(url, split, "run_split") == {:ok, :confirmed}
+      per_key = Enum.find(split.figures.assets, &(&1.asset == lab.usdc)).per_key
+
+      claim = build!(:claim_all, @buyer)
+      assert claim.figures.keys == [1, 2]
+      assert %{amount: owed} = Enum.find(claim.figures.waiting, &(&1.asset == lab.usdc))
+      assert owed == 2 * per_key
+      held = uint!(url, lab.usdc, "balanceOf(address)", [@buyer])
+      assert pressed(url, claim, "claim-#{lab.usdc}") == {:ok, :confirmed}
+      assert uint!(url, lab.usdc, "balanceOf(address)", [@buyer]) == held + owed
+
+      assert build!(:claim_all, @buyer).figures.blocked["claim-#{lab.usdc}"] ==
+               :nothing_to_claim
+
+      stranger = build!(:claim_all, @second)
+      assert stranger.figures.keys == []
+      assert stranger.figures.blocked["claim-#{@eth}"] == :nothing_to_claim
+    end
+
     test "the stakers' share is sent once by anyone; a repeat press finds nothing owed",
          %{url: url, lab: lab} do
       share = build!(:send_share, @third)

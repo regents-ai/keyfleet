@@ -21,6 +21,7 @@ defmodule Keyfleet.WalletSteps.Steps do
     :buy,
     :reveal,
     :claim,
+    :claim_all,
     :club_claim,
     :present,
     :issue_shard,

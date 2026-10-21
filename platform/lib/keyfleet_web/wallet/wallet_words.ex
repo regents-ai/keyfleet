@@ -213,7 +213,7 @@ defmodule KeyfleetWeb.WalletWords do
 
   defp confirmed("approve"), do: "Approved. Now press the next button."
   defp confirmed("buy"), do: "Done. The Key is yours."
-  defp confirmed("claim-" <> _asset), do: "Done. Paid to the Key’s holder."
+  defp confirmed("claim-" <> _asset), do: "Done. Paid to each Key’s holder."
   defp confirmed("club-claim"), do: "Done. The Key and what it earned are yours."
   defp confirmed("present"), do: "Done. Present for 48 hours."
   defp confirmed("propose"), do: "Done. It’s open to votes."

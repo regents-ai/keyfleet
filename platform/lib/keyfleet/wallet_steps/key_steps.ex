@@ -2,7 +2,8 @@ defmodule Keyfleet.WalletSteps.KeySteps do
   @moduledoc """
   The steps of a key's own buttons: buying the next key, asking again for a
   key's random draw, claiming what a key has earned, claiming a Regents Club
-  key waiting for its Pass's holder, marking keys present,
+  key waiting for its Pass's holder, claiming for every key a wallet holds
+  or holds a shard of at once, marking keys present,
   issuing, renewing and ending shards, and turning agent voting on or off.
   `Keyfleet.WalletSteps.Build` describes what every builder answers.
 
@@ -117,6 +118,46 @@ defmodule Keyfleet.WalletSteps.KeySteps do
        %{token_id: token_id, holder: holder, waiting: named(fleet, waiting), blocked: blocked}}
     else
       _unread -> {:problem, :unread, figures}
+    end
+  end
+
+  # One step for each token the ledger pays keys in, claiming for every key
+  # the signer holds or holds an active shard of at once: it settles each key
+  # to its holder and pays each holder, and the signer's own credit. Only keys
+  # the signer may act for are named, since the ledger refuses the whole claim
+  # for any other. A token with nothing waiting for any of them, or for the
+  # signer, is certain to be refused.
+  def steps(:claim_all, %{fleet: fleet, signer: signer}) do
+    candidates = Build.own_keys(fleet, signer)
+
+    with {:ok, reads} <- Reads.at_head(),
+         {:ok, assets} <-
+           Reads.one(reads, fleet.rewards_address, "rewardAssets()", [], {:array, :address}),
+         {:ok, standing} <- Reads.acting(reads, fleet, signer, candidates, "isActive"),
+         keys = for(key <- candidates, match?({_holder, true}, standing[key]), do: key),
+         payees = Enum.uniq([signer | Enum.map(keys, &elem(standing[&1], 0))]),
+         {:ok, waiting} <-
+           Reads.each(assets, &waiting_for_keys(reads, fleet, &1, keys, payees)) do
+      onchain = Enum.map(keys, &Fleet.onchain_token_id(fleet, &1))
+
+      steps =
+        Enum.map(
+          waiting,
+          &Review.step(
+            "claim-#{&1.asset}",
+            fleet.rewards_address,
+            Call.encode("claim(uint256[],address[])", [onchain, [&1.asset]])
+          )
+        )
+
+      blocked =
+        for %{asset: asset, amount: 0} <- waiting,
+            into: %{},
+            do: {"claim-#{asset}", :nothing_to_claim}
+
+      {:ok, steps, %{keys: keys, waiting: named(fleet, waiting), blocked: blocked}}
+    else
+      _unread -> {:problem, :unread, %{keys: [], waiting: []}}
     end
   end
 
@@ -457,6 +498,34 @@ defmodule Keyfleet.WalletSteps.KeySteps do
          {:ok, held} <- credit.(holder),
          {:ok, own} <- if(signer == holder, do: {:ok, 0}, else: credit.(signer)) do
       {:ok, %{asset: asset, amount: accrued + held + own}}
+    end
+  end
+
+  # What a claim of one asset for many keys would pay: what each key has
+  # accrued, which settles to its holder, and the credit of each payee, the
+  # signer and every holder of those keys.
+  defp waiting_for_keys(reads, fleet, asset, keys, payees) do
+    accrued =
+      &Reads.one(
+        reads,
+        fleet.rewards_address,
+        "accrued(address,uint256)",
+        [asset, Fleet.onchain_token_id(fleet, &1)],
+        {:uint, 256}
+      )
+
+    credit =
+      &Reads.one(
+        reads,
+        fleet.rewards_address,
+        "credits(address,address)",
+        [asset, &1],
+        {:uint, 256}
+      )
+
+    with {:ok, accrued} <- Reads.each(keys, accrued),
+         {:ok, credits} <- Reads.each(payees, credit) do
+      {:ok, %{asset: asset, amount: Enum.sum(accrued) + Enum.sum(credits)}}
     end
   end
 
