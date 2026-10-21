@@ -606,8 +606,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  # What the hub did is undone when its maker can't be kept (`done`), and the
-  # person is told to try again instead.
+  # When what the hub made can't keep its maker (`done`), the person is told
+  # to try again instead of the hub's answer.
   defp answered({:ok, %Req.Response{status: status} = response} = answer, done) do
     case done.(status) do
       :ok ->
@@ -794,12 +794,14 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
-  defp folder_made([fleet_id, subject, project_id, notebook_id], {_headers, body} = request) do
+  # A new folder is kept as its maker's. It is never removed again when that
+  # can't be kept: the hub may answer for one that was there already.
+  defp folder_made([fleet_id, subject, _project_id, notebook_id], {_headers, body} = request) do
     with {:ok, %{"path" => path}} when is_binary(path) <- Jason.decode(body),
          {:ok, key} <- Makers.folder_key(path) do
       {:ok, request,
        fn
-         201 -> Makers.record_added(fleet_id, subject, project_id, notebook_id, key)
+         201 -> Makers.record(fleet_id, notebook_id, key, subject)
          _status -> :ok
        end}
     else

@@ -137,9 +137,10 @@ defmodule Keyfleet.Notebooks.Makers do
   end
 
   @doc """
-  Keeps `subject` as the maker of the file or folder they just added at
-  `key`; when that can't be kept, removes it from the hub again, so it never
-  stays as the notebook maker's.
+  Keeps `subject` as the maker of the file they just added new at `key`;
+  when that can't be kept, removes it from the hub again, so it never stays
+  as the notebook maker's. A folder is never removed this way: the hub may
+  answer for one that was there already, with other members' files in it.
   """
   def record_added(fleet_id, subject, project_id, notebook_id, key) do
     with {:error, reason} <- record(fleet_id, notebook_id, key, subject) do

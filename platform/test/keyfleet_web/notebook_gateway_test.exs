@@ -336,7 +336,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
   # Costly failure: a file a person adds while its maker can't be kept stays
   # as the notebook maker's, out of its adder's reach.
-  test "a file or folder whose maker can't be kept is removed again", c do
+  test "a new file whose maker can't be kept is removed again, a folder is kept", c do
     cookie = enter!(c.holder)
     theirs = "/api/v1/projects/proj-fleet/notebooks/nb-0000000000000001"
     entries = theirs <> "/workspace/entries"
@@ -355,8 +355,11 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
     for answer <- [added, made] do
       assert json_response(answer, 502)["error"]["code"] == "notebooks_unavailable"
-      assert_receive {:hub, "DELETE", ^entries, "u_" <> _, _body}
     end
+
+    # The folder may have been there already, with other members' files in it.
+    assert_received {:hub, "DELETE", ^entries, "u_" <> _, _body}
+    refute_received {:hub, "DELETE", ^entries, _subject, _body}
   end
 
   # Costly failure: a copied or replayed sign-in code opens the notebooks again.

@@ -3919,3 +3919,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   your standing again and shows the room as for keys only, even if the news
   of the Key leaving never arrived.
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — A new notebook folder is never taken off again
+
+- What: when a person makes a folder in a notebook and Keyfleet can't note who
+  made it, the folder stays and they are asked to try again. Only a new file
+  is taken off again, so a folder that was already there keeps everyone's
+  files in it.
+- Why: found in the fifth review of the notebooks work.
