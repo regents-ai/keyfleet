@@ -64,7 +64,8 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
 
     assert json_response(created, 200) == %{
              "notebook_id" => @notebook,
-             "title" => "Classic #1 pilot log"
+             "title" => "Classic #1 pilot log",
+             "notebook_url" => Notebooks.notebook_url(@fleet, "proj-fleet", @notebook)
            }
 
     assert last_did(c.first) == :notebook

@@ -41,7 +41,8 @@ defmodule Keyfleet.Notebooks.Runs do
 
   @doc """
   The fleet's 50 newest notebooks, newest first, as `subject`: each with its
-  title and `subject`'s newest run there, or nil when they have started none.
+  title, its address (`Keyfleet.Notebooks.notebook_url/3`) and `subject`'s
+  newest run there, or nil when they have started none.
   """
   def list(fleet_id, subject, project_id) do
     with {:ok, %{"items" => notebooks}} <-
@@ -52,7 +53,7 @@ defmodule Keyfleet.Notebooks.Runs do
            |> answer(200),
          {:ok, runs} <- last_runs(fleet_id, subject, project_id, notebooks),
          {:ok, result_urls} <- result_urls(fleet_id, runs) do
-      {:ok, Enum.zip_with(notebooks, runs, &listing(&1, &2, result_urls))}
+      {:ok, Enum.zip_with(notebooks, runs, &listing(&1, &2, fleet_id, project_id, result_urls))}
     end
   end
 
@@ -200,10 +201,11 @@ defmodule Keyfleet.Notebooks.Runs do
     end
   end
 
-  defp listing(notebook, run, result_urls) do
+  defp listing(notebook, run, fleet_id, project_id, result_urls) do
     %{
       notebook_id: notebook["id"],
       title: notebook["title"],
+      notebook_url: Notebooks.notebook_url(fleet_id, project_id, notebook["id"]),
       last_run:
         if run do
           %{

@@ -291,7 +291,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert cards(view) == [note]
     end
 
-    test "Places to work comes first, under the heading", %{conn: conn} do
+    test "the places to work come first", %{conn: conn} do
       {:ok, _board, html} = live(conn, @board)
 
       ids =
@@ -300,7 +300,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         |> LazyHTML.query("#workspace-page > *")
         |> Enum.map(&(&1 |> LazyHTML.attribute("class") |> List.first()))
 
-      assert Enum.take(ids, 2) == ["workspace-heading", "workspace-places"]
+      assert List.first(ids) == "workspace-places"
     end
 
     test "the goals lead the work, the newest change first, and Keyfleet added the starting ones",
@@ -945,6 +945,70 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
              )
 
       refute has_element?(view, "#workspace-goal-notebooks-none")
+    end
+
+    # A task is cited by its own fields: the goal's page found only what
+    # evidence cited, so a task's notebook and commit never showed there.
+    test "a goal's page lists the notebook, result and commit its tasks cite",
+         %{conn: conn} do
+      goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
+      project = "proj-0123456789abcdef"
+      notebook = "nb-0123456789abcdef"
+      hash = String.duplicate("cd", 20)
+
+      result =
+        Keyfleet.Notebooks.result_url(
+          @fleet,
+          notebook,
+          "run_01M539TC83WX2ZRQFZB4VHH178",
+          1_792_186_134_702
+        )
+
+      task =
+        create(@fleet, "task", %{
+          "title" => "Price check",
+          "progress" => "doing",
+          "commit_ref" => KeyfleetWeb.WorkspacePage.commit_url(@fleet, hash),
+          "notebook_ref" => Keyfleet.Notebooks.notebook_url(@fleet, project, notebook),
+          "result_ref" => result
+        })
+
+      link(@fleet, task, goal, "implements")
+
+      hub!(project, fn
+        %{"tag" => _tag} ->
+          []
+
+        %{"limit" => "50"} ->
+          [
+            %{
+              "id" => notebook,
+              "title" => "Price model",
+              "description" => "",
+              "created_at" => "2026-10-20T09:00:00Z"
+            }
+          ]
+      end)
+
+      {:ok, view, _html} = live(conn, item_path(goal))
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-notebook-rows [data-notebook="#{notebook}"]),
+               "Price model"
+             )
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-notebook-rows [data-item="#{task}"] a[href="#{result}"]),
+               "Price check"
+             )
+
+      assert has_element?(
+               view,
+               ~s(#workspace-goal-code-rows [data-item="#{task}"] a[href="#{Keyfleet.Code.commit_path(@fleet, hash)}"]),
+               "Price check"
+             )
     end
 
     test "a goal's page says so when the notebooks can't be read", %{conn: conn} do

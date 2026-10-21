@@ -510,12 +510,6 @@
   color: var(--color-fg-muted);
 }
 
-.workspace-place-what {
-  color: var(--color-fg-muted);
-  font-size: 0.9rem;
-  line-height: 1.4;
-}
-
 /* The mark under the open tab, one tab wide. The server puts it under the
    open tab; once the page is live it travels to the next one chosen. */
 .workspace-places-ink {
@@ -680,7 +674,6 @@
   .workspace-place-name { font-size: 1rem; }
   .workspace-place-name::before { display: none; }
   .workspace-place-tool { font-size: 0.62rem; letter-spacing: 0.04em; }
-  .workspace-place-what { display: none; }
 }
 
 @media (max-width: 47.99rem) {

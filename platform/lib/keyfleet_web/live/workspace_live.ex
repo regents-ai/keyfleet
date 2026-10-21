@@ -55,9 +55,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
       data-active={@board.place}
       data-variant={KeyfleetWeb.Motion.standard("tabs")}
     >
-      <header class="workspace-heading">
-        <h2>Workspace</h2>
-      </header>
       <.places fleet_id={@board.fleet_id} place={@board.place} />
       <.public_notice />
 
@@ -83,12 +80,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :fleet_id, :string, required: true
   attr :place, :atom, required: true
 
-  # The three places to work, one tab each, above a chart that rises over the
-  # one open. The chart only decorates: the tabs say everything.
+  # The three places to work, one tab each named with the tool it runs on,
+  # above a chart that rises over the one open. The chart only decorates.
   defp places(assigns) do
     ~H"""
     <nav id="workspace-places" class="workspace-places" aria-labelledby="workspace-places-title">
-      <h2 id="workspace-places-title" class="workspace-kicker">Places to work</h2>
+      <h2 id="workspace-places-title" class="visually-hidden">Workspace</h2>
       <div
         id="workspace-places-chart"
         class="workspace-places-chart"
@@ -112,7 +109,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
         >
           <span class="workspace-place-name">{place_name(place)}</span>
           <span class="workspace-place-tool">{place_tool(place)}</span>
-          <span class="workspace-place-what">{place_what(place)}</span>
         </.link>
         <span
           class="workspace-places-ink"
@@ -133,10 +129,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp place_tool(:docs), do: "marimo"
   defp place_tool(:code), do: "Git"
 
-  defp place_what(:project), do: "Goals, tasks and what changed"
-  defp place_what(:docs), do: "Notebooks and saved results"
-  defp place_what(:code), do: "One shared Git repository"
-
   attr :board, :map, required: true
 
   # The fleet's goals, its workstream and its items, with how work moves
@@ -152,7 +144,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           class="workspace-panel workspace-items"
           aria-labelledby="workspace-goals-title"
         >
-          <h2 id="workspace-goals-title">Starting ideas for optional goals to take on</h2>
+          <h2 id="workspace-goals-title">Goals</h2>
           <p class="workspace-detail">Ask your agent to join one, or to add its own.</p>
           <.goal_rows id="workspace-goal-rows" rows={@board.goals} fleet_id={@board.fleet_id} />
           <.link id="workspace-all-goals" class="workspace-toggle" patch={@board.all_goals}>
@@ -228,6 +220,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
             :if={@board.cards != [] and @board.filter.type != "goal"}
             id="workspace-cards"
             class="workspace-cards"
+            phx-hook="MotionCascade"
+            data-variant={KeyfleetWeb.Motion.standard("grid")}
           >
             <.card :for={card <- @board.cards} card={card} fleet_id={@board.fleet_id} />
           </ol>
@@ -1323,9 +1317,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :goal, :map, required: true
   attr :fleet_id, :string, required: true
 
-  # The work around a goal, by where it is kept: the workspace's items, the
-  # notebooks' saved results and the commits of the fleet's code its evidence
-  # cites. Each line opens one of them.
+  # The work around a goal, by where it is kept: the workspace's items, and
+  # the notebooks, their saved results and the commits of the fleet's code
+  # its tasks and evidence cite. Each line opens one of them.
   defp goal_work(assigns) do
     ~H"""
     <section
@@ -1367,7 +1361,6 @@ defmodule KeyfleetWeb.WorkspaceLive do
       aria-labelledby="workspace-goal-notebooks-title"
     >
       <h2 id="workspace-goal-notebooks-title">Notebooks</h2>
-      <p class="workspace-detail">Tagged {@goal.name}, then the results cited for it.</p>
       <p :if={is_nil(@goal.notebooks)} id="workspace-goal-notebooks-none" class="workspace-detail">
         Notebooks aren’t connected for this fleet yet.
       </p>
@@ -1404,7 +1397,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
             {result.title}
           </a>
           <span class="workspace-row-meta">
-            <.link patch={WorkspacePage.item_path(@fleet_id, result.id)}>Evidence</.link>
+            <.link patch={WorkspacePage.item_path(@fleet_id, result.id)}>
+              {type_label(result.type)}
+            </.link>
             <KeyfleetWeb.Time.local
               id={"workspace-goal-result-#{result.id}-on"}
               at={result.changed_on}
@@ -1422,17 +1417,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
     >
       <h2 id="workspace-goal-code-title">Code</h2>
       <p class="workspace-detail">
-        <span>
-          In
-          <.link
-            :if={entries(@goal.code) != []}
-            id="workspace-goal-folder"
-            patch={@goal.folder.link}
-          >{@goal.folder.path}</.link><code
-            :if={entries(@goal.code) == []}
-            id="workspace-goal-folder-name"
-          >{@goal.folder.path}</code>, then the commits cited for it.
-        </span>
+        <.link :if={entries(@goal.code) != []} id="workspace-goal-folder" patch={@goal.folder.link}>
+          {@goal.folder.path}
+        </.link>
+        <code :if={entries(@goal.code) == []} id="workspace-goal-folder-name">
+          {@goal.folder.path}
+        </code>
       </p>
       <p :if={@goal.code == :unreadable} id="workspace-goal-code-unreadable">
         The code can’t be read right now. Try again in a minute.
@@ -1488,7 +1478,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   defp card(assigns) do
     ~H"""
-    <li class="workspace-card" data-item={@card.id} data-type={@card.type}>
+    <li
+      class="workspace-card"
+      data-item={@card.id}
+      data-type={@card.type}
+      phx-mounted={JS.ignore_attributes(["style"])}
+    >
       <p class="workspace-kind">
         <span>{type_label(@card.type)}</span>
         <span :if={@card.starting?} class="workspace-badge">Starting idea</span>

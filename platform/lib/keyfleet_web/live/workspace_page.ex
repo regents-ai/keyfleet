@@ -170,6 +170,9 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # How many items of the work around a goal its page lists.
   @goal_items 100
+  # The fields by which a goal's tasks and evidence cite their results,
+  # notebooks and commits.
+  @cites ["source_uri", "result_ref", "notebook_ref", "commit_ref"]
 
   # Only these kinds of address are ever made into links.
   @link_schemes ["https://", "ipfs://", "ar://", "git+https://"]
@@ -777,20 +780,23 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   # What a goal's page lists of the work around it (`Keyfleet.Graph.Object`,
-  # `:around_goal`): each item one line, and of the evidence among them, the
-  # saved notebook results and the commits of the fleet's code it cites;
-  # beside them the goal's own place in the code, the folder `goals/goal-N`,
-  # and the notebooks tagged `goal-N`. `code` and `notebooks` are
-  # `:unreadable` when the code store or the notebook hub doesn't answer,
+  # `:around_goal`): each item one line, and of what its tasks and evidence
+  # cite, the saved notebook results, the notebooks and the commits of the
+  # fleet's code; beside them the goal's own place in the code, the folder
+  # `goals/goal-N`, and the notebooks tagged `goal-N`. `code` and `notebooks`
+  # are `:unreadable` when the code store or the notebook hub doesn't answer,
   # and `notebooks` is nil for a fleet without notebooks.
   defp goal_work(fleet_id, goal_id, opts) do
     {objects, more} = fleet_id |> Graph.goal_work!(goal_id, opts) |> Enum.split(@goal_items)
     name = String.replace(goal_id, "#", "-")
     folder = "goals/" <> name
 
-    sources =
-      for %{type: "evidence"} = object <- objects,
-          do: {object, source(object.card["source_uri"], fleet_id)}
+    cited =
+      for object <- objects,
+          field <- @cites,
+          uri <- [object.card[field]],
+          is_binary(uri),
+          do: {object, uri, source(uri, fleet_id)}
 
     %{
       items:
@@ -805,24 +811,55 @@ defmodule KeyfleetWeb.WorkspacePage do
         end,
       more?: more != [],
       results:
-        for {object, {:notebook_result, uri}} <- sources do
-          %{id: object.id, title: object.title, uri: uri, changed_on: time(object.changed_at)}
-        end,
-      commits:
-        for {object, {:commit, hash, path}} <- sources do
+        for {object, uri, {:notebook_result, uri}} <- cited do
           %{
             id: object.id,
+            type: object.type,
+            title: object.title,
+            uri: uri,
+            changed_on: time(object.changed_at)
+          }
+        end
+        |> Enum.uniq_by(& &1.uri),
+      commits:
+        for {object, _uri, {:commit, hash, path}} <- cited do
+          %{
+            id: object.id,
+            type: object.type,
             title: object.title,
             hash: hash,
             path: path,
             changed_on: time(object.changed_at)
           }
-        end,
+        end
+        |> Enum.uniq_by(& &1.hash),
       name: name,
       folder: %{path: folder, link: Code.files_path(fleet_id, folder)},
       code: folder_entries(fleet_id, folder),
-      notebooks: notebooks(fleet_id, tag: name, limit: 50)
+      notebooks:
+        goal_notebooks(
+          fleet_id,
+          name,
+          for({_object, uri, {:notebook, _open}} <- cited, uniq: true, do: Path.basename(uri))
+        )
     }
+  end
+
+  # The notebooks tagged with the goal's name, then the ones its work cites
+  # that aren't tagged, found among the fleet's newest.
+  defp goal_notebooks(fleet_id, name, cited) do
+    with tagged when is_list(tagged) <- notebooks(fleet_id, tag: name, limit: 50) do
+      case cited -- Enum.map(tagged, & &1.id) do
+        [] ->
+          tagged
+
+        missing ->
+          case notebooks(fleet_id, limit: 50) do
+            newest when is_list(newest) -> tagged ++ Enum.filter(newest, &(&1.id in missing))
+            unreadable -> unreadable
+          end
+      end
+    end
   end
 
   defp folder_entries(fleet_id, folder) do

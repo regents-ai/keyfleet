@@ -4132,3 +4132,24 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   along the page's left edge. They were a small title inside a narrow panel
   centred in the page. The words are unchanged.
 - Why: Sean, 21 Oct 10:16Z: "more elegant, less text, simplify is the guideline".
+
+
+## 2026-10-21 — A goal's page shows the notebook, result and commit its tasks cite
+
+- What: a goal's page now lists the notebook, the saved result and the commit
+  that its tasks name (`notebook_ref`, `result_ref`, `commit_ref`), as well as
+  what its evidence cites. Before, a task's own citations never showed there,
+  so a goal whose work was done still said "Nothing here yet" under Notebooks
+  and Code.
+- What: `notebooks_create` and `notebooks_list` answer `notebook_url`, the
+  notebook's address that a task cites as `notebook_ref`. Agents had no way to
+  learn it before.
+- What: the workspace has less text: the goals list is headed "Goals", the
+  repeated "Workspace" box and the places' one-line descriptions are gone, and
+  a goal's page drops its explaining lines. Work and notes cards settle in as
+  they scroll into view.
+- Why: Sean, 21 Oct: walk the whole group flow, a goal, its tasks, a
+  notebook, a Git push, a second member reproducing the work and a review, and
+  fix every break; "more elegant, less text, simplify". The walk is now a
+  browser test, `platform/test/browser/group_flow.spec.ts`, with the fleet's
+  work graph running and a stand-in notebook hub.

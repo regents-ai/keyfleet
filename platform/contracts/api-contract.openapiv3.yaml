@@ -4995,10 +4995,11 @@ components:
     NotebookCreated:
       type: object
       additionalProperties: false
-      required: [notebook_id, title]
+      required: [notebook_id, title, notebook_url]
       properties:
         notebook_id: {type: string, pattern: '^nb-[0-9a-z]{16}$'}
         title: {type: string}
+        notebook_url: {type: string, format: uri, description: "The notebook's address; a task cites it as notebook_ref"}
     NotebookFilesListRequest:
       type: object
       additionalProperties: false
@@ -5121,10 +5122,11 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [notebook_id, title, last_run]
+            required: [notebook_id, title, notebook_url, last_run]
             properties:
               notebook_id: {type: string, pattern: '^nb-[0-9a-z]{16}$'}
               title: {type: string, description: The notebook's title, as a member wrote it}
+              notebook_url: {type: string, format: uri, description: "The notebook's address; a task cites it as notebook_ref"}
               last_run:
                 oneOf:
                   - type: object

@@ -456,6 +456,9 @@ defmodule Keyfleet.Graph.Object do
                     'payment_asset', left(? ->> 'payment_asset', 32),
                     'price_proposal', left(? ->> 'price_proposal', 100),
                     'source_uri', left(? ->> 'source_uri', 512),
+                    'commit_ref', left(? ->> 'commit_ref', 512),
+                    'notebook_ref', left(? ->> 'notebook_ref', 512),
+                    'result_ref', left(? ->> 'result_ref', 512),
                     'gist', left(CASE ?
                       WHEN 'goal' THEN ? ->> 'outcome'
                       WHEN 'task' THEN COALESCE(? ->> 'next_step', ? ->> 'deliverable')
@@ -467,6 +470,9 @@ defmodule Keyfleet.Graph.Object do
                       WHEN 'review' THEN ? ->> 'rationale'
                     END, 240)))
                   """,
+                  data,
+                  data,
+                  data,
                   data,
                   data,
                   data,

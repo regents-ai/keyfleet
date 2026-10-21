@@ -159,6 +159,13 @@ defmodule Keyfleet.Notebooks do
     do: "/projects/#{project_id}/notebooks/#{notebook_id}"
 
   @doc """
+  The address of one notebook on its fleet's notebook host, as a task cites
+  it in `notebook_ref`.
+  """
+  def notebook_url(fleet_id, project_id, notebook_id),
+    do: url(fleet_id, notebook_path(project_id, notebook_id))
+
+  @doc """
   Where a link that opens the notebooks may land: their start page, one
   notebook (`notebook_path/2`) or a saved output.
   """

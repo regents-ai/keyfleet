@@ -25,6 +25,7 @@ defmodule Keyfleet.Notebooks.Files do
 
   import Keyfleet.Notebooks.MemberRequest
 
+  alias Keyfleet.Notebooks
   alias Keyfleet.Notebooks.Makers
 
   # A file read out here is text, at most this many bytes.
@@ -33,7 +34,8 @@ defmodule Keyfleet.Notebooks.Files do
   @page 200
 
   @doc """
-  Makes a notebook titled `title` with `code` as `subject`. The same
+  Makes a notebook titled `title` with `code` as `subject`, answering its id,
+  title and address (`Keyfleet.Notebooks.notebook_url/3`). The same
   `idempotency_key` makes one notebook however often it is sent.
   """
   def create(fleet_id, subject, project_id, notebook, idempotency_key) do
@@ -44,8 +46,16 @@ defmodule Keyfleet.Notebooks.Files do
     )
     |> answer(201)
     |> case do
-      {:ok, %{"id" => id, "title" => title}} -> {:ok, %{notebook_id: id, title: title}}
-      error -> error
+      {:ok, %{"id" => id, "title" => title}} ->
+        {:ok,
+         %{
+           notebook_id: id,
+           title: title,
+           notebook_url: Notebooks.notebook_url(fleet_id, project_id, id)
+         }}
+
+      error ->
+        error
     end
   end
 
