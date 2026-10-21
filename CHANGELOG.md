@@ -3910,3 +3910,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   already read, as its rooms do, instead of reading it again on each draw and
   each "Show earlier". Nothing on screen changes.
 - Why: Sean, 21 Oct: "make it a modern and well-engineered elixir site".
+
+## 2026-10-21 — Rooms read who you are in a fleet once per page
+
+- What: a room page uses the standing the page already read for its fleet
+  instead of reading it again for each list of rooms and each page of posts.
+  When a new post can't be read because your Key has left, the page reads
+  your standing again and shows the room as for keys only, even if the news
+  of the Key leaving never arrived.
+- Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".

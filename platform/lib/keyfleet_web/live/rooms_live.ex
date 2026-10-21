@@ -29,7 +29,6 @@ defmodule KeyfleetWeb.RoomsLive do
   import KeyfleetWeb.Components.SentFrom
   import Phoenix.LiveView, only: [connected?: 1, stream: 4]
 
-  alias Keyfleet.Access
   alias Keyfleet.Actors.Human
   alias Keyfleet.Chain
   alias Keyfleet.Fleets.Rules
@@ -406,8 +405,7 @@ defmodule KeyfleetWeb.RoomsLive do
         %Broadcast{event: "rooms_changed", payload: %{fleet_id: fleet_id}},
         %{assigns: %{room: %{fleet_id: fleet_id}}} = socket
       ) do
-    actor = ShellLive.human_actor(socket)
-    {:noreply, show_standing(socket, actor, standing(actor, fleet_id))}
+    {:noreply, show_standing(socket, standing(socket, fleet_id))}
   end
 
   # A mute added or taken away on another of the muter's pages.
@@ -454,7 +452,7 @@ defmodule KeyfleetWeb.RoomsLive do
 
   defp show_room(socket, fleet_id, slug) do
     actor = ShellLive.human_actor(socket)
-    {key?, opts} = standing(actor, fleet_id)
+    {key?, opts} = standing(socket, fleet_id)
     # A fleet outside the catalog has no rooms and no mutes, and the page says
     # it doesn't exist.
     {rooms, muted} =
@@ -544,14 +542,10 @@ defmodule KeyfleetWeb.RoomsLive do
     assign(socket, :room, %{shown | muted: muted})
   end
 
-  # Whether the reader is one of the fleet's members now, and what reads the
-  # fleet's rooms as them with that answer, so it is read once for the page.
-  defp standing(actor, fleet_id) do
-    class = Access.class(actor, fleet_id)
-
-    {Access.enough?(class, :read, :rooms),
-     [actor: actor, context: Access.context(actor, fleet_id, class)]}
-  end
+  # Whether the reader may read the fleet's rooms, and what reads them as the
+  # reader, both with the class the shell last read.
+  defp standing(socket, fleet_id),
+    do: {ShellLive.may_read?(socket, fleet_id, :rooms), ShellLive.reads_as(socket, fleet_id)}
 
   defp list_rooms!(fleet_id, opts), do: Rooms.list_rooms!(fleet_id, [load: [:fleet]] ++ opts)
 
@@ -587,7 +581,7 @@ defmodule KeyfleetWeb.RoomsLive do
   # The room's latest posts, read again from where the room has got to now.
   defp show_latest(%{assigns: %{room: %{room_id: room_id} = shown}} = socket)
        when is_binary(room_id) do
-    {_key?, opts} = standing(ShellLive.human_actor(socket), shown.fleet_id)
+    {_key?, opts} = standing(socket, shown.fleet_id)
     posts = read_latest(Rooms.get_room!(shown.fleet_id, shown.slug, opts), opts)
     unmuted = Rooms.unmuted(posts, shown.muted)
 
@@ -651,7 +645,7 @@ defmodule KeyfleetWeb.RoomsLive do
         |> stream(:posts, unmuted, limit: -@thread_kept)
 
       {:error, %Ash.Error.Forbidden{}} ->
-        recheck_standing(socket)
+        socket |> ShellLive.reread_class(room.fleet_id) |> recheck_standing()
 
       {:error, failure} ->
         raise failure
@@ -661,20 +655,19 @@ defmodule KeyfleetWeb.RoomsLive do
   def show_new_posts(socket, _opts), do: socket
 
   @doc """
-  Who the reader is in the fleet, read afresh rather than carried over from
-  what the page showed, when the fleet's Keys change and after a refusal: a
+  Who the reader is in the fleet, with the class the shell has just read
+  again, when the fleet's Keys change and after a refusal: a
   Key arriving opens the fleet's rooms to them, and a Key leaving leaves them
   the Public room alone, with any other room cleared and shown as for keys only. When
   the Keys that changed hands leave the reader where they stood, the open
   room stays as it is and nothing more is read.
   """
   def recheck_standing(%{assigns: %{room: %{fleet_id: fleet_id} = room}} = socket) do
-    actor = ShellLive.human_actor(socket)
-    {key?, _opts} = standing = standing(actor, fleet_id)
+    {key?, _opts} = standing = standing(socket, fleet_id)
 
     if key? == room.key? and is_binary(room.room_id),
       do: socket,
-      else: show_standing(socket, actor, standing)
+      else: show_standing(socket, standing)
   end
 
   def recheck_standing(socket), do: socket
@@ -684,9 +677,9 @@ defmodule KeyfleetWeb.RoomsLive do
   # The Public room's posts arrive whole, so it is not read again.
   defp show_standing(
          %{assigns: %{room: %{fleet_id: fleet_id} = room}} = socket,
-         actor,
          {key?, opts}
        ) do
+    actor = ShellLive.human_actor(socket)
     rooms = list_rooms!(fleet_id, opts)
 
     shown =

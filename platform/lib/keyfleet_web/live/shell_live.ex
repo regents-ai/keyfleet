@@ -985,10 +985,13 @@ defmodule KeyfleetWeb.ShellLive do
   defp fleet_class(socket, fleet_id),
     do: %{fleet_id: fleet_id, class: Access.class(human_actor(socket), fleet_id)}
 
-  # The class read again, and with a new one the page leaves what the old
-  # one heard of the fleet's rooms, workspace and votes for what the new one
-  # hears, and the fleet's hall moves to how the new one sees it.
-  defp reread_class(%{assigns: %{fleet_class: %{fleet_id: fleet_id} = was}} = socket, fleet_id) do
+  @doc """
+  The class of `fleet_id`, the fleet in the address, read again. With a new
+  one the page leaves what the old one heard of the fleet's rooms, workspace
+  and votes for what the new one hears, and the fleet's hall moves to how the
+  new one sees it.
+  """
+  def reread_class(%{assigns: %{fleet_class: %{fleet_id: fleet_id} = was}} = socket, fleet_id) do
     case fleet_class(socket, fleet_id) do
       ^was ->
         socket
@@ -1001,7 +1004,7 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  defp reread_class(socket, _fleet_id), do: socket
+  def reread_class(socket, _fleet_id), do: socket
 
   # A room on show is heard by every class, each on its own topic; a page of
   # the fleet hears what `rooms_heard/3` and the rest say its class hears.

@@ -592,6 +592,20 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
       refute Rooms.topic(@fleet, :public) in heard.()
     end
 
+    # A refusal is the page's news that its class is out of date, so it
+    # closes the room even when the notice of the Key leaving never came.
+    test "a room for keys only closes once the reader's Key has left, when a new post can't be read",
+         %{conn: conn} do
+      {:ok, view, _html} = conn |> signed_in_as(@owner) |> live(@open_one)
+      refute has_element?(view, "#rooms-locked")
+
+      transfer!(1, @stranger)
+      room = Rooms.get_room!(@fleet, "open-1", authorize?: false)
+      send(view.pid, %Broadcast{event: "room_head", payload: %{room_id: room.id, seq: 1}})
+
+      assert has_element?(view, "#rooms-locked #rooms-thread-title", "Keys only")
+    end
+
     test "a room an agent creates joins the list for the members watching", %{conn: conn} do
       agent = shard_agent()
 
