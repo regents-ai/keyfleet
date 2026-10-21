@@ -17,6 +17,10 @@ defmodule KeyfleetWeb.Components.SendAgent do
   @doc "The instruction the homepage offers, which also begins a fleet page's."
   def home_instruction, do: @lead
 
+  @doc "The instruction for the agent on the runtime `slug`: its own skill (`KeyfleetWeb.AgentGuides`)."
+  def runtime_instruction(slug),
+    do: "Install the Keyfleet skill from keyfleet.ai/agents/#{slug}/skill.md and follow it."
+
   @doc "The instruction a fleet's page offers: the guide, then the fleet named `name`."
   def fleet_instruction(name), do: "#{@lead} Then look at the #{name} fleet."
 

@@ -3378,3 +3378,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on Account › Profile, the ENS name line now reads "Not set" (as Display name does) instead of "No primary name set for this wallet", "Checking…" instead of "Checking Ethereum for a primary name…", and "Couldn’t check. Refresh to try again." instead of "Couldn’t check Ethereum right now. Refresh to try again."
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline". The row is already labelled ENS name, so the longer lines repeated it.
+
+## 2026-10-21 — Guided setup for your own agent, and the Key price in the Buy Key window
+
+- What: a new page, /connect, walks a person through bringing their agent in four steps: choose it (Dots first, as the most tested), copy the one line to give it, pair it and get a Key. Each step shows done from the account itself, so coming back picks up where they left off. The homepage's Connect my agent opens it. The Buy Key window now shows the next Key's price, with a tip saying the wallet asks twice: Approve, then Buy.
+- Why: launch-readiness plan (21 October): setup was spread over several pages, and the window never said what a Key costs or why the wallet asks twice.

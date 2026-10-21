@@ -26,6 +26,7 @@ defmodule KeyfleetWeb.ShellLive do
   alias KeyfleetWeb.{
     AccountLive,
     CodePassword,
+    ConnectLive,
     DmsLive,
     FleetLive,
     FleetNow,
@@ -89,6 +90,8 @@ defmodule KeyfleetWeb.ShellLive do
        code_notice: nil,
        connection_outcome: nil,
        held_keys: [],
+       connect_agent: nil,
+       connect_paired: [],
        agents_topic: nil,
        credits: %Read{},
        credits_topic: nil,
@@ -152,6 +155,7 @@ defmodule KeyfleetWeb.ShellLive do
     route_spec = route_spec(uri, params)
     params = name_fleet(params, route_spec)
     if beyond_supply?(params), do: raise(NotFoundError)
+    if route_spec.route_id == :connect, do: ConnectLive.chosen(params)
 
     case PageRead.run("app", fn -> load(socket, route_spec, params) end) do
       {:ok, loaded} ->
@@ -179,6 +183,7 @@ defmodule KeyfleetWeb.ShellLive do
        |> assign(PublicDocuments.page(route_spec.route_id))
        |> load_verified_connections(route_spec)
        |> load_account_page(route_spec)
+       |> load_connect(route_spec, params)
        |> load_points(route_spec)
        |> read_class(params)
        |> follow_keys(keys_fleet(route_spec, params))
@@ -460,10 +465,18 @@ defmodule KeyfleetWeb.ShellLive do
     send_update(KeyfleetWeb.PairingBox, id: "shell-pairing-box", agents_changed: true)
     send_update(KeyfleetWeb.PanelAgents, id: "shell-agents", agents_changed: true)
 
-    if socket.assigns.route_spec.route_id == :account,
-      do: send_update(KeyfleetWeb.AgentsPanel, id: "account-agents", agents_changed: true)
+    case socket.assigns.route_spec.route_id do
+      :account ->
+        send_update(KeyfleetWeb.AgentsPanel, id: "account-agents", agents_changed: true)
+        {:noreply, socket}
 
-    {:noreply, socket}
+      :connect ->
+        account = current_account(socket.assigns.access_context)
+        {:noreply, assign(socket, connect_paired: ConnectLive.paired(account))}
+
+      _other ->
+        {:noreply, socket}
+    end
   end
 
   # A Points award or correction landed for this account; the Points page follows.
@@ -663,6 +676,14 @@ defmodule KeyfleetWeb.ShellLive do
         <Reading.page
           :if={@route_spec.route_id in [:about, :opportunities]}
           path={@route_spec.destination}
+        />
+
+        <ConnectLive.page
+          :if={@route_spec.route_id == :connect}
+          account={current_account(@access_context)}
+          agent={@connect_agent}
+          paired={@connect_paired}
+          held_keys={@held_keys}
         />
 
         <AccountLive.profile
@@ -1283,8 +1304,24 @@ defmodule KeyfleetWeb.ShellLive do
     |> read_credits(account)
   end
 
+  defp load_account_page(socket, %{route_id: :connect}),
+    do:
+      socket
+      |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
+      |> Read.clear(:credits)
+
   defp load_account_page(socket, _route_spec),
     do: socket |> assign(:held_keys, []) |> Read.clear(:credits)
+
+  defp load_connect(socket, %{route_id: :connect}, params),
+    do:
+      assign(socket,
+        connect_agent: ConnectLive.chosen(params),
+        connect_paired: ConnectLive.paired(current_account(socket.assigns.access_context))
+      )
+
+  defp load_connect(socket, _route_spec, _params),
+    do: assign(socket, connect_agent: nil, connect_paired: [])
 
   # Only the connected page asks, so the first render does not ask again a
   # moment before it.

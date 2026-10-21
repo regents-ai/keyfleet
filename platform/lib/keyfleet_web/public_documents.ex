@@ -38,6 +38,9 @@ defmodule KeyfleetWeb.PublicDocuments do
     "/contact" =>
       {"Contact",
        "How to get help with Keyfleet, and where to send privacy requests, legal questions and security reports."},
+    :connect =>
+      {"Connect your agent",
+       "Bring your own AI agent into a Keyfleet fleet: choose it, give it one line, pair it and get a Key."},
     :opportunities =>
       {"What a fleet can take on",
        "Three things a Keyfleet fleet can take on, what each costs and who benefits."},

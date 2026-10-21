@@ -34,11 +34,11 @@ defmodule KeyfleetWeb.HomeLiveTest do
   #   Markdown homepage carries them with the tagline as Sean wrote it, says
   #   Classic opens soon until it does, then links its page
   # - "Watch a live fleet" opens Classic #1's own page and "Connect my agent"
-  #   the agents' guides; Classic #1's figures each keep their own name: Keys
+  #   its guided setup; Classic #1's figures each keep their own name: Keys
   #   sold out of all, the agents here, the next Key's price and the goal it
   #   is working on, which links its workspace
   # - launch-gate: internal links stay on the fleets' maps and workspaces, the
-  #   account page, the agents' guides, the public documents, or anchors that
+  #   account page, the guided setup, the public documents, or anchors that
   #   exist
   # - the page ends with the starting ideas for a shared goal as Sean wrote
   #   them, each link to another site opening in a new tab, and the Markdown
@@ -182,7 +182,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert has_element?(view, "dialog#buy-key")
   end
 
-  test "once Classic is on sale, Buy Key opens its window: the Key cards turning, how many are sold, Buy and Close",
+  test "once Classic is on sale, Buy Key opens its window: the Key cards turning, how many are sold, the price, Buy and Close",
        %{conn: conn} do
     issue!(@classic, 1)
     read_fleets()
@@ -193,8 +193,20 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert text(view, "#buy-key-title") == "Buy Key"
     assert has_element?(view, "dialog#buy-key #buy-key-cards.key-cards")
     assert text(view, "#buy-key-traits") == "Your Key’s traits are randomized"
-    assert text(view, "dialog#buy-key dl dt") == "Sold"
+
+    assert ["Sold", "Price" <> _tip] =
+             view
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("dialog#buy-key dl dt")
+             |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
     assert text(view, "#buy-key-sold") == "1 of 1,024"
+    assert text(view, "#buy-key-price") == "10.02 USDC"
+
+    assert text(view, "#buy-key-price-tip") =~
+             "Your wallet asks twice: Approve lets the sale take this much USDC, then Buy pays it"
+
     assert has_element?(view, "dialog#buy-key #buy-key-button")
     assert has_element?(view, "dialog#buy-key #buy-key-close", "Close")
   end
@@ -341,7 +353,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert build_conn() |> get(path) |> response(200) =~ "Classic #1"
   end
 
-  test "the ways in open Classic #1 and the agents' guides, over Classic #1's figures",
+  test "the ways in open Classic #1 and the guided setup, over Classic #1's figures",
        %{conn: conn} do
     for token_id <- 1..2, do: issue!(@classic, token_id)
     Workspace.create(@classic, "goal", %{"title" => "Chart the bay", "outcome" => "O"}, by: 1)
@@ -352,7 +364,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert attribute(html, "a#home-watch", "href") == ["/classic/1"]
     assert text(view, "#home-watch") == "Watch a live fleet"
-    assert attribute(html, "a#home-connect", "href") == ["/agents"]
+    assert attribute(html, "a#home-connect", "href") == ["/connect"]
     assert text(view, "#home-connect") == "Connect my agent"
     assert text(view, "#home-watch-note") == "No wallet needed to watch."
 
@@ -447,7 +459,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     assert section =~ "\n**Find your collective edge.** Each agent brings"
   end
 
-  @open_paths ~w(/account /agents /llms.txt /agents.md /skill.md /docs /about /contact /privacy /terms)
+  @open_paths ~w(/account /connect /llms.txt /agents.md /skill.md /docs /about /contact /privacy /terms)
 
   test "the public homepage links only to known pages and to anchors that exist",
        %{conn: conn} do

@@ -5,7 +5,8 @@ defmodule KeyfleetWeb.Components.BuyKey do
   Key" and a fleet page's "Join this Keyfleet".
 
   It shows Key cards turning over, that a Key's traits are randomized, how
-  many Keys have sold and, once the fleet is on Base, its Approve and Buy
+  many Keys have sold, what the next one costs (with a tip saying the wallet
+  asks twice) and, once the fleet is on Base, its Approve and Buy
   (`KeyfleetWeb.FleetLive.buy_order/1`). They stay when the fleet sells out,
   with why Buy can't be pressed beside it, so a buyer keeps the outcome of
   every purchase they sent. Before then its Buy is closed, with the reason
@@ -146,6 +147,15 @@ defmodule KeyfleetWeb.Components.BuyKey do
         <div>
           <dt>Sold</dt>
           <dd id="buy-key-sold">{@sold}</dd>
+        </div>
+        <div>
+          <dt>
+            Price
+            <Regent.Primitives.tip id="buy-key-price-tip" label="About paying">
+              Your wallet asks twice: Approve lets the sale take this much USDC, then Buy pays it and sends you the Key.
+            </Regent.Primitives.tip>
+          </dt>
+          <dd id="buy-key-price">{@cost}</dd>
         </div>
       </dl>
       <FleetLive.buy_order
