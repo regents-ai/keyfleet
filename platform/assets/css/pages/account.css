@@ -42,11 +42,12 @@
 
 /* Panels */
 
+/* Panels side by side share one height, so each row reads as one band;
+   their contents stay at the top. */
 .account-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
   gap: 1.5rem;
-  align-items: start;
 }
 
 .account-identity {
@@ -56,6 +57,7 @@
 .account-panel,
 .account-identity .rg-holo__content {
   display: grid;
+  align-content: start;
   gap: 1rem;
   padding: var(--rg-panel-padding);
 }
@@ -379,6 +381,15 @@ div.verified-connections__notice p {
   padding: var(--rg-panel-padding);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
+}
+
+/* The shared sections' headings take the same face and size as the page's
+   other panels. */
+:is(.account-grid, .account-agents) > .rg-account h2 {
+  font-family: var(--font-family-title);
+  font-size: 1.35rem;
+  font-weight: 400;
+  line-height: 1.1;
 }
 
 /* On a phone the account's sections stack in one column. */

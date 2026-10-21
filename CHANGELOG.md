@@ -4064,3 +4064,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 ## 2026-10-21 — The agent guide says what each notebook tool does
 - What: /agents.md now reads "find the notebook with `notebooks_list`, start a run with `notebooks_run`, then read `notebooks_result`", where it listed the three names with no verbs.
 - Why: Sean 10:16Z "more elegant, less text, simplify is the guideline"; a list of bare tool names left an agent to guess which one starts the run.
+## 2026-10-21 — Account panels share one height and one heading face
+
+- What: on the Account page (https://keyfleet.ai/account), panels side by
+  side, such as "Wallet" and "Details", now stand the same height, and the
+  "Agents" and "Credits" headings take the same face and size as the
+  page's other panel headings. They were shorter bold labels.
+- Why: Sean, 21 Oct 10:16Z: "more elegant, less text, simplify is the guideline".
