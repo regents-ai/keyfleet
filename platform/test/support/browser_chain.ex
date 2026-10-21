@@ -415,6 +415,26 @@ defmodule Keyfleet.BrowserChain do
   end
 
   @doc """
+  Has Key `key` retitle the workspace item `id`, and tells the pages that read
+  the fleet's workspace, as the graph's copier does after a change. The notice
+  names a run of its own, so every page reads the workspace again.
+  """
+  def rework!(fleet_id, key, id, title) do
+    WorkspaceFixtures.edit(fleet_id, id, %{"title" => title}, by: key)
+
+    Phoenix.PubSub.broadcast(
+      Keyfleet.PubSub,
+      Keyfleet.Graph.head_topic(fleet_id),
+      {:graph_head, fleet_id, "browser", 0}
+    )
+
+    :ok
+  end
+
+  @doc "The address of the workspace item `id`."
+  def item_path(fleet_id, id), do: KeyfleetWeb.WorkspacePage.item_path(fleet_id, id)
+
+  @doc """
   Records that `wallet`, holding Key `key`, sent the fleet's code a change
   ending at `head`, as the code store's gateway does after git has its answer.
   """

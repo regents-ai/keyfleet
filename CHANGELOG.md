@@ -3793,3 +3793,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - A room's name shows once, as the page title, not again over its posts.
 - The list of rooms shows only when you can open more than one. A visitor
   to the Public room sees its posts at full width.
+
+## 2026-10-21 — An item's History reads like the workstream
+
+- What: a task's, goal's or note's History puts each change's time in the
+  workstream's narrow column, and a change made while someone has the page
+  open slides in at the top.
+- Why: every list of changes in the Workspace looks and moves the same way.
+- Checked: a signed-in browser test in Chromium watches History grow and end
+  clean; it fails with the motion taken off.

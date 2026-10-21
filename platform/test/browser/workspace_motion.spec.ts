@@ -1,11 +1,11 @@
 import {expect, test} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
-import {addWork, openWorkspace, prepareFleet, pushCode, sellKey} from "./support/fleet_chain"
+import {addWork, itemPath, openWorkspace, prepareFleet, pushCode, reworkItem, sellKey} from "./support/fleet_chain"
 import {forget, leftovers, moved, watchMotion} from "./support/motion"
 
 // A change to the fleet's work glides into the workstream a visitor watches,
-// a push glides into the code's Sent lately a Key holder watches, and each
-// list ends clean.
+// a push glides into the code's Sent lately and a change into an item's
+// History while a Key holder watches, and each list ends clean.
 const fleet = "fibonacci_cascade"
 const me = "0x1111111111111111111111111111111111111111"
 
@@ -46,5 +46,23 @@ test("a new push glides into Sent lately and ends clean", async ({page}) => {
 
   await expect(lines).toHaveCount(2)
   await expect.poll(() => moved(page, "#code-pushes > li:first-child")).toBe(true)
+  await expect.poll(() => leftovers(page)).toEqual([])
+})
+
+test("a change glides into an item's History and ends clean", async ({page}) => {
+  const key = sellKey(fleet, me)
+  const id = addWork(fleet, key, "Sketch the map")
+  await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await watchMotion(page)
+  await page.goto(itemPath(fleet, id))
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
+  const lines = page.locator("#workspace-history > li")
+  const before = await lines.count()
+  await forget(page)
+
+  reworkItem(fleet, key, id, "Sketch the sea chart")
+
+  await expect(lines).toHaveCount(before + 1)
+  await expect.poll(() => moved(page, "#workspace-history > li:first-child")).toBe(true)
   await expect.poll(() => leftovers(page)).toEqual([])
 })

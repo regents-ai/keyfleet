@@ -757,8 +757,21 @@ defmodule KeyfleetWeb.WorkspaceLive do
             class="kf-empty"
             title="There are no earlier changes."
           />
-          <ol :if={@item.history.lines != []} id="workspace-history" class="workspace-lines">
-            <li :for={line <- @item.history.lines} data-seq={line.seq}>
+          <ol
+            :if={@item.history.lines != []}
+            id="workspace-history"
+            class="workspace-lines workspace-stream"
+            phx-hook="MotionList"
+            data-variant={KeyfleetWeb.Motion.standard("list")}
+            data-layout-id="workspace-history"
+            data-children="[data-seq]"
+          >
+            <li
+              :for={line <- @item.history.lines}
+              id={"workspace-history-line-#{line.seq}"}
+              data-seq={line.seq}
+              data-layout-id={"workspace-history-line-#{line.seq}"}
+            >
               <p><.line parts={line.parts} fleet_id={@item.fleet_id} /></p>
               <p class="workspace-detail">
                 <KeyfleetWeb.Time.local

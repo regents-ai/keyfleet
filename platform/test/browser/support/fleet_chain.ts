@@ -93,6 +93,13 @@ export const openWorkspace = (fleet: string) => void call("open_workspace!", [fl
 /** Has a Key add a task to a fleet's workspace and tells the pages showing its work. */
 export const addWork = (fleet: string, key: number, title: string) => call("work!", [fleet, key, title])
 
+/** Has a Key retitle a workspace item and tells the pages reading the workspace. */
+export const reworkItem = (fleet: string, key: number, id: string, title: string) =>
+  void call("rework!", [fleet, key, id, title])
+
+/** A workspace item's address. */
+export const itemPath = (fleet: string, id: string) => call("item_path", [fleet, id])
+
 /** Records that a Key's holder sent the fleet's code a change ending at `head`. */
 export const pushCode = (fleet: string, key: number, wallet: string, head: string) =>
   void call("push!", [fleet, key, wallet, head])
