@@ -509,9 +509,11 @@ features:
       A signed-in person sees their wallets in the side panel and on the Account
       page's Profile and Wallets tab, each with a copy icon and a Basescan arrow.
       Once their browser says so, each is named "Your wallet" or "Regents wallet"
-      (the one Privy made at sign-in), and the active wallet is marked "Active";
-      an active wallet the account isn't linked to is listed too and said to be
-      one. Showing and copying only: nothing here signs or changes a wallet.
+      (the one Privy made at sign-in), and the active wallet is marked "Active".
+      Signed in, only the account's own wallets show and only one of them can be
+      active: a wallet app left connected from before a Google sign-in is never
+      shown or used, and Sign out lets go of every wallet in Privy before Privy
+      signs out. Showing and copying only: nothing here signs or changes a wallet.
     who: person
     level: ordinary
     paths:
@@ -535,4 +537,5 @@ features:
       - platform/test/browser/copy_buttons.spec.ts
     gaps:
       - Which wallet is the Regents wallet comes from Privy in the browser, so a real sign-in with both wallets is checked by hand on keyfleet.ai after release.
+      - Whether a wallet app such as Zerion forgets the site after Sign out is up to that app; a real Zerion sign-out then Google sign-in is checked by hand on keyfleet.ai after release.
       - WebKit is not run on the Mac.

@@ -3231,3 +3231,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the homepage no longer has the Regents Club section (its sea, its Keys and holders, what it is doing right now, Public View and Buy Key on OpenSea), and the Markdown homepage for agents drops its Regents Club section too. The side menu on the app's pages lists Classic #1, then Account. The Regents Club itself is unchanged: its pages still open at /app/fleets/regents_club for anyone with the link.
 - Why: Sean, 21 October: "remove the regents club section from the home page, and from the left sidenav".
+
+## 2026-10-21 — After a Google sign-in, only your account's wallets
+
+- What: once you are signed in, Keyfleet uses and shows only the wallets your account is linked to. A wallet app left connected from before, such as Zerion before a Google sign-in, is no longer listed in the side panel or on Account and is never the active wallet; your Regents wallet is the active one, so Buy Key and every other wallet button use it. Sign out now lets go of every wallet Privy holds, wallet apps included, before Privy signs out, so the next sign-in starts with none of them. The "Not linked to this account" row is gone.
+- Why: Sean 21 October 06:46Z: "I signed in with google, it should not show my zerion account that was already logged in. only the google one. signing out zerion should 100% drop that account".

@@ -90,6 +90,7 @@ const {
   createPrivySessionCompletion,
   createPrivyTokenCallbacks,
   privyLoginFailureDiagnostic,
+  signOutOfProvider,
 } = bridge
 
 // One complete pair: the session proof and the signed evidence it was acquired
@@ -321,7 +322,7 @@ describe("Privy session bridge", () => {
     const wallet = ethereumWallet("0x1111111111111111111111111111111111111111")
     const connectWallet = vi.fn(async () => ({}))
     const startup = bridge.startPrivyBridge({}, {
-      appId: "test-app", authenticated: true, ready: true, walletsReady: true, wallets: [wallet], activeWallet: wallet,
+      appId: "test-app", authenticated: true, ready: true, walletsReady: true, wallets: [wallet], activeWallet: wallet, linkedWallets: [wallet.address],
       getAccessToken: async () => "verified", logout: async () => undefined, connectWallet,
     } as unknown as bridge.PrivyBridgeProviderState)
     render(renderedAccountBridge())
@@ -1564,6 +1565,49 @@ describe("Privy session bridge", () => {
     expect(activeEthereumWallet()).toBeNull()
   })
 
+  // A wallet app left connected from before a Google sign-in is not the
+  // account's wallet, even while Privy still remembers it as the active one.
+  it("after a Google sign-in, uses the account's Regents wallet, never a wallet app left from before", async () => {
+    productionRootRender.mockReset()
+    replaceActiveEthereumWallet(null)
+    const renderAccountBridge = installAccountBridgeRenderer()
+    stubBrowserGlobals()
+    const zerion = ethereumWallet("0x0cb2000000000000000000000000000000003c37", {walletClientType: "zerion"})
+    const regents = ethereumWallet("0x2c95000000000000000000000000000000008cf6", {
+      walletClientType: "privy",
+      connectorType: "embedded",
+    })
+    const providerState = {
+      appId: "test-app",
+      authenticated: true,
+      getAccessToken: async () => "current-token",
+      logout: async () => undefined,
+      ready: true,
+      walletsReady: true,
+      wallets: [zerion, regents],
+      activeWallet: zerion as typeof zerion | undefined,
+      linkedWallets: [regents.address],
+      setActiveWallet: vi.fn((wallet: typeof zerion) => { providerState.activeWallet = wallet }),
+    }
+
+    const startup = bridge.startPrivyBridge({}, providerState as unknown as bridge.PrivyBridgeProviderState)
+    renderAccountBridge(renderedAccountBridge())
+    await startup
+    await until(() => activeEthereumWallet()?.provider === regents.provider)
+    expect(providerState.setActiveWallet).toHaveBeenCalledWith(regents)
+    expect(providerState.setActiveWallet).not.toHaveBeenCalledWith(zerion)
+  })
+
+  it("signing out lets go of every wallet Privy holds before Privy signs out, even one that refuses", async () => {
+    const order: string[] = []
+    const zerion = {disconnect: vi.fn(() => { order.push("zerion"); throw new Error("refused") })}
+    const regents = {disconnect: vi.fn(() => { order.push("regents") })}
+
+    await signOutOfProvider([zerion, regents], async () => { order.push("logout") })
+
+    expect(order).toEqual(["zerion", "regents", "logout"])
+  })
+
   // The account's wallets say which one Privy made at sign-in: the Regents wallet.
   it("tells the Regents wallet from the person's own wallet", async () => {
     productionRootRender.mockReset()
@@ -1587,6 +1631,7 @@ describe("Privy session bridge", () => {
       walletsReady: true,
       wallets: [own, regents],
       activeWallet: own,
+      linkedWallets: [own.address, regents.address],
     } as unknown as bridge.PrivyBridgeProviderState)
     renderAccountBridge(renderedAccountBridge())
     await startup
@@ -1614,6 +1659,7 @@ describe("Privy session bridge", () => {
       walletsReady: true,
       wallets: [first, second],
       activeWallet: first,
+      linkedWallets: [first.address, second.address],
     }
 
     const startup = bridge.startPrivyBridge(
@@ -1764,6 +1810,7 @@ describe("Privy session bridge", () => {
       walletsReady: false,
       wallets: [] as Array<typeof wallet>,
       activeWallet: undefined as typeof wallet | undefined,
+      linkedWallets: [wallet.address],
       setActiveWallet,
     }
     const startup = bridge.startPrivyBridge({}, providerState as unknown as bridge.PrivyBridgeProviderState)
@@ -2067,6 +2114,7 @@ describe("Privy session bridge", () => {
       walletsReady: true,
       wallets: [first, second],
       activeWallet: first,
+      linkedWallets: [address],
     }
 
     const startup = bridge.startPrivyBridge(
@@ -2124,6 +2172,7 @@ describe("Privy session bridge", () => {
         walletsReady: true,
         wallets: [first] as unknown[],
         activeWallet: first as unknown,
+        linkedWallets: [lower],
       }
 
       const startup = bridge.startPrivyBridge(
@@ -2295,6 +2344,7 @@ describe("Privy session bridge", () => {
       walletsReady: true,
       wallets: [first, chosen],
       activeWallet: first,
+      linkedWallets: [first.address, "0x2222222222222222222222222222222222222222"],
     }
 
     const startup = bridge.startPrivyBridge(
@@ -2343,6 +2393,7 @@ describe("Privy session bridge", () => {
       walletsReady: true,
       wallets: [first, unavailable],
       activeWallet: first,
+      linkedWallets: [first.address, "0x2222222222222222222222222222222222222222"],
     }
 
     const startup = bridge.startPrivyBridge(

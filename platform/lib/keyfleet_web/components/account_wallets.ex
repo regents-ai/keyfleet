@@ -8,8 +8,9 @@ defmodule KeyfleetWeb.AccountWallets do
   Which of them Privy made at sign-in (the Regents wallet) and which one is active
   are the browser's to know, so the `AccountWallets` hook reports both when the
   page arrives and each time the wallet changes. Until it does, each wallet is
-  said to be linked to this account, with no Active mark. An active wallet the account isn't linked to is shown
-  too, said to be one.
+  said to be linked to this account, with no Active mark. A wallet the account
+  isn't linked to, such as a wallet app left connected from before a Google
+  sign-in, is never shown or marked.
 
   The parent passes `account` (the signed-in account) and `id`.
   """
@@ -68,26 +69,20 @@ defmodule KeyfleetWeb.AccountWallets do
   end
 
   @doc """
-  The rows shown: the account's wallets in order, then the active wallet when the
-  account isn't linked to it. Each says what it is once the browser has said which
-  wallet is the Regents wallet (`regents`, `nil` until then).
+  The rows shown: the account's wallets in order, the active one marked. Each says
+  what it is once the browser has said which wallet is the Regents wallet
+  (`regents`, `nil` until then).
   """
   def rows(linked, active, regents) do
-    shown = if active in [nil | linked], do: linked, else: linked ++ [active]
-
-    Enum.map(shown, fn address ->
-      %{address: address, active?: address == active, label: label(address, linked, regents)}
+    Enum.map(linked, fn address ->
+      %{address: address, active?: address == active, label: label(address, regents)}
     end)
   end
 
-  defp label(address, linked, regents) do
-    cond do
-      address not in linked -> "Not linked to this account"
-      is_nil(regents) -> "Linked to this account"
-      address in regents -> "Regents wallet"
-      true -> "Your wallet"
-    end
-  end
+  defp label(_address, nil), do: "Linked to this account"
+
+  defp label(address, regents),
+    do: if(address in regents, do: "Regents wallet", else: "Your wallet")
 
   defp linked(%{wallet_address: own, wallet_addresses: wallets}),
     do:

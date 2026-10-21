@@ -411,23 +411,11 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     assert has_element?(view, "#shell-wallets-#{regents} .rg-status", "Active")
 
-    # An active wallet the account isn't linked to is shown, and said to be one.
+    # A wallet the account isn't linked to, such as a wallet app left connected
+    # from before a Google sign-in, is never shown and never marked.
     seen!(view, "#account-wallets", elsewhere, [regents])
-
-    assert has_element?(
-             view,
-             "#account-wallets-#{elsewhere} .account-wallets__label",
-             "Not linked to this account"
-           )
-
-    assert has_element?(view, "#account-wallets-#{elsewhere} .rg-status", "Active")
-
-    assert has_element?(
-             view,
-             "#account-wallets-#{elsewhere}-address-copy[data-copy-text='#{elsewhere}']"
-           )
-
-    refute has_element?(view, "#account-wallets-#{regents} .rg-status")
+    refute has_element?(view, "#account-wallets-#{elsewhere}")
+    refute has_element?(view, "#account-wallets .rg-status")
   end
 
   test "Account lists the keys the person's wallets hold, fleet by fleet", %{conn: conn} do
