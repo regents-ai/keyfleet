@@ -3419,3 +3419,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 ## 2026-10-21 — Member List cards drop lines that say nothing
 - What: a Member List card shows its Connections line only when the holder has connected accounts, and adds "last active" or "online now" after the status only when the holder has done something with a Key they hold today.
 - Why: "Connections None" and "never active" were noise, and a Key that started on its own read "Active · never active".
+
+## 2026-10-21 — A signed browser tool says when nothing was sent
+
+- What: when a signed browser tool refuses a call before sending it (a missing
+  field, a request that wasn't prepared, no proof), it answers
+  `signed_call_refused`: "Nothing was sent", then how to prepare and sign. A read
+  that fails on the way says to try again; a change that may have gone out still
+  says to check before sending it again.
+- Why: an agent with a missing field was told to check what happened, when
+  nothing had happened.
