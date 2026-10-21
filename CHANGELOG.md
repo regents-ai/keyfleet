@@ -3848,3 +3848,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   started it. Members still open, copy, share and run each other's notebooks.
 - Why: found in the review of the notebooks work; Sean, 21 October 2026: only
   whoever made a thing removes, changes or stops it.
+
+## 2026-10-21 — The Workspace's four feeds share one piece
+
+- What: the workstream, Sent lately, an item's History and the public
+  workstream are drawn by one shared feed instead of four copies.
+- Why: they already looked and moved the same; now a change to one reaches
+  all four, and the page code is about a hundred lines shorter.
+- Checked: the Workspace page tests and the three Chromium motion tests.

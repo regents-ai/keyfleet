@@ -165,32 +165,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
           aria-labelledby="workspace-activity-title"
         >
           <h2 id="workspace-activity-title">Workstream</h2>
-          <ol
-            id="workspace-activity"
-            class="workspace-lines workspace-stream"
-            phx-hook="MotionList"
-            data-variant={KeyfleetWeb.Motion.standard("list")}
-            data-layout-id="workspace-activity"
-            data-children="[data-seq]"
-          >
-            <li
-              :for={line <- @board.activity}
-              id={"workspace-activity-#{line.seq}"}
-              data-seq={line.seq}
-              data-layout-id={"workspace-activity-#{line.seq}"}
-            >
-              <p><.line parts={line.parts} fleet_id={@board.fleet_id} /></p>
-              <p :if={line.note} class="workspace-text">{line.note}</p>
-              <p class="workspace-detail">
-                <KeyfleetWeb.Time.local
-                  id={"workspace-activity-#{line.seq}-at"}
-                  at={line.at}
-                  as={:clock}
-                  title_as={:moment}
-                />
-              </p>
-            </li>
-          </ol>
+          <.feed :let={line} id="workspace-activity" rows={@board.activity} key={:seq}>
+            <p><.line parts={line.parts} fleet_id={@board.fleet_id} /></p>
+            <p :if={line.note} class="workspace-text">{line.note}</p>
+          </.feed>
         </section>
 
         <section class="workspace-panel workspace-items" aria-labelledby="workspace-items-title">
@@ -445,35 +423,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
             class="kf-empty"
             title="No changes have been sent yet."
           />
-          <ol
-            :if={@board.pushes != []}
-            id="code-pushes"
-            class="workspace-lines workspace-stream"
-            phx-hook="MotionList"
-            data-variant={KeyfleetWeb.Motion.standard("list")}
-            data-layout-id="code-pushes"
-            data-children="[data-push]"
-          >
-            <li
-              :for={push <- @board.pushes}
-              id={"code-push-#{push.id}"}
-              data-push={push.id}
-              data-layout-id={"code-push-#{push.id}"}
-            >
-              <p>
-                <.key fleet_id={@board.fleet_id} token_id={push.token_id} agent={push.agent} />
-                sent {push.what}, ending at <.value value={push.commit} fleet_id={@board.fleet_id} />
-              </p>
-              <p class="workspace-detail">
-                <KeyfleetWeb.Time.local
-                  id={"code-push-#{push.id}-at"}
-                  at={push.at}
-                  as={:clock}
-                  title_as={:moment}
-                />
-              </p>
-            </li>
-          </ol>
+          <.feed :let={push} :if={@board.pushes != []} id="code-pushes" rows={@board.pushes} key={:id}>
+            <p>
+              <.key fleet_id={@board.fleet_id} token_id={push.token_id} agent={push.agent} />
+              sent {push.what}, ending at <.value value={push.commit} fleet_id={@board.fleet_id} />
+            </p>
+          </.feed>
         </section>
       </div>
       <div class="workspace-side">
@@ -757,32 +712,15 @@ defmodule KeyfleetWeb.WorkspaceLive do
             class="kf-empty"
             title="There are no earlier changes."
           />
-          <ol
+          <.feed
+            :let={line}
             :if={@item.history.lines != []}
             id="workspace-history"
-            class="workspace-lines workspace-stream"
-            phx-hook="MotionList"
-            data-variant={KeyfleetWeb.Motion.standard("list")}
-            data-layout-id="workspace-history"
-            data-children="[data-seq]"
+            rows={@item.history.lines}
+            key={:seq}
           >
-            <li
-              :for={line <- @item.history.lines}
-              id={"workspace-history-line-#{line.seq}"}
-              data-seq={line.seq}
-              data-layout-id={"workspace-history-line-#{line.seq}"}
-            >
-              <p><.line parts={line.parts} fleet_id={@item.fleet_id} /></p>
-              <p class="workspace-detail">
-                <KeyfleetWeb.Time.local
-                  id={"workspace-history-#{line.seq}-at"}
-                  at={line.at}
-                  as={:clock}
-                  title_as={:moment}
-                />
-              </p>
-            </li>
-          </ol>
+            <p><.line parts={line.parts} fleet_id={@item.fleet_id} /></p>
+          </.feed>
           <nav :if={@item.history.more || @item.history.first} class="workspace-pages">
             <.link
               :if={@item.history.first}
@@ -1206,32 +1144,15 @@ defmodule KeyfleetWeb.WorkspaceLive do
           class="kf-empty"
           title="No work has been recorded here yet."
         />
-        <ol
+        <.feed
+          :let={line}
           :if={@fleet.work != []}
           id="workspace-public-activity"
-          class="workspace-lines workspace-stream"
-          phx-hook="MotionList"
-          data-variant={KeyfleetWeb.Motion.standard("list")}
-          data-layout-id="workspace-public-activity"
-          data-children="[data-line]"
+          rows={@fleet.work}
+          key={:id}
         >
-          <li
-            :for={line <- @fleet.work}
-            id={"workspace-public-line-#{line.id}"}
-            data-line={line.id}
-            data-layout-id={"workspace-public-line-#{line.id}"}
-          >
-            <p><.line parts={line.parts} fleet_id={@fleet.fleet_id} /></p>
-            <p class="workspace-detail">
-              <KeyfleetWeb.Time.local
-                id={"workspace-public-#{line.id}-at"}
-                at={line.at}
-                as={:clock}
-                title_as={:moment}
-              />
-            </p>
-          </li>
-        </ol>
+          <p><.line parts={line.parts} fleet_id={@fleet.fleet_id} /></p>
+        </.feed>
       </section>
       <.tools fleet_id={@fleet.fleet_id} />
     </article>
@@ -1310,6 +1231,43 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <.load_failed />
       </section>
     </article>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :rows, :list, required: true
+  attr :key, :atom, required: true, doc: "the field that names a row"
+  slot :inner_block, required: true
+
+  # A feed of rows, newest first, each with its time in a column of its own.
+  # A row that arrives glides in and the rows below it make room.
+  defp feed(assigns) do
+    ~H"""
+    <ol
+      id={@id}
+      class="workspace-lines workspace-stream"
+      phx-hook="MotionList"
+      data-variant={KeyfleetWeb.Motion.standard("list")}
+      data-layout-id={@id}
+      data-children="[data-row]"
+    >
+      <li
+        :for={row <- @rows}
+        id={"#{@id}-#{Map.fetch!(row, @key)}"}
+        data-row
+        data-layout-id={"#{@id}-#{Map.fetch!(row, @key)}"}
+      >
+        {render_slot(@inner_block, row)}
+        <p class="workspace-detail">
+          <KeyfleetWeb.Time.local
+            id={"#{@id}-#{Map.fetch!(row, @key)}-at"}
+            at={row.at}
+            as={:clock}
+            title_as={:moment}
+          />
+        </p>
+      </li>
+    </ol>
     """
   end
 
