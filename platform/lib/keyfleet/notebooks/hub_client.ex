@@ -28,7 +28,6 @@ defmodule Keyfleet.Notebooks.HubClient do
     fleet_id
     |> request(:get, "/api/v1/projects/#{segment(project_id)}/notebooks",
       params: query,
-      connect_options: [timeout: Notebooks.config()[:page_timeout_ms]],
       receive_timeout: Notebooks.config()[:page_timeout_ms]
     )
     |> page()
@@ -94,20 +93,21 @@ defmodule Keyfleet.Notebooks.HubClient do
   defp request(fleet_id, method, path, options \\ []) do
     {:ok, address} = Notebooks.hub_address(fleet_id)
 
+    {timeout, options} =
+      Keyword.pop(options, :receive_timeout, Notebooks.config()[:hub_timeout_ms])
+
     Req.request(
-      Keyword.merge(
-        [
-          method: method,
-          base_url: address,
-          url: path,
-          headers: [{"x-keyfleet-assertion", Pass.mint(fleet_id, provisioner(fleet_id))}],
-          retry: false,
-          redirect: false,
-          connect_options: [timeout: Notebooks.config()[:hub_timeout_ms]],
-          receive_timeout: Notebooks.config()[:hub_timeout_ms]
-        ],
-        options
-      )
+      [
+        method: method,
+        base_url: address,
+        url: path,
+        headers: [{"x-keyfleet-assertion", Pass.mint(fleet_id, provisioner(fleet_id))}],
+        retry: false,
+        redirect: false,
+        # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
+        connect_options: [timeout: timeout, transport_opts: [inet6: true]],
+        receive_timeout: timeout
+      ] ++ options
     )
   end
 

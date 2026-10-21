@@ -585,7 +585,7 @@ features:
       - platform/test/keyfleet_web/signed_agent_contract_test.exs
       - platform/test/keyfleet_web/api_contract_test.exs
     gaps:
-      - Proven against a local hub that keeps files as the real one does; not yet run against a real notebook host.
+      - Proven against a local hub that keeps files as the real one does and, like Fly's private addresses, answers only on IPv6 by name; not yet run against a real notebook host.
       - While someone has the notebook open in a live session, adding and writing answer 409; the log is read through a run's page.
       - Not yet run by a real agent.
 

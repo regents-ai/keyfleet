@@ -567,6 +567,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
           raw: true,
           redirect: false,
           retry: false,
+          # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
+          connect_options: [transport_opts: [inet6: true]],
           receive_timeout: http_timeout(conn)
         )
         |> stream_back(conn, fleet_id)
