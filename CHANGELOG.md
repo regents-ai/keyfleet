@@ -3482,3 +3482,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on /connect, a step that is done (agent paired, Key held) now says "Done" to screen readers before its name, not only with a drawn tick.
 - Why: launch-readiness plan (21 October): the tick was hidden from assistive technology, so a returning person using a screen reader couldn't tell where they had stopped.
+
+## 2026-10-21 — Workstream reads like the fleet feed
+
+- Workspace feeds (workstream, item history, code and files pushes, the public
+  workstream) show a short time, with the full moment on hover, as the fleet feed does.
+- New workstream lines glide in as the fleet feed's do; the line restating the
+  list's order and the public footnote are gone.
