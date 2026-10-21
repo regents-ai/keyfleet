@@ -28,7 +28,6 @@ defmodule KeyfleetWeb.Components.MemberList do
   alias Keyfleet.Keys.Metadata
   alias Keyfleet.PublicIdentity
   alias KeyfleetWeb.KeyLinks
-  alias KeyfleetWeb.Motion
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.PageRead
 
@@ -203,13 +202,7 @@ defmodule KeyfleetWeb.Components.MemberList do
         Whoever holds the first Key shows up here.
       </Regent.Primitives.empty_state>
 
-      <ol
-        :if={is_list(@holders)}
-        id={"#{@id}-holders"}
-        class="member-list__holders"
-        phx-hook="MotionCascade"
-        data-variant={Motion.standard("grid")}
-      >
+      <ol :if={is_list(@holders)} id={"#{@id}-holders"} class="member-list__holders">
         <li
           :for={holder <- @holders}
           id={"#{@id}-holder-#{holder.id}"}

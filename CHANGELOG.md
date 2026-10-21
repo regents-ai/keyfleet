@@ -3747,3 +3747,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   someone watches.
 - Checked: a browser test in Chromium watches each list grow and end clean;
   it fails with the motion taken off.
+
+## 2026-10-21 — Member cards' scroll entrance taken back out
+
+- The entrance added earlier today never played, because the Member List is
+  already on screen when the members view opens. Nothing on screen changes.
