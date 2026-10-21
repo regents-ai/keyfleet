@@ -3998,3 +3998,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - What: the page of a Key not sold yet names its fleet above its number
   ("Classic #1"), as a sold Key's page does. It said "Keyfleet".
 - Why: Sean, 21 October 10:16Z: "quick wins, refactors, improvements, for human UI and agent UX".
+
+## 2026-10-21 — Each area's browser tools sit together
+- What: the tool list (the docs and llms.txt table, the manifest, and the order a page offers them) now runs: start here (about, docs, agents_whoami, agents_status, prepare_agent_request), the public fleet reads, your profile and account, then rooms, walls, mutes, direct messages, polls, the workspace, code, notebooks and shards, and last the proposal and wallet tools. Nothing else about any tool changed.
+- Why: the coordinator's ask for the agent lane, "WebMCP tool names and descriptions (short, consistent …)", and Sean 10:16Z "more elegant, less text, simplify is the guideline".
