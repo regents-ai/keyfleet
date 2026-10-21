@@ -119,11 +119,16 @@ defmodule KeyfleetWeb.AccountLive do
           <Regent.Primitives.empty_state
             :if={@held_keys == []}
             class="kf-empty"
-            title="Your wallets don’t hold any Keys yet."
+            title="No Keys yet."
           >
-            A Regents Club Pass comes with the
-            <.link navigate={~p"/app/fleets/regents_club"}>Club Key</.link>
-            of the same number.
+            <:action>
+              <.link
+                class="rg-button rg-button--secondary"
+                patch={Keyfleet.Fleets.path("fleet_tech_classic")}
+              >
+                <span class="rg-button__label">Get a Key on Classic #1</span>
+              </.link>
+            </:action>
           </Regent.Primitives.empty_state>
           <div :for={fleet <- @held_keys} class="account-keys__fleet">
             <h3>

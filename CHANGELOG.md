@@ -3343,3 +3343,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on Account › Points, a failed refresh is now said only on the Balance card ("Last saved figures. Refresh failed."), where it always was too. The second, page-wide warning above the panels is gone, and so is the empty band it kept free under the title on every visit. The figures card is called Balance, since the page is already called Points.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline". The same warning was printed twice, and its reserved space left a blank gap at the top of the page.
+
+## 2026-10-21 — An empty Your Keys says "No Keys yet." and leads to Classic #1
+
+- What: on Account › Profile, someone whose wallets hold no Key now sees "No Keys yet." and a "Get a Key on Classic #1" button, in place of a sentence about the Regents Club Pass and a link to the Club Key.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline". The Regents Club left the homepage and side menu on 21 October, so the empty card was pointing new people to the one fleet they can't buy into; Classic #1 is where Keys are sold.

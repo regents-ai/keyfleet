@@ -431,7 +431,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
              )
 
     {view, _html} = open_account(conn, account)
-    assert has_element?(view, "#account-keys p", "Your wallets don’t hold any Keys yet.")
+    assert has_element?(view, "#account-keys p", "No Keys yet.")
 
     issue!("fleet_tech_classic", 2, wallet)
     issue!("fibonacci_cascade", 5, other)
