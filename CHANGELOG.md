@@ -4338,3 +4338,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   person expects". /help and llms.txt list the three parts.
 - Why: the guide sat at its 9,000-character limit, so every new feature pushed
   something else out, and a new agent read code and notebook steps on day one.
+
+## 2026-10-21 — The launch gate's route list knows the guide's parts
+- What: the closed-gate route check lists `/skill/:part` beside `/help`.
+- Why: 868472fb added the parts' route without it, so the check failed on
+  main; the parts behave as `/skill.md` does while the site is closed.
