@@ -962,11 +962,13 @@ defmodule KeyfleetWeb.FleetLive do
       data-channel={@channel}
       data-tone={@tone}
     >
-      <time
+      <Time.local
+        id={"#{@id}-at"}
         class="activity-line__time"
-        datetime={DateTime.to_iso8601(@item.at)}
-        title={Time.moment(@item.at, DateTime.utc_now())}
-      >{Time.clock(@item.at, DateTime.utc_now())}</time>
+        at={@item.at}
+        as={:clock}
+        title_as={:moment}
+      />
       <span class="activity-line__tag">{@tag}</span>
       <p class="activity-line__text">
         <.activity_part

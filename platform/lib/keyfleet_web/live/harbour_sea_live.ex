@@ -94,8 +94,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
            topics: [],
            watched: [],
            due: MapSet.new(),
-           agent: nil,
-           now: nil
+           agent: nil
          ), layout: false}
 
       {:halt, socket} ->
@@ -135,7 +134,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
 
   def handle_event("show_agent", %{"id" => id}, socket) when is_binary(id) do
     if ship(on_sea(socket.assigns), id),
-      do: {:noreply, assign(socket, agent: id, now: DateTime.utc_now())},
+      do: {:noreply, assign(socket, agent: id)},
       else: {:noreply, socket}
   end
 
@@ -441,13 +440,11 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     <.agent_card
       :if={ship = @agent && ship(drawn(@fleets, @public, @crew, @own, @access_context), @agent)}
       ship={ship}
-      now={@now}
     />
     """
   end
 
   attr :ship, :map, required: true
-  attr :now, DateTime, required: true
 
   # A Key's card: its name, its last actions and a link to its profile. It
   # opens as it is rendered and closes with its X, Escape or a new page.
@@ -482,11 +479,9 @@ defmodule KeyfleetWeb.HarbourSeaLive do
         </form>
       </header>
       <ol class="harbour-card__actions" aria-label="Recent actions">
-        <li :for={action <- @ship.actions}>
+        <li :for={{action, i} <- Enum.with_index(@ship.actions)}>
           <span>{action.text}</span>
-          <time datetime={DateTime.to_iso8601(action.at)}>
-            {KeyfleetWeb.Time.moment(action.at, @now)}
-          </time>
+          <KeyfleetWeb.Time.local id={"harbour-agent-action-#{i}-at"} at={action.at} as={:moment} />
         </li>
       </ol>
       <.link class="harbour-card__key" patch={KeyLinks.key_path(@ship.fleet_id, @ship.token_id)}>

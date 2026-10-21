@@ -607,7 +607,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
             </Regent.Primitives.button>
           </p>
           <div class="rooms-body">{RoomsLive.body_html(message.body)}</div>
-          <p class="rooms-detail">{RoomsLive.stamp(message.inserted_at)}</p>
+          <p class="rooms-detail">
+            <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
+          </p>
         </li>
       </ol>
       <%!-- The stream keeps no rows here, so the page shows this only while the list above is empty. --%>
@@ -690,7 +692,12 @@ defmodule KeyfleetWeb.KeyProfileLive do
             <.link patch={"#{Keyfleet.Fleets.path(@profile.fleet_id)}/rooms/#{post.room.slug}"}>
               {RoomsLive.room_label(post.room)}
             </.link>
-            on {RoomsLive.stamp(post.inserted_at)}
+            on
+            <KeyfleetWeb.Time.local
+              id={"key-profile-recent-#{post.id}-at"}
+              at={post.inserted_at}
+              as={:stamp}
+            />
           </p>
           <div class="rooms-body">{RoomsLive.body_html(post.body)}</div>
         </li>

@@ -3161,3 +3161,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: every "i" tip, including the one beside the home page's Key price, now opens while a mouse rests on it and closes when the mouse leaves; a click keeps it open, and touch and keyboard still open it with a press. The shared library moves to design-system 5b4f47ec, which also brings the template's charcoal window backdrop, buttons that show something without an arrow, and the pairing box with the chosen agent's picture in its corner and no help icon.
 - Why: Sean 20 October 16:42Z: "show current price with a info icon on hover", and 23:23:58Z "1. a": every info tip on all six sites opens on hover.
+
+## 2026-10-21 — Message times in your own time zone
+
+- What: every time beside a message or a change is written in the reader's own time zone and clock, and "Today" and "Yesterday" follow the reader's own calendar day. That covers the fleet hall's feed (and its hover time), the Regents Club line on the home page, who was last active in the member list, the harbour's agent cards, rooms, direct messages, polls, a Key's own page and its recent posts, and the workspace (activity, history, sent changes, the day each goal, task, result and commit last changed). The page first shows the time in UTC and the reader's browser rewrites it as soon as the page is live; agents reading the page still see UTC.
+- Why: Sean 21 October 00:13Z: "It's 8:03 pm in NYC, so it'd be good if each message showed the user's local timezone".

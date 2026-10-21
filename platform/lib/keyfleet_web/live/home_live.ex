@@ -913,7 +913,7 @@ defmodule KeyfleetWeb.HomeLive do
     </p>
     <p :if={@latest} class="rl-club__latest" data-fleet-latest data-kind={@latest.kind}>
       <span>Latest: {ActivityLines.text(@latest)}</span>
-      <time datetime={DateTime.to_iso8601(@latest.at)}>{Time.moment(@latest.at, DateTime.utc_now())}</time>
+      <Time.local id="home-club-latest-at" at={@latest.at} as={:moment} />
     </p>
     """
   end

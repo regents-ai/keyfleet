@@ -219,7 +219,8 @@ defmodule KeyfleetWeb.Components.MemberList do
             <span class="member-card__count">{Rules.keys(holder.count)}</span>
           </p>
           <p class="member-card__status" data-present={holder.status == :active && "true"}>
-            {status_words(holder.status)} · {seen(holder.last_active, @now)}
+            {status_words(holder.status)} ·
+            <.seen id={"#{@id}-holder-#{holder.id}-seen"} at={holder.last_active} now={@now} />
           </p>
           <p class="member-card__connections">
             <span class="member-card__label">Connections</span>
@@ -288,12 +289,27 @@ defmodule KeyfleetWeb.Components.MemberList do
   defp status_words(:idle), do: "Idle"
   defp status_words(:waiting), do: "Waiting to start"
 
-  defp seen(nil, _now), do: "never active"
+  attr :id, :string, required: true
+  attr :at, :any, required: true, doc: "when the holder was last active, or nil"
+  attr :now, DateTime, required: true
 
-  defp seen(at, now) do
-    if DateTime.diff(now, at) < @online_for,
-      do: "online now",
-      else: "last active #{KeyfleetWeb.Time.moment(at, now)}"
+  defp seen(%{at: nil} = assigns), do: ~H"never active"
+
+  defp seen(assigns) do
+    assigns = assign(assigns, :online?, DateTime.diff(assigns.now, assigns.at) < @online_for)
+
+    ~H"""
+    <%= if @online? do %>
+      online now
+    <% else %>
+      last active
+      <KeyfleetWeb.Time.local
+        id={@id}
+        at={@at}
+        as={:moment}
+      />
+    <% end %>
+    """
   end
 
   defp page_path(fleet_id, 1), do: KeyLinks.members_path(fleet_id)

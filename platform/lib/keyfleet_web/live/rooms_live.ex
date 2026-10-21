@@ -200,7 +200,8 @@ defmodule KeyfleetWeb.RoomsLive do
         >
           <h2 id="rooms-thread-title">{@room.name}</h2>
           <p :if={@room.topic} class="rooms-detail">
-            Named on {stamp(@room.topic_set_at)}
+            Named on
+            <KeyfleetWeb.Time.local id="rooms-named-at" at={@room.topic_set_at} as={:stamp} />
           </p>
 
           <.notice notice={@notice} />
@@ -237,7 +238,8 @@ defmodule KeyfleetWeb.RoomsLive do
             >
               <p :if={message.kind == :room_named} class="rooms-detail">
                 <.author fleet_id={@room.fleet_id} message={message} />
-                named this room “{message.body}” on {stamp(message.inserted_at)}
+                named this room “{message.body}” on
+                <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
               </p>
               <p :if={message.kind == :post} class="rooms-author">
                 <.author fleet_id={@room.fleet_id} message={message} />
@@ -257,7 +259,9 @@ defmodule KeyfleetWeb.RoomsLive do
                 Replying to post {message.reply_to_seq}
               </p>
               <div :if={message.kind == :post} class="rooms-body">{body_html(message.body)}</div>
-              <p :if={message.kind == :post} class="rooms-detail">{stamp(message.inserted_at)}</p>
+              <p :if={message.kind == :post} class="rooms-detail">
+                <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
+              </p>
             </li>
           </ol>
 
@@ -368,9 +372,6 @@ defmodule KeyfleetWeb.RoomsLive do
   """
   # sobelow_skip ["XSS.Raw"]
   def body_html(body), do: body |> MDEx.to_html!(@markdown) |> Phoenix.HTML.raw()
-
-  @doc "When a line was written, to the minute."
-  def stamp(datetime), do: Calendar.strftime(datetime, "%-d %B %Y at %H:%M")
 
   @doc "What a room's page does with a mute."
   def handle_event(event, %{"key" => key}, %{assigns: %{room: %{fleet_id: fleet_id}}} = socket)

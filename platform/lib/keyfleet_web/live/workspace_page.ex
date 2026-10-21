@@ -146,12 +146,6 @@ defmodule KeyfleetWeb.WorkspacePage do
     "forks" => "copies"
   }
 
-  # How every time on a workspace page is written.
-  @at "%-d %B %Y at %H:%M UTC"
-
-  # How a list line writes the day an item last changed.
-  @on "%-d %b %Y"
-
   # How many goals and tasks a fleet's outline shows anyone.
   @outlined %{"goal" => 12, "task" => 24}
 
@@ -342,7 +336,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       focus: focus(fleet_id, object_id),
       work:
         for item <- Activity.work(fleet_id, actor: actor) do
-          %{id: item.id, at: Calendar.strftime(item.at, @at), parts: ActivityLines.parts(item)}
+          %{id: item.id, at: item.at, parts: ActivityLines.parts(item)}
         end,
       outline:
         Map.new(@outlined, fn {type, limit} -> {type, outline(fleet_id, type, limit: limit)} end)
@@ -658,7 +652,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       archived?: archived?(object.sys),
       status: choice("status", object.card["status"]),
       joined: length(joined(object.sys)),
-      changed_on: on(object.changed_at)
+      changed_on: time(object.changed_at)
     }
   end
 
@@ -686,13 +680,13 @@ defmodule KeyfleetWeb.WorkspacePage do
             type: object.type,
             title: object.title,
             standing: standing(object.type, object.standing),
-            changed_on: on(object.changed_at)
+            changed_on: time(object.changed_at)
           }
         end,
       more?: more != [],
       results:
         for {object, {:notebook_result, uri}} <- sources do
-          %{id: object.id, title: object.title, uri: uri, changed_on: on(object.changed_at)}
+          %{id: object.id, title: object.title, uri: uri, changed_on: time(object.changed_at)}
         end,
       commits:
         for {object, {:commit, hash, path}} <- sources do
@@ -701,7 +695,7 @@ defmodule KeyfleetWeb.WorkspacePage do
             title: object.title,
             hash: hash,
             path: path,
-            changed_on: on(object.changed_at)
+            changed_on: time(object.changed_at)
           }
         end,
       name: name,
@@ -756,7 +750,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       archived?: archived?(object.sys),
       starting?: starting?(object.sys),
       by: created_by(object.sys, agents),
-      changed_at: at(object.changed_at),
+      changed_at: time(object.changed_at),
       facts:
         facts(object.type, Map.put(object.card, "review", object.review), fleet_id) ++
           joined_fact(object.sys),
@@ -816,7 +810,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       starting?: starting?(object.sys),
       by: created_by(object.sys, agents),
       version: object.version,
-      changed_at: at(object.changed_at),
+      changed_at: time(object.changed_at),
       fields:
         receipt(object) ++
           Enum.flat_map(known ++ others, fn {field, label} ->
@@ -936,7 +930,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp line(event, titles, agents) do
     parts = event |> parts(titles) |> Enum.map(&named(&1, agents))
-    %{seq: event.seq, at: at(event.timestamp), parts: parts}
+    %{seq: event.seq, at: time(event.timestamp), parts: parts}
   end
 
   # A review is told as its decision on the task, from its creation on the
@@ -1177,7 +1171,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       agent: agents[push.acting_agent_wallet],
       what: moved(push.ref),
       commit: {:commit, push.head, Code.commit_path(fleet_id, push.head)},
-      at: Calendar.strftime(push.pushed_at, @at)
+      at: push.pushed_at
     }
   end
 
@@ -1185,14 +1179,9 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp moved("refs/tags/" <> tag), do: "the tag " <> tag
   defp moved(ref), do: ref
 
-  defp at(timestamp) do
+  defp time(timestamp) do
     {:ok, datetime, 0} = DateTime.from_iso8601(timestamp)
-    Calendar.strftime(datetime, @at)
-  end
-
-  defp on(timestamp) do
-    {:ok, datetime, 0} = DateTime.from_iso8601(timestamp)
-    Calendar.strftime(datetime, @on)
+    datetime
   end
 
   defp humanize(field), do: field |> String.replace("_", " ") |> String.capitalize()

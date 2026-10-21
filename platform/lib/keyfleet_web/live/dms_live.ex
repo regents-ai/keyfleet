@@ -210,7 +210,9 @@ defmodule KeyfleetWeb.DmsLive do
               </p>
               <div :if={message.body} class="rooms-body">{RoomsLive.body_html(message.body)}</div>
               <.parts parts={message.parts} />
-              <p class="rooms-detail">{RoomsLive.stamp(message.inserted_at)}</p>
+              <p class="rooms-detail">
+                <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
+              </p>
             </li>
           </ol>
 
@@ -305,7 +307,11 @@ defmodule KeyfleetWeb.DmsLive do
         </.link>
         <span class="dms-preview">{preview(conversation, @dms.token_id)}</span>
         <small class="rooms-detail">
-          {RoomsLive.stamp(conversation.last_at)}
+          <KeyfleetWeb.Time.local
+            id={"dms-conversation-#{conversation.id}-at"}
+            at={conversation.last_at}
+            as={:stamp}
+          />
         </small>
       </li>
     </ul>

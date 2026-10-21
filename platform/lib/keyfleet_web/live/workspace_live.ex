@@ -81,7 +81,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
               <li :for={line <- @board.activity} data-seq={line.seq}>
                 <p><.line parts={line.parts} fleet_id={@board.fleet_id} /></p>
                 <p :if={line.note} class="workspace-text">{line.note}</p>
-                <p class="workspace-detail">{line.at}</p>
+                <p class="workspace-detail">
+                  <KeyfleetWeb.Time.local
+                    id={"workspace-activity-#{line.seq}-at"}
+                    at={line.at}
+                    as={:stamp}
+                  />
+                </p>
               </li>
             </ol>
           </section>
@@ -221,7 +227,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
             <span>
               Added by <.part part={@item.object.by} fleet_id={@item.fleet_id} />
             </span>
-            <span>Last changed {@item.object.changed_at}</span>
+            <span>
+              Last changed
+              <KeyfleetWeb.Time.local
+                id="workspace-item-changed-at"
+                at={@item.object.changed_at}
+                as={:stamp}
+              />
+            </span>
           </p>
         </section>
 
@@ -297,7 +310,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <ol :if={@item.history.lines != []} id="workspace-history" class="workspace-lines">
             <li :for={line <- @item.history.lines} data-seq={line.seq}>
               <p><.line parts={line.parts} fleet_id={@item.fleet_id} /></p>
-              <p class="workspace-detail">{line.at}</p>
+              <p class="workspace-detail">
+                <KeyfleetWeb.Time.local
+                  id={"workspace-history-#{line.seq}-at"}
+                  at={line.at}
+                  as={:stamp}
+                />
+              </p>
             </li>
           </ol>
           <nav :if={@item.history.more || @item.history.first} class="workspace-pages">
@@ -409,7 +428,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 <.key fleet_id={@commit.fleet_id} token_id={push.token_id} agent={push.agent} />
                 sent {push.what}
               </p>
-              <p class="workspace-detail">{push.at}</p>
+              <p class="workspace-detail">
+                <KeyfleetWeb.Time.local
+                  id={"workspace-commit-push-#{push.id}-at"}
+                  at={push.at}
+                  as={:stamp}
+                />
+              </p>
             </li>
           </ol>
         </section>
@@ -530,7 +555,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 <.key fleet_id={@files.fleet_id} token_id={push.token_id} agent={push.agent} />
                 sent {push.what}, ending at <.value value={push.commit} fleet_id={@files.fleet_id} />
               </p>
-              <p class="workspace-detail">{push.at}</p>
+              <p class="workspace-detail">
+                <KeyfleetWeb.Time.local
+                  id={"workspace-files-push-#{push.id}-at"}
+                  at={push.at}
+                  as={:stamp}
+                />
+              </p>
             </li>
           </ol>
         </section>
@@ -646,7 +677,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
               fleet_id={@fleet_id}
             />
           </p>
-          <p class="workspace-detail">{push.at}</p>
+          <p class="workspace-detail">
+            <KeyfleetWeb.Time.local id={"code-push-#{push.id}-at"} at={push.at} as={:stamp} />
+          </p>
         </li>
       </ol>
     </section>
@@ -763,7 +796,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <ol :if={@fleet.work != []} id="workspace-public-activity" class="workspace-lines">
           <li :for={line <- @fleet.work} data-line={line.id}>
             <p><.line parts={line.parts} fleet_id={@fleet.fleet_id} /></p>
-            <p class="workspace-detail">{line.at}</p>
+            <p class="workspace-detail">
+              <KeyfleetWeb.Time.local id={"workspace-public-#{line.id}-at"} at={line.at} as={:stamp} />
+            </p>
           </li>
         </ol>
         <p class="workspace-detail">
@@ -909,7 +944,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <span :if={row.archived?} class="workspace-badge">Archived</span>
           <span>{row.status}</span>
           <span :if={row.joined > 0}>{row.joined} joined</span>
-          <span>{row.changed_on}</span>
+          <KeyfleetWeb.Time.local id={"#{@id}-#{row.id}-on"} at={row.changed_on} as={:date} />
         </span>
       </li>
     </ol>
@@ -944,7 +979,11 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </.link>
           <span class="workspace-row-meta">
             <span :if={row.standing}>{row.standing}</span>
-            <span>{row.changed_on}</span>
+            <KeyfleetWeb.Time.local
+              id={"workspace-goal-item-#{row.id}-on"}
+              at={row.changed_on}
+              as={:date}
+            />
           </span>
         </li>
       </ol>
@@ -997,7 +1036,11 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </a>
           <span class="workspace-row-meta">
             <.link patch={WorkspacePage.item_path(@fleet_id, result.id)}>Evidence</.link>
-            <span>{result.changed_on}</span>
+            <KeyfleetWeb.Time.local
+              id={"workspace-goal-result-#{result.id}-on"}
+              at={result.changed_on}
+              as={:date}
+            />
           </span>
         </li>
       </ol>
@@ -1048,7 +1091,11 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </.link>
           <span class="workspace-row-meta">
             <code>{String.slice(commit.hash, 0, 12)}</code>
-            <span>{commit.changed_on}</span>
+            <KeyfleetWeb.Time.local
+              id={"workspace-goal-commit-#{commit.id}-on"}
+              at={commit.changed_on}
+              as={:date}
+            />
           </span>
         </li>
       </ol>
@@ -1090,7 +1137,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
       </dl>
       <p class="workspace-detail">
         <span>Added by <.part part={@card.by} fleet_id={@fleet_id} /></span>
-        <span>Last changed {@card.changed_at}</span>
+        <span>
+          Last changed
+          <KeyfleetWeb.Time.local
+            id={"workspace-card-#{@card.id}-changed-at"}
+            at={@card.changed_at}
+            as={:stamp}
+          />
+        </span>
       </p>
     </li>
     """

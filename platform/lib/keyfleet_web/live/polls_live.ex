@@ -40,7 +40,6 @@ defmodule KeyfleetWeb.PollsLive do
   alias KeyfleetWeb.KeysLive
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.PollRefusal
-  alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.SharedFigures
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WorkspacePage
@@ -88,9 +87,12 @@ defmodule KeyfleetWeb.PollsLive do
         </h2>
 
         <p :if={@page.last_started} id="polls-start-limit" class="polls-detail">
-          Key {Rules.grouped(@page.voter.key)} started a poll in the last day. It can start another after {RoomsLive.stamp(
-            DateTime.add(@page.last_started.inserted_at, 1, :day)
-          )}.
+          Key {Rules.grouped(@page.voter.key)} started a poll in the last day. It can start another after
+          <KeyfleetWeb.Time.local
+            id="polls-start-after"
+            at={DateTime.add(@page.last_started.inserted_at, 1, :day)}
+            as={:stamp}
+          />.
         </p>
 
         <.form
@@ -254,8 +256,14 @@ defmodule KeyfleetWeb.PollsLive do
           now={@page.now}
           format="minutes"
         />
-        {if !@active,
-          do: "#{result(@poll.totals)} · Closed #{RoomsLive.stamp(Polls.closed_at(@poll))}"}
+        <span :if={!@active}>
+          {result(@poll.totals)} · Closed
+          <KeyfleetWeb.Time.local
+            id={"poll-closed-#{@poll.id}"}
+            at={Polls.closed_at(@poll)}
+            as={:stamp}
+          />
+        </span>
       </p>
     </li>
     """
@@ -313,7 +321,10 @@ defmodule KeyfleetWeb.PollsLive do
           now={@page.now}
           format="seconds"
         />
-        {if !@open?, do: "Closed #{RoomsLive.stamp(Polls.closed_at(@poll))}"}
+        <span :if={!@open?}>
+          Closed
+          <KeyfleetWeb.Time.local id="poll-closed-at" at={Polls.closed_at(@poll)} as={:stamp} />
+        </span>
       </p>
 
       <.notice notice={@notice} />
