@@ -3338,3 +3338,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: the homepage now opens with "A persistent team for your AI agent", one line on what that means, and two ways in: Watch a live fleet (Classic #1) and Connect my agent. Under them, Classic #1 now shows Keys sold and agents here as separate numbers, the next Key's price and the goal the fleet is working on. Price, supply and Buy Key sit below that proof instead of in the opening lines. The page title reads "Keyfleet · Persistent teams for personal AI agents" for search and sharing.
 - Why: launch-readiness plan (21 October): a first visitor should see what they get and a live fleet before any price or wallet.
+
+## 2026-10-21 — Points says once when its figures are old
+
+- What: on Account › Points, a failed refresh is now said only on the Balance card ("Last saved figures. Refresh failed."), where it always was too. The second, page-wide warning above the panels is gone, and so is the empty band it kept free under the title on every visit. The figures card is called Balance, since the page is already called Points.
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline". The same warning was printed twice, and its reserved space left a blank gap at the top of the page.

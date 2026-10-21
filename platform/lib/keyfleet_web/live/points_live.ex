@@ -68,18 +68,11 @@ defmodule KeyfleetWeb.PointsLive do
           </a>
         </:action>
       </Regent.Primitives.empty_state>
-      <%!-- Keeps its space while unseen, so a failed refresh never moves the panels. --%>
-      <Regent.Primitives.notice
-        :if={@account && @points.value && @points.state != :empty}
-        tone="warning"
-        class="points-stale"
-        data-unseen={@points.state != :stale}
-      >
-        These are your last saved figures. The latest refresh failed.
-      </Regent.Primitives.notice>
       <div :if={@account && @points.value && @points.state != :empty} class="account-grid">
+        <%!-- Its status line says when these are the last saved figures. --%>
         <Regent.Account.points_summary
           id="account-points-summary"
+          title="Balance"
           confirmed={Amount.format(@points.value.balance_micro)}
           today={Amount.format(@points.value.earned_today_micro)}
           pending={to_string(@points.value.pending)}

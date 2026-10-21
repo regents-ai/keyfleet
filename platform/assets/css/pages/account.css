@@ -260,12 +260,6 @@ div.verified-connections__notice p {
 
 }
 
-/* The Points page's refresh note keeps its space while unseen, so a failed
-   refresh never moves the panels below it. */
-.points-stale[data-unseen] {
-  visibility: hidden;
-}
-
 /* A failed first read of the figures carries its Try again link beneath it. */
 .points-retry {
   display: grid;
