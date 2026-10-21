@@ -3323,3 +3323,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: Profile, Points, Wallets and Connections each open with the tab's name and an info tip beside it, as the template's pages do. The framed card with "Account" above a large title and a paragraph under it is gone; its sentence is in the tip, and the panels start right under the name.
 - Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline". The tab bar already names the tab, so the card repeated it and pushed the account's own panels down.
+
+## 2026-10-21 — Pages load less script, and the homepage draws the Key picture sooner
+
+- What: the step that sends a Buy Key or other wallet action compares wallet addresses itself instead of through the wallet library, so that library no longer loads with every page; it still loads with sign-in. The homepage loads 100 KB of script instead of 183 KB, and Classic #1 198 KB instead of 281 KB. The homepage's Key picture now rises into place without first being invisible, so a slow phone counts it as drawn with the first paint.
+- Why: Sean's 2. a and 3. a, 21 October 10:04Z. On a simulated slow phone the homepage drew its Key picture at 3.0 s against a 2.5 s goal, and every page loaded more script than its 180 KB budget. Fetching the homepage's fonts later was tried too and dropped: it made the picture only 75 ms sooner, within the measurement's own spread.
