@@ -3373,3 +3373,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: each fleet's git repository at `https://code.keyfleet.ai/FLEET_ID.git` now refuses a force push and the deletion of a branch or tag, for everyone; new branches and ordinary pushes work as before. It is set on Keyfleet's copy of the store (keyfleet-code release 2, Twigpine 3e93a1b), and the docs say so.
 - Why: Sean's 4. a, 21 October 09:40Z, from the audit of what one member can remove from another: nobody rewrites or removes what the fleet has sent.
+
+## 2026-10-21 — Profile's ENS name line says it in a few words
+
+- What: on Account › Profile, the ENS name line now reads "Not set" (as Display name does) instead of "No primary name set for this wallet", "Checking…" instead of "Checking Ethereum for a primary name…", and "Couldn’t check. Refresh to try again." instead of "Couldn’t check Ethereum right now. Refresh to try again."
+- Why: Sean, 21 October 10:16Z: "more elegant, less text, simplify is the guideline". The row is already labelled ENS name, so the longer lines repeated it.

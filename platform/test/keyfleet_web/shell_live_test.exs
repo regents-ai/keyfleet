@@ -705,7 +705,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     ens_row!(account, wallet, nil, "done")
     {view, _html} = open_account(conn, account)
-    assert has_element?(view, "#account-ens-name dd", "No primary name set for this wallet")
+    assert has_element?(view, "#account-ens-name dd", "Not set")
 
     ens_row!(account, wallet, "crew.eth", "done")
     {view, _html} = open_account(conn, account)
@@ -734,7 +734,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(
              view,
              "#account-ens-name dd[role=status]",
-             "Checking Ethereum for a primary name…"
+             "Checking…"
            )
   end
 

@@ -203,19 +203,19 @@ defmodule KeyfleetWeb.AccountLive do
 
   defp ens_name(%{account: %{ens_lookup_state: :done}} = assigns) do
     ~H"""
-    <dd>No primary name set for this wallet</dd>
+    <dd>Not set</dd>
     """
   end
 
   defp ens_name(%{account: %{ens_lookup_state: :pending}} = assigns) do
     ~H"""
-    <dd role="status">Checking Ethereum for a primary name…</dd>
+    <dd role="status">Checking…</dd>
     """
   end
 
   defp ens_name(assigns) do
     ~H"""
-    <dd role="status">Couldn’t check Ethereum right now. Refresh to try again.</dd>
+    <dd role="status">Couldn’t check. Refresh to try again.</dd>
     """
   end
 

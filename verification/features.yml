@@ -538,6 +538,24 @@ features:
     gaps:
       - Checked by eye in headless Chromium at 1280 and 390, light and dark; WebKit is not run on the Mac.
 
+  - id: account-ens-name
+    what: >-
+      Account › Profile's Details list the ENS name Ethereum publishes for the
+      account's wallet, with its copy icon. Without one the line says "Not set",
+      while it is being read "Checking…", and after a failed read "Couldn’t
+      check. Refresh to try again."; opening the page asks Ethereum again.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/live/account_live.ex
+    entry:
+      - route: GET /account
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/shell_live_test.exs
+    gaps:
+      - Checked by eye in headless Chromium at 1280 light and 390 dark; WebKit is not run on the Mac.
+
   - id: account-wallets
     what: >-
       A signed-in person sees their wallets in the side panel and on the Account
