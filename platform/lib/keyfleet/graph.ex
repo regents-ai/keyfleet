@@ -77,6 +77,12 @@ defmodule Keyfleet.Graph do
       define :project_relations, action: :project
       define :remove_relations, action: :remove
     end
+
+    resource Keyfleet.Graph.Pin do
+      define :pin, action: :pin
+      define :unpin, action: :destroy
+      define :pins, action: :in_place, args: [:fleet_id, :place]
+    end
   end
 
   @doc """

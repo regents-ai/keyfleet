@@ -206,8 +206,9 @@ defmodule Keyfleet.MixProject do
         # with its domain. Saved notebook outputs add one: the SavedOutput record.
         # Main itself counted 79 on 16 Oct, one above the 78 recorded here; these
         # three records bring it to 82. The Key a person posts as adds one: the
-        # PostingKey record, with its domain.
-        "xref graph --label compile-connected --fail-above 84",
+        # PostingKey record, with its domain. Workspace pins add two: the Pin
+        # record in the Graph domain, and its policy's access check.
+        "xref graph --label compile-connected --fail-above 86",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

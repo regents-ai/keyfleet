@@ -30,19 +30,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     ChainHelpers.deploy!(@fleet)
     ChainHelpers.seed_cursor!(@fleet)
 
-    Keys.record_epoch!(
-      %{
-        fleet_id: @fleet,
-        token_id: 1,
-        ownership_epoch: 1,
-        owner_wallet: @holder,
-        block_number: 10,
-        block_hash: "0x" <> String.duplicate("a", 64),
-        transaction_hash: "0x" <> String.duplicate("a", 64),
-        log_index: 0
-      },
-      actor: %Actors.System{}
-    )
+    hold!(1, @holder)
 
     %{conn: signed_in_as(conn, @holder), visitor: conn}
   end
@@ -311,7 +299,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         |> LazyHTML.query("#workspace-page > *")
         |> Enum.map(&(&1 |> LazyHTML.attribute("class") |> List.first()))
 
-      assert Enum.take(ids, 2) == ["workspace-heading", "workspace-tools workspace-panel"]
+      assert Enum.take(ids, 2) == ["workspace-heading", "workspace-places"]
     end
 
     test "the goals lead the work, the newest change first, and Keyfleet added the starting ones",
@@ -358,25 +346,27 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(view, "h2", "This item isn’t in the workspace.")
     end
 
-    test "nothing on the pages writes", %{conn: conn} do
+    test "the only presses are pins, and opening the notebooks or the code", %{conn: conn} do
       task = create(@fleet, "task", %{"title" => "A task", "progress" => "todo"})
       {:ok, board, _html} = live(conn, @board)
       {:ok, item, _html} = live(conn, item_path(task))
+      {:ok, docs, _html} = live(conn, @board <> "?place=docs")
+      {:ok, code, _html} = live(conn, @board <> "?place=code")
 
-      for view <- [board, item] do
+      assert workspace(board) |> LazyHTML.to_html() =~ "A task"
+      assert workspace(item) |> LazyHTML.to_html() =~ "A task"
+
+      for {view, presses} <- [
+            {board, []},
+            {item, []},
+            {docs, []},
+            {code, ["get_code_password"]}
+          ] do
         page = workspace(view)
         html = LazyHTML.to_html(page)
-        assert html =~ "A task"
         refute html =~ "<form"
         refute html =~ "phx-submit"
-
-        # The board's Code panel copies its address and asks for a git
-        # password, and neither writes the workspace; nothing else is pressed.
-        assert Enum.count(LazyHTML.query(page, "button")) ==
-                 Enum.count(LazyHTML.query(page, "#workspace-code button"))
-
-        assert page |> LazyHTML.query("[phx-click]") |> LazyHTML.attribute("phx-click") ==
-                 if(view == board, do: ["get_code_password"], else: [])
+        assert page |> LazyHTML.query("[phx-click]") |> LazyHTML.attribute("phx-click") == presses
       end
     end
   end
@@ -886,7 +876,14 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       notebook = "nb-0123456789abcdef"
 
       hub!(project, fn %{"tag" => ^tag, "limit" => "50"} ->
-        [%{"id" => notebook, "title" => "Price model"}]
+        [
+          %{
+            "id" => notebook,
+            "title" => "Price model",
+            "description" => "",
+            "created_at" => "2026-10-20T09:00:00Z"
+          }
+        ]
       end)
 
       {:ok, view, _html} = live(conn, item_path(goal))
@@ -1005,6 +1002,198 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(signed_in, "#workspace-files-members-only")
       refute has_element?(signed_in, "#workspace-files-sign-in")
       refute_received {:store, _path, _pass}
+    end
+  end
+
+  describe "the workspace's three places" do
+    setup do
+      open_log(@fleet)
+      :ok
+    end
+
+    test "the switch leads to each place, and a place the workspace doesn't have is a page that doesn't exist",
+         %{conn: conn} do
+      {:ok, view, _html} = live(conn, @board)
+
+      assert has_element?(
+               view,
+               ~s(#workspace-tab-project[aria-selected="true"][href="#{@board}"])
+             )
+
+      assert has_element?(view, ~s(#workspace-tab-docs[href="#{@board}?place=docs"]))
+      assert has_element?(view, ~s(#workspace-tab-code[href="#{@board}?place=code"]))
+      assert has_element?(view, "#workspace-goals")
+
+      view |> element("#workspace-tab-docs") |> render_click()
+      assert_patch(view, @board <> "?place=docs")
+      assert has_element?(view, ~s(#workspace-tab-docs[aria-selected="true"]))
+      assert has_element?(view, "#workspace-notebooks")
+      refute has_element?(view, "#workspace-goals")
+
+      view |> element("#workspace-tab-code") |> render_click()
+      assert_patch(view, @board <> "?place=code")
+      assert has_element?(view, "#workspace-code")
+
+      assert_raise KeyfleetWeb.NotFoundError, fn -> live(conn, @board <> "?place=chat") end
+    end
+
+    test "Docs lists the newest notebooks, and a pin keeps one at hand for every member",
+         %{conn: conn, visitor: visitor} do
+      project = "proj-0123456789abcdef"
+      price = "nb-0123456789abcdef"
+      plan = "nb-fedcba9876543210"
+      test = self()
+
+      hub!(project, fn query ->
+        send(test, {:listed, query})
+
+        [
+          %{
+            "id" => plan,
+            "title" => "Launch plan",
+            "description" => "Who buys first.",
+            "created_at" => "2026-10-20T09:00:00Z"
+          },
+          %{
+            "id" => price,
+            "title" => "Price model",
+            "description" => "",
+            "created_at" => "2026-10-19T09:00:00Z"
+          }
+        ]
+      end)
+
+      {:ok, view, _html} = live(conn, @board <> "?place=docs")
+      assert_received {:listed, %{"limit" => "24"} = query}
+      refute Map.has_key?(query, "tag")
+
+      assert rows(view, "#workspace-notebook-rows") == [
+               ["Notebook", "Launch plan", "20 Oct 2026"],
+               ["Notebook", "Price model", "19 Oct 2026"]
+             ]
+
+      assert has_element?(
+               view,
+               ~s([data-notebook="#{plan}"] .workspace-row-text),
+               "Who buys first."
+             )
+
+      assert has_element?(view, "#workspace-docs-pins-empty")
+      assert has_element?(view, "#open-notebooks")
+
+      view
+      |> element(~s(#workspace-notebook-#{price}-pin[aria-pressed="false"]))
+      |> render_click()
+
+      open =
+        "/fleets/#{@fleet}/notebooks/open?" <>
+          URI.encode_query(to: Keyfleet.Notebooks.notebook_path(project, price))
+
+      assert has_element?(
+               view,
+               ~s(#workspace-docs-pins-rows [data-pin="#{price}"] a[href="#{open}"]),
+               "Price model"
+             )
+
+      assert has_element?(view, ~s(#workspace-notebook-#{price}-pin[aria-pressed="true"]))
+
+      # Another holder of one of the fleet's Keys sees the same pin, and lifts it.
+      other = "0x" <> String.duplicate("b", 40)
+      hold!(2, other)
+      {:ok, theirs, _html} = live(signed_in_as(visitor, other), @board <> "?place=docs")
+
+      assert has_element?(
+               theirs,
+               ~s(#workspace-docs-pins-rows [data-pin="#{price}"]),
+               "Price model"
+             )
+
+      theirs
+      |> element(~s(#workspace-docs-pins-rows [data-pin="#{price}"] button))
+      |> render_click()
+
+      assert has_element?(theirs, "#workspace-docs-pins-empty")
+      assert has_element?(theirs, ~s(#workspace-notebook-#{price}-pin[aria-pressed="false"]))
+    end
+
+    test "Docs says so when the notebooks aren't connected, or can't be read", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @board <> "?place=docs")
+      assert has_element?(view, "#workspace-notebooks-none")
+      refute has_element?(view, "#open-notebooks")
+
+      hub!("proj-0123456789abcdef", :down)
+      {:ok, view, _html} = live(conn, @board <> "?place=docs")
+
+      assert has_element?(
+               view,
+               "#workspace-notebooks-unreadable",
+               "The notebooks can’t be read right now. Try again in a minute."
+             )
+    end
+
+    test "Code lists the top folder with how to copy it, and a pinned file stays at hand",
+         %{conn: conn} do
+      store!(%{"README.md" => "Hello", "goals/goal-1/plan.md" => "Plan"})
+
+      {:ok, view, _html} = live(conn, @board <> "?place=code")
+
+      assert rows(view, "#workspace-code-rows") == [
+               ["Folder", "goals"],
+               ["File", "README.md", "5 B"]
+             ]
+
+      assert text(view, "#workspace-code-address") == Keyfleet.Code.clone_url(@fleet)
+      assert has_element?(view, ~s(#workspace-code-address-copy))
+      assert has_element?(view, "#code-pushes-empty")
+
+      view |> element(~s(#workspace-code-rows [data-file="goals"] button)) |> render_click()
+      view |> element(~s(#workspace-code-rows [data-file="README.md"] button)) |> render_click()
+
+      # Newest pin first, each opening what it names.
+      assert view
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("#workspace-code-pins-rows > li")
+             |> LazyHTML.attribute("data-pin") == ["README.md", "goals"]
+
+      assert has_element?(
+               view,
+               ~s(#workspace-code-pins-rows [data-pin="README.md"] a[href="#{Keyfleet.Code.files_path(@fleet, "README.md")}"])
+             )
+
+      # The code's own pages show the same pin, and lift it.
+      {:ok, files, _html} = live(conn, Keyfleet.Code.files_path(@fleet, ""))
+      pin = ~s(#workspace-file-rows [data-file="README.md"] button)
+      assert has_element?(files, pin <> ~s([aria-pressed="true"]))
+      files |> element(pin) |> render_click()
+      assert has_element?(files, pin <> ~s([aria-pressed="false"]))
+
+      {:ok, view, _html} = live(conn, @board <> "?place=code")
+      refute has_element?(view, ~s(#workspace-code-pins-rows [data-pin="README.md"]))
+      assert has_element?(view, ~s(#workspace-code-pins-rows [data-pin="goals"]))
+    end
+
+    test "a pin is one per notebook or file, and only the fleet's members set or lift one" do
+      holder = %Actors.Human{human_account_id: 1, wallet_addresses: [@holder]}
+      pin = %{fleet_id: @fleet, place: :code, target: "README.md", title: "README.md"}
+
+      assert {:ok, first} = Graph.pin(pin, actor: holder)
+      assert {:ok, again} = Graph.pin(%{pin | title: "Read me"}, actor: holder)
+      assert again.id == first.id
+      assert [%{title: "Read me"}] = Graph.pins!(@fleet, :code, actor: holder)
+
+      outsider = %Actors.Human{
+        human_account_id: 0,
+        wallet_addresses: ["0x" <> String.duplicate("e", 40)]
+      }
+
+      assert {:error, %Ash.Error.Forbidden{}} = Graph.pin(pin, actor: outsider)
+      assert {:error, %Ash.Error.Forbidden{}} = Graph.unpin(first, actor: outsider)
+      assert {:error, %Ash.Error.Forbidden{}} = Graph.pins(@fleet, :code, actor: outsider)
+      assert {:error, %Ash.Error.Forbidden{}} = Graph.pin(pin, actor: %Actors.System{})
+
+      assert :ok = Graph.unpin(first, actor: holder)
+      assert [] = Graph.pins!(@fleet, :code, actor: holder)
     end
   end
 
@@ -1426,7 +1615,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         [%{ref: "refs/heads/main", head: hash}]
       )
 
-      {:ok, board, _html} = live(conn, @board)
+      {:ok, board, _html} = live(conn, @board <> "?place=code")
       assert has_element?(board, "#code-pushes", "Mate (Key 1) sent changes to main")
 
       {:ok, commit, _html} = live(conn, Keyfleet.Code.commit_path(@fleet, hash))
@@ -1641,6 +1830,23 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       )
 
     init_test_session(conn, %{human_account_id: account.id})
+  end
+
+  # Records `wallet` as the owner of the fleet's Key `token_id`.
+  defp hold!(token_id, wallet) do
+    Keys.record_epoch!(
+      %{
+        fleet_id: @fleet,
+        token_id: token_id,
+        ownership_epoch: 1,
+        owner_wallet: wallet,
+        block_number: 10,
+        block_hash: "0x" <> String.duplicate("a", 64),
+        transaction_hash: "0x" <> String.duplicate("a", 64),
+        log_index: token_id - 1
+      },
+      actor: %Actors.System{}
+    )
   end
 
   defp id_number(id), do: id |> String.split("#") |> List.last()

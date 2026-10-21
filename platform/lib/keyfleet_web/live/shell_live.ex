@@ -380,6 +380,9 @@ defmodule KeyfleetWeb.ShellLive do
   defp press("close_buy_key", _params, socket),
     do: {:noreply, socket |> SharedFigures.follow(:buy_key, []) |> assign(:buy_key, nil)}
 
+  defp press(event, params, socket) when event in ~w(pin unpin),
+    do: WorkspaceLive.handle_event(event, params, socket)
+
   defp press(event, params, socket) when event in @room_events,
     do: RoomsLive.handle_event(event, params, socket)
 

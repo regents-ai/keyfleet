@@ -30,6 +30,7 @@ import {installVitals} from "./vitals"
 import {CurrentTab} from "./hooks/current_tab"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {FleetSea, HarbourSea} from "./hooks/harbour_sea"
+import {PlacesChart} from "./hooks/places_chart"
 import {HexField, NextKeyCard} from "./hooks/home_hero"
 import {HolographicCard} from "./hooks/holographic_card"
 import {KeyCards} from "./hooks/key_cards"
@@ -40,7 +41,7 @@ import {OnchainSteps} from "./hooks/onchain_steps"
 import {PanelAgents} from "./hooks/panel_agents"
 import {PollCountdown} from "./hooks/poll_countdown"
 import {MotionCount, MotionList, MotionRefusal} from "./hooks/motion/moments"
-import {MotionCascade, ShellViews} from "./hooks/motion/reveals"
+import {MotionCascade, MotionTabs, ShellViews} from "./hooks/motion/reveals"
 import {SidePanel} from "./hooks/side_panel"
 import {VerifiedConnections} from "./hooks/verified_connections"
 import {mountMotion} from "./motion"
@@ -293,9 +294,11 @@ const hooks = {
   MotionCount,
   MotionList,
   MotionRefusal,
+  MotionTabs,
   NextKeyCard,
   OnchainSteps,
   PanelAgents,
+  PlacesChart,
   PollCountdown,
   ShellBehavior: composeHooks(shellBehavior, ShellViews),
   SidePanel,

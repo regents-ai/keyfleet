@@ -422,3 +422,37 @@ features:
     gaps:
       - Direct messages already name the Key they are sent from, so the choice does not change them.
       - WebKit is not run on the Mac.
+
+  - id: workspace-places-and-pins
+    what: >-
+      A fleet's Workspace has three places, chosen from the switch at its top
+      and each at its own address: Project (the goals, tasks and what changed),
+      Docs (the fleet's newest notebooks) and Code (the shared repository's top
+      folder, what was sent lately, its address to copy and a git password).
+      Any member pins a notebook, file or folder; every member sees the same
+      pins, newest first, beside the notebooks or the code, and any member
+      lifts one, here or on the code's own pages. Anyone else reads none of it.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/graph.ex
+      - platform/lib/keyfleet/graph/pin.ex
+      - platform/lib/keyfleet/notebooks/hub_client.ex
+      - platform/lib/keyfleet_web/live/workspace_page.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/assets/css/pages/workspace.css
+      - platform/assets/js/places_chart/shader.ts
+      - platform/assets/js/places_chart/renderer.ts
+      - platform/assets/js/hooks/places_chart.ts
+      - platform/assets/js/theme_tone.ts
+      - platform/assets/js/app.ts
+      - platform/priv/repo/migrations/20261021011817_add_workspace_pins.exs
+    entry:
+      - route: GET /:fleet/:number/workspace
+      - live: KeyfleetWeb.ShellLive
+    proofs:
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+    gaps:
+      - A pin shows on other members' open pages when they next open or switch a place, not the moment it is set.
+      - The chart above the switch is checked by eye in headless Chromium; WebKit is not run on the Mac.

@@ -18,13 +18,16 @@ defmodule Keyfleet.Notebooks.HubClient do
   def projects(fleet_id), do: fleet_id |> request(:get, "/api/v1/projects") |> page()
 
   @doc """
-  The project's 50 newest notebooks tagged `tag`, each with `id` and
-  `title`, waiting `page_timeout_ms` at most, for a page that shows them.
+  The project's newest notebooks, by when each was added, as the hub lists
+  them (`id`, `title`, `description`, `created_at`, ...), waiting
+  `page_timeout_ms` at most, for a page that shows them. `query` is what the
+  hub narrows them by: how many (`limit`), and a `tag` for only those tagged
+  with it.
   """
-  def tagged_notebooks(fleet_id, project_id, tag) do
+  def notebooks(fleet_id, project_id, query) do
     fleet_id
     |> request(:get, "/api/v1/projects/#{segment(project_id)}/notebooks",
-      params: [tag: tag, limit: 50],
+      params: query,
       receive_timeout: Notebooks.config()[:page_timeout_ms]
     )
     |> page()

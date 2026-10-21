@@ -24,10 +24,11 @@ vi.mock("../js/shell_panels", () => ({
 }))
 vi.mock("../js/hooks/motion/press", () => ({deny: vi.fn()}))
 vi.mock("../js/hooks/motion/moments", () => ({MotionCount: {}, MotionList: {}, MotionRefusal: {}}))
-vi.mock("../js/hooks/motion/reveals", () => ({MotionCascade: {}, ShellViews: {}}))
+vi.mock("../js/hooks/motion/reveals", () => ({MotionCascade: {}, MotionTabs: {}, ShellViews: {}}))
 vi.mock("../js/hooks/motion/slides", () => ({MotionPanels: {}}))
 vi.mock("../js/hooks/harbour_sea", () => ({FleetSea: {}, HarbourSea: {}}))
 vi.mock("../js/hooks/home_hero", () => ({HexField: {}, NextKeyCard: {}}))
+vi.mock("../js/hooks/places_chart", () => ({PlacesChart: {}}))
 vi.mock("phoenix_live_view", () => ({
   LiveSocket: class LiveSocket {
     constructor(

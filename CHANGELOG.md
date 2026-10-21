@@ -3191,3 +3191,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: on a Key's page, the Key on sale ("On sale now") now has one "Buy Key" button that opens the same Buy Key window as everywhere else, above the Key's page; closing the window comes back to it. The Key's page no longer has its own Approve and Buy.
 - Why: Sean 21 October 00:59Z, "2. a": the Key page's "On sale now" opens the Buy Key window, in the next release.
+
+## 2026-10-21 — Workspace in three places: Project, Docs and Code
+
+- What: a fleet's Workspace opens with a switch of three places, each at its own address. Project holds the goals, tasks and what changed, with how a task moves between Keys beside it. Docs lists the fleet's newest notebooks with how to open them. Code shows the shared repository's top folder and what was sent lately, with its address to copy and a git password. Any member pins a notebook, file or folder, and every member sees the same pins beside the notebooks or the code. A small moving chart above the switch rises over the place you are in.
+- Why: Sean asked for the Workspace tab to have three clear parts, Project, Docs and Code, each with its feed, pinned items and an info panel.

@@ -7,33 +7,9 @@
  */
 import {animate, createAnimatable, createScope, type AnimatableObject, type JSAnimation, type Scope} from "animejs"
 import {createCanvasIsland, type CanvasIslandController} from "../canvas_island"
-import type {FieldRenderer, Rgb, Tile} from "../home_hero/renderer"
+import type {FieldRenderer, Tile} from "../home_hero/renderer"
 import {EASE_IN_OUT, EASE_OUT, FAST, still} from "./motion/shared"
-
-/** Any colour the page can state, as the three 0..1 sRGB channels a shader takes. */
-let swatch: CanvasRenderingContext2D | undefined
-
-const tone = (root: HTMLElement, property: string): Rgb => {
-  swatch ??= document.createElement("canvas").getContext("2d", {willReadFrequently: true})!
-  const probe = root.ownerDocument.createElement("span")
-  probe.hidden = true
-  probe.style.color = `var(${property})`
-  root.append(probe)
-  const color = getComputedStyle(probe).color
-  probe.remove()
-  swatch.clearRect(0, 0, 1, 1)
-  swatch.fillStyle = color
-  swatch.fillRect(0, 0, 1, 1)
-  const [red = 0, green = 0, blue = 0] = swatch.getImageData(0, 0, 1, 1).data
-  return [red / 255, green / 255, blue / 255]
-}
-
-/** Calls `retone` whenever the page's light or dark changes. */
-const watchTheme = (retone: () => void) => {
-  const observer = new MutationObserver(retone)
-  observer.observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]})
-  return () => observer.disconnect()
-}
+import {tone, watchTheme} from "../theme_tone"
 
 /** A number the stylesheet states in a custom property. */
 const measure = (el: HTMLElement, property: string) => parseFloat(getComputedStyle(el).getPropertyValue(property)) || 0

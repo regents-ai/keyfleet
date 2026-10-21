@@ -3,9 +3,12 @@ defmodule KeyfleetWeb.WorkspacePage do
   What a fleet's workspace pages show, read from the workspace's read tables
   alone, never from the fleet's writer.
 
-  `board/3` is the fleet's items a page at a time, the most recently changed
-  first, beside its goals, its latest changes and the changes sent to its code
-  (`Keyfleet.Code`); `item/4` is one item with its fields, its
+  `board/3` is one of the workspace's three places (`places/0`). Its
+  Project is the fleet's items a page at a time, the most recently changed
+  first, beside its goals and its latest changes; its Docs the fleet's
+  newest notebooks; its Code the top folder of the fleet's code and the
+  changes sent to it (`Keyfleet.Code`). Docs and Code each list what the
+  fleet's members pinned there (`Keyfleet.Graph.Pin`). `item/4` is one item with its fields, its
   links a page at a time and its history a page at a time, and a goal with
   the work around it in place of its links. Goals are listed one line each,
   the board's and every list of goals. Each answers
@@ -152,6 +155,13 @@ defmodule KeyfleetWeb.WorkspacePage do
   # How many goals the board lists above the fleet's other work.
   @board_goals 12
 
+  # The workspace's places, as the address names each: the Project when it
+  # names none.
+  @places %{nil => :project, "docs" => :docs, "code" => :code}
+
+  # How many notebooks the Docs place lists, newest first.
+  @docs_shown 24
+
   # How many items of the work around a goal its page lists.
   @goal_items 100
 
@@ -188,14 +198,34 @@ defmodule KeyfleetWeb.WorkspacePage do
     with_query("#{Keyfleet.Fleets.path(fleet_id)}/workspace", query)
   end
 
+  @doc "The workspace's places, in the order a page offers them."
+  def places, do: [:project, :docs, :code]
+
+  @doc "The path of one of the workspace's places."
+  def place_path(fleet_id, :project), do: "#{Keyfleet.Fleets.path(fleet_id)}/workspace"
+  def place_path(fleet_id, place), do: with_query(place_path(fleet_id, :project), place: place)
+
   @doc "The address a workspace cites one commit of the fleet's code by."
   def commit_url(fleet_id, hash), do: Endpoint.url() <> Code.commit_path(fleet_id, hash)
 
   defp with_query(path, []), do: path
   defp with_query(path, query), do: path <> "?" <> URI.encode_query(query)
 
-  @doc "The fleet's items, a page of them, and its latest changes."
+  @doc """
+  The place of the workspace the address names (`place`): the Project, Docs
+  or Code. Any other place is a page that doesn't exist.
+  """
   def board(fleet_id, params, actor) do
+    case Map.fetch(@places, params["place"]) do
+      {:ok, :project} -> project(fleet_id, params, actor)
+      {:ok, :docs} -> docs(fleet_id, actor)
+      {:ok, :code} -> code(fleet_id, actor)
+      :error -> raise NotFoundError
+    end
+  end
+
+  # The fleet's items, a page of them, its goals and its latest changes.
+  defp project(fleet_id, params, actor) do
     filter = filter!(params)
     opts = [actor: actor]
 
@@ -224,6 +254,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       %{
         fleet_id: fleet_id,
         fleet_name: fleet.name,
+        place: :project,
         ready?: true,
         seen: seen(cursor),
         filter: filter,
@@ -233,18 +264,80 @@ defmodule KeyfleetWeb.WorkspacePage do
         first_page?: not paged?(params),
         first_page: board_path(fleet_id, filter),
         pages: page_links(page, params, &board_path(fleet_id, filter, &1)),
-        activity: Enum.map(activity, &Map.put(line(&1, titles, agents), :note, notes[&1.seq])),
-        code: %{
-          clone_url: Code.clone_url(fleet_id),
-          pushes: pushes(Code.recent_pushes!(fleet_id, opts), fleet_id)
-        }
+        activity: Enum.map(activity, &Map.put(line(&1, titles, agents), :note, notes[&1.seq]))
       }
     else
       {:missing, name} ->
-        %{fleet_id: fleet_id, fleet_name: name, ready?: false, seen: nil, filter: filter}
+        %{
+          fleet_id: fleet_id,
+          fleet_name: name,
+          place: :project,
+          ready?: false,
+          seen: nil,
+          filter: filter
+        }
 
       {:members_only, name} ->
         members_only(fleet_id, name, actor, nil)
+    end
+  end
+
+  # The fleet's newest notebooks, and the ones its members pinned. Neither
+  # comes from the workspace's log, so it keeps no place in it (`seen`), and
+  # its notices don't read it again.
+  defp docs(fleet_id, actor) do
+    opts = [actor: actor]
+
+    with {:ok, fleet} <- fleet(fleet_id, opts),
+         {:ok, pins} <- members_read(fleet, Graph.pins(fleet_id, :docs, opts)) do
+      project_id = Notebooks.hub?(fleet_id) && project_id!(fleet_id)
+
+      %{
+        fleet_id: fleet_id,
+        fleet_name: fleet.name,
+        place: :docs,
+        hub?: Notebooks.hub?(fleet_id),
+        notebooks: notebooks(fleet_id, limit: @docs_shown),
+        pins:
+          for pin <- pins do
+            open = if is_binary(project_id), do: notebook_link(fleet_id, project_id, pin.target)
+            %{id: pin.id, target: pin.target, title: pin.title, folder?: false, link: open}
+          end
+      }
+    else
+      {:missing, _name} -> raise NotFoundError
+      {:members_only, name} -> members_only(fleet_id, name, actor, nil)
+    end
+  end
+
+  # The fleet's code: how to copy it, its top folder, the changes sent to it
+  # lately, and what its members pinned in it.
+  defp code(fleet_id, actor) do
+    opts = [actor: actor]
+
+    with {:ok, fleet} <- fleet(fleet_id, opts),
+         {:ok, pushes} <- members_read(fleet, Code.recent_pushes(fleet_id, opts)) do
+      %{
+        fleet_id: fleet_id,
+        fleet_name: fleet.name,
+        place: :code,
+        clone_url: Code.clone_url(fleet_id),
+        pushes: pushes(pushes, fleet_id),
+        files: folder_entries(fleet_id, ""),
+        pins:
+          for pin <- Graph.pins!(fleet_id, :code, opts) do
+            %{
+              id: pin.id,
+              target: pin.target,
+              title: pin.title,
+              folder?: pin.folder?,
+              link: Code.files_path(fleet_id, pin.target)
+            }
+          end
+      }
+    else
+      {:missing, _name} -> raise NotFoundError
+      {:members_only, name} -> members_only(fleet_id, name, actor, nil)
     end
   end
 
@@ -450,6 +543,7 @@ defmodule KeyfleetWeb.WorkspacePage do
         fleet_id: fleet_id,
         fleet_name: fleet.name,
         path: path,
+        pinned: fleet_id |> Graph.pins!(:code, opts) |> MapSet.new(& &1.target),
         crumbs: crumbs(fleet_id, path),
         clone_url: Code.clone_url(fleet_id),
         pushes: pushes(pushes, fleet_id),
@@ -486,11 +580,11 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  defp entry_row(entry, fleet_id, ""),
-    do: Map.put(entry, :link, Code.files_path(fleet_id, entry.name))
-
-  defp entry_row(entry, fleet_id, path),
-    do: Map.put(entry, :link, Code.files_path(fleet_id, path <> "/" <> entry.name))
+  # Each entry of a folder with its path from the top of the code.
+  defp entry_row(entry, fleet_id, folder) do
+    path = if folder == "", do: entry.name, else: folder <> "/" <> entry.name
+    Map.merge(entry, %{path: path, link: Code.files_path(fleet_id, path)})
+  end
 
   defp file(fleet_id, path) do
     case Code.file(fleet_id, path) do
@@ -701,7 +795,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       name: name,
       folder: %{path: folder, link: Code.files_path(fleet_id, folder)},
       code: folder_entries(fleet_id, folder),
-      notebooks: tagged_notebooks(fleet_id, name)
+      notebooks: notebooks(fleet_id, tag: name, limit: 50)
     }
   end
 
@@ -712,30 +806,49 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  defp tagged_notebooks(fleet_id, tag) do
+  # The fleet's notebooks as `query` narrows them (`HubClient.notebooks/3`),
+  # newest first, each with when it was added and the link that opens it: nil
+  # for a fleet without notebooks, none before its project is made, and
+  # `:unreadable` when the hub doesn't answer.
+  defp notebooks(fleet_id, query) do
     with true <- Notebooks.hub?(fleet_id),
-         {:ok, project_id} when is_binary(project_id) <- Notebooks.project_id(fleet_id),
-         {:ok, notebooks} <- HubClient.tagged_notebooks(fleet_id, project_id, tag) do
+         project_id when is_binary(project_id) <- project_id!(fleet_id),
+         {:ok, notebooks} <- HubClient.notebooks(fleet_id, project_id, query) do
       for notebook <- notebooks do
-        to = Notebooks.notebook_path(project_id, notebook["id"])
+        {:ok, added, _offset} = DateTime.from_iso8601(notebook["created_at"])
 
         %{
           id: notebook["id"],
           title: notebook["title"],
-          open: "/fleets/#{fleet_id}/notebooks/open?" <> URI.encode_query(to: to)
+          description: notebook["description"],
+          added: added,
+          open: notebook_link(fleet_id, project_id, notebook["id"])
         }
       end
     else
       false ->
         nil
 
-      {:ok, nil} ->
+      nil ->
         []
 
       {:error, error} ->
         Logger.warning("The notebooks of #{fleet_id} could not be read: #{reason(error)}")
         :unreadable
     end
+  end
+
+  # The project the fleet's notebooks are in, or nil before it is made.
+  defp project_id!(fleet_id) do
+    case Notebooks.project_id(fleet_id) do
+      {:ok, project_id} -> project_id
+      {:error, error} -> raise error
+    end
+  end
+
+  defp notebook_link(fleet_id, project_id, notebook_id) do
+    to = Notebooks.notebook_path(project_id, notebook_id)
+    "/fleets/#{fleet_id}/notebooks/open?" <> URI.encode_query(to: to)
   end
 
   # Only the kind of failure is logged: a database error carries its query.
