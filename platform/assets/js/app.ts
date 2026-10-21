@@ -29,7 +29,7 @@ import {installShellPanels} from "./shell_panels"
 import {installVitals} from "./vitals"
 import {AccountWallets} from "./hooks/account_wallets"
 import {Countdown} from "./hooks/countdown"
-import {CurrentTab} from "./hooks/current_tab"
+import {FleetTabs} from "./hooks/fleet_tabs"
 import {FleetPreview} from "./hooks/fleet_preview"
 import {FleetSea, HarbourSea} from "./hooks/harbour_sea"
 import {PlacesChart} from "./hooks/places_chart"
@@ -285,7 +285,7 @@ const hooks = {
   ...colocatedHooks,
   AccountWallets,
   Countdown,
-  CurrentTab,
+  FleetTabs,
   FleetPreview,
   FleetSea,
   HarbourSea,

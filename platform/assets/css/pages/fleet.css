@@ -115,6 +115,32 @@
   box-shadow: inset 0 -3px 0 var(--ash-accent);
 }
 
+/* Once the page is live, one mark does that instead: the kit's tabs put it
+   under the open tab and glide it to the next one picked. */
+.fleet-bar__nav {
+  position: relative;
+}
+
+.fleet-bar__ink {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100px;
+  height: 3px;
+  background: var(--ash-accent);
+  transform-origin: 0 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.fleet-bar__nav[data-ink-ready] .fleet-bar__ink {
+  visibility: visible;
+}
+
+.fleet-bar__nav[data-ink-ready] [aria-current="page"]::before {
+  box-shadow: none;
+}
+
 /* The way in, in the bar above the tabs: one line and one action. */
 
 .fleet-entry {

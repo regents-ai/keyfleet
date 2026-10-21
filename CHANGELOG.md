@@ -3501,3 +3501,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   hours ago".
 - Why: live Classic #1 listed Contessa, seen 3 minutes ago, sixth, and repeated
   the same time twice on most rows.
+
+## 2026-10-21 — A fleet's tabs share one mark that glides
+- What: the mark under a fleet's open tab (Chat, Workspace, Treasury, Keys, Proposals) glides to the next tab picked with a mouse or finger, the same way Workspace's places move. From the keyboard, or with less motion on, it is simply there. On a phone it stays under the open tab as the row scrolls.
+- Why: moving between a fleet's tabs reads as one place changing, not a new page.

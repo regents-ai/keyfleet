@@ -4,6 +4,7 @@ import {
   anythingMoved,
   clippedByClass,
   forget,
+  inkSpots,
   leftovers,
   moved,
   pressRapidly,
@@ -12,8 +13,8 @@ import {
 } from "./support/motion"
 
 // A fleet page's motion: presses squish and dialogs rise only for a pointer,
-// a sale rolls its numbers and its line joins the hall's feed, and everything
-// ends clean. Nothing moves for a reader
+// the tabs' mark glides to a tab a pointer picks, a sale rolls its numbers and
+// its line joins the hall's feed, and everything ends clean. Nothing moves for a reader
 // who asked for less motion.
 const fleet = "fleet_tech_classic"
 const buyer = "0x2222222222222222222222222222222222222222"
@@ -28,6 +29,14 @@ async function openFleet(page: Page) {
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   await forget(page)
 }
+
+// Whether the tabs' mark lies along the bottom of this tab.
+const markUnder = (page: Page, tab: string) =>
+  page.evaluate(tab => {
+    const mark = document.querySelector("#fleet-tabs [data-ink]")!.getBoundingClientRect()
+    const under = document.querySelector(tab)!.getBoundingClientRect()
+    return [mark.left - under.left, mark.width - under.width, mark.bottom - under.bottom].every(gap => Math.abs(gap) < 1)
+  }, tab)
 
 const plainNumber = (page: Page, id: string) =>
   page.locator(`#${id} [data-count]`).evaluate(el => (el.children.length === 0 ? el.textContent!.trim() : null))
@@ -70,6 +79,41 @@ test("a keyboard press picks a channel and opens panels and dialogs at once, wit
   await page.waitForTimeout(600)
 
   expect(await anythingMoved(page)).toBe(false)
+})
+
+test("the mark under the fleet's tabs glides to a tab picked with a pointer and is simply there for the keyboard", async ({
+  page,
+}) => {
+  await openFleet(page)
+  await expect.poll(() => markUnder(page, "#fleet-tab-hall")).toBe(true)
+  await expect(page.locator("#fleet-tabs [data-ink]")).toBeVisible()
+  await forget(page)
+
+  await page.locator("#fleet-tab-proposals").click()
+  await expect(page.locator("#fleet-tab-proposals")).toHaveAttribute("aria-current", "page")
+  await expect.poll(() => markUnder(page, "#fleet-tab-proposals")).toBe(true)
+  expect(await inkSpots(page)).toBeGreaterThan(4)
+  await forget(page)
+
+  await page.locator("#fleet-tab-hall").focus()
+  await page.keyboard.press("Enter")
+  await expect(page.locator("#fleet-tab-hall")).toHaveAttribute("aria-current", "page")
+  await expect.poll(() => markUnder(page, "#fleet-tab-hall")).toBe(true)
+  expect(await inkSpots(page)).toBeLessThanOrEqual(1)
+})
+
+test.describe("on a phone", () => {
+  test.use({viewport: {width: 390, height: 844}, hasTouch: true, isMobile: true})
+
+  test("the mark stays under the open tab as the row scrolls to it", async ({page}) => {
+    await openFleet(page)
+    const width = await page.locator("#fleet-tabs").evaluate(row => row.scrollWidth)
+    await page.locator("#fleet-tab-proposals").tap()
+    await expect(page.locator("#fleet-tab-proposals")).toHaveAttribute("aria-current", "page")
+    await expect.poll(() => markUnder(page, "#fleet-tab-proposals")).toBe(true)
+    expect(await page.locator("#fleet-tabs").evaluate(row => row.scrollWidth)).toBe(width)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  })
 })
 
 test("Buy pressed again and again squishes only its label, which ends at rest, and every press is answered", async ({
@@ -156,5 +200,10 @@ test("a reader who asked for less motion sees presses, panels and a sale without
   await page.waitForTimeout(4_000)
 
   expect(await anythingMoved(page)).toBe(false)
+
+  await forget(page)
+  await page.locator("#fleet-tab-proposals").click()
+  await expect.poll(() => markUnder(page, "#fleet-tab-proposals")).toBe(true)
+  expect(await inkSpots(page)).toBeLessThanOrEqual(1)
   await context.close()
 })

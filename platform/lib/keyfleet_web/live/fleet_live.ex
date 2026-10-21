@@ -288,10 +288,19 @@ defmodule KeyfleetWeb.FleetLive do
             pass_note={@pass_note}
           />
 
-          <nav id="fleet-tabs" class="fleet-bar__nav" aria-label="This fleet" phx-hook="CurrentTab">
+          <nav
+            id="fleet-tabs"
+            class="fleet-bar__nav"
+            aria-label="This fleet"
+            phx-hook="FleetTabs"
+            phx-mounted={JS.ignore_attributes(["data-ink-ready"])}
+            data-active={tab(@view)}
+            data-variant={Motion.standard("tabs")}
+          >
             <.link
               id="fleet-tab-hall"
               class="rg-button rg-button--secondary"
+              data-tab="hall"
               patch={KeyLinks.hall_path(@fleet.fleet_id)}
               aria-current={if @view == :hall, do: "page"}
             >
@@ -300,6 +309,7 @@ defmodule KeyfleetWeb.FleetLive do
             <.link
               id="fleet-tab-workspace"
               class="rg-button rg-button--secondary"
+              data-tab="workspace"
               patch={"#{Fleets.path(@fleet.fleet_id)}/workspace"}
               aria-current={if @view == :workspace, do: "page"}
             >
@@ -308,6 +318,7 @@ defmodule KeyfleetWeb.FleetLive do
             <.link
               id="fleet-tab-treasury"
               class="rg-button rg-button--secondary"
+              data-tab="treasury"
               patch={ProposalsPage.treasury_path(@fleet.fleet_id)}
               aria-current={if @view == :treasury, do: "page"}
             >
@@ -316,6 +327,7 @@ defmodule KeyfleetWeb.FleetLive do
             <.link
               id="fleet-tab-keys"
               class="rg-button rg-button--secondary"
+              data-tab="keys"
               patch={KeyLinks.members_path(@fleet.fleet_id)}
               aria-current={if @view in [:map, :members], do: "page"}
             >
@@ -324,11 +336,18 @@ defmodule KeyfleetWeb.FleetLive do
             <.link
               id="fleet-tab-proposals"
               class="rg-button rg-button--secondary"
+              data-tab="proposals"
               patch={ProposalsPage.list_path(@fleet.fleet_id)}
               aria-current={if @view == :proposals, do: "page"}
             >
               Proposals
             </.link>
+            <span
+              class="fleet-bar__ink"
+              data-ink
+              aria-hidden="true"
+              phx-mounted={JS.ignore_attributes(["style"])}
+            ></span>
           </nav>
         </header>
 
@@ -407,6 +426,10 @@ defmodule KeyfleetWeb.FleetLive do
   defp view(:fleet, %{"view" => "members"}), do: :members
   defp view(:fleet, _params), do: :hall
   defp view(place, _params), do: place
+
+  # The tab a view sits under.
+  defp tab(view) when view in [:map, :members], do: "keys"
+  defp tab(view), do: Atom.to_string(view)
 
   attr :fleet, :map, required: true
   attr :actor, :any, required: true
