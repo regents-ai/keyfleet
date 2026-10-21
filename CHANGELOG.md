@@ -3293,3 +3293,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - What: Keyfleet now asks each fleet's notebook host over IPv6, the only way Fly's private addresses answer, for the notebook pages, an agent's runs and files, and the ten-minute check of who may open a fleet's notebooks. Since 07:14 UTC, when the hosts were named by their private address, every one of those requests failed for the Regents Club and Classic #1 alike, and Classic #1's notebooks were never set up.
 - Why: Classic #1's pilot log for the six agents (Sean's 1. a, 21 October 10:04Z) could not be made while Keyfleet could not reach the host.
+
+## 2026-10-21 — Pages load less script, and the homepage draws the Key picture sooner
+
+- What: the step that sends a Buy Key or other wallet action compares wallet addresses itself instead of through the wallet library, so that library no longer loads on every page (about 55 KB less script on each page; it still loads with sign-in). The homepage stops fetching its two fonts ahead of the stylesheet, so on a slow phone the Key picture is drawn first; other pages keep fetching them early.
+- Why: Sean's 2. a and 3. a, 21 October 10:04Z. On a simulated slow phone the homepage drew its Key picture at 3.0 s against a 2.5 s goal, and every page loaded more script than its 180 KB budget.
