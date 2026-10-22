@@ -73,3 +73,23 @@ it("stops counting when the poll leaves the page", () => {
   Countdown.destroyed?.call(hook)
   expect(vi.getTimerCount()).toBe(0)
 })
+
+it("counts a new Key's wait for the Treasury slice to the second, then says it is eligible", () => {
+  vi.setSystemTime(0)
+  const hook = mount({
+    closesAt: String(172_800_000),
+    now: "0",
+    format: "clock",
+    lead: "Eligible in",
+    done: "Eligible",
+  })
+
+  expect(hook.el.textContent).toBe("Eligible in 48:00:00")
+  vi.advanceTimersByTime(1_000)
+  expect(hook.el.textContent).toBe("Eligible in 47:59:59")
+  vi.advanceTimersByTime(172_798_000)
+  expect(hook.el.textContent).toBe("Eligible in 00:00:01")
+  vi.advanceTimersByTime(1_000)
+  expect(hook.el.textContent).toBe("Eligible")
+  expect(vi.getTimerCount()).toBe(0)
+})

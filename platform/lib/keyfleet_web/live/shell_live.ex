@@ -629,6 +629,9 @@ defmodule KeyfleetWeb.ShellLive do
   def handle_async(:rewards, result, socket),
     do: KeyProfileLive.handle_async(:rewards, result, socket)
 
+  def handle_async(:slice, result, socket),
+    do: KeyProfileLive.handle_async(:slice, result, socket)
+
   @impl true
   def render(assigns) do
     ~H"""

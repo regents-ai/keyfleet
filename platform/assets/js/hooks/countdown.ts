@@ -3,8 +3,9 @@ import type {Hook} from "../hook_composition"
 type CountdownHook = {el: HTMLElement; gap: number; seen: string | undefined; timer?: number}
 
 /**
- * The time something open has left, such as a poll or a proposal's vote,
- * written again as it changes. The page sends the closing time and its own
+ * The time something open has left, such as a poll or a proposal's vote, or
+ * the time until something starts, such as a new Key's share of the Treasury
+ * slice, written again as it changes. The page sends the closing time and its own
  * clock as it read it (`data-closes-at`, `data-now`), so a phone whose clock
  * is wrong still counts down to the right moment. The words match what the
  * page writes (`KeyfleetWeb.Components.Countdown`), so nothing jumps as the
@@ -13,8 +14,17 @@ type CountdownHook = {el: HTMLElement; gap: number; seen: string | undefined; ti
  * It only writes words, once a second at most, and never moves anything, so
  * a reader who asked for less motion sees the same as everyone. A clock's
  * countdown (`seconds`) says "Closing…" when the time runs out and waits;
- * the page itself draws what closed a moment later.
+ * the page itself draws what closed a moment later. A `clock` writes hours,
+ * minutes and seconds after its lead words, then its own words once it runs out.
  */
+function words(seconds: number, {format, lead, done}: DOMStringMap) {
+  if (format !== "clock") return left(seconds, format)
+  if (seconds <= 0) return done ?? ""
+  return `${lead} ${pad(Math.floor(seconds / 3600))}:${pad(Math.floor(seconds / 60) % 60)}:${pad(seconds % 60)}`
+}
+
+const pad = (n: number) => String(n).padStart(2, "0")
+
 function left(seconds: number, format: string | undefined) {
   if (format === "hours" && seconds >= 3600) return `${count(Math.floor(seconds / 3600), "hour")} left`
   if (format === "hours" || format === "minutes") {
@@ -22,7 +32,7 @@ function left(seconds: number, format: string | undefined) {
   }
   if (seconds <= 0) return "Closing…"
   if (seconds < 60) return `${count(seconds, "second")} left`
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} left`
+  return `${Math.floor(seconds / 60)}:${pad(seconds % 60)} left`
 }
 
 const count = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`
@@ -40,12 +50,12 @@ function draw(hook: CountdownHook) {
 
   const remaining = Number(closesAt) - (Date.now() + hook.gap)
   const seconds = Math.trunc(remaining / 1000)
-  const words = left(seconds, format)
-  if (hook.el.textContent !== words) hook.el.textContent = words
+  const written = words(seconds, hook.el.dataset)
+  if (hook.el.textContent !== written) hook.el.textContent = written
 
   // Under a minute the words in hours or minutes no longer change, and nor
-  // do a clock's once it says "Closing…".
-  if (seconds <= 0 || (format !== "seconds" && seconds < 60)) return
+  // do a clock's once it runs out.
+  if (seconds <= 0 || (format !== "seconds" && format !== "clock" && seconds < 60)) return
 
   // The next whole second of what is left, when the words may change.
   hook.timer = window.setTimeout(() => draw(hook), (remaining % 1000) + 1)

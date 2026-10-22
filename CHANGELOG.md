@@ -4523,3 +4523,16 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   on template v106, in code the template took from Keyfleet `53ab3d62`).
 - Check: `platform/assets/test/privy_bridge.test.ts` (a wallet that never answers its
   disconnect does not hold the sign-out open; it failed on the old code).
+
+## 2026-10-22 — A new Key counts down to its first Treasury slice
+
+- A Key's page lists "Treasury slice" under About this Key: "Eligible in 47:59:59",
+  counting down to the second, until the Key is two days old, then "Eligible". The
+  time is the vote contract's own `maturesAt` for the Key (mint + `KEY_MATURITY`),
+  read at the latest block once the window is open; the Daily Treasury Slice to Keys
+  is shared only among Keys past it.
+- The shared countdown gains a `clock` format (hours, minutes and seconds after its
+  lead words, then its own words once it runs out), on the page and in the browser.
+- Checks: `platform/assets/test/countdown.test.ts` (the clock counts to the second and
+  ends on its words) and `platform/test/keyfleet_web/live/key_profile_test.exs` (a
+  young Key counts down, an older one is eligible).

@@ -16,6 +16,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   use KeyfleetWeb, :html
 
   import KeyfleetWeb.Components.AgentPicture
+  import KeyfleetWeb.Components.Countdown
 
   import Phoenix.LiveView,
     only: [push_patch: 2, start_async: 3, stream: 4, stream_delete_by_dom_id: 3]
@@ -24,11 +25,13 @@ defmodule KeyfleetWeb.KeyProfileLive do
   alias Keyfleet.Chain
   alias Keyfleet.Chain.RewardsWaiting
   alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Fleets.Rules
   alias Keyfleet.Keys.Profile
   alias Keyfleet.Rooms
   alias Keyfleet.Rooms.Message
   alias Keyfleet.Treasury
+  alias Keyfleet.WalletSteps.Reads
   alias KeyfleetWeb.CheckIns
   alias KeyfleetWeb.Components.KeyCard
   alias KeyfleetWeb.Components.Placeholder
@@ -216,6 +219,10 @@ defmodule KeyfleetWeb.KeyProfileLive do
           >
             <.rewards rewards={@profile.rewards} />
           </dd>
+        </div>
+        <div>
+          <dt>Treasury slice</dt>
+          <dd id="key-profile-slice"><.slice slice={@profile.slice} /></dd>
         </div>
         <div>
           <dt>Held since</dt>
@@ -737,6 +744,30 @@ defmodule KeyfleetWeb.KeyProfileLive do
     ~H|<span :for={amount <- @amounts} data-count>{amount.text}</span>|
   end
 
+  attr :slice, :any, required: true
+
+  # When the key first shares the Daily Treasury Slice to Keys, counted down
+  # to the second, as the vote contract dates it from the key's mint.
+  defp slice(%{slice: :reading} = assigns),
+    do: ~H|<Placeholder.placeholder label="Loading the Treasury slice" lines={1} role={nil} />|
+
+  defp slice(%{slice: :failed} = assigns), do: ~H"Not showing right now"
+
+  defp slice(%{slice: {:ok, matures_at, now}} = assigns) do
+    assigns = assign(assigns, matures_at: matures_at, now: now)
+
+    ~H"""
+    <.countdown
+      id="key-profile-slice-countdown"
+      closes_at={@matures_at}
+      now={@now}
+      format="clock"
+      lead="Eligible in"
+      done="Eligible"
+    />
+    """
+  end
+
   defp times(0), do: "Never"
   defp times(1), do: "Once"
   defp times(count), do: "#{Rules.grouped(count)} times"
@@ -821,6 +852,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   def handle_async(:rewards, _result, socket), do: {:noreply, socket}
 
+  def handle_async(:slice, result, %{assigns: %{key_profile: %{issued?: true}}} = socket),
+    do: {:noreply, update(socket, :key_profile, &%{&1 | slice: slice_shown(result)})}
+
+  def handle_async(:slice, _result, socket), do: {:noreply, socket}
+
   @doc "The profile of the key the address names, open over its fleet's page."
   def read_key_profile(socket, fleet, token_id, before) do
     actor = ShellLive.human_actor(socket)
@@ -842,6 +878,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
     )
     |> follow_seen()
     |> read_rewards(before)
+    |> read_slice(before)
     |> stream(:key_thread, key_thread(profile), reset: true, limit: -@key_thread_kept)
   end
 
@@ -903,6 +940,42 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp rewards_shown({:ok, {:ok, amounts}}), do: {:ok, amounts}
   defp rewards_shown(_failed), do: :failed
 
+  # When an issued key first shares the Treasury slice is read from the chain
+  # once the window is open. It never moves, so the same key shown again keeps
+  # it, counted from the site's clock as it is now.
+  defp read_slice(
+         %{assigns: %{key_profile: %{fleet_id: fleet_id, token_id: token_id}}} = socket,
+         %{
+           key_profile: %{fleet_id: fleet_id, token_id: token_id, slice: {:ok, matures_at, _then}}
+         }
+       ),
+       do:
+         update(socket, :key_profile, &Map.put(&1, :slice, {:ok, matures_at, DateTime.utc_now()}))
+
+  defp read_slice(
+         %{assigns: %{key_profile: %{issued?: true, fleet_id: fleet_id, token_id: token_id}}} =
+           socket,
+         _before
+       ) do
+    socket
+    |> update(:key_profile, &Map.put(&1, :slice, :reading))
+    |> start_async(:slice, fn ->
+      fleet = Fleets.get_fleet!(fleet_id)
+      onchain = Fleet.onchain_token_id(fleet, token_id)
+
+      with {:ok, reads} <- Reads.at_head(),
+           {:ok, matures_at} <-
+             Reads.one(reads, fleet.votes_address, "maturesAt(uint256)", [onchain], {:uint, 64}) do
+        {:ok, DateTime.from_unix!(matures_at)}
+      end
+    end)
+  end
+
+  defp read_slice(socket, _before), do: socket
+
+  defp slice_shown({:ok, {:ok, matures_at}}), do: {:ok, matures_at, DateTime.utc_now()}
+  defp slice_shown(_failed), do: :failed
+
   # The messages written to a key, leaving out posts written as a key the
   # visitor has muted; the next key on sale has none yet.
   defp key_thread(%{issued?: true, thread: thread, muted: muted}),
@@ -941,6 +1014,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
       )
       |> follow_seen()
       |> read_rewards(%{key_profile: shown})
+      |> read_slice(%{key_profile: shown})
       |> stream(:key_thread, key_thread(profile), limit: -@key_thread_kept)
     else
       socket

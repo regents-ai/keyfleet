@@ -1,7 +1,8 @@
 defmodule KeyfleetWeb.Components.Countdown do
   @moduledoc """
-  The time something open has left, such as a poll or a proposal's vote. The
-  page writes it as of `now`; the browser writes it again as it changes, from
+  The time something open has left, such as a poll or a proposal's vote, or
+  the time until something starts, such as a new Key's share of the Treasury
+  slice. The page writes it as of `now`; the browser writes it again as it changes, from
   the closing time and the gap between its own clock and the site's
   (`assets/js/hooks/countdown.ts`), in the same words, so a phone whose clock
   is wrong still counts down to the right moment.
@@ -14,8 +15,13 @@ defmodule KeyfleetWeb.Components.Countdown do
 
   attr :format, :string,
     required: true,
-    values: ~w(hours minutes seconds),
-    doc: "`hours` above an hour, then minutes; `minutes` alone; or a clock's minutes and seconds"
+    values: ~w(hours minutes seconds clock),
+    doc:
+      "`hours` above an hour, then minutes; `minutes` alone; a clock's minutes and seconds; " <>
+        "or `clock`, hours, minutes and seconds after `lead`, then `done`"
+
+  attr :lead, :string, default: nil, doc: "a `clock`'s words before its time"
+  attr :done, :string, default: nil, doc: "a `clock`'s words once its time runs out"
 
   def countdown(assigns) do
     ~H"""
@@ -25,9 +31,19 @@ defmodule KeyfleetWeb.Components.Countdown do
       data-closes-at={DateTime.to_unix(@closes_at, :millisecond)}
       data-now={DateTime.to_unix(@now, :millisecond)}
       data-format={@format}
-    >{left(@format, DateTime.diff(@closes_at, @now, :second))}</span>
+      data-lead={@lead}
+      data-done={@done}
+    >{words(assigns, DateTime.diff(@closes_at, @now, :second))}</span>
     """
   end
+
+  defp words(%{format: "clock", done: done}, seconds) when seconds <= 0, do: done
+
+  defp words(%{format: "clock", lead: lead}, seconds),
+    do:
+      "#{lead} #{pad(div(seconds, 3600))}:#{seconds |> div(60) |> rem(60) |> pad()}:#{seconds |> rem(60) |> pad()}"
+
+  defp words(%{format: format}, seconds), do: left(format, seconds)
 
   defp left("hours", seconds) when seconds >= 3600,
     do: "#{count(div(seconds, 3600), "hour", "hours")} left"

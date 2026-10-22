@@ -635,6 +635,27 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     end
   end
 
+  describe "the key's share of the Treasury slice" do
+    test "a key minted under two days ago counts down to its first share, an older one is eligible",
+         %{conn: conn} do
+      young = DateTime.utc_now() |> DateTime.add(47 * 3600 + 120) |> DateTime.to_unix()
+      matures = Call.encode("maturesAt(uint256)", [id(12)])
+
+      rewards_answer(fn
+        _to, ^matures, _hash -> {:ok, <<young::256>>}
+        _to, _data, _hash -> {:ok, <<0::256>>}
+      end)
+
+      {:ok, view, _html} = live(conn, @path <> "?key=12")
+      render_async(view)
+      assert text(view, "#key-profile-slice") =~ ~r/^Eligible in 47:0[12]:\d\d$/
+
+      view |> element("#key-profile-key-3") |> render_click()
+      render_async(view)
+      assert text(view, "#key-profile-slice") == "Eligible"
+    end
+  end
+
   # What the fleet's contracts answer, at a head the chain has. Its reward
   # ledger pays out USDC alone.
   defp rewards_answer(calls) do
