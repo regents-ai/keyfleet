@@ -4514,3 +4514,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   on top; a held Key card with no picture yet is checked to name its Key at all times.
 - Why: the feed check only held on an empty feed, and the card check had failed since
   the 21 Oct design pass made picture-less cards always show their name.
+
+## 2026-10-22 — Sign-out never waits on a wallet that does not answer
+
+- Signing out asks every wallet to disconnect without waiting on its answer, so a
+  wallet whose disconnect never finishes no longer holds the sign-out open. A wallet
+  that refuses already could not. Matches ash-template `cde83109` (Sentinel's note N1
+  on template v106, in code the template took from Keyfleet `53ab3d62`).
+- Check: `platform/assets/test/privy_bridge.test.ts` (a wallet that never answers its
+  disconnect does not hold the sign-out open; it failed on the old code).

@@ -1608,6 +1608,16 @@ describe("Privy session bridge", () => {
     expect(order).toEqual(["zerion", "regents", "logout"])
   })
 
+  it("a wallet that never answers its disconnect does not hold the sign-out open", async () => {
+    const silent = {disconnect: vi.fn(() => new Promise<void>(() => {}))}
+    const logout = vi.fn(async () => undefined)
+
+    await signOutOfProvider([silent], logout)
+
+    expect(silent.disconnect).toHaveBeenCalledOnce()
+    expect(logout).toHaveBeenCalledOnce()
+  }, 1000)
+
   // The account's wallets say which one Privy made at sign-in: the Regents wallet.
   it("tells the Regents wallet from the person's own wallet", async () => {
     productionRootRender.mockReset()

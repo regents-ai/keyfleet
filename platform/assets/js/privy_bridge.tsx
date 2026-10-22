@@ -94,13 +94,14 @@ export function createAccountRequestHandler({
 
 // Signing out lets go of every wallet Privy holds, a wallet app such as Zerion
 // included, before Privy itself signs out, so the next sign-in, by Google or
-// any other way, starts with none of them. A wallet that will not let go never
-// holds the sign-out open.
+// any other way, starts with none of them. A wallet that refuses, or never
+// answers, does not hold the sign-out open: each disconnect is asked for, never
+// waited on.
 export async function signOutOfProvider(
   wallets: ReadonlyArray<{disconnect: () => void}>,
   logout: () => Promise<void>,
 ): Promise<void> {
-  await Promise.allSettled(wallets.map(wallet => Promise.resolve().then(() => wallet.disconnect())))
+  await Promise.allSettled(wallets.map(wallet => Promise.resolve().then(() => { wallet.disconnect() })))
   await logout()
 }
 
