@@ -119,10 +119,12 @@ test("the way in sits above the tabs and opens the Buy Key window, as Purchase K
   }
 })
 
-// A holder's Keys show as cards twice the old size, each naming its Key only
-// under the pointer (Sean, 20 October 2026). The Key is sold on a fleet of its
-// own, so the Classic fleet the other walks open stays as they expect it.
-test("a holder's cards are 96 wide and name their Key under the pointer", async ({page}) => {
+// A holder's Keys show as cards twice the old size (Sean, 20 October 2026). A
+// card names its Key under the pointer once its picture is drawn; until then it
+// names its Key in its middle at all times. Test fleets have no deck, so their
+// cards have no picture. The Key is sold on a fleet of its own, so the Classic
+// fleet the other walks open stays as they expect it.
+test("a holder's cards are 96 wide, and one with no picture yet names its Key at all times", async ({page}) => {
   prepareFleet("fibonacci_cascade")
   sellKey("fibonacci_cascade", "0x1111111111111111111111111111111111111111")
   await page.setViewportSize({width: 1440, height: 900})
@@ -132,18 +134,10 @@ test("a holder's cards are 96 wide and name their Key under the pointer", async 
 
   const card = page.locator("#fleet-entry-cards .fleet-entry__card").first()
   await expect(card).toBeVisible()
-  expect(Math.round((await card.locator("img, .fleet-entry__blank").first().boundingBox())!.width)).toBe(96)
+  const blank = card.locator(".fleet-entry__blank")
+  await expect(blank).toHaveCount(1)
+  expect(Math.round((await blank.boundingBox())!.width)).toBe(96)
   const name = card.locator(".fleet-entry__name")
-  await expect(name).toHaveCSS("opacity", "0")
-  await card.hover()
-  await expect(name).toHaveCSS("opacity", "1")
   await expect(name).toHaveText(/^Key [0-9,]+$/)
-
-  // Keyboard focus shows the name at once, with nothing fading.
-  await page.mouse.move(0, 0)
-  await expect(name).toHaveCSS("opacity", "0")
-  await card.evaluate(el => (el as HTMLElement).blur())
-  await page.keyboard.press("Tab")
-  await card.focus()
-  expect(await name.evaluate(el => [getComputedStyle(el).opacity, el.getAnimations().length])).toEqual(["1", 0])
+  await expect(name).toHaveCSS("opacity", "1")
 })

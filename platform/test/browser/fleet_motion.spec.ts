@@ -1,5 +1,5 @@
 import {expect, test, type Page} from "@playwright/test"
-import {prepareFleet, sellKey} from "./support/fleet_chain"
+import {moveKey, prepareFleet, sellKey} from "./support/fleet_chain"
 import {
   anythingMoved,
   clippedByClass,
@@ -18,6 +18,7 @@ import {
 // who asked for less motion.
 const fleet = "fleet_tech_classic"
 const buyer = "0x2222222222222222222222222222222222222222"
+const heir = "0x3333333333333333333333333333333333333333"
 
 test.beforeAll(() => {
   prepareFleet(fleet)
@@ -147,19 +148,26 @@ test("Buy pressed again and again squishes only its label, which ends at rest, a
   await expect(page.locator("#buy-key-order-press-note")).toHaveCount(0)
 })
 
-test("a sale rolls the count, each digit clipped by class, and its line joins the feed without moving the lines below, ending as plain text", async ({page}) => {
+test("a sale rolls the count, each digit clipped by class, and its line joins the top of the feed while the lines already there glide down, ending as plain text", async ({page}) => {
+  // An earlier sale and that key changing hands, so the feed has lines already
+  // there and the next sale, no longer part of a run of sales, joins as its own line.
+  const earlier = sellKey(fleet, buyer)
+  moveKey(fleet, earlier, heir)
   await openFleet(page)
+  await expect(page.locator("#fleet-feed-list > li").first()).toContainText(`Key ${earlier} changed hands.`, {
+    timeout: 10_000,
+  })
+  await expect.poll(() => leftovers(page)).toEqual([])
   const sold = Number(await plainNumber(page, "fleet-sales-keys"))
   // The list's layout motion styles every line while it runs, so what counts is
   // where each line already there is drawn, frame by frame.
   await page.evaluate(() => {
     const list = document.querySelector("#fleet-feed-list")!
     const top = (line: Element) => line.getBoundingClientRect().top - list.getBoundingClientRect().top
-    const lines = new Map([...list.children].map(line => [line, top(line)]))
-    const drift = {most: 0}
-    Object.assign(window, {__feedDrift: drift})
+    const paths = new Map([...list.children].map(line => [line, [top(line)]]))
+    Object.assign(window, {__feedPaths: paths})
     const sample = () => {
-      for (const [line, start] of lines) if (line.isConnected) drift.most = Math.max(drift.most, Math.abs(top(line) - start))
+      for (const [line, path] of paths) if (line.isConnected) path.push(top(line))
       requestAnimationFrame(sample)
     }
     requestAnimationFrame(sample)
@@ -177,7 +185,19 @@ test("a sale rolls the count, each digit clipped by class, and its line joins th
     {timeout: 10_000},
   )
   await page.waitForTimeout(600)
-  expect(await page.evaluate(() => (window as unknown as {__feedDrift: {most: number}}).__feedDrift.most)).toBeLessThan(0.5)
+  // Each line already there ends lower by the new line and the gap, and glides
+  // there: no frame moves it as much as half the way, which a jump would.
+  const glides = await page.evaluate(() =>
+    [...(window as unknown as {__feedPaths: Map<Element, number[]>}).__feedPaths.values()].map(path => ({
+      travel: path.at(-1)! - path[0],
+      step: Math.max(...path.slice(1).map((y, i) => Math.abs(y - path[i]))),
+    })),
+  )
+  expect(glides.length).toBeGreaterThan(0)
+  for (const {travel, step} of glides) {
+    expect(travel).toBeGreaterThan(8)
+    expect(step).toBeLessThan(travel / 2)
+  }
   await expect.poll(() => leftovers(page)).toEqual([])
 })
 
