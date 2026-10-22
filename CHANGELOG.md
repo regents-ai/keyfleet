@@ -4499,3 +4499,18 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Why: reviewer item 29 on the previous entry: one call per notebook with no
   cap or deadline could hold a goal's page for minutes, and one failed answer
   blanked the list.
+
+## 2026-10-22 — New lines in a list only fade in, as in ash-template
+
+- What: a line joining a list (the hall's feed, notes, the workspace) fades in where it
+  lands instead of sliding or growing in; the lines already there still glide to make
+  room. The list motion is now word for word the template's.
+- Why: a slide or a grow left a leftover mark written on the new line once it settled;
+  the template fixed this on 19 Oct (kit note 6) and Keyfleet had not taken it.
+
+## 2026-10-22 — Browser checks for the feed and held Key cards say what the pages do
+
+- What: the feed check sets up an older line and checks it glides down when a sale joins
+  on top; a held Key card with no picture yet is checked to name its Key at all times.
+- Why: the feed check only held on an empty feed, and the card check had failed since
+  the 21 Oct design pass made picture-less cards always show their name.
