@@ -126,8 +126,10 @@ ENV LANG=C.UTF-8
 ENV HOME=/app
 WORKDIR /app
 
+# OTP opens libsctp when it starts and prints a warning on every boot and every
+# `bin/keyfleet rpc` without it, which spoils the answer `make release` reads.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends coreutils \
+  && apt-get install -y --no-install-recommends coreutils libsctp1 \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --from=runtime-support /runtime-support/libcrypto.so.3 /usr/lib/

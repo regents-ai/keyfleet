@@ -4741,3 +4741,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the long headers. The step now names the building machine's chip (`uname -m`). From
   ash-template 8581a96 and Techtree 78c5c5a5, proven there by a fresh aarch64 build on
   the Mac and an x86_64 build on Fly.
+
+## 2026-10-23 — The site image carries libsctp
+
+- Erlang/OTP 29 opens libsctp when it starts; without it every boot, every
+  `bin/keyfleet rpc` and every release command printed an ESOCK warning first,
+  which spoils the database name `make release` reads and the answers of remote
+  calls on Fly. `platform/Dockerfile` installs `libsctp1` in the runtime image.
+  From ash-template 247054b, Techtree fadc820d and regents.sh.
