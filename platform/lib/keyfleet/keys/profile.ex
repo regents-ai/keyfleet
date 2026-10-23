@@ -11,8 +11,6 @@ defmodule Keyfleet.Keys.Profile do
   number, level and price.
   """
 
-  require Ash.Query
-
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.Agents
   alias Keyfleet.Chain

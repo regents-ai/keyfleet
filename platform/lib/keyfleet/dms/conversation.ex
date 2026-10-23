@@ -23,8 +23,6 @@ defmodule Keyfleet.Dms.Conversation do
     authorizers: [Ash.Policy.Authorizer],
     notifiers: [Ash.Notifier.PubSub]
 
-  require Ash.Query
-
   @bigint 9_223_372_036_854_775_807
   @auto_delete_days [1, 7, 30, 90]
   # An inbox lists its most recent conversations, as many as a page shows.

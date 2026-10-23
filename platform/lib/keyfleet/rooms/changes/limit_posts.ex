@@ -23,8 +23,6 @@ defmodule Keyfleet.Rooms.Changes.LimitPosts do
   """
   use Ash.Resource.Change
 
-  require Ash.Query
-
   alias Keyfleet.Actors.System
   alias Keyfleet.Limits
   alias Keyfleet.Rooms

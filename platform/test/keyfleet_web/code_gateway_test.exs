@@ -252,7 +252,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
             at <- integer(0..(byte_size(pack) - 1)),
             max_runs: 20
           ) do
-      <<before::binary-size(at), byte, rest::binary>> = pack
+      <<before::binary-size(^at), byte, rest::binary>> = pack
       changed = before <> <<Bitwise.bxor(byte, 1)>> <> rest
 
       refused = signed(agent, "/#{@fleet}.git/git-receive-pack", pack, changed)

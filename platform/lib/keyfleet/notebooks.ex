@@ -18,8 +18,6 @@ defmodule Keyfleet.Notebooks do
   """
   use Ash.Domain
 
-  require Ash.Query
-
   alias Keyfleet.AccessCache
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Agent, Human, System}

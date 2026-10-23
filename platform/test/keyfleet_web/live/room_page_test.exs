@@ -488,7 +488,12 @@ defmodule KeyfleetWeb.Live.RoomPageTest do
 
     room = Rooms.get_room!(@fleet, "general", authorize?: false)
     head = %Phoenix.Socket.Broadcast{event: "room_head", payload: %{room_id: room.id, seq: 99}}
-    log = capture_log(fn -> send(view.pid, head) && render(view) end)
+
+    log =
+      capture_log(fn ->
+        send(view.pid, head)
+        render(view)
+      end)
 
     assert render(view) =~ "Hull survey started"
     refute has_element?(view, "#page-load-failed")

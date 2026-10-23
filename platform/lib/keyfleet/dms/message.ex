@@ -29,8 +29,6 @@ defmodule Keyfleet.Dms.Message do
     notifiers: [Ash.Notifier.PubSub],
     extensions: [AshOban]
 
-  require Ash.Query
-
   alias Keyfleet.Actors.System
 
   @bigint 9_223_372_036_854_775_807

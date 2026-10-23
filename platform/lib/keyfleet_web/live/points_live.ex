@@ -292,7 +292,6 @@ defmodule KeyfleetWeb.PointsLive do
   defp no_nfts?(_bonus), do: false
 
   defp summary_state(state) when state in [:idle, :loading], do: :loading
-  defp summary_state(:empty), do: :ready
   defp summary_state(state), do: state
 
   defp scope_name("activity:account"), do: "You and your agents"

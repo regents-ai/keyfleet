@@ -106,8 +106,7 @@ defmodule Keyfleet.Access do
   def allowed?(actor, action, component, scope) when action in [:read, :write] do
     case needed(action, component) do
       :public -> true
-      :person -> person?(actor)
-      :member -> member?(actor, scope)
+      needed -> rank(class(actor, scope)) >= rank(needed)
     end
   end
 

@@ -4671,3 +4671,27 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   offered. A few minutes later `cast call convert` took 205 and refused 210:
   the most the buyer takes follows the pool, and a blocked button is built
   again every 15 seconds.
+
+## 2026-10-23 — Keyfleet runs on Elixir 1.20 and reads Credits deposits every five minutes
+
+- Keyfleet moves to Elixir 1.20.4 on OTP 29.1.2 with Node 26.12.0, as
+  ash-template and Autolaunch did (`platform/.tool-versions`, the Dockerfile's
+  four digest-pinned images, `mix.exs`). That lets it take elixir-utils
+  `e600ed34` (main), whose Credits deposit reader reads Base every five minutes
+  instead of every minute. The same pin brings the shared sign-in's own-wallet
+  rule (the person's own wallet is their main wallet, `2aed415` and `dcd6069`),
+  IronClaw in the side panel in NemoClaw's place (`7d73e67`) and the Hermes
+  pairing line that keeps the key it pairs with (`554f15d`).
+- Elixir 1.20's checks found nothing broken; the code they flagged is tidied:
+  sizes read from an earlier value in a binary match now say so (`^length`),
+  eight unused `require Ash.Query` lines are gone, and two page clauses that
+  could never run (the Points summary's empty state, the treasury's own
+  proposals read) are removed. `Keyfleet.Access.allowed?/4` now compares the
+  asker's class with the one the table needs, so every class in the table is
+  answered by the same rule.
+- Checks: `mix precommit`'s steps on 1.20 (format, ExUnit 1121 with 9
+  properties, graph host pytest 241, typecheck, vitest, browser walk 94 in
+  Chromium); Credo's 10 findings, Sobelow and the xref count of 87 are as on
+  main. The chain suite in Chromium: 79 passed, and the two that fail on main
+  (`fleet_motion.spec.ts:151`, `key_card.spec.ts:62`) still fail. WebKit is
+  not run on the Mac.

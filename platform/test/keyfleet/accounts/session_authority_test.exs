@@ -3,8 +3,6 @@ defmodule Keyfleet.Accounts.SessionAuthorityTest do
 
   import Ecto.Query
 
-  require Ash.Query
-
   alias Keyfleet.Accounts
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Human, System}

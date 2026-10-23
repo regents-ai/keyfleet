@@ -1,6 +1,4 @@
 defmodule Keyfleet.Rooms.Message do
-  require Ash.Query
-
   @moduledoc """
   One line in one room, in the place that room gave it: a post a member wrote,
   or the note that a member named the room. A key's thread is a room too, so a

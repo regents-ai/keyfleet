@@ -30,8 +30,6 @@ defmodule Keyfleet.Notebooks.Roster do
     max_attempts: 20,
     unique: [keys: [:fleet_id], period: :infinity, states: [:available, :retryable]]
 
-  require Ash.Query
-
   alias Keyfleet.Actors.{Agent, Human, System}
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
   alias Keyfleet.Notebooks

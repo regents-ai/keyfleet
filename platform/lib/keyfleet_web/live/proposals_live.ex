@@ -1428,9 +1428,6 @@ defmodule KeyfleetWeb.ProposalsLive do
   defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposals}}}),
     do: ProposalsPage.list(params["fleet_id"], params)
 
-  defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :treasury}}}),
-    do: ProposalsPage.treasury_page(params["fleet_id"])
-
   defp proposals(%{assigns: %{proposals_params: params, route_spec: %{route_id: :proposal}}}),
     do: ProposalsPage.detail(params["fleet_id"], params["number"], params)
 end
