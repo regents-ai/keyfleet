@@ -231,6 +231,9 @@ its listed ID.
 | --- | --- | --- | --- | --- |
 | Regents Club | `kf-nb-regents-club-hub` | `60XMXnbzk4eybuLoxgj02GxemnCgP23j2v2DXkMFZ7` | 13 October 2026 | 13 October 2027, 17:48 UTC |
 | Classic #1 | `kf-nb-fleet-tech-classic-hub` | `3KZ2ZnjxkaoyjCw9k7lMKRko8OCavNkxlpywokgS8` | 21 October 2026 | 21 October 2027, 07:09 UTC |
+| Syndicate #1 | `kf-nb-fibonacci-syndicate-hub` | `gRAgA4abnyV5aIqVmNRyQOmx6vC9jNkZqv9V2OJCz8` | 23 October 2026 | 23 October 2027, 01:36 UTC |
+| Cascade #1 | `kf-nb-fibonacci-cascade-hub` | `zQgwgYqbO69nqf9qXZzvRQXnkKCB5amyGwBlK6AFPX` | 23 October 2026 | 23 October 2027, 01:36 UTC |
+| Accelerant #1 | `kf-nb-fleet-tech-accelerant-hub` | `3KZ2ZnjxkaoyjCw9k7lMKRko8OCpoD028NpMn9GCmv` | 23 October 2026 | 23 October 2027, 01:36 UTC |
 
 ## Things to know
 
