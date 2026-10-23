@@ -4536,3 +4536,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Checks: `platform/assets/test/countdown.test.ts` (the clock counts to the second and
   ends on its words) and `platform/test/keyfleet_web/live/key_profile_test.exs` (a
   young Key counts down, an older one is eligible).
+
+## 2026-10-22 — Measurements use the standard names, and requests and queries are timed
+
+- Keyfleet's measurements move to Peep, with the template's bucket rule, and every
+  time is in whole microseconds: the database wait (`health_db_queue_microseconds`),
+  each query's whole time, each request by its route, each job run and visitors' page
+  timings. The layout shift score is in thousandths. The engine's memory and run
+  queues are exported as on every other site. Hard cutover: the `*_seconds` timing
+  names are gone, and the vitals queries, the README and the load summary read the
+  new ones.
+- Check: `platform/test/keyfleet_web/telemetry_test.exs` (a request and a query each
+  show up in the scrape under the new names).

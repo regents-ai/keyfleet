@@ -238,8 +238,8 @@ function quantile(q, start, end) {
   return lowerBound
 }
 
-function seconds(value) {
-  return value === null ? "no queries" : value >= 1 ? `${value.toFixed(2)} s` : `${Math.round(value * 1000)} ms`
+function microseconds(value) {
+  return value === null ? "no queries" : value >= 1_000_000 ? `${(value / 1_000_000).toFixed(2)} s` : `${Math.round(value / 1000)} ms`
 }
 
 // Pages answer and the site stays one process throughout; health answers
@@ -303,14 +303,14 @@ function faultsReport(dir) {
     }
 
     const db = [
-      quantile(0.95, buckets(join(dir, "metrics", `${phase.name}.start.prom`), "health_db_queue_seconds"), buckets(join(dir, "metrics", `${phase.name}.end.prom`), "health_db_queue_seconds")),
-      quantile(0.99, buckets(join(dir, "metrics", `${phase.name}.start.prom`), "health_db_queue_seconds"), buckets(join(dir, "metrics", `${phase.name}.end.prom`), "health_db_queue_seconds")),
+      quantile(0.95, buckets(join(dir, "metrics", `${phase.name}.start.prom`), "health_db_queue_microseconds"), buckets(join(dir, "metrics", `${phase.name}.end.prom`), "health_db_queue_microseconds")),
+      quantile(0.99, buckets(join(dir, "metrics", `${phase.name}.start.prom`), "health_db_queue_microseconds"), buckets(join(dir, "metrics", `${phase.name}.end.prom`), "health_db_queue_microseconds")),
     ]
 
     const ok = pageOk && joinOk && healthOk && recoveryOk
     if (!ok) failed = true
     lines.push(
-      `| ${phase.name} | ${phase.does} | ${failedRate === null ? "no loads" : `${percent(1 - failedRate)} answered`}${inPhase.some((p) => p.pageStatus !== "200") ? ", probe saw an error" : ""} | ${degradedMetric ? percent(figure(degradedMetric, "rate")) : "-"} | ${joinRate === null ? "no joins" : percent(joinRate)} | ${pageP95 ? ms(figure(pageP95, "p(95)")) : "-"} | ${okCount} ok, ${unavailable.length} unavailable, ${other} other; slowest ${ms(slowest)} | ${healthOk ? "yes" : "**no**"} (${phase.health}) | ${seconds(db[0])} / ${seconds(db[1])} | ${recovered} | ${ok ? "pass" : "**FAIL**"} |`,
+      `| ${phase.name} | ${phase.does} | ${failedRate === null ? "no loads" : `${percent(1 - failedRate)} answered`}${inPhase.some((p) => p.pageStatus !== "200") ? ", probe saw an error" : ""} | ${degradedMetric ? percent(figure(degradedMetric, "rate")) : "-"} | ${joinRate === null ? "no joins" : percent(joinRate)} | ${pageP95 ? ms(figure(pageP95, "p(95)")) : "-"} | ${okCount} ok, ${unavailable.length} unavailable, ${other} other; slowest ${ms(slowest)} | ${healthOk ? "yes" : "**no**"} (${phase.health}) | ${microseconds(db[0])} / ${microseconds(db[1])} | ${recovered} | ${ok ? "pass" : "**FAIL**"} |`,
     )
   }
 
@@ -344,13 +344,13 @@ function poolRows(dir) {
     ["start", "end", ""],
     ["after-start", "after-end", ", replacement server"],
   ]) {
-    const start = buckets(join(dir, `${from}.prom`), "health_db_queue_seconds")
-    const end = buckets(join(dir, `${to}.prom`), "health_db_queue_seconds")
+    const start = buckets(join(dir, `${from}.prom`), "health_db_queue_microseconds")
+    const end = buckets(join(dir, `${to}.prom`), "health_db_queue_microseconds")
     if (!start || !end) continue
     rows.push({
       measure: `Wait for a database connection, p95 / p99 (server metrics${words})`,
       target: "measured",
-      measured: `${seconds(quantile(0.95, start, end))} / ${seconds(quantile(0.99, start, end))}`,
+      measured: `${microseconds(quantile(0.95, start, end))} / ${microseconds(quantile(0.99, start, end))}`,
       result: "",
     })
   }
