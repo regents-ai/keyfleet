@@ -4655,3 +4655,19 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Checks: the image built from this commit answered in 0.46 s, and a draw sent
   the moment it started came back as the card in 2.7 s, byte for byte the same
   as a second draw.
+
+## 2026-10-23 — Buy REGENT says when an amount is too big for the price limit
+
+- The REGENT buyer refuses a piece that moves the price more than 1%. The
+  REGENT pool has thinned since launch (about 313 USDC moved it 1% on 8 October;
+  about 210 USDC does now), so the 250 USDC Buy REGENT starts with was refused
+  in the wallet every time. The Buy REGENT step is now tried at the latest block
+  before it is offered; when the buyer would refuse it, the button stays in view
+  but can't be pressed and says "Too big now: try 210 USDC", the most whole
+  USDC that goes through now ("Can’t buy REGENT right now" when none does). The
+  tip, docs, API contract, CLI notes and WebMCP tool say the same.
+- Checks: built against Base at the head block, 250, 300 and 225 USDC were
+  blocked with "Too big now: try 210 USDC", and 210, 100 and 0.5 USDC were
+  offered. A few minutes later `cast call convert` took 205 and refused 210:
+  the most the buyer takes follows the pool, and a blocked button is built
+  again every 15 seconds.

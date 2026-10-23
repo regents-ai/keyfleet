@@ -168,6 +168,8 @@ defmodule KeyfleetWeb.WalletWords do
   def blocked(:too_new), do: "Too new: Keys wait 2 days"
   def blocked(:nothing_owed), do: "Nothing owed"
   def blocked(:nothing_queued), do: "Nothing waiting to turn into REGENT"
+  def blocked({:too_big, nil}), do: "Can’t buy REGENT right now"
+  def blocked({:too_big, largest}), do: "Too big now: try #{FleetLive.usdc(largest)}"
   def blocked(:launch_settled), do: "Already settled"
   def blocked(:sale_running), do: "Sale still running"
   def blocked(:bound), do: "Already added"

@@ -43,6 +43,19 @@ defmodule Keyfleet.WalletSteps.Reads do
          do: decode(returned, types)
   end
 
+  @doc """
+  Whether calling `signature` on `to` with `arguments` would go through at the
+  head block, sent from no one in particular: `{:ok, false}` when the contract
+  refuses it.
+  """
+  def goes_through?(%__MODULE__{client: client, head: head}, to, signature, arguments) do
+    case client.call(to, Call.encode(signature, arguments), head.hash) do
+      {:ok, _returned} -> {:ok, true}
+      {:error, :reverted} -> {:ok, false}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   @doc "An account's ETH at the head block, in wei."
   def balance(%__MODULE__{client: client, head: head}, account),
     do: client.get_balance(account, head.hash)

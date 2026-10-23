@@ -860,7 +860,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       <h3 :if={@actor} id="proposals-convert-title">
         Convert USDC to REGENT for Keyfleet Treasury
         <Regent.Primitives.tip id="proposals-convert-tip" label="About converting USDC to REGENT">
-          Part of every Key sale is turned into REGENT for the treasury, up to 250 USDC at a time; after a full 250 the next waits 15 minutes. Every fleet shares one line, so a press turns the next amount in line, which may be another fleet’s. Anyone can press it.
+          Part of every Key sale is turned into REGENT for the treasury, up to 250 USDC at a time; after a full 250 the next waits 15 minutes. A piece that would move the price more than 1% can’t go through; the button then says how much can. Every fleet shares one line, so a press turns the next amount in line, which may be another fleet’s. Anyone can press it.
         </Regent.Primitives.tip>
       </h3>
       <.live_component
