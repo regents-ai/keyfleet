@@ -4548,3 +4548,24 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   new ones.
 - Check: `platform/test/keyfleet_web/telemetry_test.exs` (a request and a query each
   show up in the scrape under the new names).
+
+## 2026-10-22 — Every site applies shared changes the same way
+
+- New `/app/bin/migrate-shared`, the same command every Regent site carries: it
+  applies the shared Identity, Agents, Credits and Points database changes this
+  release carries that the database has not applied, and prints each one, or
+  `none` (Sean, 19 Oct 2026: every site works the same). A deployment still
+  never applies them.
+- The release check and `/app/bin/pending-migrations` read the same list, so a
+  deployment now also stops while a shared Identity change is missing, and the
+  listing names any missing shared change under `shared-pending:`. A shared
+  library whose ledger does not exist yet counts as wholly missing.
+- Staging's first deployment and every local database (`mix test`,
+  `mix keyfleet.setup_local_auth`) are prepared by one step: the tables Keyfleet
+  reads but does not own, every shared change, then Keyfleet's own migrations.
+  `mix test` creates its database first, as every Regent site's does.
+- Pairing is described as it works: an agent pairs from the Account page here or
+  on any Regent site, not only on regents.sh (command guide, lab guide).
+- Checks: `platform/test/keyfleet/release_test.exs` (a missing shared change is
+  listed and stops the deployment check; `migrate-shared` applies every shared
+  change once, then prints `none`).
