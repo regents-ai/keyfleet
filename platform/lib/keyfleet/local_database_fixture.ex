@@ -1,10 +1,13 @@
 defmodule Keyfleet.LocalDatabaseFixture do
   @moduledoc false
 
+  # A local database is prepared exactly as staging's first deployment is
+  # (`Keyfleet.Release.prepare_database!/2`): the same tables, the same shared
+  # changes, in production's order. `mix test` and `mix keyfleet.setup_local_auth`
+  # run this. In production `bin/migrate-shared` applies the shared changes.
   def ensure_human_accounts! do
     validate_target!(current_env(), Keyfleet.Repo.config())
-    create_shared_tables!()
-    Keyfleet.Repo.migrate!(Application.app_dir(:keyfleet, "priv/repo/migrations"))
+    Keyfleet.Release.prepare_database!(Keyfleet.Repo)
   end
 
   def validate_target!(env, repo) when is_list(repo) do
@@ -29,9 +32,6 @@ defmodule Keyfleet.LocalDatabaseFixture do
   # idempotent, so an already prepared database is left as it is. The file is
   # shipped inside this application's priv directory and holds only DDL written
   # in this repository, so neither the path nor the statements come from input.
-  # The shared profile and agent pairing schemas come from `regent_identity`'s
-  # and `regent_agents`' own migrations, which Regents alone runs in production;
-  # running them again changes nothing.
   # sobelow_skip ["SQL.Query", "Traversal.FileModule"]
   def create_shared_tables! do
     :keyfleet
@@ -41,10 +41,5 @@ defmodule Keyfleet.LocalDatabaseFixture do
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
     |> Enum.each(&Ecto.Adapters.SQL.query!(Keyfleet.Repo, &1, []))
-
-    RegentIdentity.Migrator.up(Keyfleet.Repo)
-    RegentAgents.Migrator.up(Keyfleet.Repo)
-    RegentCredits.Migrator.up(Keyfleet.Repo)
-    RegentPoints.Migrator.up(Keyfleet.Repo)
   end
 end
