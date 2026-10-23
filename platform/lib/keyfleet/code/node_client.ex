@@ -34,8 +34,8 @@ defmodule Keyfleet.Code.NodeClient do
 
   @doc """
   What the folder `path` holds on the default branch now, `""` for the top:
-  `{:ok, entries}`, each with `kind` (`"blob"` for a file, `"tree"` for a
-  folder), `path` (its name) and, for a file, `size`; or `{:error, reason}`.
+  `{:ok, entries}`, each with `type` (`"blob"` for a file, `"tree"` for a
+  folder), `name` and, for a file, `size`; or `{:error, reason}`.
   A folder that isn't there, or a file, holds nothing.
   """
   def tree(fleet_id, owner, path) do

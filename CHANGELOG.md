@@ -4695,3 +4695,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   main. The chain suite in Chromium: 79 passed, and the two that fail on main
   (`fleet_motion.spec.ts:151`, `key_card.spec.ts:62`) still fail. WebKit is
   not run on the Mac.
+
+## 2026-10-23 — A fleet's code list opens again
+
+- The workspace's Code panel, a goal's folder and pinned files read each file's
+  `name` and `type` from the code store's folder listing, the keys the store
+  sends (its `git ls-tree -l` line). They read `path` and `kind`, which the
+  store never sends, so every file arrived without a name and the workspace
+  page stopped with an error as soon as a fleet's repository held a file.
+- The workspace tests' stand-in store now answers in the store's own shape.

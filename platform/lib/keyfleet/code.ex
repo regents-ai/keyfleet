@@ -96,7 +96,7 @@ defmodule Keyfleet.Code do
          {:ok, entries} <- NodeClient.tree(fleet_id, owner, path) do
       {:ok,
        entries
-       |> Enum.map(&%{name: &1["path"], folder?: &1["kind"] == "tree", size: &1["size"]})
+       |> Enum.map(&%{name: &1["name"], folder?: &1["type"] == "tree", size: &1["size"]})
        |> Enum.sort_by(&{not &1.folder?, &1.name})}
     else
       {:ok, nil} -> {:ok, []}

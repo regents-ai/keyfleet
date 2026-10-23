@@ -2084,6 +2084,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end)
   end
 
+  # Each entry as the store answers it: its `git ls-tree -l` line.
   defp entries(files, folder) do
     prefix = if folder == "", do: "", else: folder <> "/"
 
@@ -2091,8 +2092,17 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     |> Enum.filter(fn {path, _bytes} -> String.starts_with?(path, prefix) end)
     |> Enum.map(fn {path, bytes} ->
       case path |> String.replace_prefix(prefix, "") |> String.split("/", parts: 2) do
-        [name] -> %{"kind" => "blob", "path" => name, "size" => byte_size(bytes)}
-        [name, _rest] -> %{"kind" => "tree", "path" => name, "size" => nil}
+        [name] ->
+          %{
+            "mode" => "100644",
+            "type" => "blob",
+            "hash" => "b10b",
+            "name" => name,
+            "size" => byte_size(bytes)
+          }
+
+        [name, _rest] ->
+          %{"mode" => "040000", "type" => "tree", "hash" => "7ee", "name" => name, "size" => nil}
       end
     end)
     |> Enum.uniq()
