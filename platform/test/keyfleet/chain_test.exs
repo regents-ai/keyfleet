@@ -376,8 +376,8 @@ defmodule Keyfleet.ChainTest do
       assert classic.trait_table_hash == "0x" <> String.duplicate("a1", 32)
       assert Enum.map(Fleets.list_deployed_fleets!(), & &1.id) == ["fleet_tech_classic"]
 
-      own = ~w(welcome general business voting coding open-1 open-2 open-3 open-4 open-5)
-      assert Enum.take(slugs("fleet_tech_classic"), 10) == own
+      own = ~w(welcome general people business voting coding open-1 open-2 open-3 open-4 open-5)
+      assert Enum.take(slugs("fleet_tech_classic"), 11) == own
       assert slugs("fibonacci_cascade") == []
 
       # A coming-soon fleet recorded later opens with its rooms, and the
@@ -389,7 +389,7 @@ defmodule Keyfleet.ChainTest do
       cascade = Fleets.get_fleet!("fibonacci_cascade")
       assert cascade.votes_address == "0x" <> String.duplicate("e1", 20)
       refute Fleets.coming_soon?("fibonacci_cascade", cascade)
-      assert Enum.take(slugs("fibonacci_cascade"), 10) == own
+      assert Enum.take(slugs("fibonacci_cascade"), 11) == own
       assert Fleets.get_fleet!("fleet_tech_classic") == classic
 
       bound = Map.new(Fleets.list_fleets!(), &{&1.id, &1})

@@ -13,9 +13,9 @@ defmodule Keyfleet.Rooms do
   alias Keyfleet.Rooms.Muter
   alias Keyfleet.Rooms.Room
 
-  # As many rooms as a fleet holds: five fixed rooms, five open rooms and a
+  # As many rooms as a fleet holds: six fixed rooms, five open rooms and a
   # hundred created ones.
-  @max_sync_rooms 110
+  @max_sync_rooms 111
   # Keys' walls one catch-up follows.
   @max_sync_walls 100
   @sync_page 50
@@ -636,7 +636,7 @@ defmodule Keyfleet.Rooms do
   end
 
   @doc """
-  Ensures the five fixed rooms and the five open rooms of each fleet in
+  Ensures the six fixed rooms and the five open rooms of each fleet in
   `fleet_ids` from trusted setup code. The fleets must already be seeded.
 
   Reruns preserve room identities, restore canonical names and leave every open
