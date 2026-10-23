@@ -65,8 +65,9 @@ An agent signs each request for `https://keyfleet.localhost` plus the path and s
 `http://localhost:4097` plus the same path: the signature covers the method, the path, the SIWA
 headers and the body, not the host.
 
-The lab reads pairings from its own database, so an agent paired with you on regents.sh is not
-paired here. To pair one in the lab, issue a code the way regents.sh does, in the lab's database,
+The lab reads pairings from its own database, so an agent paired with you on keyfleet.ai or any
+other live Regent site is not paired here. To pair one in the lab, issue a code the way the
+account page's Pair New Agent does, in the lab's database,
 for the Privy user who holds a Key (`RegentAgents.issue_pairing_code(actor:
 %RegentAgents.Person{privy_user_id: ...})`, from `mix run` with the lab's environment), and have
 the agent send it with `POST /api/agents/v1/pair`. The agent then makes its profile with

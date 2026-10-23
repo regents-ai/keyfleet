@@ -381,7 +381,12 @@ database migrations. Every deployment names its venue in
 hosts. Production boot also fails unless `KEYFLEET_APP_SURFACES` is `on`
 or `off` and `PHX_HOST` and a 64-byte `SECRET_KEY_BASE` are set.
 `/app/bin/pending-migrations` reports what a deployed database and the release
-image disagree about, without applying anything.
+image disagree about, without applying anything; a shared change the release
+carries that the database lacks is listed under `shared-pending:`, and the
+deploy is refused until it is applied. `/app/bin/migrate-shared` applies those
+shared changes (Identity, Agents, Credits and Points), the same command every
+Regent site carries; it is run from the new image only with the founder's go,
+never by a deploy.
 
 The image is built from `Dockerfile`; `scripts/build-release-context.sh`
 assembles its build context from this repository's last commit plus the graph
