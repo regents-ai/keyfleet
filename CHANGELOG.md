@@ -4548,3 +4548,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   new ones.
 - Check: `platform/test/keyfleet_web/telemetry_test.exs` (a request and a query each
   show up in the scrape under the new names).
+
+## 2026-10-23 — Every fleet has its own notebook hub
+
+- Syndicate #1, Cascade #1 and Accelerant #1 each get a private notebook hub on
+  marimohub c2a3303, set up the same way as Classic #1's: `kf-nb-<fleet>` and
+  `kf-nbk-<fleet>` on the fleet's own network, its own bucket, and a machine token
+  that reaches only its runner app. Their settings are
+  `notebook-hub/hub/fleets/{fibonacci-syndicate,fibonacci-cascade,fleet-tech-accelerant}.{hub,runner}.toml`.
+  The Regents Club and Classic #1 hubs move to the c2a3303 images too.
