@@ -7,7 +7,7 @@ defmodule Keyfleet.Treasury.Reading do
   share owed, the USDC from Key sales waiting to turn into REGENT, and since
   when each of those two has been waiting.
 
-  `Keyfleet.Chain.TreasuryReader` reads them every minute at the
+  `Keyfleet.Chain.TreasuryReader` reads them every five minutes at the
   head's block and keeps only the latest reading of each fleet: a reading of
   the block kept, or of an earlier one, is ignored, and comes back marked
   `upsert_skipped` in its metadata.

@@ -1,11 +1,12 @@
 defmodule Keyfleet.Chain.ReadBalances do
   @moduledoc """
   One `Keyfleet.Chain.TreasuryReader` reading of a deployed fleet's
-  balances, queued every minute by `Keyfleet.Chain.Watch`, apart from the
-  reading of its history, so a slow read never holds that up, and at once
-  (`now/1`) when a step sent from a page lands or someone asks for fresh
-  figures. A reading that fails is logged and tried again a few times; the
-  next minute's reading follows either way.
+  balances, queued every five minutes by `Keyfleet.Chain.Watch`, apart from
+  the reading of its history, so a slow read never holds that up, and at once
+  when a step sent from a page lands (`Keyfleet.Chain.Watch.refresh/1`) or
+  someone presses the Treasury's refresh (`now/1`). A reading that fails is
+  logged and tried again a few times; the next turn's reading follows either
+  way.
 
   Only one reading of a fleet waits to start at a time; one asked for while
   another is under way waits to read a later block, and the reading kept is

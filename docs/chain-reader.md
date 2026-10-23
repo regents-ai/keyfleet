@@ -50,7 +50,7 @@ active is worked out the same way: it is the wallet's latest shard record, it
 has not run out, and its key has not changed hands since it was issued.
 
 Apart from that history, and so a slow node never holds it up, the app reads
-every minute, at the head, what the treasury holds and what the reward ledger
+every five minutes, at the head, what the treasury holds and what the reward ledger
 backs for each asset the daily split shares (`splitAssets()`: ETH, REGENT,
 USDC, then OUSD once admitted and the launch token once bound) and no other:
 a token merely sent to the treasury is never read or shown. The same reading
@@ -74,19 +74,29 @@ hand, as below.
 
 The reading is Oban work:
 
-- `Keyfleet.Chain.Watch` runs every minute from the Oban cron. Where a node
-  is configured, it makes sure each deployed fleet has a reading job and
+- `Keyfleet.Chain.Watch` runs every five minutes from the Oban cron. Where a
+  node is configured, it makes sure each deployed fleet has a reading job and
   queues a reading of its balances.
 - `Keyfleet.Chain.ReadFleet` is one job per fleet, on whichever machine took
   it (queue `chain`). Each run proves the node serves the fleet's chain, makes
-  one pass over the fleet's history and waits four seconds before the next. A
-  pass that fails is retried after a wait that doubles up to a minute; after
-  20 failures the job is given up, and the watch starts a fresh one within a
-  minute.
+  one pass over the fleet's history and waits five minutes before the next. A
+  pass that fails is retried a minute later; after 20 failures the job is
+  given up, and the watch starts a fresh one within five minutes.
 - `Keyfleet.Chain.ReadBalances` takes one balance reading per fleet. It is
-  also queued at once when a step sent from the site goes through, and when
-  someone presses the Treasury's refresh (each person once every 30 seconds).
+  also queued at once when someone presses the Treasury's read-again icon
+  (each person once every 30 seconds).
   Only one reading of a fleet waits to start at a time.
+- When a step sent from the site goes through, `Keyfleet.ChainRefresh` asks
+  the watch to read that chain again (`Keyfleet.Chain.Watch.refresh/1`): each
+  fleet on it reads its history ten seconds later instead of at its next
+  turn, and its balances at once. Many presses close together cost one
+  history read. Everything else, such as a Key bought or sold elsewhere,
+  shows within five minutes.
+
+The node is paid for each call, and almost nothing changes between two reads
+of a fleet, so the reader runs on a slow clock and the site's own presses
+bring it forward. The same shape runs in every Regent site; ash-template
+holds the original.
 
 Seeing that these ran, running them again and stopping them is in
 `docs/recurring-jobs.md`.
@@ -106,7 +116,7 @@ the contracts above.
    ```
 
    With no `KEYFLEET_RPC_URL` nothing is read, and while fleets are deployed
-   the watch saves an error saying so every minute. A node on any chain other
+   the watch saves an error saying so every five minutes. A node on any chain other
    than the one a fleet was deployed on is refused, logged and saved with the
    site's errors, and nothing is read.
    The site also reads what a page's wallet buttons sent through this node
@@ -147,10 +157,11 @@ the contracts above.
    `001` and every trait of the table, with its card published at the address
    its `image` names.
 
-3. Nothing to restart: the watch starts reading a newly bound fleet within a
-   minute.
+3. Nothing to restart: the watch starts reading a newly bound fleet within
+   five minutes.
 
-While a fleet's head was last read more than two minutes ago, or its record
+While a fleet's head was last read more than seven minutes ago (one
+five-minute turn and two retries a minute apart), or its record
 is 300 blocks (about ten minutes) or more behind that head, or while it is
 stopped, nobody can post in its rooms or change its workspace; pages still
 load and say the record is catching up.

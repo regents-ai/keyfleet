@@ -155,7 +155,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   # Anything new in a fleet the visitor is a member of is a nudge to read its
   # ships again, once for a burst; Keys changing hands, to read again which
   # are the visitor's and whether they are a member. Nothing else a fleet says
-  # moves a ship: a new reading of a treasury's balances, every minute, least
+  # moves a ship: a new reading of a treasury's balances, every five minutes, least
   # of all.
   def handle_info({:reread, shown}, %{assigns: %{shown: shown, due: due}} = socket) do
     socket = assign(socket, :due, MapSet.new())

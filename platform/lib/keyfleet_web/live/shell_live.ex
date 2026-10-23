@@ -587,7 +587,7 @@ defmodule KeyfleetWeb.ShellLive do
   defp notice({:proposals_changed, fleet_id}, socket),
     do: {:noreply, FleetLive.refresh_activity_soon(socket, fleet_id)}
 
-  # A new reading of the fleet's balances, every minute, may carry
+  # A new reading of the fleet's balances, every five minutes, may carry
   # income, so the open key's rewards are read again with it.
   defp notice(
          {:balances_changed, fleet_id},

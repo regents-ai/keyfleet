@@ -62,6 +62,9 @@ export const moveKey = (fleet: string, key: number, owner: string) => void call(
 export const offerRewards = (fleet: string, key: number, atoms: number) =>
   void call("offer_rewards!", [fleet, key, atoms])
 
+/** The fleet's treasury was read just now, holding `atoms` USDC. */
+export const readTreasury = (fleet: string, atoms: number) => void call("read_treasury!", [fleet, atoms])
+
 /** A key's request for its random draw was turned down, or accepted, from now on. */
 export const refuseDraw = (fleet: string, key: number, refused: boolean) =>
   void call("refuse_draw!", [fleet, key, refused])

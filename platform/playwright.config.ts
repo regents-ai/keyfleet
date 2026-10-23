@@ -30,6 +30,7 @@ export default defineConfig({
     "key_card.spec.ts",
     "workspace_motion.spec.ts",
     "group_flow.spec.ts",
+    "treasury_read.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,

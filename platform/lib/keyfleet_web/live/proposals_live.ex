@@ -725,7 +725,7 @@ defmodule KeyfleetWeb.ProposalsLive do
         <Regent.Primitives.address id="proposals-treasury" address={@treasury.address} />
       </div>
       <p :if={not @treasury.read?} id="proposals-budget-pending" class="proposals-detail">
-        Balances usually show up within a minute.
+        Balances usually show up within five minutes.
       </p>
 
       <div
@@ -761,21 +761,13 @@ defmodule KeyfleetWeb.ProposalsLive do
           <.amount id="proposals-waiting-amount" value={@treasury.waiting} count />
         </p>
         <p class="proposals-detail">
-          <span>
-            Balances as of <time datetime={DateTime.to_iso8601(@treasury.as_of)}>{at(@treasury.as_of)}</time>.
-          </span>
-          <button
-            type="button"
-            id="proposals-refresh"
-            class="proposals-refresh"
+          <Regent.Primitives.last_read
+            id="proposals-read"
+            at={@treasury.as_of}
+            label="Refresh balances"
             phx-click="refresh_treasury"
             disabled={@resting?}
-            aria-label="Refresh balances"
-          >
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M13.25 8A5.25 5.25 0 1 1 11.7 4.3M13.25 2.25V5h-2.75" />
-            </svg>
-          </button>
+          />
         </p>
       </div>
 

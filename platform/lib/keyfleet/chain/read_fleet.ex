@@ -2,16 +2,19 @@ defmodule Keyfleet.Chain.ReadFleet do
   @moduledoc """
   Keeps one deployed fleet's history current. Each run is one
   `Keyfleet.Chain.Scanner` pass; the job then waits `:pass_interval_seconds`
-  and runs again, for as long as the fleet is deployed. One job per fleet
-  runs at a time, on whichever machine took it, and `Keyfleet.Chain.Watch`
-  makes sure every deployed fleet has one.
+  (five minutes) and runs again, for as long as the fleet is deployed. A
+  person's on-chain press that lands brings the next run forward to ten
+  seconds later (`Keyfleet.Chain.Watch.refresh/1`). One job per fleet runs at
+  a time, on whichever machine took it, and `Keyfleet.Chain.Watch` makes sure
+  every deployed fleet has one.
 
   Each run first proves the node serves the fleet's chain, and otherwise
   reads nothing and stops, with an error logged and saved with the site's
-  errors (`Keyfleet.Chain.ReadingStoppedError`); the watch tries again a minute
-  later. A pass that fails is logged and retried after a wait that
-  doubles up to a minute. A job that has failed 20 times is given up, and
-  the watch starts a fresh one within a minute.
+  errors (`Keyfleet.Chain.ReadingStoppedError`); the watch tries again at its
+  next turn. A pass that fails is logged and retried a minute later, so one
+  failure does not leave key ownership too old to act on
+  (`Keyfleet.Chain.Cursor`'s seven minutes). A job that has failed 20 times
+  is given up, and the watch starts a fresh one.
   """
   use Oban.Worker,
     queue: :chain,
@@ -25,7 +28,7 @@ defmodule Keyfleet.Chain.ReadFleet do
   alias Keyfleet.Chain.Scanner
   alias Keyfleet.Fleets
 
-  @longest_wait 60
+  @retry_after 60
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"fleet_id" => fleet_id}}) do
@@ -39,8 +42,7 @@ defmodule Keyfleet.Chain.ReadFleet do
   end
 
   @impl Oban.Worker
-  def backoff(%Oban.Job{attempt: attempt}),
-    do: min(Integer.pow(2, attempt) * pass_interval(), @longest_wait)
+  def backoff(%Oban.Job{}), do: @retry_after
 
   defp pass(fleet, client) do
     with {:ok, chain_id} <- client.chain_id(),
