@@ -17,9 +17,11 @@ defmodule Keyfleet.Chain.Cursor do
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer]
 
-  # Ownership is fresh while the head was read within this many seconds, and
-  # the record reaches to within this many blocks of it (ten minutes of Base).
-  @fresh_seconds 120
+  # Ownership is fresh while the head was read within this many seconds (one
+  # five-minute turn of `Keyfleet.Chain.ReadFleet` and two retries a minute
+  # apart), and the record reaches to within this many blocks of it (ten
+  # minutes of Base).
+  @fresh_seconds 420
   @fresh_blocks 300
 
   postgres do

@@ -99,9 +99,14 @@ config :keyfleet, Keyfleet.Lighthouse, url: "https://upload.lighthouse.storage",
 # (CVE-2026-82752).
 config :ash, default_string_length_count: :codepoints
 
-# Each deployed fleet's history is read every few seconds, by the JSON-RPC
-# node that `KEYFLEET_RPC_URL` names at runtime (`Keyfleet.Chain.ReadFleet`).
-config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, pass_interval_seconds: 4
+# Each deployed fleet's history is read every five minutes, by the JSON-RPC
+# node that `KEYFLEET_RPC_URL` names at runtime (`Keyfleet.Chain.ReadFleet`),
+# and ten seconds after a person's on-chain press lands (`Keyfleet.ChainRefresh`).
+config :keyfleet, Keyfleet.Chain, client: Keyfleet.Chain.RpcClient, pass_interval_seconds: 300
+
+# Who reads a chain again when a person's action may have changed it
+# (`Keyfleet.ChainRefresh`).
+config :keyfleet, Keyfleet.ChainRefresh, readers: [Keyfleet.Chain.Watch]
 
 # The chain a fleet's wallet buttons send on, by the chain id its deployment
 # records: its name in the page's words, and the public node a wallet adds
@@ -242,7 +247,7 @@ config :keyfleet, Oban,
   # Deleting agents' replaced pictures from their bucket waits on it too.
   # Drawing revealed Keys' cards waits on the key-art service, one at a time.
   # Reading the fleets from the chain waits on a node, so it has its own queue:
-  # one long-lived history job per fleet and its minutely balance readings.
+  # one long-lived history job per fleet and its balance readings.
   # Reading a signed-in wallet's ENS name waits on an Ethereum mainnet node.
   # `regent_credits` checks Credits purchases on chain.
   queues: [
@@ -258,7 +263,7 @@ config :keyfleet, Oban,
   cron: [
     crontab: [
       {"*/10 * * * *", Keyfleet.Notebooks.Reconcile},
-      {"* * * * *", Keyfleet.Chain.Watch},
+      {"*/5 * * * *", Keyfleet.Chain.Watch},
       {"17 4 * * *", Keyfleet.ErrorPruner},
       {"23 * * * *", Keyfleet.Treasury.OverdueCheck},
       {"41 * * * *", Keyfleet.Keys.DeckEndCheck},

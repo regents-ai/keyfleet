@@ -4616,3 +4616,29 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `platform/assets/js/privy_bridge.tsx`).
 - Checks: three cases in `platform/assets/test/privy_bridge.test.ts`; the two
   signed-out ones fail with the guard removed.
+## 2026-10-23 — Fleets read Base every five minutes
+
+- Each fleet's history is read every five minutes instead of every four
+  seconds, and its treasury balances every five minutes instead of every
+  minute (`Keyfleet.Chain.Watch` cron `*/5`, `:pass_interval_seconds` 300). The
+  node is paid for each call and almost nothing changes between two reads.
+- A step sent from the site that goes through now asks `Keyfleet.ChainRefresh`
+  to read that chain again: each fleet on it reads its history ten seconds
+  later and its balances at once. Many presses close together cost one
+  history read. `Keyfleet.ChainRefresh` is the same module every Regent site
+  carries; ash-template holds the original.
+- A failed history pass is retried a minute later (it waited up to a minute
+  before). A fleet counts as caught up while its head was read within seven
+  minutes (two before): one five-minute turn and two retries. A Key sold
+  outside Keyfleet can keep its rooms and workspace for up to seven minutes;
+  one moved with Keyfleet's own buttons, about ten seconds.
+- The Treasury's "Balances as of" line and its refresh button are now the
+  shared `Regent.Primitives.last_read` ("Updated …" with a read-again icon),
+  from design-system `af32c1d3`; the 30-second allowance per person still
+  rests the icon.
+- Notes: `docs/chain-reader.md`, `docs/recurring-jobs.md` and
+  `verification/features.yml` (`treasury-refresh`).
+- Checks: `platform/test/keyfleet/chain_test.exs` (a landed press brings the
+  fleet's next read forward, and a press on another chain does not; the
+  five-minute wait; the seven-minute freshness) and
+  `platform/test/keyfleet_web/live/proposals_page_test.exs`.

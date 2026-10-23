@@ -86,7 +86,7 @@ defmodule Keyfleet.Release do
   Recording the same record again changes nothing; a record naming other
   contracts for a bound fleet, or wiring that differs from the fleets already
   bound, is refused and changes nothing. The running site starts reading a
-  newly bound fleet within a minute (`Keyfleet.Chain.Watch`).
+  newly bound fleet within five minutes (`Keyfleet.Chain.Watch`).
   """
   def seed_deployment(path), do: with_release_repo([], fn _repo -> seed_deployment!(path) end)
 

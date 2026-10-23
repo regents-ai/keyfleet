@@ -159,6 +159,12 @@ defmodule Keyfleet.BrowserChain do
     remember({:draw_refused, keys, Fleet.onchain_token_id(fleet, token_id)}, refused)
   end
 
+  @doc "The fleet's treasury was read just now, holding `amount` atomic USDC."
+  def read_treasury!(fleet_id, amount) do
+    ProposalHelpers.treasury_reading!(fleet_id, [%{asset: @usdc, held: amount, backed: 0}])
+    :ok
+  end
+
   @doc "`owner` has allowed every fleet `amount` atomic USDC from now on."
   def allow!(owner, amount), do: remember({:allowance, String.downcase(owner)}, amount)
 

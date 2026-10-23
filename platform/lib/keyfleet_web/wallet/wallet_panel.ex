@@ -46,14 +46,13 @@ defmodule KeyfleetWeb.WalletPanel do
   are built from. Signed out, a button also carries
   `data-account-target="sign-in"`, so its press opens sign-in instead.
 
-  When a step sent from it goes through, the fleet's balances are read at
-  once (`Keyfleet.Chain.ReadBalances.now/1`) and the page that renders it
-  receives `{:onchain_landed, fleet_id}`.
+  When a step sent from it goes through, the chain is read again
+  (`KeyfleetWeb.OnchainSteps.checked/3`) and the page that renders it receives
+  `{:onchain_landed, fleet_id}`.
   """
   use KeyfleetWeb, :live_component
 
   alias Keyfleet.Actors.Human
-  alias Keyfleet.Chain.ReadBalances
   alias Keyfleet.Proposals
   alias Keyfleet.WalletSteps
   alias KeyfleetWeb.Live.Session
@@ -285,17 +284,15 @@ defmodule KeyfleetWeb.WalletPanel do
   @impl true
   # A step that has landed changes what the next one needs (an approval, a
   # vote, what is waiting), so the steps are built again. One that went
-  # through may have moved the fleet's money, so its balances are read at
-  # once and the page is told (`{:onchain_landed, fleet_id}`), so its other
-  # figures are read again too.
+  # through may have moved the fleet's money: `OnchainSteps.checked/3` has
+  # asked for the chain to be read again, and the page is told
+  # (`{:onchain_landed, fleet_id}`), so its other figures are read again too.
   def handle_async({:onchain_step, hash}, result, socket) do
     socket = OnchainSteps.checked(socket, hash, result)
 
     case Enum.find(socket.assigns.presses.sent, &(&1.hash == hash)) do
       %{outcome: :confirmed} ->
-        %{fleet_id: fleet_id} = socket.assigns.fleet
-        ReadBalances.now(fleet_id)
-        send(self(), {:onchain_landed, fleet_id})
+        send(self(), {:onchain_landed, socket.assigns.fleet.fleet_id})
         {:noreply, sync(socket)}
 
       %{outcome: :reverted} ->

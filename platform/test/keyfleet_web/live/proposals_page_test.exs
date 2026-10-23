@@ -490,7 +490,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert has_element?(
                view,
                "#proposals-budget-pending",
-               "Balances usually show up within a minute."
+               "Balances usually show up within five minutes."
              )
 
       # The treasury's whole address is there before any balance is read.
@@ -650,7 +650,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       assert has_element?(
                view,
                "#proposals-budget-pending",
-               "Balances usually show up within a minute."
+               "Balances usually show up within five minutes."
              )
 
       refute has_element?(view, "#proposals-advances-title")
@@ -1183,15 +1183,15 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       ChainViews.put!(list_views())
       {:ok, view, _html} = open(conn, @treasury_page)
 
-      assert has_element?(view, "#proposals-refresh[aria-label='Refresh balances']")
-      refute has_element?(view, "#proposals-refresh[disabled]")
+      assert has_element?(view, "#proposals-read-again[aria-label='Refresh balances']")
+      refute has_element?(view, "#proposals-read-again[disabled]")
       refute_enqueued(worker: ReadBalances, args: %{fleet_id: @fleet})
 
-      view |> element("#proposals-refresh") |> render_click()
+      view |> element("#proposals-read-again") |> render_click()
 
       assert_enqueued(worker: ReadBalances, args: %{fleet_id: @fleet})
-      assert has_element?(view, "#proposals-refresh[disabled]")
-      assert shows?(fn -> not has_element?(view, "#proposals-refresh[disabled]") end)
+      assert has_element?(view, "#proposals-read-again[disabled]")
+      assert shows?(fn -> not has_element?(view, "#proposals-read-again[disabled]") end)
     end
 
     # Buy REGENT starts over once the wallet has the press (Sean, 19 October

@@ -29,11 +29,13 @@ defmodule Keyfleet.Access do
   `scope` is a fleet's id. A member holds one of the fleet's Keys, holds an
   active shard of one, or is an agent paired with a person who holds one
   (`Keyfleet.Keys.identity/2`), read from the site's own record of who holds
-  each Key. The chain reader keeps that record. While it has not read the
-  fleet within two minutes, or is 300 blocks or more behind, or is reading a
-  stretch again (`Keyfleet.Chain.fresh?/1`), nobody is a member: a holding
-  that may be out of date grants nothing. So a member's standing is never
-  more than two minutes behind the chain. Nothing here is stored for a person:
+  each Key. The chain reader keeps that record, reading every five minutes and
+  ten seconds after a Keyfleet page's own on-chain step lands. While it has
+  not read the fleet within seven minutes, or is 300 blocks or more behind, or
+  is reading a stretch again (`Keyfleet.Chain.fresh?/1`), nobody is a member:
+  a holding that may be out of date grants nothing. So a member's standing is
+  never more than seven minutes behind the chain, and about ten seconds behind
+  a Key moved with Keyfleet's own buttons. Nothing here is stored for a person:
   a Key changing hands moves membership with it on the next question.
   Whatever moves value still reads the chain at its latest block.
   """

@@ -2,7 +2,7 @@ defmodule Keyfleet.Chain.TreasuryReader do
   @moduledoc """
   Reads one deployed fleet's money at the block the node last called its
   head, and keeps it as the fleet's `Keyfleet.Treasury.Reading`.
-  `Keyfleet.Chain.ReadBalances` runs it every minute.
+  `Keyfleet.Chain.ReadBalances` runs it every five minutes.
 
   A reading covers each asset the treasury's daily split shares
   (`splitAssets()`: ETH, REGENT, USDC, then OUSD once admitted and the launch

@@ -7,8 +7,9 @@ defmodule Keyfleet.ChainTest do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Chain
-  alias Keyfleet.Chain.{OwnershipLog, ReadFleet, Scanner, StubClient}
+  alias Keyfleet.Chain.{OwnershipLog, ReadBalances, ReadFleet, Scanner, StubClient}
   alias Keyfleet.ChainHelpers
+  alias Keyfleet.ChainRefresh
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
   alias Keyfleet.Release
@@ -40,7 +41,8 @@ defmodule Keyfleet.ChainTest do
       refute Chain.fresh?(@fleet)
 
       for {attrs, fresh?} <- [
-            {%{observed_at: DateTime.add(DateTime.utc_now(), -121, :second)}, false},
+            {%{observed_at: DateTime.add(DateTime.utc_now(), -421, :second)}, false},
+            {%{observed_at: DateTime.add(DateTime.utc_now(), -360, :second)}, true},
             {%{head_block: 1_300, next_block: 1_000}, false},
             {%{}, true},
             {%{rescan_from: 900}, false}
@@ -145,8 +147,8 @@ defmodule Keyfleet.ChainTest do
     end
 
     # The job reading a fleet never takes a node serving another chain at its
-    # word; a pass that read waits a few seconds and runs again, and one that
-    # failed is retried after a wait.
+    # word; a pass that read waits five minutes and runs again, and one that
+    # failed is retried a minute later.
     test "the reading job reads only its fleet's chain, then repeats or retries" do
       StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0)], chain_id: 1)
 
@@ -159,7 +161,7 @@ defmodule Keyfleet.ChainTest do
       assert current_keys() == []
 
       StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0)])
-      assert perform_job(ReadFleet, %{fleet_id: @fleet}) == {:snooze, 4}
+      assert perform_job(ReadFleet, %{fleet_id: @fleet}) == {:snooze, 300}
       assert [%{token_id: 1}] = current_keys()
 
       malformed = %{log(2, 1, "b", @deployed + 12, 0) | "data" => "0x01"}
@@ -171,6 +173,23 @@ defmodule Keyfleet.ChainTest do
     end
 
     # One log the reader cannot make sense of holds the whole range back.
+    # A person's on-chain press that lands brings the fleet's next history read
+    # forward to ten seconds from now and reads its balances at once; a press
+    # on another chain leaves the fleet's turn where it was.
+    test "a landed press brings the fleet's next reading forward", %{fleet: fleet} do
+      Oban.insert!(ReadFleet.new(%{fleet_id: @fleet}, schedule_in: 300))
+
+      :ok = ChainRefresh.request(fleet.chain_id + 1)
+      assert [waiting] = all_enqueued(worker: ReadFleet, args: %{fleet_id: @fleet})
+      assert DateTime.diff(waiting.scheduled_at, DateTime.utc_now()) > 200
+      refute_enqueued(worker: ReadBalances, args: %{fleet_id: @fleet})
+
+      :ok = ChainRefresh.request(fleet.chain_id)
+      assert [sooner] = all_enqueued(worker: ReadFleet, args: %{fleet_id: @fleet})
+      assert DateTime.diff(sooner.scheduled_at, DateTime.utc_now()) <= ChainRefresh.gap_s()
+      assert_enqueued(worker: ReadBalances, args: %{fleet_id: @fleet})
+    end
+
     test "a malformed log records nothing and leaves the cursor where it was", %{fleet: fleet} do
       malformed = %{log(2, 1, "b", @deployed + 4, 0) | "data" => "0x01"}
       StubClient.put_chain(head(@deployed + 10), [log(1, 1, "a", @deployed + 3, 0), malformed])
