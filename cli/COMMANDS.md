@@ -412,11 +412,14 @@ Server:
 fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
 built = WalletSteps.build_steps(fleet, :convert, wallet, %{inputs: inputs}, actor: the agent)
 an amount that can't be read -> 422 invalid_amount with its words; nothing is built
-answer the step; blocked "Nothing waiting to turn into REGENT" or "Opens <time>" when so
+answer the step; blocked "Nothing waiting to turn into REGENT" or "Opens <time>" when so,
+  or "Too big now: try <amount> USDC" when the piece named is tried at the head block and refused
 ```
 
 - **History:** 2026-10-15 added, with `{}`; the same day it took `{"inputs": {"amount"}}`
   and answered `amount`.
+  2026-10-23 blocked "Too big now: try <amount> USDC" when the piece would move the price
+  more than 1% right now.
 
 ## regents keyfleet keys claim <fleet> <key>
 

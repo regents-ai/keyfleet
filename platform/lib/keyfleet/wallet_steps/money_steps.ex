@@ -19,6 +19,9 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
   # The USDC token's decimals, which the manager refuses to be deployed
   # without.
   @usdc_decimals 6
+  @usdc_unit 1_000_000
+  # The most USDC the REGENT buyer turns in one piece.
+  @piece_usdc 250_000_000
 
   @doc false
   def steps(:run_split, %{fleet: fleet}) do
@@ -134,16 +137,17 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
              "amount",
              &Typed.amount(&1, @usdc_decimals, Typed.largest_uint256()),
              figures
-           ) do
+           ),
+         {:ok, blocked} <- convert_too_big(reads, buyer, amount, figures.blocked) do
       {:ok, [Review.step("convert", buyer, Call.encode("convert(uint256)", [amount]))],
-       Map.put(figures, :amount, amount)}
+       figures |> Map.put(:amount, amount) |> Map.put(:blocked, blocked)}
     else
       {:problem, problem, figures} -> {:problem, problem, figures}
       _unread -> {:problem, :unread, %{blocked: %{}}}
     end
   end
 
-  # Only an empty line, or a piece not open yet, is sure to fail.
+  # An empty line, or a piece not open yet, is sure to fail.
   defp convert_blocked(_reads, 0, _opens_at), do: %{"convert" => :nothing_queued}
 
   defp convert_blocked(reads, _in_line, opens_at) do
@@ -151,6 +155,45 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
       do: %{"convert" => {:opens_at, opens_at}},
       else: %{}
   end
+
+  # Otherwise the piece itself is tried at the head block: the buyer refuses one
+  # that moves the route's price by more than 1%, so a piece too big for the
+  # pools right now is sure to fail. A smaller one may not be, and the reason
+  # names the most whole USDC the buyer takes now, or nil when it takes none.
+  defp convert_too_big(_reads, _buyer, _amount, blocked) when blocked != %{}, do: {:ok, blocked}
+
+  defp convert_too_big(reads, buyer, amount, blocked) do
+    case piece_goes_through?(reads, buyer, amount) do
+      {:ok, true} ->
+        {:ok, blocked}
+
+      {:ok, false} ->
+        top = min(div(amount - 1, @usdc_unit), div(@piece_usdc, @usdc_unit))
+
+        with {:ok, largest} <- largest_piece(reads, buyer, 1, top, nil),
+             do: {:ok, %{"convert" => {:too_big, largest}}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  # The most whole USDC from `low` to `high` the buyer takes now, by halving:
+  # a piece goes through or not by its size alone.
+  defp largest_piece(_reads, _buyer, low, high, found) when low > high, do: {:ok, found}
+
+  defp largest_piece(reads, buyer, low, high, found) do
+    middle = div(low + high, 2)
+
+    case piece_goes_through?(reads, buyer, middle * @usdc_unit) do
+      {:ok, true} -> largest_piece(reads, buyer, middle + 1, high, middle * @usdc_unit)
+      {:ok, false} -> largest_piece(reads, buyer, low, middle - 1, found)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp piece_goes_through?(reads, buyer, amount),
+    do: Reads.goes_through?(reads, buyer, "convert(uint256)", [amount])
 
   defp approve(fleet, asset, amount),
     do:

@@ -7465,7 +7465,7 @@
     {
       "name": "treasury_buy_regent",
       "title": "Turn USDC into REGENT",
-      "description": "Press Buy REGENT: turns USDC waiting from every fleet's Key sales into REGENT, up to the amount typed and 250 USDC a press. Anyone may; the button says why when nothing is waiting or the next turn hasn't opened.",
+      "description": "Press Buy REGENT: turns USDC waiting from every fleet's Key sales into REGENT, up to the amount typed and 250 USDC a press. Anyone may; the button says why when nothing is waiting, the next turn hasn't opened, or the amount would move the price more than 1% (with the most that goes through now).",
       "input_schema": {
         "type": "object",
         "properties": {

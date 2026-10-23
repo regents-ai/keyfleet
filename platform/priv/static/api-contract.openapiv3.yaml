@@ -1926,8 +1926,10 @@ paths:
         The transaction that turns USDC waiting from Key sales into REGENT for its fleet's
         treasury: at most the amount named, and at most 250 USDC a press whatever is named. The
         REGENT buyer serves every fleet in turn, so the USDC may be another fleet's. Anyone may
-        send it. Blocked "Nothing waiting to turn into REGENT" when no fleet is in line, or "Opens
-        <time>" before the next piece may run. Nothing is sent here: the signing wallet sends it
+        send it. Blocked "Nothing waiting to turn into REGENT" when no fleet is in line, "Opens
+        <time>" before the next piece may run, or "Too big now: try <amount> USDC",
+        the most whole USDC that goes through now, when the amount named would move the price more
+        than 1% ("Can’t buy REGENT right now" when none does). Nothing is sent here: the signing wallet sends it
         itself, on Base. The body is at most 4096 bytes.
       security: [{siwaReceipt: []}]
       parameters:
