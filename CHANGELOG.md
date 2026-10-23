@@ -4733,3 +4733,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   rustler_precompiled checks each file against the package's checksums before using it.
 - The two curl lines name the versions mix.lock pins and change with them. Remove the
   step once GitHub or rustler_precompiled fixes the limit (backlog).
+
+## 2026-10-23 — Builds fetch the native files for their own chip
+
+- The ex_keccak and ex_secp256k1 download in `platform/Dockerfile` named x86_64 only, so
+  `make release` on a Mac (aarch64) still asked GitHub for its own files and stopped at
+  the long headers. The step now names the building machine's chip (`uname -m`). From
+  ash-template 8581a96 and Techtree 78c5c5a5, proven there by a fresh aarch64 build on
+  the Mac and an x86_64 build on Fly.
