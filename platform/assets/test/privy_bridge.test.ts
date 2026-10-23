@@ -2440,3 +2440,37 @@ describe("Privy session bridge", () => {
     ).toBe(expected)
   })
 })
+
+// Invariant (regents.sh security note, 23 Oct 2026): when Privy's logout failed
+// at sign-out, a wallet connected on the signed-out page must not sign the
+// previous person back in. Their remembered session is logged out first, and if
+// that fails too the connect window never opens.
+function connectRequest(signedOut: boolean, logout: () => Promise<void>) {
+  const order: string[] = []
+  const request = bridge.createConnectWalletRequest({
+    isCurrent: () => true,
+    signedOut: () => signedOut,
+    authenticated: () => true,
+    providerLogout: async () => { order.push("logout"); await logout() },
+    openConnect: async () => { order.push("connect") },
+  })
+  return {order, request}
+}
+
+it("signed out, a remembered Privy session is logged out before a wallet connects", async () => {
+  const {order, request} = connectRequest(true, async () => undefined)
+  await request()
+  expect(order).toEqual(["logout", "connect"])
+})
+
+it("signed out, a logout that fails never opens the connect window", async () => {
+  const {order, request} = connectRequest(true, async () => { throw new Error("logout failed") })
+  await expect(request()).rejects.toThrow("logout failed")
+  expect(order).toEqual(["logout"])
+})
+
+it("signed in, connecting a wallet keeps the visitor's own Privy session", async () => {
+  const {order, request} = connectRequest(false, async () => undefined)
+  await request()
+  expect(order).toEqual(["connect"])
+})

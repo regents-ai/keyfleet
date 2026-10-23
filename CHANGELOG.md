@@ -4604,3 +4604,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Moved plug_crypto from 2.2.0 to 2.2.1 for advisory GHSA-ffw9-w85g-f2vh
   (EEF-CVE-2026-105963: the secret key base could appear in stack trace
   arguments). Lock file only; `mix hex.audit` is clean again.
+
+## 2026-10-23 — Connecting a wallet never brings back the last sign-in
+
+- When Privy's logout failed at sign-out, Privy kept its session, and a
+  Connect wallet on the signed-out page then signed the previous Privy account
+  back in (on a shared computer, the previous person). On a signed-out page the
+  connect request now logs that remembered session out before the connect window
+  opens; if that fails, the window stays shut and the Disconnect stands. Copied
+  from ash-template f79a3149 (`createConnectWalletRequest` in
+  `platform/assets/js/privy_bridge.tsx`).
+- Checks: three cases in `platform/assets/test/privy_bridge.test.ts`; the two
+  signed-out ones fail with the guard removed.
