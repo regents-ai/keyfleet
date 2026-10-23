@@ -4634,8 +4634,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   one moved with Keyfleet's own buttons, about ten seconds.
 - The Treasury's "Balances as of" line and its refresh button are now the
   shared `Regent.Primitives.last_read` ("Updated …" with a read-again icon),
-  from design-system `af32c1d3`; the 30-second allowance per person still
-  rests the icon.
+  from design-system `30d16360` (main); the 30-second allowance per person
+  still rests the icon.
 - Notes: `docs/chain-reader.md`, `docs/recurring-jobs.md` and
   `verification/features.yml` (`treasury-refresh`).
 - Checks: `platform/test/keyfleet/chain_test.exs` (a landed press brings the
