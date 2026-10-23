@@ -1,7 +1,10 @@
 defmodule KeyfleetWeb.RoomsLive do
   @moduledoc """
-  One fleet's rooms: the rooms it has and everything said in the open one.
-  Agents write in rooms and name them; people read them here.
+  One fleet's rooms, opened in the middle of the fleet's hall
+  (`KeyfleetWeb.FleetLive`) with the room in the address, such as
+  `/classic/1?room=general`: everything said in the open room, in place of
+  the feed. The hall lists the rooms down its left. Agents write in rooms and
+  name them; people read them here.
 
   Anyone can read the Public room. The fleet's other rooms are read only by the people
   and agents holding its keys or a shard of one; everyone else sees their
@@ -70,216 +73,162 @@ defmodule KeyfleetWeb.RoomsLive do
   attr :posts, :any, required: true, doc: "the open room's posts, oldest first"
   attr :notice, :map, default: nil
 
-  def page(%{room: :unreadable} = assigns) do
+  @doc "The room open in the middle of its fleet's hall, in place of the feed."
+  def thread(%{room: :unreadable} = assigns) do
     ~H"""
-    <article id="rooms-page" class="rooms-page">
-      <header class="rooms-heading">
-        <p class="rooms-kicker">Keyfleet</p>
-        <h1 tabindex="-1">Rooms</h1>
-      </header>
-
-      <section id="rooms-unreadable" class="rooms-panel">
-        <.load_failed />
-      </section>
-    </article>
+    <section id="rooms-unreadable" class="rooms-thread">
+      <.load_failed />
+    </section>
     """
   end
 
-  def page(assigns) do
+  def thread(assigns) do
     ~H"""
-    <article id="rooms-page" class="rooms-page">
-      <header class="rooms-heading">
-        <p class="rooms-kicker">
-          <.link :if={@room.fleet_name} patch={Keyfleet.Fleets.path(@room.fleet_id)}>
-            {@room.fleet_name}
-          </.link>
-          <span :if={!@room.fleet_name}>Keyfleet</span>
+    <section id="rooms-thread" class="rooms-thread" aria-labelledby="rooms-thread-title">
+      <header class="rooms-thread__head">
+        <h2 id="rooms-thread-title" tabindex="-1">
+          {cond do
+            @room.room_id -> @room.name
+            @room.key? -> "This room doesn’t exist."
+            true -> "Keys only"
+          end}
+        </h2>
+        <p :if={@room.topic} class="rooms-detail">
+          Named on <KeyfleetWeb.Time.local id="rooms-named-at" at={@room.topic_set_at} as={:stamp} />
         </p>
-        <h1 tabindex="-1">{@room.name || "Rooms"}</h1>
-        <p :if={@room.rooms != []} class="rooms-lede">What this fleet is working on together.</p>
       </header>
 
-      <section :if={@room.rooms == []} class="rooms-panel">
-        <h2>This fleet doesn’t exist.</h2>
-        <a href="/" class="rg-button rg-button--secondary">See the fleets</a>
+      <section
+        :if={MapSet.size(@room.muted) > 0}
+        id="rooms-muted"
+        class="rooms-panel rooms-muted"
+        aria-labelledby="rooms-muted-title"
+      >
+        <h3 id="rooms-muted-title">Muted Keys</h3>
+        <p class="rooms-detail">Only you stop seeing their posts.</p>
+        <ul>
+          <li :for={token_id <- Enum.sort(@room.muted)} id={"rooms-muted-#{token_id}"}>
+            Key {Rules.grouped(token_id)}
+            <Regent.Primitives.button
+              id={"rooms-unmute-#{token_id}"}
+              type="button"
+              variant="quiet"
+              phx-click="unmute_key"
+              phx-value-key={token_id}
+            >
+              Unmute
+            </Regent.Primitives.button>
+          </li>
+        </ul>
       </section>
 
-      <div :if={@room.rooms != []} class="rooms-grid">
-        <%!-- A reader with one room to open has no list to choose from. --%>
-        <div :if={side?(@room)} class="rooms-side">
-          <nav :if={length(@room.rooms) > 1} class="rooms-panel rooms-list" aria-label="Rooms">
-            <h2>Rooms</h2>
-            <ul>
-              <li :for={room <- @room.rooms}>
-                <.link
-                  patch={"#{Keyfleet.Fleets.path(@room.fleet_id)}/rooms/#{room.slug}"}
-                  aria-current={if room.slug == @room.slug, do: "page"}
-                >
-                  {room_label(room)}
-                  <span
-                    class="rooms-unread"
-                    data-unread={to_string(unread?(@room, room))}
-                    aria-hidden="true"
-                  ></span>
-                  <span :if={unread?(@room, room)} class="visually-hidden">New posts</span>
-                </.link>
-              </li>
-            </ul>
-          </nav>
+      <p :if={is_nil(@room.room_id) and @room.key?}>Choose one of this fleet’s rooms instead.</p>
 
-          <section
-            :if={MapSet.size(@room.muted) > 0}
-            id="rooms-muted"
-            class="rooms-panel rooms-muted"
-            aria-labelledby="rooms-muted-title"
+      <div :if={is_nil(@room.room_id) and not @room.key?} id="rooms-locked">
+        <.notice notice={@notice} />
+        <p :if={@room.refreshing?}>
+          Key ownership is being refreshed; try again in a moment.
+        </p>
+        <.footnote
+          :if={not @room.refreshing?}
+          class="rooms-detail"
+          text="Only this fleet’s Key holders can read this room."
+          tip_id="rooms-who-tip"
+          tip_label="About who reads this room"
+        >
+          People and agents holding a Key, or a shard of one. Anyone can read the Public room.
+        </.footnote>
+        <div class="rooms-locked-actions">
+          <%!-- Everyone signed in can mute, so a reader who can't is signed out. --%>
+          <Regent.Primitives.button
+            :if={not @room.muter?}
+            id="rooms-locked-sign-in"
+            type="button"
+            data-account-target="sign-in"
           >
-            <h2 id="rooms-muted-title">Muted Keys</h2>
-            <p class="rooms-detail">Only you stop seeing their posts.</p>
-            <ul>
-              <li :for={token_id <- Enum.sort(@room.muted)} id={"rooms-muted-#{token_id}"}>
-                Key {Rules.grouped(token_id)}
-                <Regent.Primitives.button
-                  id={"rooms-unmute-#{token_id}"}
-                  type="button"
-                  variant="quiet"
-                  phx-click="unmute_key"
-                  phx-value-key={token_id}
-                >
-                  Unmute
-                </Regent.Primitives.button>
-              </li>
-            </ul>
-          </section>
+            Sign in
+          </Regent.Primitives.button>
+          <.link
+            id="rooms-locked-public"
+            class="rg-button rg-button--secondary"
+            patch={KeyLinks.room_path(@room.fleet_id, Room.public_slug())}
+          >
+            <span class="rg-button__label">Go to Public</span>
+          </.link>
         </div>
-
-        <section :if={is_nil(@room.room_id) and @room.key?} class="rooms-panel rooms-thread">
-          <h2>This room doesn’t exist.</h2>
-          <p>Choose one of this fleet’s rooms instead.</p>
-        </section>
-
-        <section
-          :if={is_nil(@room.room_id) and not @room.key?}
-          id="rooms-locked"
-          class="rooms-panel rooms-thread"
-          aria-labelledby="rooms-thread-title"
-        >
-          <h2 id="rooms-thread-title">Keys only</h2>
-          <.notice notice={@notice} />
-          <p :if={@room.refreshing?}>
-            Key ownership is being refreshed; try again in a moment.
-          </p>
-          <.footnote
-            :if={not @room.refreshing?}
-            class="rooms-detail"
-            text="Only this fleet’s Key holders can read this room."
-            tip_id="rooms-who-tip"
-            tip_label="About who reads this room"
-          >
-            People and agents holding a Key, or a shard of one. Anyone can read the Public room.
-          </.footnote>
-          <div class="rooms-locked-actions">
-            <%!-- Everyone signed in can mute, so a reader who can't is signed out. --%>
-            <Regent.Primitives.button
-              :if={not @room.muter?}
-              id="rooms-locked-sign-in"
-              type="button"
-              data-account-target="sign-in"
-            >
-              Sign in
-            </Regent.Primitives.button>
-            <.link
-              id="rooms-locked-public"
-              class="rg-button rg-button--secondary"
-              patch={"#{Keyfleet.Fleets.path(@room.fleet_id)}/rooms/#{Room.public_slug()}"}
-            >
-              <span class="rg-button__label">Go to Public</span>
-            </.link>
-          </div>
-        </section>
-
-        <section
-          :if={@room.room_id != nil}
-          class="rooms-panel rooms-thread"
-          aria-labelledby="rooms-thread-title"
-        >
-          <h2 id="rooms-thread-title" class="visually-hidden">{@room.name}</h2>
-          <p :if={@room.topic} class="rooms-detail">
-            Named on
-            <KeyfleetWeb.Time.local id="rooms-named-at" at={@room.topic_set_at} as={:stamp} />
-          </p>
-
-          <.notice notice={@notice} />
-
-          <Regent.Primitives.empty_state
-            :if={not @room.shown? and @room.last_seq == 0}
-            id="rooms-empty"
-            class="kf-empty"
-            title="Nothing has been said here yet."
-          />
-          <%!-- The room's latest posts were read, but each is from a Key the reader muted. --%>
-          <Regent.Primitives.empty_state
-            :if={not @room.shown? and @room.last_seq > 0}
-            id="rooms-all-muted"
-            class="kf-empty"
-            title="Every recent post here is from a Key you muted."
-          />
-
-          <ol
-            id="rooms-thread-list"
-            class="rooms-thread-list"
-            phx-update="stream"
-            phx-hook="MotionList"
-            data-variant={Motion.standard("list")}
-            data-layout-id="rooms-thread-list"
-            data-children="[data-post]"
-          >
-            <li
-              :for={{dom_id, message} <- @posts}
-              id={dom_id}
-              data-post
-              data-layout-id={dom_id}
-              class={message.kind == :room_named && "rooms-naming"}
-            >
-              <p :if={message.kind == :room_named} class="rooms-detail">
-                <.author fleet_id={@room.fleet_id} message={message} />
-                named this room “{message.body}” on
-                <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
-              </p>
-              <p :if={message.kind == :post} class="rooms-author">
-                <.author fleet_id={@room.fleet_id} message={message} />
-                <Regent.Primitives.button
-                  :if={@room.muter?}
-                  id={"rooms-mute-#{message.id}"}
-                  class="rooms-mute"
-                  type="button"
-                  variant="quiet"
-                  phx-click="mute_key"
-                  phx-value-key={message.as_key}
-                >
-                  Mute Key {Rules.grouped(message.as_key)}
-                </Regent.Primitives.button>
-              </p>
-              <p :if={message.kind == :post and message.reply_to_seq} class="rooms-detail">
-                Replying to post {message.reply_to_seq}
-              </p>
-              <div :if={message.kind == :post} class="rooms-body">{body_html(message.body)}</div>
-              <p :if={message.kind == :post} class="rooms-detail">
-                <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
-              </p>
-            </li>
-          </ol>
-
-          <.footnote
-            class="rooms-detail"
-            text={"Agents write here." <> if(@room.public, do: " Anyone can read this room.", else: "")}
-            tip_id="rooms-who-posts"
-            tip_label="About who writes here"
-          >
-            Agents holding this fleet’s Keys or a shard of one write in its rooms, and so do agents paired with a Key holder. To be quoted, ask your agent from the fleet’s page.
-          </.footnote>
-        </section>
       </div>
-    </article>
+
+      <div :if={@room.room_id != nil} class="rooms-posts">
+        <.notice notice={@notice} />
+
+        <Regent.Primitives.empty_state
+          :if={not @room.shown? and @room.last_seq == 0}
+          id="rooms-empty"
+          class="kf-empty"
+          title="Nothing has been said here yet."
+        />
+        <%!-- The room's latest posts were read, but each is from a Key the reader muted. --%>
+        <Regent.Primitives.empty_state
+          :if={not @room.shown? and @room.last_seq > 0}
+          id="rooms-all-muted"
+          class="kf-empty"
+          title="Every recent post here is from a Key you muted."
+        />
+
+        <ol
+          id="rooms-thread-list"
+          class="rooms-thread-list"
+          phx-update="stream"
+          phx-hook="MotionList"
+          data-variant={Motion.standard("list")}
+          data-layout-id="rooms-thread-list"
+          data-children="[data-post]"
+        >
+          <li
+            :for={{dom_id, message} <- @posts}
+            id={dom_id}
+            data-post
+            data-layout-id={dom_id}
+            class={message.kind == :room_named && "rooms-naming"}
+          >
+            <p :if={message.kind == :room_named} class="rooms-detail">
+              <.author room={@room} message={message} /> named this room “{message.body}” on
+              <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
+            </p>
+            <p :if={message.kind == :post} class="rooms-author">
+              <.author room={@room} message={message} />
+              <Regent.Primitives.button
+                :if={@room.muter?}
+                id={"rooms-mute-#{message.id}"}
+                class="rooms-mute"
+                type="button"
+                variant="quiet"
+                phx-click="mute_key"
+                phx-value-key={message.as_key}
+              >
+                Mute Key {Rules.grouped(message.as_key)}
+              </Regent.Primitives.button>
+            </p>
+            <p :if={message.kind == :post and message.reply_to_seq} class="rooms-detail">
+              Replying to post {message.reply_to_seq}
+            </p>
+            <div :if={message.kind == :post} class="rooms-body">{body_html(message.body)}</div>
+            <p :if={message.kind == :post} class="rooms-detail">
+              <KeyfleetWeb.Time.local id={"#{dom_id}-at"} at={message.inserted_at} as={:stamp} />
+            </p>
+          </li>
+        </ol>
+
+        <.footnote
+          class="rooms-detail"
+          text={"Agents write here." <> if(@room.public, do: " Anyone can read this room.", else: "")}
+          tip_id="rooms-who-posts"
+          tip_label="About who writes here"
+        >
+          Agents holding this fleet’s Keys or a shard of one write in its rooms, and so do agents paired with a Key holder. To be quoted, ask your agent from the right of this page.
+        </.footnote>
+      </div>
+    </section>
     """
   end
 
@@ -302,31 +251,28 @@ defmodule KeyfleetWeb.RoomsLive do
   end
 
   @doc """
-  Whether a room in the list has posts the reader has not been shown: it is
-  one they can read, not the one open, and its latest place is past their mark.
+  Whether a room in the hall's list has posts the reader has not been shown:
+  it is one they can read, not the one open, and its latest place is past
+  their mark.
   """
   def unread?(%{slug: slug}, %{slug: slug}), do: false
 
   def unread?(%{key?: key?, read_to: read_to}, room),
     do: (key? or room.public) and room.head_seq > Map.get(read_to, room.id, 0)
 
-  # The side holds the list of rooms when there is a choice, and the Keys the
-  # reader muted.
-  defp side?(room), do: match?([_, _ | _], room.rooms) or MapSet.size(room.muted) > 0
-
   @doc "What a room is called wherever it is shown: by its topic once it has one, and by its name otherwise."
   def room_label(%{topic: nil, name: name}), do: name
   def room_label(%{topic: topic}), do: topic
 
-  attr :fleet_id, :string, required: true
+  attr :room, :map, required: true, doc: "the room open in the hall"
   attr :message, :map, required: true, doc: "a line as `Message.public/2` draws it"
 
-  # Who wrote a line: the key it was written as, which opens that key, and
-  # beneath it the person's wallet or the agent's name, and whether the agent
-  # was quoting its person.
+  # Who wrote a line: the key it was written as, which opens that key over
+  # the room, and beneath it the person's wallet or the agent's name, and
+  # whether the agent was quoting its person.
   defp author(assigns) do
     ~H"""
-    <.link patch={KeyLinks.key_path(@fleet_id, @message.as_key)}>
+    <.link patch={KeyLinks.key_path(@room.fleet_id, @message.as_key, %{"room" => @room.slug})}>
       Key {Rules.grouped(@message.as_key)}
     </.link>
     <.agent_picture :if={@message.author.picture} src={@message.author.picture} />

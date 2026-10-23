@@ -166,7 +166,7 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
     assert redirected_to(browser.("/fleets/#{@fleet}"), 302) == "#{Keyfleet.Fleets.path(@fleet)}"
 
     assert redirected_to(browser.("/fleets/#{@fleet}/rooms"), 302) ==
-             "#{Keyfleet.Fleets.path(@fleet)}/rooms/general"
+             "#{Keyfleet.Fleets.path(@fleet)}?room=general"
 
     for path <- ["/fleets/fleet_unknown", "/fleets/fleet_unknown/rooms"] do
       assert html_response(browser.(path), 404) =~ "We can’t find that page"

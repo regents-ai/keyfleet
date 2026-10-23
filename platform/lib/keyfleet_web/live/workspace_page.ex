@@ -47,6 +47,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.Endpoint
+  alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.RoomsLive
 
@@ -1133,7 +1134,7 @@ defmodule KeyfleetWeb.WorkspacePage do
         seq: seq,
         path:
           if(name && Regex.match?(@room_slug, room),
-            do: "#{Keyfleet.Fleets.path(fleet_id)}/rooms/#{room}"
+            do: KeyLinks.room_path(fleet_id, room)
           )
       }
     end

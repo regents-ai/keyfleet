@@ -8,7 +8,7 @@ import {prepareFleet, sayInPublic} from "./support/fleet_chain"
 // writes posts of its own, so a retried worker's posts are never mistaken for
 // them.
 const fleet = "fleet_tech_classic"
-const room = `/classic/1/rooms/general`
+const room = `/classic/1?room=general`
 const loud = "0x7777777777777777777777777777777777777777"
 const quiet = "0x8888888888888888888888888888888888888888"
 
@@ -38,8 +38,8 @@ test("a key muted on one page is hidden on every page of the same person, and co
   await installAuthenticatedPrivy(other, "valid")
   const otherErrors = await openRoom(other)
 
-  const loudPost = (on: Page) => on.getByText(loudText)
-  const quietPost = (on: Page) => on.getByText(quietText)
+  const loudPost = (on: Page) => on.locator("#rooms-thread").getByText(loudText)
+  const quietPost = (on: Page) => on.locator("#rooms-thread").getByText(quietText)
   await expect(loudPost(page)).toBeVisible()
   await expect(page.locator("#rooms-muted")).toHaveCount(0)
 
@@ -67,7 +67,7 @@ test("a visitor who is not signed in is offered no mute", async ({page}) => {
   sayInPublic(fleet, loud, text)
   const errors = await openRoom(page)
 
-  await expect(page.getByText(text)).toBeVisible()
+  await expect(page.locator("#rooms-thread").getByText(text)).toBeVisible()
   await expect(page.getByRole("button", {name: /Mute Key/})).toHaveCount(0)
   expect(errors).toEqual([])
 })

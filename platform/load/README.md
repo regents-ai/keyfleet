@@ -109,7 +109,7 @@ A virtual user is one open page. It picks a page, by weight:
 | Classic #1 | `/classic/1` | 10 |
 | Regents Club hall | `/app/fleets/regents_club` | 15 |
 | Regents Club key map | `/app/fleets/regents_club?view=map` | 10 |
-| Public room | `/app/fleets/regents_club/rooms/general` | 15 |
+| Public room | `/app/fleets/regents_club?room=general` | 15 |
 
 Then, as the site's own browser code does (`assets/js/app.ts` with Phoenix
 LiveView 1.2):

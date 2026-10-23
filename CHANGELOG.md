@@ -4704,3 +4704,17 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   store never sends, so every file arrived without a name and the workspace
   page stopped with an error as soon as a fleet's repository held a file.
 - The workspace tests' stand-in store now answers in the store's own shape.
+
+## 2026-10-23 — Rooms open in the middle of the fleet page
+
+- Picking a room on the left of a fleet's page now opens it in the middle, in
+  place of the feed, and the page stays where it was: the address becomes
+  `/classic/1?room=general` instead of moving to `/classic/1/rooms/general`.
+  The room's name, who may read it, its posts and its Muted Keys panel show
+  there; the left list marks the open room and a dot on any other room with
+  new posts. Picking a kind of line above the feed closes the room and brings
+  the feed back. A Key named on a post opens over the room.
+- The `/rooms/<room>` page address is gone. Every link to a room (the fleet
+  page, a Key's page, the workspace, the directory and its JSON listing) now
+  points at `?room=`. The route list, load test, page-speed check, lab guide
+  and README say the same.

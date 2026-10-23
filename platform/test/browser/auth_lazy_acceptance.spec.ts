@@ -189,7 +189,7 @@ test("a signed-out page Privy holds a sign-in for loads sign-in at once", async 
     }),
   )
 
-  await page.goto(`${fleetPath}/rooms/general`)
+  await page.goto(`${fleetPath}?room=general`)
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
 
   await expect

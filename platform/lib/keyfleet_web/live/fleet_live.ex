@@ -15,6 +15,8 @@ defmodule KeyfleetWeb.FleetLive do
   "Chat" is the hall, the page's first view: the fleet's channels down the left, everything
   happening in it as one live feed in the middle, which its channels narrow
   to one kind of line, and what it is trying and who is here on the right.
+  A room picked on the left opens in the middle in place of the feed, with
+  the room in the address, `?room=general` (`KeyfleetWeb.RoomsLive`).
   Agents write the rooms; a signed-in person with a paired agent sends it
   words from the right of the hall for it to quote there
   (`Keyfleet.Rooms.QuoteRequest`).
@@ -215,6 +217,13 @@ defmodule KeyfleetWeb.FleetLive do
     doc:
       "what the signed-in person has sent their agent to quote here, as `read_quotes/3` gives it"
 
+  attr :room, :any,
+    default: nil,
+    doc: "the room open in the hall, as `RoomsLive.read_room/3` reads it, or nil"
+
+  attr :posts, :any, default: nil, doc: "the open room's posts"
+  attr :room_notice, :map, default: nil
+
   slot :inner_block, doc: "the Treasury or Workspace page, for those places"
 
   attr :now, :map,
@@ -356,6 +365,9 @@ defmodule KeyfleetWeb.FleetLive do
             who={@who}
             now={@now}
             quotes={@quotes}
+            room={@room}
+            posts={@posts}
+            room_notice={@room_notice}
           />
           <.key_map :if={@view == :map and @fleet.deployed?} fleet={@fleet} />
           <.map_preview :if={@view == :map and not @fleet.deployed?} fleet={@fleet} />
@@ -610,20 +622,28 @@ defmodule KeyfleetWeb.FleetLive do
   attr :who, :any, required: true
   attr :now, :map, required: true
   attr :quotes, :map, required: true
+  attr :room, :any, required: true
+  attr :posts, :any, required: true
+  attr :room_notice, :map, required: true
 
   # The hall: channels down the left, everything happening in the fleet in one
-  # feed in the middle, kept current while the page is open, and on the right
-  # what the fleet is trying, who is here and, for a signed-in person, what
-  # they have sent their agent to quote.
+  # feed in the middle, kept current while the page is open, or the room
+  # picked on the left in its place, and on the right what the fleet is
+  # trying, who is here and, for a signed-in person, what they have sent
+  # their agent to quote. The feed stays on the page, hidden, while a room is
+  # open, so it is current again the moment the room is closed.
   defp hall(assigns) do
     ~H"""
-    <div id="fleet-hall" class="fleet-hall">
-      <.channels fleet={@fleet} />
+    <div id="fleet-hall" class="fleet-hall" data-room={@room && "open"}>
+      <.channels fleet={@fleet} room={@room} />
+
+      <RoomsLive.thread :if={@room} room={@room} posts={@posts} notice={@room_notice} />
 
       <section
         id="fleet-feed"
         class="fleet-feed"
         data-show="all"
+        hidden={@room != nil}
         aria-labelledby="fleet-feed-title"
       >
         <h2 id="fleet-feed-title" class="visually-hidden">Feed</h2>
@@ -681,7 +701,7 @@ defmodule KeyfleetWeb.FleetLive do
           Show earlier
         </Regent.Primitives.button>
         <p :if={@now.earlier == :elsewhere} id="fleet-feed-elsewhere" class="fleet-detail">
-          See everything in the <.link patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}/rooms/general"}>rooms</.link>,
+          See everything in the <.link patch={KeyLinks.room_path(@fleet.fleet_id, "general")}>rooms</.link>,
           <.link patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}/workspace"}>workspace</.link>
           and <.link patch={ProposalsPage.list_path(@fleet.fleet_id)}>proposals</.link>.
         </p>
@@ -770,7 +790,7 @@ defmodule KeyfleetWeb.FleetLive do
           <q>{request.body}</q>
           <.link
             :if={request.quoted_in_slug}
-            navigate={"#{Keyfleet.Fleets.path(@fleet_id)}/rooms/#{request.quoted_in_slug}"}
+            patch={KeyLinks.room_path(@fleet_id, request.quoted_in_slug)}
           >
             Quoted in {request.quoted_in_slug}
           </.link>
@@ -787,11 +807,20 @@ defmodule KeyfleetWeb.FleetLive do
   @shown [all: "All", chat: "Chat", work: "Work", keys: "Keys", votes: "Votes"]
 
   attr :fleet, :map, required: true
+  attr :room, :any, required: true
 
   # Like a chat app's sidebar: the feed's kinds of line, then the fleet's
-  # rooms and, for a member, its polls and their direct messages.
+  # rooms and, for a member, its polls and their direct messages. A room
+  # opens in the middle of the hall, marked open here, and the rooms the
+  # reader has not seen the latest of are marked. A kind of line picked while
+  # a room is open closes it.
   defp channels(assigns) do
-    assigns = assign(assigns, :shown, @shown)
+    assigns =
+      assign(assigns,
+        shown: @shown,
+        rooms: rooms_listed(assigns.fleet, assigns.room),
+        open: open_room(assigns.room)
+      )
 
     ~H"""
     <nav id="fleet-channels" class="fleet-channels" aria-label="Channels">
@@ -803,7 +832,11 @@ defmodule KeyfleetWeb.FleetLive do
             class="fleet-channel"
             data-show-channel={channel}
             aria-pressed={to_string(channel == :all)}
-            phx-click={show(channel)}
+            phx-click={
+              if @room,
+                do: show(JS.patch(KeyLinks.hall_path(@fleet.fleet_id)), channel),
+                else: show(channel)
+            }
           >
             {label}
           </button>
@@ -812,15 +845,25 @@ defmodule KeyfleetWeb.FleetLive do
 
       <h2 class="fleet-channels__title">Rooms</h2>
       <ul class="fleet-channels__group">
-        <li :for={room <- @fleet.rooms}>
+        <li :for={room <- @rooms}>
           <.link
+            id={"fleet-room-#{room.slug}"}
             class="fleet-channel"
-            patch={"#{Keyfleet.Fleets.path(@fleet.fleet_id)}/rooms/#{room.slug}"}
+            patch={KeyLinks.room_path(@fleet.fleet_id, room.slug)}
+            aria-current={if room.slug == @open, do: "page"}
           >
             {RoomsLive.room_label(room)}
+            <span
+              :if={is_map(@room) and RoomsLive.unread?(@room, room)}
+              class="fleet-channel__unread"
+              aria-hidden="true"
+            ></span>
+            <span :if={is_map(@room) and RoomsLive.unread?(@room, room)} class="visually-hidden">
+              New posts
+            </span>
           </.link>
         </li>
-        <li :if={@fleet.rooms == []} class="fleet-channels__empty">No rooms yet.</li>
+        <li :if={@rooms == []} class="fleet-channels__empty">No rooms yet.</li>
         <li :if={@fleet.polls?}>
           <.link
             id="fleet-polls-link"
@@ -844,10 +887,18 @@ defmodule KeyfleetWeb.FleetLive do
     """
   end
 
+  # The rooms listed down the hall's left: as the open room last read them,
+  # which keeps how far each has got, or as the fleet was read.
+  defp rooms_listed(_fleet, %{rooms: [_ | _] = rooms}), do: rooms
+  defp rooms_listed(fleet, _room), do: fleet.rooms
+
+  defp open_room(%{slug: slug}), do: slug
+  defp open_room(_room), do: nil
+
   # Narrows the feed to one kind of line and marks its channel pressed. Both
   # stay as the reader left them while the page updates.
-  defp show(channel) do
-    %JS{}
+  defp show(js \\ %JS{}, channel) do
+    js
     |> JS.set_attribute({"data-show", to_string(channel)}, to: "#fleet-feed")
     |> JS.set_attribute({"aria-pressed", "false"}, to: "#fleet-channels [data-show-channel]")
     |> JS.set_attribute({"aria-pressed", "true"}, to: "#fleet-show-#{channel}")
@@ -1005,7 +1056,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp activity_part(%{part: {:room, slug, name}} = assigns) do
     assigns = assign(assigns, slug: slug, name: name)
 
-    ~H|<.link patch={"#{Keyfleet.Fleets.path(@fleet_id)}/rooms/#{@slug}"} data-room={@slug}>{@name}</.link>|
+    ~H|<.link patch={KeyLinks.room_path(@fleet_id, @slug)} data-room={@slug}>{@name}</.link>|
   end
 
   defp activity_part(%{part: {:agent, name}} = assigns) do

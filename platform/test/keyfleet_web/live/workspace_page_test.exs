@@ -490,21 +490,21 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}/rooms/business"]),
+               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}?room=business"]),
                "Message 4 in Business"
              )
 
       # An open room goes by the name its members gave it.
       assert has_element?(
                view,
-               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}/rooms/open-2"]),
+               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}?room=open-2"]),
                "Message 1 in Hull survey"
              )
 
       # So does a room an agent created.
       assert has_element?(
                view,
-               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}/rooms/ship-ops"]),
+               ~s(#workspace-discussion a[href="#{Keyfleet.Fleets.path(@fleet)}?room=ship-ops"]),
                "Message 3 in Ship ops"
              )
 

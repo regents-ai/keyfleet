@@ -1,6 +1,7 @@
 @layer regents-product {
-/* The rooms page stands on the Key grammar: one ground, hairline panels, the
-   display face for headings and a mono voice for kickers. */
+/* A room opens in the middle of its fleet's hall; the messages page shares
+   its grammar: one ground, hairline panels, the display face for headings
+   and a mono voice for kickers. */
 
 .rooms-page {
   display: grid;
@@ -16,13 +17,16 @@
 }
 
 .rooms-page h1,
-.rooms-page h2 {
+.rooms-page h2,
+.rooms-thread h2,
+.rooms-thread h3 {
   margin: 0;
   font-family: var(--font-family-title);
   font-weight: 400;
 }
 
-.rooms-page p {
+.rooms-page p,
+.rooms-thread p {
   margin: 0;
 }
 
@@ -53,22 +57,11 @@
   outline: none;
 }
 
-.rooms-lede {
-  max-width: 56ch;
-  color: var(--color-fg-muted);
-  font-size: 1.05rem;
-  line-height: 1.5;
-}
-
 .rooms-grid {
   display: grid;
   grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
   gap: 1.5rem;
   align-items: start;
-}
-
-.rooms-grid:not(:has(> .rooms-side)) {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 .rooms-panel {
@@ -78,27 +71,14 @@
   justify-items: start;
 }
 
-.rooms-panel h2 {
+.rooms-panel h2,
+.rooms-panel h3 {
   font-size: 1.35rem;
   line-height: 1.1;
 }
 
-.rooms-list ul {
-  display: grid;
-  gap: 0.5rem;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.rooms-list a[aria-current="page"] {
-  text-decoration: none;
-  font-weight: 600;
-}
-
-/* A room or conversation with something new shows a small dot after its
-   name. The dot keeps its place when there is nothing new. */
+/* A conversation with something new shows a small dot after its name. The
+   dot keeps its place when there is nothing new. */
 .rooms-unread {
   display: inline-block;
   inline-size: 0.5rem;
@@ -115,7 +95,6 @@
 
 /* The name, its tag and its dot sit in one row, so the underline ends with
    the name. */
-.rooms-list li > a,
 .dms-list li > a {
   display: inline-flex;
   align-items: center;
@@ -123,6 +102,33 @@
 
 .rooms-thread {
   width: 100%;
+}
+
+/* In the hall the room takes the feed's place, spaced as the feed is. */
+.fleet-hall > .rooms-thread {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: 0.75rem var(--rg-panel-padding);
+}
+
+.rooms-thread__head {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.rooms-thread__head h2 {
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+
+.rooms-thread__head h2:focus {
+  outline: none;
+}
+
+.rooms-posts {
+  display: grid;
+  gap: 1rem;
 }
 
 /* A room for Keys only offers signing in and General side by side, wrapping on a phone. */
@@ -236,12 +242,6 @@
   font-weight: 400;
 }
 
-.rooms-side {
-  display: grid;
-  gap: 1.5rem;
-  min-width: 0;
-}
-
 .rooms-muted ul {
   display: grid;
   gap: 0.5rem;
@@ -303,44 +303,9 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  /* The rooms run in one row that scrolls sideways, so the open room's posts
-     start just under it; the Keys you muted wait below the posts. */
-  .rooms-side {
-    display: contents;
-  }
-
+  /* The Keys you muted wait below the posts. */
   .rooms-muted {
     order: 1;
-  }
-
-  .rooms-list {
-    min-inline-size: 0;
-  }
-
-  .rooms-list {
-    padding-block: 0.5rem;
-  }
-
-  .rooms-list h2 {
-    display: none;
-  }
-
-  .rooms-list ul {
-    display: flex;
-    gap: 1.25rem;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-  }
-
-  .rooms-list li {
-    flex: none;
-  }
-
-  /* Each room is a full finger's height. */
-  .rooms-list li > a {
-    min-height: 2.75rem;
-    white-space: nowrap;
   }
 
   /* The Key a post was written as, which opens its page, is a full

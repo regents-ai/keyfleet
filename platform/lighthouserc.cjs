@@ -23,7 +23,7 @@ const pages = [
   "/",
   "/classic/1",
   "/app/fleets/regents_club",
-  "/classic/1/rooms/general",
+  "/classic/1?room=general",
   `/classic/1/polls/${poll}`,
 ]
 

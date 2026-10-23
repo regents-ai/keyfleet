@@ -85,12 +85,11 @@ defmodule KeyfleetWeb.RouteCatalog do
   ]
 
   # The pages every fleet has, each under the fleet's own address
-  # (`Keyfleet.Fleets.path/1`): the fleet's page itself, then its rooms,
-  # workspace and its code, proposals, treasury and polls, and each of its
-  # Keys' pages and messages.
+  # (`Keyfleet.Fleets.path/1`): the fleet's page itself, whose hall also opens
+  # its rooms (`?room=`), then its workspace and its code, proposals, treasury
+  # and polls, and each of its Keys' pages and messages.
   @fleet_pages [
     {"", :fleet, %{}},
-    {"/rooms/:slug", :rooms, %{slug: :slug}},
     {"/workspace", :workspace, %{}},
     {"/workspace/:object_id", :workspace_item, %{object_id: :object_id}},
     {"/code/:repository/commits/:commit", :code_commit,
@@ -139,7 +138,6 @@ defmodule KeyfleetWeb.RouteCatalog do
     keys: {:keys, :product, "Keyfleet", "Key", "/", [:profile_actions], :product, %{}},
     dms: {:dms, :product, "Keyfleet", "Messages", "/", [:profile_actions], :product, %{}},
     dm: {:dm, :product, "Keyfleet", "Messages", "/", [:profile_actions], :product, %{}},
-    rooms: {:rooms, :product, "Keyfleet", "Rooms", "/", [:profile_actions], :product, %{}},
     workspace:
       {:workspace, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
     workspace_item:

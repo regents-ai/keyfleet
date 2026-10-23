@@ -7,7 +7,7 @@ defmodule KeyfleetWeb.Vitals do
   and no report names a person, an address or a Key.
 
   A report names its page by the route pattern the router matched, such as
-  `/classic/1/rooms/:slug`, never by its address, so no Key number, room or
+  `/classic/1/polls/:poll_id`, never by its address, so no Key number, room or
   poll reaches a label. Only the patterns of `KeyfleetWeb.RouteCatalog`, the
   site's pages, are counted. The pattern is the page the visit opened on: live
   navigation keeps the document, so LCP, FCP and TTFB are that page's own, and

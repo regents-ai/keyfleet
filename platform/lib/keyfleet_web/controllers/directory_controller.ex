@@ -8,7 +8,7 @@ defmodule KeyfleetWeb.DirectoryController do
   anything the directory gives can't be read, it answers 503 and says so.
 
   A browser that opens `/fleets/<id>` or `/fleets/<id>/rooms` is sent to the
-  fleet's page or its Public room; any other request there is sent to the
+  fleet's page or its Public room, open in the fleet's hall; any other request there is sent to the
   fleet's Markdown. An unknown fleet is the site's not-found page, in HTML for a
   browser and in Markdown, pointing to `/fleets.md`, for anything else.
   """
@@ -36,7 +36,7 @@ defmodule KeyfleetWeb.DirectoryController do
   end
 
   def rooms(conn, %{"fleet_id" => fleet_id}),
-    do: open_fleet(conn, fleet_id, "/rooms/general")
+    do: open_fleet(conn, fleet_id, "?room=general")
 
   defp fleet_md(conn, fleet_id) do
     case read(fn -> Directory.fleet(fleet_id) end) do

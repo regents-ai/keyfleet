@@ -30,7 +30,7 @@ const stops: Stop[] = [
   at("Regents Club Keys", `${club}?view=map`),
   at("Regents Club members", `${club}?view=members`),
   at("a Key", `${club}/keys/1`),
-  at("a room", `${club}/rooms/general`),
+  at("a room", `${club}?room=general`),
   at("the polls", `${club}/polls`),
   at("About", "/about"),
   at("Opportunities", "/opportunities"),

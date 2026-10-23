@@ -379,14 +379,36 @@
   background: var(--ash-panel-strong);
 }
 
-.fleet-channel[aria-pressed="true"] {
+.fleet-channel[aria-pressed="true"],
+.fleet-channel[aria-current="page"] {
   background: var(--ash-panel-strong);
   box-shadow: inset 3px 0 0 var(--ash-accent);
+}
+
+/* While a room is open the feed is hidden, so no kind of line shows as
+   picked: the open room alone is marked. */
+.fleet-hall[data-room] .fleet-channel[aria-pressed="true"] {
+  background: none;
+  box-shadow: none;
+}
+
+/* A room with posts the reader hasn't seen shows a small dot after its name. */
+.fleet-channel__unread {
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  margin-inline-start: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-fg);
 }
 
 .fleet-channels__empty {
   padding: 0 0.5rem;
   color: var(--color-fg-muted);
+}
+
+/* While a room is open in its place, the feed stays on the page, hidden. */
+.fleet-feed[hidden] {
+  display: none;
 }
 
 .fleet-feed {
@@ -921,8 +943,7 @@
 @supports (animation-timeline: scroll()) {
   .fleet-bar__nav,
   .fleet-channels,
-  .fleet-entry__cards,
-  .rooms-list ul {
+  .fleet-entry__cards {
     mask-image: linear-gradient(
       to right,
       transparent,
@@ -958,6 +979,10 @@
 #fleet-channels button.fleet-channel:hover,
 #fleet-channels button.fleet-channel[aria-pressed="true"] {
   background: var(--ash-panel-strong);
+}
+
+#fleet-hall[data-room] #fleet-channels button.fleet-channel[aria-pressed="true"]:not(:hover) {
+  background: none;
 }
 
 /* The Keys tab's Grid and List, as one pill with the one on show filled. */

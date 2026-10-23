@@ -102,7 +102,7 @@ defmodule KeyfleetWeb.ShareCardControllerTest do
     keys_sold!(@club, [5, 2])
     FleetProposals.read(@club)
 
-    {image, alt} = ShareCard.image("/app/fleets/regents_club/rooms/general")
+    {image, alt} = ShareCard.image("/app/fleets/regents_club/workspace")
     assert image =~ "/share/regents_club.png?v="
 
     assert alt ==

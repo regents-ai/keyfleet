@@ -215,10 +215,31 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     read_now()
     {:ok, view, _html} = live(conn, @path)
 
-    assert has_element?(view, ~s(#fleet-channels a[href="#{@path}/rooms/general"]), "Public")
-    refute has_element?(view, ~s(#fleet-channels a[href="#{@path}/rooms/open-1"]))
-    refute has_element?(view, ~s(#fleet-channels a[href="#{@path}/rooms/open-2"]))
+    assert has_element?(view, ~s(#fleet-channels a[href="#{@path}?room=general"]), "Public")
+    refute has_element?(view, ~s(#fleet-channels a[href="#{@path}?room=open-1"]))
+    refute has_element?(view, ~s(#fleet-channels a[href="#{@path}?room=open-2"]))
     refute render(view) =~ "Hull survey"
+  end
+
+  # Picking a room used to leave the fleet's page for a page of the room.
+  test "a room picked in the hall opens in its middle, and a kind of line brings the feed back",
+       %{conn: conn} do
+    deploy!()
+    Keyfleet.Rooms.bootstrap_rooms!(Fleets.catalog_ids())
+    read_now()
+    {:ok, view, _html} = live(conn, @path)
+
+    view |> element("#fleet-room-general") |> render_click()
+    assert_patch(view, @path <> "?room=general")
+    assert has_element?(view, ~s(#fleet-tab-hall[aria-current="page"]))
+    assert has_element?(view, "#fleet-hall #rooms-thread-title", "Public")
+    assert has_element?(view, ~s(#fleet-room-general[aria-current="page"]))
+    assert has_element?(view, "#fleet-feed[hidden]")
+
+    view |> element("#fleet-show-work") |> render_click()
+    assert_patch(view, @path)
+    refute has_element?(view, "#rooms-thread")
+    refute has_element?(view, "#fleet-feed[hidden]")
   end
 
   # An open fleet's rooms are opened by the deploy that opens it; until then
@@ -229,7 +250,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     {:ok, view, _html} = live(conn, "/classic/1")
 
     assert text(view, "#fleet-channels .fleet-channels__empty") == "No rooms yet."
-    refute has_element?(view, ~s(#fleet-channels a[href*="/rooms/"]))
+    refute has_element?(view, ~s(#fleet-channels a[href*="room="]))
   end
 
   test "an agent on a fleet's page is led to that fleet's own summary, which answers",
@@ -403,13 +424,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       refute html =~ "Keys sold"
     end
 
-    test "its rooms, workspace, proposals and treasury lead back to its page", %{conn: conn} do
+    test "its workspace, proposals and treasury lead back to its page, which opens no room",
+         %{conn: conn} do
       Keyfleet.Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
-      {:ok, view, _html} = live(conn, @path)
+      {:ok, view, _html} = live(conn, @path <> "?room=general")
+      assert has_element?(view, "#fleet-soon-title", "Sales open soon")
+      refute has_element?(view, "#rooms-thread")
 
-      for page <-
-            ~w(/rooms/general /workspace /workspace/task%231 /proposals /proposals/1 /treasury) do
+      for page <- ~w(/workspace /workspace/task%231 /proposals /proposals/1 /treasury) do
         assert {:error, {:live_redirect, %{to: @path}}} = live(conn, @path <> page)
 
         # Reached from inside the shell, the same page patches back.
@@ -1275,7 +1298,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       line = "#fleet-feed-posts-#{post.id}[data-kind=\"post\"]"
       assert has_element?(view, ~s(#{line} a[data-key="1"]))
-      assert has_element?(view, ~s(#{line} a[data-room="general"][href="#{@path}/rooms/general"]))
+      assert has_element?(view, ~s(#{line} a[data-room="general"][href="#{@path}?room=general"]))
       refute has_element?(view, "#fleet-feed-list b")
       refute has_element?(view, "#fleet-feed-list script")
       assert text(view, line) =~ "<b>Hull</b> <script>alert(1)</script>"
@@ -1333,7 +1356,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert has_element?(
                view,
-               ~s(#fleet-quote-#{request.id} a[href="#{@path}/rooms/coding"]),
+               ~s(#fleet-quote-#{request.id} a[href="#{@path}?room=coding"]),
                "Quoted in coding"
              )
     end
@@ -1536,7 +1559,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       for _ <- 1..3, do: view |> element("#fleet-feed-earlier") |> render_click()
 
       refute has_element?(view, "#fleet-feed-earlier")
-      assert has_element?(view, ~s(#fleet-feed-elsewhere a[href="#{@path}/rooms/general"]))
+      assert has_element?(view, ~s(#fleet-feed-elsewhere a[href="#{@path}?room=general"]))
       assert has_element?(view, ~s(#fleet-feed-elsewhere a[href="#{@path}/workspace"]))
       assert has_element?(view, ~s(#fleet-feed-elsewhere a[href="#{@path}/proposals"]))
     end

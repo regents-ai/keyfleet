@@ -116,11 +116,11 @@ test("the Public room opens from the hall, and anyone can read it", async ({page
   await openClub(page)
 
   await page.locator("#fleet-channels").getByRole("link", {name: "Public", exact: true}).click()
-  await expect(page).toHaveURL(/\/rooms\/general$/)
-  const title = page.getByRole("heading", {level: 1, name: "Public", exact: true})
+  await expect(page).toHaveURL(/\?room=general$/)
+  const title = page.getByRole("heading", {level: 2, name: "Public", exact: true})
   await expectOnFirstScreen(page, title, "the room's name")
   await expect(page.locator("#rooms-thread-list [data-post]").first()).toBeVisible()
-  await expect(page.locator("#rooms-page")).toContainText("Anyone can read this room.")
+  await expect(page.locator("#rooms-thread")).toContainText("Anyone can read this room.")
   await expectComfortable(page, errors)
 })
 

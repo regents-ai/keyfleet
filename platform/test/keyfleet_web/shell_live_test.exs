@@ -32,7 +32,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
     Fleets.bootstrap_catalog!()
     ChainHelpers.deploy!("fleet_tech_classic")
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
-    {:ok, view, _html} = live(conn, "/classic/1/rooms/general")
+    {:ok, view, _html} = live(conn, "/classic/1?room=general")
 
     assert has_element?(view, "#shell-sidebar a[aria-current=page]", "Classic #1")
   end
@@ -683,12 +683,17 @@ defmodule KeyfleetWeb.ShellLiveTest do
     ChainHelpers.deploy!("fleet_tech_classic")
     ChainHelpers.deploy!("fibonacci_cascade")
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
+    FleetNow.read("fleet_tech_classic")
     FleetNow.read("fibonacci_cascade")
-    {:ok, view, _html} = live(conn, "/classic/1/rooms/general")
+    {:ok, view, _html} = live(conn, "/classic/1?room=general")
 
-    # the Public room's own posts too, while it is open (`Keyfleet.Rooms.Message.topic/2`).
+    # A room open in the hall hears the fleet's rooms as anyone does, and
+    # the Public room's own posts too (`Keyfleet.Rooms.Message.topic/2`).
     {[_general], heard} =
-      Enum.split_with(topics(view), &String.starts_with?(&1, "public:room:fleet_tech_classic:"))
+      view
+      |> topics()
+      |> Enum.reject(&String.starts_with?(&1, "shared_reading:"))
+      |> Enum.split_with(&String.starts_with?(&1, "public:room:fleet_tech_classic:"))
 
     assert heard ==
              Enum.sort([

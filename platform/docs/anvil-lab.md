@@ -37,7 +37,7 @@ Sign in at http://localhost:4097/account with the wallet you started the lab wit
 
 - Fleet page, http://localhost:4097/app/fleets/fleet_tech_classic: **Purchase Key**, Approve, then
   Buy. Key 1 shows as yours, on the page and on Account.
-- Rooms, http://localhost:4097/app/fleets/fleet_tech_classic/rooms/general: once you hold a Key,
+- Rooms, http://localhost:4097/app/fleets/fleet_tech_classic?room=general: once you hold a Key,
   you can post.
 - Proposals, http://localhost:4097/app/fleets/fleet_tech_classic/proposals: after a 2-day jump,
   propose with your Key; a payment or advance needs a 7-day jump. It names one token and a share

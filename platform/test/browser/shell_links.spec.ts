@@ -81,7 +81,7 @@ async function enterShell(page: Page) {
 }
 
 const fleetPage: Stop = {path: fleetPath, shows: "#fleet-view"}
-const general: Stop = {path: `${fleetPath}/rooms/general`, shows: "#rooms-page"}
+const general: Stop = {path: `${fleetPath}?room=general`, shows: "#rooms-thread"}
 const board: Stop = {path: `${fleetPath}/workspace`, shows: "#workspace-page"}
 const plan: Stop = {path: planPath, shows: "#workspace-item-page"}
 const proposals: Stop = {path: `${fleetPath}/proposals`, shows: "#proposals-page"}
@@ -90,7 +90,7 @@ const account: Stop = {path: "/account", shows: "#account-page"}
 
 test("the walk from home through every page, back, forward and the sidebar keeps one shell", async ({page}) => {
   const sidebar = page.locator("#shell-sidebar")
-  const keyProfile: Stop = {path: `${fleetPath}?key=${key}`, shows: "dialog#key-profile"}
+  const keyProfile: Stop = {path: `${fleetPath}?room=general&key=${key}`, shows: "dialog#key-profile"}
 
   // Home is its own page and links to no Syndicate page, so the walk enters
   // the shell with one full load of the fleet's page.
@@ -110,7 +110,7 @@ test("the walk from home through every page, back, forward and the sidebar keeps
     [page.locator("#workspace-goals .workspace-row-title", {hasText: "Research plan"}), plan],
     [page.locator("#workspace-discussion a"), general],
     // Other specs may have posted in the Public room too; this one's Key is the one to open.
-    [page.locator(`#rooms-page .rooms-author a[href$="?key=${key}"]`).first(), keyProfile],
+    [page.locator(`#rooms-thread .rooms-author a[href$="&key=${key}"]`).first(), keyProfile],
     [page.locator("#key-profile-recent a").first(), general],
     [sidebar.getByRole("link", {name: "Account"}), account],
   ]
@@ -220,7 +220,7 @@ test("on a phone, a Workstream item keeps its closing quote beside its name", as
 // phone width puts that word at the end of a line.
 test("on a narrow phone, a footnote's tip stays beside its last word", async ({page}) => {
   for (const [path, tip] of [
-    [`${fleetPath}/rooms/general`, "rooms-who-posts"],
+    [`${fleetPath}?room=general`, "rooms-who-posts"],
     [`${fleetPath}/polls`, "polls-who-tip"],
   ]) {
     await page.setViewportSize({width: 390, height: 800})

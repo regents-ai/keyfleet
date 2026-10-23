@@ -233,11 +233,10 @@ defmodule KeyfleetWeb.ShellLive do
   defp name_fleet(params, %{fleet_id: nil}), do: params
   defp name_fleet(params, %{fleet_id: fleet_id}), do: Map.put(params, "fleet_id", fleet_id)
 
-  # A coming-soon fleet has only its own page: its rooms, workspace,
-  # proposals, treasury and polls open with the fleet.
+  # A coming-soon fleet has only its own page: its workspace, proposals,
+  # treasury and polls open with the fleet, and its hall opens no room.
   defp coming_soon_inside?(%{route_id: route_id}, %{"fleet_id" => fleet_id})
        when route_id in [
-              :rooms,
               :workspace,
               :workspace_item,
               :code_commit,
@@ -432,8 +431,8 @@ defmodule KeyfleetWeb.ShellLive do
   defp notice(_message, %{assigns: %{load_failed?: true}} = socket), do: {:noreply, socket}
 
   # A new post of the room anyone reads, published whole on that room's own
-  # topic (`Keyfleet.Rooms.Message.topic/2`), which the rooms page listens to
-  # while the Public room is open, and shows as it came.
+  # topic (`Keyfleet.Rooms.Message.topic/2`), which the hall listens to while
+  # the Public room is open in it, and shows as it came.
   defp notice(%Broadcast{topic: "public:room:" <> _} = notice, socket),
     do: RoomsLive.handle_info(notice, socket)
 
@@ -443,17 +442,19 @@ defmodule KeyfleetWeb.ShellLive do
   # it; the place the notice names is never shown. The Public room's posts come whole
   # just before their head, so a page of the Public room is level with the head when
   # it arrives and reads nothing; only a post whose notice was lost leaves it
-  # behind.
+  # behind. A member's hall reads its feed, hidden under the room, again.
   defp notice(
          %Broadcast{event: "room_head", payload: %{room_id: room_id, seq: seq}},
          %{assigns: %{room: %{room_id: room_id, last_seq: last_seq}}} = socket
        )
-       when seq > last_seq,
-       do: {:noreply, RoomsLive.show_new_posts(socket)}
+       when seq > last_seq do
+    socket = RoomsLive.show_new_posts(socket)
+    {:noreply, FleetLive.refresh_activity_soon(socket, fleet_on_show(socket))}
+  end
 
-  # The page only hears about the rooms of the fleet it shows. The rooms page
-  # marks the room in its list as having something new, and a member's hall
-  # reads its feed again.
+  # The page only hears about the rooms of the fleet it shows. The hall marks
+  # the room in its list as having something new when a room is open, and a
+  # member's hall reads its feed again.
   defp notice(%Broadcast{event: "room_head", payload: head}, socket) do
     socket = RoomsLive.note_head(socket, head)
     {:noreply, FleetLive.refresh_activity_soon(socket, fleet_on_show(socket))}
@@ -740,6 +741,9 @@ defmodule KeyfleetWeb.ShellLive do
           send_agent_open={@send_agent_open}
           pass_note={@pass_note}
           quotes={@quotes}
+          room={@room}
+          posts={@streams.posts}
+          room_notice={@room_notice}
         >
           <WorkspaceLive.board
             :if={@route_spec.route_id == :workspace}
@@ -802,13 +806,6 @@ defmodule KeyfleetWeb.ShellLive do
           form={@dm_form}
           notice={@dm_notice}
           confirm_delete={@dm_confirm_delete}
-        />
-
-        <RoomsLive.page
-          :if={@route_spec.route_id == :rooms}
-          room={@room}
-          posts={@streams.posts}
-          notice={@room_notice}
         />
 
         <PollsLive.list
@@ -889,14 +886,19 @@ defmodule KeyfleetWeb.ShellLive do
       |> stream(:activity, [], reset: true)
 
   # What a page of the fleet hears of its rooms, workspace and votes besides
-  # its Keys: a page showing one of them hears it, and a member's page hears
+  # its Keys: a page showing one of them hears it (a room open in the hall
+  # hears the rooms), and a member's page hears
   # them all, since a member's feed is read again on each. Anyone else's
   # hall is drawn from the fleet's reading every such page shares
   # (`KeyfleetWeb.FleetNow`), which hears them once for all of those pages,
   # so their page hears only what a Key open over it shows: its wall, in
   # the rooms, and its votes and rewards. Each gives the fleet heard, or nil.
-  defp rooms_heard(socket, params, fleet_id),
-    do: if(fleet_id && (member?(socket, fleet_id) or Map.has_key?(params, "key")), do: fleet_id)
+  defp rooms_heard(socket, params, fleet_id) do
+    if fleet_id &&
+         (member?(socket, fleet_id) or Map.has_key?(params, "key") or
+            Map.has_key?(params, "room")),
+       do: fleet_id
+  end
 
   defp workspace_heard(socket, route_id, fleet_id),
     do: if(fleet_id && (route_id in @workspace_routes or member?(socket, fleet_id)), do: fleet_id)
@@ -913,7 +915,8 @@ defmodule KeyfleetWeb.ShellLive do
   # come from the readings every page shares, `Keyfleet.Agents.Here`), the
   # open key's profile when the key or one of its holder's changed, and the
   # map is told the changed keys' marks, or told to load again when too many
-  # changed to list. A hall drawn from the fleet's reading reads only the
+  # changed to list, and who may read the room open in the hall is read
+  # afresh. A hall drawn from the fleet's reading reads only the
   # reader's own Keys and profile; its figures come with the reading, and
   # it shows no map, which reads its Keys afresh when it is next shown.
   defp keys_changed(
@@ -928,6 +931,7 @@ defmodule KeyfleetWeb.ShellLive do
       |> KeyProfileLive.refresh_key_profile(token_ids)
       |> FleetLive.refresh_activity_soon(fleet_id)
       |> workspace_standing_changed(fleet_id)
+      |> RoomsLive.recheck_standing()
 
     if FleetLive.from_reading?(socket),
       do: {:noreply, socket},
@@ -939,8 +943,8 @@ defmodule KeyfleetWeb.ShellLive do
   defp keys_changed(%{assigns: %{polls: %{fleet_id: fleet_id}}} = socket, fleet_id, _token_ids),
     do: {:noreply, PollsLive.refresh(socket)}
 
-  # Keys changed in the fleet whose room is on show: who may read and post
-  # there is read afresh.
+  # Keys changed in a fleet not yet on sale whose room is open in its hall:
+  # who may read it is read afresh.
   defp keys_changed(%{assigns: %{room: %{fleet_id: fleet_id}}} = socket, fleet_id, _token_ids),
     do: {:noreply, RoomsLive.recheck_standing(socket)}
 
@@ -1005,7 +1009,7 @@ defmodule KeyfleetWeb.ShellLive do
       now ->
         socket
         |> assign(:fleet_class, now)
-        |> hear_as_class(fleet_id)
+        |> hear_as_class()
         |> FleetLive.class_changed(fleet_id)
         |> KeyProfileLive.class_changed(fleet_id)
     end
@@ -1013,15 +1017,14 @@ defmodule KeyfleetWeb.ShellLive do
 
   def reread_class(socket, _fleet_id), do: socket
 
-  # A room on show is heard by every class, each on its own topic; a page of
-  # the fleet hears what `rooms_heard/3` and the rest say its class hears.
-  defp hear_as_class(%{assigns: %{route_spec: %{route_id: route_id}}} = socket, fleet_id) do
+  # A page of the fleet hears what `rooms_heard/3` and the rest say its
+  # class hears, each class on its own topic.
+  defp hear_as_class(%{assigns: %{route_spec: %{route_id: route_id}}} = socket) do
     on_show = fleet_on_show(socket)
     params = socket.assigns.fleet_params || %{}
-    rooms = if route_id == :rooms, do: fleet_id, else: rooms_heard(socket, params, on_show)
 
     socket
-    |> listen_to(rooms)
+    |> listen_to(rooms_heard(socket, params, on_show))
     |> follow_workspace(workspace_heard(socket, route_id, on_show))
     |> follow_proposals(proposals_heard(socket, route_id, params, on_show))
   end
@@ -1059,12 +1062,11 @@ defmodule KeyfleetWeb.ShellLive do
   def may_read?(_socket, _fleet_id, _component), do: false
 
   # The fleet whose keys the page on show follows: the fleet's own page, one
-  # of its keys' pages, one of its rooms, its workspace, or its polls.
+  # of its keys' pages, its workspace, or its polls.
   defp keys_fleet(%{route_id: route_id}, %{"fleet_id" => fleet_id})
        when route_id in [
               :fleet,
               :keys,
-              :rooms,
               :workspace,
               :workspace_item,
               :code_commit,
@@ -1154,13 +1156,17 @@ defmodule KeyfleetWeb.ShellLive do
     end
   end
 
-  # The page starts listening before it reads, so a post that lands while it
-  # loads still reaches it; a notice for a post it already read is passed over.
-  defp load_room(socket, %{route_id: :rooms}, %{"fleet_id" => fleet_id, "slug" => slug}) do
-    socket
-    |> listen_to(fleet_id)
-    |> RoomsLive.read_room(fleet_id, slug)
-  end
+  # The room named in the address opens in the middle of its fleet's hall.
+  # The fleet's page has already started listening to the fleet's rooms
+  # (`rooms_heard/3`), so a post that lands while it loads still reaches it;
+  # a notice for a post it already read is passed over.
+  defp load_room(
+         %{assigns: %{fleet: %{fleet_id: fleet_id, coming_soon?: false}}} = socket,
+         %{route_id: :fleet},
+         %{"fleet_id" => fleet_id, "room" => slug} = params
+       )
+       when is_binary(slug) and not is_map_key(params, "view"),
+       do: RoomsLive.read_room(socket, fleet_id, slug)
 
   # A fleet's page keeps listening to the fleet's rooms, as its reader's
   # class hears them (`rooms_heard/3`).

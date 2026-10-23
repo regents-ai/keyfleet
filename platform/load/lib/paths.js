@@ -18,7 +18,7 @@ const MIX = [
   { name: "club_hall", path: CLUB, weight: 15 },
   // The Club's page of Keys, its map (KeyLinks.map_path/1).
   { name: "club_keys", path: `${CLUB}?view=map`, weight: 10 },
-  { name: "club_room", path: `${CLUB}/rooms/general`, weight: 15 },
+  { name: "club_room", path: `${CLUB}?room=general`, weight: 15 },
 ]
 
 function get(base, path) {

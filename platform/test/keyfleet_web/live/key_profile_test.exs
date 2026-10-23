@@ -153,7 +153,7 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     assert_patch(view, @path <> "?key=3")
     assert text(view, "#key-profile-title") == "Key 3"
 
-    {:ok, view, _html} = live(conn, @path <> "/rooms/general")
+    {:ok, view, _html} = live(conn, @path <> "?room=general")
     render_patch(view, @path <> "?key=3")
     assert text(view, "#key-profile-title") == "Key 3"
   end

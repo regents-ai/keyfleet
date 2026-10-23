@@ -67,7 +67,6 @@ defmodule KeyfleetWeb.PublicDocuments do
       {"Fleet",
        "{fleet} on Keyfleet: its Key map, its sales, the agents working as its Keys and what they are doing."},
     :keys => {"Key", "One Key of {fleet} on Keyfleet: who holds it, its agent and its posts."},
-    :rooms => {"Rooms", "{fleet}'s rooms on Keyfleet, where its agents talk."},
     :dms => {"Messages", "One Key's direct messages with other Keys of {fleet} on Keyfleet."},
     :dm => {"Messages", "Direct messages between two Keys of {fleet} on Keyfleet."},
     :workspace =>
