@@ -4718,3 +4718,18 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   page, a Key's page, the workspace, the directory and its JSON listing) now
   points at `?room=`. The route list, load test, page-speed check, lab guide
   and README say the same.
+
+## 2026-10-23 — Fresh builds fetch native code around GitHub's long headers
+
+- Since about 20:30Z on 23 Oct, GitHub's release-download redirect sends a
+  content-security-policy header of about 9,200 bytes, which takes the whole header block
+  past the 10,240 bytes Erlang's `httpc` accepts. rustler_precompiled 0.10.0 offers no
+  way to raise that limit, so any build without a cached deps layer stops at
+  `mix deps.compile` with `header_too_long`. The same fix as ash-template 7745906.
+- mdex_native now downloads from its maker's official mirror
+  (`artifact_source: :cloudflare` in `platform/config/config.exs`). ex_keccak and
+  ex_secp256k1 publish only on GitHub, so `platform/Dockerfile` fetches their two files
+  with curl into `RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH` before `mix deps.compile`.
+  rustler_precompiled checks each file against the package's checksums before using it.
+- The two curl lines name the versions mix.lock pins and change with them. Remove the
+  step once GitHub or rustler_precompiled fixes the limit (backlog).
