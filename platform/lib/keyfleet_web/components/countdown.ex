@@ -22,11 +22,13 @@ defmodule KeyfleetWeb.Components.Countdown do
 
   attr :lead, :string, default: nil, doc: "a `clock`'s words before its time"
   attr :done, :string, default: nil, doc: "a `clock`'s words once its time runs out"
+  attr :class, :string, default: nil
 
   def countdown(assigns) do
     ~H"""
     <span
       id={@id}
+      class={@class}
       phx-hook="Countdown"
       data-closes-at={DateTime.to_unix(@closes_at, :millisecond)}
       data-now={DateTime.to_unix(@now, :millisecond)}

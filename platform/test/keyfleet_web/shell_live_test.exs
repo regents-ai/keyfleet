@@ -5,6 +5,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
   alias Keyfleet.AccessContext.AccountControl
   alias Keyfleet.Accounts
   alias Keyfleet.Actors.System
+  alias Keyfleet.Chain.StubClient
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Fleets
   alias Keyfleet.Keys
@@ -12,6 +13,7 @@ defmodule KeyfleetWeb.ShellLiveTest do
   alias KeyfleetWeb.Components.Shell
   alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.RouteCatalog
+  alias RegentChain.Call
 
   test "an anonymous visitor to /account is asked to sign in, without private content", %{
     conn: conn
@@ -478,6 +480,47 @@ defmodule KeyfleetWeb.ShellLiveTest do
 
     view |> element("#account-keys a", "Key 5") |> render_click()
     assert_patch(view, "/cascade/1?key=5")
+  end
+
+  test "Account counts a new Key down to its first Treasury slice, and an older one shows nothing",
+       %{conn: conn} do
+    wallet = "0x7777777777777777777777777777777777777777"
+    Fleets.bootstrap_catalog!()
+    ChainHelpers.deploy!("fleet_tech_classic")
+    ChainHelpers.open_cursor!("fleet_tech_classic")
+    issue!("fleet_tech_classic", 2, wallet)
+    issue!("fleet_tech_classic", 3, wallet)
+
+    assert {:ok, account} =
+             Accounts.register_verified("did:privy:account-slice", wallet, [wallet],
+               actor: %System{}
+             )
+
+    young = DateTime.utc_now() |> DateTime.add(47 * 3600 + 120) |> DateTime.to_unix()
+
+    matures =
+      Call.encode("maturesAt(uint256)", [ChainHelpers.onchain_id("fleet_tech_classic", 2)])
+
+    StubClient.put_chain(
+      %{
+        number: 1_000,
+        hash: "0x" <> String.duplicate("c", 64),
+        timestamp: DateTime.utc_now(),
+        base_fee: 0
+      },
+      [],
+      calls: fn
+        _to, ^matures, _hash -> {:ok, <<young::256>>}
+        _to, _data, _hash -> {:ok, <<0::256>>}
+      end
+    )
+
+    {view, _html} = open_account(conn, account)
+
+    assert view |> element("#account-slice-fleet_tech_classic-2") |> render() =~
+             ~r/>Eligible in 47:0[12]:\d\d</
+
+    refute has_element?(view, "#account-slice-fleet_tech_classic-3")
   end
 
   test "where a person holds several Keys of a fleet, Account sets the one they post as", %{

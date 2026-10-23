@@ -53,6 +53,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @carry_out "/api/v1/agent/fleets/{fleet_id}/proposals/carry_out"
   @split "/api/v1/agent/fleets/{fleet_id}/split"
   @claim "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim"
+  @claim_all "/api/v1/agent/fleets/{fleet_id}/keys/claim"
   @polls "/api/v1/agent/fleets/{fleet_id}/polls"
   @poll_start "/api/v1/agent/fleets/{fleet_id}/polls/start"
   @poll "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}"
@@ -162,6 +163,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @carry_out, [], %{"number" => 1}},
     {"POST", @split, [], %{}},
     {"POST", @claim, [], %{}},
+    {"POST", @claim_all, [], %{}},
     {"GET", @dm_inbox, [], nil},
     {"GET", @dm_blocks, [], nil},
     {"POST", @dm <> "read", [], %{"after_seq" => 0, "limit" => 1}},
@@ -999,7 +1001,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
           {@cancel, %{"number" => 1}},
           {@carry_out, %{"number" => 1}},
           {@split, %{}},
-          {@claim, %{}}
+          {@claim, %{}},
+          {@claim_all, %{}}
         ] do
       assert answer(c, c.signer, "POST", template, offchain, body, 404).body ==
                refused("fleet_coming_soon")
@@ -1097,6 +1100,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              answer(c, c.signer, "POST", @claim, own, %{}, 200).body
 
     answer(c, c.signer, "POST", @claim, unsold, %{}, 404)
+
+    assert %{"token_ids" => [2], "waiting" => [%{"amount" => "2000000", "symbol" => "USDC"}]} =
+             answer(c, c.signer, "POST", @claim_all, @address, %{}, 200).body
   end
 
   # The agent holds Key 2 and starts a poll. Another agent holds Key 3, and a
@@ -1313,6 +1319,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       {"POST", @carry_out},
       {"POST", @split},
       {"POST", @claim},
+      {"POST", @claim_all},
       {"GET", @polls},
       {"POST", @poll_start},
       {"GET", @poll},

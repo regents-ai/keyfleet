@@ -3,10 +3,10 @@ defmodule KeyfleetWeb.AgentChainController do
   The transactions an agent's own wallet sends to act on a fleet's contracts:
   marking its keys present, proposing, voting, cancelling, carrying a
   proposal out, running the daily split, sending the REGENT staking share,
-  turning waiting USDC into REGENT and claiming a key's money. Each is
-  built by `Keyfleet.WalletSteps` for the signing agent's wallet, as the
-  site's buttons are built for a person's, from the chain read at the latest
-  block.
+  turning waiting USDC into REGENT and claiming one key's money or every
+  key's at once. Each is built by `Keyfleet.WalletSteps` for the signing
+  agent's wallet, as the site's buttons are built for a person's, from the
+  chain read at the latest block.
 
   The answer names the chain, says in a line what the transactions do, and
   lists them in the order to send them (`KeyfleetWeb.AgentChainJSON`). Each
@@ -67,6 +67,8 @@ defmodule KeyfleetWeb.AgentChainController do
 
   def claim(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}),
     do: answer(conn, fleet_id, :claim, %{token_id: String.to_integer(token_id)})
+
+  def claim_all(conn, %{"fleet_id" => fleet_id}), do: answer(conn, fleet_id, :claim_all, %{})
 
   defp answer(conn, fleet_id, flow, params, shape \\ &Function.identity/1) do
     agent = conn.assigns.agent_actor

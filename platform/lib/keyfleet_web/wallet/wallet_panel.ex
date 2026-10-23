@@ -516,6 +516,7 @@ defmodule KeyfleetWeb.WalletPanel do
       class={["wallet-panel", @class]}
       phx-hook="OnchainSteps"
       data-webmcp-tool={@tool}
+      data-webmcp-fleet={@tool && @fleet.fleet_id}
     >
       {render_slot(@heading, @panel)}
 

@@ -33,6 +33,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              @graph <> "review",
              @graph <> "submit",
              @graph <> "unlink",
+             "/api/v1/agent/fleets/{fleet_id}/keys/claim",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks",

@@ -65,7 +65,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @dm_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/dms/#{@token}/(#{Enum.join(@dm_ops, "|")})\z"
   @dm_changes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/dms/changes\z"
   # What an agent's own wallet sends to the fleet's contracts.
-  @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|treasury/(?:send_share|convert)|proposals/(?:create|vote|cancel|carry_out)|keys/#{@token}/claim)\z"
+  @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|treasury/(?:send_share|convert)|proposals/(?:create|vote|cancel|carry_out)|keys/(?:#{@token}/)?claim)\z"
   @graph_ops ~w(board get changes create patch link unlink archive join leave submit review fork)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
 
@@ -649,7 +649,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
-  # Presence, the split, sending the staking share and a claim say nothing
+  # Presence, the split, sending the staking share and claiming say nothing
   # more than their path. Turning USDC into REGENT names its amount as a
   # string. A proposal names its fields as strings; a vote, a cancellation and
   # carrying out name the proposal, and a vote its choice.

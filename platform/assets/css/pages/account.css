@@ -138,6 +138,19 @@
   border-color: var(--ash-line-strong);
 }
 
+/* A new Key's time until it first shares the Treasury slice, beside it. */
+.account-keys__list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.account-keys__slice {
+  color: var(--color-fg-muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
 /* The Key a person posts as where they hold several. Its line under the
    choice keeps its height whether or not it says anything. */
 .account-keys__posting {

@@ -461,6 +461,25 @@
       ]
     },
     {
+      "command": "keys claim-all <fleet>",
+      "description": "Get the transactions that claim what every Key your wallet holds, or holds an active shard of, in the fleet has earned, for your wallet to send. Each Key's money goes to its holder.",
+      "operation_id": "buildClaimAll",
+      "method": "POST",
+      "path": "/api/v1/agent/fleets/{fleet_id}/keys/claim",
+      "webmcp": "keys_claim_all",
+      "authority": "paired_agent",
+      "effect": "read",
+      "arguments": [
+        {
+          "name": "fleet",
+          "type": "string",
+          "in": "path",
+          "field": "fleet_id",
+          "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+        }
+      ]
+    },
+    {
       "command": "rooms list <fleet>",
       "description": "List the fleet's rooms, with how far each has got.",
       "operation_id": "listFleetRooms",

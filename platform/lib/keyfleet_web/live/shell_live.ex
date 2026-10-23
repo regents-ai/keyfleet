@@ -90,6 +90,7 @@ defmodule KeyfleetWeb.ShellLive do
        code_notice: nil,
        connection_outcome: nil,
        held_keys: [],
+       slices: %Read{},
        connect_agent: nil,
        connect_paired: [],
        agents_topic: nil,
@@ -695,6 +696,7 @@ defmodule KeyfleetWeb.ShellLive do
           signed_out_reason={@signed_out_reason}
           account_control={@account_control}
           held_keys={@held_keys}
+          slices={@slices}
           lease={@session_lease}
           actor={actor(@access_context)}
           credits={@credits}
@@ -1317,6 +1319,7 @@ defmodule KeyfleetWeb.ShellLive do
 
     socket
     |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
+    |> read_slices()
     |> check_ens(account)
     |> read_credits(account)
   end
@@ -1325,10 +1328,16 @@ defmodule KeyfleetWeb.ShellLive do
     do:
       socket
       |> assign(:held_keys, AccountLive.held_keys(human_actor(socket)))
+      |> Read.clear(:slices)
       |> Read.clear(:credits)
 
   defp load_account_page(socket, _route_spec),
-    do: socket |> assign(:held_keys, []) |> Read.clear(:credits)
+    do: socket |> assign(:held_keys, []) |> Read.clear(:slices) |> Read.clear(:credits)
+
+  defp read_slices(%{assigns: %{held_keys: []}} = socket), do: Read.clear(socket, :slices)
+
+  defp read_slices(%{assigns: %{held_keys: held_keys}} = socket),
+    do: Read.start(socket, :slices, held_keys, fn -> AccountLive.slices(held_keys) end)
 
   defp load_connect(socket, %{route_id: :connect}, params),
     do:

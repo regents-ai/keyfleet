@@ -7382,6 +7382,41 @@
       "effect": "write"
     },
     {
+      "name": "keys_claim_all",
+      "title": "Claim for all your Keys",
+      "description": "Press one of a fleet's Claim buttons under Your Keys: claims in one asset what every Key the wallet holds in that fleet has earned, each Key's share always paid to its holder.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "The fleet to claim in, such as fleet_tech_classic, one Your Keys lists."
+          },
+          "asset": {
+            "type": "string",
+            "description": "The address of the asset to claim, one that fleet's Claim buttons name."
+          }
+        },
+        "required": [
+          "fleet_id",
+          "asset"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "wallet",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "/account",
+      "authentication": "owner_wallet_approval",
+      "pairing_required": false,
+      "availability": "prelaunch_gated",
+      "effect": "write"
+    },
+    {
       "name": "treasury_release",
       "title": "Release the Daily Treasury Slice to Keys",
       "description": "Press Release: shares the Daily Treasury Slice equally across every Key sold, for each asset at or above its minimum. Anyone may, 24 hours after the last release.",

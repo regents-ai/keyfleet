@@ -2,10 +2,11 @@
 // document.modelContext), described in priv/tool_manifest.json.
 //
 // A page's wallet buttons: a wallet group names its tool with
-// `data-webmcp-tool`, and calling it is a press of that group's own button:
-// the same steps, built on the server for the signed-in account's wallet, and
-// the wallet asks the person to approve. A button the chain's state holds back
-// answers why, as the page shows it.
+// `data-webmcp-tool` and its fleet with `data-webmcp-fleet`, and calling the
+// tool is a press of that group's own button: the same steps, built on the
+// server for the signed-in account's wallet, and the wallet asks the person to
+// approve. A button the chain's state holds back answers why, as the page
+// shows it.
 //
 
 import manifest from "../../priv/tool_manifest.json" with {type: "json"}
@@ -32,8 +33,9 @@ type Fields = Record<string, string>
 
 // The button each tool presses, from what the agent sent. Proposing and
 // turning USDC into REGENT fill the group's form with what the agent named;
-// the others press with the form as it is.
-const presses: Record<string, (input: Fields) => {step: string; form?: Fields}> = {
+// the others press with the form as it is. Claiming for all your Keys names
+// the fleet, since the Account page has a group for each.
+const presses: Record<string, (input: Fields) => {step: string; form?: Fields; fleet?: string}> = {
   keys_mark_present: () => ({step: "present"}),
   proposals_create: input => ({step: "propose", form: input}),
   treasury_release: () => ({step: "run_split"}),
@@ -43,7 +45,15 @@ const presses: Record<string, (input: Fields) => {step: string; form?: Fields}> 
   proposals_cancel: () => ({step: "cancel"}),
   proposals_carry_out: () => ({step: "carry_out"}),
   keys_claim: input => ({step: `claim-${input.asset}`}),
+  keys_claim_all: input => ({step: `claim-${input.asset}`, fleet: input.fleet_id}),
 }
+
+type Group = {root: HTMLElement; pressButton: PressButton}
+
+// The tools offered now, each with the wallet groups on the page that name
+// it. A tool is offered once while any group names it.
+type Offered = {groups: Group[]; registration: AbortController}
+const offered = new Map<string, Offered>()
 
 const failures: Record<Failure, {message: string; hint: string}> = {
   step_unknown: {
@@ -103,7 +113,7 @@ function buttonFor(root: HTMLElement, step: string): HTMLButtonElement | undefin
   )
 }
 
-function tool(entry: Entry, root: HTMLElement, pressButton: PressButton): ModelContextTool {
+function tool(entry: Entry, held: Offered): ModelContextTool {
   return {
     name: entry.name,
     title: entry.title,
@@ -115,8 +125,9 @@ function tool(entry: Entry, root: HTMLElement, pressButton: PressButton): ModelC
       if (problem) return refusal("invalid_input", problem, "Fix the call, then call again.")
       if (signal?.aborted) return refusal("cancelled", "The call was cancelled; nothing was sent.", "Call again to send it.")
 
-      const {step, form} = presses[entry.name](input as Fields)
-      const button = buttonFor(root, step)
+      const {step, form, fleet} = presses[entry.name](input as Fields)
+      const group = held.groups.find(({root}) => fleet === undefined || root.dataset.webmcpFleet === fleet)
+      const button = group && buttonFor(group.root, step)
       if (!button) {
         return refusal(
           "not_on_page",
@@ -129,25 +140,43 @@ function tool(entry: Entry, root: HTMLElement, pressButton: PressButton): ModelC
         const why = document.getElementById(button.getAttribute("aria-describedby")!)!
         return refusal("blocked", why.textContent!.trim(), "It comes back when that changes on the chain.")
       }
-      return answer(await pressButton(button, form ?? {}))
+      return answer(await group.pressButton(button, form ?? {}))
     },
   }
 }
 
 /**
  * Offers the tool the wallet group at `root` names, if any, while the group is
- * on the page. Aborting the answer takes it away again.
+ * on the page. Aborting the answer takes the group away again, and the tool
+ * once no group on the page names it.
  */
 export function offerPageTool(root: HTMLElement, pressButton: PressButton): AbortController | undefined {
   const entry = entries.find(candidate => candidate.name === root.dataset.webmcpTool && candidate.scope !== "site")
   if (!entry) return undefined
 
-  const registration = new AbortController()
+  const group = {root, pressButton}
+  const held = offered.get(entry.name) ?? offer(entry)
+  held.groups.push(group)
+
+  const leaving = new AbortController()
+  leaving.signal.addEventListener("abort", () => {
+    held.groups = held.groups.filter(other => other !== group)
+    if (held.groups.length === 0) held.registration.abort()
+  })
+  return leaving
+}
+
+function offer(entry: Entry): Offered {
+  const held: Offered = {groups: [], registration: new AbortController()}
+  offered.set(entry.name, held)
+  held.registration.signal.addEventListener("abort", () => {
+    if (offered.get(entry.name) === held) offered.delete(entry.name)
+  })
   document.modelContext
-    .registerTool(tool(entry, root, pressButton), {signal: registration.signal})
+    .registerTool(tool(entry, held), {signal: held.registration.signal})
     .catch((error: unknown) => {
-      registration.abort()
+      held.registration.abort()
       console.warn("The browser tool could not be offered.", error)
     })
-  return registration
+  return held
 }

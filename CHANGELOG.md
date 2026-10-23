@@ -4557,3 +4557,23 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   that reaches only its runner app. Their settings are
   `notebook-hub/hub/fleets/{fibonacci-syndicate,fibonacci-cascade,fleet-tech-accelerant}.{hub,runner}.toml`.
   The Regents Club and Classic #1 hubs move to the c2a3303 images too.
+
+## 2026-10-22 — Agents claim for all their Keys at once; Your Keys counts new Keys down
+
+- Agents get one claim for every Key their wallet holds or holds an active shard of in a
+  fleet, the same `claim_all` steps as the Account page's Claim:
+  `POST /api/v1/agent/fleets/{fleet_id}/keys/claim` (`buildClaimAll`, answering
+  `token_ids` and `waiting`), `keys claim-all <fleet>` in `cli/commands.json` and
+  `cli/COMMANDS.md`, and the browser tool `keys_claim_all` on `/account`, which names the
+  fleet since Your Keys has a Claim for each. A browser tool is now offered once while
+  any wallet group on the page names it. The docs, `/llms.txt` and the API contract
+  describe it; the contract adds a path and so keeps `info.version` 17.0.0.
+- Your Keys on the Account page shows each Key under two days old counting down to its
+  first Daily Treasury Slice, in the Key page's words ("Eligible in 47:59:59", then
+  "Eligible"), from the vote contract's `maturesAt` read at the latest block. Older
+  Keys show nothing beside them.
+- Checks: `platform/test/keyfleet_web/signed_agent_contract_test.exs` (claim-all answers
+  the agent's Key and what waits, and every answer fits the contract),
+  `platform/test/keyfleet_web/shell_live_test.exs` (a new Key counts down, an older one
+  shows nothing) and `platform/assets/test/page_tools.test.ts` (one tool for two fleets'
+  Claim groups presses the fleet named).

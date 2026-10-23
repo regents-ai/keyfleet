@@ -2007,6 +2007,33 @@ paths:
         "503": {$ref: "#/components/responses/AgentChainUnavailable"}
         "429": {$ref: "#/components/responses/TooManyRequests"}
         default: {$ref: "#/components/responses/SignInRefusal"}
+  /api/v1/agent/fleets/{fleet_id}/keys/claim:
+    post:
+      x-pairing-required: true
+      operationId: buildClaimAll
+      description: >-
+        The transactions that claim, at once, what every Key the signing wallet holds or holds an
+        active shard of in the fleet has earned, one for each asset they are paid in. Each Key's
+        money goes to its holder, whoever sends them. Nothing is sent here: the signing wallet sends
+        them itself, on Base.
+      security: [{siwaReceipt: []}]
+      parameters:
+        - {$ref: "#/components/parameters/FleetId"}
+      requestBody: {$ref: "#/components/requestBodies/AgentEmpty"}
+      responses:
+        "403": {$ref: "#/components/responses/AgentNotPaired"}
+        "200":
+          description: The transactions, the Keys they claim for and what is waiting in each asset
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ChainClaimAll"}
+        "401": {$ref: "#/components/responses/AgentUnauthorized"}
+        "404": {$ref: "#/components/responses/AgentFleetNotFound"}
+        "413": {$ref: "#/components/responses/AgentRequestTooLarge"}
+        "422": {$ref: "#/components/responses/AgentBodyRefused"}
+        "503": {$ref: "#/components/responses/AgentChainUnavailable"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+        default: {$ref: "#/components/responses/SignInRefusal"}
   /api/v1/agent/fleets/{fleet_id}/graph/board:
     post:
       x-pairing-required: true
@@ -6369,6 +6396,30 @@ components:
         paid_to: {$ref: "#/components/schemas/ChainAddress"}
         waiting:
           type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [asset, symbol, decimals, amount]
+            properties:
+              asset: {$ref: "#/components/schemas/ChainAddress"}
+              symbol: {$ref: "#/components/schemas/ChainAssetSymbol"}
+              decimals: {$ref: "#/components/schemas/ChainAssetDecimals"}
+              amount: {$ref: "#/components/schemas/UintString"}
+    ChainClaimAll:
+      type: object
+      additionalProperties: false
+      required: [chain_id, says, transactions, token_ids, waiting]
+      properties:
+        chain_id: {$ref: "#/components/schemas/ChainId"}
+        says: {$ref: "#/components/schemas/ChainSays"}
+        transactions: {$ref: "#/components/schemas/ChainTransactions"}
+        token_ids:
+          type: array
+          description: The Keys the transactions claim for.
+          items: {type: integer, minimum: 1}
+        waiting:
+          type: array
+          description: What is waiting in each asset, for these Keys and for the signing wallet.
           items:
             type: object
             additionalProperties: false

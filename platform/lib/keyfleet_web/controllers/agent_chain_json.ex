@@ -83,20 +83,18 @@ defmodule KeyfleetWeb.AgentChainJSON do
          opens_at: opens_at
        }
 
-  defp figures(:claim, %{token_id: token_id, holder: holder, waiting: waiting}) do
+  defp figures(:claim, %{token_id: token_id, holder: holder, waiting: waiting}),
+    do: %{token_id: token_id, paid_to: holder, waiting: Enum.map(waiting, &waiting/1)}
+
+  defp figures(:claim_all, %{keys: keys, waiting: waiting}),
+    do: %{token_ids: keys, waiting: Enum.map(waiting, &waiting/1)}
+
+  defp waiting(entry) do
     %{
-      token_id: token_id,
-      paid_to: holder,
-      waiting:
-        Enum.map(
-          waiting,
-          &%{
-            asset: &1.asset,
-            symbol: &1.symbol,
-            decimals: &1.decimals,
-            amount: Integer.to_string(&1.amount)
-          }
-        )
+      asset: entry.asset,
+      symbol: entry.symbol,
+      decimals: entry.decimals,
+      amount: Integer.to_string(entry.amount)
     }
   end
 end

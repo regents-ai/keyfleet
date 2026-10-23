@@ -2,8 +2,10 @@ defmodule KeyfleetWeb.AccountLive do
   @moduledoc """
   The signed-in person's account, one tab each: Profile (who the site knows
   them as, their wallets and which one is active (`KeyfleetWeb.AccountWallets`),
-  their ENS name and World ID, the keys their wallets hold with one Claim per
-  fleet for all of them at once and, in a fleet where they hold several, the one they post as
+  their ENS name and World ID, the keys their wallets hold, each new one with
+  the time left until it first shares the Daily Treasury Slice to Keys, with
+  one Claim per fleet for all of them at once and, in a fleet where they hold
+  several, the one they post as
   (`KeyfleetWeb.PostingKeyChoice`), the agents
   paired with their account, which they may open, rename and unpair
   (`KeyfleetWeb.AgentsPanel`), their Credits and this browser's session), Wallets (the wallets their sign-in
@@ -17,6 +19,7 @@ defmodule KeyfleetWeb.AccountLive do
 
   use KeyfleetWeb, :html
 
+  import KeyfleetWeb.Components.Countdown
   import KeyfleetWeb.Components.PageHead, only: [page_head: 1]
   import KeyfleetWeb.Components.VerifiedConnections
 
@@ -24,8 +27,10 @@ defmodule KeyfleetWeb.AccountLive do
   alias Keyfleet.Accounts.EnsIdentity
   alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Keys
   alias Keyfleet.PublicIdentity
+  alias Keyfleet.WalletSteps.Reads
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.WalletPanel
   alias KeyfleetWeb.WalletWords
@@ -48,6 +53,11 @@ defmodule KeyfleetWeb.AccountLive do
     default: [],
     doc:
       "the keys the account's wallets hold, as `%{fleet_id, chain_id, name, token_ids}` per fleet, `chain_id` nil for a fleet not on chain"
+
+  attr :slices, KeyfleetWeb.Read,
+    default: %KeyfleetWeb.Read{},
+    doc:
+      "the read of when each held key still too new first shares the Treasury slice (`slices/1`)"
 
   def profile(assigns) do
     ~H"""
@@ -145,6 +155,7 @@ defmodule KeyfleetWeb.AccountLive do
             <ul class="account-keys__list">
               <li :for={token_id <- fleet.token_ids}>
                 <.link patch={KeyLinks.key_path(fleet.fleet_id, token_id)}>Key {token_id}</.link>
+                <.slice slices={@slices} fleet_id={fleet.fleet_id} token_id={token_id} />
               </li>
             </ul>
             <.live_component
@@ -153,6 +164,7 @@ defmodule KeyfleetWeb.AccountLive do
               id={"account-claim-#{fleet.fleet_id}"}
               class="account-keys__claim"
               flow={:claim_all}
+              tool="keys_claim_all"
               fleet={%{fleet_id: fleet.fleet_id, chain_id: fleet.chain_id}}
               actor={@actor}
               lease={@lease}
@@ -206,6 +218,34 @@ defmodule KeyfleetWeb.AccountLive do
         </section>
       </div>
     </.settings_page>
+    """
+  end
+
+  attr :slices, KeyfleetWeb.Read, required: true
+  attr :fleet_id, :string, required: true
+  attr :token_id, :integer, required: true
+
+  # A key still too new to share the Daily Treasury Slice to Keys counts down
+  # to when it first does, in the Key page's words; any other key shows nothing.
+  defp slice(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :matures_at,
+        Map.get(assigns.slices.value || %{}, {assigns.fleet_id, assigns.token_id})
+      )
+
+    ~H"""
+    <.countdown
+      :if={@matures_at}
+      id={"account-slice-#{@fleet_id}-#{@token_id}"}
+      class="account-keys__slice"
+      closes_at={@matures_at}
+      now={@slices.read_at}
+      format="clock"
+      lead="Eligible in"
+      done="Eligible"
+    />
     """
   end
 
@@ -384,6 +424,35 @@ defmodule KeyfleetWeb.AccountLive do
           name: name,
           token_ids: Enum.map(keys, & &1.token_id)
         }
+  end
+
+  @doc """
+  When each held key in its first 2 days first shares the Daily Treasury Slice
+  to Keys, as the vote contract dates it, read at the latest block:
+  `%{{fleet_id, token_id} => DateTime}`. Older keys, and fleets not on chain,
+  are left out.
+  """
+  def slices(held_keys) do
+    keys =
+      for %{fleet_id: fleet_id, chain_id: chain_id, token_ids: token_ids} <- held_keys,
+          chain_id != nil,
+          fleet = Fleets.get_fleet!(fleet_id),
+          token_id <- token_ids,
+          do: {fleet, token_id}
+
+    with {:ok, reads} <- Reads.at_head(),
+         {:ok, dated} <- Reads.each(keys, &matures_at(reads, &1)) do
+      head = Reads.now(reads)
+      {:ok, for({key, at} <- dated, DateTime.after?(at, head), into: %{}, do: {key, at})}
+    end
+  end
+
+  defp matures_at(reads, {fleet, token_id}) do
+    onchain = Fleet.onchain_token_id(fleet, token_id)
+
+    with {:ok, at} <-
+           Reads.one(reads, fleet.votes_address, "maturesAt(uint256)", [onchain], {:uint, 64}),
+         do: {:ok, {{fleet.id, token_id}, DateTime.from_unix!(at)}}
   end
 
   # What every Key held in the fleet has waiting, in each token, together.

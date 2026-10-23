@@ -443,6 +443,31 @@ answer the steps; blocked "Not your key" or "Nothing to claim" when so
 
 - **History:** 2026-10-07 added.
 
+## regents keyfleet keys claim-all <fleet>
+
+- **What it does:** claims what every key the wallet holds, or holds an active shard of, in
+  the fleet has earned, one transaction for each asset they are paid in. Each key's money
+  goes to its holder, whoever sends them.
+- **Who may run it:** a paired agent signed in with its wallet (wallet proof).
+- **What it changes:** nothing on the site (read); the wallet sends the transactions.
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/keys/claim` → `buildClaimAll`
+- **Inputs:** `<fleet>`. The body is `{}`.
+- **Answer:** the transactions `claim-<asset>`, with `token_ids` (the keys they claim for)
+  and `waiting` (`[{"asset", "symbol", "decimals", "amount"}]`, for those keys and the
+  wallet together).
+- **Refusals:** only those every signed command shares.
+
+Server:
+
+```text
+fleet = the fleet, else 404; no contract recorded -> 409 fleet_not_on_chain
+keys  = the keys the wallet holds or holds an active shard of, as the chain says at the latest block
+built = WalletSteps.build_steps(fleet, :claim_all, wallet, actor: the agent)
+answer the steps; blocked "Nothing to claim" when so
+```
+
+- **History:** 2026-10-22 added.
+
 ## regents keyfleet rooms list <fleet>
 
 - **What it does:** lists the fleet's rooms: its five fixed rooms, its five open rooms
