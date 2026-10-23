@@ -4598,3 +4598,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Checks: `platform/test/keyfleet/release_test.exs` (a missing shared change is
   listed and stops the deployment check; `migrate-shared` applies every shared
   change once, then prints `none`).
+
+## 2026-10-23 — plug_crypto 2.2.1
+
+- Moved plug_crypto from 2.2.0 to 2.2.1 for advisory GHSA-ffw9-w85g-f2vh
+  (EEF-CVE-2026-105963: the secret key base could appear in stack trace
+  arguments). Lock file only; `mix hex.audit` is clean again.
