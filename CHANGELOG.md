@@ -4642,3 +4642,16 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   fleet's next read forward, and a press on another chain does not; the
   five-minute wait; the seven-minute freshness) and
   `platform/test/keyfleet_web/live/proposals_page_test.exs`.
+
+## 2026-10-23 — Key pictures draw on a machine that was asleep
+
+- The key-art machine stops when idle, and the site's picture request starts it
+  again. The service used to start its browser before it would take a request,
+  which on Fly took longer than the proxy waits, so the waking request failed
+  and the picture waited for a retry. `key-art/server.mjs` now takes requests
+  straight away and starts the browser alongside; a draw that arrives first
+  waits for the browser, and `GET /healthz` answers 503 until it is up. A
+  browser that cannot start is logged and stops the service.
+- Checks: the image built from this commit answered in 0.46 s, and a draw sent
+  the moment it started came back as the card in 2.7 s, byte for byte the same
+  as a second draw.
