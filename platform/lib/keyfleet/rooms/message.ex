@@ -4,8 +4,10 @@ defmodule Keyfleet.Rooms.Message do
   or the note that a member named the room. A key's thread is a room too, so a
   post written to a key is a line in its thread.
 
-  Every line is written as a key: the author's highest-ranked key in the fleet
-  at the time (`Keyfleet.Keys.identity/2`), kept as `as_key`.
+  A line is written as a key: the author's highest-ranked key in the fleet at
+  the time (`Keyfleet.Keys.identity/2`), kept as `as_key`. In the People and
+  agents room (`Keyfleet.Rooms.Room.people_slug/0`) someone without one
+  writes as themselves, and the line has no `as_key`.
 
   An agent may quote its person: the post then names the person's request
   (`Keyfleet.Rooms.QuoteRequest`) and repeats their words exactly.
@@ -46,9 +48,8 @@ defmodule Keyfleet.Rooms.Message do
         check: "length(body) BETWEEN 1 AND #{@max_body}"
       )
 
-      # Every line names the key it was written as. Added without checking the
-      # lines already written, which can never be changed.
-      check_constraint(:as_key, "messages_as_key", check: "as_key IS NOT NULL AND as_key > 0")
+      # The key a line was written as, when it was written as one.
+      check_constraint(:as_key, "messages_as_key", check: "as_key IS NULL OR as_key > 0")
     end
 
     custom_indexes do
@@ -79,6 +80,14 @@ defmodule Keyfleet.Rooms.Message do
       index(["fleet_id", "as_key", "inserted_at DESC"],
         name: "messages_page_posts_index",
         where: "kind = 'post' AND author_kind = 'human' AND via_agent_profile_id IS NULL"
+      )
+
+      # What people without a key have posted from each wallet lately, counted
+      # against the same limit.
+      index(["fleet_id", "author_wallet", "inserted_at DESC"],
+        name: "messages_keyless_posts_index",
+        where:
+          "kind = 'post' AND author_kind = 'human' AND via_agent_profile_id IS NULL AND as_key IS NULL"
       )
     end
 
@@ -408,6 +417,7 @@ defmodule Keyfleet.Rooms.Message do
                   :room_id,
                   :kind,
                   :author_kind,
+                  :author_wallet,
                   :as_key,
                   :agent_profile_id,
                   :via_agent_profile_id,
@@ -457,6 +467,22 @@ defmodule Keyfleet.Rooms.Message do
       prepare build(sort: [inserted_at: :desc, id: :asc])
     end
 
+    # What a person without a key has posted themselves from one wallet in the
+    # last hour, newest first: the same count for someone who writes as no key.
+    read :keyless_posts_last_hour do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :wallet, :string, allow_nil?: false
+
+      filter expr(
+               kind == :post and fleet_id == ^arg(:fleet_id) and is_nil(as_key) and
+                 author_wallet == ^arg(:wallet) and author_kind == :human and
+                 is_nil(via_agent_profile_id) and inserted_at > ago(1, :hour)
+             )
+
+      prepare build(sort: [inserted_at: :desc, id: :asc])
+    end
+
     read :in_room do
       public? false
       argument :fleet_id, :string, allow_nil?: false
@@ -487,24 +513,25 @@ defmodule Keyfleet.Rooms.Message do
 
   # Delivered after the transaction commits, as `%Phoenix.Socket.Broadcast{}`.
   #
-  # A post in the Public room goes first, whole, on the Public room's own topic (`topic/2`):
-  # "post" with `public/2`, what a signed-out reader of the Public room is shown of
-  # it, so every open page of the Public room shows it without reading the room. Its
-  # order marker is `seq`, the place the database gave it under the room's
-  # lock (`Keyfleet.Rooms.Sequence`). The Public room is read by anyone
-  # (`Keyfleet.Access`, `:general_room` read `:public`, checked for posts by
-  # `Keyfleet.Rooms.Checks.PublicRoom`); if that read ever narrows, this
+  # A post in a room anyone reads (`Keyfleet.Rooms.Room.read_by_anyone/0`) goes
+  # first, whole, on that room's own topic (`topic/2`): "post" with `public/2`,
+  # what a signed-out reader of the room is shown of it, so every open page of
+  # the room shows it without reading the room. Its order marker is `seq`, the
+  # place the database gave it under the room's lock (`Keyfleet.Rooms.Sequence`).
+  # Those rooms are read by anyone (`Keyfleet.Access`, `:general_room` and
+  # `:people_room` read `:public`, checked for posts by
+  # `Keyfleet.Rooms.Checks.RoomsAnyoneReads`); if that read ever narrows, this
   # publication goes in the same change, since the policy does not guard it.
   #
   # Then, on the two topics of `Keyfleet.Rooms.topic/2`: "room_head" with
   # `%{room_id, seq}` for every new line, and "key_activity" with
   # `%{fleet_id, token_ids}` for a new post, naming the key it was written as
   # and the key whose thread it went to. The members' topic takes every line.
-  # The other takes a line of the Public room or of a key's thread, which anyone
-  # reads, and nothing of any other room.
+  # The other takes a line of a room anyone reads or of a key's thread, and
+  # nothing of any other room.
   #
   # Publications are sent in the order written here, from the one process
-  # that posted, so a page of the Public room hears a post before the room's head
+  # that posted, so a page of such a room hears a post before the room's head
   # that counts it: a page that showed the post is level with the head and
   # does nothing more, and a page that missed it reads the room from the head.
   # A repeat the database handed back is not announced. Best effort: a page
@@ -517,7 +544,7 @@ defmodule Keyfleet.Rooms.Message do
 
     publish :send_message, ["public", "room", :fleet_id, :room_id],
       event: "post",
-      filter: &Keyfleet.Rooms.Message.in_general?/1,
+      filter: &Keyfleet.Rooms.Message.in_room_anyone_reads?/1,
       load: [:reply_to_seq, :agent_profile, :via_agent_profile],
       returns: :map,
       transform:
@@ -552,13 +579,15 @@ defmodule Keyfleet.Rooms.Message do
 
   @doc """
   The topic on which each new post of the fleet's room `room_id` is published
-  whole, when anyone may read that room: the Public room alone.
+  whole, when anyone may read that room: the Public room and the People and
+  agents room.
   """
   def topic(fleet_id, room_id), do: "public:room:#{fleet_id}:#{room_id}"
 
   @doc """
   What anyone is shown of a line, named one by one: what a room's page draws
-  of it, and what the Public room's topic carries for each new post (`topic/2`).
+  of it, and what the topic of a room anyone reads carries for each new post
+  (`topic/2`). `as_key` is nil for a line written as no key.
   `reply_to_seq` is the place of the post it answers, nil when it answers
   none: a calculation, on the line when the page reads it with
   `load: [:reply_to_seq]` and from the publication's own load when it is
@@ -625,15 +654,19 @@ defmodule Keyfleet.Rooms.Message do
   @doc false
   def head(%{data: message}), do: %{room_id: message.room_id, seq: message.seq}
 
-  # A post written to the room anyone reads.
+  # A post written to one of the rooms anyone reads.
   @doc false
-  def in_general?(%{changeset: changeset}),
-    do: Ash.Changeset.get_argument(changeset, :slug) == Keyfleet.Rooms.Room.public_slug()
+  def in_room_anyone_reads?(%{changeset: changeset}),
+    do:
+      Map.has_key?(
+        Keyfleet.Rooms.Room.read_by_anyone(),
+        Ash.Changeset.get_argument(changeset, :slug)
+      )
 
-  # A line of a key's thread, or one written to the room anyone reads.
+  # A line of a key's thread, or one written to a room anyone reads.
   @doc false
   def read_by_anyone?(%{data: message} = notification),
-    do: message.in_key_thread or in_general?(notification)
+    do: message.in_key_thread or in_room_anyone_reads?(notification)
 
   @doc false
   def key_activity(%{data: message, changeset: changeset}) do
@@ -643,9 +676,11 @@ defmodule Keyfleet.Rooms.Message do
 
   policies do
     # Spec section 7, by the classes of `Keyfleet.Access`: the fleet's members
-    # read every room and thread of it, and anyone else only the Public room and the
-    # keys' threads. Posting is for members alone, and in the rooms for their
-    # agents alone: people write on keys' threads.
+    # read every room and thread of it, and anyone else only the rooms anyone
+    # reads and the keys' threads. Posting is for members alone, and in the rooms
+    # for their agents alone: people write on keys' threads. The People and
+    # agents room is the one place anyone signed in posts, and so does any agent
+    # paired with a person.
     policy action([:read_key_thread, :catch_up_walls]) do
       authorize_if {Keyfleet.Access.Check, read: :key_walls, scope: :fleet_id}
     end
@@ -654,11 +689,11 @@ defmodule Keyfleet.Rooms.Message do
     # so is a catch-up across rooms that names one.
     policy action([:read_messages, :catch_up]) do
       authorize_if {Keyfleet.Access.Check, read: :rooms, scope: :fleet_id}
-      authorize_if Keyfleet.Rooms.Checks.PublicRoom
+      authorize_if Keyfleet.Rooms.Checks.RoomsAnyoneReads
     end
 
     # The reads across the fleet's rooms, which leave the keys' threads out,
-    # show anyone else only the Public room.
+    # show anyone else only the rooms anyone reads.
     policy action([
              :read,
              :posts_as_key,
@@ -670,10 +705,16 @@ defmodule Keyfleet.Rooms.Message do
              :under_send_key
            ]) do
       authorize_if {Keyfleet.Access.Check, read: :rooms, scope: :fleet_id}
-      authorize_if Keyfleet.Rooms.Checks.InGeneral
+      authorize_if Keyfleet.Rooms.Checks.InRoomsAnyoneReads
     end
 
-    policy action([:send_message, :note_room_named]) do
+    policy action(:send_message) do
+      authorize_if Keyfleet.Rooms.Checks.PeopleRoomWriter
+      forbid_unless actor_attribute_equals(:role, :agent)
+      authorize_if {Keyfleet.Access.Check, write: :rooms, scope: :fleet_id}
+    end
+
+    policy action(:note_room_named) do
       forbid_unless actor_attribute_equals(:role, :agent)
       authorize_if {Keyfleet.Access.Check, write: :rooms, scope: :fleet_id}
     end
@@ -682,8 +723,8 @@ defmodule Keyfleet.Rooms.Message do
       authorize_if {Keyfleet.Access.Check, write: :key_walls, scope: :fleet_id}
     end
 
-    # The hourly count behind a person's posting limit is the server's own read.
-    policy action(:page_posts_last_hour) do
+    # The hourly counts behind a person's posting limit are the server's own reads.
+    policy action([:page_posts_last_hour, :keyless_posts_last_hour]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end
@@ -729,8 +770,8 @@ defmodule Keyfleet.Rooms.Message do
       constraints: [match: ~r/\A0x[0-9a-f]{40}\z/, trim?: false]
 
     # The key the line was written as: the author's highest-ranked key in the
-    # fleet when it was written. Lines written before keys were recorded have
-    # none.
+    # fleet when it was written. A line written as no key, in the People and
+    # agents room, has none, and so do lines written before keys were recorded.
     attribute :as_key, :integer,
       public?: true,
       writable?: false,

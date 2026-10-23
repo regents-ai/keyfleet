@@ -27,12 +27,14 @@ defmodule Keyfleet.Activity do
 
   The kinds and their facts:
 
-    * `:post`: `room`, `by` (the key it was written as), `excerpt` (its
-      start, up to 160 characters ending on a whole word with "…").
+    * `:post`: `room`, `by` (the key it was written as, with its writer's
+      `wallet`; `token_id` is nil for a post written as no key, in the People
+      and agents room), `excerpt` (its start, up to 160 characters ending on
+      a whole word with "…").
     * `:posts`: consecutive posts in one room, at most an hour apart, six
       hours from first to last and fifty in all: `room`, `count`, `keys` (up to
-      three different keys, newest first), `others` (how many more keys
-      wrote), `excerpt` (of the newest).
+      three different writers, each as `by` is, newest first), `others` (how
+      many more wrote), `excerpt` (of the newest).
     * `:room_named`: `room`, `by`, `topic` (what the room was named).
     * Workspace changes carry `by` (a key, or nil when the workspace itself
       made the change) and `item`:
@@ -161,7 +163,7 @@ defmodule Keyfleet.Activity do
   the one after it. Options: `:limit`, the most items a page holds (1 to
   #{@page}, #{@page} by default), `:actor`, who reads it, and `:context`, the
   class already read for them (`Keyfleet.Access.context/3`). Posts in rooms
-  other than the Public room, and the titles of items other than goals (see Items),
+  other than the ones anyone reads, and the titles of items other than goals (see Items),
   show only to the people and agents holding the fleet's keys or a shard of one.
   """
   @spec page(String.t(), cursor() | nil, keyword()) :: %{items: [item()], cursor: cursor() | nil}
@@ -452,7 +454,7 @@ defmodule Keyfleet.Activity do
   end
 
   defp posts_entry([newest | _] = run) do
-    keys = run |> Enum.map(&author/1) |> Enum.uniq_by(& &1.token_id)
+    keys = run |> Enum.map(&author/1) |> Enum.uniq_by(&(&1.token_id || &1.wallet))
 
     entry("posts:#{newest.id}", newest.inserted_at, :posts, line_position(List.last(run)), %{
       room: room(newest.room),
@@ -467,8 +469,13 @@ defmodule Keyfleet.Activity do
 
   defp room(room), do: %{slug: room.slug, name: room.name, topic: room.topic}
 
+  # The key a line was written as, or the wallet of someone who wrote as no key.
   defp author(line),
-    do: %{token_id: line.as_key, agent: line.agent_profile && line.agent_profile.name}
+    do: %{
+      token_id: line.as_key,
+      agent: line.agent_profile && line.agent_profile.name,
+      wallet: line.author_wallet
+    }
 
   # Keys: a run of first owners, from one purchase or several, is one item of
   # `kind`: `:sale`, or `:given` where the fleet's Keys are given. The item is

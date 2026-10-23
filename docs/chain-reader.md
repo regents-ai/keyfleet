@@ -132,7 +132,7 @@ the contracts above.
    fly ssh console -C "/app/bin/seed-deployment /tmp/base.classic.deployed.json"
    ```
 
-   It binds that fleet alone, opens its five fixed rooms and five open rooms,
+   It binds that fleet alone, opens its six fixed rooms and five open rooms,
    and prints the fleet with its contract and first block. This is what puts
    the fleet's keys on sale, and it opens a fleet the site showed as coming
    soon. Every other fleet is left as it is. Running it again with the same
