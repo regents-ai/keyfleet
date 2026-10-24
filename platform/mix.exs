@@ -6,7 +6,7 @@ defmodule Keyfleet.MixProject do
   @elixir_utils "https://github.com/regents-ai/elixir-utils.git"
   @elixir_utils_ref "e600ed34ff9e388511798ffde0999b04cd4ec9e5"
   @design_system "https://github.com/regents-ai/design-system.git"
-  @design_system_ref "30d16360c69740d7daf323e6e2ea6ff509029231"
+  @design_system_ref "9c2a817afeb3e65cc053d424032e0e90ec6d0e95"
 
   def project do
     [
@@ -14,6 +14,8 @@ defmodule Keyfleet.MixProject do
       version: "0.1.0",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
+      # The browser walk's files under test/browser are run by Playwright, not ExUnit.
+      test_ignore_filters: [&String.starts_with?(&1, "test/browser/")],
       start_permanent: false,
       aliases: aliases(),
       deps: deps(),
