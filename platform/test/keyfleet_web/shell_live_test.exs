@@ -883,7 +883,10 @@ defmodule KeyfleetWeb.ShellLiveTest do
       account_control: account_control,
       shell_instance: 1,
       get_key: true,
-      content: [%{inner_block: fn _, _ -> "Fixture content" end}]
+      content: [%{inner_block: fn _, _ -> "Fixture content" end}],
+      wallets: [],
+      agents: [],
+      pairing: []
     )
   end
 end

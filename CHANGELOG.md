@@ -4793,3 +4793,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the CLI's command list. The agent guide and tool descriptions say the same.
 - The compile-link limit in `platform/mix.exs` moves to 88: main already counted
   87, and the room's posting check adds one.
+
+## 2026-10-24 — Shared components cbf12f8d; the side panel is whole on every page
+
+- regent_ui moves from design-system 30d16360 to cbf12f8d, which draws ChatGPT
+  agents with OpenAI's mark.
+- As in ash-template 98411ef, the shell's side-panel slots (`wallets`, `agents`,
+  `pairing`, in `Shell.shell` and `Shell.aside`) are required, so a page that
+  draws the shell without one does not compile; a caller leaves one out for
+  someone signed out with `:if`. The showcase's shell preview names all three
+  for its signed-out preview account. Keyfleet has no Credits panel, so the
+  template's `credits_panel` slot has no counterpart here.
