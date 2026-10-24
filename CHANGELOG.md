@@ -4816,3 +4816,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   now set `kill_signal = "SIGTERM"` and `kill_timeout = "60s"`, so a stopping
   machine drains its connections and finishes its jobs. From ash-template
   023c8a1; Patchbay already had them.
+
+## 2026-10-24 — vgpu's MCP library at 2.3.1
+
+- vgpu 0.6.0 asks for `@modelcontextprotocol/server` and `core` 2.0.0, which
+  GitHub flags for three advisories fixed in 2.3.0. `platform/package.json`
+  overrides both to 2.3.1 (zod 4.6.7), as ash-template 1d2c2ff and every other
+  site already do. The browser bundle never runs that server, so nothing live
+  was exposed.
