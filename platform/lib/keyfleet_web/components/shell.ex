@@ -38,9 +38,13 @@ defmodule KeyfleetWeb.Components.Shell do
   attr(:get_key, :boolean, required: true)
 
   slot(:content, required: true)
-  slot(:wallets, doc: "The account's wallets, in the side panel.")
-  slot(:agents, doc: "The agents paired with the account, in the side panel.")
-  slot(:pairing, doc: "The box to pair an agent, in the side panel.")
+
+  # Required, so a page that draws the shell without one of these does not compile:
+  # signed in, it would show half a side panel. A caller leaves one out for
+  # someone signed out with `:if`.
+  slot(:wallets, required: true, doc: "The account's wallets, in the side panel.")
+  slot(:agents, required: true, doc: "The agents paired with the account, in the side panel.")
+  slot(:pairing, required: true, doc: "The box to pair an agent, in the side panel.")
   slot(:buy_key, doc: "The \"Buy Key\" window, while it is open.")
 
   def shell(assigns) do
@@ -227,9 +231,10 @@ defmodule KeyfleetWeb.Components.Shell do
 
   attr :account_control, Keyfleet.AccessContext.AccountControl, required: true
 
-  slot :wallets, doc: "The account's wallets."
-  slot :agents, doc: "The agents paired with the account."
-  slot :pairing, doc: "The box to pair an agent."
+  # Required for the same reason as the shell's.
+  slot :wallets, required: true, doc: "The account's wallets."
+  slot :agents, required: true, doc: "The agents paired with the account."
+  slot :pairing, required: true, doc: "The box to pair an agent."
 
   @doc """
   The side panel, for someone signed in: Sign out and Manage Account, the
