@@ -4749,3 +4749,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   which spoils the database name `make release` reads and the answers of remote
   calls on Fly. `platform/Dockerfile` installs `libsctp1` in the runtime image.
   From ash-template 247054b, Techtree fadc820d and regents.sh.
+
+## 2026-10-23 — Builds fetch vix's native file ahead
+
+- The release of d04d54e9 stopped at vix: elixir_make's download of vix's
+  prebuilt file from GitHub stopped at the same long headers, and the build
+  then tried to compile vix from source, whose libvips download stopped there
+  too. `platform/Dockerfile` now fetches vix 0.42.0's file for the building
+  machine's chip with curl into elixir_make's cache (`ELIXIR_MAKE_CACHE_DIR`),
+  where it is checked against vix's own checksums before it is used.

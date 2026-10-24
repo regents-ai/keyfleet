@@ -44,20 +44,24 @@ RUN mix local.hex 2.5.1 --force && \
 # runtime.exs joins the application's own files.
 COPY --from=assets /workspace/platform/node_modules node_modules
 # GitHub's download redirect sends headers longer than Erlang's HTTP client
-# accepts, so rustler_precompiled cannot fetch prebuilt native code from GitHub.
-# mdex_native uses its maker's mirror (config/config.exs); ex_keccak and
-# ex_secp256k1 publish only on GitHub, so curl fetches the files for the
-# building machine's own chip (x86_64 on Fly, aarch64 on a Mac running
-# `make release`) into the shared cache first, where rustler_precompiled checks
-# each one against the package's own checksums before using it. The versions
-# follow mix.lock. Remove this when GitHub or rustler_precompiled fixes the limit.
+# accepts, so rustler_precompiled and elixir_make cannot fetch prebuilt native
+# code from GitHub. mdex_native uses its maker's mirror (config/config.exs);
+# ex_keccak, ex_secp256k1 and vix publish only on GitHub, so curl fetches the
+# files for the building machine's own chip (x86_64 on Fly, aarch64 on a Mac
+# running `make release`) into each tool's cache first, where it checks each
+# one against the package's own checksums before using it. The versions follow
+# mix.lock. Remove this when GitHub or Erlang's HTTP client fixes the limit.
 ENV RUSTLER_PRECOMPILED_GLOBAL_CACHE_PATH=/root/rustler_precompiled
+ENV ELIXIR_MAKE_CACHE_DIR=/root/elixir_make
 RUN target="$(uname -m)-unknown-linux-gnu" && \
   mkdir -p /root/rustler_precompiled && cd /root/rustler_precompiled && \
   curl --fail --silent --show-error --location --remote-name \
     "https://github.com/exWeb3/ex_keccak/releases/download/v0.7.8/libexkeccak-v0.7.8-nif-2.16-${target}.so.tar.gz" && \
   curl --fail --silent --show-error --location --remote-name \
-    "https://github.com/ayrat555/ex_secp256k1/releases/download/v0.8.0/libex_secp256k1-v0.8.0-nif-2.16-${target}.so.tar.gz"
+    "https://github.com/ayrat555/ex_secp256k1/releases/download/v0.8.0/libex_secp256k1-v0.8.0-nif-2.16-${target}.so.tar.gz" && \
+  mkdir -p /root/elixir_make && cd /root/elixir_make && \
+  curl --fail --silent --show-error --location --remote-name \
+    "https://github.com/akash-akya/vix/releases/download/v0.42.0/vix-nif-2.17-$(uname -m)-linux-gnu-0.42.0.tar.gz"
 COPY platform/mix.exs platform/mix.lock ./
 COPY platform/config/config.exs platform/config/prod.exs config/
 RUN mix deps.get --only prod --check-locked && mix deps.compile
