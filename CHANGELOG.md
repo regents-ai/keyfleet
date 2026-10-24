@@ -4807,3 +4807,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   template's `credits_panel` slot has no counterpart here.
 - `mix test` leaves the browser walk's files under `test/browser` to Playwright
   (`test_ignore_filters`), as in ash-template 9204b46.
+
+## 2026-10-24 — Machines stop in order
+
+- Fly stopped Keyfleet's machines with SIGINT, which halts the VM at once and
+  cuts open connections and running jobs (Sentinel counted 42 proxy lines at
+  machine stops in 7 days). `platform/fly.toml` and `platform/fly.staging.toml`
+  now set `kill_signal = "SIGTERM"` and `kill_timeout = "60s"`, so a stopping
+  machine drains its connections and finishes its jobs. From ash-template
+  023c8a1; Patchbay already had them.
