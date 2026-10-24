@@ -4758,3 +4758,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   too. `platform/Dockerfile` now fetches vix 0.42.0's file for the building
   machine's chip with curl into elixir_make's cache (`ELIXIR_MAKE_CACHE_DIR`),
   where it is checked against vix's own checksums before it is used.
+
+## 2026-10-24 — Notebook hub errors name their address
+
+- A notebook hub that could not be reached showed in the notebook member job's
+  errors as `nxdomain`, `timeout` or a bare status, without the address it
+  called. Every error from `Keyfleet.Notebooks.HubClient` is now
+  `{:hub, address, reason}`, so the job's errors and the log lines from the
+  workspace page and the editor checks name the hub (for example
+  `http://kf-nb-regents-club.flycast:80`). The failures read on the live site
+  were kf-nb-regents-club and kf-nb-fleet-tech-classic not resolving for about
+  three hours on 21 Oct, and one timeout and one 404 on Classic on 23 Oct;
+  every job recovered, and all five hub addresses resolve.

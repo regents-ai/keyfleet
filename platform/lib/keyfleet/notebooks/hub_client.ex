@@ -4,8 +4,10 @@ defmodule Keyfleet.Notebooks.HubClient do
   (`kf_provisioner_<fleet id>`, the one super admin each hub names). Every
   call is made once: the job that makes it retries the whole job.
 
-  Each answer is `{:ok, data}` or `{:error, reason}`. Adding someone already
-  there, and removing or reactivating someone who isn't, answer `{:ok, nil}`.
+  Each answer is `{:ok, data}` or `{:error, {:hub, address, reason}}`, naming
+  the hub's address and the request's error, `{:status, status}` or
+  `:unexpected_page`. Adding someone already there, and removing or
+  reactivating someone who isn't, answer `{:ok, nil}`.
   """
 
   alias Keyfleet.Notebooks
@@ -113,40 +115,41 @@ defmodule Keyfleet.Notebooks.HubClient do
     {timeout, options} =
       Keyword.pop(options, :receive_timeout, Notebooks.config()[:hub_timeout_ms])
 
-    Req.request(
-      [
-        method: method,
-        base_url: address,
-        url: path,
-        headers: [{"x-keyfleet-assertion", Pass.mint(fleet_id, provisioner(fleet_id))}],
-        retry: false,
-        redirect: false,
-        # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
-        connect_options: [timeout: timeout, transport_opts: [inet6: true]],
-        receive_timeout: timeout
-      ] ++ options
-    )
+    {address,
+     Req.request(
+       [
+         method: method,
+         base_url: address,
+         url: path,
+         headers: [{"x-keyfleet-assertion", Pass.mint(fleet_id, provisioner(fleet_id))}],
+         retry: false,
+         redirect: false,
+         # Fly's private hub addresses are IPv6. Mint also falls back to IPv4 for local hubs.
+         connect_options: [timeout: timeout, transport_opts: [inet6: true]],
+         receive_timeout: timeout
+       ] ++ options
+     )}
   end
 
-  defp page(response) do
-    case answer(response, [200]) do
+  defp page({address, _response} = sent) do
+    case answer(sent, [200]) do
       {:ok, %{"items" => items}} -> {:ok, items}
-      {:ok, _other} -> {:error, :unexpected_page}
+      {:ok, _other} -> {:error, {:hub, address, :unexpected_page}}
       error -> error
     end
   end
 
-  defp answer(response, ok, settled \\ []) do
+  defp answer({address, response}, ok, settled \\ []) do
     case response do
       {:ok, %Req.Response{status: status, body: body}} ->
         cond do
           status in ok -> {:ok, data(body)}
           status in settled -> {:ok, nil}
-          true -> {:error, {:hub_status, status}}
+          true -> {:error, {:hub, address, {:status, status}}}
         end
 
       {:error, error} ->
-        {:error, error}
+        {:error, {:hub, address, error}}
     end
   end
 
