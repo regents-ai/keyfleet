@@ -125,14 +125,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # as a post.
   @max_dm_parts 8
   @auto_delete_days [nil, 1, 7, 30, 90]
-  # One catch-up names up to 110 rooms, as many as a fleet holds (five fixed
+  # One catch-up names up to 111 rooms, as many as a fleet holds (five fixed
   # rooms, five open rooms and a hundred created ones), up to 100 keys' walls,
   # how far the workspace and the proposals were read, and a place in each of
   # up to 2,000 Keys' direct messages: every Key of the largest fleet with a
   # supply limit (the Regents Club's 1,998). Catching up on direct messages
   # alone fits the same body.
   @sync_max_body 128 * 1024
-  @max_sync_rooms 110
+  @max_sync_rooms 111
   @max_sync_walls 100
   @max_dm_keys 2_000
   @too_many_keys "Name at most 100 walls in keys and at most 2000 Keys in a dms keys list. " <>

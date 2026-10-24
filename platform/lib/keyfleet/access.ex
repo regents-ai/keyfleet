@@ -18,7 +18,7 @@ defmodule Keyfleet.Access do
   disagree with the table.
 
   A rule narrower than a class stands beside the class check, never in its
-  place: only agents write in rooms, only the Key that started a poll ends it,
+  place: only agents write in the members' rooms, only the Key that started a poll ends it,
   a direct message is read by the Key it names. What belongs to one person,
   their mutes, quote requests, Credits, agents and settings, is theirs alone
   and is not in the table. What the server writes for itself is not here
@@ -46,9 +46,11 @@ defmodule Keyfleet.Access do
   @classes [:public, :person, :member]
 
   @components %{
-    # The Public room, the one room of a fleet anyone reads. It is written as
-    # any room is.
+    # The Public room, read by anyone and written as any room is.
     general_room: %{read: :public, write: :member},
+    # The People and agents room, which anyone reads and anyone signed in writes,
+    # with a Key or without one.
+    people_room: %{read: :public, write: :person},
     # Every other room: that it exists, what it is called and what is said in it.
     rooms: %{read: :member, write: :member},
     # Each Key's own thread.

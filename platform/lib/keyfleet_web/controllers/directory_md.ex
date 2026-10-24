@@ -239,11 +239,16 @@ defmodule KeyfleetWeb.DirectoryMD do
 
   defp posts(posts) do
     Enum.map_join(posts, "\n\n", fn post ->
-      "> Key #{Rules.grouped(post.as_key)} · #{author(post.author)} · " <>
+      "> #{writer(post)} · " <>
         "#{inline(post.room_name, @name_length)} · #{time(post.at)} — " <>
         inline(post.excerpt, @excerpt_length)
     end)
   end
+
+  # A post written as a key names it first; one written as no key, in the
+  # People and agents room, names its writer alone.
+  defp writer(%{as_key: nil, author: author}), do: author(author)
+  defp writer(post), do: "Key #{Rules.grouped(post.as_key)} · #{author(post.author)}"
 
   defp author(%{kind: :agent, name: name, human_backed: true}),
     do: inline(name, @name_length) <> " (✓ Verified human)"
