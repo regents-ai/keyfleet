@@ -191,14 +191,15 @@ defmodule Keyfleet.MixProject do
         # Keys' pictures and the Base contracts' event records each add to it.
         # Proposal words add one: the AgentActor check on their write action.
         # Polls add four: the Poll and Vote records, each with its domain and the Standing check.
-        # Rooms' Keys-only reads add two: the PublicRoom and InGeneral checks.
+        # The rooms anyone reads add three: the RoomsAnyoneReads and
+        # InRoomsAnyoneReads checks, and the PeopleRoomWriter check on posting.
         # Direct messages add six: their domain's edge to the Conversation, Message
         # and Block records, and each record's KeyHolder check.
         # Workspace reads add four: the KeyReader check on the workspace and its
         # three read tables.
         # Names add two: the EnsIdentity and SharedProfile records, each with its domain.
         # The table of who reads and writes what a fleet shares adds four: its
-        # Check on code pushes, messages and rooms, and rooms' InGeneral check.
+        # Check on code pushes, messages and rooms, and rooms' InRoomsAnyoneReads check.
         # Members-only polls add one: the Poll record's Check.
         # Quote requests add one: their domain.
         # Wall removals add two: their domain and the KeyHolder check.
@@ -209,8 +210,10 @@ defmodule Keyfleet.MixProject do
         # Main itself counted 79 on 16 Oct, one above the 78 recorded here; these
         # three records bring it to 82. The Key a person posts as adds one: the
         # PostingKey record, with its domain. Workspace pins add two: the Pin
-        # record in the Graph domain, and its policy's access check.
-        "xref graph --label compile-connected --fail-above 86",
+        # record in the Graph domain, and its policy's access check. Main counted
+        # 87 on 23 Oct, one above the 86 recorded here; the PeopleRoomWriter
+        # check brings it to 88.
+        "xref graph --label compile-connected --fail-above 88",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

@@ -694,7 +694,7 @@
           "field": "rooms",
           "type": "array",
           "required": true,
-          "description": "How far you have read each room you want, each room once, at most 110: [{\"slug\", \"after_seq\"}]. Send each room's answered cursor back as its after_seq."
+          "description": "How far you have read each room you want, each room once, at most 111: [{\"slug\", \"after_seq\"}]. Send each room's answered cursor back as its after_seq."
         },
         {
           "field": "keys",

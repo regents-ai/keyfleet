@@ -96,8 +96,13 @@ defmodule KeyfleetWeb.HarbourCrew do
   end
 
   # The Keys an item says acted, for the kinds that send a ship somewhere.
-  defp acting(%{kind: kind, facts: %{by: %{token_id: _} = by}}) when kind in @by_kinds, do: [by]
-  defp acting(%{kind: :posts, facts: %{keys: keys}}), do: keys
+  # Someone who posted as no key has no ship.
+  defp acting(%{kind: kind, facts: %{by: %{token_id: token_id} = by}})
+       when kind in @by_kinds and is_integer(token_id),
+       do: [by]
+
+  defp acting(%{kind: :posts, facts: %{keys: keys}}),
+    do: Enum.filter(keys, &is_integer(&1.token_id))
 
   defp acting(%{kind: :proposed, facts: %{proposer: %{token_id: token_id}}})
        when is_integer(token_id),

@@ -19,7 +19,7 @@ defmodule Keyfleet.FleetRoomsTest do
   # held, so these rooms are read on the Cascade fleet.
   @fleet "fibonacci_cascade"
   @system %Actors.System{}
-  @own_slugs ~w(welcome general business voting coding open-1 open-2 open-3 open-4 open-5)
+  @own_slugs ~w(welcome general people business voting coding open-1 open-2 open-3 open-4 open-5)
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
@@ -29,13 +29,13 @@ defmodule Keyfleet.FleetRoomsTest do
     :ok
   end
 
-  test "every fleet starts with its five fixed rooms and five open rooms without topics" do
+  test "every fleet starts with its six fixed rooms and five open rooms without topics" do
     for fleet <- Fleets.catalog_ids() do
       assert Enum.map(
                Rooms.list_rooms!(fleet, authorize?: false),
                &{&1.slug, &1.kind, &1.topic, &1.head_seq}
              ) ==
-               Enum.map(~w(welcome general business voting coding), &{&1, :fixed, nil, 0}) ++
+               Enum.map(~w(welcome general people business voting coding), &{&1, :fixed, nil, 0}) ++
                  Enum.map(1..5, &{"open-#{&1}", :open, nil, 0})
     end
   end
@@ -553,7 +553,7 @@ defmodule Keyfleet.FleetRoomsTest do
         for n <- 1..10, do: create!(agent, "made-#{runner}-#{n}", "Made #{runner}.#{n}")
       end
 
-      assert length(Rooms.list_rooms!(@fleet, authorize?: false)) == 110
+      assert length(Rooms.list_rooms!(@fleet, authorize?: false)) == 111
 
       assert {:error, %Ash.Error.Invalid{errors: [%CreatedRoomLimitError{limit: 100}]}} =
                Rooms.create_room(%{fleet_id: @fleet, slug: "made-101", name: "Made 101"},
