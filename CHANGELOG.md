@@ -4824,3 +4824,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   overrides both to 2.3.1 (zod 4.6.7), as ash-template 1d2c2ff and every other
   site already do. The browser bundle never runs that server, so nothing live
   was exposed.
+
+## 2026-10-24 — Native code comes straight from GitHub again
+
+- GitHub's download redirect fits Erlang's HTTP client again: its header is
+  about 5.5 KB, under the 10,240-byte limit. `platform/Dockerfile` no longer
+  curls ex_keccak, ex_secp256k1 and vix into their caches first, and
+  `platform/config/config.exs` no longer sends mdex_native to its Cloudflare
+  mirror. `:httpc` with certificate checks on fetched the vix, ex_keccak and
+  ex_secp256k1 release files with 200, and `fly deploy --build-only --no-cache`
+  built the image. As ash-template 150c8a7.
