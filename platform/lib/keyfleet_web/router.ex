@@ -247,6 +247,8 @@ defmodule KeyfleetWeb.Router do
 
   scope "/api/v1", KeyfleetWeb do
     pipe_through :api
+    get "/about", PublicPagesController, :document, assigns: %{document: "/about", page: :about}
+    get "/docs", PublicPagesController, :document, assigns: %{document: "/docs", page: "/docs"}
     get "/fleets", DirectoryController, :index_json
     get "/fleets/:fleet_id", DirectoryController, :show_json
     get "/fleets/:fleet_id/workspace/pulse", WorkspacePulseController, :show

@@ -39,20 +39,15 @@ type Entry = {
 type Refusal = {code: string; message: string; hint: string}
 
 type Reply =
-  | {ok: true; status: number; data: string}
-  | {ok: false; status: number; error: Refusal}
-  | {ok: false; status: number; data: string}
+  | {ok: true; status: number; data: unknown}
+  | {ok: false; status: number; retry_after?: number; error: Refusal}
 
-// Each tool reads the site's own public document, by the path it asks: the
-// Markdown an agent gets when it asks for that page (the About page, the docs,
-// or the open fleet directory), or the API's JSON. A refusal is passed on as
-// the site gives it: its error when it answers in JSON, and otherwise its
-// words, such as a missing fleet's Markdown 404 that links every fleet.
+// Each tool reads the site's own public JSON, by the path it asks.
 const paths: Record<string, (input: Record<string, string>) => string> = {
-  about: () => "/about",
-  docs: () => "/docs",
-  fleets_list: () => "/fleets.md",
-  fleets_show: input => `/fleets/${encodeURIComponent(input.fleet_id)}.md`,
+  about: () => "/api/v1/about",
+  docs: () => "/api/v1/docs",
+  fleets_list: () => "/api/v1/fleets",
+  fleets_show: input => `/api/v1/fleets/${encodeURIComponent(input.fleet_id)}`,
   proposals_list: input => `/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/proposals${input.before === undefined ? "" : `?before=${encodeURIComponent(input.before)}`}`,
   treasury_show: input => `/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/treasury`,
   workspace_pulse: input => `/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/workspace/pulse`,
@@ -65,19 +60,23 @@ function client(tool: string): Record<string, string> {
   return {"x-regent-client": `webmcp/${tool}`, ...(visit && {"x-regent-visit": visit})}
 }
 
+// Public JSON without session authority. Every refusal it sends is
+// {"error": {"code", "message", "hint"}}, handed on as it came.
 async function read(tool: string, path: string, signal: AbortSignal | undefined): Promise<Reply> {
-  const accept = path.startsWith("/api/") ? "application/json" : "text/markdown"
   const response = await fetch(path, {
-    headers: {Accept: accept, ...client(tool)},
+    headers: {Accept: "application/json", ...client(tool)},
     credentials: "omit",
     cache: "no-store",
     redirect: "error",
     signal,
   })
-  if (response.ok) return {ok: true, status: response.status, data: await response.text()}
-  if (!response.headers.get("content-type")?.includes("json")) return {ok: false, status: response.status, data: await response.text()}
-  const {error} = (await response.json()) as {error: Refusal}
-  return {ok: false, status: response.status, error}
+  const answer = await response.json()
+  if (response.ok) return {ok: true, status: response.status, data: answer}
+  // Past a rate limit the agent is told how many seconds to wait.
+  const retryAfter = Number(response.headers.get("retry-after"))
+  return response.status === 429 && retryAfter > 0
+    ? {ok: false, status: response.status, retry_after: retryAfter, error: answer.error}
+    : {ok: false, status: response.status, error: answer.error}
 }
 
 // A call that ended without an answer. Anything but a read may already have

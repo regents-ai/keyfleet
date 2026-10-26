@@ -2644,6 +2644,26 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/KeyNotFoundError"}
+  /api/v1/about:
+    get:
+      operationId: getAbout
+      description: >-
+        The About page's title and its Markdown, the text GET /about serves as Markdown. Needs no
+        sign-in.
+      responses:
+        "200": {$ref: "#/components/responses/PublicDocument"}
+        "503": {$ref: "#/components/responses/NotOpenYet"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
+  /api/v1/docs:
+    get:
+      operationId: getDocs
+      description: >-
+        The developer documentation's title and its Markdown, the text GET /docs serves as
+        Markdown. Needs no sign-in.
+      responses:
+        "200": {$ref: "#/components/responses/PublicDocument"}
+        "503": {$ref: "#/components/responses/NotOpenYet"}
+        "429": {$ref: "#/components/responses/TooManyRequests"}
   /api/v1/fleets:
     get:
       operationId: listFleets
@@ -3274,6 +3294,30 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/MuteList"}
+    PublicDocument:
+      description: A public page's title and its Markdown
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/PublicDocument"}
+    NotOpenYet:
+      description: "not_open_yet: Keyfleet isn't open yet; Retry-After says when to ask again."
+      headers:
+        Retry-After: {$ref: "#/components/headers/NotOpenYetRetryAfter"}
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error]
+            properties:
+              error:
+                type: object
+                additionalProperties: false
+                required: [code, message, hint]
+                properties:
+                  code: {type: string, enum: [not_open_yet]}
+                  message: {type: string}
+                  hint: {type: string}
     DirectoryUnavailable:
       description: >-
         not_open_yet: this part of the site isn't open yet, and Retry-After says when to ask
@@ -5340,6 +5384,13 @@ components:
             code: {type: string, const: fleet_coming_soon}
             message: {type: string}
             hint: {type: string}
+    PublicDocument:
+      type: object
+      additionalProperties: false
+      required: [title, markdown]
+      properties:
+        title: {type: string}
+        markdown: {type: string, description: "The page, as its Markdown address serves it."}
     FleetList:
       type: object
       additionalProperties: false

@@ -77,27 +77,26 @@ test("the homepage and a fleet's pages offer every site tool, one set however th
 test("with nobody signed in and no proof, every public read answers, and an unknown fleet is refused", async ({page}) => {
   await open(page, fleetPath)
 
-  for (const name of ["about", "docs", "fleets_list"]) {
+  for (const name of ["about", "docs"]) {
     const read = await callTool(page, name, {})
     expect(read, name).toMatchObject({ok: true, status: 200})
-    expect(read.data.length, name).toBeGreaterThan(0)
+    expect(read.data.title.length, name).toBeGreaterThan(0)
+    expect(read.data.markdown.length, name).toBeGreaterThan(0)
   }
 
-  // The directory lists the fleet with the address fleets_show reads it at.
-  expect((await callTool(page, "fleets_list", {})).data).toContain(`/fleets/${fleet}.md`)
-  const fleetRead = await callTool(page, "fleets_show", {fleet_id: fleet})
-  expect(fleetRead).toMatchObject({ok: true, status: 200})
-  expect(fleetRead.data.length).toBeGreaterThan(0)
+  // The directory lists the fleet by the id fleets_show reads it with.
+  const list = await callTool(page, "fleets_list", {})
+  expect(list).toMatchObject({ok: true, status: 200})
+  expect(list.data.fleets.map((entry: {id: string}) => entry.id)).toContain(fleet)
+  expect(await callTool(page, "fleets_show", {fleet_id: fleet})).toMatchObject({ok: true, status: 200, data: {id: fleet}})
 
   for (const name of ["treasury_show", "proposals_list", "workspace_pulse"]) {
     const read = await callTool(page, name, {fleet_id: fleet})
-    expect(read, name).toMatchObject({ok: true, status: 200})
-    expect(JSON.parse(read.data).fleet_id, name).toBe(fleet)
+    expect(read, name).toMatchObject({ok: true, status: 200, data: {fleet_id: fleet}})
   }
 
   const unknown = await callTool(page, "fleets_show", {fleet_id: "no_such_fleet"})
-  expect(unknown).toMatchObject({ok: false, status: 404})
-  expect(unknown.data).toContain("/fleets.md")
+  expect(unknown).toMatchObject({ok: false, status: 404, error: {code: "fleet_unknown"}})
 })
 
 test("a paired agent learns who it is and who it acts for, and reading Credits spends none", async ({page}) => {

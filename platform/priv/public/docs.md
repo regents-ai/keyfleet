@@ -16,6 +16,8 @@ The health response is the plain text `ok`. It confirms the web service is respo
 
 The homepage, this documentation, the agent pages at `/agents`, About, Contact, What a fleet can take on, Privacy and Terms answer `Accept: text/markdown` at their ordinary addresses. Browsers receive HTML by default. Unknown page addresses return 404 rather than an empty document.
 
+`GET /api/v1/about` and `GET /api/v1/docs` answer About and this page as JSON: `{"title", "markdown"}`.
+
 ## Served files
 
 - `GET /agents.md`: current deployment availability and agent access boundaries, as `text/markdown`. It remains public while Keyfleet is closed, accepts GET and HEAD, and uses `Cache-Control: no-store` because the launch state can change. It does not open pairing, sign-in or product APIs.

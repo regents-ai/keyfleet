@@ -74,6 +74,13 @@ defmodule KeyfleetWeb.PublicPagesController do
       |> put_resp_content_type("application/xml")
       |> send_resp(200, PublicDocuments.sitemap())
 
+  @doc "A public page as JSON, `{title, markdown}`: the `about` and `docs` tools."
+  def document(conn, _params) do
+    %{document: path, page: page} = conn.assigns
+    %{markdown: markdown} = PublicDocuments.document(path)
+    json(conn, %{title: PublicDocuments.page(page)[:page_title], markdown: markdown})
+  end
+
   # These documents change only with a release: a sha256 ETag of the body and a
   # five-minute public cache, as `KeyfleetWeb.AgentFilesController` sends.
   defp cached(conn, body) do

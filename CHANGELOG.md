@@ -4932,3 +4932,16 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Check: `platform/test/keyfleet/required_value_test.exs` on a database built from every
   migration. It fails with the "does not exist" error on version 6. Listed in
   `platform/test/KEPT_TESTS.md`.
+
+## 2026-10-26 — The page tools read the site's own JSON
+
+- As ash-template: the `about` and `docs` tools read `GET /api/v1/about` and
+  `GET /api/v1/docs`, new addresses that answer the About page and the
+  developer documentation as `{"title", "markdown"}`; `fleets_list` and
+  `fleets_show` read `/api/v1/fleets` and `/api/v1/fleets/:id`. Every tool
+  answer is now JSON, and a refusal is the site's own `{"error": {...}}`.
+- Each of these calls now carries its tool name and visit, so the visit
+  lines show which tool a page's agent used. The Markdown pages stay as they
+  were for people and crawlers.
+- Both API descriptions list the two new addresses, and the developer
+  documentation names them.
