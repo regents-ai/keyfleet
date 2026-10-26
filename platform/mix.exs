@@ -55,7 +55,7 @@ defmodule Keyfleet.MixProject do
       {:dns_cluster, "~> 0.3.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.6", override: true},
-      {:ash, "~> 3.36"},
+      {:ash, "~> 3.37"},
       {:ash_phoenix, "~> 2.3.25"},
       {:ash_postgres, "== 2.13.0"},
       {:oban, "~> 2.24"},
@@ -109,7 +109,7 @@ defmodule Keyfleet.MixProject do
       {:ex_image_info, "~> 1.0"},
       # Cuts each Key card's small close-up out of its picture (libvips).
       {:vix, "~> 0.42.0"},
-      {:bandit, "~> 1.13"},
+      {:bandit, "~> 1.14"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
       {:credo_ash,

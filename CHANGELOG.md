@@ -4834,3 +4834,17 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   mirror. `:httpc` with certificate checks on fetched the vix, ex_keccak and
   ex_secp256k1 release files with 200, and `fly deploy --build-only --no-cache`
   built the image. As ash-template 150c8a7.
+
+## 2026-10-26 — Bandit 1.14.0 and Ash 3.37.2
+
+- Bandit 1.13.1 had eleven published advisories, nine high (HTTP/2 flow
+  control and HPACK sizes, 1-byte chunked bodies, chunk extension smuggling,
+  Content-Length parsing, WebSocket fragments); 1.14.0 fixes them. Ash 3.37.2
+  fixes a through relationship with a limit of 1 returning unrelated records,
+  and a multitenancy upsert advisory. `platform/mix.exs` now asks for
+  `~> 1.14` and `~> 3.37`; the lock also moves spark 2.7.9, splode 0.3.3,
+  sourceror 1.13.0 and crux 0.1.5. As ash-template 14bdb108.
+- ash_postgres stays at 2.13.0, because later versions write upserts without
+  the Repo's default prefix. Its two advisories (EEF-CVE-2026-115635, -115627)
+  need attribute multitenancy, which no Keyfleet resource uses, so
+  `mix hex.audit` still names them and `mix precommit` stops at that step.
