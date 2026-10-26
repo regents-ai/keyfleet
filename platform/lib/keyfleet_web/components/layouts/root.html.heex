@@ -30,6 +30,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content={@theme} />
     <meta name="agent-request-origin" content={KeyfleetWeb.Endpoint.url()} />
+    <meta :if={assigns[:visit]} name="regent-visit" content={assigns[:visit]} />
     <meta name="csrf-token" content={get_csrf_token()} />
     <%!-- The page's route pattern, never its address, for its timings (assets/js/vitals.ts). --%>
     <meta :if={vitals_route} name="vitals-route" content={vitals_route} />

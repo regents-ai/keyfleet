@@ -35,6 +35,15 @@ if config_env() == :test and System.get_env("KEYFLEET_BROWSER_TEST") == "1" do
   # page for as long as it is open. One homepage load alone takes seven (the
   # request, the page and its five reads), so ten runs out between pages.
   config :keyfleet, Keyfleet.Repo, pool_size: 20
+
+  # The browser test server (playwright.config.ts) writes its lines in
+  # production's shape to a file, which test/browser/visits.spec.ts reads to
+  # replay a visit.
+  config :logger, level: :info
+
+  config :logger, :default_handler,
+    config: [file: String.to_charlist(Path.expand("../tmp/walk-lines.jsonl", __DIR__))],
+    formatter: LoggerJSON.Formatters.Basic.new(metadata: KeyfleetWeb.VisitLog.fields())
 end
 
 # Whether the product surfaces are open: KEYFLEET_APP_SURFACES says exactly
@@ -138,6 +147,11 @@ if database_config do
 end
 
 if config_env() == :prod do
+  # One JSON object a line, which Fly Sentinel reads, carrying only the visit
+  # fields (KeyfleetWeb.VisitLog). Release commands write the same shape.
+  config :logger, :default_handler,
+    formatter: LoggerJSON.Formatters.Basic.new(metadata: KeyfleetWeb.VisitLog.fields())
+
   unless migrating? do
     # bin/site and bin/graph name the machine; the machines of one app find
     # each other through its private DNS name (fly.toml).

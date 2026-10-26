@@ -81,12 +81,14 @@ defmodule KeyfleetWeb.Endpoint do
     plug Phoenix.CodeReloader
   end
 
+  # Which visit, and which kind of caller, each line of this request belongs to.
+  plug KeyfleetWeb.VisitLog
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
-  # One budget per client address, shared by the health check and every /api
-  # path, answered or not. Every answer, including a signed agent request
-  # refused before the router, says what is left of it; past it the answer is
-  # 429 with Retry-After.
+  # One budget per client address, shared by the health check, the browser's
+  # visit reports and every /api path, answered or not. Every answer, including
+  # a signed agent request refused before the router, says what is left of it;
+  # past it the answer is 429 with Retry-After.
   plug :limit_rate
 
   plug KeyfleetWeb.Plugs.SignedAgent
@@ -113,6 +115,9 @@ defmodule KeyfleetWeb.Endpoint do
   plug KeyfleetWeb.Router
 
   defp limit_rate(%Plug.Conn{path_info: ["healthz"]} = conn, _opts),
+    do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
+
+  defp limit_rate(%Plug.Conn{method: "POST", path_info: ["visit-log"]} = conn, _opts),
     do: RegentAgentAccess.RateLimit.call(conn, api_rate_limit())
 
   defp limit_rate(%Plug.Conn{path_info: ["api" | _]} = conn, _opts),

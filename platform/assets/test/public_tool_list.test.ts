@@ -5,7 +5,7 @@ import manifest from "../../priv/tool_manifest.json" with {type: "json"}
 const origin = "https://keyfleet.ai"
 
 beforeEach(() => {
-  vi.stubGlobal("window", {location: {origin}})
+  vi.stubGlobal("window", {location: {origin}, setTimeout: vi.fn(), clearTimeout: vi.fn()})
   vi.stubGlobal("document", {querySelector: () => ({content: origin})})
 })
 

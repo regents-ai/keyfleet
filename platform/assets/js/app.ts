@@ -49,6 +49,10 @@ import {SidePanel} from "./hooks/side_panel"
 import {TokenMenu} from "./hooks/token_menu"
 import {VerifiedConnections} from "./hooks/verified_connections"
 import {mountMotion} from "./motion"
+import {installVisitLog} from "./visit_log"
+
+// First, so an error anywhere below is reported too.
+installVisitLog()
 
 type ShellHook = Hook & {
   el: HTMLElement

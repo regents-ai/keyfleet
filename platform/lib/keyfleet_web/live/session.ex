@@ -22,7 +22,10 @@ defmodule KeyfleetWeb.Live.Session do
   def render_context(conn) do
     conn.assigns.current_lineage
     |> rendered_topic()
-    |> Map.put("render_route", local_route(conn.request_path, conn.query_string))
+    |> Map.merge(%{
+      "render_route" => local_route(conn.request_path, conn.query_string),
+      "visit" => conn.assigns.visit
+    })
   end
 
   def on_mount(:load_human, _params, session, socket) do

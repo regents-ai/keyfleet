@@ -381,6 +381,7 @@ defmodule KeyfleetWeb.Router do
 
     get "/auth/csrf", PrivySessionController, :csrf
     post "/auth/privy/failure", PrivySessionController, :failure
+    post "/visit-log", VisitLogController, :create, log: false
     post "/auth/privy/session", PrivySessionController, :create
     get "/auth/session", PrivySessionController, :show
     delete "/auth/privy/session", PrivySessionController, :delete

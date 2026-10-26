@@ -8,6 +8,7 @@ defmodule Keyfleet.Application do
   @impl true
   def start(_type, _args) do
     Keyfleet.ErrorHandlers.attach()
+    :ok = KeyfleetWeb.VisitLog.Events.attach()
 
     children =
       Application.fetch_env!(:keyfleet, :machine)

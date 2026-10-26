@@ -4882,3 +4882,36 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - One migration (`20261026194845_ash_functions_v7_extensions_1`) redefines
   the `ash_required` database helper, whose old version failed with
   "function does not exist" on a missing required value.
+
+## 2026-10-26 — Visit lines
+
+- Production writes one JSON object a line (LoggerJSON's basic shape) carrying only
+  five fields: `visit`, `request_id`, `surface`, `actor` and `event` (`name`,
+  `where`, `outcome`, `ms`), so a visit can be replayed from its lines alone. Phoenix's
+  own request lines are off in production. As ash-template e060f3a (its
+  `docs/logging-replay-plan.md`, Sean's decisions of 26 Oct).
+- `KeyfleetWeb.VisitLog` gives each browser visit a random id in an httpOnly session
+  cookie (the page's `regent-visit` meta tag hands it to the page's scripts), reads
+  the caller's kind from `x-regent-client`, and writes accounts and agents only as a
+  one-way code keyed from the site's secret; an agent's code comes from its wallet.
+  `KeyfleetWeb.VisitLog.Events` writes requests, tool calls, pages, presses, Ash
+  actions, Oban jobs and outgoing calls from their `:telemetry` events, on both
+  machines.
+- `POST /visit-log` takes what only the browser knows: a page error, a browser tool
+  that never got an answer, and a wallet step whose answer never reached the server,
+  at most 20 a batch, rate limited with the health check and the API. The site
+  stores nothing new.
+- Browser tools send `x-regent-client: webmcp/<tool>` and the visit, the signed ones
+  through the signed transport's new required `requestHeaders` setting: the
+  elixir-utils libraries move to `c4fdaae6e9bdb2dd7b09e9792aecdde2109c385d`, whose
+  only change is that setting.
+- An `/api` call that names no tool or command but carries a visit, in the `_visit`
+  cookie or in `x-regent-visit`, is the page's own script: its line keeps that visit
+  and says surface `page` (ash-template b47b11a).
+- jose moves to 1.11.13 (through regent_privy and joken), which fixes the eight
+  advisories published 26 Oct, one high (EEF-CVE-2026-65625 to -65632). Lockfile only.
+- Checks: property tests over the line writer, the plug and the browser's reports
+  (`KeyfleetWeb.VisitLogTest`), and a chain walk check (`visits.spec.ts`) that replays
+  muting a Key in a room from the server's lines; both walk servers write their lines
+  in production's shape to `platform/tmp/walk-lines.jsonl`. Listed in
+  `platform/test/KEPT_TESTS.md`.

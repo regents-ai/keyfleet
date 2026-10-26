@@ -143,3 +143,20 @@ in it and its next step.
 | an agent pairs with a code from regents.sh and checks in, signed for Keyfleet (now also asks whoami before and after) | `KeyfleetWeb.SharedAgentPairingTest` | whoami answers `not_paired` before pairing and `paired` after, each with this site's `allowed` list and next step. |
 | an agent paired by a person with no Keyfleet account checks in to person_not_here (now also asks whoami) | `KeyfleetWeb.SharedAgentPairingTest` | whoami answers `person_not_here` until the person signs in here. |
 | every agent document lists what whoami allows in each status and its next step | `KeyfleetWeb.WhatYouCanDoTest` | `/llms.txt` and `/agents.md` say exactly what whoami answers. |
+
+## Visit lines
+
+Added on 26 October 2026 with the template's visit lines (ash-template e060f3a,
+Sean's decisions of 26 Oct on its logging plan): production's log lines carry
+only a visit, the caller's kind, a one-way code for who acted and what happened,
+so a visit can be told again from them. The walk runs in `npm run test:chain`
+(Chromium).
+
+| Test | Module or spec | Protects |
+| --- | --- | --- |
+| an event keeps only fitting where and outcome values | `KeyfleetWeb.VisitLogTest` | Whatever an event is handed, its line holds only the site's own names and shapes, or `other`. |
+| a request's surface, tool and visit come only from fitting headers | `KeyfleetWeb.VisitLogTest` | Headers a caller sends never reach a line unless they fit the shape a page tool or Regents CLI sends. |
+| the browser's reports keep only the lines a page can send, twenty at most | `KeyfleetWeb.VisitLogTest` | A browser's report adds at most twenty lines, each one a page can send. |
+| a page's own path is written as its route, and a page the site lacks as unmatched | `KeyfleetWeb.VisitLogTest` | A page error names its route, never the Key, fleet or address it was on. |
+| a page's own script calling the API belongs to its visit, by header or cookie | `KeyfleetWeb.VisitLogTest` | A page's own API reads stay in its visit as surface `page`; an API call with no visit stays `agent_http` with none. |
+| opening a room and muting a Key replays in order from the visit's lines | `visits.spec.ts` | The server's lines for one visit tell its request, page, saved change and press in order, under one person code, and hold nothing anyone wrote and no wallet. |

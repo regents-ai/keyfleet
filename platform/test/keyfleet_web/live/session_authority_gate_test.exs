@@ -21,9 +21,12 @@ defmodule KeyfleetWeb.Live.SessionAuthorityGateTest do
     # integrity-only: anyone holding the markup can read what it carries.
     assert %{session: session} = static_session!(markup)
 
+    # The visit code is random, belongs to no account and is already in the
+    # page's own meta tag (KeyfleetWeb.VisitLog).
     assert session == %{
              "render_topic" => SessionAuthority.topic(lineage),
-             "render_route" => "/syndicate/1"
+             "render_route" => "/syndicate/1",
+             "visit" => nil
            }
 
     refute markup =~ lineage
@@ -38,14 +41,14 @@ defmodule KeyfleetWeb.Live.SessionAuthorityGateTest do
     assert session["render_topic"] == cookie_topic
   end
 
-  test "CANONICAL_AUTHORITY_ROW: an anonymous render signs only its route" do
+  test "CANONICAL_AUTHORITY_ROW: an anonymous render signs only its route and visit" do
     assert %{session: %{"render_route" => "/syndicate/1"} = session} =
              build_conn()
              |> get("/syndicate/1")
              |> html_response(200)
              |> static_session!()
 
-    assert Map.keys(session) == ["render_route"]
+    assert Map.keys(session) == ["render_route", "visit"]
   end
 
   # A LiveView outside the product shell, so what this characterizes is the

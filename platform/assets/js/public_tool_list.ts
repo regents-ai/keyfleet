@@ -9,11 +9,13 @@ import {signedTools, type SignedOperation, type SignedInput} from "../vendor/reg
 
 import {described} from "./tool_description"
 import {inputProblem, type Schema} from "./tool_input"
+import {report, visitId} from "./visit_log"
 
 function signedTransport() {
   return signedTools({origin: window.location.origin,
     trustedOrigins: [document.querySelector<HTMLMetaElement>('meta[name="agent-request-origin"]')?.content ?? ""],
     audience: manifest.audience, proofHeaders: manifest.proof_headers,
+    requestHeaders: client,
     // Only the signed tools are operations; each is sent with its operation's own inputs.
     operations: manifest.tools.flatMap(entry =>
       "operation_input_schema" in entry ? [{...entry, input_schema: entry.operation_input_schema}] : [],
@@ -41,26 +43,32 @@ type Reply =
   | {ok: false; status: number; error: Refusal}
   | {ok: false; status: number; data: string}
 
-type Request = (input: Record<string, string>, signal: AbortSignal | undefined) => Promise<Reply>
-
-// Each tool reads the site's own public document, in the Markdown an agent
-// gets when it asks for that page: the About page, the docs, or the open
-// fleet directory. A refusal is passed on as the site gives it: its error when
-// it answers in JSON, and otherwise its words, such as a missing fleet's
-// Markdown 404 that links every fleet.
-const requests: Record<string, Request> = {
-  about: (_input, signal) => read("/about", signal),
-  docs: (_input, signal) => read("/docs", signal),
-  fleets_list: (_input, signal) => read("/fleets.md", signal),
-  fleets_show: (input, signal) => read(`/fleets/${encodeURIComponent(input.fleet_id)}.md`, signal),
-  proposals_list: (input, signal) => read(`/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/proposals${input.before === undefined ? "" : `?before=${encodeURIComponent(input.before)}`}`, signal, "application/json"),
-  treasury_show: (input, signal) => read(`/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/treasury`, signal, "application/json"),
-  workspace_pulse: (input, signal) => read(`/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/workspace/pulse`, signal, "application/json"),
+// Each tool reads the site's own public document, by the path it asks: the
+// Markdown an agent gets when it asks for that page (the About page, the docs,
+// or the open fleet directory), or the API's JSON. A refusal is passed on as
+// the site gives it: its error when it answers in JSON, and otherwise its
+// words, such as a missing fleet's Markdown 404 that links every fleet.
+const paths: Record<string, (input: Record<string, string>) => string> = {
+  about: () => "/about",
+  docs: () => "/docs",
+  fleets_list: () => "/fleets.md",
+  fleets_show: input => `/fleets/${encodeURIComponent(input.fleet_id)}.md`,
+  proposals_list: input => `/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/proposals${input.before === undefined ? "" : `?before=${encodeURIComponent(input.before)}`}`,
+  treasury_show: input => `/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/treasury`,
+  workspace_pulse: input => `/api/v1/fleets/${encodeURIComponent(input.fleet_id)}/workspace/pulse`,
 }
 
-async function read(path: string, signal: AbortSignal | undefined, accept = "text/markdown"): Promise<Reply> {
+// Every call names its tool and this visit, so the site's log can put the call
+// beside the rest of the visit (KeyfleetWeb.VisitLog). Neither is a credential.
+function client(tool: string): Record<string, string> {
+  const visit = visitId()
+  return {"x-regent-client": `webmcp/${tool}`, ...(visit && {"x-regent-visit": visit})}
+}
+
+async function read(tool: string, path: string, signal: AbortSignal | undefined): Promise<Reply> {
+  const accept = path.startsWith("/api/") ? "application/json" : "text/markdown"
   const response = await fetch(path, {
-    headers: {Accept: accept},
+    headers: {Accept: accept, ...client(tool)},
     credentials: "omit",
     cache: "no-store",
     redirect: "error",
@@ -70,6 +78,14 @@ async function read(path: string, signal: AbortSignal | undefined, accept = "tex
   if (!response.headers.get("content-type")?.includes("json")) return {ok: false, status: response.status, data: await response.text()}
   const {error} = (await response.json()) as {error: Refusal}
   return {ok: false, status: response.status, error}
+}
+
+// A call that ended without an answer. Anything but a read may already have
+// reached the server, so its outcome is unknown. The site never heard it, so
+// the page reports it.
+function unsent(entry: Entry, signal: AbortSignal | undefined): void {
+  if (!entry.annotations.readOnlyHint) report({name: "tool.unsent", where: entry.name, outcome: "outcome_unknown"})
+  else if (!signal?.aborted) report({name: "tool.unsent", where: entry.name, outcome: "unreachable"})
 }
 
 // The signing transport refuses with a reason such as "missing_field:title".
@@ -136,6 +152,7 @@ export const tools: ModelContextTool[] = entries.filter(entry => entry.scope ===
         const sent = error instanceof TypeError || (error as Error).name === "AbortError"
         if (!sent) return refused("signed_call_refused", entry.name, error,
           "Nothing was sent. Prepare this exact request with prepare_agent_request, sign it with your SIWA signer, then call again with input, request and proof. If you have no signer, report that as a blocker.")
+        unsent(entry, signal)
         return {ok: false, error: {code: "signed_request_failed", message: String(error),
           hint: entry.state_changing ? "Check what happened before you send it again. Keep the same idempotency_key or command_id, and sign the request again."
             : "Try again in a moment."}}
@@ -144,8 +161,9 @@ export const tools: ModelContextTool[] = entries.filter(entry => entry.scope ===
     const problem = inputProblem(input, entry.input_schema)
     if (problem) return {ok: false, error: {code: "invalid_input", message: problem, hint: "Fix the call, then call again."}}
     try {
-      return await requests[entry.name](input as Record<string, string>, signal)
+      return await read(entry.name, paths[entry.name](input as Record<string, string>), signal)
     } catch (_error) {
+      unsent(entry, signal)
       return signal?.aborted
         ? {ok: false, error: {code: "cancelled", message: "The read was cancelled; nothing changed.", hint: "Call again when you want it."}}
         : {ok: false, error: {code: "unreachable", message: "The page could not be read.", hint: "Try again in a moment."}}

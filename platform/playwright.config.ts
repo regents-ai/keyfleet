@@ -31,6 +31,7 @@ export default defineConfig({
     "workspace_motion.spec.ts",
     "group_flow.spec.ts",
     "treasury_read.spec.ts",
+    "visits.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,
@@ -51,7 +52,7 @@ export default defineConfig({
   // KEYFLEET_BROWSER_TEST, which would open the port before the server is ready.
   webServer: {
     command: [
-      "mkdir -p tmp/cert",
+      "mkdir -p tmp/cert && rm -f tmp/walk-lines.jsonl",
       "(test -f tmp/cert/localhost.pem || openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=localhost -addext subjectAltName=DNS:localhost -keyout tmp/cert/localhost_key.pem -out tmp/cert/localhost.pem)",
       "MIX_ENV=test mix ecto.create --quiet",
       "MIX_ENV=test mix keyfleet.setup_local_auth",

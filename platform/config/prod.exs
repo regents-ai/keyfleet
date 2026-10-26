@@ -25,3 +25,8 @@ config :keyfleet, :graph,
 
 # Requests and outcomes are logged; database queries and debug detail are not.
 config :logger, level: :info
+
+# The visit lines (KeyfleetWeb.VisitLog) say what each request and page did,
+# by route. Phoenix's own request and connection lines would repeat them with
+# each raw path and its parameters, so they are off.
+config :phoenix, :logger, false
