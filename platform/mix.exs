@@ -221,8 +221,9 @@ defmodule Keyfleet.MixProject do
         # PostingKey record, with its domain. Workspace pins add two: the Pin
         # record in the Graph domain, and its policy's access check. Main counted
         # 87 on 23 Oct, one above the 86 recorded here; the PeopleRoomWriter
-        # check brings it to 88.
-        "xref graph --label compile-connected --fail-above 88",
+        # check brings it to 88. Projects add three: the Project record, with its
+        # domain, and its KeyActor and KeyReader checks.
+        "xref graph --label compile-connected --fail-above 91",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

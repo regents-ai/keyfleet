@@ -163,7 +163,8 @@ config :keyfleet,
     Keyfleet.WalletSteps,
     Keyfleet.Early,
     Keyfleet.Notebooks,
-    Keyfleet.Code
+    Keyfleet.Code,
+    Keyfleet.Projects
   ],
   generators: [timestamp_type: :utc_datetime]
 

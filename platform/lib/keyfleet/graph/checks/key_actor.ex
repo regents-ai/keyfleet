@@ -48,7 +48,13 @@ defmodule Keyfleet.Graph.Checks.KeyActor do
 
     # A key whose edits are restricted passes here, so that the writer's own
     # check refuses the write and says why.
-    case command(actor, arguments.fleet_id, arguments.as_key, arguments.command_id, within) do
+    case command(
+           actor,
+           arguments.fleet_id,
+           arguments.as_key,
+           Map.get(arguments, :command_id),
+           within
+         ) do
       {:ok, _command} -> true
       {:error, %EditsRestrictedError{}} -> true
       {:error, _error} -> false

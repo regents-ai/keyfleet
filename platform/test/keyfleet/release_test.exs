@@ -228,6 +228,7 @@ defmodule Keyfleet.ReleaseTest do
              "poll_votes",
              "polls",
              "posting_keys",
+             "projects",
              "proposal_cancellations",
              "proposal_executions",
              "proposal_votes",
