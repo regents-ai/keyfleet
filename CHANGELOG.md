@@ -4866,3 +4866,19 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   a sandbox of its own. The fourth is `KeyfleetWeb.ScriptPreloads`, whose
   read of `priv/esbuild-meta.json` takes a fixed path in the application's
   own priv folder, now noted beside its skip.
+
+## 2026-10-26 — ash_postgres from Regent's copy of 2.15.2
+
+- `platform/mix.exs` takes ash_postgres from Regent's copy of 2.15.2
+  (regents-ai/ash_postgres cc886ab3), which adds ash-project/ash_postgres#910:
+  upserts and merges use the Repo's default prefix, so they write into
+  `keyfleet_app` on the shared database. That fixes the two ash_postgres
+  advisories (EEF-CVE-2026-115635, -115627), and `mix hex.audit` is clean
+  again. ash_sql moves to 0.8.4 and the elixir-utils libraries to 56fa86bd,
+  which use the same copy. As ash-template 07b9188.
+- `Keyfleet.Repo` now names PostgreSQL 17, the version the shared database
+  runs; the old 14 kept upserts off MERGE, which dropped the schema before
+  this fix.
+- One migration (`20261026194845_ash_functions_v7_extensions_1`) redefines
+  the `ash_required` database helper, whose old version failed with
+  "function does not exist" on a missing required value.
