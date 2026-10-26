@@ -4848,3 +4848,21 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the Repo's default prefix. Its two advisories (EEF-CVE-2026-115635, -115627)
   need attribute multitenancy, which no Keyfleet resource uses, so
   `mix hex.audit` still names them and `mix precommit` stops at that step.
+
+## 2026-10-26 — Credo and Sobelow pass again
+
+- `mix credo --strict` had named ten findings since about 21 Oct: functions
+  nested three deep in the notebook gateway (`forward_http`, `session_start`),
+  the notebook makers (`under`) and four test hubs, an identity `with` in
+  `Keyfleet.Notebooks.membership/2`, a one-clause `with` in
+  `Keyfleet.Notebooks.Makers.result/4`, and a test hub of complexity 12. Each
+  is now a `case` or a small named helper; what every function returns is
+  unchanged.
+- `mix sobelow --exit` stopped on four findings. Three were the notebook
+  gateway's saved pages, whose entries in `platform/.sobelow-skips` went stale
+  when their line numbers moved; those three entries are gone, and
+  `send_kept` and `send_saved_output` carry an inline `sobelow_skip` instead,
+  which survives moved lines: both send a notebook's own page, on purpose, in
+  a sandbox of its own. The fourth is `KeyfleetWeb.ScriptPreloads`, whose
+  read of `priv/esbuild-meta.json` takes a fixed path in the application's
+  own priv folder, now noted beside its skip.

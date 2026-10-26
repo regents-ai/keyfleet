@@ -267,13 +267,7 @@ defmodule Keyfleet.BrowserWorkspace do
 
   # A run read again has finished.
   defp jobs("GET", [job_id, "runs", run_id], id, conn, request) do
-    finish = fn job ->
-      runs =
-        for run <- job["runs"],
-            do: if(run["run_id"] == run_id, do: %{run | "status" => "succeeded"}, else: run)
-
-      %{job | "runs" => runs}
-    end
+    finish = fn job -> %{job | "runs" => Enum.map(job["runs"], &finished(&1, run_id))} end
 
     with %{} <- find_run(request, id, job_id, run_id),
          :ok <- update_job(request, id, job_id, finish) do
@@ -313,13 +307,16 @@ defmodule Keyfleet.BrowserWorkspace do
 
   defp update_job(request, id, job_id, change) do
     Agent.update(request.state, fn state ->
-      jobs =
-        for job <- Map.get(state.jobs, id, []),
-            do: if(job["id"] == job_id, do: change.(job), else: job)
-
+      jobs = Enum.map(Map.get(state.jobs, id, []), &changed(&1, job_id, change))
       put_in(state, [:jobs, id], jobs)
     end)
   end
+
+  defp changed(%{"id" => job_id} = job, job_id, change), do: change.(job)
+  defp changed(job, _job_id, _change), do: job
+
+  defp finished(%{"run_id" => run_id} = run, run_id), do: %{run | "status" => "succeeded"}
+  defp finished(run, _run_id), do: run
 
   defp random(length, alphabet \\ ~c"0123456789abcdefghijklmnopqrstuvwxyz"),
     do: for(_ <- 1..length, into: "", do: <<Enum.random(alphabet)>>)

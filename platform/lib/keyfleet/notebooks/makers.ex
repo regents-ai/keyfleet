@@ -58,14 +58,18 @@ defmodule Keyfleet.Notebooks.Makers do
   (`ver_…`) is its notebook's author's, a run's (`run_…`) whoever started it.
   """
   def result(fleet_id, subject, notebook_id, source_id) do
-    with {:ok, project_id} when is_binary(project_id) <- Notebooks.project_id(fleet_id) do
-      case source_id do
-        "run_" <> _ -> result_run(fleet_id, subject, project_id, notebook_id, source_id)
-        _version -> notebook(fleet_id, subject, project_id, notebook_id)
-      end
-    else
-      {:ok, nil} -> {:error, :not_found}
-      {:error, _error} -> {:error, :unavailable}
+    case Notebooks.project_id(fleet_id) do
+      {:ok, project_id} when is_binary(project_id) ->
+        case source_id do
+          "run_" <> _ -> result_run(fleet_id, subject, project_id, notebook_id, source_id)
+          _version -> notebook(fleet_id, subject, project_id, notebook_id)
+        end
+
+      {:ok, nil} ->
+        {:error, :not_found}
+
+      {:error, _error} ->
+        {:error, :unavailable}
     end
   end
 
@@ -202,10 +206,7 @@ defmodule Keyfleet.Notebooks.Makers do
     with {:ok, items} <- entries(fleet_id, subject, project_id, notebook_id, folder, nil, []) do
       Enum.reduce_while(items, {:ok, []}, fn
         %{"kind" => "directory", "path" => "/" <> key}, {:ok, leaves} ->
-          case leaves(fleet_id, subject, project_id, notebook_id, key) do
-            {:ok, found} -> {:cont, {:ok, found ++ leaves}}
-            error -> {:halt, error}
-          end
+          fleet_id |> leaves(subject, project_id, notebook_id, key) |> add_found(leaves)
 
         %{"path" => "/" <> key}, {:ok, leaves} ->
           {:cont, {:ok, [key | leaves]}}
@@ -215,6 +216,9 @@ defmodule Keyfleet.Notebooks.Makers do
       end)
     end
   end
+
+  defp add_found({:ok, found}, leaves), do: {:cont, {:ok, found ++ leaves}}
+  defp add_found(error, _leaves), do: {:halt, error}
 
   defp entries(fleet_id, subject, project_id, notebook_id, folder, cursor, items) do
     params = [path: folder, limit: @page] ++ if(cursor, do: [cursor: cursor], else: [])

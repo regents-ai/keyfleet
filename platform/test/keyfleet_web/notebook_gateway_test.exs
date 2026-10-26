@@ -968,38 +968,8 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
          %Plug.Conn{method: "GET", request_path: "/api/v1/projects/proj-fleet/notebooks/" <> rest} =
            conn,
          holder
-       ) do
-    case String.split(rest, "/") do
-      [notebook] ->
-        author =
-          if notebook == "nb-0000000000000001", do: "u_other", else: Notebooks.subject(holder)
-
-        json(conn, 200, %{success: true, data: %{meta: %{author: author}}})
-
-      ["nb-0000000000000001", "sessions", _session] ->
-        json(conn, 200, %{success: true, data: %{user_id: "u_other"}})
-
-      ["nb-0000000000000001", "jobs", _job] ->
-        json(conn, 200, %{success: true, data: %{created_by: "u_other"}})
-
-      ["nb-0000000000000001", "jobs", _job, "runs", _run] ->
-        json(conn, 200, %{success: true, data: %{triggered_by: "u_other"}})
-
-      [_notebook, "workspace", "entries"] ->
-        items =
-          case fetch_query_params(conn).query_params["path"] do
-            "data" -> [%{path: "/data/theirs.csv", kind: "file"}]
-            "kept" -> [%{path: "/kept/mine.csv", kind: "file"}]
-            "shared" -> [%{path: "/shared/theirs.csv", kind: "file"}]
-            _file -> []
-          end
-
-        json(conn, 200, %{success: true, data: %{items: items}})
-
-      _other ->
-        json(conn, 200, %{success: true, data: %{}})
-    end
-  end
+       ),
+       do: notebook_answer(conn, holder, String.split(rest, "/"))
 
   defp hub_answer(
          %Plug.Conn{method: "POST", request_path: "/api/v1/projects/" <> _} = conn,
@@ -1013,6 +983,32 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
   end
 
   defp hub_answer(conn, _holder), do: json(conn, 200, %{success: true, data: %{}})
+
+  defp notebook_answer(conn, holder, [notebook]) do
+    author = if notebook == "nb-0000000000000001", do: "u_other", else: Notebooks.subject(holder)
+    json(conn, 200, %{success: true, data: %{meta: %{author: author}}})
+  end
+
+  defp notebook_answer(conn, _holder, ["nb-0000000000000001", "sessions", _session]),
+    do: json(conn, 200, %{success: true, data: %{user_id: "u_other"}})
+
+  defp notebook_answer(conn, _holder, ["nb-0000000000000001", "jobs", _job]),
+    do: json(conn, 200, %{success: true, data: %{created_by: "u_other"}})
+
+  defp notebook_answer(conn, _holder, ["nb-0000000000000001", "jobs", _job, "runs", _run]),
+    do: json(conn, 200, %{success: true, data: %{triggered_by: "u_other"}})
+
+  defp notebook_answer(conn, _holder, [_notebook, "workspace", "entries"]) do
+    items = entries(fetch_query_params(conn).query_params["path"])
+    json(conn, 200, %{success: true, data: %{items: items}})
+  end
+
+  defp notebook_answer(conn, _holder, _other), do: json(conn, 200, %{success: true, data: %{}})
+
+  defp entries("data"), do: [%{path: "/data/theirs.csv", kind: "file"}]
+  defp entries("kept"), do: [%{path: "/kept/mine.csv", kind: "file"}]
+  defp entries("shared"), do: [%{path: "/shared/theirs.csv", kind: "file"}]
+  defp entries(_file), do: []
 
   defp json(conn, status, body),
     do:

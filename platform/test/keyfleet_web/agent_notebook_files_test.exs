@@ -291,11 +291,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
         all = Enum.flat_map(kept["jobs"], & &1["runs"])
         run = %{"run_id" => "run_#{length(all) + 1}", "status" => "queued"}
 
-        jobs =
-          for job <- kept["jobs"],
-              do: if(job["id"] == job_id, do: %{job | "runs" => [run | job["runs"]]}, else: job)
-
-        {run, %{kept | "jobs" => jobs}}
+        {run, %{kept | "jobs" => Enum.map(kept["jobs"], &with_run(&1, job_id, run))}}
       end)
 
     json(conn, 201, %{success: true, data: run})
@@ -401,6 +397,9 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
        do: json(conn, 201, %{success: true, data: %{}})
 
   defp hub_answer(conn, _files, _body), do: json(conn, 200, %{success: true, data: %{}})
+
+  defp with_run(%{"id" => job_id} = job, job_id, run), do: %{job | "runs" => [run | job["runs"]]}
+  defp with_run(job, _job_id, _run), do: job
 
   defp item(path, content),
     do: %{

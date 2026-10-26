@@ -2145,38 +2145,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   defp hub!(project_id, answer) do
     hub =
       KeyfleetWeb.SignedAgentHelpers.serve!(:hub, fn conn, _opts ->
-        conn = Plug.Conn.fetch_query_params(conn)
-
-        case answer do
-          :down ->
-            Plug.Conn.send_resp(conn, 503, "")
-
-          answer ->
-            case conn.request_path do
-              "/api/v1/projects/" <> ^project_id <> "/notebooks" ->
-                Req.Test.json(conn, %{
-                  "success" => true,
-                  "data" => %{"items" => answer.(conn.query_params), "next_cursor" => nil}
-                })
-
-              # One notebook, asked for by its id.
-              "/api/v1/projects/" <> ^project_id <> "/notebooks/" <> id ->
-                case answer.({:notebook, id}) do
-                  nil ->
-                    conn |> Plug.Conn.put_status(404) |> Req.Test.json(%{"success" => false})
-
-                  :down ->
-                    Plug.Conn.send_resp(conn, 503, "")
-
-                  {:slow, meta} ->
-                    Process.sleep(500)
-                    Req.Test.json(conn, %{"success" => true, "data" => %{"meta" => meta}})
-
-                  meta ->
-                    Req.Test.json(conn, %{"success" => true, "data" => %{"meta" => meta}})
-                end
-            end
-        end
+        conn |> Plug.Conn.fetch_query_params() |> hub_answer(project_id, answer)
       end)
 
     notebooks = Application.fetch_env!(:keyfleet, :notebooks)
@@ -2184,6 +2153,35 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     Application.put_env(:keyfleet, :notebooks, Keyword.put(notebooks, :fleets, %{@fleet => hub}))
     Keyfleet.Notebooks.record_hub!(@fleet, project_id, actor: %Actors.System{})
   end
+
+  defp hub_answer(conn, _project_id, :down), do: Plug.Conn.send_resp(conn, 503, "")
+
+  defp hub_answer(conn, project_id, answer) do
+    case conn.request_path do
+      "/api/v1/projects/" <> ^project_id <> "/notebooks" ->
+        Req.Test.json(conn, %{
+          "success" => true,
+          "data" => %{"items" => answer.(conn.query_params), "next_cursor" => nil}
+        })
+
+      # One notebook, asked for by its id.
+      "/api/v1/projects/" <> ^project_id <> "/notebooks/" <> id ->
+        notebook_answer(conn, answer.({:notebook, id}))
+    end
+  end
+
+  defp notebook_answer(conn, nil),
+    do: conn |> Plug.Conn.put_status(404) |> Req.Test.json(%{"success" => false})
+
+  defp notebook_answer(conn, :down), do: Plug.Conn.send_resp(conn, 503, "")
+
+  defp notebook_answer(conn, {:slow, meta}) do
+    Process.sleep(500)
+    Req.Test.json(conn, %{"success" => true, "data" => %{"meta" => meta}})
+  end
+
+  defp notebook_answer(conn, meta),
+    do: Req.Test.json(conn, %{"success" => true, "data" => %{"meta" => meta}})
 
   defp claims(pass) do
     [_header, payload, _signature] = String.split(pass, ".")

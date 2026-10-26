@@ -595,10 +595,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
               receive_timeout: http_timeout(conn)
             )
             |> answered(done)
-            |> case do
-              {:refused, reason} -> maker_refusal(conn, reason)
-              answer -> stream_back(answer, conn, fleet_id)
-            end
+            |> answer_back(conn, fleet_id)
 
           {:error, reason} ->
             maker_refusal(conn, reason)
@@ -620,6 +617,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   defp answered(answer, _done), do: answer
+
+  defp answer_back({:refused, reason}, conn, _fleet_id), do: maker_refusal(conn, reason)
+  defp answer_back(answer, conn, fleet_id), do: stream_back(answer, conn, fleet_id)
 
   defp http_timeout(%{
          method: "POST",
@@ -741,7 +741,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # Starting an app session in place of another stops that one, so only its
   # starter does; editing another member's notebook opens a sandbox of one's
   # own that saves nothing (the hub's temporary sandbox).
-  defp session_start(conn, ids, {headers, body} = request) do
+  defp session_start(conn, ids, {_headers, body} = request) do
     with {:ok, start} <- session_body(conn, body) do
       case start do
         %{"mode" => "app", "replace_app_session_id" => session_id} ->
@@ -751,18 +751,22 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
           {:ok, request, &done/1}
 
         _edit ->
-          case apply(Makers, :notebook, ids) do
-            {:error, :not_maker} ->
-              copy = Jason.encode!(Map.put(start, "edit_intent", "temporary"))
-
-              {:ok,
-               {List.keystore(headers, "content-type", 0, {"content-type", "application/json"}),
-                copy}, &done/1}
-
-            _maker_or_hub ->
-              only_maker(:notebook, ids, [], request)
-          end
+          edit_session(ids, start, request)
       end
+    end
+  end
+
+  defp edit_session(ids, start, {headers, _body} = request) do
+    case apply(Makers, :notebook, ids) do
+      {:error, :not_maker} ->
+        copy = Jason.encode!(Map.put(start, "edit_intent", "temporary"))
+
+        {:ok,
+         {List.keystore(headers, "content-type", 0, {"content-type", "application/json"}), copy},
+         &done/1}
+
+      _maker_or_hub ->
+        only_maker(:notebook, ids, [], request)
     end
   end
 
@@ -981,6 +985,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
     end
   end
 
+  # The page is a notebook's own saved page, sent as members wrote it on purpose:
+  # `stream_back/3` has already put it in a sandbox of its own (`sandbox_saved_page/1`).
+  # sobelow_skip ["XSS.SendResp"]
   defp send_kept(conn, fleet_id, {notebook_id, source_id, saved_at}, parts) do
     page = IO.iodata_to_binary(parts)
 
@@ -1034,6 +1041,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   end
 
   # A saved output's address shows Keyfleet's copy, whatever the hub keeps now.
+  # The copy is a notebook's page, sent as members wrote it on purpose, in a
+  # sandbox of its own and never read as another type.
+  # sobelow_skip ["XSS.SendResp"]
   defp send_saved_output(conn, fleet_id, path) do
     {:ok, {notebook_id, source_id, saved_at}} = Notebooks.result(path)
 

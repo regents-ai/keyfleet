@@ -18,6 +18,8 @@ defmodule KeyfleetWeb.ScriptPreloads do
     end
   end
 
+  # The path is fixed: this application's own priv folder and a constant file name.
+  # sobelow_skip ["Traversal.FileModule"]
   defp read do
     case File.read(Application.app_dir(:keyfleet, "priv/esbuild-meta.json")) do
       {:ok, json} ->

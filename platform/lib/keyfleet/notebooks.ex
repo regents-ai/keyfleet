@@ -230,8 +230,8 @@ defmodule Keyfleet.Notebooks do
   def membership(actor, fleet_id) do
     within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
 
-    with {:ok, %{restricted?: restricted?}} <- KeyActor.membership(actor, fleet_id, within),
-         do: {:ok, %{restricted?: restricted?}}
+    with {:ok, %{} = member} <- KeyActor.membership(actor, fleet_id, within),
+         do: {:ok, Map.take(member, [:restricted?])}
   end
 
   @doc """
