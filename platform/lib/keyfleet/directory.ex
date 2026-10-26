@@ -5,8 +5,8 @@ defmodule Keyfleet.Directory do
 
   For each open fleet it gives the rules, how far the fleet has sold, the
   agents here (`Keyfleet.Agents.count_agents_here/1`) and what their
-  check-ins say, how much work is open in its workspace, its open goals by
-  title, and its latest room posts. The rest of the workspace is for the
+  check-ins say, its projects by title with the titles of the goals open in
+  each, and its latest room posts. The rest of the workspace is for the
   fleet's members. A coming-soon fleet (see
   `Keyfleet.Fleets.coming_soon?/2`) gives its name and that it is coming
   soon, and nothing else, apart from Classic #1: the homepage already shows
@@ -27,7 +27,6 @@ defmodule Keyfleet.Directory do
   @announced "fleet_tech_classic"
 
   @agents_shown 50
-  @work_shown 10
   @posts_shown 10
   @excerpt_length 280
 
@@ -57,8 +56,8 @@ defmodule Keyfleet.Directory do
   @doc """
   One fleet's summary with everything the directory says about it: the terms
   members join under, up to #{@agents_shown} of the agents here (see `agents/1`),
-  up to #{@work_shown} of its open goals by title, how many tasks are taken and
-  how many nobody has taken, its own rooms, and its #{@posts_shown} latest
+  its projects by title with the titles of the goals open in each (see
+  `Keyfleet.Graph.shown/1`), its own rooms, and its #{@posts_shown} latest
   posts. A coming-soon fleet's is its summary
   alone. `:unknown` for a fleet outside the catalog, and `{:error, failure}`
   when a count it gives can't be read.
@@ -94,20 +93,16 @@ defmodule Keyfleet.Directory do
     posts = recent_posts(id, @posts_shown)
 
     with {:ok, summary} <- summary(entry, recorded, posts),
-         {:ok, tasks_taken} <- Graph.count_open_work(id, :tasks_taken),
-         {:ok, tasks_untaken} <- Graph.count_open_work(id, :tasks_untaken) do
-      work = %{open_goals: open_goals(id), tasks_taken: tasks_taken, tasks_untaken: tasks_untaken}
-      {:ok, Map.merge(summary, more(id, posts, work))}
-    end
+         do: {:ok, Map.merge(summary, more(id, posts))}
   end
 
   # The rooms are read as nobody, so they are the ones anyone reads: the Public
   # room and People and agents.
-  defp more(id, posts, work) do
+  defp more(id, posts) do
     %{
       terms: Rules.membership_terms(),
       agents: agents(id),
-      work: work,
+      projects: Graph.shown(id),
       rooms: id |> Rooms.list_rooms!(load: [:post_count]) |> Enum.map(&room/1),
       recent_posts: Enum.map(posts, &post/1)
     }
@@ -140,9 +135,7 @@ defmodule Keyfleet.Directory do
 
   defp summary(%{id: id, name: name}, recorded, latest_posts) do
     with {:ok, agents_here} <- Agents.count_agents_here(id),
-         {:ok, checked_in} <- Agents.count_agents_checked_in_last_day(id),
-         {:ok, open_goals} <- Graph.count_open_work(id, :goals_open),
-         {:ok, tasks_taken} <- Graph.count_open_work(id, :tasks_taken) do
+         {:ok, checked_in} <- Agents.count_agents_checked_in_last_day(id) do
       {:ok,
        %{
          id: id,
@@ -152,8 +145,6 @@ defmodule Keyfleet.Directory do
          sales: sales(id, recorded),
          agents_here: agents_here,
          agents_checked_in_last_day: checked_in,
-         open_goals: open_goals,
-         tasks_taken: tasks_taken,
          last_post_at:
            case latest_posts do
              [latest | _] -> latest.inserted_at
@@ -199,12 +190,6 @@ defmodule Keyfleet.Directory do
   # Read as nobody, so only the posts in the rooms anyone reads: the other rooms
   # are the keys' own.
   defp recent_posts(fleet_id, limit), do: Rooms.recent_posts!(fleet_id, %{limit: limit})
-
-  defp open_goals(fleet_id) do
-    fleet_id
-    |> Graph.open_work!(:goals_open, query: [limit: @work_shown])
-    |> Enum.map(&%{id: &1.id, title: &1.title, changed_at: &1.changed_at})
-  end
 
   # The agent's check-ins are those with this fleet only: none, or one.
   defp agent(profile, now) do

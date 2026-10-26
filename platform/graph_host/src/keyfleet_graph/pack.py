@@ -1,4 +1,4 @@
-"""The pinned `keyfleet_work@0.7.0` work pack.
+"""The pinned `keyfleet_work@0.8.0` work pack.
 
 Two models per object type: the member model is what a member may write, and
 the record model adds the server-owned `sys` block and is what the graph
@@ -16,10 +16,10 @@ from typing import Annotated, Literal, Optional
 from activegraph.packs import ObjectType, Pack, RelationType
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, create_model, model_validator
 
-from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, multi_line, single_line
+from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, ProjectName, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.7.0"
+PACK_VERSION = "0.8.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -52,9 +52,8 @@ Uri = Annotated[str, StringConstraints(min_length=1), single_line, AfterValidato
 DecimalString = Annotated[str, StringConstraints(pattern=r"^(0|[1-9][0-9]{0,77})(\.[0-9]{1,18})?$")]
 Digest = Annotated[str, StringConstraints(pattern=r"^sha256:[0-9a-f]{64}$")]
 Title = _text(200, required=True)
-# What anyone may read of a goal or task beside its title and standing; every
-# other field is for the fleet's members only.
-PublicSummary = Optional[_text(500)]
+# The project every workspace starts with; the starting goals are its own.
+GENERAL = "general"
 
 
 def _items():
@@ -79,7 +78,6 @@ class Goal(WorkObject):
     # A question is never empty, so a goal's first one is always one to ask.
     open_questions: list[_text(500, required=True)] = _items()
     status: Literal["open", "achieved", "dropped"] = "open"
-    public_summary: PublicSummary = None
 
 
 class Task(WorkObject):
@@ -100,7 +98,6 @@ class Task(WorkObject):
     commit_ref: Optional[Uri] = None
     notebook_ref: Optional[Uri] = None
     result_ref: Optional[Uri] = None
-    public_summary: PublicSummary = None
 
 
 class Finding(WorkObject):
@@ -198,9 +195,10 @@ class ReviewReceipt(_Model):
 
 
 class Sys(_Model):
-    # Every item is the whole fleet's to read and build on; only the Key it
-    # belongs to changes or archives it.
-    scope: Literal["fleet"]
+    # Every item belongs to one project of the fleet, set when it is made and
+    # never changed. Every member reads and builds on every project's items;
+    # only the Key an item belongs to changes or archives it.
+    project: ProjectName
     created_by: Member
     archived: bool
 

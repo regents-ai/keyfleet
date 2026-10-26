@@ -25,7 +25,6 @@ defmodule Keyfleet.WorkspaceFixtures do
       "status" => "open",
       "success_criteria" => [],
       "open_questions" => [],
-      "public_summary" => nil,
       "discussion" => []
     },
     "task" => %{
@@ -38,7 +37,6 @@ defmodule Keyfleet.WorkspaceFixtures do
       "commit_ref" => nil,
       "notebook_ref" => nil,
       "result_ref" => nil,
-      "public_summary" => nil,
       "discussion" => []
     },
     "finding" => %{"confidence" => "low", "uncertainty" => nil, "discussion" => []},
@@ -58,17 +56,26 @@ defmodule Keyfleet.WorkspaceFixtures do
     "dead_end" => %{"discussion" => []}
   }
 
+  @doc "Starts a project in the fleet beside `general`, as a member's start leaves it."
+  def start_project(fleet_id, name, title) do
+    Keyfleet.Projects.Project
+    |> Ash.Changeset.for_create(:create, %{fleet_id: fleet_id, name: name, title: title},
+      actor: @system
+    )
+    |> Ash.create!()
+  end
+
   @doc "Starts the fleet's copy of a log; the fleet then reads as an empty workspace."
   def open_log(fleet_id, run_id \\ "log_fixture"),
     do: Graph.start_cursor!(%{fleet_id: fleet_id, run_id: run_id}, actor: @system)
 
   @doc """
   Adds an object and answers its id, `<type>#<place in the log>` unless `:id`
-  is given. Options: `:by` (key number, 17).
+  is given. Options: `:by` (key number, 17) and `:project` (`general`).
   """
   def create(fleet_id, type, data, opts \\ []) do
     sys = %{
-      "scope" => "fleet",
+      "project" => Keyword.get(opts, :project, "general"),
       "created_by" => member(opts),
       "archived" => false
     }
@@ -81,7 +88,13 @@ defmodule Keyfleet.WorkspaceFixtures do
   opens the workspace, and answers its id. Options: `:id`.
   """
   def starting_goal(fleet_id, number, data, opts \\ []) do
-    sys = %{"scope" => "fleet", "created_by" => nil, "starting" => number, "archived" => false}
+    sys = %{
+      "project" => "general",
+      "created_by" => nil,
+      "starting" => number,
+      "archived" => false
+    }
+
     add(fleet_id, "goal", data, sys, "keyfleet:starting_goals", opts)
   end
 
@@ -99,6 +112,7 @@ defmodule Keyfleet.WorkspaceFixtures do
             fleet_id: fleet_id,
             id: id,
             type: type,
+            project: sys["project"],
             data: data,
             sys: sys,
             version: 1,
@@ -208,7 +222,7 @@ defmodule Keyfleet.WorkspaceFixtures do
         id = "review##{seq}"
 
         sys = %{
-          "scope" => "fleet",
+          "project" => Keyword.get(opts, :project, "general"),
           "created_by" => member(opts),
           "archived" => false,
           "review" => receipt
@@ -220,6 +234,7 @@ defmodule Keyfleet.WorkspaceFixtures do
               fleet_id: fleet_id,
               id: id,
               type: "review",
+              project: sys["project"],
               data: data,
               sys: sys,
               version: 1,
@@ -355,6 +370,7 @@ defmodule Keyfleet.WorkspaceFixtures do
           fleet_id: fleet_id,
           id: object.id,
           type: object.type,
+          project: object.project,
           data: data,
           sys: sys,
           version: object.version + 1,

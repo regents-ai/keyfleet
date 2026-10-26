@@ -9,7 +9,7 @@ defmodule KeyfleetWeb.FleetPage do
   alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.Keys.Metadata
-  alias KeyfleetWeb.ActivityLines
+  alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.KeyMap
 
   # How many of a holder's cards the way in shows.
@@ -55,10 +55,26 @@ defmodule KeyfleetWeb.FleetPage do
   def chosen_key(_progress, _key), do: nil
 
   @doc """
-  "Trying now", beside the hall's feed: the fleet's open goals and
-  the work on them, with the key on each task named.
+  "Trying now", beside the hall's feed and on a visitor's workspace: each of
+  the fleet's projects with its open goals, as `Keyfleet.Graph.shown/1`
+  reads them, every title as it can be seen. A title with nothing to see
+  reads "A project" or "A goal".
   """
-  def read_trying_now(fleet_id), do: fleet_id |> Graph.trying_now() |> ActivityLines.trying_now()
+  def read_trying_now(fleet_id) do
+    for project <- Graph.shown(fleet_id) do
+      %{
+        title: seen(project.title, "A project"),
+        goals: Enum.map(project.goals, &seen(&1, "A goal"))
+      }
+    end
+  end
+
+  defp seen(title, untitled) do
+    case title |> DirectoryMD.visible() |> String.trim() do
+      "" -> untitled
+      title -> title
+    end
+  end
 
   @doc """
   The first `wanted` pages of the hall's feed, newest first, read with

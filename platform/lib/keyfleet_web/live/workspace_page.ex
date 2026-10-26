@@ -27,12 +27,10 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   Only the fleet's members read its workspace
   (`Keyfleet.Graph.Checks.KeyReader`) and its code: for anyone else every page
-  answers `members_only?: true`. The board then shows the fleet's outline,
-  each goal and task by title, standing and the public summary its members
-  wrote, beside its latest workspace changes told as the fleet's feed tells
-  them to anyone (`Keyfleet.Activity.work/2`); nothing else members write.
-  An item's page shows that item's own outline entry first, when it is a
-  goal or task in the outline.
+  answers `members_only?: true`, with what the fleet shows anyone of its
+  workspace: each project by title with the titles of its open goals
+  (`KeyfleetWeb.FleetPage.read_trying_now/1`), and nothing else members
+  write.
 
   A page name that is not one the tables can answer, such as an unknown type
   or a damaged page position, is a page that doesn't exist.
@@ -40,13 +38,13 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   require Logger
 
-  alias Keyfleet.{Activity, Agents, Code, Fleets, Notebooks}
+  alias Keyfleet.{Agents, Code, Fleets, Notebooks}
   alias Keyfleet.Graph
   alias Keyfleet.Notebooks.HubClient
   alias Keyfleet.Rooms
-  alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.Endpoint
+  alias KeyfleetWeb.FleetPage
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.RoomsLive
@@ -70,7 +68,6 @@ defmodule KeyfleetWeb.WorkspacePage do
     "goal" => [
       {"outcome", "Outcome"},
       {"status", "Status"},
-      {"public_summary", "Public summary"},
       {"success_criteria", "Success criteria"},
       {"open_questions", "Open questions"}
     ],
@@ -83,8 +80,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       {"next_step", "Next step"},
       {"notebook_ref", "Notebook"},
       {"commit_ref", "Commit"},
-      {"result_ref", "Result"},
-      {"public_summary", "Public summary"}
+      {"result_ref", "Result"}
     ],
     "finding" => [
       {"statement", "Statement"},
@@ -155,9 +151,6 @@ defmodule KeyfleetWeb.WorkspacePage do
     "reviews" => "reviews",
     "forks" => "copies"
   }
-
-  # How many goals and tasks a fleet's outline shows anyone.
-  @outlined %{"goal" => 12, "task" => 24}
 
   # How many goals the board lists above the fleet's other work.
   @board_goals 12
@@ -290,7 +283,7 @@ defmodule KeyfleetWeb.WorkspacePage do
         }
 
       {:members_only, name} ->
-        members_only(fleet_id, name, actor, nil)
+        members_only(fleet_id, name)
     end
   end
 
@@ -326,7 +319,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       }
     else
       {:missing, _name} -> raise NotFoundError
-      {:members_only, name} -> members_only(fleet_id, name, actor, nil)
+      {:members_only, name} -> members_only(fleet_id, name)
     end
   end
 
@@ -362,7 +355,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       }
     else
       {:missing, _name} -> raise NotFoundError
-      {:members_only, name} -> members_only(fleet_id, name, actor, nil)
+      {:members_only, name} -> members_only(fleet_id, name)
     end
   end
 
@@ -422,7 +415,7 @@ defmodule KeyfleetWeb.WorkspacePage do
       end
     else
       {:missing, name} -> %{fleet_id: fleet_id, fleet_name: name, ready?: false, seen: nil}
-      {:members_only, name} -> members_only(fleet_id, name, actor, object_id)
+      {:members_only, name} -> members_only(fleet_id, name)
     end
   end
 
@@ -445,47 +438,14 @@ defmodule KeyfleetWeb.WorkspacePage do
     }
   end
 
-  defp members_only(fleet_id, name, actor, object_id) do
+  defp members_only(fleet_id, name) do
     %{
       fleet_id: fleet_id,
       fleet_name: name,
       members_only?: true,
       seen: nil,
-      focus: focus(fleet_id, object_id),
-      work:
-        for item <- Activity.work(fleet_id, actor: actor) do
-          %{id: item.id, at: item.at, parts: ActivityLines.parts(item)}
-        end,
-      outline:
-        Map.new(@outlined, fn {type, limit} -> {type, outline(fleet_id, type, limit: limit)} end)
+      projects: FleetPage.read_trying_now(fleet_id)
     }
-  end
-
-  # The goal or task an item's page names, as the outline shows it to anyone.
-  defp focus(_fleet_id, nil), do: nil
-
-  defp focus(fleet_id, object_id) do
-    case String.split(object_id, "#", parts: 2) do
-      [type, _number] when type in ["goal", "task"] ->
-        fleet_id
-        |> outline(type, filter: [id: object_id], limit: 1)
-        |> List.first()
-        |> then(&(&1 && Map.put(&1, :type_name, type |> type_name() |> elem(0))))
-
-      _other ->
-        nil
-    end
-  end
-
-  defp outline(fleet_id, type, query) do
-    for object <- Graph.outline!(fleet_id, type, query: query) do
-      %{
-        id: object.id,
-        title: object.title,
-        standing: standing(type, object.standing),
-        summary: object.public_summary
-      }
-    end
   end
 
   defp standing(_type, nil), do: nil

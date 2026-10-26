@@ -1,7 +1,9 @@
 defmodule Keyfleet.Graph.Object do
   @moduledoc """
   One workspace object as the fleet's graph log last left it: its member
-  fields (`data`), its server-owned fields (`sys`) and its version.
+  fields (`data`), its server-owned fields (`sys`), its version and the
+  project it belongs to (`Keyfleet.Projects`), copied from `sys` so a project's
+  objects are read by index.
 
   A task marked done has been submitted for review, and its `review` says
   where that stands: `awaiting_review` until a review of the task's current
@@ -15,10 +17,9 @@ defmodule Keyfleet.Graph.Object do
   unlinking it, or a notice that it needs attention leaves them as they were.
 
   Only the projector writes here. Only the fleet's members read its objects
-  (`Keyfleet.Graph.Checks.KeyReader`), except through the three reads a fleet
-  shows anyone: its open work, by title; the titles of the items its latest
-  activity names, where anyone else reads only the goals'; and its outline,
-  each goal and task by title, standing and public summary alone.
+  (`Keyfleet.Graph.Checks.KeyReader`), except through the one read a fleet
+  shows anyone: its open goals, each by title and project alone
+  (`Keyfleet.Graph.shown/1`).
   """
   use Ash.Resource,
     domain: Keyfleet.Graph,
@@ -32,10 +33,14 @@ defmodule Keyfleet.Graph.Object do
     repo(Keyfleet.Repo)
 
     # The workspace lists a fleet's objects, or one type of them, most
-    # recently changed first.
+    # recently changed first, from the whole fleet or one project.
     custom_indexes do
       index([:fleet_id, :changed_seq, :id], name: "graph_objects_changed_index")
       index([:fleet_id, :type, :changed_seq, :id], name: "graph_objects_type_changed_index")
+
+      index([:fleet_id, :project, :type, :changed_seq, :id],
+        name: "graph_objects_project_changed_index"
+      )
     end
 
     references do
@@ -52,15 +57,18 @@ defmodule Keyfleet.Graph.Object do
     end
 
     # A page of the fleet's workspace, the most recently changed first:
-    # optionally one type of object only, and the archived ones only when
-    # asked for. Each object comes with what its card shows, not its text.
+    # optionally one project's or one type of object only, and the archived
+    # ones only when asked for. Each object comes with what its card shows,
+    # not its text.
     read :cards do
       argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, constraints: @text
       argument :type, :string, constraints: @text
       argument :include_archived?, :boolean, allow_nil?: false, default: false
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and
+                 (is_nil(^arg(:project)) or project == ^arg(:project)) and
                  (is_nil(^arg(:type)) or type == ^arg(:type)) and
                  (^arg(:include_archived?) or
                     fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys))
@@ -68,7 +76,16 @@ defmodule Keyfleet.Graph.Object do
 
       prepare build(
                 sort: [changed_seq: :desc],
-                select: [:fleet_id, :id, :type, :sys, :version, :changed_seq, :changed_at],
+                select: [
+                  :fleet_id,
+                  :id,
+                  :type,
+                  :project,
+                  :sys,
+                  :version,
+                  :changed_seq,
+                  :changed_at
+                ],
                 load: [:title, :card, :review]
               )
 
@@ -80,49 +97,29 @@ defmodule Keyfleet.Graph.Object do
                  stable_sort: [fleet_id: :desc, id: :desc]
     end
 
-    # The work still open in the fleet's workspace, the most recently changed
-    # first: its open goals, or its tasks in progress, taken or not taken
-    # yet, as `kind` says (`Keyfleet.Graph.Preparations.OpenWork`).
-    # Anyone may read it, so each object comes with its title alone. Callers
-    # bound it with a limit, or count it.
-    read :open_work do
+    # The fleet's open goals, the most recently changed first: goals whose
+    # status is `open`, not archived, and, for a starting goal, one of the
+    # ideas every workspace begins with, joined by someone. Anyone may read
+    # it, so each goal comes with its title and project alone. Callers bound
+    # it with a limit.
+    read :open_goals do
       argument :fleet_id, :string, allow_nil?: false
-
-      argument :kind, :atom,
-        allow_nil?: false,
-        constraints: [one_of: [:goals_open, :tasks_taken, :tasks_untaken]]
-
-      filter expr(fleet_id == ^arg(:fleet_id))
-      prepare Keyfleet.Graph.Preparations.OpenWork
-
-      prepare build(
-                sort: [changed_seq: :desc],
-                select: [:fleet_id, :id, :type, :changed_seq, :changed_at],
-                load: [:title]
-              )
-    end
-
-    # The fleet's goals or tasks, as `type` says, the most recently changed
-    # first, archived ones left out. Anyone may read it, so each comes with
-    # its title, its standing (a goal's status, a task's progress or, once
-    # submitted, its review) and the public summary its members wrote, and
-    # nothing else. Callers bound it with a limit, or ask for one by id.
-    read :outline do
-      argument :fleet_id, :string, allow_nil?: false
-
-      argument :type, :string,
-        allow_nil?: false,
-        constraints: [match: ~r/\A(goal|task)\z/, trim?: false]
 
       filter expr(
-               fleet_id == ^arg(:fleet_id) and type == ^arg(:type) and
-                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys)
+               fleet_id == ^arg(:fleet_id) and type == "goal" and
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys) and
+                 fragment("(? ->> 'status') = 'open'", data) and
+                 fragment(
+                   "(? ->> 'starting' IS NULL OR jsonb_array_length(? -> 'joined') > 0)",
+                   sys,
+                   sys
+                 )
              )
 
       prepare build(
                 sort: [changed_seq: :desc],
-                select: [:fleet_id, :id, :type, :changed_seq, :changed_at],
-                load: [:title, :standing, :public_summary]
+                select: [:fleet_id, :id, :type, :project, :changed_seq, :changed_at],
+                load: [:title]
               )
     end
 
@@ -284,7 +281,7 @@ defmodule Keyfleet.Graph.Object do
     end
 
     # The titles of a few of the fleet's objects, to name the objects a page
-    # mentions: every one for the fleet's members, the goals for anyone else.
+    # mentions.
     read :titled do
       argument :fleet_id, :string, allow_nil?: false
 
@@ -305,27 +302,21 @@ defmodule Keyfleet.Graph.Object do
 
     create :project do
       public? false
-      accept [:fleet_id, :id, :type, :data, :sys, :version, :changed_seq, :changed_at]
+      accept [:fleet_id, :id, :type, :project, :data, :sys, :version, :changed_seq, :changed_at]
       upsert? true
       upsert_fields [:type, :data, :sys, :version, :changed_seq, :changed_at]
     end
   end
 
   policies do
-    # The summary a fleet shows anyone.
-    policy action([:open_work, :outline]) do
+    # The open goals a fleet shows anyone.
+    policy action(:open_goals) do
       authorize_if always()
-    end
-
-    # Anyone may read a goal's title; only the fleet's members read the
-    # titles of its other items.
-    policy action(:titled) do
-      authorize_if expr(type == "goal")
-      authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
     policy action([
              :in_fleet,
+             :titled,
              :cards,
              :around_goal,
              :assigned_to_keys,
@@ -351,6 +342,8 @@ defmodule Keyfleet.Graph.Object do
       constraints: @text
 
     attribute :type, :string, allow_nil?: false, public?: true, constraints: @text
+    # Set when the object is made, and never changed.
+    attribute :project, :string, allow_nil?: false, public?: true, constraints: @text
     attribute :data, :map, allow_nil?: false, public?: true
     attribute :sys, :map, allow_nil?: false, public?: true
     attribute :version, :integer, allow_nil?: false, public?: true, constraints: [min: 1]
@@ -426,18 +419,6 @@ defmodule Keyfleet.Graph.Object do
                   data
                 )
               ),
-              public?: true
-
-    # What a goal's or task's members wrote for anyone to read.
-    calculate :public_summary,
-              :string,
-              expr(fragment("left(? ->> 'public_summary', 500)", data)),
-              public?: true
-
-    # A goal's first open question, the one it most needs answered.
-    calculate :first_open_question,
-              :string,
-              expr(fragment("left(? #>> '{open_questions,0}', 500)", data)),
               public?: true
 
     # The few short fields a card shows, and the start of the object's main

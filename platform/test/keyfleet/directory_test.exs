@@ -5,7 +5,6 @@ defmodule Keyfleet.DirectoryTest do
   alias Keyfleet.ChainHelpers
   alias Keyfleet.Directory
   alias Keyfleet.Fleets
-  alias Keyfleet.Graph
   alias Keyfleet.Keys
   alias Keyfleet.PairingHelpers
   alias Keyfleet.Repo
@@ -17,7 +16,9 @@ defmodule Keyfleet.DirectoryTest do
   @owner "0x" <> String.duplicate("a", 40)
 
   setup do
-    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true)
+    # A fleet's entry reads its workspace in a repeatable-read snapshot, which
+    # Postgres allows inside the sandbox only at that level already.
+    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Repo, shared: true, isolation: "REPEATABLE READ")
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     Fleets.bootstrap_catalog!()
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
@@ -27,45 +28,20 @@ defmodule Keyfleet.DirectoryTest do
     :ok
   end
 
-  test "open work leaves out what is finished, dropped or archived" do
+  test "a fleet's entry gives each project by title with its open goals' titles" do
     Workspace.open_log(@fleet)
-    open = Workspace.create(@fleet, "goal", %{"title" => "Map the first paid service"})
+    Workspace.start_project(@fleet, "lab", "Lab")
+    Workspace.create(@fleet, "goal", %{"title" => "Map the first paid service"})
     Workspace.create(@fleet, "goal", %{"title" => "Done", "status" => "achieved"})
-    Workspace.create(@fleet, "goal", %{"title" => "Gave up", "status" => "dropped"})
-    Workspace.archive(@fleet, Workspace.create(@fleet, "goal", %{"title" => "Archived"}))
-
-    Workspace.create(@fleet, "task", %{"title" => "Nobody's"})
-    Workspace.create(@fleet, "task", %{"title" => "Claimed", "assignee_key" => 12})
-
-    Workspace.create(@fleet, "task", %{
-      "title" => "Underway",
-      "progress" => "doing",
-      "assignee_key" => 12
-    })
-
-    Workspace.create(@fleet, "task", %{"title" => "Nobody on it", "progress" => "doing"})
-    finished = Workspace.create(@fleet, "task", %{"title" => "Finished", "progress" => "doing"})
-    Workspace.submit(@fleet, finished, "https://example.com/finished")
-    Workspace.create(@fleet, "task", %{"title" => "Stuck", "progress" => "blocked"})
-
-    Workspace.archive(
-      @fleet,
-      Workspace.create(@fleet, "task", %{"title" => "Old", "progress" => "doing"})
-    )
+    Workspace.create(@fleet, "goal", %{"title" => "Try the new model"}, project: "lab")
+    Workspace.create(@fleet, "task", %{"title" => "Draft the price", "assignee_key" => 12})
 
     {:ok, fleet} = Directory.fleet(@fleet)
 
-    assert {fleet.open_goals, fleet.tasks_taken} == {1, 2}
-
-    # The goals by title, and how much work there is; never the work itself.
-    assert %{
-             open_goals: [%{id: ^open, title: "Map the first paid service"} = goal],
-             tasks_taken: 2,
-             tasks_untaken: 3
-           } = fleet.work
-
-    assert goal |> Map.keys() |> Enum.sort() == [:changed_at, :id, :title]
-    assert {:error, %Ash.Error.Invalid{}} = Graph.open_work(@fleet, :tasks_done)
+    assert fleet.projects == [
+             %{title: "General", goals: ["Map the first paid service"]},
+             %{title: "Lab", goals: ["Try the new model"]}
+           ]
   end
 
   test "a long post's excerpt ends at a word with an ellipsis, within 280 code points" do

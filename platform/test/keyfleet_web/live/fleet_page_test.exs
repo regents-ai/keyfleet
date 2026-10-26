@@ -21,7 +21,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetProposals
-  alias KeyfleetWeb.WorkspacePage
   alias Phoenix.Socket.Broadcast
   alias RegentChain.Call
 
@@ -1581,8 +1580,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       assert text(view, "#{proposed} .activity-line__text") =~ "put Proposal 1 to a vote."
     end
 
-    test "a goal shows by its title to anyone, other items by their titles to Key holders only",
-         %{conn: holder} do
+    test "the workspace's changes show in the feed to Key holders only", %{conn: holder} do
       Workspace.open_log(@fleet)
       goal = goal!("Survey the hull")
       task = task!("Map every plate", %{})
@@ -1591,15 +1589,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       # The workspace's changes are older than the keys the setup issued.
       read_now()
       {:ok, view, _html} = live(build_conn(), @path)
-      view |> element("#fleet-feed-earlier") |> render_click()
-      html = render(view)
+
+      if has_element?(view, "#fleet-feed-earlier"),
+        do: view |> element("#fleet-feed-earlier") |> render_click()
+
       lines = text(view, "#fleet-feed-list")
 
-      assert lines =~ "set a goal: “Survey the hull”."
-      assert lines =~ "added a task."
-      assert lines =~ "backed “Survey the hull” with a task."
-      refute html =~ "Map every plate"
-      refute has_element?(view, ~s(#fleet-feed-list a[data-item-link="#{task}"]))
+      refute lines =~ "Survey the hull"
+      refute lines =~ "a task"
+      refute render(view) =~ "Map every plate"
 
       {:ok, view, _html} = live(holder, @path)
       view |> element("#fleet-feed-earlier") |> render_click()
@@ -1753,22 +1751,24 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       %{conn: build_conn()}
     end
 
-    test "an open goal shows by its title, with how much work is open and never the work",
+    test "each project shows by its title with its open goals' titles, and never the work",
          %{conn: conn} do
-      goal = goal!("Sell the first audit")
+      Workspace.start_project(@fleet, "lab", "Lab")
+      goal!("Sell the first audit")
+
+      Workspace.create(@fleet, "goal", %{"title" => "Try the model", "outcome" => "O"},
+        project: "lab"
+      )
+
       task!("Draft the price", %{"progress" => "doing", "assignee_key" => 12})
-      task!("Find a buyer", %{"progress" => "doing"})
-      task!("Write the offer", %{})
       read_now()
 
       {:ok, view, html} = live(conn, @path)
 
-      row = ~s(#fleet-trying li[data-goal="#{goal}"])
-      assert has_element?(view, ~s(#{row} a[data-item-link="#{goal}"][href="#{item_path(goal)}"]))
-
-      assert text(view, "#fleet-trying-counts") ==
-               "1 goal in progress · 1 task taken · 2 not taken yet"
-
+      assert text(view, "#fleet-trying-project-0 h3") == "General"
+      assert text(view, "#fleet-trying-project-0 .trying-goal") == "Sell the first audit"
+      assert text(view, "#fleet-trying-project-1 h3") == "Lab"
+      assert text(view, "#fleet-trying-project-1 .trying-goal") == "Try the model"
       refute html =~ "Draft the price"
       refute has_element?(view, "#fleet-trying-empty")
     end
@@ -1778,39 +1778,36 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       goal = goal!("Sell the first audit")
       read_now()
       {:ok, view, _html} = live(conn, @path)
-      assert has_element?(view, ~s(#fleet-trying li[data-goal="#{goal}"]))
+      assert has_element?(view, "#fleet-trying .trying-goal", "Sell the first audit")
 
       Workspace.edit(@fleet, goal, %{"status" => "achieved"})
       read_now()
 
-      refute has_element?(view, ~s(#fleet-trying li[data-goal="#{goal}"]))
+      refute has_element?(view, "#fleet-trying .trying-goal")
       assert text(view, "#fleet-trying-empty") =~ "No goals in progress."
     end
 
     test "what members wrote shows as text, with nothing that can't be seen", %{conn: conn} do
-      written = "<b>Hull</b> <script>alert(1)</script>\u0007\u202Esurvey\u2066 done"
-
-      goal = goal!(written, %{"open_questions" => [written]})
+      goal!("<b>Hull</b> <script>alert(1)</script>\u0007\u202Esurvey\u2066 done")
       read_now()
 
       {:ok, view, _html} = live(conn, @path)
 
-      assert has_element?(view, "#fleet-trying-question")
       refute has_element?(view, "#fleet-trying b")
       refute has_element?(view, "#fleet-trying script")
-      assert text(view, ~s(#fleet-trying a[data-item-link="#{goal}"])) =~ "<b>Hull</b>"
+      assert text(view, "#fleet-trying .trying-goal") =~ "<b>Hull</b>"
 
       html = view |> element("#fleet-trying") |> render()
       refute html =~ ~r/[\x{0}-\x{8}\x{B}-\x{1F}\x{7F}-\x{9F}\p{Cf}]/u
     end
 
-    test "an item whose title has nothing to see still has a link to it", %{conn: conn} do
-      goal = goal!("\u200B\u2066")
+    test "a goal whose title has nothing to see still shows", %{conn: conn} do
+      goal!("\u200B\u2066")
       read_now()
 
       {:ok, view, _html} = live(conn, @path)
 
-      assert text(view, ~s(#fleet-trying a[data-item-link="#{goal}"])) != ""
+      assert text(view, "#fleet-trying .trying-goal") == "A goal"
     end
   end
 
@@ -1819,8 +1816,6 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
   defp task!(title, data),
     do: Workspace.create(@fleet, "task", Map.put(data, "title", title))
-
-  defp item_path(id), do: WorkspacePage.item_path(@fleet, id)
 
   defp deploy!(fleet_id \\ @fleet, deployed_block \\ 1),
     do:

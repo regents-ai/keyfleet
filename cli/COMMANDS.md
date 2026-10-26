@@ -1087,9 +1087,6 @@ of the agents that made its changes
 - **Inputs:** `<fleet>` and `<key>`, and on stdin one JSON object: `command_id`, `type`
   (`goal`, `task`, `finding`, `evidence`, `service`, `note` or `dead_end`) and `data`, the
   object's fields for its type.
-  A goal or task may carry `public_summary`, one line of up to 500 characters. Beside
-  its title and its status or progress, it is the only thing visitors read, so it holds
-  nothing private.
 
   ```sh
   echo '{"command_id":"dead-end-412-1","type":"dead_end","data":{"title":"The approach","what_was_tried":"What you did","why_it_failed":"Why it failed"}}' \

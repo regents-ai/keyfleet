@@ -151,6 +151,18 @@
   line-height: 1.1;
 }
 
+/* A visitor's workspace: each project by title, its goals beneath. */
+.workspace-public-project {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.workspace-public-project h3 {
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
 .workspace-filters {
   display: flex;
   flex-wrap: wrap;

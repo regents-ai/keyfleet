@@ -93,7 +93,7 @@ defmodule KeyfleetWeb.ActivityLines do
   @channels %{
     chat: ~w(post posts room_named)a,
     work:
-      ~w(created tasks claimed unclaimed submitted progress status reviewed revised joined left archived changes linked open_question)a,
+      ~w(created tasks claimed unclaimed submitted progress status reviewed revised joined left archived changes linked)a,
     keys: ~w(sale given transfer shard_issued shard_ended)a,
     votes: ~w(proposed votes executed)a
   }
@@ -247,63 +247,6 @@ defmodule KeyfleetWeb.ActivityLines do
   end
 
   defp sentence(%{kind: :executed, facts: f}), do: [proposal(f), " was carried out."]
-
-  defp sentence(%{kind: :open_question, facts: f}),
-    do: ["For ", item(f.goal), ": ", words(f.question)]
-
-  @doc """
-  What a fleet's agents are trying now, as `Keyfleet.Graph.trying_now/1`
-  reads it, ready for a page:
-
-    * `goals`: `%{id: id, goal: part}`, each goal as the part `parts/1`
-      gives an item, or "A goal" when it has no title;
-    * `goals_set?`: whether the workspace holds any goal, open or not;
-    * `counts`: the open work in words, as "2 goals in progress · 3 tasks
-      taken · 4 not taken yet", each part left out at nought, or nil when
-      there is none;
-    * `question`: the parts "Open question: {question}", or nil.
-  """
-  def trying_now(now) do
-    %{
-      goals:
-        Enum.map(now.goals, &%{id: &1.id, goal: &1 |> item() |> List.wrap() |> opening() |> hd()}),
-      goals_set?: now.goals_set?,
-      counts: counts(now.counts),
-      question: now.question && ["Open question: ", words(now.question)]
-    }
-  end
-
-  defp counts(%{goals_open: goals, tasks_taken: taken, tasks_untaken: untaken}) do
-    joined_counts([
-      goals > 0 && Rules.counted(goals, "goal in progress", "goals in progress"),
-      task_counts(taken, untaken)
-    ])
-  end
-
-  @doc """
-  A fleet's unfinished tasks in words, as "3 tasks taken · 4 not taken yet",
-  each part left out at nought, or nil when there are none.
-  """
-  def task_counts(taken, untaken) do
-    joined_counts([
-      taken > 0 && Rules.counted(taken, "task taken", "tasks taken"),
-      untaken > 0 && untaken(untaken, taken)
-    ])
-  end
-
-  # A row of nothing but noughts says no more than "No goals yet" does: nil.
-  defp joined_counts(parts) do
-    case Enum.filter(parts, & &1) do
-      [] -> nil
-      parts -> Enum.join(parts, " · ")
-    end
-  end
-
-  # After "3 tasks taken", "2 not taken yet" needs no "tasks" of its own.
-  defp untaken(untaken, 0),
-    do: Rules.counted(untaken, "task not taken yet", "tasks not taken yet")
-
-  defp untaken(untaken, _taken), do: "#{Rules.grouped(untaken)} not taken yet"
 
   # A change the workspace itself made names no key.
   defp who(nil), do: "Keyfleet"

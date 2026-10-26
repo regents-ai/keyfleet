@@ -8,7 +8,11 @@ defmodule Keyfleet.Graph.WriterTest do
   @fleets Keyfleet.Fleets.catalog_ids()
   @wallet "0x" <> String.duplicate("a1", 20)
   @contract "0x" <> String.duplicate("b2", 20)
-  @note %{type: "note", data: %{title: "Plan", body: "Ship the first service."}}
+  @note %{
+    project: "general",
+    type: "note",
+    data: %{title: "Plan", body: "Ship the first service."}
+  }
 
   # A host that stops is saved with the site's errors, from the writer's own
   # process.
@@ -622,7 +626,7 @@ defmodule Keyfleet.Graph.WriterTest do
     actor = "member:8453:#{@contract}:17@3/agent:#{@wallet}"
     key = {"chain_id": 1, "contract": "#{@contract}", "token_id": 17}
     created_by = {"key": key, "ownership_epoch": 3, "kind": "agent", "wallet": "#{@wallet}"}
-    sys_record = {"scope": "fleet", "created_by": created_by, "archived": False}
+    sys_record = {"project": "general", "created_by": created_by, "archived": False}
     host = Host(fleet, db, [])
     add = host.graph.add_object
     with host._transaction():

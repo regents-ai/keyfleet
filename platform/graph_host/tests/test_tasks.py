@@ -35,8 +35,8 @@ def _holder(host, object_id="task#2"):
 def host(db):
     """A goal, and an untaken task that implements it."""
     host = Host("fleet_a", str(db), [])
-    _ok(host, "create", {"type": "goal", "data": GOAL}, command("g"))
-    _ok(host, "create", {"type": "task", "data": {"title": "Draft", "deliverable": "One page", "acceptance_criteria": ["Fits on one page"]}}, command("t"))
+    _ok(host, "create", {"project": "general", "type": "goal", "data": GOAL}, command("g"))
+    _ok(host, "create", {"project": "general", "type": "task", "data": {"title": "Draft", "deliverable": "One page", "acceptance_criteria": ["Fits on one page"]}}, command("t"))
     _ok(host, "link", {"source": "task#2", "target": "goal#1", "type": "implements"}, command("l"))
     return host
 
@@ -131,7 +131,7 @@ def test_the_holder_drops_a_task_and_its_creator_archives_it(host):
 
 
 def test_links_from_a_task_are_its_holders_to_make_and_remove(host):
-    _ok(host, "create", {"type": "goal", "data": {"title": "Another", "outcome": "More"}}, command("g2", **OTHER))
+    _ok(host, "create", {"project": "general", "type": "goal", "data": {"title": "Another", "outcome": "More"}}, command("g2", **OTHER))
     [implements] = host.graph.relations(source="task#2", type="implements")
 
     linked = _call(host, "link", {"source": "task#2", "target": "goal#3", "type": "implements"}, command("l", **OTHER))
@@ -139,7 +139,7 @@ def test_links_from_a_task_are_its_holders_to_make_and_remove(host):
 
     assert (linked["error"]["code"], unlinked["error"]["code"]) == ("not_owner", "not_owner")
     assert [rel.target for rel in host.graph.relations(source="task#2", type="implements")] == ["goal#1"]
-    _ok(host, "create", {"type": "task", "data": {"title": "Theirs"}}, command("t2", **OTHER))
+    _ok(host, "create", {"project": "general", "type": "task", "data": {"title": "Theirs"}}, command("t2", **OTHER))
     _ok(host, "link", {"source": "task#4", "target": "task#2", "type": "depends_on"}, command("l2", **OTHER))
 
 
@@ -198,7 +198,7 @@ def test_only_a_live_task_is_forked(host, setup, target):
     ("archive", {"id": "note#3", "expected_version": 1}),
 ])
 def test_another_keys_goal_or_note_is_left_as_its_creator_wrote_it(host, op, body):
-    _ok(host, "create", {"type": "note", "data": {"title": "Mine", "body": "Kept"}}, command("n"))
+    _ok(host, "create", {"project": "general", "type": "note", "data": {"title": "Mine", "body": "Kept"}}, command("n"))
 
     reply = _call(host, op, body, command("x", **OTHER))
 

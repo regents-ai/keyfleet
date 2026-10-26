@@ -11,8 +11,8 @@ defmodule KeyfleetWeb.FleetNow do
     * `feed`: the first page of its activity with no actor
       (`Keyfleet.Activity.page/3`), its items and the cursor for the page
       after them;
-    * `trying`: "Trying now", its open goals and the work on them
-      (`KeyfleetWeb.FleetPage.read_trying_now/1`);
+    * `trying`: "Trying now", each of its projects by title with the titles
+      of its open goals (`KeyfleetWeb.FleetPage.read_trying_now/1`);
     * `goal`: the title of its most recently changed open goal, and
       `headline`: the item it features (`Keyfleet.Activity.headline/2`), which
       the homepage shows.
@@ -20,8 +20,8 @@ defmodule KeyfleetWeb.FleetNow do
   Pages showing a fleet to a reader who isn't a member draw it from here: the
   homepage, the fleet hall and the harbour's sea; the header's "Purchase Key"
   reads from it whether its fleet is open. A member's reading differs
-  (rooms other than the Public room, every item's title), so a member's page still
-  reads under its own scope.
+  (rooms other than the Public room, the workspace's changes), so a member's
+  page still reads under its own scope.
 
   This is a reread on notice, the second of the two shapes the `elixir-stack`
   skill lets keep a shared reading. It hears what an open page of a fleet hears
@@ -175,7 +175,7 @@ defmodule KeyfleetWeb.FleetNow do
   end
 
   defp goal(fleet_id) do
-    case Graph.open_work!(fleet_id, :goals_open, query: [limit: 1]) do
+    case Graph.open_goals!(fleet_id, query: [limit: 1]) do
       [goal] -> goal.title
       [] -> nil
     end

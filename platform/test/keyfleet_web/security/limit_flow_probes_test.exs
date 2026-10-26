@@ -194,6 +194,7 @@ defmodule KeyfleetWeb.Security.LimitFlowProbesTest do
           %{
             "as_key" => 2,
             "command_id" => Ecto.UUID.generate(),
+            "project" => "general",
             "type" => "note",
             "data" => %{"title" => "x"}
           }

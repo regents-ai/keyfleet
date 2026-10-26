@@ -96,15 +96,16 @@ defmodule Keyfleet.SharedReading do
       open:
         "a fleet's activity, what it is trying and how far it has sold, as a signed-out " <>
           "visitor reads them, are open to a signed-out read: Keyfleet.Activity.page/3 and " <>
-          "headline/2 with no actor (the Public room, the Keys' threads and goal titles, under the " <>
-          "Keyfleet.Rooms.Message and Keyfleet.Graph.Object :titled read policies), " <>
-          "Keyfleet.Graph.trying_now/1 and :open_work, the fleet's record, and the Keys sold " <>
+          "headline/2 with no actor (the Public room and the Keys' threads, under the " <>
+          "Keyfleet.Rooms.Message read policy, and no workspace changes), " <>
+          "Keyfleet.Graph.shown/1 (the :titles read of projects and :open_goals), the fleet's " <>
+          "record, and the Keys sold " <>
           "(Keyfleet.Chain.minted/2), which the chain shows anyone; if any of these tightens, " <>
           "this kind changes with it",
       # One for each fleet in Keyfleet.Fleets' catalog, like fleet_agents.
       keys: 5,
       # Not yet measured at its fullest: a page of 30 activity items, the
-      # open goals and a few numbers. A reading over it is refused and
+      # projects and their open goals, and a few numbers. A reading over it is refused and
       # counted, and pages keep the one before.
       bytes: 65_536,
       within: 120

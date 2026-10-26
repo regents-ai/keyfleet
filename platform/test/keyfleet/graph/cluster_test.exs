@@ -10,7 +10,11 @@ defmodule Keyfleet.Graph.ClusterTest do
   @moduletag :tmp_dir
 
   @fleet hd(Keyfleet.Fleets.catalog_ids())
-  @note %{type: "note", data: %{title: "Plan", body: "Ship the first service."}}
+  @note %{
+    project: "general",
+    type: "note",
+    data: %{title: "Plan", body: "Ship the first service."}
+  }
 
   setup %{tmp_dir: tmp_dir} do
     on_exit(&GraphPeer.leave_cluster/0)

@@ -163,14 +163,15 @@ defmodule Keyfleet.Graph.Projection do
   end
 
   # The graph's own rule: a patch of an object it does not hold changes
-  # nothing. The version a patch reaches is the one it was checked against,
-  # plus one.
+  # nothing. An update merges its value into the object's data; a replace,
+  # which only the graph host itself writes, becomes the data. The version a
+  # patch reaches is the one it was checked against, plus one.
   defp fold(%{"type" => "patch.applied", "payload" => %{"patch" => patch}} = event, state) do
-    %{"target" => id, "op" => "update", "value" => value, "expected_version" => expected} = patch
+    %{"target" => id, "op" => op, "value" => value, "expected_version" => expected} = patch
 
     case state.objects do
       %{^id => object} ->
-        patched = %{object | data: Map.merge(object.data, value), version: expected + 1}
+        patched = %{object | data: patched(op, object.data, value), version: expected + 1}
         touch(state, event, id, patched)
 
       _missing ->
@@ -203,6 +204,9 @@ defmodule Keyfleet.Graph.Projection do
   defp fold(%{"type" => "keyfleet.attention"}, state), do: state
   defp fold(%{"type" => "keyfleet.command"}, state), do: state
 
+  defp patched("update", data, value), do: Map.merge(data, value)
+  defp patched("replace", _data, value), do: value
+
   # Only a creation or a patch changes an object: it last changed at that
   # event's place and time.
   defp touch(state, %{"seq" => seq, "timestamp" => at}, id, object) do
@@ -227,6 +231,7 @@ defmodule Keyfleet.Graph.Projection do
           fleet_id: fleet_id,
           id: id,
           type: type,
+          project: Map.fetch!(sys, "project"),
           data: data,
           sys: sys,
           version: version,

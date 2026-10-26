@@ -54,7 +54,15 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
        c do
     start_graph(c)
     [ann, bea] = for name <- ["Ann", "Bea"], do: tap(join(c, name), &shard(&1, 1))
-    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
+
+    goal =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "g-1",
+        project: "general",
+        type: "goal",
+        data: @goal
+      })
 
     answers =
       [{ann, "achieved"}, {bea, "dropped"}]
@@ -87,7 +95,16 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
        c do
     start_graph(c)
     [ann, bea] = shard_agents(c)
-    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
+
+    goal =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "g-1",
+        project: "general",
+        type: "goal",
+        data: @goal
+      })
+
     writer = writer()
 
     :sys.suspend(writer)
@@ -126,8 +143,17 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
        c do
     start_graph(c)
     [ann, _bea] = shard_agents(c)
-    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
-    create = %{as_key: 1, command_id: "f-1", type: "goal", data: @goal}
+
+    goal =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "g-1",
+        project: "general",
+        type: "goal",
+        data: @goal
+      })
+
+    create = %{as_key: 1, command_id: "f-1", project: "general", type: "goal", data: @goal}
 
     for {field, value} <- [
           actor: "system",
@@ -169,7 +195,15 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
        c do
     start_graph(c)
     [ann, bea] = shard_agents(c)
-    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
+
+    goal =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "g-1",
+        project: "general",
+        type: "goal",
+        data: @goal
+      })
 
     joined = graph(c, bea, "join", %{as_key: 2, command_id: "j-1", id: goal["id"]})
     assert joined.status == 200
@@ -191,7 +225,16 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
        c do
     start_graph(c)
     [ann, bea] = shard_agents(c)
-    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
+
+    goal =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "g-1",
+        project: "general",
+        type: "goal",
+        data: @goal
+      })
+
     assert graph(c, bea, "join", %{as_key: 2, command_id: "j-1", id: goal["id"]}).status == 200
 
     holder = %Actors.Human{human_account_id: 1, wallet_addresses: [@owners[1]]}
@@ -255,7 +298,15 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
        c do
     start_graph(c)
     [ann, bea] = shard_agents(c)
-    goal = write!(c, ann, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
+
+    goal =
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "g-1",
+        project: "general",
+        type: "goal",
+        data: @goal
+      })
 
     joined = graph(c, bea, "join", %{as_key: 2, command_id: "j-1", id: goal["id"]})
     assert joined.status == 200
@@ -282,6 +333,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       write!(c, ann, "create", %{
         as_key: 1,
         command_id: "t-1",
+        project: "general",
         type: "task",
         data: %{title: "Draft"}
       })
@@ -304,6 +356,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       write!(c, ann, "create", %{
         as_key: 1,
         command_id: "t-1",
+        project: "general",
         type: "task",
         data: %{title: "Draft"}
       })
@@ -311,7 +364,13 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     source = %{title: "The brief", source_uri: "https://example.com/brief"}
 
     evidence =
-      write!(c, ann, "create", %{as_key: 1, command_id: "e-1", type: "evidence", data: source})
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "e-1",
+        project: "general",
+        type: "evidence",
+        data: source
+      })
 
     submitted =
       graph(c, ann, "submit", %{
@@ -390,6 +449,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       write!(c, ann, "create", %{
         as_key: 1,
         command_id: "t-1",
+        project: "general",
         type: "task",
         data: %{
           title: "Fewer notices",
@@ -483,7 +543,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
              |> Enum.reverse()
 
     assert Enum.all?(starting, &(&1["data"]["sys"]["created_by"] == nil))
-    assert Graph.count_open_work(@fleet, :goals_open) == {:ok, 0}
+    assert Graph.open_goals!(@fleet) == []
 
     goal = List.last(starting)
     assert goal["data"]["sys"]["starting"] == 1
@@ -495,6 +555,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       write!(c, ann, "create", %{
         as_key: 1,
         command_id: "t-1",
+        project: "general",
         type: "task",
         data: %{title: "Draft"}
       })
@@ -534,7 +595,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     read = graph(c, ann, "get", %{id: goal["id"]}).body
     assert read["object"]["version"] == 2
     assert ContractSchema.errors(read, "WorkspaceObjectView") == []
-    assert Graph.count_open_work(@fleet, :goals_open) == {:ok, 1}
+    assert [%{title: "Plan a service that earns stablecoins"}] = Graph.open_goals!(@fleet)
   end
 
   # Levels decide nothing about the workspace: every Key of a Fibonacci fleet
@@ -545,7 +606,15 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     sell_cascade(1..3)
     start_graph(c, fleets: [@fleet, @cascade])
     [ann, cal] = shard_cascade(c, [{"Ann", 1}, {"Cal", 3}])
-    draft = %{as_key: 1, command_id: "t-1", type: "task", data: %{title: "Draft the brief"}}
+
+    draft = %{
+      as_key: 1,
+      command_id: "t-1",
+      project: "general",
+      type: "task",
+      data: %{title: "Draft the brief"}
+    }
+
     task = write!(c, ann, "create", draft, @cascade)
 
     assign = fn agent, key, version, assignee ->
@@ -630,6 +699,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         graph(c, agent, "create", %{
           as_key: key,
           command_id: "x-#{key}",
+          project: "general",
           type: "goal",
           data: @goal
         })
@@ -650,7 +720,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   test "a write whose outcome never came back says so, and its retry applies it once", c do
     start_graph(c, reply_timeout: 1_000)
     [ann, _bea] = shard_agents(c)
-    create = %{as_key: 1, command_id: "g-1", type: "goal", data: @goal}
+    create = %{as_key: 1, command_id: "g-1", project: "general", type: "goal", data: @goal}
 
     # A host that stops answering: its outcome is unknown until it is replaced.
     host_pid = host_os_pid()
@@ -755,7 +825,14 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     cal = join(c, "Cal")
     shard(cal, 1)
 
-    goal = write!(c, cal, "create", %{as_key: 1, command_id: "g-1", type: "goal", data: @goal})
+    goal =
+      write!(c, cal, "create", %{
+        as_key: 1,
+        command_id: "g-1",
+        project: "general",
+        type: "goal",
+        data: @goal
+      })
 
     assert %{"ownership_epoch" => 2, "wallet" => wallet} =
              graph(c, cal, "get", %{id: goal["id"]}).body["object"]["sys"]["created_by"]
@@ -775,7 +852,13 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     note = %{title: "Interview transcript", body: String.duplicate("word ", 3_999) <> "done."}
 
     written =
-      write!(c, ann, "create", %{as_key: 1, command_id: "n-1", type: "note", data: note})
+      write!(c, ann, "create", %{
+        as_key: 1,
+        command_id: "n-1",
+        project: "general",
+        type: "note",
+        data: note
+      })
 
     assert graph(c, ann, "get", %{id: written["id"]}).body["object"]["data"]["body"] ==
              note.body
@@ -786,6 +869,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
       graph(c, ann, "create", %{
         as_key: 1,
         command_id: "n-2",
+        project: "general",
         type: "note",
         data: too_large
       })
@@ -916,12 +1000,12 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   end
 
   defp goal_command(command_id),
-    do: %{as_key: 1, command_id: command_id, type: "goal", data: @goal}
+    do: %{as_key: 1, command_id: command_id, project: "general", type: "goal", data: @goal}
 
   # Creates a service unless the body names another type, and answers what
   # was created.
   defp write!(c, agent, "create", body, fleet \\ @fleet) do
-    body = Map.merge(%{type: "service"}, body)
+    body = Map.merge(%{project: "general", type: "service"}, body)
     written = graph(c, agent, "create", body, fleet)
     assert written.status == 200
     assert written.body["replayed"] == false

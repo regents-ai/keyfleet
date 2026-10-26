@@ -3,7 +3,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
   import ExUnit.CaptureLog
 
-  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, SharedReading}
+  alias Keyfleet.{Actors, ChainHelpers, Fleets, Keys, ProposalHelpers, SharedReading}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.{FleetNow, KeyLinks}
@@ -296,7 +296,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
   # again for every burst of notices, and drew its seas empty until it had.
   describe "Classic's sea" do
     test "draws the ships of the one shared reading from the first render", %{conn: conn} do
-      Workspace.create(@classic, "goal", %{"title" => "Chart the bay", "outcome" => "O"}, by: 7)
+      proposal!(1, 7)
       read_fleets()
 
       static = conn |> get("/") |> html_response(200)
@@ -308,16 +308,17 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     test "takes new ships only from the shared reading, and a ship opens its Key",
          %{conn: conn} do
-      Workspace.create(@classic, "goal", %{"title" => "Chart the bay", "outcome" => "O"}, by: 7)
+      proposal!(1, 7)
       read_fleets()
       {:ok, view, _html} = live(conn, "/")
 
       # Saved, but not yet in the reading: the page reads no ships of its own.
-      Workspace.create(@classic, "goal", %{"title" => "Map the reef", "outcome" => "O"}, by: 9)
+      proposal!(2, 9)
       assert crew(render(view), "#home-classic-sea") == [7]
 
+      # Both proposals were seen in the same moment, so their order is not told.
       FleetNow.read(@classic)
-      assert crew(render(view), "#home-classic-sea") == [9, 7]
+      assert Enum.sort(crew(render(view), "#home-classic-sea")) == [7, 9]
 
       assert {:error, {:live_redirect, %{to: to}}} =
                render_hook(view, "open_ship", %{"id" => "#{@classic}:9"})
@@ -500,6 +501,14 @@ defmodule KeyfleetWeb.HomeLiveTest do
       },
       actor: %Actors.System{}
     )
+  end
+
+  # Proposal `number`, by the holder of Key `token_id` alone, which sails the
+  # Key's ship to the castle.
+  defp proposal!(number, token_id) do
+    holder = ProposalHelpers.wallet(Integer.to_string(token_id))
+    ProposalHelpers.keys_sold!(@classic, [token_id], holder)
+    ProposalHelpers.proposal!(@classic, number, %{proposer: holder})
   end
 
   # What the homepage's producer does as the site starts and on each pass.

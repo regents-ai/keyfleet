@@ -12,7 +12,8 @@ joins it only when Sean agrees to it for a named requirement or a real regressio
 
 | Test | Module | Protects |
 | --- | --- | --- |
-| key threads and word edits stay out; claims, progress and links show; only goal titles are public | `Keyfleet.ActivityTest` | The public activity feed leaves private words out. |
+| key threads and word edits stay out; claims, progress and links show; the public feed has no workspace changes | `Keyfleet.ActivityTest` | The public activity feed leaves private words and the workspace out. |
+| public reads carry project titles and open goals' titles, and nothing else of the workspace | `KeyfleetWeb.PublicWorkspaceTest` | Visitors see each project's title and its open goals' titles, and nothing else of the workspace (KF-PROJECTS-PUBLIC, 26 Oct 2026). |
 | a second verified wallet cannot disclose or edit the first profile | `Keyfleet.AgentProfilesTest` | One agent's wallet never reads or edits another agent's profile. |
 | unverified actors cannot create, read, or edit and rejected writes leave data intact | `Keyfleet.AgentProfilesTest` | Nobody unverified makes, reads or edits a profile, and a refused write changes nothing. |
 | an agent never writes another agent's check-ins | `Keyfleet.CheckInsTest` | An agent never writes another agent's check-ins. |

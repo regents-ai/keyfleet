@@ -11,6 +11,7 @@ defmodule KeyfleetWeb.AgentGraphController do
   alias Keyfleet.Graph.Errors.UnknownFleetError
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
   alias Keyfleet.Limits
+  alias Keyfleet.Projects.Errors.UnknownProjectError
   alias KeyfleetWeb.{Endpoint, Refusal, WorkspacePage}
 
   # The workspace's own refusals: the status each is answered with, and what
@@ -99,7 +100,8 @@ defmodule KeyfleetWeb.AgentGraphController do
     end
   end
 
-  def create(conn, params), do: write(conn, &Graph.create_object/3, params, ~w(type data))
+  def create(conn, params),
+    do: write(conn, &Graph.create_object/3, params, ~w(project type data))
 
   def patch(conn, params),
     do:
@@ -223,6 +225,7 @@ defmodule KeyfleetWeb.AgentGraphController do
   end
 
   defp answer(%UnknownFleetError{}), do: refusal(404, "fleet_unknown")
+  defp answer(%UnknownProjectError{}), do: refusal(404, "project_unknown")
   defp answer(%OwnershipRefreshingError{}), do: refusal(503, "ownership_refreshing")
   defp answer(%NotKeyHolderError{}), do: refusal(403, "not_a_key_holder")
   defp answer(%EditsRestrictedError{}), do: refusal(403, "edits_restricted")

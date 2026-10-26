@@ -20,10 +20,6 @@ defmodule Keyfleet.ActivityTest do
   @system %Actors.System{}
   # The wallet the workspace fixtures sign every change with.
   @member_wallet "0x" <> String.duplicate("a1", 20)
-  # The workspace fixtures log their changes from 2026-09-22 12:00, a minute
-  # apart: a day on is within the week, eight days on is not.
-  @this_week ~U[2026-09-23 12:00:00Z]
-  @week_on ~U[2026-09-30 13:00:00Z]
 
   setup do
     # Workspace reads take a repeatable-read snapshot, which Postgres allows
@@ -134,7 +130,7 @@ defmodule Keyfleet.ActivityTest do
     end
   end
 
-  test "key threads and word edits stay out; claims, progress and links show; only goal titles are public" do
+  test "key threads and word edits stay out; claims, progress and links show; the public feed has no workspace changes" do
     owner = human("a")
     writer = PairingHelpers.agent_for!(owner)
 
@@ -190,28 +186,9 @@ defmodule Keyfleet.ActivityTest do
                %{by: by, item: %{id: note, type: "note", title: "Plates"}}
              ]
 
-    # Anyone else reads the goal by its title and every other item by its type.
+    # Anyone else reads no workspace change at all.
     %{items: items} = Activity.page(@fleet, nil)
-
-    assert items |> Enum.filter(&String.starts_with?(&1.id, "graph:")) |> Enum.map(& &1.facts) ==
-             [
-               %{
-                 by: by,
-                 relation: "contradicts",
-                 source: %{id: finding, type: "finding", title: nil},
-                 target: %{id: goal, type: "goal", title: "Survey the hull"}
-               },
-               %{by: by, item: %{id: task, type: "task", title: nil}},
-               %{
-                 by: by,
-                 item: %{id: task, type: "task", title: nil},
-                 to: %{token_id: 17, agent: nil}
-               },
-               %{by: by, item: %{id: goal, type: "goal", title: "Survey the hull"}},
-               %{by: by, item: %{id: finding, type: "finding", title: nil}},
-               %{by: by, item: %{id: task, type: "task", title: nil}},
-               %{by: by, item: %{id: note, type: "note", title: nil}}
-             ]
+    refute Enum.any?(items, &String.starts_with?(&1.id, "graph:"))
   end
 
   test "posts group by room while they come within the hour", %{seen_at: seen_at} do
@@ -377,104 +354,22 @@ defmodule Keyfleet.ActivityTest do
   end
 
   describe "headline" do
-    test "a contradiction from the last week comes before a later post", %{seen_at: seen_at} do
+    test "a proposal carried out this week is featured, and no workspace change ever is",
+         %{seen_at: seen_at} do
       goal = Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
       finding = Workspace.create(@fleet, "finding", %{"title" => "Rust"})
       Workspace.link(@fleet, finding, goal, "contradicts")
-      line!("general", ~U[2026-09-22 18:00:00Z])
-
-      now = ~U[2026-09-23 12:00:00Z]
-      assert %{kind: :linked, facts: %{relation: "contradicts"}} = Activity.headline(@fleet, now)
-
-      # A week on, the contradiction is old news and no rule features anything.
-      assert Activity.headline(@fleet, DateTime.add(seen_at, 8, :day)) == nil
-    end
-
-    test "a task accepted this week comes before an open question, and not after a week" do
-      goal = Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
-      Workspace.edit(@fleet, goal, %{"open_questions" => ["Where does the rust start?"]})
-      task = Workspace.create(@fleet, "task", %{"title" => "Map the plates"})
-      Workspace.submit(@fleet, task, "https://example.com/plates")
-
-      # Submitted work waits for a review before it is featured.
-      assert %{kind: :open_question} = Activity.headline(@fleet, @this_week)
-
-      Workspace.review(@fleet, task, "accept", by: 4)
-
-      assert %{kind: :reviewed, facts: %{item: %{id: ^task}, decision: "accept"}} =
-               Activity.headline(@fleet, @this_week)
-
-      assert %{
-               kind: :open_question,
-               facts: %{
-                 goal: %{id: ^goal, title: "Survey the hull"},
-                 question: "Where does the rust start?"
-               }
-             } = Activity.headline(@fleet, @week_on)
-    end
-
-    test "a goal achieved this week is featured" do
-      goal = Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
       Workspace.edit(@fleet, goal, %{"status" => "achieved"})
+      now = DateTime.add(seen_at, 1, :hour)
 
-      assert %{kind: :status, facts: %{item: %{id: ^goal}, status: "achieved"}} =
-               Activity.headline(@fleet, @this_week)
-    end
+      assert Activity.headline(@fleet, now) == nil
 
-    test "accepted work and a proposal carried out: the newer is featured", %{seen_at: seen_at} do
-      task = Workspace.create(@fleet, "task", %{"title" => "Map the plates"})
       proposal!(@fleet, 1, %{})
       # Carried out at the time the chain records were seen.
       execution!(@fleet, 1, wallet("f"))
-      post!(PairingHelpers.agent_for!(human("a")), "general", "Paid")
-      now = DateTime.add(seen_at, 1, :hour)
 
-      graph_event_at!(DateTime.add(seen_at, -1, :minute), "object.created", accepted(task))
       assert %{kind: :executed, facts: %{number: 1}} = Activity.headline(@fleet, now)
-      # A week on, neither counts.
       assert Activity.headline(@fleet, DateTime.add(now, 7, :day)) == nil
-
-      graph_event_at!(DateTime.add(seen_at, 1, :minute), "object.created", accepted(task))
-      assert %{kind: :reviewed, facts: %{item: %{id: ^task}}} = Activity.headline(@fleet, now)
-    end
-
-    test "the open question is the first of the most recently changed open goal" do
-      older = Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
-      Workspace.create(@fleet, "goal", %{"title" => "Paint", "open_questions" => ["Which red?"]})
-      Workspace.edit(@fleet, older, %{"open_questions" => ["Where?", "When?"]})
-
-      # Goals that are no longer open do not count, however recent.
-      for {title, change} <- [
-            {"Dock", &Workspace.edit(@fleet, &1, %{"status" => "achieved"})},
-            {"Sail", &Workspace.edit(@fleet, &1, %{"status" => "dropped"})},
-            {"Moor", &Workspace.archive(@fleet, &1)}
-          ] do
-        @fleet
-        |> Workspace.create("goal", %{"title" => title, "open_questions" => ["Why?"]})
-        |> change.()
-      end
-
-      assert %{kind: :open_question, facts: %{goal: %{id: ^older}, question: "Where?"}} =
-               Activity.headline(@fleet, @week_on)
-    end
-
-    test "when the newest open goal has no question, no rule features anything" do
-      Workspace.create(@fleet, "goal", %{"title" => "Paint", "open_questions" => ["Which red?"]})
-      Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
-
-      assert Activity.headline(@fleet, @week_on) == nil
-    end
-
-    test "a contradiction behind the latest 200 notable changes is not featured" do
-      goal = Workspace.create(@fleet, "goal", %{"title" => "Survey the hull"})
-      finding = Workspace.create(@fleet, "finding", %{"title" => "Rust"})
-      Workspace.link(@fleet, finding, goal, "contradicts")
-
-      notes!(199, ~U[2026-09-22 18:00:00Z])
-      assert %{kind: :linked} = Activity.headline(@fleet, @this_week)
-
-      notes!(1, ~U[2026-09-22 18:00:00Z])
-      assert Activity.headline(@fleet, @this_week) == nil
     end
   end
 
@@ -561,42 +456,6 @@ defmodule Keyfleet.ActivityTest do
     )
 
     Graph.advance_cursor!(cursor, %{applied_seq: seq}, actor: @system)
-  end
-
-  # A member's patch marking `task` done.
-  # A review accepting `task`, as its creation is logged.
-  defp accepted(task) do
-    sys = %{"review" => %{"task" => task}}
-
-    %{
-      "object" => %{
-        "id" => "review#1",
-        "type" => "review",
-        "data" => %{"decision" => "accept", "sys" => sys}
-      }
-    }
-  end
-
-  # `count` new notes, logged at `at`.
-  defp notes!(count, at) do
-    cursor = Graph.get_cursor!(@fleet, actor: @system)
-    seqs = Enum.map(1..count, &(cursor.applied_seq + &1))
-
-    seqs
-    |> Enum.map(fn seq ->
-      %{
-        fleet_id: @fleet,
-        seq: seq,
-        event_id: "evt_#{seq}",
-        type: "object.created",
-        actor: "keyfleet:gateway",
-        timestamp: DateTime.to_iso8601(at),
-        payload: %{"object" => %{"id" => "note##{seq}", "type" => "note"}}
-      }
-    end)
-    |> Graph.record_events!(actor: @system)
-
-    Graph.advance_cursor!(cursor, %{applied_seq: List.last(seqs)}, actor: @system)
   end
 
   defp epoch!(token_id, ownership_epoch, owner) do

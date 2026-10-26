@@ -387,7 +387,7 @@ defmodule KeyfleetWeb.ApiContractTest do
           {"board", [], []},
           {"get", ~w(id), ~w(relations_after)},
           {"changes", [], ~w(after_seq limit)},
-          {"create", command ++ ~w(type data), []},
+          {"create", command ++ ~w(project type data), []},
           {"patch", command ++ ~w(id expected_version), ~w(set unset reason evidence)},
           {"link", command ++ ~w(source target type), ~w(note)},
           {"unlink", command ++ ~w(relation_id), []},

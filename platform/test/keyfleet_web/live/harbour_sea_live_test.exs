@@ -1,7 +1,8 @@
 defmodule KeyfleetWeb.HarbourSeaLiveTest do
   use KeyfleetWeb.ConnCase, async: false
 
-  alias Keyfleet.{Accounts, Actors, ChainHelpers, Fleets, Graph, Keys, Proposals, Rooms}
+  alias Keyfleet.{Accounts, Actors, ChainHelpers, Fleets, Graph, Keys, ProposalHelpers}
+  alias Keyfleet.{Proposals, Rooms}
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.{FleetNow, HarbourSeaLive}
@@ -33,11 +34,11 @@ defmodule KeyfleetWeb.HarbourSeaLiveTest do
     show_club(view)
     assert crew(view) == []
 
-    goal()
+    proposal()
     assert crew(view) == []
 
     FleetNow.read(@club)
-    assert [%{"id" => "regents_club:17", "place" => "forge"}] = crew(view)
+    assert [%{"id" => "regents_club:17", "place" => "castle"}] = crew(view)
   end
 
   test "a signed-out sea reads nothing itself and hears none of the fleet's notices",
@@ -60,7 +61,7 @@ defmodule KeyfleetWeb.HarbourSeaLiveTest do
     on_exit(fn -> :telemetry.detach(handler) end)
 
     show_club(view)
-    goal()
+    proposal()
     FleetNow.read(@club)
     assert [%{"id" => "regents_club:17"}] = crew(view)
     refute_received :sea_query
@@ -123,6 +124,13 @@ defmodule KeyfleetWeb.HarbourSeaLiveTest do
   # What the page tells the sea when the Club's page is on show.
   defp show_club(view),
     do: render_hook(view, "show_page", %{"path" => "/app/fleets/regents_club"})
+
+  # A proposal by Key 17's holder, which sails its ship to the castle. Work in
+  # the workspace sails no ship a visitor sees.
+  defp proposal do
+    ProposalHelpers.keys_sold!(@club, [17], @owner)
+    ProposalHelpers.proposal!(@club, 1, %{proposer: @owner})
+  end
 
   # A goal Key 17 makes, which sails its ship to the forge.
   defp goal do

@@ -4505,7 +4505,7 @@
     {
       "name": "workspace_create",
       "title": "Add a workspace object",
-      "description": "Add a goal, task, finding, evidence, service, note or dead end as the Key you act as, with its fields in data. A goal's or task's public_summary is public, so keep private details out of it. Keep command_id when retrying: the change is written once. Answers its id and version.",
+      "description": "Add a goal, task, finding, evidence, service, note or dead end as the Key you act as, with its fields in data. Name the project it belongs to; every fleet has general. Keep command_id when retrying: the change is written once. Answers its id and version.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -4534,6 +4534,12 @@
                 "minLength": 1,
                 "maxLength": 128
               },
+              "project": {
+                "type": "string",
+                "description": "Name of the project it belongs to, such as general",
+                "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                "maxLength": 32
+              },
               "type": {
                 "type": "string",
                 "enum": [
@@ -4548,7 +4554,7 @@
               },
               "data": {
                 "type": "object",
-                "description": "The object's fields for its type. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
+                "description": "The object's fields for its type. Visitors read a goal's title and the title of its project, and nothing else of the workspace.",
                 "additionalProperties": true,
                 "properties": {
                   "body": {
@@ -4563,6 +4569,7 @@
               "fleet_id",
               "as_key",
               "command_id",
+              "project",
               "type",
               "data"
             ],
@@ -4613,6 +4620,12 @@
             "minLength": 1,
             "maxLength": 128
           },
+          "project": {
+            "type": "string",
+            "description": "Name of the project it belongs to, such as general",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "maxLength": 32
+          },
           "type": {
             "type": "string",
             "enum": [
@@ -4627,7 +4640,7 @@
           },
           "data": {
             "type": "object",
-            "description": "The object's fields for its type. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
+            "description": "The object's fields for its type. Visitors read a goal's title and the title of its project, and nothing else of the workspace.",
             "additionalProperties": true,
             "properties": {
               "body": {
@@ -4642,6 +4655,7 @@
           "fleet_id",
           "as_key",
           "command_id",
+          "project",
           "type",
           "data"
         ],
@@ -4703,7 +4717,7 @@
               },
               "set": {
                 "type": "object",
-                "description": "Fields to set, by name. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
+                "description": "Fields to set, by name.",
                 "additionalProperties": true,
                 "properties": {
                   "body": {
@@ -4805,7 +4819,7 @@
           },
           "set": {
             "type": "object",
-            "description": "Fields to set, by name. A goal or task may carry public_summary, one line of up to 500 characters. Beside its title and its status or progress, it is the only thing visitors read, so it holds nothing private.",
+            "description": "Fields to set, by name.",
             "additionalProperties": true,
             "properties": {
               "body": {

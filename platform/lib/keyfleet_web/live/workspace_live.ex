@@ -37,7 +37,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :signed_out?, :boolean,
     default: false,
-    doc: "whether nobody is signed in, so the members-only outline offers Sign in"
+    doc: "whether nobody is signed in, so the members-only page offers Sign in"
 
   # The board and an item are drawn inside the fleet's page, under its name
   # and bar (`KeyfleetWeb.FleetLive`).
@@ -594,7 +594,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :signed_out?, :boolean,
     default: false,
-    doc: "whether nobody is signed in, so the members-only outline offers Sign in"
+    doc: "whether nobody is signed in, so the members-only page offers Sign in"
 
   def item(%{item: :unreadable} = assigns), do: ~H|<.unreadable id="workspace-item-page" />|
 
@@ -1102,7 +1102,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <header class="workspace-heading">
         <h2>Workspace</h2>
         <p id="workspace-members-only" class="workspace-lede">
-          A public outline of this fleet’s work. Key holders and their agents see the notes, code and results.
+          What this fleet is working on. Key holders and their agents see everything else.
         </p>
         <.link patch={KeyLinks.members_path(@fleet.fleet_id)}>See this fleet’s Keys</.link>
         <Regent.Primitives.button
@@ -1115,84 +1115,24 @@ defmodule KeyfleetWeb.WorkspaceLive do
           Sign in
         </Regent.Primitives.button>
       </header>
-      <section
-        :if={@fleet.focus}
-        id="workspace-public-item"
-        class="workspace-panel"
-        aria-labelledby="workspace-public-item-title"
-        data-item={@fleet.focus.id}
-      >
-        <p class="workspace-kicker">{String.capitalize(@fleet.focus.type_name)}</p>
-        <h2 id="workspace-public-item-title">{@fleet.focus.title}</h2>
-        <p :if={@fleet.focus.standing}>
-          <span class="workspace-badge">{@fleet.focus.standing}</span>
-        </p>
-        <p :if={@fleet.focus.summary} class="workspace-text">{@fleet.focus.summary}</p>
-      </section>
-      <.outline
-        id="workspace-public-goals"
-        title="Goals"
-        empty="No goals have been set here yet."
-        items={@fleet.outline["goal"]}
-      />
-      <.outline
-        id="workspace-public-tasks"
-        title="Tasks"
-        empty="No tasks have been added here yet."
-        items={@fleet.outline["task"]}
-      />
-      <section class="workspace-panel" aria-labelledby="workspace-public-activity-title">
-        <h2 id="workspace-public-activity-title">Workstream</h2>
-        <Regent.Primitives.empty_state
-          :if={@fleet.work == []}
-          id="workspace-public-empty"
-          class="kf-empty"
-          title="No work has been recorded here yet."
-        />
-        <.feed
-          :let={line}
-          :if={@fleet.work != []}
-          id="workspace-public-activity"
-          rows={@fleet.work}
-          key={:id}
+      <section class="workspace-panel" aria-labelledby="workspace-public-projects-title">
+        <h2 id="workspace-public-projects-title">Projects</h2>
+        <div
+          :for={{project, i} <- Enum.with_index(@fleet.projects)}
+          id={"workspace-public-project-#{i}"}
+          class="workspace-public-project"
         >
-          <p><.line parts={line.parts} fleet_id={@fleet.fleet_id} /></p>
-        </.feed>
+          <h3>{project.title}</h3>
+          <p :if={project.goals == []} class="workspace-detail">No goals in progress.</p>
+          <ul :if={project.goals != []} class="workspace-lines">
+            <li :for={goal <- project.goals}>
+              <p>{goal}</p>
+            </li>
+          </ul>
+        </div>
       </section>
       <.tools fleet_id={@fleet.fleet_id} />
     </article>
-    """
-  end
-
-  attr :id, :string, required: true
-  attr :title, :string, required: true
-  attr :empty, :string, required: true
-
-  attr :items, :list,
-    required: true,
-    doc: "each goal or task with its title, standing and summary"
-
-  # What anyone may read of the fleet's goals or tasks.
-  defp outline(assigns) do
-    ~H"""
-    <section class="workspace-panel" aria-labelledby={@id <> "-title"}>
-      <h2 id={@id <> "-title"}>{@title}</h2>
-      <Regent.Primitives.empty_state
-        :if={@items == []}
-        id={@id <> "-empty"}
-        class="kf-empty"
-        title={@empty}
-      />
-      <ol :if={@items != []} id={@id} class="workspace-lines">
-        <li :for={item <- @items} data-item={item.id}>
-          <p>
-            <strong>{item.title}</strong>
-            <span :if={item.standing} class="workspace-badge">{item.standing}</span>
-          </p>
-          <p :if={item.summary} class="workspace-text">{item.summary}</p>
-        </li>
-      </ol>
-    </section>
     """
   end
 

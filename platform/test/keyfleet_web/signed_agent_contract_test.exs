@@ -185,6 +185,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
      %{
        "as_key" => 1,
        "command_id" => "c-1",
+       "project" => "general",
        "type" => "goal",
        "data" => %{}
      }},

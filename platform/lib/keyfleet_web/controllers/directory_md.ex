@@ -11,7 +11,7 @@ defmodule KeyfleetWeb.DirectoryMD do
   """
 
   alias Keyfleet.Fleets.{Presets, Rules}
-  alias KeyfleetWeb.{ActivityLines, DirectoryJSON, PublicDocuments}
+  alias KeyfleetWeb.{DirectoryJSON, PublicDocuments}
 
   # What Markdown could act on in a line it doesn't start: a backslash, code,
   # a link or image (`[`), HTML (`<`), emphasis and strikethrough. `_` makes
@@ -65,9 +65,9 @@ defmodule KeyfleetWeb.DirectoryMD do
   end
 
   @doc """
-  One fleet: its rules, who's here, its open work, its rooms and its latest
-  posts in the Public room, or for a coming-soon fleet, that it is coming soon, and
-  for Classic #1, its sale's terms.
+  One fleet: its rules, who's here, its projects with the goals open in each,
+  its rooms and its latest posts in the Public room, or for a coming-soon
+  fleet, that it is coming soon, and for Classic #1, its sale's terms.
   """
   def show(assigns) do
     case DirectoryJSON.show(assigns) do
@@ -100,13 +100,11 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     #{agents(fleet)}
 
-    ## Goals in progress (#{fleet.open_goals})
+    ## Projects
 
-    #{goals(fleet.work.open_goals)}
+    #{projects(fleet.projects)}
 
-    ## Tasks
-
-    #{tasks(fleet)}
+    The rest of the workspace is for Key holders.
 
     ## Rooms
 
@@ -186,8 +184,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     "#{Rules.counted(fleet.agents_here, "agent", "agents")} here, " <>
       "#{Rules.grouped(fleet.agents_checked_in_last_day)} checked in during the last 24 hours · " <>
-      "#{Rules.counted(fleet.open_goals, "goal", "goals")} in progress · " <>
-      "#{Rules.counted(fleet.tasks_taken, "task", "tasks")} taken · #{last_post}."
+      "#{last_post}."
   end
 
   defp terms do
@@ -216,17 +213,16 @@ defmodule KeyfleetWeb.DirectoryMD do
   defp returns(%{scheduled_check_ins: times}),
     do: " · #{Rules.counted(times, "scheduled check-in", "scheduled check-ins")}"
 
-  defp goals([]), do: "No goals in progress."
+  # Each project's title, with the titles of the goals open in it beneath.
+  defp projects(projects) do
+    Enum.map_join(projects, "\n", fn
+      %{title: title, goals: []} ->
+        "- #{inline(title, @title_length)} · no goals in progress"
 
-  defp goals(goals),
-    do: Enum.map_join(goals, "\n", &"- #{&1.id} · #{title(&1.title)}")
-
-  defp title(nil), do: "untitled"
-  defp title(title), do: inline(title, @title_length)
-
-  defp tasks(%{work: work}) do
-    counts = ActivityLines.task_counts(work.tasks_taken, work.tasks_untaken) || "No tasks yet"
-    "#{counts}. The workspace itself is for Key holders."
+      %{title: title, goals: goals} ->
+        "- #{inline(title, @title_length)}\n" <>
+          Enum.map_join(goals, "\n", &"  - #{inline(&1, @title_length)}")
+    end)
   end
 
   defp room_lines(rooms) do

@@ -14,6 +14,11 @@ defmodule Keyfleet.Graph.Workspace do
   reproduced the work from that commit. Neither says anything about paying
   for it.
 
+  Every item belongs to one of the fleet's projects (`Keyfleet.Projects`),
+  named when it is made and never changed; a review or fork belongs to its
+  task's. Links run between any two items of the fleet, whatever their
+  projects.
+
   A member takes an untaken task by assigning it to their own Key. Only the
   Key holding a task gives it to another Key or drops it; any other member
   forks it instead (`fork`), which copies it as their own task in progress.
@@ -41,6 +46,7 @@ defmodule Keyfleet.Graph.Workspace do
 
   alias Keyfleet.Graph.Validations.FreshOwnership
   alias Keyfleet.Graph.Validations.KnownFleet
+  alias Keyfleet.Graph.Validations.KnownProject
   alias Keyfleet.Graph.Workspace.Read
   alias Keyfleet.Graph.Workspace.Relay
 
@@ -78,15 +84,17 @@ defmodule Keyfleet.Graph.Workspace do
     end
 
     action :create, :map do
-      description "Adds an object to the fleet's workspace."
+      description "Adds an object to one of the fleet's projects."
       argument :fleet_id, :string, allow_nil?: false
       argument :as_key, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
       argument :command_id, :string, allow_nil?: false, constraints: @text
+      argument :project, :string, allow_nil?: false, constraints: @text
       argument :type, :string, allow_nil?: false, constraints: @text
       argument :data, :map, allow_nil?: false
       validate KnownFleet
+      validate KnownProject, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
-      run {Relay, op: "create", body: [:type, :data]}
+      run {Relay, op: "create", body: [:project, :type, :data]}
     end
 
     action :patch, :map do

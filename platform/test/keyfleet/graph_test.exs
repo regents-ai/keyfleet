@@ -16,7 +16,11 @@ defmodule Keyfleet.GraphTest do
   @owner "0x" <> String.duplicate("a", 40)
   @agent_wallet "0x" <> String.duplicate("c", 40)
   @holder %Actors.Human{human_account_id: 1, wallet_addresses: [@owner]}
-  @note %{type: "note", data: %{title: "Plan", body: "Ship the first service."}}
+  @note %{
+    project: "general",
+    type: "note",
+    data: %{title: "Plan", body: "Ship the first service."}
+  }
 
   setup %{tmp_dir: tmp_dir} do
     # Workspace reads take a repeatable-read snapshot, which Postgres allows

@@ -46,6 +46,14 @@ defmodule Keyfleet.Projects.Project do
       prepare build(sort: [inserted_at: :asc, name: :asc])
     end
 
+    # Anyone reads the titles of a fleet's projects, oldest first; a page
+    # shows the title alone.
+    read :titles do
+      argument :fleet_id, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id))
+      prepare build(sort: [inserted_at: :asc, name: :asc], select: [:fleet_id, :name, :title])
+    end
+
     read :named do
       argument :fleet_id, :string, allow_nil?: false
       argument :name, :string, allow_nil?: false, constraints: [trim?: false]
@@ -91,6 +99,10 @@ defmodule Keyfleet.Projects.Project do
   policies do
     policy action(:start) do
       authorize_if KeyActor
+    end
+
+    policy action(:titles) do
+      authorize_if always()
     end
 
     policy action([:in_fleet, :named]) do

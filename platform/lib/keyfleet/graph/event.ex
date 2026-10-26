@@ -8,8 +8,8 @@ defmodule Keyfleet.Graph.Event do
   `byte_size`, the length of the event as a reader receives it, so a page of
   events is cut to size by the database. Only the projector writes here. Only
   the fleet's members read its events (`Keyfleet.Graph.Checks.KeyReader`),
-  except the lines of its latest activity a fleet shows anyone, which carry no
-  text an event holds.
+  except which of its changes are notable and when, which the workspace pulse
+  shows anyone without any text an event holds.
   """
   use Ash.Resource,
     domain: Keyfleet.Graph,
@@ -29,8 +29,6 @@ defmodule Keyfleet.Graph.Event do
   @history 50
   @brief_fields [:fleet_id, :seq, :type, :actor, :timestamp]
   @member ~r/\Amember:[0-9]+:0x[0-9a-f]{40}:([0-9]+)@[0-9]+\/(human|agent):(0x[0-9a-f]{40})\z/
-  # How many of the latest notable events a featured change is looked for in.
-  @marks_window 200
 
   # The changes worth telling people who watch a fleet: every new object; a
   # patch that moves a status, progress or who has taken a task, archives an
@@ -42,9 +40,6 @@ defmodule Keyfleet.Graph.Event do
   @notable """
   type = 'object.created' OR (type = 'relation.created' AND (payload #>> '{relation,type}') IN ('contradicts', 'supports', 'produces')) OR (type = 'patch.applied' AND (jsonb_exists_any(payload -> 'diff', ARRAY['status', 'progress', 'assignee_key']) OR (payload #> '{diff,sys,new,archived}') = 'true'::jsonb OR split_part(payload ->> 'target', '#', 1) IN ('goal', 'service')))\
   """
-
-  # The oldest place in the fleet's latest 200 notable changes.
-  @window_floor "COALESCE((SELECT w.seq FROM keyfleet_app.graph_events AS w WHERE w.fleet_id = ? AND (#{@notable}) ORDER BY w.seq DESC OFFSET ? LIMIT 1), 0)"
 
   postgres do
     table "graph_events"
@@ -141,36 +136,6 @@ defmodule Keyfleet.Graph.Event do
       prepare build(select: @brief_fields, load: [:brief])
     end
 
-    # The latest disagreement (`:contradiction`, a `contradicts` link) or the
-    # latest finished work (`:completion`, a goal achieved or a review that
-    # accepts a task)
-    # among the fleet's 200 latest notable changes, or none.
-    read :latest_mark do
-      argument :fleet_id, :string, allow_nil?: false
-
-      argument :mark, :atom,
-        allow_nil?: false,
-        constraints: [one_of: [:contradiction, :completion]]
-
-      filter expr(fleet_id == ^arg(:fleet_id))
-
-      prepare fn query, _context ->
-        fleet_id = Ash.Query.get_argument(query, :fleet_id)
-
-        query
-        |> Ash.Query.filter(^sql(@notable))
-        |> Ash.Query.filter(seq >= ^sql(@window_floor, [fleet_id, @marks_window - 1]))
-        |> mark(Ash.Query.get_argument(query, :mark))
-        |> Ash.Query.unset([:sort, :limit, :offset])
-        |> Ash.Query.sort(seq: :desc)
-        |> Ash.Query.limit(1)
-        |> Ash.Query.select(@brief_fields)
-        |> Ash.Query.load(:brief)
-      end
-
-      get? true
-    end
-
     # Every change to one object up to `through_seq`, newest first, one more
     # than a page so the reader knows whether more come before: its creation,
     # its edits and archiving, and the links made to or from it and removed
@@ -259,8 +224,9 @@ defmodule Keyfleet.Graph.Event do
   end
 
   policies do
-    # The latest activity a fleet shows anyone.
-    policy action([:notable_before, :latest_mark]) do
+    # Which changes are notable, and when, without their words: the
+    # workspace pulse shows anyone that much.
+    policy action(:notable_before) do
       authorize_if always()
     end
 
@@ -382,35 +348,9 @@ defmodule Keyfleet.Graph.Event do
   # A fragment of SQL kept in one module attribute, so the same words can
   # make an index and the reads that use it; the expression macro takes only
   # literal SQL.
-  defp sql(sql, args \\ []) do
-    {:ok, fragment} = Ash.Query.Function.Fragment.new([sql | args])
+  defp sql(sql) do
+    {:ok, fragment} = Ash.Query.Function.Fragment.new([sql])
     fragment
-  end
-
-  defp mark(query, :contradiction) do
-    Ash.Query.filter(
-      query,
-      type == "relation.created" and
-        fragment("(? #>> '{relation,type}') = 'contradicts'", payload)
-    )
-  end
-
-  defp mark(query, :completion) do
-    Ash.Query.filter(
-      query,
-      (type == "patch.applied" and
-         fragment(
-           "split_part(? ->> 'target', '#', 1) = 'goal' AND (? #>> '{diff,status,new}') = 'achieved'",
-           payload,
-           payload
-         )) or
-        (type == "object.created" and
-           fragment(
-             "(? #>> '{object,type}') = 'review' AND (? #>> '{object,data,decision}') = 'accept'",
-             payload,
-             payload
-           ))
-    )
   end
 
   @doc """

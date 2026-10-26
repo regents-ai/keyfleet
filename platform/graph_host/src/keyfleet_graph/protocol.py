@@ -107,6 +107,8 @@ Id = Annotated[str, StringConstraints(min_length=1, max_length=128), single_line
 Name = Annotated[str, StringConstraints(max_length=64), single_line]
 Reason = Annotated[str, StringConstraints(max_length=1000), multi_line]
 Sha256Ref = Annotated[str, StringConstraints(pattern=r"^sha256:[0-9a-f]{64}$")]
+# A project's name inside its fleet, as the site's addresses use it.
+ProjectName = Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+(-[a-z0-9]+)*$", max_length=32)]
 UtcTimestamp = Annotated[str, StringConstraints(pattern=r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$")]
 
 
@@ -167,6 +169,8 @@ class ChangesBody(_Shape):
 
 class CreateBody(_Shape):
     type: Name
+    # The site checks the fleet has the project; the graph keeps its name.
+    project: ProjectName
     data: dict[str, Any]
 
 class PatchBody(_Shape):

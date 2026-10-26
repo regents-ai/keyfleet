@@ -144,8 +144,8 @@
   }
 }
 
-/* Trying now: the fleet's open goals as a short list, then how much work is
-   open and the question the newest goal most needs answered. */
+/* Trying now: each of the fleet's projects by title, with its open goals as
+   a short list. */
 
 .trying-now {
   display: grid;
@@ -168,10 +168,6 @@
   overflow-wrap: anywhere;
 }
 
-.trying-now__detail {
-  color: var(--color-fg-muted);
-}
-
 .trying-goal {
   display: grid;
   gap: 0.2rem;
@@ -181,6 +177,17 @@
 
 .trying-now h2 {
   font-size: 1.05rem;
+}
+
+.trying-project {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.trying-project h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--color-fg-muted);
 }
 
 .trying-goal__title {

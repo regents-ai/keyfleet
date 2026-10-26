@@ -4,16 +4,16 @@ defmodule Keyfleet.Graph do
 
   Every call names its fleet. Writes go to the fleet's graph; a write names the
   key it acts as, `as_key`, and its own command id; see
-  `Keyfleet.Graph.Workspace`. Reads are for the fleet's members, except the
-  summary a fleet shows anyone (`Keyfleet.Graph.Checks.KeyReader`), and are
+  `Keyfleet.Graph.Workspace`. Reads are for the fleet's members
+  (`Keyfleet.Graph.Checks.KeyReader`), except what a fleet shows anyone
+  (`shown/1`), and are
   answered from read tables the projector keeps copied from the graph's log,
   so a read never waits on a write. Each read says how far along the log it reflects, its
   `watermark`.
   """
   use Ash.Domain
 
-  @goals_shown 3
-  @trying_counts [:goals_open, :tasks_taken, :tasks_untaken]
+  @goals_shown 50
   @tables [
     Keyfleet.Graph.Cursor,
     Keyfleet.Graph.Event,
@@ -48,7 +48,6 @@ defmodule Keyfleet.Graph do
       define :read_events, action: :page, args: [:fleet_id, :after_seq, :limit]
       define :latest_activity, action: :activity, args: [:fleet_id]
       define :notable_before, action: :notable_before, args: [:fleet_id, :before_seq, :limit]
-      define :latest_mark, action: :latest_mark, args: [:fleet_id, :mark], not_found_error?: false
       define :object_history, action: :history, args: [:fleet_id, :object_id]
       define :record_events, action: :record
     end
@@ -59,8 +58,7 @@ defmodule Keyfleet.Graph do
       define :workspace_cards, action: :cards, args: [:fleet_id]
       define :goal_work, action: :around_goal, args: [:fleet_id, :goal_id]
       define :object_titles, action: :titled, args: [:fleet_id, :ids]
-      define :open_work, action: :open_work, args: [:fleet_id, :kind]
-      define :outline, action: :outline, args: [:fleet_id, :type]
+      define :open_goals, action: :open_goals, args: [:fleet_id]
       define :work_citing, action: :citing, args: [:fleet_id, :uri]
       define :tasks_assigned_to, action: :assigned_to_keys, args: [:fleet_id, :token_ids]
       define :reviews_asked_of, action: :review_asked_of, args: [:fleet_id, :token_ids]
@@ -87,81 +85,35 @@ defmodule Keyfleet.Graph do
   end
 
   @doc """
-  How many objects of one kind of open work the fleet's workspace holds:
-  `:goals_open`, `:tasks_taken` or `:tasks_untaken`, as the
-  `:open_work` read of `Keyfleet.Graph.Object` defines them, as `{:ok,
-  count}` or `{:error, failure}` (see `Keyfleet.Count`).
-  """
-  def count_open_work(fleet_id, kind) do
-    Keyfleet.Graph.Object
-    |> Ash.Query.for_read(:open_work, %{fleet_id: fleet_id, kind: kind})
-    |> Keyfleet.Count.of()
-  end
-
-  @doc """
-  The first open question of the fleet's newest open goal, with that goal:
-  `%{goal: goal, question: question}`, or nil when the fleet has no open goal
-  or its newest one has no open question. The newest open goal is the one
-  changed most recently among the `:goals_open` of the `:open_work` read. The
-  goal comes with its `title`.
-
-  This is the one place the rule lives; `trying_now/1` answers the same
-  question from the goals it reads.
-  """
-  def open_question(fleet_id), do: fleet_id |> open_goals(1) |> question_of()
-
-  @doc """
-  What a fleet shows anyone of what its agents are trying to do right now,
-  read from one snapshot (`in_snapshot/1`), with no text beyond titles and
-  the open question:
-
-    * `goals`: up to #{@goals_shown} open goals, most recently changed first,
-      each with its `title`.
-    * `goals_set?`: whether the workspace holds any goal, open or not, that
-      is not archived.
-    * `counts`: how many open goals and unfinished tasks the workspace
-      holds, as `count_open_work/2` counts them: `goals_open`, `tasks_taken`
-      and `tasks_untaken`.
-    * `question`: the question `open_question/1` gives, or nil.
+  What a fleet shows anyone of its workspace, read from one snapshot
+  (`in_snapshot/1`): each of its projects by title, oldest first, with the
+  titles of the open goals in it (the `:open_goals` read of objects),
+  most recently changed first, up to #{@goals_shown} across the fleet. A
+  project with no open goal is listed with none. Nothing else of the
+  workspace is shown: not a project's name, a goal's other fields, a task, a
+  count or a change.
 
   Never call it inside a transaction: its snapshot has to be its
   transaction's first statement. Inside an ordinary transaction that fails
   loudly; inside a repeatable-read one it doesn't fail, but reads that
   transaction's snapshot, taken at its first query, rather than one of its
-  own. The outer transaction can write again once it returns.
+  own.
   """
-  def trying_now(fleet_id) do
-    {:ok, now} = in_snapshot(fn -> read_trying_now(fleet_id) end)
-    now
-  end
+  @spec shown(String.t()) :: [%{title: String.t(), goals: [String.t()]}]
+  def shown(fleet_id) do
+    {:ok, shown} =
+      in_snapshot(fn ->
+        goals =
+          fleet_id
+          |> open_goals!(query: [limit: @goals_shown])
+          |> Enum.group_by(& &1.project, & &1.title)
 
-  defp read_trying_now(fleet_id) do
-    goals = open_goals(fleet_id, @goals_shown)
-
-    counts =
-      Map.new(@trying_counts, fn kind ->
-        case count_open_work(fleet_id, kind) do
-          {:ok, count} -> {kind, count}
-          {:error, failure} -> raise failure
-        end
+        for project <- Keyfleet.Projects.project_titles!(fleet_id),
+            do: %{title: project.title, goals: Map.get(goals, project.name, [])}
       end)
 
-    %{
-      goals: goals,
-      goals_set?: goals != [] or outline!(fleet_id, "goal", query: [limit: 1]) != [],
-      counts: counts,
-      question: goals |> question_of() |> then(&(&1 && &1.question))
-    }
+    shown
   end
-
-  defp open_goals(fleet_id, limit) do
-    open_work!(fleet_id, :goals_open, query: [limit: limit], load: [:first_open_question])
-  end
-
-  defp question_of([%{first_open_question: question} = goal | _]) when is_binary(question),
-    do: %{goal: goal, question: question}
-
-  defp question_of(_goals), do: nil
 
   @doc """
   Runs `read` in one read-only snapshot of the workspace's read tables and

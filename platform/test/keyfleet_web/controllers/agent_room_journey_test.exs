@@ -180,7 +180,7 @@ defmodule KeyfleetWeb.AgentRoomJourneyTest do
           {"POST", "#{fleet}/proposals/read", ~s({"number":1,"votes_after_seq":0})},
           {"POST", "#{fleet}/graph/changes", "{}"},
           {"POST", "#{fleet}/graph/create",
-           ~s({"as_key":1,"command_id":"c-1","type":"note","data":{}})},
+           ~s({"as_key":1,"command_id":"c-1","project":"general","type":"note","data":{}})},
           {"GET", "#{fleet}/mutes", nil},
           {"POST", "#{fleet}/keys/{token_id}/mute", "{}"},
           {"POST", "#{fleet}/keys/{token_id}/unmute", "{}"},

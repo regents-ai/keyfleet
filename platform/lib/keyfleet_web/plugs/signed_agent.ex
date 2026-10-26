@@ -150,7 +150,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     "board" => {%{}, %{}},
     "get" => {%{"id" => :text}, %{"relations_after" => :seq}},
     "changes" => {%{}, %{"after_seq" => :seq, "limit" => :graph_page}},
-    "create" => {Map.merge(@command_fields, %{"type" => :text, "data" => :object}), %{}},
+    "create" =>
+      {Map.merge(@command_fields, %{"project" => :text, "type" => :text, "data" => :object}), %{}},
     "patch" =>
       {Map.merge(@command_fields, %{"id" => :text, "expected_version" => :version}),
        %{"set" => :object, "unset" => :texts, "reason" => :text, "evidence" => :texts}},

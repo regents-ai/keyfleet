@@ -60,7 +60,7 @@
 97	test/keyfleet/reveals_chain_test.exs
 91	test/keyfleet_web/connect_live_test.exs
 85	test/keyfleet/check_ins_test.exs
-82	test/keyfleet/graph/trying_now_test.exs
+82	test/keyfleet/graph/shown_test.exs
 76	test/keyfleet/polls_test.exs
 71	test/keyfleet/shared_reading_property_test.exs
 68	test/keyfleet_web/controllers/agent_avatar_test.exs

@@ -26,6 +26,7 @@ from pydantic_core import from_json
 
 from keyfleet_graph import protocol
 from keyfleet_graph.pack import (
+    GENERAL,
     MAX_JOINED,
     MAX_STARTING,
     MEMBER_MODELS,
@@ -45,6 +46,9 @@ GATEWAY_ACTOR = "keyfleet:gateway"
 # The name on the writes that keep a workspace's starting goals as the site
 # lists them.
 STARTING_ACTOR = "keyfleet:starting_goals"
+# The name on the writes that put a workspace's items made before projects
+# into `general`. The release after the one that adds projects removes them.
+PROJECTS_ACTOR = "keyfleet:projects"
 # A `changes` page stops at this many bytes of encoded events, or after the
 # first event when that one alone is larger.
 CHANGES_PAGE_BYTES = 512 * 1024
@@ -103,6 +107,7 @@ class Host:
         with self._transaction():
             self.log_id = self._log_id()
             self.runtime.load_pack(PACK)
+            self._into_general()
             self._keep_starting_goals(starting_goals)
             self._settle()
         self._ledger = {
@@ -203,7 +208,7 @@ class Host:
         if member is None:
             raise _invalid("type", f"unknown object type {body.type!r}")
         _check_fields(member, body.data.keys(), body.data, command, None)
-        record = _validate(RECORD_MODELS[body.type], {**body.data, "sys": _sys(command)})
+        record = _validate(RECORD_MODELS[body.type], {**body.data, "sys": _sys(command, body.project)})
 
         def apply(reactions: Reactions) -> dict:
             obj = self.graph.add_object(body.type, record, actor=command.principal)
@@ -417,7 +422,8 @@ class Host:
             "conflicts_of_interest": body.conflicts_of_interest,
             "reproduction": body.reproduction,
         }
-        sys = {**_sys(command), "review": receipt}
+        # A review belongs to the project of the task it judged.
+        sys = {**_sys(command, task.data["sys"]["project"]), "review": receipt}
         record = _validate(RECORD_MODELS["review"], {**member, "sys": sys})
 
         def apply(reactions: Reactions) -> dict:
@@ -430,7 +436,7 @@ class Host:
     def _plan_fork(self, command: Command, body: protocol.ForkBody) -> Callable[[Reactions], dict]:
         """Copies a task for the acting Key to work on, in progress and theirs.
 
-        The fork keeps the task's title, deliverable, acceptance criteria and discussion, implements
+        The fork stays in the task's project and keeps its title, deliverable, acceptance criteria and discussion, implements
         the same goals and services, and links to the task with `forks`. The
         task forked is left as it was, its holder included: forking is how a
         member works on a task another Key holds.
@@ -438,7 +444,7 @@ class Host:
         task = self._task(body.id, "id")
         copied = {field: task.data[field] for field in ("title", "deliverable", "acceptance_criteria", "discussion") if task.data.get(field)}
         member = {**copied, "assignee_key": command.auth.key.token_id, "progress": "doing"}
-        record = _validate(RECORD_MODELS["task"], {**member, "sys": _sys(command)})
+        record = _validate(RECORD_MODELS["task"], {**member, "sys": _sys(command, task.data["sys"]["project"])})
         implements = [
             rel.target
             for rel in self.graph.relations(source=task.id, type="implements")
@@ -453,6 +459,25 @@ class Host:
             return {"id": fork.id, "version": fork.version}
 
         return apply
+
+    # ---------- projects ----------
+
+    def _into_general(self) -> None:
+        """Puts every item made before projects into `general`, once.
+
+        Each such item is rewritten whole by one replace: its `sys` names
+        `general` in place of its scope, and a goal or task loses the public
+        summary the pack no longer has. The release after the one that adds
+        projects removes this step.
+        """
+        for obj in self.graph.objects():
+            if "project" in obj.data["sys"]:
+                continue
+            sys = {field: value for field, value in obj.data["sys"].items() if field != "scope"}
+            data = {field: value for field, value in obj.data.items() if field != "public_summary"}
+            record = _validate(RECORD_MODELS[obj.type], {**data, "sys": {**sys, "project": GENERAL}})
+            patch = self.graph.propose_patch(obj.id, "replace", record, proposed_by=PROJECTS_ACTOR)
+            self.graph.apply_patch(patch.id, approved_by=PROJECTS_ACTOR)
 
     # ---------- starting goals ----------
 
@@ -471,7 +496,7 @@ class Host:
         for number, goal in reversed(list(enumerate(goals, start=1))):
             obj = held.get(number)
             if obj is None:
-                sys = {"scope": "fleet", "created_by": None, "starting": number, "archived": False}
+                sys = {"project": GENERAL, "created_by": None, "starting": number, "archived": False}
                 record = _validate(RECORD_MODELS["goal"], {**goal.model_dump(), "sys": sys})
                 self.graph.add_object("goal", record, actor=STARTING_ACTOR)
                 continue
@@ -768,8 +793,8 @@ def _check_archiver(obj, command: Command) -> None:
         )
 
 
-def _sys(command: Command) -> dict[str, Any]:
-    return {"scope": "fleet", "created_by": _member(command), "archived": False}
+def _sys(command: Command, project: str) -> dict[str, Any]:
+    return {"project": project, "created_by": _member(command), "archived": False}
 
 
 def _member(command: Command) -> dict[str, Any]:

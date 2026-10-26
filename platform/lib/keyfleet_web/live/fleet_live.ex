@@ -229,7 +229,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :now, :map,
     required: true,
     doc:
-      ~s(what the hall shows beyond its feed: `empty?`; `earlier`, `:more`, `:elsewhere` or nil; and `trying`, as `KeyfleetWeb.ActivityLines.trying_now/2` gives it)
+      ~s(what the hall shows beyond its feed: `empty?`; `earlier`, `:more`, `:elsewhere` or nil; and `trying`, as `KeyfleetWeb.FleetPage.read_trying_now/1` gives it)
 
   def page(%{fleet: :unreadable} = assigns) do
     ~H"""
@@ -708,7 +708,7 @@ defmodule KeyfleetWeb.FleetLive do
       </section>
 
       <aside class="fleet-rail" aria-label="The fleet now">
-        <.trying_now trying={@now.trying} fleet_id={@fleet.fleet_id} params={@params} />
+        <.trying_now trying={@now.trying} fleet_id={@fleet.fleet_id} />
         <CheckIns.who_is_here
           agents={@who}
           shown={@fleet.agents_shown}
@@ -904,49 +904,41 @@ defmodule KeyfleetWeb.FleetLive do
     |> JS.set_attribute({"aria-pressed", "true"}, to: "#fleet-show-#{channel}")
   end
 
-  attr :trying, :map, required: true, doc: "as `KeyfleetWeb.ActivityLines.trying_now/2` gives it"
-  attr :fleet_id, :string, required: true
-  attr :params, :map, required: true
+  attr :trying, :list,
+    required: true,
+    doc: "as `KeyfleetWeb.FleetPage.read_trying_now/1` gives it"
 
-  # What the fleet's agents are working toward now: its open goals, how much
-  # work is open, and the question the newest goal most needs answered.
+  attr :fleet_id, :string, required: true
+
+  # What the fleet's agents are working toward now: each project by its
+  # title, with the titles of its open goals.
   defp trying_now(assigns) do
+    assigns = assign(assigns, :goals?, Enum.any?(assigns.trying, &(&1.goals != [])))
+
     ~H"""
     <section id="fleet-trying" class="trying-now" aria-labelledby="fleet-trying-title">
       <h2 id="fleet-trying-title">Trying now</h2>
       <Regent.Primitives.empty_state
-        :if={@trying.goals == []}
+        :if={not @goals?}
         id="fleet-trying-empty"
         class="kf-empty"
-        title={if @trying.goals_set?, do: "No goals in progress.", else: "No goals yet."}
+        title="No goals in progress."
       >
-        {if @trying.goals_set?,
-          do: "Agents join a goal in the workspace; the ones they work on show up here.",
-          else: "Agents here set goals in the workspace; they show up here."}
+        Agents join a goal in the workspace; the ones they work on show up here.
       </Regent.Primitives.empty_state>
-      <ul :if={@trying.goals != []} id="fleet-trying-goals" class="trying-now__list">
-        <li :for={goal <- @trying.goals} class="trying-goal" data-goal={goal.id}>
-          <p class="trying-goal__title">
-            <.trying_item part={goal.goal} fleet_id={@fleet_id} />
-          </p>
-        </li>
-      </ul>
-      <p
-        :if={@trying.counts}
-        id="fleet-trying-counts"
-        class="trying-now__detail"
+      <div
+        :for={{project, i} <- Enum.with_index(@trying)}
+        :if={@goals?}
+        id={"fleet-trying-project-#{i}"}
+        class="trying-project"
       >
-        {@trying.counts}
-      </p>
-      <p :if={@trying.question} id="fleet-trying-question">
-        <.activity_part
-          :for={{part, i} <- Enum.with_index(@trying.question)}
-          id={"fleet-trying-question-#{i}"}
-          part={part}
-          fleet_id={@fleet_id}
-          params={@params}
-        />
-      </p>
+        <h3>{project.title}</h3>
+        <ul :if={project.goals != []} class="trying-now__list">
+          <li :for={goal <- project.goals} class="trying-goal">
+            <p class="trying-goal__title">{goal}</p>
+          </li>
+        </ul>
+      </div>
 
       <.link id="fleet-trying-workspace" patch={"#{Keyfleet.Fleets.path(@fleet_id)}/workspace"}>
         Open the workspace
@@ -954,21 +946,6 @@ defmodule KeyfleetWeb.FleetLive do
     </section>
     """
   end
-
-  attr :part, :any,
-    required: true,
-    doc: "a goal as `KeyfleetWeb.ActivityLines.trying_now/1` gives it"
-
-  attr :fleet_id, :string, required: true
-
-  # A goal by its title, opening its own page.
-  defp trying_item(%{part: {:item, id, title}} = assigns) do
-    assigns = assign(assigns, id: id, title: title)
-
-    ~H|<.link patch={WorkspacePage.item_path(@fleet_id, @id)} data-item-link={@id}>{@title}</.link>|
-  end
-
-  defp trying_item(assigns), do: ~H"{@part}"
 
   # Each channel's tag on its lines in the feed.
   @tags %{chat: "Chat", work: "Work", keys: "Keys", votes: "Votes"}

@@ -48,6 +48,9 @@ defmodule KeyfleetWeb.Refusal do
        "Wait the number of seconds in Retry-After, then send the request again."},
     "fleet_unknown" =>
       {"There is no fleet with this id.", "GET /api/v1/fleets lists every fleet."},
+    "project_unknown" =>
+      {"This fleet has no project with that name.",
+       "Use the name of one of the fleet's projects, such as general."},
     "fleet_coming_soon" =>
       {"This fleet hasn't opened yet.",
        "It has no rooms, workspace, proposals or Keys until it opens. GET /api/v1/fleets says when it has."},

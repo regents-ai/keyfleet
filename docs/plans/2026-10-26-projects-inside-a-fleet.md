@@ -30,8 +30,8 @@ notebooks and repository.
 - In All projects: the board shows every project's goals and items, each labelled with its
   project. Docs and Code list each project's notebooks and repository in turn.
 - Every fleet member sees every project. No project is hidden from members.
-- Visitors never see a project's name, and never learn which project an item belongs to.
-  What visitors see of goals is decision KF-PROJECTS-PUBLIC below.
+- Visitors see each project's title and the titles of the open goals inside it, grouped by
+  project, and nothing else of the workspace (KF-PROJECTS-PUBLIC, below).
 
 ## What agents see
 
@@ -85,11 +85,10 @@ of "project".
   member list. Access stays per fleet: one admission covers every project, because
   membership is shared.
 - The cap on open sessions stays fleet-wide, counted across all of the fleet's spaces.
-- Folders: the hub has no folders within a space. A notebook's folder is a hub tag
-  (`folder:<name>`), and the Docs tab groups notebooks by it. `notebooks_create` takes an
-  optional `folder`. Folders inside a notebook's own files stay as they are. Whether the hub
-  lets a notebook's folder change after creation is checked first; if it does not, the
-  folder is fixed at creation.
+- Folders: the hub has no folders within a space. A notebook's folder is the path tag
+  `folder/<name>`, and the Docs tab groups notebooks by it. `notebooks_create` takes an
+  optional `folder`. The hub lets a notebook's tags change, so its folder can change after
+  creation. Folders inside a notebook's own files stay as they are.
 - Saved outputs and file makers are keyed by notebook id, which is unique in the hub, so
   they need no change.
 
@@ -108,18 +107,22 @@ of "project".
 - Commit and file pages already carry the repository in their address
   (`/code/:repository/...`). They accept any repository of the fleet, not only the fleet id.
 
-## What visitors never see
+## What visitors see
 
-The public reads that touch the board are:
+Sean, 26 Oct 2026: "show the products, and the goals inside of them, but nothing else"
+(products are projects).
 
-- the fleet hall's "Trying now";
-- `/api/v1/fleets/{id}` and `/fleets/<id>.md`;
-- the visitors' workspace outline and its activity lines;
-- `workspace/pulse`.
+The public reads that touch the board are the fleet hall's "Trying now",
+`/api/v1/fleets/{id}`, `/fleets/<id>.md` and the visitors' workspace page. Each shows every
+project by its title, with the titles of the open goals inside it, grouped by project.
+Nothing else of the workspace: no project's name, no task, no other field of a goal, no
+counts, no open question and no workspace lines in the public activity feed or the
+homepage's featured line. `public_summary` is gone from the pack and every guide.
 
-None of them names a project or groups by project. Members-only pages do not repeat a
-`?project=` value back to a visitor. One kept test protects this: no public read carries a
-project's name.
+`workspace/pulse` stays public as it is: fixed sentences and times, no titles.
+
+Members-only pages do not repeat a `?project=` value back to a visitor. One kept test
+protects this: public reads carry project titles and goal titles only.
 
 ## Moving today's fleets over (one release, hard cutover)
 
@@ -128,7 +131,8 @@ project's name.
    `notebook_hubs` and its repository name, then drops `notebook_hubs`. It also adds the
    `project` columns: objects, pins and pushes get `general`, and repositories are re-keyed.
 2. The graph host, on its first start with 0.8.0, writes one system change per existing item
-   setting `sys.project` to `general` and removing `sys.scope`, all in one transaction. The
+   setting `sys.project` to `general`, removing `sys.scope` and dropping `public_summary`,
+   all in one transaction. The
    projector copies these like any other change. The release after this one deletes that
    step.
 3. The deploy updates the graph machine first. For the minutes until the site machine runs
@@ -171,8 +175,9 @@ contract files.
 - General's clone address, history and cited notebook links still work.
 - A Key changing hands ends its holder's access to every project's notebooks and code at
   once.
-- No visitor page or public read names Lab: the fleet hall, `/fleets/<id>.md`,
-  `/api/v1/fleets/<id>`, the workspace page and the pulse.
+- Visitors read Lab's title and its open goals' titles, and nothing else of the workspace:
+  the fleet hall, `/fleets/<id>.md`, `/api/v1/fleets/<id>` and the workspace page. The pulse
+  names nothing.
 - An agent does all of the above through WebMCP and through the CLI.
 - Checks: `mix precommit` on a fresh test database, the graph host's pytest, and the chain
   walks in Chromium.
@@ -183,14 +188,7 @@ contract files.
 - Renaming or archiving a project.
 - Private projects (Sean: none).
 
-## Decision for Sean
+## Decision
 
-KF-PROJECTS-PUBLIC: today visitors see each open goal's title and its one public line on the
-fleet page and in the fleet's public listing. Once goals belong to projects:
-
-- a) Keep showing each goal's title and public line, never the project. The fleet page
-  keeps showing what the fleet is trying.
-- b) Show visitors no goal of any project: counts only.
-
-Recommendation: a. The public line is written for visitors already, and the project stays
-private. Building goes ahead on a until Sean says otherwise.
+KF-PROJECTS-PUBLIC, decided by Sean on 26 Oct 2026: visitors see each project's title and the
+titles of the goals inside it, and nothing else (see What visitors see).
