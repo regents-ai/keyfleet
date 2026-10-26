@@ -160,3 +160,13 @@ so a visit can be told again from them. The walk runs in `npm run test:chain`
 | a page's own path is written as its route, and a page the site lacks as unmatched | `KeyfleetWeb.VisitLogTest` | A page error names its route, never the Key, fleet or address it was on. |
 | a page's own script calling the API belongs to its visit, by header or cookie | `KeyfleetWeb.VisitLogTest` | A page's own API reads stay in its visit as surface `page`; an API call with no visit stays `agent_http` with none. |
 | opening a room and muting a Key replays in order from the visit's lines | `visits.spec.ts` | The server's lines for one visit tell its request, page, saved change and press in order, under one person code, and hold nothing anyone wrote and no wallet. |
+
+## The shared ash_required helper
+
+Added on 26 October 2026 with ash-template 628d719: the shared `public.ash_required`
+was version 6, which raised "function ash_raise_error does not exist" for a missing
+required value.
+
+| Test | Module or spec | Protects |
+| --- | --- | --- |
+| a missing required value raises Ash's error, and a present one comes back | `Keyfleet.RequiredValueTest` | A database built from every migration, the site's and the shared libraries', ends with version 7 in `public`. |

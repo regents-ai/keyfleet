@@ -4915,3 +4915,20 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   muting a Key in a room from the server's lines; both walk servers write their lines
   in production's shape to `platform/tmp/walk-lines.jsonl`. Listed in
   `platform/test/KEPT_TESTS.md`.
+
+## 2026-10-26 — The shared ash_required helper, fixed in public
+
+- Version 6 of ash_postgres's `ash_required`, the copy in `public` that every site on the
+  shared database calls, runs with an empty search path and cannot find
+  `ash_raise_error`, so a missing required value raised "function ash_raise_error does not
+  exist" instead of Ash's error. Migration `20261026194845_ash_functions_v7_extensions_1`
+  now names `public.ash_required`, so it replaces that one copy whichever login runs it.
+  Version 7 keeps the same arguments and raises the same `ash_error:` message. As
+  ash-template 628d719.
+- elixir-utils moves to `e796a9d527b839121145d2515da9f4d5689fe80b`: Credits' first
+  migration installs version 6, and on a fresh database it ran after the site's and put
+  that copy back; its new shared migration `20261026220000` installs version 7 in
+  `public` too, so this release runs `bin/migrate-shared` before it deploys.
+- Check: `platform/test/keyfleet/required_value_test.exs` on a database built from every
+  migration. It fails with the "does not exist" error on version 6. Listed in
+  `platform/test/KEPT_TESTS.md`.
