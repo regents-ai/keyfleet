@@ -20,21 +20,23 @@ defmodule Keyfleet.Notebooks.DeleteSpace do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"fleet_id" => fleet_id, "project" => name, "space" => space}}) do
-    if Notebooks.hub?(fleet_id) do
-      with {:ok, spaces} <- HubClient.projects(fleet_id) do
-        fleet_id
-        |> ours(spaces, "keyfleet/" <> name)
-        |> Enum.concat(List.wrap(space))
-        |> Enum.uniq()
-        |> Enum.reduce_while(:ok, fn id, :ok ->
-          case HubClient.delete_project(fleet_id, id) do
-            {:ok, _deleted} -> {:cont, :ok}
-            {:error, error} -> {:halt, {:error, error}}
-          end
-        end)
-      end
-    else
-      {:cancel, :no_hub}
+    if Notebooks.hub?(fleet_id), do: delete(fleet_id, name, space), else: {:cancel, :no_hub}
+  end
+
+  defp delete(fleet_id, name, space) do
+    with {:ok, spaces} <- HubClient.projects(fleet_id) do
+      fleet_id
+      |> ours(spaces, "keyfleet/" <> name)
+      |> Enum.concat(List.wrap(space))
+      |> Enum.uniq()
+      |> Enum.reduce_while(:ok, fn id, :ok -> delete_space(fleet_id, id) end)
+    end
+  end
+
+  defp delete_space(fleet_id, id) do
+    case HubClient.delete_project(fleet_id, id) do
+      {:ok, _deleted} -> {:cont, :ok}
+      {:error, error} -> {:halt, {:error, error}}
     end
   end
 

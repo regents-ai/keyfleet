@@ -862,11 +862,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     logs = [graph | others]
 
     cond do
-      map_size(Map.drop(params, ["keys", "dms", "quotes"])) != 4 ->
-        :invalid
-
-      not (Enum.all?(rooms, &cursor?/1) and graph_cursor?(graph) and
-             Enum.all?(others, &log_cursor?/1) and run?(run)) ->
+      not sync_shape?(params, rooms, graph, others, run) ->
         :invalid
 
       not (sync_in_range?(rooms, logs ++ rooms) and run_in_range?(run)) ->
@@ -881,6 +877,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   defp check_sync_rooms(_params), do: :invalid
+
+  # The sync body names its rooms, graph, proposals and run, and may name keys,
+  # direct messages and quotes; each part is shaped as its cursor is.
+  defp sync_shape?(params, rooms, graph, others, run) do
+    map_size(Map.drop(params, ["keys", "dms", "quotes"])) == 4 and
+      Enum.all?(rooms, &cursor?/1) and graph_cursor?(graph) and
+      Enum.all?(others, &log_cursor?/1) and run?(run)
+  end
 
   defp check_sync_dms(%{"dms" => dms}), do: check_dm_cursors(dms)
   defp check_sync_dms(_params), do: :ok
@@ -907,13 +911,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        )
        when is_binary(title) and is_binary(code) and is_binary(key) do
     cond do
-      not (Enum.all?(
-             Map.keys(params),
-             &(&1 in ~w(title code idempotency_key description goal folder))
-           ) and
-             is_binary(Map.get(params, "description", "")) and
-             notebook_goal?(params["goal"]) and notebook_folder?(params["folder"]) and
-               Regex.match?(~r/\A[!-~]{1,128}\z/, key)) ->
+      not notebook_create_fields?(params, key) ->
         :invalid
 
       String.length(title) in 1..@max_notebook_title ->
@@ -925,6 +923,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   defp check_notebook_create_body(_params), do: :invalid
+
+  defp notebook_create_fields?(params, key) do
+    Enum.all?(Map.keys(params), &(&1 in ~w(title code idempotency_key description goal folder))) and
+      is_binary(Map.get(params, "description", "")) and notebook_goal?(params["goal"]) and
+      notebook_folder?(params["folder"]) and Regex.match?(~r/\A[!-~]{1,128}\z/, key)
+  end
 
   defp notebook_goal?(nil), do: true
 

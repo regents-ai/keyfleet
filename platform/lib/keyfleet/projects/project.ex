@@ -118,6 +118,9 @@ defmodule Keyfleet.Projects.Project do
       get? true
     end
 
+    # The four Key steps call `Hold` from a function, so a change to it
+    # recompiles nothing here.
+
     # A member starts a project as one of the fleet's Keys, which holds it.
     action :start, :struct do
       constraints instance_of: __MODULE__
@@ -127,7 +130,7 @@ defmodule Keyfleet.Projects.Project do
       argument :title, :string, allow_nil?: false
       validate KnownFleet
       validate FreshOwnership, only_when_valid?: true
-      run {Hold, step: :start}
+      run fn input, context -> Hold.run(input, [step: :start], context) end
     end
 
     # The Key's active project becomes archived, still the Key's.
@@ -137,7 +140,7 @@ defmodule Keyfleet.Projects.Project do
       argument :as_key, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
       validate KnownFleet
       validate FreshOwnership, only_when_valid?: true
-      run {Hold, step: :archive}
+      run fn input, context -> Hold.run(input, [step: :archive], context) end
     end
 
     # An archived project, any Key's, becomes the acting Key's active one.
@@ -148,7 +151,7 @@ defmodule Keyfleet.Projects.Project do
       argument :name, :string, allow_nil?: false, constraints: [trim?: false]
       validate KnownFleet
       validate FreshOwnership, only_when_valid?: true
-      run {Hold, step: :take_over}
+      run fn input, context -> Hold.run(input, [step: :take_over], context) end
     end
 
     # One of the acting Key's own archived projects is deleted for good.
@@ -159,7 +162,7 @@ defmodule Keyfleet.Projects.Project do
       argument :name, :string, allow_nil?: false, constraints: [trim?: false]
       validate KnownFleet
       validate FreshOwnership, only_when_valid?: true
-      run {Hold, step: :delete}
+      run fn input, context -> Hold.run(input, [step: :delete], context) end
     end
 
     create :create do
