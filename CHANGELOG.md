@@ -5238,3 +5238,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   across every wallet of their account.
 - Chain walks group_flow and workspace_motion open the Code place inside the
   General project, since the Code place only lists pushes inside a project.
+
+## 2026-10-27 — Agents' activity: the site reads its reader key
+
+- The agents panel can read each paired agent's activity once the site has its
+  reader key: `SIWA_ACTIVITY_READ_TOKEN` is now read (config/runtime.exs), as
+  ash-template reads it. Until the key is set, every read failed as not
+  configured, which is why an agent's activity "couldn't be read right now".

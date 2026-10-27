@@ -182,6 +182,10 @@ if config_env() == :prod do
     config :keyfleet, :siwa_broker_url, siwa_url
     config :regent_agents, siwa: [url: siwa_url, audience: "keyfleet"]
 
+    # This site's own key for reading what paired agents have done from the
+    # sign-in service (RegentAgents.Activity), as ash-template reads it.
+    config :regent_agents, :activity_read_token, System.get_env("SIWA_ACTIVITY_READ_TOKEN")
+
     # The fleets' code store, at its private Flycast address
     # (`http://keyfleet-code.flycast`), takes only passes signed with
     # KEYFLEET_HUB_SIGNING_KEY.
