@@ -2,7 +2,7 @@ import {expect, test, type Page} from "@playwright/test"
 import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 
 // A "Bring your agent" link (/pair?to=<page>): the person pairs their agent there,
-// and the message they paste sends the agent to that page once it is paired. A
+// and the message they paste ends by sending the agent to that page once it is paired. A
 // link to anywhere but a page on this site opens plain pairing.
 
 const box = (page: Page) => page.locator("#pair-pairing-box")
@@ -33,7 +33,8 @@ test.describe("signed in", () => {
 
     await choose(page, "Dots")
     await expect(message(page)).toContainText(/Pairing code:\s*\S{12,}/)
-    await expect(message(page)).toContainText(`\nOnce paired, start at ${await start.innerText()}\n`)
+    const last = `\nOnce paired, start at ${await start.innerText()}`
+    expect((await message(page).innerText()).trimEnd().endsWith(last)).toBe(true)
     expect(errors).toEqual([])
   })
 

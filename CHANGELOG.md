@@ -5343,3 +5343,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   connection, siwa_keyring 0.2.0, and the agent request signer. The Credits and
   agents listeners now share one database connection the site opens
   (`Keyfleet.SharedChanges`, named `keyfleet-listen`) instead of one each.
+
+## 2026-10-27 — Start line last in the pairing message
+
+- elixir-utils 6773781 → 20ee197: the shared pairing message takes Keyfleet's
+  own lines for each agent (its own key and folder, its 30-minute check-in, its
+  setup page) and places them after the pairing words, so "Once paired, start at
+  <page>" is always the last line. Keyfleet no longer adds lines after the
+  shared message. The same move brings the Credits words saying where a Base
+  purchase goes after staking (89eb064).

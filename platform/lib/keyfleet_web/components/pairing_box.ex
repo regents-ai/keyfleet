@@ -147,16 +147,18 @@ defmodule KeyfleetWeb.PairingBox do
   end
 
   @doc """
-  What the person pastes to their agent: the shared pairing words, with the
-  page it begins on when a pairing link names one (`start`), then this
+  What the person pastes to their agent: the shared pairing words, then this
   runtime's own setup from its page under /agents, so agents sharing one
-  computer each keep their own key and folder and each comes back on its own.
+  computer each keep their own key and folder and each comes back on its own,
+  and last the page it begins on when a pairing link names one (`start`).
   """
   def agent_message(code, harness, start) do
     origin = KeyfleetWeb.Endpoint.url()
 
-    PairingMessage.text(code, origin, harness, start) <>
-      "\n" <> setup(harness) <> "\nYour full setup: " <> origin <> AgentGuides.path(harness)
+    PairingMessage.text(code, origin, harness,
+      setup: setup(harness) <> "\nYour full setup: " <> origin <> AgentGuides.path(harness),
+      start: start
+    )
   end
 
   @check_in "Check in on Keyfleet as your keyfleet skill says."
