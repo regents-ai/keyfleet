@@ -5485,3 +5485,18 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   sent round again.
 - That page now has Keyfleet's look, names the fleet, says why it is there and
   links back to the workspace.
+
+## 2026-10-27 — The projects plan and the agent feature map say what is on main
+
+- The projects plan no longer says steps 1–6 wait on a branch: they are on main
+  and went live on 27 Oct at 04:34Z, with the fix for items made before
+  projects and the shared projects after them. Step 7, the CLI's copy of the
+  contract and commands, is in no regents-cli release yet. Short dated notes
+  say where the site moved on after the plan: the two shared projects no Key
+  holds, notebook locks and daily copies, a page for every project, and no
+  new-item form on the board, so no project chooser there.
+- The agent feature map marks each row Proven whose test is on main, and says
+  what each still leaves unproven: the project routes' answers over HTTP, the
+  refusals for writes into an archived project, the hidden Delete for General
+  and the "Holder of Key" pulse line. It adds rows for the shared projects,
+  each Key's scratchpad and its lock, the daily copies and a project's own page.
