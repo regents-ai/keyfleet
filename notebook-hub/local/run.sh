@@ -55,6 +55,7 @@ docker create --name kf-nb-local-hub \
   -e MARIMOHUB_EDITOR_SANDBOX_SHARING=exclusive \
   -e MARIMOHUB_JOBS=on \
   -e MARIMOHUB_JOBS_MAX_PER_NOTEBOOK=100 \
+  -e MARIMOHUB_INTEGRATIONS=off \
   -e "MARIMOHUB_COMPUTE_IMAGE=$runner_image" \
   -e MARIMOHUB_COMPUTE_FLY_API_URL=http://_api.internal:4280 \
   -e "FLY_API_TOKEN=$fly_token" \

@@ -286,3 +286,10 @@ its listed ID.
   the other error lines carry `error.storage`: the HTTP status, the store's
   request ids and how many tries were made. A support ticket to the store needs
   those ids (Classic #1 saves refused with "Unknown", 27 Oct 2026).
+- **Hub integrations are off (`MARIMOHUB_INTEGRATIONS=off`).** marimohub's
+  integrations hold data-source settings and their secrets for notebooks.
+  Keyfleet's gateway never opens their routes and nothing in Keyfleet makes
+  one, so every hub runs with them off and needs no `MARIMOHUB_SECRETS_KEK`.
+  With them on and no key, each hub warned "integration secret sources: none"
+  at every start (27 Oct 2026). Turning them on later means opening the routes
+  in the gateway and giving each hub its own key.

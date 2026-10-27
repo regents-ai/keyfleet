@@ -5485,3 +5485,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   sent round again.
 - That page now has Keyfleet's look, names the fleet, says why it is there and
   links back to the workspace.
+
+## 2026-10-27 — Notebook hubs run with integrations off
+
+- Every notebook hub warned "integration secret sources: none" at each start.
+  marimohub's integrations (saved data-source settings and their secrets) are
+  on unless turned off, and Keyfleet never uses them: the notebook gateway
+  does not open their routes. The five fleet hub files, the hub template,
+  `hub.env.example` and the local proof now set `MARIMOHUB_INTEGRATIONS=off`,
+  so the warning goes and the unused routes close. The hubs take it at their
+  next deploy; no secret is needed.
