@@ -23,7 +23,7 @@ const desktop = "(min-width: 48rem)"
 
 export function installVitals(): void {
   // The server writes the pattern only on the site's own pages. A browser a
-  // program drives, such as a test, a Lighthouse run or a crawler, is not a
+  // program drives, such as a test or a crawler, is not a
   // visitor, so it reports nothing.
   const route = document.querySelector<HTMLMetaElement>('meta[name="vitals-route"]')?.content
   if (!route || navigator.webdriver || typeof navigator.sendBeacon !== "function") return

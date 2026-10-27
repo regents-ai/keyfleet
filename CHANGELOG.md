@@ -4988,3 +4988,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   About) the districts only light up.
 - `KeyfleetWeb.HarbourCrew.districts/1` writes the three addresses in
   `data-harbour-districts`; the city's hook reads them and opens the page.
+
+## 2026-10-27 — Release speed check removed
+
+- Sean, 27 Oct (KF-LIGHTHOUSE a): the release no longer loads pages in Lighthouse.
+  `scripts/budgets.sh`, `platform/lighthouserc.cjs` and `platform/load/profile-live.sh`
+  are gone, and so are `@lhci/cli` and `lighthouse` from the build tools, which clears
+  the six development-only security alerts they brought in (body-parser, basic-ftp,
+  tmp twice, extract-zip twice). The built-asset size budgets (`npm run test:budgets`)
+  and visitors' own page timings (`KeyfleetWeb.Vitals`) stay. Nothing visitors
+  download changes.
+  `@types/node` is now listed directly; it came in only through Lighthouse.

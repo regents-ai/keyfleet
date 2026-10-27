@@ -294,10 +294,7 @@ Each page reports its Core Web Vitals once as it is left, to `POST /vitals`,
 by route pattern, device class and connection type, with nothing saved and
 no address kept (`KeyfleetWeb.Vitals`, whose docs hold the queries). They are
 exported as `keyfleet_vitals_{lcp,inp,fcp,ttfb}_microseconds` and
-`keyfleet_vitals_cls_thousandths` on the metrics port. `load/profile-live.sh <out dir>`
-profiles the local site's public pages as two emulated phones (lab emulation
-in Chromium, not a device); the live site only when it is named as a second
-argument.
+`keyfleet_vitals_cls_thousandths` on the metrics port.
 
 ## Checks
 
@@ -500,13 +497,8 @@ hostname, and runs the image as staging against it: `bin/bootstrap-staging`,
 server with an empty `/data`, whose `/healthz`, home page, fingerprinted
 stylesheet, graph host Python and own database connection it checks. The
 server gets no chain node or Privy app, and stand-in addresses for the sign-in
-server and the other services it needs that never resolve. Last,
-`../scripts/budgets.sh` holds the image's main pages to their speed budgets
-(`lighthouserc.cjs`: a phone on slow 4G, median of three runs, Largest
-Contentful Paint under 2.5 s, layout shift under 0.1, blocking time under
-200 ms, stylesheets within 60 KiB and a page's script within 180 KiB), and a
-page over any of them stops the release. It removes the database, the network and the
-context afterwards, keeps the image, and prints the app commit, the
+server and the other services it needs that never resolve. It removes the
+database, the network and the context afterwards, keeps the image, and prints the app commit, the
 shared-library commits from `mix.lock`, the graph host supply and the image
 digest. It never deploys.
 
