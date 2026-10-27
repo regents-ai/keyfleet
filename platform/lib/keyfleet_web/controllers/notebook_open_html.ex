@@ -1,32 +1,44 @@
 defmodule KeyfleetWeb.NotebookOpenHTML do
   @moduledoc """
   The page that sends a person's one-time notebook code to their fleet's
-  notebook host (`KeyfleetWeb.NotebookOpenController`). Its one script sends
-  the form as soon as the page loads, only when the person has just pressed
-  Open notebooks in the workspace; without scripts, the button does. Anyone
-  the notebook host sends here, from a saved output's address or after a
-  refused code, is asked to press the button, so a browser that leaves out
-  which site sent the form, or won't keep the notebook sign-in, is never sent
-  round and round.
+  notebook host (`KeyfleetWeb.NotebookOpenController`), in Keyfleet's own look.
+  Its one script sends the form as soon as the page loads; without scripts, the
+  button does. Someone this site sent on moments ago and who is back already is
+  asked to press the button instead, so a browser that won't keep the notebook
+  sign-in is never sent round and round.
   """
   use KeyfleetWeb, :html
 
   def entry(assigns) do
     ~H"""
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="en" data-brand="platform" data-theme={@theme}>
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Opening notebooks</title>
+        <title>Notebooks · {@fleet_name} · Keyfleet</title>
+        <link rel="stylesheet" href={~p"/assets/js/app.css"} />
       </head>
       <body>
-        <p :if={!@by_itself?}>Press the button to open the notebooks.</p>
-        <form id="notebook-entry" method="post" action={@entry.action}>
-          <input type="hidden" name="code" value={@entry.code} />
-          <input type="hidden" name="to" value={@entry.to} />
-          <button type="submit">Open notebooks</button>
-        </form>
+        <Regent.Utility.page
+          title={if @by_itself?, do: "Opening notebooks", else: "Open notebooks"}
+          context={@fleet_name}
+          id="notebook-entry-page"
+        >
+          <p :if={!@by_itself?}>
+            If this page comes back after you press, your browser is blocking the notebooks’ sign-in.
+          </p>
+          <:actions>
+            <form id="notebook-entry" method="post" action={@entry.action}>
+              <input type="hidden" name="code" value={@entry.code} />
+              <input type="hidden" name="to" value={@entry.to} />
+              <button type="submit" class="rg-button rg-button--primary">Open notebooks</button>
+            </form>
+          </:actions>
+          <:note>
+            <a href={@workspace_path}>Back to the workspace</a>
+          </:note>
+        </Regent.Utility.page>
         <script :if={@by_itself?} nonce={@nonce}>
           document.getElementById("notebook-entry").submit()
         </script>

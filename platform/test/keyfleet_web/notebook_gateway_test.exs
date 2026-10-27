@@ -414,6 +414,21 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     assert again.resp_cookies == %{}
   end
 
+  # Costly failure: a browser that won't keep the notebook sign-in is sent
+  # between Keyfleet and the notebooks round and round, spending a code each time.
+  test "Keyfleet sends a holder to the notebooks by itself, then waits for a press", c do
+    session = SessionAuthorityHelpers.signed_in_session(c.holder.human_account_id)
+    open = "/fleets/#{@fleet}/notebooks/open?" <> URI.encode_query(to: "/")
+
+    first = build_conn() |> SessionAuthorityHelpers.init_test_session(session) |> get(open)
+    assert html_response(first, 200) =~ ~s[getElementById("notebook-entry").submit()]
+
+    again = first |> recycle() |> get(open)
+    page = html_response(again, 200)
+    assert page =~ "Open notebooks"
+    refute page =~ "submit()"
+  end
+
   # Costly failure: a page on another site, or a pasted link, sends someone's
   # browser a code made for another account, signing them in to the notebooks
   # as that account.

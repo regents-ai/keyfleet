@@ -5473,3 +5473,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   of tries. A local store answering with an empty 500 gives the same
   "Unknown" and now logs all four. Hub image `c2a3303-a1b75d2`; the fleet
   files name it, and the hubs take it at their next deploy.
+
+## 2026-10-27 — Notebook links open the notebook straight away
+
+- A link to a notebook or a saved result now goes straight to it. Before, every
+  link except the workspace's Open notebooks button stopped on a plain page
+  asking for a press.
+- Keyfleet remembers when it last sent someone to a fleet's notebooks. Anyone
+  back within 30 seconds is in a browser that didn't keep the notebook sign-in,
+  so they see a Keyfleet page with an Open notebooks button instead of being
+  sent round again.
+- That page now has Keyfleet's look, names the fleet, says why it is there and
+  links back to the workspace.
