@@ -5517,3 +5517,17 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   refusals for writes into an archived project, the hidden Delete for General
   and the "Holder of Key" pulse line. It adds rows for the shared projects,
   each Key's scratchpad and its lock, the daily copies and a project's own page.
+
+## 2026-10-27 — Pair New Agent always answers; Unpair asks in Keyfleet's own window
+
+- Pair New Agent under the agents list (and on Connect) now brings the side
+  panel's pairing box into view, moves focus to it and lights it in blue for a
+  moment. Before, with the panel already open, a press changed nothing on
+  screen. With reduced motion the light holds still instead of fading.
+- Unpair asks "Unpair <name>? It will need a new code to pair again." in the
+  shared cut-corner window, with Cancel and Unpair, instead of the browser's own
+  box. Escape or Cancel closes it and hands focus back to the Unpair button.
+- In the agents panel, which shares its row with another panel, each agent's
+  See what it has done and Unpair sit on their own line under the name. Before,
+  they took a column that squeezed the name and check-in line to nothing and
+  ran under the wallet's copy and explorer buttons.
