@@ -7,7 +7,7 @@ defmodule KeyfleetWeb.VisitLog.Events do
   - `request`: a page or file answered over HTTP, by route and outcome.
   - `tool.call`: an `/api` call, named by the tool or command the caller gave in
     `x-regent-client`, else by its route; the outcome is `ok` or the error code
-    the answer carried.
+    the answer carried; `client` names the program that called.
   - `press`: an event a page or one of its components handled, as `View:event`.
     A wallet step reports what the wallet answered: `sent`, `signed` or why
     nothing was sent.
@@ -15,6 +15,7 @@ defmodule KeyfleetWeb.VisitLog.Events do
     `resource.action`, with its time.
   - `job`: a background job's run, by worker and how it ended.
   - `outgoing`: a call to another site, by method and host, and its status.
+  - `step` `signed_in`: the browser's sign-in exchange succeeded.
 
   Actions and outgoing calls are written only inside a request, page or job, so
   the chain reader's own polling writes nothing.
@@ -61,10 +62,16 @@ defmodule KeyfleetWeb.VisitLog.Events do
 
       case conn.path_info do
         ["api" | _] ->
-          VisitLog.record("tool.call", VisitLog.client(conn) || route, answer(conn), ms(duration))
+          VisitLog.record(
+            "tool.call",
+            VisitLog.client(conn) || route,
+            answer(conn),
+            ms(duration),
+            VisitLog.caller(conn)
+          )
 
         _page ->
-          VisitLog.record("request", route, answer(conn), ms(duration))
+          requested(conn, route, ms(duration))
       end
     end
   end
@@ -123,6 +130,16 @@ defmodule KeyfleetWeb.VisitLog.Events do
       ms(measurements[:duration])
     )
   end
+
+  defp requested(conn, route, ms) do
+    VisitLog.record("request", route, answer(conn), ms)
+    if signed_in?(conn, route), do: VisitLog.step("signed_in")
+  end
+
+  defp signed_in?(%Plug.Conn{method: "POST", status: status}, "/auth/privy/session"),
+    do: status in 200..299
+
+  defp signed_in?(_conn, _route), do: false
 
   # The health check and the browser's own reports would only describe themselves.
   defp quiet?(%Plug.Conn{path_info: ["healthz"]}), do: true

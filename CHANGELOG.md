@@ -5424,3 +5424,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   a code couldn't be made, because each one spent a per-person allowance.
 - The allowance is gone, as in the template: a person may make as many codes
   as they like.
+
+## 2026-10-27 — Visit lines back, with Global Privacy Control
+
+- The visit lines held back this morning return, as in the template (e61e4dd):
+  where a visit came from, the sign-in and pairing steps, and the program
+  behind an agent's call.
+- A browser that sends Global Privacy Control gets no record of where its
+  visit came from or how far it got, on any page of that visit (founder
+  decision VISIT-SOURCES-PRIVACY a, 27 Oct).
+- The privacy page says so, word for word from the template: "If your browser
+  sends Global Privacy Control, we keep no record of where your visit came
+  from or how far it got." Its effective date is now October 27, 2026.

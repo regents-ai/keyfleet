@@ -5,6 +5,7 @@ defmodule KeyfleetWeb.VisitLogController do
   - `page.error`: the page hit a script error, by route; never its message.
   - `tool.unsent`: one of the page's tools got no answer from the site.
   - `press.unsent`: a wallet press never reached the site.
+  - `step` `sign_in_opened`: a Sign in button was pressed.
 
   Each line is checked against the names, routes and outcomes the page can send;
   anything else is dropped. The answer is the same whatever was sent, and nothing
@@ -20,8 +21,7 @@ defmodule KeyfleetWeb.VisitLogController do
   def create(conn, params) do
     Logger.metadata(actor: VisitLog.actor(conn.assigns[:current_human_account]))
 
-    for {name, where, outcome} <- lines(params, conn.host),
-        do: VisitLog.record(name, where, outcome)
+    for line <- lines(params, conn.host), do: write(line)
 
     conn |> put_resp_header("cache-control", "no-store") |> send_resp(:no_content, "")
   end
@@ -44,7 +44,13 @@ defmodule KeyfleetWeb.VisitLogController do
        when is_binary(step),
        do: named("press.unsent", step, "lost")
 
+  defp line(%{"name" => "step", "where" => "sign_in_opened"}, _host),
+    do: [{"step", "sign_in_opened", nil}]
+
   defp line(_untrusted, _host), do: []
+
+  defp write({"step", step, nil}), do: VisitLog.step(step)
+  defp write({name, where, outcome}), do: VisitLog.record(name, where, outcome)
 
   defp named(name, where, outcome),
     do: if(Regex.match?(@name, where), do: [{name, where, outcome}], else: [])

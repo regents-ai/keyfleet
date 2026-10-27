@@ -24,7 +24,9 @@ defmodule KeyfleetWeb.Live.Session do
     |> rendered_topic()
     |> Map.merge(%{
       "render_route" => local_route(conn.request_path, conn.query_string),
-      "visit" => conn.assigns.visit
+      "visit" => conn.assigns.visit,
+      "arrival" => conn.assigns[:arrival],
+      "gpc" => conn.assigns.gpc
     })
   end
 
