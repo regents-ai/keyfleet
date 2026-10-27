@@ -5271,3 +5271,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Checked in headless Chromium against the live pages at 1280 and 390 px, light
   and dark: every public page draws the same except the pairing icons and the
   channel list rows. WebKit not run on the Mac.
+
+## 2026-10-27 — Swarm city: the lifted city's top bar fits a phone
+
+- With the city lifted, the bar's name, Chat and Workspace now share one row on
+  a 390-wide phone: on phones the bar is tighter and its two buttons drop their
+  arrows. On narrower screens the name takes the first row and Chat and
+  Workspace stay together on the second, instead of Workspace dropping alone.
