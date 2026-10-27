@@ -1,44 +1,46 @@
 import {expect, test} from "@playwright/test"
+import {prepareFleet} from "./support/fleet_chain"
 
-// The button at the header's far right lifts the page away to show the city
-// behind it, and brings it back. It is drawn as a skyline, with no box round
-// it and a hairline between it and the control before it.
-test("the city button stands unboxed after a hairline and lifts the page and back", async ({page}) => {
+// The city button beside a fleet's name lifts the page away to show the city.
+// A bar at the top names the fleet and opens its Chat or Workspace; the
+// fleet's name, Escape, or either link brings the page back. Only an open
+// fleet's page has the button, so this runs in the chain suite.
+test.beforeAll(() => {
+  prepareFleet("fleet_tech_classic")
+})
+
+test("the city button beside the fleet's name lifts the page, and the bar and Escape bring it back", async ({page}) => {
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   await page.goto("/classic/1")
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
-  const lift = page.locator("#sea-lift")
+  const lift = page.locator(".fleet-bar__title > #sea-lift")
   await expect(lift).toHaveAccessibleName("Show the city")
+  await expect(page.locator("#shell-header #sea-lift")).toHaveCount(0)
 
-  const look = await lift.evaluate(button => {
-    const style = getComputedStyle(button)
-    const rule = getComputedStyle(button, "::before")
-    const header = document.querySelector("#shell-header")!
-    const controls = [...header.querySelectorAll("button, a")].filter(
-      el => el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().right <= button.getBoundingClientRect().left,
-    )
-    const left = Math.max(...controls.map(el => el.getBoundingClientRect().right))
-    const ruleAt = button.getBoundingClientRect().left + parseFloat(rule.left)
-    return {
-      border: style.borderTopWidth,
-      rule: [rule.content, rule.width],
-      between: left < ruleAt && ruleAt < button.getBoundingClientRect().left,
-    }
-  })
-  expect(look.border).toBe("0px")
-  expect(look.rule).toEqual(['""', "1px"])
-  expect(look.between).toBe(true)
+  const back = page.locator("#sea-return")
+  await lift.click()
+  await expect(page.locator("body")).toHaveClass(/\bsea-lifted\b/)
+  await expect(page.locator("#app-shell")).toBeHidden()
+  await expect(back).toHaveText("Keyfleet Classic #1")
+  await expect(back).toBeFocused()
+  await expect(page.locator("#sea-chat")).toBeVisible()
+  await expect(page.locator("#sea-workspace")).toBeVisible()
+
+  await back.click()
+  await expect(page.locator("body")).not.toHaveClass(/\bsea-lifted\b/)
+  await expect(page.locator("#app-shell")).toBeVisible()
+  await expect(lift).toBeFocused()
 
   await lift.click()
   await expect(page.locator("body")).toHaveClass(/\bsea-lifted\b/)
-  await expect(lift).toHaveAttribute("aria-pressed", "true")
-  await expect(lift).toHaveAccessibleName("Bring the page back")
-  await expect(page.locator("#app-shell")).toBeHidden()
+  await page.keyboard.press("Escape")
+  await expect(page.locator("body")).not.toHaveClass(/\bsea-lifted\b/)
 
   await lift.click()
+  await page.locator("#sea-workspace").click()
+  await expect(page).toHaveURL(/\/classic\/1\/workspace$/)
   await expect(page.locator("body")).not.toHaveClass(/\bsea-lifted\b/)
-  await expect(lift).toHaveAttribute("aria-pressed", "false")
   await expect(page.locator("#app-shell")).toBeVisible()
   expect(errors).toEqual([])
 })

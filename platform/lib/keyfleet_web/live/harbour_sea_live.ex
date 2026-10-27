@@ -6,10 +6,12 @@ defmodule KeyfleetWeb.HarbourSeaLive do
 
   On a fleet's pages the ships are that fleet's Keys; anywhere else they are
   the latest Keys of every open fleet. The visitor's own Keys come first, then
-  the most recent, sixteen at most. The city takes no presses until its button
-  lifts the page away; then a drag turns it and pressing a disc opens its card: the Key's last few
-  actions and a link to its profile. On a fleet's pages its districts lead to
-  the fleet's Public room, workspace and treasury (`HarbourCrew.districts/1`).
+  the most recent, sixteen at most. The city takes no presses until the button
+  beside a fleet's name (`lift/1`) lifts the page away; then a drag turns it and
+  pressing a disc opens its card: the Key's last few actions and a link to its
+  profile. Its districts lead to the fleet's Public room, workspace and treasury
+  (`HarbourCrew.districts/1`), and a bar at the top names the fleet, brings the
+  page back (as Escape does) and opens its Chat or Workspace.
 
   The root layout renders it beside the page's own LiveView
   (`KeyfleetWeb.Router` marks the pages that have it), so it keeps running
@@ -424,32 +426,63 @@ defmodule KeyfleetWeb.HarbourSeaLive do
         <span class="harbour-sea__tag" data-harbour-tag hidden></span>
       </div>
     </div>
-    <button
-      id="sea-lift"
-      type="button"
-      class="harbour-sea__lift"
-      aria-controls="app-shell"
-      aria-pressed="false"
-      aria-label="Show the city"
-      title="Show the city"
-      phx-click={
-        JS.toggle_class("sea-lifted", to: "body")
-        |> JS.toggle_attribute({"aria-pressed", "true", "false"})
-        |> JS.toggle_attribute({"aria-label", "Bring the page back", "Show the city"})
-        |> JS.toggle_attribute({"title", "Bring the page back", "Show the city"})
-      }
-    >
-      <svg viewBox="0 0 20 18" fill="currentColor" aria-hidden="true">
-        <rect :for={{x, y, w, h} <- city_skyline()} x={x} y={y} width={w} height={h} />
-        <rect class="harbour-sea__lift-flag" x="7" y="0" width="2" height="2" />
-      </svg>
-    </button>
+    <nav :if={is_binary(@shown)} id="sea-bar" class="harbour-sea__bar" aria-label="The city">
+      <button
+        id="sea-return"
+        type="button"
+        class="harbour-sea__return"
+        title="Bring the page back"
+        phx-click={land()}
+      >
+        Keyfleet {Fleets.name(@shown)}
+      </button>
+      <.link
+        id="sea-chat"
+        class="rg-button rg-button--secondary"
+        navigate={KeyLinks.hall_path(@shown)}
+      >
+        Chat
+      </.link>
+      <.link
+        id="sea-workspace"
+        class="rg-button rg-button--secondary"
+        navigate={Fleets.path(@shown) <> "/workspace"}
+      >
+        Workspace
+      </.link>
+    </nav>
     <.agent_card
       :if={ship = @agent && ship(drawn(@fleets, @public, @crew, @own, @access_context), @agent)}
       ship={ship}
     />
     """
   end
+
+  @doc """
+  The button beside a fleet's name that lifts the page away to show the city,
+  handing focus to the bar's first button, which brings it back (`land/0`).
+  """
+  def lift(assigns) do
+    ~H"""
+    <button
+      id="sea-lift"
+      type="button"
+      class="harbour-sea__lift"
+      aria-controls="app-shell"
+      aria-label="Show the city"
+      title="Show the city"
+      phx-click={JS.add_class("sea-lifted", to: "body") |> JS.focus(to: "#sea-return")}
+    >
+      <svg viewBox="0 0 20 18" fill="currentColor" aria-hidden="true">
+        <rect :for={{x, y, w, h} <- city_skyline()} x={x} y={y} width={w} height={h} />
+        <rect class="harbour-sea__lift-flag" x="7" y="0" width="2" height="2" />
+      </svg>
+    </button>
+    """
+  end
+
+  @doc "Brings the lifted page back, with focus on the button that lifted it."
+  def land, do: JS.remove_class("sea-lifted", to: "body") |> JS.focus(to: "#sea-lift")
 
   # The lift button's picture, drawn in blocks like the Regents crown: four
   # towers of a skyline. Each tower is {x, y, width, height}; the beacon on the

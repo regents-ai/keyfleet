@@ -139,24 +139,13 @@ body.sea-lifted .harbour-sea__harbour {
   pointer-events: auto;
 }
 
-/* ---- The lift button ---- */
+/* ---- The lift button and the city's bar ---- */
 
-/* It stands at the header's top right, in a slot the header
-   leaves empty for it, so it never covers a header control: the button, and
-   before it a hairline like the header's others, a space either side. It is
-   centred on the header's row, which its buttons make 4.75rem high (3.875rem
-   on a phone). */
-body:has(> .harbour-sea) #shell-header {
-  padding-inline-end: calc(2.75rem + 3 * var(--space-1) + 1px);
-}
-
-/* It rides with the header, so once the page scrolls it never covers what
-   comes up under it; with the page lifted it stays on the screen. */
-.harbour-sea .harbour-sea__lift {
-  position: absolute;
-  top: calc(1px + (4.75rem - 2.75rem) / 2);
-  right: var(--space-1);
-  z-index: 2;
+/* The button that lifts the page away stands before a fleet's name
+   (`HarbourSeaLive.lift/1`, `.fleet-bar__title` in pages/fleet.css): a
+   skyline, unboxed, its press target the height of the name beside it. Its
+   rules name its place, so the plain button's frame never applies. */
+.fleet-bar__title > .harbour-sea__lift {
   display: grid;
   place-items: center;
   width: 2.75rem;
@@ -170,114 +159,74 @@ body:has(> .harbour-sea) #shell-header {
   cursor: pointer;
 }
 
-/* The hairline between it and the control before it, midway between the two:
-   that control keeps a space of its own (var(--space-1)) after it, and the
-   slot two more. */
-.harbour-sea .harbour-sea__lift::before {
-  content: "";
-  position: absolute;
-  inset-block-start: calc(50% - 0.625rem);
-  inset-inline-start: calc(-1.5 * var(--space-1) - 1px);
-  width: 1px;
-  height: 1.25rem;
-  background: var(--hairline-strong);
-}
-
-/* With the page lifted it stands alone on the city, on the page's ground so it
-   stays easy to find, with nothing before it to set apart. */
-body.sea-lifted .harbour-sea .harbour-sea__lift {
-  position: fixed;
-  background: var(--color-bg);
-}
-
-body.sea-lifted .harbour-sea .harbour-sea__lift::before {
-  content: none;
-}
-
 @media (hover: hover) {
-  .harbour-sea .harbour-sea__lift:hover {
-    background: color-mix(in oklab, var(--color-fg) 6%, var(--color-bg));
+  .harbour-sea__lift:hover {
+    background: color-mix(in oklab, var(--color-fg) 6%, transparent);
   }
 }
 
-.harbour-sea .harbour-sea__lift:focus-visible {
+.harbour-sea__lift:focus-visible {
   outline: 2px solid var(--ash-accent);
   outline-offset: 2px;
 }
 
-.harbour-sea .harbour-sea__lift svg {
-  width: 1.5rem;
-  height: 1.5rem;
+.harbour-sea__lift svg {
+  width: 1.75rem;
+  height: 1.75rem;
 }
 
-.harbour-sea .harbour-sea__lift-flag {
+.harbour-sea__lift-flag {
   fill: var(--palette-tangerine-tango);
 }
 
-/* A phone's header is one short row; the slot is the button, its hairline and
-   a hair more. */
-@media (max-width: 47.99rem) {
-  body:has(> .harbour-sea) #shell-header {
-    padding-inline-end: calc(2.75rem + 3 * 4px + 1px);
-  }
+/* With the page lifted, the bar at the top centre names the fleet, and its
+   first button brings the page back; Chat and Workspace open those pages. It
+   stands on the page's ground so it stays easy to find over the city, and on a
+   phone the two buttons wrap under the name. */
+.harbour-sea__bar {
+  display: none;
+}
 
-  .harbour-sea .harbour-sea__lift::before {
-    inset-inline-start: calc(-0.5 * var(--space-1) - 4px - 1px);
-  }
+body.sea-lifted .harbour-sea__bar {
+  position: fixed;
+  z-index: 2;
+  inset-block-start: var(--space-2);
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: max-content;
+  max-width: calc(100% - 2 * var(--space-2));
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
 
-  /* The row's controls draw a little tighter to make that room. */
-  body:has(> .harbour-sea) #shell-header .mobile-menu-button {
-    padding-inline: 0.5rem;
-  }
+.harbour-sea__bar > .harbour-sea__return {
+  min-height: 2.75rem;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
 
-  body:has(> .harbour-sea) #shell-header .rg-button:not(.rg-button--quiet) {
-    gap: 0.25rem;
-    padding-inline: 0.5rem;
-  }
-
-  body:has(> .harbour-sea) #shell-header .rg-button:not(.rg-button--quiet)::after {
-    margin-inline: 0;
-  }
-
-  .harbour-sea .harbour-sea__lift {
-    top: calc(1px + (3.875rem - 2.75rem) / 2);
-    right: 4px;
+@media (hover: hover) {
+  .harbour-sea__return:hover {
+    background: color-mix(in oklab, var(--color-fg) 6%, transparent);
   }
 }
 
-/* Just past the shell's phone row, the header's links give their place to the
-   slot; the footer carries the same links. */
-@media (min-width: 48rem) and (max-width: 48.49rem) {
-  body:has(> .harbour-sea) #shell-header .rl-header-links {
-    display: none;
-  }
-}
-
-/* Under 480px the brand is its mark alone, as the shell's row leaves it, so the
-   name never shows cut short. */
-@media (max-width: 29.99rem) {
-  body:has(> .harbour-sea) #shell-header .shell-brand__name {
-    display: none;
-  }
-}
-
-/* Below 392px the theme switch gives way sooner than the shell's own 360px,
-   as the shell does: the device's setting applies until the screen is wider. */
-@media (max-width: 24.49rem) {
-  body:has(> .harbour-sea) #shell-header:has(.shell-get-key) .theme-control {
-    display: none;
-  }
-}
-
-/* On a 320px phone the buttons drop their arrows and the name tightens. */
-@media (max-width: 22.49rem) {
-  body:has(> .harbour-sea) #shell-header .rg-button:not(.rg-button--quiet)::after {
-    display: none;
-  }
-
-  body:has(> .harbour-sea) #app-shell #shell-header .account-chip {
-    padding-inline: 0.35rem;
-  }
+.harbour-sea__return:focus-visible {
+  outline: 2px solid var(--ash-accent);
+  outline-offset: 2px;
 }
 
 /* Lifted: the page, menus and footer included, rises off the top and only the

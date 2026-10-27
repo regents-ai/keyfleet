@@ -178,8 +178,8 @@ span.account-chip {
 }
 
 .shell-aside-button .shell-icon {
-  width: 1.3rem;
-  height: 1.3rem;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 #shell-header [data-aside-toggle][aria-expanded="true"] {
@@ -787,6 +787,38 @@ span.account-chip {
   margin-inline-start: var(--space-3);
 }
 
+@media (hover: hover) {
+  :is(#shell-header .rl-header-links, .regent-footer__social) > a:hover {
+    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
+  }
+}
+
+/* ---- Regents Products ---- */
+
+/* The nine-dot button, as the template's is, without the plain button's border
+   and fill, in the same ink as the X and GitHub marks beside it. */
+:is(.rl-header-links, .regent-footer__social) .shell-tool {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.shell-tool .shell-icon--apps {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* On a touch screen every mark, the nine dots included, keeps a full finger's
+   press area. */
 @media (pointer: coarse) {
   #shell-header .rl-header-links,
   .regent-footer__social {
@@ -805,40 +837,13 @@ span.account-chip {
   }
 }
 
-@media (hover: hover) {
-  :is(#shell-header .rl-header-links, .regent-footer__social) > a:hover {
-    background: color-mix(in oklch, var(--color-fg) 6%, transparent);
-  }
-}
-
-/* ---- Regents Products ---- */
-
-/* The nine-dot button, as the template's is, without the plain button's border
-   and fill, in the same ink as the X and GitHub marks beside it. */
-:is(.rl-header-links, .regent-footer__social) .shell-tool {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.shell-tool .shell-icon--apps {
-  width: 1.5rem;
-  height: 1.5rem;
-}
 
 /* The Regents crown beside the nine dots, on its charcoal tile, the size of
    the marks beside it. */
 .shell-regents-crown .shell-apps__tile {
   width: 1.5rem;
   height: 1.5rem;
+  border: 0;
 }
 
 .rl-header-links .shell-regents-crown .shell-apps__crown {
@@ -975,6 +980,13 @@ span.account-chip {
 
 .regent-footer .shell-tool__tip {
   inset-block: auto calc(100% + 0.35rem);
+}
+
+/* The side panel's button is the header's last, at the screen's edge, so its
+   name lines up with its right edge, as the panel does, and never runs off. */
+.shell-aside-button > .shell-tool__tip {
+  inset-inline: auto 0;
+  transform: none;
 }
 
 .shell-tool:focus-visible > .shell-tool__tip {

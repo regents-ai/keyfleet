@@ -5026,3 +5026,19 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The city's overview aims a little higher and stands a little further back,
   so the raised grid stays whole inside the picture on a wide screen.
 - As ash-template f76f138, whose swarm city demo carries the same change.
+
+## 2026-10-27 — The city button moves beside the fleet's name; header marks match
+
+- The city button now sits just left of the fleet's name on a fleet's pages,
+  instead of at the header's far right after a hairline. Pages that are not a
+  fleet's keep the city behind them with no button.
+- Once the page is lifted, a bar at the top centre reads "Keyfleet Classic #1"
+  (the fleet's own name) with Chat and Workspace beside it. The name brings the
+  page back, as Escape now does; Chat and Workspace open those pages, and any
+  move to another page brings the page back first.
+- The header's marks share one size: the side-panel icon is 1.5rem like the
+  crown, nine dots, X and GitHub; the nine-dot button's press area is square
+  again (a plain button's 2.75rem height had made its hover a tall strip), and
+  the crown's tile has no frame, which showed as a light square in dark mode.
+  On a touch screen every mark keeps its 2.75rem press area.
+- Check: `test/browser/sea_lift.spec.ts`.

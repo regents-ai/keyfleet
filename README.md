@@ -26,8 +26,10 @@ disc flies to the district of its key's last action (the inn for a post, the
 forge for work in the workspace, the castle for a proposal or a vote) and
 circles its towers. On a fleet's pages the discs are that fleet's keys, the
 visitor's own first; anywhere else they are the latest keys of every open
-fleet. The button at the top right lifts the page away to show the whole city;
-then a drag turns it, a mouse over a district lights it, and pressing a disc
+fleet. On a fleet's pages the city button beside the fleet's name lifts the
+page away to show the whole city, and a bar at the top names the fleet, opens
+its Chat or Workspace, and brings the page back (as Escape does); then a drag
+turns it, a mouse over a district lights it, and pressing a disc
 opens its key's last few actions. On a fleet's pages each district leads
 somewhere in that fleet: the inn to its Public room, the forge to its workspace
 and the castle to its treasury; a mouse over one names it and pressing it opens

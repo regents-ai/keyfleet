@@ -32,6 +32,7 @@ export default defineConfig({
     "group_flow.spec.ts",
     "treasury_read.spec.ts",
     "visits.spec.ts",
+    "sea_lift.spec.ts",
   ],
   fullyParallel: false,
   workers: 1,
