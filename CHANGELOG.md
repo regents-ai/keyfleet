@@ -4999,3 +4999,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   and visitors' own page timings (`KeyfleetWeb.Vitals`) stay. Nothing visitors
   download changes.
   `@types/node` is now listed directly; it came in only through Lighthouse.
+
+## 2026-10-27 — Every page writes its page line itself
+
+- As ash-template 7fec82e: `KeyfleetWeb.VisitLog.on_mount/4` attaches a
+  handle_params hook on every page the router opens and writes its `page` line;
+  `KeyfleetWeb.VisitLog.Events` no longer listens for LiveView's handle_params
+  event. Keyfleet already wrote a line for every page, because its session hooks
+  make LiveView report params on every page; the line no longer depends on that.
+  The visits walk now opens the home page first and expects "page /" once.

@@ -4,10 +4,11 @@ import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {prepareFleet, sayInPublic} from "./support/fleet_chain"
 
 // A visit can be told again from its lines alone (KeyfleetWeb.VisitLog). The
-// walk's person opens a room and mutes a Key from one of its posts, and the
-// lines the server wrote for that visit (config/runtime.exs) say so in order:
-// the request, the page, the mute the site saved and the press that asked for
-// it. Every line carries the same visit and the same one-way code for the
+// walk's person opens the home page, then a room, and mutes a Key from one of
+// its posts, and the lines the server wrote for that visit (config/runtime.exs)
+// say so in order: each request and page, the mute the site saved and the press
+// that asked for it. The home page has no handle_params of its own, and its
+// opening is still a line. Every line carries the same visit and the same one-way code for the
 // person, holds only the visit fields, and holds nothing anyone wrote and no
 // wallet. The poster is this walk's own, and the walk unmutes at the end, so
 // the room's other walks never meet its mute.
@@ -55,6 +56,8 @@ test("opening a room and muting a Key replays in order from the visit's lines", 
   page.on("pageerror", error => errors.push(error.message))
 
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
+  await page.goto("/")
+  await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   await page.goto("/classic/1?room=general")
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   // A post names the poster's first Key, so the walk mutes from its own post.
@@ -68,8 +71,8 @@ test("opening a room and muting a Key replays in order from the visit's lines", 
   const told = lines(visit)
   const steps = told.map(step)
 
-  expect(steps[0]).toBe("request /classic/1")
-  const order = ["request /classic/1", "page /classic/1", "action mute.mute", "press ShellLive:mute_key"].map(wanted =>
+  expect(steps[0]).toBe("request /")
+  const order = ["request /", "page /", "request /classic/1", "page /classic/1", "action mute.mute", "press ShellLive:mute_key"].map(wanted =>
     steps.indexOf(wanted),
   )
   expect(order.every(index => index >= 0)).toBe(true)
