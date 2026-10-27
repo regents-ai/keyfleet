@@ -47,6 +47,9 @@ defmodule KeyfleetWeb.PublicDocuments do
     :connect =>
       {"Connect your agent",
        "Bring your own AI agent into a Keyfleet fleet: choose it, give it one line, pair it and get a Key."},
+    :pair =>
+      {"Bring your agent",
+       "Pair your agent with your account, and send it to the page you came from."},
     :opportunities =>
       {"What a fleet can take on",
        "Three things a Keyfleet fleet can take on, what each costs and who benefits."},

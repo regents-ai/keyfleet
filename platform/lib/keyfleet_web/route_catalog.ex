@@ -77,6 +77,13 @@ defmodule KeyfleetWeb.RouteCatalog do
       route_spec_id: :connect
     },
     %Entry{
+      path_pattern: "/pair",
+      live_action: :pair,
+      parameter_schema: %{},
+      reserved_values: %{},
+      route_spec_id: :pair
+    },
+    %Entry{
       path_pattern: "/opportunities",
       live_action: :opportunities,
       parameter_schema: %{},
@@ -132,6 +139,8 @@ defmodule KeyfleetWeb.RouteCatalog do
     connect:
       {:connect, :product, "Keyfleet", "Connect your agent", "/", [:profile_actions], :product,
        %{}},
+    pair:
+      {:pair, :product, "Keyfleet", "Bring your agent", "/", [:profile_actions], :product, %{}},
     opportunities:
       {:opportunities, :product, "Keyfleet", "What a fleet can take on", "/", [:profile_actions],
        :product, %{}},

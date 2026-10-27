@@ -34,6 +34,7 @@ defmodule KeyfleetWeb.ShellLive do
     KeyProfileLive,
     KeysLive,
     PageRead,
+    PairLive,
     PointsLive,
     PollsLive,
     ProposalsLive,
@@ -94,6 +95,7 @@ defmodule KeyfleetWeb.ShellLive do
        held_keys: [],
        slices: %Read{},
        connect_agent: nil,
+       pair_start: nil,
        connect_paired: [],
        agents_topic: nil,
        credits: %Read{},
@@ -183,6 +185,7 @@ defmodule KeyfleetWeb.ShellLive do
        |> RoomsLive.leave()
        |> DmsLive.leave()
        |> assign(route_spec: route_spec, send_agent_open: false)
+       |> assign(:pair_start, PairLive.start(params))
        |> assign(PublicDocuments.page(route_spec, params))
        |> load_verified_connections(route_spec)
        |> load_account_page(route_spec)
@@ -478,6 +481,10 @@ defmodule KeyfleetWeb.ShellLive do
         account = current_account(socket.assigns.access_context)
         {:noreply, assign(socket, connect_paired: ConnectLive.paired(account))}
 
+      :pair ->
+        send_update(KeyfleetWeb.PairingBox, id: "pair-pairing-box", agents_changed: true)
+        {:noreply, socket}
+
       _other ->
         {:noreply, socket}
     end
@@ -691,6 +698,14 @@ defmodule KeyfleetWeb.ShellLive do
           agent={@connect_agent}
           paired={@connect_paired}
           held_keys={@held_keys}
+        />
+
+        <PairLive.page
+          :if={@route_spec.route_id == :pair}
+          account={current_account(@access_context)}
+          lease={@session_lease}
+          start={@pair_start}
+          signed_out_reason={@signed_out_reason}
         />
 
         <AccountLive.profile

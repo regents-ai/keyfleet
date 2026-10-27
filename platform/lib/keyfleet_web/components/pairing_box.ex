@@ -9,7 +9,9 @@ defmodule KeyfleetWeb.PairingBox do
 
   The parent passes `account` (the signed-in account), its `session_lease` as
   `lease` and `id`, and sends `agents_changed: true` when an agent pairs, checks
-  in or is unpaired anywhere.
+  in or is unpaired anywhere. A pairing link (`/pair?to=<path>`) also passes
+  `start`, the page on this site the agent begins on once paired; the message
+  then sends it there.
   """
   use KeyfleetWeb, :live_component
 
@@ -30,8 +32,12 @@ defmodule KeyfleetWeb.PairingBox do
   @impl true
   def update(%{agents_changed: true}, socket), do: {:ok, after_pairing(socket)}
 
-  def update(%{account: account, id: id, lease: lease}, socket),
-    do: {:ok, socket |> assign(id: id, lease: lease) |> take_account(account)}
+  def update(%{account: account, id: id, lease: lease} = assigns, socket),
+    do:
+      {:ok,
+       socket
+       |> assign(id: id, lease: lease, start: assigns[:start])
+       |> take_account(account)}
 
   # The account as the page gave it, or as it reads now before each event
   # (`Session.check_component_lease/2`).
@@ -69,7 +75,7 @@ defmodule KeyfleetWeb.PairingBox do
         phx-change="issue_pairing_code"
         phx-submit="issue_pairing_code"
         phx-target={@myself}
-        {pairing(@pairing)}
+        {pairing(@pairing, @start)}
       />
     </div>
     """
@@ -88,25 +94,25 @@ defmodule KeyfleetWeb.PairingBox do
   defp label(harness), do: Harness.label(harness)
 
   # The pairing box's state; the box keeps one size whatever it holds.
-  defp pairing(%{harness: harness, code: %PairingCode.Issued{} = code}) do
+  defp pairing(%{harness: harness, code: %PairingCode.Issued{} = code}, start) do
     %{
       chosen: to_string(harness),
-      message: agent_message(code.code, harness),
+      message: agent_message(code.code, harness, start),
       expires_iso: DateTime.to_iso8601(code.expires_at),
       expires: Calendar.strftime(code.expires_at, "%H:%M UTC")
     }
   end
 
-  defp pairing(%{harness: harness, code: {:paired, agent}}),
+  defp pairing(%{harness: harness, code: {:paired, agent}}, _start),
     do: %{
       chosen: to_string(harness),
       outcome: {:paired, agent.name}
     }
 
-  defp pairing(%{harness: harness, code: :unavailable}),
+  defp pairing(%{harness: harness, code: :unavailable}, _start),
     do: %{chosen: to_string(harness), outcome: :unavailable}
 
-  defp pairing(nil), do: %{}
+  defp pairing(nil, _start), do: %{}
 
   # A code on screen gives way to the agent that used it, so a spent code is
   # never left there to send again.
@@ -141,14 +147,15 @@ defmodule KeyfleetWeb.PairingBox do
   end
 
   @doc """
-  What the person pastes to their agent: the shared pairing words, then this
+  What the person pastes to their agent: the shared pairing words, with the
+  page it begins on when a pairing link names one (`start`), then this
   runtime's own setup from its page under /agents, so agents sharing one
   computer each keep their own key and folder and each comes back on its own.
   """
-  def agent_message(code, harness) do
+  def agent_message(code, harness, start) do
     origin = KeyfleetWeb.Endpoint.url()
 
-    PairingMessage.text(code, origin, harness) <>
+    PairingMessage.text(code, origin, harness, start) <>
       "\n" <> setup(harness) <> "\nYour full setup: " <> origin <> AgentGuides.path(harness)
   end
 

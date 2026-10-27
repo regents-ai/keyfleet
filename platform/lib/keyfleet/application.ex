@@ -62,8 +62,9 @@ defmodule Keyfleet.Application do
       # and the reads that fetch it.
       Keyfleet.Agents.ActivityReading,
       {Task.Supervisor, name: Keyfleet.Agents.Reads},
-      agents_listener_child(),
-      credits_listener_child(),
+      # After the repository and PubSub: a Credits balance or a pairing changed
+      # on any Regent site reaches the pages showing it.
+      shared_changes_child(),
       # A key's profile reads its rewards wherever the site runs.
       Keyfleet.Chain.RewardsWaiting,
       graph_children(),
@@ -106,18 +107,9 @@ defmodule Keyfleet.Application do
     end
   end
 
-  # Agent changes announced by any Regent site, through the database, reach
-  # this site's pages; it needs the database and PubSub started first.
-  defp agents_listener_child do
+  defp shared_changes_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false),
-      do: RegentAgents.Listener
-  end
-
-  # A Credits balance changed on any Regent site, announced through the
-  # database, reaches the account pages showing it.
-  defp credits_listener_child do
-    if Application.get_env(:keyfleet, :database_startup_enabled, false),
-      do: RegentCredits.Listener
+      do: Keyfleet.SharedChanges
   end
 
   # Metrics are served beside the site, never by a process that only runs a task.

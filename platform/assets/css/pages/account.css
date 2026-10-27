@@ -459,3 +459,23 @@ div.verified-connections__notice p {
     padding-inline-start: 1.25rem;
   }
 }
+
+/* Bring your agent (/pair): the pairing box keeps the width it has on a phone,
+   so the agents' pictures stay together, and the page an agent starts at wraps
+   rather than running off a narrow screen. On the narrowest screens the
+   pictures shrink a little so all five in a row still fit. Unlayered, like the
+   shared pairing box it adjusts. */
+.pair-page .rg-account__pair {
+  max-inline-size: 24rem;
+}
+
+.pair-page #pair-start {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 22rem) {
+  .pair-page .rg-account__pair[data-layout="icons"] .rg-account__choice .rg-account__mark {
+    inline-size: 2rem;
+    block-size: 2rem;
+  }
+}

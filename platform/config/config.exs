@@ -20,6 +20,7 @@ public_reads =
 config :regent_agents,
   repo: Keyfleet.Repo,
   pubsub: Keyfleet.PubSub,
+  notifications: Keyfleet.Notifications,
   account: {Keyfleet.Agents, :account},
   allowed: %{
     "not_paired" => [
@@ -56,6 +57,7 @@ config :ex_money,
 config :regent_credits,
   repo: Keyfleet.Repo,
   pubsub: Keyfleet.PubSub,
+  notifications: Keyfleet.Notifications,
   ash_domains: [RegentCredits],
   admins: [],
   chain_client: Keyfleet.ChainClient,

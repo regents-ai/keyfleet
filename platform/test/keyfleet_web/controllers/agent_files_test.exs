@@ -186,7 +186,7 @@ defmodule KeyfleetWeb.AgentFilesTest do
   test "every agent in Pair New Agent is sent to a setup page that answers, and agents that share a computer each keep their own key" do
     messages =
       for harness <- RegentAgents.Harness.featured(),
-          do: {harness, KeyfleetWeb.PairingBox.agent_message("CODE", harness)}
+          do: {harness, KeyfleetWeb.PairingBox.agent_message("CODE", harness, nil)}
 
     for {harness, message} <- messages do
       [_, path] = Regex.run(~r{Your full setup: https?://[^/]+(/agents/[a-z-]+)$}, message)

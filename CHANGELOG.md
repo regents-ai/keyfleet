@@ -5325,3 +5325,21 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `none`, so a refused signed call can be traced to an old or hand-built client.
 - The privacy page's cookies section says what the visit cookie counts and that
   only the name of the sending site is kept.
+
+## 2026-10-27 — Bring your agent to one page; one listening connection
+
+- Copied from the template (4d5ab2db). A "Bring your agent" link,
+  `/pair?to=<page>`, opens a page with the same pairing box as the side panel,
+  and the message the person pastes says "Once paired, start at <page>", so the
+  agent begins where the link pointed. Only a page on this site is taken; any
+  other `to` opens plain pairing. Signed out, the page shows where the agent
+  will start and asks the person to sign in.
+- Its look is the template's (6d32f05): the pairing box keeps its phone width
+  so the agents' pictures stay together, the start link wraps, and below 22rem
+  the pictures shrink so a row fits at 320 px.
+- The agent guide (`/llms.txt`) names the link and the start line.
+- elixir-utils e796a9d → 6773781: the pairing message's start line, amounts
+  shown the one Regent way in shared Points and Credits, the shared listening
+  connection, siwa_keyring 0.2.0, and the agent request signer. The Credits and
+  agents listeners now share one database connection the site opens
+  (`Keyfleet.SharedChanges`, named `keyfleet-listen`) instead of one each.
