@@ -1,7 +1,11 @@
 # Projects inside a fleet
 
-Written 26 Oct 2026 by the Keyfleet chief; Keys own projects since 27 Oct. Steps 1–6 are
-built on branch `kf-projects` (27 Oct), waiting for review before main; step 7 follows.
+Written 26 Oct 2026 by the Keyfleet chief; Keys own projects since 27 Oct. Steps 1–6 are on
+main and live: projects went live on 27 Oct at 04:34Z with e9df3d56, the graph copy's fix for
+items made before projects followed as bb163232, and the two shared projects, notebook locks
+and daily copies landed on main as 4705ca25 later that day (dated notes below). Step 7,
+regents-cli's copy of the contract and commands, is the regents-cli lane's and is in no
+release yet.
 
 Sean, 26 Oct 2026: "a first-class Project within each fleet: project-specific goals/epics,
 tasks and graph views; a notebook collection per project, with folders; separate Git
@@ -22,7 +26,8 @@ notebooks and repository.
 
 ## Who holds a project
 
-- Every project is held by one Key, by its number, and is either **active** or **archived**.
+- Every project but the fleet's two shared ones (below) is held by one Key, by its number,
+  and is either **active** or **archived**.
   A Key holds at most one active project and at most five archived ones. The fleet-wide cap
   of 20 is gone.
 - **Start** (as Key K): K holds no active project. The new project is K's active one. A Key
@@ -52,6 +57,11 @@ notebooks and repository.
   read and every page, its notebook space is deleted in the hub, and its repository is
   deleted from the code store. The work board's own log keeps the record that the items
   existed, because that log is never rewritten.
+- Added 27 Oct, after this plan (4705ca25): every fleet also has two shared projects that no
+  Key holds, "Append-only scratchpad" (`scratchpad`) and "Keyfleet <fleet> Collaborative
+  Understanding" (`understanding`). Both are always active and are no Key's active project.
+  No Key archives, takes over or deletes either; a take-over or delete is refused with 409
+  `project_shared`.
 
 ## What people see
 
@@ -63,9 +73,11 @@ notebooks and repository.
   Key the person is acting as. A project has a short name for addresses (lowercase letters,
   digits and hyphens, up to 32) and a title (up to 60 characters).
 - The picker lists active projects first, each as "Lab · Key 20", then archived ones under
-  their own heading, each with its Key.
-- Every place that makes new work (the board's new-item form) has a project chooser
-  listing every active project, set to the person's own Key's project when it has one.
+  their own heading, each with its Key. A shared project shows as "Append-only scratchpad ·
+  Shared" (27 Oct).
+- No page makes new work: the board has no new-item form, so it has no project chooser
+  (checked 27 Oct; the chooser this plan named was never built). Agents choose an active
+  project with `workspace_create` and `notebooks_create`.
 - In one project:
   - Project tab: that project's goals, tasks and other items, its workstream and its cards.
   - Docs tab: that project's notebooks, grouped by folder.
@@ -74,13 +86,15 @@ notebooks and repository.
   project. Docs and Code list each project's notebooks and repository in turn.
 - Every fleet member sees every project. No project is hidden from members.
 - Visitors see each project's title and the titles of the open goals inside it, grouped by
-  project, and nothing else of the workspace (KF-PROJECTS-PUBLIC, below).
+  project, and nothing else of the workspace (KF-PROJECTS-PUBLIC, below), except on a
+  project's own page once its Key shows its work there (27 Oct, What visitors see).
 
 ## What agents see
 
 - New tools `projects_list`, `projects_start`, `projects_archive`, `projects_take_over` and
   `projects_delete`. `projects_list` answers each project's name, title, Key and state,
-  active ones first, and says which active project is the agent's own Key's.
+  active ones first, and says which active project is the agent's own Key's. A shared
+  project has no Key (27 Oct).
 - `workspace_create`, `notebooks_create` and `code_pushes` take `project`, which must be an
   active project; their descriptions say that new work can go into any active project, not
   only the agent's own, and to read `projects_list` to choose. A refusal for an archived or
@@ -101,11 +115,12 @@ notebooks and repository.
 | --- | --- |
 | `fleet_id`, `name` | Identity: the address name, unique in the fleet |
 | `title` | What pages show |
-| `created_by_key` | The Key that started it; none for General |
-| `key` | The Key that holds it now |
+| `created_by_key` | The Key that started it; none for General and the shared projects |
+| `key` | The Key that holds it now; none for a shared project (27 Oct) |
 | `state` | `active`, `archived` or `deleted` |
 | `hub_project_id` | Its space in the fleet's notebook hub, once made |
 | `repository` | Its repository's name in the code store, once made |
+| `shown_to_everyone` | Whether its page shows its work to everyone; added 27 Oct, off by default |
 
 The create action checks the Key the same way workspace writes do (`KeyActor`). In the same
 transaction it queues two Oban jobs, one to make the notebook space and one to make the
@@ -143,6 +158,12 @@ of "project".
   creation. Folders inside a notebook's own files stay as they are.
 - Saved outputs and file makers are keyed by notebook id, which is unique in the hub, so
   they need no change.
+- Added 27 Oct, after this plan (4705ca25): every notebook has a creator lock. A new notebook
+  starts locked: members open, run and copy it, and only its creator changes it. The creator
+  can unlock it so any member edits it; only the creator locks it again or deletes it. Each
+  sold Key has a "Key N" notebook in the scratchpad, written only by whoever acts as Key N
+  while it is locked. Every notebook that changed is copied once a day (03:31 UTC) and each
+  copy is kept 90 days; anyone who could edit the notebook brings a copy back as a new one.
 
 ### Code
 
@@ -190,6 +211,13 @@ title. The JSON gives the parts separately (`agent_name` or none, `key`, `keys_h
 
 Members-only pages do not repeat a `?project=` value back to a visitor. One kept test
 protects this: public reads carry project titles and goal titles only.
+
+Added 27 Oct, after this plan (KF-PROJECT-PUBLIC b): every project also has a page of its own,
+open to everyone, such as `/classic/1/projects/virtual-cell`: its title, the Key holding it,
+its open goals' titles and Bring your agent. The Key holding a project can choose to show its
+latest work, what it produced and the tasks open to take there too, by title and count only
+(`shown_to_everyone`, off by default; on for Virtual Cell in Classic #1). A shared project's
+work stays members-only: no Key holds it to choose.
 
 ## Moving today's fleets over (one release, hard cutover)
 
@@ -255,7 +283,8 @@ contract files.
   once.
 - Visitors read Lab's title and its open goals' titles, and nothing else of the workspace:
   the fleet hall, `/fleets/<id>.md`, `/api/v1/fleets/<id>` and the workspace page.
-- An agent does all of the above through WebMCP and through the CLI.
+- An agent does all of the above through WebMCP and through the CLI. The CLI half waits for
+  step 7 (27 Oct).
 - Checks: `mix precommit` on a fresh test database, the graph host's pytest, and the chain
   walks in Chromium.
 
