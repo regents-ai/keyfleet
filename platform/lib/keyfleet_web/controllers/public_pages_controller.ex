@@ -68,6 +68,8 @@ defmodule KeyfleetWeb.PublicPagesController do
     |> send_resp(200, body)
   end
 
+  # The body is XML listing this site's own page addresses, each one escaped.
+  # sobelow_skip ["XSS.SendResp"]
   def sitemap(conn, _params),
     do:
       conn

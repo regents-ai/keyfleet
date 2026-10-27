@@ -18,10 +18,12 @@
 # seconds a workspace write answers "try again". The site machine then takes
 # the same image bluegreen, so a page is answered throughout.
 #
-# One deploy of an app runs at a time on this Mac, from any checkout: two at
-# once can leave the two machines on different commits (21 October 2026). The
-# script runs itself again under lockf(1), which the system lets go of when it
-# ends, however it ends.
+# Releases from this Mac take turns, from any checkout: two of this app at once
+# can leave the two machines on different commits (21 October 2026), and every
+# site shares one production database, where a release briefly doubles a site's
+# connections. The script runs itself again under lockf(1) on the lock every
+# site's deploy takes, waits for any release holding it, and the system lets go
+# of it when the script ends, however it ends.
 set -euo pipefail
 
 case "${1:-}" in
@@ -33,14 +35,10 @@ case "${1:-}" in
     ;;
 esac
 
-lock="/tmp/deploy-$app.lock"
+lock=/tmp/regent-shared-db-release.lock
 if [[ "${DEPLOY_LOCK:-}" != "$lock" ]]; then
-  status=0
-  DEPLOY_LOCK="$lock" lockf -s -t 0 "$lock" bash "$0" "$@" || status=$?
-  if [[ $status -eq 75 ]]; then
-    echo "Refusing to deploy: another deploy of $app is running on this Mac. Run this again once it finishes." >&2
-  fi
-  exit "$status"
+  echo "==> Deploying to $app (waits for any other release holding $lock)"
+  DEPLOY_LOCK="$lock" exec lockf -k "$lock" bash "$0" "$@"
 fi
 
 root="$(cd "$(dirname "$0")/.." && pwd)"

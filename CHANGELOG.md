@@ -5052,6 +5052,33 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the template's ruling of 27 October asks: one release on the shared database
   at a time, and five connections for each serving pool.
 
+## 2026-10-27 — Every Sobelow approval sits beside its code
+
+- The last eight approvals in `platform/.sobelow-skips` matched by line number,
+  so any edit above them made them stale and stopped `mix precommit`. Each is
+  now a `sobelow_skip` note beside the code it approves, with its reason, and
+  the list file is gone:
+  - the seven router pipelines that send a content security policy Sobelow
+    cannot read: `browser` and the two showcase pipelines set theirs in a plug
+    for each response, and `directory`, `public_documents`, `early` and
+    `errors_admin` build the reading policy with a function call;
+  - the sitemap, which is XML listing the site's own page addresses, each one
+    escaped.
+- Nothing a person or agent sees changes. Taking the notes off brings back
+  exactly these eight findings; with them `mix sobelow --exit` finds none.
+
+## 2026-10-27 — Releases from this Mac wait for every site's
+
+- `scripts/deploy.sh` now takes `/tmp/regent-shared-db-release.lock`, the lock
+  every site's deploy takes (ash-template 2012700), in place of a lock for
+  Keyfleet alone. A deploy started while any site is releasing waits for it
+  instead of building alongside, since every site shares one production
+  database and a release briefly doubles a site's connections. A second
+  Keyfleet deploy now waits as well, where it used to stop straight away.
+- On 27 October Patchbay v275 and Keyfleet v353 overlapped by about a minute:
+  Fly lists a release only once its build has finished, so reading the other
+  sites' releases first could not see Patchbay's build.
+
 ## 2026-10-27 — Projects inside a fleet, held by Keys
 
 - A fleet's work is split into projects (`Keyfleet.Projects`), as

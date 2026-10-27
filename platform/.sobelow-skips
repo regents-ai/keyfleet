@@ -1,8 +1,0 @@
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:20,482F4A6
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:45,2A72B3B
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:58,1A68E9B
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:74,2C3A640
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:99,192EBFD
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:130,306DE8
-Config.CSP: Missing Content-Security-Policy,lib/keyfleet_web/router.ex:137,AC642B
-XSS.SendResp: XSS in `send_resp`,lib/keyfleet_web/controllers/public_pages_controller.ex:75,3E5A3B2

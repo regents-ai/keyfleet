@@ -5,7 +5,8 @@ defmodule KeyfleetWeb.Router do
   alias KeyfleetWeb.ContentSecurityPolicy
 
   # Sobelow looks for the policy in this pipeline's header map; it is set by
-  # `put_sign_in_policy/2` instead, for each response (.sobelow-skips).
+  # `put_sign_in_policy/2` instead, for each response.
+  # sobelow_skip ["Config.CSP"]
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -38,6 +39,9 @@ defmodule KeyfleetWeb.Router do
   end
 
   # The open fleet directory's Markdown.
+  # This pipeline and the three below set the reading policy in the header map.
+  # Sobelow cannot read a policy built by a function call, so each says so here.
+  # sobelow_skip ["Config.CSP"]
   pipeline :directory do
     plug :put_format, "md"
 
@@ -47,6 +51,7 @@ defmodule KeyfleetWeb.Router do
     }
   end
 
+  # sobelow_skip ["Config.CSP"]
   pipeline :public_documents do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -64,6 +69,7 @@ defmodule KeyfleetWeb.Router do
   # The early-access page: no sign-in and no app scripts, only the key roller,
   # so its root layout loads that one script and it gets the strict reading
   # policy.
+  # sobelow_skip ["Config.CSP"]
   pipeline :early do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -90,6 +96,7 @@ defmodule KeyfleetWeb.Router do
   # the reading policy; an admin's page replaces it with one carrying this
   # request's nonce (KeyfleetWeb.ErrorsAdmin). Like every page, it is closed while
   # the site is.
+  # sobelow_skip ["Config.CSP"]
   pipeline :errors_admin do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -122,8 +129,8 @@ defmodule KeyfleetWeb.Router do
     # pipeline negotiates its formats first, so a JSON request to a page is
     # refused with 406 before any page header is sent. The showcase includes
     # the sign-in window and frames its own preview.
-    # Their policy is set by `put_showcase_policy/2`, for each response
-    # (.sobelow-skips).
+    # Their policy is set by `put_showcase_policy/2`, for each response.
+    # sobelow_skip ["Config.CSP"]
     pipeline :showcase_browser do
       plug :accepts, ["html"]
       plug :showcase_page
@@ -131,6 +138,7 @@ defmodule KeyfleetWeb.Router do
       plug :put_showcase_policy
     end
 
+    # sobelow_skip ["Config.CSP"]
     pipeline :showcase_catalog do
       plug :accepts, ["html", "json"]
       plug :showcase_page
