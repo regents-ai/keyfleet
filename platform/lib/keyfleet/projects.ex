@@ -8,10 +8,9 @@ defmodule Keyfleet.Projects do
 
   Each project is held by one of the fleet's Keys and is active, archived or
   deleted. A Key holds at most one active project and five archived ones; it
-  starts, archives, takes over and deletes them as
-  `Keyfleet.Projects.Project` says. New work goes into any active project,
-  whoever holds it; an archived one takes no writes until a Key takes it
-  over.
+  starts, archives, takes over and deletes them as `Keyfleet.Projects.Project`
+  says. New work goes into any active project, whoever holds it; an archived
+  one takes no writes until a Key takes it over.
 
   Every member of the fleet sees every project that is not deleted and works
   in any active one: membership is the fleet's, never a project's. Visitors

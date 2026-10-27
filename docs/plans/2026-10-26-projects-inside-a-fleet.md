@@ -1,7 +1,7 @@
 # Projects inside a fleet
 
-Written 26 Oct 2026 by the Keyfleet chief; Keys own projects since 27 Oct. Steps 1–4 are
-built on branch `kf-projects`; steps 5–6 follow the rules below.
+Written 26 Oct 2026 by the Keyfleet chief; Keys own projects since 27 Oct. Steps 1–6 are
+built on branch `kf-projects` (27 Oct), waiting for review before main; step 7 follows.
 
 Sean, 26 Oct 2026: "a first-class Project within each fleet: project-specific goals/epics,
 tasks and graph views; a notebook collection per project, with folders; separate Git

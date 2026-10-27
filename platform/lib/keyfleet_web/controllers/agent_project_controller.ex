@@ -60,7 +60,7 @@ defmodule KeyfleetWeb.AgentProjectController do
       key: project.key,
       state: project.state,
       yours: yours != nil and project.name == yours.name,
-      clone_url: Code.clone_url(project.repository)
+      clone_url: Code.agent_clone_url(project.repository)
     }
   end
 

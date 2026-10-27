@@ -10,8 +10,9 @@ defmodule KeyfleetWeb.AgentNotebookController do
   as on the fleet's notebook host (`Keyfleet.Notebooks.admit/3`), and the hub
   knows each run, notebook and change as the agent's. An archived project's
   notebooks are read and never changed, and a Key whose edits a vote of the
-  fleet has restricted lists and reads, and starts, makes and writes nothing. Starting a run spends the agent's
-  `:notebook_run_starts` allowance, the same one the notebook host spends.
+  fleet has restricted lists and reads, and starts, makes and writes nothing.
+  Starting a run spends the agent's `:notebook_run_starts` allowance, the same
+  one the notebook host spends.
   """
   use KeyfleetWeb, :controller
 

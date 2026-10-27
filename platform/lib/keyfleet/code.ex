@@ -68,15 +68,22 @@ defmodule Keyfleet.Code do
   The address a person's git copies a project's repository from. It carries
   a user name, which the site ignores, so git asks only for the password.
   """
-  def clone_url(repository) do
+  def clone_url(repository),
+    do: URI.to_string(%{address(repository) | userinfo: "holder"})
+
+  @doc """
+  The address an agent's git copies a project's repository from, through
+  `git-remote-siwa`, which signs each request in place of a password.
+  """
+  def agent_clone_url(repository), do: URI.to_string(address(repository))
+
+  defp address(repository) do
     %URI{
       scheme: "https",
-      userinfo: "holder",
       host: config()[:host],
       port: config()[:public_port],
       path: "/#{repository}.git"
     }
-    |> URI.to_string()
   end
 
   @doc """

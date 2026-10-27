@@ -10,8 +10,9 @@ each request and that they hold one of the fleet's keys (or, for an agent, a
 shard of one or a pairing with a holder), and then forwards git's request
 with a short signed pass naming that one repository. Only a holder learns
 whether a project's repository is there. The store needs nothing per
-project: a pass names the repository it opens. Anything that speaks git's smart HTTP can sit behind that
-address: nothing an agent or person sends depends on the store.
+project: a pass names the repository it opens. Anything that speaks git's
+smart HTTP can sit behind that address: nothing an agent or person sends
+depends on the store.
 
 - Who may use them: holders of the fleet's keys and their agents, in every
   project. Checked at
@@ -22,9 +23,21 @@ address: nothing an agent or person sends depends on the store.
   force push and the deletion of a branch or tag, for everyone (git's
   `receive.denyNonFastForwards` and `receive.denyDeletes`, set on the store's
   receive-pack). New branches and ordinary pushes work as usual.
+- An archived project's repository is copied and never changed: Keyfleet
+  refuses a push to it (403 `code_project_archived`) before the store is
+  asked. A Key that takes the project over can push again.
+- Deleting a project deletes its repository from the store for good, with
+  its history (`Keyfleet.Code.DeleteRepository`, queued as the project is
+  deleted). The store's `DELETE /api/v1/repos/<owner>/<repository>` takes
+  only a `delete` pass, which only Keyfleet's own key signs; it answers 204,
+  also for a repository already gone, so a failed run is made again a minute
+  later. That call is on the store's `kf-delete-repo` branch and not yet
+  released: until it is, the store answers 404, a deletion's run gives up
+  after its 20 tries, and the repository stays in the store, out of
+  everyone's reach. Release the store first.
 - Each change sent is recorded under its project, the key and the wallet
-  that sent it, and the fleet's workspace shows the latest ten (key, branch and time; never the
-  commit message).
+  that sent it, and the project's Code shows the latest ten (key, branch and
+  time; never the commit message).
 - People: a person gets a password from the Code panel in the fleet's
   workspace. Git uses it with any user name, for every project's repository
   in that fleet. It lasts 12 hours and ends when they sign out.
@@ -60,8 +73,9 @@ The code is in `platform/lib/keyfleet/code.ex`, `platform/lib/keyfleet/code/`,
 | `KEYFLEET_PASS_JWKS` | store secret | The public half of Keyfleet's keys: the JSON at `https://keyfleet.ai/.well-known/hub-jwks.json`. |
 | `KEYFLEET_PASS_ISSUER` | store, `fly.toml` | `https://keyfleet.ai` |
 
-The code host, pass life, password life, request size cap (100 MB), the waits
-for a body and admission time live in `config :keyfleet, :code` (`platform/config/config.exs`).
+The code host, pass life, password life, request size cap (100 MB), the
+waits for a body and admission time live in `config :keyfleet, :code`
+(`platform/config/config.exs`).
 
 ## Running it on this computer
 
@@ -102,8 +116,8 @@ store cannot be reached, stops mid-exchange or answers with a fault of its
 own, the site saves it with its errors at `/admin/errors`
 (`Keyfleet.Code.StoreDownError`), which Fly Sentinel reads. Making a
 project's repository (`Keyfleet.Code.Setup`, queued as the project starts)
-tries once a minute, 20 times; until it
-works, git is told when the next try is. A setup that gave up starts again on
+tries once a minute, 20 times; until it works, git is told when the next try
+is. A setup that gave up starts again on
 the next ask, which git is told and the site saves the same way.
 
 These are the steps it was set up with, for setting it up again; each needs
