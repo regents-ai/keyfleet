@@ -5213,3 +5213,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Keys is shared among the Keys sold at least 2 days ago, as the treasury pays it,
   instead of all the Keys. Version 1.6, effective October 27, 2026 (Sean,
   KF-GOV-TERMS a).
+
+## 2026-10-27 — Swarm city: room for 24 discs
+
+- The city now draws up to 24 discs, each with its swarm and trail, up from 16
+  (Sean, 27 Oct: "do 24"), ready for one disc per account. How many the site
+  sends is set where it picks them (`KeyfleetWeb.HarbourCrew`). As ash-template
+  a728847.

@@ -16,7 +16,7 @@ export type Agent = {
 }
 
 /** Agents the city will ever draw, the swarm each one leads, and the points its trail keeps. */
-export const MAX_AGENTS = 16
+export const MAX_AGENTS = 24
 export const FOLLOWERS = 9
 export const TRAIL = 84
 /** Seconds between two points of a trail. */
