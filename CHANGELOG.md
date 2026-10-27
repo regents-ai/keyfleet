@@ -5159,3 +5159,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   ago (`matureKeys()`), the Keys the treasury pays, instead of every Key sold, so
   its Per Key figure is what each Key gets (KF-GOV-FIXES a).
 - API contract `info.version` 20.0.0.
+
+## 2026-10-27 — The daily slice's words name the Keys it pays
+
+- The treasury tab's note on the Daily Treasury Slice to Keys, the fleet rules and
+  the agent tool `treasury_release` say the slice is shared among the Keys sold at
+  least 2 days ago, as the treasury pays it, instead of every Key sold (KF-GOV-FIXES a).

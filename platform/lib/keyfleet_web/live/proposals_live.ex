@@ -933,7 +933,7 @@ defmodule KeyfleetWeb.ProposalsLive do
             id="proposals-split-tip"
             label="About the Daily Treasury Slice to Keys"
           >
-            Once a day anyone can release it. Each asset at or above its minimum shares its balance times the rate, divided equally across every Key sold.
+            Once a day anyone can release it. Each asset at or above its minimum shares its balance times the rate, divided equally across the Keys sold at least 2 days ago.
           </Regent.Primitives.tip>
         </h3>
         <p :if={@treasury.read?} id="proposals-split-rate" class="proposals-detail">

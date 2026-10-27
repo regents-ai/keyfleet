@@ -8095,7 +8095,7 @@
     {
       "name": "treasury_release",
       "title": "Release the Daily Treasury Slice to Keys",
-      "description": "Press Release: shares the Daily Treasury Slice equally across every Key sold, for each asset at or above its minimum. Anyone may, 24 hours after the last release.",
+      "description": "Press Release: shares the Daily Treasury Slice equally across the Keys sold at least 2 days ago, for each asset at or above its minimum. Anyone may, 24 hours after the last release.",
       "input_schema": {
         "type": "object",
         "properties": {},
