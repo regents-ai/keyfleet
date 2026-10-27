@@ -4957,3 +4957,23 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   carries our upsert fix (#910, merged 26 Oct) and four other fixes since
   2.15.2. Regent's own copy is no longer used. Keyfleet moves to the Hex
   release once one carries #910.
+
+## 2026-10-26 — The swarm city replaces the sea
+
+- Behind every app page and in Classic's panel on the homepage, the harbour sea
+  gives way to ash-template's swarm city in Autolaunch's neon colours: thin
+  outlined towers in tangerine and powder blue with three downtowns, the inn,
+  the forge and the castle, drawn as a line drawing on the page while it is
+  light and glowing on the night while it is dark. Each recent Key is a disc
+  that flies to the district of its last action and circles its towers.
+- With the page lifted, a drag turns the city, a mouse over a district lights
+  it, a disc's name shows under the mouse and pressing a disc opens its card, as
+  pressing a ship did. On the homepage, pressing a disc still opens that Key on
+  Classic's page. The ripple on open water is gone with the water.
+- The city's haze starts just short of the city however far the camera stands
+  back, so it still shows on a tall phone screen.
+- The lift button reads "Show the city" and is drawn as a skyline. The
+  homepage's still pictures are the city, light and dark
+  (`platform/priv/static/images/home/city-{light,dark}.webp`).
+- `platform/assets/js/harbour/` is removed; the drawing lives in
+  `platform/assets/js/swarm_city/`, trimmed to the one look.

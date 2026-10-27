@@ -1,13 +1,13 @@
 defmodule KeyfleetWeb.HarbourSeaLive do
   @moduledoc """
-  The sea behind the product's pages: one ship for each of the most recently
-  active Keys, sailing to the island of the Key's last action and circling it
-  (`KeyfleetWeb.HarbourCrew`).
+  The swarm city behind the product's pages: one disc for each of the most
+  recently active Keys, flying to the district of the Key's last action and
+  circling its towers (`KeyfleetWeb.HarbourCrew`).
 
   On a fleet's pages the ships are that fleet's Keys; anywhere else they are
   the latest Keys of every open fleet. The visitor's own Keys come first, then
-  the most recent, sixteen at most. The sea takes no presses until its button
-  lifts the page away; then pressing a ship opens its card: the Key's last few
+  the most recent, sixteen at most. The city takes no presses until its button
+  lifts the page away; then a drag turns it and pressing a disc opens its card: the Key's last few
   actions and a link to its profile.
 
   The root layout renders it beside the page's own LiveView
@@ -414,7 +414,6 @@ defmodule KeyfleetWeb.HarbourSeaLive do
       class="harbour-sea__harbour"
       phx-hook="HarbourSea"
       phx-mounted={JS.ignore_attributes(["data-harbour-ready"])}
-      data-harbour-layout="sea"
       data-harbour-crew={HarbourCrew.on_sea(drawn(@fleets, @public, @crew, @own, @access_context))}
       aria-hidden="true"
     >
@@ -429,18 +428,18 @@ defmodule KeyfleetWeb.HarbourSeaLive do
       class="harbour-sea__lift"
       aria-controls="app-shell"
       aria-pressed="false"
-      aria-label="Show the sea"
-      title="Show the sea"
+      aria-label="Show the city"
+      title="Show the city"
       phx-click={
         JS.toggle_class("sea-lifted", to: "body")
         |> JS.toggle_attribute({"aria-pressed", "true", "false"})
-        |> JS.toggle_attribute({"aria-label", "Bring the page back", "Show the sea"})
-        |> JS.toggle_attribute({"title", "Bring the page back", "Show the sea"})
+        |> JS.toggle_attribute({"aria-label", "Bring the page back", "Show the city"})
+        |> JS.toggle_attribute({"title", "Bring the page back", "Show the city"})
       }
     >
       <svg viewBox="0 0 20 18" fill="currentColor" aria-hidden="true">
-        <rect :for={{x, y, w} <- sea_island()} x={x} y={y} width={w} height="2" />
-        <rect class="harbour-sea__lift-flag" x="10" y="0" width="4" height="4" />
+        <rect :for={{x, y, w, h} <- city_skyline()} x={x} y={y} width={w} height={h} />
+        <rect class="harbour-sea__lift-flag" x="7" y="0" width="2" height="2" />
       </svg>
     </button>
     <.agent_card
@@ -450,23 +449,15 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     """
   end
 
-  # The lift button's picture, drawn in blocks like the Regents crown: an island
-  # with its mast over two rows of waves. Each block row is {x, y, width}; the
-  # flag on the mast is drawn apart, in Tangerine.
-  defp sea_island do
+  # The lift button's picture, drawn in blocks like the Regents crown: four
+  # towers of a skyline. Each tower is {x, y, width, height}; the beacon on the
+  # tallest is drawn apart, in Tangerine.
+  defp city_skyline do
     [
-      {8, 0, 2},
-      {8, 2, 2},
-      {8, 4, 2},
-      {5, 6, 8},
-      {3, 8, 12},
-      {2, 10, 14},
-      {2, 14, 4},
-      {10, 14, 4},
-      {18, 14, 2},
-      {0, 16, 2},
-      {6, 16, 4},
-      {14, 16, 4}
+      {1, 9, 4, 9},
+      {6, 3, 4, 15},
+      {11, 6, 3, 12},
+      {15, 11, 4, 7}
     ]
   end
 

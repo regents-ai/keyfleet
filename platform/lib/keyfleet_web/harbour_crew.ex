@@ -59,7 +59,7 @@ defmodule KeyfleetWeb.HarbourCrew do
     |> Enum.take(@ships)
   end
 
-  @doc "The ships as the sea's hook reads them, in `data-harbour-crew`."
+  @doc "The ships as the city's hook reads them, in `data-harbour-crew`."
   def on_sea(ships),
     do: Jason.encode!(Enum.map(ships, &Map.take(&1, [:id, :name, :place, :color])))
 
