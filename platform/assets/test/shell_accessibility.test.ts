@@ -10,6 +10,7 @@ vi.mock("phoenix_html", () => ({}))
 vi.mock("phoenix-colocated/keyfleet", () => ({hooks: {}}))
 vi.mock("../js/auth_lazy", () => ({
   browserCsrfToken: () => "csrf-token",
+  holdAdoptionWhileLeaving: vi.fn(),
   holdSocketDuringCookieRotation: vi.fn(),
   installAccountAuthLazyLoader: vi.fn(),
   installCrossTabCsrf: vi.fn(),

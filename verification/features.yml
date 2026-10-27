@@ -414,11 +414,16 @@ features:
       - platform/assets/test/privy_bridge.test.ts
       - platform/assets/test/auth_lazy.test.ts
       - platform/assets/test/modal_dialog.test.ts
+      - platform/assets/test/session_leaving.test.ts
       - platform/test/browser/wallet_buttons.spec.ts
+      - platform/test/browser/auth_lazy_acceptance.spec.ts
     regressions:
       - id: R-20261021-closed-sign-in-window-back
         from: Sean, 21 October 2026 06:32Z, signed out on the homepage
         test: platform/test/browser/wallet_buttons.spec.ts
+      - id: R-20261027-refused-sign-in-reloads-once
+        from: Keyfleet chief, 27 October 2026, full precommit on 83363e79 counted three /account loads
+        test: platform/assets/test/session_leaving.test.ts
     gaps:
       - Privy's own email code, text message and Google pages cannot be reached from a test; a real sign-in with each is checked by hand on keyfleet.ai after release.
 

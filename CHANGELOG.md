@@ -5192,3 +5192,17 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   fail; the button shows why instead. Before, a press made while the page still
   showed another wallet's figures could reach Privy's wallet for a Key it does
   not hold, and the chain refused it (Mark present on Classic #1, 27 Oct).
+
+## 2026-10-27 — A refused sign-in reloads the page once
+
+- When the server refuses a sign-in and drops the browser's session, the page
+  reloads once and lands signed out. Before, the old page's live connection,
+  told by the server to drop, could ask for a new session while the reload was
+  already on its way. That late answer replaced the reloaded page's cookie, its
+  connection was refused, and the page loaded a third time.
+- `holdAdoptionWhileLeaving` in `platform/assets/js/auth_lazy.ts`: from
+  `beforeunload` on, a page's held live connection asks the server for nothing;
+  the page that replaces it reads its own session. Checked by
+  `platform/assets/test/session_leaving.test.ts` (fails without the change) and
+  the browser test "a rejected bearer leaves the browser anonymous…", which
+  failed 3 of 17 runs alone before and passed 40 of 40 after.

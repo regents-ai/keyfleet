@@ -10,6 +10,7 @@ import {hooks as colocatedHooks} from "phoenix-colocated/keyfleet"
 import {composeHooks, type Hook} from "./hook_composition"
 import {
   browserCsrfToken,
+  holdAdoptionWhileLeaving,
   holdSocketDuringCookieRotation,
   installAccountAuthLazyLoader,
   installCrossTabCsrf,
@@ -340,6 +341,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
 // subject to the barrier. `types.d.ts` describes only the LiveSocket surface
 // this application calls, so the transport entry point is named at the cast.
 holdSocketDuringCookieRotation(liveSocket.getSocket() as PinnedSocket)
+holdAdoptionWhileLeaving()
 // Started before the first connect, so a page rendered for a refused cookie
 // holds its socket until that cookie is retired.
 void retireRefusedSession()
