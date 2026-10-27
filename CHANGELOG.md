@@ -4945,3 +4945,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   were for people and crawlers.
 - Both API descriptions list the two new addresses, and the developer
   documentation names them.
+
+## 2026-10-26 — Newest Ash pages and background-jobs packages
+
+- ash_phoenix moves to 2.3.26 and ash_oban to 0.10.3, their newest releases.
+  Ash itself stays at 3.37.2, already the newest. Phoenix stays where it was.

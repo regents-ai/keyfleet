@@ -56,7 +56,7 @@ defmodule Keyfleet.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.6", override: true},
       {:ash, "~> 3.37"},
-      {:ash_phoenix, "~> 2.3.25"},
+      {:ash_phoenix, "~> 2.3.26"},
       # Regent's copy of 2.15.2 with ash-project/ash_postgres#910: upserts use the
       # repo's prefix, which picks each site's schema on the shared database. It
       # stands in for the Hex release that ash_money and ash_double_entry ask for.
@@ -72,7 +72,7 @@ defmodule Keyfleet.MixProject do
       {:mint_web_socket, "~> 1.0"},
       # The code gateway's connection to the fleets' code store.
       {:mint, "~> 1.11"},
-      {:ash_oban, "~> 0.10.0"},
+      {:ash_oban, "~> 0.10.3"},
       {:igniter, "== 0.8.4", only: [:dev, :test], runtime: false},
       {:mdex, "== 0.14.2"},
       {:regent_privy,
