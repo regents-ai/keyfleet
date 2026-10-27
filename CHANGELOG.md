@@ -5259,3 +5259,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - A disc's card's View now opens the Key's own page (`/classic/1/keys/N`), as
   Sean asked ("a 'View' button which goes to the Key page"), instead of the
   fleet page with the Key's profile open.
+
+## 2026-10-27 — Small icon buttons keep their own look
+
+- The plain-button defaults (a dark border, a 44 px floor and padding) now sit
+  in the lowest style layer, as ash-template has them, so every component's own
+  button rule wins over them. The pairing box's copy and new-code icons are small
+  and even again instead of sitting in large dark boxes of unequal height, and
+  the workspace pin and the idle-keys field show their own borders. The fleet
+  page's channel list (All, Chat, Work, Keys, Votes) now uses its own row height.
+- Checked in headless Chromium against the live pages at 1280 and 390 px, light
+  and dark: every public page draws the same except the pairing icons and the
+  channel list rows. WebKit not run on the Mac.
