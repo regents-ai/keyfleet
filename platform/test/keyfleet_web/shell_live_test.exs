@@ -157,18 +157,11 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#{box} input[name=harness][value=hermes][checked]")
   end
 
-  test "the side panel makes pairing codes only within the account's allowance",
+  # Sean, 27 Oct 2026: switching agents made a new code each time and soon said
+  # none could be made; each agent keeps its code until it expires.
+  test "each agent in the side panel keeps its own code until a new one is asked for",
        %{conn: conn} do
-    limits = Application.fetch_env!(:keyfleet, :limits)
-    on_exit(fn -> Application.put_env(:keyfleet, :limits, limits) end)
-
-    Application.put_env(
-      :keyfleet,
-      :limits,
-      Keyword.put(limits, :pairing_codes, limit: 1, window_seconds: 3600)
-    )
-
-    account = register_account("pairing-budget", "0x5555555555555555555555555555555555555555")
+    account = register_account("pairing-codes", "0x5555555555555555555555555555555555555555")
 
     {:ok, view, _html} =
       conn
@@ -176,15 +169,31 @@ defmodule KeyfleetWeb.ShellLiveTest do
       |> live("/account")
 
     box = "#shell-pairing-box"
+
+    code = fn html ->
+      Regex.run(~r/Pairing code: (?!X+\b)(\S+)/, html, capture: :all_but_first)
+    end
+
     html = view |> element(box) |> render_change(%{})
-    refute html =~ ~r/Pairing code: (?!X+\b)\S+/
+    assert code.(html) == nil
 
-    html = view |> element(box) |> render_change(%{"harness" => "hermes"})
-    assert [_, code] = Regex.run(~r/Pairing code: (?!X+\b)(\S+)/, html)
+    hermes = view |> element(box) |> render_change(%{"harness" => "hermes"}) |> code.()
+    codex = view |> element(box) |> render_change(%{"harness" => "codex"}) |> code.()
+    assert [_] = hermes
+    assert [_] = codex
+    refute hermes == codex
 
-    html = view |> element(box) |> render_change(%{"harness" => "hermes"})
-    refute html =~ code
-    refute html =~ ~r/Pairing code: (?!X+\b)\S+/
+    for _again <- 1..25 do
+      assert view |> element(box) |> render_change(%{"harness" => "hermes"}) |> code.() ==
+               hermes
+
+      assert view |> element(box) |> render_change(%{"harness" => "codex"}) |> code.() == codex
+    end
+
+    view |> element(box) |> render_change(%{"harness" => "hermes"})
+    new = view |> element(box) |> render_submit(%{"harness" => "hermes"}) |> code.()
+    assert [_] = new
+    refute new == hermes
   end
 
   test "the Account page lists a paired agent with its picture and harness", %{conn: conn} do

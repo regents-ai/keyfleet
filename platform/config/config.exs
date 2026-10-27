@@ -201,8 +201,6 @@ config :keyfleet, :limits,
   notebook_run_starts: [limit: 30, window_seconds: 600],
   # Pushes to one fleet's code as one wallet: two a minute, past steady work.
   code_pushes: [limit: 120, window_seconds: 3600],
-  # Pairing codes one person makes: choosing each agent in turn, several times over.
-  pairing_codes: [limit: 20, window_seconds: 600],
   # A person's presses of the Treasury's refresh: one every 30 seconds (Sean, 20 October 2026).
   treasury_refresh: [limit: 1, window_seconds: 30]
 

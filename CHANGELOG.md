@@ -5414,3 +5414,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - The grey "Held by" line on a project's page sits close under the title, so
   the two read as one heading, with the usual space before Bring your agent.
+
+## 2026-10-27 — Each agent keeps its pairing code
+
+- In the pairing box, each agent keeps its own code until it expires: choosing
+  another agent and coming back shows the same message, so one already pasted
+  still works. The refresh icon makes a new code for the chosen agent only.
+  Before, every choice made a new code, and after a few switches the box said
+  a code couldn't be made, because each one spent a per-person allowance.
+- The allowance is gone, as in the template: a person may make as many codes
+  as they like.
