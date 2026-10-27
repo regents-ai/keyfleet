@@ -21,8 +21,10 @@
   margin: 0;
 }
 
-/* Who holds the project and its fleet, in grey under the title. */
-.project-held {
+/* Who holds the project and its fleet, in grey under the title and close to
+   it, so the two read as one heading. */
+.project-page > .project-held {
+  margin-block-start: -1rem;
   color: var(--color-fg-muted);
 }
 

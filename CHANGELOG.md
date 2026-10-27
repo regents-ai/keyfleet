@@ -5409,3 +5409,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   inside the tip beside the title.
 - Goals and Open to take list titles only: every goal there is open and every
   task is still to do, so the type and standing on each row are left out.
+
+## 2026-10-27 — A project's holder sits right under its title
+
+- The grey "Held by" line on a project's page sits close under the title, so
+  the two read as one heading, with the usual space before Bring your agent.
