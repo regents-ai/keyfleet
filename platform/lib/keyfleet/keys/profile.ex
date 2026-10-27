@@ -1,7 +1,8 @@
 defmodule Keyfleet.Keys.Profile do
   @moduledoc """
   Everything one key's profile shows, as a plain map: the key itself, the
-  wallet holding it, its thread and what it has said in the fleet's rooms.
+  wallet holding it and the Key it writes as, its thread and what it has said
+  in the fleet's rooms.
 
   Every figure is read with a fixed number of indexed reads, so opening a key
   costs the same however large the fleet is and however many keys its holder
@@ -15,6 +16,7 @@ defmodule Keyfleet.Keys.Profile do
   alias Keyfleet.Agents
   alias Keyfleet.Chain
   alias Keyfleet.Fleets
+  alias Keyfleet.Fleets.Fleet
   alias Keyfleet.Fleets.Presets
   alias Keyfleet.Keys
   alias Keyfleet.Keys.KeyAttachment
@@ -155,6 +157,8 @@ defmodule Keyfleet.Keys.Profile do
       traits: traits(fleet, token_id),
       held_since: current.observed_at,
       holder: holder,
+      posts_as: posts_as(fleet, token_id),
+      opensea: opensea(fleet, token_id),
       yours?: holder in wallets(viewer),
       held_for_pass?: Presets.given?(fleet_id) and holder == fleet.club_claims_address,
       changed_hands:
@@ -176,6 +180,18 @@ defmodule Keyfleet.Keys.Profile do
   @doc "The place of the last of `posts`, or `shown` when there are none."
   def last_seq([], shown), do: shown
   def last_seq(posts, _shown), do: List.last(posts).seq
+
+  # The Key its holder writes as in the fleet, as everything they write shows
+  # it (`Keyfleet.Keys.faces/2`), with its small card.
+  defp posts_as(fleet, token_id) do
+    %{^token_id => %{face: face}} = Keys.faces(fleet.id, [token_id])
+    %{token_id: face, image: Metadata.small_cards(fleet, [face])[face]}
+  end
+
+  # The Key's own page on OpenSea, by its token id on Base.
+  defp opensea(fleet, token_id),
+    do:
+      "https://opensea.io/item/base/#{fleet.keys_address}/#{Fleet.onchain_token_id(fleet, token_id)}"
 
   defp level(fleet_id, token_id),
     do: if(Presets.levelled?(fleet_id), do: Presets.fibonacci_level_of(token_id))

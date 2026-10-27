@@ -71,7 +71,11 @@ defmodule KeyfleetWeb.Live.KeyProfileTest do
     assert text(view, "#key-profile-holder-address .rg-address__label") == "0xeeee..eeee"
     holder = wallet("e")
     assert has_element?(view, "#key-profile-holder-address-copy[data-copy-text='#{holder}']")
-    assert has_element?(view, "#key-profile-holder-opensea[href='https://opensea.io/#{holder}']")
+    fleet = Fleets.get_fleet!(@fleet)
+    item = "#{fleet.keys_address}/#{Fleets.Fleet.onchain_token_id(fleet, 12)}"
+    assert has_element?(view, "#key-profile-opensea[href='https://opensea.io/item/base/#{item}']")
+    # Its holder chose no Key to post as, so posts as their lowest.
+    assert text(view, "#key-profile-posts-as") == "Posts as Key 3"
 
     assert has_element?(
              view,

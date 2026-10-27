@@ -5,9 +5,11 @@ defmodule KeyfleetWeb.Components.MemberList do
   account, with the Keys at every address it links counted together; Keys at
   an address no account links make a card of their own. Each card names the
   person (their chosen name over their short main address, else their ENS
-  name, else their short main address), how many Keys they hold with the lowest as small cards opening
-  each Key, their connected X, GitHub and Farcaster accounts, and whether they
-  are active: a Key of theirs can vote now, as the Treasury counts presence.
+  name, else their short main address), how many Keys they hold as small cards
+  opening each Key, the Key they post as first in a slot of its own and then
+  their lowest, their connected X, GitHub and Farcaster accounts, and whether
+  they are active: a Key of theirs can vote now, as the Treasury counts
+  presence.
   `club_claims` is the address the Regents Club's Keys wait at for their Pass
   holders, left out of the list; nil for a fleet with none.
 
@@ -89,7 +91,23 @@ defmodule KeyfleetWeb.Components.MemberList do
   defp cards(fleet_id, deck, holders) do
     wallets = Enum.flat_map(holders, & &1.wallets)
     held = Keys.lowest_held(fleet_id, wallets, @cards_shown)
-    pictures = pictures(deck, held |> Map.values() |> List.flatten())
+
+    lowest =
+      Map.new(
+        holders,
+        &{&1.wallets,
+         &1.wallets |> Enum.flat_map(fn w -> Map.get(held, w, []) end) |> Enum.sort()}
+      )
+
+    faces = Keys.faces(fleet_id, for({_own, [first | _rest]} <- lowest, do: first))
+
+    shown =
+      Map.new(lowest, fn {own, [first | _rest] = keys} ->
+        face = Map.fetch!(faces, first).face
+        {own, Enum.take([face | List.delete(keys, face)], @cards_shown)}
+      end)
+
+    pictures = pictures(deck, shown |> Map.values() |> List.flatten())
     present = Keys.present_holders(fleet_id, wallets)
     idle = Keys.idle_holders(fleet_id, wallets)
     last_active = Keys.last_active(fleet_id, wallets)
@@ -99,9 +117,7 @@ defmodule KeyfleetWeb.Components.MemberList do
     for %{account_id: account_id, wallets: own, count: count} <- holders do
       account = accounts[account_id]
       {name, address, label} = who(account, own)
-
-      shown =
-        own |> Enum.flat_map(&Map.get(held, &1, [])) |> Enum.sort() |> Enum.take(@cards_shown)
+      [face | _rest] = shown = shown[own]
 
       %{
         id: card_id(account, own),
@@ -116,7 +132,11 @@ defmodule KeyfleetWeb.Components.MemberList do
           |> Enum.map(&last_active[&1])
           |> Enum.reject(&is_nil/1)
           |> Enum.max(DateTime, fn -> nil end),
-        cards: for(token_id <- shown, do: %{token_id: token_id, image: pictures[token_id]}),
+        cards:
+          for(
+            token_id <- shown,
+            do: %{token_id: token_id, image: pictures[token_id], face?: token_id == face}
+          ),
         more: count - length(shown)
       }
     end
@@ -227,7 +247,8 @@ defmodule KeyfleetWeb.Components.MemberList do
             </a>
           </p>
           <ul class="fleet-entry__cards member-card__cards" aria-label="Keys held" tabindex="0">
-            <li :for={card <- holder.cards}>
+            <li :for={card <- holder.cards} class={card.face? && "member-card__face"}>
+              <span :if={card.face?} class="member-card__face-label">Posts as</span>
               <.link
                 id={"#{@id}-card-#{card.token_id}"}
                 class="fleet-entry__card"

@@ -1,9 +1,10 @@
 defmodule KeyfleetWeb.KeyProfileLive do
   @moduledoc """
   One key's profile, open over its fleet's page while the address names the
-  key: its card, what is known about it and the wallet holding it, the
-  messages written to it with a box to write one, and what it has said in the
-  fleet's Public room, which anyone can read.
+  key: its card beside, first, who holds it, the Key they post as and the
+  Key's page on OpenSea, what it has to claim, and the messages written to it
+  with a box to write one; then what is known about it, its shards, and what
+  it has said in the fleet's Public room, which anyone can read.
 
   Closing it takes the key out of the address: by going back when the page
   opened it, so Back and Close agree, and by replacing the address when the
@@ -100,7 +101,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
         <.next_key :if={not @profile.issued?} profile={@profile} />
 
         <%= if @profile.issued? do %>
-          <.facts profile={@profile} />
+          <.holder profile={@profile} params={@params} />
           <.reveal
             :if={is_nil(@profile.traits)}
             profile={@profile}
@@ -122,8 +123,9 @@ defmodule KeyfleetWeb.KeyProfileLive do
             actor={@actor}
             lease={@lease}
           />
-          <.holder profile={@profile} params={@params} />
           <.thread profile={@profile} fleet={@fleet} params={@params} thread={@thread} />
+          <.facts profile={@profile} />
+          <.shards profile={@profile} />
           <.recent_posts profile={@profile} params={@params} />
         <% end %>
       </div>
@@ -246,26 +248,34 @@ defmodule KeyfleetWeb.KeyProfileLive do
           <dt>Wall posts</dt>
           <dd id="key-profile-messages">{Rules.grouped(@profile.messages)}</dd>
         </div>
-        <div>
-          <dt>Shards</dt>
-          <dd :if={@profile.shards == []} id="key-profile-shards">None</dd>
-          <dd :if={@profile.shards != []} id="key-profile-shards">
-            <ul class="key-profile-shards">
-              <li :for={shard <- @profile.shards} id={"key-profile-shard-#{shard.wallet}"}>
-                <.shard_agent shard={shard} seen={@profile.seen[shard.wallet]} />
-                · until {day(shard.expires_at)}
-              </li>
-            </ul>
-          </dd>
-        </div>
       </dl>
-      <.link
-        :if={@profile.yours?}
-        id="key-profile-manage"
-        patch={KeyLinks.page_path(@profile.fleet_id, @profile.token_id)}
-      >
-        Manage shards
-      </.link>
+    </section>
+    """
+  end
+
+  attr :profile, :map, required: true
+
+  # The agents lent a shard of the Key, one row each.
+  defp shards(assigns) do
+    ~H"""
+    <section class="key-profile__section" aria-labelledby="key-profile-shards-title">
+      <div class="key-profile__section-head">
+        <h3 id="key-profile-shards-title">Shards</h3>
+        <.link
+          :if={@profile.yours?}
+          id="key-profile-manage"
+          patch={KeyLinks.page_path(@profile.fleet_id, @profile.token_id)}
+        >
+          Manage shards
+        </.link>
+      </div>
+      <p :if={@profile.shards == []} id="key-profile-shards" class="key-profile-muted">None</p>
+      <ul :if={@profile.shards != []} id="key-profile-shards" class="key-profile-shards">
+        <li :for={shard <- @profile.shards} id={"key-profile-shard-#{shard.wallet}"}>
+          <.shard_agent shard={shard} seen={@profile.seen[shard.wallet]} />
+          <span class="key-profile-status">Lent until {day(shard.expires_at)}</span>
+        </li>
+      </ul>
     </section>
     """
   end
@@ -284,8 +294,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
 
   defp shard_agent(assigns) do
     ~H"""
-    <.agent_picture src={@shard.agent.avatar_src} />
-    {@shard.agent.name} · {@shard.agent.harness}
+    <span class="key-profile-shard__who">
+      <.agent_picture src={@shard.agent.avatar_src} />
+      <strong>{@shard.agent.name}</strong>
+      <span class="key-profile-muted">{@shard.agent.harness}</span>
+    </span>
     <a
       :if={@shard.agent.registry_url}
       id={"key-profile-registry-#{@shard.wallet}"}
@@ -492,23 +505,44 @@ defmodule KeyfleetWeb.KeyProfileLive do
   attr :profile, :map, required: true
   attr :params, :map, required: true
 
-  # Another of the holder's keys opens in place of this one, without adding a
-  # step to go back through.
+  # Another of the holder's keys, the one they post as among them, opens in
+  # place of this one, without adding a step to go back through.
   defp holder(assigns) do
     ~H"""
-    <section class="key-profile__section" aria-labelledby="key-profile-holder-title">
+    <section
+      id="key-profile-owner"
+      class="key-profile__section"
+      aria-labelledby="key-profile-holder-title"
+    >
       <div class="key-profile-holder">
         <h3 id="key-profile-holder-title">Held by {held_by(@profile)}</h3>
         <Regent.Primitives.address id="key-profile-holder-address" address={@profile.holder} />
-        <a
-          id="key-profile-holder-opensea"
-          href={"https://opensea.io/#{@profile.holder}"}
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          OpenSea
+        <a id="key-profile-opensea" href={@profile.opensea} rel="noopener noreferrer" target="_blank">
+          View on OpenSea
         </a>
       </div>
+      <.link
+        :if={not @profile.held_for_pass?}
+        id="key-profile-posts-as"
+        class="key-profile-posts-as"
+        patch={KeyLinks.key_path(@profile.fleet_id, @profile.posts_as.token_id, @params)}
+        replace
+        aria-current={@profile.posts_as.token_id == @profile.token_id && "true"}
+      >
+        <img
+          :if={@profile.posts_as.image}
+          src={@profile.posts_as.image}
+          alt=""
+          width="40"
+          height="50"
+          loading="lazy"
+          decoding="async"
+        />
+        <span :if={!@profile.posts_as.image} class="fleet-entry__blank"></span>
+        <span class="key-profile-posts-as__words">
+          Posts as <strong>Key {Rules.grouped(@profile.posts_as.token_id)}</strong>
+        </span>
+      </.link>
       <dl class="key-profile-facts">
         <div>
           <dt>Keys in this fleet</dt>

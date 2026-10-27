@@ -5376,3 +5376,16 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The migration adds the column and turns it on for Virtual Cell in Classic #1,
   as the founder chose (KF-PROJECT-PUBLIC b).
 - The agent guide names the page.
+
+## 2026-10-27 — Key page and member list: the posts-as Key first
+
+- The Member List leads each person's row with the Key they post as, in a
+  framed "Posts as" slot of its own, then their lowest Keys.
+- A Key's page puts its owner first: who holds it, the Key they post as and
+  the Key's own OpenSea page. Its claims and its post wall come next. About
+  this Key and Shards follow as lined rows, each shard a row of its own, and
+  the card's dark stage sits inside the window's white edge.
+- A person whose Keys sit at several of their addresses now has them counted
+  together when the site works out which Key they post as; before, Keys at an
+  address other than the one holding the asked-for Key were left out, which
+  could show the wrong posts-as Key in the list and in the city.

@@ -124,12 +124,13 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     move!(10, second)
     move!(8, loose)
 
-    Accounts.register_verified!(
-      "did:privy:member-list",
-      String.upcase(main),
-      [main, first, String.replace_prefix(String.upcase(second), "0X", "0x")],
-      actor: %Keyfleet.Actors.System{}
-    )
+    account =
+      Accounts.register_verified!(
+        "did:privy:member-list",
+        String.upcase(main),
+        [main, first, String.replace_prefix(String.upcase(second), "0X", "0x")],
+        actor: %Keyfleet.Actors.System{}
+      )
 
     {:ok, view, _html} = live(conn, @members_path)
 
@@ -143,6 +144,15 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert shown_keys(view, main) == [7, 9, 10]
     refute render(view) =~ RegentFormat.short_address(first)
     assert shown_keys(view, loose) == [8]
+
+    # The Key the person chose to post as leads their row, in its own slot.
+    person = %Actors.Human{human_account_id: account.id, wallet_addresses: [main, first, second]}
+    {:ok, _choice} = Keys.choose_posting_key(@fleet, 10, actor: person)
+    {:ok, view, _html} = live(conn, @members_path)
+
+    assert shown_keys(view, main) == [10, 7, 9]
+    assert text(view, "#fleet-members-holder-#{main} .member-card__face-label") == "Posts as"
+    assert has_element?(view, ".member-card__face #fleet-members-card-10")
   end
 
   # A typed name could read like an ENS name, so the main address sits beside

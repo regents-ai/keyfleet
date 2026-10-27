@@ -512,7 +512,11 @@ defmodule Keyfleet.Keys do
     linked = linked_to(owners |> Map.values() |> Enum.uniq())
     account_ids = linked |> Map.values() |> Enum.uniq()
     wallets = account_wallets(account_ids)
-    holder = fn wallet -> linked[wallet] || wallet end
+    # Every address of those accounts, not only the ones holding `token_ids`.
+    holders =
+      for {account_id, own} <- wallets, wallet <- own, into: linked, do: {wallet, account_id}
+
+    holder = fn wallet -> holders[wallet] || wallet end
     addresses = fn holder -> Map.get(wallets, holder, [holder]) end
 
     held =

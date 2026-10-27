@@ -100,15 +100,35 @@
   align-items: center;
 }
 
+/* Each part of the profile is its own section under a rule. */
 .key-profile__section {
   display: grid;
   gap: 0.85rem;
   min-width: 0;
 }
 
+.key-profile__section + .key-profile__section {
+  padding-block-start: 1.5rem;
+  border-block-start: 1px solid var(--color-border);
+}
+
+/* A heading with a tip beside it keeps the tip on its line. */
 .key-profile__section h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
   margin: 0;
   font-size: 1.1rem;
+}
+
+/* A section's title with its one link at the other end. */
+.key-profile__section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
 }
 
 /* "Held by", with what a person can do with that address beside it. */
@@ -123,10 +143,46 @@
   color: inherit;
 }
 
+/* The Key its holder posts as, its small card beside its number. */
+.key-profile-posts-as {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  justify-self: start;
+  padding: 0.35rem 0.75rem 0.35rem 0.35rem;
+  border: 1px solid var(--color-border);
+  text-decoration: none;
+}
+
+.key-profile-posts-as:hover {
+  border-color: var(--color-fg);
+}
+
+/* "Posts as" in grey over the Key's number. */
+.key-profile-posts-as__words {
+  display: grid;
+  color: var(--color-fg-muted);
+  font-size: 0.8rem;
+}
+
+.key-profile-posts-as__words strong {
+  color: var(--color-fg);
+  font-size: 1rem;
+}
+
+.key-profile-posts-as img,
+.key-profile-posts-as .fleet-entry__blank {
+  display: block;
+  inline-size: 2.5rem;
+  aspect-ratio: 767 / 959;
+  border: 1px solid var(--color-border);
+  object-fit: cover;
+}
+
 /* On a phone OpenSea and Manage shards are a full finger's height, level with
    the address's icons. */
 @media (max-width: 47.99rem) {
-  #key-profile-holder-opensea,
+  #key-profile-opensea,
   #key-profile-manage {
     display: inline-flex;
     align-items: center;
@@ -134,18 +190,23 @@
   }
 }
 
+/* Facts are rows, a name and its figure, each under a rule; two columns
+   where they fit. */
 .key-profile-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-  gap: 0.85rem 1.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  column-gap: 2rem;
   margin: 0;
 }
 
 .key-profile-facts div {
-  display: grid;
-  align-content: start;
-  gap: 0.2rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
   min-width: 0;
+  padding-block: 0.6rem;
+  border-block-end: 1px solid var(--color-border);
 }
 
 .key-profile-facts dt {
@@ -155,7 +216,32 @@
 
 .key-profile-facts dd {
   margin: 0;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+/* Each shard is a row: its agent, then what is known about it. */
+.key-profile-shards {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-block-start: 1px solid var(--color-border);
+  list-style: none;
+}
+
+.key-profile-shards li {
+  display: grid;
+  gap: 0.2rem;
+  padding-block: 0.75rem;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.key-profile-shard__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
 }
 
 /* Each kind of reward waiting is its own line, never run into the next. */
@@ -243,11 +329,10 @@
   white-space: nowrap;
 }
 
-/* The Key's picture, the same one its metadata names, its stage reaching
-   the column's edges. */
+/* The Key's picture, the same one its metadata names, its dark stage inside
+   the profile's white edge, so it reads as part of the window. */
 .key-profile-card {
   justify-self: stretch;
-  margin: calc(-1 * var(--key-profile-card-pad)) calc(-1 * var(--key-profile-card-pad)) 0;
   padding: clamp(1.25rem, 3vw, 2rem) var(--key-profile-card-pad);
 }
 
@@ -283,11 +368,6 @@
     overflow: visible;
   }
 
-  /* The stage starts right under the title bar, closing the gap above it. */
-  .key-profile-card {
-    margin-block-start: -1.5rem;
-  }
-
   .key-profile-card .key-card__tilt {
     width: auto;
     height: min(46svh, 36rem);
@@ -318,15 +398,6 @@
   .key-profile-card .key-card__tilt {
     width: min(58vw, 33svh);
     height: auto;
-  }
-
-  .key-profile-facts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  /* The shards, each with its agent's lines, take the whole width. */
-  .key-profile-facts > div:has(#key-profile-shards) {
-    grid-column: 1 / -1;
   }
 
   /* Close sits beside the title when they fit. With the message button too,
@@ -365,12 +436,4 @@
   .key-profile .rooms-composer {
     justify-items: stretch;
   }
-/* A heading with a tip beside it keeps the tip on its line. */
-.key-profile__section h3 {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 }
