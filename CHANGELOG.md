@@ -5278,3 +5278,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   a 390-wide phone: on phones the bar is tighter and its two buttons drop their
   arrows. On narrower screens the name takes the first row and Chat and
   Workspace stay together on the second, instead of Workspace dropping alone.
+
+## 2026-10-27 — Sign-ins: their change notices go out after they save
+
+- Binding, refreshing and ending a sign-in now run inside Ash's own
+  transaction, which sends each change's notices once it commits. Before, they
+  ran in a plain database transaction and Ash dropped the notices with a
+  "Missed 1 notifications" warning (Sentinel, 27 Oct). Nothing listens to
+  them yet, so nobody saw a difference; the warning stops.

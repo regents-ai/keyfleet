@@ -190,7 +190,7 @@ defmodule Keyfleet.Accounts.SessionAuthority do
   @spec revoke(claim() | nil) :: String.t() | nil
   def revoke(%{lineage: lineage}) do
     {:ok, _row} =
-      Repo.transaction(fn ->
+      Ash.transact(__MODULE__, fn ->
         ensure(lineage, DateTime.utc_now())
         lineage |> lock() |> revoke!()
       end)
@@ -321,14 +321,15 @@ defmodule Keyfleet.Accounts.SessionAuthority do
 
   # Bind and refresh may ensure the unbound generation-zero row the claim names,
   # so the absent-row order of a race takes the same lock as the present-row one.
-  # `Repo.transaction`, not `Ash.transact`: an exhausted lineage is revoked and
-  # then answers `{:error, :reset}`, and that revocation must commit, while
-  # `Ash.transact` rolls back whenever the function returns an error.
+  # `Ash.transact` sends the change's notifications once it commits. The answer
+  # comes back wrapped: an exhausted lineage is revoked and then answers
+  # `{:error, :reset}`, and that revocation must commit, while `Ash.transact`
+  # rolls back whenever the function itself returns an error.
   defp locked(%{lineage: lineage, generation: generation}, callback) do
-    {:ok, result} =
-      Repo.transaction(fn ->
+    {:ok, {:answer, result}} =
+      Ash.transact(__MODULE__, fn ->
         if generation == 0, do: ensure(lineage, nil)
-        lineage |> lock() |> callback.()
+        {:answer, lineage |> lock() |> callback.()}
       end)
 
     result
