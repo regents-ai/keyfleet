@@ -4950,3 +4950,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 
 - ash_phoenix moves to 2.3.26 and ash_oban to 0.10.3, their newest releases.
   Ash itself stays at 3.37.2, already the newest. Phoenix stays where it was.
+
+## 2026-10-26 — The database library comes from the Ash team again
+
+- ash_postgres comes from ash-project/ash_postgres main at 55db7d44, which
+  carries our upsert fix (#910, merged 26 Oct) and four other fixes since
+  2.15.2. Regent's own copy is no longer used. Keyfleet moves to the Hex
+  release once one carries #910.

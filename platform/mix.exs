@@ -57,12 +57,13 @@ defmodule Keyfleet.MixProject do
       {:phoenix_live_view, "~> 1.2.6", override: true},
       {:ash, "~> 3.37"},
       {:ash_phoenix, "~> 2.3.26"},
-      # Regent's copy of 2.15.2 with ash-project/ash_postgres#910: upserts use the
-      # repo's prefix, which picks each site's schema on the shared database. It
-      # stands in for the Hex release that ash_money and ash_double_entry ask for.
+      # ash_postgres main after 2.15.2, with ash-project/ash_postgres#910: upserts
+      # use the repo's prefix, which picks each site's schema on the shared
+      # database. It stands in for the Hex release that ash_money and
+      # ash_double_entry ask for, until a release carries #910.
       {:ash_postgres,
-       git: "https://github.com/regents-ai/ash_postgres.git",
-       ref: "cc886ab3efc8b05d51b7b1f57e609341fb6a0873",
+       git: "https://github.com/ash-project/ash_postgres.git",
+       ref: "55db7d449aad351d200c5f300fca2a83e0a8734c",
        override: true},
       {:oban, "~> 2.24"},
       # Each paired agent's activity, kept a few minutes for the side panel.
