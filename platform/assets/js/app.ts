@@ -1,8 +1,6 @@
 import "../css/app.css"
 import "../vendor/regent_ui/tip.mjs"
 
-// Asks before any element carrying data-confirm acts, such as ending a poll.
-import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/keyfleet"

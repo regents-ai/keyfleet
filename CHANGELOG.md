@@ -5531,3 +5531,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   See what it has done and Unpair sit on their own line under the name. Before,
   they took a column that squeezed the name and check-in line to nothing and
   ran under the wallet's copy and explorer buttons.
+
+## 2026-10-27 — Every "are you sure?" asks in Keyfleet's own window
+
+- Deleting a project for good, ending a poll early and taking a post off your
+  Key's wall now ask in the same cut-corner window as Unpair, instead of the
+  browser's own box. Each keeps its question: "Delete <project> for good? Its
+  work, notebooks and code go with it.", "End this poll now? It takes no more
+  votes." and "Take this post off your wall? It can’t be put back."
+- The window opens with focus on the question. Cancel or Escape close it and
+  hand focus back to the button you pressed; only the window's own Delete, End
+  poll or Take it off goes ahead.
+- Nothing on Keyfleet uses the browser's confirm box any more.

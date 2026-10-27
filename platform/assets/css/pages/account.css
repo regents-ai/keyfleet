@@ -480,46 +480,6 @@ div.verified-connections__notice p {
   }
 }
 
-/* The question before an agent is unpaired, in a small window over the page. */
-.account-unpair {
-  --rg-dialog-size: 26rem;
-  color: var(--color-fg);
-  font-size: 1rem;
-}
-
-.account-unpair .rg-dialog__body {
-  display: grid;
-  gap: 1rem;
-}
-
-.account-unpair h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  line-height: 1.1;
-  overflow-wrap: anywhere;
-}
-
-/* The title takes focus when the window opens so it is read out first; it is
-   not something to press, so it shows no focus ring. */
-#app-shell .account-unpair h2:focus {
-  outline: none;
-}
-
-.account-unpair p {
-  margin: 0;
-}
-
-.account-unpair__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
-
-.account-unpair__actions form {
-  margin: 0;
-}
-
 /* Bring your agent (/pair): the pairing box keeps the width it has on a phone,
    so the agents' pictures stay together, and the page an agent starts at wraps
    rather than running off a narrow screen. On the narrowest screens the

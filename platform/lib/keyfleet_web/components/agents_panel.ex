@@ -20,6 +20,8 @@ defmodule KeyfleetWeb.AgentsPanel do
   """
   use KeyfleetWeb, :live_component
 
+  import KeyfleetWeb.Components.ConfirmDialog
+
   alias Keyfleet.Agents.ActivityReading
   alias Keyfleet.Capabilities
   alias Keyfleet.Credits
@@ -240,38 +242,24 @@ defmodule KeyfleetWeb.AgentsPanel do
             </:actions>
           </Regent.Account.agent_detail>
 
-          <Regent.Structure.dialog
+          <.confirm_dialog
             :if={@confirming}
             id="account-unpair-dialog"
-            class="account-unpair"
-            phx-hook="ModalDialog"
-            phx-mounted={JS.ignore_attributes(["open", "style"])}
-            data-close-event="cancel_unpair"
-            data-shown={@confirming.id}
-            aria-labelledby="account-unpair-title"
-            aria-describedby="account-unpair-about"
+            question={"Unpair #{@confirming.name}?"}
+            about="It will need a new code to pair again."
+            close="cancel_unpair"
+            shown={@confirming.id}
           >
-            <h2 id="account-unpair-title" tabindex="-1" data-modal-title>
-              Unpair {@confirming.name}?
-            </h2>
-            <p id="account-unpair-about">It will need a new code to pair again.</p>
-            <div class="account-unpair__actions">
-              <form method="dialog">
-                <P.button id="account-unpair-cancel" type="submit" variant="secondary">
-                  Cancel
-                </P.button>
-              </form>
-              <P.button
-                id="account-unpair-confirm"
-                type="button"
-                phx-click="unpair_agent"
-                phx-value-id={@confirming.id}
-                phx-target={@myself}
-              >
-                Unpair
-              </P.button>
-            </div>
-          </Regent.Structure.dialog>
+            <P.button
+              id="account-unpair-confirm"
+              type="button"
+              phx-click="unpair_agent"
+              phx-value-id={@confirming.id}
+              phx-target={@myself}
+            >
+              Unpair
+            </P.button>
+          </.confirm_dialog>
         </:footer>
       </Regent.Account.agents>
     </div>
