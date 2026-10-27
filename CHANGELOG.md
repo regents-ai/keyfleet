@@ -5008,3 +5008,13 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   event. Keyfleet already wrote a line for every page, because its session hooks
   make LiveView report params on every page; the line no longer depends on that.
   The visits walk now opens the home page first and expects "page /" once.
+
+## 2026-10-27 — One address per page: a slash at the end is not found
+
+- As ash-template 9dd2237: `KeyfleetWeb.Plugs.NoTrailingSlash`, right after
+  `RegentAgentAccess.Plug` in the endpoint, answers any address ending in a slash
+  other than the homepage as an address that names nothing: the not-found page,
+  or the API's `not_found` answer under /api. Before, every page also opened at
+  its address with a slash on the end (/about/, /classic/1/, /api/v1/fleets/).
+  The notebook and code gateways answer on their own hosts before it, and files
+  served by Plug.Static are unchanged. Check: `test/keyfleet_web/trailing_slash_test.exs`.

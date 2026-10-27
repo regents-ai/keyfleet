@@ -99,6 +99,10 @@ defmodule KeyfleetWeb.Endpoint do
     documents: &KeyfleetWeb.PublicDocuments.document/1,
     guide: "/llms.txt"
 
+  # After the error format is chosen, so a slash address is answered as any
+  # address that names nothing.
+  plug KeyfleetWeb.Plugs.NoTrailingSlash
+
   # The largest body the site takes is an agent's signed post or workspace
   # write, about 50 kilobytes, which SignedAgent reads under its own limit;
   # anything past a megabyte is refused before it is read.
