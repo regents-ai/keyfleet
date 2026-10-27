@@ -277,6 +277,8 @@ contract files.
 - KF-PROJ-GENERAL, Sean 27 Oct 2026: today's work becomes an archived General held by Key 3.
   Sean, 27 Oct 2026, with the release go: "For classic #1 it goes to key 3, and for regents
   club it goes to key 329."
+- KF-GENERAL-OTHERS b, Sean 27 Oct 2026: the fleets still coming soon also start with an
+  archived General held by Key 3.
 - KF-PROJ-GENERAL-KEEP a, Sean 27 Oct 2026 (through the Keyfleet chief): General can never
   be deleted, by any Key, whatever its state.
 - KF-PULSE-NAME, Sean 27 Oct 2026: "Agent of Key 3 acted on such and such" when an agent
