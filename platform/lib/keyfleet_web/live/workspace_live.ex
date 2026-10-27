@@ -28,6 +28,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.PageRead
+  alias KeyfleetWeb.ProjectPage
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WorkspacePage
 
@@ -221,7 +222,27 @@ defmodule KeyfleetWeb.WorkspaceLive do
         >
           Delete {@on_show.title}
         </Regent.Primitives.button>
+        <Regent.Primitives.button
+          :if={@on_show && @on_show.key == @board.you.key}
+          id="project-show"
+          variant="secondary"
+          phx-click="project_show"
+          phx-value-project={@on_show.name}
+          phx-value-shown={to_string(not @on_show.shown_to_everyone)}
+        >
+          {if @on_show.shown_to_everyone,
+            do: "Show its page’s work to members only",
+            else: "Show its page’s work to everyone"}
+        </Regent.Primitives.button>
       </div>
+      <p :if={@on_show} id="project-page-link">
+        <.link navigate={ProjectPage.path(@board.fleet_id, @on_show.name)}>
+          {@on_show.title}’s page
+        </.link>
+        · {if @on_show.shown_to_everyone,
+          do: "shows its work to everyone",
+          else: "shows its work to members"}
+      </p>
       <p :if={@notice} id="project-notice" class="workspace-notebooks-notice" role="status">
         {@notice}
       </p>
@@ -1924,6 +1945,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   def handle_event("project_delete", %{"project" => name}, socket),
     do: hold(socket, &Projects.delete_project(&1, &2, name, &3))
+
+  def handle_event("project_show", %{"project" => name, "shown" => shown}, socket),
+    do: hold(socket, &Projects.show_project(&1, &2, name, shown == "true", &3))
 
   def handle_event(
         "notebook_lock",

@@ -53,6 +53,37 @@ defmodule Keyfleet.Graph.ShownTest do
            ]
   end
 
+  # A visitor reads a project's work only once the Key holding it shows it.
+  test "a project's page lists its work only once its Key shows it to everyone" do
+    project = Workspace.start_project(@fleet, "lab", "Lab")
+    goal("Try the new model", project: "lab")
+    Workspace.create(@fleet, "task", %{"title" => "Draft the price"}, project: "lab")
+
+    hidden = KeyfleetWeb.ProjectPage.read(@fleet, "lab")
+    assert hidden.goals == ["Try the new model"]
+    assert hidden.parts == nil
+    assert Ash.read!(work("lab")) == []
+
+    project
+    |> Ash.Changeset.for_update(:shown, %{shown_to_everyone: true, key: 20},
+      actor: %Keyfleet.Actors.System{}
+    )
+    |> Ash.update!()
+
+    shown = KeyfleetWeb.ProjectPage.read(@fleet, "lab")
+    assert shown.goals == nil
+    assert [%{title: "Draft the price"}] = shown.parts.work.items
+    assert [%{title: "Try the new model"}] = shown.parts.goals.items
+  end
+
+  defp work(project),
+    do:
+      Ash.Query.for_read(Keyfleet.Graph.Object, :shown, %{
+        fleet_id: @fleet,
+        project: project,
+        part: :work
+      })
+
   defp goal(title, opts \\ []),
     do: Workspace.create(@fleet, "goal", %{"title" => title, "outcome" => "O"}, opts)
 end

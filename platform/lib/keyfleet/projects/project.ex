@@ -26,6 +26,10 @@ defmodule Keyfleet.Projects.Project do
   notebook space and its first repository (`bootstrap_general`). No Key ever
   deletes it (`Keyfleet.Projects.Validations.NotGeneral`).
 
+  The Key holding a project chooses whether its page shows anyone its work
+  (`show`, `shown_to_everyone`): its goals, its latest work, what it produced
+  and the tasks open to take, each by title. It starts shown to members only.
+
   Every fleet also has two shared projects, active and held by no Key
   (`shared`): `scratchpad`, where each Key has a notebook of its own
   (`Keyfleet.Notebooks.Scratchpads`), and `understanding`, the fleet's notes on
@@ -144,6 +148,16 @@ defmodule Keyfleet.Projects.Project do
     # The four Key steps call `Hold` from a function, so a change to it
     # recompiles nothing here.
 
+    # A project's page as anyone reads it: the project, whether its page shows
+    # its work to everyone, and nothing else.
+    read :page do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :name, :string, allow_nil?: false, constraints: [trim?: false]
+      filter expr(fleet_id == ^arg(:fleet_id) and name == ^arg(:name) and state != :deleted)
+      prepare build(select: [:fleet_id, :name, :title, :key, :state, :shown_to_everyone])
+      get? true
+    end
+
     # A member starts a project as one of the fleet's Keys, which holds it.
     action :start, :struct do
       constraints instance_of: __MODULE__
@@ -188,6 +202,19 @@ defmodule Keyfleet.Projects.Project do
       validate Keyfleet.Projects.Validations.NotGeneral, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
       run fn input, context -> Hold.run(input, [step: :delete], context) end
+    end
+
+    # The Key holding a project shows its work to everyone on its page, or to
+    # members only again.
+    action :show, :struct do
+      constraints instance_of: __MODULE__
+      argument :fleet_id, :string, allow_nil?: false
+      argument :as_key, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
+      argument :name, :string, allow_nil?: false, constraints: [trim?: false]
+      argument :shown_to_everyone, :boolean, allow_nil?: false
+      validate KnownFleet
+      validate FreshOwnership, only_when_valid?: true
+      run fn input, context -> Hold.run(input, [step: :show], context) end
     end
 
     create :create do
@@ -268,6 +295,13 @@ defmodule Keyfleet.Projects.Project do
       change Keyfleet.Projects.Changes.Forget
     end
 
+    update :shown do
+      public? false
+      accept [:shown_to_everyone]
+      argument :key, :integer, allow_nil?: false
+      change filter(expr(state != :deleted and key == ^arg(:key)))
+    end
+
     update :record_space do
       accept [:hub_project_id]
       require_atomic? false
@@ -276,11 +310,11 @@ defmodule Keyfleet.Projects.Project do
   end
 
   policies do
-    policy action([:start, :archive, :take_over, :delete]) do
+    policy action([:start, :archive, :take_over, :delete, :show]) do
       authorize_if KeyActor
     end
 
-    policy action(:titles) do
+    policy action([:titles, :page]) do
       authorize_if always()
     end
 
@@ -299,6 +333,7 @@ defmodule Keyfleet.Projects.Project do
              :archived,
              :taken_over,
              :deleted,
+             :shown,
              :record_space,
              :by_repository,
              :locked_by_repository
@@ -328,6 +363,8 @@ defmodule Keyfleet.Projects.Project do
     attribute :state, :atom, allow_nil?: false, public?: true, constraints: [one_of: @states]
     attribute :repository, :string, allow_nil?: false, public?: true
     attribute :hub_project_id, :string, public?: true
+    # Whether the project's page shows its work to everyone, or to members only.
+    attribute :shown_to_everyone, :boolean, allow_nil?: false, default: false, public?: true
     create_timestamp :inserted_at, public?: true
   end
 

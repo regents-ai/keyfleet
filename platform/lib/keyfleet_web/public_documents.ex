@@ -82,6 +82,9 @@ defmodule KeyfleetWeb.PublicDocuments do
        "One saved change in {fleet}'s shared code on Keyfleet, and the work that cites it."},
     :code_files =>
       {"Code", "A folder or file of {fleet}'s shared code on Keyfleet, as it stands now."},
+    :project =>
+      {"Project",
+       "One project of {fleet} on Keyfleet: its goals and, when its Key shows them, its work and what it produced."},
     :proposals => {"Proposals", "What {fleet}'s Keys are voting on, and how each vote went."},
     :proposal => {"Proposal", "One proposal in {fleet}, with its votes and what it does."},
     :treasury =>

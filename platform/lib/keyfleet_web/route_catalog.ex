@@ -23,6 +23,8 @@ defmodule KeyfleetWeb.RouteCatalog do
   # A project's repository is named by its fleet's id, then, for any project
   # but `general`, a hyphen and the project's name.
   @repository ~r/\A[a-z0-9_]{1,64}(-[a-z0-9]+)*\z/
+  # A project is named as `Keyfleet.Projects.Project` names it.
+  @project ~r/\A[a-z0-9]+(-[a-z0-9]+)*\z/
   # A commit is named by its full hash, as git writes it.
   @commit ~r/\A([0-9a-f]{40}|[0-9a-f]{64})\z/
 
@@ -94,8 +96,8 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   # The pages every fleet has, each under the fleet's own address
   # (`Keyfleet.Fleets.path/1`): the fleet's page itself, whose hall also opens
-  # its rooms (`?room=`), then its workspace and its code, proposals, treasury
-  # and polls, and each of its Keys' pages and messages.
+  # its rooms (`?room=`), then its workspace and its code, each project's page,
+  # proposals, treasury and polls, and each of its Keys' pages and messages.
   @fleet_pages [
     {"", :fleet, %{}},
     {"/workspace", :workspace, %{}},
@@ -103,6 +105,7 @@ defmodule KeyfleetWeb.RouteCatalog do
     {"/code/:repository/commits/:commit", :code_commit,
      %{repository: :repository, commit: :commit}},
     {"/code/:repository/files", :code_files, %{repository: :repository}},
+    {"/projects/:project", :project, %{project: :project}},
     {"/proposals", :proposals, %{}},
     {"/proposals/:number", :proposal, %{number: :number}},
     {"/treasury", :treasury, %{}},
@@ -156,6 +159,7 @@ defmodule KeyfleetWeb.RouteCatalog do
       {:code_commit, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
     code_files:
       {:code_files, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
+    project: {:project, :product, "Keyfleet", "Project", "/", [:profile_actions], :product, %{}},
     proposals:
       {:proposals, :product, "Keyfleet", "Proposals", "/", [:profile_actions], :product, %{}},
     proposal:
@@ -222,6 +226,9 @@ defmodule KeyfleetWeb.RouteCatalog do
 
   defp valid_parameter?(:repository, value),
     do: is_binary(value) and Regex.match?(@repository, value)
+
+  defp valid_parameter?(:project, value),
+    do: is_binary(value) and String.length(value) <= 32 and Regex.match?(@project, value)
 
   defp valid_parameter?(:commit, value), do: is_binary(value) and Regex.match?(@commit, value)
 

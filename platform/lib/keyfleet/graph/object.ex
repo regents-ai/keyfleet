@@ -126,6 +126,45 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
+    # A project's work as its page shows anyone, once the Key holding it shows
+    # it to everyone (`Keyfleet.Projects.Project`): one part of it, the most
+    # recently changed first, not archived. `goals` are its open goals,
+    # `work` everything but goals and reviews, `outputs` its findings and its
+    # accepted tasks, `open` the tasks nobody has taken. Each comes with its
+    # title, type and standing alone. Callers bound it with a limit.
+    read :shown do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: @text
+
+      argument :part, :atom,
+        allow_nil?: false,
+        constraints: [one_of: [:goals, :work, :outputs, :open]]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and project == ^arg(:project) and
+                 fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys) and
+                 fragment(
+                   "EXISTS (SELECT 1 FROM keyfleet_app.projects AS shown WHERE shown.fleet_id = ? AND shown.name = ? AND shown.state <> 'deleted' AND shown.shown_to_everyone)",
+                   fleet_id,
+                   project
+                 ) and
+                 ((^arg(:part) == :goals and type == "goal" and
+                     fragment("(? ->> 'status') = 'open'", data)) or
+                    (^arg(:part) == :work and type not in ["goal", "review"]) or
+                    (^arg(:part) == :outputs and
+                       (type == "finding" or (type == "task" and review == "accepted"))) or
+                    (^arg(:part) == :open and type == "task" and
+                       fragment("(? ->> 'progress') = 'todo'", data) and
+                       fragment("(? ->> 'assignee_key') IS NULL", data)))
+             )
+
+      prepare build(
+                sort: [changed_seq: :desc],
+                select: [:fleet_id, :id, :type, :project, :changed_seq, :changed_at],
+                load: [:title, :standing]
+              )
+    end
+
     # The evidence that cites `uri` as its source and the tasks that name it
     # as their commit, the most recently changed first, archived ones
     # included.
@@ -336,8 +375,9 @@ defmodule Keyfleet.Graph.Object do
   end
 
   policies do
-    # The open goals a fleet shows anyone.
-    policy action(:open_goals) do
+    # The open goals a fleet shows anyone, and the work of the projects shown
+    # to everyone.
+    policy action([:open_goals, :shown]) do
       authorize_if always()
     end
 

@@ -37,6 +37,8 @@ defmodule KeyfleetWeb.ShellLive do
     PairLive,
     PointsLive,
     PollsLive,
+    ProjectLive,
+    ProjectPage,
     ProposalsLive,
     Read,
     RoomsLive,
@@ -96,6 +98,7 @@ defmodule KeyfleetWeb.ShellLive do
        slices: %Read{},
        connect_agent: nil,
        pair_start: nil,
+       project_page: nil,
        connect_paired: [],
        agents_topic: nil,
        credits: %Read{},
@@ -187,6 +190,7 @@ defmodule KeyfleetWeb.ShellLive do
        |> assign(route_spec: route_spec, send_agent_open: false)
        |> assign(:pair_start, PairLive.start(params))
        |> assign(PublicDocuments.page(route_spec, params))
+       |> load_project(route_spec, params)
        |> load_verified_connections(route_spec)
        |> load_account_page(route_spec)
        |> load_connect(route_spec, params)
@@ -246,6 +250,7 @@ defmodule KeyfleetWeb.ShellLive do
               :workspace_item,
               :code_commit,
               :code_files,
+              :project,
               :proposals,
               :proposal,
               :treasury,
@@ -700,6 +705,8 @@ defmodule KeyfleetWeb.ShellLive do
           held_keys={@held_keys}
         />
 
+        <ProjectLive.page :if={@route_spec.route_id == :project} project={@project_page} />
+
         <PairLive.page
           :if={@route_spec.route_id == :pair}
           account={current_account(@access_context)}
@@ -863,6 +870,21 @@ defmodule KeyfleetWeb.ShellLive do
   # is left out rather than the page.
   defp get_key?,
     do: match?({%{coming_soon?: false}, _degraded?}, FleetNow.fetch(get_key_fleet()))
+
+  # A project's page is read once, as it opens, and carries its title.
+  defp load_project(socket, %{route_id: :project}, %{
+         "fleet_id" => fleet_id,
+         "project" => name
+       }) do
+    project = ProjectPage.read(fleet_id, name)
+
+    assign(socket,
+      project_page: project,
+      page_title: project.title <> " · " <> project.fleet_name
+    )
+  end
+
+  defp load_project(socket, _route_spec, _params), do: assign(socket, :project_page, nil)
 
   # The page starts listening for changed keys before it reads, so a change
   # that lands while it loads still reaches it. The map is told when the key

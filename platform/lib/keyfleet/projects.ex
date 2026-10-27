@@ -19,7 +19,8 @@ defmodule Keyfleet.Projects do
   Every member of the fleet sees every project that is not deleted and works
   in any active one: membership is the fleet's, never a project's. Visitors
   see each project's title and the titles of the goals inside it, and
-  nothing else of the workspace.
+  nothing else of the workspace, unless the Key holding a project shows its
+  page's work to everyone.
 
   Acting as a Key is the same rule as every workspace write
   (`Keyfleet.Graph.Checks.KeyActor`). A project is never renamed or moved,
@@ -46,6 +47,12 @@ defmodule Keyfleet.Projects do
       define :archive_project, action: :archive, args: [:fleet_id, :as_key]
       define :take_over_project, action: :take_over, args: [:fleet_id, :as_key, :name]
       define :delete_project, action: :delete, args: [:fleet_id, :as_key, :name]
+
+      define :show_project,
+        action: :show,
+        args: [:fleet_id, :as_key, :name, :shown_to_everyone]
+
+      define :project_page, action: :page, args: [:fleet_id, :name], not_found_error?: false
       define :record_space, action: :record_space, args: [:hub_project_id]
     end
   end

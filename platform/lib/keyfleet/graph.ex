@@ -61,6 +61,7 @@ defmodule Keyfleet.Graph do
       define :goal_work, action: :around_goal, args: [:fleet_id, :goal_id]
       define :object_titles, action: :titled, args: [:fleet_id, :ids]
       define :open_goals, action: :open_goals, args: [:fleet_id]
+      define :shown_work, action: :shown, args: [:fleet_id, :project, :part]
       define :work_citing, action: :citing, args: [:fleet_id, :uri]
       define :tasks_assigned_to, action: :assigned_to_keys, args: [:fleet_id, :token_ids]
       define :reviews_asked_of, action: :review_asked_of, args: [:fleet_id, :token_ids]

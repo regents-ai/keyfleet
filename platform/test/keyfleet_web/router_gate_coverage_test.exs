@@ -49,7 +49,7 @@ defmodule KeyfleetWeb.RouterGateCoverageTest do
                  page <-
                    ["", "/workspace", "/workspace/:object_id"] ++
                      ["/code/:repository/commits/:commit", "/code/:repository/files"] ++
-                     ["/proposals"] ++
+                     ["/projects/:project", "/proposals"] ++
                      ["/proposals/:number", "/treasury", "/polls", "/polls/:poll_id"] ++
                      ["/keys/:token_id"] ++
                      ["/keys/:token_id/dms", "/keys/:token_id/dms/:other_token_id"],
