@@ -49,15 +49,14 @@ export type Street = readonly [number, number, number, number]
 export const CITY_REACH = 11
 /** The grid the swarm reads roofs from, in world units. */
 export const CELL = 0.5
-/** The red grid's height over the city, how far it reaches each way, and its spacing. */
-export const SKY_GRID = 12.2
+/** How far the red grid reaches each way over the city, and its spacing. */
 export const SKY_REACH = 6.6
 export const SKY_SPACING = 0.6
 /** The plaza's reach, and the half-width of an avenue. */
 export const PLAZA = 1.5
 export const AVENUE = 0.3
 
-/** Where each downtown's landmark tower tops out, for the district's card and its needle through the sky grid. */
+/** Where each downtown's landmark tower tops out, for the district's card. */
 export const CROWNS: Readonly<Record<Place, readonly [number, number, number]>> = {
   castle: [DISTRICTS.castle.x, 14.2, DISTRICTS.castle.z],
   forge: [DISTRICTS.forge.x + 0.3, 8.1, DISTRICTS.forge.z - 0.2],
@@ -257,6 +256,8 @@ function build(): {towers: Tower[]; streets: Street[]; corners: [number, number]
 const CITY = build()
 
 export const TOWERS: readonly Tower[] = CITY.towers
+/** The red grid's height: a clear floor above the tallest roof, so nothing rises through it. */
+export const SKY_GRID = Math.max(...TOWERS.map(tower => tower.top)) + 1
 /** The main streets, from the first cuts of the plate. */
 export const STREETS: readonly Street[] = CITY.streets
 /** Where blocks meet the streets round them. */

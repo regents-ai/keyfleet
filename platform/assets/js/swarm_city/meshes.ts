@@ -96,7 +96,7 @@ function skyLines(): Float32Array<ArrayBuffer> {
     for (const [x, z] of [[at, -SKY_REACH], [at, SKY_REACH], [-SKY_REACH, at], [SKY_REACH, at]] as const) line(x, SKY_GRID, z, x, 0, z, 1)
   }
   const roofs = new Set<string>()
-  const tallest = TOWERS.filter(tower => tower.top < SKY_GRID && Math.max(Math.abs(tower.x), Math.abs(tower.z)) < SKY_REACH)
+  const tallest = TOWERS.filter(tower => Math.max(Math.abs(tower.x), Math.abs(tower.z)) < SKY_REACH)
     .sort((a, b) => b.top - a.top)
   for (const tower of tallest) {
     const key = `${Math.round(tower.x * 2)},${Math.round(tower.z * 2)}`

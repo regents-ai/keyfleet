@@ -5018,3 +5018,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   its address with a slash on the end (/about/, /classic/1/, /api/v1/fleets/).
   The notebook and code gateways answer on their own hosts before it, and files
   served by Plug.Static are unchanged. Check: `test/keyfleet_web/trailing_slash_test.exs`.
+
+## 2026-10-27 — Swarm city: the sky grid clears the tallest tower
+
+- The red grid over the city now hangs one step above the tallest roof instead
+  of at a fixed height, so the castle's needle no longer rises through it.
+- The city's overview aims a little higher and stands a little further back,
+  so the raised grid stays whole inside the picture on a wide screen.
+- As ash-template f76f138, whose swarm city demo carries the same change.

@@ -31,7 +31,7 @@ const themeOf = (): Theme => document.documentElement.dataset.theme as Theme
 const PLACES: readonly Place[] = ["castle", "forge", "inn"]
 
 /** The whole city, seen from above its southern edge. */
-const OVERVIEW = {x: 0, y: 2.2, z: 0.4, yaw: 0.65, pitch: 0.62, distance: 36}
+const OVERVIEW = {x: 0, y: 5, z: 0.4, yaw: 0.65, pitch: 0.62, distance: 40}
 
 /** Space kept between a disc's name and the sides of the picture, in pixels. */
 const TAG_MARGIN = 4
