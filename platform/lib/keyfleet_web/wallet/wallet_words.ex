@@ -62,17 +62,11 @@ defmodule KeyfleetWeb.WalletWords do
   defp action({:pay, asset, to, share, amount}),
     do: "Pays #{share_words(asset, share, amount)} to #{RegentFormat.short_address(to)}."
 
-  defp action({:advance, _id, asset, operator, share, amount}),
-    do:
-      "Advances #{share_words(asset, share, amount)} to #{RegentFormat.short_address(operator)}."
-
   defp action({:rate, bps}),
     do: "Sets the Daily Treasury Slice to Keys to #{ProposalsPage.units(bps, 2)}%."
 
   defp action({:edits, target, true}), do: "Restricts Key #{Rules.grouped(target)}’s edits."
   defp action({:edits, target, false}), do: "Allows Key #{Rules.grouped(target)}’s edits."
-  defp action({:signature, :approve, _issued_at}), do: "Signs the fleet’s Lit wallet request."
-  defp action({:signature, :revoke, _issued_at}), do: "Withdraws the fleet’s signature."
   defp action({:launch, %{symbol: symbol}}), do: "Launches #{symbol} through Autolaunch."
 
   defp share_words(asset, share, amount),
@@ -108,7 +102,7 @@ defmodule KeyfleetWeb.WalletWords do
   defp problem(:days_unreadable), do: "From 1 to 365 days."
   defp problem(:share_unreadable), do: "From 0.0001% to 99%."
   defp problem(:rate_unreadable), do: "From 0.1% to 2%."
-  defp problem(:issued_at_unreadable), do: "The request time is a whole number, like 1790000000."
+  defp problem(:restricted_unreadable), do: "Choose Restrict or Allow."
   defp problem(:kind_unknown), do: "Choose what to propose."
   defp problem({:missing, name}), do: "#{field_name(name)} is empty."
 

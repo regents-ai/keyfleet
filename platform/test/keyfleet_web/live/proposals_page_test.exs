@@ -145,19 +145,29 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         image: "https://example.com/coin.png"
       }
 
-      actions = [
-        {:pay, @usdc, paid, 125_000},
-        {:advance, 5, operator, @eth, 100_000, "0x" <> String.duplicate("e", 64)},
-        {:rate, 75},
-        {:edits, 12, true},
-        {:signature, :approve, issued_at},
-        {:launch, launch}
+      # The site makes no advance or Lit approval, but a proposal made on the
+      # chain directly may, and its page says what it does.
+      treasury = &[{fleet.treasury_address, 0, Call.encode(&1, &2)}]
+      purpose = "0x" <> String.duplicate("e", 64)
+
+      encoded = [
+        Actions.encode({:pay, @usdc, paid, 125_000}, fleet),
+        treasury.("advance(uint256,address,address,uint32,bytes32)", [
+          5,
+          operator,
+          @eth,
+          100_000,
+          purpose
+        ]),
+        Actions.encode({:rate, 75}, fleet),
+        Actions.encode({:edits, 12, true}, fleet),
+        treasury.("approveLitCreateWallet(uint256)", [issued_at]),
+        Actions.encode({:launch, launch}, fleet)
       ]
 
       calls =
-        for action <- actions, {target, value, data} <- Actions.encode(action, fleet) do
-          %{target: target, value: value, data: data}
-        end
+        for {target, value, data} <- Enum.concat(encoded),
+            do: %{target: target, value: value, data: data}
 
       unknown = Call.encode("transferOwnership(address)", [paid])
 
@@ -607,7 +617,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
              )
 
       assert text(view, "#proposals-split-rate") ==
-               "0.75% of eligible balances, shared equally across issued Keys."
+               "0.75% of eligible balances, shared equally across Keys sold at least 2 days ago."
 
       assert text(view, "#proposals-split-next") ==
                "Next release: 21 September 2026 at 12:00 UTC."
@@ -670,7 +680,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {:ok, view, _html} = open(conn, @treasury_page)
 
       assert text(view, "#proposals-split-rate") ==
-               "1% of eligible balances, shared equally across issued Keys."
+               "1% of eligible balances, shared equally across Keys sold at least 2 days ago."
 
       refute has_element?(view, "#proposals-split-next")
       assert length(lines(view, "#proposals-history li")) == 20
@@ -779,8 +789,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       recipient = ProposalHelpers.wallet("b")
 
       ChainViews.put!(
-        list_views(keys: [{7, @holder, 0}], usdc_held: 100_000_000) ++
-          [{@votes, "proposalCount()", [], {"uint256", [4]}}],
+        list_views(keys: [{7, @holder, 0}], usdc_held: 100_000_000),
         balances: %{@treasury => 10 ** 18}
       )
 
@@ -815,13 +824,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         "Pays 12.5% of the treasury’s USDC (about 12.5 USDC today) to 0xbbbb..bbbb."
       )
 
-      # An advance takes the number the proposal is about to take.
-      expect.(
-        [kind: "advance", text: "Run the servers", asset: @eth, share: "50"],
-        {:advance, 5, recipient, @eth, 500_000, keccak("Run the servers")},
-        "Advances 50% of the treasury’s ETH (about 0.5 ETH today) to 0xbbbb..bbbb."
-      )
-
       expect.(
         [kind: "rate", rate: "0.75"],
         {:rate, 75},
@@ -838,18 +840,6 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
         [kind: "edits", restricted: "false"],
         {:edits, 12, false},
         "Allows Key 12’s edits."
-      )
-
-      expect.(
-        [kind: "signature", signature: "approve", issued_at: "1790000000"],
-        {:signature, :approve, 1_790_000_000},
-        "Signs the fleet’s Lit wallet request."
-      )
-
-      expect.(
-        [kind: "signature", signature: "revoke"],
-        {:signature, :revoke, 1_790_000_000},
-        "Withdraws the fleet’s signature."
       )
 
       launch = %{
@@ -1509,6 +1499,7 @@ defmodule KeyfleetWeb.Live.ProposalsPageTest do
       {@treasury, "lastRunAt()", [], {"uint256", [Keyword.get(opts, :last_run_at, 0)]}},
       {@treasury, "nextRunAt()", [], {"uint256", [Keyword.get(opts, :next_run_at, now() - 60)]}},
       {@fleet_contract, "totalMinted()", [], {"uint256", [Keyword.get(opts, :minted, 3)]}},
+      {@fleet_contract, "matureKeys()", [], {"uint256", [Keyword.get(opts, :minted, 3)]}},
       {@usdc, "decimals()", [], {"uint8", [6]}},
       {@usdc, "balanceOf(address)", [@treasury], {"uint256", [Keyword.get(opts, :usdc_held, 0)]}},
       {@fleet_contract, "protocolShareOwed()", [], {"uint256", [Keyword.get(opts, :owed, 0)]}}

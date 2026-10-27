@@ -7841,10 +7841,8 @@
             "enum": [
               "decision",
               "pay",
-              "advance",
               "rate",
               "edits",
-              "signature",
               "launch"
             ]
           },
@@ -7858,11 +7856,11 @@
           },
           "asset": {
             "type": "string",
-            "description": "pay and advance: the address of the asset paid, one the page offers."
+            "description": "pay: the address of the asset paid, one the page offers."
           },
           "recipient": {
             "type": "string",
-            "description": "pay and advance: the address paid."
+            "description": "pay: the address paid."
           },
           "rate": {
             "type": "string",
@@ -7879,18 +7877,6 @@
               "true",
               "false"
             ]
-          },
-          "signature": {
-            "type": "string",
-            "description": "signature: \"approve\" authorizes the treasury's Lit CreateWallet request, \"revoke\" withdraws that approval.",
-            "enum": [
-              "approve",
-              "revoke"
-            ]
-          },
-          "issued_at": {
-            "type": "string",
-            "description": "signature: the planned Lit CreateWallet request time, in Unix seconds, after the vote and execution delay."
           },
           "name": {
             "type": "string",
@@ -7914,7 +7900,7 @@
           },
           "share": {
             "type": "string",
-            "description": "pay and advance: percentage of the treasury balance, 0.0001 to 99. Voting lasts 24 hours."
+            "description": "pay: percentage of the treasury balance, 0.0001 to 99. Voting lasts 24 hours."
           }
         },
         "required": [

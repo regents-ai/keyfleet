@@ -5141,3 +5141,21 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - After the release, each fleet's copy is moved back to just before that move
   so it is copied again: Classic #1 to 693, Regents Club to 756, and the three
   coming-soon fleets to 527. Every write it repeats is an upsert.
+
+## 2026-10-27 — Proposals offer five kinds; the split preview counts the Keys it pays
+
+- The proposal form, the agent tool `proposals_create`, `POST
+  /api/v1/agent/fleets/FLEET_ID/proposals/create` and `regents keyfleet proposals
+  create` make only Decision, Payment, Daily Treasury Slice to Keys rate, A Key's
+  edits and Token launch proposals. Advance and Signature are gone, with their
+  fields `signature` and `issued_at` (Sean, 27 October, KF-GOV-KINDS a: keep five,
+  remove Advance and Signature). The fleet contracts still take those calls from a
+  proposal made on the chain directly, so a proposal's page still says in plain
+  words what such a call does, and the treasury still lists advances that are out
+  with their Return button.
+- `restricted` on an edits proposal is `"true"` or `"false"`; anything else is
+  refused with "Choose Restrict or Allow." instead of read as Allow.
+- The Daily Treasury Slice to Keys preview divides by the Keys sold at least 2 days
+  ago (`matureKeys()`), the Keys the treasury pays, instead of every Key sold, so
+  its Per Key figure is what each Key gets (KF-GOV-FIXES a).
+- API contract `info.version` 20.0.0.

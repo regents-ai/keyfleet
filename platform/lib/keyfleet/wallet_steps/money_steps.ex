@@ -33,8 +33,10 @@ defmodule Keyfleet.WalletSteps.MoneySteps do
          {:ok, bps} <- uint.(reads, "dailySplitBps()"),
          {:ok, last_run_at} <- uint.(reads, "lastRunAt()"),
          {:ok, next_run_at} <- uint.(reads, "nextRunAt()"),
+         # The split pays only Keys sold at least 2 days ago, as the treasury
+         # counts them.
          {:ok, keys} <-
-           Reads.one(reads, fleet.manager_address, "totalMinted()", [], {:uint, 256}),
+           Reads.one(reads, fleet.manager_address, "matureKeys()", [], {:uint, 256}),
          {:ok, preview} <- Reads.each(assets, &preview(reads, fleet, &1, bps, keys)) do
       opens_at = if next_run_at > 0, do: DateTime.from_unix!(next_run_at)
 

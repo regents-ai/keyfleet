@@ -31,7 +31,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
   @launch_fields [name: 64, symbol: 16, description: 512, website: 256, image: 256]
   # The kinds of proposal whose calls move money, which the vote contract
   # refuses during a fleet's first 7 days of sales.
-  @money_kinds ["pay", "advance", "signature", "launch"]
+  @money_kinds ["pay", "launch"]
 
   @doc false
   def steps(:ballot, %{fleet: fleet, signer: signer, proposal: proposal}) do
@@ -201,35 +201,15 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
     end
   end
 
-  # An advance is numbered with the number this proposal is about to take,
-  # which no other advance has.
-  defp action("advance", fleet, inputs, reads, text, figures) do
-    with {:ok, asset, share, amount, operator} <- payment(fleet, inputs, reads, figures),
-         {:ok, count} <- read(reads, fleet.votes_address, "proposalCount()", figures) do
-      id = count + 1
-
-      {:ok, {:advance, id, operator, asset.address, share, content_hash(text)},
-       {:advance, id, asset, operator, share, amount}}
-    end
-  end
-
   defp action("rate", _fleet, inputs, _reads, _text, figures) do
     with {:ok, bps} <- Build.typed(inputs, "rate", &Typed.rate/1, figures),
          do: {:ok, {:rate, bps}, {:rate, bps}}
   end
 
   defp action("edits", _fleet, inputs, _reads, _text, figures) do
-    restricted? = Build.field(inputs, "restricted") == "true"
-
     with {:ok, target} <- Build.typed(inputs, "target", &Typed.target/1, figures),
+         {:ok, restricted?} <- Build.typed(inputs, "restricted", &Typed.restricted/1, figures),
          do: {:ok, {:edits, target, restricted?}, {:edits, target, restricted?}}
-  end
-
-  defp action("signature", _fleet, inputs, _reads, _text, figures) do
-    way = if Build.field(inputs, "signature") == "revoke", do: :revoke, else: :approve
-
-    with {:ok, issued_at} <- Build.typed(inputs, "issued_at", &Typed.issued_at/1, figures),
-         do: {:ok, {:signature, way, issued_at}, {:signature, way, issued_at}}
   end
 
   defp action("launch", _fleet, inputs, _reads, _text, figures) do
@@ -247,7 +227,7 @@ defmodule Keyfleet.WalletSteps.VoteSteps do
          do: {:ok, {name, value}}
   end
 
-  # The token, share and wallet of a payment or an advance: a token the
+  # The token, share and wallet of a payment: a token the
   # treasury holds, by address, and a share of the treasury's balance of it,
   # in parts per million. The treasury pays that share of its balance when the
   # proposal is carried out; `amount` is what it comes to at the latest block.

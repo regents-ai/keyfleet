@@ -233,11 +233,12 @@ answer the steps, with blocked "No keys to use" when the wallet has none
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/proposals/create` → `buildProposal`
 - **Inputs:** `<fleet>`, and on stdin one JSON object, every value a string:
   `kind`, `key` and `text` (up to 4,000 bytes), plus the fields of its kind. Every vote
-  lasts 24 hours. `pay` and `advance`: `asset`, `share` (percent of the treasury's
-  balance of that asset, 0.0001 to 99) and `recipient`; for now the transaction names
-  the amount that share is at the latest block. `rate`: `rate`, the daily split in percent, 0.1 to 2. `edits`: `target`
-  and `restricted`. `signature`: `issued_at`, the time the treasury's Lit wallet request names, in seconds, and `signature` (`approve` or `revoke`).
-  `launch`: `name`, `symbol`, `description`, `website`, `image`.
+  lasts 24 hours. `kind` is `decision`, `pay`, `rate`, `edits` or `launch`. `pay`:
+  `asset`, `share` (percent of the treasury's balance of that asset, 0.0001 to 99) and
+  `recipient`; for now the transaction names the amount that share is at the latest
+  block. `rate`: `rate`, the daily split in percent, 0.1 to 2. `edits`: `target` and
+  `restricted` (`true` or `false`). `launch`: `name`, `symbol`, `description`,
+  `website`, `image`.
 
   ```sh
   echo '{"kind":"decision","key":"7","text":"Survey the hull first."}' \
@@ -245,7 +246,7 @@ answer the steps, with blocked "No keys to use" when the wallet has none
   ```
 
 - **Answer:** the transaction `propose`, with `kind`, `key`, `hours` (always 24),
-  `closes_at` (if it is sent now) and `content_hash`. For `pay` and `advance`, `says`
+  `closes_at` (if it is sent now) and `content_hash`. For `pay`, `says`
   names the share and about what it is today.
 - **Refusals:** 422 `invalid_proposal`: a field is missing or can't be read;
   `error.details.problem` says which. Nothing was kept. Words past the wallet's 20 an
@@ -269,7 +270,8 @@ answer the step, blocked "Not your key" unless the wallet may vote the key
 - **Server needs:** the `proposal_words` table; the chain read at the latest block.
 - **History:** 2026-10-07 added. 2026-10-07: every vote lasts 24 hours (`hours` input
   gone); `pay` and `advance` take `share` in place of `amount`. 2026-10-18: words past
-  20 an hour for the wallet are left unsaved.
+  20 an hour for the wallet are left unsaved. 2026-10-27: `advance` and `signature`
+  are gone, with `signature` and `issued_at`; `restricted` is `true` or `false` only.
 
 ## regents keyfleet proposals vote <fleet> <number> <choice>
 

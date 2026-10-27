@@ -39,7 +39,7 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   @hour 3_600
   @day 86_400
   @eth "0x0000000000000000000000000000000000000000"
-  @money ["pay", "advance", "signature", "launch"]
+  @money ["pay", "launch"]
   @propose "propose(uint256,bytes32,(address,uint256,bytes)[])"
   # The site's one-card test deck, every lab fleet's.
   @deck "0xf11579d3bd868d9a111bc512d814d04c0f10beb44fba7f3a92fa26eb67500356"
@@ -303,24 +303,6 @@ defmodule Keyfleet.WalletStepsAnvilTest do
       approved!(url, %{"kind" => "edits", "target" => "2", "restricted" => "true"})
       assert uint!(url, lab.votes, "editsRestricted(uint256)", [id(2)]) == 1
 
-      signed = lit_digest!(lab.treasury, 1_790_000_000)
-
-      approved!(url, %{
-        "kind" => "signature",
-        "signature" => "approve",
-        "issued_at" => "1790000000"
-      })
-
-      assert uint!(url, lab.treasury, "approvedHash(bytes32)", [signed]) == 1
-
-      approved!(url, %{
-        "kind" => "signature",
-        "signature" => "revoke",
-        "issued_at" => "1790000000"
-      })
-
-      assert uint!(url, lab.treasury, "approvedHash(bytes32)", [signed]) == 0
-
       # While a passed payment waits its day, No is the one ballot taken, and
       # here it cancels the payment.
       propose!(url, @buyer, pay)
@@ -340,22 +322,31 @@ defmodule Keyfleet.WalletStepsAnvilTest do
          %{url: url, lab: lab} do
       open_treasury!(url)
 
-      proposed =
-        approved!(url, %{
-          "kind" => "advance",
-          "asset" => lab.usdc,
-          "share" => "40",
-          "recipient" => @third,
-          "text" => "Hosting"
-        })
-
+      # The site makes no advance, but a proposal made on the chain directly
+      # may, and the site carries it out and takes it back like any other.
       usdc = lab.usdc
+      hosting = VoteSteps.content_hash("Hosting")
 
-      assert {:advance, 1, %{address: ^usdc}, @third, 400_000, 40_000_000} =
-               proposed.figures.action
+      advance =
+        Call.encode("advance(uint256,address,address,uint32,bytes32)", [
+          1,
+          @third,
+          usdc,
+          400_000,
+          hosting
+        ])
 
-      assert [@third, ^usdc, 40_000_000, purpose] = advance!(url, lab)
-      assert purpose == VoteSteps.content_hash("Hosting")
+      send!(
+        url,
+        @buyer,
+        lab.votes,
+        Call.encode(@propose, [id(1), hosting, [{lab.treasury, 0, advance}]])
+      )
+
+      scan!()
+      carried_out!(url, true)
+
+      assert [@third, ^usdc, 40_000_000, ^hosting] = advance!(url, lab)
 
       returned = build!(:return_advance, @third, advance_id: 1, inputs: %{"amount" => "15"})
       assert names(returned) == ["approve", "return"]
@@ -724,17 +715,23 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     built
   end
 
-  # A proposal made, voted yes with Keys 1 and 2, and carried out with its
-  # exact calls once its vote ends; one that moves money waits a day more,
-  # and a press during that day is refused. The steps it was proposed with.
+  # A proposal made and carried out; the steps it was proposed with.
   defp approved!(url, inputs) do
     proposed = propose!(url, @buyer, inputs)
+    carried_out!(url, inputs["kind"] in @money)
+    proposed
+  end
+
+  # The latest proposal, voted yes with Keys 1 and 2, and carried out with its
+  # exact calls once its vote ends; one that moves money waits a day more,
+  # and a press during that day is refused.
+  defp carried_out!(url, money?) do
     number = uint!(url, Fleets.get_fleet!(@fleet_id).votes_address, "proposalCount()")
     assert pressed(url, build!(:ballot, @buyer, proposal: number), "yes") == {:ok, :confirmed}
     skip!(url, @day + 1)
     carry_out = build!(:carry_out, @third, proposal: number)
 
-    if inputs["kind"] in @money do
+    if money? do
       assert %{"carry_out" => {:carry_out_from, from}} = carry_out.figures.blocked
       assert pressed(url, carry_out, "carry_out") == {:ok, :reverted}
       skip!(url, DateTime.to_unix(from) - timestamp!(url))
@@ -744,7 +741,6 @@ defmodule Keyfleet.WalletStepsAnvilTest do
     assert carry_out.figures.blocked == %{}
     assert pressed(url, carry_out, "carry_out") == {:ok, :confirmed}
     scan!()
-    proposed
   end
 
   # Moves the clock on to when proposals may move the treasury's money.
@@ -863,29 +859,6 @@ defmodule Keyfleet.WalletStepsAnvilTest do
   defp uint!(url, to, signature, arguments \\ []) do
     "0x" <> hex = view!(url, to, signature, arguments)
     String.to_integer(hex, 16)
-  end
-
-  # The digest Lit checks for the treasury's CreateWallet request at
-  # `issued_at`, worked out here from Lit's typed data: domain "Lit
-  # ChainSecured", version 1 and the chain id, no verifying contract.
-  defp lit_digest!(treasury, issued_at) do
-    hash = &ExKeccak.hash_256/1
-
-    domain =
-      hash.(
-        hash.("EIP712Domain(string name,string version,uint256 chainId)") <>
-          hash.("Lit ChainSecured") <> hash.("1") <> <<@chain_id::256>>
-      )
-
-    {:ok, owner} = RegentChain.Address.decode(treasury)
-
-    message =
-      hash.(
-        hash.("CreateWallet(address address,uint256 issuedAt)") <>
-          <<0::96>> <> owner <> <<issued_at::256>>
-      )
-
-    "0x" <> Base.encode16(hash.(<<0x19, 0x01>> <> domain <> message), case: :lower)
   end
 
   defp address!(url, to, signature, arguments \\ []) do

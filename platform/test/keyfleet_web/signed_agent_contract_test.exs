@@ -155,8 +155,6 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "rate" => "1",
        "target" => "1",
        "restricted" => "true",
-       "signature" => "approve",
-       "issued_at" => "1790000000",
        "name" => "Probe",
        "symbol" => "PRB",
        "description" => "A probe",
@@ -1096,6 +1094,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       uint.(fleet.treasury_address, "lastRunAt()", [], 0),
       uint.(fleet.treasury_address, "nextRunAt()", [], 0),
       uint.(fleet.manager_address, "totalMinted()", [], 0),
+      uint.(fleet.manager_address, "matureKeys()", [], 0),
       {usdc, "decimals()", [], {"uint8", [6]}},
       uint.(usdc, "balanceOf(address)", [fleet.treasury_address], 0)
     ])

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Keyfleet API
-  version: 19.0.0
+  version: 20.0.0
 paths:
   /api/v1/fleets/{fleet_id}/proposals:
     get:
@@ -6633,11 +6633,10 @@ components:
         Every field is a string, as the proposals page's form sends it. Every vote lasts 24
         hours. kind names what the proposal does, and the other fields it needs are those of its
         kind. decision: nothing more. pay: asset, share and recipient, paid from the treasury.
-        advance: asset, share and recipient, the operator the advance goes to. rate: rate. edits: target and
-        restricted. signature: issued_at and signature. launch: name, symbol, description, website
-        and image.
+        rate: rate. edits: target and restricted. launch: name, symbol, description, website and
+        image.
       properties:
-        kind: {type: string, enum: [decision, pay, advance, rate, edits, signature, launch]}
+        kind: {type: string, enum: [decision, pay, rate, edits, launch]}
         key: {type: string, description: "The Key the proposal is made with, in decimal"}
         text: {type: string, description: "The proposal's words, at most 4000 bytes once trimmed"}
         asset: {type: string, description: "The address of an asset the treasury pays in"}
@@ -6645,9 +6644,7 @@ components:
         recipient: {type: string, description: "A full wallet address"}
         rate: {type: string, description: "The daily split in percent, 0.1 to 2, with at most two decimals"}
         target: {type: string, description: "The Key whose workspace edits it restricts or frees, in decimal"}
-        restricted: {type: string, description: "\"true\" restricts the Key's workspace edits; anything else frees them"}
-        signature: {type: string, description: "\"revoke\" withdraws the treasury's approval of its Lit wallet request; anything else approves it"}
-        issued_at: {type: string, description: "The time the treasury's Lit wallet request names, in whole seconds since 1970, as Lit gives it"}
+        restricted: {type: string, enum: ["true", "false"], description: "\"true\" restricts the Key's workspace edits and \"false\" frees them"}
         name: {type: string, description: "The launched token's name, at most 64 bytes"}
         symbol: {type: string, description: "Its symbol, at most 16 bytes"}
         description: {type: string, description: "At most 512 bytes"}
@@ -6718,7 +6715,7 @@ components:
         chain_id: {$ref: "#/components/schemas/ChainId"}
         says: {$ref: "#/components/schemas/ChainSays"}
         transactions: {$ref: "#/components/schemas/ChainTransactions"}
-        kind: {type: string, enum: [decision, pay, advance, rate, edits, signature, launch]}
+        kind: {type: string, enum: [decision, pay, rate, edits, launch]}
         key: {type: integer, minimum: 1}
         hours: {type: integer, const: 24, description: "How long voting stays open"}
         closes_at: {type: string, format: date-time, description: When voting closes if it is sent now}

@@ -63,10 +63,8 @@ defmodule KeyfleetWeb.ProposalsLive do
   @kinds [
     {"decision", "Decision"},
     {"pay", "Payment"},
-    {"advance", "Advance"},
     {"rate", "Daily Treasury Slice to Keys rate"},
     {"edits", "A Key’s edits"},
-    {"signature", "Signature"},
     {"launch", "Token launch"}
   ]
 
@@ -534,7 +532,7 @@ defmodule KeyfleetWeb.ProposalsLive do
       <h2 id="propose-title">
         Propose
         <Regent.Primitives.tip id="propose-tip" label="About proposing">
-          Proposing with a Key you hold, or one you hold a shard of while its agent voting is on, opens a 24-hour vote. A payment or advance names one token and a share of the treasury’s balance of it when it is carried out, a day after its vote passes. Approved proposals are carried out exactly as written.
+          Proposing with a Key you hold, or one you hold a shard of while its agent voting is on, opens a 24-hour vote. A payment names one token and a share of the treasury’s balance of it when it is carried out, a day after its vote passes. Approved proposals are carried out exactly as written.
         </Regent.Primitives.tip>
       </h2>
       <.live_component
@@ -557,8 +555,6 @@ defmodule KeyfleetWeb.ProposalsLive do
             "rate" => "",
             "target" => "",
             "restricted" => "true",
-            "signature" => "approve",
-            "issued_at" => "",
             "name" => "",
             "symbol" => "",
             "description" => "",
@@ -591,7 +587,7 @@ defmodule KeyfleetWeb.ProposalsLive do
               value={panel.inputs["text"]}
             />
 
-            <div class="proposals-form" hidden={panel.inputs["kind"] not in ["pay", "advance"]}>
+            <div class="proposals-form" hidden={panel.inputs["kind"] != "pay"}>
               <.select_field
                 id="propose-asset"
                 name="asset"
@@ -642,22 +638,6 @@ defmodule KeyfleetWeb.ProposalsLive do
                 label="Edits"
                 value={panel.inputs["restricted"]}
                 options={[{"true", "Restrict"}, {"false", "Allow"}]}
-              />
-            </div>
-
-            <div class="proposals-form" hidden={panel.inputs["kind"] != "signature"}>
-              <.select_field
-                id="propose-signature"
-                name="signature"
-                label="Signature"
-                value={panel.inputs["signature"]}
-                options={[{"approve", "Sign"}, {"revoke", "Withdraw"}]}
-              />
-              <.text_field
-                id="propose-issued-at"
-                name="issued_at"
-                label="Request time"
-                value={panel.inputs["issued_at"]}
               />
             </div>
 
@@ -957,7 +937,7 @@ defmodule KeyfleetWeb.ProposalsLive do
           </Regent.Primitives.tip>
         </h3>
         <p :if={@treasury.read?} id="proposals-split-rate" class="proposals-detail">
-          {@treasury.split_rate} of eligible balances, shared equally across issued Keys.
+          {@treasury.split_rate} of eligible balances, shared equally across Keys sold at least 2 days ago.
         </p>
         <p
           :if={

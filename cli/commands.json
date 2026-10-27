@@ -181,7 +181,7 @@
           "field": "kind",
           "type": "string",
           "required": true,
-          "description": "decision, pay, advance, rate, edits, signature or launch."
+          "description": "decision, pay, rate, edits or launch."
         },
         {
           "field": "key",
@@ -199,19 +199,19 @@
           "field": "asset",
           "type": "string",
           "required": false,
-          "description": "pay and advance: the address of an asset the treasury pays in."
+          "description": "pay: the address of an asset the treasury pays in."
         },
         {
           "field": "share",
           "type": "string",
           "required": false,
-          "description": "pay and advance: the share of the treasury's balance of the asset, in percent, 0.0001 to 99."
+          "description": "pay: the share of the treasury's balance of the asset, in percent, 0.0001 to 99."
         },
         {
           "field": "recipient",
           "type": "string",
           "required": false,
-          "description": "pay and advance: the wallet paid."
+          "description": "pay: the wallet paid."
         },
         {
           "field": "rate",
@@ -229,19 +229,7 @@
           "field": "restricted",
           "type": "string",
           "required": false,
-          "description": "edits: true to restrict, false to free."
-        },
-        {
-          "field": "signature",
-          "type": "string",
-          "required": false,
-          "description": "signature: approve or revoke."
-        },
-        {
-          "field": "issued_at",
-          "type": "string",
-          "required": false,
-          "description": "signature: the time the treasury's Lit wallet request names, in seconds."
+          "description": "edits: true to restrict, false to free; nothing else."
         },
         {
           "field": "name",

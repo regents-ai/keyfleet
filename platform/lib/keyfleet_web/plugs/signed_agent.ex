@@ -130,7 +130,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # fields of its kind, each a string as the proposals page's form sends it.
   @propose_required ~w(kind key text)
   @propose_fields @propose_required ++
-                    ~w(asset share recipient rate target restricted signature issued_at name symbol description website image)
+                    ~w(asset share recipient rate target restricted name symbol description website image)
   @choices ~w(yes no abstain)
   # A direct message's parts sit beside its words, so it fits the same body
   # as a post.

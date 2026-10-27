@@ -141,16 +141,11 @@ defmodule Keyfleet.WalletSteps.Typed do
   end
 
   @doc """
-  The time a Lit request names, in whole seconds since 1970, as the request
-  gives it.
+  Whether a Key's edits are restricted: `"true"` or `"false"`, nothing else.
   """
-  def issued_at(text) do
-    entry = String.trim(text)
-
-    if Regex.match?(~r/\A\d{1,20}\z/, entry),
-      do: {:ok, String.to_integer(entry)},
-      else: {:error, :issued_at_unreadable}
-  end
+  def restricted("true"), do: {:ok, true}
+  def restricted("false"), do: {:ok, false}
+  def restricted(_text), do: {:error, :restricted_unreadable}
 
   @doc """
   Text up to `bytes` long, trimmed; nothing typed is `{:missing, name}` and

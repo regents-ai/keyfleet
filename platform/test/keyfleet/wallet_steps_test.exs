@@ -676,21 +676,7 @@ defmodule Keyfleet.WalletStepsTest do
       assert steps(built)["propose"].data == proposed(fleet, {:pay, @native, @third, 500_000})
     end
 
-    test "an advance takes the proposal's number and its text's hash", %{fleet: fleet} do
-      built =
-        propose(%{"kind" => "advance", "asset" => @usdc, "share" => "10", "recipient" => @third})
-
-      assert {:advance, 7, %{address: @usdc}, @third, 100_000, 250_000_000} =
-               built.figures.action
-
-      assert steps(built)["propose"].data ==
-               proposed(
-                 fleet,
-                 {:advance, 7, @third, @usdc, 100_000, VoteSteps.content_hash("Why")}
-               )
-    end
-
-    test "a rate change, an edits restriction and a signature", %{fleet: fleet} do
+    test "a rate change and an edits restriction", %{fleet: fleet} do
       assert steps(propose(%{"kind" => "rate", "rate" => "1.25"}))["propose"].data ==
                proposed(fleet, {:rate, 125})
 
@@ -698,13 +684,9 @@ defmodule Keyfleet.WalletStepsTest do
                "propose"
              ].data == proposed(fleet, {:edits, 7, true})
 
-      assert steps(
-               propose(%{
-                 "kind" => "signature",
-                 "signature" => "revoke",
-                 "issued_at" => " 1790000000 "
-               })
-             )["propose"].data == proposed(fleet, {:signature, :revoke, 1_790_000_000})
+      assert steps(propose(%{"kind" => "edits", "target" => "7", "restricted" => "false"}))[
+               "propose"
+             ].data == proposed(fleet, {:edits, 7, false})
     end
 
     test "a launch through Autolaunch names the fleet's treasury", %{fleet: fleet} do
@@ -740,8 +722,8 @@ defmodule Keyfleet.WalletStepsTest do
       assert %{problem: :rate_unreadable} = propose(%{"kind" => "rate", "rate" => "0.05"})
       assert %{problem: {:missing, :text}} = propose(%{"kind" => "decision", "text" => " "})
 
-      assert %{problem: :issued_at_unreadable} =
-               propose(%{"kind" => "signature", "issued_at" => "21 September"})
+      assert %{problem: :restricted_unreadable} =
+               propose(%{"kind" => "edits", "target" => "7", "restricted" => "flase"})
 
       assert %{problem: :no_key} = propose(%{"kind" => "decision", "key" => ""})
 
@@ -790,7 +772,8 @@ defmodule Keyfleet.WalletStepsTest do
           uint(fleet.treasury_address, "dailySplitBps()", 50),
           uint(fleet.treasury_address, "lastRunAt()", @now - 86_000),
           uint(fleet.treasury_address, "nextRunAt()", next_run_at),
-          uint(fleet.manager_address, "totalMinted()", 10),
+          uint(fleet.manager_address, "totalMinted()", 12),
+          uint(fleet.manager_address, "matureKeys()", 10),
           {@usdc, "decimals()", [], {"uint8", [6]}},
           uint(@usdc, "balanceOf(address)", [fleet.treasury_address], 50_000_000)
         ],
@@ -808,7 +791,8 @@ defmodule Keyfleet.WalletStepsTest do
                  usdc
              ] = built.figures.assets
 
-      # Half a percent of 1 ETH, shared by 10 keys; USDC is under its least.
+      # Half a percent of 1 ETH, shared by the 10 Keys sold at least 2 days
+      # ago, not all 12 sold; USDC is under its least.
       assert eth.per_key == 500_000_000_000_000
       assert eth.threshold == 50_000_000_000_000_000
       assert usdc.per_key == 0
@@ -973,15 +957,25 @@ defmodule Keyfleet.WalletStepsTest do
     test "each kind reads back as itself; anything else as a plain call", %{fleet: fleet} do
       hash = "0x" <> String.duplicate("cd", 32)
 
-      for action <- [
-            {:pay, @usdc, @third, 5},
-            {:advance, 3, @third, @native, 9, hash},
-            {:rate, 75},
-            {:signature, :approve, 1_790_000_000},
-            {:edits, 4, false}
-          ] do
+      for action <- [{:pay, @usdc, @third, 5}, {:rate, 75}, {:edits, 4, false}] do
         [{target, value, data}] = Actions.encode(action, fleet)
         assert Actions.decode(%{target: target, value: value, data: data}, fleet) == action
+      end
+
+      # The site makes no advance or Lit approval, but a proposal made on the
+      # chain directly may, and its page says so.
+      for {call, arguments, action} <- [
+            {"advance(uint256,address,address,uint32,bytes32)", [3, @third, @native, 9, hash],
+             {:advance, 3, @third, @native, 9, hash}},
+            {"approveLitCreateWallet(uint256)", [1_790_000_000],
+             {:signature, :approve, 1_790_000_000}},
+            {"revokeLitCreateWallet(uint256)", [1_790_000_000],
+             {:signature, :revoke, 1_790_000_000}}
+          ] do
+        data = Call.encode(call, arguments)
+
+        assert Actions.decode(%{target: fleet.treasury_address, value: 0, data: data}, fleet) ==
+                 action
       end
 
       [{_target, 0, data}] = Actions.encode({:rate, 75}, fleet)
@@ -995,15 +989,16 @@ defmodule Keyfleet.WalletStepsTest do
   end
 
   describe "what's typed" do
-    test "rates, shares, request times and text" do
+    test "rates, shares, edits and text" do
       assert Typed.rate("0.1") == {:ok, 10}
       assert Typed.rate("2") == {:ok, 200}
       assert Typed.rate("0.5") == {:ok, 50}
       assert Typed.rate("2.01") == {:error, :rate_unreadable}
       assert Typed.share(" 1.5 ") == {:ok, 15_000}
       assert Typed.share("99.0001") == {:error, :share_unreadable}
-      assert Typed.issued_at(" 1790000000 ") == {:ok, 1_790_000_000}
-      assert Typed.issued_at("1.5") == {:error, :issued_at_unreadable}
+      assert Typed.restricted("true") == {:ok, true}
+      assert Typed.restricted("false") == {:ok, false}
+      assert Typed.restricted("") == {:error, :restricted_unreadable}
       assert Typed.text("  hi ", :name, 2) == {:ok, "hi"}
       assert Typed.text("hey", :name, 2) == {:error, {:too_long, :name, 2}}
       assert Typed.keys("9 3,3") == {:ok, [3, 9]}
