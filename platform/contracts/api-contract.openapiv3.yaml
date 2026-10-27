@@ -1137,7 +1137,7 @@ paths:
       description: >-
         Deletes an archived project the Key as_key holds: its items leave every read and page,
         and its notebooks and repository are deleted. Its name is never used again. This cannot
-        be undone.
+        be undone. General can't be deleted.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
@@ -3689,7 +3689,7 @@ components:
         the work to it. project_no_active: the Key has no active project to archive.
         project_archive_full: the Key already holds five archived projects; delete one first.
         project_not_archived: only an archived project is taken over or deleted.
-        project_name_taken: the fleet has, or had, a project by that name. request_replayed: the
+        project_general_kept: General can't be deleted. project_name_taken: the fleet has, or had, a project by that name. request_replayed: the
         sign-in service has seen this signed request before; sign it again and send it.
       content:
         application/json:
@@ -4195,7 +4195,7 @@ components:
           properties:
             code:
               type: string
-              enum: [fleet_unknown, project_unknown, not_a_key_holder, edits_restricted, project_not_holder, project_active_held, project_no_active, project_archive_full, project_not_archived, project_name_taken, project_invalid, ownership_refreshing, graph_unavailable]
+              enum: [fleet_unknown, project_unknown, not_a_key_holder, edits_restricted, project_not_holder, project_active_held, project_no_active, project_archive_full, project_not_archived, project_general_kept, project_name_taken, project_invalid, ownership_refreshing, graph_unavailable]
             message: {type: string}
             hint: {type: string}
     ProjectClosedError:

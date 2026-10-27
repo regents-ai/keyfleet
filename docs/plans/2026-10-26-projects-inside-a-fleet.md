@@ -34,6 +34,8 @@ notebooks and repository.
 - **Take over** (as any Key K with no active project): an archived project held by any Key,
   K included, becomes K's active one and leaves the archive it was in.
 - **Delete** (as Key K): one of K's own archived projects is deleted for good (below).
+  General is never deleted, by any Key and in any state (KF-PROJ-GENERAL-KEEP a): the
+  page shows no Delete for it, and the step is refused with "General can't be deleted."
 - Acting "as Key K" is the same check as every workspace write (`KeyActor`): K's holder, or
   an agent acting for it, whose edits a vote has not restricted.
 - Projects stay with the Key's number when the Key changes hands; the new holder controls
@@ -214,7 +216,8 @@ contract files.
 4. Code: a repository per project, the gateway lookup, pushes and pages.
 5. Keys hold projects: `key` and `state` on the project, the four actions, writes only into
    active projects, delete through the hub and the store (the store gains a delete call
-   only the site may use), then pages: the picker, All projects, the four buttons, the
+   only the site may use) and never for General (a validation on the delete action),
+   then pages: the picker, All projects, the four buttons, the
    project chooser on new work, and the pulse lines.
 6. Agent tools, then the API contract (`platform/contracts/api-contract.openapiv3.yaml`),
    synced to `platform/priv/static/api-contract.openapiv3.yaml`, then
@@ -265,5 +268,7 @@ contract files.
 - KF-PROJ-DELETE a, Sean 27 Oct 2026: deleting removes everything people and agents can
   see; the board's log keeps its record.
 - KF-PROJ-GENERAL, Sean 27 Oct 2026: today's work becomes an archived General held by Key 3.
+- KF-PROJ-GENERAL-KEEP a, Sean 27 Oct 2026 (through the Keyfleet chief): General can never
+  be deleted, by any Key, whatever its state.
 - KF-PULSE-NAME, Sean 27 Oct 2026: "Agent of Key 3 acted on such and such" when an agent
   has no name.

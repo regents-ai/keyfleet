@@ -23,7 +23,8 @@ defmodule Keyfleet.Projects.Project do
 
   Every fleet has `general`, archived and held by Key 3, which holds the
   starting goals, the fleet's first notebook space and its first repository
-  (`bootstrap_general`).
+  (`bootstrap_general`). No Key ever deletes it
+  (`Keyfleet.Projects.Validations.NotGeneral`).
   """
   use Ash.Resource,
     domain: Keyfleet.Projects,
@@ -154,13 +155,15 @@ defmodule Keyfleet.Projects.Project do
       run fn input, context -> Hold.run(input, [step: :take_over], context) end
     end
 
-    # One of the acting Key's own archived projects is deleted for good.
+    # One of the acting Key's own archived projects, never `general`, is
+    # deleted for good.
     action :delete, :struct do
       constraints instance_of: __MODULE__
       argument :fleet_id, :string, allow_nil?: false
       argument :as_key, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
       argument :name, :string, allow_nil?: false, constraints: [trim?: false]
       validate KnownFleet
+      validate Keyfleet.Projects.Validations.NotGeneral
       validate FreshOwnership, only_when_valid?: true
       run fn input, context -> Hold.run(input, [step: :delete], context) end
     end

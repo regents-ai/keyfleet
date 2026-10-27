@@ -5065,7 +5065,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `projects_delete`). New work goes into any active project; an archived one takes no
   writes, no notebook changes and no pushes until a Key takes it over. A deleted
   project's items leave every read and page, its hub space and repository are deleted,
-  and its name is never used again.
+  and its name is never used again. General is never deleted, by any Key: the page
+  shows no Delete for it and the route answers 409 `project_general_kept`.
 - Every fleet, today's and new ones, has `general`, archived and held by Key 3, holding
   what the fleet already had: its goals, its notebook space and its repository
   (`<fleet>.git`, unchanged).

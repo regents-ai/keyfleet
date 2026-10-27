@@ -75,6 +75,9 @@ defmodule KeyfleetWeb.Refusal do
     "project_not_holder" =>
       {"Only the Key that holds an archived project deletes it.",
        "Act as the Key projects_list names for it, or take it over first."},
+    "project_general_kept" =>
+      {"General can't be deleted.",
+       "General keeps the fleet's starting goals, first notebooks and first repository. A Key with no active project can take it over with projects_take_over."},
     "fleet_coming_soon" =>
       {"This fleet hasn't opened yet.",
        "It has no rooms, workspace, proposals or Keys until it opens. GET /api/v1/fleets says when it has."},

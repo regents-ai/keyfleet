@@ -59,9 +59,10 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Lists the fleet's projects, active ones first, with its own Key's marked; starts, archives, takes over and deletes one as a Key, each answer and refusal as documented | `SignedAgentContractTest` (the project routes), `ApiContractTest` | New |
 | An agent's Key takes `general` over through WebMCP, then makes a goal and a task in it, writes a notebook there and pushes to its repository | `group_flow.spec.ts` "one member's agent sets a goal and its task…" | New |
 | An archived project takes no new work: a workspace write, a notebook made, a file added or a run started there is refused with `project_archived` naming the active projects, and a push is refused | `AgentGraphJourneyTest`, `AgentNotebookFilesTest`, `CodeGatewayTest` (each takes `general` over first) | New for the takeover; the refusals themselves are not run |
-| A Key holds one active and five archived projects; the sixth archive is refused, and deleting one removes its items, notebook space and repository and keeps its name taken | none yet | Not run: a new test waits Sean's agreement |
+| A Key holds one active and five archived projects; the sixth archive is refused, and deleting one makes room, takes its items away and queues deleting its notebook space and repository | `Keyfleet.Projects.HoldTest` "a Key is refused a sixth archived project…" | New |
+| General is never deleted, by any Key, archived or active; the page shows no Delete for it | `Keyfleet.Projects.HoldTest` "no Key deletes General…" | New for the refusal; the hidden button is not run |
 | Visitors read each project's title and its open goals' titles, and nothing else | `PublicWorkspaceTest`, `DirectoryTest`, `FleetPageTest` "each project shows by its title…" | New |
-| The pulse reads "Agent Muse with Key 20³ worked on Lab", "Agent of Key 20³…" and "Holder of Key 20³…" | `agent_tools.spec.ts` reads `workspace_pulse` (its shape only) | Not run for the lines themselves |
+| The pulse reads "Agent Muse with Key 20³ worked on Lab" and "Agent of Key 20³ worked on Lab", and leaves a deleted project's work out | `Keyfleet.WorkspacePulseTest`; `agent_tools.spec.ts` reads `workspace_pulse` (its shape) | New; "Holder of Key 20³…" is not run |
 | The project commands work from the released CLI | regents-cli release | Not run: not in any release yet |
 
 ## Workspace (the fleet's shared graph)

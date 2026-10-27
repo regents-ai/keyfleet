@@ -1520,7 +1520,7 @@ answer the project, active under the Key
 
 - **What it does:** deletes an archived project `<key>` holds: its items leave every read
   and page, and its notebooks and repository are deleted. It cannot be undone, and its
-  name is never used again in the fleet.
+  name is never used again in the fleet. General can't be deleted.
 - **Who may run it:** a paired agent that may act as `<key>`.
 - **What it changes:** the project's state, to `deleted`; its notebook space and
   repository are deleted shortly after (write).
@@ -1528,12 +1528,14 @@ answer the project, active under the Key
 - **Inputs:** `<fleet>`, `<key>` and `<project>`. The body is `{"as_key"}`.
 - **Answer:** `{"project": project}`, its `state` `deleted`.
 - **Refusals:** 403 `project_not_holder` (another Key holds it); 409
-  `project_not_archived` (archive it first); and those the project commands share.
+  `project_not_archived` (archive it first); 409 `project_general_kept` (General);
+  and those the project commands share.
 
 Server:
 
 ```text
 Projects.delete_project(fleet, as_key, project) as the agent, in one transaction
+       general -> 409 project_general_kept
        another Key holds it -> 403 project_not_holder; active -> 409 project_not_archived
 queue deleting its notebook space and repository, once per project
 answer the project, deleted

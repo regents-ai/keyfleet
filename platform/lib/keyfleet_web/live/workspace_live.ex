@@ -137,7 +137,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   # ones, each with the Key that holds it. Beside it what the member's Key
   # may do now: start a project when it has none active, archive its active
   # one, take over the archived project on show, or delete it when it is
-  # the Key's own.
+  # the Key's own and not General, which is never deleted.
   defp projects(assigns) do
     assigns =
       assign(assigns,
@@ -208,7 +208,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
           Take over {@on_show.title}
         </Regent.Primitives.button>
         <Regent.Primitives.button
-          :if={@on_show && @on_show.state == :archived && @on_show.key == @board.you.key}
+          :if={
+            @on_show && @on_show.state == :archived && @on_show.key == @board.you.key &&
+              @on_show.name != Projects.general()
+          }
           id="project-delete"
           variant="secondary"
           phx-click="project_delete"

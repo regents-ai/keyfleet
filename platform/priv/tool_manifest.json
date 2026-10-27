@@ -6450,7 +6450,7 @@
     {
       "name": "projects_delete",
       "title": "Delete an archived project",
-      "description": "Delete an archived project the Key you act as holds: its items leave every page and read, and its notebooks and repository are deleted. It can't be undone, and its name is never used again. Delete only when your person means it. Answers the project, state deleted.",
+      "description": "Delete an archived project the Key you act as holds: its items leave every page and read, and its notebooks and repository are deleted. It can't be undone, and its name is never used again. General can't be deleted. Delete only when your person means it. Answers the project, state deleted.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,

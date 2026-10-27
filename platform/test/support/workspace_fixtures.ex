@@ -76,7 +76,8 @@ defmodule Keyfleet.WorkspaceFixtures do
 
   @doc """
   Adds an object and answers its id, `<type>#<place in the log>` unless `:id`
-  is given. Options: `:by` (key number, 17) and `:project` (`general`).
+  is given. Options: `:by` (key number, 17), `:wallet` (the agent that made
+  it) and `:project` (`general`).
   """
   def create(fleet_id, type, data, opts \\ []) do
     sys = %{
@@ -439,9 +440,11 @@ defmodule Keyfleet.WorkspaceFixtures do
       "key" => %{"chain_id" => 1, "contract" => @contract, "token_id" => by(opts)},
       "ownership_epoch" => 3,
       "kind" => "agent",
-      "wallet" => @wallet
+      "wallet" => wallet(opts)
     }
   end
 
-  defp principal(opts), do: "member:8453:#{@contract}:#{by(opts)}@3/agent:#{@wallet}"
+  defp principal(opts), do: "member:8453:#{@contract}:#{by(opts)}@3/agent:#{wallet(opts)}"
+
+  defp wallet(opts), do: Keyword.get(opts, :wallet, @wallet)
 end

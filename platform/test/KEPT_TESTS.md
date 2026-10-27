@@ -182,3 +182,15 @@ answering 200, and every route matched with a slash on the end.
 | a page address with a slash at the end is the site's not-found page | `KeyfleetWeb.TrailingSlashTest` | No page has a second address with a slash on the end. |
 | an API address with a slash at the end is the API's not-found answer | `KeyfleetWeb.TrailingSlashTest` | An agent calling a slash address gets the API's own not_found JSON. |
 | the homepage keeps its slash | `KeyfleetWeb.TrailingSlashTest` | The rule never takes the homepage away. |
+
+## Projects held by Keys
+
+Added on 27 October 2026 with projects inside a fleet (KF-PROJ-DELETE a,
+KF-PROJ-GENERAL-KEEP a); the Keyfleet chief relayed Sean's 18 October ruling that
+meaningful regression tests need no agreement.
+
+| Test | Module | Protects |
+| --- | --- | --- |
+| a Key is refused a sixth archived project until it deletes one, which takes its work away | `Keyfleet.Projects.HoldTest` | A Key holds at most five archived projects; a delete makes room, hides the project's items and queues deleting its notebook space and repository. |
+| no Key deletes General, archived or active | `Keyfleet.Projects.HoldTest` | General, with the fleet's starting goals, first notebooks and first repository, is never deleted. |
+| the pulse names the agent and its Key's count, and leaves a deleted project out | `Keyfleet.WorkspacePulseTest` | The public pulse says which agent and Key worked on which project, and a deleted project's work leaves it. |
