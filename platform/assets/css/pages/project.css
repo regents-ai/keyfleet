@@ -21,6 +21,15 @@
   margin: 0;
 }
 
+/* Who holds the project and its fleet, in grey under the title. */
+.project-held {
+  color: var(--color-fg-muted);
+}
+
+.project-held a {
+  color: inherit;
+}
+
 .project-actions {
   display: flex;
   flex-wrap: wrap;

@@ -5401,3 +5401,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The Key window's facts and shards are ruled between rows only, so no line
   runs straight into the next section's line, and Shards has no line under
   its heading, like About this Key.
+
+## 2026-10-27 — A project's page says who holds it
+
+- Under a project's title, in grey, the page now says which Key holds it and
+  which fleet it belongs to ("Held by Key 3 · Classic #1"), instead of only
+  inside the tip beside the title.
+- Goals and Open to take list titles only: every goal there is open and every
+  task is still to do, so the type and standing on each row are left out.
