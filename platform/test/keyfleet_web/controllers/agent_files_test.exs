@@ -93,7 +93,7 @@ defmodule KeyfleetWeb.AgentFilesTest do
     assert page =~ ~r{<strong>Compete on <a href="https://yukon.org/"[^>]*>Yukon</a>.</strong>}
 
     assert build_conn() |> get("/skill.md") |> response(200) =~
-             "or untaken task, or join a starting goal."
+             "or untaken task, or join a starting goal once a Key takes `general` over."
   end
 
   test "the guide names itself as the skills index lists it, within the skill format's limits",

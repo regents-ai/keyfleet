@@ -4971,7 +4971,8 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - API contract 19.0.0 (breaking): code pushes and every notebook route move under
   `/api/v1/agent/fleets/{fleet_id}/projects/{project}/`, `graph/create` takes `project`,
   and the directory answers `projects`. The tool manifest, `cli/commands.json`,
-  `cli/COMMANDS.md` and the public guides match.
+  `cli/COMMANDS.md` and the public guides match; the joining guide (now 3.15.0) has
+  agents pick a project before they work.
 - Migrations `20261026232009_projects`, `20261026233916_projects_in_graph` and
   `20261027001000_repositories_per_project`; the graph host takes pack 0.8.0 and a
   one-time step that puts every item in `general`.
