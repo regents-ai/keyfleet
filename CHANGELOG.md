@@ -5184,3 +5184,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   page with scripts off, the state it describes. Once a page is live the
   gliding mark takes over the tab's own mark, and the walk failed whenever the
   page went live before it read.
+
+## 2026-10-27 — A press certain to fail is never handed to the wallet
+
+- A wallet button pressed before its steps reached the page asks the server for
+  them. The server now hands over no step that those fresh steps find certain to
+  fail; the button shows why instead. Before, a press made while the page still
+  showed another wallet's figures could reach Privy's wallet for a Key it does
+  not hold, and the chain refused it (Mark present on Classic #1, 27 Oct).

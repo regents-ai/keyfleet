@@ -209,14 +209,17 @@ defmodule KeyfleetWeb.WalletPanel do
   # A press made before its step reached the page, or before the steps caught
   # up with the form: the form is taken as the page's own, and the reply
   # carries the steps built from it, read now even where the chain is read,
-  # so the press never waits on steps still being read elsewhere.
+  # so the press never waits on steps still being read elsewhere. A step those
+  # steps find certain to fail is not handed over: the button was pressed while
+  # the page still showed figures built for another wallet or form, and it now
+  # shows why it can't be pressed.
   def handle_event("prepare_and_send", %{"form" => form, "step" => step}, socket)
       when is_map(form) and is_binary(step) do
     socket = socket |> take_inputs(form) |> sync_now()
 
-    case socket.assigns.review do
-      %{} = review -> {:reply, %{review: review, send: step}, socket}
-      nil -> {:reply, %{}, socket}
+    case {socket.assigns.review, blocked(socket.assigns, step)} do
+      {%{} = review, nil} -> {:reply, %{review: review, send: step}, socket}
+      _none_or_blocked -> {:reply, %{}, socket}
     end
   end
 
