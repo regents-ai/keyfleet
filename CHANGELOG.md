@@ -5042,3 +5042,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the crown's tile has no frame, which showed as a light square in dark mode.
   On a touch screen every mark keeps its 2.75rem press area.
 - Check: `test/browser/sea_lift.spec.ts`.
+
+## 2026-10-27 — The health check reads through the site's own pool
+
+- `/healthz` now asks the database through the site's pool (`Keyfleet.Health`,
+  as the template's `AshTemplate.Health`) instead of a connection of its own,
+  so Keyfleet holds ten database connections across its site and graph
+  machines instead of eleven. A pool that stays full now fails the check, as
+  the template's ruling of 27 October asks: one release on the shared database
+  at a time, and five connections for each serving pool.
