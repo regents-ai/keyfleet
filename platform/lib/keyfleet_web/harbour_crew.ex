@@ -14,7 +14,7 @@ defmodule KeyfleetWeb.HarbourCrew do
   """
 
   alias Keyfleet.Fleets
-  alias KeyfleetWeb.{ActivityLines, DirectoryMD}
+  alias KeyfleetWeb.{ActivityLines, DirectoryMD, KeyLinks}
 
   # The island each kind of activity sends a ship to.
   @places %{
@@ -62,6 +62,21 @@ defmodule KeyfleetWeb.HarbourCrew do
   @doc "The ships as the city's hook reads them, in `data-harbour-crew`."
   def on_sea(ships),
     do: Jason.encode!(Enum.map(ships, &Map.take(&1, [:id, :name, :place, :color])))
+
+  @doc """
+  Where each district of fleet `fleet_id`'s city leads, as the city's hook reads
+  them in `data-harbour-districts`: the inn to the fleet's Public room, the forge
+  to its workspace and the castle to its treasury.
+  """
+  def districts(fleet_id) do
+    path = Fleets.path(fleet_id)
+
+    Jason.encode!(%{
+      inn: %{name: "Public room", path: KeyLinks.room_path(fleet_id, "general")},
+      forge: %{name: "Workspace", path: path <> "/workspace"},
+      castle: %{name: "Treasury", path: path <> "/treasury"}
+    })
+  end
 
   @doc """
   A ship for each Key that did something at an island in `items`, the first

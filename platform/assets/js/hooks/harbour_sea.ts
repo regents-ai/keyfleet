@@ -18,6 +18,13 @@ type CrewMember = Agent & {readonly name: string}
 /** The agents as the server wrote them: who, the place of their last action, and their colour. */
 const crewOf = (root: HTMLElement): CrewMember[] => JSON.parse(root.dataset.harbourCrew!) as CrewMember[]
 
+/** Where a district leads: the page's name and address. */
+type District = {readonly name: string; readonly path: string}
+
+/** Where each district leads, when the city stands for one fleet. */
+const districtsOf = (root: HTMLElement): Partial<Record<Place, District>> =>
+  root.dataset.harbourDistricts ? (JSON.parse(root.dataset.harbourDistricts) as Record<Place, District>) : {}
+
 /** The page's theme, which the server always writes on the page. */
 const themeOf = (): Theme => document.documentElement.dataset.theme as Theme
 
@@ -59,11 +66,16 @@ type HarbourSeaController = CanvasIslandController & {
  * Without WebGPU nothing is drawn and the page's own ground shows.
  *
  * Where the city takes presses, a drag turns it, a mouse over a disc shows its
- * agent's name, a mouse over a district lights it, and pressing a disc hands
- * its agent to `open`. Anime.js eases the districts' light and a released
+ * agent's name, a mouse over a district lights it and names where it leads,
+ * pressing a disc hands its agent to `open`, and pressing a district that leads
+ * somewhere hands its address to `go`. Anime.js eases the districts' light and a released
  * drag; the renderer reads both when it draws.
  */
-const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) => void): HarbourSeaController => {
+const createHarbourSeaController = (
+  root: HTMLElement,
+  open: (agentId: string) => void,
+  go: (path: string) => void,
+): HarbourSeaController => {
   const view: CityView = {...OVERVIEW, castle: 0, forge: 0, inn: 0}
   const scope = createScope({root})
   let sync = () => {}
@@ -88,6 +100,7 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
       const canvas = root.querySelector<HTMLCanvasElement>("[data-harbour-canvas]")!
       const tag = root.querySelector<HTMLElement>("[data-harbour-tag]")!
       let crew = crewOf(root)
+      let districts = districtsOf(root)
       let theme = themeOf()
       let hovered: Place | null = null
 
@@ -137,6 +150,7 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
       }
       const hideTag = () => {
         tag.hidden = true
+        delete tag.dataset.harbourDistrict
       }
 
       // A drag: where it started, the view it started from, and how fast it was turning when let go.
@@ -194,10 +208,18 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
         const node = city.nodeAt(u, v)
         canvas.style.cursor = node ? "pointer" : ""
         if (!node) {
-          hideTag()
-          return hover(city.districtAt(u, v)?.place ?? null)
+          const place = city.districtAt(u, v)?.place ?? null
+          const district = place && districts[place]
+          canvas.style.cursor = district ? "pointer" : ""
+          if (district) {
+            tag.textContent = district.name
+            tag.dataset.harbourDistrict = ""
+            standAt(u, v)
+          } else hideTag()
+          return hover(place)
         }
         const agent = crew.find(member => member.id === node.id)!
+        delete tag.dataset.harbourDistrict
         tag.textContent = agent.name
         tag.style.setProperty("--sail", agent.color)
         standAt(node.u, node.v)
@@ -215,10 +237,17 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
           dragged = false
           return
         }
-        const node = city.nodeAt(...pointOf(event))
-        if (!node) return
+        const [u, v] = pointOf(event)
+        const node = city.nodeAt(u, v)
+        if (node) {
+          hideTag()
+          return open(node.id)
+        }
+        const place = city.districtAt(u, v)?.place
+        const district = place && districts[place]
+        if (!district) return
         hideTag()
-        open(node.id)
+        go(district.path)
       }
       // The city fades out and comes back as the still picture, rather than
       // stopping mid-flight. Given another chance, it moves on from there.
@@ -240,6 +269,7 @@ const createHarbourSeaController = (root: HTMLElement, open: (agentId: string) =
       })
       sync = () => {
         crew = crewOf(root)
+        districts = districtsOf(root)
         renderer()?.setAgents(crew)
         nudge()
       }
@@ -285,7 +315,7 @@ type HarbourSeaHook = {
   shownPage?: string
   onPageLoaded?: () => void
   pushEvent(event: string, payload: object): void
-  liveSocket: {js(): {exec(el: HTMLElement, encodedJS: string): void}}
+  liveSocket: {js(): {exec(el: HTMLElement, encodedJS: string): void; navigate(href: string): void}}
 }
 
 /**
@@ -318,7 +348,11 @@ export const HarbourSea = {
     }
     window.addEventListener("phx:page-loading-stop", this.onPageLoaded)
     this.onPageLoaded()
-    this.controller = createHarbourSeaController(this.el, id => this.pushEvent("show_agent", {id}))
+    this.controller = createHarbourSeaController(
+      this.el,
+      id => this.pushEvent("show_agent", {id}),
+      path => this.liveSocket.js().navigate(path),
+    )
     this.controller.mount()
   },
   updated(this: HarbourSeaHook) {
@@ -344,15 +378,21 @@ type FleetSeaHook = {
   el: HTMLElement
   controller?: HarbourSeaController
   pushEvent(event: string, payload: object): void
+  liveSocket: {js(): {navigate(href: string): void}}
 }
 
 /**
  * A fleet's city in its section of the homepage, its discs that fleet's Keys.
- * Pressing a disc asks the page to open that Key's profile on the fleet's page.
+ * Pressing a disc asks the page to open that Key's profile on the fleet's page,
+ * and pressing a district opens where it leads on the fleet's pages.
  */
 export const FleetSea = {
   mounted(this: FleetSeaHook) {
-    this.controller = createHarbourSeaController(this.el, id => this.pushEvent("open_ship", {id}))
+    this.controller = createHarbourSeaController(
+      this.el,
+      id => this.pushEvent("open_ship", {id}),
+      path => this.liveSocket.js().navigate(path),
+    )
     this.controller.mount()
   },
   updated(this: FleetSeaHook) {

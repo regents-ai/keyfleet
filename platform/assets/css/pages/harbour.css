@@ -43,8 +43,9 @@
   opacity: 1;
 }
 
-/* The name of the agent whose disc is under the mouse, standing over it. The
-   hook moves it with `translate`. */
+/* The name of the agent whose disc is under the mouse, or of the place the
+   district under it leads to, standing over it. The hook moves it with
+   `translate`. */
 .harbour-sea__tag {
   position: absolute;
   top: 0;
@@ -78,6 +79,11 @@
   width: 0.55rem;
   height: 0.55rem;
   content: "";
+}
+
+/* A district's name carries no agent's colour. */
+.harbour-sea__tag[data-harbour-district]::before {
+  content: none;
 }
 
 /* ---- The page over the city ---- */

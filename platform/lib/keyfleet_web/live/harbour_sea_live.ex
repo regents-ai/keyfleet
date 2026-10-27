@@ -8,7 +8,8 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   the latest Keys of every open fleet. The visitor's own Keys come first, then
   the most recent, sixteen at most. The city takes no presses until its button
   lifts the page away; then a drag turns it and pressing a disc opens its card: the Key's last few
-  actions and a link to its profile.
+  actions and a link to its profile. On a fleet's pages its districts lead to
+  the fleet's Public room, workspace and treasury (`HarbourCrew.districts/1`).
 
   The root layout renders it beside the page's own LiveView
   (`KeyfleetWeb.Router` marks the pages that have it), so it keeps running
@@ -415,6 +416,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
       phx-hook="HarbourSea"
       phx-mounted={JS.ignore_attributes(["data-harbour-ready"])}
       data-harbour-crew={HarbourCrew.on_sea(drawn(@fleets, @public, @crew, @own, @access_context))}
+      data-harbour-districts={is_binary(@shown) && HarbourCrew.districts(@shown)}
       aria-hidden="true"
     >
       <div id="harbour-stage" class="harbour-sea__stage" phx-update="ignore" data-harbour-stage>

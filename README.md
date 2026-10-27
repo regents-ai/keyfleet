@@ -28,8 +28,11 @@ circles its towers. On a fleet's pages the discs are that fleet's keys, the
 visitor's own first; anywhere else they are the latest keys of every open
 fleet. The button at the top right lifts the page away to show the whole city;
 then a drag turns it, a mouse over a district lights it, and pressing a disc
-opens its key's last few actions. The homepage shows Classic's city beside its
-cards. With less motion asked for, on a browser saving data, or on a device
+opens its key's last few actions. On a fleet's pages each district leads
+somewhere in that fleet: the inn to its Public room, the forge to its workspace
+and the castle to its treasury; a mouse over one names it and pressing it opens
+it. The homepage shows Classic's city beside its cards, whose districts lead to
+Classic's once it is open. With less motion asked for, on a browser saving data, or on a device
 saving power or falling behind, the city is a still picture that still updates
 when a disc moves.
 

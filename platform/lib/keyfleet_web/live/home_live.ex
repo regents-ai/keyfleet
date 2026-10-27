@@ -205,9 +205,13 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   defp seen(fleet_id, {%{coming_soon?: false} = reading, _degraded?}),
-    do: %{ships: ships(fleet_id, reading), goal: reading.goal}
+    do: %{
+      ships: ships(fleet_id, reading),
+      districts: HarbourCrew.districts(fleet_id),
+      goal: reading.goal
+    }
 
-  defp seen(_fleet_id, _not_open), do: %{ships: [], goal: nil}
+  defp seen(_fleet_id, _not_open), do: %{ships: [], districts: nil, goal: nil}
 
   defp here(%{here: here}), do: here
   defp here(nil), do: nil
@@ -607,7 +611,8 @@ defmodule KeyfleetWeb.HomeLive do
   attr :fleet, :map, required: true
 
   # A fleet's swarm city: a disc for each of its most recently active Keys,
-  # circling the towers of the district of what it did last. The stylesheet
+  # circling the towers of the district of what it did last; each district leads
+  # to its place on the fleet's pages (`HarbourCrew.districts/1`). The stylesheet
   # shows the city still until the GPU's first frame has landed, and keeps it
   # where there is no GPU.
   defp sea(assigns) do
@@ -618,6 +623,7 @@ defmodule KeyfleetWeb.HomeLive do
       phx-hook="FleetSea"
       phx-mounted={JS.ignore_attributes(["data-harbour-ready"])}
       data-harbour-crew={HarbourCrew.on_sea(@fleet.ships)}
+      data-harbour-districts={@fleet.districts}
       aria-hidden="true"
     >
       <div id={"#{@id}-stage"} class="rl-sea__stage" phx-update="ignore" data-harbour-stage>

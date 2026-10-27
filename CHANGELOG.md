@@ -4977,3 +4977,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   (`platform/priv/static/images/home/city-{light,dark}.webp`).
 - `platform/assets/js/harbour/` is removed; the drawing lives in
   `platform/assets/js/swarm_city/`, trimmed to the one look.
+
+## 2026-10-26 — The city's districts lead into the fleet
+
+- On a fleet's pages, and in Classic's city on the homepage once Classic is
+  open, each district of the swarm city leads somewhere in that fleet: the inn
+  to its Public room, the forge to its workspace and the castle to its
+  treasury. A mouse over a district names where it leads and shows a pointer;
+  pressing it opens that page and brings the page back down. Elsewhere (Account,
+  About) the districts only light up.
+- `KeyfleetWeb.HarbourCrew.districts/1` writes the three addresses in
+  `data-harbour-districts`; the city's hook reads them and opens the page.
