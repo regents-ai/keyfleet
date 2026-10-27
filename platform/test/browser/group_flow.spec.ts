@@ -5,14 +5,16 @@ import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 import {call, prepareFleet, pushCode, sellKey} from "./support/fleet_chain"
 
 // A fleet's members work on one goal together, the way they do on the site:
-// one member's agent sets the goal and its task, writes a notebook, runs it,
-// sends the code and submits the task; another member's agent joins the goal,
-// runs the same notebook again and accepts the work. The members read each
-// step on the workspace's pages. The fleet's work graph runs here with its
-// own Python host, and its notebooks answer from a stand-in hub
-// (`Keyfleet.BrowserWorkspace`).
+// one member's agent takes over the fleet's General project, sets the goal
+// and its task, writes a notebook, runs it, sends the code and submits the
+// task; another member's agent joins the goal, runs the same notebook again
+// and accepts the work. The members read each step on the workspace's pages.
+// The fleet's work graph runs here with its own Python host, and its
+// notebooks answer from a stand-in hub (`Keyfleet.BrowserWorkspace`).
 const fleet = "fleet_tech_accelerant"
 const fleetPath = "/accelerant/1"
+// Every fleet's first project, archived until a Key takes it over.
+const general = "general"
 // Signed in as "valid" and as "other-account" (test/support/test_privy_verifier.ex).
 const maker = "0x1111111111111111111111111111111111111111"
 const reviewer = "0x3333333333333333333333333333333333333333"
@@ -63,14 +65,17 @@ const write = (asKey: number, fields: Record<string, unknown>) => ({
 test("one member's agent sets a goal and its task, writes and runs a notebook, sends code and submits", async ({page}) => {
   await open(page, fleetPath)
   await ok(page, makerAgent, "agents_join", {name: "Maker agent", declared_harness: "test"})
+  await ok(page, makerAgent, "projects_take_over", {fleet_id: fleet, project: general, as_key: makerKey})
 
   const goal = await ok(page, makerAgent, "workspace_create", write(makerKey, {
+    project: general,
     type: "goal",
     data: {title: "Count the harbour's boats", outcome: "A notebook that counts them, run twice."},
   }))
   made.goal = goal.result.id
 
   const task = await ok(page, makerAgent, "workspace_create", write(makerKey, {
+    project: general,
     type: "task",
     data: {title: "Write the counting notebook", assignee_key: makerKey},
   }))
@@ -79,6 +84,7 @@ test("one member's agent sets a goal and its task, writes and runs a notebook, s
 
   const notebook = await ok(page, makerAgent, "notebooks_create", {
     fleet_id: fleet,
+    project: general,
     title: "Boat count",
     code: "import marimo\napp = marimo.App()\n",
     description: "Counts the boats in the harbour.",
@@ -89,23 +95,25 @@ test("one member's agent sets a goal and its task, writes and runs a notebook, s
   expect(notebook.notebook_url).toContain(made.notebook)
   await ok(page, makerAgent, "notebooks_add_file", {
     fleet_id: fleet,
+    project: general,
     notebook_id: made.notebook,
     path: "boats.csv",
     content: "name\nKestrel\nWren\n",
   })
 
-  const run = await ok(page, makerAgent, "notebooks_run", {fleet_id: fleet, notebook_id: made.notebook, idempotency_key: randomUUID()})
-  const result = await ok(page, makerAgent, "notebooks_result", {fleet_id: fleet, notebook_id: made.notebook, run_id: run.run_id})
+  const run = await ok(page, makerAgent, "notebooks_run", {fleet_id: fleet, project: general, notebook_id: made.notebook, idempotency_key: randomUUID()})
+  const result = await ok(page, makerAgent, "notebooks_result", {fleet_id: fleet, project: general, notebook_id: made.notebook, run_id: run.run_id})
   expect(result.status).toBe("succeeded")
   made.result = result.result_url
   expect(made.result).toBeTruthy()
 
   pushCode(fleet, makerKey, maker, "a".repeat(40))
-  const pushes = await ok(page, makerAgent, "code_pushes", {fleet_id: fleet})
+  const pushes = await ok(page, makerAgent, "code_pushes", {fleet_id: fleet, project: general})
   made.commit = pushes.pushes[0].commit_url
   expect(made.commit).toBeTruthy()
 
   const evidence = await ok(page, makerAgent, "workspace_create", write(makerKey, {
+    project: general,
     type: "evidence",
     data: {title: "The notebook's count", source_uri: made.result},
   }))
@@ -128,13 +136,13 @@ test("another member's agent joins the goal, runs the notebook again and accepts
   await ok(page, reviewerAgent, "agents_join", {name: "Reviewer agent", declared_harness: "test"})
   await ok(page, reviewerAgent, "workspace_join_goal", write(reviewerKey, {id: made.goal}))
 
-  const listed = await ok(page, reviewerAgent, "notebooks_list", {fleet_id: fleet})
+  const listed = await ok(page, reviewerAgent, "notebooks_list", {fleet_id: fleet, project: general})
   expect(listed.notebooks.map((notebook: {notebook_id: string}) => notebook.notebook_id)).toContain(made.notebook)
-  const file = await ok(page, reviewerAgent, "notebooks_read_file", {fleet_id: fleet, notebook_id: made.notebook, path: "boats.csv"})
+  const file = await ok(page, reviewerAgent, "notebooks_read_file", {fleet_id: fleet, project: general, notebook_id: made.notebook, path: "boats.csv"})
   expect(file.content).toContain("Kestrel")
 
-  const run = await ok(page, reviewerAgent, "notebooks_run", {fleet_id: fleet, notebook_id: made.notebook, idempotency_key: randomUUID()})
-  const again = await ok(page, reviewerAgent, "notebooks_result", {fleet_id: fleet, notebook_id: made.notebook, run_id: run.run_id})
+  const run = await ok(page, reviewerAgent, "notebooks_run", {fleet_id: fleet, project: general, notebook_id: made.notebook, idempotency_key: randomUUID()})
+  const again = await ok(page, reviewerAgent, "notebooks_result", {fleet_id: fleet, project: general, notebook_id: made.notebook, run_id: run.run_id})
   expect(again.status).toBe("succeeded")
 
   const task = await ok(page, reviewerAgent, "workspace_show", {fleet_id: fleet, id: made.task})

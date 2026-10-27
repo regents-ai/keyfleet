@@ -83,7 +83,7 @@ defmodule KeyfleetWeb.AgentGraphController do
         more_goals: goals.more?,
         pinned_notebooks:
           for pin <- notebooks do
-            space = Notebooks.hub?(fleet_id) && shown[pin.project].hub_project_id
+            space = if Notebooks.hub?(fleet_id), do: shown[pin.project].hub_project_id
 
             %{
               project: pin.project,
