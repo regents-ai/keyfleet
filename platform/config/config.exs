@@ -292,10 +292,11 @@ config :keyfleet, Oban,
 # address; runtime.exs reads both from the environment.
 #
 # A person is checked again at most every `access_ttl_ms`; a key changing
-# hands ends their access at once. An "Open notebooks" link works once, for
-# `handoff_ttl_seconds`, and the notebook sign-in it sets lasts
-# `session_max_age` seconds. Keyfleet keeps its own copy of each saved page
-# it hands out an address for, up to `saved_page_max_bytes`.
+# hands ends their access at once. Someone made an editor of the fleet's hub
+# projects is not asked of the hub again for `editor_ttl_ms`. An "Open
+# notebooks" link works once, for `handoff_ttl_seconds`, and the notebook
+# sign-in it sets lasts `session_max_age` seconds. Keyfleet keeps its own copy
+# of each saved page it hands out an address for, up to `saved_page_max_bytes`.
 config :keyfleet, :notebooks,
   issuer: "https://keyfleet.ai",
   host_suffix: "notebooks.keyfleet.ai",
@@ -304,6 +305,7 @@ config :keyfleet, :notebooks,
   signing_keys: nil,
   pass_ttl_seconds: 120,
   access_ttl_ms: 30_000,
+  editor_ttl_ms: 10 * 60 * 1000,
   handoff_ttl_seconds: 60,
   session_max_age: 12 * 60 * 60,
   max_request_bytes: 32 * 1024 * 1024,

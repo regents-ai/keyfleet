@@ -292,10 +292,21 @@ defmodule Keyfleet.Notebooks do
     end
   end
 
+  # Once made an editor of every space the fleet has, `subject` is not asked
+  # of the hub again for `editor_ttl_ms`, or until its access ends or the
+  # fleet gains a space; the ten-minute roster run keeps the hub in step
+  # meanwhile.
   defp make_editor(fleet_id, spaces, subject) do
-    with {:ok, _added} <- each_space(spaces, &HubClient.add_editor(fleet_id, &1, subject)),
-         {:ok, _reactivated} <- HubClient.reactivate(fleet_id, subject),
-         do: :ok
+    case AccessCache.lookup(:hub_editor, fleet_id, subject) do
+      {:ok, ^spaces} ->
+        :ok
+
+      _stale ->
+        with {:ok, _added} <- each_space(spaces, &HubClient.add_editor(fleet_id, &1, subject)),
+             {:ok, _reactivated} <- HubClient.reactivate(fleet_id, subject) do
+          AccessCache.admit(:hub_editor, fleet_id, subject, spaces, config()[:editor_ttl_ms])
+        end
+    end
   end
 
   # Asks the hub `ask` of each space in turn, as `{:ok, answers}`, stopping
@@ -437,7 +448,10 @@ defmodule Keyfleet.Notebooks do
   each one's next request is checked afresh (from `Keyfleet.Chain.Scanner`,
   when the fleet's Keys change).
   """
-  def end_access(fleet_id), do: AccessCache.end_fleet(:notebooks, fleet_id)
+  def end_access(fleet_id) do
+    AccessCache.end_fleet(:notebooks, fleet_id)
+    AccessCache.end_fleet(:hub_editor, fleet_id)
+  end
 
   @doc """
   Ends `subject`'s access to the fleet's notebooks on every node now: its open
@@ -445,6 +459,7 @@ defmodule Keyfleet.Notebooks do
   """
   def end_access(fleet_id, subject) do
     AccessCache.end_access(:notebooks, fleet_id, subject)
+    AccessCache.end_access(:hub_editor, fleet_id, subject)
 
     Phoenix.PubSub.broadcast(
       Keyfleet.PubSub,

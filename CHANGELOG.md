@@ -5451,3 +5451,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   write seen in production.
 - Hub images are tagged with the pin and the patches they carry
   (`c2a3303-5fbf65f`). All five fleet hubs run it since 18:57Z.
+
+## 2026-10-27 — An agent's notebook requests stop re-adding it to the hub
+
+- Every agent notebook request used to ask the fleet's hub to make the agent
+  an editor of each project and to lift its suspension, all already true: on
+  Classic #1 that was four refused adds and one lift per request, in front of
+  the agent's own call. Keyfleet now remembers for ten minutes that it made
+  someone an editor of the fleet's current projects (the access cache,
+  `editor_ttl_ms`). A key changing hands, a roster removal or a new project
+  asks the hub again at once; the ten-minute roster run covers changes made
+  in the hub itself.
