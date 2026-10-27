@@ -8,7 +8,7 @@ app = "kf-nb-fibonacci-cascade"
 primary_region = "iad"
 
 [build]
-  image = "registry.fly.io/kf-nb-fibonacci-cascade:c2a3303-5fbf65f"
+  image = "registry.fly.io/kf-nb-fibonacci-cascade:c2a3303-a1b75d2"
 
 [env]
   MARIMOHUB_RUN_MAINTENANCE = "true"

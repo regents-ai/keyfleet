@@ -34,8 +34,9 @@ them to the hub. That part is built separately, in `platform/`.
   `hub.env.example`, which lists every hub setting with a one-line meaning.
 - **`marimohub/`**: the exact marimohub version used (`pin.env`), the
   lockfile change (`pnpm-lock.patch`, made by pnpm) that adds `compute-fly` to
-  marimohub's workspace, and `catalog-commit.patch`, our fix to marimohub's
-  catalog (below).
+  marimohub's workspace, `catalog-commit.patch`, our fix to marimohub's
+  catalog, and `storage-errors.patch`, which puts the store's answer in error
+  lines (both below).
 - **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
@@ -59,7 +60,7 @@ things:
 3. Builds the three images:
    - `keyfleet/marimo-sandbox:c2a3303`, marimohub's notebook image, about 3 GB;
    - `keyfleet/notebook-runner:c2a3303`;
-   - `keyfleet/notebook-hub:c2a3303-5fbf65f`, about 440 MB. The part after
+   - `keyfleet/notebook-hub:c2a3303-a1b75d2`, about 440 MB. The part after
      the dash names the patches in `marimohub/`, so a changed patch gives a
      new tag. `build-images.sh` prints the tag it built on its last line.
 4. Runs the helper's tests inside the runner image.
@@ -157,7 +158,7 @@ Keyfleet's server puts on each request, which the hub checks.
    Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
    (same tags). Then run `fly auth docker` and:
    - tag `keyfleet/notebook-runner:c2a3303` as `registry.fly.io/kf-nbk-<fleet>:c2a3303` and push it;
-   - tag `keyfleet/notebook-hub:c2a3303-5fbf65f` as `registry.fly.io/kf-nb-<fleet>:c2a3303-5fbf65f`
+   - tag `keyfleet/notebook-hub:c2a3303-a1b75d2` as `registry.fly.io/kf-nb-<fleet>:c2a3303-a1b75d2`
      and push it, then set the same tag in `[build] image` of
      `hub/fleets/<fleet>.hub.toml`.
 4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:
@@ -279,3 +280,9 @@ its listed ID.
   before deleting, and keeps the snapshot when the catalog names it. The patch
   adds three tests to marimohub's `recovery.test.ts`. Drop the patch when
   marimohub ships the same fix.
+- **A failed storage call names the store's answer (`storage-errors.patch`).**
+  marimohub logs a refused storage call with only the client's error name, so a
+  reply with no error code reads "Unknown". With the patch, `request_error` and
+  the other error lines carry `error.storage`: the HTTP status, the store's
+  request ids and how many tries were made. A support ticket to the store needs
+  those ids (Classic #1 saves refused with "Unknown", 27 Oct 2026).

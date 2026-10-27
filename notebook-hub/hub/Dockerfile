@@ -24,6 +24,10 @@ RUN git apply /tmp/pnpm-lock.patch
 # its own catalog names.
 COPY marimohub/catalog-commit.patch /tmp/catalog-commit.patch
 RUN git apply /tmp/catalog-commit.patch
+# A failed storage call's log line carries the store's HTTP status, request ids and
+# tries, so a refused write can be traced with the store.
+COPY marimohub/storage-errors.patch /tmp/storage-errors.patch
+RUN git apply /tmp/storage-errors.patch
 COPY compute-fly packages/compute-fly
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec vp run --filter @marimo-hub/web --filter @marimo-hub/server build

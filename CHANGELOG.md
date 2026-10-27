@@ -5462,3 +5462,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `editor_ttl_ms`). A key changing hands, a roster removal or a new project
   asks the hub again at once; the ten-minute roster run covers changes made
   in the hub itself.
+
+## 2026-10-27 — A refused notebook save names the store's answer
+
+- Three notebook file saves on Classic #1 (19:40, 19:52 and 20:34 UTC) came
+  back from the hub's storage with an error the hub could only call
+  "Unknown", after three tries. A new marimohub patch,
+  `notebook-hub/marimohub/storage-errors.patch`, adds `error.storage` to the
+  hub's error lines: the store's HTTP status, its request ids and the number
+  of tries. A local store answering with an empty 500 gives the same
+  "Unknown" and now logs all four. Hub image `c2a3303-a1b75d2`; the fleet
+  files name it, and the hubs take it at their next deploy.
