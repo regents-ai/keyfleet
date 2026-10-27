@@ -7,7 +7,7 @@
 type Report = {step: "home" | "watch" | "connect"} | {step: "copy"; agent: string}
 
 export function installLaunchSteps(): void {
-  // A browser a program drives, such as a test, a Lighthouse run or a crawler,
+  // A browser a program drives, such as a test or a crawler,
   // is not a visitor, so it reports nothing.
   if (navigator.webdriver || typeof navigator.sendBeacon !== "function") return
 

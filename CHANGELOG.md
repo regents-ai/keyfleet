@@ -4946,6 +4946,87 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Both API descriptions list the two new addresses, and the developer
   documentation names them.
 
+## 2026-10-26 — Newest Ash pages and background-jobs packages
+
+- ash_phoenix moves to 2.3.26 and ash_oban to 0.10.3, their newest releases.
+  Ash itself stays at 3.37.2, already the newest. Phoenix stays where it was.
+
+## 2026-10-26 — The database library comes from the Ash team again
+
+- ash_postgres comes from ash-project/ash_postgres main at 55db7d44, which
+  carries our upsert fix (#910, merged 26 Oct) and four other fixes since
+  2.15.2. Regent's own copy is no longer used. Keyfleet moves to the Hex
+  release once one carries #910.
+
+## 2026-10-26 — The swarm city replaces the sea
+
+- Behind every app page and in Classic's panel on the homepage, the harbour sea
+  gives way to ash-template's swarm city in Autolaunch's neon colours: thin
+  outlined towers in tangerine and powder blue with three downtowns, the inn,
+  the forge and the castle, drawn as a line drawing on the page while it is
+  light and glowing on the night while it is dark. Each recent Key is a disc
+  that flies to the district of its last action and circles its towers.
+- With the page lifted, a drag turns the city, a mouse over a district lights
+  it, a disc's name shows under the mouse and pressing a disc opens its card, as
+  pressing a ship did. On the homepage, pressing a disc still opens that Key on
+  Classic's page. The ripple on open water is gone with the water.
+- The city's haze starts just short of the city however far the camera stands
+  back, so it still shows on a tall phone screen.
+- The lift button reads "Show the city" and is drawn as a skyline. The
+  homepage's still pictures are the city, light and dark
+  (`platform/priv/static/images/home/city-{light,dark}.webp`).
+- `platform/assets/js/harbour/` is removed; the drawing lives in
+  `platform/assets/js/swarm_city/`, trimmed to the one look.
+
+## 2026-10-26 — The city's districts lead into the fleet
+
+- On a fleet's pages, and in Classic's city on the homepage once Classic is
+  open, each district of the swarm city leads somewhere in that fleet: the inn
+  to its Public room, the forge to its workspace and the castle to its
+  treasury. A mouse over a district names where it leads and shows a pointer;
+  pressing it opens that page and brings the page back down. Elsewhere (Account,
+  About) the districts only light up.
+- `KeyfleetWeb.HarbourCrew.districts/1` writes the three addresses in
+  `data-harbour-districts`; the city's hook reads them and opens the page.
+
+## 2026-10-27 — Release speed check removed
+
+- Sean, 27 Oct (KF-LIGHTHOUSE a): the release no longer loads pages in Lighthouse.
+  `scripts/budgets.sh`, `platform/lighthouserc.cjs` and `platform/load/profile-live.sh`
+  are gone, and so are `@lhci/cli` and `lighthouse` from the build tools, which clears
+  the six development-only security alerts they brought in (body-parser, basic-ftp,
+  tmp twice, extract-zip twice). The built-asset size budgets (`npm run test:budgets`)
+  and visitors' own page timings (`KeyfleetWeb.Vitals`) stay. Nothing visitors
+  download changes.
+  `@types/node` is now listed directly; it came in only through Lighthouse.
+
+## 2026-10-27 — Every page writes its page line itself
+
+- As ash-template 7fec82e: `KeyfleetWeb.VisitLog.on_mount/4` attaches a
+  handle_params hook on every page the router opens and writes its `page` line;
+  `KeyfleetWeb.VisitLog.Events` no longer listens for LiveView's handle_params
+  event. Keyfleet already wrote a line for every page, because its session hooks
+  make LiveView report params on every page; the line no longer depends on that.
+  The visits walk now opens the home page first and expects "page /" once.
+
+## 2026-10-27 — One address per page: a slash at the end is not found
+
+- As ash-template 9dd2237: `KeyfleetWeb.Plugs.NoTrailingSlash`, right after
+  `RegentAgentAccess.Plug` in the endpoint, answers any address ending in a slash
+  other than the homepage as an address that names nothing: the not-found page,
+  or the API's `not_found` answer under /api. Before, every page also opened at
+  its address with a slash on the end (/about/, /classic/1/, /api/v1/fleets/).
+  The notebook and code gateways answer on their own hosts before it, and files
+  served by Plug.Static are unchanged. Check: `test/keyfleet_web/trailing_slash_test.exs`.
+
+## 2026-10-27 — Swarm city: the sky grid clears the tallest tower
+
+- The red grid over the city now hangs one step above the tallest roof instead
+  of at a fixed height, so the castle's needle no longer rises through it.
+- The city's overview aims a little higher and stands a little further back,
+  so the raised grid stays whole inside the picture on a wide screen.
+- As ash-template f76f138, whose swarm city demo carries the same change.
+
 ## 2026-10-27 — Projects inside a fleet, held by Keys
 
 - A fleet's work is split into projects (`Keyfleet.Projects`), as

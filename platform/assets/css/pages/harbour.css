@@ -1,24 +1,20 @@
-/* The sea behind the app's pages (`KeyfleetWeb.HarbourSeaLive`): the harbour
-   fills the screen behind everything, seen from low down so the water runs out
-   to the horizon. The header, sidebar, side panel, cards and reading column
-   stay solid over it; the open margins between them show the sea. Every rule
-   here applies only while the sea is on the page, so a page without it (the
-   homepage, /early) is drawn as before. Unlayered, so it wins over the shell's
-   own rules. */
+/* The swarm city behind the app's pages (`KeyfleetWeb.HarbourSeaLive`): it
+   fills the screen behind everything, seen from above its southern edge. The
+   header, sidebar, side panel, cards and reading column stay solid over it;
+   the open margins between them show the city. Every rule here applies only
+   while the city is on the page, so a page without it (the homepage, /early)
+   is drawn as before. Unlayered, so it wins over the shell's own rules. */
 
-/* The far sea fades into `--harbour-haze`, the page's ground in each theme; the
-   harbour reads it as a hex colour, so it is written out, not taken from a
-   variable. */
+/* The ground the city stands on in each theme, the colour of its far haze. */
 .harbour-sea__harbour {
-  --harbour-haze: #0b0b0b;
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: var(--harbour-haze);
+  background: #0e0e0e;
 }
 
 :root[data-theme="light"] .harbour-sea__harbour {
-  --harbour-haze: #f6f4ea;
+  background: #e5e3d2;
 }
 
 .harbour-sea__stage {
@@ -35,14 +31,21 @@
   height: 100%;
   opacity: 0;
   transition: opacity 600ms ease;
+  touch-action: none;
+  cursor: grab;
+}
+
+.harbour-sea__stage[data-harbour-dragging] canvas {
+  cursor: grabbing;
 }
 
 .harbour-sea__harbour[data-harbour-ready="true"] canvas {
   opacity: 1;
 }
 
-/* The name of the ship under the mouse, standing on its masthead. The hook
-   moves it with `translate`. */
+/* The name of the agent whose disc is under the mouse, or of the place the
+   district under it leads to, standing over it. The hook moves it with
+   `translate`. */
 .harbour-sea__tag {
   position: absolute;
   top: 0;
@@ -78,10 +81,15 @@
   content: "";
 }
 
-/* ---- The page over the sea ---- */
+/* A district's name carries no agent's colour. */
+.harbour-sea__tag[data-harbour-district]::before {
+  content: none;
+}
 
-/* The html element keeps the ground, which shows while the sea loads and where
-   there is no WebGPU; everything above it lets the sea through. */
+/* ---- The page over the city ---- */
+
+/* The html element keeps the ground, which shows while the city loads and where
+   there is no WebGPU; everything above it lets the city through. */
 body:has(> .harbour-sea) {
   --sea-lift: 560ms;
   background: transparent;
@@ -105,7 +113,7 @@ body:has(> .harbour-sea) #app-shell {
 
 /* The account tabs and the reading column (/about, /opportunities) carry text
    straight on the ground, so they keep it. Cards already paint their own. The
-   account pages stand on the ground whole, so the sea never shows through them. */
+   account pages stand on the ground whole, so the city never shows through them. */
 body:has(> .harbour-sea) #shell-tabs,
 body:has(> .harbour-sea) #route-content:has(.account-page) {
   background: var(--color-bg);
@@ -121,8 +129,8 @@ body:has(> .harbour-sea) #app-shell-scroller > .regent-footer {
   background: var(--color-bg);
 }
 
-/* The sea never takes a press meant for the page: it lies behind it and lets
-   every press through. Once the page is lifted away, the sea takes them. */
+/* The city never takes a press meant for the page: it lies behind it and lets
+   every press through. Once the page is lifted away, the city takes them. */
 .harbour-sea__harbour {
   pointer-events: none;
 }
@@ -175,7 +183,7 @@ body:has(> .harbour-sea) #shell-header {
   background: var(--hairline-strong);
 }
 
-/* With the page lifted it stands alone on the sea, on the page's ground so it
+/* With the page lifted it stands alone on the city, on the page's ground so it
    stays easy to find, with nothing before it to set apart. */
 body.sea-lifted .harbour-sea .harbour-sea__lift {
   position: fixed;
@@ -273,8 +281,8 @@ body.sea-lifted .harbour-sea .harbour-sea__lift::before {
 }
 
 /* Lifted: the page, menus and footer included, rises off the top and only the
-   sea is left. Hidden once it has gone, so the keyboard and screen readers
-   skip it and land on the button and the sea. */
+   city is left. Hidden once it has gone, so the keyboard and screen readers
+   skip it and land on the button and the city. */
 body.sea-lifted:has(> .harbour-sea) {
   height: 100dvh;
   min-height: 0;

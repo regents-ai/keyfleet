@@ -205,9 +205,13 @@ defmodule KeyfleetWeb.HomeLive do
   end
 
   defp seen(fleet_id, {%{coming_soon?: false} = reading, _degraded?}),
-    do: %{ships: ships(fleet_id, reading), goal: reading.goal}
+    do: %{
+      ships: ships(fleet_id, reading),
+      districts: HarbourCrew.districts(fleet_id),
+      goal: reading.goal
+    }
 
-  defp seen(_fleet_id, _not_open), do: %{ships: [], goal: nil}
+  defp seen(_fleet_id, _not_open), do: %{ships: [], districts: nil, goal: nil}
 
   defp here(%{here: here}), do: here
   defp here(nil), do: nil
@@ -551,7 +555,7 @@ defmodule KeyfleetWeb.HomeLive do
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
-  # Classic's sea beside what a Key lets an agent join, the cards turning
+  # Classic's city beside what a Key lets an agent join, the cards turning
   # over, its public page and "Buy Key". "Buy Key" follows the same sale as
   # "Buy Next Key": closed, with the reason under it, until the sale opens.
   defp classic(assigns) do
@@ -559,7 +563,7 @@ defmodule KeyfleetWeb.HomeLive do
 
     ~H"""
     <section id="home-classic" class="rl-fleet" aria-labelledby="home-classic-title">
-      <.sea id="home-classic-sea" layout="classic" fleet={@classic} />
+      <.sea id="home-classic-sea" fleet={@classic} />
 
       <div class="rl-fleet__copy">
         <h2 id="home-classic-title">Classic Keyfleet</h2>
@@ -604,21 +608,22 @@ defmodule KeyfleetWeb.HomeLive do
   defp classic_join, do: @classic_join
 
   attr :id, :string, required: true
-  attr :layout, :string, required: true, values: ~w(classic)
   attr :fleet, :map, required: true
 
-  # A fleet's sea: a ship for each of its most recently active Keys, circling
-  # the island of what it did last. The stylesheet shows the harbour still
-  # until the GPU's first frame has landed, and keeps it where there is no GPU.
+  # A fleet's swarm city: a disc for each of its most recently active Keys,
+  # circling the towers of the district of what it did last; each district leads
+  # to its place on the fleet's pages (`HarbourCrew.districts/1`). The stylesheet
+  # shows the city still until the GPU's first frame has landed, and keeps it
+  # where there is no GPU.
   defp sea(assigns) do
     ~H"""
     <div
       id={@id}
-      class={["rl-sea", "rl-sea--#{@layout}"]}
+      class="rl-sea"
       phx-hook="FleetSea"
       phx-mounted={JS.ignore_attributes(["data-harbour-ready"])}
-      data-harbour-layout={@layout}
       data-harbour-crew={HarbourCrew.on_sea(@fleet.ships)}
+      data-harbour-districts={@fleet.districts}
       aria-hidden="true"
     >
       <div id={"#{@id}-stage"} class="rl-sea__stage" phx-update="ignore" data-harbour-stage>

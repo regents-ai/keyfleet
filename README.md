@@ -19,16 +19,22 @@ person's keys, agents, ENS name and World ID are on the Account page, where
 they rename and unpair their agents. The homepage's hex tiles light under a
 mouse; on a phone or tablet, or with less motion asked for, they stay still.
 
-Behind every page but the homepage is the harbour: a blueprint sea with an inn,
-a forge and a castle, and one ship for each recently active key. A ship sails to
-the island of its key's last action (the inn for a post, the forge for work in
-the workspace, the castle for a proposal or a vote) and circles there. On a
-fleet's pages the ships are that fleet's keys, the visitor's own first; anywhere
-else they are the latest keys of every open fleet. The button at the top right
-lifts the page away to show the whole sea; then pressing a ship opens its key's
-last few actions. With less motion asked for, on a browser saving data, or on a
-device saving power or falling behind, the sea is a still picture that still
-updates when a ship moves.
+Behind every page but the homepage is the swarm city: thin outlined towers in
+tangerine and powder blue, light or dark with the page, with three downtowns,
+the inn, the forge and the castle, and one disc for each recently active key. A
+disc flies to the district of its key's last action (the inn for a post, the
+forge for work in the workspace, the castle for a proposal or a vote) and
+circles its towers. On a fleet's pages the discs are that fleet's keys, the
+visitor's own first; anywhere else they are the latest keys of every open
+fleet. The button at the top right lifts the page away to show the whole city;
+then a drag turns it, a mouse over a district lights it, and pressing a disc
+opens its key's last few actions. On a fleet's pages each district leads
+somewhere in that fleet: the inn to its Public room, the forge to its workspace
+and the castle to its treasury; a mouse over one names it and pressing it opens
+it. The homepage shows Classic's city beside its cards, whose districts lead to
+Classic's once it is open. With less motion asked for, on a browser saving data, or on a device
+saving power or falling behind, the city is a still picture that still updates
+when a disc moves.
 
 ## How a fleet works
 

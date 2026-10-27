@@ -1,15 +1,15 @@
 import {expect, test} from "@playwright/test"
 
-// The button at the header's far right lifts the page away to show the sea
-// behind it, and brings it back. It is drawn as an island over the waves, with
-// no box round it and a hairline between it and the control before it.
-test("the sea button stands unboxed after a hairline and lifts the page and back", async ({page}) => {
+// The button at the header's far right lifts the page away to show the city
+// behind it, and brings it back. It is drawn as a skyline, with no box round
+// it and a hairline between it and the control before it.
+test("the city button stands unboxed after a hairline and lifts the page and back", async ({page}) => {
   const errors: string[] = []
   page.on("pageerror", error => errors.push(error.message))
   await page.goto("/classic/1")
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   const lift = page.locator("#sea-lift")
-  await expect(lift).toHaveAccessibleName("Show the sea")
+  await expect(lift).toHaveAccessibleName("Show the city")
 
   const look = await lift.evaluate(button => {
     const style = getComputedStyle(button)

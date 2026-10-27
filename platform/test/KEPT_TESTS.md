@@ -171,3 +171,14 @@ required value.
 | Test | Module or spec | Protects |
 | --- | --- | --- |
 | a missing required value raises Ash's error, and a present one comes back | `Keyfleet.RequiredValueTest` | A database built from every migration, the site's and the shared libraries', ends with version 7 in `public`. |
+
+## One address per page
+
+Added on 27 October 2026 with ash-template 9dd2237: Sentinel found keyfleet.ai/about/
+answering 200, and every route matched with a slash on the end.
+
+| Test | Module or spec | Protects |
+| --- | --- | --- |
+| a page address with a slash at the end is the site's not-found page | `KeyfleetWeb.TrailingSlashTest` | No page has a second address with a slash on the end. |
+| an API address with a slash at the end is the API's not-found answer | `KeyfleetWeb.TrailingSlashTest` | An agent calling a slash address gets the API's own not_found JSON. |
+| the homepage keeps its slash | `KeyfleetWeb.TrailingSlashTest` | The rule never takes the homepage away. |

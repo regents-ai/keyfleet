@@ -21,7 +21,6 @@ Mac.
 | `lib/live.js` | The live connection, as the site's own browser code makes it. |
 | `summarize.mjs` | Turns any run's results into Markdown tables. Node only, no packages. |
 | `zap-baseline.sh`, `zap-rules.tsv` | The OWASP ZAP baseline scan of the local copy. |
-| `profile-live.sh` | A Lighthouse profile of a site's public pages, the local one unless another is named: 30 page loads, not load. |
 
 Results go to `results/<run>-<time>/` here, which git ignores.
 
@@ -342,6 +341,5 @@ single-machine replacement and a failing database. They cannot prove:
 - **Real phones**: the script is a browser's network traffic, not a browser.
   It draws nothing, runs no page script, fetches only what the HTML names and
   the modules those import, and sends nothing a reader's clicks would. LCP,
-  INP and CLS come from real visitors' browsers (`KeyfleetWeb.Vitals`), and
-  `profile-live.sh` gives a lab profile in Chromium.
+  INP and CLS come from real visitors' browsers (`KeyfleetWeb.Vitals`).
 - **Real 4G**: its latency, loss and handovers, and the reconnects they cause.

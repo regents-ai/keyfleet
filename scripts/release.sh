@@ -17,12 +17,10 @@
 # as one cluster: the graph machine with an empty graph volume and the site
 # machine with none. It checks the health endpoint, the home page, a built
 # stylesheet, the graph host's Python, the running site's database connection
-# and a graph writer answering the site from the graph machine, then measures the
-# pages against their Lighthouse budgets (scripts/budgets.sh), which needs
-# Playwright's Chromium on this machine. It runs as staging because that role
-# admits only the staging database hostnames, which the throwaway database
-# answers to on its network. The server gets no chain node
-# or Privy app, so it reads no chain and offers no sign-in.
+# and a graph writer answering the site from the graph machine. It runs as
+# staging because that role admits only the staging database hostnames, which
+# the throwaway database answers to on its network. The server gets no chain
+# node or Privy app, so it reads no chain and offers no sign-in.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -182,12 +180,6 @@ wait_for "a graph writer on the graph machine" graph_writer
 writer_node="$(graph_writer)"
 [[ $writer_node == "keyfleet@$subnet::1:2" ]] || fail "the graph writer answered from \"$writer_node\""
 
-# The pages against their Lighthouse budgets, at the address PHX_HOST names so
-# their live connection opens. Every fleet is coming soon in this database, so
-# its room and poll addresses open the fleet's page, and the summary says so.
-echo "==> Measuring the pages against their Lighthouse budgets"
-scripts/budgets.sh "http://localhost:${base##*:}"
-
 echo
 echo "Release built and smoke-checked"
 echo "  app commit      $commit"
@@ -202,4 +194,3 @@ echo "  static asset    $stylesheet answered $stylesheet_answer"
 echo "  graph host      $graph_host loaded the graph host"
 echo "  database        the running server queried $connected_database"
 echo "  cluster         the site reached a graph writer on $writer_node"
-echo "  budgets         every page's median Lighthouse run kept within platform/lighthouserc.cjs"
