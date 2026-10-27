@@ -582,7 +582,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
           <KeyfleetWeb.Time.local id={"harbour-agent-action-#{i}-at"} at={action.at} as={:moment} />
         </li>
       </ol>
-      <.link class="harbour-card__key" navigate={KeyLinks.key_path(@ship.fleet_id, @ship.token_id)}>
+      <.link class="harbour-card__key" navigate={KeyLinks.page_path(@ship.fleet_id, @ship.token_id)}>
         View
       </.link>
     </Regent.Structure.dialog>

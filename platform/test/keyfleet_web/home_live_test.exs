@@ -324,7 +324,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
       assert has_element?(
                view,
-               "#harbour-agent a[href='#{KeyLinks.key_path(@classic, 9)}']",
+               "#harbour-agent a[href='#{KeyLinks.page_path(@classic, 9)}']",
                "View"
              )
 

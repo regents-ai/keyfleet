@@ -5253,3 +5253,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   instead of covering it. As ash-template.
 - The count of Keys after a disc's name sits raised beside the Key, as a small
   superscript, instead of level with it.
+
+## 2026-10-27 — City card: View opens the Key's own page
+
+- A disc's card's View now opens the Key's own page (`/classic/1/keys/N`), as
+  Sean asked ("a 'View' button which goes to the Key page"), instead of the
+  fleet page with the Key's profile open.
