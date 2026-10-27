@@ -48,7 +48,7 @@ defmodule Keyfleet.Projects.Project do
     table "projects"
     repo(Keyfleet.Repo)
 
-    identity_wheres_to_sql one_active_per_key: "state = 'active'"
+    identity_wheres_to_sql(one_active_per_key: "state = 'active'")
 
     check_constraints do
       check_constraint(:name, "projects_name_shape",
@@ -62,6 +62,12 @@ defmodule Keyfleet.Projects.Project do
   end
 
   actions do
+    # The read a guarded change of state reads its row back with.
+    read :read do
+      primary? true
+      public? false
+    end
+
     # The fleet's projects, oldest first, so `general` leads; a deleted one
     # is left out.
     read :in_fleet do
@@ -163,13 +169,13 @@ defmodule Keyfleet.Projects.Project do
       change set_attribute(:state, :active)
 
       change fn changeset, _context ->
-               %{fleet_id: fleet_id, name: name, key: key} = changeset.attributes
+        %{fleet_id: fleet_id, name: name, key: key} = changeset.attributes
 
-               Ash.Changeset.force_change_attributes(changeset,
-                 created_by_key: key,
-                 repository: "#{fleet_id}-#{name}"
-               )
-             end
+        Ash.Changeset.force_change_attributes(changeset,
+          created_by_key: key,
+          repository: "#{fleet_id}-#{name}"
+        )
+      end
 
       change Keyfleet.Notebooks.Changes.MakeSpace
       change Keyfleet.Code.Changes.MakeRepository
@@ -183,14 +189,14 @@ defmodule Keyfleet.Projects.Project do
       upsert_fields [:title]
 
       change fn changeset, _context ->
-               Ash.Changeset.force_change_attributes(changeset,
-                 name: "general",
-                 title: "General",
-                 key: @general_key,
-                 state: :archived,
-                 repository: Ash.Changeset.get_attribute(changeset, :fleet_id)
-               )
-             end
+        Ash.Changeset.force_change_attributes(changeset,
+          name: "general",
+          title: "General",
+          key: @general_key,
+          state: :archived,
+          repository: Ash.Changeset.get_attribute(changeset, :fleet_id)
+        )
+      end
     end
 
     update :archived do
@@ -241,6 +247,7 @@ defmodule Keyfleet.Projects.Project do
     end
 
     policy action([
+             :read,
              :create,
              :general,
              :ever_named,

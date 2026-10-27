@@ -9,8 +9,9 @@ defmodule Keyfleet.Graph.Event do
   `byte_size`, the length of the event as a reader receives it, so a page of
   events is cut to size by the database. Only the projector writes here. Only
   the fleet's members read its events (`Keyfleet.Graph.Checks.KeyReader`),
-  except which of its changes are notable and when, which the workspace pulse
-  shows anyone without any text an event holds.
+  except which of its changes are notable, when, as which Key and in which
+  projects, which the workspace pulse shows anyone without any text an event
+  holds.
   """
   use Ash.Resource,
     domain: Keyfleet.Graph,
@@ -141,7 +142,7 @@ defmodule Keyfleet.Graph.Event do
 
       prepare fn query, _context -> Ash.Query.filter(query, ^sql(@notable)) end
       prepare {Keyfleet.Preparations.NewestFirst, sort: [seq: :desc], before: [:before_seq]}
-      prepare build(select: @brief_fields, load: [:brief])
+      prepare build(select: [:projects | @brief_fields], load: [:brief])
     end
 
     # Every change to one object up to `through_seq`, newest first, one more

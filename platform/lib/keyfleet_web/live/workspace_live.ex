@@ -5,10 +5,13 @@ defmodule KeyfleetWeb.WorkspaceLive do
   agents keep, what each one is linked to, and everything that changed.
 
   It has three places, each one address: the Project (goals, tasks and what
-  changed), its Docs (the fleet's notebooks) and its Code. The only writes
-  are pins, a notebook or a piece of code a member keeps at hand for every
-  member (`Keyfleet.Graph.Pin`), and the buttons that open the notebooks or
-  make a git password. Everything shown is what `KeyfleetWeb.WorkspacePage`
+  changed), its Docs (the fleet's notebooks) and its Code, in one of the
+  fleet's projects or across all of them, as the project picker chooses.
+  The only writes are pins, a notebook or a piece of code a member keeps at
+  hand for every member (`Keyfleet.Graph.Pin`); starting, archiving,
+  taking over and deleting a project as the member's Key
+  (`Keyfleet.Projects`); and the buttons that open the notebooks or make a
+  git password. Everything shown is what `KeyfleetWeb.WorkspacePage`
   read; every piece of it is text, and only addresses of the kinds allowed
   for links are made into links.
   """
@@ -17,7 +20,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   import KeyfleetWeb.Components.LoadFailed
 
-  alias Keyfleet.Graph
+  alias Keyfleet.{Graph, Keys, Projects}
+  alias Keyfleet.Graph.Errors.{EditsRestrictedError, NotKeyHolderError}
+  alias Keyfleet.Keys.Errors.OwnershipRefreshingError
+  alias Keyfleet.Projects.Errors.{HoldError, NameTakenError}
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.PageRead
@@ -34,6 +40,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :notebooks_notice, :string, default: nil
   attr :code_password, :map, default: nil, doc: "the git password just made, and until when"
   attr :code_notice, :string, default: nil
+  attr :project_notice, :string, default: nil, doc: "why a project press was refused"
 
   attr :signed_out?, :boolean,
     default: false,
@@ -55,7 +62,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
       data-active={@board.place}
       data-variant={KeyfleetWeb.Motion.standard("tabs")}
     >
-      <.places fleet_id={@board.fleet_id} place={@board.place} />
+      <.places fleet_id={@board.fleet_id} place={@board.place} project={@board.project} />
+      <.projects board={@board} notice={@project_notice} />
       <.public_notice />
 
       <div
@@ -79,6 +87,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :fleet_id, :string, required: true
   attr :place, :atom, required: true
+  attr :project, :string, default: nil
 
   # The three places to work, one tab each named with the tool it runs on,
   # above a chart that rises over the one open. The chart only decorates.
@@ -105,7 +114,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           data-tab={place}
           aria-selected={to_string(place == @place)}
           aria-controls={place == @place && "workspace-place-#{place}"}
-          patch={WorkspacePage.place_path(@fleet_id, place)}
+          patch={WorkspacePage.place_path(@fleet_id, place, @project)}
         >
           <span class="workspace-place-name">{place_name(place)}</span>
           <span class="workspace-place-tool">{place_tool(place)}</span>
@@ -120,6 +129,119 @@ defmodule KeyfleetWeb.WorkspaceLive do
     </nav>
     """
   end
+
+  attr :board, :map, required: true
+  attr :notice, :string, default: nil
+
+  # The picker: All projects, then the active projects, then the archived
+  # ones, each with the Key that holds it. Beside it what the member's Key
+  # may do now: start a project when it has none active, archive its active
+  # one, take over the archived project on show, or delete it when it is
+  # the Key's own.
+  defp projects(assigns) do
+    assigns =
+      assign(assigns,
+        active: Enum.filter(assigns.board.projects, &(&1.state == :active)),
+        archived: Enum.filter(assigns.board.projects, &(&1.state == :archived)),
+        on_show: Enum.find(assigns.board.projects, &(&1.name == assigns.board.project))
+      )
+
+    ~H"""
+    <section id="workspace-projects" class="workspace-projects" aria-label="Projects">
+      <nav id="workspace-project-picker" class="workspace-project-picker" aria-label="Projects">
+        <.link
+          id="workspace-project-all"
+          patch={WorkspacePage.place_path(@board.fleet_id, @board.place)}
+          aria-current={if is_nil(@board.project), do: "page"}
+        >
+          All projects
+        </.link>
+        <.project_link :for={project <- @active} board={@board} project={project} />
+      </nav>
+      <div :if={@archived != []} id="workspace-project-archive" class="workspace-project-archive">
+        <h3>Archived</h3>
+        <nav class="workspace-project-picker" aria-label="Archived projects">
+          <.project_link :for={project <- @archived} board={@board} project={project} />
+        </nav>
+      </div>
+      <div :if={@board.you} id="workspace-project-actions" class="workspace-project-actions">
+        <Regent.Primitives.disclosure
+          :if={is_nil(@board.you.active)}
+          id="project-start"
+          summary="New project"
+        >
+          <form id="project-start-form" class="workspace-project-form" phx-submit="project_start">
+            <label>
+              Title <input name="title" type="text" maxlength="60" required />
+            </label>
+            <label>
+              Short name
+              <input
+                name="name"
+                type="text"
+                maxlength="32"
+                pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                title="Lowercase letters, digits and hyphens"
+                required
+              />
+            </label>
+            <Regent.Primitives.button type="submit">
+              Start as {ActivityLines.key_name(@board.you.key, nil)}
+            </Regent.Primitives.button>
+          </form>
+        </Regent.Primitives.disclosure>
+        <Regent.Primitives.button
+          :if={@board.you.active}
+          id="project-archive"
+          variant="secondary"
+          phx-click="project_archive"
+        >
+          Archive {title(@board.projects, @board.you.active)}
+        </Regent.Primitives.button>
+        <Regent.Primitives.button
+          :if={@on_show && @on_show.state == :archived && is_nil(@board.you.active)}
+          id="project-take-over"
+          variant="secondary"
+          phx-click="project_take_over"
+          phx-value-project={@on_show.name}
+        >
+          Take over {@on_show.title}
+        </Regent.Primitives.button>
+        <Regent.Primitives.button
+          :if={@on_show && @on_show.state == :archived && @on_show.key == @board.you.key}
+          id="project-delete"
+          variant="secondary"
+          phx-click="project_delete"
+          phx-value-project={@on_show.name}
+          data-confirm={"Delete #{@on_show.title} for good? Its work, notebooks and code go with it."}
+        >
+          Delete {@on_show.title}
+        </Regent.Primitives.button>
+      </div>
+      <p :if={@notice} id="project-notice" class="workspace-notebooks-notice" role="status">
+        {@notice}
+      </p>
+    </section>
+    """
+  end
+
+  attr :board, :map, required: true
+  attr :project, :map, required: true
+
+  defp project_link(assigns) do
+    ~H"""
+    <.link
+      id={"workspace-project-#{@project.name}"}
+      data-project={@project.name}
+      patch={WorkspacePage.place_path(@board.fleet_id, @board.place, @project.name)}
+      aria-current={if @board.project == @project.name, do: "page"}
+    >
+      {@project.title} · {ActivityLines.key_name(@project.key, nil)}
+    </.link>
+    """
+  end
+
+  defp title(projects, name), do: Enum.find_value(projects, &(&1.name == name && &1.title))
 
   defp place_name(:project), do: "Project"
   defp place_name(:docs), do: "Docs"
@@ -269,8 +391,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :board, :map, required: true
   attr :notice, :string, default: nil
 
-  # The newest notebooks, grouped by folder, beside what the fleet's members
-  # pinned and how to open them.
+  # One project's newest notebooks, grouped by folder, or each project's few
+  # newest in turn, beside what the fleet's members pinned and how to open
+  # them.
   defp docs(assigns) do
     ~H"""
     <div class="workspace-grid">
@@ -282,61 +405,49 @@ defmodule KeyfleetWeb.WorkspaceLive do
         >
           <h2 id="workspace-notebooks-title">Notebooks</h2>
           <Regent.Primitives.empty_state
-            :if={is_nil(@board.notebooks)}
+            :if={not @board.hub?}
             id="workspace-notebooks-none"
             class="kf-empty"
             title="Notebooks aren’t connected for this fleet yet."
           />
-          <p :if={@board.notebooks == :unreadable} id="workspace-notebooks-unreadable">
-            The notebooks can’t be read right now. Try again in a minute.
-          </p>
-          <Regent.Primitives.empty_state
-            :if={@board.notebooks == []}
-            id="workspace-notebooks-empty"
-            class="kf-empty"
-            title="No notebooks yet."
+          <.notebook_rows
+            :if={@board.hub? and @board.project}
+            notebooks={@board.notebooks}
+            pins={@board.pins}
+            project={@board.project}
+            active?={@board.active?}
+          />
+          <section
+            :for={section <- if(@board.hub?, do: @board.sections, else: [])}
+            id={"workspace-docs-#{section.project}"}
+            class="workspace-folder"
+            data-project={section.project}
           >
-            Open the notebooks to start the first one.
-          </Regent.Primitives.empty_state>
-          <div
-            :if={listed(@board.notebooks) != []}
-            id="workspace-notebook-rows"
-            class="workspace-folders"
-          >
-            <section
-              :for={{folder, notebooks} <- by_folder(listed(@board.notebooks))}
-              class="workspace-folder"
-              data-folder={folder}
-            >
-              <h3 :if={folder}>{folder}</h3>
-              <ol class="workspace-rows">
-                <li
-                  :for={notebook <- notebooks}
-                  class="workspace-row workspace-row--pinnable"
-                  data-notebook={notebook.id}
-                >
-                  <a class="workspace-row-title" href={notebook.open}>{notebook.title}</a>
-                  <span class="workspace-row-meta">
-                    <KeyfleetWeb.Time.local
-                      id={"workspace-notebook-#{notebook.id}-added"}
-                      at={notebook.added}
-                      as={:date}
-                    />
-                  </span>
-                  <p :if={notebook.description != ""} class="workspace-row-text">
-                    {notebook.description}
-                  </p>
-                  <.pin_toggle
-                    id={"workspace-notebook-#{notebook.id}-pin"}
-                    place={:docs}
-                    target={notebook.id}
-                    name={notebook.title}
-                    whose={whose(@board.pins, notebook.id)}
+            <h3>
+              <.link patch={section.link}>{section.title}</.link>
+            </h3>
+            <p :if={section.notebooks == :unreadable} class="workspace-detail">
+              These notebooks can’t be read right now.
+            </p>
+            <p :if={section.notebooks == []} class="workspace-detail">No notebooks yet.</p>
+            <ol :if={listed(section.notebooks) != []} class="workspace-rows">
+              <li
+                :for={notebook <- listed(section.notebooks)}
+                class="workspace-row"
+                data-notebook={notebook.id}
+              >
+                <a class="workspace-row-title" href={notebook.open}>{notebook.title}</a>
+                <span class="workspace-row-meta">
+                  <span :if={notebook.folder}>{notebook.folder}</span>
+                  <KeyfleetWeb.Time.local
+                    id={"workspace-docs-#{section.project}-#{notebook.id}-added"}
+                    at={notebook.added}
+                    as={:date}
                   />
-                </li>
-              </ol>
-            </section>
-          </div>
+                </span>
+              </li>
+            </ol>
+          </section>
         </section>
       </div>
       <div class="workspace-side">
@@ -374,18 +485,116 @@ defmodule KeyfleetWeb.WorkspaceLive do
     """
   end
 
+  attr :notebooks, :any, required: true, doc: "the notebooks as read, or `:unreadable`"
+  attr :pins, :list, required: true
+  attr :project, :string, required: true
+  attr :active?, :boolean, required: true
+
+  # One project's notebooks, those in no folder first, then each folder
+  # under its name.
+  defp notebook_rows(assigns) do
+    ~H"""
+    <p :if={@notebooks == :unreadable} id="workspace-notebooks-unreadable">
+      The notebooks can’t be read right now. Try again in a minute.
+    </p>
+    <Regent.Primitives.empty_state
+      :if={@notebooks == []}
+      id="workspace-notebooks-empty"
+      class="kf-empty"
+      title="No notebooks yet."
+    >
+      Open the notebooks to start the first one.
+    </Regent.Primitives.empty_state>
+    <div :if={listed(@notebooks) != []} id="workspace-notebook-rows" class="workspace-folders">
+      <section
+        :for={{folder, notebooks} <- by_folder(listed(@notebooks))}
+        class="workspace-folder"
+        data-folder={folder}
+      >
+        <h3 :if={folder}>{folder}</h3>
+        <ol class="workspace-rows">
+          <li
+            :for={notebook <- notebooks}
+            class="workspace-row workspace-row--pinnable"
+            data-notebook={notebook.id}
+          >
+            <a class="workspace-row-title" href={notebook.open}>{notebook.title}</a>
+            <span class="workspace-row-meta">
+              <KeyfleetWeb.Time.local
+                id={"workspace-notebook-#{notebook.id}-added"}
+                at={notebook.added}
+                as={:date}
+              />
+            </span>
+            <p :if={notebook.description != ""} class="workspace-row-text">
+              {notebook.description}
+            </p>
+            <.pin_toggle
+              id={"workspace-notebook-#{notebook.id}-pin"}
+              place={:docs}
+              project={@project}
+              active?={@active?}
+              target={notebook.id}
+              name={notebook.title}
+              whose={whose(@pins, notebook.id)}
+            />
+          </li>
+        </ol>
+      </section>
+    </div>
+    """
+  end
+
   attr :board, :map, required: true
   attr :password, :map, default: nil, doc: "the git password just made, and until when"
   attr :notice, :string, default: nil
 
-  # The fleet's shared code: its top folder and the changes sent lately,
-  # beside what its members pinned, where git copies it from, and a password
-  # for a holder of one of its Keys.
+  # One project's code: its top folder and the changes sent lately, beside
+  # what the members pinned, where git copies it from, and a password for a
+  # holder of one of the fleet's Keys. Across all projects, each project's
+  # repository in turn, and every pin.
   defp code(assigns) do
     ~H"""
     <div class="workspace-grid">
       <div class="workspace-main">
-        <section id="workspace-code" class="workspace-panel" aria-labelledby="workspace-code-title">
+        <section
+          :if={is_nil(@board.project)}
+          id="workspace-code"
+          class="workspace-panel"
+          aria-labelledby="workspace-code-title"
+        >
+          <h2 id="workspace-code-title">Repositories</h2>
+          <ol id="workspace-repositories" class="workspace-rows">
+            <li
+              :for={repository <- @board.repositories}
+              class="workspace-row"
+              data-project={repository.project}
+            >
+              <.link class="workspace-row-title" patch={repository.link}>{repository.title}</.link>
+              <span class="workspace-row-meta">
+                {ActivityLines.key_name(repository.key, nil)}
+                <span :if={repository.state == :archived} class="workspace-badge">Archived</span>
+              </span>
+              <div class="workspace-copy-box">
+                <code id={"workspace-code-address-#{repository.project}"}>
+                  {repository.clone_url}
+                </code>
+                <Regent.Primitives.copy_icon
+                  id={"workspace-code-address-#{repository.project}-copy"}
+                  target={"workspace-code-address-#{repository.project}"}
+                  label={"Copy the address of #{repository.title}’s code"}
+                />
+              </div>
+            </li>
+          </ol>
+        </section>
+
+        <section
+          :if={@board.project}
+          id="workspace-code"
+          class="workspace-panel"
+          aria-labelledby="workspace-code-title"
+        >
           <h2 id="workspace-code-title">Files</h2>
           <p :if={@board.files == :unreadable} id="workspace-code-unreadable">
             The code can’t be read right now. Try again in a minute.
@@ -414,6 +623,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
               <.pin_toggle
                 id={"workspace-code-#{entry_id(entry.path)}-pin"}
                 place={:code}
+                project={@board.project}
+                active?={@board.active?}
                 target={entry.path}
                 name={entry.path}
                 whose={whose(@board.pins, entry.path)}
@@ -429,7 +640,11 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </.link>
         </section>
 
-        <section class="workspace-panel" aria-labelledby="workspace-code-pushes-title">
+        <section
+          :if={@board.project}
+          class="workspace-panel"
+          aria-labelledby="workspace-code-pushes-title"
+        >
           <h2 id="workspace-code-pushes-title">Sent lately</h2>
           <Regent.Primitives.empty_state
             :if={@board.pushes == []}
@@ -464,7 +679,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
                 One shared place for this fleet’s code. Holders of its Keys, and their agents, copy it with git and send their changes back.
               </Regent.Primitives.tip>
             </h3>
-            <div class="workspace-copy-box">
+            <div :if={@board.project} class="workspace-copy-box">
               <code id="workspace-code-address">{@board.clone_url}</code>
               <Regent.Primitives.copy_icon
                 id="workspace-code-address-copy"
@@ -518,13 +733,15 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <h3 id={@id <> "-title"}>Pinned</h3>
         <p :if={@pins == []} id={@id <> "-empty"} class="workspace-detail">{@empty}</p>
         <ol :if={@pins != []} id={@id <> "-rows"} class="workspace-pins">
-          <li :for={pin <- @pins} data-pin={pin.target}>
+          <li :for={pin <- @pins} data-pin={pin.target} data-project={pin.project}>
             <a :if={@place == :docs and pin.link} href={pin.link}>{pin.title}</a>
             <span :if={@place == :docs and is_nil(pin.link)}>{pin.title}</span>
             <.link :if={@place == :code} patch={pin.link}>{pin.title}</.link>
+            <span :if={pin.label} class="workspace-badge" data-project-label>{pin.label}</span>
             <.pin_toggle
-              id={"#{@id}-#{entry_id(pin.target)}"}
+              id={"#{@id}-#{pin.project}-#{entry_id(pin.target)}"}
               place={@place}
+              project={pin.project}
               target={pin.target}
               name={pin.title}
               whose={pin.whose}
@@ -538,6 +755,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :id, :string, required: true
   attr :place, :atom, required: true
+  attr :project, :string, required: true
+  attr :active?, :boolean, default: true, doc: "whether the project takes new pins"
   attr :target, :string, required: true
   attr :name, :string, required: true, doc: "what a press pins, read out and shown on hover"
 
@@ -546,10 +765,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
     doc: "whose pin is on it, if any: only its pinner lifts a pin"
 
   # A pin a press sets or lifts, for every member of the fleet to see. Another
-  # member's pin shows pinned, but only they lift it.
+  # member's pin shows pinned, but only they lift it. An archived project
+  # takes no new pins.
   defp pin_toggle(assigns) do
     ~H"""
     <button
+      :if={@active? or @whose != nil}
       id={@id}
       type="button"
       class="kf-pin"
@@ -559,6 +780,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
       disabled={@whose == :theirs}
       phx-click={if @whose == :mine, do: "unpin", else: "pin"}
       phx-value-place={@place}
+      phx-value-project={@project}
       phx-value-target={@target}
     >
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -957,6 +1179,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
             :if={match?({:folder, _}, @files.listing)}
             listing={@files.listing}
             pinned={@files.pinned}
+            project={@files.project}
+            active?={@files.active?}
           />
           <.file :if={match?({:file, _}, @files.listing)} listing={@files.listing} />
         </section>
@@ -1000,7 +1224,10 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :pinned, :map,
     required: true,
-    doc: "whose each path pinned in the fleet's code is, `:mine` or `:theirs`"
+    doc: "whose each path pinned in the project's code is, `:mine` or `:theirs`"
+
+  attr :project, :string, required: true
+  attr :active?, :boolean, required: true
 
   defp folder(%{listing: {:folder, entries}} = assigns) do
     assigns = assign(assigns, :entries, entries)
@@ -1024,6 +1251,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <.pin_toggle
           id={"workspace-file-#{entry_id(entry.path)}-pin"}
           place={:code}
+          project={@project}
+          active?={@active?}
           target={entry.path}
           name={entry.path}
           whose={@pinned[entry.path]}
@@ -1256,6 +1485,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           {row.title}
         </.link>
         <span class="workspace-row-meta">
+          <span :if={row.project} class="workspace-badge" data-project-label>{row.project}</span>
           <span :if={row.starting?} class="workspace-badge">Starting idea</span>
           <span :if={row.archived?} class="workspace-badge">Archived</span>
           <span :if={row.status}>{row.status}</span>
@@ -1461,6 +1691,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
     >
       <p class="workspace-kind">
         <span>{type_label(@card.type)}</span>
+        <span :if={@card.project} class="workspace-badge" data-project-label>{@card.project}</span>
         <span :if={@card.starting?} class="workspace-badge">Starting idea</span>
         <span :if={@card.archived?} class="workspace-badge">Archived</span>
       </p>
@@ -1571,22 +1802,29 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   @doc """
   A press of a pin on the workspace page on show. A pin names something the
-  page lists, by its place and `target`, and keeps the title the page shows;
-  a press naming anything else changes nothing. Unpinning lifts the member's
-  own pin with that place and target, wherever the page showed it; another
-  member's pin stays. Either way the page
-  reads afresh: a member who lost their Key meanwhile sees what they may read.
+  page lists in the project on show, by its place and `target`, and keeps
+  the title the page shows; a press naming anything else changes nothing.
+  Unpinning lifts the member's own pin with that project, place and target,
+  wherever the page showed it; another member's pin stays. Either way the
+  page reads afresh: a member who lost their Key meanwhile sees what they
+  may read, and a project archived meanwhile shows it takes no new pins.
+
+  The project presses act as the member's Key (`Keyfleet.Keys.identity/2`):
+  start a project, archive the Key's active one, take over or delete one.
+  One that goes moves the page to the project it leaves on show; a refused
+  one says why.
   """
-  def handle_event("pin", %{"place" => place, "target" => target}, socket) do
+  def handle_event("pin", %{"place" => place, "project" => project, "target" => target}, socket) do
     workspace = socket.assigns.workspace
 
-    case shown(workspace, Map.get(@pin_places, place), target) do
+    case shown(workspace, project, Map.get(@pin_places, place), target) do
       nil ->
         {:noreply, socket}
 
       {place, title, folder?} ->
         %{
           fleet_id: workspace.fleet_id,
+          project: project,
           place: place,
           target: target,
           title: title,
@@ -1597,11 +1835,16 @@ defmodule KeyfleetWeb.WorkspaceLive do
     end
   end
 
-  def handle_event("unpin", %{"place" => place, "target" => target}, socket)
+  def handle_event(
+        "unpin",
+        %{"place" => place, "project" => project, "target" => target},
+        socket
+      )
       when is_map_key(@pin_places, place) do
     actor = ShellLive.human_actor(socket)
+    fleet_id = socket.assigns.workspace.fleet_id
 
-    case Graph.pins(socket.assigns.workspace.fleet_id, @pin_places[place], actor: actor) do
+    case Graph.pins(fleet_id, @pin_places[place], project, actor: actor) do
       {:ok, pins} ->
         case Enum.find(pins, &(&1.target == target)) do
           nil -> {:noreply, read_workspace(socket)}
@@ -1613,29 +1856,82 @@ defmodule KeyfleetWeb.WorkspaceLive do
     end
   end
 
-  def handle_event(_pin, _params, socket), do: {:noreply, socket}
+  def handle_event("project_start", %{"name" => name, "title" => title}, socket),
+    do: hold(socket, &Projects.start_project(&1, &2, name, title, &3))
 
-  # What the page lists in a place under `target`: its title, and whether it
-  # is a folder.
-  defp shown(%{place: :docs, notebooks: notebooks}, :docs, target) do
+  def handle_event("project_archive", _params, socket),
+    do: hold(socket, &Projects.archive_project/3)
+
+  def handle_event("project_take_over", %{"project" => name}, socket),
+    do: hold(socket, &Projects.take_over_project(&1, &2, name, &3))
+
+  def handle_event("project_delete", %{"project" => name}, socket),
+    do: hold(socket, &Projects.delete_project(&1, &2, name, &3))
+
+  def handle_event(_press, _params, socket), do: {:noreply, socket}
+
+  defp hold(socket, step) do
+    actor = ShellLive.human_actor(socket)
+    %{fleet_id: fleet_id, place: place} = socket.assigns.workspace
+
+    with %{token_id: key} <- Keys.identity(actor, fleet_id),
+         {:ok, project} <- step.(fleet_id, key, actor: actor) do
+      on_show = if project.state == :deleted, do: nil, else: project.name
+
+      {:noreply,
+       Phoenix.LiveView.push_patch(socket, to: WorkspacePage.place_path(fleet_id, place, on_show))}
+    else
+      nil ->
+        {:noreply, assign(socket, :project_notice, refusal(%NotKeyHolderError{}))}
+
+      {:error, error} ->
+        {:noreply, socket |> assign(:project_notice, refused(error)) |> read_workspace()}
+    end
+  end
+
+  defp refused(%{errors: errors}),
+    do: Enum.find_value(errors, &refusal/1) || "That didn’t go through. Try again in a minute."
+
+  defp refusal(%HoldError{words: words}), do: words
+  defp refusal(%NameTakenError{} = error), do: Exception.message(error)
+  defp refusal(%{field: :name}), do: "A short name is lowercase letters, digits and hyphens."
+  defp refusal(%{field: :title}), do: "A title is 1 to 60 characters."
+
+  defp refusal(%NotKeyHolderError{}),
+    do: "Only holders of this fleet’s Keys work on its projects."
+
+  defp refusal(%EditsRestrictedError{}), do: "A vote has stopped this Key’s edits for now."
+
+  defp refusal(%OwnershipRefreshingError{}),
+    do: "Key holders are being checked. Try again in a minute."
+
+  defp refusal(_error), do: nil
+
+  # What the page lists in a place of the project on show under `target`:
+  # its title, and whether it is a folder.
+  defp shown(%{place: :docs, project: project, notebooks: notebooks}, project, :docs, target) do
     notebooks
     |> listed()
     |> Enum.find_value(&(&1.id == target && {:docs, &1.title, false}))
   end
 
-  defp shown(%{place: :code, files: files}, :code, target), do: shown_file(entries(files), target)
+  defp shown(%{place: :code, project: project, files: files}, project, :code, target),
+    do: shown_file(entries(files), target)
 
-  defp shown(%{listing: {:folder, entries}}, :code, target), do: shown_file(entries, target)
+  defp shown(%{project: project, listing: {:folder, entries}}, project, :code, target),
+    do: shown_file(entries, target)
 
-  defp shown(_workspace, _place, _target), do: nil
+  defp shown(_workspace, _project, _place, _target), do: nil
 
   defp shown_file(entries, target),
     do: Enum.find_value(entries, &(&1.path == target && {:code, &1.path, &1.folder?}))
 
   defp pressed(:ok, socket), do: {:noreply, read_workspace(socket)}
   defp pressed({:ok, _pin}, socket), do: {:noreply, read_workspace(socket)}
-  # A pin that isn't the member's, or that they lifted already from another tab.
+  # A pin that isn't the member's, or that they lifted already from another
+  # tab; or one in a project archived meanwhile.
   defp pressed({:error, %Ash.Error.Forbidden{}}, socket), do: {:noreply, read_workspace(socket)}
+  defp pressed({:error, %Ash.Error.Invalid{}}, socket), do: {:noreply, read_workspace(socket)}
 
   defp pressed({:error, failure}, _socket), do: raise(failure)
 

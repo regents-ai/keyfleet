@@ -134,7 +134,8 @@ defmodule Keyfleet.Graph.Object do
       argument :project, :string, constraints: @text
 
       filter expr(
-               fleet_id == ^arg(:fleet_id) and (is_nil(^arg(:project)) or project == ^arg(:project)) and
+               fleet_id == ^arg(:fleet_id) and
+                 (is_nil(^arg(:project)) or project == ^arg(:project)) and
                  ((type == "evidence" and fragment("? ->> 'source_uri'", data) == ^arg(:uri)) or
                     (type == "task" and fragment("? ->> 'commit_ref'", data) == ^arg(:uri)))
              )
@@ -157,7 +158,8 @@ defmodule Keyfleet.Graph.Object do
       argument :project, :string, constraints: @text
 
       filter expr(
-               fleet_id == ^arg(:fleet_id) and (is_nil(^arg(:project)) or project == ^arg(:project)) and
+               fleet_id == ^arg(:fleet_id) and
+                 (is_nil(^arg(:project)) or project == ^arg(:project)) and
                  fragment(
                    """
                    ? IN (

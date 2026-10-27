@@ -42,10 +42,17 @@ defmodule Keyfleet.Projects.Changes.Forget do
         ] do
       resource
       |> Ash.Query.for_read(:of_project, arguments, actor: @system)
-      |> Ash.bulk_destroy!(destroy, %{}, actor: @system, strategy: [:atomic], return_errors?: true)
+      |> Ash.bulk_destroy!(destroy, %{},
+        actor: @system,
+        strategy: [:atomic],
+        return_errors?: true
+      )
     end
 
-    Oban.insert!(DeleteSpace.new(%{fleet_id: fleet_id, project: name, space: project.hub_project_id}))
+    Oban.insert!(
+      DeleteSpace.new(%{fleet_id: fleet_id, project: name, space: project.hub_project_id})
+    )
+
     Oban.insert!(DeleteRepository.new(%{repository: project.repository}))
     {:ok, project}
   end

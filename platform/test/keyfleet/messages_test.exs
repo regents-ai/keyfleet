@@ -331,7 +331,7 @@ defmodule Keyfleet.MessagesTest do
                Rooms.sync(
                  @fleet,
                  [%{slug: "general", after_seq: 0}],
-                 %{graph: 0, proposals: after_seq, keys: [], dms: nil, quotes: nil},
+                 %{graph: 0, project: nil, proposals: after_seq, keys: [], dms: nil, quotes: nil},
                  writer,
                  false
                )

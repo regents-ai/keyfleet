@@ -24,7 +24,6 @@ defmodule Keyfleet.Code.Repository do
     end
 
     destroy :forget
-
   end
 
   policies do

@@ -334,8 +334,7 @@ defmodule KeyfleetWeb.WorkspacePage do
           first_page?: not paged?(params),
           first_page: board_path(fleet.id, filter),
           pages: page_links(page, params, &board_path(fleet.id, filter, &1)),
-          activity:
-            Enum.map(activity, &Map.put(line(&1, titles, agents), :note, notes[&1.seq]))
+          activity: Enum.map(activity, &Map.put(line(&1, titles, agents), :note, notes[&1.seq]))
         }
 
       {:missing, _name} ->

@@ -485,6 +485,28 @@ defmodule Keyfleet.Keys do
     |> Map.new(fn {wallet, at} -> {wallet, DateTime.from_naive!(at, "Etc/UTC")} end)
   end
 
+  @doc """
+  How many of the fleet's keys the holder of each of `token_ids` holds now,
+  as `%{token_id => count}`; a key nobody holds yet is left out.
+  """
+  def holders_key_counts(_fleet_id, []), do: %{}
+
+  def holders_key_counts(fleet_id, token_ids) do
+    owners =
+      Keyfleet.Keys.KeyAttachment
+      |> Ash.Query.for_read(:owned_in_fleet, %{fleet_id: fleet_id, token_ids: token_ids})
+      |> Ash.Query.select([:token_id, :owner_wallet])
+      |> Ash.read!()
+      |> Map.new(&{&1.token_id, &1.owner_wallet})
+
+    counts =
+      fleet_id
+      |> keys_held_in_fleet!(owners |> Map.values() |> Enum.uniq())
+      |> Enum.frequencies_by(& &1.owner_wallet)
+
+    Map.new(owners, fn {token_id, wallet} -> {token_id, counts[wallet]} end)
+  end
+
   # The fleet's keys with their owners today, as `:owned_in_fleet` reads them.
   defp owned(fleet_id) do
     {:ok, query} =

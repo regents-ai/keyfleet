@@ -25,6 +25,7 @@ defmodule Keyfleet.Agents do
 
     resource Keyfleet.Agents.Pairing do
       define :get_pairing, action: :by_wallet, args: [:wallet], not_found_error?: false
+      define :pairings, action: :by_wallets, args: [:wallets]
     end
 
     resource Keyfleet.Agents.CheckIn do

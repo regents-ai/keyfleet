@@ -49,7 +49,10 @@ defmodule Keyfleet.Projects.Hold do
   defp step(:archive, fleet_id, key, _arguments) do
     with {:ok, project} <- active(fleet_id, key),
          :ok <- archive_room(fleet_id, key) do
-      project |> Ash.Changeset.for_update(:archived, %{}, actor: @system) |> Ash.update() |> unwrap()
+      project
+      |> Ash.Changeset.for_update(:archived, %{}, actor: @system)
+      |> Ash.update()
+      |> unwrap()
     end
   end
 
@@ -81,7 +84,11 @@ defmodule Keyfleet.Projects.Hold do
         :ok
 
       [project] ->
-        refuse(:active_held, project, "Key #{key} is working on #{project.title}. Archive it first.")
+        refuse(
+          :active_held,
+          project,
+          "Key #{key} is working on #{project.title}. Archive it first."
+        )
     end
   end
 
@@ -120,7 +127,8 @@ defmodule Keyfleet.Projects.Hold do
   defp archived(%{state: :archived}, _why), do: :ok
 
   defp archived(project, why),
-    do: refuse(:not_archived, project, "#{project.title} is active with Key #{project.key}. #{why}")
+    do:
+      refuse(:not_archived, project, "#{project.title} is active with Key #{project.key}. #{why}")
 
   defp holder(%{key: key}, key), do: :ok
 

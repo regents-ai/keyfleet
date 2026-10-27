@@ -189,7 +189,8 @@ defmodule KeyfleetWeb.AgentNotebookController do
   # goal's page, and one made in a folder the tag folder/<name>, which the
   # project's Docs group it under.
   defp tags(goal, folder) do
-    for {prefix, value} <- [{"goal-", goal_number(goal)}, {"folder/", folder}], value != nil,
+    for {prefix, value} <- [{"goal-", goal_number(goal)}, {"folder/", folder}],
+        value != nil,
         do: prefix <> value
   end
 

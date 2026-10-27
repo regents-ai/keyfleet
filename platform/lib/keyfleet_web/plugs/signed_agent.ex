@@ -866,7 +866,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         :invalid
 
       not (Enum.all?(rooms, &cursor?/1) and graph_cursor?(graph) and
-               Enum.all?(others, &log_cursor?/1) and run?(run)) ->
+             Enum.all?(others, &log_cursor?/1) and run?(run)) ->
         :invalid
 
       not (sync_in_range?(rooms, logs ++ rooms) and run_in_range?(run)) ->
@@ -908,9 +908,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        when is_binary(title) and is_binary(code) and is_binary(key) do
     cond do
       not (Enum.all?(
-               Map.keys(params),
-               &(&1 in ~w(title code idempotency_key description goal folder))
-             ) and
+             Map.keys(params),
+             &(&1 in ~w(title code idempotency_key description goal folder))
+           ) and
              is_binary(Map.get(params, "description", "")) and
              notebook_goal?(params["goal"]) and notebook_folder?(params["folder"]) and
                Regex.match?(~r/\A[!-~]{1,128}\z/, key)) ->
