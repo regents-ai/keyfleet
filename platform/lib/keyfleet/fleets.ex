@@ -131,8 +131,9 @@ defmodule Keyfleet.Fleets do
   Seeds the fixed catalog from trusted application setup code.
 
   Reruns preserve machine identities and restore canonical display names. The
-  whole catalog commits together. This internal entry point must never be exposed
-  as a user action.
+  whole catalog commits together. Every fleet then has its first project,
+  `general` (`Keyfleet.Projects.bootstrap_general!/1`). This internal entry
+  point must never be exposed as a user action.
   """
   def bootstrap_catalog! do
     %Ash.BulkResult{records: fleets} =
@@ -147,6 +148,7 @@ defmodule Keyfleet.Fleets do
         sorted?: true
       )
 
+    :ok = Keyfleet.Projects.bootstrap_general!(Enum.map(fleets, & &1.id))
     fleets
   end
 

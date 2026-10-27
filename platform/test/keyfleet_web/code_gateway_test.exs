@@ -356,6 +356,36 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     assert claims["iat"] >= finished
   end
 
+  # Costly failure: a push begun before its project was archived lands in the
+  # archived project once its body is in.
+  test "a push whose project is archived while it arrives is refused and reaches nothing", c do
+    password = person_password!(c.holder)
+    socket = open_site!()
+
+    :ok =
+      :gen_tcp.send(socket, [
+        "POST /#{@fleet}.git/git-receive-pack HTTP/1.1\r\n",
+        "host: #{@host}\r\n",
+        "authorization: #{Plug.BasicAuth.encode_basic_auth("git", password)}\r\n",
+        "content-type: application/x-git-receive-pack-request\r\n",
+        "content-length: 4\r\n\r\n",
+        "00"
+      ])
+
+    # The site has checked the project and waits for the rest of the body.
+    Process.sleep(300)
+
+    Keyfleet.Projects.archive_project!(@fleet, 1,
+      actor: %Human{human_account_id: 1, wallet_addresses: [@holder_wallet]}
+    )
+
+    :ok = :gen_tcp.send(socket, "00")
+
+    assert {:ok, "HTTP/1.1 403" <> answer} = :gen_tcp.recv(socket, 0, 5_000)
+    assert answer =~ "This project is archived"
+    refute_received {:store, "POST", _path, _claims, _body}
+  end
+
   # Costly failure: the site can't record a push the store took, and git is
   # told the push failed though it landed.
   test "a push the site can't record still gets the store's answer, and the failure is saved",

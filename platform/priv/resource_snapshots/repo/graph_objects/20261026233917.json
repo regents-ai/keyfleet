@@ -207,7 +207,7 @@
     },
     {
       "all_tenants?": false,
-      "concurrently": false,
+      "concurrently": true,
       "error_fields": [
         "fleet_id",
         "project",

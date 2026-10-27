@@ -1,9 +1,9 @@
 defmodule Keyfleet.Repo.Migrations.Projects do
   @moduledoc """
-  Makes projects, and gives each of the five fleets its first one, `general`,
-  titled "General", archived and held by Key 3: it keeps the fleet's
-  repository, named after the fleet, and the fleet's notebook space, moved
-  over from `notebook_hubs`, which goes.
+  Makes projects, and gives every fleet recorded so far its first one,
+  `general`, titled "General", archived and held by Key 3: it keeps the
+  fleet's repository, named after the fleet, and the fleet's notebook space,
+  moved over from `notebook_hubs`, which goes.
   """
 
   use Ecto.Migration
@@ -43,8 +43,7 @@ defmodule Keyfleet.Repo.Migrations.Projects do
     execute("""
     INSERT INTO keyfleet_app.projects (fleet_id, name, title, key, state, repository, hub_project_id)
     SELECT fleet.id, 'general', 'General', 3, 'archived', fleet.id, hub.project_id
-    FROM unnest(ARRAY['fibonacci_syndicate', 'fibonacci_cascade', 'fleet_tech_classic',
-                      'fleet_tech_accelerant', 'regents_club']) AS fleet(id)
+    FROM keyfleet_app.fleets AS fleet
     LEFT JOIN keyfleet_app.notebook_hubs AS hub ON hub.fleet_id = fleet.id
     """)
 

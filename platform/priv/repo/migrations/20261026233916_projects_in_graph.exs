@@ -3,7 +3,8 @@ defmodule Keyfleet.Repo.Migrations.ProjectsInGraph do
   Gives every workspace object, every pin and every change copied from the
   workspace's log the project it belongs to: a change, every project whose
   items it touched. Everything made before projects belongs to its fleet's
-  first project, `general`.
+  first project, `general`. The index that lists one project's objects is
+  built without blocking writes, by the next migration.
   """
 
   use Ecto.Migration
@@ -16,10 +17,6 @@ defmodule Keyfleet.Repo.Migrations.ProjectsInGraph do
     alter table(:graph_objects) do
       modify(:project, :text, default: nil)
     end
-
-    create index(:graph_objects, [:fleet_id, :project, :type, :changed_seq, :id],
-             name: "graph_objects_project_changed_index"
-           )
 
     alter table(:graph_events) do
       add(:projects, {:array, :text}, null: false, default: ["general"])
@@ -68,12 +65,6 @@ defmodule Keyfleet.Repo.Migrations.ProjectsInGraph do
     alter table(:graph_events) do
       remove(:projects)
     end
-
-    drop_if_exists(
-      index(:graph_objects, [:fleet_id, :project, :type, :changed_seq, :id],
-        name: "graph_objects_project_changed_index"
-      )
-    )
 
     alter table(:graph_objects) do
       remove(:project)

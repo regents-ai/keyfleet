@@ -133,12 +133,14 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
     end
   end
 
-  # A body may take far longer to arrive than a pass lasts, and the key may
-  # change hands meanwhile, so the key is checked again once the body is in
-  # and the pass is made then.
+  # A body may take far longer to arrive than a pass lasts, and meanwhile the
+  # key may change hands and the project be archived or deleted, so both are
+  # read again once the body is in and the pass is made then.
   defp send_checked(conn, project, path, need, check, body, actor) do
     with {:holder, {:ok, %{} = holder}} <- {:holder, check.()},
-         {:allowed, :ok} <- {:allowed, allowed(holder, need)} do
+         {:allowed, :ok} <- {:allowed, allowed(holder, need)},
+         {:project, {:ok, %Project{} = project}} <- {:project, project(project.repository)},
+         {:open, :ok} <- {:open, open(project, need)} do
       forward(conn, project.repository, path, pass(project.repository, holder, need), body, fn
         response -> sent(conn, project, holder, actor, body.head, response)
       end)

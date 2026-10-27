@@ -64,6 +64,9 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       |> Projects.record_space!(space, actor: %System{})
     end
 
+    # Key 1 takes over the fleet's archived `general`, so its notebooks take changes.
+    Projects.take_over_project!(@fleet, 1, Projects.general(), actor: holder)
+
     %{holder: holder, buyer: buyer}
   end
 
@@ -211,6 +214,34 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
     restrict!(1, false, 2)
     Notebooks.end_access(@fleet)
 
+    assert post_notebook(@host, notebooks, cookie).status == 201
+    assert_receive {:hub, "POST", ^notebooks, "u_" <> _, _body}
+  end
+
+  # Costly failure: work is added to an archived project's notebooks, which
+  # take nothing until a Key takes the project over.
+  test "nobody changes an archived project's notebooks, and they can still be read", c do
+    cookie = enter!(c.holder)
+    notebooks = "/api/v1/projects/proj-fleet/notebooks"
+    Projects.archive_project!(@fleet, 1, actor: c.holder)
+
+    assert get_notebook(@host, notebooks, cookie).status == 200
+    assert_receive {:hub, "GET", ^notebooks, "u_" <> _, _body}
+
+    for {method, path} <- [
+          {:post, notebooks},
+          {:post, notebooks <> "/nb-0000000000000002/sessions"},
+          {:post, notebooks <> "/nb-0000000000000002/sessions/sess-mine/heartbeat"},
+          {:put, notebooks <> "/nb-0000000000000002/workspace/files?path=/mine.csv"}
+        ] do
+      refused = send_notebook(method, path, cookie, "{}")
+      assert json_response(refused, 403)["error"]["code"] == "notebooks_project_archived"
+    end
+
+    refute_received {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks" <> _, _subject, _body}
+    refute_received {:hub, "PUT", "/api/v1/projects/proj-fleet/notebooks" <> _, _subject, _body}
+
+    Projects.take_over_project!(@fleet, 1, Projects.general(), actor: c.holder)
     assert post_notebook(@host, notebooks, cookie).status == 201
     assert_receive {:hub, "POST", ^notebooks, "u_" <> _, _body}
   end

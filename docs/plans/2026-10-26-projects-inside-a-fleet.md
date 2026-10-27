@@ -42,6 +42,11 @@ notebooks and repository.
   them.
 - New work goes into **any** active project, whoever holds it (KF-PROJ-OWN b). Archived
   projects take no writes of any kind until a Key takes one over; they stay readable.
+  That holds in the notebook host too: the site's gateway in front of the hub lets anyone
+  open and read an archived project's notebooks and refuses every change, a new session
+  or a session's heartbeat included, with 403 `notebooks_project_archived`. An editor
+  session opened before the archive keeps working until it ends, because the hub's own
+  editor talks to that session directly and the hub has no read-only role to switch it to.
 - A deleted project keeps its row, marked deleted, so its name and repository name are
   never reused; nothing else of it is kept (KF-PROJ-DELETE a): its board items leave every
   read and every page, its notebook space is deleted in the hub, and its repository is
@@ -148,10 +153,12 @@ of "project".
   fleet), so today's clone address and history stay as they are. A new project's repository
   is `<fleet id>-<project name>`. Repository names are unique across the store, and fleet
   ids hold no hyphen, so names never collide.
-- `code_repositories` is keyed by repository name and carries `fleet_id` and `project`. The
-  gateway reads the fleet from the name (the part before the first hyphen), checks sign-in
-  and Key holding, and only then looks the project up, so only a Key holder learns whether
-  a project's repository exists.
+- `code_repositories` is keyed by repository name (its old `fleet_id` column renamed to
+  `repository`) and keeps only the owner the store made it under; it has no fleet or
+  project column. A project names its repository (`projects.repository`), and the project
+  is found from that. The gateway reads the fleet from the name (the part before the first
+  hyphen), checks sign-in and Key holding, and only then looks the project up, so only a
+  Key holder learns whether a project's repository exists.
 - The git password stays per fleet, because membership is shared. Pushes gain `project`.
   The push limit stays per fleet and wallet.
 - Commit and file pages already carry the repository in their address

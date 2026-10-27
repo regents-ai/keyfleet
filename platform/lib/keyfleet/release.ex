@@ -119,14 +119,15 @@ defmodule Keyfleet.Release do
   Seeds the five fleets and opens the rooms of every fleet that is not coming
   soon, without binding any fleet to a deployment, so the site shows every
   fleet while key sales stay off. A coming-soon fleet gets its rooms when it
-  opens. Every fleet gets its `general` project (`Keyfleet.Projects`). `migrate/0` runs it after the migrations on every deploy. Running it
-  again changes nothing, and it never touches a fleet's recorded deployment.
+  opens. Every fleet gets its `general` project with it
+  (`Keyfleet.Fleets.bootstrap_catalog!/0`). `migrate/0` runs it after the
+  migrations on every deploy. Running it again changes nothing, and it never
+  touches a fleet's recorded deployment.
   """
   def seed_catalog! do
     fleets = Keyfleet.Fleets.bootstrap_catalog!()
     open = Keyfleet.Fleets.open_fleet_ids()
     Keyfleet.Rooms.bootstrap_rooms!(open)
-    Keyfleet.Projects.bootstrap_general!(Enum.map(fleets, & &1.id))
 
     for fleet <- fleets do
       IO.puts("#{fleet.id}: #{if fleet.id in open, do: "open", else: "coming soon"}")

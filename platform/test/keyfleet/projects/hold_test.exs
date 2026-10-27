@@ -4,7 +4,8 @@ defmodule Keyfleet.Projects.HoldTest do
 
   alias Keyfleet.Actors
   alias Keyfleet.ChainHelpers
-  alias Keyfleet.Code.DeleteRepository
+  alias Keyfleet.Code
+  alias Keyfleet.Code.{DeleteRepository, Setup}
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
@@ -50,6 +51,32 @@ defmodule Keyfleet.Projects.HoldTest do
     assert_enqueued(worker: DeleteRepository, args: %{repository: "#{@fleet}-p1"})
 
     assert %{state: :archived} = Projects.archive_project!(@fleet, 20, actor: owner(20))
+  end
+
+  # A project deleted while the store makes its repository: the repository
+  # is deleted again, not kept, so none outlives its project.
+  test "a repository whose project is deleted while it is being made is deleted again" do
+    repository = "#{@fleet}-quick"
+    owner = "did:key:z6MkfleetOwner"
+    Projects.start_project!(@fleet, 20, "quick", "Quick", actor: owner(20))
+    assert_enqueued(worker: Setup, args: %{repository: repository})
+    Projects.archive_project!(@fleet, 20, actor: owner(20))
+
+    Req.Test.stub(Keyfleet.Code.NodeClient, fn
+      %{method: "POST"} = conn ->
+        Projects.delete_project!(@fleet, 20, "quick", actor: owner(20))
+        send(self(), :created)
+        Req.Test.json(conn, %{"name" => repository, "owner_did" => owner})
+
+      %{method: "DELETE", request_path: path} = conn ->
+        send(self(), {:deleted, path})
+        Plug.Conn.send_resp(conn, 204, "")
+    end)
+
+    assert :ok = perform_job(Setup, %{repository: repository})
+    assert_received :created
+    assert_received {:deleted, "/api/v1/repos/" <> _}
+    assert {:ok, nil} = Code.get_repository(repository, actor: @system)
   end
 
   # General keeps the fleet's starting goals, first notebooks and first

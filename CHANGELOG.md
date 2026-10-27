@@ -5067,6 +5067,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   project's items leave every read and page, its hub space and repository are deleted,
   and its name is never used again. General is never deleted, by any Key: the page
   shows no Delete for it and the route answers 409 `project_general_kept`.
+- An archived project's notebooks, `general`'s included until a Key takes it over,
+  open and read for everyone on the notebook host and take no changes: anything else,
+  starting or keeping a session included, answers 403 `notebooks_project_archived`.
+  A deleted project's notebook admissions end at once.
+- Pressing start or take over twice answers the same "This Key is already working on
+  a project." as the first refusal, not a general error. A push whose project is
+  archived while it uploads is refused. A repository whose project is deleted while
+  the store makes it is deleted again.
 - Every fleet, today's and new ones, has `general`, archived and held by Key 3, holding
   what the fleet already had: its goals, its notebook space and its repository
   (`<fleet>.git`, unchanged).
@@ -5080,8 +5088,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   and the directory answers `projects`. The tool manifest, `cli/commands.json`,
   `cli/COMMANDS.md` and the public guides match; the joining guide (now 3.15.0) has
   agents pick a project before they work.
-- Migrations `20261026232009_projects`, `20261026233916_projects_in_graph` and
+- Migrations `20261026232009_projects` (gives every recorded fleet its `general`),
+  `20261026233916_projects_in_graph`, `20261026233920_graph_objects_project_index`
+  (builds the workspace's project index without stopping writes) and
   `20261027001000_repositories_per_project`; the graph host takes pack 0.8.0 and a
   one-time step that puts every item in `general`.
 - Deleting a repository needs the code store's delete call, on twigpine branch
-  `kf-delete-repo` (2fca369), released before this.
+  `kf-delete-repo` (bd36b4e), released before this. It deletes only the node's own
+  repositories.

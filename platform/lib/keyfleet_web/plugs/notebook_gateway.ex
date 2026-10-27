@@ -48,7 +48,11 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   first time in that span, they are made an editor of every project's space
   in the hub. A Key whose edits a vote of the fleet has restricted
   (`Keyfleet.Notebooks.membership/2`) only reads: anything else it sends is
-  refused, until a vote allows its edits again. The token routes, with
+  refused, until a vote allows its edits again. In an archived project's
+  space everyone only reads, until a Key takes the project over
+  (`Keyfleet.Notebooks.archived_space?/2`, read afresh for each change);
+  starting a notebook session there, or keeping one alive, is a change too.
+  The token routes, with
   which a hub would hand out credentials that skip this check, are refused
   for everyone.
 
@@ -496,15 +500,33 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   # A Key whose edits a vote of the fleet has restricted opens and reads the
   # notebooks, and changes nothing: it sends only reads, and opens no live
-  # connection.
-  defp admitted(conn, fleet_id, subject, %{restricted?: true}) do
-    if conn.method in ["GET", "HEAD"] and not websocket?(conn),
-      do: forward(conn, fleet_id, subject),
-      else: Refusal.json(conn, 403, "notebooks_edits_restricted")
+  # connection. Nobody changes anything in an archived project's space.
+  defp admitted(conn, fleet_id, subject, access) do
+    cond do
+      conn.method in ["GET", "HEAD"] and not websocket?(conn) ->
+        forward(conn, fleet_id, subject)
+
+      access.restricted? ->
+        Refusal.json(conn, 403, "notebooks_edits_restricted")
+
+      true ->
+        in_open_space(conn, fleet_id, subject)
+    end
   end
 
-  defp admitted(conn, fleet_id, subject, %{restricted?: false}),
-    do: forward(conn, fleet_id, subject)
+  defp in_open_space(
+         %Plug.Conn{path_info: ["api", "v1", "projects", space | _]} = conn,
+         fleet_id,
+         subject
+       ) do
+    case Notebooks.archived_space?(fleet_id, space) do
+      {:ok, false} -> forward(conn, fleet_id, subject)
+      {:ok, true} -> Refusal.json(conn, 403, "notebooks_project_archived")
+      {:error, _error} -> refuse(conn, :unavailable)
+    end
+  end
+
+  defp in_open_space(conn, fleet_id, subject), do: forward(conn, fleet_id, subject)
 
   defp refuse(conn, :not_holder), do: Refusal.json(conn, 403, "notebooks_not_holder")
   defp refuse(conn, :catching_up), do: Refusal.json(conn, 503, "notebooks_catching_up")

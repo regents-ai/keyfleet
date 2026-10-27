@@ -36,6 +36,8 @@ defmodule Keyfleet.Projects do
         args: [:repository],
         not_found_error?: false
 
+      define :locked_project_of_repository, action: :locked_by_repository, args: [:repository]
+
       define :start_project, action: :start, args: [:fleet_id, :as_key, :name, :title]
       define :archive_project, action: :archive, args: [:fleet_id, :as_key]
       define :take_over_project, action: :take_over, args: [:fleet_id, :as_key, :name]

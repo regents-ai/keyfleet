@@ -10,25 +10,37 @@ defmodule Keyfleet.Projects.Hold do
   The database keeps each rule even when two steps run at once: one active
   project per Key is a unique index, and each change of state is made only
   from the state it was checked in, so of two steps on one project the
-  second finds it changed and is refused.
+  second finds it changed and is refused. A second start or take-over the
+  index refuses, from a double press, is told as the check tells it
+  (`active_held`), in the index's own words.
+
+  Once a delete is kept, everyone's admission to the fleet's notebooks ends,
+  so their next request is let in to the spaces left, without the deleted
+  project's.
   """
   use Ash.Resource.Actions.Implementation
 
+  alias Ash.Error.Changes.InvalidAttribute
   alias Keyfleet.Graph.Checks.KeyActor
+  alias Keyfleet.Notebooks
   alias Keyfleet.Projects.Errors.{HoldError, NameTakenError, UnknownProjectError}
   alias Keyfleet.Projects.Project
 
   @system %Keyfleet.Actors.System{}
+  # The unique index behind the identity `one_active_per_key`.
+  @one_active "projects_one_active_per_key_index"
 
   @impl true
   def run(input, opts, %{actor: actor}) do
     %{fleet_id: fleet_id, as_key: key} = input.arguments
     within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
+    step = Keyword.fetch!(opts, :step)
 
-    with {:ok, _command} <- KeyActor.command(actor, fleet_id, key, nil, within) do
-      Ash.transact(Project, fn ->
-        step(Keyword.fetch!(opts, :step), fleet_id, key, input.arguments)
-      end)
+    with {:ok, _command} <- KeyActor.command(actor, fleet_id, key, nil, within),
+         {:ok, project} <-
+           Ash.transact(Project, fn -> step(step, fleet_id, key, input.arguments) end) do
+      if step == :delete, do: Notebooks.end_access(fleet_id)
+      {:ok, project}
     end
   end
 
@@ -149,5 +161,16 @@ defmodule Keyfleet.Projects.Hold do
     do: {:error, HoldError.exception(code: code, words: words, project: project && project.name)}
 
   defp unwrap({:ok, project}), do: project
+
+  defp unwrap({:error, %Ash.Error.Invalid{errors: errors} = error}) do
+    case Enum.find(errors, &one_active?/1) do
+      %InvalidAttribute{message: words} -> refuse(:active_held, nil, words)
+      nil -> {:error, error}
+    end
+  end
+
   defp unwrap({:error, error}), do: {:error, error}
+
+  defp one_active?(%InvalidAttribute{private_vars: vars}), do: vars[:constraint] == @one_active
+  defp one_active?(_error), do: false
 end

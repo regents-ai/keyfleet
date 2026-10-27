@@ -9,9 +9,10 @@ defmodule Keyfleet.WorkspacePulse do
     * "Holder of Key 20³ worked on Lab": a person working from the page.
 
   The Key is the one the change was made as; the raised number is how many
-  of the fleet's Keys that Key's holder has now; the project is told by its
-  title. Each line also gives its parts apart (`agent_name`, `key`,
-  `keys_held`, `project_title`, `at`), so a page draws the raised number.
+  of the fleet's Keys that Key's holder has now, left off when no holder of
+  it is recorded; the project is told by its title. Each line also gives its
+  parts apart (`agent_name`, `key`, `keys_held`, `project_title`, `at`), so
+  a page draws the raised number.
   The workspace's own changes, and changes to a deleted project, are left
   out. No item, its title or any text an item holds leaves this boundary;
   members use the signed workspace reads for those.
@@ -63,7 +64,7 @@ defmodule Keyfleet.WorkspacePulse do
 
     for {event, token_id, kind, wallet, title} <- worked do
       name = if kind == "agent", do: names[wallet]
-      keys_held = Map.fetch!(held, token_id)
+      keys_held = held[token_id]
 
       %{
         seq: event.seq,
@@ -81,6 +82,8 @@ defmodule Keyfleet.WorkspacePulse do
   defp who("agent", nil), do: "Agent of"
   defp who("agent", name), do: "Agent #{name} with"
   defp who("human", _name), do: "Holder of"
+
+  defp raised(nil), do: ""
 
   defp raised(count),
     do: count |> Integer.to_string() |> String.to_charlist() |> Enum.map_join(&@raised[&1])

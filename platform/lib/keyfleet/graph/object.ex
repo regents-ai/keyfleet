@@ -39,7 +39,8 @@ defmodule Keyfleet.Graph.Object do
       index([:fleet_id, :type, :changed_seq, :id], name: "graph_objects_type_changed_index")
 
       index([:fleet_id, :project, :type, :changed_seq, :id],
-        name: "graph_objects_project_changed_index"
+        name: "graph_objects_project_changed_index",
+        concurrently: true
       )
     end
 

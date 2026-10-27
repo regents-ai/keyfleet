@@ -297,6 +297,9 @@ defmodule KeyfleetWeb.Refusal do
     "notebooks_edits_restricted" =>
       {"A vote of this fleet has stopped this Key changing its work, so it can open and read the notebooks but not change them.",
        "Nothing was changed. Make changes once the fleet's vote allows this Key's edits again."},
+    "notebooks_project_archived" =>
+      {"This project is archived, so its notebooks take no changes. They can still be opened and read.",
+       "Nothing was changed. Make changes in an active project's notebooks. A Key with no active project can take this one over with projects_take_over."},
     "notebooks_maker_only" =>
       {"Only whoever made this removes, changes or stops it.",
        "Nothing was changed. Open it, copy it or run it instead."},

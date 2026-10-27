@@ -119,6 +119,17 @@ defmodule Keyfleet.Projects.Project do
       get? true
     end
 
+    # The project of a repository in any state, its row held until the
+    # transaction ends: a delete of it either committed already or waits
+    # (`Keyfleet.Code.Setup`).
+    read :locked_by_repository do
+      public? false
+      argument :repository, :string, allow_nil?: false, constraints: [trim?: false]
+      filter expr(repository == ^arg(:repository))
+      get? true
+      prepare fn query, _context -> Ash.Query.lock(query, :for_update) end
+    end
+
     # The four Key steps call `Hold` from a function, so a change to it
     # recompiles nothing here.
 
@@ -163,7 +174,7 @@ defmodule Keyfleet.Projects.Project do
       argument :as_key, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
       argument :name, :string, allow_nil?: false, constraints: [trim?: false]
       validate KnownFleet
-      validate Keyfleet.Projects.Validations.NotGeneral
+      validate Keyfleet.Projects.Validations.NotGeneral, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
       run fn input, context -> Hold.run(input, [step: :delete], context) end
     end
@@ -262,7 +273,8 @@ defmodule Keyfleet.Projects.Project do
              :taken_over,
              :deleted,
              :record_space,
-             :by_repository
+             :by_repository,
+             :locked_by_repository
            ]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
@@ -296,6 +308,6 @@ defmodule Keyfleet.Projects.Project do
 
     identity :one_active_per_key, [:fleet_id, :key],
       where: expr(state == :active),
-      message: "this Key is already working on a project"
+      message: "This Key is already working on a project."
   end
 end

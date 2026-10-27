@@ -454,6 +454,16 @@ defmodule Keyfleet.Notebooks do
     end
   end
 
+  @doc """
+  Whether `space` in the fleet's hub is an archived project's, where nobody
+  changes anything until a Key takes the project over: `{:ok, boolean}`, or
+  `{:error, error}` when the projects can't be read.
+  """
+  def archived_space?(fleet_id, space) do
+    with {:ok, projects} <- Projects.projects(fleet_id, actor: %System{}),
+         do: {:ok, Enum.any?(projects, &(&1.hub_project_id == space and &1.state == :archived))}
+  end
+
   @doc "The project's space in its fleet's hub, as `{:ok, space}`, or `{:ok, nil}` before it is made."
   def space(fleet_id, project) do
     with {:ok, found} <- Projects.project(fleet_id, project, actor: %System{}),

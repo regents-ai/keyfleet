@@ -7,8 +7,13 @@ defmodule Keyfleet.Code.Setup do
   again finds the one already made, so a run that fails part way is simply
   run again. A failed run tries again a minute later, up to `max_attempts` runs.
   A setup that gave up is queued again by the next ask, and that is saved
-  with the site's errors (`Keyfleet.Code.StoreDownError`). A setup still
-  waiting when its project is deleted makes nothing.
+  with the site's errors (`Keyfleet.Code.StoreDownError`).
+
+  A project can be deleted while its repository is being made. The record is
+  kept in a transaction holding the project's row, so a delete either
+  commits first and is seen here, and the repository just made is deleted
+  again instead of kept, or commits after and its own job finds the record
+  (`Keyfleet.Code.DeleteRepository`). No repository outlives its project.
   """
   use Oban.Worker,
     queue: :code_store,
@@ -17,7 +22,7 @@ defmodule Keyfleet.Code.Setup do
 
   alias Keyfleet.Actors.System
   alias Keyfleet.Code
-  alias Keyfleet.Code.{NodeClient, StoreDownError}
+  alias Keyfleet.Code.{NodeClient, Repository, StoreDownError}
   alias Keyfleet.Projects
 
   @impl Oban.Worker
@@ -25,23 +30,25 @@ defmodule Keyfleet.Code.Setup do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"repository" => repository}}) do
-    case Projects.project_of_repository(repository, actor: %System{}) do
-      {:ok, nil} -> {:cancel, :project_deleted}
-      {:ok, _project} -> make(repository)
+    case Code.get_repository(repository, actor: %System{}) do
+      {:ok, nil} -> make(repository)
+      {:ok, _made} -> :ok
       {:error, error} -> {:error, error}
     end
   end
 
   defp make(repository) do
-    case Code.get_repository(repository, actor: %System{}) do
-      {:ok, nil} ->
-        with {:ok, owner} <- NodeClient.create_repository(repository),
-             {:ok, _made} <- Code.record_repository(repository, owner, actor: %System{}) do
-          :ok
-        end
+    with {:ok, owner} <- NodeClient.create_repository(repository),
+         {:ok, kept} <-
+           Ash.transact([Projects.Project, Repository], fn -> keep(repository, owner) end) do
+      if kept == :deleted, do: NodeClient.delete_repository(repository, owner), else: :ok
+    end
+  end
 
-      {:ok, _made} ->
-        :ok
+  defp keep(repository, owner) do
+    case Projects.locked_project_of_repository!(repository, actor: %System{}) do
+      %{state: :deleted} -> :deleted
+      _project -> Code.record_repository!(repository, owner, actor: %System{})
     end
   end
 
