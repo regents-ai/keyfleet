@@ -507,6 +507,35 @@ defmodule Keyfleet.Graph.ProjectionTest do
     assert read.changed_seq > unlinked
   end
 
+  # Live on 27 Oct 2026: items copied before projects keep no project in their
+  # `sys`, only in their `project` column, and the copy took that as a deleted
+  # project, so it dropped every change to them, the move into `general` first.
+  test "a change to an item copied before projects is copied, under its project" do
+    start_projector(catch_up_interval: 60_000)
+    run_id = log_id()
+
+    {:ok, %{"head_seq" => head, "result" => %{"id" => goal}}} =
+      command(
+        "create",
+        %{project: "general", type: "goal", data: %{title: "Revenue", outcome: "One customer."}},
+        "g-1"
+      )
+
+    assert Projector.await(@fleet, run_id, head) == head
+
+    Repo.query!(
+      "UPDATE keyfleet_app.graph_objects SET sys = sys - 'project' WHERE fleet_id = $1 AND id = $2",
+      [@fleet, goal]
+    )
+
+    archived = write!("archive", %{id: goal, expected_version: 1}, "a-1")
+    assert Projector.await(@fleet, run_id, archived) == archived
+    read = Graph.read_object!(@fleet, goal, actor: @holder)
+
+    assert {read.version, read.project, read.sys["project"], read.sys["archived"]} ==
+             {2, "general", "general", true}
+  end
+
   # The place and time of the latest creation or patch of the object.
   defp last_change(id) do
     tables()[Graph.Event]

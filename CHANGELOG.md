@@ -5130,3 +5130,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Regents Club's, which Key 329 holds (Sean, 27 October: "For classic #1 it goes
   to key 3, and for regents club it goes to key 329."). The migration that makes
   projects and the fleet setup both give it that Key, and the guides say so.
+
+## 2026-10-27 — Changes to items made before projects reach the pages again
+
+- The copy from each fleet's graph into the tables pages read took an item's
+  project from its `sys`, which items copied before projects never had, so it
+  took them for items of a deleted project and dropped every change to them.
+  Live, that dropped the one-time move of every item into `general` (27 Oct,
+  04:34Z). It now reads the item's `project` column, which the migration filled.
+- After the release, each fleet's copy is moved back to just before that move
+  so it is copied again: Classic #1 to 693, Regents Club to 756, and the three
+  coming-soon fleets to 527. Every write it repeats is an upsert.

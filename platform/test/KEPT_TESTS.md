@@ -195,6 +195,7 @@ meaningful regression tests need no agreement.
 | a repository whose project is deleted while it is being made is deleted again | `Keyfleet.Projects.HoldTest` | No repository outlives its project when a delete lands while the store is making it. |
 | no Key deletes General, archived or active | `Keyfleet.Projects.HoldTest` | General, with the fleet's starting goals, first notebooks and first repository, is never deleted. |
 | General starts archived under Key 3, and under Key 329 in Regents Club | `Keyfleet.Projects.HoldTest` | Each fleet's General goes to the Key Sean named for it (27 Oct 2026). |
+| a change to an item copied before projects is copied, under its project | `Keyfleet.Graph.ProjectionTest` | Edits to items made before projects reach the pages; on 27 Oct 2026 the copy dropped them, the move into General first. |
 | the pulse names the agent and its Key's count, and leaves a deleted project out | `Keyfleet.WorkspacePulseTest` | The public pulse says which agent and Key worked on which project, and a deleted project's work leaves it. |
 | nobody changes an archived project's notebooks, and they can still be read | `KeyfleetWeb.NotebookGatewayTest` | An archived project's notebooks open and read for everyone and take no change, a new session included, until a Key takes it over. |
 | a push whose project is archived while it arrives is refused and reaches nothing | `KeyfleetWeb.CodeGatewayTest` | A push begun before its project was archived does not land in it. |

@@ -189,7 +189,13 @@ defmodule Keyfleet.Graph.Projection do
       fleet_id
       |> Graph.read_objects!(named, actor: @system)
       |> Map.new(
-        &{&1.id, %{type: &1.type, data: Map.put(&1.data, "sys", &1.sys), version: &1.version}}
+        &{&1.id,
+         %{
+           type: &1.type,
+           project: &1.project,
+           data: Map.put(&1.data, "sys", &1.sys),
+           version: &1.version
+         }}
       )
 
     on_page = MapSet.new(events, & &1["id"])
@@ -214,7 +220,7 @@ defmodule Keyfleet.Graph.Projection do
   # command record touches the projects of the copied events it names.
   defp place(fleet_id, events, known) do
     live = fleet_id |> Projects.projects!(actor: @system) |> MapSet.new(& &1.name)
-    of = Map.new(known.objects, fn {id, object} -> {id, object.data["sys"]["project"]} end)
+    of = Map.new(known.objects, fn {id, object} -> {id, object.project} end)
 
     state = %{live: live, of: of, ends: known.ends, placed: known.placed}
     {kept, _state} = Enum.flat_map_reduce(events, state, &place_one/2)
