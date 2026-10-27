@@ -1721,6 +1721,34 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
   end
 
+  describe "deleting a project" do
+    setup do
+      open_log(@fleet)
+      holder = %Actors.Human{human_account_id: 1, wallet_addresses: [@holder]}
+      Keyfleet.Projects.start_project!(@fleet, 1, "lab", "Lab", actor: holder)
+      Keyfleet.Projects.archive_project!(@fleet, 1, actor: holder)
+      :ok
+    end
+
+    # Deleting takes the project's work with it, so Delete asks first in
+    # Keyfleet's own window: Cancel keeps the project, and saying so deletes it.
+    test "Delete asks first, Cancel keeps the project, and saying so deletes it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @board <> "?project=lab")
+
+      view |> element("#project-delete") |> render_click()
+      assert has_element?(view, "#project-delete-dialog h2", "Delete Lab for good?")
+
+      view |> render_hook("cancel_project_delete", %{})
+      refute has_element?(view, "#project-delete-dialog")
+      assert %{state: :archived} = lab()
+
+      view |> element("#project-delete") |> render_click()
+      view |> element("#project-delete-confirm") |> render_click()
+      refute has_element?(view, "#project-delete-dialog")
+      assert lab() == nil
+    end
+  end
+
   describe "another fleet's workspace" do
     test "never shows up in this one", %{conn: conn} do
       open_log(@fleet)
@@ -2161,6 +2189,9 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
     init_test_session(conn, %{human_account_id: account.id})
   end
+
+  # The fleet's project `lab`, or nil once it is deleted.
+  defp lab, do: Keyfleet.Projects.project!(@fleet, "lab", actor: %Actors.System{})
 
   # Records `wallet` as the owner of the fleet's Key `token_id`.
   # Key 1 takes over the fleet's archived `general`, so it takes new work.

@@ -1136,8 +1136,9 @@ features:
     proofs:
       - platform/test/keyfleet_web/shell_live_test.exs
       - platform/test/keyfleet_web/live/key_profile_test.exs
+      - platform/test/keyfleet_web/live/workspace_page_test.exs
+      - platform/test/keyfleet_web/live/polls_page_test.exs
       - platform/test/browser/account_agents.spec.ts
     gaps:
-      - Delete on a project and End poll have no test that opens the window and goes ahead; their actions' refusals are tested on their own.
       - Focus going back to the opening button and Escape are walked in the browser for Unpair only; the other three share its component.
       - WebKit is not run on the Mac.
