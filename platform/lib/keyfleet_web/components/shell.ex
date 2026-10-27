@@ -266,6 +266,7 @@ defmodule KeyfleetWeb.Components.Shell do
         id="shell-pairing"
         aria-labelledby="shell-pairing-title"
         tabindex="-1"
+        phx-mounted={JS.ignore_attributes(["data-flash"])}
       >
         <h2 id="shell-pairing-title">Pair New Agent</h2>
         {render_slot(@pairing)}
