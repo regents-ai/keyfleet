@@ -56,7 +56,7 @@ defmodule KeyfleetWeb.ShellLive do
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
   @poll_events ~w(start_poll end_poll cast_vote)
   @sign_in_events ~w(open_notebooks get_code_password)
-  @workspace_events ~w(pin unpin project_start project_archive project_take_over project_delete)
+  @workspace_events ~w(pin unpin project_start project_archive project_take_over project_delete notebook_lock notebook_restore)
 
   # The routes that show a fleet's workspace and its votes.
   @workspace_routes [:workspace, :workspace_item, :code_commit, :code_files]

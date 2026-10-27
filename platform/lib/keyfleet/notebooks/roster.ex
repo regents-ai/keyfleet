@@ -12,7 +12,8 @@ defmodule Keyfleet.Notebooks.Roster do
   of every space the fleet's projects have; anyone else this site added
   loses their place in each, their open notebook connections close, and they
   are suspended in that hub, so nothing they hold there still lets them in.
-  Someone who holds a key again is let back in.
+  Someone who holds a key again is let back in. Once the hub is in step,
+  every Key gets its scratchpad notebook (`Keyfleet.Notebooks.Scratchpads`).
 
   It runs whenever a key changes hands or a shard is issued or ended, and
   again when an issued shard runs out (`Keyfleet.Notebooks.Changes.UpdateRoster`),
@@ -34,7 +35,7 @@ defmodule Keyfleet.Notebooks.Roster do
   alias Keyfleet.Actors.{Agent, Human, System}
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
   alias Keyfleet.{Notebooks, Projects}
-  alias Keyfleet.Notebooks.{HubClient, Space}
+  alias Keyfleet.Notebooks.{HubClient, Scratchpads, Space}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"fleet_id" => fleet_id}}) do
@@ -42,8 +43,10 @@ defmodule Keyfleet.Notebooks.Roster do
          {:ok, spaces} <- spaces(fleet_id),
          {:ok, holders} <- holders(fleet_id),
          {:ok, members} <- members(fleet_id, spaces),
-         {:ok, users} <- HubClient.users(fleet_id) do
-      sync(fleet_id, holders, members, users)
+         {:ok, users} <- HubClient.users(fleet_id),
+         :ok <- sync(fleet_id, holders, members, users) do
+      Oban.insert!(Scratchpads.new(%{fleet_id: fleet_id}))
+      :ok
     else
       {:error, %OwnershipRefreshingError{}} -> {:snooze, 15}
       other -> other

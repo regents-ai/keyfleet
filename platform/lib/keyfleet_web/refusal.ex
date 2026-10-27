@@ -75,6 +75,9 @@ defmodule KeyfleetWeb.Refusal do
     "project_not_holder" =>
       {"Only the Key that holds an archived project deletes it.",
        "Act as the Key projects_list names for it, or take it over first."},
+    "project_shared" =>
+      {"This project belongs to the whole fleet.",
+       "The scratchpad and the fleet's collaborative understanding are always active and held by no Key, so no Key archives, takes over or deletes them. Any member works in them."},
     "project_general_kept" =>
       {"General can't be deleted.",
        "General keeps the fleet's starting goals, first notebooks and first repository. A Key with no active project can take it over with projects_take_over."},
@@ -302,7 +305,7 @@ defmodule KeyfleetWeb.Refusal do
        "Nothing was changed. Make changes in an active project's notebooks. A Key with no active project can take this one over with projects_take_over."},
     "notebooks_maker_only" =>
       {"Only whoever made this removes, changes or stops it.",
-       "Nothing was changed. Open it, copy it or run it instead."},
+       "Nothing was changed. Open it, copy it or run it instead. A notebook its maker unlocked takes edits from every member, and only its maker deletes, locks or unlocks it."},
     "notebooks_schedules_refused" =>
       {"These notebooks don't run on a schedule.",
        "Leave out the schedule, then start each run when you want it."},
@@ -327,6 +330,9 @@ defmodule KeyfleetWeb.Refusal do
     "notebook_runs_full" =>
       {"This notebook can't take another run right now.",
        "Read the runs you started with notebooks_result until they finish, then start another."},
+    "notebook_copy_not_found" =>
+      {"This project has no such daily copy.",
+       "List the project's copies with notebooks_copies and bring one back by its id."},
     "notebook_file_not_found" =>
       {"This fleet has no such notebook or file.",
        "Check the notebook's id with notebooks_list and the file's path with notebooks_files."},

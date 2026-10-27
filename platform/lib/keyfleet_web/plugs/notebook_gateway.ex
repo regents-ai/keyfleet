@@ -237,8 +237,11 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp route(conn, fleet_id) do
     case identify(conn, fleet_id) do
-      {:ok, conn, subject, actor} -> within_allowances(conn, fleet_id, subject, actor)
-      {:refused, conn} -> conn
+      {:ok, conn, subject, actor} ->
+        conn |> assign(:notebook_actor, actor) |> within_allowances(fleet_id, subject, actor)
+
+      {:refused, conn} ->
+        conn
     end
   end
 
@@ -687,6 +690,9 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # Members open, copy and run each other's work, and only whoever made a
   # thing removes, changes or stops it (`Keyfleet.Notebooks.Makers`). Anyone
   # else editing a notebook gets a sandbox of their own that saves nothing.
+  # A notebook its creator unlocked is every member's to edit, and only its
+  # creator deletes it; a Key's scratchpad's creator is whoever acts as that
+  # Key (`Keyfleet.Notebooks.Makers.open_to?/4`).
   # `{:ok, {headers, body}, done}` for what goes to the hub, where `done` runs
   # with the status it answered, or `{:error, reason}`.
   defp made(
@@ -701,26 +707,41 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp made(_conn, _fleet_id, _subject, request), do: {:ok, request, &done/1}
 
-  defp made(method, [], ids, _conn, request) when method in ["PATCH", "DELETE"],
-    do: only_maker(:notebook, ids, [], request)
+  defp made("PATCH", [], ids, conn, request), do: open_or_maker(:edit, conn, ids, request)
 
-  defp made("PATCH", ["source"], ids, _conn, request),
-    do: only_maker(:notebook, ids, [], request)
+  defp made("DELETE", [], [fleet_id, _subject, _project_id, notebook_id] = ids, conn, request) do
+    with {:ok, request, _done} <- open_or_maker(:creator, conn, ids, request) do
+      # The notebook is gone either way: what Keyfleet still keeps of it is
+      # reported and forgotten later.
+      {:ok, request,
+       fn
+         200 ->
+           Notebooks.forget_notebook(fleet_id, notebook_id)
+           :ok
 
-  defp made("POST", ["source", "sync"], ids, _conn, request),
-    do: only_maker(:notebook, ids, [], request)
+         _status ->
+           :ok
+       end}
+    end
+  end
 
-  defp made("POST", ["versions", _version, "restore"], ids, _conn, request),
-    do: only_maker(:notebook, ids, [], request)
+  defp made("PATCH", ["source"], ids, conn, request),
+    do: open_or_maker(:edit, conn, ids, request)
 
-  defp made("POST", ["editor-session", "takeover"], ids, _conn, request),
-    do: only_maker(:notebook, ids, [], request)
+  defp made("POST", ["source", "sync"], ids, conn, request),
+    do: open_or_maker(:edit, conn, ids, request)
 
-  defp made(method, ["security-labels"], ids, _conn, request) when method in ["PUT", "DELETE"],
-    do: only_maker(:notebook, ids, [], request)
+  defp made("POST", ["versions", _version, "restore"], ids, conn, request),
+    do: open_or_maker(:edit, conn, ids, request)
 
-  defp made("DELETE", ["deep-links", _slug], ids, _conn, request),
-    do: only_maker(:notebook, ids, [], request)
+  defp made("POST", ["editor-session", "takeover"], ids, conn, request),
+    do: open_or_maker(:edit, conn, ids, request)
+
+  defp made(method, ["security-labels"], ids, conn, request) when method in ["PUT", "DELETE"],
+    do: open_or_maker(:creator, conn, ids, request)
+
+  defp made("DELETE", ["deep-links", _slug], ids, conn, request),
+    do: open_or_maker(:creator, conn, ids, request)
 
   defp made("POST", ["sessions", session_id, "leave"], ids, _conn, request),
     do: only_maker(:session, ids, [session_id], request)
@@ -751,6 +772,19 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   defp done(_status), do: :ok
 
+  # Whether the notebook is open to whoever sent it for `scope`, or else its
+  # maker's alone.
+  defp open_or_maker(scope, conn, ids, check \\ :notebook, more \\ [], request) do
+    case open_to(scope, conn, ids) do
+      {:ok, true} -> {:ok, request, &done/1}
+      {:ok, false} -> only_maker(check, ids, more, request)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp open_to(scope, conn, [fleet_id, _subject, _project_id, notebook_id]),
+    do: Makers.open_to?(fleet_id, conn.assigns.notebook_actor, notebook_id, scope)
+
   # The hub answers for itself about what it doesn't have.
   defp only_maker(check, ids, more, request) do
     case apply(Makers, check, ids ++ more) do
@@ -773,22 +807,23 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
           {:ok, request, &done/1}
 
         _edit ->
-          edit_session(ids, start, request)
+          edit_session(conn, ids, start, request)
       end
     end
   end
 
-  defp edit_session(ids, start, {headers, _body} = request) do
-    case apply(Makers, :notebook, ids) do
-      {:error, :not_maker} ->
-        copy = Jason.encode!(Map.put(start, "edit_intent", "temporary"))
+  defp edit_session(conn, ids, start, {headers, _body} = request) do
+    with {:ok, false} <- open_to(:edit, conn, ids),
+         {:error, :not_maker} <- apply(Makers, :notebook, ids) do
+      copy = Jason.encode!(Map.put(start, "edit_intent", "temporary"))
 
-        {:ok,
-         {List.keystore(headers, "content-type", 0, {"content-type", "application/json"}), copy},
-         &done/1}
-
-      _maker_or_hub ->
-        only_maker(:notebook, ids, [], request)
+      {:ok,
+       {List.keystore(headers, "content-type", 0, {"content-type", "application/json"}), copy},
+       &done/1}
+    else
+      {:ok, true} -> {:ok, request, &done/1}
+      {:error, :unavailable} -> {:error, :unavailable}
+      _maker_or_hub -> only_maker(:notebook, ids, [], request)
     end
   end
 
@@ -813,7 +848,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
          end}
 
       {:ok, key, false} ->
-        only_maker(:overwrite, ids, [key], request)
+        open_or_maker(:edit, conn, ids, :overwrite, [key], request)
 
       :error ->
         {:error, :invalid}
@@ -839,7 +874,7 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
   # made all of that.
   defp removal(conn, [fleet_id, _subject, _project_id, notebook_id] = ids, request) do
     with {:ok, key, false} <- workspace_query(conn),
-         {:ok, request, _done} <- only_maker(:removal, ids, [key], request) do
+         {:ok, request, _done} <- open_or_maker(:edit, conn, ids, :removal, [key], request) do
       # The path is gone either way: a maker still kept for it is replaced
       # when something is added there again.
       {:ok, request,

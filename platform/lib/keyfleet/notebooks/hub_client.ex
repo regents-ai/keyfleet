@@ -52,6 +52,68 @@ defmodule Keyfleet.Notebooks.HubClient do
     end
   end
 
+  @doc """
+  Every notebook in the project, a page of `limit` at a time, as the hub lists
+  them (`id`, `title`, `author`, `updated_at`, `tags`, ...), each page read
+  in turn until the last.
+  """
+  def all_notebooks(fleet_id, project_id, limit \\ 500),
+    do: all_notebooks(fleet_id, project_id, limit, nil, [])
+
+  defp all_notebooks(fleet_id, project_id, limit, cursor, found) do
+    params = [limit: limit] ++ if(cursor, do: [cursor: cursor], else: [])
+
+    sent =
+      request(fleet_id, :get, "/api/v1/projects/#{segment(project_id)}/notebooks", params: params)
+
+    case answer(sent, [200]) do
+      {:ok, %{"items" => items, "next_cursor" => next}} when is_binary(next) ->
+        all_notebooks(fleet_id, project_id, limit, next, found ++ items)
+
+      {:ok, %{"items" => items}} ->
+        {:ok, found ++ items}
+
+      {:ok, _other} ->
+        {:error, {:hub, elem(sent, 0), :unexpected_page}}
+
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Makes a notebook in the project as the provisioner, titled `title` and
+  tagged with `tags`, with `code`, answering its `meta`. The same
+  `idempotency_key` makes one notebook however often it is sent.
+  """
+  def create_notebook(
+        fleet_id,
+        project_id,
+        %{title: _, code: _, tags: _} = notebook,
+        idempotency_key
+      ) do
+    fleet_id
+    |> request(:post, "/api/v1/projects/#{segment(project_id)}/notebooks",
+      json: Map.put(notebook, :description, ""),
+      headers: [{"idempotency-key", idempotency_key}]
+    )
+    |> answer([201])
+  end
+
+  @doc "The notebook's code, or nil when the hub has no notebook by that id."
+  def content(fleet_id, project_id, notebook_id) do
+    fleet_id
+    |> request(
+      :get,
+      "/api/v1/projects/#{segment(project_id)}/notebooks/#{segment(notebook_id)}/content"
+    )
+    |> answer([200], [404])
+    |> case do
+      {:ok, %{"code" => code}} -> {:ok, code}
+      other -> other
+    end
+  end
+
   @doc "Makes a project the provisioner owns, named `name` and tagged with `tags`."
   def create_project(fleet_id, name, tags) do
     fleet_id

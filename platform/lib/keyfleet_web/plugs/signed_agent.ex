@@ -55,6 +55,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @files_list_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/list\z"
   @file_read_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/read\z"
   @file_write_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/(add|write)\z"
+  @notebook_lock_path ~r"\A#{@in_project}/notebooks/#{@notebook}/lock\z"
+  # A project's daily copies of its notebooks, each named by its id.
+  @copy ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+  @copies_path ~r"\A#{@in_project}/notebooks/copies\z"
+  @copy_restore_path ~r"\A#{@in_project}/notebooks/copies/#{@copy}/restore\z"
 
   # A poll is named by its id as the API answers it.
   @poll ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
@@ -63,7 +68,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @poll_start_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/start\z"
   @poll_vote_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@poll}/vote\z"
   @poll_end_path ~r"\A/api/v1/agent/fleets/#{@fleet}/polls/#{@poll}/end\z"
-  @empty_body_paths [@mute_path, @poll_end_path]
+  @empty_body_paths [@mute_path, @poll_end_path, @copy_restore_path]
   @poll_post_paths [@poll_start_path, @poll_vote_path, @poll_end_path]
 
   # Direct messages: a Key's conversations and blocks, what it does in one
@@ -91,6 +96,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@files_list_path, {[], ~w(path cursor)}},
     {@file_read_path, {~w(path), []}},
     {@file_write_path, {~w(path content), []}},
+    {@notebook_lock_path, {~w(locked), []}},
     {@topic_path, {~w(topic), []}},
     {@read_path, {[], ~w(after_seq limit)}},
     {@key_read_path, {[], ~w(after_seq limit)}},
@@ -489,6 +495,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           @dm_inbox_path,
           @code_pushes_path,
           @notebooks_path,
+          @copies_path,
           @run_path,
           @projects_path
         ],
@@ -515,6 +522,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @files_list_path,
         @file_read_path,
         @file_write_path,
+        @notebook_lock_path,
+        @copy_restore_path,
         @chain_path,
         @graph_path,
         @dm_path,
@@ -638,7 +647,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         notebook_create: @notebook_create_path,
         files_list: @files_list_path,
         file_read: @file_read_path,
-        file_write: @file_write_path
+        file_write: @file_write_path,
+        notebook_lock: @notebook_lock_path
       ],
       fn {op, pattern} -> if Regex.match?(pattern, path), do: op end
     )
@@ -678,6 +688,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: admit(map_size(params) == 2 and is_binary(path) and is_binary(content))
 
   defp check_fleet_body(:file_write, _params), do: :invalid
+
+  # Locking or unlocking a notebook says which.
+  defp check_fleet_body(:notebook_lock, %{"locked" => locked} = params),
+    do: admit(map_size(params) == 1 and is_boolean(locked))
+
+  defp check_fleet_body(:notebook_lock, _params), do: :invalid
 
   defp chain_op(path) do
     case Regex.run(@chain_path, path, capture: :all_but_first) do

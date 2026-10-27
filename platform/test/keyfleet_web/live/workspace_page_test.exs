@@ -1274,14 +1274,14 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       # Notebooks in no folder come first, then each folder under its name.
       assert rows(view, "#workspace-notebook-rows section:not([data-folder]) ol") == [
-               ["Price model", "19 Oct 2026"]
+               ["Price model", "Locked 19 Oct 2026"]
              ]
 
       assert text(view, ~s(#workspace-notebook-rows [data-folder="plans/launch"] h3)) ==
                "plans/launch"
 
       assert rows(view, ~s(#workspace-notebook-rows [data-folder="plans/launch"] ol)) == [
-               ["Launch plan", "20 Oct 2026"]
+               ["Launch plan", "Locked 20 Oct 2026"]
              ]
 
       assert has_element?(

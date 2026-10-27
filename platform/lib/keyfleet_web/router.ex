@@ -336,6 +336,18 @@ defmodule KeyfleetWeb.Router do
          AgentNotebookController,
          :write_file
 
+    post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/lock",
+         AgentNotebookController,
+         :lock
+
+    get "/fleets/:fleet_id/projects/:project/notebooks/copies",
+        AgentNotebookController,
+        :copies
+
+    post "/fleets/:fleet_id/projects/:project/notebooks/copies/:copy_id/restore",
+         AgentNotebookController,
+         :restore
+
     post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/runs/start",
          AgentNotebookController,
          :start

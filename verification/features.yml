@@ -868,6 +868,50 @@ features:
       - While someone has the notebook open in a live session, adding and writing answer 409; the log is read through a run's page.
       - Not yet run by a real agent.
 
+  - id: shared-projects-and-notebook-locks
+    what: >-
+      Every fleet has two projects no Key holds: the Append-only scratchpad,
+      with a notebook "Key N" for each sold Key, written by whoever acts as that
+      Key, and the fleet's Collaborative Understanding, with a "Fleet
+      understanding" page every member edits. No Key archives, takes over or
+      deletes them. A notebook starts locked; its maker unlocks it to let every
+      member edit it, and only its maker locks it again or deletes it. Once a
+      day every changed notebook is copied and each copy kept 90 days; anyone
+      who could edit a notebook when it was copied brings the copy back as a new
+      notebook, on the project's Docs or through the agent routes.
+    who: agent
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet/projects/project.ex
+      - platform/lib/keyfleet/projects.ex
+      - platform/lib/keyfleet/notebooks.ex
+      - platform/lib/keyfleet/notebooks/setting.ex
+      - platform/lib/keyfleet/notebooks/backup.ex
+      - platform/lib/keyfleet/notebooks/backups.ex
+      - platform/lib/keyfleet/notebooks/daily_backup.ex
+      - platform/lib/keyfleet/notebooks/scratchpads.ex
+      - platform/lib/keyfleet/notebooks/understanding_page.ex
+      - platform/lib/keyfleet/notebooks/makers.ex
+      - platform/lib/keyfleet/notebooks/files.ex
+      - platform/lib/keyfleet_web/plugs/notebook_gateway.ex
+      - platform/lib/keyfleet_web/controllers/agent_notebook_controller.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/lib/keyfleet_web/live/workspace_page.ex
+      - platform/contracts/api-contract.openapiv3.yaml
+      - platform/priv/tool_manifest.json
+      - cli/commands.json
+    entry:
+      - route: POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/lock
+      - route: GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/copies
+      - route: POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/copies/{copy_id}/restore
+      - route: GET /fleets/{fleet}/workspace?project=scratchpad&place=docs
+    proofs:
+      - platform/test/keyfleet/notebooks/default_projects_test.exs
+      - platform/test/keyfleet_web/api_contract_test.exs
+    gaps:
+      - Proven against a local hub; not yet run against a real notebook host.
+      - The daily copy runs at 03:31 UTC; the first real copies appear the morning after release.
+
   - id: release-without-gap
     what: >-
       A release of keyfleet.ai answers every page throughout. The site machine

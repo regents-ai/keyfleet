@@ -28,6 +28,7 @@ defmodule Keyfleet.Projects.Errors.HoldError do
     * `not_archived`: only an archived project is taken over or deleted
     * `not_holder`: only the Key that holds an archived project deletes it
     * `general_kept`: `general` is never deleted
+    * `shared`: a project the whole fleet shares is never taken over or deleted
   """
   use Splode.Error, fields: [:code, :words, :project], class: :invalid
 

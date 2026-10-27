@@ -40,6 +40,8 @@ defmodule Keyfleet.DirectoryTest do
 
     assert fleet.projects == [
              %{title: "General", goals: ["Map the first paid service"]},
+             %{title: "Append-only scratchpad", goals: []},
+             %{title: "Keyfleet Syndicate #1 Collaborative Understanding", goals: []},
              %{title: "Lab", goals: ["Try the new model"]}
            ]
   end

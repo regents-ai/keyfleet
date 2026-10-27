@@ -132,7 +132,8 @@ defmodule Keyfleet.Fleets do
 
   Reruns preserve machine identities and restore canonical display names. The
   whole catalog commits together. Every fleet then has its first project,
-  `general` (`Keyfleet.Projects.bootstrap_general!/1`). This internal entry
+  `general` (`Keyfleet.Projects.bootstrap_general!/1`), and the two projects
+  it shares (`Keyfleet.Projects.bootstrap_shared!/1`). This internal entry
   point must never be exposed as a user action.
   """
   def bootstrap_catalog! do
@@ -149,6 +150,7 @@ defmodule Keyfleet.Fleets do
       )
 
     :ok = Keyfleet.Projects.bootstrap_general!(Enum.map(fleets, & &1.id))
+    :ok = Keyfleet.Projects.bootstrap_shared!(fleets)
     fleets
   end
 

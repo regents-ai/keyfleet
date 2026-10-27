@@ -107,24 +107,33 @@ defmodule Keyfleet.Notebooks.Files do
   Writes `content` to the file at `path` in `notebook_id`, as `subject`,
   making its folders as needed: `:add` makes a new file, kept as
   `subject`'s, and leaves one already there as it is, answering `:conflict`;
-  `:write` replaces a file `subject` made, answering `:not_maker` for anyone
-  else's (`Keyfleet.Notebooks.Makers`). A file added whose maker can't be
-  kept is removed again, so it never stays as the notebook maker's.
+  `:write` replaces a file `subject` made, or any file of a notebook open to
+  `actor` for editing (`Keyfleet.Notebooks.Makers.open_to?/4`), answering
+  `:not_maker` for anyone else's. A file added whose maker can't be kept is
+  removed again, so it never stays as the notebook maker's.
   """
-  def write(fleet_id, subject, project_id, notebook_id, path, content, :add) do
+  def write(fleet_id, _actor, subject, project_id, notebook_id, path, content, :add) do
     with {:ok, key} <- file_key(path),
          {:ok, item} <- put(fleet_id, subject, project_id, notebook_id, path, content, true),
          :ok <- Makers.record_added(fleet_id, subject, project_id, notebook_id, key),
          do: {:ok, item}
   end
 
-  def write(fleet_id, subject, project_id, notebook_id, path, content, :write) do
+  def write(fleet_id, actor, subject, project_id, notebook_id, path, content, :write) do
     with {:ok, key} <- file_key(path) do
-      case Makers.overwrite(fleet_id, subject, project_id, notebook_id, key) do
+      case overwrite(fleet_id, actor, subject, project_id, notebook_id, key) do
         :ok -> put(fleet_id, subject, project_id, notebook_id, path, content, false)
         {:error, :not_found} -> {:error, :file_not_found}
         {:error, reason} -> {:error, reason}
       end
+    end
+  end
+
+  defp overwrite(fleet_id, actor, subject, project_id, notebook_id, key) do
+    case Makers.open_to?(fleet_id, actor, notebook_id, :edit) do
+      {:ok, true} -> :ok
+      {:ok, false} -> Makers.overwrite(fleet_id, subject, project_id, notebook_id, key)
+      {:error, reason} -> {:error, reason}
     end
   end
 

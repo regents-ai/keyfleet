@@ -247,6 +247,8 @@ config :keyfleet, Oban,
   # Making fleets' repositories in the code store waits on it too.
   # Deleting agents' replaced pictures from their bucket waits on it too.
   # Drawing revealed Keys' cards waits on the key-art service, one at a time.
+  # The daily copies of the fleets' notebooks have a queue of their own, one
+  # fleet at a time, so they never hold back a roster run.
   # Reading the fleets from the chain waits on a node, so it has its own queue:
   # one long-lived history job per fleet and its balance readings.
   # Reading a signed-in wallet's ENS name waits on an Ethereum mainnet node.
@@ -254,6 +256,7 @@ config :keyfleet, Oban,
   queues: [
     default: 5,
     notebook_hubs: 1,
+    notebook_backups: 1,
     code_store: 2,
     avatars: 2,
     key_art: 1,
@@ -264,6 +267,7 @@ config :keyfleet, Oban,
   cron: [
     crontab: [
       {"*/10 * * * *", Keyfleet.Notebooks.Reconcile},
+      {"31 3 * * *", Keyfleet.Notebooks.DailyBackup},
       {"*/5 * * * *", Keyfleet.Chain.Watch},
       {"17 4 * * *", Keyfleet.ErrorPruner},
       {"23 * * * *", Keyfleet.Treasury.OverdueCheck},

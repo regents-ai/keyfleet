@@ -54,7 +54,10 @@ defmodule Keyfleet.Notebooks.Runs do
            |> answer(200),
          {:ok, runs} <- last_runs(fleet_id, subject, project_id, notebooks),
          {:ok, result_urls} <- result_urls(fleet_id, runs) do
-      {:ok, Enum.zip_with(notebooks, runs, &listing(&1, &2, fleet_id, project_id, result_urls))}
+      locks = Notebooks.locks(fleet_id)
+
+      {:ok,
+       Enum.zip_with(notebooks, runs, &listing(&1, &2, fleet_id, project_id, result_urls, locks))}
     end
   end
 
@@ -202,12 +205,17 @@ defmodule Keyfleet.Notebooks.Runs do
     end
   end
 
-  defp listing(notebook, run, fleet_id, project_id, result_urls) do
+  # A notebook with nothing kept of it is locked and nobody's scratchpad.
+  defp listing(notebook, run, fleet_id, project_id, result_urls, locks) do
+    lock = Map.get(locks, notebook["id"], %{locked: true, key: nil})
+
     %{
       notebook_id: notebook["id"],
       title: notebook["title"],
       description: notebook["description"],
       created_at: notebook["created_at"],
+      locked: lock.locked,
+      scratchpad_key: lock.key,
       notebook_url: Notebooks.notebook_url(fleet_id, project_id, notebook["id"]),
       last_run:
         if run do

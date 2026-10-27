@@ -1861,7 +1861,7 @@
       },
       {
         "command": "notebooks list <fleet> <project>",
-        "description": "List a project's 50 newest notebooks, newest first, each with its id, its title and the last background run you started there (its run_id, status and, once its page is kept, result_url), or null when you have started none. Changes nothing.",
+        "description": "List a project's 50 newest notebooks, newest first, each with its id, its title, whether it is locked, the Key whose scratchpad it is (or null) and the last background run you started there (its run_id, status and, once its page is kept, result_url), or null when you have started none. Changes nothing.",
         "operation_id": "listNotebooks",
         "method": "GET",
         "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks",
@@ -2178,7 +2178,7 @@
       },
       {
         "command": "notebooks files write <fleet> <project> <notebook> <path>",
-        "description": "Replace the whole text of a file the agent added to a notebook's files, the new text piped on stdin, at most 20,480 bytes. Writing notebook.py saves a new version of the code of a notebook the agent made. Others' files answer 403 notebooks_maker_only; to add beside them, use notebooks files add. Read the file first.",
+        "description": "Replace the whole text of a file the agent added to a notebook's files, or of any file of a notebook its creator unlocked or of the scratchpad of a Key the agent acts as, the new text piped on stdin, at most 20,480 bytes. Writing notebook.py saves a new version of the notebook's code. Others' files answer 403 notebooks_maker_only; to add beside them, use notebooks files add. Read the file first.",
         "operation_id": "writeNotebookFile",
         "method": "POST",
         "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/write",
@@ -2224,6 +2224,142 @@
             "description": "The file's whole text."
           }
         ]
+      },
+      {
+        "command": "notebooks lock <fleet> <project> <notebook>",
+        "description": "Lock a notebook the agent created. Only its creator locks, unlocks or deletes it; in the Append-only scratchpad, Key N's notebook is created by whoever acts as Key N. Others' notebooks answer 403 notebooks_maker_only. Locked, the fleet's members open, copy and run it, and only its creator changes it. A notebook starts locked.",
+        "operation_id": "lockNotebook",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/lock",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "webmcp": "notebooks_lock",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "in": "path",
+            "field": "project",
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+          },
+          {
+            "name": "notebook",
+            "type": "string",
+            "in": "path",
+            "field": "notebook_id",
+            "description": "The notebook's id, nb- and 16 characters, as notebooks list or notebooks create answers it."
+          }
+        ],
+        "body": {
+          "locked": true
+        }
+      },
+      {
+        "command": "notebooks unlock <fleet> <project> <notebook>",
+        "description": "Unlock a notebook the agent created. Only its creator locks, unlocks or deletes it; in the Append-only scratchpad, Key N's notebook is created by whoever acts as Key N. Others' notebooks answer 403 notebooks_maker_only. Unlocked, every member edits it too.",
+        "operation_id": "lockNotebook",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/lock",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "webmcp": "notebooks_lock",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "in": "path",
+            "field": "project",
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+          },
+          {
+            "name": "notebook",
+            "type": "string",
+            "in": "path",
+            "field": "notebook_id",
+            "description": "The notebook's id, nb- and 16 characters, as notebooks list or notebooks create answers it."
+          }
+        ],
+        "body": {
+          "locked": false
+        }
+      },
+      {
+        "command": "notebooks copies <fleet> <project>",
+        "description": "List a project's daily copies of its notebooks, each notebook's copies newest first, with whether you may bring each back. Every notebook that changed is copied once a day; each copy is kept 90 days. Changes nothing.",
+        "operation_id": "listNotebookCopies",
+        "method": "GET",
+        "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/copies",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "read",
+        "webmcp": "notebooks_copies",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "in": "path",
+            "field": "project",
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+          }
+        ]
+      },
+      {
+        "command": "notebooks restore <fleet> <project> <copy>",
+        "description": "Bring a daily copy back as a new notebook of the agent's in the same project, titled after the notebook and the day it was copied. The notebook it was copied from stays as it is. Only an agent that could edit the notebook when it was copied may.",
+        "operation_id": "restoreNotebookCopy",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/copies/{copy_id}/restore",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "webmcp": "notebooks_restore",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "in": "path",
+            "field": "project",
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+          },
+          {
+            "name": "copy",
+            "type": "string",
+            "in": "path",
+            "field": "copy_id",
+            "description": "The copy's id, as notebooks copies lists it."
+          }
+        ],
+        "body": {}
       },
     {
       "command": "agents whoami",

@@ -698,6 +698,35 @@
   align-self: center;
 }
 
+/* A notebook creator's Lock or Unlock, quiet beside the date. */
+.workspace-row-switch {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-fg);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+/* One notebook's daily copies: its title, a day, and Bring back. */
+.workspace-copy-form {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.workspace-copy-form label {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.workspace-copy-form label span {
+  overflow-wrap: anywhere;
+}
+
 /* A pin: quiet until pointed at, filled once set. */
 .kf-pin {
   display: inline-grid;

@@ -223,8 +223,9 @@ defmodule Keyfleet.MixProject do
         # record in the Graph domain, and its policy's access check. Main counted
         # 87 on 23 Oct, one above the 86 recorded here; the PeopleRoomWriter
         # check brings it to 88. Projects add three: the Project record, with its
-        # domain, and its KeyActor and KeyReader checks.
-        "xref graph --label compile-connected --fail-above 90",
+        # domain, and its KeyActor and KeyReader checks. Notebook locks and daily
+        # copies add two: the Setting and Backup records in the Notebooks domain.
+        "xref graph --label compile-connected --fail-above 92",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

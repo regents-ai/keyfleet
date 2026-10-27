@@ -14,6 +14,10 @@ defmodule Keyfleet.Projects.Hold do
   index refuses, from a double press, is told as the check tells it
   (`active_held`), in the index's own words.
 
+  A project the whole fleet shares, held by no Key, is never archived, taken
+  over or deleted: no Key holds it as its active project, and it is never
+  archived.
+
   Once a delete is kept, everyone's admission to the fleet's notebooks ends,
   so their next request is let in to the spaces left, without the deleted
   project's.
@@ -137,6 +141,9 @@ defmodule Keyfleet.Projects.Hold do
   end
 
   defp archived(%{state: :archived}, _why), do: :ok
+
+  defp archived(%{key: nil} = project, _why),
+    do: refuse(:shared, project, "#{project.title} belongs to the whole fleet.")
 
   defp archived(project, why),
     do:

@@ -5286,3 +5286,27 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   ran in a plain database transaction and Ash dropped the notices with a
   "Missed 1 notifications" warning (Sentinel, 27 Oct). Nothing listens to
   them yet, so nobody saw a difference; the warning stops.
+
+## 2026-10-27 — Two shared projects in every fleet, notebook locks and daily copies
+
+- Every fleet now has two projects no Key holds and nobody can take over or
+  delete: "Append-only scratchpad" (`scratchpad`) and "Keyfleet <fleet>
+  Collaborative Understanding" (`understanding`), made with the fleet catalog
+  when the site starts.
+- Each sold Key gets one "Key N" notebook in the scratchpad, made again if it is
+  deleted. Only whoever acts as Key N writes in it while it is locked; every
+  member reads it.
+- Every notebook has a lock. New notebooks start locked: members read, run,
+  comment in the chat room and copy them, and only the creator changes them.
+  The creator can unlock a notebook so any member edits it; only the creator
+  locks it again or deletes it.
+- The understanding project starts with an unlocked "Fleet understanding" page
+  for the fleet's soft rules, tips and things not to do, including the tip that
+  personal notebooks work best kept append-only.
+- Every notebook that changed is copied once a day (03:31 UTC) and each copy is
+  kept 90 days. Anyone who could edit the notebook can bring a copy back as a
+  new notebook, on the Docs page or with the new `notebooks copies` and
+  `notebooks restore` commands; `notebooks lock` and `notebooks unlock` switch
+  the lock. Signed API contract 21.0.0: notebook lists carry `locked` and
+  `scratchpad_key`, and a shared project refuses take-over and delete with 409
+  `project_shared`.

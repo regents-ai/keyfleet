@@ -15,9 +15,18 @@ defmodule Keyfleet.Notebooks.Makers do
   Each check is `:ok` for the maker, or `{:error, reason}`: `:not_maker`,
   `:not_found` when the hub doesn't have the thing, or `:unavailable` when
   the hub or the kept makers can't be read.
+
+  Sean, 27 Oct 2026: a notebook's creator locks or unlocks it. Locked, as
+  every notebook starts, the rule above stands; unlocked, every member also
+  changes what is in it, and still only its creator deletes it or locks it
+  again (`open_to?/4`). A Key's scratchpad is made by this site
+  (`Keyfleet.Notebooks.Scratchpads`), and its creator is whoever acts as that
+  Key.
   """
 
   alias Keyfleet.Actors.System
+  alias Keyfleet.Graph.Checks.KeyActor
+  alias Keyfleet.Graph.Errors.{EditsRestrictedError, NotKeyHolderError}
   alias Keyfleet.Notebooks
   alias Keyfleet.Notebooks.{FileMaker, RecordsDownError, Runs}
 
@@ -25,6 +34,39 @@ defmodule Keyfleet.Notebooks.Makers do
 
   # The hub lists at most this many workspace entries a page.
   @page 500
+
+  @doc """
+  Whether the notebook is open to `actor` past the checks below, as
+  `{:ok, boolean}`, or `{:error, :unavailable}` when that can't be read now.
+  `:edit` asks whether `actor` may change what is in it, as every member may
+  once its creator unlocked it; `:creator` whether `actor` is its creator by
+  Keyfleet's own record, as whoever acts as the Key whose scratchpad it is
+  (`Keyfleet.Notebooks.Setting`). Any other notebook's creator is its author
+  in the hub, whom `notebook/4` asks.
+  """
+  def open_to?(fleet_id, actor, notebook_id, scope) when scope in [:edit, :creator] do
+    case Notebooks.notebook_setting(fleet_id, notebook_id, actor: %System{}) do
+      {:ok, %{unlocked: true}} when scope == :edit -> {:ok, true}
+      {:ok, %{key: key}} when is_integer(key) -> acts_as(actor, fleet_id, key)
+      {:ok, _locked} -> {:ok, false}
+      {:error, error} -> down("read", fleet_id, notebook_id, error)
+    end
+  end
+
+  @doc """
+  Whether `actor` acts as the fleet's Key `key` now (`KeyActor`), as
+  `{:ok, boolean}`, or `{:error, :unavailable}` when that can't be read.
+  """
+  def acts_as(actor, fleet_id, key) do
+    within = Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
+
+    case KeyActor.command(actor, fleet_id, key, nil, within) do
+      {:ok, _command} -> {:ok, true}
+      {:error, %NotKeyHolderError{}} -> {:ok, false}
+      {:error, %EditsRestrictedError{}} -> {:ok, false}
+      {:error, _error} -> {:error, :unavailable}
+    end
+  end
 
   @doc "Whether `subject` made the notebook."
   def notebook(fleet_id, subject, project_id, notebook_id) do
@@ -189,9 +231,13 @@ defmodule Keyfleet.Notebooks.Makers do
     end
   end
 
-  defp down(what, fleet_id, notebook_id, error) do
+  @doc """
+  Reports that what Keyfleet keeps of a notebook could not be `what` (read,
+  kept, forgotten), answering `{:error, :unavailable}`.
+  """
+  def down(what, fleet_id, notebook_id, error) do
     RecordsDownError.report(
-      "Who made the files of notebook #{notebook_id} in #{fleet_id} could not be #{what}: " <>
+      "What Keyfleet keeps of notebook #{notebook_id} in #{fleet_id} could not be #{what}: " <>
         inspect(error)
     )
 

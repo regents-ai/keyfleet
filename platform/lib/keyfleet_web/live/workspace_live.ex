@@ -20,10 +20,11 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   import KeyfleetWeb.Components.LoadFailed
 
-  alias Keyfleet.{Graph, Keys, Projects}
+  alias Keyfleet.Actors.Human
+  alias Keyfleet.{Graph, Keys, Notebooks, Projects}
   alias Keyfleet.Graph.Errors.{EditsRestrictedError, NotKeyHolderError}
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
-  alias Keyfleet.Projects.Errors.{HoldError, NameTakenError}
+  alias Keyfleet.Projects.Errors.{ClosedError, HoldError, NameTakenError}
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.PageRead
@@ -239,12 +240,16 @@ defmodule KeyfleetWeb.WorkspaceLive do
       patch={WorkspacePage.place_path(@board.fleet_id, @board.place, @project.name)}
       aria-current={if @board.project == @project.name, do: "page"}
     >
-      {@project.title} · {ActivityLines.key_name(@project.key, nil)}
+      {@project.title} · {holder(@project.key)}
     </.link>
     """
   end
 
   defp title(projects, name), do: Enum.find_value(projects, &(&1.name == name && &1.title))
+
+  # Who holds a project: one Key, or the whole fleet for a shared one.
+  defp holder(nil), do: "Shared"
+  defp holder(key), do: ActivityLines.key_name(key, nil)
 
   defp place_name(:project), do: "Project"
   defp place_name(:docs), do: "Docs"
@@ -483,6 +488,40 @@ defmodule KeyfleetWeb.WorkspaceLive do
             <p :if={@notice} id="notebooks-notice" class="workspace-notebooks-notice">{@notice}</p>
           </div>
         </section>
+        <section
+          :if={@board.project && @board.active? && @board.copies != []}
+          id="workspace-copies"
+          class="rg-panel workspace-info"
+          aria-labelledby="workspace-copies-title"
+        >
+          <div class="rg-panel__body">
+            <h3 id="workspace-copies-title">
+              Daily copies
+              <Regent.Primitives.tip id="workspace-copies-tip" label="About daily copies">
+                Each notebook that changed is copied once a day and kept for 90 days. Bringing one back makes a new notebook, yours.
+              </Regent.Primitives.tip>
+            </h3>
+            <form
+              :for={notebook <- @board.copies}
+              id={"workspace-copies-#{notebook.notebook_id}"}
+              class="workspace-copy-form"
+              phx-submit="notebook_restore"
+            >
+              <input type="hidden" name="project" value={@board.project} />
+              <label>
+                <span>{notebook.title}</span>
+                <select name="copy">
+                  <option :for={copy <- notebook.copies} value={copy.id}>
+                    {Calendar.strftime(copy.changed_at, "%-d %b %Y")}
+                  </option>
+                </select>
+              </label>
+              <Regent.Primitives.button type="submit" variant="secondary">
+                Bring back
+              </Regent.Primitives.button>
+            </form>
+          </div>
+        </section>
       </div>
     </div>
     """
@@ -523,11 +562,26 @@ defmodule KeyfleetWeb.WorkspaceLive do
           >
             <a class="workspace-row-title" href={notebook.open}>{notebook.title}</a>
             <span class="workspace-row-meta">
+              <span id={"workspace-notebook-#{notebook.id}-lock"}>
+                {if notebook.locked, do: "Locked", else: "Anyone edits"}
+              </span>
               <KeyfleetWeb.Time.local
                 id={"workspace-notebook-#{notebook.id}-added"}
                 at={notebook.added}
                 as={:date}
               />
+              <button
+                :if={notebook.creator? and @active?}
+                id={"workspace-notebook-#{notebook.id}-switch"}
+                type="button"
+                class="workspace-row-switch"
+                phx-click="notebook_lock"
+                phx-value-project={@project}
+                phx-value-notebook={notebook.id}
+                phx-value-locked={to_string(not notebook.locked)}
+              >
+                {if notebook.locked, do: "Unlock", else: "Lock"}
+              </button>
             </span>
             <p :if={notebook.description != ""} class="workspace-row-text">
               {notebook.description}
@@ -575,7 +629,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
             >
               <.link class="workspace-row-title" patch={repository.link}>{repository.title}</.link>
               <span class="workspace-row-meta">
-                {ActivityLines.key_name(repository.key, nil)}
+                {holder(repository.key)}
                 <span :if={repository.state == :archived} class="workspace-badge">Archived</span>
               </span>
               <div class="workspace-copy-box">
@@ -1871,6 +1925,34 @@ defmodule KeyfleetWeb.WorkspaceLive do
   def handle_event("project_delete", %{"project" => name}, socket),
     do: hold(socket, &Projects.delete_project(&1, &2, name, &3))
 
+  def handle_event(
+        "notebook_lock",
+        %{"project" => project, "notebook" => notebook_id, "locked" => locked},
+        socket
+      )
+      when locked in ["true", "false"] do
+    notebook(socket, fn fleet_id, actor ->
+      with {:ok, _lock} <-
+             Notebooks.lock(
+               fleet_id,
+               actor,
+               Notebooks.subject(actor),
+               project,
+               notebook_id,
+               locked == "true"
+             ),
+           do: {:ok, nil}
+    end)
+  end
+
+  def handle_event("notebook_restore", %{"project" => project, "copy" => copy_id}, socket) do
+    notebook(socket, fn fleet_id, actor ->
+      with {:ok, %{title: title}} <-
+             Notebooks.restore(fleet_id, actor, Notebooks.subject(actor), project, copy_id),
+           do: {:ok, "Brought back as #{title}."}
+    end)
+  end
+
   def handle_event(_press, _params, socket), do: {:noreply, socket}
 
   defp hold(socket, step) do
@@ -1891,6 +1973,43 @@ defmodule KeyfleetWeb.WorkspaceLive do
         {:noreply, socket |> assign(:project_notice, refused(error)) |> read_workspace()}
     end
   end
+
+  # A notebook press acts as the signed-in member; the page reads afresh
+  # either way and says how it went.
+  defp notebook(socket, step) do
+    notice =
+      case ShellLive.human_actor(socket) do
+        %Human{} = actor ->
+          case step.(socket.assigns.workspace.fleet_id, actor) do
+            {:ok, notice} -> notice
+            {:error, reason} -> notebook_refusal(reason)
+          end
+
+        nil ->
+          "Sign in to change this fleet’s notebooks."
+      end
+
+    {:noreply, socket |> assign(:notebooks_notice, notice) |> read_workspace()}
+  end
+
+  defp notebook_refusal(:not_maker),
+    do: "Only whoever made this notebook locks, unlocks or brings it back."
+
+  defp notebook_refusal(:not_holder),
+    do: "Only holders of this fleet’s Keys change its notebooks."
+
+  defp notebook_refusal(:edits_restricted), do: "A vote has stopped this Key’s edits for now."
+
+  defp notebook_refusal(:setting_up),
+    do: "This project’s notebooks are still being set up. Try again in a few minutes."
+
+  defp notebook_refusal(%ClosedError{} = closed), do: Exception.message(closed)
+
+  defp notebook_refusal(reason) when reason in [:not_found, :copy_not_found, :file_not_found],
+    do: "That notebook or copy is gone now."
+
+  defp notebook_refusal(_reason),
+    do: "The notebooks aren’t answering right now. Try again in a moment."
 
   defp refused(%{errors: errors}),
     do: Enum.find_value(errors, &refusal/1) || "That didn’t go through. Try again in a minute."

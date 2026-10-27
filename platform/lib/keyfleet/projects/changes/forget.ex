@@ -3,7 +3,7 @@ defmodule Keyfleet.Projects.Changes.Forget do
   Deleting a project takes everything people and agents could see of it
   away, in the transaction that marks it deleted: its items, the links from
   or to them and the changes that touched them leave the workspace's read
-  tables, and its pins and its pushes go. The same transaction queues the
+  tables, and its pins, its pushes and the daily copies of its notebooks go. The same transaction queues the
   jobs that delete its notebook space from the hub
   (`Keyfleet.Notebooks.DeleteSpace`) and its repository from the code store
   (`Keyfleet.Code.DeleteRepository`).
@@ -38,7 +38,8 @@ defmodule Keyfleet.Projects.Changes.Forget do
           {Graph.Object, :forget},
           {Graph.Event, :forget},
           {Graph.Pin, :forget},
-          {Code.Push, :forget}
+          {Code.Push, :forget},
+          {Keyfleet.Notebooks.Backup, :forget}
         ] do
       resource
       |> Ash.Query.for_read(:of_project, arguments, actor: @system)

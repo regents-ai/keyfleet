@@ -61,11 +61,17 @@ defmodule KeyfleetWeb.PublicWorkspaceTest do
 
     assert json["projects"] == [
              %{"title" => "General", "goals" => ["Revenue"]},
+             %{"title" => "Append-only scratchpad", "goals" => []},
+             %{"title" => "Keyfleet Syndicate #1 Collaborative Understanding", "goals" => []},
              %{"title" => "Lab", "goals" => ["Try the model"]}
            ]
 
     markdown = conn |> get("/fleets/#{@fleet}.md") |> response(200)
-    assert markdown =~ "## Projects\n\n- “General”\n  - “Revenue”\n- “Lab”\n  - “Try the model”\n"
+
+    assert markdown =~
+             "## Projects\n\n- “General”\n  - “Revenue”\n- “Append-only scratchpad” · no goals in progress\n" <>
+               "- “Keyfleet Syndicate #1 Collaborative Understanding” · no goals in progress\n" <>
+               "- “Lab”\n  - “Try the model”\n"
 
     {:ok, hall, _html} = live(conn, Fleets.path(@fleet))
     {:ok, workspace, _html} = live(conn, Fleets.path(@fleet) <> "/workspace")

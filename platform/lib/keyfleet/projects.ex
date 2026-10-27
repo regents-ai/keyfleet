@@ -6,7 +6,11 @@ defmodule Keyfleet.Projects do
   by Key 3 (Key 329 in Regents Club), which holds the starting goals, the fleet's first notebook space
   and its first repository.
 
-  Each project is held by one of the fleet's Keys and is active, archived or
+  Every fleet also shares two projects that no Key holds, always active: the
+  `scratchpad`, with a notebook for each Key, and `understanding`, the
+  fleet's notes on working together (`bootstrap_shared!/1`).
+
+  Every other project is held by one of the fleet's Keys and is active, archived or
   deleted. A Key holds at most one active project and five archived ones; it
   starts, archives, takes over and deletes them as `Keyfleet.Projects.Project`
   says. New work goes into any active project, whoever holds it; an archived
@@ -58,6 +62,36 @@ defmodule Keyfleet.Projects do
       Enum.map(fleet_ids, &%{fleet_id: &1}),
       Keyfleet.Projects.Project,
       :general,
+      actor: %Keyfleet.Actors.System{},
+      return_errors?: true,
+      stop_on_error?: true,
+      transaction: :all,
+      sorted?: true
+    )
+
+    :ok
+  end
+
+  @doc """
+  Gives each of these fleets its two shared projects (`Project.shared_names/0`),
+  active and held by no Key, unless it has them already: the `scratchpad`,
+  titled "Append-only scratchpad", and `understanding`, titled after the
+  fleet. A fleet that has them keeps them, their titles made canonical again.
+  """
+  def bootstrap_shared!(fleets) do
+    Ash.bulk_create!(
+      Enum.flat_map(fleets, fn fleet ->
+        [
+          %{fleet_id: fleet.id, name: "scratchpad", title: "Append-only scratchpad"},
+          %{
+            fleet_id: fleet.id,
+            name: "understanding",
+            title: "Keyfleet #{fleet.name} Collaborative Understanding"
+          }
+        ]
+      end),
+      Keyfleet.Projects.Project,
+      :shared,
       actor: %Keyfleet.Actors.System{},
       return_errors?: true,
       stop_on_error?: true,

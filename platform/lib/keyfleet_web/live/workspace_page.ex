@@ -40,7 +40,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   require Logger
 
-  alias Keyfleet.Actors.System
+  alias Keyfleet.Actors.{Human, System}
   alias Keyfleet.{Agents, Code, Fleets, Keys, Notebooks, Projects}
   alias Keyfleet.Graph
   alias Keyfleet.Notebooks.HubClient
@@ -342,18 +342,26 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  # One project's newest notebooks, or each project's few newest in turn,
-  # and what the fleet's members pinned there. Neither comes from the
-  # workspace's log, so it keeps no place in it (`seen`), and its notices
+  # One project's newest notebooks, each locked or open to every member's
+  # edits, with whether the member is the one who locks it, and the daily
+  # copies of them the member may bring back; or each project's few newest in
+  # turn; and what the fleet's members pinned there. None of it comes from
+  # the workspace's log, so it keeps no place in it (`seen`), and its notices
   # don't read it again.
   defp place(fleet, :docs, shown, projects, _params, opts) do
     hub? = Notebooks.hub?(fleet.id)
     spaces = Map.new(projects, &{&1.name, hub? && &1.hub_project_id})
     labels = labels(shown, projects)
+    shown_hub? = hub? and shown != nil
 
     %{
       hub?: hub?,
-      notebooks: shown && notebooks(fleet.id, spaces[shown.name], limit: @docs_shown),
+      notebooks:
+        shown &&
+          fleet.id
+          |> notebooks(spaces[shown.name], limit: @docs_shown)
+          |> with_locks(fleet.id, shown_hub?, opts[:actor]),
+      copies: if(shown_hub?, do: copies(fleet.id, opts[:actor], shown.name), else: []),
       sections: if(is_nil(shown), do: sections(fleet.id, projects, spaces), else: []),
       pins:
         for pin <- Graph.pins!(fleet.id, :docs, shown && shown.name, opts),
@@ -1031,6 +1039,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     %{
       id: notebook["id"],
       title: notebook["title"],
+      author: notebook["author"],
       description: notebook["description"],
       folder: Enum.find_value(notebook["tags"], &folder/1),
       added: added,
@@ -1040,6 +1049,49 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp folder("folder/" <> folder), do: folder
   defp folder(_tag), do: nil
+
+  # Each notebook locked or open to every member's edits
+  # (`Keyfleet.Notebooks.locks/1`), and whether the member is its creator:
+  # its author, or the Key whose scratchpad it is.
+  defp with_locks(rows, fleet_id, true, actor) when is_list(rows) do
+    locks = Notebooks.locks(fleet_id)
+    {subject, key} = viewer(fleet_id, actor)
+
+    for row <- rows do
+      lock = Map.get(locks, row.id, %{locked: true, key: nil})
+
+      Map.merge(row, %{
+        locked: lock.locked,
+        creator?: if(lock.key, do: lock.key == key, else: row.author == subject)
+      })
+    end
+  end
+
+  defp with_locks(rows, _fleet_id, _hub?, _actor), do: rows
+
+  defp viewer(fleet_id, %Human{} = actor) do
+    {Notebooks.subject(actor), Keys.identity(actor, fleet_id)[:token_id]}
+  end
+
+  defp viewer(_fleet_id, _actor), do: {nil, nil}
+
+  # The project's daily copies the member may bring back, each notebook's
+  # newest first; none for anyone who holds no Key, or when they can't be
+  # read now.
+  defp copies(fleet_id, %Human{} = actor, project) do
+    case Notebooks.copies(fleet_id, actor, Notebooks.subject(actor), project) do
+      {:ok, notebooks} ->
+        for notebook <- notebooks,
+            copies = Enum.filter(notebook.copies, & &1.restorable),
+            copies != [],
+            do: %{notebook | copies: copies}
+
+      {:error, _reason} ->
+        []
+    end
+  end
+
+  defp copies(_fleet_id, _actor, _project), do: []
 
   # A project's space in the fleet's notebook hub: false for a fleet without
   # notebooks, nil before it is made.

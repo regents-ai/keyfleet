@@ -25,6 +25,12 @@ defmodule Keyfleet.Projects.Project do
   Club, `general_key/1`), which holds the starting goals, the fleet's first
   notebook space and its first repository (`bootstrap_general`). No Key ever
   deletes it (`Keyfleet.Projects.Validations.NotGeneral`).
+
+  Every fleet also has two shared projects, active and held by no Key
+  (`shared`): `scratchpad`, where each Key has a notebook of its own
+  (`Keyfleet.Notebooks.Scratchpads`), and `understanding`, the fleet's notes on
+  how its members work together. No Key archives, takes over or deletes one,
+  and neither counts as a Key's active project.
   """
   use Ash.Resource,
     domain: Keyfleet.Projects,
@@ -42,6 +48,9 @@ defmodule Keyfleet.Projects.Project do
 
   @doc "The most archived projects one Key holds."
   def archived_most, do: @archived_most
+
+  @doc "The names of the two projects every fleet shares, held by no Key."
+  def shared_names, do: ["scratchpad", "understanding"]
 
   @doc "The Key that holds a fleet's `general`: 329 in Regents Club, 3 in every other."
   def general_key("regents_club"), do: 329
@@ -218,6 +227,21 @@ defmodule Keyfleet.Projects.Project do
       end
     end
 
+    # Gives a fleet its shared project `name` once, active and held by no
+    # Key; a fleet that has it keeps it, its title made canonical again.
+    create :shared do
+      public? false
+      accept [:fleet_id, :name, :title]
+      upsert? true
+      upsert_fields [:title]
+      change set_attribute(:state, :active)
+
+      change fn changeset, _context ->
+        %{fleet_id: fleet_id, name: name} = changeset.attributes
+        Ash.Changeset.force_change_attribute(changeset, :repository, "#{fleet_id}-#{name}")
+      end
+    end
+
     update :archived do
       public? false
       accept []
@@ -269,6 +293,7 @@ defmodule Keyfleet.Projects.Project do
              :read,
              :create,
              :general,
+             :shared,
              :ever_named,
              :held,
              :archived,
@@ -296,9 +321,10 @@ defmodule Keyfleet.Projects.Project do
       public?: true,
       constraints: [min_length: 1, max_length: 60, match: ~r/\A[^\x00-\x1f\x7f]*\z/]
 
-    # The Key that started it; none for `general`, which every fleet starts with.
+    # The Key that started it; none for the projects every fleet starts with.
     attribute :created_by_key, :integer, public?: true
-    attribute :key, :integer, allow_nil?: false, public?: true, constraints: [min: 0]
+    # The Key that holds it; none for a shared project, which the whole fleet holds.
+    attribute :key, :integer, public?: true, constraints: [min: 0]
     attribute :state, :atom, allow_nil?: false, public?: true, constraints: [one_of: @states]
     attribute :repository, :string, allow_nil?: false, public?: true
     attribute :hub_project_id, :string, public?: true

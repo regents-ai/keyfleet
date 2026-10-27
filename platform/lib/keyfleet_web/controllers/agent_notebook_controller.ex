@@ -6,7 +6,9 @@ defmodule KeyfleetWeb.AgentNotebookController do
   read it until it has finished and its saved result has an address the
   workspace can cite (`Keyfleet.Notebooks.Runs`); and make a notebook, then
   list, read, add and write its files (`Keyfleet.Notebooks.Files`), each in
-  the space of the project the address names. The agent is let in exactly
+  the space of the project the address names; lock or unlock a notebook it
+  made, and list and bring back the project's daily copies of its notebooks
+  (`Keyfleet.Notebooks.lock/6`, `copies/4`, `restore/4`). The agent is let in exactly
   as on the fleet's notebook host (`Keyfleet.Notebooks.admit/3`), and the hub
   knows each run, notebook and change as the agent's. An archived project's
   notebooks are read and never changed, and a Key whose edits a vote of the
@@ -89,6 +91,42 @@ defmodule KeyfleetWeb.AgentNotebookController do
     end)
   end
 
+  def lock(conn, %{
+        "fleet_id" => fleet_id,
+        "project" => project,
+        "notebook_id" => notebook_id,
+        "locked" => locked
+      }) do
+    in_notebooks(conn, fleet_id, project, :change, fn subject, _space ->
+      with {:error, :not_found} <-
+             Notebooks.lock(
+               fleet_id,
+               conn.assigns.agent_actor,
+               subject,
+               project,
+               notebook_id,
+               locked
+             ),
+           do: {:error, :file_not_found}
+    end)
+  end
+
+  def copies(conn, %{"fleet_id" => fleet_id, "project" => project}) do
+    in_notebooks(conn, fleet_id, project, :read, fn subject, _space ->
+      with {:ok, notebooks} <-
+             Notebooks.copies(fleet_id, conn.assigns.agent_actor, subject, project),
+           do: {:ok, %{notebooks: notebooks}}
+    end)
+  end
+
+  def restore(conn, %{"fleet_id" => fleet_id, "project" => project, "copy_id" => copy_id}) do
+    in_notebooks(conn, fleet_id, project, :change, fn subject, _space ->
+      fleet_id
+      |> Notebooks.restore(conn.assigns.agent_actor, subject, project, copy_id)
+      |> edited(conn, fleet_id)
+    end)
+  end
+
   def add_file(conn, params), do: write(conn, params, :add)
   def write_file(conn, params), do: write(conn, params, :write)
 
@@ -105,7 +143,7 @@ defmodule KeyfleetWeb.AgentNotebookController do
        ) do
     in_notebooks(conn, fleet_id, project, :change, fn subject, space ->
       fleet_id
-      |> Files.write(subject, space, notebook_id, path, content, mode)
+      |> Files.write(conn.assigns.agent_actor, subject, space, notebook_id, path, content, mode)
       |> edited(conn, fleet_id)
     end)
   end
@@ -136,7 +174,9 @@ defmodule KeyfleetWeb.AgentNotebookController do
     else
       {:hub, false} -> Refusal.json(conn, 404, "notebooks_not_found")
       %ClosedError{} = closed -> closed(conn, closed)
+      {:error, %ClosedError{} = closed} -> closed(conn, closed)
       {:restricted, true} -> Refusal.json(conn, 403, "notebooks_edits_restricted")
+      {:error, :edits_restricted} -> Refusal.json(conn, 403, "notebooks_edits_restricted")
       {:error, :not_maker} -> Refusal.json(conn, 403, "notebooks_maker_only")
       {:profile, {:ok, nil}} -> Refusal.json(conn, 403, "notebooks_agent_profile")
       {:profile, {:error, _error}} -> Refusal.json(conn, 503, "notebooks_unavailable")
@@ -144,6 +184,7 @@ defmodule KeyfleetWeb.AgentNotebookController do
       {:error, :not_found} -> Refusal.json(conn, 404, "notebook_run_not_found")
       {:error, :runs_full} -> Refusal.json(conn, 429, "notebook_runs_full")
       {:error, :file_not_found} -> Refusal.json(conn, 404, "notebook_file_not_found")
+      {:error, :copy_not_found} -> Refusal.json(conn, 404, "notebook_copy_not_found")
       {:error, :conflict} -> Refusal.json(conn, 409, "notebook_file_conflict")
       {:error, :refused} -> Refusal.json(conn, 422, "notebook_file_refused")
       {:error, :files_full} -> Refusal.json(conn, 422, "notebook_files_full")

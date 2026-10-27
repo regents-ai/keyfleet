@@ -30,7 +30,11 @@ defmodule Keyfleet.Graph.ShownTest do
     Workspace.open_log(@other_fleet)
     Workspace.create(@other_fleet, "goal", %{"title" => "Theirs", "outcome" => "O"})
 
-    assert Graph.shown(@fleet) == [%{title: "General", goals: ["Sell the first audit"]}]
+    assert Graph.shown(@fleet) == [
+             %{title: "General", goals: ["Sell the first audit"]},
+             %{title: "Append-only scratchpad", goals: []},
+             %{title: "Keyfleet Syndicate #1 Collaborative Understanding", goals: []}
+           ]
   end
 
   test "each project lists its own goals, newest first, and a project with none lists none" do
@@ -42,6 +46,8 @@ defmodule Keyfleet.Graph.ShownTest do
 
     assert Graph.shown(@fleet) == [
              %{title: "General", goals: ["Map the first paid service"]},
+             %{title: "Append-only scratchpad", goals: []},
+             %{title: "Keyfleet Syndicate #1 Collaborative Understanding", goals: []},
              %{title: "Lab", goals: ["Measure the speed-up", "Try the new model"]},
              %{title: "Outreach", goals: []}
            ]

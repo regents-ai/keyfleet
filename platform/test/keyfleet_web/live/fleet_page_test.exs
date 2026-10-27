@@ -1767,8 +1767,9 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
       assert text(view, "#fleet-trying-project-0 h3") == "General"
       assert text(view, "#fleet-trying-project-0 .trying-goal") == "Sell the first audit"
-      assert text(view, "#fleet-trying-project-1 h3") == "Lab"
-      assert text(view, "#fleet-trying-project-1 .trying-goal") == "Try the model"
+      assert text(view, "#fleet-trying-project-1 h3") == "Append-only scratchpad"
+      assert text(view, "#fleet-trying-project-3 h3") == "Lab"
+      assert text(view, "#fleet-trying-project-3 .trying-goal") == "Try the model"
       refute html =~ "Draft the price"
       refute has_element?(view, "#fleet-trying-empty")
     end

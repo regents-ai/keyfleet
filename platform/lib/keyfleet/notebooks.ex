@@ -26,7 +26,8 @@ defmodule Keyfleet.Notebooks do
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Agent, Human, System}
   alias Keyfleet.Graph.Checks.KeyActor
-  alias Keyfleet.Notebooks.{Handoff, HubClient, HubSilentError, Roster}
+  alias Keyfleet.Notebooks.{Backup, Files, Handoff, HubClient, HubSilentError, Makers, Roster}
+  alias Keyfleet.Notebooks.Setting
   alias Keyfleet.Projects
 
   resources do
@@ -52,6 +53,21 @@ defmodule Keyfleet.Notebooks do
 
       define :saved_outputs, action: :of_sources, args: [:fleet_id, :source_ids]
       define :remove_saved_output, action: :remove
+    end
+
+    resource Keyfleet.Notebooks.Setting do
+      define :notebook_setting,
+        action: :of,
+        args: [:fleet_id, :notebook_id],
+        not_found_error?: false
+
+      define :notebook_settings, action: :in_fleet, args: [:fleet_id]
+    end
+
+    resource Keyfleet.Notebooks.Backup do
+      define :newest_backups, action: :newest, args: [:fleet_id]
+      define :backup_copies, action: :copies, args: [:fleet_id, :project]
+      define :backup, action: :read, get_by: [:id], not_found_error?: false
     end
   end
 
@@ -469,4 +485,173 @@ defmodule Keyfleet.Notebooks do
     with {:ok, found} <- Projects.project(fleet_id, project, actor: %System{}),
          do: {:ok, found && found.hub_project_id}
   end
+
+  ## Locks
+
+  @doc """
+  Locks (`locked?` true) or unlocks a notebook of the fleet's active project
+  `project`, as `actor`, known to the hub as `subject`. Only the notebook's
+  creator does (`Keyfleet.Notebooks.Makers`): its author in the hub, or for a
+  Key's scratchpad whoever acts as that Key. Answers `{:ok, %{notebook_id:,
+  locked:}}`, or `{:error, reason}`: a `Keyfleet.Projects.Errors.ClosedError`
+  for an archived or unknown project, `:setting_up` before the project's
+  space is made, `:not_holder`, `:edits_restricted`, `:not_maker`,
+  `:not_found` for a notebook the project doesn't have, or `:unavailable`.
+  """
+  def lock(fleet_id, actor, subject, project, notebook_id, locked?) do
+    with {:ok, space} <- open_space(fleet_id, project),
+         :ok <- unrestricted(actor, fleet_id),
+         :ok <- creator(fleet_id, actor, subject, space, notebook_id) do
+      Setting
+      |> Ash.Changeset.for_create(
+        :switch,
+        %{fleet_id: fleet_id, notebook_id: notebook_id, unlocked: not locked?},
+        actor: %System{}
+      )
+      |> Ash.create!()
+
+      {:ok, %{notebook_id: notebook_id, locked: locked?}}
+    end
+  end
+
+  defp creator(fleet_id, actor, subject, space, notebook_id) do
+    case Makers.open_to?(fleet_id, actor, notebook_id, :creator) do
+      {:ok, true} -> :ok
+      {:ok, false} -> Makers.notebook(fleet_id, subject, space, notebook_id)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
+  What Keyfleet keeps of each of these notebooks of the fleet, by id: whether
+  it is locked, and the Key whose scratchpad it is, if any. A notebook with
+  nothing kept is locked and nobody's scratchpad.
+  """
+  def locks(fleet_id) do
+    for setting <- notebook_settings!(fleet_id, actor: %System{}),
+        into: %{},
+        do: {setting.notebook_id, %{locked: not setting.unlocked, key: setting.key}}
+  end
+
+  @doc """
+  Forgets what Keyfleet keeps of a notebook once its hub deleted it. When
+  that can't be done now it is reported, and the next scratchpad run
+  forgets a deleted scratchpad (`Keyfleet.Notebooks.Scratchpads`).
+  """
+  def forget_notebook(fleet_id, notebook_id) do
+    with {:ok, setting} when not is_nil(setting) <-
+           notebook_setting(fleet_id, notebook_id, actor: %System{}),
+         {:error, error} <- Ash.destroy(setting, action: :forget, actor: %System{}) do
+      Makers.down("forgotten", fleet_id, notebook_id, error)
+    else
+      {:ok, nil} -> :ok
+      :ok -> :ok
+      {:error, error} -> Makers.down("read", fleet_id, notebook_id, error)
+    end
+  end
+
+  ## Daily copies
+
+  @doc """
+  The daily copies of the notebooks of the fleet's project `project`
+  (`Keyfleet.Notebooks.Backup`), for one of its members, `actor`, known to
+  the hub as `subject`: each notebook once, newest copy first, with its
+  copies, newest first, and whether `actor` may bring each back
+  (`restorable`). `{:error, :not_holder}` for anyone else, or
+  `{:error, :unavailable}` when membership can't be read now.
+  """
+  def copies(fleet_id, actor, subject, project) do
+    case KeyActor.membership(actor, fleet_id, check_timeout()) do
+      {:ok, %{token_id: key}} ->
+        {:ok, kept_copies(fleet_id, subject, project, key)}
+
+      {:ok, nil} ->
+        {:error, :not_holder}
+
+      {:error, _error} ->
+        {:error, :unavailable}
+    end
+  end
+
+  defp kept_copies(fleet_id, subject, project, key) do
+    fleet_id
+    |> backup_copies!(project, actor: %System{})
+    |> Enum.group_by(& &1.notebook_id)
+    |> Enum.map(fn {notebook_id, [newest | _] = copies} ->
+      %{
+        notebook_id: notebook_id,
+        title: newest.title,
+        copies:
+          for copy <- copies do
+            %{
+              id: copy.id,
+              changed_at: copy.changed_at,
+              restorable: copy.unlocked or copy.author == subject or copy.key == key
+            }
+          end
+      }
+    end)
+    |> Enum.sort_by(&hd(&1.copies).changed_at, {:desc, DateTime})
+  end
+
+  @doc """
+  Brings a daily copy of a notebook of the fleet's project `project` back as
+  a new notebook there, made by `subject` as `actor`, titled after the
+  notebook and the day it was copied.
+  Anyone who could edit the notebook when it was copied may: its creator, any
+  member while it was unlocked, or whoever acts as the Key whose scratchpad
+  it was. Answers `{:ok, %{notebook_id:, title:, notebook_url:}}`, or
+  `{:error, reason}`: `:copy_not_found`, as `lock/6` for its project and
+  standing, `:not_maker` for anyone else, or as
+  `Keyfleet.Notebooks.Files.create/5` for the hub's answer.
+  """
+  def restore(fleet_id, actor, subject, project, backup_id) do
+    with {:copy, {:ok, %Backup{fleet_id: ^fleet_id, project: ^project} = copy}} <-
+           {:copy, backup(backup_id, actor: %System{})},
+         {:ok, space} <- open_space(fleet_id, project),
+         :ok <- unrestricted(actor, fleet_id),
+         :ok <- could_edit(copy, actor, subject) do
+      title = "#{copy.title} (copy of #{Calendar.strftime(copy.changed_at, "%-d %b %Y")})"
+
+      Files.create(
+        fleet_id,
+        subject,
+        space,
+        %{"title" => title, "code" => copy.code},
+        "restore:#{copy.id}:#{subject}"
+      )
+    else
+      {:copy, _none} -> {:error, :copy_not_found}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp could_edit(%Backup{unlocked: true}, _actor, _subject), do: :ok
+  defp could_edit(%Backup{author: subject}, _actor, subject), do: :ok
+  defp could_edit(%Backup{key: nil}, _actor, _subject), do: {:error, :not_maker}
+
+  defp could_edit(%Backup{fleet_id: fleet_id, key: key}, actor, _subject) do
+    case Makers.acts_as(actor, fleet_id, key) do
+      {:ok, true} -> :ok
+      {:ok, false} -> {:error, :not_maker}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # The space of the fleet's project `project` while it takes changes.
+  defp open_space(fleet_id, project) do
+    with {:ok, %{hub_project_id: space}} <- Projects.open(fleet_id, project),
+         do: if(space, do: {:ok, space}, else: {:error, :setting_up})
+  end
+
+  defp unrestricted(actor, fleet_id) do
+    case membership(actor, fleet_id) do
+      {:ok, %{restricted?: false}} -> :ok
+      {:ok, %{restricted?: true}} -> {:error, :edits_restricted}
+      {:ok, nil} -> {:error, :not_holder}
+      {:error, _error} -> {:error, :unavailable}
+    end
+  end
+
+  defp check_timeout, do: Application.fetch_env!(:keyfleet, :graph)[:check_timeout]
 end
