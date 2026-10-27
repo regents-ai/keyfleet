@@ -16,6 +16,8 @@ defmodule KeyfleetWeb.PublicGuideRoutesTest do
     "KEY" => "1",
     "$KEY" => "1",
     "SLUG" => "general",
+    "PROJECT" => "general",
+    "$PROJECT" => "general",
     "OPERATION" => "get"
   }
 

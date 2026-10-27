@@ -39,6 +39,7 @@ defmodule Keyfleet.Graph do
 
     resource Keyfleet.Graph.Cursor do
       define :get_cursor, action: :read, get_by: [:fleet_id], not_found_error?: false
+      define :hold_cursor, action: :hold, args: [:fleet_id], not_found_error?: false
       define :start_cursor, action: :start
       define :advance_cursor, action: :advance
       define :forget_cursor, action: :forget
@@ -50,6 +51,7 @@ defmodule Keyfleet.Graph do
       define :notable_before, action: :notable_before, args: [:fleet_id, :before_seq, :limit]
       define :object_history, action: :history, args: [:fleet_id, :object_id]
       define :record_events, action: :record
+      define :events_with_ids, action: :with_event_ids, args: [:fleet_id, :event_ids]
     end
 
     resource Keyfleet.Graph.Object do
@@ -75,12 +77,13 @@ defmodule Keyfleet.Graph do
       define :producers_of, action: :producing, args: [:fleet_id, :targets]
       define :project_relations, action: :project
       define :remove_relations, action: :remove
+      define :read_relations, action: :with_ids, args: [:fleet_id, :ids]
     end
 
     resource Keyfleet.Graph.Pin do
       define :pin, action: :pin
       define :unpin, action: :destroy
-      define :pins, action: :in_place, args: [:fleet_id, :place]
+      define :pins, action: :in_place, args: [:fleet_id, :place, {:optional, :project}]
     end
   end
 

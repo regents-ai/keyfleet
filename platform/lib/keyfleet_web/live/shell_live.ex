@@ -56,6 +56,7 @@ defmodule KeyfleetWeb.ShellLive do
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
   @poll_events ~w(start_poll end_poll cast_vote)
   @sign_in_events ~w(open_notebooks get_code_password)
+  @workspace_events ~w(pin unpin project_start project_archive project_take_over project_delete)
 
   # The routes that show a fleet's workspace and its votes.
   @workspace_routes [:workspace, :workspace_item, :code_commit, :code_files]
@@ -88,6 +89,7 @@ defmodule KeyfleetWeb.ShellLive do
        notebooks_notice: nil,
        code_password: nil,
        code_notice: nil,
+       project_notice: nil,
        connection_outcome: nil,
        held_keys: [],
        slices: %Read{},
@@ -382,7 +384,7 @@ defmodule KeyfleetWeb.ShellLive do
   defp press("close_buy_key", _params, socket),
     do: {:noreply, socket |> SharedFigures.follow(:buy_key, []) |> assign(:buy_key, nil)}
 
-  defp press(event, params, socket) when event in ~w(pin unpin),
+  defp press(event, params, socket) when event in @workspace_events,
     do: WorkspaceLive.handle_event(event, params, socket)
 
   defp press(event, params, socket) when event in @room_events,
@@ -751,6 +753,7 @@ defmodule KeyfleetWeb.ShellLive do
             notebooks_notice={@notebooks_notice}
             code_password={@code_password}
             code_notice={@code_notice}
+            project_notice={@project_notice}
             signed_out?={is_nil(actor(@access_context))}
           />
           <WorkspaceLive.item
@@ -1210,7 +1213,8 @@ defmodule KeyfleetWeb.ShellLive do
       workspace_params: params,
       notebooks_notice: nil,
       code_password: nil,
-      code_notice: nil
+      code_notice: nil,
+      project_notice: nil
     )
     |> WorkspaceLive.read_workspace()
   end

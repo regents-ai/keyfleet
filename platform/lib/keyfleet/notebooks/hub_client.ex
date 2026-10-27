@@ -59,6 +59,17 @@ defmodule Keyfleet.Notebooks.HubClient do
     |> answer([201])
   end
 
+  @doc """
+  Deletes the project with its notebooks, as the provisioner, a manager of
+  every hub project. A project already gone counts as deleted. The hub keeps
+  a deleted project out of every read at once and clears it away later.
+  """
+  def delete_project(fleet_id, project_id) do
+    fleet_id
+    |> request(:delete, "/api/v1/projects/#{segment(project_id)}")
+    |> answer([200], [404])
+  end
+
   @doc "The project's members, each named by `user_id` or, when it was added by its address, `email`."
   def members(fleet_id, project_id),
     do:

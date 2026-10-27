@@ -163,10 +163,11 @@ defmodule Keyfleet.Rooms do
   rooms and may read none of them is refused (`Ash.Error.Forbidden`).
 
   `places` says how far the caller has read the rest, as
-  `%{graph: seq, proposals: seq, keys: walls, dms: cursors | nil, quotes: seq | nil}`.
+  `%{graph: seq, project: name | nil, proposals: seq, keys: walls, dms: cursors | nil, quotes: seq | nil}`.
 
   `graph` is the place in the workspace's log. The workspace answers with at
-  most 100 of its changes after that point, as `Keyfleet.Graph.list_changes/3`
+  most 100 of its changes after that point, the whole fleet's or, when
+  `project` names one, that project's, as `Keyfleet.Graph.list_changes/3`
   does, with `next_cursor` to send next time and `run_id`: a different `run_id`
   from the one the caller last saw means the log started over, and the caller
   reads it again from 0.
@@ -232,7 +233,7 @@ defmodule Keyfleet.Rooms do
          {:ok, graph} <-
            Keyfleet.Graph.list_changes(
              fleet_id,
-             %{after_seq: places.graph, limit: @graph_sync_page},
+             %{after_seq: places.graph, project: places.project, limit: @graph_sync_page},
              actor: actor
            ),
          {:ok, rooms} <- sync_rooms(fleet_id, cursors, actor),

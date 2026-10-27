@@ -5,22 +5,25 @@ defmodule KeyfleetWeb.AgentNotebookController do
   started there, start a background run of a notebook's saved code, then
   read it until it has finished and its saved result has an address the
   workspace can cite (`Keyfleet.Notebooks.Runs`); and make a notebook, then
-  list, read, add and write its files (`Keyfleet.Notebooks.Files`), all in
-  the general project's space. The agent is let in exactly as on the fleet's notebook host
-  (`Keyfleet.Notebooks.admit/3`), and the hub knows each run, notebook and
-  change as the agent's. A Key whose edits a vote of the fleet has
-  restricted lists and reads, and starts, makes and writes nothing. Starting a run spends the agent's
-  `:notebook_run_starts` allowance, the same one the notebook host spends.
+  list, read, add and write its files (`Keyfleet.Notebooks.Files`), each in
+  the space of the project the address names. The agent is let in exactly
+  as on the fleet's notebook host (`Keyfleet.Notebooks.admit/3`), and the hub
+  knows each run, notebook and change as the agent's. An archived project's
+  notebooks are read and never changed, and a Key whose edits a vote of the
+  fleet has restricted lists and reads, and starts, makes and writes nothing.
+  Starting a run spends the agent's `:notebook_run_starts` allowance, the same
+  one the notebook host spends.
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Limits
   alias Keyfleet.{Notebooks, Projects}
   alias Keyfleet.Notebooks.{Files, Runs}
+  alias Keyfleet.Projects.Errors.ClosedError
   alias KeyfleetWeb.Refusal
 
-  def index(conn, %{"fleet_id" => fleet_id}) do
-    in_notebooks(conn, fleet_id, :read, fn subject, space ->
+  def index(conn, %{"fleet_id" => fleet_id, "project" => project}) do
+    in_notebooks(conn, fleet_id, project, :read, fn subject, space ->
       with {:ok, notebooks} <- Runs.list(fleet_id, subject, space),
            do: {:ok, %{notebooks: notebooks}}
     end)
@@ -28,24 +31,37 @@ defmodule KeyfleetWeb.AgentNotebookController do
 
   def start(conn, %{
         "fleet_id" => fleet_id,
+        "project" => project,
         "notebook_id" => notebook_id,
         "idempotency_key" => idempotency_key
       }) do
-    in_notebooks(conn, fleet_id, :change, fn subject, space ->
+    in_notebooks(conn, fleet_id, project, :change, fn subject, space ->
       with :ok <- Limits.admit(:notebook_run_starts, subject),
            do: Runs.start(fleet_id, subject, space, notebook_id, idempotency_key)
     end)
   end
 
-  def show(conn, %{"fleet_id" => fleet_id, "notebook_id" => notebook_id, "run_id" => run_id}) do
-    in_notebooks(conn, fleet_id, :read, fn subject, space ->
+  def show(conn, %{
+        "fleet_id" => fleet_id,
+        "project" => project,
+        "notebook_id" => notebook_id,
+        "run_id" => run_id
+      }) do
+    in_notebooks(conn, fleet_id, project, :read, fn subject, space ->
       Runs.read(fleet_id, subject, space, notebook_id, run_id)
     end)
   end
 
-  def create(conn, %{"fleet_id" => fleet_id, "idempotency_key" => idempotency_key} = params) do
-    in_notebooks(conn, fleet_id, :change, fn subject, space ->
-      notebook = params |> Map.take(~w(title code description)) |> for_goal(params["goal"])
+  def create(
+        conn,
+        %{"fleet_id" => fleet_id, "project" => project, "idempotency_key" => idempotency_key} =
+          params
+      ) do
+    in_notebooks(conn, fleet_id, project, :change, fn subject, space ->
+      notebook =
+        params
+        |> Map.take(~w(title code description))
+        |> Map.put("tags", tags(params["goal"], params["folder"]))
 
       fleet_id
       |> Files.create(subject, space, notebook, idempotency_key)
@@ -53,14 +69,22 @@ defmodule KeyfleetWeb.AgentNotebookController do
     end)
   end
 
-  def list_files(conn, %{"fleet_id" => fleet_id, "notebook_id" => notebook_id} = params) do
-    in_notebooks(conn, fleet_id, :read, fn subject, space ->
+  def list_files(
+        conn,
+        %{"fleet_id" => fleet_id, "project" => project, "notebook_id" => notebook_id} = params
+      ) do
+    in_notebooks(conn, fleet_id, project, :read, fn subject, space ->
       Files.list(fleet_id, subject, space, notebook_id, params["path"], params["cursor"])
     end)
   end
 
-  def read_file(conn, %{"fleet_id" => fleet_id, "notebook_id" => notebook_id, "path" => path}) do
-    in_notebooks(conn, fleet_id, :read, fn subject, space ->
+  def read_file(conn, %{
+        "fleet_id" => fleet_id,
+        "project" => project,
+        "notebook_id" => notebook_id,
+        "path" => path
+      }) do
+    in_notebooks(conn, fleet_id, project, :read, fn subject, space ->
       Files.read(fleet_id, subject, space, notebook_id, path)
     end)
   end
@@ -72,13 +96,14 @@ defmodule KeyfleetWeb.AgentNotebookController do
          conn,
          %{
            "fleet_id" => fleet_id,
+           "project" => project,
            "notebook_id" => notebook_id,
            "path" => path,
            "content" => content
          },
          mode
        ) do
-    in_notebooks(conn, fleet_id, :change, fn subject, space ->
+    in_notebooks(conn, fleet_id, project, :change, fn subject, space ->
       fleet_id
       |> Files.write(subject, space, notebook_id, path, content, mode)
       |> edited(conn, fleet_id)
@@ -93,8 +118,10 @@ defmodule KeyfleetWeb.AgentNotebookController do
 
   defp edited(refused, _conn, _fleet_id), do: refused
 
-  # A Key whose edits a vote of the fleet has restricted only reads.
-  defp in_notebooks(conn, fleet_id, need, act) do
+  # A Key whose edits a vote of the fleet has restricted only reads, and so
+  # does anyone in an archived project. Only a member learns which projects
+  # the fleet has.
+  defp in_notebooks(conn, fleet_id, project, need, act) do
     actor = conn.assigns.agent_actor
 
     with {:hub, true} <- {:hub, Notebooks.hub?(fleet_id)},
@@ -102,11 +129,13 @@ defmodule KeyfleetWeb.AgentNotebookController do
            {:profile, Notebooks.agent(actor)},
          {:ok, access} <- Notebooks.admit(actor, fleet_id, subject),
          {:restricted, false} <- {:restricted, need == :change and access.restricted?},
-         {:space, space} when is_binary(space) <- {:space, access.spaces[Projects.general()]},
+         :ok <- usable(fleet_id, project, need),
+         {:space, space} when is_binary(space) <- {:space, access.spaces[project]},
          {:ok, answer} <- act.(subject, space) do
       json(conn, answer)
     else
       {:hub, false} -> Refusal.json(conn, 404, "notebooks_not_found")
+      %ClosedError{} = closed -> closed(conn, closed)
       {:restricted, true} -> Refusal.json(conn, 403, "notebooks_edits_restricted")
       {:error, :not_maker} -> Refusal.json(conn, 403, "notebooks_maker_only")
       {:profile, {:ok, nil}} -> Refusal.json(conn, 403, "notebooks_agent_profile")
@@ -135,8 +164,37 @@ defmodule KeyfleetWeb.AgentNotebookController do
     |> Refusal.json(429, "notebook_runs_limit_reached")
   end
 
+  # An archived project's notebooks are read, and only an active project's
+  # changed.
+  defp usable(fleet_id, project, need) do
+    case Projects.open(fleet_id, project) do
+      {:ok, _project} -> :ok
+      {:error, %ClosedError{code: :project_archived}} when need == :read -> :ok
+      {:error, closed} -> closed
+    end
+  end
+
+  defp closed(conn, %ClosedError{code: code} = closed) do
+    status = if code == :project_archived, do: 409, else: 404
+
+    body =
+      Refusal.closed(to_string(code), Exception.message(closed), %{
+        project: closed.project,
+        active: closed.active
+      })
+
+    conn |> put_status(status) |> json(body)
+  end
+
   # A notebook made for goal#N carries the tag goal-N, which lists it on the
-  # goal's page.
-  defp for_goal(notebook, nil), do: notebook
-  defp for_goal(notebook, "goal#" <> n), do: Map.put(notebook, "tags", ["goal-" <> n])
+  # goal's page, and one made in a folder the tag folder/<name>, which the
+  # project's Docs group it under.
+  defp tags(goal, folder) do
+    for {prefix, value} <- [{"goal-", goal_number(goal)}, {"folder/", folder}],
+        value != nil,
+        do: prefix <> value
+  end
+
+  defp goal_number(nil), do: nil
+  defp goal_number("goal#" <> n), do: n
 end

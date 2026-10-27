@@ -15,7 +15,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   @endpoint KeyfleetWeb.Endpoint
   @fleet "fibonacci_syndicate"
   @notebook "nb-0123456789abcdef"
-  @api "/api/v1/agent/fleets/#{@fleet}/notebooks"
+  @api "/api/v1/agent/fleets/#{@fleet}/projects/general/notebooks"
   @workspace "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/workspace/"
   @jobs "/api/v1/projects/proj-fleet/notebooks/#{@notebook}/jobs"
 
@@ -51,7 +51,14 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     secret = :crypto.strong_rand_bytes(32)
     SignedAgentHelpers.start_broker!(self(), secret)
 
-    %{secret: secret, files: files, first: agent!(2), second: agent!(3)}
+    first = agent!(2)
+
+    # Key 2 takes over the fleet's archived `general`, so its notebooks take work.
+    Projects.take_over_project!(@fleet, 2, Projects.general(),
+      actor: %Keyfleet.Actors.Human{human_account_id: 1, wallet_addresses: [first.wallet]}
+    )
+
+    %{secret: secret, files: files, first: first, second: agent!(3)}
   end
 
   # Costly failure: agents keeping one shared log lose each other's entries,
@@ -76,8 +83,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     first = c.first.subject
 
     assert_receive {:hub, "POST", "/api/v1/projects/proj-fleet/notebooks", ^first, _query, body}
-    assert %{"description" => ""} = sent = Jason.decode!(body)
-    refute Map.has_key?(sent, "tags")
+    assert %{"description" => "", "tags" => []} = Jason.decode!(body)
 
     files = "#{@api}/#{@notebook}/files/"
     entry = %{"path" => "log/a.md", "content" => "First, from the first agent."}
@@ -243,7 +249,12 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
         actor: PairingHelpers.pair_wallet!(wallet)
       )
 
-    %{signer: signer, profile_id: profile.id, subject: Notebooks.agent_subject(profile.id)}
+    %{
+      signer: signer,
+      wallet: wallet,
+      profile_id: profile.id,
+      subject: Notebooks.agent_subject(profile.id)
+    }
   end
 
   defp epoch!(token_id, owner) do

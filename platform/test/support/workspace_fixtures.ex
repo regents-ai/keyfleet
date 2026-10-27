@@ -56,10 +56,15 @@ defmodule Keyfleet.WorkspaceFixtures do
     "dead_end" => %{"discussion" => []}
   }
 
-  @doc "Starts a project in the fleet beside `general`, as a member's start leaves it."
-  def start_project(fleet_id, name, title) do
+  @doc """
+  Starts a project in the fleet beside `general`, as a member's start leaves
+  it: active and held by the key `:by` (20).
+  """
+  def start_project(fleet_id, name, title, opts \\ []) do
     Keyfleet.Projects.Project
-    |> Ash.Changeset.for_create(:create, %{fleet_id: fleet_id, name: name, title: title},
+    |> Ash.Changeset.for_create(
+      :create,
+      %{fleet_id: fleet_id, name: name, title: title, key: Keyword.get(opts, :by, 20)},
       actor: @system
     )
     |> Ash.create!()
@@ -123,7 +128,7 @@ defmodule Keyfleet.WorkspaceFixtures do
         actor: @system
       )
 
-      {id, "object.created", actor, %{"object" => object, "id" => id}}
+      {id, "object.created", actor, %{"object" => object, "id" => id}, [sys["project"]]}
     end)
   end
 
@@ -133,7 +138,8 @@ defmodule Keyfleet.WorkspaceFixtures do
       [object] = Graph.read_objects!(fleet_id, [id], actor: @system)
       data = Map.merge(object.data, set)
       project(fleet_id, seq, object, data, object.sys)
-      {id, "patch.applied", principal(opts), patch_payload(seq, object, object.data, set)}
+      payload = patch_payload(seq, object, object.data, set)
+      {id, "patch.applied", principal(opts), payload, [object.project]}
     end)
   end
 
@@ -144,7 +150,7 @@ defmodule Keyfleet.WorkspaceFixtures do
       sys = Map.put(object.sys, "archived", true)
       project(fleet_id, seq, object, object.data, sys)
       payload = patch_payload(seq, object, %{"sys" => object.sys}, %{"sys" => sys})
-      {id, "patch.applied", principal(opts), payload}
+      {id, "patch.applied", principal(opts), payload, [object.project]}
     end)
   end
 
@@ -155,7 +161,7 @@ defmodule Keyfleet.WorkspaceFixtures do
       sys = Map.put(object.sys, "joined", Map.get(object.sys, "joined", []) ++ [member(opts)])
       project(fleet_id, seq, object, object.data, sys)
       payload = patch_payload(seq, object, %{"sys" => object.sys}, %{"sys" => sys})
-      {id, "patch.applied", principal(opts), payload}
+      {id, "patch.applied", principal(opts), payload, [object.project]}
     end)
   end
 
@@ -185,7 +191,7 @@ defmodule Keyfleet.WorkspaceFixtures do
           Map.put(set, "sys", sys)
         )
 
-      {id, "patch.applied", principal(opts), payload}
+      {id, "patch.applied", principal(opts), payload, [object.project]}
     end)
   end
 
@@ -252,7 +258,8 @@ defmodule Keyfleet.WorkspaceFixtures do
           "version" => 1
         }
 
-        {id, "object.created", principal(opts), %{"object" => object, "id" => id}}
+        payload = %{"object" => object, "id" => id}
+        {id, "object.created", principal(opts), payload, [sys["project"]]}
       end)
 
     link(fleet_id, id, task, "reviews", opts)
@@ -288,56 +295,75 @@ defmodule Keyfleet.WorkspaceFixtures do
       )
 
       payload = %{"relation" => relation, "id" => id, "source" => source, "target" => target}
-      {id, "relation.created", principal(opts), payload}
+      {id, "relation.created", principal(opts), payload, projects_of(fleet_id, [source, target])}
     end)
   end
 
   @doc "Removes a link."
   def unlink(fleet_id, relation_id, opts \\ []) do
     append(fleet_id, fn _seq ->
+      [relation] = Graph.read_relations!(fleet_id, [relation_id], actor: @system)
+      projects = projects_of(fleet_id, [relation.source, relation.target])
+
       Graph.Relation
       |> Ash.Query.for_read(:with_ids, %{fleet_id: fleet_id, ids: [relation_id]}, actor: @system)
       |> Graph.remove_relations!(actor: @system)
 
-      {relation_id, "relation.removed", principal(opts), %{"id" => relation_id}}
+      {relation_id, "relation.removed", principal(opts), %{"id" => relation_id}, projects}
     end)
   end
 
   @doc "Records an attention notice about an object, as the fleet's reactions do."
   def attention(fleet_id, kind, object_id) do
-    event(fleet_id, "keyfleet.attention", %{
+    payload = %{
       "kind" => kind,
       "object_id" => object_id,
       "cause" => %{"event_id" => "evt_cause"},
       "dedupe_key" => "#{kind}:#{object_id}"
-    })
+    }
+
+    append(fleet_id, fn seq ->
+      {seq, "keyfleet.attention", "keyfleet:reactions", payload,
+       projects_of(fleet_id, [object_id])}
+    end)
   end
 
-  @doc "Records an event of any type that changes no rows, and answers its place in the log."
+  @doc """
+  Records an event of any type that changes no rows, in `general`, and
+  answers its place in the log.
+  """
   def event(fleet_id, type, payload, actor \\ "keyfleet:reactions") do
-    append(fleet_id, fn seq -> {seq, type, actor, payload} end)
+    append(fleet_id, fn seq -> {seq, type, actor, payload, ["general"]} end)
   end
 
   # Runs `change` with the next place in the log. It writes the rows its
-  # change leaves and answers `{result, type, actor, payload}`; the event and
-  # the command record that follows it are recorded, and the cursor moves
-  # past both, in one transaction. Answers `result`.
+  # change leaves and answers `{result, type, actor, payload, projects}`; the
+  # event and the command record that follows it, both in those projects, are
+  # recorded, and the cursor moves past both, in one transaction. Answers
+  # `result`.
   defp append(fleet_id, change) do
     {:ok, result} =
       Ash.transact(@tables, fn ->
         cursor = Graph.get_cursor!(fleet_id, actor: @system)
         seq = cursor.applied_seq + 1
-        {result, type, actor, payload} = change.(seq)
+        {result, type, actor, payload, projects} = change.(seq)
 
         Graph.record_events!(
           [
-            row(fleet_id, seq, type, actor, payload),
-            row(fleet_id, seq + 1, "keyfleet.command", "keyfleet:gateway", %{
-              "principal" => actor,
-              "op" => type,
-              "result" => %{},
-              "events" => ["evt_#{seq}"]
-            })
+            row(fleet_id, seq, type, actor, payload, projects),
+            row(
+              fleet_id,
+              seq + 1,
+              "keyfleet.command",
+              "keyfleet:gateway",
+              %{
+                "principal" => actor,
+                "op" => type,
+                "result" => %{},
+                "events" => ["evt_#{seq}"]
+              },
+              projects
+            )
           ],
           actor: @system
         )
@@ -349,7 +375,7 @@ defmodule Keyfleet.WorkspaceFixtures do
     result
   end
 
-  defp row(fleet_id, seq, type, actor, payload) do
+  defp row(fleet_id, seq, type, actor, payload, projects) do
     %{
       fleet_id: fleet_id,
       seq: seq,
@@ -357,8 +383,16 @@ defmodule Keyfleet.WorkspaceFixtures do
       type: type,
       actor: actor,
       timestamp: timestamp(seq),
-      payload: payload
+      payload: payload,
+      projects: projects
     }
+  end
+
+  defp projects_of(fleet_id, ids) do
+    fleet_id
+    |> Graph.read_objects!(ids, actor: @system)
+    |> Enum.map(& &1.project)
+    |> Enum.uniq()
   end
 
   defp timestamp(seq), do: @start |> DateTime.add(seq, :minute) |> DateTime.to_iso8601()

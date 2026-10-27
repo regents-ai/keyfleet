@@ -7,8 +7,9 @@ defmodule Keyfleet.Code.Pass do
   `fleet` names the one repository it opens, a project's (`Keyfleet.Projects.Project`,
   `repository`), and `scope` what it allows:
   `push` (copy and send changes, for the key holder whose wallet is `sub`, as
-  `did:pkh:eip155:8453:<wallet>`, the key's chain), `read` (copy) or `create` (make the
-  repository), the last two with `sub` `keyfleet`. It lasts
+  `did:pkh:eip155:8453:<wallet>`, the key's chain), `read` (copy), `create` (make the
+  repository) or `delete` (delete it for good), the last three with `sub`
+  `keyfleet`. It lasts
   `pass_ttl_seconds`.
   """
 
@@ -25,6 +26,9 @@ defmodule Keyfleet.Code.Pass do
 
   @doc "A pass to make the repository."
   def create(repository), do: mint(repository, "create", "keyfleet")
+
+  @doc "A pass to delete the repository, when its project is deleted."
+  def delete(repository), do: mint(repository, "delete", "keyfleet")
 
   defp mint(repository, scope, subject) do
     Pass.sign(

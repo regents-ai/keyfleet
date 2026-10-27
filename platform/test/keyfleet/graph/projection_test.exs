@@ -643,7 +643,8 @@ defmodule Keyfleet.Graph.ProjectionTest do
         credential_ref: nil,
         checked_at: "2026-09-22T12:00:00Z",
         chain_block: nil
-      }
+      },
+      projects: %{"general" => "active"}
     }
   end
 
@@ -804,5 +805,5 @@ defmodule Keyfleet.Graph.ProjectionTest do
   end
 
   defp places(graph_after_seq),
-    do: %{graph: graph_after_seq, proposals: 0, keys: [], dms: nil, quotes: nil}
+    do: %{graph: graph_after_seq, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil}
 end

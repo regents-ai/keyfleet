@@ -3,7 +3,8 @@ defmodule Keyfleet.Code.Repository do
   A project's repository in the code store, as this site made it, by its
   name (`Keyfleet.Projects.Project`, `repository`): the owner the store keeps
   it under, which every address in the store names. Recorded once, when the
-  repository is made (`Keyfleet.Code.Setup`).
+  repository is made (`Keyfleet.Code.Setup`), and forgotten once the store
+  has deleted it with its project (`Keyfleet.Code.DeleteRepository`).
   """
   use Ash.Resource,
     domain: Keyfleet.Code,
@@ -21,6 +22,8 @@ defmodule Keyfleet.Code.Repository do
     create :record do
       accept [:repository, :owner]
     end
+
+    destroy :forget
   end
 
   policies do

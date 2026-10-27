@@ -3,14 +3,16 @@ defmodule KeyfleetWeb.WorkspacePage do
   What a fleet's workspace pages show, read from the workspace's read tables
   alone, never from the fleet's writer.
 
-  `board/3` is one of the workspace's three places (`places/0`). Its
-  Project is the fleet's items a page at a time, the most recently changed
-  first, beside its goals and its latest changes; its Docs the fleet's
-  newest notebooks; its Code the top folder of `general`'s repository and
-  the changes sent to it (`Keyfleet.Code`). Docs and Code each list what the
-  fleet's members pinned there (`Keyfleet.Graph.Pin`). `item/4` is one item with its fields, its
-  links a page at a time and its history a page at a time, and a goal with
-  the work around it in place of its links. Goals are listed one line each,
+  `board/3` is one of the workspace's three places (`places/0`), in one of
+  the fleet's projects (`Keyfleet.Projects`) or across all of them. Its
+  Project is the items a page at a time, the most recently changed first,
+  beside the goals and the latest changes; its Docs the newest notebooks;
+  its Code the project's repository, its top folder and the changes sent to
+  it (`Keyfleet.Code`), or every project's repository in turn. Docs and Code
+  each list what the fleet's members pinned there (`Keyfleet.Graph.Pin`).
+  `item/4` is one item with its fields, its links a page at a time and its
+  history a page at a time, and a goal with the work around it in place of
+  its links. Goals are listed one line each,
   the board's and every list of goals. Each answers
   `seen`, the log and the place in it the read tables had reached when the
   page was read. Every change is told as one plain line: a list of parts, each a piece of text, a key
@@ -39,7 +41,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   require Logger
 
   alias Keyfleet.Actors.System
-  alias Keyfleet.{Agents, Code, Fleets, Notebooks, Projects}
+  alias Keyfleet.{Agents, Code, Fleets, Keys, Notebooks, Projects}
   alias Keyfleet.Graph
   alias Keyfleet.Notebooks.HubClient
   alias Keyfleet.Rooms
@@ -160,8 +162,10 @@ defmodule KeyfleetWeb.WorkspacePage do
   # names none.
   @places %{nil => :project, "docs" => :docs, "code" => :code}
 
-  # How many notebooks the Docs place lists, newest first.
+  # How many notebooks the Docs place lists, newest first: one project's, or
+  # each project's in the whole fleet's view.
   @docs_shown 24
+  @section_shown 6
 
   # How many items of the work around a goal its page lists.
   @goal_items 100
@@ -195,174 +199,263 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   @doc "The path of the fleet's workspace, showing `filter` from `position`."
   def board_path(fleet_id, filter, position \\ []) do
-    query =
-      Enum.reject(
-        [type: filter.type, archived: if(filter.archived?, do: "shown")] ++ position,
-        &is_nil(elem(&1, 1))
+    with_query(
+      "#{Keyfleet.Fleets.path(fleet_id)}/workspace",
+      given(
+        [
+          project: filter.project,
+          type: filter.type,
+          archived: if(filter.archived?, do: "shown")
+        ] ++ position
       )
-
-    with_query("#{Keyfleet.Fleets.path(fleet_id)}/workspace", query)
+    )
   end
 
   @doc "The workspace's places, in the order a page offers them."
   def places, do: [:project, :docs, :code]
 
-  @doc "The path of one of the workspace's places."
-  def place_path(fleet_id, :project), do: "#{Keyfleet.Fleets.path(fleet_id)}/workspace"
-  def place_path(fleet_id, place), do: with_query(place_path(fleet_id, :project), place: place)
+  @doc "The path of one of the workspace's places, in one project or, for nil, all of them."
+  def place_path(fleet_id, place, project \\ nil) do
+    with_query(
+      "#{Keyfleet.Fleets.path(fleet_id)}/workspace",
+      given(place: if(place != :project, do: place), project: project)
+    )
+  end
 
   @doc "The address a workspace cites one commit of a project's repository by."
   def commit_url(fleet_id, repository, hash),
     do: Endpoint.url() <> Code.commit_path(fleet_id, repository, hash)
 
+  defp given(query), do: Enum.reject(query, &is_nil(elem(&1, 1)))
+
   defp with_query(path, []), do: path
   defp with_query(path, query), do: path <> "?" <> URI.encode_query(query)
 
   @doc """
-  The place of the workspace the address names (`place`): the Project, Docs
-  or Code. Any other place is a page that doesn't exist.
+  The place of the workspace the address names (`place`), the Project, Docs
+  or Code, in the project it names (`project`) or across all of them; beside
+  it the fleet's projects, for the picker, and the Key the member acts as
+  (`you`) with the projects it holds. Any other place, or a project the
+  fleet doesn't have, is a page that doesn't exist, and a visitor learns
+  neither.
   """
   def board(fleet_id, params, actor) do
-    case Map.fetch(@places, params["place"]) do
-      {:ok, :project} -> project(fleet_id, params, actor)
-      {:ok, :docs} -> docs(fleet_id, actor)
-      {:ok, :code} -> code(fleet_id, actor)
-      :error -> raise NotFoundError
-    end
-  end
-
-  # The fleet's items, a page of them, its goals and its latest changes.
-  defp project(fleet_id, params, actor) do
-    filter = filter!(params)
+    place = Map.get(@places, params["place"]) || raise NotFoundError
     opts = [actor: actor]
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
-         {:ok, page} <- cards_page(fleet, filter, params, opts),
-         {:ready, cursor} <- ready(fleet, opts) do
-      activity = Graph.latest_activity!(fleet_id, opts)
-      titles = titles(fleet_id, Enum.flat_map(activity, &mentions/1), opts)
+         {:ok, projects} <- members_read(fleet, Projects.by_state(fleet_id, opts)) do
+      shown = shown_project!(projects, params["project"])
 
-      goals =
-        fleet_id
-        |> Graph.workspace_cards!(%{type: "goal"}, Keyword.put(opts, :page, limit: @board_goals))
-        |> Map.fetch!(:results)
-
-      agents =
-        agent_names(
-          Enum.map(page.results, &creator_wallet(&1.sys)) ++ Enum.map(activity, &actor_wallet/1)
-        )
-
-      notes =
-        fleet_id
-        |> Graph.workspace_cards!(%{type: "note"}, Keyword.put(opts, :page, limit: 24))
-        |> Map.fetch!(:results)
-        |> Map.new(&{&1.changed_seq, &1.card["gist"]})
-
-      %{
+      fleet
+      |> place(place, shown, projects, params, opts)
+      |> Map.merge(%{
         fleet_id: fleet_id,
         fleet_name: fleet.name,
-        place: :project,
-        ready?: true,
-        seen: seen(cursor),
-        filter: filter,
-        cards: Enum.map(page.results, &entry(&1, filter, fleet_id, agents)),
-        goals: Enum.map(goals, &goal_row/1),
-        all_goals: board_path(fleet_id, %{type: "goal", archived?: false}),
-        first_page?: not paged?(params),
-        first_page: board_path(fleet_id, filter),
-        pages: page_links(page, params, &board_path(fleet_id, filter, &1)),
-        activity: Enum.map(activity, &Map.put(line(&1, titles, agents), :note, notes[&1.seq]))
-      }
-    else
-      {:missing, name} ->
-        %{
-          fleet_id: fleet_id,
-          fleet_name: name,
-          place: :project,
-          ready?: false,
-          seen: nil,
-          filter: filter
-        }
-
-      {:members_only, name} ->
-        members_only(fleet_id, name)
-    end
-  end
-
-  # The general project's newest notebooks, and the ones the fleet's members
-  # pinned. Neither comes from the workspace's log, so it keeps no place in it
-  # (`seen`), and its notices don't read it again.
-  defp docs(fleet_id, actor) do
-    opts = [actor: actor]
-
-    with {:ok, fleet} <- fleet(fleet_id, opts),
-         {:ok, pins} <- members_read(fleet, Graph.pins(fleet_id, :docs, opts)) do
-      space = space!(fleet_id, Projects.general())
-
-      %{
-        fleet_id: fleet_id,
-        fleet_name: fleet.name,
-        place: :docs,
-        hub?: Notebooks.hub?(fleet_id),
-        notebooks: notebooks(fleet_id, space, limit: @docs_shown),
-        pins:
-          for pin <- pins do
-            open = if is_binary(space), do: notebook_link(fleet_id, space, pin.target)
-
-            %{
-              id: pin.id,
-              target: pin.target,
-              title: pin.title,
-              folder?: false,
-              link: open,
-              whose: whose(pin, actor)
-            }
-          end
-      }
+        place: place,
+        project: shown && shown.name,
+        active?: is_nil(shown) or shown.state == :active,
+        projects: Enum.map(projects, &Map.take(&1, [:name, :title, :key, :state])),
+        you: you(projects, actor, fleet_id)
+      })
     else
       {:missing, _name} -> raise NotFoundError
       {:members_only, name} -> members_only(fleet_id, name)
     end
+  end
+
+  defp shown_project!(_projects, nil), do: nil
+
+  defp shown_project!(projects, name),
+    do: Enum.find(projects, &(&1.name == name)) || raise(NotFoundError)
+
+  # The Key the member acts as (`Keyfleet.Keys.identity/2`), its active
+  # project and its archived ones; nil for a member who holds no Key.
+  defp you(projects, actor, fleet_id) do
+    with %{token_id: key} <- Keys.identity(actor, fleet_id) do
+      held = Enum.filter(projects, &(&1.key == key))
+
+      %{
+        key: key,
+        active: Enum.find_value(held, &(&1.state == :active && &1.name)),
+        archived: for(%{state: :archived, name: name} <- held, do: name)
+      }
+    end
+  end
+
+  # Each project's title by its name, to label what the whole fleet's view
+  # lists; none in one project's.
+  defp labels(nil, projects), do: Map.new(projects, &{&1.name, &1.title})
+  defp labels(_shown, _projects), do: %{}
+
+  # The project's items, or the whole fleet's, a page of them, beside its
+  # goals and its latest changes.
+  defp place(fleet, :project, shown, projects, params, opts) do
+    filter = filter!(params, shown)
+    within = %{project: filter.project}
+    labels = labels(shown, projects)
+
+    case ready(fleet, opts) do
+      {:ready, cursor} ->
+        page = page!(cards_page(fleet, filter, params, opts))
+        activity = Graph.latest_activity!(fleet.id, within, opts)
+        titles = titles(fleet.id, Enum.flat_map(activity, &mentions/1), opts)
+
+        goals =
+          fleet.id
+          |> Graph.workspace_cards!(
+            Map.put(within, :type, "goal"),
+            Keyword.put(opts, :page, limit: @board_goals)
+          )
+          |> Map.fetch!(:results)
+
+        agents =
+          agent_names(
+            Enum.map(page.results, &creator_wallet(&1.sys)) ++
+              Enum.map(activity, &actor_wallet/1)
+          )
+
+        notes =
+          fleet.id
+          |> Graph.workspace_cards!(
+            Map.put(within, :type, "note"),
+            Keyword.put(opts, :page, limit: 24)
+          )
+          |> Map.fetch!(:results)
+          |> Map.new(&{&1.changed_seq, &1.card["gist"]})
+
+        %{
+          ready?: true,
+          seen: seen(cursor),
+          filter: filter,
+          cards: Enum.map(page.results, &entry(&1, filter, fleet.id, agents, labels)),
+          goals: Enum.map(goals, &goal_row(&1, labels)),
+          all_goals: board_path(fleet.id, %{filter | type: "goal", archived?: false}),
+          first_page?: not paged?(params),
+          first_page: board_path(fleet.id, filter),
+          pages: page_links(page, params, &board_path(fleet.id, filter, &1)),
+          activity: Enum.map(activity, &Map.put(line(&1, titles, agents), :note, notes[&1.seq]))
+        }
+
+      {:missing, _name} ->
+        %{ready?: false, seen: nil, filter: filter}
+    end
+  end
+
+  # One project's newest notebooks, or each project's few newest in turn,
+  # and what the fleet's members pinned there. Neither comes from the
+  # workspace's log, so it keeps no place in it (`seen`), and its notices
+  # don't read it again.
+  defp place(fleet, :docs, shown, projects, _params, opts) do
+    hub? = Notebooks.hub?(fleet.id)
+    spaces = Map.new(projects, &{&1.name, hub? && &1.hub_project_id})
+    labels = labels(shown, projects)
+
+    %{
+      hub?: hub?,
+      notebooks: shown && notebooks(fleet.id, spaces[shown.name], limit: @docs_shown),
+      sections: if(is_nil(shown), do: sections(fleet.id, projects, spaces), else: []),
+      pins:
+        for pin <- Graph.pins!(fleet.id, :docs, shown && shown.name, opts),
+            Map.has_key?(spaces, pin.project) do
+          space = spaces[pin.project]
+          link = if is_binary(space), do: notebook_link(fleet.id, space, pin.target)
+          pin_row(pin, link, labels, opts[:actor])
+        end
+    }
+  end
+
+  # One project's repository: how to copy it, its top folder, the changes
+  # sent to it lately, and what the fleet's members pinned in it.
+  defp place(fleet, :code, %{} = project, _projects, _params, opts) do
+    repository = project.repository
+
+    %{
+      repository: repository,
+      clone_url: Code.clone_url(repository),
+      pushes: pushes(Code.recent_pushes!(fleet.id, project.name, opts), fleet.id, repository),
+      files: folder_entries(fleet.id, repository, ""),
+      repositories: [],
+      pins:
+        for pin <- Graph.pins!(fleet.id, :code, project.name, opts) do
+          link = Code.files_path(fleet.id, repository, pin.target)
+          pin_row(pin, link, %{}, opts[:actor])
+        end
+    }
+  end
+
+  # Every project's repository in turn, each with how to copy it, and every
+  # pin in the fleet's code.
+  defp place(fleet, :code, nil, projects, _params, opts) do
+    repositories = Map.new(projects, &{&1.name, &1.repository})
+    labels = labels(nil, projects)
+
+    %{
+      repositories:
+        for project <- projects do
+          %{
+            project: project.name,
+            title: project.title,
+            key: project.key,
+            state: project.state,
+            clone_url: Code.clone_url(project.repository),
+            link: place_path(fleet.id, :code, project.name)
+          }
+        end,
+      pins:
+        for pin <- Graph.pins!(fleet.id, :code, nil, opts),
+            Map.has_key?(repositories, pin.project) do
+          link = Code.files_path(fleet.id, repositories[pin.project], pin.target)
+          pin_row(pin, link, labels, opts[:actor])
+        end
+    }
+  end
+
+  defp pin_row(pin, link, labels, actor) do
+    %{
+      id: pin.id,
+      project: pin.project,
+      label: labels[pin.project],
+      target: pin.target,
+      title: pin.title,
+      folder?: pin.folder?,
+      link: link,
+      whose: whose(pin, actor)
+    }
   end
 
   # Whose a pin is to the member reading: only its pinner lifts it.
   defp whose(pin, actor),
     do: if(pin.human_account_id == actor.human_account_id, do: :mine, else: :theirs)
 
-  # `general`'s repository: how to copy it, its top folder, the changes sent
-  # to it lately, and what the fleet's members pinned in the code.
-  defp code(fleet_id, actor) do
-    opts = [actor: actor]
-    general = Projects.general()
+  # Each project's newest few notebooks, the projects read at once; one the
+  # hub doesn't answer in time is `:unreadable`.
+  defp sections(fleet_id, projects, spaces) do
+    projects
+    |> Task.async_stream(&notebooks(fleet_id, spaces[&1.name], limit: @section_shown),
+      max_concurrency: 4,
+      timeout: Notebooks.config()[:page_timeout_ms],
+      on_timeout: :kill_task
+    )
+    |> Enum.zip_with(projects, fn
+      {:ok, notebooks}, project ->
+        section(fleet_id, project, notebooks)
 
-    with {:ok, fleet} <- fleet(fleet_id, opts),
-         {:ok, pushes} <- members_read(fleet, Code.recent_pushes(fleet_id, general, opts)) do
-      repository = repository!(fleet_id, general)
+      {:exit, :timeout}, project ->
+        Logger.warning("The notebooks of #{fleet_id} could not be read: timeout")
+        section(fleet_id, project, :unreadable)
+    end)
+  end
 
-      %{
-        fleet_id: fleet_id,
-        fleet_name: fleet.name,
-        place: :code,
-        repository: repository,
-        clone_url: Code.clone_url(repository),
-        pushes: pushes(pushes, fleet_id, repository),
-        files: folder_entries(fleet_id, repository, ""),
-        pins:
-          for pin <- Graph.pins!(fleet_id, :code, opts) do
-            %{
-              id: pin.id,
-              target: pin.target,
-              title: pin.title,
-              folder?: pin.folder?,
-              link: Code.files_path(fleet_id, repository, pin.target),
-              whose: whose(pin, actor)
-            }
-          end
-      }
-    else
-      {:missing, _name} -> raise NotFoundError
-      {:members_only, name} -> members_only(fleet_id, name)
-    end
+  defp section(fleet_id, project, notebooks) do
+    %{
+      project: project.name,
+      title: project.title,
+      key: project.key,
+      state: project.state,
+      notebooks: notebooks,
+      link: place_path(fleet_id, :docs, project.name)
+    }
   end
 
   @doc """
@@ -545,7 +638,12 @@ defmodule KeyfleetWeb.WorkspacePage do
         fleet_name: fleet.name,
         repository: repository,
         path: path,
-        pinned: fleet_id |> Graph.pins!(:code, opts) |> Map.new(&{&1.target, whose(&1, actor)}),
+        project: project.name,
+        active?: project.state == :active,
+        pinned:
+          fleet_id
+          |> Graph.pins!(:code, project.name, opts)
+          |> Map.new(&{&1.target, whose(&1, actor)}),
         crumbs: crumbs(fleet_id, repository, path),
         clone_url: Code.clone_url(repository),
         pushes: pushes(pushes, fleet_id, repository),
@@ -660,7 +758,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp seen(cursor), do: {cursor.run_id, cursor.applied_seq}
 
-  defp filter!(params) do
+  defp filter!(params, shown) do
     type =
       case params["type"] do
         nil -> nil
@@ -675,18 +773,15 @@ defmodule KeyfleetWeb.WorkspacePage do
         _unknown -> raise NotFoundError
       end
 
-    %{type: type, archived?: archived?}
+    %{project: shown && shown.name, type: type, archived?: archived?}
   end
 
   defp cards_page(fleet, filter, params, opts) do
-    read =
-      Graph.workspace_cards(
-        fleet.id,
-        %{type: filter.type, include_archived?: filter.archived?},
-        Keyword.put(opts, :page, card_position(params) ++ [limit: 24])
-      )
-
-    members_read(fleet, read)
+    Graph.workspace_cards(
+      fleet.id,
+      %{project: filter.project, type: filter.type, include_archived?: filter.archived?},
+      Keyword.put(opts, :page, card_position(params) ++ [limit: 24])
+    )
   end
 
   defp card_position(%{"after" => keyset}) when is_binary(keyset), do: [after: keyset]
@@ -750,14 +845,18 @@ defmodule KeyfleetWeb.WorkspacePage do
     |> Map.new(&{&1.id, &1})
   end
 
-  # Goals are listed one line each; every other item is a card.
-  defp entry(object, %{type: "goal"}, _fleet_id, _agents), do: goal_row(object)
-  defp entry(object, _filter, fleet_id, agents), do: card(object, fleet_id, agents)
+  # Goals are listed one line each; every other item is a card. In the whole
+  # fleet's view each is labelled with its project's title.
+  defp entry(object, %{type: "goal"}, _fleet_id, _agents, labels), do: goal_row(object, labels)
 
-  defp goal_row(object) do
+  defp entry(object, _filter, fleet_id, agents, labels),
+    do: card(object, fleet_id, agents, labels)
+
+  defp goal_row(object, labels) do
     %{
       id: object.id,
       title: object.title,
+      project: labels[object.project],
       starting?: starting?(object.sys),
       archived?: archived?(object.sys),
       status: standing("goal", object.card["status"]),
@@ -964,11 +1063,12 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp reason(%module{}), do: inspect(module)
   defp reason(reason), do: inspect(reason)
 
-  defp card(object, fleet_id, agents) do
+  defp card(object, fleet_id, agents, labels) do
     %{
       id: object.id,
       type: object.type,
       title: object.title,
+      project: labels[object.project],
       archived?: archived?(object.sys),
       starting?: starting?(object.sys),
       by: created_by(object.sys, agents),

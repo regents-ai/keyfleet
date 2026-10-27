@@ -97,16 +97,18 @@ defmodule Keyfleet.Graph.Object do
                  stable_sort: [fleet_id: :desc, id: :desc]
     end
 
-    # The fleet's open goals, the most recently changed first: goals whose
+    # The fleet's open goals, or one project's, the most recently changed first: goals whose
     # status is `open`, not archived, and, for a starting goal, one of the
     # ideas every workspace begins with, joined by someone. Anyone may read
     # it, so each goal comes with its title and project alone. Callers bound
     # it with a limit.
     read :open_goals do
       argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, constraints: @text
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and type == "goal" and
+                 (is_nil(^arg(:project)) or project == ^arg(:project)) and
                  fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys) and
                  fragment("(? ->> 'status') = 'open'", data) and
                  fragment(
@@ -129,9 +131,11 @@ defmodule Keyfleet.Graph.Object do
     read :citing do
       argument :fleet_id, :string, allow_nil?: false
       argument :uri, :string, allow_nil?: false, constraints: @text
+      argument :project, :string, constraints: @text
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and
+                 (is_nil(^arg(:project)) or project == ^arg(:project)) and
                  ((type == "evidence" and fragment("? ->> 'source_uri'", data) == ^arg(:uri)) or
                     (type == "task" and fragment("? ->> 'commit_ref'", data) == ^arg(:uri)))
              )
@@ -151,9 +155,11 @@ defmodule Keyfleet.Graph.Object do
     read :around_goal do
       argument :fleet_id, :string, allow_nil?: false
       argument :goal_id, :string, allow_nil?: false, constraints: @text
+      argument :project, :string, constraints: @text
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and
+                 (is_nil(^arg(:project)) or project == ^arg(:project)) and
                  fragment(
                    """
                    ? IN (
@@ -198,8 +204,11 @@ defmodule Keyfleet.Graph.Object do
         allow_nil?: false,
         constraints: [max_length: 100, items: [min: 1]]
 
+      argument :project, :string, constraints: @text
+
       filter expr(
                fleet_id == ^arg(:fleet_id) and type == "task" and
+                 (is_nil(^arg(:project)) or project == ^arg(:project)) and
                  fragment("(? ->> 'assignee_key')::bigint = ANY(?)", data, ^arg(:token_ids)) and
                  fragment("(? ->> 'progress') <> 'done'", data) and
                  fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys)
@@ -223,8 +232,11 @@ defmodule Keyfleet.Graph.Object do
         allow_nil?: false,
         constraints: [max_length: 100, items: [min: 1]]
 
+      argument :project, :string, constraints: @text
+
       filter expr(
                fleet_id == ^arg(:fleet_id) and type == "task" and
+                 (is_nil(^arg(:project)) or project == ^arg(:project)) and
                  fragment("(? ->> 'reviewer_key')::bigint = ANY(?)", data, ^arg(:token_ids)) and
                  fragment("(? ->> 'progress') = 'done'", data) and
                  fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys) and
@@ -260,9 +272,11 @@ defmodule Keyfleet.Graph.Object do
       argument :fleet_id, :string, allow_nil?: false
       argument :token_id, :integer, allow_nil?: false, constraints: [min: 1]
       argument :wallet, :string, allow_nil?: false, constraints: @text
+      argument :project, :string, constraints: @text
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and type == "goal" and
+                 (is_nil(^arg(:project)) or project == ^arg(:project)) and
                  fragment(
                    "(? -> 'joined') @> jsonb_build_array(jsonb_build_object('key', jsonb_build_object('token_id', ?::bigint), 'wallet', ?::text))",
                    sys,
@@ -300,6 +314,18 @@ defmodule Keyfleet.Graph.Object do
       filter expr(fleet_id == ^arg(:fleet_id) and id in ^arg(:ids))
     end
 
+    # Every object of one project, for its deletion.
+    read :of_project do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: @text
+      filter expr(fleet_id == ^arg(:fleet_id) and project == ^arg(:project))
+    end
+
+    destroy :forget do
+      public? false
+    end
+
     create :project do
       public? false
       accept [:fleet_id, :id, :type, :project, :data, :sys, :version, :changed_seq, :changed_at]
@@ -327,7 +353,7 @@ defmodule Keyfleet.Graph.Object do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:with_ids, :project]) do
+    policy action([:with_ids, :project, :of_project, :forget]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end

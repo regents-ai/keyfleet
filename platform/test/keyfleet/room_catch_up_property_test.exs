@@ -18,7 +18,7 @@ defmodule Keyfleet.RoomCatchUpPropertyTest do
 
   @fleet "fibonacci_syndicate"
   @rooms ["general", "coding"]
-  @places %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil}
+  @places %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil}
   @system %Actors.System{}
   # The most posts one sync answers from a room (`Keyfleet.Rooms`).
   @sync_page 50

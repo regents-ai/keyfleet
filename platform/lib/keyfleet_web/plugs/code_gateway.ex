@@ -32,7 +32,8 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   pass made, so a body that arrives slowly still carries a pass that holds,
   and a key that changed hands meanwhile is refused.
 
-  A key changing hands clears the fleet's admissions at once.
+  A key changing hands clears the fleet's admissions at once. An archived
+  project's repository is copied and never changed: a push to it is refused.
 
   What reaches the store carries a pass (`Keyfleet.Code.Pass`) in place of
   any sign-in, with only the headers git's exchange needs. The store's answer
@@ -116,6 +117,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
            {:holder, reported(fleet_id, current_holder(fleet_id, subject, actor))},
          {:allowed, :ok} <- {:allowed, allowed(holder, need)},
          {:project, {:ok, %Project{} = project}} <- {:project, project(repository)},
+         {:open, :ok} <- {:open, open(project, need)},
          {:owner, {:ok, owner}} <- {:owner, Code.owner(repository)},
          {:pushes, :ok} <- {:pushes, spend_push(conn, fleet_id, holder)},
          {:body, {:ok, conn, body}} <- {:body, spool(conn)} do
@@ -148,6 +150,7 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   defp refused(conn, {:route, :error}), do: refuse(conn, 404, "code_not_found")
   defp refused(conn, {:project, {:ok, nil}}), do: refuse(conn, 404, "code_not_found")
   defp refused(conn, {:project, {:error, _error}}), do: refuse(conn, 503, "code_unavailable")
+  defp refused(conn, {:open, :archived}), do: refuse(conn, 403, "code_project_archived")
   defp refused(_conn, {:body, {:too_large, conn}}), do: refuse(conn, 413, "code_too_large")
   defp refused(_conn, {:body, {:error, conn}}), do: refuse(conn, 400, "invalid_request")
 
@@ -401,6 +404,9 @@ defmodule KeyfleetWeb.Plugs.CodeGateway do
   # A key whose edits a vote restricted may still copy the code.
   defp allowed(%{restricted?: true}, :push), do: :restricted
   defp allowed(_holder, _need), do: :ok
+
+  defp open(%Project{state: :archived}, :push), do: :archived
+  defp open(_project, _need), do: :ok
 
   defp pass(repository, %{restricted?: true}, :read), do: Pass.read(repository)
   defp pass(repository, %{wallet: wallet}, _need), do: Pass.push(repository, wallet)

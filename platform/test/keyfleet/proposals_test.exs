@@ -169,7 +169,7 @@ defmodule Keyfleet.ProposalsTest do
         Rooms.sync(
           @fleet,
           [],
-          %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+          %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
           owner,
           false
         )
@@ -181,7 +181,7 @@ defmodule Keyfleet.ProposalsTest do
         Rooms.sync(
           @fleet,
           [],
-          %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+          %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
           owner,
           false
         )
@@ -192,7 +192,7 @@ defmodule Keyfleet.ProposalsTest do
         Rooms.sync(
           @fleet,
           [],
-          %{graph: 0, proposals: 50, keys: [], dms: nil, quotes: nil},
+          %{graph: 0, project: nil, proposals: 50, keys: [], dms: nil, quotes: nil},
           owner,
           false
         )

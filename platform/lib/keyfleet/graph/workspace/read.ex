@@ -12,7 +12,8 @@ defmodule Keyfleet.Graph.Workspace.Read do
   (`review`), and a page of up to 200 of its links, oldest first, made after
   `relations_after`; `relations_next_cursor` is the `relations_after` to read
   the next page from, or nil after the last one. `changes` answers the copied
-  events after `after_seq`, oldest first, at most `limit` of them and no more
+  events after `after_seq`, the whole fleet's or, given `project`, those that
+  touched that project, oldest first, at most `limit` of them and no more
   than 512 KiB of them unless one event alone is larger;
   `next_cursor` is the `after_seq` to read on from, and `run_id` names the
   log they come from.
@@ -61,10 +62,16 @@ defmodule Keyfleet.Graph.Workspace.Read do
     end
   end
 
-  defp read(:changes, %{fleet_id: fleet_id, after_seq: after_seq, limit: limit}, opts) do
+  defp read(:changes, %{fleet_id: fleet_id, after_seq: after_seq, limit: limit} = args, opts) do
     {run_id, watermark} = standing(fleet_id, opts)
-    page = fleet_id |> Graph.read_events!(after_seq, limit, opts) |> Enum.map(&Event.view/1)
-    has_more = page != [] and more_after?(fleet_id, List.last(page).seq, opts)
+    project = %{project: args[:project]}
+
+    page =
+      fleet_id
+      |> Graph.read_events!(after_seq, limit, project, opts)
+      |> Enum.map(&Event.view/1)
+
+    has_more = page != [] and more_after?(fleet_id, List.last(page).seq, project, opts)
 
     %{
       run_id: run_id,
@@ -98,9 +105,13 @@ defmodule Keyfleet.Graph.Workspace.Read do
     end
   end
 
-  defp more_after?(fleet_id, seq, opts) do
+  defp more_after?(fleet_id, seq, project, opts) do
     Event
-    |> Ash.Query.for_read(:page, %{fleet_id: fleet_id, after_seq: seq, limit: 1}, opts)
+    |> Ash.Query.for_read(
+      :page,
+      Map.merge(project, %{fleet_id: fleet_id, after_seq: seq, limit: 1}),
+      opts
+    )
     |> Ash.exists?(opts)
   end
 end

@@ -134,6 +134,9 @@ class Command(_Shape):
     id: Id
     principal: str
     auth: Auth
+    # Each of the fleet's projects that is not deleted, with its state, as the
+    # site read it at the write's turn.
+    projects: dict[ProjectName, Literal["active", "archived"]]
 
     @model_validator(mode="after")
     def _principal_names_the_audited_key(self) -> "Command":
@@ -169,7 +172,7 @@ class ChangesBody(_Shape):
 
 class CreateBody(_Shape):
     type: Name
-    # The site checks the fleet has the project; the graph keeps its name.
+    # One of the command's active projects; the graph keeps its name.
     project: ProjectName
     data: dict[str, Any]
 

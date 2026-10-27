@@ -349,7 +349,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(view, "h2", "This item isn’t in the workspace.")
     end
 
-    test "the only presses are pins, and opening the notebooks or the code", %{conn: conn} do
+    test "the only presses are pins, the Key's projects, and opening the notebooks or the code",
+         %{conn: conn} do
       task = create(@fleet, "task", %{"title" => "A task", "progress" => "todo"})
       {:ok, board, _html} = live(conn, @board)
       {:ok, item, _html} = live(conn, item_path(task))
@@ -359,16 +360,15 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert workspace(board) |> LazyHTML.to_html() =~ "A task"
       assert workspace(item) |> LazyHTML.to_html() =~ "A task"
 
-      for {view, presses} <- [
-            {board, []},
-            {item, []},
-            {docs, []},
-            {code, ["get_code_password"]}
+      # Key 1 holds no active project, so it may start one.
+      for {view, forms, presses} <- [
+            {board, ["project_start"], []},
+            {item, [], []},
+            {docs, ["project_start"], []},
+            {code, ["project_start"], ["get_code_password"]}
           ] do
         page = workspace(view)
-        html = LazyHTML.to_html(page)
-        refute html =~ "<form"
-        refute html =~ "phx-submit"
+        assert page |> LazyHTML.query("[phx-submit]") |> LazyHTML.attribute("phx-submit") == forms
         assert page |> LazyHTML.query("[phx-click]") |> LazyHTML.attribute("phx-click") == presses
       end
     end
@@ -1210,6 +1210,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   describe "the workspace's three places" do
     setup do
       open_log(@fleet)
+      take_over_general()
       :ok
     end
 
@@ -1267,7 +1268,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         ]
       end)
 
-      {:ok, view, _html} = live(conn, @board <> "?place=docs")
+      {:ok, view, _html} = live(conn, @board <> "?place=docs&project=general")
       assert_received {:listed, %{"limit" => "24"} = query}
       refute Map.has_key?(query, "tag")
 
@@ -1312,7 +1313,9 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       # its pinner lifts it.
       other = "0x" <> String.duplicate("b", 40)
       hold!(2, other)
-      {:ok, theirs, _html} = live(signed_in_as(visitor, other), @board <> "?place=docs")
+
+      {:ok, theirs, _html} =
+        live(signed_in_as(visitor, other), @board <> "?place=docs&project=general")
 
       assert has_element?(
                theirs,
@@ -1334,13 +1337,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
 
     test "Docs says so when the notebooks aren't connected, or can't be read", %{conn: conn} do
-      {:ok, view, _html} = live(conn, @board <> "?place=docs")
+      {:ok, view, _html} = live(conn, @board <> "?place=docs&project=general")
       assert has_element?(view, "#workspace-notebooks-none")
       refute has_element?(view, "#workspace-docs-pins")
       refute has_element?(view, "#workspace-docs-info")
 
       hub!("proj-0123456789abcdef", :down)
-      {:ok, view, _html} = live(conn, @board <> "?place=docs")
+      {:ok, view, _html} = live(conn, @board <> "?place=docs&project=general")
 
       assert has_element?(
                view,
@@ -1353,7 +1356,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
          %{conn: conn} do
       store!(%{"README.md" => "Hello", "goals/goal-1/plan.md" => "Plan"})
 
-      {:ok, view, _html} = live(conn, @board <> "?place=code")
+      {:ok, view, _html} = live(conn, @board <> "?place=code&project=general")
 
       assert rows(view, "#workspace-code-rows") == [
                ["Folder", "goals"],
@@ -1387,14 +1390,14 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       files |> element(pin) |> render_click()
       assert has_element?(files, pin <> ~s([aria-pressed="false"]))
 
-      {:ok, view, _html} = live(conn, @board <> "?place=code")
+      {:ok, view, _html} = live(conn, @board <> "?place=code&project=general")
       refute has_element?(view, ~s(#workspace-code-pins-rows [data-pin="README.md"]))
       assert has_element?(view, ~s(#workspace-code-pins-rows [data-pin="goals"]))
     end
 
     test "Code offers nothing to browse before files reach main, even after changes were sent",
          %{conn: conn} do
-      {:ok, view, _html} = live(conn, @board <> "?place=code")
+      {:ok, view, _html} = live(conn, @board <> "?place=code&project=general")
       assert has_element?(view, "#workspace-code-empty")
       refute has_element?(view, "#workspace-code-files")
 
@@ -1402,7 +1405,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         %{ref: "refs/heads/draft", head: String.duplicate("6", 40)}
       ])
 
-      {:ok, view, _html} = live(conn, @board <> "?place=code")
+      {:ok, view, _html} = live(conn, @board <> "?place=code&project=general")
       assert has_element?(view, "#code-pushes")
       assert has_element?(view, "#workspace-code-main-empty")
       refute has_element?(view, "#workspace-code-empty")
@@ -1412,7 +1415,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     test "Code gives a holder a git password, and says until when in the reader's own time",
          %{conn: conn} do
       store!(%{"README.md" => "Hello"})
-      {:ok, view, _html} = live(conn, @board <> "?place=code")
+      {:ok, view, _html} = live(conn, @board <> "?place=code&project=general")
       refute has_element?(view, "#code-password")
 
       view |> element("#get-code-password") |> render_click()
@@ -1436,12 +1439,19 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
     test "a pin is one per notebook or file, and only the fleet's members set or lift one" do
       holder = %Actors.Human{human_account_id: 1, wallet_addresses: [@holder]}
-      pin = %{fleet_id: @fleet, place: :code, target: "README.md", title: "README.md"}
+
+      pin = %{
+        fleet_id: @fleet,
+        project: "general",
+        place: :code,
+        target: "README.md",
+        title: "README.md"
+      }
 
       assert {:ok, first} = Graph.pin(pin, actor: holder)
       assert {:ok, again} = Graph.pin(%{pin | title: "Read me"}, actor: holder)
       assert again.id == first.id
-      assert [%{title: "Read me"}] = Graph.pins!(@fleet, :code, actor: holder)
+      assert [%{title: "Read me"}] = Graph.pins!(@fleet, :code, "general", actor: holder)
 
       outsider = %Actors.Human{
         human_account_id: 0,
@@ -1450,7 +1460,10 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert {:error, %Ash.Error.Forbidden{}} = Graph.pin(pin, actor: outsider)
       assert {:error, %Ash.Error.Forbidden{}} = Graph.unpin(first, actor: outsider)
-      assert {:error, %Ash.Error.Forbidden{}} = Graph.pins(@fleet, :code, actor: outsider)
+
+      assert {:error, %Ash.Error.Forbidden{}} =
+               Graph.pins(@fleet, :code, "general", actor: outsider)
+
       assert {:error, %Ash.Error.Forbidden{}} = Graph.pin(pin, actor: %Actors.System{})
 
       # A pin is its pinner's: another member neither lifts nor retitles it.
@@ -1461,10 +1474,10 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert {kept.id, kept.human_account_id} == {first.id, 1}
 
       assert [%{title: "Read me", human_account_id: 1}] =
-               Graph.pins!(@fleet, :code, actor: member)
+               Graph.pins!(@fleet, :code, "general", actor: member)
 
       assert :ok = Graph.unpin(first, actor: holder)
-      assert [] = Graph.pins!(@fleet, :code, actor: holder)
+      assert [] = Graph.pins!(@fleet, :code, "general", actor: holder)
 
       # Lifting a pin already lifted, from another tab, finds no pin of theirs
       # to lift, and the page then reads afresh.
@@ -1476,11 +1489,18 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       hold!(2, @member)
       member = %Actors.Human{human_account_id: 2, wallet_addresses: [@member]}
 
-      Graph.pin!(%{fleet_id: @fleet, place: :code, target: "README.md", title: "README.md"},
+      Graph.pin!(
+        %{
+          fleet_id: @fleet,
+          project: "general",
+          place: :code,
+          target: "README.md",
+          title: "README.md"
+        },
         actor: member
       )
 
-      {:ok, view, _html} = live(conn, @board <> "?place=code")
+      {:ok, view, _html} = live(conn, @board <> "?place=code&project=general")
 
       for pin <- [
             ~s(#workspace-code-rows [data-file="README.md"] button),
@@ -1926,7 +1946,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         [%{ref: "refs/heads/main", head: hash}]
       )
 
-      {:ok, board, _html} = live(conn, @board <> "?place=code")
+      {:ok, board, _html} = live(conn, @board <> "?place=code&project=general")
       assert has_element?(board, "#code-pushes", "Mate (Key 1) sent changes to main")
 
       {:ok, commit, _html} = live(conn, Keyfleet.Code.commit_path(@fleet, @repository, hash))
@@ -2143,6 +2163,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   end
 
   # Records `wallet` as the owner of the fleet's Key `token_id`.
+  # Key 1 takes over the fleet's archived `general`, so it takes new work.
+  defp take_over_general do
+    Keyfleet.Projects.take_over_project!(@fleet, 1, Keyfleet.Projects.general(),
+      actor: %Actors.Human{human_account_id: 1, wallet_addresses: [@holder]}
+    )
+  end
+
   defp hold!(token_id, wallet) do
     Keys.record_epoch!(
       %{

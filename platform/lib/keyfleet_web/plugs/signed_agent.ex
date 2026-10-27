@@ -35,18 +35,26 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
-  @code_pushes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/code/pushes\z"
-  # A fleet's notebooks and their runs: a notebook and a run named as the hub
-  # names them.
+  # A fleet's projects, each named as its address names it, and what a Key
+  # does with them.
+  @project ~S"[a-z0-9]+(?:-[a-z0-9]+)*"
+  @in_project "/api/v1/agent/fleets/#{@fleet}/projects/#{@project}"
+  @projects_path ~r"\A/api/v1/agent/fleets/#{@fleet}/projects\z"
+  @project_start_path ~r"\A/api/v1/agent/fleets/#{@fleet}/projects/start\z"
+  @project_archive_path ~r"\A/api/v1/agent/fleets/#{@fleet}/projects/archive\z"
+  @project_hold_path ~r"\A#{@in_project}/(take_over|delete)\z"
+  @code_pushes_path ~r"\A#{@in_project}/code/pushes\z"
+  # A project's notebooks and their runs: a notebook and a run named as the
+  # hub names them.
   @notebook ~S"nb-[0-9a-z]{16}"
   @run ~S"run_[0-9A-HJKMNP-TV-Z]{26}"
-  @notebooks_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks\z"
-  @run_start_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/runs/start\z"
-  @run_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/runs/#{@run}\z"
-  @notebook_create_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/create\z"
-  @files_list_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/files/list\z"
-  @file_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/files/read\z"
-  @file_write_path ~r"\A/api/v1/agent/fleets/#{@fleet}/notebooks/#{@notebook}/files/(add|write)\z"
+  @notebooks_path ~r"\A#{@in_project}/notebooks\z"
+  @run_start_path ~r"\A#{@in_project}/notebooks/#{@notebook}/runs/start\z"
+  @run_path ~r"\A#{@in_project}/notebooks/#{@notebook}/runs/#{@run}\z"
+  @notebook_create_path ~r"\A#{@in_project}/notebooks/create\z"
+  @files_list_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/list\z"
+  @file_read_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/read\z"
+  @file_write_path ~r"\A#{@in_project}/notebooks/#{@notebook}/files/(add|write)\z"
 
   # A poll is named by its id as the API answers it.
   @poll ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
@@ -74,9 +82,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @body_fields [
     {@sync_path, {~w(rooms graph proposals run), ~w(keys dms quotes)}},
     {@proposal_read_path, {~w(number votes_after_seq), []}},
+    {@project_start_path, {~w(as_key name title), []}},
+    {@project_archive_path, {~w(as_key), []}},
+    {@project_hold_path, {~w(as_key), []}},
     {@create_room_path, {~w(slug name), []}},
     {@run_start_path, {~w(idempotency_key), []}},
-    {@notebook_create_path, {~w(title code idempotency_key), ~w(description goal)}},
+    {@notebook_create_path, {~w(title code idempotency_key), ~w(description goal folder)}},
     {@files_list_path, {[], ~w(path cursor)}},
     {@file_read_path, {~w(path), []}},
     {@file_write_path, {~w(path content), []}},
@@ -147,9 +158,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # ones it may add. A write names the key it acts as and its command id.
   @command_fields %{"as_key" => :key, "command_id" => :text}
   @graph_bodies %{
-    "board" => {%{}, %{}},
+    "board" => {%{}, %{"project" => :text}},
     "get" => {%{"id" => :text}, %{"relations_after" => :seq}},
-    "changes" => {%{}, %{"after_seq" => :seq, "limit" => :graph_page}},
+    "changes" => {%{}, %{"project" => :text, "after_seq" => :seq, "limit" => :graph_page}},
     "create" =>
       {Map.merge(@command_fields, %{"project" => :text, "type" => :text, "data" => :object}), %{}},
     "patch" =>
@@ -478,7 +489,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           @dm_inbox_path,
           @code_pushes_path,
           @notebooks_path,
-          @run_path
+          @run_path,
+          @projects_path
         ],
         &Regex.match?(&1, path)
       )
@@ -495,6 +507,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @key_send_path,
         @sync_path,
         @proposal_read_path,
+        @project_start_path,
+        @project_archive_path,
+        @project_hold_path,
         @run_start_path,
         @notebook_create_path,
         @files_list_path,
@@ -616,6 +631,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       [
         sync: @sync_path,
         proposal_read: @proposal_read_path,
+        project_start: @project_start_path,
+        project_archive: @project_archive_path,
+        project_hold: @project_hold_path,
         run_start: @run_start_path,
         notebook_create: @notebook_create_path,
         files_list: @files_list_path,
@@ -628,6 +646,24 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_fleet_body(:sync, params), do: check_sync_body(params)
   defp check_fleet_body(:proposal_read, params), do: check_proposal_read_body(params)
+
+  # A project is started with its address name and its title, as a Key.
+  defp check_fleet_body(
+         :project_start,
+         %{"as_key" => key, "name" => name, "title" => title} = params
+       )
+       when map_size(params) == 3 and is_integer(key) and is_binary(name) and is_binary(title),
+       do: in_range(key in 1..@max_seq)
+
+  defp check_fleet_body(:project_start, _params), do: :invalid
+
+  # Archiving, taking over and deleting name only the Key they act as.
+  defp check_fleet_body(op, %{"as_key" => key} = params)
+       when op in [:project_archive, :project_hold] and map_size(params) == 1 and
+              is_integer(key),
+       do: in_range(key in 1..@max_seq)
+
+  defp check_fleet_body(op, _params) when op in [:project_archive, :project_hold], do: :invalid
   defp check_fleet_body(:run_start, params), do: check_run_start_body(params)
   defp check_fleet_body(:notebook_create, params), do: check_notebook_create_body(params)
   defp check_fleet_body(:files_list, params), do: check_files_list_body(params)
@@ -822,13 +858,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
          %{"rooms" => rooms, "graph" => graph, "proposals" => proposals, "run" => run} = params
        )
        when is_list(rooms) do
-    logs = [graph, proposals | params |> Map.take(["quotes"]) |> Map.values()]
+    others = [proposals | params |> Map.take(["quotes"]) |> Map.values()]
+    logs = [graph | others]
 
     cond do
-      map_size(Map.drop(params, ["keys", "dms", "quotes"])) != 4 ->
-        :invalid
-
-      not (Enum.all?(rooms, &cursor?/1) and Enum.all?(logs, &log_cursor?/1) and run?(run)) ->
+      not sync_shape?(params, rooms, graph, others, run) ->
         :invalid
 
       not (sync_in_range?(rooms, logs ++ rooms) and run_in_range?(run)) ->
@@ -843,6 +877,14 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   defp check_sync_rooms(_params), do: :invalid
+
+  # The sync body names its rooms, graph, proposals and run, and may name keys,
+  # direct messages and quotes; each part is shaped as its cursor is.
+  defp sync_shape?(params, rooms, graph, others, run) do
+    map_size(Map.drop(params, ["keys", "dms", "quotes"])) == 4 and
+      Enum.all?(rooms, &cursor?/1) and graph_cursor?(graph) and
+      Enum.all?(others, &log_cursor?/1) and run?(run)
+  end
 
   defp check_sync_dms(%{"dms" => dms}), do: check_dm_cursors(dms)
   defp check_sync_dms(_params), do: :ok
@@ -869,10 +911,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        )
        when is_binary(title) and is_binary(code) and is_binary(key) do
     cond do
-      not (Enum.all?(Map.keys(params), &(&1 in ~w(title code idempotency_key description goal))) and
-             is_binary(Map.get(params, "description", "")) and
-             notebook_goal?(params["goal"]) and
-               Regex.match?(~r/\A[!-~]{1,128}\z/, key)) ->
+      not notebook_create_fields?(params, key) ->
         :invalid
 
       String.length(title) in 1..@max_notebook_title ->
@@ -885,12 +924,26 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_notebook_create_body(_params), do: :invalid
 
+  defp notebook_create_fields?(params, key) do
+    Enum.all?(Map.keys(params), &(&1 in ~w(title code idempotency_key description goal folder))) and
+      is_binary(Map.get(params, "description", "")) and notebook_goal?(params["goal"]) and
+      notebook_folder?(params["folder"]) and Regex.match?(~r/\A[!-~]{1,128}\z/, key)
+  end
+
   defp notebook_goal?(nil), do: true
 
   defp notebook_goal?(goal) when is_binary(goal),
     do: Regex.match?(~r/\Agoal#[1-9][0-9]{0,9}\z/, goal)
 
   defp notebook_goal?(_goal), do: false
+
+  # A folder is one name: letters, digits, dots, dashes and underscores.
+  defp notebook_folder?(nil), do: true
+
+  defp notebook_folder?(folder) when is_binary(folder),
+    do: Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/, folder)
+
+  defp notebook_folder?(_folder), do: false
 
   # A listing may name the folder and the page it reads on from.
   defp check_files_list_body(params) when is_map(params),
@@ -978,6 +1031,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: map_size(log) == 1 and is_integer(after_seq)
 
   defp log_cursor?(_log), do: false
+
+  # The workspace's log is followed for the whole fleet, or for one project.
+  defp graph_cursor?(%{"project" => project} = graph),
+    do: is_binary(project) and log_cursor?(Map.delete(graph, "project"))
+
+  defp graph_cursor?(graph), do: log_cursor?(graph)
 
   # How the agent is running as it syncs: in a conversation, or on the
   # schedule it names.

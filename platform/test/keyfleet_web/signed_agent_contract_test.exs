@@ -63,14 +63,19 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
   @dm_blocks "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/blocks"
   @dm "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/dms/{other_token_id}/"
   @dm_changes "/api/v1/agent/fleets/{fleet_id}/dms/changes"
-  @notebook_create "/api/v1/agent/fleets/{fleet_id}/notebooks/create"
-  @notebook_files "/api/v1/agent/fleets/{fleet_id}/notebooks/{notebook_id}/files/"
+  @projects "/api/v1/agent/fleets/{fleet_id}/projects"
+  @project_start "/api/v1/agent/fleets/{fleet_id}/projects/start"
+  @project_archive "/api/v1/agent/fleets/{fleet_id}/projects/archive"
+  @project "/api/v1/agent/fleets/{fleet_id}/projects/{project}/"
+  @notebook_create "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/create"
+  @notebook_files "/api/v1/agent/fleets/{fleet_id}/projects/{project}/notebooks/{notebook_id}/files/"
 
   @address %{
     "fleet_id" => @fleet,
     "token_id" => "1",
     "other_token_id" => "2",
     "slug" => "general",
+    "project" => "general",
     "poll_id" => "00000000-0000-4000-8000-000000000000",
     "notebook_id" => "nb-0123456789abcdef"
   }
@@ -123,7 +128,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @sync, [],
      %{
        "rooms" => [%{"slug" => "general", "after_seq" => 0}],
-       "graph" => %{"after_seq" => 0},
+       "graph" => %{"after_seq" => 0, "project" => "general"},
        "proposals" => %{"after_seq" => 0},
        "keys" => [%{"token_id" => 1, "after_seq" => 0}],
        "dms" => %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]},
@@ -133,7 +138,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @sync, ["rooms", 0], %{"slug" => "general", "after_seq" => 0}},
     {"POST", @sync, ["run", {:one_of, 0}], %{"kind" => "session"}},
     {"POST", @sync, ["run", {:one_of, 1}], %{"kind" => "scheduled", "every_minutes" => 60}},
-    {"POST", @sync, ["graph"], %{"after_seq" => 0}},
+    {"POST", @sync, ["graph"], %{"after_seq" => 0, "project" => "general"}},
     {"POST", @sync, ["proposals"], %{"after_seq" => 0}},
     {"POST", @sync, ["dms"], %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]}},
     {"POST", @sync, ["quotes"], %{"after_seq" => 0}},
@@ -178,9 +183,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @dm <> "block", [], %{}},
     {"POST", @dm <> "unblock", [], %{}},
     {"POST", @dm_changes, [], %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]}},
-    {"POST", @graph <> "board", [], %{}},
+    {"POST", @graph <> "board", [], %{"project" => "general"}},
     {"POST", @graph <> "get", [], %{"id" => "goal#1", "relations_after" => 0}},
-    {"POST", @graph <> "changes", [], %{"after_seq" => 0, "limit" => 1}},
+    {"POST", @graph <> "changes", [], %{"after_seq" => 0, "limit" => 1, "project" => "general"}},
     {"POST", @graph <> "create", [],
      %{
        "as_key" => 1,
@@ -254,12 +259,18 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "code" => "import marimo",
        "description" => "d",
        "goal" => "goal#1",
+       "folder" => "experiments",
        "idempotency_key" => "n-1"
      }},
     {"POST", @notebook_files <> "list", [], %{"path" => "log", "cursor" => "c"}},
     {"POST", @notebook_files <> "read", [], %{"path" => "log/a.md"}},
     {"POST", @notebook_files <> "add", [], %{"path" => "log/a.md", "content" => "Seen"}},
-    {"POST", @notebook_files <> "write", [], %{"path" => "log/a.md", "content" => "Seen"}}
+    {"POST", @notebook_files <> "write", [], %{"path" => "log/a.md", "content" => "Seen"}},
+    {"GET", @projects, [], nil},
+    {"POST", @project_start, [], %{"as_key" => 1, "name" => "lab", "title" => "Lab"}},
+    {"POST", @project_archive, [], %{"as_key" => 1}},
+    {"POST", @project <> "take_over", [], %{"as_key" => 1}},
+    {"POST", @project <> "delete", [], %{"as_key" => 1}}
   ]
 
   # Where each body's fields go once admitted, less the ones its address supplies.
@@ -273,7 +284,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
              {@key_send, Keyfleet.Rooms.Message, :send_to_key},
              {@poll_start, Keyfleet.Polls.Poll, :start},
              {@poll_vote, Keyfleet.Polls.Vote, :cast},
-             {@dm <> "read", Keyfleet.Dms.Message, :in_conversation}
+             {@dm <> "read", Keyfleet.Dms.Message, :in_conversation},
+             {@project_start, Keyfleet.Projects.Project, :start},
+             {@project_archive, Keyfleet.Projects.Project, :archive}
            ] ++
              for(
                op <-
@@ -1436,7 +1449,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
           Keyfleet.Dms,
           Keyfleet.Graph,
           Keyfleet.Proposals,
-          Keyfleet.Polls
+          Keyfleet.Polls,
+          Keyfleet.Projects
         ],
         &Ash.Domain.Info.resources/1
       )

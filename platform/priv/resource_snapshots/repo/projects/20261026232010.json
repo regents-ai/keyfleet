@@ -57,6 +57,30 @@
       "references": null,
       "scale": null,
       "size": null,
+      "source": "key",
+      "type": "bigint"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
+      "source": "state",
+      "type": "text"
+    },
+    {
+      "allow_nil?": false,
+      "default": "nil",
+      "generated?": false,
+      "precision": null,
+      "primary_key?": false,
+      "references": null,
+      "scale": null,
+      "size": null,
       "source": "repository",
       "type": "text"
     },
@@ -94,13 +118,21 @@
       "base_filter": null,
       "check": "name ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND char_length(name) <= 32",
       "name": "projects_name_shape"
+    },
+    {
+      "attribute": [
+        "state"
+      ],
+      "base_filter": null,
+      "check": "state IN ('active', 'archived', 'deleted')",
+      "name": "projects_state"
     }
   ],
   "create_table_options": null,
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true,
-  "hash": "F8274E53840D0BEC34F6E746C0906C1140536A124148FDF6F3033E1E4BD264E7",
+  "hash": "A8B061C08CA2ECD1B62CF58E47628D2146E31A0FD4166FBB2639461CE9D3C5C2",
   "identities": [
     {
       "all_tenants?": false,
@@ -115,6 +147,24 @@
       "name": "one_repository",
       "nils_distinct?": true,
       "where": null
+    },
+    {
+      "all_tenants?": false,
+      "base_filter": null,
+      "index_name": "projects_one_active_per_key_index",
+      "keys": [
+        {
+          "type": "atom",
+          "value": "fleet_id"
+        },
+        {
+          "type": "atom",
+          "value": "key"
+        }
+      ],
+      "name": "one_active_per_key",
+      "nils_distinct?": true,
+      "where": "state = 'active'"
     }
   ],
   "multitenancy": {

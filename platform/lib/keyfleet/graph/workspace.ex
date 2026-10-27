@@ -16,8 +16,11 @@ defmodule Keyfleet.Graph.Workspace do
 
   Every item belongs to one of the fleet's projects (`Keyfleet.Projects`),
   named when it is made and never changed; a review or fork belongs to its
-  task's. Links run between any two items of the fleet, whatever their
-  projects.
+  task's. New work goes into any active project; an archived project's items
+  take no writes, and nothing links from them, until a Key takes the project
+  over. Links run from an item of an active project to any item of the
+  fleet, whatever its project. The graph refuses the rest, naming the
+  fleet's active projects (`project_archived`, `project_unknown`).
 
   A member takes an untaken task by assigning it to their own Key. Only the
   Key holding a task gives it to another Key or drops it; any other member
@@ -46,7 +49,6 @@ defmodule Keyfleet.Graph.Workspace do
 
   alias Keyfleet.Graph.Validations.FreshOwnership
   alias Keyfleet.Graph.Validations.KnownFleet
-  alias Keyfleet.Graph.Validations.KnownProject
   alias Keyfleet.Graph.Workspace.Read
   alias Keyfleet.Graph.Workspace.Relay
 
@@ -70,8 +72,9 @@ defmodule Keyfleet.Graph.Workspace do
     end
 
     action :changes, :map do
-      description "The workspace's changes after a place in its log, oldest first."
+      description "The workspace's changes after a place in its log, oldest first: the whole fleet's, or one project's."
       argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, constraints: @text
 
       argument :after_seq, :integer,
         allow_nil?: false,
@@ -84,7 +87,7 @@ defmodule Keyfleet.Graph.Workspace do
     end
 
     action :create, :map do
-      description "Adds an object to one of the fleet's projects."
+      description "Adds an object to one of the fleet's active projects."
       argument :fleet_id, :string, allow_nil?: false
       argument :as_key, :integer, allow_nil?: false, constraints: [min: 1, max: @bigint]
       argument :command_id, :string, allow_nil?: false, constraints: @text
@@ -92,7 +95,6 @@ defmodule Keyfleet.Graph.Workspace do
       argument :type, :string, allow_nil?: false, constraints: @text
       argument :data, :map, allow_nil?: false
       validate KnownFleet
-      validate KnownProject, only_when_valid?: true
       validate FreshOwnership, only_when_valid?: true
       run {Relay, op: "create", body: [:project, :type, :data]}
     end

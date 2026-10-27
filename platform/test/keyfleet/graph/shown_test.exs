@@ -35,7 +35,7 @@ defmodule Keyfleet.Graph.ShownTest do
 
   test "each project lists its own goals, newest first, and a project with none lists none" do
     Workspace.start_project(@fleet, "lab", "Lab")
-    Workspace.start_project(@fleet, "outreach", "Outreach")
+    Workspace.start_project(@fleet, "outreach", "Outreach", by: 21)
     goal("Map the first paid service")
     goal("Try the new model", project: "lab")
     goal("Measure the speed-up", project: "lab")

@@ -300,28 +300,42 @@ defmodule KeyfleetWeb.Router do
     get "/fleets/:fleet_id/polls/:poll_id", AgentPollController, :show
     post "/fleets/:fleet_id/polls/:poll_id/vote", AgentPollController, :vote
     post "/fleets/:fleet_id/polls/:poll_id/end", AgentPollController, :end_poll
-    get "/fleets/:fleet_id/code/pushes", AgentCodeController, :pushes
-    get "/fleets/:fleet_id/notebooks", AgentNotebookController, :index
-    post "/fleets/:fleet_id/notebooks/create", AgentNotebookController, :create
+    get "/fleets/:fleet_id/projects", AgentProjectController, :index
+    post "/fleets/:fleet_id/projects/start", AgentProjectController, :start
+    post "/fleets/:fleet_id/projects/archive", AgentProjectController, :archive
+    post "/fleets/:fleet_id/projects/:project/take_over", AgentProjectController, :take_over
+    post "/fleets/:fleet_id/projects/:project/delete", AgentProjectController, :delete
+    get "/fleets/:fleet_id/projects/:project/code/pushes", AgentCodeController, :pushes
+    get "/fleets/:fleet_id/projects/:project/notebooks", AgentNotebookController, :index
 
-    post "/fleets/:fleet_id/notebooks/:notebook_id/files/list",
+    post "/fleets/:fleet_id/projects/:project/notebooks/create",
+         AgentNotebookController,
+         :create
+
+    post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/files/list",
          AgentNotebookController,
          :list_files
 
-    post "/fleets/:fleet_id/notebooks/:notebook_id/files/read",
+    post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/files/read",
          AgentNotebookController,
          :read_file
 
-    post "/fleets/:fleet_id/notebooks/:notebook_id/files/add",
+    post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/files/add",
          AgentNotebookController,
          :add_file
 
-    post "/fleets/:fleet_id/notebooks/:notebook_id/files/write",
+    post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/files/write",
          AgentNotebookController,
          :write_file
 
-    post "/fleets/:fleet_id/notebooks/:notebook_id/runs/start", AgentNotebookController, :start
-    get "/fleets/:fleet_id/notebooks/:notebook_id/runs/:run_id", AgentNotebookController, :show
+    post "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/runs/start",
+         AgentNotebookController,
+         :start
+
+    get "/fleets/:fleet_id/projects/:project/notebooks/:notebook_id/runs/:run_id",
+        AgentNotebookController,
+        :show
+
     get "/fleets/:fleet_id/mutes", AgentMuteController, :index
     post "/fleets/:fleet_id/keys/:token_id/mute", AgentMuteController, :create
     post "/fleets/:fleet_id/keys/:token_id/unmute", AgentMuteController, :delete
