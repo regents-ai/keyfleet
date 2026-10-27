@@ -13,7 +13,7 @@ defmodule Keyfleet.BrowserWorkspace do
   """
 
   alias Keyfleet.Graph.{Projector, Projectors, Writer}
-  alias Keyfleet.Notebooks
+  alias Keyfleet.Projects
 
   @project "proj-0123456789abcdef"
 
@@ -80,7 +80,11 @@ defmodule Keyfleet.BrowserWorkspace do
     notebooks = Application.fetch_env!(:keyfleet, :notebooks)
     fleets = Map.put(notebooks[:fleets], fleet_id, hub)
     Application.put_env(:keyfleet, :notebooks, Keyword.put(notebooks, :fleets, fleets))
-    Notebooks.record_hub!(fleet_id, @project, actor: %Keyfleet.Actors.System{})
+
+    fleet_id
+    |> Projects.project!(Projects.general(), actor: %Keyfleet.Actors.System{})
+    |> Projects.record_space!(@project, actor: %Keyfleet.Actors.System{})
+
     :ok
   end
 

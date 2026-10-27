@@ -269,8 +269,8 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :board, :map, required: true
   attr :notice, :string, default: nil
 
-  # The fleet's newest notebooks, beside what its members pinned and how to
-  # open them.
+  # The newest notebooks, grouped by folder, beside what the fleet's members
+  # pinned and how to open them.
   defp docs(assigns) do
     ~H"""
     <div class="workspace-grid">
@@ -298,36 +298,45 @@ defmodule KeyfleetWeb.WorkspaceLive do
           >
             Open the notebooks to start the first one.
           </Regent.Primitives.empty_state>
-          <ol
+          <div
             :if={listed(@board.notebooks) != []}
             id="workspace-notebook-rows"
-            class="workspace-rows"
+            class="workspace-folders"
           >
-            <li
-              :for={notebook <- listed(@board.notebooks)}
-              class="workspace-row workspace-row--pinnable"
-              data-notebook={notebook.id}
+            <section
+              :for={{folder, notebooks} <- by_folder(listed(@board.notebooks))}
+              class="workspace-folder"
+              data-folder={folder}
             >
-              <a class="workspace-row-title" href={notebook.open}>{notebook.title}</a>
-              <span class="workspace-row-meta">
-                <KeyfleetWeb.Time.local
-                  id={"workspace-notebook-#{notebook.id}-added"}
-                  at={notebook.added}
-                  as={:date}
-                />
-              </span>
-              <p :if={notebook.description != ""} class="workspace-row-text">
-                {notebook.description}
-              </p>
-              <.pin_toggle
-                id={"workspace-notebook-#{notebook.id}-pin"}
-                place={:docs}
-                target={notebook.id}
-                name={notebook.title}
-                whose={whose(@board.pins, notebook.id)}
-              />
-            </li>
-          </ol>
+              <h3 :if={folder}>{folder}</h3>
+              <ol class="workspace-rows">
+                <li
+                  :for={notebook <- notebooks}
+                  class="workspace-row workspace-row--pinnable"
+                  data-notebook={notebook.id}
+                >
+                  <a class="workspace-row-title" href={notebook.open}>{notebook.title}</a>
+                  <span class="workspace-row-meta">
+                    <KeyfleetWeb.Time.local
+                      id={"workspace-notebook-#{notebook.id}-added"}
+                      at={notebook.added}
+                      as={:date}
+                    />
+                  </span>
+                  <p :if={notebook.description != ""} class="workspace-row-text">
+                    {notebook.description}
+                  </p>
+                  <.pin_toggle
+                    id={"workspace-notebook-#{notebook.id}-pin"}
+                    place={:docs}
+                    target={notebook.id}
+                    name={notebook.title}
+                    whose={whose(@board.pins, notebook.id)}
+                  />
+                </li>
+              </ol>
+            </section>
+          </div>
         </section>
       </div>
       <div class="workspace-side">
@@ -1422,6 +1431,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   defp listed(notebooks) when is_list(notebooks), do: notebooks
   defp listed(_none_or_unreadable), do: []
+
+  # Notebooks in no folder first, then each folder by name, newest first in
+  # each.
+  defp by_folder(notebooks) do
+    notebooks
+    |> Enum.group_by(& &1.folder)
+    |> Enum.sort_by(fn {folder, _notebooks} -> {folder != nil, folder} end)
+  end
 
   defp entries(entries) when is_list(entries), do: entries
   defp entries(:unreadable), do: []

@@ -189,6 +189,24 @@
   gap: 0.25rem;
 }
 
+/* A space's notebooks, by folder: those in none first, then each folder
+   under its name. */
+.workspace-folders {
+  display: grid;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.workspace-folder {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.workspace-folder h3 {
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
 /* Goals, and the work around one, read as a list of pages: one line each,
    hairlines between them and no box around any. The title takes the room it
    needs; what stands out about it follows, and wraps under it when narrow. */

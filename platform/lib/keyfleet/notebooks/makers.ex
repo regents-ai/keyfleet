@@ -56,22 +56,29 @@ defmodule Keyfleet.Notebooks.Makers do
   @doc """
   Whether `subject` made the saved result of `source_id`: a version's
   (`ver_…`) is its notebook's author's, a run's (`run_…`) whoever started it.
+  The notebook is looked for in each of the fleet's spaces in turn.
   """
   def result(fleet_id, subject, notebook_id, source_id) do
-    case Notebooks.project_id(fleet_id) do
-      {:ok, project_id} when is_binary(project_id) ->
-        case source_id do
-          "run_" <> _ -> result_run(fleet_id, subject, project_id, notebook_id, source_id)
-          _version -> notebook(fleet_id, subject, project_id, notebook_id)
-        end
-
-      {:ok, nil} ->
-        {:error, :not_found}
-
-      {:error, _error} ->
-        {:error, :unavailable}
+    case Notebooks.spaces(fleet_id) do
+      {:ok, spaces} -> find_result(spaces, fleet_id, subject, notebook_id, source_id)
+      {:error, _error} -> {:error, :unavailable}
     end
   end
+
+  defp find_result([], _fleet_id, _subject, _notebook_id, _source_id), do: {:error, :not_found}
+
+  defp find_result([{_project, space} | spaces], fleet_id, subject, notebook_id, source_id) do
+    case result_in(fleet_id, subject, space, notebook_id, source_id) do
+      {:error, :not_found} -> find_result(spaces, fleet_id, subject, notebook_id, source_id)
+      answer -> answer
+    end
+  end
+
+  defp result_in(fleet_id, subject, project_id, notebook_id, "run_" <> _ = run_id),
+    do: result_run(fleet_id, subject, project_id, notebook_id, run_id)
+
+  defp result_in(fleet_id, subject, project_id, notebook_id, _version),
+    do: notebook(fleet_id, subject, project_id, notebook_id)
 
   defp result_run(fleet_id, subject, project_id, notebook_id, run_id) do
     with {:ok, _path, run} <- Runs.find(fleet_id, subject, project_id, notebook_id, run_id) do

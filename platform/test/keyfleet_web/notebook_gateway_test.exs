@@ -10,7 +10,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
 
   alias Keyfleet.Accounts
   alias Keyfleet.Actors.{Human, System}
-  alias Keyfleet.{ChainHelpers, Fleets, Keys, Notebooks}
+  alias Keyfleet.{ChainHelpers, Fleets, Keys, Notebooks, Projects}
   alias Keyfleet.Notebooks.Roster
   alias KeyfleetWeb.{NotebookSocket, SessionAuthorityHelpers, SignedAgentHelpers}
 
@@ -58,8 +58,11 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       Keyword.put(notebooks, :fleets, %{@fleet => hub, @other_fleet => hub})
     )
 
-    Notebooks.record_hub!(@fleet, "proj-fleet", actor: %System{})
-    Notebooks.record_hub!(@other_fleet, "proj-other", actor: %System{})
+    for {fleet_id, space} <- [{@fleet, "proj-fleet"}, {@other_fleet, "proj-other"}] do
+      fleet_id
+      |> Projects.project!(Projects.general(), actor: %System{})
+      |> Projects.record_space!(space, actor: %System{})
+    end
 
     %{holder: holder, buyer: buyer}
   end
@@ -633,7 +636,7 @@ defmodule KeyfleetWeb.NotebookGatewayTest do
       ChainHelpers.issue_shard!(@fleet, 1, "0x" <> String.duplicate("c", 40), 2)
 
     assert_enqueued(worker: Roster, args: %{fleet_id: @fleet}, scheduled_at: ends_at)
-    assert %{success: 1, failure: 0} = Oban.drain_queue(queue: :notebook_hubs)
+    assert %{failure: 0, discard: 0} = Oban.drain_queue(queue: :notebook_hubs)
 
     epoch!(1, 2, @buyer_wallet)
 

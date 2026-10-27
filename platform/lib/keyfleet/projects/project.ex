@@ -7,7 +7,8 @@ defmodule Keyfleet.Projects.Project do
   fleet's own name for `general`, which keeps the fleet's first repository,
   and `<fleet id>-<name>` for every other. Fleet ids hold no hyphen, so no two
   projects of any fleets share a repository name. `hub_project_id` is its
-  space in the fleet's notebook hub, once that is made.
+  space in the fleet's notebook hub, once a job has made it
+  (`Keyfleet.Notebooks.Space`).
 
   Starting a project waits its turn behind any other start in the same fleet,
   holding the fleet's `general` row, so two starts can never take one name or
@@ -93,6 +94,13 @@ defmodule Keyfleet.Projects.Project do
       accept [:fleet_id, :name, :title]
       validate KnownFleet
       change Keyfleet.Projects.Changes.Room
+      change Keyfleet.Notebooks.Changes.MakeSpace
+    end
+
+    update :record_space do
+      accept [:hub_project_id]
+      require_atomic? false
+      change Keyfleet.Notebooks.Changes.QueueRoster
     end
   end
 
@@ -110,7 +118,7 @@ defmodule Keyfleet.Projects.Project do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action(:create) do
+    policy action([:create, :record_space]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end

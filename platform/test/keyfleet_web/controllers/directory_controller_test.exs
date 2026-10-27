@@ -240,10 +240,4 @@ defmodule KeyfleetWeb.DirectoryControllerTest do
       actor: PairingHelpers.agent_for!(owner())
     )
   end
-
-  # The first paragraph under `heading`.
-  defp section(body, heading) do
-    [_before, after_heading] = String.split(body, heading <> "\n\n", parts: 2)
-    after_heading |> String.split("\n\n", parts: 2) |> hd()
-  end
 end

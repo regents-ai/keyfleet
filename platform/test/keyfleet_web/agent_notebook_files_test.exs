@@ -9,7 +9,7 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
   import Plug.Conn
 
   alias Keyfleet.Actors.System
-  alias Keyfleet.{ChainHelpers, ContractSchema, Fleets, Keys, Notebooks, PairingHelpers}
+  alias Keyfleet.{ChainHelpers, ContractSchema, Fleets, Keys, Notebooks, PairingHelpers, Projects}
   alias KeyfleetWeb.SignedAgentHelpers
 
   @endpoint KeyfleetWeb.Endpoint
@@ -43,7 +43,10 @@ defmodule KeyfleetWeb.AgentNotebookFilesTest do
     notebooks = Application.fetch_env!(:keyfleet, :notebooks)
     on_exit(fn -> Application.put_env(:keyfleet, :notebooks, notebooks) end)
     Application.put_env(:keyfleet, :notebooks, Keyword.put(notebooks, :fleets, %{@fleet => hub}))
-    Notebooks.record_hub!(@fleet, "proj-fleet", actor: %System{})
+
+    @fleet
+    |> Projects.project!(Projects.general(), actor: %System{})
+    |> Projects.record_space!("proj-fleet", actor: %System{})
 
     secret = :crypto.strong_rand_bytes(32)
     SignedAgentHelpers.start_broker!(self(), secret)

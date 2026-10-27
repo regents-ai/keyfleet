@@ -38,7 +38,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   require Logger
 
-  alias Keyfleet.{Agents, Code, Fleets, Notebooks}
+  alias Keyfleet.{Agents, Code, Fleets, Notebooks, Projects}
   alias Keyfleet.Graph
   alias Keyfleet.Notebooks.HubClient
   alias Keyfleet.Rooms
@@ -287,25 +287,25 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  # The fleet's newest notebooks, and the ones its members pinned. Neither
-  # comes from the workspace's log, so it keeps no place in it (`seen`), and
-  # its notices don't read it again.
+  # The general project's newest notebooks, and the ones the fleet's members
+  # pinned. Neither comes from the workspace's log, so it keeps no place in it
+  # (`seen`), and its notices don't read it again.
   defp docs(fleet_id, actor) do
     opts = [actor: actor]
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
          {:ok, pins} <- members_read(fleet, Graph.pins(fleet_id, :docs, opts)) do
-      project_id = Notebooks.hub?(fleet_id) && project_id!(fleet_id)
+      space = space!(fleet_id, Projects.general())
 
       %{
         fleet_id: fleet_id,
         fleet_name: fleet.name,
         place: :docs,
         hub?: Notebooks.hub?(fleet_id),
-        notebooks: notebooks(fleet_id, limit: @docs_shown),
+        notebooks: notebooks(fleet_id, space, limit: @docs_shown),
         pins:
           for pin <- pins do
-            open = if is_binary(project_id), do: notebook_link(fleet_id, project_id, pin.target)
+            open = if is_binary(space), do: notebook_link(fleet_id, space, pin.target)
 
             %{
               id: pin.id,
@@ -379,7 +379,7 @@ defmodule KeyfleetWeb.WorkspacePage do
           Map.put(base, :object, nil)
 
         object ->
-          {links, goal} = around(object.type, fleet_id, object_id, links_at, opts)
+          {links, goal} = around(object, fleet_id, links_at, opts)
 
           {history, earlier} =
             fleet_id
@@ -420,11 +420,11 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   # A goal's page lists the work around it in place of its links.
-  defp around("goal", fleet_id, object_id, _links_at, opts),
-    do: {nil, goal_work(fleet_id, object_id, opts)}
+  defp around(%{type: "goal"} = goal, fleet_id, _links_at, opts),
+    do: {nil, goal_work(fleet_id, goal, opts)}
 
-  defp around(_type, fleet_id, object_id, links_at, opts) do
-    {page!(Graph.object_links(fleet_id, object_id, [page: links_at ++ [limit: 50]] ++ opts)), nil}
+  defp around(object, fleet_id, links_at, opts) do
+    {page!(Graph.object_links(fleet_id, object.id, [page: links_at ++ [limit: 50]] ++ opts)), nil}
   end
 
   defp other_ends(nil, _object_id), do: []
@@ -746,12 +746,13 @@ defmodule KeyfleetWeb.WorkspacePage do
   # `:around_goal`): each item one line, and of what its tasks and evidence
   # cite, the saved notebook results, the notebooks and the commits of the
   # fleet's code; beside them the goal's own place in the code, the folder
-  # `goals/goal-N`, and the notebooks tagged `goal-N`. `code` and `notebooks`
-  # are `:unreadable` when the code store or the notebook hub doesn't answer,
-  # and `notebooks` is nil for a fleet without notebooks.
-  defp goal_work(fleet_id, goal_id, opts) do
-    {objects, more} = fleet_id |> Graph.goal_work!(goal_id, opts) |> Enum.split(@goal_items)
-    name = String.replace(goal_id, "#", "-")
+  # `goals/goal-N`, and the notebooks tagged `goal-N` in its project's space.
+  # `code` and `notebooks` are `:unreadable` when the code store or the
+  # notebook hub doesn't answer, and `notebooks` is nil for a fleet without
+  # notebooks.
+  defp goal_work(fleet_id, goal, opts) do
+    {objects, more} = fleet_id |> Graph.goal_work!(goal.id, opts) |> Enum.split(@goal_items)
+    name = String.replace(goal.id, "#", "-")
     folder = "goals/" <> name
 
     cited =
@@ -764,8 +765,9 @@ defmodule KeyfleetWeb.WorkspacePage do
     {notebooks, unshown} =
       goal_notebooks(
         fleet_id,
+        space!(fleet_id, goal.project),
         name,
-        for({_object, uri, {:notebook, _open}} <- cited, uniq: true, do: Path.basename(uri))
+        for({_object, uri, {:notebook, _open}} <- cited, uniq: true, do: notebook_in(uri))
       )
 
     %{
@@ -813,10 +815,10 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # The notebooks tagged with the goal's name, then the ones its work cites
   # that aren't tagged, with how many of those aren't shown.
-  defp goal_notebooks(fleet_id, name, cited) do
-    case notebooks(fleet_id, tag: name, limit: 50) do
+  defp goal_notebooks(fleet_id, space, name, cited) do
+    case notebooks(fleet_id, space, tag: name, limit: 50) do
       tagged when is_list(tagged) ->
-        {found, unshown} = cited_notebooks(fleet_id, cited -- Enum.map(tagged, & &1.id))
+        {found, unshown} = cited_notebooks(fleet_id, cited -- Enum.map(tagged, &{space, &1.id}))
         {tagged ++ found, unshown}
 
       none_or_unreadable ->
@@ -824,49 +826,53 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
+  # The space and id of a cited notebook, from its address.
+  defp notebook_in(uri) do
+    ["", "projects", space, "notebooks", id] = String.split(URI.parse(uri).path, "/")
+    {space, id}
+  end
+
   # The most recently cited, each asked for by its id at once, however old,
-  # all within one page wait. One since deleted is left out; one the hub
-  # doesn't answer in time, and those past the first @cited_notebooks, are
-  # counted as not shown.
+  # all within one page wait. One in a space that isn't one of the fleet's
+  # projects', or since deleted, is left out; one the hub doesn't answer in
+  # time, and those past the first @cited_notebooks, are counted as not shown.
   defp cited_notebooks(_fleet_id, []), do: {[], 0}
 
-  defp cited_notebooks(fleet_id, ids) do
-    case project_id!(fleet_id) do
-      nil ->
-        {[], 0}
+  defp cited_notebooks(fleet_id, cited) do
+    {:ok, spaces} = Notebooks.spaces(fleet_id)
+    ours = MapSet.new(spaces, fn {_project, space} -> space end)
+    {asked, rest} = cited |> Enum.filter(&(elem(&1, 0) in ours)) |> Enum.split(@cited_notebooks)
 
-      project_id ->
-        {asked, rest} = Enum.split(ids, @cited_notebooks)
+    answers =
+      Task.async_stream(
+        asked,
+        fn {space, id} -> {space, HubClient.notebook(fleet_id, space, id)} end,
+        max_concurrency: @cited_notebooks,
+        timeout: Notebooks.config()[:page_timeout_ms],
+        on_timeout: :kill_task
+      )
 
-        answers =
-          Task.async_stream(asked, &HubClient.notebook(fleet_id, project_id, &1),
-            max_concurrency: @cited_notebooks,
-            timeout: Notebooks.config()[:page_timeout_ms],
-            on_timeout: :kill_task
-          )
+    {found, unanswered} =
+      Enum.reduce(answers, {[], 0}, fn
+        {:ok, {_space, {:ok, %{"status" => "deleted"}}}}, acc ->
+          acc
 
-        {found, unanswered} =
-          Enum.reduce(answers, {[], 0}, fn
-            {:ok, {:ok, %{"status" => "deleted"}}}, acc ->
-              acc
+        {:ok, {_space, {:ok, nil}}}, acc ->
+          acc
 
-            {:ok, {:ok, nil}}, acc ->
-              acc
+        {:ok, {space, {:ok, notebook}}}, {found, unanswered} ->
+          {[notebook_row(fleet_id, space, notebook) | found], unanswered}
 
-            {:ok, {:ok, notebook}}, {found, unanswered} ->
-              {[notebook_row(fleet_id, project_id, notebook) | found], unanswered}
+        {:ok, {_space, {:error, error}}}, {found, unanswered} ->
+          Logger.warning("A notebook of #{fleet_id} could not be read: #{reason(error)}")
+          {found, unanswered + 1}
 
-            {:ok, {:error, error}}, {found, unanswered} ->
-              Logger.warning("A notebook of #{fleet_id} could not be read: #{reason(error)}")
-              {found, unanswered + 1}
+        {:exit, :timeout}, {found, unanswered} ->
+          Logger.warning("A notebook of #{fleet_id} could not be read: timeout")
+          {found, unanswered + 1}
+      end)
 
-            {:exit, :timeout}, {found, unanswered} ->
-              Logger.warning("A notebook of #{fleet_id} could not be read: timeout")
-              {found, unanswered + 1}
-          end)
-
-        {Enum.reverse(found), unanswered + length(rest)}
-    end
+    {Enum.reverse(found), unanswered + length(rest)}
   end
 
   defp folder_entries(fleet_id, folder) do
@@ -876,21 +882,18 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  # The fleet's notebooks as `query` narrows them (`HubClient.notebooks/3`),
-  # newest first, each with when it was added and the link that opens it: nil
-  # for a fleet without notebooks, none before its project is made, and
-  # `:unreadable` when the hub doesn't answer.
-  defp notebooks(fleet_id, query) do
-    with true <- Notebooks.hub?(fleet_id),
-         project_id when is_binary(project_id) <- project_id!(fleet_id),
-         {:ok, notebooks} <- HubClient.notebooks(fleet_id, project_id, query) do
-      Enum.map(notebooks, &notebook_row(fleet_id, project_id, &1))
-    else
-      false ->
-        nil
+  # A space's notebooks as `query` narrows them (`HubClient.notebooks/3`),
+  # newest first, each with its folder, when it was added and the link that
+  # opens it: nil for a fleet without notebooks (`space!/2` false), none
+  # before the project's space is made, and `:unreadable` when the hub
+  # doesn't answer.
+  defp notebooks(_fleet_id, false, _query), do: nil
+  defp notebooks(_fleet_id, nil, _query), do: []
 
-      nil ->
-        []
+  defp notebooks(fleet_id, space, query) do
+    case HubClient.notebooks(fleet_id, space, query) do
+      {:ok, notebooks} ->
+        Enum.map(notebooks, &notebook_row(fleet_id, space, &1))
 
       {:error, error} ->
         Logger.warning("The notebooks of #{fleet_id} could not be read: #{reason(error)}")
@@ -898,28 +901,36 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  defp notebook_row(fleet_id, project_id, notebook) do
+  defp notebook_row(fleet_id, space, notebook) do
     {:ok, added, _offset} = DateTime.from_iso8601(notebook["created_at"])
 
     %{
       id: notebook["id"],
       title: notebook["title"],
       description: notebook["description"],
+      folder: Enum.find_value(notebook["tags"], &folder/1),
       added: added,
-      open: notebook_link(fleet_id, project_id, notebook["id"])
+      open: notebook_link(fleet_id, space, notebook["id"])
     }
   end
 
-  # The project the fleet's notebooks are in, or nil before it is made.
-  defp project_id!(fleet_id) do
-    case Notebooks.project_id(fleet_id) do
-      {:ok, project_id} -> project_id
+  defp folder("folder/" <> folder), do: folder
+  defp folder(_tag), do: nil
+
+  # A project's space in the fleet's notebook hub: false for a fleet without
+  # notebooks, nil before it is made.
+  defp space!(fleet_id, project) do
+    with true <- Notebooks.hub?(fleet_id),
+         {:ok, space} <- Notebooks.space(fleet_id, project) do
+      space
+    else
+      false -> false
       {:error, error} -> raise error
     end
   end
 
-  defp notebook_link(fleet_id, project_id, notebook_id),
-    do: notebook_open(fleet_id, Notebooks.notebook_path(project_id, notebook_id))
+  defp notebook_link(fleet_id, space, notebook_id),
+    do: notebook_open(fleet_id, Notebooks.notebook_path(space, notebook_id))
 
   defp notebook_open(fleet_id, to),
     do: "/fleets/#{fleet_id}/notebooks/open?" <> URI.encode_query(to: to)

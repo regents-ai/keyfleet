@@ -927,7 +927,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
             "id" => notebook,
             "title" => "Price model",
             "description" => "",
-            "created_at" => "2026-10-20T09:00:00Z"
+            "created_at" => "2026-10-20T09:00:00Z",
+            "tags" => []
           }
         ]
       end)
@@ -985,7 +986,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
             "title" => "Price model",
             "description" => "",
             "status" => "active",
-            "created_at" => "2026-10-20T09:00:00Z"
+            "created_at" => "2026-10-20T09:00:00Z",
+            "tags" => []
           }
       end)
 
@@ -1242,13 +1244,15 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
             "id" => plan,
             "title" => "Launch plan",
             "description" => "Who buys first.",
-            "created_at" => "2026-10-20T09:00:00Z"
+            "created_at" => "2026-10-20T09:00:00Z",
+            "tags" => ["goal-1", "folder/plans/launch"]
           },
           %{
             "id" => price,
             "title" => "Price model",
             "description" => "",
-            "created_at" => "2026-10-19T09:00:00Z"
+            "created_at" => "2026-10-19T09:00:00Z",
+            "tags" => []
           }
         ]
       end)
@@ -1257,9 +1261,16 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert_received {:listed, %{"limit" => "24"} = query}
       refute Map.has_key?(query, "tag")
 
-      assert rows(view, "#workspace-notebook-rows") == [
-               ["Launch plan", "20 Oct 2026"],
+      # Notebooks in no folder come first, then each folder under its name.
+      assert rows(view, "#workspace-notebook-rows section:not([data-folder]) ol") == [
                ["Price model", "19 Oct 2026"]
+             ]
+
+      assert text(view, ~s(#workspace-notebook-rows [data-folder="plans/launch"] h3)) ==
+               "plans/launch"
+
+      assert rows(view, ~s(#workspace-notebook-rows [data-folder="plans/launch"] ol)) == [
+               ["Launch plan", "20 Oct 2026"]
              ]
 
       assert has_element?(
@@ -2042,7 +2053,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       "title" => title,
       "description" => "",
       "status" => status,
-      "created_at" => "2025-01-02T09:00:00Z"
+      "created_at" => "2025-01-02T09:00:00Z",
+      "tags" => []
     }
   end
 
@@ -2063,7 +2075,10 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     notebooks = Application.fetch_env!(:keyfleet, :notebooks)
     on_exit(fn -> Application.put_env(:keyfleet, :notebooks, notebooks) end)
     Application.put_env(:keyfleet, :notebooks, Keyword.put(notebooks, :fleets, %{@fleet => hub}))
-    Keyfleet.Notebooks.record_hub!(@fleet, project_id, actor: %Actors.System{})
+
+    @fleet
+    |> Keyfleet.Projects.project!(Keyfleet.Projects.general(), actor: %Actors.System{})
+    |> Keyfleet.Projects.record_space!(project_id, actor: %Actors.System{})
   end
 
   defp hub_answer(conn, _project_id, :down), do: Plug.Conn.send_resp(conn, 503, "")

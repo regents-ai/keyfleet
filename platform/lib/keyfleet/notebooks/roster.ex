@@ -2,16 +2,17 @@ defmodule Keyfleet.Notebooks.Roster do
   @moduledoc """
   Brings one fleet's notebook hub in step with who holds the fleet's keys now.
 
-  The first time, it sets the hub up: its first request makes this site's
-  provisioner the hub's first user, then it makes the project the fleet's key
-  holders work in and records it (`Keyfleet.Notebooks.Hub`).
+  Any of the fleet's projects still without a space in the hub gets the job
+  that makes one (`Keyfleet.Notebooks.Space`), which runs this again once the
+  space is made. Its first request makes this site's provisioner the hub's
+  first user.
 
   Then everyone who holds one of the fleet's keys, an agent with an active
   shard of one, or an agent paired with a person who holds one, is an editor
-  of that project; anyone else this site added
-  loses their place, their open notebook connections close, and they are
-  suspended in that hub, so nothing they hold there still lets them in. Someone
-  who holds a key again is let back in.
+  of every space the fleet's projects have; anyone else this site added
+  loses their place in each, their open notebook connections close, and they
+  are suspended in that hub, so nothing they hold there still lets them in.
+  Someone who holds a key again is let back in.
 
   It runs whenever a key changes hands or a shard is issued or ended, and
   again when an issued shard runs out (`Keyfleet.Notebooks.Changes.UpdateRoster`),
@@ -32,55 +33,48 @@ defmodule Keyfleet.Notebooks.Roster do
 
   alias Keyfleet.Actors.{Agent, Human, System}
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
-  alias Keyfleet.Notebooks
-  alias Keyfleet.Notebooks.HubClient
-
-  @project_name "Fleet notebooks"
+  alias Keyfleet.{Notebooks, Projects}
+  alias Keyfleet.Notebooks.{HubClient, Space}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"fleet_id" => fleet_id}}) do
     with true <- Notebooks.hub?(fleet_id) || {:cancel, :no_hub},
-         {:ok, project_id} <- project(fleet_id),
+         {:ok, spaces} <- spaces(fleet_id),
          {:ok, holders} <- holders(fleet_id),
-         {:ok, members} <- HubClient.members(fleet_id, project_id),
+         {:ok, members} <- members(fleet_id, spaces),
          {:ok, users} <- HubClient.users(fleet_id) do
-      sync(fleet_id, project_id, holders, members, users)
+      sync(fleet_id, holders, members, users)
     else
       {:error, %OwnershipRefreshingError{}} -> {:snooze, 15}
       other -> other
     end
   end
 
-  defp project(fleet_id) do
-    case Notebooks.project_id(fleet_id) do
-      {:ok, nil} -> set_up(fleet_id)
-      found -> found
+  # The spaces made so far; each project without one gets the job that makes it.
+  defp spaces(fleet_id) do
+    with {:ok, projects} <- Projects.projects(fleet_id, actor: %System{}) do
+      for %{hub_project_id: nil} = project <- projects,
+          do: Oban.insert!(Space.new(%{fleet_id: fleet_id, project: project.name}))
+
+      {:ok, for(%{hub_project_id: space} <- projects, space, do: space)}
     end
   end
 
-  # The provisioner's first request is what makes it the hub's first user.
-  defp set_up(fleet_id) do
-    provisioner = HubClient.provisioner(fleet_id)
+  # Each space's members this site added, by subject, with how the hub names each.
+  defp members(fleet_id, spaces) do
+    Enum.reduce_while(spaces, {:ok, %{}}, fn space, {:ok, all} ->
+      case HubClient.members(fleet_id, space) do
+        {:ok, members} ->
+          {:cont, {:ok, Map.put(all, space, ours(members))}}
 
-    with {:ok, projects} <- HubClient.projects(fleet_id),
-         {:ok, project_id} <- ours(projects, provisioner) || create(fleet_id),
-         {:ok, _hub} <- Notebooks.record_hub(fleet_id, project_id, actor: %System{}) do
-      {:ok, project_id}
-    end
-  end
-
-  defp ours(projects, provisioner) do
-    Enum.find_value(projects, fn
-      %{"id" => id, "name" => @project_name, "owner" => ^provisioner} -> {:ok, id}
-      _project -> nil
+        {:error, error} ->
+          {:halt, {:error, error}}
+      end
     end)
   end
 
-  defp create(fleet_id) do
-    with {:ok, %{"id" => project_id}} <- HubClient.create_project(fleet_id, @project_name) do
-      {:ok, project_id}
-    end
-  end
+  defp ours(members),
+    do: for(member <- members, subject = member_subject(member), into: %{}, do: {subject, member})
 
   # The subjects who hold one of the fleet's keys, or an active shard of one,
   # now, and the agents paired with a person who holds one. An agent's pairing
@@ -128,25 +122,30 @@ defmodule Keyfleet.Notebooks.Roster do
     end)
   end
 
-  defp sync(fleet_id, project_id, holders, members, users) do
-    # Each member this site added, by subject, with how the hub names it.
-    members =
-      for member <- members, subject = member_subject(member), into: %{}, do: {subject, member}
-
+  defp sync(fleet_id, holders, members, users) do
     managed = Enum.filter(users, &Notebooks.managed_subject?(&1["id"]))
     leaving = for %{"id" => id} <- managed, id not in holders, do: id
-    leaving = Enum.uniq(leaving ++ Enum.reject(Map.keys(members), &(&1 in holders)))
+
+    leaving =
+      Enum.uniq(
+        leaving ++
+          for(
+            {_space, ours} <- members,
+            subject <- Map.keys(ours),
+            subject not in holders,
+            do: subject
+          )
+      )
 
     Enum.each(leaving, &Notebooks.end_access(fleet_id, &1))
 
     steps =
       Enum.concat([
         for(
+          {space, ours} <- members,
           subject <- leaving,
-          Map.has_key?(members, subject),
-          do: fn ->
-            HubClient.remove_member(fleet_id, project_id, member_ref(members[subject]))
-          end
+          Map.has_key?(ours, subject),
+          do: fn -> HubClient.remove_member(fleet_id, space, member_ref(ours[subject])) end
         ),
         for(
           %{"id" => id, "suspended_at" => nil} <- managed,
@@ -160,9 +159,10 @@ defmodule Keyfleet.Notebooks.Roster do
           do: fn -> HubClient.reactivate(fleet_id, id) end
         ),
         for(
+          {space, ours} <- members,
           subject <- holders,
-          not Map.has_key?(members, subject),
-          do: fn -> HubClient.add_editor(fleet_id, project_id, subject) end
+          not Map.has_key?(ours, subject),
+          do: fn -> HubClient.add_editor(fleet_id, space, subject) end
         )
       ])
 

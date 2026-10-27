@@ -24,6 +24,7 @@ defmodule Keyfleet.Projects do
       define :project_titles, action: :titles, args: [:fleet_id]
       define :project, action: :named, args: [:fleet_id, :name], not_found_error?: false
       define :start_project, action: :start, args: [:fleet_id, :as_key, :name, :title]
+      define :record_space, action: :record_space, args: [:hub_project_id]
     end
   end
 

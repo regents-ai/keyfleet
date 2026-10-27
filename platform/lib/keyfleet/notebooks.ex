@@ -10,6 +10,10 @@ defmodule Keyfleet.Notebooks do
   by a wallet. Each request carries a short pass this site signs
   (`Keyfleet.Notebooks.Pass`).
 
+  Each project of the fleet has its own space in the hub, made by a job when
+  the project starts (`Keyfleet.Notebooks.Space`) and kept on the project as
+  `hub_project_id`. Every member of the fleet is an editor of every space.
+
   A person opens the notebooks from the fleet's workspace, whose page sends
   the notebook host a code that works once (`open/4`); the notebook sign-in it sets ends
   when their Keyfleet sign-in does. When a key changes hands, a job
@@ -22,14 +26,10 @@ defmodule Keyfleet.Notebooks do
   alias Keyfleet.Accounts.SessionAuthority
   alias Keyfleet.Actors.{Agent, Human, System}
   alias Keyfleet.Graph.Checks.KeyActor
-  alias Keyfleet.Notebooks.{Handoff, Hub, HubClient, HubSilentError, Roster}
+  alias Keyfleet.Notebooks.{Handoff, HubClient, HubSilentError, Roster}
+  alias Keyfleet.Projects
 
   resources do
-    resource Keyfleet.Notebooks.Hub do
-      define :record_hub, action: :record, args: [:fleet_id, :project_id]
-      define :get_hub, action: :read, get_by: [:fleet_id], not_found_error?: false
-    end
-
     resource Keyfleet.Notebooks.Handoff
 
     resource Keyfleet.Notebooks.FileMaker do
@@ -236,21 +236,21 @@ defmodule Keyfleet.Notebooks do
 
   @doc """
   Lets `actor`, known to the hubs as `subject`, into the fleet's notebooks
-  now: `{:ok, %{project_id:, restricted?:}}` once it is one of the fleet's
+  now: `{:ok, %{spaces:, restricted?:}}` once it is one of the fleet's
   members (`membership/2`, which says whether its Key's edits are
-  restricted) and an editor of the fleet's project in the hub, or
+  restricted) and an editor of every space the fleet's projects have in the
+  hub (`spaces`, each project's name with its space), or
   `{:error, reason}`: `:not_holder`, `:catching_up` while key ownership can't
-  be read, `:setting_up` while the hub has no project yet (a job is booked
-  to make it), or `:unavailable` when the hub didn't answer. Someone who lost
+  be read, `:setting_up` while the hub has no space yet (a job is booked
+  to make them), or `:unavailable` when the hub didn't answer. Someone who lost
   a key and holds one again was suspended in the hub, and is let back in.
   """
   def admit(actor, fleet_id, subject) do
     with {:holder, {:ok, %{restricted?: restricted?}}} <-
            {:holder, membership(actor, fleet_id)},
-         {:project, {:ok, project_id}} when is_binary(project_id) <-
-           {:project, project_id(fleet_id)},
-         {:hub, :ok} <- {:hub, make_editor(fleet_id, project_id, subject)} do
-      access = %{project_id: project_id, restricted?: restricted?}
+         {:spaces, {:ok, [_ | _] = spaces}} <- {:spaces, spaces(fleet_id)},
+         {:hub, :ok} <- {:hub, make_editor(fleet_id, spaces, subject)} do
+      access = %{spaces: Map.new(spaces), restricted?: restricted?}
       AccessCache.admit(:notebooks, fleet_id, subject, access, config()[:access_ttl_ms])
       {:ok, access}
     else
@@ -260,11 +260,11 @@ defmodule Keyfleet.Notebooks do
       {:holder, {:error, _error}} ->
         {:error, :catching_up}
 
-      {:project, {:ok, nil}} ->
+      {:spaces, {:ok, []}} ->
         Oban.insert!(Roster.new(%{fleet_id: fleet_id}))
         {:error, :setting_up}
 
-      {:project, {:error, _error}} ->
+      {:spaces, {:error, _error}} ->
         {:error, :unavailable}
 
       {:hub, {:error, reason}} ->
@@ -276,31 +276,42 @@ defmodule Keyfleet.Notebooks do
     end
   end
 
-  defp make_editor(fleet_id, project_id, subject) do
-    with {:ok, _added} <- HubClient.add_editor(fleet_id, project_id, subject),
-         {:ok, _reactivated} <- HubClient.reactivate(fleet_id, subject) do
-      :ok
-    end
+  defp make_editor(fleet_id, spaces, subject) do
+    with {:ok, _added} <- each_space(spaces, &HubClient.add_editor(fleet_id, &1, subject)),
+         {:ok, _reactivated} <- HubClient.reactivate(fleet_id, subject),
+         do: :ok
+  end
+
+  # Asks the hub `ask` of each space in turn, as `{:ok, answers}`, stopping
+  # at the first that fails.
+  defp each_space(spaces, ask) do
+    Enum.reduce_while(spaces, {:ok, []}, fn {_project, space}, {:ok, answers} ->
+      case ask.(space) do
+        {:ok, answer} -> {:cont, {:ok, [answer | answers]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
   end
 
   @doc """
   Whether the fleet's notebooks have room for a session of `notebook_id` now,
-  whoever starts it: `{:ok, true}` while fewer than `max_sessions` are open in
-  the fleet's project, or when one of them is already that notebook's, which
-  starting it again joins; `{:ok, false}` when they are full; or
-  `{:error, :unavailable}` when the open sessions can't be read. A background
-  run is the hub's job, not a session, so it takes no room. Two sessions
-  started at the same moment may both find the last place.
+  whoever starts it: `{:ok, true}` while fewer than `max_sessions` are open
+  across all of the fleet's spaces, or when one of them is already that
+  notebook's, which starting it again joins; `{:ok, false}` when they are
+  full; or `{:error, :unavailable}` when the open sessions can't be read. A
+  background run is the hub's job, not a session, so it takes no room. Two
+  sessions started at the same moment may both find the last place.
   """
   def session_room?(fleet_id, notebook_id) do
-    with {:project, {:ok, project_id}} when is_binary(project_id) <-
-           {:project, project_id(fleet_id)},
-         {:hub, {:ok, sessions}} <- {:hub, HubClient.sessions(fleet_id, project_id)} do
+    with {:spaces, {:ok, spaces}} <- {:spaces, spaces(fleet_id)},
+         {:hub, {:ok, open}} <- {:hub, each_space(spaces, &HubClient.sessions(fleet_id, &1))} do
+      sessions = Enum.concat(open)
+
       {:ok,
        length(sessions) < config()[:max_sessions] or
          Enum.any?(sessions, &(&1["notebook_id"] == notebook_id))}
     else
-      {:project, _none} ->
+      {:spaces, {:error, _error}} ->
         {:error, :unavailable}
 
       {:hub, {:error, reason}} ->
@@ -432,12 +443,20 @@ defmodule Keyfleet.Notebooks do
   """
   def access_topic(fleet_id, subject), do: "notebook_access:#{fleet_id}:#{subject}"
 
-  @doc "The project the fleet's key holders work in, once this site has set the hub up."
-  def project_id(fleet_id) do
-    case get_hub(fleet_id, actor: %System{}) do
-      {:ok, %Hub{project_id: project_id}} -> {:ok, project_id}
-      {:ok, nil} -> {:ok, nil}
-      {:error, error} -> {:error, error}
+  @doc """
+  The spaces the fleet's projects have in its hub so far, oldest project
+  first, as `{:ok, [{project name, space}]}`. A project's space is made by a
+  job once it starts (`Keyfleet.Notebooks.Space`).
+  """
+  def spaces(fleet_id) do
+    with {:ok, projects} <- Projects.projects(fleet_id, actor: %System{}) do
+      {:ok, for(%{hub_project_id: space} = project <- projects, space, do: {project.name, space})}
     end
+  end
+
+  @doc "The project's space in its fleet's hub, as `{:ok, space}`, or `{:ok, nil}` before it is made."
+  def space(fleet_id, project) do
+    with {:ok, found} <- Projects.project(fleet_id, project, actor: %System{}),
+         do: {:ok, found && found.hub_project_id}
   end
 end

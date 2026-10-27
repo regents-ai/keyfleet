@@ -45,8 +45,8 @@ defmodule KeyfleetWeb.Plugs.NotebookGateway do
 
   Each one's key ownership is read at most every `access_ttl_ms`
   (`Keyfleet.AccessCache`), and afresh whenever the fleet's Keys change; the
-  first time in that span, they are made an editor of the fleet's project in
-  the hub. A Key whose edits a vote of the fleet has restricted
+  first time in that span, they are made an editor of every project's space
+  in the hub. A Key whose edits a vote of the fleet has restricted
   (`Keyfleet.Notebooks.membership/2`) only reads: anything else it sends is
   refused, until a vote allows its edits again. The token routes, with
   which a hub would hand out credentials that skip this check, are refused

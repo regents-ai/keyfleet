@@ -42,6 +42,7 @@ defmodule Keyfleet.MembershipCheck do
     LocalDatabaseFixture,
     Notebooks,
     PairingHelpers,
+    Projects,
     Rooms,
     WorkspaceFixtures
   }
@@ -502,7 +503,11 @@ defmodule Keyfleet.MembershipCheck do
 
     for fleet_id <- [@fleet, @other_fleet] do
       WorkspaceFixtures.open_log(fleet_id)
-      Notebooks.record_hub!(fleet_id, "proj-" <> fleet_id, actor: %Actors.System{})
+
+      fleet_id
+      |> Projects.project!(Projects.general(), actor: %Actors.System{})
+      |> Projects.record_space!("proj-" <> fleet_id, actor: %Actors.System{})
+
       Code.record_repository!(fleet_id, @store_owner, actor: %Actors.System{})
     end
   end

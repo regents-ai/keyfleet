@@ -16,7 +16,7 @@ defmodule Keyfleet.Notebooks.HubClient do
   @doc "The hub user this site manages the fleet's hub as."
   def provisioner(fleet_id), do: "kf_provisioner_#{fleet_id}"
 
-  @doc "Every project in the hub."
+  @doc "Every project in the hub, each with its `owner` and `tags`."
   def projects(fleet_id), do: fleet_id |> request(:get, "/api/v1/projects") |> page()
 
   @doc """
@@ -52,10 +52,10 @@ defmodule Keyfleet.Notebooks.HubClient do
     end
   end
 
-  @doc "Makes a project the provisioner owns."
-  def create_project(fleet_id, name) do
+  @doc "Makes a project the provisioner owns, named `name` and tagged with `tags`."
+  def create_project(fleet_id, name, tags) do
     fleet_id
-    |> request(:post, "/api/v1/projects", json: %{name: name, description: ""})
+    |> request(:post, "/api/v1/projects", json: %{name: name, description: "", tags: tags})
     |> answer([201])
   end
 

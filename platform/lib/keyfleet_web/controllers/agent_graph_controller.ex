@@ -2,7 +2,7 @@ defmodule KeyfleetWeb.AgentGraphController do
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Actors.System
-  alias Keyfleet.{Code, Fleets, Graph, Notebooks}
+  alias Keyfleet.{Code, Fleets, Graph, Notebooks, Projects}
   alias Keyfleet.Graph.Errors.EditsRestrictedError
   alias Keyfleet.Graph.Errors.IndeterminateError
   alias Keyfleet.Graph.Errors.NotKeyHolderError
@@ -72,7 +72,7 @@ defmodule KeyfleetWeb.AgentGraphController do
            ),
          {:ok, notebooks} <- Graph.pins(fleet_id, :docs, opts),
          {:ok, code} <- Graph.pins(fleet_id, :code, opts),
-         {:ok, project_id} <- project_id(fleet_id) do
+         {:ok, space} <- space(fleet_id) do
       json(conn, %{
         goals: Enum.map(goals.results, &goal(&1, fleet_id)),
         more_goals: goals.more?,
@@ -81,7 +81,7 @@ defmodule KeyfleetWeb.AgentGraphController do
             %{
               notebook_id: pin.target,
               title: pin.title,
-              notebook_url: project_id && Notebooks.notebook_url(fleet_id, project_id, pin.target)
+              notebook_url: space && Notebooks.notebook_url(fleet_id, space, pin.target)
             }
           end,
         pinned_code:
@@ -186,9 +186,12 @@ defmodule KeyfleetWeb.AgentGraphController do
     }
   end
 
-  # The project a fleet's notebooks are in, nil for a fleet without them.
-  defp project_id(fleet_id) do
-    if Notebooks.hub?(fleet_id), do: Notebooks.project_id(fleet_id), else: {:ok, nil}
+  # The general project's notebook space, nil for a fleet without notebooks
+  # or before the space is made.
+  defp space(fleet_id) do
+    if Notebooks.hub?(fleet_id),
+      do: Notebooks.space(fleet_id, Projects.general()),
+      else: {:ok, nil}
   end
 
   # Each wallet has its own allowance of writes in each fleet, spent before

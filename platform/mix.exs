@@ -195,7 +195,7 @@ defmodule Keyfleet.MixProject do
         # The early-access list adds one: its domain.
         # Shards add two: the ShardEvent and EditsRestriction records, each with its domain.
         # Mutes add two: their domain and the OwnMute check.
-        # Notebooks add two: the Hub and Handoff records, each with its domain.
+        # Notebooks add one: the Handoff record, with its domain.
         # Code adds two: the Repository and Push records, each with its domain.
         # Keys' pictures and the Base contracts' event records each add to it.
         # Proposal words add one: the AgentActor check on their write action.
@@ -223,7 +223,7 @@ defmodule Keyfleet.MixProject do
         # 87 on 23 Oct, one above the 86 recorded here; the PeopleRoomWriter
         # check brings it to 88. Projects add three: the Project record, with its
         # domain, and its KeyActor and KeyReader checks.
-        "xref graph --label compile-connected --fail-above 91",
+        "xref graph --label compile-connected --fail-above 90",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

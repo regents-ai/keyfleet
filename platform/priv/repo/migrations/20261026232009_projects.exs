@@ -2,7 +2,7 @@ defmodule Keyfleet.Repo.Migrations.Projects do
   @moduledoc """
   Makes projects, and gives each of the five fleets its first one, `general`,
   titled "General": it keeps the fleet's repository, named after the fleet,
-  and the fleet's notebook space, copied from `notebook_hubs`.
+  and the fleet's notebook space, moved over from `notebook_hubs`, which goes.
   """
 
   use Ecto.Migration
@@ -37,9 +37,28 @@ defmodule Keyfleet.Repo.Migrations.Projects do
                       'fleet_tech_accelerant', 'regents_club']) AS fleet(id)
     LEFT JOIN keyfleet_app.notebook_hubs AS hub ON hub.fleet_id = fleet.id
     """)
+
+    drop(table(:notebook_hubs))
   end
 
   def down do
+    create table(:notebook_hubs, primary_key: false) do
+      add(:fleet_id, :text, null: false, primary_key: true)
+      add(:project_id, :text, null: false)
+
+      add(:inserted_at, :utc_datetime_usec,
+        null: false,
+        default: fragment("(now() AT TIME ZONE 'utc')")
+      )
+    end
+
+    execute("""
+    INSERT INTO keyfleet_app.notebook_hubs (fleet_id, project_id)
+    SELECT fleet_id, hub_project_id
+    FROM keyfleet_app.projects
+    WHERE name = 'general' AND hub_project_id IS NOT NULL
+    """)
+
     drop_if_exists(constraint(:projects, :projects_name_shape))
 
     drop_if_exists(unique_index(:projects, [:repository], name: "projects_one_repository_index"))

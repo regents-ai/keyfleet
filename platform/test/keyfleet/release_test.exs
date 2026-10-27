@@ -221,7 +221,6 @@ defmodule Keyfleet.ReleaseTest do
              "mutes",
              "notebook_file_makers",
              "notebook_handoffs",
-             "notebook_hubs",
              "notebook_saved_outputs",
              "oban_jobs",
              "oban_peers",

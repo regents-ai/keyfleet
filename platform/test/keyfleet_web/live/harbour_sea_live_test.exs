@@ -1,9 +1,9 @@
 defmodule KeyfleetWeb.HarbourSeaLiveTest do
   use KeyfleetWeb.ConnCase, async: false
 
-  alias Keyfleet.{Accounts, Actors, ChainHelpers, Fleets, Graph, Keys, ProposalHelpers}
-  alias Keyfleet.{Proposals, Rooms}
+  alias Keyfleet.{Accounts, Actors, ChainHelpers, Fleets, Graph, Keys}
   alias Keyfleet.Accounts.SessionAuthority
+  alias Keyfleet.{ProposalHelpers, Proposals, Rooms}
   alias Keyfleet.WorkspaceFixtures, as: Workspace
   alias KeyfleetWeb.{FleetNow, HarbourSeaLive}
 
