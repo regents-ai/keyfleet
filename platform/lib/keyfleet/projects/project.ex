@@ -126,7 +126,7 @@ defmodule Keyfleet.Projects.Project do
       argument :name, :string, allow_nil?: false, constraints: [trim?: false]
       argument :title, :string, allow_nil?: false
       validate KnownFleet
-      validate FreshOwnership
+      validate FreshOwnership, only_when_valid?: true
       run {Hold, step: :start}
     end
 
@@ -136,7 +136,7 @@ defmodule Keyfleet.Projects.Project do
       argument :fleet_id, :string, allow_nil?: false
       argument :as_key, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
       validate KnownFleet
-      validate FreshOwnership
+      validate FreshOwnership, only_when_valid?: true
       run {Hold, step: :archive}
     end
 
@@ -147,7 +147,7 @@ defmodule Keyfleet.Projects.Project do
       argument :as_key, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
       argument :name, :string, allow_nil?: false, constraints: [trim?: false]
       validate KnownFleet
-      validate FreshOwnership
+      validate FreshOwnership, only_when_valid?: true
       run {Hold, step: :take_over}
     end
 
@@ -158,7 +158,7 @@ defmodule Keyfleet.Projects.Project do
       argument :as_key, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
       argument :name, :string, allow_nil?: false, constraints: [trim?: false]
       validate KnownFleet
-      validate FreshOwnership
+      validate FreshOwnership, only_when_valid?: true
       run {Hold, step: :delete}
     end
 
