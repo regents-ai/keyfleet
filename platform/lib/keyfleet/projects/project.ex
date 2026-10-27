@@ -6,7 +6,8 @@ defmodule Keyfleet.Projects.Project do
   Its repository in the code store is named when the project starts: the
   fleet's own name for `general`, which keeps the fleet's first repository,
   and `<fleet id>-<name>` for every other. Fleet ids hold no hyphen, so no two
-  projects of any fleets share a repository name. `hub_project_id` is its
+  projects of any fleets share a repository name; a job queued as the
+  project starts makes it there (`Keyfleet.Code.Setup`). `hub_project_id` is its
   space in the fleet's notebook hub, once a job has made it
   (`Keyfleet.Notebooks.Space`).
 
@@ -62,6 +63,13 @@ defmodule Keyfleet.Projects.Project do
       get? true
     end
 
+    # The project whose repository git asks for by name.
+    read :by_repository do
+      argument :repository, :string, allow_nil?: false, constraints: [trim?: false]
+      filter expr(repository == ^arg(:repository))
+      get? true
+    end
+
     # A member starts a project as one of the fleet's Keys.
     action :start, :struct do
       constraints instance_of: __MODULE__
@@ -95,6 +103,7 @@ defmodule Keyfleet.Projects.Project do
       validate KnownFleet
       change Keyfleet.Projects.Changes.Room
       change Keyfleet.Notebooks.Changes.MakeSpace
+      change Keyfleet.Code.Changes.MakeRepository
     end
 
     update :record_space do
@@ -118,7 +127,7 @@ defmodule Keyfleet.Projects.Project do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:create, :record_space]) do
+    policy action([:create, :record_space, :by_repository]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end

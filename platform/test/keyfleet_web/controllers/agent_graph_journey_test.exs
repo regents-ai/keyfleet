@@ -18,6 +18,8 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
   @moduletag :tmp_dir
 
   @fleet "fibonacci_syndicate"
+  # `general`'s repository is named after its fleet.
+  @repository @fleet
   @contract "0x" <> String.duplicate("7", 40)
   @cascade "fibonacci_cascade"
   @owners %{1 => "0x" <> String.duplicate("a", 40), 2 => "0x" <> String.duplicate("b", 40)}
@@ -262,7 +264,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert starting != [] and Enum.all?(starting, & &1["starting"])
     assert board["more_goals"] == false
     assert [%{"path" => "goals", "folder" => true, "url" => code_url}] = board["pinned_code"]
-    assert String.ends_with?(code_url, Keyfleet.Code.files_path(@fleet, "goals"))
+    assert String.ends_with?(code_url, Keyfleet.Code.files_path(@fleet, @repository, "goals"))
 
     assert [%{"notebook_id" => "nb-0123456789abcdef", "title" => "Plan"}] =
              board["pinned_notebooks"]
@@ -437,7 +439,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
        c do
     start_graph(c)
     [ann, bea] = shard_agents(c)
-    commit = KeyfleetWeb.WorkspacePage.commit_url(@fleet, String.duplicate("a", 40))
+    commit = KeyfleetWeb.WorkspacePage.commit_url(@fleet, @repository, String.duplicate("a", 40))
 
     notebook =
       Keyfleet.Notebooks.url(
@@ -518,7 +520,8 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
         id: task["id"],
         expected_version: 2,
         set: %{
-          commit_ref: KeyfleetWeb.WorkspacePage.commit_url(@fleet, String.duplicate("b", 40))
+          commit_ref:
+            KeyfleetWeb.WorkspacePage.commit_url(@fleet, @repository, String.duplicate("b", 40))
         }
       })
 

@@ -22,6 +22,7 @@ long (see "Money nobody has moved" below).
 | `Keyfleet.Notebooks.Reconcile` | every 10 minutes | queues a notebook hub update for each fleet with a hub | default | saved error, 3 tries |
 | `Keyfleet.Notebooks.Roster` | queued by Reconcile and by Key changes | brings every project space's members in step with the Keys, and queues a space for any project without one | notebook_hubs | saved error, 20 tries |
 | `Keyfleet.Notebooks.Space` | queued when a project starts, and by Roster | makes one project's space in the fleet's hub | notebook_hubs | saved error, 20 tries |
+| `Keyfleet.Code.Setup` | queued when a project starts, and by an ask for a repository not made yet | makes one project's repository in the code store | code_store | saved error, 20 tries a minute apart; the next ask starts it again |
 | `Keyfleet.SharedReading.Heal` | every minute, two kinds | rereads fleet agents and Key agents | default | saved error; the next minute replaces it |
 | `Keyfleet.Treasury.OverdueCheck` | :23 past every hour | saves an error for each kind of money nobody has moved in time, naming each fleet | default | saved error, 1 try; the next hour runs it again |
 | `Keyfleet.Keys.DeckEndCheck` | :41 past every hour | saves one error naming each fleet within 100 Keys of its deck's end that can sell past it (Accelerant #1 from its 900th Key to its 1,000th), so the randomness subscription is readied before Key 1,001 | default | saved error, 1 try; the next hour runs it again |

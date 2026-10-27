@@ -6,8 +6,8 @@ defmodule KeyfleetWeb.WorkspacePage do
   `board/3` is one of the workspace's three places (`places/0`). Its
   Project is the fleet's items a page at a time, the most recently changed
   first, beside its goals and its latest changes; its Docs the fleet's
-  newest notebooks; its Code the top folder of the fleet's code and the
-  changes sent to it (`Keyfleet.Code`). Docs and Code each list what the
+  newest notebooks; its Code the top folder of `general`'s repository and
+  the changes sent to it (`Keyfleet.Code`). Docs and Code each list what the
   fleet's members pinned there (`Keyfleet.Graph.Pin`). `item/4` is one item with its fields, its
   links a page at a time and its history a page at a time, and a goal with
   the work around it in place of its links. Goals are listed one line each,
@@ -21,8 +21,8 @@ defmodule KeyfleetWeb.WorkspacePage do
   the ideas every workspace begins with (`Keyfleet.GoalIdeas`), was added by
   Keyfleet.
 
-  `commit/4` is one commit in the fleet's code, at the address a workspace
-  cites it by (`commit_url/2`): who sent it, and the evidence that cites it
+  `commit/4` is one commit in one of the fleet's repositories, at the
+  address a workspace cites it by (`commit_url/3`): who sent it, and the evidence that cites it
   with the tasks that produced that evidence.
 
   Only the fleet's members read its workspace
@@ -38,6 +38,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   require Logger
 
+  alias Keyfleet.Actors.System
   alias Keyfleet.{Agents, Code, Fleets, Notebooks, Projects}
   alias Keyfleet.Graph
   alias Keyfleet.Notebooks.HubClient
@@ -210,8 +211,9 @@ defmodule KeyfleetWeb.WorkspacePage do
   def place_path(fleet_id, :project), do: "#{Keyfleet.Fleets.path(fleet_id)}/workspace"
   def place_path(fleet_id, place), do: with_query(place_path(fleet_id, :project), place: place)
 
-  @doc "The address a workspace cites one commit of the fleet's code by."
-  def commit_url(fleet_id, hash), do: Endpoint.url() <> Code.commit_path(fleet_id, hash)
+  @doc "The address a workspace cites one commit of a project's repository by."
+  def commit_url(fleet_id, repository, hash),
+    do: Endpoint.url() <> Code.commit_path(fleet_id, repository, hash)
 
   defp with_query(path, []), do: path
   defp with_query(path, query), do: path <> "?" <> URI.encode_query(query)
@@ -327,20 +329,24 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp whose(pin, actor),
     do: if(pin.human_account_id == actor.human_account_id, do: :mine, else: :theirs)
 
-  # The fleet's code: how to copy it, its top folder, the changes sent to it
-  # lately, and what its members pinned in it.
+  # `general`'s repository: how to copy it, its top folder, the changes sent
+  # to it lately, and what the fleet's members pinned in the code.
   defp code(fleet_id, actor) do
     opts = [actor: actor]
+    general = Projects.general()
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
-         {:ok, pushes} <- members_read(fleet, Code.recent_pushes(fleet_id, opts)) do
+         {:ok, pushes} <- members_read(fleet, Code.recent_pushes(fleet_id, general, opts)) do
+      repository = repository!(fleet_id, general)
+
       %{
         fleet_id: fleet_id,
         fleet_name: fleet.name,
         place: :code,
-        clone_url: Code.clone_url(fleet_id),
-        pushes: pushes(pushes, fleet_id),
-        files: folder_entries(fleet_id, ""),
+        repository: repository,
+        clone_url: Code.clone_url(repository),
+        pushes: pushes(pushes, fleet_id, repository),
+        files: folder_entries(fleet_id, repository, ""),
         pins:
           for pin <- Graph.pins!(fleet_id, :code, opts) do
             %{
@@ -348,7 +354,7 @@ defmodule KeyfleetWeb.WorkspacePage do
               target: pin.target,
               title: pin.title,
               folder?: pin.folder?,
-              link: Code.files_path(fleet_id, pin.target),
+              link: Code.files_path(fleet_id, repository, pin.target),
               whose: whose(pin, actor)
             }
           end
@@ -463,18 +469,21 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp standing("task", progress), do: choice("progress", progress)
 
   @doc """
-  One commit of the fleet's code, named by its repository and full hash:
-  the pushes that left a branch or tag at it, and the evidence that cites it
-  with the tasks that produced that evidence. An address naming another
-  repository, or less than a full hash, is a page that doesn't exist.
+  One commit of one of the fleet's repositories, named by the repository and
+  its full hash: the pushes that left a branch or tag at it, and the evidence
+  that cites it with the tasks that produced that evidence. An address naming
+  a repository none of the fleet's projects has, or less than a full hash, is
+  a page that doesn't exist.
   """
   def commit(fleet_id, repository, hash, actor) do
-    if repository != fleet_id or not Code.full_hash?(hash), do: raise(NotFoundError)
+    if not Code.full_hash?(hash), do: raise(NotFoundError)
+    project = project_of!(fleet_id, repository)
     opts = [actor: actor]
-    url = commit_url(fleet_id, hash)
+    url = commit_url(fleet_id, repository, hash)
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
-         {:ok, pushes} <- members_read(fleet, Code.pushes_of_commit(fleet_id, hash, opts)),
+         {:ok, pushes} <-
+           members_read(fleet, Code.pushes_of_commit(fleet_id, project.name, hash, opts)),
          {:ok, citing} <- members_read(fleet, Graph.work_citing(fleet_id, url, opts)) do
       producers = producers(fleet_id, Enum.filter(citing, &(&1.type == "evidence")), opts)
       titles = titles(fleet_id, producers |> Map.values() |> List.flatten(), opts)
@@ -485,8 +494,8 @@ defmodule KeyfleetWeb.WorkspacePage do
         fleet_name: fleet.name,
         hash: hash,
         url: url,
-        clone_url: Code.clone_url(fleet_id),
-        pushes: pushes(pushes, fleet_id),
+        clone_url: Code.clone_url(repository),
+        pushes: pushes(pushes, fleet_id, repository),
         citing:
           for object <- citing do
             %{
@@ -510,14 +519,14 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   @doc """
-  One folder or file of the fleet's code as it stands on the default branch
-  now, named by its repository and the `path` asked for (none for the top
-  folder): a folder's names, folders first, or a file's text, beside the
-  latest changes sent to the code. A file that isn't text, or is past
+  One folder or file of a project's repository as it stands on the default
+  branch now, named by the repository and the `path` asked for (none for the
+  top folder): a folder's names, folders first, or a file's text, beside the
+  latest changes sent to the repository. A file that isn't text, or is past
   `file_max_bytes`, is named but not shown; `listing` is `:unreadable`
-  when the code store doesn't answer. An address naming another repository,
-  a path that can't name a place in the code, or a file that isn't there is
-  a page that doesn't exist.
+  when the code store doesn't answer. An address naming a repository none
+  of the fleet's projects has, a path that can't name a place in the code,
+  or a file that isn't there is a page that doesn't exist.
   """
   def files(fleet_id, repository, params, actor) do
     path =
@@ -526,20 +535,21 @@ defmodule KeyfleetWeb.WorkspacePage do
         path -> if Code.code_path?(path), do: path, else: raise(NotFoundError)
       end
 
-    if repository != fleet_id, do: raise(NotFoundError)
+    project = project_of!(fleet_id, repository)
     opts = [actor: actor]
 
     with {:ok, fleet} <- fleet(fleet_id, opts),
-         {:ok, pushes} <- members_read(fleet, Code.recent_pushes(fleet_id, opts)) do
+         {:ok, pushes} <- members_read(fleet, Code.recent_pushes(fleet_id, project.name, opts)) do
       %{
         fleet_id: fleet_id,
         fleet_name: fleet.name,
+        repository: repository,
         path: path,
         pinned: fleet_id |> Graph.pins!(:code, opts) |> Map.new(&{&1.target, whose(&1, actor)}),
-        crumbs: crumbs(fleet_id, path),
-        clone_url: Code.clone_url(fleet_id),
-        pushes: pushes(pushes, fleet_id),
-        listing: listing(fleet_id, path)
+        crumbs: crumbs(fleet_id, repository, path),
+        clone_url: Code.clone_url(repository),
+        pushes: pushes(pushes, fleet_id, repository),
+        listing: listing(fleet_id, repository, path)
       }
     else
       {:missing, _name} ->
@@ -550,47 +560,61 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
-  # Each folder above the place shown, from the top, as a link.
-  defp crumbs(_fleet_id, ""), do: []
+  # The project whose repository an address names, if it is one of the
+  # fleet's.
+  defp project_of!(fleet_id, repository) do
+    case Projects.project_of_repository!(repository, actor: %System{}) do
+      %{fleet_id: ^fleet_id} = project -> project
+      _none_or_another_fleets -> raise NotFoundError
+    end
+  end
 
-  defp crumbs(fleet_id, path) do
+  defp repository!(fleet_id, project) do
+    {:ok, repository} = Code.repository(fleet_id, project)
+    repository
+  end
+
+  # Each folder above the place shown, from the top, as a link.
+  defp crumbs(_fleet_id, _repository, ""), do: []
+
+  defp crumbs(fleet_id, repository, path) do
     names = String.split(path, "/")
 
     for depth <- 0..(length(names) - 2)//1 do
       above = names |> Enum.take(depth + 1) |> Enum.join("/")
-      %{name: Enum.at(names, depth), link: Code.files_path(fleet_id, above)}
+      %{name: Enum.at(names, depth), link: Code.files_path(fleet_id, repository, above)}
     end
   end
 
   # A folder holds something: git keeps no empty folder. So a place that
   # holds nothing is a file, or nothing at all.
-  defp listing(fleet_id, path) do
-    case Code.folder(fleet_id, path) do
-      {:ok, []} when path != "" -> file(fleet_id, path)
-      {:ok, entries} -> {:folder, Enum.map(entries, &entry_row(&1, fleet_id, path))}
-      {:error, error} -> unreadable_code(fleet_id, error)
+  defp listing(fleet_id, repository, path) do
+    case Code.folder(repository, path) do
+      {:ok, []} when path != "" -> file(repository, path)
+      {:ok, entries} -> {:folder, Enum.map(entries, &entry_row(&1, fleet_id, repository, path))}
+      {:error, error} -> unreadable_code(repository, error)
     end
   end
 
-  # Each entry of a folder with its path from the top of the code.
-  defp entry_row(entry, fleet_id, folder) do
+  # Each entry of a folder with its path from the top of the repository.
+  defp entry_row(entry, fleet_id, repository, folder) do
     path = if folder == "", do: entry.name, else: folder <> "/" <> entry.name
-    Map.merge(entry, %{path: path, link: Code.files_path(fleet_id, path)})
+    Map.merge(entry, %{path: path, link: Code.files_path(fleet_id, repository, path)})
   end
 
-  defp file(fleet_id, path) do
-    case Code.file(fleet_id, path) do
+  defp file(repository, path) do
+    case Code.file(repository, path) do
       {:ok, :too_large} -> {:file, :too_large}
       {:ok, bytes} -> {:file, if(text?(bytes), do: bytes, else: :not_text)}
       :not_found -> raise NotFoundError
-      {:error, error} -> unreadable_code(fleet_id, error)
+      {:error, error} -> unreadable_code(repository, error)
     end
   end
 
   defp text?(bytes), do: String.valid?(bytes) and not String.contains?(bytes, <<0>>)
 
-  defp unreadable_code(fleet_id, error) do
-    Logger.warning("The code of #{fleet_id} could not be read: #{reason(error)}")
+  defp unreadable_code(repository, error) do
+    Logger.warning("The repository #{repository} could not be read: #{reason(error)}")
     :unreadable
   end
 
@@ -754,6 +778,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     {objects, more} = fleet_id |> Graph.goal_work!(goal.id, opts) |> Enum.split(@goal_items)
     name = String.replace(goal.id, "#", "-")
     folder = "goals/" <> name
+    repository = repository!(fleet_id, goal.project)
 
     cited =
       for object <- objects,
@@ -806,8 +831,8 @@ defmodule KeyfleetWeb.WorkspacePage do
         end
         |> Enum.uniq_by(& &1.hash),
       name: name,
-      folder: %{path: folder, link: Code.files_path(fleet_id, folder)},
-      code: folder_entries(fleet_id, folder),
+      folder: %{path: folder, link: Code.files_path(fleet_id, repository, folder)},
+      code: folder_entries(fleet_id, repository, folder),
       notebooks: notebooks,
       notebooks_unshown: unshown
     }
@@ -875,10 +900,10 @@ defmodule KeyfleetWeb.WorkspacePage do
     {Enum.reverse(found), unanswered + length(rest)}
   end
 
-  defp folder_entries(fleet_id, folder) do
-    case Code.folder(fleet_id, folder) do
-      {:ok, entries} -> Enum.map(entries, &entry_row(&1, fleet_id, folder))
-      {:error, error} -> unreadable_code(fleet_id, error)
+  defp folder_entries(fleet_id, repository, folder) do
+    case Code.folder(repository, folder) do
+      {:ok, entries} -> Enum.map(entries, &entry_row(&1, fleet_id, repository, folder))
+      {:error, error} -> unreadable_code(repository, error)
     end
   end
 
@@ -1050,20 +1075,21 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp field_value(_field, value, _fleet_id), do: value(value)
 
-  # A commit of the fleet's own code is shown as that commit, opened on this
-  # site; a saved result of one of the fleet's notebooks as that result; one
+  # A commit of one of the fleet's own repositories is shown as that commit,
+  # opened on this site; a saved result of one of the fleet's notebooks as that result; one
   # of its notebooks as that notebook, opened through this site; any other
   # address as `value/1` shows it.
   defp source(nil, _fleet_id), do: nil
 
   defp source(uri, fleet_id) do
-    hash = String.replace_prefix(uri, commit_url(fleet_id, ""), "")
+    code = String.replace_prefix(uri, Endpoint.url() <> Fleets.path(fleet_id) <> "/code/", "")
     saved = String.replace_prefix(uri, Notebooks.url(fleet_id, "/results/"), "")
     path = String.replace_prefix(uri, Notebooks.url(fleet_id, ""), "")
 
     cond do
-      hash != uri and Code.full_hash?(hash) ->
-        {:commit, hash, Code.commit_path(fleet_id, hash)}
+      code != uri and commit?(fleet_id, code) ->
+        [repository, "commits", hash] = String.split(code, "/")
+        {:commit, hash, Code.commit_path(fleet_id, repository, hash)}
 
       saved != uri and Regex.match?(@saved_result, saved) ->
         {:notebook_result, uri}
@@ -1073,6 +1099,18 @@ defmodule KeyfleetWeb.WorkspacePage do
 
       true ->
         value(uri)
+    end
+  end
+
+  # `<repository>/commits/<full hash>`, in one of the fleet's repositories by
+  # its name.
+  defp commit?(fleet_id, code) do
+    case String.split(code, "/") do
+      [repository, "commits", hash] ->
+        Code.repository_fleet(repository) == {:ok, fleet_id} and Code.full_hash?(hash)
+
+      _other ->
+        false
     end
   end
 
@@ -1369,19 +1407,19 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp starting?(sys), do: is_integer(sys["starting"])
 
   # A push an agent sent names the agent beside its Key.
-  defp pushes(pushes, fleet_id) do
+  defp pushes(pushes, fleet_id, repository) do
     agents = agent_names(Enum.map(pushes, & &1.acting_agent_wallet))
-    Enum.map(pushes, &push(&1, fleet_id, agents))
+    Enum.map(pushes, &push(&1, fleet_id, repository, agents))
   end
 
   # The log stamps every event in UTC.
-  defp push(push, fleet_id, agents) do
+  defp push(push, fleet_id, repository, agents) do
     %{
       id: push.id,
       token_id: push.token_id,
       agent: agents[push.acting_agent_wallet],
       what: moved(push.ref),
-      commit: {:commit, push.head, Code.commit_path(fleet_id, push.head)},
+      commit: {:commit, push.head, Code.commit_path(fleet_id, repository, push.head)},
       at: push.pushed_at
     }
   end

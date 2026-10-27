@@ -423,7 +423,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           <.link
             :if={entries(@board.files) != []}
             id="workspace-code-files"
-            patch={Keyfleet.Code.files_path(@board.fleet_id, "")}
+            patch={Keyfleet.Code.files_path(@board.fleet_id, @board.repository, "")}
           >
             Browse the code
           </.link>
@@ -932,7 +932,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           class="workspace-crumbs"
           aria-label="Folders"
         >
-          <.link patch={Keyfleet.Code.files_path(@files.fleet_id, "")}>Code</.link>
+          <.link patch={Keyfleet.Code.files_path(@files.fleet_id, @files.repository, "")}>Code</.link>
           <%= for crumb <- @files.crumbs do %>
             <span aria-hidden="true">/</span>
             <.link patch={crumb.link}>{crumb.name}</.link>
@@ -951,7 +951,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           </p>
           <p :if={@files.listing == :removed} id="workspace-files-removed">
             A later change removed this from the code.
-            <.link patch={Keyfleet.Code.files_path(@files.fleet_id, "")}>Open the code</.link>
+            <.link patch={Keyfleet.Code.files_path(@files.fleet_id, @files.repository, "")}>Open the code</.link>
           </p>
           <.folder
             :if={match?({:folder, _}, @files.listing)}

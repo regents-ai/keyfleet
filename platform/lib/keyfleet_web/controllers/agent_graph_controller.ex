@@ -72,7 +72,8 @@ defmodule KeyfleetWeb.AgentGraphController do
            ),
          {:ok, notebooks} <- Graph.pins(fleet_id, :docs, opts),
          {:ok, code} <- Graph.pins(fleet_id, :code, opts),
-         {:ok, space} <- space(fleet_id) do
+         {:ok, space} <- space(fleet_id),
+         {:ok, repository} <- Code.repository(fleet_id, Projects.general()) do
       json(conn, %{
         goals: Enum.map(goals.results, &goal(&1, fleet_id)),
         more_goals: goals.more?,
@@ -90,7 +91,7 @@ defmodule KeyfleetWeb.AgentGraphController do
               path: pin.target,
               title: pin.title,
               folder: pin.folder?,
-              url: Endpoint.url() <> Code.files_path(fleet_id, pin.target)
+              url: Endpoint.url() <> Code.files_path(fleet_id, repository, pin.target)
             }
           end
       })

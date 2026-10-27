@@ -20,8 +20,9 @@ defmodule KeyfleetWeb.RouteCatalog do
   @number ~r/\A[1-9][0-9]{0,17}\z/
   # A poll is named by its id, a UUID in lower case.
   @poll_id ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/
-  # A repository of a fleet's code is named by the fleet's id.
-  @repository ~r/\A[a-z0-9_]{1,64}\z/
+  # A project's repository is named by its fleet's id, then, for any project
+  # but `general`, a hyphen and the project's name.
+  @repository ~r/\A[a-z0-9_]{1,64}(-[a-z0-9]+)*\z/
   # A commit is named by its full hash, as git writes it.
   @commit ~r/\A([0-9a-f]{40}|[0-9a-f]{64})\z/
 

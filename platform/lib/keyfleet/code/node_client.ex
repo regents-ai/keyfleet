@@ -1,7 +1,7 @@
 defmodule Keyfleet.Code.NodeClient do
   @moduledoc """
   What this site asks of the code store outside git itself, under a pass that
-  opens only the one fleet's repository (`Keyfleet.Code.Pass`). Every call is
+  opens only the one repository (`Keyfleet.Code.Pass`). Every call is
   made once: the job that makes it retries the whole job, and a page reads
   afresh when it is opened again.
   """
@@ -10,13 +10,13 @@ defmodule Keyfleet.Code.NodeClient do
   alias Keyfleet.Code.Pass
 
   @doc """
-  Makes the fleet's private repository, or finds the one already made:
+  Makes a project's private repository, or finds the one already made:
   `{:ok, owner}`, the owner the store keeps it under, or `{:error, reason}`.
   """
-  def create_repository(fleet_id) do
+  def create_repository(repository) do
     request(
-      Pass.create(fleet_id),
-      [method: :post, url: "/api/v1/repos", json: %{name: fleet_id, is_public: false}],
+      Pass.create(repository),
+      [method: :post, url: "/api/v1/repos", json: %{name: repository, is_public: false}],
       Code.config()[:node_timeout_ms]
     )
     |> case do
@@ -38,10 +38,10 @@ defmodule Keyfleet.Code.NodeClient do
   folder), `name` and, for a file, `size`; or `{:error, reason}`.
   A folder that isn't there, or a file, holds nothing.
   """
-  def tree(fleet_id, owner, path) do
-    url = Path.join(["/api/v1/repos", segment(owner), segment(fleet_id), "tree", encode(path)])
+  def tree(repository, owner, path) do
+    url = Path.join(["/api/v1/repos", segment(owner), segment(repository), "tree", encode(path)])
 
-    case request(Pass.read(fleet_id), [method: :get, url: url], Code.config()[:page_timeout_ms]) do
+    case request(Pass.read(repository), [method: :get, url: url], Code.config()[:page_timeout_ms]) do
       {:ok, %Req.Response{status: 200, body: %{"entries" => entries}}} when is_list(entries) ->
         {:ok, entries}
 
@@ -57,12 +57,12 @@ defmodule Keyfleet.Code.NodeClient do
   The file at `path` on the default branch now: `{:ok, bytes}`, `{:ok,
   :too_large}` past `file_max_bytes`, `:not_found`, or `{:error, reason}`.
   """
-  def blob(fleet_id, owner, path) do
-    url = Path.join(["/api/v1/repos", segment(owner), segment(fleet_id), "blob", encode(path)])
+  def blob(repository, owner, path) do
+    url = Path.join(["/api/v1/repos", segment(owner), segment(repository), "blob", encode(path)])
     cap = Code.config()[:file_max_bytes]
 
     case request(
-           Pass.read(fleet_id),
+           Pass.read(repository),
            [method: :get, url: url, decode_body: false, into: &read_capped(&1, &2, cap)],
            Code.config()[:page_timeout_ms]
          ) do

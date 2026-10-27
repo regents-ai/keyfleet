@@ -1,9 +1,11 @@
 defmodule Keyfleet.Code do
   @moduledoc """
-  Each fleet's shared code: one private git repository per fleet, kept in
-  Keyfleet's own code store (a Git server on a private address) and reached
-  only through this site, at `https://<host>/<fleet id>.git`
-  (`KeyfleetWeb.Plugs.CodeGateway`).
+  Each fleet's shared code: one private git repository per project
+  (`Keyfleet.Projects.Project`, `repository`), kept in Keyfleet's own code
+  store (a Git server on a private address) and reached only through this
+  site, at `https://<host>/<repository>.git`
+  (`KeyfleetWeb.Plugs.CodeGateway`). A project's repository is made when the
+  project starts (`Keyfleet.Code.Setup`).
 
   Whoever holds one of the fleet's keys, or an agent with an active shard of
   one or a pairing with a holder, may copy it and send changes; a key whose
@@ -15,8 +17,8 @@ defmodule Keyfleet.Code do
   (`end_access/1`, from `Keyfleet.Chain.Scanner`).
 
   The store records every change under the wallet that holds the key, and
-  this site keeps a line for each (`Keyfleet.Code.Push`) for the fleet's
-  workspace to show.
+  this site keeps a line for each (`Keyfleet.Code.Push`), under its project,
+  for the fleet's workspace to show.
   """
   use Ash.Domain
 
@@ -25,56 +27,75 @@ defmodule Keyfleet.Code do
   alias Keyfleet.Code.{NodeClient, Push, RecordsDownError, Repository, Setup}
   alias Keyfleet.Graph.Checks.KeyActor
   alias Keyfleet.Graph.Errors.{EditsRestrictedError, NotKeyHolderError}
-  alias Keyfleet.Keys
+  alias Keyfleet.{Keys, Projects}
 
   resources do
     resource Repository do
-      define :record_repository, action: :record, args: [:fleet_id, :owner]
-      define :get_repository, action: :read, get_by: [:fleet_id], not_found_error?: false
+      define :record_repository, action: :record, args: [:repository, :owner]
+      define :get_repository, action: :read, get_by: [:repository], not_found_error?: false
     end
 
     resource Push do
-      define :recent_pushes, action: :recent, args: [:fleet_id]
-      define :pushes_of_commit, action: :of_commit, args: [:fleet_id, :head]
+      define :recent_pushes, action: :recent, args: [:fleet_id, :project]
+      define :pushes_of_commit, action: :of_commit, args: [:fleet_id, :project, :head]
     end
   end
 
   @doc "The code store settings: `config :keyfleet, :code`."
   def config, do: Application.fetch_env!(:keyfleet, :code)
 
+  @doc "The project's repository, as `{:ok, repository}`, or `{:ok, nil}` for no such project."
+  def repository(fleet_id, project) do
+    with {:ok, found} <- Projects.project(fleet_id, project, actor: %System{}),
+         do: {:ok, found && found.repository}
+  end
+
   @doc """
-  The address a person's git copies the fleet's code from. It carries a user
-  name, which the site ignores, so git asks only for the password.
+  The fleet a repository's name belongs to, `{:ok, fleet_id}`: the name is
+  its fleet's id, then, for any project but `general`, a hyphen and the
+  project's name (`Keyfleet.Projects.Changes.Room`); fleet ids hold no
+  hyphen. `:error` for a name no project's repository could have.
   """
-  def clone_url(fleet_id) do
+  def repository_fleet(repository) do
+    case Regex.run(~r/\A([a-z0-9_]{1,64})(?:-[a-z0-9]+)*\z/, repository) do
+      [_whole, fleet_id] -> {:ok, fleet_id}
+      nil -> :error
+    end
+  end
+
+  @doc """
+  The address a person's git copies a project's repository from. It carries
+  a user name, which the site ignores, so git asks only for the password.
+  """
+  def clone_url(repository) do
     %URI{
       scheme: "https",
       userinfo: "holder",
       host: config()[:host],
       port: config()[:public_port],
-      path: "/#{fleet_id}.git"
+      path: "/#{repository}.git"
     }
     |> URI.to_string()
   end
 
   @doc """
-  The path of one commit in the fleet's code on this site: the fleet's
-  address, its repository (named by the fleet, as git copies it from
-  `/<fleet id>.git`) and the commit's full hash. A workspace cites a commit by
-  this path on the site's own address, never by a short hash or a branch,
-  which move or collide.
+  The path of one commit on this site: the fleet's address, the project's
+  repository (as git copies it from `/<repository>.git`) and the commit's
+  full hash. A workspace cites a commit by this path on the site's own
+  address, never by a short hash or a branch, which move or collide.
   """
-  def commit_path(fleet_id, hash),
-    do: "#{Keyfleet.Fleets.path(fleet_id)}/code/#{fleet_id}/commits/#{hash}"
+  def commit_path(fleet_id, repository, hash),
+    do: "#{Keyfleet.Fleets.path(fleet_id)}/code/#{repository}/commits/#{hash}"
 
   @doc """
-  The path of a file or folder in the fleet's code on this site, `""` for
-  the top folder, as it stands on the default branch now.
+  The path of a file or folder in a project's repository on this site, `""`
+  for the top folder, as it stands on the default branch now.
   """
-  def files_path(fleet_id, ""), do: "#{Keyfleet.Fleets.path(fleet_id)}/code/#{fleet_id}/files"
+  def files_path(fleet_id, repository, ""),
+    do: "#{Keyfleet.Fleets.path(fleet_id)}/code/#{repository}/files"
 
-  def files_path(fleet_id, path),
-    do: files_path(fleet_id, "") <> "?" <> URI.encode_query(path: path)
+  def files_path(fleet_id, repository, path),
+    do: files_path(fleet_id, repository, "") <> "?" <> URI.encode_query(path: path)
 
   @doc """
   Whether `path` names a place in the code: names joined by `/`, none of
@@ -91,9 +112,9 @@ defmodule Keyfleet.Code do
   while the fleet has no repository, and nothing for a folder that isn't
   there or a file. `{:error, error}` when the store can't be read.
   """
-  def folder(fleet_id, path) do
-    with {:ok, owner} when is_binary(owner) <- stored_owner(fleet_id),
-         {:ok, entries} <- NodeClient.tree(fleet_id, owner, path) do
+  def folder(repository, path) do
+    with {:ok, owner} when is_binary(owner) <- stored_owner(repository),
+         {:ok, entries} <- NodeClient.tree(repository, owner, path) do
       {:ok,
        entries
        |> Enum.map(&%{name: &1["name"], folder?: &1["type"] == "tree", size: &1["size"]})
@@ -109,19 +130,19 @@ defmodule Keyfleet.Code do
   :too_large}` past `file_max_bytes`, `:not_found` (no repository yet
   included), or `{:error, error}` when the store can't be read.
   """
-  def file(fleet_id, path) do
-    case stored_owner(fleet_id) do
+  def file(repository, path) do
+    case stored_owner(repository) do
       {:ok, nil} -> :not_found
-      {:ok, owner} -> NodeClient.blob(fleet_id, owner, path)
+      {:ok, owner} -> NodeClient.blob(repository, owner, path)
       {:error, error} -> {:error, error}
     end
   end
 
   # A page reads the code only once the repository is made: it never asks
   # for one to be made.
-  defp stored_owner(fleet_id) do
-    with {:ok, repository} <- get_repository(fleet_id, actor: %System{}),
-         do: {:ok, repository && repository.owner}
+  defp stored_owner(repository) do
+    with {:ok, made} <- get_repository(repository, actor: %System{}),
+         do: {:ok, made && made.owner}
   end
 
   @doc "Whether `hash` is a commit's full hash, as git writes it: 40 or 64 lowercase hex digits."
@@ -192,18 +213,18 @@ defmodule Keyfleet.Code do
   def end_access(fleet_id), do: AccessCache.end_fleet(:code, fleet_id)
 
   @doc """
-  The owner the store keeps the fleet's repository under, as `{:ok, owner}`;
-  while it is being made, which the first ask queues, `{:setting_up,
-  seconds}` until the next try or `:setup_restarted` (`Setup.queue/1`); or
-  `{:error, error}` when it can't be read.
+  The owner the store keeps the repository under, as `{:ok, owner}`; while
+  it is being made, `{:setting_up, seconds}` until the next try; once its
+  setup gave up, which this ask queues again (`Setup.queue/1`),
+  `:setup_restarted`; or `{:error, error}` when it can't be read.
   """
-  def owner(fleet_id) do
-    case get_repository(fleet_id, actor: %System{}) do
+  def owner(repository) do
+    case get_repository(repository, actor: %System{}) do
       {:ok, %Repository{owner: owner}} ->
         {:ok, owner}
 
       {:ok, nil} ->
-        Setup.queue(fleet_id)
+        Setup.queue(repository)
 
       {:error, error} ->
         {:error, error}
@@ -211,20 +232,26 @@ defmodule Keyfleet.Code do
   end
 
   @doc """
-  Records the branches and tags `holder` moved in one push, each `%{ref:,
-  head:}`, and tells the fleet's open pages. The store has already taken the
-  push and git has its answer, so a push that can't be recorded is saved with
-  the site's errors (`Keyfleet.Code.RecordsDownError`) and never raises.
+  Records the branches and tags `holder` moved in one push to the project's
+  repository, each `%{ref:, head:}`, and tells the fleet's open pages. The
+  store has already taken the push and git has its answer, so a push that
+  can't be recorded is saved with the site's errors
+  (`Keyfleet.Code.RecordsDownError`) and never raises.
   """
-  def record_pushes(_fleet_id, _holder, []), do: :ok
+  def record_pushes(_fleet_id, _project, _holder, []), do: :ok
 
-  def record_pushes(fleet_id, holder, updates) do
+  def record_pushes(fleet_id, project, holder, updates) do
     updates
     |> Enum.map(
       &Map.merge(
         &1,
         Map.merge(
-          %{fleet_id: fleet_id, token_id: holder.token_id, wallet: holder.wallet},
+          %{
+            fleet_id: fleet_id,
+            project: project,
+            token_id: holder.token_id,
+            wallet: holder.wallet
+          },
           Map.take(holder, [:acting_agent_wallet, :beneficiary_privy_user_id, :agent_pairing_id])
         )
       )
@@ -240,7 +267,7 @@ defmodule Keyfleet.Code do
 
       %Ash.BulkResult{errors: errors} ->
         RecordsDownError.report(
-          "A push to #{fleet_id} could not be recorded: " <>
+          "A push to #{fleet_id}'s #{project} could not be recorded: " <>
             Enum.map_join(errors, ", ", &inspect(&1.__struct__))
         )
 

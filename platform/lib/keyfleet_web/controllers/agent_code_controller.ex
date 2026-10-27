@@ -1,25 +1,29 @@
 defmodule KeyfleetWeb.AgentCodeController do
   @moduledoc """
-  The changes sent to the fleet's code lately, each with the address a
+  The changes sent lately to `general`'s repository, each with the address a
   workspace cites its commit by. Git itself reaches the code through
   `KeyfleetWeb.Plugs.CodeGateway`.
   """
   use KeyfleetWeb, :controller
 
   alias Keyfleet.Actors.System
-  alias Keyfleet.{Code, Fleets}
+  alias Keyfleet.{Code, Fleets, Projects}
   alias KeyfleetWeb.{Refusal, WorkspacePage}
 
   def pushes(conn, %{"fleet_id" => fleet_id}) do
+    general = Projects.general()
+
     with {:ok, %{}} <- Fleets.get_fleet(fleet_id, actor: %System{}),
-         {:ok, pushes} <- Code.recent_pushes(fleet_id, actor: conn.assigns.agent_actor) do
+         {:ok, pushes} <-
+           Code.recent_pushes(fleet_id, general, actor: conn.assigns.agent_actor),
+         {:ok, repository} <- Code.repository(fleet_id, general) do
       json(conn, %{
         pushes:
           for push <- pushes do
             %{
               ref: push.ref,
               commit: push.head,
-              commit_url: WorkspacePage.commit_url(fleet_id, push.head),
+              commit_url: WorkspacePage.commit_url(fleet_id, repository, push.head),
               token_id: push.token_id,
               pushed_at: push.pushed_at
             }

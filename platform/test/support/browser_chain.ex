@@ -441,13 +441,17 @@ defmodule Keyfleet.BrowserChain do
   def item_path(fleet_id, id), do: KeyfleetWeb.WorkspacePage.item_path(fleet_id, id)
 
   @doc """
-  Records that `wallet`, holding Key `key`, sent the fleet's code a change
-  ending at `head`, as the code store's gateway does after git has its answer.
+  Records that `wallet`, holding Key `key`, sent `general`'s repository a
+  change ending at `head`, as the code store's gateway does after git has its
+  answer.
   """
   def push!(fleet_id, key, wallet, head) do
-    Keyfleet.Code.record_pushes(fleet_id, %{token_id: key, wallet: wallet}, [
-      %{ref: "refs/heads/main", head: head}
-    ])
+    Keyfleet.Code.record_pushes(
+      fleet_id,
+      Keyfleet.Projects.general(),
+      %{token_id: key, wallet: wallet},
+      [%{ref: "refs/heads/main", head: head}]
+    )
 
     :ok
   end

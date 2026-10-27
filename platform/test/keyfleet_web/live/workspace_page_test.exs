@@ -12,6 +12,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   alias Keyfleet.Rooms
 
   @fleet "fibonacci_syndicate"
+  # `general`'s repository is named after its fleet.
+  @repository @fleet
   @other "fibonacci_cascade"
   # A fleet whose name sorts after this one's.
   @later "fleet_tech_classic"
@@ -619,7 +621,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       link(@fleet, finding, goal, "supports")
 
       hash = String.duplicate("ab", 20)
-      commit = KeyfleetWeb.WorkspacePage.commit_url(@fleet, hash)
+      commit = KeyfleetWeb.WorkspacePage.commit_url(@fleet, @repository, hash)
 
       result =
         Keyfleet.Notebooks.result_url(
@@ -655,7 +657,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-goal-code-rows [data-item="#{code}"] a[href="#{Keyfleet.Code.commit_path(@fleet, hash)}"]),
+               ~s(#workspace-goal-code-rows [data-item="#{code}"] a[href="#{Keyfleet.Code.commit_path(@fleet, @repository, hash)}"]),
                "The price page"
              )
 
@@ -740,13 +742,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
           "progress" => "doing",
           "reviewer_key" => 4,
           "acceptance_criteria" => ["At most one notice a minute"],
-          "commit_ref" => KeyfleetWeb.WorkspacePage.commit_url(@fleet, hash),
+          "commit_ref" => KeyfleetWeb.WorkspacePage.commit_url(@fleet, @repository, hash),
           "notebook_ref" => Keyfleet.Notebooks.url(@fleet, notebook)
         })
 
       submit(@fleet, task, "https://example.com/result", by: 9)
       review = review(@fleet, task, "accept", by: 4, reproduction: "passed")
-      commit_path = Keyfleet.Code.commit_path(@fleet, hash)
+      commit_path = Keyfleet.Code.commit_path(@fleet, @repository, hash)
       open = "/fleets/#{@fleet}/notebooks/open?" <> URI.encode_query(to: notebook)
 
       {:ok, item, _html} = live(conn, item_path(task))
@@ -870,18 +872,18 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-goal-folder[href="#{Keyfleet.Code.files_path(@fleet, folder)}"]),
+               ~s(#workspace-goal-folder[href="#{Keyfleet.Code.files_path(@fleet, @repository, folder)}"]),
                folder
              )
 
       assert has_element?(
                view,
-               ~s(#workspace-goal-code-rows [data-file="plan.md"] a[href="#{Keyfleet.Code.files_path(@fleet, folder <> "/plan.md")}"])
+               ~s(#workspace-goal-code-rows [data-file="plan.md"] a[href="#{Keyfleet.Code.files_path(@fleet, @repository, folder <> "/plan.md")}"])
              )
 
       file = view
       file |> element(~s(#workspace-goal-code-rows [data-file="plan.md"] a)) |> render_click()
-      assert_patch(file, Keyfleet.Code.files_path(@fleet, folder <> "/plan.md"))
+      assert_patch(file, Keyfleet.Code.files_path(@fleet, @repository, folder <> "/plan.md"))
 
       assert text(file, "#workspace-file") == "# Plan\nSell one Key.\n"
 
@@ -900,7 +902,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
     test "a goal's page says so when the code can't be read", %{conn: conn} do
       goal = create(@fleet, "goal", %{"title" => "Revenue", "outcome" => "o", "status" => "open"})
-      Keyfleet.Code.record_repository!(@fleet, "z6MkOwner", actor: %Actors.System{})
+      Keyfleet.Code.record_repository!(@repository, "z6MkOwner", actor: %Actors.System{})
       Req.Test.stub(Keyfleet.Code.NodeClient, &Plug.Conn.send_resp(&1, 503, ""))
 
       {:ok, view, _html} = live(conn, item_path(goal))
@@ -969,7 +971,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         create(@fleet, "task", %{
           "title" => "Price check",
           "progress" => "doing",
-          "commit_ref" => KeyfleetWeb.WorkspacePage.commit_url(@fleet, hash),
+          "commit_ref" => KeyfleetWeb.WorkspacePage.commit_url(@fleet, @repository, hash),
           "notebook_ref" => Keyfleet.Notebooks.notebook_url(@fleet, project, notebook),
           "result_ref" => result
         })
@@ -1007,7 +1009,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-goal-code-rows [data-item="#{task}"] a[href="#{Keyfleet.Code.commit_path(@fleet, hash)}"]),
+               ~s(#workspace-goal-code-rows [data-item="#{task}"] a[href="#{Keyfleet.Code.commit_path(@fleet, @repository, hash)}"]),
                "Price check"
              )
     end
@@ -1109,11 +1111,11 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
     test "opens at the top folder, folders first, with how to copy it and what was sent lately",
          %{conn: conn} do
-      Keyfleet.Code.record_pushes(@fleet, %{token_id: 1, wallet: @holder}, [
+      Keyfleet.Code.record_pushes(@fleet, "general", %{token_id: 1, wallet: @holder}, [
         %{ref: "refs/heads/main", head: String.duplicate("5", 40)}
       ])
 
-      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, ""))
+      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, @repository, ""))
 
       assert rows(view, "#workspace-file-rows") == [
                ["Folder", "goals"],
@@ -1122,20 +1124,24 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(view, "#workspace-files-page h2", "Code")
       refute has_element?(view, "#workspace-files-crumbs")
-      assert has_element?(view, "#workspace-files-clone", Keyfleet.Code.clone_url(@fleet))
+      assert has_element?(view, "#workspace-files-clone", Keyfleet.Code.clone_url(@repository))
       assert has_element?(view, "#workspace-files-pushes", "Key 1 sent changes to main")
 
       view |> element(~s(#workspace-file-rows [data-file="goals"] a)) |> render_click()
-      assert_patch(view, Keyfleet.Code.files_path(@fleet, "goals"))
+      assert_patch(view, Keyfleet.Code.files_path(@fleet, @repository, "goals"))
       assert rows(view, "#workspace-file-rows") == [["Folder", "goal-1"]]
     end
 
     test "names a file that isn't text, or is too large, without showing it", %{conn: conn} do
-      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, "goals/goal-1/data.bin"))
+      {:ok, view, _html} =
+        live(conn, Keyfleet.Code.files_path(@fleet, @repository, "goals/goal-1/data.bin"))
+
       assert has_element?(view, "#workspace-file-not-text")
       refute has_element?(view, "#workspace-file")
 
-      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, "goals/goal-1/big.txt"))
+      {:ok, view, _html} =
+        live(conn, Keyfleet.Code.files_path(@fleet, @repository, "goals/goal-1/big.txt"))
+
       assert has_element?(view, "#workspace-file-too-large")
       refute has_element?(view, "#workspace-file")
     end
@@ -1144,7 +1150,11 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
          %{conn: conn} do
       for path <- ["goals/goal-2", "goals//goal-1", "goals/../README.md", "/README.md", ""] do
         assert_raise KeyfleetWeb.NotFoundError, fn ->
-          live(conn, Keyfleet.Code.files_path(@fleet, "") <> "?" <> URI.encode_query(path: path))
+          live(
+            conn,
+            Keyfleet.Code.files_path(@fleet, @repository, "") <>
+              "?" <> URI.encode_query(path: path)
+          )
         end
       end
 
@@ -1155,7 +1165,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
     test "a file a later change removed says so, and leads back to the top of the code",
          %{conn: conn} do
-      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, "README.md"))
+      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, @repository, "README.md"))
       assert has_element?(view, "#workspace-file")
 
       serve_code(%{"goals/goal-1/notes/one.md" => "one"})
@@ -1165,13 +1175,13 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       refute has_element?(view, "#workspace-file")
 
       view |> element("#workspace-files-removed a") |> render_click()
-      assert_patch(view, Keyfleet.Code.files_path(@fleet, ""))
+      assert_patch(view, Keyfleet.Code.files_path(@fleet, @repository, ""))
       assert rows(view, "#workspace-file-rows") == [["Folder", "goals"]]
     end
 
     test "says so when the code can't be read", %{conn: conn} do
       Req.Test.stub(Keyfleet.Code.NodeClient, &Plug.Conn.send_resp(&1, 503, ""))
-      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, "README.md"))
+      {:ok, view, _html} = live(conn, Keyfleet.Code.files_path(@fleet, @repository, "README.md"))
 
       assert has_element?(
                view,
@@ -1182,7 +1192,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
     test "shows only that it is members' code to anyone else, and offers Sign in to a visitor",
          %{visitor: visitor} do
-      path = Keyfleet.Code.files_path(@fleet, "README.md")
+      path = Keyfleet.Code.files_path(@fleet, @repository, "README.md")
 
       {:ok, signed_out, _html} = live(visitor, path)
       assert has_element?(signed_out, "#workspace-files-members-only")
@@ -1350,7 +1360,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                ["File", "README.md", "5 B"]
              ]
 
-      assert text(view, "#workspace-code-address") == Keyfleet.Code.clone_url(@fleet)
+      assert text(view, "#workspace-code-address") == Keyfleet.Code.clone_url(@repository)
       assert has_element?(view, ~s(#workspace-code-address-copy))
       assert has_element?(view, "#code-pushes-empty")
       assert has_element?(view, "#workspace-code-files")
@@ -1367,11 +1377,11 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       assert has_element?(
                view,
-               ~s(#workspace-code-pins-rows [data-pin="README.md"] a[href="#{Keyfleet.Code.files_path(@fleet, "README.md")}"])
+               ~s(#workspace-code-pins-rows [data-pin="README.md"] a[href="#{Keyfleet.Code.files_path(@fleet, @repository, "README.md")}"])
              )
 
       # The code's own pages show the same pin, and lift it.
-      {:ok, files, _html} = live(conn, Keyfleet.Code.files_path(@fleet, ""))
+      {:ok, files, _html} = live(conn, Keyfleet.Code.files_path(@fleet, @repository, ""))
       pin = ~s(#workspace-file-rows [data-file="README.md"] button)
       assert has_element?(files, pin <> ~s([aria-pressed="true"]))
       files |> element(pin) |> render_click()
@@ -1388,7 +1398,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       assert has_element?(view, "#workspace-code-empty")
       refute has_element?(view, "#workspace-code-files")
 
-      Keyfleet.Code.record_pushes(@fleet, %{token_id: 1, wallet: @holder}, [
+      Keyfleet.Code.record_pushes(@fleet, "general", %{token_id: 1, wallet: @holder}, [
         %{ref: "refs/heads/draft", head: String.duplicate("6", 40)}
       ])
 
@@ -1483,7 +1493,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
                )
       end
 
-      {:ok, files, _html} = live(conn, Keyfleet.Code.files_path(@fleet, ""))
+      {:ok, files, _html} = live(conn, Keyfleet.Code.files_path(@fleet, @repository, ""))
 
       assert has_element?(
                files,
@@ -1911,6 +1921,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
 
       Keyfleet.Code.record_pushes(
         @fleet,
+        "general",
         %{token_id: 1, wallet: @holder, acting_agent_wallet: agent},
         [%{ref: "refs/heads/main", head: hash}]
       )
@@ -1918,7 +1929,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
       {:ok, board, _html} = live(conn, @board <> "?place=code")
       assert has_element?(board, "#code-pushes", "Mate (Key 1) sent changes to main")
 
-      {:ok, commit, _html} = live(conn, Keyfleet.Code.commit_path(@fleet, hash))
+      {:ok, commit, _html} = live(conn, Keyfleet.Code.commit_path(@fleet, @repository, hash))
       assert has_element?(commit, "#workspace-commit-pushes", "Mate (Key 1) sent changes to main")
     end
 
@@ -1927,7 +1938,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     test "a commit page someone can't read still names the commit, and offers Sign in to a visitor",
          %{visitor: visitor} do
       hash = String.duplicate("5", 40)
-      path = Keyfleet.Code.commit_path(@fleet, hash)
+      path = Keyfleet.Code.commit_path(@fleet, @repository, hash)
 
       {:ok, signed_out, _html} = live(visitor, path)
       assert has_element?(signed_out, "#workspace-commit-page code", hash)
@@ -1983,7 +1994,7 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
   # The fleet's repository, holding `files` by their paths, answered as the
   # code store answers: a folder's names, or one file's bytes.
   defp store!(files) do
-    Keyfleet.Code.record_repository!(@fleet, "z6MkOwner", actor: %Actors.System{})
+    Keyfleet.Code.record_repository!(@repository, "z6MkOwner", actor: %Actors.System{})
     serve_code(files)
   end
 

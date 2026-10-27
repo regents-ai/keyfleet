@@ -133,7 +133,7 @@ integrity check.`; then, against the repositories `check` listed,
 
 ```
 identity key: present
-<owner>/<fleet id>.git ok <refs>
+<owner>/<repository>.git ok <refs>
 repositories: <n>
 The code store's key and every live repository came back.
 ```

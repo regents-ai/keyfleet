@@ -504,11 +504,9 @@ defmodule Keyfleet.MembershipCheck do
     for fleet_id <- [@fleet, @other_fleet] do
       WorkspaceFixtures.open_log(fleet_id)
 
-      fleet_id
-      |> Projects.project!(Projects.general(), actor: %Actors.System{})
-      |> Projects.record_space!("proj-" <> fleet_id, actor: %Actors.System{})
-
-      Code.record_repository!(fleet_id, @store_owner, actor: %Actors.System{})
+      general = Projects.project!(fleet_id, Projects.general(), actor: %Actors.System{})
+      Projects.record_space!(general, "proj-" <> fleet_id, actor: %Actors.System{})
+      Code.record_repository!(general.repository, @store_owner, actor: %Actors.System{})
     end
   end
 

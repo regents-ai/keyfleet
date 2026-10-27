@@ -51,6 +51,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     on_exit(fn -> Application.put_env(:keyfleet, :code, code) end)
     Application.put_env(:keyfleet, :code, Keyword.put(code, :node, store))
 
+    # Each fleet's `general` repository, named after the fleet.
     Code.record_repository!(@fleet, @owner, actor: %System{})
     Code.record_repository!(@other_fleet, @owner, actor: %System{})
 
@@ -141,12 +142,12 @@ defmodule KeyfleetWeb.CodeGatewayTest do
 
   # Costly failure: a person opens the address their workspace shows in a
   # browser and is told there is no code there.
-  test "a browser opening a fleet's address is sent to the fleet's code on the site" do
+  test "a browser opening a repository's address is sent to its code on the site" do
     opened = git(:get, "/#{@fleet}.git", nil)
     assert opened.status == 302
 
     assert get_resp_header(opened, "location") ==
-             [KeyfleetWeb.Endpoint.url() <> Code.files_path(@fleet, "")]
+             [KeyfleetWeb.Endpoint.url() <> Code.files_path(@fleet, @fleet, "")]
 
     assert git(:get, "/fleet_nobody_made.git", nil).status == 404
     assert git(:get, "/#{@fleet}", nil).status == 404
@@ -182,8 +183,8 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     assert git(:get, "/#{@fleet}.git/info/refs?service=git-receive-pack", password).status == 200
   end
 
-  # Costly failure: a fleet's code is never set up, or set up twice.
-  test "the first ask sets the fleet's repository up, and setting it up again is safe", c do
+  # Costly failure: a repository is never set up, or set up twice.
+  test "an ask for a repository not made yet sets it up, and setting it up again is safe", c do
     fleet = "fleet_tech_classic"
     ChainHelpers.seed_cursor!(fleet)
     epoch!(fleet, 1, 1, @holder_wallet)
@@ -191,7 +192,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     {:ok, %{password: password}} =
       CodePassword.for_person(c.holder, signed_in!(c.holder), fleet)
 
-    assert_enqueued(worker: Setup, args: %{fleet_id: fleet})
+    assert_enqueued(worker: Setup, args: %{repository: fleet})
     waiting = git(:get, "/#{fleet}.git/info/refs?service=git-upload-pack", password)
     assert waiting.status == 503
 
@@ -202,8 +203,8 @@ defmodule KeyfleetWeb.CodeGatewayTest do
       Req.Test.json(conn, %{"name" => fleet, "owner_did" => @owner})
     end)
 
-    assert :ok = perform_job(Setup, %{fleet_id: fleet})
-    assert :ok = perform_job(Setup, %{fleet_id: fleet})
+    assert :ok = perform_job(Setup, %{repository: fleet})
+    assert :ok = perform_job(Setup, %{repository: fleet})
     assert_received {:create, %{"scope" => "create", "fleet" => ^fleet}, %{"name" => ^fleet}}
     refute_received {:create, _claims, _body}
 
@@ -377,7 +378,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
 
     assert Keyfleet.Repo.exists?(
              from(error in ErrorTracker.Error,
-               where: like(error.reason, ^"A push to #{@fleet} could not be recorded%")
+               where: like(error.reason, ^"A push to #{@fleet}'s general could not be recorded%")
              )
            )
   end

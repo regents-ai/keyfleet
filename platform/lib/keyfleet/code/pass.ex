@@ -4,7 +4,8 @@ defmodule Keyfleet.Code.Pass do
   Bearer`: an ES256 JWT signed with the notebook hubs' keys
   (`Keyfleet.Notebooks.Pass.sign/2`), for the audience `keyfleet-code`.
 
-  `fleet` names the one repository it opens and `scope` what it allows:
+  `fleet` names the one repository it opens, a project's (`Keyfleet.Projects.Project`,
+  `repository`), and `scope` what it allows:
   `push` (copy and send changes, for the key holder whose wallet is `sub`, as
   `did:pkh:eip155:8453:<wallet>`, the key's chain), `read` (copy) or `create` (make the
   repository), the last two with `sub` `keyfleet`. It lasts
@@ -16,18 +17,18 @@ defmodule Keyfleet.Code.Pass do
 
   @audience "keyfleet-code"
 
-  @doc "A pass to send changes to the fleet's code as the holder of `wallet`."
-  def push(fleet_id, wallet), do: mint(fleet_id, "push", "did:pkh:eip155:8453:" <> wallet)
+  @doc "A pass to send changes to the repository as the holder of `wallet`."
+  def push(repository, wallet), do: mint(repository, "push", "did:pkh:eip155:8453:" <> wallet)
 
-  @doc "A pass to copy the fleet's code, for a key whose edits are restricted."
-  def read(fleet_id), do: mint(fleet_id, "read", "keyfleet")
+  @doc "A pass to copy the repository, for a key whose edits are restricted."
+  def read(repository), do: mint(repository, "read", "keyfleet")
 
-  @doc "A pass to make the fleet's repository."
-  def create(fleet_id), do: mint(fleet_id, "create", "keyfleet")
+  @doc "A pass to make the repository."
+  def create(repository), do: mint(repository, "create", "keyfleet")
 
-  defp mint(fleet_id, scope, subject) do
+  defp mint(repository, scope, subject) do
     Pass.sign(
-      %{"aud" => @audience, "fleet" => fleet_id, "scope" => scope, "sub" => subject},
+      %{"aud" => @audience, "fleet" => repository, "scope" => scope, "sub" => subject},
       Code.config()[:pass_ttl_seconds]
     )
   end
