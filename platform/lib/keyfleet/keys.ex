@@ -113,6 +113,10 @@ defmodule Keyfleet.Keys do
     resource Keyfleet.Keys.PostingKey do
       define :choose_posting_key, action: :choose, args: [:fleet_id, :token_id]
       define :posting_key, action: :in_fleet, args: [:fleet_id], not_found_error?: false
+
+      define :posting_keys_of_accounts,
+        action: :of_accounts,
+        args: [:fleet_id, :human_account_ids]
     end
 
     resource Keyfleet.Keys.EditsRestriction do
@@ -486,12 +490,18 @@ defmodule Keyfleet.Keys do
   end
 
   @doc """
-  How many of the fleet's keys the holder of each of `token_ids` holds now,
-  as `%{token_id => count}`; a key nobody holds yet is left out.
+  The holder of each of `token_ids` today and the Key they write as, as
+  `%{token_id => %{holder: holder, face: token_id, owner: wallet, owned:
+  count}}`; a key nobody holds yet is left out. A holder is a Regent account
+  with every address it links, or an address no account links, as `holders/4`
+  counts them. `face` is the key they chose to write as while their wallets
+  hold it (`Keyfleet.Keys.PostingKey`), else the highest-ranked key their
+  wallets hold, as `identity/2` picks it; `owner` is their main address and
+  `owned` how many of the fleet's keys their addresses hold together.
   """
-  def holders_key_counts(_fleet_id, []), do: %{}
+  def faces(_fleet_id, []), do: %{}
 
-  def holders_key_counts(fleet_id, token_ids) do
+  def faces(fleet_id, token_ids) do
     owners =
       Keyfleet.Keys.KeyAttachment
       |> Ash.Query.for_read(:owned_in_fleet, %{fleet_id: fleet_id, token_ids: token_ids})
@@ -499,12 +509,82 @@ defmodule Keyfleet.Keys do
       |> Ash.read!()
       |> Map.new(&{&1.token_id, &1.owner_wallet})
 
-    counts =
-      fleet_id
-      |> keys_held_in_fleet!(owners |> Map.values() |> Enum.uniq())
-      |> Enum.frequencies_by(& &1.owner_wallet)
+    linked = linked_to(owners |> Map.values() |> Enum.uniq())
+    account_ids = linked |> Map.values() |> Enum.uniq()
+    wallets = account_wallets(account_ids)
+    holder = fn wallet -> linked[wallet] || wallet end
+    addresses = fn holder -> Map.get(wallets, holder, [holder]) end
 
-    Map.new(owners, fn {token_id, wallet} -> {token_id, counts[wallet]} end)
+    held =
+      fleet_id
+      |> keys_held_in_fleet!(
+        owners
+        |> Map.values()
+        |> Enum.map(holder)
+        |> Enum.uniq()
+        |> Enum.flat_map(addresses)
+      )
+      |> Enum.group_by(&holder.(&1.owner_wallet), & &1.token_id)
+
+    chosen = chosen_keys(fleet_id, account_ids)
+    main = main_addresses(account_ids)
+
+    Map.new(owners, fn {token_id, wallet} ->
+      holder = holder.(wallet)
+      keys = Map.get(held, holder, [token_id])
+
+      {token_id,
+       %{
+         holder: holder,
+         face: if(chosen[holder] in keys, do: chosen[holder], else: Enum.min(keys)),
+         owner: main[holder] || wallet,
+         owned: length(keys)
+       }}
+    end)
+  end
+
+  # The account linking each of `wallets`, as `holders/4` counts them; an
+  # address no account links is left out.
+  defp linked_to(wallets) do
+    from(linked in subquery(linked_wallets()),
+      where: linked.wallet in ^wallets,
+      select: {linked.wallet, linked.account_id}
+    )
+    # Every address a Regent account links is public, as in holders/4.
+    |> Keyfleet.Repo.all()
+    |> Map.new()
+  end
+
+  # Every address each of `account_ids` links, as `holders/4` counts them.
+  defp account_wallets([]), do: %{}
+
+  defp account_wallets(account_ids) do
+    from(linked in subquery(linked_wallets()),
+      where: linked.account_id in ^account_ids,
+      select: {linked.account_id, linked.wallet}
+    )
+    # Every address a Regent account links is public, as in holders/4.
+    |> Keyfleet.Repo.all()
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+  end
+
+  # The key each of `account_ids` chose to write as in the fleet. What a
+  # person writes shows it beside their words, so it is no secret.
+  defp chosen_keys(_fleet_id, []), do: %{}
+
+  defp chosen_keys(fleet_id, account_ids) do
+    fleet_id
+    |> posting_keys_of_accounts!(account_ids, actor: %Keyfleet.Actors.System{})
+    |> Map.new(&{&1.human_account_id, &1.token_id})
+  end
+
+  # The main address of each of `account_ids`, as the Member List names them.
+  defp main_addresses([]), do: %{}
+
+  defp main_addresses(account_ids) do
+    account_ids
+    |> Keyfleet.Accounts.accounts_by_ids!(actor: %Keyfleet.Actors.System{})
+    |> Map.new(&{&1.id, &1.wallet_address && String.downcase(&1.wallet_address)})
   end
 
   # The fleet's keys with their owners today, as `:owned_in_fleet` reads them.

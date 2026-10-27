@@ -74,13 +74,18 @@ defmodule Keyfleet.SharedReading do
           "(Keyfleet.Agents.AgentProfile :here_in_fleet, Keyfleet.Agents.CheckIn read policy) " <>
           "and in the open fleet directory; if either policy tightens, this kind changes with it. " <>
           "Its two holder counts are numbers only: how many addresses hold a Key, which the " <>
-          "chain shows anyone, and how many of them acted in the last hour, naming nobody",
+          "chain shows anyone, and how many of them acted in the last hour, naming nobody. " <>
+          "Its faces name the holder of each of the agents' Keys, the Key they write as and " <>
+          "how many Keys they hold (Keyfleet.Keys.faces/2): the chain shows who holds each Key, " <>
+          "every address an account links is public as the Member List shows, and the Key a " <>
+          "person writes as shows beside everything they write",
       # One for each fleet in Keyfleet.Fleets' catalog: a sixth fleet raises
       # it, or its Who's here is refused and shown as not counted.
       keys: 5,
-      # 26,881 bytes measured at its fullest; the rest leaves room for a longer
+      # 26,881 bytes measured at its fullest before faces, which add about
+      # 120 bytes for each of up to 50 Keys; the rest leaves room for a longer
       # picture address in production.
-      bytes: 32_768,
+      bytes: 40_960,
       within: 120
     },
     key_agents: %{
@@ -100,8 +105,9 @@ defmodule Keyfleet.SharedReading do
           "Keyfleet.Rooms.Message read policy, and no workspace changes), " <>
           "Keyfleet.Graph.shown/1 (the :titles read of projects and :open_goals), the fleet's " <>
           "record, and the Keys sold " <>
-          "(Keyfleet.Chain.minted/2), which the chain shows anyone; if any of these tightens, " <>
-          "this kind changes with it",
+          "(Keyfleet.Chain.minted/2), which the chain shows anyone, and the holders of the Keys " <>
+          "in its activity with the Key each writes as (Keyfleet.Keys.faces/2), as open as the " <>
+          "Member List and what they write; if any of these tightens, this kind changes with it",
       # One for each fleet in Keyfleet.Fleets' catalog, like fleet_agents.
       keys: 5,
       # Not yet measured at its fullest: a page of 30 activity items, the

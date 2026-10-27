@@ -81,6 +81,20 @@
   content: "";
 }
 
+/* A disc's name opens its card, as the disc does; a district's name is only a
+   name. The count of the holder's Keys rides raised after the Key. */
+.harbour-sea__tag[data-harbour-ship] {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.harbour-sea__tag sup {
+  color: var(--color-fg-muted);
+  font-size: 0.85em;
+  line-height: 0;
+  text-transform: none;
+}
+
 /* A district's name carries no agent's colour. */
 .harbour-sea__tag[data-harbour-district]::before {
   content: none;
@@ -331,6 +345,20 @@ body.sea-lifted:has(> .harbour-sea) #app-shell {
 .harbour-card__close svg {
   width: 1rem;
   height: 1rem;
+}
+
+.harbour-card__owner {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  margin: 0;
+  padding: var(--space-1) var(--space-3) 0;
+  font: 0.8rem/1.4 var(--font-family-mono);
+}
+
+.harbour-card__owned {
+  margin-inline-start: auto;
+  color: var(--color-fg-muted);
 }
 
 .harbour-card__actions {

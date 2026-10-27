@@ -14,7 +14,10 @@ defmodule Keyfleet.Agents.Here do
       that names its row and the address of its own picture, or nil when it
       set none: a picture made from its wallet is made where it is drawn
       (`Keyfleet.Agents.Avatar.shown/2`), and is ten times the size of the
-      address. The wallet is never written into the page.
+      address. The wallet is never written into the page. Beside them,
+      `faces`: who holds each of their Keys, the Key they write as and how
+      many of the fleet's Keys they hold (`Keyfleet.Keys.faces/2`), for the city's
+      discs.
     * `lines_key/2`: what each agent's check-ins say, by wallet, for the open
       Key.
 
@@ -135,7 +138,15 @@ defmodule Keyfleet.Agents.Here do
         {:error, _failure} -> nil
       end
 
-    {:ok, %{here: count, agents: agents, holders: holders}}
+    keys = for %{key: token_id} <- agents, is_integer(token_id), uniq: true, do: token_id
+
+    {:ok,
+     %{
+       here: count,
+       agents: agents,
+       holders: holders,
+       faces: Keys.faces(fleet_id, keys)
+     }}
   rescue
     # The database not answering raises beneath Ash. It is a read not taken,
     # never a reason for this process, and the site with it, to stop.

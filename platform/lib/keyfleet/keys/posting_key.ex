@@ -6,9 +6,10 @@ defmodule Keyfleet.Keys.PostingKey do
   (`Keyfleet.Keys.identity/2`). A person who has chosen none, or whose chosen
   Key has since left their wallets, writes as the first Key their wallets hold.
 
-  Only its own person sets it and reads it, and only a Key their wallets hold
-  now is chosen (`Keyfleet.Keys.Validations.HeldByPerson`). Choosing again
-  replaces the choice.
+  Only its own person sets it, and only a Key their wallets hold now is
+  chosen (`Keyfleet.Keys.Validations.HeldByPerson`). Choosing again
+  replaces the choice. The choice is no secret: everything the person writes
+  shows it, and so do the city's ships (`Keyfleet.Keys.faces/2`).
   """
   use Ash.Resource,
     domain: Keyfleet.Keys,
@@ -46,11 +47,24 @@ defmodule Keyfleet.Keys.PostingKey do
 
       get? true
     end
+
+    # The choices of several people in a fleet, for the city's ships, which
+    # show the Key each holder writes as.
+    read :of_accounts do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :human_account_ids, {:array, :integer}, allow_nil?: false
+
+      filter expr(fleet_id == ^arg(:fleet_id) and human_account_id in ^arg(:human_account_ids))
+    end
   end
 
   policies do
     policy action([:choose, :in_fleet]) do
       authorize_if actor_attribute_equals(:role, :human)
+    end
+
+    policy action(:of_accounts) do
+      authorize_if actor_attribute_equals(:role, :system)
     end
   end
 

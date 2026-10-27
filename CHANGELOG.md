@@ -5220,3 +5220,21 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   (Sean, 27 Oct: "do 24"), ready for one disc per account. How many the site
   sends is set where it picks them (`KeyfleetWeb.HarbourCrew`). As ash-template
   a728847.
+
+## 2026-10-27 — Swarm city: one disc per holder, wearing the Key they post as
+
+- The city's discs are holders, not Keys: an account with every wallet it
+  links, grouped as the Member List groups them, or a wallet no account links.
+  Up to 24 show, the visitor's own first (Sean, 27 Oct: "it should show the
+  same Key the account chooses to post as"). Each wears the Key its holder
+  posts as (`Keyfleet.Keys.PostingKey`), else their lowest-numbered Key, and
+  flies to the district of their latest action (`Keyfleet.Keys.faces/2`,
+  `KeyfleetWeb.HarbourCrew`).
+- A mouse over a disc names its Key with how many Keys its holder owns raised
+  after it. Pressing the disc or that name opens its card on fleet pages and
+  on the homepage: the holder's address with a copy button, their last few
+  actions, and View for the Key's page. The card can be closed.
+- The workspace's "Keys held" count for an agent is now its holder's,
+  across every wallet of their account.
+- Chain walks group_flow and workspace_motion open the Code place inside the
+  General project, since the Code place only lists pushes inside a project.

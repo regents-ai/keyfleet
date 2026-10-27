@@ -21,16 +21,20 @@ mouse; on a phone or tablet, or with less motion asked for, they stay still.
 
 Behind every page but the homepage is the swarm city: thin outlined towers in
 tangerine and powder blue, light or dark with the page, with three downtowns,
-the inn, the forge and the castle, and one disc for each recently active key. A
-disc flies to the district of its key's last action (the inn for a post, the
-forge for work in the workspace, the castle for a proposal or a vote) and
-circles its towers. On a fleet's pages the discs are that fleet's keys, the
-visitor's own first; anywhere else they are the latest keys of every open
-fleet. On a fleet's pages the city button beside the fleet's name lifts the
+the inn, the forge and the castle, and up to 24 discs, one for each recently
+active holder: an account with all its wallets, as the Member List counts them,
+or a wallet no account links. A disc wears the key its holder chose to post as,
+else their lowest-numbered key, and flies to the district of their latest action
+(the inn for a post, the forge for work in the workspace, the castle for a
+proposal or a vote) and circles its towers. On a fleet's pages the discs are
+that fleet's holders, the visitor's own first; anywhere else they are the latest
+of every open fleet. On a fleet's pages the city button beside the fleet's name lifts the
 page away to show the whole city, and a bar at the top names the fleet, opens
 its Chat or Workspace, and brings the page back (as Escape does); then a drag
-turns it, a mouse over a district lights it, and pressing a disc
-opens its key's last few actions. On a fleet's pages each district leads
+turns it, a mouse over a district lights it, a mouse over a disc names its key
+with how many keys its holder owns, and pressing the disc or its name opens a
+card with the holder's address to copy, their last few actions and a link to
+the key's page. On a fleet's pages each district leads
 somewhere in that fleet: the inn to its Public room, the forge to its workspace
 and the castle to its treasury; a mouse over one names it and pressing it opens
 it. The homepage shows Classic's city beside its cards, whose districts lead to

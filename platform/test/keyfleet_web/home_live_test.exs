@@ -306,7 +306,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
       assert crew(html, "#home-classic-sea") == [7]
     end
 
-    test "takes new ships only from the shared reading, and a ship opens its Key",
+    test "takes new ships only from the shared reading, and a ship opens its card",
          %{conn: conn} do
       proposal!(1, 7)
       read_fleets()
@@ -320,10 +320,16 @@ defmodule KeyfleetWeb.HomeLiveTest do
       FleetNow.read(@classic)
       assert Enum.sort(crew(render(view), "#home-classic-sea")) == [7, 9]
 
-      assert {:error, {:live_redirect, %{to: to}}} =
-               render_hook(view, "open_ship", %{"id" => "#{@classic}:9"})
+      render_hook(view, "open_ship", %{"id" => "#{@classic}:9"})
 
-      assert to == KeyLinks.key_path(@classic, 9)
+      assert has_element?(
+               view,
+               "#harbour-agent a[href='#{KeyLinks.key_path(@classic, 9)}']",
+               "View"
+             )
+
+      render_hook(view, "close_agent", %{})
+      refute has_element?(view, "#harbour-agent")
     end
   end
 

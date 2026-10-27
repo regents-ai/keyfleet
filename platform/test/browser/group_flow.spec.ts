@@ -167,7 +167,7 @@ test("the members read the goal, its notebook, its code and the accepted task on
   await open(page, `${fleetPath}/workspace?place=docs`)
   await expect(page.locator("#workspace-place-docs")).toContainText("Boat count")
 
-  await open(page, `${fleetPath}/workspace?place=code`)
+  await open(page, `${fleetPath}/workspace?place=code&project=general`)
   await expect(page.locator("#code-pushes > li")).toHaveCount(1)
 
   await open(page, call("item_path", [fleet, made.task!]))

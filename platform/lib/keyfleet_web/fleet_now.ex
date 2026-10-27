@@ -10,7 +10,9 @@ defmodule KeyfleetWeb.FleetNow do
       Key history has been read (`Keyfleet.Chain.minted/2`, `fresh?/1`);
     * `feed`: the first page of its activity with no actor
       (`Keyfleet.Activity.page/3`), its items and the cursor for the page
-      after them;
+      after them, and `faces`: who holds each Key that acted in them, the Key
+      they write as and how many Keys they hold (`Keyfleet.Keys.faces/2`), for the city's
+      discs;
     * `trying`: "Trying now", each of its projects by title with the titles
       of its open goals (`KeyfleetWeb.FleetPage.read_trying_now/1`);
     * `goal`: the title of its most recently changed open goal, and
@@ -46,7 +48,7 @@ defmodule KeyfleetWeb.FleetNow do
   use GenServer
 
   alias Keyfleet.{Activity, Chain, Fleets, Graph, Keys, Proposals, Rooms, SharedReading}
-  alias KeyfleetWeb.{FleetPage, PageRead}
+  alias KeyfleetWeb.{FleetPage, HarbourCrew, PageRead}
   alias Phoenix.Socket.Broadcast
 
   @doc "Where the reading of `fleet_id` is held."
@@ -161,6 +163,7 @@ defmodule KeyfleetWeb.FleetNow do
       current?: deployed? and Chain.fresh?(fleet_id),
       minted: if(deployed?, do: minted!(fleet_id), else: 0),
       feed: %{items: items, cursor: cursor},
+      faces: Keys.faces(fleet_id, HarbourCrew.keys(items)),
       trying: FleetPage.read_trying_now(fleet_id),
       goal: goal(fleet_id),
       headline: Activity.headline(fleet_id, now)

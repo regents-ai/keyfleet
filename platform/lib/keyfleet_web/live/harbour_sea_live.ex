@@ -1,15 +1,17 @@
 defmodule KeyfleetWeb.HarbourSeaLive do
   @moduledoc """
   The swarm city behind the product's pages: one disc for each of the most
-  recently active Keys, flying to the district of the Key's last action and
-  circling its towers (`KeyfleetWeb.HarbourCrew`).
+  recently active holders and each holder whose Keys the agents here act as,
+  flying to the district of their last action and circling its towers
+  (`KeyfleetWeb.HarbourCrew`).
 
-  On a fleet's pages the ships are that fleet's Keys; anywhere else they are
-  the latest Keys of every open fleet. The visitor's own Keys come first, then
-  the most recent, sixteen at most. The city takes no presses until the button
-  beside a fleet's name (`lift/1`) lifts the page away; then a drag turns it and
-  pressing a disc opens its card: the Key's last few actions and a link to its
-  profile. Its districts lead to the fleet's Public room, workspace and treasury
+  On a fleet's pages the ships are that fleet's holders, one for each account
+  with all its Keys, showing the Key it writes as; anywhere else they are the
+  latest holders of every open fleet. The visitor's own ship comes first, then
+  the agents' here, then the most recent, twenty-four at most. The city takes
+  no presses until the button beside a fleet's name (`lift/1`) lifts the page
+  away; then a drag turns it, the mouse over a disc names its Key, and pressing
+  the disc or its name opens its card (`agent_card/1`). Its districts lead to the fleet's Public room, workspace and treasury
   (`HarbourCrew.districts/1`), and a bar at the top names the fleet, brings the
   page back (as Escape does) and opens its Chat or Workspace.
 
@@ -20,7 +22,8 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   page itself would not.
 
   A fleet's ships are drawn from what every visitor who isn't a member sees
-  alike, `KeyfleetWeb.FleetNow`, read once for every open page. Only a
+  alike, `KeyfleetWeb.FleetNow` and `Keyfleet.Agents.Here`, read once for every
+  open page. Only a
   member's ships are read as the visitor, since a member sees more (rooms
   other than the Public room, every item's title). Which ships are the visitor's own
   is read as the visitor, when the fleet comes on show and when its Keys
@@ -31,6 +34,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
 
   alias Keyfleet.Access
   alias Keyfleet.Activity
+  alias Keyfleet.Agents.Here
   alias Keyfleet.Fleets
   alias Keyfleet.Graph
   alias Keyfleet.Keys
@@ -39,7 +43,6 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   alias Keyfleet.SharedReading
 
   alias KeyfleetWeb.{
-    ActivityLines,
     Endpoint,
     FleetNow,
     HarbourCrew,
@@ -48,6 +51,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
     Read,
     RouteCatalog,
     Router,
+    SharedFigures,
     ShellLive
   }
 
@@ -147,12 +151,16 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   # A new reading of a fleet the visitor isn't a member of redraws its ships.
-  # One that has gone leaves the sea as it is drawn.
+  # One that has gone leaves the sea as it is drawn. A new reading of the
+  # agents here in a fleet the visitor is a member of reads its ships again.
   @impl true
-  def handle_info({:shared_reading, {:fleet_now, fleet_id} = key}, socket) do
-    if key in socket.assigns.watched,
-      do: {:noreply, socket |> draw([fleet_id]) |> close_sailed()},
-      else: {:noreply, socket}
+  def handle_info({:shared_reading, {kind, fleet_id} = key}, socket)
+      when kind in [:fleet_now, :fleet_agents] do
+    cond do
+      key not in socket.assigns.watched -> {:noreply, socket}
+      {fleet_id, :member} in socket.assigns.fleets -> {:noreply, crew_soon(socket)}
+      true -> {:noreply, socket |> draw([fleet_id]) |> close_sailed()}
+    end
   end
 
   # Anything new in a fleet the visitor is a member of is a nudge to read its
@@ -294,13 +302,19 @@ defmodule KeyfleetWeb.HarbourSeaLive do
 
   # What the visitor hears of each fleet on show. A member hears what the
   # shell hears for their class: its rooms, its workspace and its votes. Anyone
-  # else hears its shared reading, which hears those for everyone. A signed-in
+  # else hears its shared reading, which hears those for everyone. Everyone
+  # hears its agents here, whose Keys fly too. A signed-in
   # visitor also hears its Keys, which change which ships are theirs and
   # whether they are a member; a signed-out one holds none.
   defp follow(socket, actor) do
     %{fleets: fleets, topics: topics_was, watched: watched_was} = socket.assigns
     topics = Enum.flat_map(fleets, fn {fleet_id, class} -> topics(fleet_id, class, actor) end)
-    watched = for {fleet_id, class} <- fleets, class != :member, do: FleetNow.key(fleet_id)
+
+    watched =
+      Enum.flat_map(fleets, fn
+        {fleet_id, :member} -> [Here.fleet_key(fleet_id)]
+        {fleet_id, _class} -> [FleetNow.key(fleet_id), Here.fleet_key(fleet_id)]
+      end)
 
     Enum.each(topics_was -- topics, &Phoenix.PubSub.unsubscribe(Keyfleet.PubSub, &1))
     Enum.each(topics -- topics_was, &Phoenix.PubSub.subscribe(Keyfleet.PubSub, &1))
@@ -332,8 +346,14 @@ defmodule KeyfleetWeb.HarbourSeaLive do
         Map.take(public, Enum.map(fleets, &elem(&1, 0))),
         fn fleet_id, public ->
           case FleetNow.fetch(fleet_id) do
-            {%{coming_soon?: false, feed: %{items: items}}, _degraded?} ->
-              Map.put(public, fleet_id, HarbourCrew.ships(fleet_id, items))
+            {%{coming_soon?: false, feed: %{items: items}, faces: faces}, _degraded?} ->
+              {agents, here_faces} = here(fleet_id)
+
+              Map.put(
+                public,
+                fleet_id,
+                HarbourCrew.ships(fleet_id, items, agents, Map.merge(here_faces, faces))
+              )
 
             {%{coming_soon?: true}, _degraded?} ->
               Map.put(public, fleet_id, [])
@@ -367,9 +387,21 @@ defmodule KeyfleetWeb.HarbourSeaLive do
                  context: Access.context(actor, fleet_id, :member)
                )
 
-             {fleet_id, HarbourCrew.ships(fleet_id, items)}
+             {agents, here_faces} = here(fleet_id)
+             faces = Keys.faces(fleet_id, HarbourCrew.keys(items))
+
+             {fleet_id, HarbourCrew.ships(fleet_id, items, agents, Map.merge(here_faces, faces))}
            end)}
         end)
+    end
+  end
+
+  # The agents here in a fleet and who holds their Keys and writes as which, from the reading every
+  # open page shares; none while it has not been read.
+  defp here(fleet_id) do
+    case SharedFigures.reading(Here.fleet_key(fleet_id)) do
+      %{agents: agents, faces: faces} -> {agents, faces}
+      nil -> {[], %{}}
     end
   end
 
@@ -377,7 +409,7 @@ defmodule KeyfleetWeb.HarbourSeaLive do
   defp owned(actor, fleet_id), do: MapSet.new(Keys.held_keys(actor, fleet_id), & &1.token_id)
 
   # The ships on the sea: each fleet's, as the visitor's class there sees it,
-  # the visitor's own Keys first, then the most recently active. What was read
+  # the visitor's own ship first, then the most recently active. What was read
   # for the visitor shows only while they are signed in as they were then: a
   # sign-in that ends while the page is open takes it away with it. A fleet
   # the visitor has just joined shows as anyone sees it until their own read
@@ -396,7 +428,8 @@ defmodule KeyfleetWeb.HarbourSeaLive do
           do: read[fleet_id] || public[fleet_id],
           else: public[fleet_id]
 
-      for ship <- ships || [], do: Map.put(ship, :own?, MapSet.member?(mine, ship.token_id))
+      for ship <- ships || [],
+          do: Map.put(ship, :own?, Enum.any?(ship.keys, &MapSet.member?(mine, &1)))
     end)
     |> HarbourCrew.sea()
   end
@@ -498,9 +531,13 @@ defmodule KeyfleetWeb.HarbourSeaLive do
 
   attr :ship, :map, required: true
 
-  # A Key's card: its name, its last actions and a link to its profile. It
-  # opens as it is rendered and closes with its X, Escape or a new page.
-  defp agent_card(assigns) do
+  @doc """
+  A ship's card: its name and Key, the address of its holder to copy and how
+  many Keys they hold, their Keys' last few actions, and the Key's page. It
+  opens as it is rendered and closes with its X, Escape or a new page. The
+  homepage opens it for Classic's ships too.
+  """
+  def agent_card(assigns) do
     ~H"""
     <Regent.Structure.dialog
       id="harbour-agent"
@@ -530,16 +567,28 @@ defmodule KeyfleetWeb.HarbourSeaLive do
           </button>
         </form>
       </header>
+      <p :if={@ship.owner} id="harbour-agent-owner" class="harbour-card__owner">
+        <span>{Keyfleet.PublicIdentity.short_wallet(@ship.owner)}</span>
+        <Regent.Primitives.copy_icon
+          id="harbour-agent-owner-copy"
+          text={@ship.owner}
+          label="Copy the holder’s address"
+        />
+        <span :if={@ship.owned} class="harbour-card__owned">{keys_owned(@ship.owned)}</span>
+      </p>
       <ol class="harbour-card__actions" aria-label="Recent actions">
         <li :for={{action, i} <- Enum.with_index(@ship.actions)}>
           <span>{action.text}</span>
           <KeyfleetWeb.Time.local id={"harbour-agent-action-#{i}-at"} at={action.at} as={:moment} />
         </li>
       </ol>
-      <.link class="harbour-card__key" patch={KeyLinks.key_path(@ship.fleet_id, @ship.token_id)}>
-        Open {ActivityLines.key_name(@ship.token_id, nil)}
+      <.link class="harbour-card__key" navigate={KeyLinks.key_path(@ship.fleet_id, @ship.token_id)}>
+        View
       </.link>
     </Regent.Structure.dialog>
     """
   end
+
+  defp keys_owned(1), do: "1 Key owned"
+  defp keys_owned(owned), do: "#{owned} Keys owned"
 end

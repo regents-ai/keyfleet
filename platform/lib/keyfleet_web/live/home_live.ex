@@ -11,10 +11,11 @@ defmodule KeyfleetWeb.HomeLive do
   take on as a shared goal (`Keyfleet.GoalIdeas`), each link to another site
   opening in a new tab; and the footer.
 
-  Classic's sea has a ship for each of its most recently active Keys, as
-  anyone reads them (`KeyfleetWeb.HarbourCrew`), from the fleet's activity in
-  the one reading every open page shares (`KeyfleetWeb.FleetNow`). Pressing a
-  ship opens its Key's profile on the fleet's page. The cards are
+  Classic's sea has a ship for each of its most recently active holders and
+  each holder whose Keys the agents here act as, as anyone reads them
+  (`KeyfleetWeb.HarbourCrew`), from the readings every open page shares
+  (`KeyfleetWeb.FleetNow`, `Keyfleet.Agents.Here`). Pressing a ship opens its
+  card (`KeyfleetWeb.HarbourSeaLive.agent_card/1`), as on the app's pages. The cards are
   thirty Keys of no fleet, a fifth of a second each, turning only while on
   screen.
 
@@ -55,7 +56,6 @@ defmodule KeyfleetWeb.HomeLive do
   alias KeyfleetWeb.{
     FleetNow,
     HarbourCrew,
-    KeyLinks,
     Motion,
     PublicDocuments,
     RouteCatalog,
@@ -185,7 +185,7 @@ defmodule KeyfleetWeb.HomeLive do
     {:ok,
      socket
      |> assign(PublicDocuments.page("/"))
-     |> assign(route_spec: RouteCatalog.fetch!("/"), buy_open: false)
+     |> assign(route_spec: RouteCatalog.fetch!("/"), buy_open: false, ship: nil)
      |> assign(classic: fleet(@classic))}
   end
 
@@ -194,24 +194,22 @@ defmodule KeyfleetWeb.HomeLive do
   # working on, and the agents here, nil until they are counted.
   defp fleet(fleet_id) do
     found = FleetNow.fetch(fleet_id)
+    agents = SharedFigures.reading(Here.fleet_key(fleet_id))
 
     fleet_id
     |> BuyKey.sale(found)
-    |> Map.merge(seen(fleet_id, found))
-    |> Map.merge(%{
-      name: Fleets.name(fleet_id),
-      here: here(SharedFigures.reading(Here.fleet_key(fleet_id)))
-    })
+    |> Map.merge(seen(fleet_id, found, agents))
+    |> Map.merge(%{name: Fleets.name(fleet_id), here: here(agents)})
   end
 
-  defp seen(fleet_id, {%{coming_soon?: false} = reading, _degraded?}),
+  defp seen(fleet_id, {%{coming_soon?: false} = reading, _degraded?}, agents),
     do: %{
-      ships: ships(fleet_id, reading),
+      ships: ships(fleet_id, reading, agents),
       districts: HarbourCrew.districts(fleet_id),
       goal: reading.goal
     }
 
-  defp seen(_fleet_id, _not_open), do: %{ships: [], districts: nil, goal: nil}
+  defp seen(_fleet_id, _not_open, _agents), do: %{ships: [], districts: nil, goal: nil}
 
   defp here(%{here: here}), do: here
   defp here(nil), do: nil
@@ -223,16 +221,14 @@ defmodule KeyfleetWeb.HomeLive do
   def handle_event("close_buy_key", _params, socket),
     do: {:noreply, assign(socket, :buy_open, false)}
 
-  # A ship on Classic's sea: its Key's profile on the fleet's page.
+  # A ship on Classic's sea opens its card; one gone from the sea opens none.
   def handle_event("open_ship", %{"id" => id}, socket) when is_binary(id) do
-    case Enum.find(socket.assigns.classic.ships, &(&1.id == id)) do
-      %{fleet_id: fleet_id, token_id: token_id} ->
-        {:noreply, push_navigate(socket, to: KeyLinks.key_path(fleet_id, token_id))}
-
-      nil ->
-        {:noreply, socket}
-    end
+    if Enum.any?(socket.assigns.classic.ships, &(&1.id == id)),
+      do: {:noreply, assign(socket, :ship, id)},
+      else: {:noreply, socket}
   end
+
+  def handle_event("close_agent", _params, socket), do: {:noreply, assign(socket, :ship, nil)}
 
   # Hears when the person's agents change on any Regent site, for the side panel.
   defp follow_agents(%{privy_user_id: person}),
@@ -258,11 +254,17 @@ defmodule KeyfleetWeb.HomeLive do
   # follows; the homepage shows no other figure a purchase changes.
   def handle_info({:onchain_landed, _fleet_id}, socket), do: {:noreply, socket}
 
-  # The ships on the fleet's sea, from its activity in the reading as anyone
-  # reads it, so none is the reader's own.
-  defp ships(fleet_id, reading) do
+  # The ships on the fleet's sea, from its activity in the reading and the
+  # agents here as anyone reads them, so none is the reader's own.
+  defp ships(fleet_id, reading, agents) do
+    {here, faces} =
+      case agents do
+        %{agents: here, faces: faces} -> {here, faces}
+        nil -> {[], %{}}
+      end
+
     fleet_id
-    |> HarbourCrew.ships(reading.feed.items)
+    |> HarbourCrew.ships(reading.feed.items, here, Map.merge(faces, reading.faces))
     |> Enum.map(&Map.put(&1, :own?, false))
     |> HarbourCrew.sea()
   end
@@ -316,6 +318,7 @@ defmodule KeyfleetWeb.HomeLive do
           <.classic
             classic={@classic}
             buy_open={@buy_open}
+            ship={@ship}
             actor={@actor}
             lease={@session_lease}
           />
@@ -552,6 +555,7 @@ defmodule KeyfleetWeb.HomeLive do
 
   attr :classic, :map, required: true
   attr :buy_open, :boolean, required: true
+  attr :ship, :string, required: true, doc: "the id of the ship whose card is open, or nil"
   attr :actor, :any, required: true
   attr :lease, :map, required: true, doc: "the page's `session_lease`, or nil"
 
@@ -601,6 +605,10 @@ defmodule KeyfleetWeb.HomeLive do
       </div>
 
       <BuyKey.window :if={@buy_open} sale={@classic} actor={@actor} lease={@lease} />
+      <KeyfleetWeb.HarbourSeaLive.agent_card
+        :if={ship = @ship && Enum.find(@classic.ships, &(&1.id == @ship))}
+        ship={ship}
+      />
     </section>
     """
   end
@@ -610,8 +618,8 @@ defmodule KeyfleetWeb.HomeLive do
   attr :id, :string, required: true
   attr :fleet, :map, required: true
 
-  # A fleet's swarm city: a disc for each of its most recently active Keys,
-  # circling the towers of the district of what it did last; each district leads
+  # A fleet's swarm city: a disc for each of its most recently active holders,
+  # circling the towers of the district of what they did last; each district leads
   # to its place on the fleet's pages (`HarbourCrew.districts/1`). The stylesheet
   # shows the city still until the GPU's first frame has landed, and keeps it
   # where there is no GPU.

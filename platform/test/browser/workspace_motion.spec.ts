@@ -19,7 +19,7 @@ test("a new push glides into Sent lately and ends clean", async ({page}) => {
   pushCode(fleet, key, me, "1".repeat(40))
   await (await installAuthenticatedPrivy(page, "valid")).establishLocalSession()
   await watchMotion(page)
-  await page.goto("/cascade/1/workspace?place=code")
+  await page.goto("/cascade/1/workspace?place=code&project=general")
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   const lines = page.locator("#code-pushes > li")
   await expect(lines).toHaveCount(1)

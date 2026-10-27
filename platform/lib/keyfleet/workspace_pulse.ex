@@ -59,12 +59,12 @@ defmodule Keyfleet.WorkspacePulse do
           title = Enum.find_value(event.projects, &titles[&1]),
           do: {event, token_id, kind, wallet, title}
 
-    held = Keys.holders_key_counts(fleet_id, worked |> Enum.map(&elem(&1, 1)) |> Enum.uniq())
+    held = Keys.faces(fleet_id, worked |> Enum.map(&elem(&1, 1)) |> Enum.uniq())
     names = names(for {_event, _key, "agent", wallet, _title} <- worked, uniq: true, do: wallet)
 
     for {event, token_id, kind, wallet, title} <- worked do
       name = if kind == "agent", do: names[wallet]
-      keys_held = held[token_id]
+      keys_held = held[token_id][:owned]
 
       %{
         seq: event.seq,

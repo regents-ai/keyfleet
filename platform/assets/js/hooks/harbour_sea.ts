@@ -12,8 +12,11 @@ const savingData = () =>
   matchMedia("(prefers-reduced-data: reduce)").matches ||
   (navigator as Navigator & {connection?: {saveData: boolean}}).connection?.saveData === true
 
-/** One agent as the server wrote it, with the name its disc shows under the mouse. */
-type CrewMember = Agent & {readonly name: string}
+/**
+ * One holder as the server wrote it, with the name of the Key its disc shows
+ * under the mouse and how many Keys they hold.
+ */
+type CrewMember = Agent & {readonly label: string; readonly owned: number | null}
 
 /** The agents as the server wrote them: who, the place of their last action, and their colour. */
 const crewOf = (root: HTMLElement): CrewMember[] => JSON.parse(root.dataset.harbourCrew!) as CrewMember[]
@@ -65,9 +68,9 @@ type HarbourSeaController = CanvasIslandController & {
  * as a phone saving power, until the tab is shown again.
  * Without WebGPU nothing is drawn and the page's own ground shows.
  *
- * Where the city takes presses, a drag turns it, a mouse over a disc shows its
- * agent's name, a mouse over a district lights it and names where it leads,
- * pressing a disc hands its agent to `open`, and pressing a district that leads
+ * Where the city takes presses, a drag turns it, a mouse over a disc names its
+ * Key and how many Keys its holder holds, a mouse over a district lights it and
+ * names where it leads, pressing a disc or its name hands its holder to `open`, and pressing a district that leads
  * somewhere hands its address to `go`. Anime.js eases the districts' light and a released
  * drag; the renderer reads both when it draws.
  */
@@ -151,6 +154,19 @@ const createHarbourSeaController = (
       const hideTag = () => {
         tag.hidden = true
         delete tag.dataset.harbourDistrict
+        delete tag.dataset.harbourShip
+      }
+      /** Names a disc's Key, with how many Keys its holder holds raised after it. */
+      const nameShip = (agent: CrewMember) => {
+        delete tag.dataset.harbourDistrict
+        tag.dataset.harbourShip = agent.id
+        tag.replaceChildren(agent.label)
+        if (agent.owned) {
+          const owned = document.createElement("sup")
+          owned.textContent = agent.owned === 1 ? "1 Key owned" : `${agent.owned} Keys owned`
+          tag.append(owned)
+        }
+        tag.style.setProperty("--sail", agent.color)
       }
 
       // A drag: where it started, the view it started from, and how fast it was turning when let go.
@@ -212,18 +228,23 @@ const createHarbourSeaController = (
           const district = place && districts[place]
           canvas.style.cursor = district ? "pointer" : ""
           if (district) {
+            delete tag.dataset.harbourShip
             tag.textContent = district.name
             tag.dataset.harbourDistrict = ""
             standAt(u, v)
           } else hideTag()
           return hover(place)
         }
-        const agent = crew.find(member => member.id === node.id)!
-        delete tag.dataset.harbourDistrict
-        tag.textContent = agent.name
-        tag.style.setProperty("--sail", agent.color)
+        nameShip(crew.find(member => member.id === node.id)!)
         standAt(node.u, node.v)
         hover(null)
+      }
+      // A disc's name opens its card as the disc does.
+      const onTagClick = () => {
+        const id = tag.dataset.harbourShip
+        if (!id) return
+        hideTag()
+        open(id)
       }
       const onPointerLeave = () => {
         if (drag?.moved) return
@@ -281,6 +302,7 @@ const createHarbourSeaController = (
       canvas.addEventListener("pointercancel", onPointerCancel)
       stage.addEventListener("pointerleave", onPointerLeave)
       canvas.addEventListener("click", onClick)
+      tag.addEventListener("click", onTagClick)
 
       return () => {
         sync = () => {}
@@ -294,6 +316,7 @@ const createHarbourSeaController = (
         canvas.removeEventListener("pointercancel", onPointerCancel)
         stage.removeEventListener("pointerleave", onPointerLeave)
         canvas.removeEventListener("click", onClick)
+        tag.removeEventListener("click", onTagClick)
       }
     },
   })
