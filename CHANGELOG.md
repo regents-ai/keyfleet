@@ -5436,3 +5436,18 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The privacy page says so, word for word from the template: "If your browser
   sends Global Privacy Control, we keep no record of where your visit came
   from or how far it got." Its effective date is now October 27, 2026.
+
+## 2026-10-27 — Notebook hubs keep the snapshot their catalog names
+
+- The notebook hub carries a fix to marimohub's catalog,
+  `notebook-hub/marimohub/catalog-commit.patch`. A catalog write that landed
+  but was retried by the storage client used to be taken as a lost race, so
+  the hub deleted the snapshot its catalog had just moved to and stopped with
+  "Catalog has not been initialized" (Classic #1 and the Regents Club,
+  27 Oct 2026). The hub now reads the catalog before deleting, and keeps a
+  snapshot the catalog names.
+- The patch adds three tests to marimohub's catalog tests; every hub image
+  build runs those tests. Without the fix the three fail with the same refused
+  write seen in production.
+- Hub images are tagged with the pin and the patches they carry
+  (`c2a3303-5fbf65f`). All five fleet hubs run it since 18:57Z.

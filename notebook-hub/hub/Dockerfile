@@ -19,9 +19,16 @@ RUN git init --quiet \
  && git checkout --quiet --detach FETCH_HEAD
 COPY marimohub/pnpm-lock.patch /tmp/pnpm-lock.patch
 RUN git apply /tmp/pnpm-lock.patch
+# A catalog write that lands but is retried by the storage client keeps its snapshot
+# (the catalog is read before deleting); without it the hub could delete the snapshot
+# its own catalog names.
+COPY marimohub/catalog-commit.patch /tmp/catalog-commit.patch
+RUN git apply /tmp/catalog-commit.patch
 COPY compute-fly packages/compute-fly
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec vp run --filter @marimo-hub/web --filter @marimo-hub/server build
+# marimohub's catalog tests, with the three catalog-commit.patch adds.
+RUN cd packages/core && pnpm exec vp test run src/services/catalog/
 RUN cd packages/compute-fly && pnpm exec vp pack
 
 # --- runtime: as marimohub's server image, plus the compute library ---

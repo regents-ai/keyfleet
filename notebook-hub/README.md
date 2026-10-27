@@ -32,8 +32,10 @@ them to the hub. That part is built separately, in `platform/`.
 - **`hub/`**: the hub image (marimohub built from source at the pinned version,
   with `compute-fly` added), the two Fly app templates, and
   `hub.env.example`, which lists every hub setting with a one-line meaning.
-- **`marimohub/`**: the exact marimohub version used (`pin.env`) and the
-  lockfile change (`pnpm-lock.patch`, made by pnpm) that adds `compute-fly` to marimohub's workspace.
+- **`marimohub/`**: the exact marimohub version used (`pin.env`), the
+  lockfile change (`pnpm-lock.patch`, made by pnpm) that adds `compute-fly` to
+  marimohub's workspace, and `catalog-commit.patch`, our fix to marimohub's
+  catalog (below).
 - **`local/`**: the local end-to-end proof (see below).
 - **`scripts/`**: `workspace.sh` prepares marimohub at the pin with
   `compute-fly` inside it. `build-images.sh` builds the three images.
@@ -57,7 +59,9 @@ things:
 3. Builds the three images:
    - `keyfleet/marimo-sandbox:c2a3303`, marimohub's notebook image, about 3 GB;
    - `keyfleet/notebook-runner:c2a3303`;
-   - `keyfleet/notebook-hub:c2a3303`, about 440 MB.
+   - `keyfleet/notebook-hub:c2a3303-5fbf65f`, about 440 MB. The part after
+     the dash names the patches in `marimohub/`, so a changed patch gives a
+     new tag. `build-images.sh` prints the tag it built on its last line.
 4. Runs the helper's tests inside the runner image.
 
 The first image build takes a while; later runs reuse Docker's cache.
@@ -153,7 +157,9 @@ Keyfleet's server puts on each request, which the hub checks.
    Fly first: `DOCKER_DEFAULT_PLATFORM=linux/amd64 notebook-hub/scripts/build-images.sh`
    (same tags). Then run `fly auth docker` and:
    - tag `keyfleet/notebook-runner:c2a3303` as `registry.fly.io/kf-nbk-<fleet>:c2a3303` and push it;
-   - tag `keyfleet/notebook-hub:c2a3303` as `registry.fly.io/kf-nb-<fleet>:c2a3303` and push it.
+   - tag `keyfleet/notebook-hub:c2a3303-5fbf65f` as `registry.fly.io/kf-nb-<fleet>:c2a3303-5fbf65f`
+     and push it, then set the same tag in `[build] image` of
+     `hub/fleets/<fleet>.hub.toml`.
 4. **Create the fleet's bucket on the hub app. Sean runs this one himself**:
    `fly storage create --app kf-nb-<fleet> --name <bucket>`. Fly sets the
    bucket's key on the hub app itself, as the secrets `AWS_ACCESS_KEY_ID` and
@@ -263,3 +269,13 @@ its listed ID.
 - **Machine names.** Each machine is named after its marimohub session sandbox,
   so the hub finds an existing machine again after a restart instead of
   starting a second one.
+- **The hub keeps a snapshot its catalog names (`catalog-commit.patch`).**
+  marimohub moves its catalog to a new snapshot with a conditional write. Its
+  storage client retries a write whose answer was lost; when the first try
+  had already landed, the retry is refused, and marimohub at the pin then
+  deleted the snapshot its catalog had just moved to. The hub stopped with
+  "Catalog has not been initialized" until the catalog was rebuilt (Classic #1
+  and the Regents Club, 27 Oct 2026). With the patch, the hub reads the catalog
+  before deleting, and keeps the snapshot when the catalog names it. The patch
+  adds three tests to marimohub's `recovery.test.ts`. Drop the patch when
+  marimohub ships the same fix.
