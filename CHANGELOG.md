@@ -5051,3 +5051,18 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   machines instead of eleven. A pool that stays full now fails the check, as
   the template's ruling of 27 October asks: one release on the shared database
   at a time, and five connections for each serving pool.
+
+## 2026-10-27 — Every Sobelow approval sits beside its code
+
+- The last eight approvals in `platform/.sobelow-skips` matched by line number,
+  so any edit above them made them stale and stopped `mix precommit`. Each is
+  now a `sobelow_skip` note beside the code it approves, with its reason, and
+  the list file is gone:
+  - the seven router pipelines that send a content security policy Sobelow
+    cannot read: `browser` and the two showcase pipelines set theirs in a plug
+    for each response, and `directory`, `public_documents`, `early` and
+    `errors_admin` build the reading policy with a function call;
+  - the sitemap, which is XML listing the site's own page addresses, each one
+    escaped.
+- Nothing a person or agent sees changes. Taking the notes off brings back
+  exactly these eight findings; with them `mix sobelow --exit` finds none.
