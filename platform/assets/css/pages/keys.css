@@ -50,22 +50,24 @@
 
 /* The Key's own card, its stage reaching the panel's edges beside the number. */
 .key-heading__card {
-  padding: clamp(1.25rem, 3vw, 2rem) clamp(1.5rem, 4vw, 3.5rem);
+  --key-stage-pad: clamp(1.25rem, 3vw, 2rem);
+
+  padding: var(--key-stage-pad) clamp(1.5rem, 4vw, 3.5rem);
 }
 
 .key-heading__card .key-card__tilt {
   width: clamp(9rem, 22vw, 15rem);
 }
 
-/* Phones: the stage under the number, the card as tall as half the screen
-   at most. */
+/* Phones: the stage under the number, the card and its stage two-fifths of
+   the screen tall at most, so what follows starts on the first screen. */
 @media (max-width: 599px) {
   .key-heading {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .key-heading__card .key-card__tilt {
-    width: min(70vw, 40svh * 767 / 959);
+    width: min(70vw, (40svh - 2 * var(--key-stage-pad)) * 767 / 959);
   }
 }
 

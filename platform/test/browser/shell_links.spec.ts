@@ -176,9 +176,13 @@ test("the links between a fleet's pages each patch the open page", async ({page}
   await walk.settled()
 })
 
-// The tab of the page on show carries its mark on the tab's own fill, where
-// the fill cannot cover it; the other tabs carry none.
-test("a fleet's current tab is marked", async ({page}) => {
+// Before the page is live, the tab of the page on show carries its mark on
+// the tab's own fill, where the fill cannot cover it; the other tabs carry
+// none. Once live, one gliding mark takes over (fleet_motion.spec.ts), so this
+// reads the page as it first arrives, with scripts off.
+test("a fleet's current tab is marked", async ({browser}) => {
+  const context = await browser.newContext({javaScriptEnabled: false})
+  const page = await context.newPage()
   await page.goto(`${fleetPath}/proposals`)
   const marks = await page.locator("#fleet-tabs a").evaluateAll(tabs =>
     tabs.map(tab => [tab.id, getComputedStyle(tab, "::before").boxShadow]),
@@ -188,6 +192,7 @@ test("a fleet's current tab is marked", async ({page}) => {
     if (id === "fleet-tab-proposals") expect(mark).toContain("inset")
     else expect(mark).toBe("none")
   }
+  await context.close()
 })
 
 // On a phone a Workstream line's links stay part of their sentence: the

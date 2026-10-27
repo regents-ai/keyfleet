@@ -5165,3 +5165,22 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The treasury tab's note on the Daily Treasury Slice to Keys, the fleet rules and
   the agent tool `treasury_release` say the slice is shared among the Keys sold at
   least 2 days ago, as the treasury pays it, instead of every Key sold (KF-GOV-FIXES a).
+
+## 2026-10-27 — A Key's card fits two-fifths of a phone screen again
+
+- On a phone, a Key's page drew its card's charcoal stage 378 px tall on an
+  844 px screen, a near-square block filling the width, because the stage's
+  padding (21 October) was added on top of a picture already sized to
+  two-fifths of the screen. The picture now leaves room for that padding, so
+  the card and its stage together are two-fifths of the screen at most and
+  the Key's holder shows on the first screen. Tablets and computers are
+  unchanged. The phone walk in `key_card.spec.ts` succeeds again.
+- The chain walk "a sale rolls the count…" (`fleet_motion.spec.ts`) watches
+  Accelerant #1's feed, which no walk talks in. The test server records every
+  chain line at the moment it started, while a post carries the real time, so
+  on Classic #1 the posts earlier walks made stayed above the new sale and the
+  walk failed whenever it ran after them.
+- The walk "a fleet's current tab is marked" (`shell_links.spec.ts`) reads the
+  page with scripts off, the state it describes. Once a page is live the
+  gliding mark takes over the tab's own mark, and the walk failed whenever the
+  page went live before it read.

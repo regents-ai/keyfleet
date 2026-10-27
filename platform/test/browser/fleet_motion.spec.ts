@@ -17,16 +17,21 @@ import {
 // its line joins the hall's feed, and everything ends clean. Nothing moves for a reader
 // who asked for less motion.
 const fleet = "fleet_tech_classic"
+// A fleet no walk talks in, for the feed. The test server records every chain
+// line at the moment it started (it holds one transaction), while a post
+// carries the real time, so any post an earlier walk made stays above a sale.
+const quiet = "fleet_tech_accelerant"
 const buyer = "0x2222222222222222222222222222222222222222"
 const heir = "0x3333333333333333333333333333333333333333"
 
 test.beforeAll(() => {
   prepareFleet(fleet)
+  prepareFleet(quiet)
 })
 
-async function openFleet(page: Page) {
+async function openFleet(page: Page, path = "/classic/1") {
   await watchMotion(page)
-  await page.goto(`/classic/1`)
+  await page.goto(path)
   await expect(page.locator("[data-phx-main].phx-connected")).toBeAttached()
   await forget(page)
 }
@@ -151,9 +156,9 @@ test("Buy pressed again and again squishes only its label, which ends at rest, a
 test("a sale rolls the count, each digit clipped by class, and its line joins the top of the feed while the lines already there glide down, ending as plain text", async ({page}) => {
   // An earlier sale and that key changing hands, so the feed has lines already
   // there and the next sale, no longer part of a run of sales, joins as its own line.
-  const earlier = sellKey(fleet, buyer)
-  moveKey(fleet, earlier, heir)
-  await openFleet(page)
+  const earlier = sellKey(quiet, buyer)
+  moveKey(quiet, earlier, heir)
+  await openFleet(page, "/accelerant/1")
   await expect(page.locator("#fleet-feed-list > li").first()).toContainText(`Key ${earlier} changed hands.`, {
     timeout: 10_000,
   })
@@ -173,7 +178,7 @@ test("a sale rolls the count, each digit clipped by class, and its line joins th
     requestAnimationFrame(sample)
   })
 
-  sellKey(fleet, buyer)
+  sellKey(quiet, buyer)
 
   await expect.poll(() => plainNumber(page, "fleet-sales-keys")).toBe(String(sold + 1))
   expect(await rolled(page, "fleet-sales-keys")).toBe(true)
