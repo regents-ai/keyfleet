@@ -1,0 +1,129 @@
+@layer regents-product {
+/* A project's page (`KeyfleetWeb.ProjectLive`) is one solid card over the
+   swarm city, in the workspace's Key grammar: the display face for headings,
+   a mono kicker for each item's type, a framed badge for where it stands and
+   hairlines between rows. Its four lists sit two to a row where there is room
+   and stack on a phone. Every title wraps wherever it must. */
+
+.project-page {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+  max-width: 72rem;
+  padding: var(--rg-panel-padding);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  overflow-wrap: anywhere;
+}
+
+.project-page h2,
+.project-page p {
+  margin: 0;
+}
+
+.project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+}
+
+.project-workspace {
+  color: var(--color-fg);
+  font-weight: 600;
+  text-underline-offset: 0.2em;
+}
+
+.project-parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1.5rem 2.5rem;
+  align-items: start;
+}
+
+.project-part {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  min-width: 0;
+  padding-block-start: 1rem;
+  border-block-start: 1px solid var(--ash-line-strong);
+}
+
+.project-part h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-family: var(--font-family-title);
+  font-size: 1.35rem;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.project-count {
+  color: var(--color-fg-muted);
+  font-family: var(--font-family-mono);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.project-items {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A row: its type above its title, where it stands on the right. */
+.project-items li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 1rem;
+  row-gap: 0.2rem;
+  align-items: center;
+  padding-block: 0.65rem;
+}
+
+.project-items li + li {
+  border-block-start: 1px solid var(--color-border);
+}
+
+.project-type {
+  grid-column: 1;
+  color: var(--color-fg-muted);
+  font-family: var(--font-family-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.project-title {
+  grid-column: 1;
+  line-height: 1.4;
+}
+
+.project-standing {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--ash-line-strong);
+  font-family: var(--font-family-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.project-empty {
+  padding-block: 0.65rem;
+  color: var(--color-fg-muted);
+}
+
+/* What only members see is said once, under the goals. */
+.project-note {
+  padding-inline-start: 0.75rem;
+  border-inline-start: 3px solid var(--ash-accent-warm);
+  color: var(--color-fg-muted);
+}
+
+}

@@ -23,19 +23,24 @@ defmodule KeyfleetWeb.ProjectLive do
         <.link id="project-bring-agent" navigate={@project.pair_path} class="rg-button">
           Bring your agent
         </.link>
-        <.link id="project-workspace" navigate={@project.workspace_path}>Open in the workspace</.link>
+        <.link id="project-workspace" navigate={@project.workspace_path} class="project-workspace">Open in the workspace</.link>
       </p>
 
-      <section :if={@project.goals} id="project-goals" aria-labelledby="project-goals-title">
+      <section
+        :if={@project.goals}
+        id="project-goals"
+        class="project-part"
+        aria-labelledby="project-goals-title"
+      >
         <h2 id="project-goals-title">Goals</h2>
-        <ul :if={@project.goals != []}>
-          <li :for={goal <- @project.goals}>{goal}</li>
+        <ul :if={@project.goals != []} class="project-items">
+          <li :for={goal <- @project.goals}><span class="project-title">{goal}</span></li>
         </ul>
-        <p :if={@project.goals == []}>No open goals yet.</p>
-        <p id="project-members-only">Its work is shown to the fleet's members.</p>
+        <p :if={@project.goals == []} class="project-empty">No open goals yet.</p>
+        <p id="project-members-only" class="project-note">Its work is shown to the fleet's members.</p>
       </section>
 
-      <div :if={@project.parts} id="project-parts">
+      <div :if={@project.parts} id="project-parts" class="project-parts">
         <.part
           id="project-goals"
           title="Goals"
@@ -72,16 +77,16 @@ defmodule KeyfleetWeb.ProjectLive do
 
   defp part(assigns) do
     ~H"""
-    <section id={@id} aria-labelledby={"#{@id}-title"}>
+    <section id={@id} class="project-part" aria-labelledby={"#{@id}-title"}>
       <h2 id={"#{@id}-title"}>{@title} <span class="project-count">{@part.count}</span></h2>
-      <ul :if={@part.items != []}>
+      <ul :if={@part.items != []} class="project-items">
         <li :for={item <- @part.items} data-item={item.id}>
           <span class="project-type">{item.type}</span>
-          {item.title}
+          <span class="project-title">{item.title}</span>
           <span :if={item.standing} class="project-standing">{item.standing}</span>
         </li>
       </ul>
-      <p :if={@part.items == []}>{@empty}</p>
+      <p :if={@part.items == []} class="project-empty">{@empty}</p>
     </section>
     """
   end

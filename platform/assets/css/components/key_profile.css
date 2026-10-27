@@ -105,6 +105,7 @@
   display: grid;
   gap: 0.85rem;
   min-width: 0;
+  container-type: inline-size;
 }
 
 .key-profile__section + .key-profile__section {
@@ -190,23 +191,38 @@
   }
 }
 
-/* Facts are rows, a name and its figure, each under a rule; two columns
-   where they fit. */
+/* Facts are rows, a name and its figure, with a rule between rows and none
+   above the first or under the last, so a section's own rule is never
+   doubled. Two columns where the section is wide enough. */
 .key-profile-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   column-gap: 2rem;
   margin: 0;
 }
 
-.key-profile-facts div {
+.key-profile-facts > div {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
   min-width: 0;
   padding-block: 0.6rem;
-  border-block-end: 1px solid var(--color-border);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.key-profile-facts > div:first-child {
+  border-block-start: 0;
+}
+
+@container (min-width: 34rem) {
+  .key-profile-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .key-profile-facts > div:nth-child(2) {
+    border-block-start: 0;
+  }
 }
 
 .key-profile-facts dt {
@@ -221,12 +237,12 @@
   overflow-wrap: anywhere;
 }
 
-/* Each shard is a row: its agent, then what is known about it. */
+/* Each shard is a row, its agent then what is known about it, ruled like
+   the facts above it. */
 .key-profile-shards {
   display: grid;
   margin: 0;
   padding: 0;
-  border-block-start: 1px solid var(--color-border);
   list-style: none;
 }
 
@@ -234,7 +250,10 @@
   display: grid;
   gap: 0.2rem;
   padding-block: 0.75rem;
-  border-block-end: 1px solid var(--color-border);
+}
+
+.key-profile-shards li + li {
+  border-block-start: 1px solid var(--color-border);
 }
 
 .key-profile-shard__who {
