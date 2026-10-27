@@ -28,6 +28,7 @@ defmodule KeyfleetWeb.AgentsPanel do
   alias RegentAgents.{Harness, HumanBacking, PairedAgent, Person}
 
   @name_refused "That name can’t be used. Use 1 to 80 characters with no hidden characters."
+  @gone "This agent is no longer paired with your account. Nothing changed."
 
   @impl true
   def mount(socket),
@@ -82,7 +83,7 @@ defmodule KeyfleetWeb.AgentsPanel do
           {{:status, "Saved. This agent is now called #{name} on every Regent site."}, nil}
 
         {:ok, nil} ->
-          {{:alert, "This agent is no longer paired with your account. Nothing changed."}, nil}
+          {{:alert, @gone}, nil}
 
         {:error, %Ash.Error.Invalid{errors: errors}} ->
           if Enum.any?(errors, &match?(%{field: :name}, &1)),
@@ -96,15 +97,18 @@ defmodule KeyfleetWeb.AgentsPanel do
     {:noreply, socket |> read_agents() |> assign(notice: notice, name_error: name_error)}
   end
 
-  # Unpair asks first, naming the agent as the list shows it.
+  # Unpair asks first, naming the agent as the list shows it. An agent already
+  # gone from the list says so, as Unpair itself would.
   def handle_event("confirm_unpair", %{"id" => id}, socket) do
-    confirming =
-      case socket.assigns.agents do
-        agents when is_list(agents) -> Enum.find(agents, &(&1.id == id))
-        :unavailable -> nil
-      end
+    agent = is_list(socket.assigns.agents) && Enum.find(socket.assigns.agents, &(&1.id == id))
 
-    {:noreply, assign(socket, confirming: confirming && Map.take(confirming, [:id, :name]))}
+    case agent do
+      %PairedAgent{id: id, name: name} ->
+        {:noreply, assign(socket, confirming: %{id: id, name: name})}
+
+      _gone ->
+        {:noreply, socket |> read_agents() |> assign(notice: {:alert, @gone})}
+    end
   end
 
   def handle_event("cancel_unpair", _params, socket),
@@ -120,7 +124,7 @@ defmodule KeyfleetWeb.AgentsPanel do
         {:status, "#{agent.name} is unpaired. It will need a new code to pair again."}
       else
         {:ok, nil} ->
-          {:alert, "This agent is no longer paired with your account. Nothing changed."}
+          {:alert, @gone}
 
         _failed ->
           failed_notice()
