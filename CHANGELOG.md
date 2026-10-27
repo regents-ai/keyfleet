@@ -5310,3 +5310,18 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   the lock. Signed API contract 21.0.0: notebook lists carry `locked` and
   `scratchpad_key`, and a shared project refuses take-over and delete with 409
   `project_shared`.
+
+## 2026-10-27 — Visit lines: where visits come from and where they stop
+
+- Copied from the template (a2544421), changing only the module names. A
+  visit's first connected page writes one `arrival` line naming where it came
+  from (an AI answer such as ChatGPT or Perplexity, a search engine, a social
+  site, another site, this site, or nowhere); the address it came from is never
+  written. Moving between pages and reconnecting add none.
+- Four `step` lines show how far a visit gets: Sign in pressed, signed in,
+  pairing code shown and agent paired (with the agent's kind).
+- An agent call's line now names the program that made it: `webmcp`,
+  `regents-cli/<version>`, another program's `<name>/<version>`, `other` or
+  `none`, so a refused signed call can be traced to an old or hand-built client.
+- The privacy page's cookies section says what the visit cookie counts and that
+  only the name of the sending site is kept.

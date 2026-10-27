@@ -16,6 +16,7 @@ defmodule KeyfleetWeb.PairingBox do
   alias Keyfleet.Limits
   alias KeyfleetWeb.AgentGuides
   alias KeyfleetWeb.Live.Session
+  alias KeyfleetWeb.VisitLog
   alias RegentAgents.{Harness, PairingCode, PairingMessage, Person}
 
   @impl true
@@ -115,6 +116,7 @@ defmodule KeyfleetWeb.PairingBox do
        ) do
     with {:ok, agents} <- RegentAgents.list_my_agents(actor: socket.assigns.person),
          %{} = agent <- Enum.find(agents, &(DateTime.compare(&1.paired_at, issued_at) != :lt)) do
+      VisitLog.step("agent_paired", to_string(shown.harness))
       assign(socket, pairing: %{shown | code: {:paired, agent}})
     else
       _unchanged -> socket
@@ -129,6 +131,7 @@ defmodule KeyfleetWeb.PairingBox do
     code =
       with :ok <- Limits.spend(:pairing_codes, {:human, socket.assigns.account_id}),
            {:ok, issued} <- RegentAgents.issue_pairing_code(actor: socket.assigns.person) do
+        VisitLog.step("pairing_code_shown", to_string(harness))
         issued
       else
         _unavailable -> :unavailable
