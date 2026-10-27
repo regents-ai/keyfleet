@@ -261,7 +261,12 @@ defmodule KeyfleetWeb.Components.Shell do
 
       {render_slot(@agents)}
 
-      <section :if={@pairing != []} id="shell-pairing" aria-labelledby="shell-pairing-title">
+      <section
+        :if={@pairing != []}
+        id="shell-pairing"
+        aria-labelledby="shell-pairing-title"
+        tabindex="-1"
+      >
         <h2 id="shell-pairing-title">Pair New Agent</h2>
         {render_slot(@pairing)}
       </section>

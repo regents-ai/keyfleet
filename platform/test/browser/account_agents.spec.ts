@@ -4,7 +4,7 @@ import {installAuthenticatedPrivy} from "./support/authenticated_privy"
 
 // A person manages their paired agents on the Account page, as on regents.sh:
 // See what it has done opens the agent's window, Done closes it, and Unpair,
-// once confirmed, takes the agent off the account. The window is the shared
+// once confirmed in a window of its own, takes the agent off the account. The window is the shared
 // cut-corner dialog, on a wide screen and on a phone.
 const person = "did:privy:verified"
 
@@ -43,9 +43,17 @@ for (const viewport of [{width: 1280, height: 800}, {width: 390, height: 844}]) 
 
     await row.getByRole("button", {name: `See what ${name} has done`}).click()
     await expect(dialog).toBeVisible()
-    page.once("dialog", confirm => confirm.accept())
+    const confirm = page.locator("#account-unpair-dialog")
     await dialog.getByRole("button", {name: "Unpair"}).click()
+    await expect(confirm.getByRole("heading", {name: `Unpair ${name}?`})).toBeFocused()
+    await confirm.getByRole("button", {name: "Cancel"}).click()
+    await expect(confirm).toBeHidden()
+    await expect(dialog.getByRole("button", {name: "Unpair"})).toBeFocused()
 
+    await dialog.getByRole("button", {name: "Unpair"}).click()
+    await confirm.getByRole("button", {name: "Unpair"}).click()
+
+    await expect(confirm).toBeHidden()
     await expect(dialog).toBeHidden()
     await expect(row).toHaveCount(0)
     await expect(page.locator("#account-agents [role=status]")).toHaveText(

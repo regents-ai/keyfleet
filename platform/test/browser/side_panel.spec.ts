@@ -62,8 +62,16 @@ test("on a wide screen the side panel opens beside the page and is remembered", 
   await page.goto("/account")
   await expect(page.locator("#app-shell")).toHaveAttribute("data-behavior-ready", "true")
   await expect(panel(page)).toBeHidden()
-  await page.locator("#account-page").getByRole("button", {name: "Pair New Agent"}).click()
-  await expect(page.locator("#shell-pairing")).toBeInViewport()
+  const pairNew = page.locator("#account-page").getByRole("button", {name: "Pair New Agent"})
+  const pairing = page.locator("#shell-pairing")
+  await pairNew.click()
+  await expect(pairing).toBeInViewport()
+  await expect(pairing).toBeFocused()
+  await expect(pairing).toHaveAttribute("data-flash", "")
+  // With the panel already open, the button still answers: the box lights again.
+  await expect(pairing).not.toHaveAttribute("data-flash")
+  await pairNew.click()
+  await expect(pairing).toHaveAttribute("data-flash", "")
 })
 
 test("on the homepage the side panel sits beside the page, and Manage Account opens the account page", async ({page}) => {

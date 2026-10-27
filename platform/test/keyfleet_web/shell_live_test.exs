@@ -759,7 +759,10 @@ defmodule KeyfleetWeb.ShellLiveTest do
     assert has_element?(view, "#account-agents li", "Sol")
 
     view |> element("#account-agent-dialog button", "Unpair") |> render_click()
+    assert has_element?(view, "#account-unpair-dialog h2", "Unpair Sol?")
+    view |> element("#account-unpair-confirm") |> render_click()
 
+    refute has_element?(view, "#account-unpair-dialog")
     refute has_element?(view, "#account-agent-dialog")
     refute has_element?(view, "#account-agents li")
     assert has_element?(view, "#account-agents [role=status]", "Sol is unpaired.")

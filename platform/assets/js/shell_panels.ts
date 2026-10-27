@@ -53,13 +53,36 @@ export function installShellPanels(shell: HTMLElement) {
       .forEach(reader => reader.dispatchEvent(new CustomEvent("ash:aside-opened")))
   }
 
+  // A page's own Pair New Agent button shows the pairing box: focus moves to it,
+  // it scrolls into view inside the panel, or the page where the panel sits
+  // below, and it lights up for a moment (shell.css), so a press always has an
+  // answer, even with the panel already open.
+  let flashEnds: number | undefined
+  const showPairing = () => {
+    const pairing = shell.querySelector<HTMLElement>("#shell-pairing")
+    if (!pairing) return
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    pairing.focus({preventScroll: true})
+    pairing.scrollIntoView({behavior: still ? "auto" : "smooth", block: "nearest"})
+    // A second press restarts the light.
+    window.clearTimeout(flashEnds)
+    delete pairing.dataset.flash
+    void pairing.offsetWidth
+    pairing.dataset.flash = ""
+    flashEnds = window.setTimeout(() => delete pairing.dataset.flash, 1200)
+  }
+
   const onClick = (event: MouseEvent) => {
     const target = event.target instanceof Element ? event.target : null
     if (!target) return
 
     if (target.closest("[data-aside-toggle]")) return setAside(!asideOpen())
-    // A page's own Pair New Agent button opens the panel, and leaves it open.
-    if (target.closest("[data-aside-open]")) return setAside(true)
+    // A page's own Pair New Agent button opens the panel, leaves it open and
+    // shows its pairing box.
+    if (target.closest("[data-aside-open]")) {
+      setAside(true)
+      return showPairing()
+    }
     // Where the panel covers the page, a link inside it closes it.
     if (covers() && target.closest("#shell-aside a")) setAside(false)
   }
@@ -88,6 +111,7 @@ export function installShellPanels(shell: HTMLElement) {
       shell.removeEventListener("click", onClick)
       document.removeEventListener("keydown", onKeydown)
       covering.removeEventListener("change", sync)
+      window.clearTimeout(flashEnds)
     },
   }
 }
