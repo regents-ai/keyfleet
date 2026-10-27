@@ -16,11 +16,12 @@
 }
 
 /* While the visitor signs in, the profile stays where it was, above the page
-   and below the sign-in window. */
+   and its header and below the sign-in window. Stepped down from the browser's
+   top layer for that while, it takes the highest place a page part has. */
 .key-profile[open]:not(:modal) {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: var(--rg-layer-tip);
   margin: auto;
 }
 

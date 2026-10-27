@@ -5543,3 +5543,19 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   hand focus back to the button you pressed; only the window's own Delete, End
   poll or Take it off goes ahead.
 - Nothing on Keyfleet uses the browser's confirm box any more.
+
+## 2026-10-27 — Layers: one stacking place for each floating part
+
+- Shared components move from design-system 9c2a817 to d53b8f1, which adds the
+  six layer places and flat edges (Sean, LAYERS-DEPTH a). It also brings the
+  shared agent list's new layout: each agent's address, copy controls and
+  buttons sit on their own line under its whole name. So Keyfleet's own rule
+  for a narrow agents panel is gone.
+- The skip link, header, phone menu and its shade, side panel, $REGENT menu,
+  icon names, sign-in note, page progress bar, toasts and a form's phone action
+  bar each take their shared place instead of a number of their own. The
+  $REGENT menu and toasts lose their soft shadow. A key's profile, stepped down
+  while you sign in, takes the highest place a page part has, so the header
+  never covers it.
+- Artwork keeps its own order inside itself: the key map, the fleet stage, the
+  harbour city and the motion lab.

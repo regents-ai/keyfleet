@@ -460,26 +460,6 @@ div.verified-connections__notice p {
   }
 }
 
-/* The agents panel shares a row with another panel on most screens, too narrow
-   for the shared list's actions column beside each name: the name and its
-   check-in line were squeezed to nothing and the wallet's controls ran under
-   the actions. There, as on a phone, each agent's actions take their own line
-   under its name, shown at all times so no row keeps an empty line. */
-.account-agents {
-  container-type: inline-size;
-}
-
-@container (max-width: 39.99rem) {
-  .account-agents .rg-account__agents li {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas: "mark name" "mark meta" ". actions";
-  }
-
-  .account-agents .rg-account__agents .rg-account__actions {
-    opacity: 1;
-  }
-}
-
 /* Bring your agent (/pair): the pairing box keeps the width it has on a phone,
    so the agents' pictures stay together, and the page an agent starts at wraps
    rather than running off a narrow screen. On the narrowest screens the
