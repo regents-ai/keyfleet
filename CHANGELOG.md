@@ -5206,3 +5206,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `platform/assets/test/session_leaving.test.ts` (fails without the change) and
   the browser test "a rejected bearer leaves the browser anonymous…", which
   failed 3 of 17 runs alone before and passed 40 of 40 after.
+
+## 2026-10-27 — Terms of Use 1.6: the daily slice goes to Keys sold at least 2 days ago
+
+- The Fleet funds paragraph of the Terms of Use says the Daily Treasury Slice to
+  Keys is shared among the Keys sold at least 2 days ago, as the treasury pays it,
+  instead of all the Keys. Version 1.6, effective October 27, 2026 (Sean,
+  KF-GOV-TERMS a).
