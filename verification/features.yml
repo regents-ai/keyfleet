@@ -1107,3 +1107,37 @@ features:
       - platform/test/keyfleet_web/controllers/public_pages_controller_test.exs
     gaps:
       - Each entry's date is the release's, not the fleet's latest post.
+
+  - id: ask-first-windows
+    what: >-
+      Before a press that can't be undone, Keyfleet asks in its own cut-corner
+      window, never the browser's box: Unpair on Account, Delete on the member's
+      own archived project, End poll for the poll's starter, and the × that takes
+      a post off the member's own Key's wall. The window opens with focus on its
+      question; Cancel or Escape close it and hand focus back to the button that
+      opened it, and only its own button goes ahead. The server still decides
+      whether the press is allowed.
+    who: person
+    level: ordinary
+    paths:
+      - platform/lib/keyfleet_web/components/confirm_dialog.ex
+      - platform/lib/keyfleet_web/components/agents_panel.ex
+      - platform/lib/keyfleet_web/live/workspace_live.ex
+      - platform/lib/keyfleet_web/live/polls_live.ex
+      - platform/lib/keyfleet_web/live/key_profile_live.ex
+      - platform/lib/keyfleet_web/live/shell_live.ex
+      - platform/assets/js/hooks/modal_dialog.ts
+      - platform/assets/css/components/confirm_dialog.css
+    entry:
+      - route: GET /account
+      - route: GET /:fleet/:number/workspace
+      - route: GET /:fleet/:number/polls/:poll_id
+      - route: GET /:fleet/:number?key=:token_id
+    proofs:
+      - platform/test/keyfleet_web/shell_live_test.exs
+      - platform/test/keyfleet_web/live/key_profile_test.exs
+      - platform/test/browser/account_agents.spec.ts
+    gaps:
+      - Delete on a project and End poll have no test that opens the window and goes ahead; their actions' refusals are tested on their own.
+      - Focus going back to the opening button and Escape are walked in the browser for Unpair only; the other three share its component.
+      - WebKit is not run on the Mac.
