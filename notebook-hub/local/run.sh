@@ -10,7 +10,8 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=../marimohub/pin.env
 source "$here/marimohub/pin.env"
 tag="${MARIMOHUB_COMMIT:0:7}"
-hub_image="keyfleet/notebook-hub:$tag"
+hub_tag="$tag-$(cat "$here"/marimohub/*.patch | shasum -a 256 | cut -c1-7)"
+hub_image="keyfleet/notebook-hub:$hub_tag"
 runner_image="keyfleet/notebook-runner:$tag"
 net6=kf-nb-local-6pn
 front=kf-nb-local-front

@@ -5495,3 +5495,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   `hub.env.example` and the local proof now set `MARIMOHUB_INTEGRATIONS=off`,
   so the warning goes and the unused routes close. The hubs take it at their
   next deploy; no secret is needed.
+
+## 2026-10-27 — The local notebook proof uses the patched hub image
+
+- `notebook-hub/local/run.sh` still started `keyfleet/notebook-hub:<pin>`, the
+  image from before the hub carried marimohub patches, while
+  `scripts/build-images.sh` names the hub image `<pin>-<patches>`. The local
+  proof now works out the same name, so it runs the hub that is deployed.
