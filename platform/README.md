@@ -286,8 +286,10 @@ again at most once a second after a notice and heals every minute. Each new
 post in a room of a fleet anyone reads reaches every open page of it whole, on
 `Keyfleet.Rooms.Message.topic/2`. A member's pages still read as the member, and polls, which only members see,
 are read on each member's page.
-`/healthz` checks the database over a connection of its own, so a busy pool
-never fails the machine's health check. After a deploy, open pages reconnect
+`/healthz` checks the database through the site's own pool, as the template
+does (`Keyfleet.Health`), so a pool that stays full fails the machine's health
+check. The site machine keeps at most five database connections and the graph
+machine five, on the database every Regent site shares. After a deploy, open pages reconnect
 spread over a moment rather than all at once (`assets/js/app.ts`).
 
 Each page reports its Core Web Vitals once as it is left, to `POST /vitals`,

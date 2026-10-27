@@ -5027,6 +5027,31 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   so the raised grid stays whole inside the picture on a wide screen.
 - As ash-template f76f138, whose swarm city demo carries the same change.
 
+## 2026-10-27 — The city button moves beside the fleet's name; header marks match
+
+- The city button now sits just left of the fleet's name on a fleet's pages,
+  instead of at the header's far right after a hairline. Pages that are not a
+  fleet's keep the city behind them with no button.
+- Once the page is lifted, a bar at the top centre reads "Keyfleet Classic #1"
+  (the fleet's own name) with Chat and Workspace beside it. The name brings the
+  page back, as Escape now does; Chat and Workspace open those pages, and any
+  move to another page brings the page back first.
+- The header's marks share one size: the side-panel icon is 1.5rem like the
+  crown, nine dots, X and GitHub; the nine-dot button's press area is square
+  again (a plain button's 2.75rem height had made its hover a tall strip), and
+  the crown's tile has no frame, which showed as a light square in dark mode.
+  On a touch screen every mark keeps its 2.75rem press area.
+- Check: `test/browser/sea_lift.spec.ts`.
+
+## 2026-10-27 — The health check reads through the site's own pool
+
+- `/healthz` now asks the database through the site's pool (`Keyfleet.Health`,
+  as the template's `AshTemplate.Health`) instead of a connection of its own,
+  so Keyfleet holds ten database connections across its site and graph
+  machines instead of eleven. A pool that stays full now fails the check, as
+  the template's ruling of 27 October asks: one release on the shared database
+  at a time, and five connections for each serving pool.
+
 ## 2026-10-27 — Projects inside a fleet, held by Keys
 
 - A fleet's work is split into projects (`Keyfleet.Projects`), as

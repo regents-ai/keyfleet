@@ -77,6 +77,23 @@
   min-width: 0;
 }
 
+/* The city's button stands before the name, centred on it, with the fleet's
+   figures under the name. */
+.fleet-bar__title:has(> .harbour-sea__lift) {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-2);
+}
+
+.fleet-bar__title > .harbour-sea__lift {
+  grid-row: 1;
+  align-self: center;
+  margin-inline-start: calc(-1 * (2.75rem - 1.75rem) / 2);
+}
+
+.fleet-bar__title:has(> .harbour-sea__lift) > :not(.harbour-sea__lift) {
+  grid-column: 2;
+}
+
 .fleet-bar__title h1 {
   font-size: clamp(1.5rem, 3vw, 2.25rem);
   line-height: 1.05;

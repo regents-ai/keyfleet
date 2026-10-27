@@ -313,9 +313,16 @@ type HarbourSeaHook = {
   controller?: HarbourSeaController
   shownPath?: string
   shownPage?: string
-  onPageLoaded?: () => void
+  onPageLoaded?: (event?: CustomEvent<{kind: string}>) => void
+  onKey?: (event: KeyboardEvent) => void
   pushEvent(event: string, payload: object): void
-  liveSocket: {js(): {exec(el: HTMLElement, encodedJS: string): void; navigate(href: string): void}}
+  liveSocket: {
+    js(): {
+      exec(el: HTMLElement, encodedJS: string): void
+      navigate(href: string): void
+      removeClass(el: HTMLElement, names: string): void
+    }
+  }
 }
 
 /**
@@ -325,29 +332,34 @@ type HarbourSeaHook = {
  * backdrop which page is on screen, on mount and after every live navigation,
  * and the backdrop picks the crew for it.
  *
- * A new page, the card's link to a Key included, brings the page back down if
- * it was lifted and closes the card, so nobody is left on a page they can't see.
- * The lift button's own commands bring it down, so its pressed state and label
- * follow.
+ * Any navigation, the bar's Chat and Workspace and the card's link to a Key
+ * included, brings a lifted page back down, and a new page closes the card, so
+ * nobody is left on a page they can't see. Escape brings the page back as the
+ * bar's first button does, unless a Key's card is open: Escape closes that first.
  */
 export const HarbourSea = {
   mounted(this: HarbourSeaHook) {
-    this.onPageLoaded = () => {
+    this.onPageLoaded = event => {
+      const kind = event?.detail.kind
+      if (kind === "patch" || kind === "redirect")
+        this.liveSocket.js().removeClass(document.body, "sea-lifted")
       const page = window.location.pathname + window.location.search
-      if (this.shownPage !== undefined && page !== this.shownPage) {
-        const lift = document.getElementById("sea-lift")
-        if (lift && document.body.classList.contains("sea-lifted"))
-          this.liveSocket.js().exec(lift, lift.getAttribute("phx-click")!)
-        if (document.getElementById("harbour-agent")) this.pushEvent("close_agent", {})
-      }
+      if (this.shownPage !== undefined && page !== this.shownPage && document.getElementById("harbour-agent"))
+        this.pushEvent("close_agent", {})
       this.shownPage = page
       const path = window.location.pathname
       if (path === this.shownPath) return
       this.shownPath = path
       this.pushEvent("show_page", {path})
     }
-    window.addEventListener("phx:page-loading-stop", this.onPageLoaded)
+    window.addEventListener("phx:page-loading-stop", this.onPageLoaded as EventListener)
     this.onPageLoaded()
+    this.onKey = event => {
+      const back = document.getElementById("sea-return")
+      if (event.key === "Escape" && back && document.body.classList.contains("sea-lifted") && !document.querySelector("dialog[open]"))
+        this.liveSocket.js().exec(back, back.getAttribute("phx-click")!)
+    }
+    window.addEventListener("keydown", this.onKey)
     this.controller = createHarbourSeaController(
       this.el,
       id => this.pushEvent("show_agent", {id}),
@@ -368,7 +380,8 @@ export const HarbourSea = {
     this.controller?.resume()
   },
   destroyed(this: HarbourSeaHook) {
-    window.removeEventListener("phx:page-loading-stop", this.onPageLoaded!)
+    window.removeEventListener("phx:page-loading-stop", this.onPageLoaded as EventListener)
+    window.removeEventListener("keydown", this.onKey!)
     this.controller?.destroy()
     this.controller = undefined
   },

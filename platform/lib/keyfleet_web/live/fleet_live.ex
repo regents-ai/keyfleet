@@ -81,6 +81,7 @@ defmodule KeyfleetWeb.FleetLive do
   alias KeyfleetWeb.Components.SendAgent
   alias KeyfleetWeb.FleetNow
   alias KeyfleetWeb.FleetPage
+  alias KeyfleetWeb.HarbourSeaLive
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.KeyMap
   alias KeyfleetWeb.KeyProfileLive
@@ -263,6 +264,7 @@ defmodule KeyfleetWeb.FleetLive do
       >
         <header class="fleet-bar">
           <div class="fleet-bar__title">
+            <HarbourSeaLive.lift />
             <h1 tabindex="-1">{@fleet.name}</h1>
             <p id="fleet-sales" class="fleet-bar__sales">
               <.headcount

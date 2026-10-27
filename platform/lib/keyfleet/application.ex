@@ -43,7 +43,6 @@ defmodule Keyfleet.Application do
       KeyfleetWeb.Telemetry,
       {Keyfleet.Accounts.RequestRateLimiter, []},
       database_child(),
-      health_child(),
       cluster_child(),
       {Phoenix.PubSub, name: Keyfleet.PubSub},
       graph_processes_child(),
@@ -95,22 +94,6 @@ defmodule Keyfleet.Application do
   defp database_child do
     if Application.get_env(:keyfleet, :database_startup_enabled, false),
       do: Keyfleet.Repo
-  end
-
-  # `/healthz` asks the database through a connection of its own. Through the
-  # site's pool it waited behind every page whenever pages kept all five
-  # connections busy, and failed Fly's check on the site's only machine while
-  # the database itself answered.
-  defp health_child do
-    if Application.get_env(:keyfleet, :database_startup_enabled, false) do
-      # Postgrex's own pool, never the test suite's sandbox.
-      options =
-        Keyfleet.Repo.config()
-        |> Keyword.drop([:pool])
-        |> Keyword.merge(name: Keyfleet.Health, pool_size: 1)
-
-      %{id: Keyfleet.Health, start: {Postgrex, :start_link, [options]}}
-    end
   end
 
   # Background work lives in the database, so it starts with it. AshOban adds a

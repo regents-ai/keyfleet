@@ -12,19 +12,5 @@ defmodule KeyfleetWeb.HealthController do
     |> send_resp(status, body)
   end
 
-  # A running server alone does not make the site ready: read one of the site's
-  # own tables without returning rows, through the check's own connection
-  # (`Keyfleet.Application`), so pages keeping the site's pool busy never fail
-  # it. The timeout is below Fly's two-second health deadline, and no error or
-  # connection detail leaves this endpoint. The schema is the repository's own
-  # configured name, never request input.
-  # sobelow_skip ["SQL.Query"]
-  defp database_ready? do
-    sql = "SELECT 1 FROM \"#{Keyfleet.Repo.default_prefix()}\".session_authorities LIMIT 0"
-    match?({:ok, _}, Postgrex.query(Keyfleet.Health, sql, [], timeout: 1_000))
-  rescue
-    _error -> false
-  catch
-    :exit, _reason -> false
-  end
+  defp database_ready?, do: Keyfleet.Health.database_ready?()
 end
