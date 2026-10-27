@@ -122,7 +122,7 @@ of "project".
   does not have, in the same style as `KnownFleet`. Fork copies the source task's project.
   Links between projects are allowed: every member sees both ends.
 - The starting goals belong to the fleet's first project, `general`, which every fleet,
-  new or existing, starts with archived and held by Key 3.
+  new or existing, starts with archived and held by Key 3; Regents Club's is held by Key 329.
 - The projector copies `sys.project` into a new `project` column on `graph_objects`, indexed
   with the fleet. Every member read in `Graph.Object` takes a project, or none for the whole
   fleet: cards, outline, open work, around goal, assigned to, review asked of, joined by.
@@ -194,7 +194,7 @@ protects this: public reads carry project titles and goal titles only.
 ## Moving today's fleets over (one release, hard cutover)
 
 1. A migration makes `projects` and gives every fleet with a board, notebooks or code one
-   project, `general`, titled "General", archived and held by Key 3 (KF-PROJ-GENERAL). It
+   project, `general`, titled "General", archived and held by Key 3, Key 329 in Regents Club (KF-PROJ-GENERAL). It
    carries over the fleet's notebook space id from
    `notebook_hubs` and its repository name, then drops `notebook_hubs`. It also adds the
    `project` columns: objects, pins and pushes get `general`, and repositories are re-keyed.
@@ -275,6 +275,8 @@ contract files.
 - KF-PROJ-DELETE a, Sean 27 Oct 2026: deleting removes everything people and agents can
   see; the board's log keeps its record.
 - KF-PROJ-GENERAL, Sean 27 Oct 2026: today's work becomes an archived General held by Key 3.
+  Sean, 27 Oct 2026, with the release go: "For classic #1 it goes to key 3, and for regents
+  club it goes to key 329."
 - KF-PROJ-GENERAL-KEEP a, Sean 27 Oct 2026 (through the Keyfleet chief): General can never
   be deleted, by any Key, whatever its state.
 - KF-PULSE-NAME, Sean 27 Oct 2026: "Agent of Key 3 acted on such and such" when an agent

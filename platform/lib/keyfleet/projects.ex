@@ -3,7 +3,7 @@ defmodule Keyfleet.Projects do
   The projects inside each fleet. A project gives one piece of the fleet's
   work its own board, its own space in the fleet's notebook hub and its own
   repository in the code store. Every fleet has `general`, archived and held
-  by Key 3, which holds the starting goals, the fleet's first notebook space
+  by Key 3 (Key 329 in Regents Club), which holds the starting goals, the fleet's first notebook space
   and its first repository.
 
   Each project is held by one of the fleet's Keys and is active, archived or
@@ -50,8 +50,8 @@ defmodule Keyfleet.Projects do
   def general, do: "general"
 
   @doc """
-  Gives each of these fleets its `general`, archived and held by Key 3,
-  unless it has it already; a fleet that has it keeps it as it is.
+  Gives each of these fleets its `general`, archived and held by Key 3 (Key
+  329 in Regents Club), unless it has it already; a fleet that has it keeps it as it is.
   """
   def bootstrap_general!(fleet_ids) do
     Ash.bulk_create!(

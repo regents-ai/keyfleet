@@ -94,6 +94,17 @@ defmodule Keyfleet.Projects.HoldTest do
     refute_enqueued(worker: DeleteRepository)
   end
 
+  # Sean, 27 Oct 2026: General is held by Key 3, except in Regents Club, where
+  # Key 329 holds it.
+  test "General starts archived under Key 3, and under Key 329 in Regents Club" do
+    Projects.bootstrap_general!(["regents_club"])
+
+    assert %{state: :archived, key: 3} = Projects.project!(@fleet, "general", actor: @system)
+
+    assert %{state: :archived, key: 329} =
+             Projects.project!("regents_club", "general", actor: @system)
+  end
+
   defp owner(key), do: %Actors.Human{human_account_id: key, wallet_addresses: [wallet(key)]}
 
   defp wallet(key), do: "0x" <> String.pad_leading(Integer.to_string(key), 40, "0")

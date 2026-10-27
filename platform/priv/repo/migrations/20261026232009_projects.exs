@@ -1,7 +1,7 @@
 defmodule Keyfleet.Repo.Migrations.Projects do
   @moduledoc """
   Makes projects, and gives every fleet recorded so far its first one,
-  `general`, titled "General", archived and held by Key 3: it keeps the
+  `general`, titled "General", archived and held by Key 3 (Key 329 in Regents Club): it keeps the
   fleet's repository, named after the fleet, and the fleet's notebook space,
   moved over from `notebook_hubs`, which goes.
   """
@@ -42,7 +42,9 @@ defmodule Keyfleet.Repo.Migrations.Projects do
 
     execute("""
     INSERT INTO keyfleet_app.projects (fleet_id, name, title, key, state, repository, hub_project_id)
-    SELECT fleet.id, 'general', 'General', 3, 'archived', fleet.id, hub.project_id
+    SELECT fleet.id, 'general', 'General',
+           CASE fleet.id WHEN 'regents_club' THEN 329 ELSE 3 END,
+           'archived', fleet.id, hub.project_id
     FROM keyfleet_app.fleets AS fleet
     LEFT JOIN keyfleet_app.notebook_hubs AS hub ON hub.fleet_id = fleet.id
     """)

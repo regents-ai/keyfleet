@@ -5123,3 +5123,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - Deleting a repository needs the code store's delete call, on twigpine branch
   `kf-delete-repo` (bd36b4e), released before this. It deletes only the node's own
   repositories.
+
+## 2026-10-27 — Regents Club's General is held by Key 329
+
+- Every fleet's `general` project is still archived and held by Key 3, except
+  Regents Club's, which Key 329 holds (Sean, 27 October: "For classic #1 it goes
+  to key 3, and for regents club it goes to key 329."). The migration that makes
+  projects and the fleet setup both give it that Key, and the guides say so.

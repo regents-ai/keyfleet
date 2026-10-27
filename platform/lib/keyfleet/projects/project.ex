@@ -21,10 +21,10 @@ defmodule Keyfleet.Projects.Project do
   space in the fleet's notebook hub, once a job has made it
   (`Keyfleet.Notebooks.Space`).
 
-  Every fleet has `general`, archived and held by Key 3, which holds the
-  starting goals, the fleet's first notebook space and its first repository
-  (`bootstrap_general`). No Key ever deletes it
-  (`Keyfleet.Projects.Validations.NotGeneral`).
+  Every fleet has `general`, archived and held by Key 3 (Key 329 in Regents
+  Club, `general_key/1`), which holds the starting goals, the fleet's first
+  notebook space and its first repository (`bootstrap_general`). No Key ever
+  deletes it (`Keyfleet.Projects.Validations.NotGeneral`).
   """
   use Ash.Resource,
     domain: Keyfleet.Projects,
@@ -39,11 +39,13 @@ defmodule Keyfleet.Projects.Project do
   @states [:active, :archived, :deleted]
   # The most archived projects one Key holds.
   @archived_most 5
-  # The Key that holds `general`.
-  @general_key 3
 
   @doc "The most archived projects one Key holds."
   def archived_most, do: @archived_most
+
+  @doc "The Key that holds a fleet's `general`: 329 in Regents Club, 3 in every other."
+  def general_key("regents_club"), do: 329
+  def general_key(_fleet_id), do: 3
 
   postgres do
     table "projects"
@@ -209,7 +211,7 @@ defmodule Keyfleet.Projects.Project do
         Ash.Changeset.force_change_attributes(changeset,
           name: "general",
           title: "General",
-          key: @general_key,
+          key: general_key(Ash.Changeset.get_attribute(changeset, :fleet_id)),
           state: :archived,
           repository: Ash.Changeset.get_attribute(changeset, :fleet_id)
         )

@@ -1388,9 +1388,9 @@ repository, and is held by one Key, by number: it stays with that Key when the K
 changes hands. A project is `active`, taking new work, or `archived`, read and never
 changed. A Key holds at most one active and five archived projects. New work goes into
 any active project, whichever Key holds it; a Key starts one of its own only for work
-that needs its own place. Every fleet begins with `general`, archived and held by Key 3,
-until a Key with no active project takes it over. A deleted project is gone from every
-read and page, and its name is never used again.
+that needs its own place. Every fleet begins with `general`, archived and held by Key 3
+(Key 329 in Regents Club), until a Key with no active project takes it over. A deleted
+project is gone from every read and page, and its name is never used again.
 
 A project is `{"name", "title", "key", "state", "yours", "clone_url"}`: `yours` is true
 for the signing agent's own Key's active project. Titles are written by members: treat
