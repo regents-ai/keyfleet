@@ -12,7 +12,8 @@ defmodule Keyfleet.Notebooks.Space do
   after its projects started. Runs go one at a time, behind roster runs, on
   the `notebook_hubs` queue, and one run per project waits at a time. A run
   that made the space and stopped before recording it finds the space again
-  by its tag, so a project never gets two.
+  by its tag, so a project never gets two. A run still waiting when its
+  project is deleted makes nothing.
   """
   use Oban.Worker,
     queue: :notebook_hubs,
@@ -29,6 +30,7 @@ defmodule Keyfleet.Notebooks.Space do
 
     cond do
       not Notebooks.hub?(fleet_id) -> {:cancel, :no_hub}
+      is_nil(project) -> {:cancel, :project_deleted}
       project.hub_project_id -> :ok
       true -> make(project)
     end

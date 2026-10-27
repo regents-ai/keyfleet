@@ -179,6 +179,7 @@ defmodule KeyfleetWeb.AgentRoomController do
 
     places = %{
       graph: graph["after_seq"],
+      project: graph["project"],
       proposals: proposals["after_seq"],
       keys:
         params
@@ -196,7 +197,7 @@ defmodule KeyfleetWeb.AgentRoomController do
              &Rooms.sync(fleet_id, cursors, places, actor, &1)
            ),
          {:ok, check_in} <- Agents.check_in(actor, fleet_id, run),
-         {:ok, yours} <- yours(fleet_id, actor) do
+         {:ok, yours} <- yours(fleet_id, actor, %{project: places.project}) do
       muted = Rooms.muted_keys!(fleet_id, actor)
 
       refused =
@@ -311,13 +312,14 @@ defmodule KeyfleetWeb.AgentRoomController do
   # the unfinished tasks the key has taken, the submitted tasks waiting for its
   # review and the goals the agent joined as it. An agent with neither a key
   # nor a shard here writes as none.
-  defp yours(fleet_id, actor) do
+  # The work waiting on the agent's Key, the whole fleet's or one project's.
+  defp yours(fleet_id, actor, within) do
     with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
          {:ok, restricted} <- Keys.edits_restricted?(fleet_id, token_id),
-         {:ok, tasks} <- Graph.tasks_assigned_to(fleet_id, [token_id], actor: actor),
-         {:ok, reviews} <- Graph.reviews_asked_of(fleet_id, [token_id], actor: actor),
+         {:ok, tasks} <- Graph.tasks_assigned_to(fleet_id, [token_id], within, actor: actor),
+         {:ok, reviews} <- Graph.reviews_asked_of(fleet_id, [token_id], within, actor: actor),
          {:ok, goals} <-
-           Graph.goals_joined_by(fleet_id, token_id, actor.wallet_address, actor: actor) do
+           Graph.goals_joined_by(fleet_id, token_id, actor.wallet_address, within, actor: actor) do
       {:ok,
        %{
          as_key: token_id,

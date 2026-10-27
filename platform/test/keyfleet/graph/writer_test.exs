@@ -663,7 +663,8 @@ defmodule Keyfleet.Graph.WriterTest do
         credential_ref: nil,
         checked_at: "2026-09-22T12:00:00Z",
         chain_block: nil
-      }
+      },
+      projects: %{"general" => "active"}
     }
   end
 

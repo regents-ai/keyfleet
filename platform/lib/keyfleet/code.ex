@@ -33,6 +33,7 @@ defmodule Keyfleet.Code do
     resource Repository do
       define :record_repository, action: :record, args: [:repository, :owner]
       define :get_repository, action: :read, get_by: [:repository], not_found_error?: false
+      define :forget_repository, action: :forget
     end
 
     resource Push do
@@ -53,7 +54,7 @@ defmodule Keyfleet.Code do
   @doc """
   The fleet a repository's name belongs to, `{:ok, fleet_id}`: the name is
   its fleet's id, then, for any project but `general`, a hyphen and the
-  project's name (`Keyfleet.Projects.Changes.Room`); fleet ids hold no
+  project's name (`Keyfleet.Projects.Project`); fleet ids hold no
   hyphen. `:error` for a name no project's repository could have.
   """
   def repository_fleet(repository) do

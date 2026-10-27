@@ -83,6 +83,25 @@ defmodule Keyfleet.Graph.Relation do
       filter expr(fleet_id == ^arg(:fleet_id) and id in ^arg(:ids))
     end
 
+    # Every link from or to an object of one project, for its deletion. Run
+    # before the project's objects go.
+    read :of_project do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: @text
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 fragment(
+                   "EXISTS (SELECT 1 FROM keyfleet_app.graph_objects AS o WHERE o.fleet_id = ? AND o.project = ? AND o.id IN (?, ?))",
+                   ^arg(:fleet_id),
+                   ^arg(:project),
+                   source,
+                   target
+                 )
+             )
+    end
+
     create :project do
       public? false
       accept [:fleet_id, :id, :type, :source, :target, :data, :created_seq]
@@ -100,7 +119,7 @@ defmodule Keyfleet.Graph.Relation do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action([:with_ids, :project, :remove]) do
+    policy action([:with_ids, :project, :remove, :of_project]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end

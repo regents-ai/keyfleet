@@ -4,7 +4,8 @@ defmodule Keyfleet.Graph.Event do
 
   Only the events that change the workspace, the attention each write asks
   for and the command record each write leaves are copied; the runtime's own
-  bookkeeping is not. Each keeps
+  bookkeeping is not. Each keeps the projects whose items it touched
+  (`projects`), so a member reads one project's changes, and each keeps
   `byte_size`, the length of the event as a reader receives it, so a page of
   events is cut to size by the database. Only the projector writes here. Only
   the fleet's members read its events (`Keyfleet.Graph.Checks.KeyReader`),
@@ -69,23 +70,28 @@ defmodule Keyfleet.Graph.Event do
   end
 
   actions do
-    # The events after one place in the log, oldest first: at most `limit` of
-    # them, and no more than `@page_bytes` of them unless the first alone is
-    # larger. The cut is found from the recorded sizes inside the query, so
-    # only the page's own rows are loaded.
+    # The events after one place in the log, oldest first, the whole fleet's
+    # or one project's: at most `limit` of them, and no more than
+    # `@page_bytes` of them unless the first alone is larger. The cut is
+    # found from the recorded sizes inside the query, so only the page's own
+    # rows are loaded.
     read :page do
       argument :fleet_id, :string, allow_nil?: false
       argument :after_seq, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 500]
+      argument :project, :string, constraints: @text
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and seq > ^arg(:after_seq) and
+                 (is_nil(^arg(:project)) or fragment("? = ANY(?)", ^arg(:project), projects)) and
                  seq <=
                    fragment(
-                     "(SELECT COALESCE(max(p.seq) FILTER (WHERE p.total <= ?), min(p.seq)) FROM (SELECT e.seq, sum(e.byte_size) OVER (ORDER BY e.seq) AS total FROM keyfleet_app.graph_events AS e WHERE e.fleet_id = ? AND e.seq > ? ORDER BY e.seq LIMIT ?) AS p)",
+                     "(SELECT COALESCE(max(p.seq) FILTER (WHERE p.total <= ?), min(p.seq)) FROM (SELECT e.seq, sum(e.byte_size) OVER (ORDER BY e.seq) AS total FROM keyfleet_app.graph_events AS e WHERE e.fleet_id = ? AND e.seq > ? AND (?::text IS NULL OR ?::text = ANY(e.projects)) ORDER BY e.seq LIMIT ?) AS p)",
                      ^@page_bytes,
                      ^arg(:fleet_id),
                      ^arg(:after_seq),
+                     ^arg(:project),
+                     ^arg(:project),
                      ^arg(:limit)
                    )
              )
@@ -98,15 +104,17 @@ defmodule Keyfleet.Graph.Event do
       end
     end
 
-    # The fleet's latest changes, newest first, for its workspace page. The
-    # record each write leaves of itself is left out: the changes it made are
-    # listed on their own. So is a review's link to its task, which the
-    # review's own creation already tells.
+    # The fleet's latest changes, or one project's, newest first, for its
+    # workspace page. The record each write leaves of itself is left out: the
+    # changes it made are listed on their own. So is a review's link to its
+    # task, which the review's own creation already tells.
     read :activity do
       argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, constraints: @text
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and type != "keyfleet.command" and
+                 (is_nil(^arg(:project)) or fragment("? = ANY(?)", ^arg(:project), projects)) and
                  not (type == "relation.created" and
                         fragment("(? #>> '{relation,type}') = 'reviews'", payload))
              )
@@ -210,11 +218,34 @@ defmodule Keyfleet.Graph.Event do
               )
     end
 
+    # The events a page's command records name that an earlier page copied.
+    read :with_event_ids do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :event_ids, {:array, :string}, allow_nil?: false, constraints: [items: @text]
+      filter expr(fleet_id == ^arg(:fleet_id) and event_id in ^arg(:event_ids))
+    end
+
+    # Every change that touched one project, for its deletion.
+    read :of_project do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: @text
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and fragment("? = ANY(?)", ^arg(:project), projects)
+             )
+    end
+
+    destroy :forget do
+      public? false
+    end
+
     create :record do
       public? false
-      accept [:fleet_id, :seq, :event_id, :type, :actor, :timestamp, :payload]
+      accept [:fleet_id, :seq, :event_id, :type, :actor, :timestamp, :payload, :projects]
       upsert? true
-      upsert_fields [:event_id, :type, :actor, :timestamp, :payload, :byte_size]
+      upsert_fields [:event_id, :type, :actor, :timestamp, :payload, :projects, :byte_size]
 
       change fn changeset, _context ->
         encoded = changeset.attributes |> view() |> Jason.encode_to_iodata!()
@@ -234,7 +265,7 @@ defmodule Keyfleet.Graph.Event do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 
-    policy action(:record) do
+    policy action([:record, :with_event_ids, :of_project, :forget]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end
@@ -253,6 +284,11 @@ defmodule Keyfleet.Graph.Event do
     attribute :actor, :string, allow_nil?: false, public?: true, constraints: @text
     attribute :timestamp, :string, allow_nil?: false, public?: true, constraints: @text
     attribute :payload, :map, allow_nil?: false, public?: true
+
+    # The projects whose items the change touched: an item's creation or
+    # change, its project; a link, both ends'; a write's own record, every
+    # project its changes touched.
+    attribute :projects, {:array, :string}, allow_nil?: false, default: [], public?: true
     attribute :byte_size, :integer, allow_nil?: false, constraints: [min: 1]
   end
 

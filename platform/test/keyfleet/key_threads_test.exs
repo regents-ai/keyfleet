@@ -78,7 +78,7 @@ defmodule Keyfleet.KeyThreadsTest do
              Rooms.sync(
                @fleet,
                [%{slug: "key-5", after_seq: 0}],
-               %{graph: 0, proposals: 0, keys: [], dms: nil, quotes: nil},
+               %{graph: 0, project: nil, proposals: 0, keys: [], dms: nil, quotes: nil},
                first,
                false
              )
@@ -96,7 +96,7 @@ defmodule Keyfleet.KeyThreadsTest do
     taken = to_key!(first, 5, "Taken off")
     Rooms.remove_from_wall!(taken.id, actor: fifth)
     walls = [%{token_id: 5, after_seq: 0}, %{token_id: 7, after_seq: 0}]
-    places = %{graph: 0, proposals: 0, keys: walls, dms: nil, quotes: nil}
+    places = %{graph: 0, project: nil, proposals: 0, keys: walls, dms: nil, quotes: nil}
 
     assert {:ok, %{keys: [five, seven]}} = Rooms.sync(@fleet, [], places, first, false)
     assert {five.token_id, five.head_seq, five.cursor} == {5, 2, 2}

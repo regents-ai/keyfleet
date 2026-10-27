@@ -11,6 +11,13 @@ defmodule Keyfleet.Graph.Projection do
   every event it reads, including the runtime's own bookkeeping, which is
   not copied.
 
+  Each event keeps the projects whose items it touched. A page skips every
+  event that touches an item of a deleted project, or one already gone from
+  the read tables, and everything such an event would change: a project
+  deleted while its last writes were on their way never comes back. Each
+  page holds the fleet's cursor from its start, as a project's deletion does
+  (`Keyfleet.Projects.Changes.Forget`), so the two take turns.
+
   The log names itself with `run_id`, minted when its file was created. A
   cursor from another log, or one past the log's head, was copied from a log
   that is no longer this fleet's: the fleet's read tables are removed and
@@ -20,6 +27,7 @@ defmodule Keyfleet.Graph.Projection do
   alias Keyfleet.Actors.System
   alias Keyfleet.Graph
   alias Keyfleet.Graph.Writer
+  alias Keyfleet.Projects
 
   @system %System{}
   @page 500
@@ -97,8 +105,11 @@ defmodule Keyfleet.Graph.Projection do
     events = Enum.filter(events, &(&1["type"] in @copied))
 
     transact(fn ->
+      Graph.hold_cursor!(fleet_id, actor: @system)
+      known = known(fleet_id, events)
+      events = place(fleet_id, events, known)
       record(fleet_id, events)
-      project(fleet_id, events)
+      project(fleet_id, events, known.objects)
 
       with {:ok, cursor} <- Graph.advance_cursor(cursor, %{applied_seq: next_seq}, actor: @system),
            do: cursor
@@ -117,7 +128,8 @@ defmodule Keyfleet.Graph.Projection do
         type: event["type"],
         actor: event["actor"],
         timestamp: event["timestamp"],
-        payload: public_payload(event)
+        payload: public_payload(event),
+        projects: event["projects"]
       }
     end)
     |> Graph.record_events!(actor: @system)
@@ -128,19 +140,134 @@ defmodule Keyfleet.Graph.Projection do
 
   defp public_payload(%{"payload" => payload}), do: payload
 
-  # The page's events folded, in order, over the objects they patch, then
-  # written once each.
-  defp project(fleet_id, events) do
-    patched =
-      for %{"type" => "patch.applied", "payload" => p} <- events, uniq: true, do: p["target"]
+  # What the read tables already hold of the objects, links and events the
+  # page's events name: the links a removal names first, then the objects at
+  # either end of a link, patched or asked about, and the events a command
+  # record names that an earlier page copied.
+  defp known(fleet_id, events) do
+    created =
+      for %{"type" => "object.created", "payload" => p} <- events,
+          into: MapSet.new(),
+          do: p["object"]["id"]
 
-    known =
+    linked =
+      for %{"type" => "relation.created", "payload" => p} <- events,
+          into: MapSet.new(),
+          do: p["relation"]["id"]
+
+    removed =
+      for %{"type" => "relation.removed", "payload" => p} <- events,
+          p["id"] not in linked,
+          uniq: true,
+          do: p["id"]
+
+    ends =
       fleet_id
-      |> Graph.read_objects!(patched, actor: @system)
+      |> Graph.read_relations!(removed, actor: @system)
+      |> Map.new(&{&1.id, [&1.source, &1.target]})
+
+    named =
+      events
+      |> Enum.flat_map(fn
+        %{"type" => "patch.applied", "payload" => p} ->
+          [p["target"]]
+
+        %{"type" => "relation.created", "payload" => %{"relation" => r}} ->
+          [r["source"], r["target"]]
+
+        %{"type" => "keyfleet.attention", "payload" => p} ->
+          [p["object_id"]]
+
+        _event ->
+          []
+      end)
+      |> Enum.concat(Enum.concat(Map.values(ends)))
+      |> Enum.reject(&(&1 in created))
+      |> Enum.uniq()
+
+    objects =
+      fleet_id
+      |> Graph.read_objects!(named, actor: @system)
       |> Map.new(
         &{&1.id, %{type: &1.type, data: Map.put(&1.data, "sys", &1.sys), version: &1.version}}
       )
 
+    on_page = MapSet.new(events, & &1["id"])
+
+    earlier =
+      for %{"type" => "keyfleet.command", "payload" => p} <- events,
+          id <- p["events"],
+          id not in on_page,
+          uniq: true,
+          do: id
+
+    placed =
+      fleet_id
+      |> Graph.events_with_ids!(earlier, actor: @system)
+      |> Map.new(&{&1.event_id, &1.projects})
+
+    %{objects: objects, ends: ends, placed: placed}
+  end
+
+  # The page's events, each with the projects it touched, without those that
+  # touch a deleted project or an item the read tables no longer hold. A
+  # command record touches the projects of the copied events it names.
+  defp place(fleet_id, events, known) do
+    live = fleet_id |> Projects.projects!(actor: @system) |> MapSet.new(& &1.name)
+    of = Map.new(known.objects, fn {id, object} -> {id, object.data["sys"]["project"]} end)
+
+    state = %{live: live, of: of, ends: known.ends, placed: known.placed}
+    {kept, _state} = Enum.flat_map_reduce(events, state, &place_one/2)
+    kept
+  end
+
+  defp place_one(event, state) do
+    state = learn(event, state)
+    touched = touched(event, state)
+
+    if Enum.all?(touched, &(&1 in state.live)) do
+      projects = Enum.uniq(touched)
+      {[Map.put(event, "projects", projects)], put_in(state.placed[event["id"]], projects)}
+    else
+      {[], put_in(state.placed[event["id"]], :gone)}
+    end
+  end
+
+  defp learn(%{"type" => "object.created", "payload" => %{"object" => o}}, state),
+    do: put_in(state.of[o["id"]], o["data"]["sys"]["project"])
+
+  defp learn(%{"type" => "relation.created", "payload" => %{"relation" => r}}, state),
+    do: put_in(state.ends[r["id"]], [r["source"], r["target"]])
+
+  defp learn(_event, state), do: state
+
+  defp touched(%{"type" => "object.created", "payload" => %{"object" => o}}, state),
+    do: [state.of[o["id"]]]
+
+  defp touched(%{"type" => "patch.applied", "payload" => p}, state), do: [state.of[p["target"]]]
+
+  defp touched(%{"type" => "relation.created", "payload" => %{"relation" => r}}, state),
+    do: Enum.map(state.ends[r["id"]], &state.of[&1])
+
+  defp touched(%{"type" => "relation.removed", "payload" => %{"id" => id}}, state),
+    do: state.ends |> Map.get(id, [nil]) |> Enum.map(&state.of[&1])
+
+  defp touched(%{"type" => "keyfleet.attention", "payload" => p}, state),
+    do: [state.of[p["object_id"]]]
+
+  defp touched(%{"type" => "keyfleet.command", "payload" => p}, state) do
+    Enum.flat_map(p["events"], fn id ->
+      case state.placed do
+        %{^id => :gone} -> [nil]
+        %{^id => projects} -> projects
+        _not_copied -> []
+      end
+    end)
+  end
+
+  # The page's events folded, in order, over the objects they patch, then
+  # written once each.
+  defp project(fleet_id, events, known) do
     folded =
       Enum.reduce(
         events,

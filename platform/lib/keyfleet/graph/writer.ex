@@ -79,10 +79,11 @@ defmodule Keyfleet.Graph.Writer do
   write's turn comes, just before the write reaches the host, with the
   milliseconds it may spend added to `args`. It is a named function, not an
   anonymous one, so a write still works while a release has the site and graph
-  machines on different code. It answers `{:ok, command}`, the command's `:id`, `:principal` and `:auth` as
-  they stand at that moment, or `{:error, error}`, which
-  is returned as it is with nothing sent; one that exits or raises is
-  answered `{:error, :unavailable}`, also with nothing sent.
+  machines on different code. It answers `{:ok, command}`, the command's
+  `:id`, `:principal`, `:auth` and the fleet's `:projects` as they stand at
+  that moment, or `{:error, error}`, which is returned as it is with nothing
+  sent; one that exits or raises is answered `{:error, :unavailable}`, also
+  with nothing sent.
   """
   @spec command(String.t(), String.t(), map(), authorize()) :: reply()
   def command(fleet_id, op, body, authorize) when op in @write_ops do

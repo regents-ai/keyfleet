@@ -33,6 +33,24 @@ defmodule Keyfleet.Code.NodeClient do
   end
 
   @doc """
+  Deletes the repository from the store for good, with its history:
+  `:ok`, also when it is already gone, or `{:error, reason}`.
+  """
+  def delete_repository(repository, owner) do
+    url = Path.join(["/api/v1/repos", segment(owner), segment(repository)])
+
+    case request(
+           Pass.delete(repository),
+           [method: :delete, url: url],
+           Code.config()[:node_timeout_ms]
+         ) do
+      {:ok, %Req.Response{status: 204}} -> :ok
+      {:ok, %Req.Response{status: status}} -> {:error, {:code_store_status, status}}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
   What the folder `path` holds on the default branch now, `""` for the top:
   `{:ok, entries}`, each with `type` (`"blob"` for a file, `"tree"` for a
   folder), `name` and, for a file, `size`; or `{:error, reason}`.

@@ -7,17 +7,46 @@ defmodule Keyfleet.Projects.Errors.UnknownProjectError do
 end
 
 defmodule Keyfleet.Projects.Errors.NameTakenError do
-  @moduledoc "Raised when a new project takes a name its fleet already uses."
+  @moduledoc """
+  Raised when a new project takes a name its fleet already uses, or once
+  used: a deleted project's name is never used again.
+  """
   use Splode.Error, fields: [:fleet_id, :name], class: :invalid
 
-  def message(%{fleet_id: fleet_id, name: name}),
-    do: "#{fleet_id} already has a project named #{name}"
+  def message(%{name: name}),
+    do: "This fleet already has, or had, a project named #{name}. Choose another name."
 end
 
-defmodule Keyfleet.Projects.Errors.FullError do
-  @moduledoc "Raised when a fleet already holds the most projects it may."
-  use Splode.Error, fields: [:fleet_id, :most], class: :invalid
+defmodule Keyfleet.Projects.Errors.HoldError do
+  @moduledoc """
+  Raised when a Key may not start, archive, take over or delete a project
+  now, with the words that say why (`message`) and a short code for agents:
 
-  def message(%{fleet_id: fleet_id, most: most}),
-    do: "#{fleet_id} already holds #{most} projects, the most a fleet may"
+    * `active_held`: the Key is working on another project
+    * `no_active`: the Key holds no active project to archive
+    * `archive_full`: the Key already holds the most archived projects
+    * `not_archived`: only an archived project is taken over or deleted
+    * `not_holder`: only the Key that holds an archived project deletes it
+  """
+  use Splode.Error, fields: [:code, :words, :project], class: :invalid
+
+  def message(%{words: words}), do: words
+end
+
+defmodule Keyfleet.Projects.Errors.ClosedError do
+  @moduledoc """
+  Raised when work names a project that takes none: `project_archived` for
+  an archived one, `project_unknown` for a name the fleet has no project
+  by. `active` names the fleet's active projects, where new work goes.
+  """
+  use Splode.Error, fields: [:code, :project, :active], class: :invalid
+
+  def message(%{code: :project_archived, project: project, active: active}),
+    do: "#{project} is archived. " <> where(active)
+
+  def message(%{code: :project_unknown, project: project, active: active}),
+    do: "This fleet has no project named #{project}. " <> where(active)
+
+  defp where([]), do: "No project is active; a Key starts one or takes one over."
+  defp where(active), do: "New work goes into an active project: #{Enum.join(active, ", ")}."
 end

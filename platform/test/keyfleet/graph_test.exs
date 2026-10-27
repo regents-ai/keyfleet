@@ -63,6 +63,8 @@ defmodule Keyfleet.GraphTest do
 
     await_ready()
     start_supervised!({Keyfleet.Graph.Projectors, fleets: [@fleet]})
+    # Key 1 takes over the fleet's archived `general`, so new work can go there.
+    Keyfleet.Projects.take_over_project!(@fleet, 1, "general", actor: @holder)
     :ok
   end
 

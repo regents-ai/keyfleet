@@ -50,7 +50,31 @@ defmodule KeyfleetWeb.Refusal do
       {"There is no fleet with this id.", "GET /api/v1/fleets lists every fleet."},
     "project_unknown" =>
       {"This fleet has no project with that name.",
-       "Use the name of one of the fleet's projects, such as general."},
+       "Use the name of one of the fleet's projects. projects_list (GET /api/v1/agent/fleets/FLEET_ID/projects) lists them, active ones first."},
+    "project_archived" =>
+      {"This project is archived, so it takes no new work.",
+       "Put the work in one of the active projects in details.active; any member works in any of them. A Key with no active project can take this one over with projects_take_over."},
+    "project_invalid" =>
+      {"A project's name or title doesn't fit.",
+       "A name is lowercase letters and digits in parts joined by single hyphens, up to 32 characters, such as lab. A title is 1 to 60 characters on one line."},
+    "project_name_taken" =>
+      {"This fleet already has, or had, a project with that name.",
+       "Choose another name. A deleted project's name is never used again."},
+    "project_active_held" =>
+      {"This Key is already working on a project.",
+       "Archive it with projects_archive first, or add the work to it: new work goes into any active project."},
+    "project_no_active" =>
+      {"This Key has no active project to archive.",
+       "projects_list names the project each Key holds."},
+    "project_archive_full" =>
+      {"This Key already holds five archived projects.",
+       "Delete one with projects_delete, or another Key can take one over with projects_take_over."},
+    "project_not_archived" =>
+      {"Only an archived project is taken over or deleted.",
+       "projects_list gives each project's state. Archive an active project with projects_archive, as the Key that holds it."},
+    "project_not_holder" =>
+      {"Only the Key that holds an archived project deletes it.",
+       "Act as the Key projects_list names for it, or take it over first."},
     "fleet_coming_soon" =>
       {"This fleet hasn't opened yet.",
        "It has no rooms, workspace, proposals or Keys until it opens. GET /api/v1/fleets says when it has."},
@@ -328,6 +352,9 @@ defmodule KeyfleetWeb.Refusal do
     "code_edits_restricted" =>
       {"A vote of this fleet has stopped this Key changing its work, so it can copy the code but not send changes.",
        "Send changes once the fleet's vote allows this Key's edits again."},
+    "code_project_archived" =>
+      {"This project is archived, so its code takes no changes. It can still be copied.",
+       "Send the work to an active project's repository: projects_list gives each one's clone_url. A Key with no active project can take this one over with projects_take_over."},
     "code_catching_up" =>
       {"Who holds this fleet's Keys is still being read.", "Try again in a minute."},
     "code_setting_up" => {"This fleet's code is still being set up.", "Try again in a minute."},
@@ -355,6 +382,18 @@ defmodule KeyfleetWeb.Refusal do
   def body(code) do
     {message, hint} = Map.fetch!(@refusals, code)
     %{error: %{code: code, message: message, hint: hint}}
+  end
+
+  @doc """
+  The body refusing work in a project that takes none
+  (`Keyfleet.Projects.Errors.ClosedError`), in words naming the fleet's
+  active projects, which `details` lists.
+  """
+  def closed(code, message, details) do
+    code
+    |> body()
+    |> put_in([:error, :message], message)
+    |> put_in([:error, :details], details)
   end
 
   @doc """

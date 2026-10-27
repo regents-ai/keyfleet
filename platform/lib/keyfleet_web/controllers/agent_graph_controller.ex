@@ -54,32 +54,39 @@ defmodule KeyfleetWeb.AgentGraphController do
 
   def changes(conn, %{"fleet_id" => fleet_id} = params) do
     fleet_id
-    |> Graph.list_changes(Map.take(params, ~w(after_seq limit)), actor: conn.assigns.agent_actor)
+    |> Graph.list_changes(Map.take(params, ~w(after_seq limit project)),
+      actor: conn.assigns.agent_actor
+    )
     |> read(conn, fleet_id)
   end
 
-  # What the workspace's pages keep at hand: its newest goals, as its Project
-  # lists them, and what its members pinned in its Docs and its Code.
-  def board(conn, %{"fleet_id" => fleet_id}) do
+  # What the workspace's pages keep at hand, the whole fleet's or one
+  # project's: its newest goals, as its Project lists them, and what its
+  # members pinned in its Docs and its Code.
+  def board(conn, %{"fleet_id" => fleet_id} = params) do
     opts = [actor: conn.assigns.agent_actor]
+    project = params["project"]
 
     with {:ok, %{}} <- Fleets.get_fleet(fleet_id, actor: %System{}),
+         {:ok, projects} <- Projects.projects(fleet_id, opts),
+         {:ok, shown} <- shown(projects, project),
          {:ok, goals} <-
            Graph.workspace_cards(
              fleet_id,
-             %{type: "goal"},
+             %{type: "goal", project: project},
              Keyword.put(opts, :page, limit: @board_goals)
            ),
-         {:ok, notebooks} <- Graph.pins(fleet_id, :docs, opts),
-         {:ok, code} <- Graph.pins(fleet_id, :code, opts),
-         {:ok, space} <- space(fleet_id),
-         {:ok, repository} <- Code.repository(fleet_id, Projects.general()) do
+         {:ok, notebooks} <- Graph.pins(fleet_id, :docs, project, opts),
+         {:ok, code} <- Graph.pins(fleet_id, :code, project, opts) do
       json(conn, %{
         goals: Enum.map(goals.results, &goal(&1, fleet_id)),
         more_goals: goals.more?,
         pinned_notebooks:
           for pin <- notebooks do
+            space = Notebooks.hub?(fleet_id) && shown[pin.project].hub_project_id
+
             %{
+              project: pin.project,
               notebook_id: pin.target,
               title: pin.title,
               notebook_url: space && Notebooks.notebook_url(fleet_id, space, pin.target)
@@ -87,7 +94,10 @@ defmodule KeyfleetWeb.AgentGraphController do
           end,
         pinned_code:
           for pin <- code do
+            repository = shown[pin.project].repository
+
             %{
+              project: pin.project,
               path: pin.target,
               title: pin.title,
               folder: pin.folder?,
@@ -97,6 +107,7 @@ defmodule KeyfleetWeb.AgentGraphController do
       })
     else
       {:ok, nil} -> answer(conn, refusal(404, "fleet_unknown"))
+      :unknown -> answer(conn, refusal(404, "project_unknown"))
       result -> read(result, conn, fleet_id)
     end
   end
@@ -178,6 +189,7 @@ defmodule KeyfleetWeb.AgentGraphController do
   defp goal(object, fleet_id) do
     %{
       id: object.id,
+      project: object.project,
       title: object.title,
       status: object.card["status"],
       starting: is_integer(object.sys["starting"]),
@@ -187,12 +199,14 @@ defmodule KeyfleetWeb.AgentGraphController do
     }
   end
 
-  # The general project's notebook space, nil for a fleet without notebooks
-  # or before the space is made.
-  defp space(fleet_id) do
-    if Notebooks.hub?(fleet_id),
-      do: Notebooks.space(fleet_id, Projects.general()),
-      else: {:ok, nil}
+  # The projects a board shows, by name: the one asked for, or every one.
+  defp shown(projects, nil), do: {:ok, Map.new(projects, &{&1.name, &1})}
+
+  defp shown(projects, name) do
+    case Enum.find(projects, &(&1.name == name)) do
+      nil -> :unknown
+      project -> {:ok, %{name => project}}
+    end
   end
 
   # Each wallet has its own allowance of writes in each fleet, spent before
@@ -223,6 +237,10 @@ defmodule KeyfleetWeb.AgentGraphController do
 
   defp answer(conn, {status, body}), do: conn |> put_status(status) |> json(body)
 
+  defp answer(%RefusedError{code: code, reason: reason, details: details})
+       when code in ~w(project_archived project_unknown),
+       do: {project_status(code), Refusal.closed(code, reason, details)}
+
   defp answer(%RefusedError{code: code, reason: reason, details: details}) do
     {status, hint} = Map.fetch!(@workspace_refusals, code)
     {status, %{error: %{code: code, message: reason, hint: hint, details: details}}}
@@ -239,6 +257,9 @@ defmodule KeyfleetWeb.AgentGraphController do
     do: refusal(503, "indeterminate", %{retry_same_command_id: true})
 
   defp answer(_error), do: nil
+
+  defp project_status("project_archived"), do: 409
+  defp project_status("project_unknown"), do: 404
 
   # The policy's own refusal, before the write took its turn.
   defp fallback(%Ash.Error.Forbidden{}), do: refusal(403, "not_a_key_holder")

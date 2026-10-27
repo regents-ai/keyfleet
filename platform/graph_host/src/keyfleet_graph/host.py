@@ -10,6 +10,10 @@ it and `Runtime.load` rebuilds memory from what is durable.
 
 Refusals are decided before the transaction begins, write nothing and are
 not remembered; each is a pure function of the request and the current state.
+
+Each command carries the fleet's projects as the site read them at the
+write's turn. A write goes only into an active project, and an object of a
+project the command does not list, one the site deleted, is not found.
 """
 
 import hashlib
@@ -204,6 +208,7 @@ class Host:
     # ---------- planners: every check, then the closure that writes ----------
 
     def _plan_create(self, command: Command, body: protocol.CreateBody) -> Callable[[Reactions], dict]:
+        _check_active(command, body.project)
         member = MEMBER_MODELS.get(body.type)
         if member is None:
             raise _invalid("type", f"unknown object type {body.type!r}")
@@ -217,7 +222,8 @@ class Host:
         return apply
 
     def _plan_patch(self, command: Command, body: protocol.PatchBody) -> Callable[[Reactions], dict]:
-        obj = self._editable(body.id)
+        obj = self._editable(command, body.id)
+        _check_active(command, _project(obj))
         _check_version(obj, body.expected_version)
         _check_not_starting(obj)
         _check_fields(MEMBER_MODELS[obj.type], set(body.set) | set(body.unset), body.set, command, obj)
@@ -243,7 +249,8 @@ class Host:
         return apply
 
     def _plan_archive(self, command: Command, body: protocol.ArchiveBody) -> Callable[[Reactions], dict]:
-        obj = self._editable(body.id)
+        obj = self._editable(command, body.id)
+        _check_active(command, _project(obj))
         _check_version(obj, body.expected_version)
         _check_not_starting(obj)
         _check_archiver(obj, command)
@@ -258,8 +265,9 @@ class Host:
         return apply
 
     def _plan_link(self, command: Command, body: protocol.LinkBody) -> Callable[[Reactions], dict]:
-        source = self._live(body.source, "source")
-        target = self._live(body.target, "target")
+        source = self._live(command, body.source, "source")
+        target = self._live(command, body.target, "target")
+        _check_active(command, _project(source))
         endpoints = RELATION_ENDPOINTS.get(body.type)
         if endpoints is None:
             raise _invalid("type", f"unknown relation type {body.type!r}")
@@ -290,7 +298,9 @@ class Host:
             raise _invalid("relation_id", "a review stays linked to the task it judged")
         if rel.type == "forks":
             raise _invalid("relation_id", "a fork stays linked to the task it was copied from")
-        _check_owner(self.graph.get_object(rel.source), command)
+        source = self._object(command, rel.source, "relation_id")
+        _check_active(command, _project(source))
+        _check_owner(source, command)
         target = self.graph.get_object(rel.target)
 
         def apply(reactions: Reactions) -> dict:
@@ -302,7 +312,7 @@ class Host:
         return apply
 
     def _plan_join(self, command: Command, body: protocol.JoinBody) -> Callable[[Reactions], dict]:
-        goal = self._goal(body.id)
+        goal = self._goal(command, body.id)
         member = _member(command)
         recorded = goal.data["sys"].get("joined", [])
         joined = _unlapsed(recorded, member)
@@ -315,7 +325,7 @@ class Host:
         return self._rejoined(command, goal, [*joined, member])
 
     def _plan_leave(self, command: Command, body: protocol.LeaveBody) -> Callable[[Reactions], dict]:
-        goal = self._goal(body.id)
+        goal = self._goal(command, body.id)
         member = _member(command)
         recorded = goal.data["sys"].get("joined", [])
         joined = [entry for entry in _unlapsed(recorded, member) if not _same_member(entry, member)]
@@ -341,7 +351,8 @@ class Host:
         submission is only a claim: whether the work is accepted is for its
         reviews to say.
         """
-        task = self._task(body.id, "id")
+        task = self._task(command, body.id, "id")
+        _check_active(command, _project(task))
         _check_version(task, body.expected_version)
         key = command.auth.key.token_id
         _check_holder(task, key, key)
@@ -350,7 +361,7 @@ class Host:
             raise _invalid("evidence", "a submission names its result, its evidence or both")
         produced = []
         for index, item_id in enumerate(evidence):
-            item = self._live(item_id, f"evidence.{index}")
+            item = self._live(command, item_id, f"evidence.{index}")
             if item.type not in RELATION_ENDPOINTS["produces"][1]:
                 raise _invalid(f"evidence.{index}", f"a task cannot produce a {item.type}")
             produced.append(item)
@@ -389,7 +400,8 @@ class Host:
         two different Keys belong to different people is not something the
         graph knows, so a review never claims it.
         """
-        task = self._task(body.task, "task")
+        task = self._task(command, body.task, "task")
+        _check_active(command, _project(task))
         submitted = task.data["sys"].get("submitted")
         if task.data["progress"] != "done" or submitted is None:
             raise _invalid("task", "the task has not been submitted for review")
@@ -411,7 +423,7 @@ class Host:
             "task_version": task.version,
             "submitted_by": submitted_by,
             "evidence": [
-                {"id": item_id, "version": self._object(item_id, "evidence").version}
+                {"id": item_id, "version": self._object(command, item_id, "evidence").version}
                 for item_id in submitted["evidence"]
             ],
             "commit_ref": task.data.get("commit_ref"),
@@ -423,7 +435,7 @@ class Host:
             "reproduction": body.reproduction,
         }
         # A review belongs to the project of the task it judged.
-        sys = {**_sys(command, task.data["sys"]["project"]), "review": receipt}
+        sys = {**_sys(command, _project(task)), "review": receipt}
         record = _validate(RECORD_MODELS["review"], {**member, "sys": sys})
 
         def apply(reactions: Reactions) -> dict:
@@ -441,14 +453,16 @@ class Host:
         task forked is left as it was, its holder included: forking is how a
         member works on a task another Key holds.
         """
-        task = self._task(body.id, "id")
+        task = self._task(command, body.id, "id")
+        _check_active(command, _project(task))
         copied = {field: task.data[field] for field in ("title", "deliverable", "acceptance_criteria", "discussion") if task.data.get(field)}
         member = {**copied, "assignee_key": command.auth.key.token_id, "progress": "doing"}
-        record = _validate(RECORD_MODELS["task"], {**member, "sys": _sys(command, task.data["sys"]["project"])})
+        record = _validate(RECORD_MODELS["task"], {**member, "sys": _sys(command, _project(task))})
         implements = [
-            rel.target
+            target.id
             for rel in self.graph.relations(source=task.id, type="implements")
-            if not self.graph.get_object(rel.target).data["sys"]["archived"]
+            if _project(target := self.graph.get_object(rel.target)) in command.projects
+            and not target.data["sys"]["archived"]
         ]
 
         def apply(reactions: Reactions) -> dict:
@@ -513,33 +527,36 @@ class Host:
 
     # ---------- state helpers ----------
 
-    def _goal(self, object_id: str):
-        goal = self._live(object_id, "id")
+    def _goal(self, command: Command, object_id: str):
+        goal = self._live(command, object_id, "id")
         if goal.type != "goal":
             raise _invalid("id", f"only a goal can be joined, not a {goal.type}")
+        _check_active(command, _project(goal))
         return goal
 
-    def _object(self, object_id: str, path: str):
+    # An object of a project the command does not list belongs to a deleted
+    # project, and is not found.
+    def _object(self, command: Command, object_id: str, path: str):
         obj = self.graph.get_object(object_id)
-        if obj is None:
+        if obj is None or _project(obj) not in command.projects:
             raise Refusal("not_found", f"no such object ({path})", {"id": object_id})
         return obj
 
-    def _live(self, object_id: str, path: str):
-        obj = self._object(object_id, path)
+    def _live(self, command: Command, object_id: str, path: str):
+        obj = self._object(command, object_id, path)
         if obj.data["sys"]["archived"]:
             raise _invalid(path, "the object is archived")
         return obj
 
-    def _task(self, object_id: str, path: str):
-        obj = self._live(object_id, path)
+    def _task(self, command: Command, object_id: str, path: str):
+        obj = self._live(command, object_id, path)
         if obj.type != "task":
             raise _invalid(path, "the object is not a task")
         return obj
 
     # Reviews are written once and stay as written.
-    def _editable(self, object_id: str):
-        obj = self._live(object_id, "id")
+    def _editable(self, command: Command, object_id: str):
+        obj = self._live(command, object_id, "id")
         if obj.type == "review":
             raise _invalid("id", "a review cannot be changed")
         return obj
@@ -791,6 +808,26 @@ def _check_archiver(obj, command: Command) -> None:
             "only the Key that created this archives it, once no other Key holds it: fork it instead",
             {"id": obj.id, "owner_key": _owner(obj)},
         )
+
+
+def _project(obj) -> str:
+    return obj.data["sys"]["project"]
+
+
+def _check_active(command: Command, project: str) -> None:
+    """New work goes only into an active project; a refusal names the active ones."""
+    state = command.projects.get(project)
+    if state == "active":
+        return
+    active = sorted(name for name, held in command.projects.items() if held == "active")
+    if active:
+        where = f"New work goes into an active project: {', '.join(active)}."
+    else:
+        where = "No project is active; a Key starts one or takes one over."
+    details = {"project": project, "active": active}
+    if state is None:
+        raise Refusal("project_unknown", f"This fleet has no project named {project}. {where}", details)
+    raise Refusal("project_archived", f"{project} is archived. {where}", details)
 
 
 def _sys(command: Command, project: str) -> dict[str, Any]:

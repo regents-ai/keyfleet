@@ -35,6 +35,18 @@ defmodule Keyfleet.Code.Push do
       ]
     end
 
+    # Every push to one project's repository, for its deletion.
+    read :of_project do
+      public? false
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false
+      filter expr(fleet_id == ^arg(:fleet_id) and project == ^arg(:project))
+    end
+
+    destroy :forget do
+      public? false
+    end
+
     read :recent do
       argument :fleet_id, :string, allow_nil?: false
       argument :project, :string, allow_nil?: false
@@ -62,7 +74,7 @@ defmodule Keyfleet.Code.Push do
       authorize_if {Keyfleet.Access.Check, read: :code, scope: :fleet_id}
     end
 
-    policy action_type(:create) do
+    policy action([:record, :of_project, :forget]) do
       authorize_if actor_attribute_equals(:role, :system)
     end
   end
