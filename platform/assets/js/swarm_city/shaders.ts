@@ -398,12 +398,12 @@ fn vs_main(
 ) -> NodeVarying {
   var output: NodeVarying;
   let at = corner(vertex);
-  // Never smaller than a share of the picture's height, so a far agent still reads as a disc
-  // and keeps the same size beside the city on a phone as on a wide screen.
+  // Never smaller than a share of the picture's shorter side, so a far agent still reads as a
+  // disc and keeps the same size beside the city on a tall phone as on a wide screen.
   let centre = city.viewProjection * vec4f(position, 1.0);
   let perPixel = centre.w * 2.0 / (city.resolution.y * FOCAL);
   let lead = select(0.0, 1.0, size > 0.15);
-  let least = mix(0.006, 0.016, lead) * city.resolution.y * perPixel;
+  let least = mix(0.006, 0.016, lead) * min(city.resolution.x, city.resolution.y) * perPixel;
   let radius = max(size, least);
   let world = position + (city.right * at.x + city.up * at.y) * radius;
   output.clip = city.viewProjection * vec4f(world, 1.0);

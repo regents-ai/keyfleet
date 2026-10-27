@@ -5245,3 +5245,11 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   reader key: `SIWA_ACTIVITY_READ_TOKEN` is now read (config/runtime.exs), as
   ash-template reads it. Until the key is set, every read failed as not
   configured, which is why an agent's activity "couldn't be read right now".
+
+## 2026-10-27 — Swarm city: discs keep their size on phones; the Key count rides raised
+
+- A disc's smallest size now follows the shorter side of the picture, so on a
+  tall phone the discs are as small beside the city as on a wide screen
+  instead of covering it. As ash-template.
+- The count of Keys after a disc's name sits raised beside the Key, as a small
+  superscript, instead of level with it.
