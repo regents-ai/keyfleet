@@ -42,6 +42,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     Rooms.bootstrap_rooms!(Fleets.catalog_ids())
     ChainHelpers.deploy!(@fleet, %{manager_address: @contract})
     for {token_id, wallet} <- @owners, do: record_owner(token_id, 1, wallet)
+    take_over_general(@fleet, @owners[1])
 
     secret = :crypto.strong_rand_bytes(32)
     old = Application.get_env(:keyfleet, :siwa_broker_url)
@@ -240,7 +241,16 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert graph(c, bea, "join", %{as_key: 2, command_id: "j-1", id: goal["id"]}).status == 200
 
     holder = %Actors.Human{human_account_id: 1, wallet_addresses: [@owners[1]]}
-    pin = %{fleet_id: @fleet, place: :code, target: "goals", title: "goals", folder?: true}
+
+    pin = %{
+      fleet_id: @fleet,
+      project: "general",
+      place: :code,
+      target: "goals",
+      title: "goals",
+      folder?: true
+    }
+
     Graph.pin!(pin, actor: holder)
 
     Graph.pin!(
@@ -920,6 +930,13 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     end
 
     for token_id <- token_ids, do: record_owner(token_id, 1, owner_wallet(token_id), @cascade)
+    take_over_general(@cascade, owner_wallet(1))
+  end
+
+  # Key 1 takes over the fleet's archived `general`, so new work can go there.
+  defp take_over_general(fleet, wallet) do
+    holder = %Actors.Human{human_account_id: 1, wallet_addresses: [wallet]}
+    Keyfleet.Projects.take_over_project!(fleet, 1, "general", actor: holder)
   end
 
   # One agent for each named Cascade key, holding a shard its owner issued.

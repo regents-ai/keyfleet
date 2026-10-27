@@ -737,7 +737,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
             <a :if={@place == :docs and pin.link} href={pin.link}>{pin.title}</a>
             <span :if={@place == :docs and is_nil(pin.link)}>{pin.title}</span>
             <.link :if={@place == :code} patch={pin.link}>{pin.title}</.link>
-            <span :if={pin.label} class="workspace-badge" data-project-label>{pin.label}</span>
+            <span :if={pin.label} class="workspace-project-tag" data-project-label>{pin.label}</span>
             <.pin_toggle
               id={"#{@id}-#{pin.project}-#{entry_id(pin.target)}"}
               place={@place}
@@ -1485,7 +1485,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           {row.title}
         </.link>
         <span class="workspace-row-meta">
-          <span :if={row.project} class="workspace-badge" data-project-label>{row.project}</span>
+          <span :if={row.project} class="workspace-project-tag" data-project-label>{row.project}</span>
           <span :if={row.starting?} class="workspace-badge">Starting idea</span>
           <span :if={row.archived?} class="workspace-badge">Archived</span>
           <span :if={row.status}>{row.status}</span>
@@ -1691,7 +1691,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
     >
       <p class="workspace-kind">
         <span>{type_label(@card.type)}</span>
-        <span :if={@card.project} class="workspace-badge" data-project-label>{@card.project}</span>
+        <span :if={@card.project} class="workspace-project-tag" data-project-label>{@card.project}</span>
         <span :if={@card.starting?} class="workspace-badge">Starting idea</span>
         <span :if={@card.archived?} class="workspace-badge">Archived</span>
       </p>

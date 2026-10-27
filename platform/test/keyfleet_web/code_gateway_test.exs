@@ -54,6 +54,10 @@ defmodule KeyfleetWeb.CodeGatewayTest do
     # Each fleet's `general` repository, named after the fleet.
     Code.record_repository!(@fleet, @owner, actor: %System{})
     Code.record_repository!(@other_fleet, @owner, actor: %System{})
+    # Key 1 takes over the fleet's archived `general`, so its code takes pushes.
+    Keyfleet.Projects.take_over_project!(@fleet, 1, "general",
+      actor: %Human{human_account_id: 1, wallet_addresses: [@holder_wallet]}
+    )
 
     %{holder: holder, buyer: buyer}
   end
