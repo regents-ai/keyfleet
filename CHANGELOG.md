@@ -5066,3 +5066,15 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
     escaped.
 - Nothing a person or agent sees changes. Taking the notes off brings back
   exactly these eight findings; with them `mix sobelow --exit` finds none.
+
+## 2026-10-27 — Releases from this Mac wait for every site's
+
+- `scripts/deploy.sh` now takes `/tmp/regent-shared-db-release.lock`, the lock
+  every site's deploy takes (ash-template 2012700), in place of a lock for
+  Keyfleet alone. A deploy started while any site is releasing waits for it
+  instead of building alongside, since every site shares one production
+  database and a release briefly doubles a site's connections. A second
+  Keyfleet deploy now waits as well, where it used to stop straight away.
+- On 27 October Patchbay v275 and Keyfleet v353 overlapped by about a minute:
+  Fly lists a release only once its build has finished, so reading the other
+  sites' releases first could not see Patchbay's build.
