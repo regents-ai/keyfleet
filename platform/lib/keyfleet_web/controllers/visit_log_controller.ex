@@ -5,7 +5,6 @@ defmodule KeyfleetWeb.VisitLogController do
   - `page.error`: the page hit a script error, by route; never its message.
   - `tool.unsent`: one of the page's tools got no answer from the site.
   - `press.unsent`: a wallet press never reached the site.
-  - `step` `sign_in_opened`: a Sign in button was pressed.
 
   Each line is checked against the names, routes and outcomes the page can send;
   anything else is dropped. The answer is the same whatever was sent, and nothing
@@ -44,9 +43,6 @@ defmodule KeyfleetWeb.VisitLogController do
   defp line(%{"name" => "press.unsent", "where" => step, "outcome" => "lost"}, _host)
        when is_binary(step),
        do: named("press.unsent", step, "lost")
-
-  defp line(%{"name" => "step", "where" => "sign_in_opened"}, _host),
-    do: [{"step", "sign_in_opened", nil}]
 
   defp line(_untrusted, _host), do: []
 

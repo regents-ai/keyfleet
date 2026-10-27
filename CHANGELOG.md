@@ -5352,3 +5352,12 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   <page>" is always the last line. Keyfleet no longer adds lines after the
   shared message. The same move brings the Credits words saying where a Base
   purchase goes after staking (89eb064).
+
+## 2026-10-27 — Visit lines held back
+
+- The template's visit lines (b521ffb7: where a visit came from, the sign-in
+  and pairing steps, the program behind an agent's call, and the privacy
+  page's sentence about them) are taken back out until the founder decides
+  whether browsers that send Global Privacy Control get none of them. The
+  template, Techtree and Patchbay hold theirs too. They come back with that
+  rule and the privacy sentence word for word from the template.
