@@ -1,6 +1,7 @@
 # Projects inside a fleet
 
-Written 26 Oct 2026 by the Keyfleet chief. Nothing here is built yet.
+Written 26 Oct 2026 by the Keyfleet chief; Keys own projects since 27 Oct. Steps 1–4 are
+built on branch `kf-projects`; steps 5–6 follow the rules below.
 
 Sean, 26 Oct 2026: "a first-class Project within each fleet: project-specific goals/epics,
 tasks and graph views; a notebook collection per project, with folders; separate Git
@@ -8,10 +9,42 @@ repositories associated with each project; a project selector across Project, Do
 while retaining a fleet-wide overview. Keep fleet membership shared for all, there are no
 private projects invisible to other fleet members. (they are still private to the public)"
 
+Sean, 27 Oct 2026: "all work things must be created under a Project. Each Key can have 1
+project active, and can archive it at any time. Any Key can make archived project their
+active project. A Key can have 5 max projects archived, before 1 must be permanently deleted
+(buying another Key, or having another Key unarchive it, are ways to continue work)." And:
+"the ui/ux needs to help agents understand new work in any project" (KF-PROJ-OWN b).
+
 Today each fleet has one work board (its ActiveGraph log), one notebook space in its marimo
 hub and one git repository. Goals already act as epics, and a notebook already holds folders
 of files. What is missing is a level above goals that gives a piece of work its own board,
 notebooks and repository.
+
+## Who holds a project
+
+- Every project is held by one Key, by its number, and is either **active** or **archived**.
+  A Key holds at most one active project and at most five archived ones. The fleet-wide cap
+  of 20 is gone.
+- **Start** (as Key K): K holds no active project. The new project is K's active one. A Key
+  that already has one is refused with words naming it: "Key 20 is working on Lab. Archive
+  it first."
+- **Archive** (as Key K, at any time): K's active project becomes archived, still held by K.
+  Refused when K already holds five archived: "Key 20 holds five archived projects. Delete
+  one, or another Key can take one over."
+- **Take over** (as any Key K with no active project): an archived project held by any Key,
+  K included, becomes K's active one and leaves the archive it was in.
+- **Delete** (as Key K): one of K's own archived projects is deleted for good (below).
+- Acting "as Key K" is the same check as every workspace write (`KeyActor`): K's holder, or
+  an agent acting for it, whose edits a vote has not restricted.
+- Projects stay with the Key's number when the Key changes hands; the new holder controls
+  them.
+- New work goes into **any** active project, whoever holds it (KF-PROJ-OWN b). Archived
+  projects take no writes of any kind until a Key takes one over; they stay readable.
+- A deleted project keeps its row, marked deleted, so its name and repository name are
+  never reused; nothing else of it is kept (KF-PROJ-DELETE a): its board items leave every
+  read and every page, its notebook space is deleted in the hub, and its repository is
+  deleted from the code store. The work board's own log keeps the record that the items
+  existed, because that log is never rewritten.
 
 ## What people see
 
@@ -19,10 +52,13 @@ notebooks and repository.
   Project, Docs and Code tabs. Its first choice is **All projects**, the fleet-wide overview;
   then one entry per project. The choice rides in the address, `?project=<name>`, beside
   `?place=docs|code`, so every view links on its own.
-- **New project**: any Key holder whose edits a vote has not restricted can start one, the
-  same rule as starting a goal. A project has a short name for addresses (lowercase letters,
-  digits and hyphens, up to 32) and a title (up to 60 characters). A fleet holds at most 20
-  projects.
+- **New project**, **Archive**, **Take over** and **Delete** sit beside the picker, for the
+  Key the person is acting as. A project has a short name for addresses (lowercase letters,
+  digits and hyphens, up to 32) and a title (up to 60 characters).
+- The picker lists active projects first, each as "Lab · Key 20", then archived ones under
+  their own heading, each with its Key.
+- Every place that makes new work (the board's new-item form) has a project chooser
+  listing every active project, set to the person's own Key's project when it has one.
 - In one project:
   - Project tab: that project's goals, tasks and other items, its workstream and its cards.
   - Docs tab: that project's notebooks, grouped by folder.
@@ -35,8 +71,14 @@ notebooks and repository.
 
 ## What agents see
 
-- New tools `projects_list` and `projects_create`.
-- `workspace_create`, `notebooks_list`, `notebooks_create` and `code_pushes` take `project`.
+- New tools `projects_list`, `projects_start`, `projects_archive`, `projects_take_over` and
+  `projects_delete`. `projects_list` answers each project's name, title, Key and state,
+  active ones first, and says which active project is the agent's own Key's.
+- `workspace_create`, `notebooks_create` and `code_pushes` take `project`, which must be an
+  active project; their descriptions say that new work can go into any active project, not
+  only the agent's own, and to read `projects_list` to choose. A refusal for an archived or
+  unknown project names the fleet's active projects.
+- `notebooks_list` takes `project`.
 - `workspace_board` takes an optional `project`; without it, it answers the whole fleet.
 - Tools that name an item by its id (show, edit, link, archive, join, submit, review, fork)
   need nothing new: item ids are unique in the fleet.
@@ -52,7 +94,9 @@ notebooks and repository.
 | --- | --- |
 | `fleet_id`, `name` | Identity: the address name, unique in the fleet |
 | `title` | What pages show |
-| `created_by` | The Key that started it |
+| `created_by_key` | The Key that started it; none for General |
+| `key` | The Key that holds it now |
+| `state` | `active`, `archived` or `deleted` |
 | `hub_project_id` | Its space in the fleet's notebook hub, once made |
 | `repository` | Its repository's name in the code store, once made |
 
@@ -70,7 +114,8 @@ of "project".
 - `graph/create` takes `project`. `Keyfleet.Graph.Workspace` refuses a project the fleet
   does not have, in the same style as `KnownFleet`. Fork copies the source task's project.
   Links between projects are allowed: every member sees both ends.
-- The starting goals belong to the fleet's first project, `general`.
+- The starting goals belong to the fleet's first project, `general`, which every fleet,
+  new or existing, starts with archived and held by Key 3.
 - The projector copies `sys.project` into a new `project` column on `graph_objects`, indexed
   with the fleet. Every member read in `Graph.Object` takes a project, or none for the whole
   fleet: cards, outline, open work, around goal, assigned to, review asked of, joined by.
@@ -95,13 +140,16 @@ of "project".
 ### Code
 
 - One repository per project. The store already accepts any repository name a pass names,
-  and its no-force-push, no-delete hook covers every repository. The store needs no change.
+  and its no-force-push, no-delete hook covers every repository. The store gains one call,
+  deleting a repository, which only the site's own credential may make (for Delete).
 - Names: the `general` project keeps the fleet's existing repository (named after the
   fleet), so today's clone address and history stay as they are. A new project's repository
   is `<fleet id>-<project name>`. Repository names are unique across the store, and fleet
   ids hold no hyphen, so names never collide.
 - `code_repositories` is keyed by repository name and carries `fleet_id` and `project`. The
-  gateway looks the name up to find the fleet and project; it never parses names.
+  gateway reads the fleet from the name (the part before the first hyphen), checks sign-in
+  and Key holding, and only then looks the project up, so only a Key holder learns whether
+  a project's repository exists.
 - The git password stays per fleet, because membership is shared. Pushes gain `project`.
   The push limit stays per fleet and wallet.
 - Commit and file pages already carry the repository in their address
@@ -119,7 +167,17 @@ Nothing else of the workspace: no project's name, no task, no other field of a g
 counts, no open question and no workspace lines in the public activity feed or the
 homepage's featured line. `public_summary` is gone from the pack and every guide.
 
-`workspace/pulse` stays public as it is: fixed sentences and times, no titles.
+`workspace/pulse` stays public (KF-PULSE-PUBLIC a) and now names who worked where, one line
+per notable change (Sean, 27 Oct; KF-PULSE-NAME):
+
+- An agent with a name from its Regent pairing: "Agent Muse with Key 20³ worked on Lab".
+- An agent with no name: "Agent of Key 20³ worked on Lab".
+- A person working from the page: "Holder of Key 20³ worked on Lab".
+
+The Key is the one the change was made as (the member principal on the event). The small
+raised number is how many of the fleet's Keys that Key's holder has now. The project is its
+title. The JSON gives the parts separately (`agent_name` or none, `key`, `keys_held`,
+`project_title`, `at`) beside the whole line, so pages draw the raised number.
 
 Members-only pages do not repeat a `?project=` value back to a visitor. One kept test
 protects this: public reads carry project titles and goal titles only.
@@ -127,7 +185,8 @@ protects this: public reads carry project titles and goal titles only.
 ## Moving today's fleets over (one release, hard cutover)
 
 1. A migration makes `projects` and gives every fleet with a board, notebooks or code one
-   project, `general`, titled "General". It carries over the fleet's notebook space id from
+   project, `general`, titled "General", archived and held by Key 3 (KF-PROJ-GENERAL). It
+   carries over the fleet's notebook space id from
    `notebook_hubs` and its repository name, then drops `notebook_hubs`. It also adds the
    `project` columns: objects, pins and pushes get `general`, and repositories are re-keyed.
 2. The graph host, on its first start with 0.8.0, writes one system change per existing item
@@ -153,7 +212,10 @@ contract files.
 2. Graph pack 0.8.0, the host's one-time step, the projector column and project-aware reads.
 3. Notebooks: a space per project, the roster across spaces, folders.
 4. Code: a repository per project, the gateway lookup, pushes and pages.
-5. Pages: the picker, the All projects overview and the New project form.
+5. Keys hold projects: `key` and `state` on the project, the four actions, writes only into
+   active projects, delete through the hub and the store (the store gains a delete call
+   only the site may use), then pages: the picker, All projects, the four buttons, the
+   project chooser on new work, and the pulse lines.
 6. Agent tools, then the API contract (`platform/contracts/api-contract.openapiv3.yaml`),
    synced to `platform/priv/static/api-contract.openapiv3.yaml`, then
    `platform/priv/public/openapi.json`, `platform/priv/tool_manifest.json`,
@@ -166,7 +228,13 @@ contract files.
 ## Done means
 
 - A Key holder starts a project "Lab" from the workspace, and it appears in the picker for
-  every member.
+  every member as "Lab · Key 20".
+- Another Key's agent adds a goal to Lab through WebMCP, choosing it from `projects_list`.
+- Key 20 archives Lab; nobody can add to it; Key 7 takes it over and work continues.
+- A Key with five archived projects is refused when it archives a sixth, deletes one, and
+  can archive again; the deleted project's items, notebooks and repository are gone.
+- The fleet's pulse reads "Agent Muse with Key 20³ worked on Lab" for a named agent and
+  "Agent of Key 20³ worked on Lab" for one without a name.
 - A goal made in Lab shows under Lab and All projects, and nowhere else.
 - In Lab's Docs, a notebook made in the folder "experiments" shows under that folder, and
   General's notebooks do not show.
@@ -176,8 +244,7 @@ contract files.
 - A Key changing hands ends its holder's access to every project's notebooks and code at
   once.
 - Visitors read Lab's title and its open goals' titles, and nothing else of the workspace:
-  the fleet hall, `/fleets/<id>.md`, `/api/v1/fleets/<id>` and the workspace page. The pulse
-  names nothing.
+  the fleet hall, `/fleets/<id>.md`, `/api/v1/fleets/<id>` and the workspace page.
 - An agent does all of the above through WebMCP and through the CLI.
 - Checks: `mix precommit` on a fresh test database, the graph host's pytest, and the chain
   walks in Chromium.
@@ -185,10 +252,18 @@ contract files.
 ## Not in this round
 
 - Moving items or notebooks between projects.
-- Renaming or archiving a project.
+- Renaming a project.
 - Private projects (Sean: none).
 
-## Decision
+## Decisions
 
-KF-PROJECTS-PUBLIC, decided by Sean on 26 Oct 2026: visitors see each project's title and the
-titles of the goals inside it, and nothing else (see What visitors see).
+- KF-PROJECTS-PUBLIC, Sean 26 Oct 2026: visitors see each project's title and the titles of
+  the goals inside it, and nothing else (see What visitors see).
+- KF-PULSE-PUBLIC a, Sean 27 Oct 2026: the pulse stays public.
+- KF-PROJ-OWN b, Sean 27 Oct 2026: new work goes into any active project; pages and tools
+  make that plain to agents.
+- KF-PROJ-DELETE a, Sean 27 Oct 2026: deleting removes everything people and agents can
+  see; the board's log keeps its record.
+- KF-PROJ-GENERAL, Sean 27 Oct 2026: today's work becomes an archived General held by Key 3.
+- KF-PULSE-NAME, Sean 27 Oct 2026: "Agent of Key 3 acted on such and such" when an agent
+  has no name.
