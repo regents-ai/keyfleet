@@ -207,6 +207,8 @@
               "publications_list",
               "publications_posts",
               "publications_item",
+              "publications_page",
+              "publications_commit",
               "publications_withdraw",
               "workspace_board",
               "workspace_show",
@@ -7194,7 +7196,7 @@
     {
       "name": "publications_list",
       "title": "List what is public in a project",
-      "description": "Read what the fleet's Keys made public in a project, newest first: each one's id, the Key that made it public, its kind and, for posts, the room and range, or for an item, its id. Anyone reads them on the workspace's Public place. Changes nothing.",
+      "description": "Read what the fleet's Keys made public in a project, newest first: each one's id, the Key that made it public, its kind and, for posts, the room and range, for an item, its id, for a page, its address, or for a commit, its hash. Anyone reads them on the workspace's Public place. Changes nothing.",
       "input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -7525,6 +7527,228 @@
       "interfaces": {
         "webmcp": "publications_item",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/publications/items",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "publications_page",
+      "title": "Make a saved notebook page public",
+      "description": "Make public a saved notebook page you made, by its address, in the project whose notebook made it, which is active. The page then opens for anyone at that address, signed in or not; the notebook itself stays with members. A version's page is its notebook's author's, a run's page whoever started the run. Each page goes public once. Answers what was made public.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "as_key",
+              "page"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "as_key": {
+                "type": "integer",
+                "description": "Number of the Key you act as: yours, your shard's or your paired person's",
+                "minimum": 1
+              },
+              "page": {
+                "type": "string",
+                "description": "The saved page's address on the fleet's notebook host",
+                "minLength": 1,
+                "maxLength": 512
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": false
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/publications/pages",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "as_key",
+          "page"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "as_key": {
+            "type": "integer",
+            "description": "Number of the Key you act as: yours, your shard's or your paired person's",
+            "minimum": 1
+          },
+          "page": {
+            "type": "string",
+            "description": "The saved page's address on the fleet's notebook host",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "publications_page",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/publications/pages",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "publications_commit",
+      "title": "Make a commit of your project public",
+      "description": "Make public, read-only, your Key's active project's code at one commit, by its full hash: anyone then reads its files and folders at that commit on this site, signed in or not. Later changes stay with members. Only the Key holding the project does this, each commit once. Answers what was made public.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "project",
+              "as_key",
+              "commit"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "project": {
+                "type": "string",
+                "description": "The project's name, from projects_list",
+                "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                "maxLength": 32
+              },
+              "as_key": {
+                "type": "integer",
+                "description": "Number of the Key you act as: yours, your shard's or your paired person's",
+                "minimum": 1
+              },
+              "commit": {
+                "type": "string",
+                "description": "The commit's full hash, from code_pushes",
+                "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": false
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/commit",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "project",
+          "as_key",
+          "commit"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "project": {
+            "type": "string",
+            "description": "The project's name, from projects_list",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "maxLength": 32
+          },
+          "as_key": {
+            "type": "integer",
+            "description": "Number of the Key you act as: yours, your shard's or your paired person's",
+            "minimum": 1
+          },
+          "commit": {
+            "type": "string",
+            "description": "The commit's full hash, from code_pushes",
+            "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "publications_commit",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/commit",
         "cli": {
           "release_status": "source_only",
           "descriptor": "cli/commands.json"

@@ -106,6 +106,17 @@ defmodule Keyfleet.Code do
     do: files_path(fleet_id, repository, "") <> "?" <> URI.encode_query(path: path)
 
   @doc """
+  The path of a file or folder in a project's repository on this site at the
+  commit `at`, or on the default branch for nil.
+  """
+  def files_path(fleet_id, repository, path, nil), do: files_path(fleet_id, repository, path)
+
+  def files_path(fleet_id, repository, path, at) do
+    query = if path == "", do: [at: at], else: [path: path, at: at]
+    files_path(fleet_id, repository, "") <> "?" <> URI.encode_query(query)
+  end
+
+  @doc """
   Whether `path` names a place in the code: names joined by `/`, none of
   them empty, `.` or `..`.
   """
@@ -115,14 +126,15 @@ defmodule Keyfleet.Code do
   end
 
   @doc """
-  What the folder `path` holds on the default branch now, `""` for the top:
+  What the folder `path` holds on the default branch now, or at the commit
+  `at`, `""` for the top:
   `{:ok, entries}`, folders first, each `%{name:, folder?:, size:}`; nothing
   while the fleet has no repository, and nothing for a folder that isn't
   there or a file. `{:error, error}` when the store can't be read.
   """
-  def folder(repository, path) do
+  def folder(repository, path, at \\ nil) do
     with {:ok, owner} when is_binary(owner) <- stored_owner(repository),
-         {:ok, entries} <- NodeClient.tree(repository, owner, path) do
+         {:ok, entries} <- NodeClient.tree(repository, owner, path, at) do
       {:ok,
        entries
        |> Enum.map(&%{name: &1["name"], folder?: &1["type"] == "tree", size: &1["size"]})
@@ -134,14 +146,14 @@ defmodule Keyfleet.Code do
   end
 
   @doc """
-  The file at `path` on the default branch now: `{:ok, bytes}`, `{:ok,
-  :too_large}` past `file_max_bytes`, `:not_found` (no repository yet
+  The file at `path` on the default branch now, or at the commit `at`:
+  `{:ok, bytes}`, `{:ok, :too_large}` past `file_max_bytes`, `:not_found` (no repository yet
   included), or `{:error, error}` when the store can't be read.
   """
-  def file(repository, path) do
+  def file(repository, path, at \\ nil) do
     case stored_owner(repository) do
       {:ok, nil} -> :not_found
-      {:ok, owner} -> NodeClient.blob(repository, owner, path)
+      {:ok, owner} -> NodeClient.blob(repository, owner, path, at)
       {:error, error} -> {:error, error}
     end
   end

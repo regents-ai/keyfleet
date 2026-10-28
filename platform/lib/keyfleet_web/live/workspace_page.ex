@@ -487,8 +487,10 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # Newest first, each with what a visitor reads of it: for posts, the posts
   # its Key wrote in that range of the room, word for word, each with its
-  # writer; for an item, the item as it stands, while it isn't archived. Only
-  # the Key that made it public (`key`) takes it back.
+  # writer; for an item, the item as it stands, while it isn't archived; for
+  # a saved notebook page, its address, which opens for anyone; for a commit,
+  # the project's files at it, read-only. Only the Key that made it public
+  # (`key`) takes it back.
   defp public(fleet_id, shown, projects, key) do
     labels = labels(shown, projects)
 
@@ -556,6 +558,23 @@ defmodule KeyfleetWeb.WorkspacePage do
       %{sys: %{"archived" => true}} -> nil
       nil -> nil
       object -> %{item: public_item(object, agents)}
+    end
+  end
+
+  defp public_record(%{kind: :page} = publication, _rooms, _objects, _agents),
+    do: %{page_url: Notebooks.url(publication.fleet_id, publication.page)}
+
+  defp public_record(%{kind: :commit} = publication, _rooms, _objects, _agents) do
+    case Code.repository(publication.fleet_id, publication.project) do
+      {:ok, repository} when is_binary(repository) ->
+        %{
+          commit: publication.commit_hash,
+          files_url:
+            Code.files_path(publication.fleet_id, repository, "", publication.commit_hash)
+        }
+
+      _gone ->
+        nil
     end
   end
 
@@ -774,6 +793,8 @@ defmodule KeyfleetWeb.WorkspacePage do
         fleet_id: fleet_id,
         fleet_name: fleet.name,
         hash: hash,
+        project: project.name,
+        public: commit_public(fleet_id, project, repository, hash, actor),
         url: url,
         clone_url: Code.clone_url(repository),
         pushes: pushes(pushes, fleet_id, repository),
@@ -799,23 +820,38 @@ defmodule KeyfleetWeb.WorkspacePage do
     end
   end
 
+  # Whether everyone reads the project's code at this commit, and what the
+  # member's Key does about it: the Key holding the active project makes it
+  # public, and the Key that made it public takes it back.
+  defp commit_public(fleet_id, project, repository, hash, actor) do
+    publication = Projects.commit_publication!(fleet_id, project.name, hash, actor: actor)
+    key = with %{token_id: key} <- Keys.identity(actor, fleet_id), do: key
+
+    %{
+      id: publication && publication.id,
+      link: Code.files_path(fleet_id, repository, "", hash),
+      take_back?: publication != nil and publication.key == key,
+      make?:
+        is_nil(publication) and is_integer(key) and project.key == key and
+          project.state == :active
+    }
+  end
+
   @doc """
   One folder or file of a project's repository as it stands on the default
-  branch now, named by the repository and the `path` asked for (none for the
-  top folder): a folder's names, folders first, or a file's text, beside the
-  latest changes sent to the repository. A file that isn't text, or is past
+  branch now, or at the commit `at` asks for, named by the repository and the
+  `path` asked for (none for the top folder): a folder's names, folders
+  first, or a file's text, beside the latest changes sent to the repository.
+  A visitor reads a commit the Key holding the project made public, read-only,
+  and nothing else of the code. A file that isn't text, or is past
   `file_max_bytes`, is named but not shown; `listing` is `:unreadable`
   when the code store doesn't answer. An address naming a repository none
   of the fleet's projects has, a path that can't name a place in the code,
   or a file that isn't there is a page that doesn't exist.
   """
   def files(fleet_id, repository, params, actor) do
-    path =
-      case params["path"] do
-        nil -> ""
-        path -> if Code.code_path?(path), do: path, else: raise(NotFoundError)
-      end
-
+    path = code_path!(params["path"])
+    at = commit!(params["at"])
     project = project_of!(fleet_id, repository)
     opts = [actor: actor]
 
@@ -826,24 +862,56 @@ defmodule KeyfleetWeb.WorkspacePage do
         fleet_name: fleet.name,
         repository: repository,
         path: path,
+        at: at,
         project: project.name,
-        active?: project.state == :active,
+        active?: project.state == :active and is_nil(at),
         pinned:
-          fleet_id
-          |> Graph.pins!(:code, project.name, opts)
-          |> Map.new(&{&1.target, whose(&1, actor)}),
-        crumbs: crumbs(fleet_id, repository, path),
+          if(at,
+            do: %{},
+            else:
+              fleet_id
+              |> Graph.pins!(:code, project.name, opts)
+              |> Map.new(&{&1.target, whose(&1, actor)})
+          ),
+        crumbs: crumbs(fleet_id, repository, path, at),
         clone_url: Code.clone_url(repository),
-        pushes: pushes(pushes, fleet_id, repository),
-        listing: listing(fleet_id, repository, path)
+        pushes: if(at, do: [], else: pushes(pushes, fleet_id, repository)),
+        listing: listing(fleet_id, repository, path, at)
       }
     else
       {:missing, _name} ->
         raise NotFoundError
 
       {:members_only, name} ->
-        %{fleet_id: fleet_id, fleet_name: name, path: path, members_only?: true}
+        if at && Projects.commit_publication!(fleet_id, project.name, at, actor: %System{}),
+          do: public_files(fleet_id, name, repository, project, path, at),
+          else: %{fleet_id: fleet_id, fleet_name: name, path: path, members_only?: true}
     end
+  end
+
+  defp code_path!(nil), do: ""
+  defp code_path!(path), do: if(Code.code_path?(path), do: path, else: raise(NotFoundError))
+
+  defp commit!(nil), do: nil
+  defp commit!(hash), do: if(Code.full_hash?(hash), do: hash, else: raise(NotFoundError))
+
+  # A commit the Key holding the project made public, as a visitor reads it:
+  # its files and folders alone.
+  defp public_files(fleet_id, name, repository, project, path, at) do
+    %{
+      fleet_id: fleet_id,
+      fleet_name: name,
+      repository: repository,
+      path: path,
+      at: at,
+      project: project.name,
+      active?: false,
+      pinned: %{},
+      crumbs: crumbs(fleet_id, repository, path, at),
+      clone_url: nil,
+      pushes: [],
+      listing: listing(fleet_id, repository, path, at)
+    }
   end
 
   # The project whose repository an address names, if it is one of the
@@ -861,35 +929,40 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   # Each folder above the place shown, from the top, as a link.
-  defp crumbs(_fleet_id, _repository, ""), do: []
+  defp crumbs(_fleet_id, _repository, "", _at), do: []
 
-  defp crumbs(fleet_id, repository, path) do
+  defp crumbs(fleet_id, repository, path, at) do
     names = String.split(path, "/")
 
     for depth <- 0..(length(names) - 2)//1 do
       above = names |> Enum.take(depth + 1) |> Enum.join("/")
-      %{name: Enum.at(names, depth), link: Code.files_path(fleet_id, repository, above)}
+      %{name: Enum.at(names, depth), link: Code.files_path(fleet_id, repository, above, at)}
     end
   end
 
   # A folder holds something: git keeps no empty folder. So a place that
   # holds nothing is a file, or nothing at all.
-  defp listing(fleet_id, repository, path) do
-    case Code.folder(repository, path) do
-      {:ok, []} when path != "" -> file(repository, path)
-      {:ok, entries} -> {:folder, Enum.map(entries, &entry_row(&1, fleet_id, repository, path))}
-      {:error, error} -> unreadable_code(repository, error)
+  defp listing(fleet_id, repository, path, at) do
+    case Code.folder(repository, path, at) do
+      {:ok, []} when path != "" ->
+        file(repository, path, at)
+
+      {:ok, entries} ->
+        {:folder, Enum.map(entries, &entry_row(&1, fleet_id, repository, path, at))}
+
+      {:error, error} ->
+        unreadable_code(repository, error)
     end
   end
 
   # Each entry of a folder with its path from the top of the repository.
-  defp entry_row(entry, fleet_id, repository, folder) do
+  defp entry_row(entry, fleet_id, repository, folder, at) do
     path = if folder == "", do: entry.name, else: folder <> "/" <> entry.name
-    Map.merge(entry, %{path: path, link: Code.files_path(fleet_id, repository, path)})
+    Map.merge(entry, %{path: path, link: Code.files_path(fleet_id, repository, path, at)})
   end
 
-  defp file(repository, path) do
-    case Code.file(repository, path) do
+  defp file(repository, path, at) do
+    case Code.file(repository, path, at) do
       {:ok, :too_large} -> {:file, :too_large}
       {:ok, bytes} -> {:file, if(text?(bytes), do: bytes, else: :not_text)}
       :not_found -> raise NotFoundError
@@ -1189,7 +1262,7 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   defp folder_entries(fleet_id, repository, folder) do
     case Code.folder(repository, folder) do
-      {:ok, entries} -> Enum.map(entries, &entry_row(&1, fleet_id, repository, folder))
+      {:ok, entries} -> Enum.map(entries, &entry_row(&1, fleet_id, repository, folder, nil))
       {:error, error} -> unreadable_code(repository, error)
     end
   end

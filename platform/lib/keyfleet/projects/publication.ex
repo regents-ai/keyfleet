@@ -3,12 +3,17 @@ defmodule Keyfleet.Projects.Publication do
   Something a Key made public in one of its fleet's projects, for the
   workspace's Public place (`KeyfleetWeb.WorkspacePage`), which anyone reads.
 
-  A Key makes public only what it made, of two kinds. Posts: the posts a
+  A Key makes public only what it made, of four kinds. Posts: the posts a
   Key wrote in one of the fleet's rooms from one place in it to another
   (`room`, `from_seq`, `to_seq`), word for word, shown in the project it
   names. An item: one workspace item the Key added (`item`), as it stands,
   shown in its own project while it isn't archived; each item is public at
-  most once. Only what was written for the wallet that owns the Key when it
+  most once. A page: one saved notebook page its person or agent made
+  (`page`, the page's path on the fleet's notebook host), which then opens
+  for anyone at its own address, from this site's own copy of it; each page
+  is public at most once. A commit: the Key holding a project makes the
+  project's code at one commit (`commit_hash`) public, read-only, files and
+  folders; each commit once. Only what was written for the wallet that owns the Key when it
   makes it public shows, so a Key that changes hands never makes a former
   owner's work public. Making something public changes nothing where it
   lives, which keeps its readers; the Key takes it back by withdrawing the
@@ -43,12 +48,16 @@ defmodule Keyfleet.Projects.Publication do
     end
 
     check_constraints do
-      check_constraint(:kind, "publications_kind", check: "kind IN ('posts', 'item')")
+      check_constraint(:kind, "publications_kind",
+        check: "kind IN ('posts', 'item', 'page', 'commit')"
+      )
 
       check_constraint(:kind, "publications_shape",
         check: """
-        (kind = 'posts' AND room IS NOT NULL AND from_seq IS NOT NULL AND to_seq IS NOT NULL AND item IS NULL)
-        OR (kind = 'item' AND item IS NOT NULL AND room IS NULL AND from_seq IS NULL AND to_seq IS NULL)
+        (kind = 'posts' AND room IS NOT NULL AND from_seq IS NOT NULL AND to_seq IS NOT NULL AND item IS NULL AND page IS NULL AND commit_hash IS NULL)
+        OR (kind = 'item' AND item IS NOT NULL AND room IS NULL AND from_seq IS NULL AND to_seq IS NULL AND page IS NULL AND commit_hash IS NULL)
+        OR (kind = 'page' AND page IS NOT NULL AND room IS NULL AND from_seq IS NULL AND to_seq IS NULL AND item IS NULL AND commit_hash IS NULL)
+        OR (kind = 'commit' AND commit_hash IS NOT NULL AND room IS NULL AND from_seq IS NULL AND to_seq IS NULL AND item IS NULL AND page IS NULL)
         """
       )
 
@@ -80,7 +89,20 @@ defmodule Keyfleet.Projects.Publication do
 
     create :record do
       public? false
-      accept [:fleet_id, :project, :key, :author_wallet, :kind, :room, :from_seq, :to_seq, :item]
+
+      accept [
+        :fleet_id,
+        :project,
+        :key,
+        :author_wallet,
+        :kind,
+        :room,
+        :from_seq,
+        :to_seq,
+        :item,
+        :page,
+        :commit_hash
+      ]
     end
 
     # The publication of one item, if it is public.
@@ -110,6 +132,28 @@ defmodule Keyfleet.Projects.Publication do
       run fn input, context -> Publish.run(input, [step: :posts], context) end
     end
 
+    # The publication of one saved notebook page, by its path, if it is public.
+    read :of_page do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :page, :string, allow_nil?: false, constraints: [trim?: false]
+      filter expr(fleet_id == ^arg(:fleet_id) and page == ^arg(:page))
+      get? true
+    end
+
+    # The publication of one commit of a project's code, if it is public.
+    read :of_commit do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, allow_nil?: false, constraints: [trim?: false]
+      argument :commit_hash, :string, allow_nil?: false, constraints: [trim?: false]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and project == ^arg(:project) and
+                 commit_hash == ^arg(:commit_hash)
+             )
+
+      get? true
+    end
+
     # A Key makes public one workspace item it added, in the item's own
     # project, which is active.
     action :publish_item, :struct do
@@ -120,6 +164,31 @@ defmodule Keyfleet.Projects.Publication do
       validate KnownFleet
       validate FreshOwnership, only_when_valid?: true
       run fn input, context -> Publish.run(input, [step: :item], context) end
+    end
+
+    # A Key makes public one saved notebook page its person or agent made, by
+    # the page's address, in the project whose notebook made it, which is
+    # active.
+    action :publish_page, :struct do
+      constraints instance_of: __MODULE__
+      argument :fleet_id, :string, allow_nil?: false
+      argument :as_key, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
+      argument :page, :string, allow_nil?: false, constraints: [trim?: false]
+      validate KnownFleet
+      validate FreshOwnership, only_when_valid?: true
+      run fn input, context -> Publish.run(input, [step: :page], context) end
+    end
+
+    # The Key holding an active project makes its code at one commit public.
+    action :publish_commit, :struct do
+      constraints instance_of: __MODULE__
+      argument :fleet_id, :string, allow_nil?: false
+      argument :as_key, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
+      argument :project, :string, allow_nil?: false, constraints: [trim?: false]
+      argument :commit_hash, :string, allow_nil?: false, constraints: [trim?: false]
+      validate KnownFleet
+      validate FreshOwnership, only_when_valid?: true
+      run fn input, context -> Publish.run(input, [step: :commit], context) end
     end
 
     # The Key that made something public takes it back.
@@ -135,11 +204,11 @@ defmodule Keyfleet.Projects.Publication do
   end
 
   policies do
-    policy action([:in_fleet, :of_item]) do
+    policy action([:in_fleet, :of_item, :of_page, :of_commit]) do
       authorize_if always()
     end
 
-    policy action([:publish_posts, :publish_item, :withdraw]) do
+    policy action([:publish_posts, :publish_item, :publish_page, :publish_commit, :withdraw]) do
       authorize_if KeyActor
     end
 
@@ -161,17 +230,24 @@ defmodule Keyfleet.Projects.Publication do
     attribute :kind, :atom,
       allow_nil?: false,
       public?: true,
-      constraints: [one_of: [:posts, :item]]
+      constraints: [one_of: [:posts, :item, :page, :commit]]
 
     attribute :room, :string, public?: true
     attribute :from_seq, :integer, public?: true, constraints: [min: 1]
     attribute :to_seq, :integer, public?: true, constraints: [min: 1]
     # The workspace item made public, by its id.
     attribute :item, :string, public?: true, constraints: [trim?: false]
+    # The saved notebook page made public, by its path on the fleet's
+    # notebook host (`Keyfleet.Notebooks.result_path/3`).
+    attribute :page, :string, public?: true, constraints: [trim?: false]
+    # The commit of the project's code made public, by its full hash.
+    attribute :commit_hash, :string, public?: true, constraints: [trim?: false]
     create_timestamp :inserted_at, public?: true
   end
 
   identities do
     identity :one_per_item, [:fleet_id, :item]
+    identity :one_per_page, [:fleet_id, :page]
+    identity :one_per_commit, [:fleet_id, :project, :commit_hash]
   end
 end
