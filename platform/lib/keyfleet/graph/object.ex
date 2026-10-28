@@ -8,8 +8,11 @@ defmodule Keyfleet.Graph.Object do
   A task marked done has been submitted for review, and its `review` says
   where that stands: `awaiting_review` until a review of the task's current
   version has been recorded, then `disputed` if any review of that version
-  disputes it, otherwise `accepted`. Any change to the task makes a new
-  version, which waits for review again.
+  disputes it, `reproduced` if one accepting it says the reviewer ran the
+  work again from its commit and it reproduced, otherwise `accepted`. Any
+  change to the task makes a new version, which waits for review again. A
+  task not submitted has no `review`, whatever its author says it ran: its
+  `progress` is all Keyfleet knows of it.
 
   An object last changed where its creation or its latest patch (an archive
   included) stands in the log: `changed_seq` is that event's place and
@@ -130,7 +133,7 @@ defmodule Keyfleet.Graph.Object do
     # it to everyone (`Keyfleet.Projects.Project`): one part of it, the most
     # recently changed first, not archived. `goals` are its open goals,
     # `work` everything but goals and reviews, `outputs` its findings and its
-    # accepted tasks, `open` the tasks nobody has taken and the blocked ones,
+    # accepted or reproduced tasks, `open` the tasks nobody has taken and the blocked ones,
     # which need someone's help. Each comes with its title, type, standing and
     # who made it alone. Callers bound it with a limit.
     read :shown do
@@ -153,7 +156,7 @@ defmodule Keyfleet.Graph.Object do
                      fragment("(? ->> 'status') = 'open'", data)) or
                     (^arg(:part) == :work and type not in ["goal", "review"]) or
                     (^arg(:part) == :outputs and
-                       (type == "finding" or (type == "task" and review == "accepted"))) or
+                       (type == "finding" or (type == "task" and review in ["accepted", "reproduced"]))) or
                     (^arg(:part) == :open and type == "task" and
                        (fragment("(? ->> 'progress') = 'blocked'", data) or
                           (fragment("(? ->> 'progress') = 'todo'", data) and
@@ -454,6 +457,8 @@ defmodule Keyfleet.Graph.Object do
                   CASE WHEN ? = 'task' AND (? ->> 'progress') = 'done' THEN COALESCE((
                     SELECT CASE
                       WHEN bool_or((review.data ->> 'decision') = 'dispute') THEN 'disputed'
+                      WHEN bool_or((review.data ->> 'decision') = 'accept'
+                        AND (review.data ->> 'reproduction') = 'passed') THEN 'reproduced'
                       WHEN bool_or((review.data ->> 'decision') = 'accept') THEN 'accepted'
                     END
                     FROM keyfleet_app.graph_relations AS link

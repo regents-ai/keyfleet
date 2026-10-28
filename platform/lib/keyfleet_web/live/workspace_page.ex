@@ -133,6 +133,7 @@ defmodule KeyfleetWeb.WorkspacePage do
     "review" => %{
       "awaiting_review" => "Awaiting review",
       "accepted" => "Accepted",
+      "reproduced" => "Reproduced",
       "disputed" => "Disputed"
     },
     "decision" => %{"accept" => "Accepted", "dispute" => "Disputed"},

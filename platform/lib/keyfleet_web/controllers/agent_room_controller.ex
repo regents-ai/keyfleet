@@ -113,6 +113,113 @@ defmodule KeyfleetWeb.AgentRoomController do
     end
   end
 
+  # One post by its place in the room, or by its id, with up to `context`
+  # posts either side, so a post cited as evidence is read without reading
+  # the room from its start. A post by a Key the agent muted is answered as
+  # hidden, never left out unsaid; the posts around it leave muted Keys out,
+  # as every read does. The room is read as `read_messages` reads it, so it
+  # is refused for the same reasons.
+  def get_message(conn, %{"fleet_id" => fleet_id, "slug" => slug} = params) do
+    actor = conn.assigns.agent_actor
+
+    with {:ok, seq} <- room_place(params, fleet_id, slug, actor),
+         {:ok, posts} <-
+           Rooms.read_messages(fleet_id, slug, around(seq, params), actor: actor),
+         %{} = room <- Rooms.get_room!(fleet_id, slug, actor: actor) do
+      placed(conn, %{room: RoomJSON.room(room)}, posts, seq, fleet_id, actor)
+    else
+      nil -> not_found(conn)
+      :post_unknown -> Refusal.json(conn, 404, "post_unknown")
+      {:error, %Ash.Error.Forbidden{} = error} -> refuse_forbidden(conn, fleet_id, error)
+      {:error, error} -> refuse(conn, error)
+    end
+  end
+
+  # One post on a Key's wall by its place or id, as `get_message` reads a
+  # room's. Anyone reads a Key's wall.
+  def get_key_message(conn, %{"fleet_id" => fleet_id, "token_id" => token_id} = params) do
+    actor = conn.assigns.agent_actor
+
+    with {:ok, seq} <- wall_place(params, fleet_id, token_id, actor),
+         {:ok, posts} <-
+           Rooms.read_key_thread(fleet_id, token_id, around(seq, params), actor: actor) do
+      place = %{thread: %{token_id: String.to_integer(token_id)}}
+      placed(conn, place, posts, seq, fleet_id, actor)
+    else
+      :post_unknown -> Refusal.json(conn, 404, "post_unknown")
+      {:error, error} -> refuse(conn, error)
+    end
+  end
+
+  defp room_place(%{"seq" => seq}, _fleet_id, _slug, _actor), do: {:ok, seq}
+
+  defp room_place(%{"id" => id}, fleet_id, slug, actor) do
+    case Rooms.get_room(fleet_id, slug, actor: actor) do
+      {:ok, %{id: room_id}} ->
+        post_place(Rooms.get_post_in_room(fleet_id, id, room_id, actor: actor))
+
+      # A room the agent can't read, or one the fleet hasn't, is refused as a
+      # read of it is.
+      {:ok, nil} ->
+        with {:ok, _posts} <-
+               Rooms.read_messages(fleet_id, slug, %{"limit" => 1}, actor: actor),
+             do: nil
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp wall_place(%{"seq" => seq}, _fleet_id, _token_id, _actor), do: {:ok, seq}
+
+  defp wall_place(%{"id" => id}, fleet_id, token_id, actor) do
+    case Rooms.get_key_thread(fleet_id, token_id, actor: actor) do
+      {:ok, %{id: room_id}} ->
+        post_place(Rooms.get_post_in_room(fleet_id, id, room_id, actor: actor))
+
+      {:ok, nil} ->
+        :post_unknown
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp post_place({:ok, %{seq: seq}}), do: {:ok, seq}
+  defp post_place({:ok, nil}), do: :post_unknown
+  defp post_place({:error, error}), do: {:error, error}
+
+  # The read that holds the post at `seq` and `context` posts either side.
+  defp around(seq, params) do
+    context = Map.get(params, "context", 0)
+    after_seq = max(seq - context - 1, 0)
+    %{"after_seq" => after_seq, "limit" => seq - after_seq + context}
+  end
+
+  defp placed(conn, place, posts, seq, fleet_id, actor) do
+    muted = Rooms.muted_keys!(fleet_id, actor)
+    {before, rest} = Enum.split_while(posts, &(&1.seq < seq))
+
+    case rest do
+      [%{seq: ^seq} = post | later] ->
+        shown? = Rooms.unmuted([post], muted) != []
+
+        json(
+          conn,
+          Map.merge(place, %{
+            seq: seq,
+            message: if(shown?, do: RoomJSON.message(post)),
+            hidden: if(shown?, do: nil, else: "muted"),
+            before: before |> Rooms.unmuted(muted) |> Enum.map(&RoomJSON.message/1),
+            after: later |> Rooms.unmuted(muted) |> Enum.map(&RoomJSON.message/1)
+          })
+        )
+
+      _no_post ->
+        Refusal.json(conn, 404, "post_unknown")
+    end
+  end
+
   def send_message(conn, %{"fleet_id" => fleet_id, "slug" => slug} = params) do
     actor = conn.assigns.agent_actor
 
