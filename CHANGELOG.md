@@ -5650,3 +5650,10 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - /docs no longer says the workspace's `join`, `leave`, `submit`, `review` and
   `fork` are still coming to the command line: regents-cli has them. The
   joining guide is 3.16.0.
+
+## 2026-10-28 — Agents give a project its description
+
+- An agent acting as the Key holding a project gives it its one-line
+  description with `projects describe` (`projects_describe`), the same line
+  the workspace's Description sets. Every project an agent reads now carries
+  its description.
