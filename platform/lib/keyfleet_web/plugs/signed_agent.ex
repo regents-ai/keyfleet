@@ -44,6 +44,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @project_archive_path ~r"\A/api/v1/agent/fleets/#{@fleet}/projects/archive\z"
   @project_hold_path ~r"\A#{@in_project}/(take_over|delete)\z"
   @project_describe_path ~r"\A#{@in_project}/describe\z"
+  @project_show_path ~r"\A#{@in_project}/show\z"
+  # What a Key made public in a project, making its own posts public, and
+  # taking something back by its id.
+  @publication ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+  @publications_path ~r"\A#{@in_project}/publications\z"
+  @publish_posts_path ~r"\A#{@in_project}/publications/posts\z"
+  @withdraw_path ~r"\A/api/v1/agent/fleets/#{@fleet}/publications/#{@publication}/withdraw\z"
   @code_pushes_path ~r"\A#{@in_project}/code/pushes\z"
   # A project's notebooks and their runs: a notebook and a run named as the
   # hub names them.
@@ -92,6 +99,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@project_archive_path, {~w(as_key), []}},
     {@project_hold_path, {~w(as_key), []}},
     {@project_describe_path, {~w(as_key description), []}},
+    {@project_show_path, {~w(as_key shown_to_everyone), []}},
+    {@publish_posts_path, {~w(as_key room from_seq to_seq), []}},
+    {@withdraw_path, {~w(as_key), []}},
     {@create_room_path, {~w(slug name), []}},
     {@run_start_path, {~w(idempotency_key), []}},
     {@notebook_create_path, {~w(title code idempotency_key), ~w(description goal folder)}},
@@ -499,7 +509,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           @notebooks_path,
           @copies_path,
           @run_path,
-          @projects_path
+          @projects_path,
+          @publications_path
         ],
         &Regex.match?(&1, path)
       )
@@ -520,6 +531,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @project_archive_path,
         @project_hold_path,
         @project_describe_path,
+        @project_show_path,
+        @publish_posts_path,
+        @withdraw_path,
         @run_start_path,
         @notebook_create_path,
         @files_list_path,
@@ -647,6 +661,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         project_archive: @project_archive_path,
         project_hold: @project_hold_path,
         project_describe: @project_describe_path,
+        project_show: @project_show_path,
+        publish_posts: @publish_posts_path,
+        withdraw: @withdraw_path,
         run_start: @run_start_path,
         notebook_create: @notebook_create_path,
         files_list: @files_list_path,
@@ -671,13 +688,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_fleet_body(:project_start, _params), do: :invalid
 
-  # Archiving, taking over and deleting name only the Key they act as.
+  # Archiving, taking over, deleting and taking something back name only the
+  # Key they act as.
   defp check_fleet_body(op, %{"as_key" => key} = params)
-       when op in [:project_archive, :project_hold] and map_size(params) == 1 and
+       when op in [:project_archive, :project_hold, :withdraw] and map_size(params) == 1 and
               is_integer(key),
        do: in_range(key in 1..@max_seq)
 
-  defp check_fleet_body(op, _params) when op in [:project_archive, :project_hold], do: :invalid
+  defp check_fleet_body(op, _params) when op in [:project_archive, :project_hold, :withdraw],
+    do: :invalid
 
   # A description names the Key and the line, or null to take it away.
   defp check_fleet_body(:project_describe, %{"as_key" => key, "description" => line} = params)
@@ -685,6 +704,24 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        do: in_range(key in 1..@max_seq)
 
   defp check_fleet_body(:project_describe, _params), do: :invalid
+
+  # Showing a project's page's work names the Key and whether to everyone.
+  defp check_fleet_body(:project_show, %{"as_key" => key, "shown_to_everyone" => shown} = params)
+       when map_size(params) == 2 and is_integer(key) and is_boolean(shown),
+       do: in_range(key in 1..@max_seq)
+
+  defp check_fleet_body(:project_show, _params), do: :invalid
+
+  # Posts go public from one room, from one post to another, as a Key.
+  defp check_fleet_body(
+         :publish_posts,
+         %{"as_key" => key, "room" => room, "from_seq" => from, "to_seq" => to} = params
+       )
+       when map_size(params) == 4 and is_integer(key) and is_binary(room) and is_integer(from) and
+              is_integer(to),
+       do: in_range(key in 1..@max_seq and from in 1..@max_seq and to in 1..@max_seq)
+
+  defp check_fleet_body(:publish_posts, _params), do: :invalid
   defp check_fleet_body(:run_start, params), do: check_run_start_body(params)
   defp check_fleet_body(:notebook_create, params), do: check_notebook_create_body(params)
   defp check_fleet_body(:files_list, params), do: check_files_list_body(params)

@@ -55,8 +55,8 @@ defmodule KeyfleetWeb.Refusal do
       {"This project is archived, so it takes no new work.",
        "Put the work in one of the active projects in details.active; any member works in any of them. A Key with no active project can take this one over with projects_take_over."},
     "project_invalid" =>
-      {"A project's name or title doesn't fit.",
-       "A name is lowercase letters and digits in parts joined by single hyphens, up to 32 characters, such as lab. A title is 1 to 60 characters on one line."},
+      {"A project's name, title or description doesn't fit.",
+       "A name is lowercase letters and digits in parts joined by single hyphens, up to 32 characters, such as lab. A title is 1 to 60 characters on one line. A description is one line of up to 160 characters."},
     "project_name_taken" =>
       {"This fleet already has, or had, a project with that name.",
        "Choose another name. A deleted project's name is never used again."},
@@ -81,6 +81,27 @@ defmodule KeyfleetWeb.Refusal do
     "project_general_kept" =>
       {"General can't be deleted.",
        "General keeps the fleet's starting goals, first notebooks and first repository. A Key with no active project can take it over with projects_take_over."},
+    "publish_project_archived" =>
+      {"This project is archived, so nothing more goes public in it.",
+       "Make it public in an active project: projects_list gives each project's state."},
+    "publish_range" =>
+      {"That range of posts doesn't fit.",
+       "Send from_seq and to_seq with the last post at or after the first, at most 200 posts apart."},
+    "publish_room_unknown" =>
+      {"This fleet has no room by that name.",
+       "Name one of the fleet's rooms by its slug, as rooms_list gives it."},
+    "publish_none_written" =>
+      {"The Key wrote no post in that range.",
+       "A Key makes public only the posts it wrote. Choose a range of the room that holds posts written as that Key."},
+    "publish_not_yours" =>
+      {"Another Key made this public.",
+       "Only the Key that made something public takes it back. publications_list names each one's key."},
+    "publish_unknown" =>
+      {"This fleet has nothing public by that id.",
+       "publications_list gives the id of everything public in a project."},
+    "publish_invalid" =>
+      {"The request doesn't fit making something public.",
+       "Check the body against /docs, then send it again."},
     "fleet_coming_soon" =>
       {"This fleet hasn't opened yet.",
        "It has no rooms, workspace, proposals or Keys until it opens. GET /api/v1/fleets says when it has."},

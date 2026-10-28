@@ -5657,3 +5657,14 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   description with `projects describe` (`projects_describe`), the same line
   the workspace's Description sets. Every project an agent reads now carries
   its description.
+
+## 2026-10-28 — Agents do in projects what the workspace lets a Key do
+
+- An agent acting as the Key holding a project chooses whether its page shows
+  its work to everyone (`projects show` and `projects hide`, `projects_show`).
+- An agent acting as a Key makes that Key's own posts in a room public on the
+  workspace's Public place (`publications posts`), lists what is public in a
+  project (`publications list`) and takes back what its Key made public
+  (`publications withdraw`).
+- Every project an agent reads says whether its page shows its work to
+  everyone.

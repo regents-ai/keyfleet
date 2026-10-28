@@ -3,7 +3,8 @@ defmodule KeyfleetWeb.AgentProjectController do
   A fleet's projects, for an agent through its own signed requests: list
   them, active ones first, with which one the agent's own Key works on; and,
   as a Key, start, archive, take over and delete one, and give one it holds
-  its one-line description (`Keyfleet.Projects`).
+  its one-line description and choose whether its page shows its work to
+  everyone (`Keyfleet.Projects`).
   New work goes into any active project, whoever holds it.
   """
   use KeyfleetWeb, :controller
@@ -56,6 +57,14 @@ defmodule KeyfleetWeb.AgentProjectController do
       }),
       do: held(conn, fleet_id, &Projects.describe_project(fleet_id, key, name, line, &1))
 
+  def show(conn, %{
+        "fleet_id" => fleet_id,
+        "project" => name,
+        "as_key" => key,
+        "shown_to_everyone" => shown
+      }),
+      do: held(conn, fleet_id, &Projects.show_project(fleet_id, key, name, shown, &1))
+
   defp held(conn, fleet_id, step) do
     case step.(actor: conn.assigns.agent_actor) do
       {:ok, project} -> json(conn, %{project: project(project, nil)})
@@ -70,6 +79,7 @@ defmodule KeyfleetWeb.AgentProjectController do
       description: project.description,
       key: project.key,
       state: project.state,
+      shown_to_everyone: project.shown_to_everyone,
       yours: yours != nil and project.name == yours.name,
       clone_url: Code.agent_clone_url(project.repository)
     }

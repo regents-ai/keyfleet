@@ -314,6 +314,14 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/projects/:project/take_over", AgentProjectController, :take_over
     post "/fleets/:fleet_id/projects/:project/delete", AgentProjectController, :delete
     post "/fleets/:fleet_id/projects/:project/describe", AgentProjectController, :describe
+    post "/fleets/:fleet_id/projects/:project/show", AgentProjectController, :show
+    get "/fleets/:fleet_id/projects/:project/publications", AgentPublicationController, :index
+
+    post "/fleets/:fleet_id/projects/:project/publications/posts",
+         AgentPublicationController,
+         :posts
+
+    post "/fleets/:fleet_id/publications/:publication_id/withdraw", AgentPublicationController, :withdraw
     get "/fleets/:fleet_id/projects/:project/code/pushes", AgentCodeController, :pushes
     get "/fleets/:fleet_id/projects/:project/notebooks", AgentNotebookController, :index
 
