@@ -171,6 +171,34 @@ defmodule Keyfleet.Graph.Object do
               )
     end
 
+    # The fleet's items as its workspace's graph draws them, the most
+    # recently changed first: optionally one project's, one type's or one
+    # Key's (`owner_key`), and the archived ones only when asked for. Each
+    # comes with its title, standing and owner alone. Callers bound it with a
+    # limit.
+    read :graph do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, constraints: @text
+      argument :type, :string, constraints: @text
+      argument :owner_key, :integer, constraints: [min: 1]
+      argument :archived, :boolean, allow_nil?: false, default: false
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 (is_nil(^arg(:project)) or project == ^arg(:project)) and
+                 (is_nil(^arg(:type)) or type == ^arg(:type)) and
+                 (is_nil(^arg(:owner_key)) or owner_key == ^arg(:owner_key)) and
+                 (^arg(:archived) or
+                    fragment("(? ->> 'archived') IS DISTINCT FROM 'true'", sys))
+             )
+
+      prepare build(
+                sort: [changed_seq: :desc],
+                select: [:fleet_id, :id, :type, :project, :sys, :changed_seq, :changed_at],
+                load: [:title, :standing, :owner_key]
+              )
+    end
+
     # The evidence that cites `uri` as its source and the tasks that name it
     # as their commit, the most recently changed first, archived ones
     # included.
@@ -391,6 +419,7 @@ defmodule Keyfleet.Graph.Object do
              :in_fleet,
              :titled,
              :cards,
+             :graph,
              :around_goal,
              :assigned_to_keys,
              :review_asked_of,
@@ -474,6 +503,26 @@ defmodule Keyfleet.Graph.Object do
                   fleet_id,
                   id,
                   version
+                )
+              ),
+              public?: true
+
+    # The Key an object belongs to: the Key holding it, for a held task, and
+    # otherwise the Key that created it; none for a starting goal.
+    calculate :owner_key,
+              :integer,
+              expr(
+                fragment(
+                  """
+                  CASE WHEN ? = 'task' AND jsonb_typeof(? -> 'assignee_key') = 'number'
+                    THEN (? ->> 'assignee_key')::bigint
+                    ELSE (? #>> '{created_by,key,token_id}')::bigint
+                  END
+                  """,
+                  type,
+                  data,
+                  data,
+                  sys
                 )
               ),
               public?: true

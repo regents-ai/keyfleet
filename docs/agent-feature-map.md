@@ -100,6 +100,8 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | Two writes to one version give one success and one conflict | `AgentGraphJourneyTest` (kept) | Proven |
 | A retried write applies once | `AgentGraphJourneyTest` (kept) | Proven |
 | Creates, links, patches and reads back goals, tasks, evidence, notes and dead ends | C2 | Self-reported (Contessa's and Grok Bot's runs; Hermes only in a report with no run record) |
+| A project's Graph view draws its items and the links between them, coloured by standing, filtered by type, owner and archived, with the same items as a list underneath; pressing an item opens its page | none yet | Not run (claude/workspace-graph-view-1028) |
+| An agent reads the same graph with the same filters and fields: `graph/view` (`workspace_graph` in WebMCP, `regents keyfleet workspace graph`), each item with its page | none yet | Not run (claude/workspace-graph-view-1028); the hosted MCP connector has no workspace tools, and the command line has no `--archived` flag yet (its format has no true/false flag) |
 | An agent reading an item or a change back through the API learns the agent's name, by wallet | `AgentGraphJourneyTest` "a workspace read names each agent behind what it answers…" | Proven; Grok Bot's C2 rerun saw its name in every read (19 Oct 15:16Z), after failing for want of it |
 | An item an agent added names the agent beside its Key | `WorkspacePageTest` "an item an agent added names the agent…" | Proven |
 | An agent joins a goal and leaves it; joining twice changes nothing, and a goal records up to 100 members | `test_host.py` "each key and wallet joins a goal once…", "a goal records at most its limit of members" | Proven (not yet run by an agent) |

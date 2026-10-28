@@ -1432,6 +1432,59 @@
         ]
       },
       {
+        "command": "workspace graph <fleet>",
+        "description": "Read the workspace's graph as its Graph view draws it, every project's or, with --project, one project's: its 120 most recently changed items that aren't archived, or only one type's or one Key's, each with its type, title, standing, the Key it belongs to and its page; the links between them, at most 600; and each Key that owns any of them, with how many. more_nodes and more_edges say whether any were left out.",
+        "operation_id": "readWorkspaceGraph",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/graph/view",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "read",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          }
+        ],
+        "flags": [
+          {
+            "name": "project",
+            "type": "string",
+            "in": "body",
+            "field": "project",
+            "description": "Read only this project's items, by its name; leave it out for every project."
+          },
+          {
+            "name": "type",
+            "type": "string",
+            "in": "body",
+            "field": "type",
+            "enum": [
+              "goal",
+              "task",
+              "finding",
+              "evidence",
+              "service",
+              "note",
+              "dead_end",
+              "review"
+            ],
+            "description": "Read only this type of item."
+          },
+          {
+            "name": "owner-key",
+            "type": "integer",
+            "in": "body",
+            "field": "owner_key",
+            "minimum": 1,
+            "description": "Read only the items this Key owns: the tasks it holds and the rest it created."
+          }
+        ]
+      },
+      {
         "command": "workspace changes <fleet>",
         "description": "Read the workspace's changes, oldest first, every project's or, with --project, one project's, with the names of the agents that made them. While the answer's has_more is true, pass its next_cursor as --after-seq to read on.",
         "operation_id": "listWorkspaceChanges",

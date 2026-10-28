@@ -175,7 +175,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
       <nav id="workspace-project-picker" class="workspace-project-picker" aria-label="Projects">
         <.link
           id="workspace-project-all"
-          patch={WorkspacePage.place_path(@board.fleet_id, @board.place)}
+          patch={picker_path(@board, nil)}
           aria-current={if is_nil(@board.project), do: "page"}
         >
           All projects
@@ -322,7 +322,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
     <.link
       id={"workspace-project-#{@project.name}"}
       data-project={@project.name}
-      patch={WorkspacePage.place_path(@board.fleet_id, @board.place, @project.name)}
+      patch={picker_path(@board, @project.name)}
       aria-current={if @board.project == @project.name, do: "page"}
     >
       {@project.title} · {holder(@project.key)}
@@ -331,6 +331,15 @@ defmodule KeyfleetWeb.WorkspaceLive do
   end
 
   defp title(projects, name), do: Enum.find_value(projects, &(&1.name == name && &1.title))
+
+  # The picker keeps the Project's graph open while it is.
+  defp picker_path(%{place: :project, filter: %{view: :graph}} = board, project),
+    do: WorkspacePage.board_path(board.fleet_id, %{graph_filter(board.filter) | project: project})
+
+  defp picker_path(board, project),
+    do: WorkspacePage.place_path(board.fleet_id, board.place, project)
+
+  defp graph_filter(filter), do: %{filter | view: :graph, type: nil, owner: nil, archived?: false}
 
   # Who holds a project: one Key, or the whole fleet for a shared one.
   defp holder(nil), do: "Shared"
@@ -348,13 +357,41 @@ defmodule KeyfleetWeb.WorkspaceLive do
 
   attr :board, :map, required: true
 
-  # The fleet's goals, its workstream and its items, with how work moves
-  # between Keys beside them.
+  # The Project as a board, or as a graph of its items and their links.
   defp project(assigns) do
     ~H"""
-    <.unavailable :if={not @board.ready?} />
+    <nav id="workspace-views" class="workspace-views" aria-label="Project views">
+      <.link
+        :for={{view, label} <- [board: "Board", graph: "Graph"]}
+        id={"workspace-view-#{view}"}
+        class="rg-panel"
+        patch={view_path(@board, view)}
+        aria-current={if @board.filter.view == view, do: "page"}
+      >
+        {label}
+      </.link>
+    </nav>
 
-    <div :if={@board.ready?} class="workspace-grid">
+    <.unavailable :if={not @board.ready?} />
+    <.board_view :if={@board.ready? and @board.filter.view == :board} board={@board} />
+    <.graph_view :if={@board.ready? and @board.filter.view == :graph} board={@board} />
+    """
+  end
+
+  # Switching keeps the kind of item shown, and the archived ones.
+  defp view_path(board, :board),
+    do: WorkspacePage.board_path(board.fleet_id, %{board.filter | view: :board, owner: nil})
+
+  defp view_path(board, :graph),
+    do: WorkspacePage.board_path(board.fleet_id, %{board.filter | view: :graph})
+
+  attr :board, :map, required: true
+
+  # The fleet's goals, its workstream and its items, with how work moves
+  # between Keys beside them.
+  defp board_view(assigns) do
+    ~H"""
+    <div class="workspace-grid">
       <div class="workspace-main">
         <section
           id="workspace-goals"
@@ -482,6 +519,213 @@ defmodule KeyfleetWeb.WorkspaceLive do
     </div>
     """
   end
+
+  attr :board, :map, required: true
+
+  # The items and the links between them as one picture, coloured by where
+  # each stands, above the same items as a list, each with its links in
+  # words. Pressing an item in either opens its page. The picture is drawn
+  # whole by the server; on a screen with WebGPU, the links are drawn again
+  # on the GPU and the ones around the item pointed at light up
+  # (`KeyfleetWeb.WorkspaceGraph`).
+  defp graph_view(assigns) do
+    assigns =
+      assign(assigns,
+        graph: assigns.board.graph,
+        filter: assigns.board.filter,
+        filtered?:
+          assigns.board.filter.type != nil or assigns.board.filter.owner != nil or
+            assigns.board.filter.archived?
+      )
+
+    ~H"""
+    <section
+      id="workspace-graph"
+      class="workspace-panel workspace-graph"
+      aria-labelledby="workspace-graph-title"
+      phx-hook="WorkspaceGraph"
+      phx-mounted={JS.ignore_attributes(["data-graph-ready", "data-lighting"])}
+    >
+      <header class="workspace-graph-head">
+        <h2 id="workspace-graph-title">Graph</h2>
+        <p id="workspace-graph-count" class="workspace-detail">
+          <span>{count(length(@graph.nodes), "item", "items")}</span>
+          <span>{count(length(@graph.edges), "link", "links")}</span>
+          <span :if={@graph.more_nodes?}>The {length(@graph.nodes)} most recently changed</span>
+          <span :if={@graph.more_edges?}>The first {length(@graph.edges)} links</span>
+        </p>
+      </header>
+
+      <div class="workspace-graph-filters">
+        <nav class="workspace-filters" aria-label="Kinds of item">
+          <.link
+            :for={{type, label} <- [{nil, "Everything"} | kinds()]}
+            patch={WorkspacePage.board_path(@board.fleet_id, %{@filter | type: type})}
+            aria-current={if @filter.type == type, do: "page"}
+            data-type-filter={type || "all"}
+          >
+            {label}
+          </.link>
+        </nav>
+        <nav id="workspace-graph-owners" class="workspace-filters" aria-label="Owners">
+          <.link
+            :for={{owner, label} <- owners(@graph.owners, @filter.owner, @board.you)}
+            patch={WorkspacePage.board_path(@board.fleet_id, %{@filter | owner: owner})}
+            aria-current={if @filter.owner == owner, do: "page"}
+            data-owner-filter={owner || "all"}
+          >
+            {label}
+          </.link>
+        </nav>
+        <.link
+          id="workspace-graph-archived"
+          class="workspace-toggle"
+          patch={
+            WorkspacePage.board_path(@board.fleet_id, %{@filter | archived?: not @filter.archived?})
+          }
+        >
+          {if @filter.archived?, do: "Hide archived items", else: "Show archived items"}
+        </.link>
+      </div>
+
+      <Regent.Primitives.empty_state
+        :if={@graph.nodes == []}
+        id="workspace-graph-empty"
+        class="kf-empty"
+        title={if @filtered?, do: "No items match these filters.", else: "Nothing here yet."}
+      >
+        <:action :if={@filtered?}>
+          <.link
+            class="rg-button rg-button--secondary"
+            patch={WorkspacePage.board_path(@board.fleet_id, graph_filter(@filter))}
+          >
+            <span class="rg-button__label">Show everything</span>
+          </.link>
+        </:action>
+      </Regent.Primitives.empty_state>
+
+      <div :if={@graph.nodes != []} id="workspace-graph-frame" class="workspace-graph-frame">
+        <div class="workspace-graph-stage">
+          <canvas
+            id="workspace-graph-canvas"
+            data-graph-canvas
+            phx-update="ignore"
+            aria-hidden="true"
+          ></canvas>
+          <svg
+            id="workspace-graph-picture"
+            class="workspace-graph-picture"
+            width={@graph.width}
+            height={@graph.height}
+            viewBox={"0 0 #{@graph.width} #{@graph.height}"}
+            aria-hidden="true"
+            focusable="false"
+          >
+            <g class="workspace-graph-edges">
+              <path
+                :for={edge <- @graph.edges}
+                d={edge.path}
+                data-edge={edge.id}
+                data-type={edge.type}
+                data-source={edge.source}
+                data-target={edge.target}
+                data-curve={edge.curve}
+              />
+            </g>
+            <g class="workspace-graph-nodes">
+              <.link
+                :for={node <- @graph.nodes}
+                patch={node.path}
+                tabindex="-1"
+                data-node={node.id}
+                data-tone={node.tone}
+                data-archived={node.archived?}
+              >
+                <title>{node.title}</title>
+                <rect x={node.x} y={node.y} width={node.width} height={node.height} />
+                <rect
+                  class="workspace-graph-tone"
+                  x={node.x}
+                  y={node.y}
+                  width="4"
+                  height={node.height}
+                />
+                <text class="workspace-graph-kind" x={node.x + 16} y={node.y + 20}>
+                  {node.kind}{if node.standing, do: " · #{node.standing}"}
+                </text>
+                <text class="workspace-graph-title" x={node.x + 16} y={node.y + 39}>
+                  {node.shown_title}
+                </text>
+              </.link>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <ul
+        :if={@graph.tones != []}
+        id="workspace-graph-key"
+        class="workspace-graph-key"
+        aria-label="Status"
+      >
+        <li :for={tone <- @graph.tones} data-tone={tone.tone}>
+          <span class="workspace-graph-mark" aria-hidden="true"></span>
+          {tone.name} <span class="workspace-detail">{tone.count}</span>
+        </li>
+      </ul>
+
+      <ol :if={@graph.nodes != []} id="workspace-graph-list" class="workspace-graph-list">
+        <li :for={row <- @graph.rows} data-row={row.id} data-tone={row.tone}>
+          <p class="workspace-kind">
+            <span class="workspace-graph-mark" aria-hidden="true"></span>
+            <span>{row.kind}</span>
+            <span :if={row.standing}>{row.standing}</span>
+            <span :if={row.archived?} class="workspace-badge">Archived</span>
+          </p>
+          <h3><.link patch={row.path}>{row.title}</.link></h3>
+          <p :if={row.owner || row.project} class="workspace-detail">
+            <span :if={row.owner}>{row.owner}</span>
+            <span :if={row.project} data-project-label>{row.project}</span>
+          </p>
+          <ul :if={row.links != []} class="workspace-graph-links">
+            <li :for={{direction, words, other} <- row.links}>
+              <span :if={direction == :to}>
+                {String.capitalize(words)} <.link patch={other.path}>{other.title}</.link>
+              </span>
+              <span :if={direction == :from}>
+                <.link patch={other.path}>{other.title}</.link> {words} this
+              </span>
+            </li>
+          </ul>
+        </li>
+      </ol>
+    </section>
+    """
+  end
+
+  defp count(1, one, _many), do: "1 #{one}"
+  defp count(number, _one, many), do: "#{number} #{many}"
+
+  # Everyone, the member's own Key, then each Key that owns any of the items
+  # drawn, with how many; the Key chosen stays offered while it owns none.
+  defp owners(owners, chosen, you) do
+    yours = you && you.key
+    mine = if yours, do: [{yours, "Your Key"}], else: []
+
+    others =
+      for %{key: key, items: items} <- owners,
+          key != yours,
+          do: {key, "#{key_label(key)} · #{items}"}
+
+    kept =
+      if chosen && chosen != yours && chosen not in Enum.map(owners, & &1.key),
+        do: [{chosen, key_label(chosen)}],
+        else: []
+
+    [{nil, "Everyone"}] ++ mine ++ others ++ kept
+  end
+
+  defp key_label(key), do: ActivityLines.key_name(key, nil)
 
   attr :board, :map, required: true
   attr :notice, :string, default: nil

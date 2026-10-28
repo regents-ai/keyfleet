@@ -90,6 +90,20 @@ defmodule Keyfleet.Graph.Workspace do
       run {Read, read: :changes}
     end
 
+    action :graph, :map do
+      description "The workspace's items and the links between them, as its graph draws them."
+      argument :fleet_id, :string, allow_nil?: false
+      argument :project, :string, constraints: @text
+
+      argument :type, :string,
+        constraints: [match: ~r/\A(goal|task|finding|evidence|service|note|dead_end|review)\z/]
+
+      argument :owner_key, :integer, constraints: [min: 1, max: @bigint]
+      argument :archived, :boolean, allow_nil?: false, default: false
+      validate KnownFleet
+      run {Read, read: :graph}
+    end
+
     action :create, :map do
       description "Adds an object to one of the fleet's active projects."
       argument :fleet_id, :string, allow_nil?: false
@@ -234,7 +248,7 @@ defmodule Keyfleet.Graph.Workspace do
   end
 
   policies do
-    policy action([:get, :changes]) do
+    policy action([:get, :changes, :graph]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 

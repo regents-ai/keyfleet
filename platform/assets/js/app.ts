@@ -47,6 +47,7 @@ import {MotionCascade, MotionTabs, ShellViews} from "./hooks/motion/reveals"
 import {SidePanel} from "./hooks/side_panel"
 import {TokenMenu} from "./hooks/token_menu"
 import {VerifiedConnections} from "./hooks/verified_connections"
+import {WorkspaceGraph} from "./hooks/workspace_graph"
 import {mountMotion} from "./motion"
 import {installVisitLog} from "./visit_log"
 
@@ -313,6 +314,7 @@ const hooks = {
   SidePanel,
   TokenMenu,
   VerifiedConnections,
+  WorkspaceGraph,
 }
 if (!browserCsrfToken()) throw new Error("Missing CSRF token")
 

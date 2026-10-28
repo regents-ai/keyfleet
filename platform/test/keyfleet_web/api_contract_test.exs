@@ -35,6 +35,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              @graph <> "review",
              @graph <> "submit",
              @graph <> "unlink",
+             @graph <> "view",
              "/api/v1/agent/fleets/{fleet_id}/keys/claim",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}",
              "/api/v1/agent/fleets/{fleet_id}/keys/{token_id}/claim",
@@ -411,6 +412,7 @@ defmodule KeyfleetWeb.ApiContractTest do
 
     for {op, required, optional} <- [
           {"board", [], ~w(project)},
+          {"view", [], ~w(project type owner_key archived)},
           {"get", ~w(id), ~w(relations_after fields)},
           {"changes", [], ~w(project object after_seq limit max_bytes)},
           {"create", command ++ ~w(project type data), []},

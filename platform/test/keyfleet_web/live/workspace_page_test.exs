@@ -1782,6 +1782,33 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
     end
   end
 
+  describe "the workspace's graph" do
+    # Costly failure: the graph is a second way into the workspace, so a graph
+    # that skipped the board's members-only rule would show anyone every item.
+    test "draws this fleet's items for a member, and anyone else the members-only page",
+         %{conn: conn, visitor: visitor} do
+      open_log(@fleet)
+      open_log(@other)
+      create(@fleet, "task", %{"title" => "Ours", "progress" => "todo"}, id: "task#1")
+      create(@other, "task", %{"title" => "Theirs", "progress" => "todo"}, id: "task#2")
+      path = @board <> "?view=graph"
+
+      {:ok, graph, _html} = live(conn, path)
+      assert has_element?(graph, "#workspace-graph")
+      assert render(graph) =~ "Ours"
+      refute render(graph) =~ "Theirs"
+
+      outsider = signed_in_as(visitor, "0x" <> String.duplicate("e", 40))
+
+      for someone <- [visitor, outsider] do
+        {:ok, refused, _html} = live(someone, path)
+        assert has_element?(refused, "#workspace-members-only")
+        refute has_element?(refused, "#workspace-graph")
+        refute render(refused) =~ "Ours"
+      end
+    end
+  end
+
   describe "an item with the same id in another fleet" do
     test "is named by this fleet's own item", %{conn: conn} do
       open_log(@fleet)

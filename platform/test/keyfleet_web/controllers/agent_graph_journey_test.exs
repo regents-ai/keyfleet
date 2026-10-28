@@ -722,8 +722,9 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
 
     assert logged_commands() == []
 
-    # Nor may it read the workspace: that needs a Key or a shard of one.
-    for {op, input} <- [{"changes", %{}}, {"get", %{id: "goal#1"}}] do
+    # Nor may it read the workspace, its graph included: that needs a Key or a
+    # shard of one.
+    for {op, input} <- [{"changes", %{}}, {"get", %{id: "goal#1"}}, {"view", %{}}] do
       read = graph(c, stranger, op, input)
       assert {read.status, read.body["error"]["code"]} == {403, "workspace_members_only"}
       assert ContractSchema.errors(read.body, "WorkspaceError") == []

@@ -56,6 +56,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.NotFoundError
   alias KeyfleetWeb.RoomsLive
+  alias KeyfleetWeb.WorkspaceGraph
 
   @types ~w(goal task finding evidence service note dead_end review)
 
@@ -207,14 +208,20 @@ defmodule KeyfleetWeb.WorkspacePage do
         query
       )
 
-  @doc "The path of the fleet's workspace, showing `filter` from `position`."
+  @doc """
+  The path of the fleet's workspace, showing `filter` from `position`: on the
+  board, or in the graph (`view: :graph`), where `owner` names the Key whose
+  items it draws.
+  """
   def board_path(fleet_id, filter, position \\ []) do
     with_query(
       "#{Keyfleet.Fleets.path(fleet_id)}/workspace",
       given(
         [
+          view: if(filter.view == :graph, do: "graph"),
           project: filter.project,
           type: filter.type,
+          owner: filter.owner,
           archived: if(filter.archived?, do: "shown")
         ] ++ position
       )
@@ -327,6 +334,38 @@ defmodule KeyfleetWeb.WorkspacePage do
   # lists; none in one project's.
   defp labels(nil, projects), do: Map.new(projects, &{&1.name, &1.title})
   defp labels(_shown, _projects), do: %{}
+
+  # The project's items, or the whole fleet's, drawn as a graph with the
+  # links between them (`KeyfleetWeb.WorkspaceGraph`).
+  defp place(fleet, :project, shown, projects, params, opts)
+       when is_map_key(params, "view") do
+    filter = filter!(params, shown)
+
+    case ready(fleet, opts) do
+      {:ready, cursor} ->
+        graph =
+          Graph.workspace_graph!(
+            fleet.id,
+            %{
+              project: filter.project,
+              type: filter.type,
+              owner_key: filter.owner,
+              archived: filter.archived?
+            },
+            opts
+          )
+
+        %{
+          ready?: true,
+          seen: seen(cursor),
+          filter: filter,
+          graph: WorkspaceGraph.draw(graph, fleet.id, labels(shown, projects))
+        }
+
+      {:missing, _name} ->
+        %{ready?: false, seen: nil, filter: filter}
+    end
+  end
 
   # The project's items, or the whole fleet's, a page of them, beside its
   # goals and its latest changes.
@@ -1044,21 +1083,41 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp seen(cursor), do: {cursor.run_id, cursor.applied_seq}
 
   defp filter!(params, shown) do
-    type =
-      case params["type"] do
-        nil -> nil
-        type when type in @types -> type
-        _unknown -> raise NotFoundError
-      end
+    view = view!(params)
 
-    archived? =
-      case params["archived"] do
-        nil -> false
-        "shown" -> true
-        _unknown -> raise NotFoundError
-      end
+    %{
+      view: view,
+      project: shown && shown.name,
+      type: type!(params["type"]),
+      owner: owner!(view, params["owner"]),
+      archived?: archived!(params["archived"])
+    }
+  end
 
-    %{project: shown && shown.name, type: type, archived?: archived?}
+  # The graph is one picture, so it has no pages, and only it is drawn for
+  # one Key.
+  defp view!(%{"view" => "graph"} = params),
+    do: if(paged?(params), do: raise(NotFoundError), else: :graph)
+
+  defp view!(%{"view" => _unknown}), do: raise(NotFoundError)
+  defp view!(_board), do: :board
+
+  defp type!(nil), do: nil
+  defp type!(type) when type in @types, do: type
+  defp type!(_unknown), do: raise(NotFoundError)
+
+  defp owner!(_view, nil), do: nil
+  defp owner!(:graph, owner) when is_binary(owner), do: token_id!(owner)
+  defp owner!(_view, _unknown), do: raise(NotFoundError)
+
+  defp archived!(nil), do: false
+  defp archived!("shown"), do: true
+  defp archived!(_unknown), do: raise(NotFoundError)
+
+  defp token_id!(digits) do
+    if String.match?(digits, ~r/\A[1-9][0-9]{0,17}\z/),
+      do: String.to_integer(digits),
+      else: raise(NotFoundError)
   end
 
   defp cards_page(fleet, filter, params, opts) do
@@ -1638,7 +1697,8 @@ defmodule KeyfleetWeb.WorkspacePage do
     }
   end
 
-  defp relation_words(type), do: Map.fetch!(@relations, type)
+  @doc "What one item is to another by their link, read from its source to its target."
+  def relation_words(type), do: Map.fetch!(@relations, type)
 
   # The ids a change's line names.
   defp mentions(%{brief: brief}),

@@ -1415,6 +1415,52 @@ newest 24 goals, then the pinned notebooks and code
 - **Server needs:** the fleet's workspace and its pins.
 - **History:** 2026-10-28 added; the browser tool `workspace_board` had no command before.
 
+## regents keyfleet workspace graph <fleet>
+
+- **Purpose:** reads the workspace's graph as its Graph view draws it, every project's
+  or one project's: its 120 most recently changed items, newest first, the links
+  between them and each Key that owns any of them. The same filters as the page: one
+  type, one Key's items.
+- **Access:** a paired agent that is a member of the fleet.
+- **Changes:** nothing (read).
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/view` → `readWorkspaceGraph`
+- **Inputs:** `<fleet>`, and `--project`, `--type` (`goal`, `task`, `finding`,
+  `evidence`, `service`, `note`, `dead_end` or `review`) and `--owner-key` to narrow it.
+  Archived items are left out; the route's body takes `"archived": true` to include
+  them.
+
+  ```sh
+  regents keyfleet workspace graph fleet_tech_classic --project virtual-cell --type task
+  ```
+
+- **Answer:** `{"nodes": [node], "edges": [edge], "owners", "more_nodes",
+  "more_edges", "watermark"}`. A node is `{"id", "type", "title", "project",
+  "standing", "owner_key", "archived", "changed_at", "url"}`: `standing` is a goal's
+  status, a task's progress or, once submitted, its review, and `null` for anything
+  else; `owner_key` is the Key holding a held task, otherwise the Key that created the
+  item, and `null` for a starting goal; `url` is its page. An edge is
+  `{"id", "type", "source", "target"}`, a link whose both ends are among the nodes,
+  oldest first, at most 600. `owners` is `[{"key", "items"}]`, lowest Key first.
+  `more_nodes` is true when older items are left out: narrow by project, type or owner
+  to see them. `more_edges` is true when newer links are left out: `workspace get`
+  answers every link of one item.
+- **Refusals:** 403 `workspace_members_only`; 404 `project_unknown`; 422
+  `invalid_request` for a type it doesn't know; and those every workspace command
+  shares.
+
+Server:
+
+```text
+Graph.workspace_graph(fleet, project, type, owner_key, archived) as the agent
+       members only, read while key ownership is fresh -> else 403, or 503 ownership_refreshing
+answer the 120 most recently changed items that match, each with its standing, its
+       owner and its page's address, the links between them, oldest first, at most
+       600, and each Key that owns any of them, with how many
+```
+
+- **Server needs:** the fleet's workspace; the keys, shards and pairings as recorded.
+- **History:** 2026-10-28 added.
+
 ## regents keyfleet workspace changes <fleet>
 
 - **Purpose:** reads the workspace's changes, every project's or one project's,
