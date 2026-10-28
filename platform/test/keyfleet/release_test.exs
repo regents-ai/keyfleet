@@ -235,6 +235,7 @@ defmodule Keyfleet.ReleaseTest do
              "proposal_votes",
              "proposal_words",
              "proposals",
+             "publications",
              "quote_requests",
              "room_read_marks",
              "rooms",

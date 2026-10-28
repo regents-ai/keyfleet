@@ -4,7 +4,7 @@ defmodule Keyfleet.Capabilities do
   time from `priv/tool_manifest.json`: the reads every page offers; on the
   pages with wallet buttons, tools that press them; and exact signed agent
   requests using the agent's own identity and current pairing.
-  The browser code registers them from the same file; `/capabilities`, the
+  The browser code registers them from the same file; `/capabilities.json`, the
   docs page and `/llms.txt` list them from here.
   """
 

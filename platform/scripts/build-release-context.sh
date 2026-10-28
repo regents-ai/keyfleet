@@ -179,11 +179,11 @@ trap - EXIT
 printf 'context ready: %s\n' "$destination"
 cat "$destination/BUILD-INPUTS.txt"
 printf 'build with:\n'
-printf '  docker build --platform linux/%s \\\n' "$arch"
+printf '  docker build --platform linux/%s --build-arg SOURCE_COMMIT=<commit> \\\n' "$arch"
 printf '    -f %s/Dockerfile -t <tag> %s\n' "$destination" "$destination"
 printf 'or deploy with Fly'"'"'s remote builder (amd64 only; fly.staging.toml for staging):\n'
 printf '  fly deploy %s --config %s/platform/fly.toml \\\n' "$destination" "$destination"
 printf '    --dockerfile %s/Dockerfile --ignorefile %s/Dockerfile.dockerignore \\\n' \
   "$destination" "$destination"
-printf '    --remote-only --ha=false --process-groups graph\n'
+printf '    --build-arg SOURCE_COMMIT=<commit> --remote-only --ha=false --process-groups graph\n'
 printf 'then the site machine, bluegreen, from the image that made (scripts/deploy.sh)\n'

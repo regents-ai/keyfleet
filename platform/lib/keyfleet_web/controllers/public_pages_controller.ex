@@ -39,7 +39,11 @@ defmodule KeyfleetWeb.PublicPagesController do
   end
 
   def capabilities(conn, _params) do
-    body = Jason.encode!(Keyfleet.Capabilities.manifest())
+    body =
+      Keyfleet.Capabilities.manifest()
+      |> Map.put("build", Application.fetch_env!(:keyfleet, :build))
+      |> Jason.encode!()
+
     conn |> cached(body) |> put_resp_content_type("application/json") |> send_resp(200, body)
   end
 

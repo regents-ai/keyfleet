@@ -91,7 +91,7 @@ defmodule KeyfleetWeb.LaunchGateTest do
           post(build_conn(), "/auth/privy/session", %{}),
           delete(build_conn(), "/auth/privy/session"),
           get(build_conn(), "/openapi.json"),
-          get(build_conn(), "/capabilities"),
+          get(build_conn(), "/capabilities.json"),
           get(build_conn(), "/.well-known/api-catalog"),
           get(build_conn(), "/.well-known/agent-skills/index.json"),
           get(build_conn(), "/metadata/1/1")

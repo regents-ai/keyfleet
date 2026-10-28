@@ -96,12 +96,17 @@ defmodule Keyfleet.Projects.Project do
       prepare build(sort: [inserted_at: :asc, name: :asc])
     end
 
-    # Anyone reads the titles of a fleet's projects, oldest first; a page
-    # shows the title alone.
+    # Anyone reads a fleet's projects as their pages show them, oldest first:
+    # each one's title and line, the Key holding it, whether it is archived
+    # and whether its page shows its work to everyone.
     read :titles do
       argument :fleet_id, :string, allow_nil?: false
       filter expr(fleet_id == ^arg(:fleet_id) and state != :deleted)
-      prepare build(sort: [inserted_at: :asc, name: :asc], select: [:fleet_id, :name, :title])
+
+      prepare build(
+                sort: [inserted_at: :asc, name: :asc],
+                select: [:fleet_id, :name, :title, :description, :key, :state, :shown_to_everyone]
+              )
     end
 
     read :named do

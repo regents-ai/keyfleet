@@ -84,6 +84,7 @@ graph_host_supply="$(sed -n 's/^graph-host-supply=//p' "$context/BUILD-INPUTS.tx
 
 echo "==> Building $image from commit $commit"
 docker build --no-cache --platform "linux/$arch" \
+  --build-arg SOURCE_COMMIT="$commit" \
   --label "org.opencontainers.image.revision=$commit" --tag "$image" \
   --file "$context/Dockerfile" "$context"
 digest="$(docker image inspect --format '{{.Id}}' "$image")"

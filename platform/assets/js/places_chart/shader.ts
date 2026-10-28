@@ -8,17 +8,20 @@
  */
 export const chartWgsl = /* wgsl */ `
 struct Params {
-  // Width and height in device pixels, and device pixels per CSS pixel.
+  // Width and height in device pixels, device pixels per CSS pixel, and a
+  // tab's width, 0..1 across the canvas.
   size: vec4f,
-  // How far each place's ridge has risen, 0..1: the Project, Docs and Code.
+  // How far each place's ridge has risen, 0..1: the Project, Docs, Code and
+  // Public.
   rise: vec4f,
-  // The centre of each place's tab, 0..1 across the canvas, and a tab's width.
+  // The centre of each place's tab, 0..1 across the canvas.
   centers: vec4f,
   // The resting lines' colour and strength, then each place's colour.
   line: vec4f,
   project: vec4f,
   docs: vec4f,
   code: vec4f,
+  everyone: vec4f,
 }
 @group(0) @binding(0) var<uniform> params: Params;
 
@@ -32,13 +35,14 @@ fn bump(x: f32, center: f32, width: f32) -> f32 {
 
 // How far each place lifts line k at x (0..1 across). Each line's ridge
 // drifts a little from the next, so they read as hills rather than copies.
-fn lifts(x: f32, k: f32) -> vec3f {
-  let width = params.centers.w;
+fn lifts(x: f32, k: f32) -> vec4f {
+  let width = params.size.w;
   let drift = 0.06 * width;
-  return vec3f(
+  return vec4f(
     params.rise.x * bump(x, params.centers.x + drift * sin(k * 1.3), width),
     params.rise.y * bump(x, params.centers.y + drift * sin(k * 1.3 + 2.0), width),
     params.rise.z * bump(x, params.centers.z + drift * sin(k * 1.3 + 4.0), width),
+    params.rise.w * bump(x, params.centers.w + drift * sin(k * 1.3 + 6.0), width),
   );
 }
 
@@ -50,7 +54,7 @@ fn ridge(x: f32, k: f32) -> f32 {
   let reach = h * (0.18 + 0.12 * depth);
   let lift = lifts(x, k);
   let wobble = h * 0.025 * sin(x * 23.0 + k * 2.1) * sin(x * 7.0 + k * 0.7);
-  return base - reach * (lift.x + lift.y + lift.z) + wobble;
+  return base - reach * dot(lift, vec4f(1.0)) + wobble;
 }
 
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
@@ -68,10 +72,10 @@ fn ridge(x: f32, k: f32) -> f32 {
     let slope = (ridge(uv.x + pixel, k) - ridge(uv.x - pixel, k)) * 0.5;
     let gap = abs(px.y - y) / sqrt(1.0 + slope * slope);
     let lift = lifts(uv.x, k);
-    let total = lift.x + lift.y + lift.z;
+    let total = dot(lift, vec4f(1.0));
     let risen = min(1.0, total * 1.3);
-    let tint = (params.project.rgb * lift.x + params.docs.rgb * lift.y + params.code.rgb * lift.z)
-      / max(total, 0.0001);
+    let tint = (params.project.rgb * lift.x + params.docs.rgb * lift.y + params.code.rgb * lift.z
+      + params.everyone.rgb * lift.w) / max(total, 0.0001);
     let ink = mix(params.line.rgb, tint, risen);
     let a = (1.0 - smoothstep(stroke * 0.5 - 0.5, stroke * 0.5 + 0.75, gap))
       * mix(params.line.a, 1.0, risen);

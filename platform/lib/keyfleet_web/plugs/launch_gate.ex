@@ -47,7 +47,7 @@ defmodule KeyfleetWeb.Plugs.LaunchGate do
     ["api"],
     ["auth"],
     ["metadata"],
-    ["capabilities"],
+    ["capabilities.json"],
     [".well-known", "api-catalog"]
   ]
 

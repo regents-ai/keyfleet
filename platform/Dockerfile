@@ -105,6 +105,11 @@ RUN set -eu; \
 
 FROM slim AS app
 
+# The commit this image is built from, which /capabilities.json reports.
+ARG SOURCE_COMMIT
+RUN test -n "$SOURCE_COMMIT"
+ENV SOURCE_COMMIT=$SOURCE_COMMIT
+
 # The builder image sets this and the slim base does not. Without it the VM
 # runs with latin1 name encoding, which Elixir warns about at boot.
 ENV LANG=C.UTF-8

@@ -86,6 +86,7 @@ fly deploy "$context" \
   --ignorefile "$context/Dockerfile.dockerignore" \
   --remote-only \
   --ha=false \
+  --build-arg SOURCE_COMMIT="$commit" \
   --image-label "${commit:0:7}" \
   --process-groups graph
 

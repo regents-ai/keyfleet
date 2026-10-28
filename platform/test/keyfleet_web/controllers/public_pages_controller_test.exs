@@ -153,7 +153,7 @@ defmodule KeyfleetWeb.PublicPagesControllerTest do
 
   test "the discovery files carry an ETag of their body and a five-minute public cache" do
     for path <-
-          ~w(/openapi.json /robots.txt /llms.txt /capabilities /.well-known/security.txt /.well-known/api-catalog) do
+          ~w(/openapi.json /robots.txt /llms.txt /capabilities.json /.well-known/security.txt /.well-known/api-catalog) do
       answer = get(build_conn(), path)
       digest = Base.encode16(:crypto.hash(:sha256, answer.resp_body), case: :lower)
 

@@ -130,6 +130,9 @@ config :keyfleet, :chain_nodes, %{
 # keeps an idle request open.
 config :keyfleet, :agent_wait_ms, 20_000
 
+# The commit and Fly image a release runs; set from the machine in production.
+config :keyfleet, :build, %{commit: nil, release: nil}
+
 # How long a member's open fleet page waits after a notice that something
 # happened in the fleet before it reads the hall's feed again, so a burst of
 # changes is read once.

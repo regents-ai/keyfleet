@@ -36,7 +36,9 @@ defmodule Keyfleet.RuntimeConfigTest do
       "KEY_ART_URL",
       "LIGHTHOUSE_API_KEY",
       "KEYFLEET_MACHINE",
-      "DNS_CLUSTER_QUERY"
+      "DNS_CLUSTER_QUERY",
+      "SOURCE_COMMIT",
+      "FLY_IMAGE_REF"
     ]
 
     previous = Map.new(names, &{&1, System.get_env(&1)})
@@ -44,6 +46,9 @@ defmodule Keyfleet.RuntimeConfigTest do
 
     # Production demands an explicit gate setting; these tests cover the rest of the file.
     System.put_env("KEYFLEET_APP_SURFACES", "on")
+    # Every production image carries the commit it was built from and its own name.
+    System.put_env("SOURCE_COMMIT", "0123456789abcdef0123456789abcdef01234567")
+    System.put_env("FLY_IMAGE_REF", "registry.fly.io/keyfleet:deployment-test")
 
     on_exit(fn ->
       Enum.each(previous, fn {name, value} -> restore_env(name, value) end)
