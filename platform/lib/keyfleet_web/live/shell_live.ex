@@ -59,7 +59,7 @@ defmodule KeyfleetWeb.ShellLive do
   @dm_events ~w(validate_dm send_dm dm_auto_delete dm_block dm_unblock dm_ask_delete dm_keep dm_delete)
   @poll_events ~w(start_poll confirm_end_poll cancel_end_poll end_poll cast_vote)
   @sign_in_events ~w(open_notebooks get_code_password)
-  @workspace_events ~w(pin unpin project_start project_archive project_take_over confirm_project_delete cancel_project_delete project_delete project_show project_describe publish_posts publish_item publish_page withdraw_publication notebook_lock notebook_restore)
+  @workspace_events ~w(pin unpin project_start project_archive project_take_over confirm_project_delete cancel_project_delete project_delete project_show project_describe publish_posts publish_item publish_page publish_commit withdraw_publication notebook_lock notebook_restore)
 
   # The routes that show a fleet's workspace and its votes.
   @workspace_routes [:workspace, :workspace_item, :code_commit, :code_files]
@@ -791,6 +791,7 @@ defmodule KeyfleetWeb.ShellLive do
           <WorkspaceLive.commit
             :if={@route_spec.route_id == :code_commit}
             commit={@workspace}
+            publish_notice={@publish_notice}
             signed_out?={is_nil(actor(@access_context))}
           />
           <WorkspaceLive.files

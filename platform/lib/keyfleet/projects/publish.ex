@@ -17,7 +17,9 @@ defmodule Keyfleet.Projects.Publish do
   whoever wrote for the Key; each item once. A saved notebook page is made
   public, once, by the person or agent that made it (`Keyfleet.Notebooks.Makers`)
   acting as the Key, into the project whose notebook made it, which is
-  active, once this site keeps its own copy of the page. Only the Key that
+  active, once this site keeps its own copy of the page. A project's code at
+  one commit is made public by the Key holding the project, which is active,
+  once the code store has that commit; each commit once. Only the Key that
   made something public takes it back. A refusal says why in words
   (`Keyfleet.Projects.Errors.PublishError`).
 
@@ -29,7 +31,7 @@ defmodule Keyfleet.Projects.Publish do
   alias Keyfleet.Actors.Human
   alias Keyfleet.Graph
   alias Keyfleet.Graph.Checks.KeyActor
-  alias Keyfleet.{Keys, Notebooks, Rooms}
+  alias Keyfleet.{Code, Keys, Notebooks, Rooms}
   alias Keyfleet.Notebooks.Makers
   alias Keyfleet.Projects
   alias Keyfleet.Projects.Errors.{PublishError, UnknownProjectError}
@@ -122,6 +124,30 @@ defmodule Keyfleet.Projects.Publish do
     end
   end
 
+  defp step(:commit, fleet_id, key, %{project: project, commit_hash: hash}, _actor) do
+    with :ok <- active(fleet_id, project),
+         :ok <- holds(fleet_id, project, key),
+         :ok <- committed(fleet_id, project, hash),
+         :ok <-
+           once(Projects.commit_publication(fleet_id, project, hash, actor: @system), "commit"),
+         {:ok, %{owner_wallet: owner}} <- held(fleet_id, key) do
+      Publication
+      |> Ash.Changeset.for_create(
+        :record,
+        %{
+          fleet_id: fleet_id,
+          project: project,
+          key: key,
+          author_wallet: owner,
+          kind: :commit,
+          commit_hash: hash
+        },
+        actor: @system
+      )
+      |> Ash.create()
+    end
+  end
+
   defp step(:withdraw, fleet_id, key, %{id: id}, _actor) do
     case Ash.get(Publication, id, actor: @system, not_found_error?: false) do
       {:ok, %{fleet_id: ^fleet_id, key: ^key} = publication} ->
@@ -195,6 +221,35 @@ defmodule Keyfleet.Projects.Publish do
         {:error, error}
     end
   end
+
+  defp holds(fleet_id, name, key) do
+    case Projects.project(fleet_id, name, actor: @system) do
+      {:ok, %{key: ^key}} ->
+        :ok
+
+      {:ok, project} ->
+        refuse(:not_holder, "Only the Key holding #{project.title} makes its code public.")
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  # The code store has the commit in the project's repository.
+  defp committed(fleet_id, project, hash) do
+    with true <- Code.full_hash?(hash),
+         {:ok, repository} when is_binary(repository) <- Code.repository(fleet_id, project),
+         {:ok, [_ | _]} <- Code.folder(repository, "", hash) do
+      :ok
+    else
+      {:error, {:code_store_status, status}} when status in [400, 404] -> unknown_commit(project)
+      {:error, _unreadable} -> refuse(:code_unavailable, "The code can't be read right now.")
+      _none -> unknown_commit(project)
+    end
+  end
+
+  defp unknown_commit(project),
+    do: refuse(:commit_unknown, "The code of #{project} has no commit by that full hash.")
 
   defp once({:ok, nil}, _thing), do: :ok
   defp once({:ok, _public}, thing), do: refuse(:already_public, "This #{thing} is already public.")

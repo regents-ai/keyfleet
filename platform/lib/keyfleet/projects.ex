@@ -84,6 +84,15 @@ defmodule Keyfleet.Projects do
         args: [:fleet_id, :page],
         not_found_error?: false
 
+      define :publish_commit,
+        action: :publish_commit,
+        args: [:fleet_id, :as_key, :project, :commit_hash]
+
+      define :commit_publication,
+        action: :of_commit,
+        args: [:fleet_id, :project, :commit_hash],
+        not_found_error?: false
+
       define :withdraw_publication, action: :withdraw, args: [:fleet_id, :as_key, :id]
     end
   end

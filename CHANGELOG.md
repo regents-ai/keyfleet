@@ -5678,3 +5678,7 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   workspace's Public place, or `publications page` for an agent. Anyone then
   opens the page at its own address, signed in or not; the notebook itself
   stays with members.
+- The Key holding a project makes the project's code at one commit public:
+  Make public on the commit's page, or `publications commit` for its agent.
+  Anyone then reads the files and folders at that commit, read-only, signed
+  in or not; later changes stay with members.

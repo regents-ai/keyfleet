@@ -119,6 +119,14 @@ defmodule KeyfleetWeb.Refusal do
     "publish_page_unavailable" =>
       {"The notebooks can't say who made this page right now.",
        "Nothing changed. Send it again shortly."},
+    "publish_not_holder" =>
+      {"Only the Key holding a project makes its code public.",
+       "projects_list names the Key holding each project."},
+    "publish_commit_unknown" =>
+      {"The project's code has no commit by that hash.",
+       "Send a full commit hash from the project's repository, as code_pushes gives it."},
+    "publish_code_unavailable" =>
+      {"The code can't be read right now.", "Nothing changed. Send it again shortly."},
     "publish_unknown" =>
       {"This fleet has nothing public by that id.",
        "publications_list gives the id of everything public in a project."},

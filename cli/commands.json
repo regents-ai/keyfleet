@@ -2107,6 +2107,48 @@
         ]
       },
       {
+        "command": "publications commit <fleet> <key> <project> <commit>",
+        "description": "Make public, read-only, the code of a project the Key holds at one commit: anyone then reads its files and folders at that commit, signed in or not. Later changes stay with members.",
+        "operation_id": "publishCommit",
+        "method": "POST",
+        "path": "/api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/commit",
+        "authority": "paired_agent",
+        "conditions": ["member"],
+        "effect": "write",
+        "webmcp": "publications_commit",
+        "arguments": [
+          {
+            "name": "fleet",
+            "type": "string",
+            "in": "path",
+            "field": "fleet_id",
+            "description": "The fleet's id, such as fleet_tech_classic; `regents keyfleet fleets list` names them all."
+          },
+          {
+            "name": "key",
+            "type": "integer",
+            "in": "body",
+            "field": "as_key",
+            "minimum": 1,
+            "description": "The number of the Key you act as: yours, your shard's or your paired person's."
+          },
+          {
+            "name": "project",
+            "type": "string",
+            "in": "path",
+            "field": "project",
+            "description": "The project's name, such as general; `regents keyfleet projects list` names them all."
+          },
+          {
+            "name": "commit",
+            "type": "string",
+            "in": "body",
+            "field": "commit",
+            "description": "The commit's full hash, as `regents keyfleet code pushes` gives it."
+          }
+        ]
+      },
+      {
         "command": "publications withdraw <fleet> <key> <publication>",
         "description": "Take back something a Key made public; it goes back to the fleet's members only. Only the Key that made it public takes it back.",
         "operation_id": "withdrawPublication",

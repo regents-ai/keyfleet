@@ -51,15 +51,20 @@ defmodule Keyfleet.Code.NodeClient do
   end
 
   @doc """
-  What the folder `path` holds on the default branch now, `""` for the top:
+  What the folder `path` holds on the default branch now, or at the commit
+  `at` (a full hash), `""` for the top:
   `{:ok, entries}`, each with `type` (`"blob"` for a file, `"tree"` for a
   folder), `name` and, for a file, `size`; or `{:error, reason}`.
   A folder that isn't there, or a file, holds nothing.
   """
-  def tree(repository, owner, path) do
+  def tree(repository, owner, path, at \\ nil) do
     url = Path.join(["/api/v1/repos", segment(owner), segment(repository), "tree", encode(path)])
 
-    case request(Pass.read(repository), [method: :get, url: url], Code.config()[:page_timeout_ms]) do
+    case request(
+           Pass.read(repository),
+           [method: :get, url: url, params: at(at)],
+           Code.config()[:page_timeout_ms]
+         ) do
       {:ok, %Req.Response{status: 200, body: %{"entries" => entries}}} when is_list(entries) ->
         {:ok, entries}
 
@@ -72,16 +77,23 @@ defmodule Keyfleet.Code.NodeClient do
   end
 
   @doc """
-  The file at `path` on the default branch now: `{:ok, bytes}`, `{:ok,
-  :too_large}` past `file_max_bytes`, `:not_found`, or `{:error, reason}`.
+  The file at `path` on the default branch now, or at the commit `at`:
+  `{:ok, bytes}`, `{:ok, :too_large}` past `file_max_bytes`, `:not_found`,
+  or `{:error, reason}`.
   """
-  def blob(repository, owner, path) do
+  def blob(repository, owner, path, at \\ nil) do
     url = Path.join(["/api/v1/repos", segment(owner), segment(repository), "blob", encode(path)])
     cap = Code.config()[:file_max_bytes]
 
     case request(
            Pass.read(repository),
-           [method: :get, url: url, decode_body: false, into: &read_capped(&1, &2, cap)],
+           [
+             method: :get,
+             url: url,
+             params: at(at),
+             decode_body: false,
+             into: &read_capped(&1, &2, cap)
+           ],
            Code.config()[:page_timeout_ms]
          ) do
       {:ok, %Req.Response{status: 200, body: body}} -> {:ok, body}
@@ -90,6 +102,10 @@ defmodule Keyfleet.Code.NodeClient do
       {:error, error} -> {:error, error}
     end
   end
+
+  # The store reads the default branch unless `ref` names a commit.
+  defp at(nil), do: []
+  defp at(hash), do: [ref: hash]
 
   # A page waits `page_timeout_ms` at most for what it shows; a job waits
   # `node_timeout_ms`.
