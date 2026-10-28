@@ -347,6 +347,10 @@ defmodule KeyfleetWeb.Router do
     get "/shards", AgentShardController, :index
     post "/keys/:fleet_id/:token_id/messages/read", AgentRoomController, :read_key_thread
     post "/keys/:fleet_id/:token_id/messages/send", AgentRoomController, :send_to_key
+    post "/keys/:fleet_id/:token_id/messages/remove", AgentKeyController, :remove_from_wall
+    get "/fleets/:fleet_id/keys/:token_id", AgentKeyController, :show
+    post "/fleets/:fleet_id/posting_key", AgentKeyController, :choose_posting_key
+    post "/fleets/:fleet_id/activity", AgentActivityController, :index
     get "/fleets/:fleet_id/rooms", AgentRoomController, :rooms
     post "/fleets/:fleet_id/rooms/create", AgentRoomController, :create_room
     post "/fleets/:fleet_id/rooms/:slug/topic", AgentRoomController, :set_topic

@@ -73,7 +73,9 @@ defmodule Keyfleet.PostingKeyTest do
                Keys.choose_posting_key(@fleet, token_id, actor: person)
     end
 
-    assert {:error, %Ash.Error.Forbidden{}} = Keys.choose_posting_key(@fleet, 41, actor: writer)
+    assert {:error, %Ash.Error.Invalid{errors: [%KeyNotHeldError{}]}} =
+             Keys.choose_posting_key(@fleet, 7, actor: writer)
+
     assert post!(writer, "Still") |> written_as() == {41, wallet("b")}
   end
 

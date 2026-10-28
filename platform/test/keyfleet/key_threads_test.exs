@@ -94,7 +94,7 @@ defmodule Keyfleet.KeyThreadsTest do
        %{first: first, fifth: fifth} do
     opening = to_key!(first, 5, "Welcome aboard")
     taken = to_key!(first, 5, "Taken off")
-    Rooms.remove_from_wall!(taken.id, actor: fifth)
+    Rooms.remove_from_wall!(@fleet, 5, taken.id, actor: fifth)
     walls = [%{token_id: 5, after_seq: 0}, %{token_id: 7, after_seq: 0}]
     places = %{graph: 0, project: nil, proposals: 0, keys: walls, dms: nil, quotes: nil}
 

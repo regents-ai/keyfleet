@@ -34,6 +34,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @mute_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/(mute|unmute)\z"
   @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
+  @key_remove_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/remove\z"
+  # A Key as its page shows it, and what has been happening in its fleet.
+  @key_page_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}\z"
+  @activity_path ~r"\A/api/v1/agent/fleets/#{@fleet}/activity\z"
+  # The Key the agent's person writes as.
+  @posting_key_path ~r"\A/api/v1/agent/fleets/#{@fleet}/posting_key\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   # A fleet's projects, each named as its address names it, and what a Key
   # does with them.
@@ -116,6 +122,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@key_read_path, {[], ~w(after_seq limit)}},
     {@send_path, {~w(body idempotency_key), ~w(reply_to_id quote_request_id)}},
     {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
+    {@key_remove_path, {~w(message_id), []}},
+    {@activity_path, {[], ~w(cursor)}},
+    {@posting_key_path, {~w(token_id), []}},
     {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
     {@poll_vote_path, {~w(choice), ~w(reason)}}
   ]
@@ -503,6 +512,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       Enum.any?(
         [
           @rooms_path,
+          @key_page_path,
           @mutes_path,
           @polls_path,
           @poll_path,
@@ -527,6 +537,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @send_path,
         @key_read_path,
         @key_send_path,
+        @key_remove_path,
+        @activity_path,
+        @posting_key_path,
         @sync_path,
         @proposal_read_path,
         @project_start_path,
@@ -626,6 +639,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       op = dm_op(path) -> check_dm_body(op, params)
       op = chain_op(path) -> check_chain_body(op, params)
       op = graph_op(path) -> check_graph_body(op, params)
+      op = key_op(path) -> check_key_body(op, params)
       poll_write?(path) -> check_poll_body(path, params)
       true -> check_room_body(path, params)
     end
@@ -652,6 +666,19 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         :invalid
     end
   end
+
+  # Taking a post off a Key's wall, reading the fleet's activity and choosing
+  # the Key a person posts as each name fields of their own.
+  defp key_op(path) do
+    Enum.find_value(
+      [key_remove: @key_remove_path, activity: @activity_path, posting_key: @posting_key_path],
+      fn {op, pattern} -> if Regex.match?(pattern, path), do: op end
+    )
+  end
+
+  defp check_key_body(:key_remove, params), do: admit(valid_remove_body?(params))
+  defp check_key_body(:activity, params), do: admit(valid_activity_body?(params))
+  defp check_key_body(:posting_key, params), do: check_posting_key_body(params)
 
   # Catching up, reading a proposal, starting a notebook run, making a
   # notebook and working with its files each name fields of their own.
@@ -897,6 +924,26 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   defp valid_send_body?(_params, _fields), do: false
+
+  # Taking a post off a Key's wall names the post, by its id as the API gives it.
+  defp valid_remove_body?(%{"message_id" => id} = params),
+    do: map_size(params) == 1 and is_binary(id) and Regex.match?(@post_id, id)
+
+  defp valid_remove_body?(_params), do: false
+
+  # The fleet's activity is read from the newest page, {}, or on from the
+  # cursor the last page answered.
+  defp valid_activity_body?(params) when is_map(params),
+    do: Enum.all?(params, fn {key, value} -> key == "cursor" and is_binary(value) end)
+
+  defp valid_activity_body?(_params), do: false
+
+  # Choosing the Key the agent's person writes as names that Key.
+  defp check_posting_key_body(%{"token_id" => token_id} = params)
+       when map_size(params) == 1 and is_integer(token_id),
+       do: in_range(token_id in 1..@max_seq)
+
+  defp check_posting_key_body(_params), do: :invalid
 
   # A created room names its address and its name; naming an open room names
   # its topic.

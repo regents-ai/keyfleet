@@ -1,13 +1,14 @@
 defmodule Keyfleet.Rooms.WallRemoval do
   @moduledoc """
-  A post taken off a Key's wall by the person holding that Key.
+  A post taken off a Key's wall by whoever acts as that Key now: its holder,
+  an agent with an active shard of it, or an agent paired with its holder.
 
   The post itself stays as it was written: a post is never changed or
   deleted. From its removal on, the wall leaves it out for everyone who reads
-  it, on the site and through the agent API. A removal names only the post;
-  the wall it is on and the wallet holding that Key are read from the post
-  (`Keyfleet.Rooms.Changes.OffItsWall`), so nobody takes a post off a wall it
-  isn't on. A removal is never undone, which the database enforces by refusing
+  it, on the site and through the agent API. A removal names the wall and the
+  post; the post must be on that wall, and the wallet holding the Key is read
+  as it is taken off (`Keyfleet.Rooms.Changes.OffItsWall`), so nobody takes a
+  post off a wall it isn't on. A removal is never undone, which the database enforces by refusing
   to change, delete or empty the table, and removing a post twice keeps the
   one removal.
   """
@@ -63,7 +64,7 @@ defmodule Keyfleet.Rooms.WallRemoval do
     defaults [:read]
 
     create :remove do
-      accept [:message_id]
+      accept [:fleet_id, :token_id, :message_id]
       upsert? true
       upsert_identity :one_per_post
       upsert_fields []
@@ -101,16 +102,15 @@ defmodule Keyfleet.Rooms.WallRemoval do
     publish :remove, [:fleet_id, "rooms"], event: "wall_removed"
   end
 
-  # Anyone may know a post is off a wall, as anyone reads the wall. Only the
-  # person holding the Key now takes a post off its wall; while the fleet's
-  # key ownership is not fresh, nobody does.
+  # Anyone may know a post is off a wall, as anyone reads the wall. Only
+  # whoever acts as the Key now takes a post off its wall, a person or an
+  # agent alike; while the fleet's key ownership is not fresh, nobody does.
   policies do
     policy action_type(:read) do
       authorize_if always()
     end
 
     policy action(:remove) do
-      forbid_unless actor_attribute_equals(:role, :human)
       authorize_if {Keyfleet.Dms.Checks.KeyHolder, keys: [:token_id]}
     end
   end
@@ -121,7 +121,6 @@ defmodule Keyfleet.Rooms.WallRemoval do
     attribute :token_id, :integer,
       allow_nil?: false,
       public?: true,
-      writable?: false,
       constraints: [min: 1, max: @max_bigint],
       description: "The Key whose wall the post is off."
 
@@ -137,7 +136,6 @@ defmodule Keyfleet.Rooms.WallRemoval do
   relationships do
     belongs_to :fleet, Keyfleet.Fleets.Fleet do
       attribute_type :string
-      attribute_writable? false
       allow_nil? false
       public? true
     end

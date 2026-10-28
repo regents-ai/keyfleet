@@ -1,15 +1,20 @@
 defmodule Keyfleet.Keys.Validations.HeldByPerson do
   @moduledoc """
   One of the signed-in person's wallets holds the Key the changeset names, in
-  its fleet, right now.
+  its fleet, right now. For an agent paired with a person here, the person's
+  wallets.
   """
   use Ash.Resource.Validation
 
+  alias Keyfleet.Actors.Agent
   alias Keyfleet.Actors.Human
   alias Keyfleet.Keys
   alias Keyfleet.Keys.Errors.KeyNotHeldError
 
   @impl true
+  def validate(changeset, opts, %{actor: %Agent{pairing: %Human{} = person}} = context),
+    do: validate(changeset, opts, %{context | actor: person})
+
   def validate(changeset, _opts, %{actor: %Human{wallet_addresses: wallets} = actor}) do
     fleet_id = Ash.Changeset.get_attribute(changeset, :fleet_id)
     token_id = Ash.Changeset.get_attribute(changeset, :token_id)

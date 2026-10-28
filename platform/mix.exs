@@ -243,8 +243,9 @@ defmodule Keyfleet.MixProject do
         # domain, and its KeyActor and KeyReader checks. Notebook locks and daily
         # copies add two: the Setting and Backup records in the Notebooks domain.
         # Public records add two: the Publication record, with its domain, and
-        # its Publish action.
-        "xref graph --label compile-connected --fail-above 94",
+        # its Publish action. An agent choosing its person's posting Key adds
+        # one: the ActsForPerson check.
+        "xref graph --label compile-connected --fail-above 95",
         "cmd --cd graph_host uv run --frozen --offline pytest -q",
         "test --warnings-as-errors",
         "ash.codegen --check",

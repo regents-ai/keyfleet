@@ -181,6 +181,15 @@ defmodule Keyfleet.Notebooks.Makers do
     end
   end
 
+  @doc """
+  Whether the file at `key` is free for `subject` to be kept as its maker:
+  `{:ok, true}` when no maker is kept for it, or `subject` is.
+  """
+  def unclaimed?(fleet_id, notebook_id, key, subject) do
+    with {:ok, makers} <- kept_makers(fleet_id, notebook_id, key),
+         do: {:ok, Map.get(makers, key, subject) == subject}
+  end
+
   @doc "Keeps `subject` as the maker of the file or folder at `key`."
   def record(fleet_id, notebook_id, key, subject) do
     case Notebooks.record_file_maker(fleet_id, notebook_id, key, subject, actor: %System{}) do

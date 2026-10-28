@@ -1206,10 +1206,16 @@ defmodule KeyfleetWeb.KeyProfileLive do
   # The holder's own page drops the post at once; every other page with the
   # wall open hears of it (`Keyfleet.Rooms.WallRemoval`). A refusal says so
   # and leaves the post where it is.
-  defp remove_from_wall(%{assigns: %{key_profile: %{issued?: true}}} = socket, message_id) do
+  defp remove_from_wall(
+         %{assigns: %{key_profile: %{issued?: true, fleet_id: fleet_id, token_id: token_id}}} =
+           socket,
+         message_id
+       ) do
     socket = update(socket, :key_profile, &%{&1 | removing: nil})
 
-    case Rooms.remove_from_wall(message_id, actor: ShellLive.human_actor(socket)) do
+    case Rooms.remove_from_wall(fleet_id, token_id, message_id,
+           actor: ShellLive.human_actor(socket)
+         ) do
       {:ok, _removal} ->
         socket |> update(:key_profile, &%{&1 | notice: nil}) |> off_wall(message_id)
 

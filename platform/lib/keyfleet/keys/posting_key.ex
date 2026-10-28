@@ -1,13 +1,14 @@
 defmodule Keyfleet.Keys.PostingKey do
   @moduledoc """
-  The Key a person writes as in one fleet, chosen on the Account page. While
+  The Key a person writes as in one fleet, chosen on the Account page or by
+  an agent paired with them (`Keyfleet.Keys.Checks.ActsForPerson`). While
   their wallets hold it, everything they write in the fleet is written as it,
   and so is everything their agents write there for them
   (`Keyfleet.Keys.identity/2`). A person who has chosen none, or whose chosen
   Key has since left their wallets, writes as the first Key their wallets hold.
 
-  Only its own person sets it, and only a Key their wallets hold now is
-  chosen (`Keyfleet.Keys.Validations.HeldByPerson`). Choosing again
+  Only its own person, or their agent, sets it, and only a Key the person's
+  wallets hold now is chosen (`Keyfleet.Keys.Validations.HeldByPerson`). Choosing again
   replaces the choice. The choice is no secret: everything the person writes
   shows it, and so do the city's ships (`Keyfleet.Keys.faces/2`).
   """
@@ -60,7 +61,7 @@ defmodule Keyfleet.Keys.PostingKey do
 
   policies do
     policy action([:choose, :in_fleet]) do
-      authorize_if actor_attribute_equals(:role, :human)
+      authorize_if Keyfleet.Keys.Checks.ActsForPerson
     end
 
     policy action(:of_accounts) do

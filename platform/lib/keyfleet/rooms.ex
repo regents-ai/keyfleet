@@ -71,7 +71,7 @@ defmodule Keyfleet.Rooms do
     end
 
     resource Keyfleet.Rooms.WallRemoval do
-      define :remove_from_wall, action: :remove, args: [:message_id]
+      define :remove_from_wall, action: :remove, args: [:fleet_id, :token_id, :message_id]
     end
 
     resource Keyfleet.Rooms.ReadMark do

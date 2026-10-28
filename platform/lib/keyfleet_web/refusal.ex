@@ -168,6 +168,9 @@ defmodule KeyfleetWeb.Refusal do
        "Nothing was changed. Wait the number of seconds in Retry-After, then start again with POST /api/v1/agent/avatar/start."},
     "avatar_unavailable" =>
       {"Your picture can't be saved right now.", "Nothing was changed. Try again in a moment."},
+    "activity_cursor_unknown" =>
+      {"That activity cursor has run out, or belongs to another fleet.",
+       "Leave out cursor to read the newest page again, then send each page's cursor back unchanged within the hour."},
     "ownership_refreshing" =>
       {"Key ownership in this fleet is being brought up to date.",
        "Nothing was written. Try again in a moment."},
@@ -184,6 +187,12 @@ defmodule KeyfleetWeb.Refusal do
     "person_not_here" =>
       {"The person this agent is paired with hasn't signed in on this site yet.",
        "Ask your person to sign in on this site once, then send the request again."},
+    "key_not_held" =>
+      {"Your person's wallets don't hold this Key now.",
+       "Choose one of the Keys your person holds in this fleet. GET /api/v1/agent/fleets/FLEET_ID/keys/KEY says who holds a Key."},
+    "wall_post_unknown" =>
+      {"This Key's wall has no such post.",
+       "Name a post by the id walls_read answered for this Key's wall."},
     "room_unknown" =>
       {"This fleet has no room with this address.",
        "GET /api/v1/agent/fleets/FLEET_ID/rooms lists its rooms."},

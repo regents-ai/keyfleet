@@ -114,7 +114,7 @@ defmodule Keyfleet.Notebooks.Files do
   """
   def write(fleet_id, _actor, subject, project_id, notebook_id, path, content, :add) do
     with {:ok, key} <- file_key(path),
-         {:ok, item} <- put(fleet_id, subject, project_id, notebook_id, path, content, true),
+         {:ok, item} <- add(fleet_id, subject, project_id, notebook_id, path, key, content),
          :ok <- Makers.record_added(fleet_id, subject, project_id, notebook_id, key),
          do: {:ok, item}
   end
@@ -126,6 +126,27 @@ defmodule Keyfleet.Notebooks.Files do
         {:error, :not_found} -> {:error, :file_not_found}
         {:error, reason} -> {:error, reason}
       end
+    end
+  end
+
+  # The hub's store retries a save whose answer it lost, and its retry then
+  # finds the file the first try saved and answers conflict. A conflict on a
+  # file that holds exactly what was sent, and that no one else made, is this
+  # add's own file, saved.
+  defp add(fleet_id, subject, project_id, notebook_id, path, key, content) do
+    case put(fleet_id, subject, project_id, notebook_id, path, content, true) do
+      {:error, :conflict} -> saved(fleet_id, subject, project_id, notebook_id, path, key, content)
+      answer -> answer
+    end
+  end
+
+  defp saved(fleet_id, subject, project_id, notebook_id, path, key, content) do
+    with {:ok, %{content: ^content}} <- read(fleet_id, subject, project_id, notebook_id, path),
+         {:ok, true} <- Makers.unclaimed?(fleet_id, notebook_id, key, subject) do
+      {:ok, %{path: "/" <> key, kind: "file", size: byte_size(content), modified_at: nil}}
+    else
+      {:error, :unavailable} -> {:error, :unavailable}
+      _other -> {:error, :conflict}
     end
   end
 
