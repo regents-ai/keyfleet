@@ -72,9 +72,13 @@ defmodule Keyfleet.Graph.Workspace do
     end
 
     action :changes, :map do
-      description "The workspace's changes after a place in its log, oldest first: the whole fleet's, or one project's."
+      description "The workspace's changes after a place in its log, oldest first: the whole fleet's, one project's or one object's."
       argument :fleet_id, :string, allow_nil?: false
       argument :project, :string, constraints: @text
+      argument :object, :string, constraints: @text
+
+      # At most a page of changes (`Keyfleet.Graph.Event`).
+      argument :max_bytes, :integer, constraints: [min: 1, max: 512 * 1024]
 
       argument :after_seq, :integer,
         allow_nil?: false,

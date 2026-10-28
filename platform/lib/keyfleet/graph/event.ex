@@ -77,17 +77,24 @@ defmodule Keyfleet.Graph.Event do
     end
   end
 
+  @doc "The most bytes of events one page of changes holds."
+  def page_bytes, do: @page_bytes
+
   actions do
     # The events after one place in the log, oldest first, the whole fleet's
-    # or one project's: at most `limit` of them, and no more than
-    # `@page_bytes` of them unless the first alone is larger. The cut is
-    # found from the recorded sizes inside the query, so only the page's own
-    # rows are loaded.
+    # or one project's: at most `limit` of them, and no more than `max_bytes`
+    # of them unless the first alone is larger. The cut is found from the
+    # recorded sizes inside the query, so only the page's own rows are loaded.
     read :page do
       argument :fleet_id, :string, allow_nil?: false
       argument :after_seq, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
       argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 500]
       argument :project, :string, constraints: @text
+
+      argument :max_bytes, :integer,
+        allow_nil?: false,
+        default: @page_bytes,
+        constraints: [min: 1, max: @page_bytes]
 
       filter expr(
                fleet_id == ^arg(:fleet_id) and seq > ^arg(:after_seq) and
@@ -95,13 +102,80 @@ defmodule Keyfleet.Graph.Event do
                  seq <=
                    fragment(
                      "(SELECT COALESCE(max(p.seq) FILTER (WHERE p.total <= ?), min(p.seq)) FROM (SELECT e.seq, sum(e.byte_size) OVER (ORDER BY e.seq) AS total FROM keyfleet_app.graph_events AS e WHERE e.fleet_id = ? AND e.seq > ? AND (?::text IS NULL OR ?::text = ANY(e.projects)) ORDER BY e.seq LIMIT ?) AS p)",
-                     ^@page_bytes,
+                     ^arg(:max_bytes),
                      ^arg(:fleet_id),
                      ^arg(:after_seq),
                      ^arg(:project),
                      ^arg(:project),
                      ^arg(:limit)
                    )
+             )
+
+      prepare fn query, _context ->
+        query
+        |> Ash.Query.unset([:sort, :limit, :offset])
+        |> Ash.Query.sort(seq: :asc)
+        |> Ash.Query.limit(Ash.Query.get_argument(query, :limit))
+      end
+    end
+
+    # Every change to one object after one place in the log, oldest first, at
+    # most `limit` of them: its creation, its edits and archiving, the links
+    # made to or from it, a review's of a task included, and those links'
+    # removals. Each kind is looked up on its own index from `after_seq` on,
+    # as `:history` looks them up back from the newest.
+    read :about_object do
+      argument :fleet_id, :string, allow_nil?: false
+      argument :object_id, :string, allow_nil?: false, constraints: @text
+      argument :after_seq, :integer, allow_nil?: false, constraints: [min: 0, max: @bigint]
+      argument :limit, :integer, allow_nil?: false, constraints: [min: 1, max: 501]
+
+      filter expr(
+               fleet_id == ^arg(:fleet_id) and
+                 fragment(
+                   """
+                   ? = ANY(ARRAY(
+                     (SELECT e.seq FROM keyfleet_app.graph_events AS e
+                      WHERE e.fleet_id = ? AND (e.payload ->> 'id') = ? AND e.type = 'object.created' AND e.seq > ?
+                      ORDER BY e.seq LIMIT ?)
+                     UNION ALL
+                     (SELECT e.seq FROM keyfleet_app.graph_events AS e
+                      WHERE e.fleet_id = ? AND (e.payload ->> 'target') = ? AND e.type IN ('patch.applied', 'relation.created') AND e.seq > ?
+                      ORDER BY e.seq LIMIT ?)
+                     UNION ALL
+                     (SELECT e.seq FROM keyfleet_app.graph_events AS e
+                      WHERE e.fleet_id = ? AND (e.payload ->> 'source') = ? AND e.type = 'relation.created' AND e.seq > ?
+                      ORDER BY e.seq LIMIT ?)
+                     UNION ALL
+                     (SELECT d.seq
+                      FROM keyfleet_app.graph_events AS r
+                      CROSS JOIN LATERAL (
+                        SELECT d.seq FROM keyfleet_app.graph_events AS d
+                        WHERE d.fleet_id = r.fleet_id AND (d.payload ->> 'id') = (r.payload ->> 'id') AND d.type = 'relation.removed' AND d.seq > ?
+                        LIMIT 1
+                      ) AS d
+                      WHERE r.fleet_id = ? AND r.type = 'relation.created' AND ((r.payload ->> 'source') = ? OR (r.payload ->> 'target') = ?)
+                      ORDER BY d.seq LIMIT ?)))
+                   """,
+                   seq,
+                   ^arg(:fleet_id),
+                   ^arg(:object_id),
+                   ^arg(:after_seq),
+                   ^arg(:limit),
+                   ^arg(:fleet_id),
+                   ^arg(:object_id),
+                   ^arg(:after_seq),
+                   ^arg(:limit),
+                   ^arg(:fleet_id),
+                   ^arg(:object_id),
+                   ^arg(:after_seq),
+                   ^arg(:limit),
+                   ^arg(:after_seq),
+                   ^arg(:fleet_id),
+                   ^arg(:object_id),
+                   ^arg(:object_id),
+                   ^arg(:limit)
+                 )
              )
 
       prepare fn query, _context ->
@@ -285,7 +359,7 @@ defmodule Keyfleet.Graph.Event do
       authorize_if always()
     end
 
-    policy action([:page, :activity, :history, :command]) do
+    policy action([:page, :about_object, :activity, :history, :command]) do
       authorize_if Keyfleet.Graph.Checks.KeyReader
     end
 

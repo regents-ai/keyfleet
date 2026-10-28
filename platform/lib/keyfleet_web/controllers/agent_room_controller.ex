@@ -21,6 +21,7 @@ defmodule KeyfleetWeb.AgentRoomController do
   alias Keyfleet.Rooms.Errors.SendConflictError
   alias KeyfleetWeb.AgentDmController
   alias KeyfleetWeb.AgentWaits
+  alias KeyfleetWeb.Budget
   alias KeyfleetWeb.ClientAddress
   alias KeyfleetWeb.ProposalJSON
   alias KeyfleetWeb.Refusal
@@ -100,12 +101,17 @@ defmodule KeyfleetWeb.AgentRoomController do
          %{} = room <- Rooms.get_room!(fleet_id, slug, actor: actor) do
       muted = Rooms.muted_keys!(fleet_id, actor)
 
-      json(conn, %{
-        room: RoomJSON.room(room),
-        cursor: cursor(messages, Map.get(params, "after_seq", 0)),
-        has_more: Rooms.more_after?(messages),
-        messages: messages |> Rooms.unmuted(muted) |> Enum.map(&RoomJSON.message/1)
-      })
+      paged(
+        conn,
+        %{
+          room: RoomJSON.room(room),
+          cursor: cursor(messages, Map.get(params, "after_seq", 0)),
+          has_more: Rooms.more_after?(messages),
+          messages: []
+        },
+        messages |> Rooms.unmuted(muted) |> Enum.map(&RoomJSON.message/1),
+        params["max_bytes"]
+      )
     else
       nil -> not_found(conn)
       {:error, %Ash.Error.Forbidden{} = error} -> refuse_forbidden(conn, fleet_id, error)
@@ -245,15 +251,19 @@ defmodule KeyfleetWeb.AgentRoomController do
       {:ok, messages} ->
         thread = Rooms.get_key_thread!(fleet_id, token_id, actor: actor)
 
-        json(conn, %{
-          thread: %{token_id: String.to_integer(token_id), head_seq: head_seq(thread)},
-          cursor: cursor(messages, Map.get(params, "after_seq", 0)),
-          has_more: Rooms.more_after?(messages),
-          messages:
-            messages
-            |> Rooms.unmuted(Rooms.muted_keys!(fleet_id, actor))
-            |> Enum.map(&RoomJSON.message/1)
-        })
+        paged(
+          conn,
+          %{
+            thread: %{token_id: String.to_integer(token_id), head_seq: head_seq(thread)},
+            cursor: cursor(messages, Map.get(params, "after_seq", 0)),
+            has_more: Rooms.more_after?(messages),
+            messages: []
+          },
+          messages
+          |> Rooms.unmuted(Rooms.muted_keys!(fleet_id, actor))
+          |> Enum.map(&RoomJSON.message/1),
+          params["max_bytes"]
+        )
 
       {:error, error} ->
         refuse(conn, error)
@@ -317,7 +327,16 @@ defmodule KeyfleetWeb.AgentRoomController do
         |> put_dms(synced.dms)
         |> put_quotes(synced.quotes)
 
-      json(conn, answer)
+      sent = %{
+        graph: places.graph,
+        rooms: Map.new(cursors, &{&1.slug, &1.after_seq}),
+        keys: Map.new(places.keys, &{&1.token_id, &1.after_seq})
+      }
+
+      case Budget.sync(answer, params["max_bytes"], sent) do
+        {:ok, answer} -> json(conn, answer)
+        {:error, bytes} -> over_budget(conn, bytes)
+      end
     else
       {:error, %Ash.Error.Forbidden{}} -> members_only(conn, fleet_id)
       {:error, error} -> refuse(conn, error)
@@ -352,6 +371,27 @@ defmodule KeyfleetWeb.AgentRoomController do
 
   defp cursor([], after_seq), do: after_seq
   defp cursor(messages, _after_seq), do: List.last(messages).seq
+
+  # A page of posts within the caller's `max_bytes`: one cut short reads on
+  # from the last post it kept.
+  defp paged(conn, bare, shown, max_bytes) do
+    case Budget.page(bare, shown, max_bytes) do
+      {:ok, shown, false} ->
+        json(conn, %{bare | messages: shown})
+
+      {:ok, kept, true} ->
+        json(conn, %{bare | messages: kept, cursor: List.last(kept).seq, has_more: true})
+
+      {:error, bytes} ->
+        over_budget(conn, bytes)
+    end
+  end
+
+  defp over_budget(conn, bytes),
+    do:
+      conn
+      |> put_status(422)
+      |> json(put_in(Refusal.body("over_budget"), [:error, :details], %{bytes: bytes}))
 
   defp head_seq(nil), do: 0
   defp head_seq(thread), do: thread.head_seq
