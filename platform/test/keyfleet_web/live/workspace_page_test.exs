@@ -561,8 +561,8 @@ defmodule KeyfleetWeb.Live.WorkspacePageTest do
         end)
 
       assert fields == [
-               {"What was tried", "Paged through the archive."},
-               {"Why it didn’t work", "It needs a login."}
+               {"Approach tried", "Paged through the archive."},
+               {"Reason it didn’t work", "It needs a login."}
              ]
 
       assert has_element?(

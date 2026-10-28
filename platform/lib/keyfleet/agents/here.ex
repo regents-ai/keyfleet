@@ -6,7 +6,7 @@ defmodule Keyfleet.Agents.Here do
 
   Two readings come from each pass over a fleet:
 
-    * `fleet_key/1`: "Who's here", the count of agents, the bar's count of
+    * `fleet_key/1`: "Here now", the count of agents, the bar's count of
       the addresses holding a Key and of those online now
       (`Keyfleet.Keys.count_holders/2`, over the last hour), and as many of
       the agents as the fleet's directory lists, each with what its check-ins
@@ -60,7 +60,7 @@ defmodule Keyfleet.Agents.Here do
     code: "pushed code"
   }
 
-  @doc "Where \"Who's here\" for `fleet_id` is held."
+  @doc "Where \"Here now\" for `fleet_id` is held."
   def fleet_key(fleet_id), do: {:fleet_agents, fleet_id}
 
   @doc "Where what the check-ins of the agents on one Key say is held."

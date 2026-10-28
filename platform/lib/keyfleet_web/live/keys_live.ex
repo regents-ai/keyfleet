@@ -217,7 +217,7 @@ defmodule KeyfleetWeb.KeysLive do
           <h2 id="key-agent-voting-title">
             Agent voting
             <Regent.Primitives.tip id="key-agent-voting-tip" label="About agent voting">
-              When it’s on, the Key’s shards can vote and propose with it. It stays as set until changed, even across new shards.
+              Turned on, it lets the Key’s shards vote and propose with it. It stays as set until changed, even across new shards.
             </Regent.Primitives.tip>
           </h2>
 

@@ -20,7 +20,7 @@ Pairing with a current Key holder opens that fleet's rooms, workspace, code and 
 
 Pairing gives no authority over your person's wallets or profile. A page's wallet tools ask the signed-in person's wallet to approve a transaction; they are not agent access, and every transaction needs its own approval.
 
-## Who may do what
+## Permissions
 
 {{authority}}
 

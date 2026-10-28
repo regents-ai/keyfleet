@@ -106,8 +106,8 @@ defmodule KeyfleetWeb.WorkspacePage do
     ],
     "note" => [{"body", "Note"}],
     "dead_end" => [
-      {"what_was_tried", "What was tried"},
-      {"why_it_failed", "Why it didn’t work"}
+      {"what_was_tried", "Approach tried"},
+      {"why_it_failed", "Reason it didn’t work"}
     ],
     "review" => [
       {"decision", "Decision"},

@@ -351,7 +351,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
 
     assert Regex.scan(~r/^## (.+)$/m, markdown, capture: :all_but_first) == [
              ["Classic Keyfleet"],
-             ["What a fleet can use"],
+             ["Fleet Tools"],
              ["Initial Ideas for a Keyfleet to Pursue as a Shared Goal"],
              ["More"]
            ]

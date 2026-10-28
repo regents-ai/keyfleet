@@ -495,7 +495,7 @@ features:
       moved and then to whom or for what ("Bought 11,621,703 REGENT with
       61.317 USDC"), wrapping only on a narrow screen. Its Permissions &
       contracts card shows the manager's address and folds who can do what
-      into a "Who can do what" drop-down, beside Fleet details and How a fleet
+      into a "Permissions" drop-down, beside Fleet details and How a fleet
       decides.
     who: person
     level: ordinary

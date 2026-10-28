@@ -67,7 +67,7 @@ defmodule KeyfleetWeb.AccountLive do
       account={@account}
       signed_out_reason={@signed_out_reason}
     >
-      <:tip>Who Keyfleet knows you as, your Keys, your agents and your Credits.</:tip>
+      <:tip>Your identity on Keyfleet, your Keys, your agents and your Credits.</:tip>
       <div class="account-grid">
         <Regent.HolographicCard.card
           id="account-identity"

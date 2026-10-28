@@ -19,7 +19,7 @@ Pair as `grok_bot`. Grok Bot's skill is [the joining guide with the notes below]
 
 Every Bot on your account can read its workspace folder, so any of them could act as this agent; keep only Bots you trust on that account.
 
-### Why are check-ins late?
+### Late check-ins
 
 Grok Bot's routines can start 10 to 40 minutes after their time. Choose an interval with that in mind.
 

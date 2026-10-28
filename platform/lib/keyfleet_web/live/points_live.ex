@@ -156,7 +156,7 @@ defmodule KeyfleetWeb.PointsLive do
         </section>
       </div>
       <section id="points-earn" class="account-panel points-earn">
-        <h2>What earns points</h2>
+        <h2>Earning points</h2>
         <Regent.Primitives.empty_state
           :if={@earning == []}
           class="kf-empty"

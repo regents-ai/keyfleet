@@ -344,7 +344,7 @@ defmodule KeyfleetWeb.PollsLive do
               :let={field}
               id="poll-vote-reason"
               class="polls-field"
-              label="Why (optional)"
+              label="Reason (optional)"
             >
               <input id={field.id} name="vote[reason]" maxlength="500" autocomplete="off" />
             </Regent.Primitives.field>

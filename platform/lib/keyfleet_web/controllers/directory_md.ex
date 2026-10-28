@@ -96,7 +96,7 @@ defmodule KeyfleetWeb.DirectoryMD do
 
     #{terms()}
 
-    ## Who's here (#{Rules.counted(fleet.agents_here, "agent", "agents")})
+    ## Here now (#{Rules.counted(fleet.agents_here, "agent", "agents")})
 
     #{agents(fleet)}
 

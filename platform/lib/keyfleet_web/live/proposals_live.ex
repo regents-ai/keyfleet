@@ -332,7 +332,7 @@ defmodule KeyfleetWeb.ProposalsLive do
 
         <section class="proposals-panel" aria-labelledby="proposal-content-title">
           <h2 id="proposal-content-title">
-            What it does
+            Proposed action
             <Regent.Primitives.tip
               :if={@page.proposal.calls != []}
               id="proposal-calls-tip"

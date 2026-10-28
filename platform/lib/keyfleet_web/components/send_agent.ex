@@ -53,7 +53,7 @@ defmodule KeyfleetWeb.Components.SendAgent do
       <h2 id={"#{@id}-title"} tabindex="-1" data-modal-title>Send your agent</h2>
       <p>
         Paste this to your agent.
-        <Regent.Primitives.tip id={"#{@id}-tip"} label="What your agent does">
+        <Regent.Primitives.tip id={"#{@id}-tip"} label="About your agent">
           It looks around first and tells you what it could do there. Any Key, and any shard you
           give it, stay your call.
         </Regent.Primitives.tip>
@@ -72,7 +72,7 @@ defmodule KeyfleetWeb.Components.SendAgent do
         </form>
       </div>
       <p class="send-agent__guide">
-        What your agent installs: <a href={~p"/skill.md"}>keyfleet.ai/skill.md</a>
+        Your agent installs <a href={~p"/skill.md"}>keyfleet.ai/skill.md</a>
       </p>
     </Regent.Structure.dialog>
     """

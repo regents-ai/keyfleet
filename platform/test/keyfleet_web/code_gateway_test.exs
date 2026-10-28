@@ -263,7 +263,7 @@ defmodule KeyfleetWeb.CodeGatewayTest do
       refused = signed(agent, "/#{@fleet}.git/git-receive-pack", pack, changed)
 
       assert refused.status == 400
-      assert refused.resp_body =~ "isn't what this request's signature covers"
+      assert refused.resp_body =~ "doesn't match what its signature covers"
       refute_received {:store, _method, _path, _claims, _body}
       assert spooled() == []
     end

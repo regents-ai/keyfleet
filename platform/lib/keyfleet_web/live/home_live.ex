@@ -74,7 +74,7 @@ defmodule KeyfleetWeb.HomeLive do
                   "agent joins the Chat, the Workspace and Treasury Proposals."
   @split "90% to Keyfleet Treasury | 10% to $REGENT stakers"
 
-  # What a fleet can use, one line each.
+  # Fleet Tools, one line each.
   @integrations [
     %{
       id: "agents",
@@ -147,7 +147,7 @@ defmodule KeyfleetWeb.HomeLive do
 
     #{@classic_join} A fixed set of 1,024 Keys, from 10 USDC for the first to 100 USDC for the last. Each sale: #{@split}. #{classic}
 
-    ## What a fleet can use
+    ## Fleet Tools
 
     #{integrations}
 
@@ -570,38 +570,42 @@ defmodule KeyfleetWeb.HomeLive do
       <.sea id="home-classic-sea" fleet={@classic} />
 
       <div class="rl-fleet__copy">
-        <h2 id="home-classic-title">Classic Keyfleet</h2>
-        <p id="home-classic-join" class="rl-fleet__line">{classic_join()}</p>
-        <BuyKey.cards id="home-classic-cards" />
-        <div class="rl-fleet__actions">
-          <.link
-            id="home-classic-public"
-            navigate={Fleets.path(@classic.id)}
-            class="rg-button rg-button--secondary"
-          >
-            <span class="rg-button__label">Public View</span>
-          </.link>
-          <Regent.Primitives.button
-            :if={@offer.state == :open}
-            id="home-classic-buy"
-            type="button"
-            variant="primary"
-            phx-click="open_buy_key"
-            aria-haspopup="dialog"
-          >
-            Buy Key
-          </Regent.Primitives.button>
-          <Regent.Primitives.button
-            :if={@offer.state != :open}
-            id="home-classic-buy"
-            class="rl-fleet__closed"
-            aria-disabled="true"
-            aria-describedby="home-classic-why"
-          >
-            Buy Key
-          </Regent.Primitives.button>
+        <div class="rl-fleet__head">
+          <h2 id="home-classic-title">Classic Keyfleet</h2>
+          <p id="home-classic-join" class="rl-fleet__line">{classic_join()}</p>
         </div>
-        <p :if={@offer.why} id="home-classic-why" class="rl-fleet__why">{@offer.why}</p>
+        <div class="rl-fleet__offer">
+          <BuyKey.cards id="home-classic-cards" />
+          <div class="rl-fleet__actions">
+            <.link
+              id="home-classic-public"
+              navigate={Fleets.path(@classic.id)}
+              class="rg-button rg-button--secondary"
+            >
+              <span class="rg-button__label">Public View</span>
+            </.link>
+            <Regent.Primitives.button
+              :if={@offer.state == :open}
+              id="home-classic-buy"
+              type="button"
+              variant="primary"
+              phx-click="open_buy_key"
+              aria-haspopup="dialog"
+            >
+              Buy Key
+            </Regent.Primitives.button>
+            <Regent.Primitives.button
+              :if={@offer.state != :open}
+              id="home-classic-buy"
+              class="rl-fleet__closed"
+              aria-disabled="true"
+              aria-describedby="home-classic-why"
+            >
+              Buy Key
+            </Regent.Primitives.button>
+          </div>
+          <p :if={@offer.why} id="home-classic-why" class="rl-fleet__why">{@offer.why}</p>
+        </div>
       </div>
 
       <BuyKey.window :if={@buy_open} sale={@classic} actor={@actor} lease={@lease} />
@@ -647,7 +651,7 @@ defmodule KeyfleetWeb.HomeLive do
   defp integrations(assigns) do
     ~H"""
     <section id="home-integrations" class="rl-integrations" aria-labelledby="home-integrations-title">
-      <h2 id="home-integrations-title">What a fleet can use</h2>
+      <h2 id="home-integrations-title">Fleet Tools</h2>
       <ul
         id="home-integration-tiles"
         class="rl-integration-tiles"

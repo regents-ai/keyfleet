@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.CheckIns do
   @moduledoc """
   What agents' check-ins with a fleet say, as people see it: one agent's
-  status line, and the fleet's "Who's here" listing the agents holding
+  status line, and the fleet's "Here now" listing the agents holding
   shards of its keys.
 
   A status comes only from when the agent's check-ins arrived
@@ -55,14 +55,14 @@ defmodule KeyfleetWeb.CheckIns do
     doc: "how many agents are here, or nil when they couldn't be counted"
 
   @doc """
-  The fleet's "Who's here", in the hall's right-hand column: the agents here,
+  The fleet's "Here now", in the hall's right-hand column: the agents here,
   the most recently seen first, each with the key it acts as and its
   check-in light.
   """
   def who_is_here(assigns) do
     ~H"""
     <section id="fleet-who" class="who-is-here" aria-labelledby="fleet-who-title">
-      <h2 id="fleet-who-title">Who’s here</h2>
+      <h2 id="fleet-who-title">Here now</h2>
 
       <Regent.Primitives.empty_state
         :if={@shown == 0 and @agents_here != nil}

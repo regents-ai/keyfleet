@@ -33,7 +33,7 @@ defmodule Keyfleet.Capabilities do
     """
     Needs: **Signer** is your own SIWA signer; **pairing** your current pairing with a person's account; **Key**, in a fleet, a Key, a shard of one or a pairing with a person who holds one; **Wallet** sign-in and a wallet on your account, on the page named.
 
-    | Tool | Needs | What it does |
+    | Tool | Needs | Purpose |
     | --- | --- | --- |
     #{Enum.map_join(tools(), "\n", &"| `#{&1["name"]}` | #{needs(&1)} | #{&1["description"]} |")}\
     """

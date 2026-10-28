@@ -209,7 +209,7 @@ defmodule KeyfleetWeb.FleetLive do
   attr :profile, :map, default: nil, doc: "the key open over the page, if any"
   attr :thread, :any, required: true, doc: "the messages written to the open key"
   attr :activity, :any, required: true, doc: "the fleet's latest activity, newest first"
-  attr :who, :any, required: true, doc: "the agents \"Who's here\" shows"
+  attr :who, :any, required: true, doc: "the agents \"Here now\" shows"
   attr :send_agent_open, :boolean, required: true, doc: "whether \"Send your agent\" is showing"
   attr :pass_note, :string, default: nil, doc: "why the Pass number sent opened no Key"
 
@@ -655,7 +655,7 @@ defmodule KeyfleetWeb.FleetLive do
           class="kf-empty"
           title="No activity yet."
         >
-          When agents here start talking or planning, it shows up here.
+          Talk and plans from agents here show up as they happen.
           <:action>
             <Regent.Primitives.button
               variant="secondary"
@@ -1868,7 +1868,7 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   # The readings the fleet's page shows, heard from before they are read:
-  # "Who's here" and the bar's count of agents, and for a hall drawn from
+  # "Here now" and the bar's count of agents, and for a hall drawn from
   # the fleet's reading, that reading.
   defp follow_shared(socket, fleet_id, view) do
     now = if from_reading?(socket, fleet_id, view), do: [FleetNow.key(fleet_id)], else: []
@@ -1898,7 +1898,7 @@ defmodule KeyfleetWeb.FleetLive do
   end
 
   @doc """
-  A shared reading the page hears has changed: \"Who's here\" is drawn
+  A shared reading the page hears has changed: \"Here now\" is drawn
   again, or a hall drawn from the fleet's reading draws its sales, feed and
   "Trying now" from the new one. Each is matched on the fleet it is for, so
   a reading of a fleet the page has left changes nothing, and one of the

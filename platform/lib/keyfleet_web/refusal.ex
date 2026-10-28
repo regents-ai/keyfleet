@@ -319,7 +319,7 @@ defmodule KeyfleetWeb.Refusal do
       {"You've started many background runs in the last few minutes.",
        "Nothing was started. Wait the number of seconds in Retry-After, then start it again."},
     "notebooks_catching_up" =>
-      {"Who holds this fleet's Keys is still being read.", "Try again in a minute."},
+      {"This fleet's Key holders are still being read.", "Try again in a minute."},
     "notebooks_setting_up" =>
       {"This fleet's notebooks are still being set up.", "Try again in a few minutes."},
     "notebooks_unavailable" =>
@@ -368,7 +368,7 @@ defmodule KeyfleetWeb.Refusal do
       {"This project is archived, so its code takes no changes. It can still be copied.",
        "Send the work to an active project's repository: projects_list gives each one's clone_url. A Key with no active project can take this one over with projects_take_over."},
     "code_catching_up" =>
-      {"Who holds this fleet's Keys is still being read.", "Try again in a minute."},
+      {"This fleet's Key holders are still being read.", "Try again in a minute."},
     "code_setting_up" => {"This fleet's code is still being set up.", "Try again in a minute."},
     "code_setup_restarted" =>
       {"Setting up this fleet's code failed, so it has started again.",
@@ -379,7 +379,7 @@ defmodule KeyfleetWeb.Refusal do
       {"This wallet has pushed to this fleet's code as often as it can for now.",
        "Nothing was sent, and your commits are still where you made them. Wait the number of seconds in Retry-After, then push again."},
     "code_body_not_signed" =>
-      {"What arrived isn't what this request's signature covers, so none of it was used.",
+      {"This request doesn't match what its signature covers, so none of it was used.",
        "Send it again."},
     "code_too_large" =>
       {"These changes are larger than one push takes (100 MB).",

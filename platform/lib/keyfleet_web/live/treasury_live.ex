@@ -115,7 +115,7 @@ defmodule KeyfleetWeb.TreasuryLive do
           <span>Manager</span>
           <Regent.Primitives.address id="fleet-manager" address={@page.manager_address} />
         </div>
-        <Regent.Primitives.disclosure id="treasury-permissions-more" summary="Who can do what">
+        <Regent.Primitives.disclosure id="treasury-permissions-more" summary="Permissions">
           <dl class="treasury-permissions">
             <div :for={row <- Authority.treasury_rows()}>
               <dt>{row.what}</dt>

@@ -80,7 +80,7 @@ defmodule Keyfleet.SharedReading do
           "every address an account links is public as the Member List shows, and the Key a " <>
           "person writes as shows beside everything they write",
       # One for each fleet in Keyfleet.Fleets' catalog: a sixth fleet raises
-      # it, or its Who's here is refused and shown as not counted.
+      # it, or its Here now is refused and shown as not counted.
       keys: 5,
       # 26,881 bytes measured at its fullest before faces, which add about
       # 120 bytes for each of up to 50 Keys; the rest leaves room for a longer
