@@ -226,8 +226,16 @@ defmodule KeyfleetWeb.AgentRoomController do
       else: refreshing(conn)
   end
 
+  # A post answers with how many others posted since the sender's Key last
+  # did there, so a reply that crossed it is never missed.
   defp sent(conn, _fleet_id, {:ok, message}),
-    do: conn |> put_status(sent_status(message)) |> json(%{message: RoomJSON.message(message)})
+    do:
+      conn
+      |> put_status(sent_status(message))
+      |> json(%{
+        message: RoomJSON.message(message),
+        posted_after_you: Rooms.posted_after_previous(message)
+      })
 
   # Standing cannot be read while the fleet's key ownership is not fresh.
   defp sent(conn, fleet_id, {:error, %Ash.Error.Forbidden{} = error}),
@@ -312,7 +320,8 @@ defmodule KeyfleetWeb.AgentRoomController do
   # the unfinished tasks the key has taken, the submitted tasks waiting for its
   # review and the goals the agent joined as it. An agent with neither a key
   # nor a shard here writes as none.
-  # The work waiting on the agent's Key, the whole fleet's or one project's.
+  # The work waiting on the agent's Key, the whole fleet's or one project's,
+  # and the rooms where others have posted since the Key last did.
   defp yours(fleet_id, actor, within) do
     with %{token_id: token_id} <- Keys.identity(actor, fleet_id),
          {:ok, restricted} <- Keys.edits_restricted?(fleet_id, token_id),
@@ -326,11 +335,23 @@ defmodule KeyfleetWeb.AgentRoomController do
          edits_restricted: restricted,
          tasks: tasks,
          reviews: reviews,
-         goals: goals
+         goals: goals,
+         posted_after_you: Rooms.posted_after_key(fleet_id, token_id)
        }}
     else
-      nil -> {:ok, %{as_key: nil, edits_restricted: false, tasks: [], reviews: [], goals: []}}
-      error -> error
+      nil ->
+        {:ok,
+         %{
+           as_key: nil,
+           edits_restricted: false,
+           tasks: [],
+           reviews: [],
+           goals: [],
+           posted_after_you: []
+         }}
+
+      error ->
+        error
     end
   end
 

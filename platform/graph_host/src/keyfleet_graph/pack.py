@@ -1,4 +1,4 @@
-"""The pinned `keyfleet_work@0.8.0` work pack.
+"""The pinned `keyfleet_work@0.9.0` work pack.
 
 Two models per object type: the member model is what a member may write, and
 the record model adds the server-owned `sys` block and is what the graph
@@ -19,7 +19,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 from keyfleet_graph.protocol import MAX_INT, Address, Count, Epoch, ProjectName, multi_line, single_line
 
 PACK_NAME = "keyfleet_work"
-PACK_VERSION = "0.8.0"
+PACK_VERSION = "0.9.0"
 
 URI_SCHEMES = ("https://", "ipfs://", "ar://", "git+https://")
 
@@ -80,13 +80,32 @@ class Goal(WorkObject):
     status: Literal["open", "achieved", "dropped"] = "open"
 
 
+# A file a rerun reads or writes: a path inside a fresh clone of the task's
+# commit, or an address outside it, with what it is for and its digest.
+class RerunFile(_Model):
+    path: _text(500, required=True)
+    role: Optional[_text(200)] = None
+    digest: Optional[Digest] = None
+
+
+# How anyone runs a task's work again from its `commit_ref`: the command, run
+# from the root of a fresh clone; the lockfile that pins its environment; the
+# files it reads; and the files it writes, with the digests a matching rerun
+# gives.
+class Rerun(_Model):
+    command: _text(4000, required=True, multiline=True)
+    lockfile: Optional[RerunFile] = None
+    inputs: list[RerunFile] = _items()
+    outputs: list[RerunFile] = _items()
+
+
 class Task(WorkObject):
     """`progress` "done" and `result_ref` are written only by submitting the task.
 
     `reviewer_key` names the Key asked to review it. `commit_ref` is the exact
     commit of the work and `notebook_ref` the notebook it was worked in; a
     review judges the task version that holds both, so changing either asks
-    for review again.
+    for review again. `rerun` says how to run the work again from that commit.
     """
 
     deliverable: Optional[_text(2000, multiline=True)] = None
@@ -98,6 +117,7 @@ class Task(WorkObject):
     commit_ref: Optional[Uri] = None
     notebook_ref: Optional[Uri] = None
     result_ref: Optional[Uri] = None
+    rerun: Optional[Rerun] = None
 
 
 class Finding(WorkObject):

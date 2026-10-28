@@ -28,7 +28,7 @@ defmodule KeyfleetWeb.AgentGraphController do
     "invalid" => {422, "Correct the value the message names, then send the request again."},
     "forbidden_field" =>
       {422,
-       "Leave out the fields details names. Members may not set them; a task is marked done by submitting it, and a task another Key holds is forked rather than taken."},
+       "Leave out the fields details.fields names. details.allowed, when present, lists the fields this kind of item takes; a task is marked done by submitting it, and a task another Key holds is forked rather than taken."},
     "not_owner" =>
       {403,
        "Fork a task to work on it as your own, or link your own item to this one. details.owner_key names the Key it belongs to."},

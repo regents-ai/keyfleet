@@ -96,6 +96,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @chain_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(presence|split|treasury/(?:send_share|convert)|proposals/(?:create|vote|cancel|carry_out)|keys/(?:#{@token}/)?claim)\z"
   @graph_ops ~w(board get changes create patch link unlink archive join leave submit review fork)
   @graph_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/(#{Enum.join(@graph_ops, "|")})\z"
+  @graph_unknown_path ~r"\A/api/v1/agent/fleets/#{@fleet}/graph/[^/]+\z"
+  @outside_projects_path ~r"\A/api/v1/agent/fleets/#{@fleet}/(notebooks|code)(/|\z)"
 
   # The fields each room, sync, proposal read and poll body holds: the ones it
   # must name, then the ones it may add.
@@ -234,36 +236,104 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp agent_request?(conn),
     do: Enum.map(Enum.take(conn.path_info, 3), &URI.decode/1) == ["api", "v1", "agent"]
 
+  # An address no operation has, a method its operation doesn't take and a
+  # body that isn't JSON are each told so before any signature is read: the
+  # sign-in is not what is wrong with them.
   defp authenticate(conn) do
-    with true <- supported_request?(conn),
-         true <- json_or_bodyless_get?(conn),
-         %Plug.Conn.Unfetched{} <- conn.body_params do
-      case read_signed(conn) do
-        {:ok, "", %{method: "GET"} = conn} ->
-          verify(%{conn | assigns: Map.delete(conn.assigns, :raw_body)})
-
-        {:ok, _raw, conn} ->
-          verify_json(conn)
-
-        {:error, _reason} ->
-          deny(conn, %{reason: :invalid_request})
-
-        {:more, _raw, conn} ->
-          send_refusal(conn, 413, KeyfleetWeb.Refusal.body("request_too_large"))
-
-        :too_large ->
-          send_refusal(conn, 413, KeyfleetWeb.Refusal.body("request_too_large"))
-      end
-    else
-      _ -> deny(conn, %{reason: :invalid_request})
+    cond do
+      not supported_request?(conn) -> refuse_address(conn)
+      not json_or_bodyless_get?(conn) -> json_required(conn)
+      true -> read_and_verify(conn)
     end
   end
+
+  defp read_and_verify(%{body_params: %Plug.Conn.Unfetched{}} = conn) do
+    case read_signed(conn) do
+      {:ok, "", %{method: "GET"} = conn} ->
+        verify(%{conn | assigns: Map.delete(conn.assigns, :raw_body)})
+
+      {:ok, _raw, conn} ->
+        verify_json(conn)
+
+      {:error, _reason} ->
+        send_refusal(conn, 400, KeyfleetWeb.Refusal.body("invalid_request"))
+
+      {:more, _raw, conn} ->
+        too_large(conn)
+
+      :too_large ->
+        too_large(conn)
+    end
+  end
+
+  defp read_and_verify(conn), do: deny(conn, %{reason: :invalid_request})
 
   defp verify_json(conn) do
     if json_or_bodyless_get?(%{conn | method: "POST"}),
       do: verify(conn),
-      else: deny(conn, %{reason: :invalid_request})
+      else: json_required(conn)
   end
+
+  defp refuse_address(conn) do
+    case Enum.filter(~w(GET POST), &supported?(&1, conn.request_path)) do
+      [] ->
+        send_refusal(conn, 404, unknown_address(conn.request_path))
+
+      [method] ->
+        conn
+        |> put_resp_header("allow", method)
+        |> send_refusal(
+          405,
+          KeyfleetWeb.Refusal.body(
+            "method_not_allowed",
+            "Send it as a #{method}, signed over that method. #{carries(method)}"
+          )
+        )
+    end
+  end
+
+  defp carries("GET"), do: "A GET carries no body."
+  defp carries("POST"), do: "A POST carries a JSON body, {} when there is nothing to say."
+
+  # The addresses agents most often reach for that moved or never existed:
+  # a workspace operation by another name, and a fleet's notebooks or code
+  # outside its projects.
+  defp unknown_address(path) do
+    cond do
+      Regex.match?(@graph_unknown_path, path) ->
+        KeyfleetWeb.Refusal.body(
+          "operation_unknown",
+          "The workspace's operations are #{Enum.join(@graph_ops, ", ")}: each a POST to " <>
+            "/api/v1/agent/fleets/FLEET_ID/graph/OPERATION."
+        )
+
+      Regex.match?(@outside_projects_path, path) ->
+        KeyfleetWeb.Refusal.body(
+          "operation_unknown",
+          "A fleet's notebooks and code are inside its projects, under " <>
+            "/api/v1/agent/fleets/FLEET_ID/projects/PROJECT/. projects_list " <>
+            "(GET /api/v1/agent/fleets/FLEET_ID/projects) names them."
+        )
+
+      true ->
+        KeyfleetWeb.Refusal.body("operation_unknown")
+    end
+  end
+
+  defp json_required(conn),
+    do: send_refusal(conn, 415, KeyfleetWeb.Refusal.body("json_required"))
+
+  defp too_large(conn),
+    do:
+      send_refusal(
+        conn,
+        413,
+        KeyfleetWeb.Refusal.body(
+          "request_too_large",
+          "This operation takes a body of at most #{body_limit(conn.request_path)} bytes. " <>
+            "Send a shorter one."
+        )
+      )
 
   defp json_or_bodyless_get?(conn) do
     case get_req_header(conn, "content-type") do
