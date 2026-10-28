@@ -23,9 +23,9 @@ defmodule KeyfleetWeb.AgentPublicationController do
   @listed 100
 
   # A page at a time, newest first; `after` is the last page's next_cursor.
-  def index(conn, %{"fleet_id" => fleet_id, "project" => name} = params) do
+  def index(conn, %{"fleet_id" => fleet_id, "project" => name}) do
     page =
-      case params do
+      case conn.body_params do
         %{"after" => cursor} when is_binary(cursor) -> [limit: @listed, after: cursor]
         _newest -> [limit: @listed]
       end

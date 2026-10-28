@@ -5761,3 +5761,6 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
 - The workspace's Public place shows a dozen at a time with Earlier and Back
   to the newest, signed in or not, and `publications list` reads 100 at a
   time with `next_cursor` and `--after`.
+- `publications list` reads with a signed POST to
+  `projects/PROJECT/publications/list`, `{}` for the newest 100 or
+  `{"after"}` with the last answer's `next_cursor` for the next.

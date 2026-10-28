@@ -54,7 +54,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # What a Key made public in a project, making its own posts public, and
   # taking something back by its id.
   @publication ~S"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-  @publications_path ~r"\A#{@in_project}/publications\z"
+  @publications_list_path ~r"\A#{@in_project}/publications/list\z"
   @publish_posts_path ~r"\A#{@in_project}/publications/posts\z"
   @publish_commit_path ~r"\A#{@in_project}/publications/commit\z"
   @withdraw_path ~r"\A/api/v1/agent/fleets/#{@fleet}/publications/#{@publication}/withdraw\z"
@@ -111,6 +111,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@project_show_path, {~w(as_key shown_to_everyone), []}},
     {@publish_posts_path, {~w(as_key room from_seq to_seq), []}},
     {@withdraw_path, {~w(as_key), []}},
+    {@publications_list_path, {[], ~w(after)}},
     {@publish_item_path, {~w(as_key item), []}},
     {@publish_page_path, {~w(as_key page), []}},
     {@publish_commit_path, {~w(as_key commit), []}},
@@ -525,8 +526,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           @notebooks_path,
           @copies_path,
           @run_path,
-          @projects_path,
-          @publications_path
+          @projects_path
         ],
         &Regex.match?(&1, path)
       )
@@ -553,6 +553,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @project_show_path,
         @publish_posts_path,
         @withdraw_path,
+        @publications_list_path,
         @publish_item_path,
         @publish_page_path,
         @publish_commit_path,
@@ -700,6 +701,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         project_show: @project_show_path,
         publish_posts: @publish_posts_path,
         withdraw: @withdraw_path,
+        publications_list: @publications_list_path,
         publish_item: @publish_item_path,
         publish_page: @publish_page_path,
         publish_commit: @publish_commit_path,
@@ -761,6 +763,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
        do: in_range(key in 1..@max_seq and from in 1..@max_seq and to in 1..@max_seq)
 
   defp check_fleet_body(:publish_posts, _params), do: :invalid
+
+  # What is public reads from the newest, or on from the last page's cursor.
+  defp check_fleet_body(:publications_list, params) when map_size(params) == 0, do: :ok
+
+  defp check_fleet_body(:publications_list, %{"after" => cursor} = params)
+       when map_size(params) == 1 and is_binary(cursor) and byte_size(cursor) in 1..1024,
+       do: :ok
+
+  defp check_fleet_body(:publications_list, _params), do: :invalid
 
   # An item goes public by its id, as a Key.
   defp check_fleet_body(:publish_item, %{"as_key" => key, "item" => item} = params)

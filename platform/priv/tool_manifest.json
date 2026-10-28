@@ -7258,7 +7258,7 @@
       "pairing_required": true,
       "availability": "available",
       "effect": "read",
-      "route": "GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/list",
       "operation_input_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -7288,7 +7288,7 @@
       },
       "interfaces": {
         "webmcp": "publications_list",
-        "http": "GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/list",
         "cli": {
           "release_status": "source_only",
           "descriptor": "cli/commands.json"

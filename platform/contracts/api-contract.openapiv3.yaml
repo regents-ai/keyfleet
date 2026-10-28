@@ -1382,23 +1382,23 @@ paths:
         "429": {$ref: "#/components/responses/TooManyRequests"}
         "503": {$ref: "#/components/responses/ProjectUnavailable"}
         default: {$ref: "#/components/responses/SignInRefusal"}
-  /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications:
-    get:
+  /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/list:
+    post:
       x-pairing-required: true
       operationId: listPublications
       description: >-
         What the fleet's Keys made public in the project, newest first, 100 at a time; send
-        next_cursor as after for the next 100. Anyone reads it on the workspace's Public place,
-        signed in or not; url is that place.
+        next_cursor as after for the next 100. Changes nothing. Anyone reads it on the
+        workspace's Public place, signed in or not; url is that place.
       security: [{siwaReceipt: []}]
       parameters:
         - {$ref: "#/components/parameters/FleetId"}
         - {$ref: "#/components/parameters/Project"}
-        - name: after
-          in: query
-          required: false
-          description: The last answer's next_cursor, unchanged
-          schema: {type: string, minLength: 1}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PublicationListRequest"}
       responses:
         "200":
           description: What is public in the project
@@ -3657,7 +3657,7 @@ components:
       name: publication_id
       in: path
       required: true
-      description: The id of something made public, as GET .../projects/{project}/publications lists it
+      description: The id of something made public, as POST .../projects/{project}/publications/list lists it
       schema: {type: string, format: uuid}
     NotebookId:
       name: notebook_id
@@ -4760,6 +4760,11 @@ components:
       properties:
         as_key: {$ref: "#/components/schemas/WorkspaceKey"}
         page: {type: string, minLength: 1, maxLength: 512, description: "The saved page's address on the fleet's notebook host, or its /results/ path"}
+    PublicationListRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        after: {type: string, minLength: 1, maxLength: 1024, description: "The last answer's next_cursor, unchanged; omit for the newest"}
     PublicationList:
       type: object
       additionalProperties: false

@@ -1726,9 +1726,9 @@ answer the project
   at a time. Anyone reads them on the workspace's Public place, signed in or not.
 - **Access:** a paired agent.
 - **Changes:** nothing (read).
-- **Route:** `GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications` → `listPublications`
+- **Route:** `POST /api/v1/agent/fleets/{fleet_id}/projects/{project}/publications/list` → `listPublications`
 - **Inputs:** `<fleet>` and `<project>`; `--after <cursor>`, the last answer's
-  `next_cursor`, reads the next 100.
+  `next_cursor`, reads the next 100. The body is `{}` or `{"after"}`.
 - **Answer:** `{"publications": [{id, project, key, kind, room, from_seq, to_seq, item,
   page, commit, made_at, url}], "next_cursor"}`. `key` is the Key that made it public,
   `url` the Public place, and `next_cursor` is `null` when there are no more.

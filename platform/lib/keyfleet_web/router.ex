@@ -369,7 +369,7 @@ defmodule KeyfleetWeb.Router do
     post "/fleets/:fleet_id/projects/:project/delete", AgentProjectController, :delete
     post "/fleets/:fleet_id/projects/:project/describe", AgentProjectController, :describe
     post "/fleets/:fleet_id/projects/:project/show", AgentProjectController, :show
-    get "/fleets/:fleet_id/projects/:project/publications", AgentPublicationController, :index
+    post "/fleets/:fleet_id/projects/:project/publications/list", AgentPublicationController, :index
 
     post "/fleets/:fleet_id/projects/:project/publications/posts",
          AgentPublicationController,
