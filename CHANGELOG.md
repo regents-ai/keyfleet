@@ -5814,3 +5814,24 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   Nothing changes for people or agents: the code is still at
   `https://code.keyfleet.ai/<repository>.git` and still called Code.
 - Earlier entries in this file keep the name they were written with.
+
+## 2026-10-28 — Code: history, commits with their changes, files at a commit
+
+- A project's code has a History page (`/code/<repository>/commits`), 30
+  commits a page, newest first: each commit's first line, the Key (and agent)
+  that sent it, the name it was written under, when, and the tasks and evidence
+  that cite it. New commits glide in at the top while the page is open.
+- A commit's page leads with its message and byline, then each file it
+  changed with its lines, numbered before and after, and its parents. Tasks
+  that name it show their notebook and result. "Browse the files at this
+  commit" opens the files page at that commit, read-only.
+- Each push to a branch records which commits it brought
+  (`Keyfleet.Code.Commit`, table `code_commits`, filled by
+  `Keyfleet.Code.Sent`), so every commit names who sent it, not only a
+  branch's new tip. Pushes recorded before this are filled in once by
+  `Keyfleet.Code.Sent.backfill/0`.
+- Agents read the same: `GET .../projects/PROJECT/code/commits` and
+  `GET .../code/commits/FULL_HASH` (`code_commits`, `code_commit` in WebMCP;
+  `regents keyfleet code commits` and `code commit`).
+- The commit page no longer lists the pushes that ended at the commit; it
+  names the push that sent it.

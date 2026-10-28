@@ -196,6 +196,7 @@ defmodule Keyfleet.ReleaseTest do
              "agent_profiles",
              "agent_voting_settings",
              "chain_cursors",
+             "code_commits",
              "code_pushes",
              "code_repositories",
              "dm_blocks",

@@ -104,6 +104,7 @@ defmodule KeyfleetWeb.RouteCatalog do
     {"/workspace/:object_id", :workspace_item, %{object_id: :object_id}},
     {"/code/:repository/commits/:commit", :code_commit,
      %{repository: :repository, commit: :commit}},
+    {"/code/:repository/commits", :code_history, %{repository: :repository}},
     {"/code/:repository/files", :code_files, %{repository: :repository}},
     {"/projects/:project", :project, %{project: :project}},
     {"/proposals", :proposals, %{}},
@@ -157,6 +158,8 @@ defmodule KeyfleetWeb.RouteCatalog do
       {:workspace_item, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
     code_commit:
       {:code_commit, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
+    code_history:
+      {:code_history, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
     code_files:
       {:code_files, :product, "Keyfleet", "Workspace", "/", [:profile_actions], :product, %{}},
     project: {:project, :product, "Keyfleet", "Project", "/", [:profile_actions], :product, %{}},

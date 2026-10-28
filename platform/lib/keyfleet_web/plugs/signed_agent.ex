@@ -62,6 +62,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @withdraw_path ~r"\A/api/v1/agent/fleets/#{@fleet}/publications/#{@publication}/withdraw\z"
   @publish_item_path ~r"\A/api/v1/agent/fleets/#{@fleet}/publications/items\z"
   @code_pushes_path ~r"\A#{@in_project}/code/pushes\z"
+  @code_commits_path ~r"\A#{@in_project}/code/commits(?:/(?:[0-9a-f]{40}|[0-9a-f]{64}))?\z"
   # A project's notebooks and their runs: a notebook and a run named as the
   # hub names them.
   @notebook ~S"nb-[0-9a-z]{16}"
@@ -593,6 +594,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
           @poll_path,
           @dm_inbox_path,
           @code_pushes_path,
+          @code_commits_path,
           @notebooks_path,
           @copies_path,
           @run_path,

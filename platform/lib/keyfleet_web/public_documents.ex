@@ -79,7 +79,9 @@ defmodule KeyfleetWeb.PublicDocuments do
       {"Workspace", "One item in {fleet}'s workspace on Keyfleet, with its history and links."},
     :code_commit =>
       {"Commit",
-       "One saved change in {fleet}'s shared code on Keyfleet, and the work that cites it."},
+       "One saved change in {fleet}'s shared code on Keyfleet: what changed, who sent it, and the work that cites it."},
+    :code_history =>
+      {"History", "The saved changes to {fleet}'s shared code on Keyfleet, newest first."},
     :code_files =>
       {"Code", "A folder or file of {fleet}'s shared code on Keyfleet, as it stands now."},
     :project =>

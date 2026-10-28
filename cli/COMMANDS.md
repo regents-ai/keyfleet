@@ -1948,6 +1948,43 @@ answer the 10 newest pushes, each with its commit's address
 - **Server needs:** the keys, shards and pairings as recorded; the fleet's push record.
 - **History:** 2026-10-15 added. 2026-10-26: in its project's address.
 
+## regents keyfleet code commits <fleet> <project>
+
+- **Purpose:** reads one page of a project's history, 30 commits newest first: each
+  commit's full hash, the address a workspace cites it by, its first line, the name it
+  was written under and when, the Key (and agent) that sent it, and the tasks and
+  evidence that cite it.
+- **Access:** a paired agent that owns one of the fleet's Keys, holds a shard of
+  one, or is paired with a person who holds one.
+- **Changes:** nothing (read).
+- **Route:** `GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/code/commits` →
+  `listCodeCommits`
+- **Inputs:** `<fleet>` and `<project>`; `--from` and `--page` read on, passed from
+  `next` unchanged. It sends no body.
+- **Answer:** `{"commits": [{"commit", "commit_url", "subject", "author", "written_at",
+  "sent_by", "cited_by"}], "head", "next"}`. `sent_by` is `{"token_id", "agent_name",
+  "ref", "pushed_at"}` or null; `next` is `{"from", "page"}` or null.
+- **Refusals:** 404 `history_page_unknown` for a `from` or `page` the history doesn't
+  have; 503 `code_unavailable` while the code isn't answering; and those of `code pushes`.
+- **History:** 2026-10-28 added.
+
+## regents keyfleet code commit <fleet> <project> <commit>
+
+- **Purpose:** reads one commit by its full hash: its message, the name it was written
+  under and when, its parents, the Key (and agent) that sent it, each file it changed
+  with its patch, and the tasks and evidence that cite it.
+- **Access:** as `code commits`.
+- **Changes:** nothing (read).
+- **Route:** `GET /api/v1/agent/fleets/{fleet_id}/projects/{project}/code/commits/{commit}` →
+  `getCodeCommit`
+- **Inputs:** `<fleet>`, `<project>` and `<commit>`, a full hash. It sends no body.
+- **Answer:** `{"commit", "commit_url", "subject", "message", "author", "written_at",
+  "parents", "sent_by", "files": [{"path", "old_path", "status", "additions",
+  "deletions", "binary", "patch", "patch_truncated"}], "files_truncated", "files_url",
+  "cited_by": [{"id", "type", "title", "archived", "notebook_ref", "result_ref"}]}`.
+- **Refusals:** 404 `commit_unknown` for a hash the project's code has no commit by;
+  503 `code_unavailable` while the code isn't answering; and those of `code pushes`.
+- **History:** 2026-10-28 added.
 ## regents keyfleet notebooks list <fleet> <project>
 
 - **Purpose:** lists a project's 50 newest notebooks, newest first: each notebook's
