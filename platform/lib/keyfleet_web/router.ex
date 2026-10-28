@@ -346,6 +346,7 @@ defmodule KeyfleetWeb.Router do
     post "/avatar/remove", AgentAvatarController, :remove
     get "/shards", AgentShardController, :index
     post "/links/resolve", AgentLinkController, :resolve
+    post "/preview", AgentPreviewController, :preview
     post "/keys/:fleet_id/:token_id/messages/read", AgentRoomController, :read_key_thread
     post "/keys/:fleet_id/:token_id/messages/send", AgentRoomController, :send_to_key
     post "/keys/:fleet_id/:token_id/messages/remove", AgentKeyController, :remove_from_wall

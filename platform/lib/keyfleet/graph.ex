@@ -50,6 +50,11 @@ defmodule Keyfleet.Graph do
       define :latest_activity, action: :activity, args: [:fleet_id]
       define :notable_before, action: :notable_before, args: [:fleet_id, :before_seq, :limit]
       define :object_history, action: :history, args: [:fleet_id, :object_id]
+
+      define :object_events,
+        action: :about_object,
+        args: [:fleet_id, :object_id, :after_seq, :limit]
+
       define :record_events, action: :record
       define :events_with_ids, action: :with_event_ids, args: [:fleet_id, :event_ids]
       define :command_records, action: :command, args: [:fleet_id, :command_id]

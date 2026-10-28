@@ -36,7 +36,10 @@ defmodule KeyfleetWeb.AgentGraphController do
       {403,
        "Ask a member who did not submit the task, from another Key and wallet, to review it."},
     "duplicate_mismatch" =>
-      {422, "This command_id was used for a different change. Use a new command_id."}
+      {422, "This command_id was used for a different change. Use a new command_id."},
+    "over_budget" =>
+      {422,
+       "details.bytes is the size of the change at details.seq. Send max_bytes of at least that, or leave it out."}
   }
 
   @command ~w(as_key command_id)
@@ -47,21 +50,38 @@ defmodule KeyfleetWeb.AgentGraphController do
   # One item as its page in the workspace shows it, in one read: the item,
   # its links and the items at their other ends, its page's address, the posts
   # its discussion names and, for a task, the commit to clone and what its
-  # rerun is missing.
+  # rerun is missing. `fields` names the parts besides the item to answer;
+  # the posts its discussion names are read only when it names them.
   def get_object(conn, %{"fleet_id" => fleet_id, "id" => id} = params) do
     actor = conn.assigns.agent_actor
+    parts = parts(params)
 
     result =
       with {:ok, read} <-
              Graph.get_object(fleet_id, id, Map.take(params, ~w(relations_after)), actor: actor),
-           do: {:ok, Map.merge(read, around(read.object, fleet_id, actor))}
+           do:
+             {:ok,
+              read |> Map.merge(around(read.object, fleet_id, actor, parts)) |> Map.take(parts)}
 
     read(result, conn, fleet_id)
   end
 
+  @parts ~w(owner_key relations linked url discussion commit rerun_check agents)a
+
+  # The item and how far the workspace had read are always answered; a page
+  # of links comes with the place to read on from.
+  defp parts(%{"fields" => fields}) do
+    named = fields |> String.split(",") |> Enum.map(&String.to_existing_atom/1)
+
+    [:object, :watermark | named] ++
+      if(:relations in named, do: [:relations_next_cursor], else: [])
+  end
+
+  defp parts(_params), do: [:object, :watermark, :relations_next_cursor | @parts]
+
   def changes(conn, %{"fleet_id" => fleet_id} = params) do
     fleet_id
-    |> Graph.list_changes(Map.take(params, ~w(after_seq limit project)),
+    |> Graph.list_changes(Map.take(params, ~w(after_seq limit project object max_bytes)),
       actor: conn.assigns.agent_actor
     )
     |> read(conn, fleet_id)
@@ -193,12 +213,14 @@ defmodule KeyfleetWeb.AgentGraphController do
     refusal(503, "graph_unavailable")
   end
 
-  defp around(object, fleet_id, actor) do
+  defp around(object, fleet_id, actor, parts) do
     %{
-      url: Endpoint.url() <> WorkspacePage.item_path(fleet_id, object.id),
-      discussion: discussion(object.data["discussion"], fleet_id, actor),
-      commit: commit(object.data["commit_ref"], fleet_id)
+      url: fn -> Endpoint.url() <> WorkspacePage.item_path(fleet_id, object.id) end,
+      discussion: fn -> discussion(object.data["discussion"], fleet_id, actor) end,
+      commit: fn -> commit(object.data["commit_ref"], fleet_id) end
     }
+    |> Map.take(parts)
+    |> Map.new(fn {part, read} -> {part, read.()} end)
   end
 
   # Each post the item's discussion names, as a room read answers it: nil for

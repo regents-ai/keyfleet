@@ -114,7 +114,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"GET", @rooms, [], nil},
     {"POST", @create, [], %{"slug" => "probe-room", "name" => "Probe"}},
     {"POST", @topic, [], %{"topic" => "Probe"}},
-    {"POST", @read, [], %{"after_seq" => 0, "limit" => 1}},
+    {"POST", @read, [], %{"after_seq" => 0, "limit" => 1, "max_bytes" => 65_536}},
     {"POST", @send, [],
      %{
        "body" => "probe",
@@ -122,7 +122,7 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "reply_to_id" => nil,
        "quote_request_id" => nil
      }},
-    {"POST", @key_read, [], %{"after_seq" => 0, "limit" => 1}},
+    {"POST", @key_read, [], %{"after_seq" => 0, "limit" => 1, "max_bytes" => 65_536}},
     {"POST", @key_send, [],
      %{"body" => "probe", "idempotency_key" => "p-1", "reply_to_id" => nil}},
     {"POST", @sync, [],
@@ -133,7 +133,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
        "keys" => [%{"token_id" => 1, "after_seq" => 0}],
        "dms" => %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]},
        "quotes" => %{"after_seq" => 0},
-       "run" => %{"kind" => "session"}
+       "run" => %{"kind" => "session"},
+       "max_bytes" => 16_384
      }},
     {"POST", @sync, ["rooms", 0], %{"slug" => "general", "after_seq" => 0}},
     {"POST", @sync, ["run", {:one_of, 0}], %{"kind" => "session"}},
@@ -182,8 +183,16 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @dm <> "unblock", [], %{}},
     {"POST", @dm_changes, [], %{"keys" => [%{"token_id" => 1, "after_seq" => 0}]}},
     {"POST", @graph <> "board", [], %{"project" => "general"}},
-    {"POST", @graph <> "get", [], %{"id" => "goal#1", "relations_after" => 0}},
-    {"POST", @graph <> "changes", [], %{"after_seq" => 0, "limit" => 1, "project" => "general"}},
+    {"POST", @graph <> "get", [],
+     %{"id" => "goal#1", "relations_after" => 0, "fields" => "commit"}},
+    {"POST", @graph <> "changes", [],
+     %{
+       "after_seq" => 0,
+       "limit" => 1,
+       "project" => "general",
+       "object" => "goal#1",
+       "max_bytes" => 1024
+     }},
     {"POST", @graph <> "create", [],
      %{
        "as_key" => 1,
@@ -270,6 +279,19 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
     {"POST", @project <> "take_over", [], %{"as_key" => 1}},
     {"POST", @project <> "delete", [], %{"as_key" => 1}}
   ]
+
+  # Fields a body may not send together (the schema's `not: {required: …}`);
+  # a whole sample sent over HTTP leaves these out.
+  @apart %{(@graph <> "changes") => ["project"]}
+
+  # Fields their controllers spend, never the action: a room or wall read's
+  # `max_bytes` fits the answer (KeyfleetWeb.Budget), and an item read's
+  # `fields` picks the parts of its answer.
+  @fitted %{
+    @read => ["max_bytes"],
+    @key_read => ["max_bytes"],
+    (@graph <> "get") => ["fields"]
+  }
 
   # Where each body's fields go once admitted, less the ones its address supplies.
   @actions [
@@ -382,7 +404,9 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
       addressed = Regex.scan(~r/\{(\w+)\}/, template, capture: :all_but_first) |> List.flatten()
       documented = Map.keys(request_schema(contract, "POST", template, [])["properties"])
 
-      assert Enum.sort(documented) == Enum.sort(takes -- addressed), template
+      assert Enum.sort(documented -- Map.get(@fitted, template, [])) ==
+               Enum.sort(takes -- addressed),
+             template
     end
 
     # Joining names a new profile and its harness; everything else is set later.
@@ -725,6 +749,8 @@ defmodule KeyfleetWeb.SignedAgentContractTest do
 
     for {method, template, [], body} <- @bodies, String.contains?(template, "{fleet_id}") do
       code = if template =~ "/notebooks/", do: "notebooks_not_found", else: "fleet_unknown"
+
+      body = if apart = @apart[template], do: Map.drop(body, apart), else: body
 
       assert answer(c, c.signer, method, template, nowhere, body, 404).body["error"]["code"] ==
                code,

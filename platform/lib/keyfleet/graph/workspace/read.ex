@@ -21,7 +21,10 @@ defmodule Keyfleet.Graph.Workspace.Read do
   touched that project, oldest first, at most `limit` of them and no more
   than 512 KiB of them unless one event alone is larger;
   `next_cursor` is the `after_seq` to read on from, and `run_id` names the
-  log they come from.
+  log they come from. Given `object`, it answers that object's own changes
+  alone: its creation, edits, archiving, links and their removal. Given
+  `max_bytes`, a page holds no more than that, and a change larger than it
+  alone is refused with its size rather than answered past the budget.
 
   Both name, in `agents`, the agents behind what they answer, by wallet: the
   agent that created the object, or that made each change, with the name it
@@ -71,26 +74,77 @@ defmodule Keyfleet.Graph.Workspace.Read do
     end
   end
 
-  defp read(:changes, %{fleet_id: fleet_id, after_seq: after_seq, limit: limit} = args, opts) do
+  defp read(:changes, %{fleet_id: fleet_id, after_seq: after_seq} = args, opts) do
     {run_id, watermark} = standing(fleet_id, opts)
-    project = %{project: args[:project]}
 
-    page =
-      fleet_id
-      |> Graph.read_events!(after_seq, limit, project, opts)
-      |> Enum.map(&Event.view/1)
+    with {:ok, events, has_more} <- events(args, opts) do
+      page = Enum.map(events, &Event.view/1)
 
-    has_more = page != [] and more_after?(fleet_id, List.last(page).seq, project, opts)
-
-    %{
-      run_id: run_id,
-      events: page,
-      next_cursor: if(has_more, do: List.last(page).seq, else: max(after_seq, watermark)),
-      has_more: has_more,
-      watermark: watermark,
-      agents: page |> Enum.map(&writer(&1.actor)) |> Agents.names_by_wallet()
-    }
+      %{
+        run_id: run_id,
+        events: page,
+        next_cursor: if(has_more, do: List.last(page).seq, else: max(after_seq, watermark)),
+        has_more: has_more,
+        watermark: watermark,
+        agents: page |> Enum.map(&writer(&1.actor)) |> Agents.names_by_wallet()
+      }
+    end
   end
+
+  # One object's changes: a page of them, cut to `max_bytes` here, as the
+  # database cuts a page of the fleet's.
+  defp events(%{object: id} = args, opts) when is_binary(id) do
+    budget = args[:max_bytes] || Event.page_bytes()
+
+    {events, rest} =
+      args.fleet_id
+      |> Graph.object_events!(id, args.after_seq, args.limit + 1, opts)
+      |> Enum.split(args.limit)
+
+    {page, cut} = within(events, budget)
+    fitted(page, args[:max_bytes], cut ++ rest != [])
+  end
+
+  defp events(%{fleet_id: fleet_id, after_seq: after_seq, limit: limit} = args, opts) do
+    window = args |> Map.take([:project, :max_bytes]) |> Map.reject(&is_nil(elem(&1, 1)))
+    project = %{project: args[:project]}
+    page = Graph.read_events!(fleet_id, after_seq, limit, window, opts)
+    has_more = page != [] and more_after?(fleet_id, List.last(page).seq, project, opts)
+    fitted(page, args[:max_bytes], has_more)
+  end
+
+  # The first events that fit in `budget` bytes together, and the rest; the
+  # first alone when it doesn't fit, so a page without a caller's budget is
+  # never empty.
+  defp within(events, budget) do
+    {page, rest, _left} =
+      Enum.reduce(events, {[], [], budget}, fn
+        event, {[], [], left} ->
+          {[event], [], left - event.byte_size}
+
+        %{byte_size: bytes} = event, {page, [], left} when bytes <= left ->
+          {[event | page], [], left - bytes}
+
+        event, {page, rest, left} ->
+          {page, [event | rest], left}
+      end)
+
+    {Enum.reverse(page), Enum.reverse(rest)}
+  end
+
+  # A budget the caller named is never broken: a change larger than it alone
+  # is refused with its size, and the caller chooses to raise the budget.
+  defp fitted([%{byte_size: bytes, seq: seq} | _rest], max_bytes, _has_more)
+       when is_integer(max_bytes) and bytes > max_bytes,
+       do:
+         {:error,
+          RefusedError.exception(
+            code: "over_budget",
+            reason: "the change at seq #{seq} alone is #{bytes} bytes, more than max_bytes",
+            details: %{seq: seq, bytes: bytes}
+          )}
+
+  defp fitted(page, _max_bytes, has_more), do: {:ok, page, has_more}
 
   # The Key an object belongs to: the Key holding it, for a held task, and
   # otherwise the Key that created it; none for a starting goal.

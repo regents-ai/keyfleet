@@ -15,6 +15,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @shards_path "/api/v1/agent/shards"
   # What a pasted Keyfleet address names.
   @links_path "/api/v1/agent/links/resolve"
+  @preview_path "/api/v1/agent/preview"
   # An agent's picture: a signed start names the upload, whose bytes then go
   # to the address it answers, outside this plug (`AgentAvatarController`).
   @avatar_start_path "/api/v1/agent/avatar/start"
@@ -114,7 +115,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # The fields each room, sync, proposal read and poll body holds: the ones it
   # must name, then the ones it may add.
   @body_fields [
-    {@sync_path, {~w(rooms graph proposals run), ~w(keys dms quotes)}},
+    {@sync_path, {~w(rooms graph proposals run), ~w(keys dms quotes max_bytes)}},
     {@proposal_read_path, {~w(number votes_after_seq), []}},
     {@project_start_path, {~w(as_key name title), []}},
     {@project_archive_path, {~w(as_key), []}},
@@ -135,8 +136,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@file_write_path, {~w(path content), []}},
     {@notebook_lock_path, {~w(locked), []}},
     {@topic_path, {~w(topic), []}},
-    {@read_path, {[], ~w(after_seq limit)}},
-    {@key_read_path, {[], ~w(after_seq limit)}},
+    {@read_path, {[], ~w(after_seq limit max_bytes)}},
+    {@key_read_path, {[], ~w(after_seq limit max_bytes)}},
     {@get_path, {[], ~w(seq id context)}},
     {@key_get_path, {[], ~w(seq id context)}},
     {@send_path, {~w(body idempotency_key), ~w(reply_to_id quote_request_id)}},
@@ -205,13 +206,32 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # How many posts either side of one read by its place.
   @max_context 20
   @max_graph_page 500
+  # How many bytes of posts a room or wall read, and a sync, may be asked to
+  # fit in: the least holds the largest post with its room.
+  @post_budgets (64 * 1024)..(8 * 1024 * 1024)
+  @sync_budgets (16 * 1024)..(64 * 1024 * 1024)
+  # The parts of a workspace item `graph/get` answers besides the item itself,
+  # which `fields` picks from.
+  @get_parts ~w(owner_key relations linked url discussion commit rerun_check agents)
+  # How small and large a page of workspace changes a caller may ask for; the
+  # largest is a whole page.
+  @min_change_budget 1024
+  @max_change_budget 512 * 1024
   # What each workspace operation's body holds: its required fields, then the
   # ones it may add. A write names the key it acts as and its command id.
   @command_fields %{"as_key" => :key, "command_id" => :text}
   @graph_bodies %{
     "board" => {%{}, %{"project" => :text}},
-    "get" => {%{"id" => :text}, %{"relations_after" => :seq}},
-    "changes" => {%{}, %{"project" => :text, "after_seq" => :seq, "limit" => :graph_page}},
+    "get" => {%{"id" => :text}, %{"relations_after" => :seq, "fields" => :get_parts}},
+    "changes" =>
+      {%{},
+       %{
+         "project" => :text,
+         "object" => :text,
+         "after_seq" => :seq,
+         "limit" => :graph_page,
+         "max_bytes" => :change_budget
+       }},
     "create" =>
       {Map.merge(@command_fields, %{"project" => :text, "type" => :text, "data" => :object}), %{}},
     "patch" =>
@@ -588,12 +608,16 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # string.
   defp supported_request?(conn), do: supported?(conn.method, conn.request_path)
 
+  @doc "Whether a signed agent operation answers `method` at `path`."
+  def operation?(method, path), do: supported?(method, path)
+
   defp supported?("POST", @join_path), do: true
   defp supported?("POST", @update_path), do: true
   defp supported?("POST", @avatar_start_path), do: true
   defp supported?("POST", @avatar_remove_path), do: true
   defp supported?("GET", @shards_path), do: true
   defp supported?("POST", @links_path), do: true
+  defp supported?("POST", @preview_path), do: true
   defp supported?("GET", @profile_path), do: true
   defp supported?("GET", path) when path in @account_paths, do: true
   defp supported?("POST", @credits_history_path), do: true
@@ -666,9 +690,11 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp supported?(_method, _path), do: false
 
-  defp body_limit(@update_path), do: @update_max_body
+  @doc "The most bytes a body sent to `path` may hold."
+  def body_limit(@update_path), do: @update_max_body
+  def body_limit(@preview_path), do: @sync_max_body + 1024
 
-  defp body_limit(path) do
+  def body_limit(path) do
     cond do
       send?(path) -> @send_max_body
       catch_up?(path) -> @sync_max_body
@@ -733,6 +759,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: admit(map_size(params) == 1 and is_binary(url) and byte_size(url) in 1..2048)
 
   def check_body(@links_path, _params), do: :invalid
+
+  # A write named by its browser tool, with the input that tool takes.
+  def check_body(@preview_path, %{"tool" => tool, "input" => input} = params),
+    do: admit(map_size(params) == 2 and is_binary(tool) and is_map(input))
+
+  def check_body(@preview_path, _params), do: :invalid
   def check_body(@avatar_remove_path, params), do: admit(params == %{})
 
   def check_body(path, params) do
@@ -767,7 +799,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
   defp check_room_body(:create, params), do: admit(valid_room_body?(params))
   defp check_room_body(:topic, params), do: admit(valid_topic_body?(params))
-  defp check_room_body(:read, params), do: check_read_body(params)
+  defp check_room_body(:read, params), do: with_budget(params, @post_budgets, &check_read_body/1)
   defp check_room_body(:get, params), do: check_place_body(params)
 
   defp check_room_body(:send, params),
@@ -821,7 +853,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     )
   end
 
-  defp check_fleet_body(:sync, params), do: check_sync_body(params)
+  defp check_fleet_body(:sync, params),
+    do: with_budget(params, @sync_budgets, &check_sync_body/1)
+
   defp check_fleet_body(:proposal_read, params), do: check_proposal_read_body(params)
 
   # A project is started with its address name and its title, as a Key.
@@ -1010,6 +1044,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     end
   end
 
+  # One project's changes or one object's, never both.
+  defp check_graph_body("changes", %{"project" => _, "object" => _}), do: :invalid
+
   # Nothing outside an operation's own fields is admitted, so a request can
   # never name its own author, standing or scope rules.
   defp check_graph_body(op, params) when is_map(params) do
@@ -1035,7 +1072,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp shaped?(:object, value), do: is_map(value)
   defp shaped?(:texts, value), do: is_list(value) and Enum.all?(value, &is_binary/1)
 
-  defp shaped?(kind, value) when kind in [:key, :version, :seq, :graph_page],
+  # Parts named once each, joined by commas, as a command line flag sends them.
+  defp shaped?(:get_parts, value) when is_binary(value) do
+    parts = String.split(value, ",")
+    parts == Enum.uniq(parts) and Enum.all?(parts, &(&1 in @get_parts))
+  end
+
+  defp shaped?(:get_parts, _value), do: false
+
+  defp shaped?(kind, value) when kind in [:key, :version, :seq, :graph_page, :change_budget],
     do: is_integer(value)
 
   defp shaped?(nil, _value), do: false
@@ -1043,6 +1088,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp in_bounds?(kind, value) when kind in [:key, :version], do: value in 1..@max_seq
   defp in_bounds?(:seq, value), do: value in 0..@max_seq
   defp in_bounds?(:graph_page, value), do: value in 1..@max_graph_page
+  defp in_bounds?(:change_budget, value), do: value in @min_change_budget..@max_change_budget
   defp in_bounds?(_kind, _value), do: true
 
   # A read names how far it has already read and how much it wants; a post names
@@ -1062,6 +1108,22 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   defp check_read_body(_params), do: :invalid
+
+  # A read that takes `max_bytes` is checked without it, then the budget.
+  defp with_budget(params, budgets, check) when is_map(params) do
+    case Map.pop(params, "max_bytes", :none) do
+      {:none, params} ->
+        check.(params)
+
+      {bytes, params} when is_integer(bytes) ->
+        with :ok <- check.(params), do: in_range(bytes in budgets)
+
+      {_not_a_number, _params} ->
+        :invalid
+    end
+  end
+
+  defp with_budget(_params, _budgets, _check), do: :invalid
 
   # One post is named by its place or by its id, never both, with up to
   # `@max_context` posts either side.
@@ -1384,6 +1446,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp fields(@avatar_start_path), do: {~w(sha256 byte_size content_type), []}
   defp fields(@credits_history_path), do: {[], ["after"]}
   defp fields(@links_path), do: {~w(url), []}
+  defp fields(@preview_path), do: {~w(tool input), []}
 
   defp fields(path) do
     cond do

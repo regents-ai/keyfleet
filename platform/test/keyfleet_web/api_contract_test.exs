@@ -103,6 +103,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/remove",
              "/api/v1/agent/keys/{fleet_id}/{token_id}/messages/send",
              "/api/v1/agent/links/resolve",
+             "/api/v1/agent/preview",
              "/api/v1/agent/profile",
              "/api/v1/agent/profile/update",
              "/api/v1/agent/shards",
@@ -410,8 +411,8 @@ defmodule KeyfleetWeb.ApiContractTest do
 
     for {op, required, optional} <- [
           {"board", [], ~w(project)},
-          {"get", ~w(id), ~w(relations_after)},
-          {"changes", [], ~w(project after_seq limit)},
+          {"get", ~w(id), ~w(relations_after fields)},
+          {"changes", [], ~w(project object after_seq limit max_bytes)},
           {"create", command ++ ~w(project type data), []},
           {"patch", command ++ ~w(id expected_version), ~w(set unset reason evidence)},
           {"link", command ++ ~w(source target type), ~w(note)},

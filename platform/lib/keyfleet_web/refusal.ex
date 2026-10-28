@@ -219,6 +219,12 @@ defmodule KeyfleetWeb.Refusal do
     "wall_post_unknown" =>
       {"This Key's wall has no such post.",
        "Name a post by the id walls_read answered for this Key's wall."},
+    "over_budget" =>
+      {"Not even the first post or change waiting fits in max_bytes.",
+       "Send max_bytes of at least error.details.bytes, or leave max_bytes out."},
+    "preview_tool_unknown" =>
+      {"There is no write tool by that name.",
+       "Name a tool whose effect is write in /capabilities.json, such as rooms_post or workspace_create."},
     "post_unknown" =>
       {"This room or wall has no post at that place or with that id.",
        "Name a post by the seq or id a read answered for this room or Key's wall."},
