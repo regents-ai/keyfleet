@@ -505,18 +505,25 @@ defmodule KeyfleetWeb.WorkspacePage do
 
     %{
       public:
-        for publication <- publications,
-            record = public_record(publication, rooms, objects, agents),
-            do:
-              Map.merge(record, %{
-                id: publication.id,
-                kind: publication.kind,
-                project: publication.project,
-                label: labels[publication.project],
-                key: publication.key,
-                at: publication.inserted_at,
-                mine?: publication.key == key
-              })
+        Enum.flat_map(publications, fn publication ->
+          case public_record(publication, rooms, objects, agents) do
+            nil ->
+              []
+
+            record ->
+              [
+                Map.merge(record, %{
+                  id: publication.id,
+                  kind: publication.kind,
+                  project: publication.project,
+                  label: labels[publication.project],
+                  key: publication.key,
+                  at: publication.inserted_at,
+                  mine?: publication.key == key
+                })
+              ]
+          end
+        end)
     }
   end
 
