@@ -161,7 +161,7 @@ defmodule KeyfleetWeb.EarlyHTML do
 
       <section id="key-roller" class="roller" aria-labelledby="roller-title" data-key-roller>
         <p class="early__overline">Try a Key</p>
-        <h2 id="roller-title" class="roller__title">Roll an example Key</h2>
+        <h2 id="roller-title" class="roller__title">Example Key</h2>
         <div class="roller__stage" data-roller-stage data-state="painting">
           <canvas
             class="roller__canvas"

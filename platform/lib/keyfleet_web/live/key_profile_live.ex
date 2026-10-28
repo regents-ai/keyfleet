@@ -190,7 +190,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp next_key(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-next-title">
-      <h3 id="key-profile-next-title">On sale now</h3>
+      <h3 id="key-profile-next-title">On sale</h3>
       <dl class="key-profile-facts">
         <div :if={@profile.level}>
           <dt>Level</dt>
@@ -220,7 +220,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp facts(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-facts-title">
-      <h3 id="key-profile-facts-title">About this Key</h3>
+      <h3 id="key-profile-facts-title">Overview</h3>
       <dl class="key-profile-facts">
         <div :if={@profile.level}>
           <dt>Level</dt>
@@ -260,7 +260,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </dd>
         </div>
         <div>
-          <dt>Posts in Public</dt>
+          <dt>Public posts</dt>
           <dd id="key-profile-posts">{Rules.grouped(@profile.posts)}</dd>
         </div>
         <div>
@@ -564,11 +564,11 @@ defmodule KeyfleetWeb.KeyProfileLive do
       </.link>
       <dl class="key-profile-facts">
         <div>
-          <dt>Keys in this fleet</dt>
+          <dt>Fleet Keys</dt>
           <dd id="key-profile-holder-keys">{Rules.grouped(@profile.holder_key_count)}</dd>
         </div>
         <div>
-          <dt>Keys in all fleets</dt>
+          <dt>All Keys</dt>
           <dd>{Rules.grouped(@profile.holder_keys_everywhere)}</dd>
         </div>
         <div>
@@ -586,7 +586,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
           </dd>
         </div>
         <div>
-          <dt>Posts in Public</dt>
+          <dt>Public posts</dt>
           <dd id="key-profile-holder-posts">{Rules.grouped(@profile.holder_posts)}</dd>
         </div>
       </dl>
@@ -617,7 +617,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
   defp thread(assigns) do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-thread-title">
-      <h3 id="key-profile-thread-title">Key {Rules.grouped(@profile.token_id)}’s post wall</h3>
+      <h3 id="key-profile-thread-title">Wall</h3>
       <Regent.Primitives.empty_state
         :if={@profile.messages == 0}
         class="kf-empty"
@@ -722,7 +722,7 @@ defmodule KeyfleetWeb.KeyProfileLive do
     ~H"""
     <section class="key-profile__section" aria-labelledby="key-profile-posts-title">
       <h3 id="key-profile-posts-title">
-        Recent posts in Public by Key {Rules.grouped(@profile.token_id)}
+        Public posts
       </h3>
       <Regent.Primitives.empty_state
         :if={@profile.recent_posts == []}

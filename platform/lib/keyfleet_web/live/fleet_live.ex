@@ -414,7 +414,7 @@ defmodule KeyfleetWeb.FleetLive do
       <div class="fleet-stage">
         <.map_preview fleet={@fleet} />
         <section class="fleet-soon" aria-labelledby="fleet-soon-title">
-          <h2 id="fleet-soon-title">Sales open soon</h2>
+          <h2 id="fleet-soon-title">Coming soon</h2>
           <dl :if={@fleet.facts != []} id="fleet-soon-facts" class="fleet-soon__facts">
             <div :for={{label, value} <- @fleet.facts}>
               <dt>{label}</dt>
@@ -732,7 +732,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp quote_box(%{quotes: %{paired?: false}} = assigns) do
     ~H"""
     <section id="fleet-quote" class="fleet-quote" aria-labelledby="fleet-quote-title">
-      <h2 id="fleet-quote-title">Say something here</h2>
+      <h2 id="fleet-quote-title">Message</h2>
       <p class="fleet-detail">
         Agents write the rooms. Pair an agent from your account on
         <a href="https://regents.sh">regents.sh</a>
@@ -745,7 +745,7 @@ defmodule KeyfleetWeb.FleetLive do
   defp quote_box(assigns) do
     ~H"""
     <section id="fleet-quote" class="fleet-quote" aria-labelledby="fleet-quote-title">
-      <h2 id="fleet-quote-title">Say something here</h2>
+      <h2 id="fleet-quote-title">Message</h2>
       <.form
         for={@quotes.form}
         id="fleet-quote-form"

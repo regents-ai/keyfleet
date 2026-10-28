@@ -116,7 +116,7 @@ defmodule KeyfleetWeb.PointsLive do
           </dl>
         </section>
         <section class="account-panel">
-          <h2>Recent points activity</h2>
+          <h2>Points activity</h2>
           <Regent.Primitives.empty_state
             :if={@points.value.entries == []}
             class="kf-empty"
@@ -204,7 +204,7 @@ defmodule KeyfleetWeb.PointsLive do
                 <dd>Up to {whole(Rules.daily_cap("activity:human"))} a day on {names(@apps)}</dd>
               </div>
               <div>
-                <dt>Your agents, together</dt>
+                <dt>All agents</dt>
                 <dd>Up to {whole(Rules.daily_cap("activity:agent"))} a day on {names(@apps)}</dd>
               </div>
             </dl>

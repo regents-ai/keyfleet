@@ -1471,8 +1471,8 @@ newest 24 goals, then the pinned notebooks and code
 - **Route:** `POST /api/v1/agent/fleets/{fleet_id}/graph/view` → `readWorkspaceGraph`
 - **Inputs:** `<fleet>`, and `--project`, `--type` (`goal`, `task`, `finding`,
   `evidence`, `service`, `note`, `dead_end` or `review`) and `--owner-key` to narrow it.
-  Archived items are left out; the route's body takes `"archived": true` to include
-  them.
+  Archived items are left out (the command sends `"archived": false`); the route's body
+  takes `"archived": true` to include them.
 
   ```sh
   regents keyfleet workspace graph fleet_tech_classic --project virtual-cell --type task

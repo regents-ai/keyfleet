@@ -171,7 +171,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
             <P.disclosure
               phx-mounted={JS.ignore_attributes("open")}
               id="palette-notes"
-              summary="Palette & structural details"
+              summary="Palette"
             >
               <p>
                 Source: the shared design-system package. Platform uses charcoal, Autolaunch tangerine, Patchbay platinum, and Techtree powder blue. Preview edits stay in this browser; shared source changes reach each site through its asset build.
@@ -207,7 +207,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                   </p><code>0x71C7..976F</code><P.disclosure
                     phx-mounted={JS.ignore_attributes("open")}
                     id="type-tokens"
-                    summary="Type & spacing tokens"
+                    summary="Type tokens"
                   >
                     <p>
                       Titles & subtitles: Geist Pixel Square, weight 400. Body & interface: Geist Sans. Code & technical identifiers: Geist Mono. Space: 8 / 16 / 24 / 32 / 40 / 48 / 64 px.
@@ -245,7 +245,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                   <h3>Disclosure</h3><P.disclosure
                     phx-mounted={JS.ignore_attributes("open")}
                     id="disclosure-example"
-                    summary="What is shared?"
+                    summary="Shared parts"
                   >
                     <p>
                       Components own presentation. Each application supplies actions, routes, authorization and state.
@@ -253,7 +253,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                   </P.disclosure><P.disclosure
                     phx-mounted={JS.ignore_attributes("open")}
                     id="disclosure-open"
-                    summary="Open by default"
+                    summary="Default open"
                     open
                   >
                     <p>
@@ -412,7 +412,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
             <P.disclosure
               phx-mounted={JS.ignore_attributes("open")}
               id="shell-detail"
-              summary="Shell, theme toggle & layouts"
+              summary="Shell"
             >
               <iframe
                 id="shell-preview"
@@ -497,7 +497,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                   </div><p id="account-auth-status" role="status" phx-update="ignore" hidden></p><P.disclosure
                     phx-mounted={JS.ignore_attributes("open")}
                     id="privy-scope"
-                    summary="Uses your configured identity"
+                    summary="Identity"
                   >
                     <p>
                       These controls use the application's existing Privy bridge and verified
@@ -511,7 +511,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                   </div><P.disclosure
                     phx-mounted={JS.ignore_attributes("open")}
                     id="real-actions"
-                    summary="Real action requirements"
+                    summary="Requirements"
                   >
                     <p>
                       These destinations use their existing authentication and wallet verification. Transactions require a wallet signature. The showcase does not submit them.
@@ -523,7 +523,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
             <P.disclosure
               phx-mounted={JS.ignore_attributes("open")}
               id="connections-detail"
-              summary="Verified connections · local fixture"
+              summary="Connections"
             >
               <KeyfleetWeb.Components.VerifiedConnections.verified_connections
                 id="showcase-connections"
@@ -566,7 +566,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                   </ul><P.disclosure
                     phx-mounted={JS.ignore_attributes("open")}
                     id="ash-demo-notes"
-                    summary="Resource & validation"
+                    summary="Resource"
                   >
                     <p>
                       Runs Ash.Changeset.for_create and Ash.create against Ash.DataLayer.Simple. Title: 2–80 characters. Quantity: 1–100. Records live only in this view; no database writes. AshPhoenix is not installed in this application; this form uses Phoenix with an Ash action.
@@ -593,7 +593,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
                   >Copy result</button><P.disclosure
                     phx-mounted={JS.ignore_attributes("open")}
                     id="utility-notes"
-                    summary="Ownership & effects"
+                    summary="Ownership"
                   >
                     <p>
                       Privy verification uses an ephemeral fixture key and the real RegentPrivy verifier, with valid, expired and wrong-audience examples. Fixture tokens never enter the session endpoint. Shared APIs are labeled in the inventory below.
@@ -632,7 +632,7 @@ defmodule KeyfleetWeb.ShowcaseLive do
             <P.disclosure
               phx-mounted={JS.ignore_attributes("open")}
               id="component-inventory"
-              summary="Active design components"
+              summary="Components"
             >
               <div :for={item <- @catalog.components} class="sc-inventory-row">
                 <code>{item.module}.{item.function}/1</code><small>Attributes: {Enum.join(

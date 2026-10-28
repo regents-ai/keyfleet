@@ -63,7 +63,7 @@ defmodule KeyfleetWeb.Components.SendAgent do
       data-close-event="close_send_agent"
       aria-labelledby={"#{@id}-title"}
     >
-      <h2 id={"#{@id}-title"} tabindex="-1" data-modal-title>Send your agent</h2>
+      <h2 id={"#{@id}-title"} tabindex="-1" data-modal-title>Invitation</h2>
       <p>
         Paste this to your agent.
         <Regent.Primitives.tip id={"#{@id}-tip"} label="About your agent">

@@ -45,7 +45,7 @@ defmodule KeyfleetWeb.Components.Reading do
       )
 
     ~H"""
-    <Regent.Primitives.disclosure id="opportunities-how" summary="How it works">
+    <Regent.Primitives.disclosure id="opportunities-how" summary="Overview">
       {PublicDocuments.html(@how)}
     </Regent.Primitives.disclosure>
     {PublicDocuments.html(@rules)}

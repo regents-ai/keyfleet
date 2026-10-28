@@ -333,7 +333,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
     assert text(view, "#treasury-rules") =~
              "When a level sells out, the holders of the level before it are paid back"
 
-    assert has_element?(view, "#treasury-rules #treasury-risks summary", "How a fleet decides")
+    assert has_element?(view, "#treasury-rules #treasury-risks summary", "Governance")
 
     for row <- Keyfleet.Authority.treasury_rows() do
       assert has_element?(view, "#treasury-rules dt", row.what)
@@ -376,7 +376,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
 
     {:ok, view, html} = live(conn, "/classic/1")
 
-    assert html =~ "Sales open soon"
+    assert html =~ "Coming soon"
     assert text(view, "#fleet-soon-facts") =~ "1,024"
     assert text(view, "#fleet-soon-facts") =~ "10–100 USDC"
     refute has_element?(view, "#fleet-sales")
@@ -418,7 +418,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       {:ok, view, html} = live(conn, @path)
 
       assert has_element?(view, "#fleet-soon h1", "Cascade #1")
-      assert has_element?(view, "#fleet-soon-title", "Sales open soon")
+      assert has_element?(view, "#fleet-soon-title", "Coming soon")
       assert has_element?(view, ~s(#fleet-soon a[href="/"]), "See the fleets")
       # Cascade has no supply limit, so only its first price shows.
       assert text(view, "#fleet-soon-facts") =~ "From 10 USDC"
@@ -438,7 +438,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
       Keyfleet.Rooms.bootstrap_rooms!(Fleets.catalog_ids())
 
       {:ok, view, _html} = live(conn, @path <> "?room=general")
-      assert has_element?(view, "#fleet-soon-title", "Sales open soon")
+      assert has_element?(view, "#fleet-soon-title", "Coming soon")
       refute has_element?(view, "#rooms-thread")
 
       for page <- ~w(/workspace /workspace/task%231 /proposals /proposals/1 /treasury) do
@@ -447,14 +447,14 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
         # Reached from inside the shell, the same page patches back.
         render_patch(view, @path <> page)
         assert_patch(view, @path)
-        assert has_element?(view, "#fleet-soon-title", "Sales open soon")
+        assert has_element?(view, "#fleet-soon-title", "Coming soon")
       end
     end
 
     test "opens once its deployment is recorded", %{conn: conn} do
       ChainHelpers.seed_cursor!(@fleet)
       {:ok, view, _html} = live(conn, @path)
-      assert has_element?(view, "#fleet-soon-title", "Sales open soon")
+      assert has_element?(view, "#fleet-soon-title", "Coming soon")
 
       deploy!()
       Here.read(@fleet)
@@ -1374,7 +1374,7 @@ defmodule KeyfleetWeb.Live.FleetPageTest do
          %{conn: conn} do
       read_now()
       {:ok, view, _html} = live(conn, @path)
-      assert text(view, "#fleet-quote h2") == "Say something here"
+      assert text(view, "#fleet-quote h2") == "Message"
       assert has_element?(view, ~s(#fleet-quote a[href="https://regents.sh"]))
       refute has_element?(view, "#fleet-quote-form")
 

@@ -27,7 +27,7 @@ defmodule KeyfleetWeb.ConnectLiveTest do
   test "SMOKE: the page mounts in the app shell with its four steps", %{conn: conn} do
     assert conn |> get("/connect") |> html_response(200)
     {:ok, view, _html} = live(conn, "/connect")
-    assert has_element?(view, "#app-shell #connect-page h1", "Connect your agent")
+    assert has_element?(view, "#app-shell #connect-page h1", "Connect")
 
     assert view
            |> render()

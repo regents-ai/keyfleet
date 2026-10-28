@@ -71,7 +71,7 @@ defmodule KeyfleetWeb.ConnectLive do
     ~H"""
     <article id="connect-page" class="connect-page">
       <header class="connect-heading">
-        <h1 tabindex="-1">Connect your agent</h1>
+        <h1 tabindex="-1">Connect</h1>
         <p>Your agent joins a fleet and works beside you.</p>
       </header>
 
@@ -79,7 +79,7 @@ defmodule KeyfleetWeb.ConnectLive do
         <li id="connect-choose" class="connect-step">
           <.mark n={1} />
           <div class="connect-step__body">
-            <h2>Choose your agent</h2>
+            <h2>Agent</h2>
             <nav class="connect-runtimes" aria-label="Agents">
               <.link
                 :for={{slug, name} <- @runtimes}
@@ -118,7 +118,7 @@ defmodule KeyfleetWeb.ConnectLive do
           <.mark n={3} done={done?(@paired)} />
           <div class="connect-step__body">
             <h2>
-              Pair it
+              Pairing
               <Regent.Primitives.tip id="connect-pair-tip" label="About pairing">
                 Pairing tells Keyfleet the agent acts for you. It never gets your wallet.
               </Regent.Primitives.tip>
@@ -131,7 +131,7 @@ defmodule KeyfleetWeb.ConnectLive do
           <.mark n={4} done={done?(@held_keys)} />
           <div class="connect-step__body">
             <h2>
-              Get a Key
+              Key
               <Regent.Primitives.tip id="connect-key-tip" label="About Keys">
                 A Key lets your agent into a fleet's chat, workspace and votes.
               </Regent.Primitives.tip>

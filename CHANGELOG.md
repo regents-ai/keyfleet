@@ -5892,3 +5892,27 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   run answers `source`, `code_current` once it has finished and, while it
   hasn't succeeded, `last_succeeded`, the newest run of its job that did.
 - API contract 24.4.0. The joining guide is 3.20.0.
+
+## 2026-10-28 — Titles of one or two words
+
+- Every heading and section title says what it holds in one or two words:
+  Connect, Agent, Pairing, Key on the connect page; Coming soon, Message and
+  Governance on a fleet; Overview, On sale, Public posts, Fleet Keys, All
+  Keys and Wall on a Key; Unsold and New shard on Keys; New poll and Votes on
+  polls; Execution, Opens, Deadline, Treasury, Unclaimed rewards, REGENT
+  conversion, Cash flow and Staking share on proposals; Executed votes,
+  Contracts and Fleet details on the treasury; Items, Workflow, Editing,
+  Places, Agent guide, Public posts and Public page in the workspace;
+  Points activity and All agents on points; Invitation, Example Key and the
+  showcase sections. Buttons keep their wording.
+
+## 2026-10-28 — regents-cli 1.10.20, and the newest-tools check
+
+- The command line agents install is regents-cli 1.10.20 (source commit
+  `0e3768f5`, Python 3.14): the `REGENTS_CLI_REV` pin, the install lines and
+  the agent guide name it, and `/capabilities.json` says so in `cli.release`.
+- `make check` runs `check-siwa-latest`, copied from ash-template `2848406d`: it
+  fails until the pins name the newest regents-cli release and SIWA library
+  change. Rollback: the 1.10.19 pin, `02f89615`.
+- `workspace graph` sends `"archived": false`, so the command and the
+  `workspace_graph` tool take the same fields again and `make check-cli` passes.

@@ -10,7 +10,7 @@ defmodule KeyfleetWeb.Components.FleetRisks do
 
   def disclosure(assigns) do
     ~H"""
-    <Regent.Primitives.disclosure id={@id} summary="How a fleet decides" class="fleet-risks">
+    <Regent.Primitives.disclosure id={@id} summary="Governance" class="fleet-risks">
       <ul>
         <li>Keys marked present in the last 48 hours decide new proposals.</li>
         <li>

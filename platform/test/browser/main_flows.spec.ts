@@ -63,7 +63,7 @@ test("Classic #1's page says its sales open soon and leads back to the fleets", 
   await expect(page).toHaveURL(/\/classic\/1$/)
   await expectConnected(page)
   await expect(page.getByRole("heading", {level: 1, name: "Classic #1"})).toBeVisible()
-  await expect(page.locator("#fleet-soon-title")).toHaveText("Sales open soon")
+  await expect(page.locator("#fleet-soon-title")).toHaveText("Coming soon")
   // Until it opens there is nothing behind its tabs, so it shows none.
   await expect(page.locator("#fleet-tabs")).toHaveCount(0)
   const back = page.locator("#fleet-soon").getByRole("link", {name: "See the fleets"})

@@ -1534,7 +1534,10 @@
             "minimum": 1,
             "description": "Read only the items this Key owns: the tasks it holds and the rest it created."
           }
-        ]
+        ],
+        "body": {
+          "archived": false
+        }
       },
       {
         "command": "workspace changes <fleet>",

@@ -1,12 +1,12 @@
 .DEFAULT_GOAL := help
-.PHONY: help check check-change check-platform check-required-fixes check-cli check-contracts check-audit-fork check-notebook-hub release readiness
+.PHONY: help check check-change check-platform check-required-fixes check-cli check-siwa-latest check-contracts check-audit-fork check-notebook-hub release readiness
 help:
 	@echo "Run make check-change before an ordinary change ships: it runs the tests that cover what changed since origin/main."
-	@echo "Run make check for every gate, or check-platform, check-required-fixes, check-cli or check-contracts for one component."
+	@echo "Run make check for every gate, or check-platform, check-required-fixes, check-cli, check-siwa-latest or check-contracts for one component."
 	@echo "Run make check-notebook-hub for the fleet notebook hub; it is not part of make check and must succeed before any hub image is pushed."
 	@echo "Run make release to run every gate, then build the committed tree into an image and start it against a throwaway database."
 	@echo "Run make readiness to start the local server and check what the agent-readiness scorer looks for."
-check: check-platform check-required-fixes check-cli check-contracts
+check: check-platform check-required-fixes check-cli check-siwa-latest check-contracts
 # The check an ordinary change runs before it ships (scripts/check-change.sh).
 # BASE=<ref> compares with another starting point than origin/main.
 check-change:
@@ -23,11 +23,15 @@ check-required-fixes:
 	&& elixir _build/check_required_fixes.exs "ash-template $$rev" < _build/required-fixes.json
 # The command description check is regents-cli's own checker at the commit pinned
 # here, run by uv straight from GitHub. Move the pin in a commit.
-REGENTS_CLI_REV := 02f89615c4d8ceaf4c6f597f07112e41f001adc6
+REGENTS_CLI_REV := 0e3768f5b92fe8210fb00fea0053bcb5e9c2afaf
 check-cli:
 	uv run --no-project scripts/check_command_docs.py
 	uv run --no-project --with "regents-cli[check] @ git+https://github.com/regents-ai/regents-cli@$(REGENTS_CLI_REV)" \
 	  python -m regents_cli.check_commands cli/commands.json platform/priv/public/openapi.json platform/priv/static/api-contract.openapiv3.yaml
+# Fails until the pins name the newest regents-cli release and SIWA library change
+# (scripts/check-siwa-latest.sh). Needs `gh auth login`.
+check-siwa-latest:
+	scripts/check-siwa-latest.sh $(REGENTS_CLI_REV)
 check-contracts:
 	cd contracts && forge fmt --check && forge build && forge test --no-match-path 'test/audit/KeyfleetAuditFork.t.sol' && script/check_bytecode.sh
 # The audit's proofs against real Base contracts, on a fork pinned to one block.

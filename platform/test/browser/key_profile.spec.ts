@@ -97,7 +97,7 @@ test.describe("a key's profile", () => {
     const next = sellKey(fleet, me) + 1
     const errors = await signIn(page)
     await openFleet(page, `?key=${next}`)
-    await expect(page.locator("#key-profile-next-title")).toHaveText("On sale now")
+    await expect(page.locator("#key-profile-next-title")).toHaveText("On sale")
 
     await page.locator("#key-profile-buy").click()
     const sale = page.locator("dialog#buy-key")

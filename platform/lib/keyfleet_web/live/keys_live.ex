@@ -68,7 +68,7 @@ defmodule KeyfleetWeb.KeysLive do
       </header>
 
       <section :if={is_nil(@key.owner_wallet)} id="key-not-sold" class="key-panel">
-        <h2>Not sold yet</h2>
+        <h2>Unsold</h2>
         <p>Its holder and shards show up here once it’s sold.</p>
       </section>
 
@@ -163,7 +163,7 @@ defmodule KeyfleetWeb.KeysLive do
           aria-labelledby="key-issue-shard-title"
         >
           <h2 id="key-issue-shard-title">
-            Issue a shard
+            New shard
             <Regent.Primitives.tip id="key-issue-tip" label="About issuing a shard">
               Check the agent’s wallet address. Issuing again to a wallet with a shard renews it from now.
             </Regent.Primitives.tip>
