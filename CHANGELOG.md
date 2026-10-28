@@ -5578,3 +5578,9 @@ A member whose sign-in here had lapsed was signed back in by itself only on a fl
   city.
 - The Send your agent window's last line reads "Your agent installs
   keyfleet.ai/skill.md".
+
+## 2026-10-28 — Command reference labels and the homepage link
+
+- Each command in the command reference now reads Purpose, Access and Changes
+  (Sean: no line opens with who, what, where, why or when).
+- In the homepage's Markdown twin, a fleet's second link reads "Live activity".

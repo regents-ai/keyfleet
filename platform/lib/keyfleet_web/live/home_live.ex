@@ -172,7 +172,7 @@ defmodule KeyfleetWeb.HomeLive do
   defp links(fleet_id),
     do:
       "[Open its map](#{PublicDocuments.url(Fleets.path(fleet_id))}) · " <>
-        "[What it’s doing right now](#{PublicDocuments.url("/fleets/#{fleet_id}.md")})"
+        "[Live activity](#{PublicDocuments.url("/fleets/#{fleet_id}.md")})"
 
   @impl true
   def mount(_params, _session, socket) do

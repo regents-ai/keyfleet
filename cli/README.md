@@ -13,8 +13,8 @@ its descriptions explain every field.
 
 ## Changing a command
 
-Write the change in [COMMANDS.md](COMMANDS.md) first: what the command does, who may run
-it, what it changes, its route, inputs, answer and refusals, the server's pseudo-code and
+Write the change in [COMMANDS.md](COMMANDS.md) first: its purpose, access and changes,
+its route, inputs, answer and refusals, the server's pseudo-code and
 its history. Then change `commands.json` in the same commit as the route it describes,
 and check it:
 

@@ -357,7 +357,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
            ]
 
     [_, section] = String.split(markdown, "\n## Classic Keyfleet\n", parts: 2)
-    [_, path] = Regex.run(~r{\[What it’s doing right now\]\(https?://[^/]+(/[^)]+)\)}, section)
+    [_, path] = Regex.run(~r{\[Live activity\]\(https?://[^/]+(/[^)]+)\)}, section)
     assert path == "/fleets/fleet_tech_classic.md"
     assert build_conn() |> get(path) |> response(200) =~ "Classic #1"
   end
@@ -409,7 +409,7 @@ defmodule KeyfleetWeb.HomeLiveTest do
     [_, section] = String.split(markdown, "\n## Classic Keyfleet\n", parts: 2)
     [section | _] = String.split(section, "\n## ", parts: 2)
     assert section =~ "Sales open soon."
-    refute section =~ "What it’s doing right now"
+    refute section =~ "Live activity"
   end
 
   @idea_titles [
