@@ -262,7 +262,7 @@ yet, and each needs Sean's typed go naming it.
   with `scripts/deploy.sh production`, which creates the graph machine on it.
   The new machine has a new id; update `LIVE_MACHINE` here and in the script.
 - **The code store volume.** The same, in `keyfleet-code`, with
-  `keyfleet_code_data`, deployed from the code store's checkout, `repos/twigpine`
+  `keyfleet_code_data`, deployed from the code store's checkout, `repos/keyfleet-code`
   (`infra/keyfleet/README.md`, "Deploy on Fly").
 - **The database.** A point-in-time restore makes a new cluster with a new id
   and host. Keyfleet admits only `dzx6qo6xqzvojpv5`, and every Regents site

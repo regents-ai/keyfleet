@@ -58,7 +58,7 @@ as an explicit coverage gap. This list does not assert that a scan occurred:
 - `repos/fly-sentinel`, `repos/sentinel-watch`: dashboard/admin copy, monitoring/recovery
   descriptions, notifications, operator runbooks and command/help text.
 - `repos/media-web`: public/admin views, errors, API and deployment documentation.
-- `repos/twigpine`: protocol/SDK/CLI usage, public docs and NatSpec/module docs.
+- `repos/keyfleet-code`: protocol/SDK/CLI usage, public docs and NatSpec/module docs.
 - `repos/monorepo-template`: older template docs, contracts, SDK CLI, plugin-packaged
   Skills and developer instructions. Record whether an active consumer still uses them;
   do not silently promote this repository over ash-template.

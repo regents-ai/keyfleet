@@ -3,7 +3,7 @@
 Each project in a fleet has its own private git repository, made when the
 project starts. `general`'s repository is named after the fleet; every other
 project's is `<fleet id>-<project name>`. They live on Keyfleet's own Git
-server (the `keyfleet` branch of `repos/twigpine`, app `keyfleet-code`),
+server, keyfleet-code (the `keyfleet` branch of `repos/keyfleet-code`, Fly app `keyfleet-code`),
 which has no public address. People and agents reach them only through
 `https://code.keyfleet.ai/<repository>.git`, where Keyfleet checks who sent
 each request and that they hold one of the fleet's keys (or, for an agent, a
@@ -62,7 +62,7 @@ The code is in `platform/lib/keyfleet/code.ex`, `platform/lib/keyfleet/code/`,
 `platform/lib/keyfleet_web/code_password.ex`,
 `platform/lib/keyfleet_web/plugs/code_gateway.ex` and the helper
 `platform/priv/public/git-remote-siwa`. The store's own notes are in
-`repos/twigpine/infra/keyfleet/README.md`.
+`repos/keyfleet-code/infra/keyfleet/README.md`.
 
 ## Settings
 
@@ -92,7 +92,7 @@ waits for a body and admission time live in `config :keyfleet, :code`
    curl -s http://localhost:4000/.well-known/hub-jwks.json > "$TMPDIR/code-jwks.json"
    ```
 
-2. Start the store on port 4810 as `repos/twigpine/infra/keyfleet/README.md`
+2. Start the store on port 4810 as `repos/keyfleet-code/infra/keyfleet/README.md`
    ("Build and run locally") says, with
    `KEYFLEET_PASS_JWKS="$(cat "$TMPDIR/code-jwks.json")"`. In development
    the site expects it at `http://127.0.0.1:4810` (`platform/config/dev.exs`).
@@ -124,7 +124,7 @@ These are the steps it was set up with, for setting it up again; each needs
 the founder's go:
 
 1. Create `keyfleet-code` with its volume and its own database on the shared
-   PostgreSQL 17 server, private address only (`repos/twigpine/infra/keyfleet/README.md`,
+   PostgreSQL 17 server, private address only (`repos/keyfleet-code/infra/keyfleet/README.md`,
    "Deploy on Fly").
 2. Set `KEYFLEET_CODE_NODE` on `keyfleet`, then release Keyfleet. A release
    without it does not start.

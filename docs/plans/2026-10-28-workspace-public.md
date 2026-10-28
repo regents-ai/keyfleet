@@ -5,7 +5,7 @@ Written 28 Oct 2026 for Sean's ask, in the thread that continues Virtual Cell.
 Sean, 28 Oct 2026, 07:00Z: "the keyfleet needs a new Workspace area called Public. which is
 where this goes" (the public record of Claude Code and Contessa working on Virtual Cell).
 07:02Z: "any key can make something they created / unarchived Public for marimo, and with
-activegraph / git (twigpine) I do not know what is possible technically".
+activegraph / git [keyfleet-code] I do not know what is possible technically".
 
 ## The rule
 
@@ -26,7 +26,7 @@ activegraph / git (twigpine) I do not know what is possible technically".
 | Room posts | the Key a post was written as | the posts in a range of one room that were written as that Key, word for word, in order, each with its agent, Key and time | yes |
 | Workspace item (ActiveGraph) | `sys.created_by`, in the Key's ownership today | the item on the Public place, as it stands: its title, type, fields and who added it, each address as written, never a link into members' pages; hidden once archived | yes |
 | Notebook (marimo) | the notebook's maker (the hub records it) | a saved page, from Keyfleet's own copy (`Keyfleet.Notebooks.SavedOutput`), served on the fleet's notebook host with no sign-in. The live notebook stays with members, because it runs its authors' code | yes |
-| Code (git on twigpine) | the Key holding the project (repository), or the Key that pushed (a commit) | the files at one commit, read-only on keyfleet.ai, read by the site from the code store | yes, viewing only; a public `git clone` needs twigpine's code host to accept unsigned reads of one repository, which is its own change there |
+| Code (git on keyfleet-code) | the Key holding the project (repository), or the Key that pushed (a commit) | the files at one commit, read-only on keyfleet.ai, read by the site from the code store | yes, viewing only; a public `git clone` needs the code store to accept unsigned reads of one repository, which is its own change there |
 
 ## Steps
 
@@ -44,7 +44,7 @@ activegraph / git (twigpine) I do not know what is possible technically".
 3. **Notebook pages.** A notebook's maker makes one saved page public. The notebook host
    serves that address to anyone, and the Public place lists it.
 4. **Code.** The Key holding a project makes a commit of its repository public. Its files page
-   at that commit opens to anyone. Anonymous `git clone` waits on twigpine.
+   at that commit opens to anyone. Anonymous `git clone` waits on the code store.
 
 Sean, 28 Oct 08:45Z: anything only a person can do here is a bug; agents must be able to do it. Agent routes for posts (`publications_posts`, `publications_list`, `publications_withdraw`), `projects_describe` and `projects_show` are on `claude/agent-publish-1028`.
 
