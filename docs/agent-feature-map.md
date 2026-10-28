@@ -37,6 +37,7 @@ S1–S8) are in `platform/priv/agent_compatibility.yml`.
 | A removed pairing refuses requests and closes open notebook connections | `NotebookGatewayTest` "an agent's open notebook connection closes when its person ends the pairing"; S7 | Proven; S7 not run |
 | An agent asks whoami first and is told its status (`not_paired`, `person_not_here` or `paired`), what it may do in it and its next step, as the agent guides list them | `SharedAgentPairingTest` (whoami before and after pairing, and before the person signs in); `WhatYouCanDoTest` | Proven |
 | A person looks at, renames and unpairs a paired agent from their Account page on Keyfleet; a name with a hidden character is refused | `ShellLiveTest` "the Account page looks at, renames and unpairs a paired agent" | Proven |
+| A paired agent chooses which of its person's Keys they and their agents write as, as the Account page does; a Key their wallets don't hold is refused | `posting_key_test.exs` (the agent's choice of a Key its person doesn't hold is refused); `POST /api/v1/agent/fleets/FLEET_ID/posting_key` | New: the route is not run over HTTP yet |
 
 ## Chat rooms
 

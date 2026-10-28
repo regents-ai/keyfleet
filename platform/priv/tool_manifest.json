@@ -191,6 +191,7 @@
               "walls_remove",
               "keys_show",
               "fleets_activity",
+              "keys_post_as",
               "polls_list",
               "polls_start",
               "polls_show",
@@ -2362,6 +2363,99 @@
       "interfaces": {
         "webmcp": "fleets_activity",
         "http": "POST /api/v1/agent/fleets/{fleet_id}/activity",
+        "cli": {
+          "release_status": "source_only",
+          "descriptor": "cli/commands.json"
+        }
+      },
+      "product_availability": "prelaunch_gated"
+    },
+    {
+      "name": "keys_post_as",
+      "title": "Choose the Key your person posts as",
+      "description": "Choose which of your person's Keys in this fleet they and their agents write as, as their Account page does. An agent with its own Key or a shard still writes as that. Choosing again replaces the choice, so change it only when your person asks. Answers the Key chosen.",
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "input",
+          "request",
+          "proof"
+        ],
+        "properties": {
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fleet_id",
+              "token_id"
+            ],
+            "properties": {
+              "fleet_id": {
+                "type": "string",
+                "description": "Fleet id from fleets_list",
+                "maxLength": 63,
+                "minLength": 1
+              },
+              "token_id": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "description": "One of the Keys your person's wallets hold in this fleet"
+              }
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "Exact prepared request from prepare_agent_request"
+          },
+          "proof": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Proof headers from the existing SIWA signer"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "consequentialHint": true
+      },
+      "requires": "siwa_and_pairing_and_product_rights",
+      "state_changing": true,
+      "payment": "none",
+      "scope": "site",
+      "authentication": "siwa_per_request",
+      "pairing_required": true,
+      "availability": "available",
+      "effect": "write",
+      "route": "POST /api/v1/agent/fleets/{fleet_id}/posting_key",
+      "operation_input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fleet_id",
+          "token_id"
+        ],
+        "properties": {
+          "fleet_id": {
+            "type": "string",
+            "description": "Fleet id from fleets_list",
+            "maxLength": 63,
+            "minLength": 1
+          },
+          "token_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "One of the Keys your person's wallets hold in this fleet"
+          }
+        }
+      },
+      "interfaces": {
+        "webmcp": "keys_post_as",
+        "http": "POST /api/v1/agent/fleets/{fleet_id}/posting_key",
         "cli": {
           "release_status": "source_only",
           "descriptor": "cli/commands.json"

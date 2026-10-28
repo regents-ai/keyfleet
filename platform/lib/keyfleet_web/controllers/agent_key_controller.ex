@@ -1,7 +1,7 @@
 defmodule KeyfleetWeb.AgentKeyController do
   @moduledoc """
-  A Key as its page shows it, for a signed-in agent, and taking a post off the
-  wall of a Key the agent acts as.
+  A Key as its page shows it, for a signed-in agent, taking a post off the
+  wall of a Key the agent acts as, and choosing the Key its person writes as.
 
   The page is what anyone reads on the site: who holds the Key and since when,
   the Key its holder writes as, the other Keys they hold, its card's traits,
@@ -13,6 +13,7 @@ defmodule KeyfleetWeb.AgentKeyController do
   alias Keyfleet.Chain
   alias Keyfleet.Dms.Checks.KeyHolder
   alias Keyfleet.Fleets
+  alias Keyfleet.Keys
   alias Keyfleet.Keys.Profile
   alias Keyfleet.Rooms
   alias KeyfleetWeb.Refusal
@@ -57,6 +58,21 @@ defmodule KeyfleetWeb.AgentKeyController do
       {:error, :invalid_token_id} -> Refusal.json(conn, 422, "invalid_request")
       {:error, %Ash.Error.Forbidden{}} -> refuse_holder(conn, fleet_id)
       {:error, %Ash.Error.Invalid{}} -> Refusal.json(conn, 404, "wall_post_unknown")
+    end
+  end
+
+  # The Key the agent's person writes as in the fleet, and so every agent of
+  # theirs that writes for them, as their Account page chooses it.
+  def choose_posting_key(conn, %{"fleet_id" => fleet_id, "token_id" => token_id}) do
+    actor = conn.assigns.agent_actor
+
+    with %{} <- Fleets.get_fleet!(fleet_id),
+         {:ok, choice} <- Keys.choose_posting_key(fleet_id, token_id, actor: actor) do
+      json(conn, %{posting_key: %{fleet_id: choice.fleet_id, token_id: choice.token_id}})
+    else
+      nil -> Refusal.json(conn, 404, "fleet_unknown")
+      {:error, %Ash.Error.Forbidden{}} -> Refusal.json(conn, 403, "person_not_here")
+      {:error, %Ash.Error.Invalid{}} -> Refusal.json(conn, 409, "key_not_held")
     end
   end
 

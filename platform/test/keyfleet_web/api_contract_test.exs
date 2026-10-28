@@ -53,6 +53,7 @@ defmodule KeyfleetWeb.ApiContractTest do
              "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}",
              "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}/end",
              "/api/v1/agent/fleets/{fleet_id}/polls/{poll_id}/vote",
+             "/api/v1/agent/fleets/{fleet_id}/posting_key",
              "/api/v1/agent/fleets/{fleet_id}/presence",
              "/api/v1/agent/fleets/{fleet_id}/projects",
              "/api/v1/agent/fleets/{fleet_id}/projects/archive",

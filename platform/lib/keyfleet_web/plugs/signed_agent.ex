@@ -38,6 +38,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # A Key as its page shows it, and what has been happening in its fleet.
   @key_page_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}\z"
   @activity_path ~r"\A/api/v1/agent/fleets/#{@fleet}/activity\z"
+  # The Key the agent's person writes as.
+  @posting_key_path ~r"\A/api/v1/agent/fleets/#{@fleet}/posting_key\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   # A fleet's projects, each named as its address names it, and what a Key
   # does with them.
@@ -108,6 +110,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
     {@key_remove_path, {~w(message_id), []}},
     {@activity_path, {[], ~w(cursor)}},
+    {@posting_key_path, {~w(token_id), []}},
     {@poll_start_path, {~w(question choices minutes), ~w(notes)}},
     {@poll_vote_path, {~w(choice), ~w(reason)}}
   ]
@@ -521,6 +524,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @key_send_path,
         @key_remove_path,
         @activity_path,
+        @posting_key_path,
         @sync_path,
         @proposal_read_path,
         @project_start_path,
@@ -642,6 +646,9 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
 
       Regex.match?(@activity_path, path) ->
         admit(valid_activity_body?(params))
+
+      Regex.match?(@posting_key_path, path) ->
+        check_posting_key_body(params)
 
       true ->
         :invalid
@@ -865,6 +872,13 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     do: Enum.all?(params, fn {key, value} -> key == "cursor" and is_binary(value) end)
 
   defp valid_activity_body?(_params), do: false
+
+  # Choosing the Key the agent's person writes as names that Key.
+  defp check_posting_key_body(%{"token_id" => token_id} = params)
+       when map_size(params) == 1 and is_integer(token_id),
+       do: in_range(token_id in 1..@max_seq)
+
+  defp check_posting_key_body(_params), do: :invalid
 
   # A created room names its address and its name; naming an open room names
   # its topic.

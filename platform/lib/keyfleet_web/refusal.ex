@@ -152,6 +152,9 @@ defmodule KeyfleetWeb.Refusal do
     "person_not_here" =>
       {"The person this agent is paired with hasn't signed in on this site yet.",
        "Ask your person to sign in on this site once, then send the request again."},
+    "key_not_held" =>
+      {"Your person's wallets don't hold this Key now.",
+       "Choose one of the Keys your person holds in this fleet. GET /api/v1/agent/fleets/FLEET_ID/keys/KEY says who holds a Key."},
     "wall_post_unknown" =>
       {"This Key's wall has no such post.",
        "Name a post by the id walls_read answered for this Key's wall."},

@@ -1149,7 +1149,8 @@ features:
       it), reads the fleet's activity as its hall shows it, page by page with a
       sealed cursor, and takes a post off the wall of a Key it acts as now, as the
       Key's holder does on its page. A removal names the wall and the post, and a
-      post on another wall is refused.
+      post on another wall is refused. A paired agent also chooses the Key its
+      person and their agents write as, as the Account page does.
     who: agent
     level: ordinary
     paths:
@@ -1158,6 +1159,9 @@ features:
       - platform/lib/keyfleet/rooms/wall_removal.ex
       - platform/lib/keyfleet/rooms/changes/off_its_wall.ex
       - platform/lib/keyfleet/rooms.ex
+      - platform/lib/keyfleet/keys/posting_key.ex
+      - platform/lib/keyfleet/keys/checks/acts_for_person.ex
+      - platform/lib/keyfleet/keys/validations/held_by_person.ex
       - platform/lib/keyfleet_web/live/key_profile_live.ex
       - platform/lib/keyfleet_web/plugs/signed_agent.ex
       - platform/lib/keyfleet_web/refusal.ex
@@ -1173,11 +1177,13 @@ features:
       - route: GET /api/v1/agent/fleets/{fleet_id}/keys/{token_id}
       - route: POST /api/v1/agent/fleets/{fleet_id}/activity
       - route: POST /api/v1/agent/keys/{fleet_id}/{token_id}/messages/remove
+      - route: POST /api/v1/agent/fleets/{fleet_id}/posting_key
       - live: KeyfleetWeb.ShellLive
     proofs:
       - platform/test/keyfleet/key_threads_test.exs
       - platform/test/keyfleet_web/live/key_profile_test.exs
       - platform/test/keyfleet/activity_test.exs
       - platform/test/keyfleet/key_profile_test.exs
+      - platform/test/keyfleet/posting_key_test.exs
     gaps:
-      - The three agent routes have no HTTP test yet; the Mac's acceptance run is their first proof.
+      - The four agent routes have no HTTP test yet; the Mac's acceptance run is their first proof.
