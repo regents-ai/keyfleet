@@ -11,6 +11,20 @@ defmodule Keyfleet.Capabilities do
   @manifest_path Application.app_dir(:keyfleet, "priv/tool_manifest.json")
   @external_resource @manifest_path
   @manifest @manifest_path |> File.read!() |> Jason.decode!()
+
+  # The agent contract's and the agent guide's own versions, read from the
+  # files the site serves, so what it says it is can't drift from them.
+  @contract_path Application.app_dir(:keyfleet, "priv/static/api-contract.openapiv3.yaml")
+  @guide_path Application.app_dir(:keyfleet, "priv/public/skill.md")
+  @external_resource @contract_path
+  @external_resource @guide_path
+  @contract_version ~r/^info:\n(?:  .*\n)*?  version: (\S+)$/m
+                    |> Regex.run(File.read!(@contract_path), capture: :all_but_first)
+                    |> hd()
+  @guide_version ~r/^version: (\S+)$/m
+                 |> Regex.run(File.read!(@guide_path), capture: :all_but_first)
+                 |> hd()
+
   @needs %{
     "none" => "Nothing",
     "siwa" => "Signer",
@@ -22,6 +36,15 @@ defmodule Keyfleet.Capabilities do
   @doc "The whole manifest."
   @spec manifest() :: map()
   def manifest, do: @manifest
+
+  @doc """
+  What this site speaks to agents, by version: the agent contract
+  (`/api-contract.openapiv3.yaml`) and the agent guide (`/skill.md`). A
+  client compares them with the ones it was made for; a tool or route it
+  doesn't find in the manifest isn't this site's.
+  """
+  @spec versions() :: %{String.t() => String.t()}
+  def versions, do: %{"api_contract" => @contract_version, "agent_guide" => @guide_version}
 
   @doc "Every tool, in the manifest's order."
   @spec tools() :: [map()]

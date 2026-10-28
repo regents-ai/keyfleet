@@ -13,6 +13,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @credits_history_path "/api/v1/agent/account/credits/history"
   @account_paths ~w(/api/v1/agent/account/balances /api/v1/agent/account/points)
   @shards_path "/api/v1/agent/shards"
+  # What a pasted Keyfleet address names.
+  @links_path "/api/v1/agent/links/resolve"
   # An agent's picture: a signed start names the upload, whose bytes then go
   # to the address it answers, outside this plug (`AgentAvatarController`).
   @avatar_start_path "/api/v1/agent/avatar/start"
@@ -29,12 +31,15 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   @topic_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/topic\z"
   @read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/read\z"
   @send_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/send\z"
+  # One post by its place or id, with the posts around it.
+  @get_path ~r"\A/api/v1/agent/fleets/#{@fleet}/rooms/#{@slug}/messages/get\z"
   @sync_path ~r"\A/api/v1/agent/fleets/#{@fleet}/sync\z"
   @mutes_path ~r"\A/api/v1/agent/fleets/#{@fleet}/mutes\z"
   @mute_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}/(mute|unmute)\z"
   @key_read_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/read\z"
   @key_send_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/send\z"
   @key_remove_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/remove\z"
+  @key_get_path ~r"\A/api/v1/agent/keys/#{@fleet}/#{@token}/messages/get\z"
   # A Key as its page shows it, and what has been happening in its fleet.
   @key_page_path ~r"\A/api/v1/agent/fleets/#{@fleet}/keys/#{@token}\z"
   @activity_path ~r"\A/api/v1/agent/fleets/#{@fleet}/activity\z"
@@ -43,6 +48,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # What the agent's posts and workspace writes made under one send key or
   # command id.
   @receipts_path ~r"\A/api/v1/agent/fleets/#{@fleet}/receipts\z"
+  # The agent's standing in a fleet, read without writing anything.
+  @doctor_path ~r"\A/api/v1/agent/fleets/#{@fleet}/doctor\z"
   @proposal_read_path ~r"\A/api/v1/agent/fleets/#{@fleet}/proposals/read\z"
   # A fleet's projects, each named as its address names it, and what a Key
   # does with them.
@@ -126,6 +133,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
     {@topic_path, {~w(topic), []}},
     {@read_path, {[], ~w(after_seq limit)}},
     {@key_read_path, {[], ~w(after_seq limit)}},
+    {@get_path, {[], ~w(seq id context)}},
+    {@key_get_path, {[], ~w(seq id context)}},
     {@send_path, {~w(body idempotency_key), ~w(reply_to_id quote_request_id)}},
     {@key_send_path, {~w(body idempotency_key), ~w(reply_to_id)}},
     {@key_remove_path, {~w(message_id), []}},
@@ -189,6 +198,8 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   # Places in a room are counted in a Postgres bigint.
   @max_seq 9_223_372_036_854_775_807
   @max_page 200
+  # How many posts either side of one read by its place.
+  @max_context 20
   @max_graph_page 500
   # What each workspace operation's body holds: its required fields, then the
   # ones it may add. A write names the key it acts as and its command id.
@@ -578,6 +589,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp supported?("POST", @avatar_start_path), do: true
   defp supported?("POST", @avatar_remove_path), do: true
   defp supported?("GET", @shards_path), do: true
+  defp supported?("POST", @links_path), do: true
   defp supported?("GET", @profile_path), do: true
   defp supported?("GET", path) when path in @account_paths, do: true
   defp supported?("POST", @credits_history_path), do: true
@@ -587,6 +599,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       Enum.any?(
         [
           @rooms_path,
+          @doctor_path,
           @key_page_path,
           @mutes_path,
           @polls_path,
@@ -608,8 +621,10 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         @create_room_path,
         @topic_path,
         @read_path,
+        @get_path,
         @send_path,
         @key_read_path,
+        @key_get_path,
         @key_send_path,
         @key_remove_path,
         @activity_path,
@@ -706,6 +721,12 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
         )
 
   def check_body(@avatar_start_path, _params), do: :invalid
+
+  # An address, as long as a browser's address bar takes.
+  def check_body(@links_path, %{"url" => url} = params),
+    do: admit(map_size(params) == 1 and is_binary(url) and byte_size(url) in 1..2048)
+
+  def check_body(@links_path, _params), do: :invalid
   def check_body(@avatar_remove_path, params), do: admit(params == %{})
 
   def check_body(path, params) do
@@ -717,31 +738,39 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
       op = graph_op(path) -> check_graph_body(op, params)
       op = key_op(path) -> check_key_body(op, params)
       poll_write?(path) -> check_poll_body(path, params)
-      true -> check_room_body(path, params)
+      true -> path |> room_op() |> check_room_body(params)
     end
   end
 
-  defp check_room_body(path, params) do
-    cond do
-      Regex.match?(@create_room_path, path) ->
-        admit(valid_room_body?(params))
-
-      Regex.match?(@topic_path, path) ->
-        admit(valid_topic_body?(params))
-
-      Regex.match?(@read_path, path) or Regex.match?(@key_read_path, path) ->
-        check_read_body(params)
-
-      Regex.match?(@send_path, path) ->
-        admit(valid_send_body?(params, ~w(body idempotency_key reply_to_id quote_request_id)))
-
-      Regex.match?(@key_send_path, path) ->
-        admit(valid_send_body?(params, ~w(body idempotency_key reply_to_id)))
-
-      true ->
-        :invalid
-    end
+  # Making a room, setting its topic, reading it, reading one post and
+  # posting each name fields of their own; a Key's wall reads and posts as a
+  # room does.
+  defp room_op(path) do
+    Enum.find_value(
+      [
+        create: [@create_room_path],
+        topic: [@topic_path],
+        read: [@read_path, @key_read_path],
+        get: [@get_path, @key_get_path],
+        send: [@send_path],
+        key_send: [@key_send_path]
+      ],
+      fn {op, patterns} -> if Enum.any?(patterns, &Regex.match?(&1, path)), do: op end
+    )
   end
+
+  defp check_room_body(:create, params), do: admit(valid_room_body?(params))
+  defp check_room_body(:topic, params), do: admit(valid_topic_body?(params))
+  defp check_room_body(:read, params), do: check_read_body(params)
+  defp check_room_body(:get, params), do: check_place_body(params)
+
+  defp check_room_body(:send, params),
+    do: admit(valid_send_body?(params, ~w(body idempotency_key reply_to_id quote_request_id)))
+
+  defp check_room_body(:key_send, params),
+    do: admit(valid_send_body?(params, ~w(body idempotency_key reply_to_id)))
+
+  defp check_room_body(nil, _params), do: :invalid
 
   # Taking a post off a Key's wall, reading the fleet's activity and choosing
   # the Key a person posts as each name fields of their own.
@@ -1009,6 +1038,25 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   end
 
   defp check_read_body(_params), do: :invalid
+
+  # One post is named by its place or by its id, never both, with up to
+  # `@max_context` posts either side.
+  defp check_place_body(params) when is_map(params) do
+    {context, place} = Map.pop(params, "context", 0)
+
+    case Map.to_list(place) do
+      [{"seq", seq}] when is_integer(seq) and is_integer(context) ->
+        in_range(seq in 1..@max_seq and context in 0..@max_context)
+
+      [{"id", id}] when is_binary(id) and is_integer(context) ->
+        if Regex.match?(@post_id, id), do: in_range(context in 0..@max_context), else: :invalid
+
+      _other ->
+        :invalid
+    end
+  end
+
+  defp check_place_body(_params), do: :invalid
 
   defp valid_send_body?(%{"body" => body, "idempotency_key" => key} = params, fields) do
     is_binary(body) and is_binary(key) and
@@ -1311,6 +1359,7 @@ defmodule KeyfleetWeb.Plugs.SignedAgent do
   defp fields(@update_path), do: {:any_of, @editable}
   defp fields(@avatar_start_path), do: {~w(sha256 byte_size content_type), []}
   defp fields(@credits_history_path), do: {[], ["after"]}
+  defp fields(@links_path), do: {~w(url), []}
 
   defp fields(path) do
     cond do

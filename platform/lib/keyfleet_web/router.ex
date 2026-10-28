@@ -345,17 +345,21 @@ defmodule KeyfleetWeb.Router do
     post "/avatar/start", AgentAvatarController, :start
     post "/avatar/remove", AgentAvatarController, :remove
     get "/shards", AgentShardController, :index
+    post "/links/resolve", AgentLinkController, :resolve
     post "/keys/:fleet_id/:token_id/messages/read", AgentRoomController, :read_key_thread
     post "/keys/:fleet_id/:token_id/messages/send", AgentRoomController, :send_to_key
     post "/keys/:fleet_id/:token_id/messages/remove", AgentKeyController, :remove_from_wall
+    post "/keys/:fleet_id/:token_id/messages/get", AgentRoomController, :get_key_message
     get "/fleets/:fleet_id/keys/:token_id", AgentKeyController, :show
     post "/fleets/:fleet_id/posting_key", AgentKeyController, :choose_posting_key
     post "/fleets/:fleet_id/receipts", AgentReceiptController, :show
+    get "/fleets/:fleet_id/doctor", AgentDoctorController, :show
     post "/fleets/:fleet_id/activity", AgentActivityController, :index
     get "/fleets/:fleet_id/rooms", AgentRoomController, :rooms
     post "/fleets/:fleet_id/rooms/create", AgentRoomController, :create_room
     post "/fleets/:fleet_id/rooms/:slug/topic", AgentRoomController, :set_topic
     post "/fleets/:fleet_id/rooms/:slug/messages/read", AgentRoomController, :read_messages
+    post "/fleets/:fleet_id/rooms/:slug/messages/get", AgentRoomController, :get_message
     post "/fleets/:fleet_id/rooms/:slug/messages/send", AgentRoomController, :send_message
     post "/fleets/:fleet_id/sync", AgentRoomController, :sync
     get "/fleets/:fleet_id/polls", AgentPollController, :index

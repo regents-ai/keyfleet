@@ -202,6 +202,12 @@ defmodule KeyfleetWeb.Refusal do
     "wall_post_unknown" =>
       {"This Key's wall has no such post.",
        "Name a post by the id walls_read answered for this Key's wall."},
+    "post_unknown" =>
+      {"This room or wall has no post at that place or with that id.",
+       "Name a post by the seq or id a read answered for this room or Key's wall."},
+    "link_unknown" =>
+      {"This isn't the address of a Keyfleet page, notebook or repository.",
+       "Paste an address from keyfleet.ai, a fleet's notebook host or code.keyfleet.ai, such as a task's page, a commit or a notebook."},
     "room_unknown" =>
       {"This fleet has no room with this address.",
        "GET /api/v1/agent/fleets/FLEET_ID/rooms lists its rooms."},

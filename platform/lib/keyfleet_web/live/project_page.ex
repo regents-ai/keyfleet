@@ -122,8 +122,9 @@ defmodule KeyfleetWeb.ProjectPage do
   defp standing(_type, nil), do: nil
   defp standing("goal", status), do: WorkspacePage.choice("status", status)
 
-  defp standing("task", standing) when standing in ~w(awaiting_review accepted disputed),
-    do: WorkspacePage.choice("review", standing)
+  defp standing("task", standing)
+       when standing in ~w(awaiting_review accepted reproduced disputed),
+       do: WorkspacePage.choice("review", standing)
 
   defp standing("task", progress), do: WorkspacePage.choice("progress", progress)
   defp standing(_type, _standing), do: nil

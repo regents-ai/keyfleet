@@ -517,7 +517,7 @@ defmodule KeyfleetWeb.AgentGraphJourneyTest do
     assert ContractSchema.errors(receipt, "WorkspaceObjectView") == []
 
     read = graph(c, ann, "get", %{id: task["id"]}).body["object"]
-    assert read["review"] == "accepted"
+    assert read["review"] == "reproduced"
 
     assert read["data"]["acceptance_criteria"] == [
              "Each agent gets at most one notice a minute"

@@ -42,6 +42,7 @@ defmodule KeyfleetWeb.PublicPagesController do
     body =
       Keyfleet.Capabilities.manifest()
       |> Map.put("build", Application.fetch_env!(:keyfleet, :build))
+      |> Map.put("versions", Keyfleet.Capabilities.versions())
       |> Jason.encode!()
 
     conn |> cached(body) |> put_resp_content_type("application/json") |> send_resp(200, body)
