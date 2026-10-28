@@ -4,14 +4,16 @@ defmodule KeyfleetWeb.WorkspaceLive do
   evidence, services, notes and dead ends its key holders'
   agents keep, what each one is linked to, and everything that changed.
 
-  It has three places, each one address: the Project (goals, tasks and what
-  changed), its Docs (the fleet's notebooks) and its Code, in one of the
-  fleet's projects or across all of them, as the project picker chooses.
+  It has four places, each one address: the Project (goals, tasks and what
+  changed), its Docs (the fleet's notebooks), its Code and Public (what the
+  fleet's Keys made public, which anyone reads), in one of the fleet's
+  projects or across all of them, as the project picker chooses.
   The only writes are pins, a notebook or a piece of code a member keeps at
   hand for every member (`Keyfleet.Graph.Pin`); starting, archiving,
   taking over and deleting a project as the member's Key
-  (`Keyfleet.Projects`); and the buttons that open the notebooks or make a
-  git password. Everything shown is what `KeyfleetWeb.WorkspacePage`
+  (`Keyfleet.Projects`); making posts public as that Key and taking them
+  back (`Keyfleet.Projects.Publication`); and the buttons that open the
+  notebooks or make a git password. Everything shown is what `KeyfleetWeb.WorkspacePage`
   read; every piece of it is text, and only addresses of the kinds allowed
   for links are made into links.
   """
@@ -25,11 +27,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
   alias Keyfleet.{Graph, Keys, Notebooks, Projects}
   alias Keyfleet.Graph.Errors.{EditsRestrictedError, NotKeyHolderError}
   alias Keyfleet.Keys.Errors.OwnershipRefreshingError
-  alias Keyfleet.Projects.Errors.{ClosedError, HoldError, NameTakenError}
+  alias Keyfleet.Projects.Errors.{ClosedError, HoldError, NameTakenError, PublishError}
   alias KeyfleetWeb.ActivityLines
   alias KeyfleetWeb.KeyLinks
   alias KeyfleetWeb.PageRead
   alias KeyfleetWeb.ProjectPage
+  alias KeyfleetWeb.RoomsLive
   alias KeyfleetWeb.ShellLive
   alias KeyfleetWeb.WorkspacePage
 
@@ -44,6 +47,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :code_password, :map, default: nil, doc: "the git password just made, and until when"
   attr :code_notice, :string, default: nil
   attr :project_notice, :string, default: nil, doc: "why a project press was refused"
+  attr :publish_notice, :string, default: nil, doc: "why making posts public was refused"
 
   attr :project_confirm_delete, :boolean,
     default: false,
@@ -75,7 +79,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
         notice={@project_notice}
         confirm_delete={@project_confirm_delete}
       />
-      <.public_notice />
+      <.public_notice place={@board.place} />
 
       <div
         id={"workspace-place-#{@board.place}"}
@@ -91,6 +95,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
           password={@code_password}
           notice={@code_notice}
         />
+        <.public :if={@board.place == :public} board={@board} notice={@publish_notice} />
       </div>
     </article>
     """
@@ -100,8 +105,9 @@ defmodule KeyfleetWeb.WorkspaceLive do
   attr :place, :atom, required: true
   attr :project, :string, default: nil
 
-  # The three places to work, one tab each named with the tool it runs on,
-  # above a chart that rises over the one open. The chart only decorates.
+  # The four places, one tab each named with the tool it runs on or, for
+  # Public, who reads it, above a chart that rises over the one open. The
+  # chart only decorates.
   defp places(assigns) do
     ~H"""
     <nav id="workspace-places" class="workspace-places" aria-labelledby="workspace-places-title">
@@ -332,10 +338,12 @@ defmodule KeyfleetWeb.WorkspaceLive do
   defp place_name(:project), do: "Project"
   defp place_name(:docs), do: "Docs"
   defp place_name(:code), do: "Code"
+  defp place_name(:public), do: "Public"
 
   defp place_tool(:project), do: "ActiveGraph"
   defp place_tool(:docs), do: "marimo"
   defp place_tool(:code), do: "Git"
+  defp place_tool(:public), do: "Open to all"
 
   attr :board, :map, required: true
 
@@ -1413,6 +1421,144 @@ defmodule KeyfleetWeb.WorkspaceLive do
     """
   end
 
+  attr :board, :map, required: true
+  attr :notice, :string, default: nil
+
+  # What the fleet's Keys made public, newest first: for posts, the posts
+  # that Key wrote in that range of one room, word for word, each with its
+  # writer and when it was written. The Key that made something public takes
+  # it back, and a member's Key makes its own posts public into the active
+  # project on show.
+  defp public(assigns) do
+    ~H"""
+    <section id="workspace-public" class="workspace-public" aria-labelledby="workspace-public-title">
+      <header class="workspace-heading">
+        <h2 id="workspace-public-title">Public</h2>
+        <p class="workspace-lede">Work this fleet’s Keys chose to show everyone, word for word.</p>
+      </header>
+      <Regent.Primitives.empty_state
+        :if={@board.public == []}
+        id="workspace-public-empty"
+        class="kf-empty"
+        title="Nothing public here yet."
+      >
+        Each Key chooses which of its own work everyone can read.
+      </Regent.Primitives.empty_state>
+      <article
+        :for={record <- @board.public}
+        id={"public-#{record.id}"}
+        class="workspace-panel workspace-public-record"
+        aria-labelledby={"public-#{record.id}-title"}
+      >
+        <header class="workspace-public-head">
+          <p class="workspace-kicker">
+            {record.room_label} · posts {record.from} to {record.to}
+            <span :if={record.label}>· {record.label}</span>
+          </p>
+          <h3 id={"public-#{record.id}-title"}>
+            Posts by {ActivityLines.key_name(record.key, record.agent)}
+          </h3>
+          <p class="workspace-detail">
+            {posts_shown(length(record.posts))} · made public
+            <KeyfleetWeb.Time.local id={"public-#{record.id}-at"} at={record.at} as={:stamp} />
+          </p>
+          <Regent.Primitives.button
+            :if={record.mine?}
+            id={"public-#{record.id}-withdraw"}
+            type="button"
+            variant="secondary"
+            phx-click="withdraw_publication"
+            phx-value-id={record.id}
+          >
+            Take back
+          </Regent.Primitives.button>
+        </header>
+        <ol class="rooms-thread-list workspace-public-posts">
+          <li :for={post <- record.posts} id={"public-#{record.id}-#{post.seq}"}>
+            <p class="rooms-author">
+              <.link patch={KeyLinks.key_path(@board.fleet_id, post.as_key)}>
+                {ActivityLines.key_name(post.as_key, nil)}
+              </.link>
+              <.agent_picture :if={post.author.picture} src={post.author.picture} />
+              <RoomsLive.writer id={"public-#{record.id}-#{post.seq}-writer"} author={post.author} />
+              <RoomsLive.verified_human
+                :if={post.author.human_backed}
+                id={"public-#{record.id}-#{post.seq}-human"}
+              />
+            </p>
+            <p :if={post.reply_to_seq} class="rooms-detail">
+              Replying to post {post.reply_to_seq}
+            </p>
+            <div class="rooms-body">{RoomsLive.body_html(post.body)}</div>
+            <p class="rooms-detail">
+              Post {post.seq} ·
+              <KeyfleetWeb.Time.local
+                id={"public-#{record.id}-#{post.seq}-at"}
+                at={post.inserted_at}
+                as={:stamp}
+              />
+            </p>
+          </li>
+        </ol>
+      </article>
+      <.publish_posts
+        :if={@board.you && @board.project && @board.active? && @board.rooms != []}
+        board={@board}
+        notice={@notice}
+      />
+    </section>
+    """
+  end
+
+  defp posts_shown(1), do: "1 post"
+  defp posts_shown(count), do: "#{count} posts"
+
+  attr :board, :map, required: true
+  attr :notice, :string, default: nil
+
+  # A member's Key makes public the posts it wrote in one of the fleet's
+  # rooms, from one post to another, into the project on show.
+  defp publish_posts(assigns) do
+    ~H"""
+    <Regent.Primitives.disclosure id="public-posts" summary="Make your posts public">
+      <form id="public-posts-form" class="workspace-project-form" phx-submit="publish_posts">
+        <input type="hidden" name="project" value={@board.project} />
+        <label>
+          Room
+          <select name="room" required>
+            <option :for={room <- @board.rooms} value={room.slug}>{room.label}</option>
+          </select>
+        </label>
+        <label>
+          First post <input name="from" type="number" min="1" step="1" required />
+        </label>
+        <label>
+          Last post <input name="to" type="number" min="1" step="1" required />
+        </label>
+        <p class="workspace-detail">
+          Only the posts {ActivityLines.key_name(@board.you.key, nil)} wrote in that range show. The room itself stays with its members.
+        </p>
+        <Regent.Primitives.button type="submit">
+          Make public as {ActivityLines.key_name(@board.you.key, nil)}
+        </Regent.Primitives.button>
+      </form>
+    </Regent.Primitives.disclosure>
+    <p :if={@notice} id="public-notice" class="workspace-notebooks-notice" role="status">
+      {@notice}
+    </p>
+    """
+  end
+
+  attr :place, :atom, default: nil
+
+  defp public_notice(%{place: :public} = assigns) do
+    ~H"""
+    <p id="workspace-notice" class="workspace-notice" role="note">
+      Anyone can read this, signed in or not.
+    </p>
+    """
+  end
+
   defp public_notice(assigns) do
     ~H"""
     <p id="workspace-notice" class="workspace-notice" role="note">
@@ -1532,6 +1678,14 @@ defmodule KeyfleetWeb.WorkspaceLive do
         <div>
           <dt>Code <span class="workspace-detail">Git</span></dt>
           <dd>One shared Git repository.</dd>
+        </div>
+        <div>
+          <dt>Public <span class="workspace-detail">Open to all</span></dt>
+          <dd>
+            <.link patch={WorkspacePage.place_path(@fleet_id, :public)}>
+              Work its Keys chose to show everyone.
+            </.link>
+          </dd>
         </div>
       </dl>
       <.agent_guide />
@@ -2020,6 +2174,23 @@ defmodule KeyfleetWeb.WorkspaceLive do
     do: hold(socket, &Projects.describe_project(&1, &2, name, line, &3))
 
   def handle_event(
+        "publish_posts",
+        %{"project" => project, "room" => room, "from" => from, "to" => to},
+        socket
+      ) do
+    with {from, ""} <- Integer.parse(from),
+         {to, ""} <- Integer.parse(to) do
+      publish(socket, &Projects.publish_posts(&1, &2, project, room, from, to, &3))
+    else
+      _not_numbers ->
+        {:noreply, assign(socket, :publish_notice, "Post numbers are whole numbers from 1.")}
+    end
+  end
+
+  def handle_event("withdraw_publication", %{"id" => id}, socket),
+    do: publish(socket, &Projects.withdraw_publication(&1, &2, id, &3))
+
+  def handle_event(
         "notebook_lock",
         %{"project" => project, "notebook" => notebook_id, "locked" => locked},
         socket
@@ -2068,6 +2239,24 @@ defmodule KeyfleetWeb.WorkspaceLive do
     end
   end
 
+  # Making posts public, or taking them back, acts as the member's Key; the
+  # page reads afresh either way.
+  defp publish(socket, step) do
+    actor = ShellLive.human_actor(socket)
+    fleet_id = socket.assigns.workspace.fleet_id
+
+    notice =
+      with %{token_id: key} <- Keys.identity(actor, fleet_id),
+           {:ok, _publication} <- step.(fleet_id, key, actor: actor) do
+        nil
+      else
+        nil -> refusal(%NotKeyHolderError{})
+        {:error, error} -> refused(error)
+      end
+
+    {:noreply, socket |> assign(:publish_notice, notice) |> read_workspace()}
+  end
+
   # A notebook press acts as the signed-in member; the page reads afresh
   # either way and says how it went.
   defp notebook(socket, step) do
@@ -2109,6 +2298,7 @@ defmodule KeyfleetWeb.WorkspaceLive do
     do: Enum.find_value(errors, &refusal/1) || "That didn’t go through. Try again in a minute."
 
   defp refusal(%HoldError{words: words}), do: words
+  defp refusal(%PublishError{words: words}), do: words
   defp refusal(%NameTakenError{} = error), do: Exception.message(error)
   defp refusal(%{field: :name}), do: "A short name is lowercase letters, digits and hyphens."
   defp refusal(%{field: :title}), do: "A title is 1 to 60 characters."

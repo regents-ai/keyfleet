@@ -3,13 +3,15 @@ defmodule KeyfleetWeb.WorkspacePage do
   What a fleet's workspace pages show, read from the workspace's read tables
   alone, never from the fleet's writer.
 
-  `board/3` is one of the workspace's three places (`places/0`), in one of
+  `board/3` is one of the workspace's four places (`places/0`), in one of
   the fleet's projects (`Keyfleet.Projects`) or across all of them. Its
   Project is the items a page at a time, the most recently changed first,
   beside the goals and the latest changes; its Docs the newest notebooks;
   its Code the project's repository, its top folder and the changes sent to
   it (`Keyfleet.Code`), or every project's repository in turn. Docs and Code
   each list what the fleet's members pinned there (`Keyfleet.Graph.Pin`).
+  Public is what the fleet's Keys made public
+  (`Keyfleet.Projects.Publication`), newest first, and anyone reads it.
   `item/4` is one item with its fields, its links a page at a time and its
   history a page at a time, and a goal with the work around it in place of
   its links. Goals are listed one line each,
@@ -32,7 +34,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   answers `members_only?: true`, with what the fleet shows anyone of its
   workspace: each project by title with the titles of its open goals
   (`KeyfleetWeb.FleetPage.read_trying_now/1`), and nothing else members
-  write.
+  write, except the Public place, which reads the same for everyone.
 
   A page name that is not one the tables can answer, such as an unknown type
   or a damaged page position, is a page that doesn't exist.
@@ -44,7 +46,9 @@ defmodule KeyfleetWeb.WorkspacePage do
   alias Keyfleet.{Agents, Code, Fleets, Keys, Notebooks, Projects}
   alias Keyfleet.Graph
   alias Keyfleet.Notebooks.HubClient
+  alias Keyfleet.Projects.Publish
   alias Keyfleet.Rooms
+  alias Keyfleet.Rooms.Message
   alias KeyfleetWeb.DirectoryMD
   alias KeyfleetWeb.Endpoint
   alias KeyfleetWeb.FleetPage
@@ -160,7 +164,10 @@ defmodule KeyfleetWeb.WorkspacePage do
 
   # The workspace's places, as the address names each: the Project when it
   # names none.
-  @places %{nil => :project, "docs" => :docs, "code" => :code}
+  @places %{nil => :project, "docs" => :docs, "code" => :code, "public" => :public}
+
+  # How many things made public the Public place lists, newest first.
+  @public_shown 12
 
   # How many notebooks the Docs place lists, newest first: one project's, or
   # each project's in the whole fleet's view.
@@ -212,7 +219,7 @@ defmodule KeyfleetWeb.WorkspacePage do
   end
 
   @doc "The workspace's places, in the order a page offers them."
-  def places, do: [:project, :docs, :code]
+  def places, do: [:project, :docs, :code, :public]
 
   @doc "The path of one of the workspace's places, in one project or, for nil, all of them."
   def place_path(fleet_id, place, project \\ nil) do
@@ -232,12 +239,13 @@ defmodule KeyfleetWeb.WorkspacePage do
   defp with_query(path, query), do: path <> "?" <> URI.encode_query(query)
 
   @doc """
-  The place of the workspace the address names (`place`), the Project, Docs
-  or Code, in the project it names (`project`) or across all of them; beside
-  it the fleet's projects, for the picker, and the Key the member acts as
-  (`you`) with the projects it holds. Any other place, or a project the
-  fleet doesn't have, is a page that doesn't exist, and a visitor learns
-  neither.
+  The place of the workspace the address names (`place`), the Project, Docs,
+  Code or Public, in the project it names (`project`) or across all of them;
+  beside it the fleet's projects, for the picker, and the Key the member
+  acts as (`you`) with the projects it holds. Any other place, or a project
+  the fleet doesn't have, is a page that doesn't exist, and a visitor learns
+  neither. Anyone reads the Public place; a visitor reads every other place
+  as the members-only page.
   """
   def board(fleet_id, params, actor) do
     place = Map.get(@places, params["place"]) || raise NotFoundError
@@ -264,8 +272,33 @@ defmodule KeyfleetWeb.WorkspacePage do
       })
     else
       {:missing, _name} -> raise NotFoundError
+      {:members_only, name} when place == :public -> public_board(fleet_id, name, params)
       {:members_only, name} -> members_only(fleet_id, name)
     end
+  end
+
+  # The Public place as a visitor reads it, with the projects as their pages
+  # show them.
+  defp public_board(fleet_id, name, params) do
+    projects = Projects.project_titles!(fleet_id)
+    shown = shown_project!(projects, params["project"])
+
+    fleet_id
+    |> public(shown, projects, nil)
+    |> Map.merge(%{
+      fleet_id: fleet_id,
+      fleet_name: name,
+      place: :public,
+      project: shown && shown.name,
+      active?: is_nil(shown) or shown.state == :active,
+      projects:
+        Enum.map(
+          projects,
+          &Map.take(&1, [:name, :title, :description, :key, :state, :shown_to_everyone])
+        ),
+      you: nil,
+      rooms: []
+    })
   end
 
   defp shown_project!(_projects, nil), do: nil
@@ -423,6 +456,22 @@ defmodule KeyfleetWeb.WorkspacePage do
     }
   end
 
+  # What the fleet's Keys made public, in the project on show or every
+  # project, and the rooms the member's Key makes its posts public from.
+  defp place(fleet, :public, shown, projects, _params, opts) do
+    you = you(projects, opts[:actor], fleet.id)
+
+    fleet.id
+    |> public(shown, projects, you && you.key)
+    |> Map.put(
+      :rooms,
+      if(you,
+        do: for(room <- Rooms.list_rooms!(fleet.id, opts), do: room_choice(room)),
+        else: []
+      )
+    )
+  end
+
   defp pin_row(pin, link, labels, actor) do
     %{
       id: pin.id,
@@ -435,6 +484,54 @@ defmodule KeyfleetWeb.WorkspacePage do
       whose: whose(pin, actor)
     }
   end
+
+  # Newest first, each with what a visitor reads of it: for posts, the posts
+  # its Key wrote in that range of the room, word for word, each with its
+  # writer. Only the Key that made it public (`key`) takes it back.
+  defp public(fleet_id, shown, projects, key) do
+    labels = labels(shown, projects)
+
+    rooms =
+      fleet_id
+      |> Rooms.list_rooms!(authorize?: false)
+      |> Map.new(&{&1.slug, RoomsLive.room_label(&1)})
+
+    %{
+      public:
+        for publication <-
+              Projects.publications!(fleet_id, shown && shown.name,
+                query: [limit: @public_shown]
+              ) do
+          posts =
+            for post <-
+                  Publish.posts(
+                    fleet_id,
+                    publication.room,
+                    publication.from_seq,
+                    publication.to_seq,
+                    publication.key
+                  ),
+                do: Message.public(post, post.reply_to_seq)
+
+          %{
+            id: publication.id,
+            project: publication.project,
+            label: labels[publication.project],
+            key: publication.key,
+            agent: Enum.find_value(posts, &(&1.author.kind == :agent && &1.author.name)),
+            room: publication.room,
+            room_label: Map.get(rooms, publication.room, publication.room),
+            from: publication.from_seq,
+            to: publication.to_seq,
+            at: publication.inserted_at,
+            mine?: publication.key == key,
+            posts: posts
+          }
+        end
+    }
+  end
+
+  defp room_choice(room), do: %{slug: room.slug, label: RoomsLive.room_label(room)}
 
   # Whose a pin is to the member reading: only its pinner lifts it.
   defp whose(pin, actor),

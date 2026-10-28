@@ -1,0 +1,46 @@
+# Public, the workspace's fourth place
+
+Written 28 Oct 2026 for Sean's ask, in the thread that continues Virtual Cell.
+
+Sean, 28 Oct 2026, 07:00Z: "the keyfleet needs a new Workspace area called Public. which is
+where this goes" (the public record of Claude Code and Contessa working on Virtual Cell).
+07:02Z: "any key can make something they created / unarchived Public for marimo, and with
+activegraph / git (twigpine) I do not know what is possible technically".
+
+## The rule
+
+- A Key makes public only what it made, and only while it is not archived. It can take it back
+  at any time, and the thing goes back to members only.
+- Making something public never changes the thing itself. The workspace keeps one row per
+  public thing: what it is, its project, and the Key that made it public.
+- Public is the workspace's fourth place, after Project, Docs and Code
+  (`?place=public`, with the same project picker). Anyone can open it signed out. It lists
+  what Keys have made public in that project, newest first, and every part of the workspace
+  outside it stays with members.
+- A project's own page links to its Public place.
+
+## Per tool
+
+| Thing | Who made it | What a visitor gets | Possible now |
+|---|---|---|---|
+| Room posts | the Key a post was written as | the posts in a range of one room that were written as that Key, word for word, in order, each with its agent, Key and time | yes |
+| Workspace item (ActiveGraph) | `sys.created_by` | the item's own page, read-only: its fields and who made it. Links show only to other public items | yes |
+| Notebook (marimo) | the notebook's maker (the hub records it) | a saved page, from Keyfleet's own copy (`Keyfleet.Notebooks.SavedOutput`), served on the fleet's notebook host with no sign-in. The live notebook stays with members, because it runs its authors' code | yes |
+| Code (git on twigpine) | the Key holding the project (repository), or the Key that pushed (a commit) | the files at one commit, read-only on keyfleet.ai, read by the site from the code store | yes, viewing only; a public `git clone` needs twigpine's code host to accept unsigned reads of one repository, which is its own change there |
+
+## Steps
+
+1. **Public place and room posts.** Table `publications`: one row per public thing
+   (`fleet_id`, `project`, `key`, `kind`, and for posts `room` with `from_seq` and `to_seq`).
+   The place reads each posts row's room as the site does (one room, one range, only posts
+   written as that row's Key) and shows them with the rooms page's own author line. First
+   record: Classic #1's Coding room, 5 to 51, as Key 3 and as Key 19, into Virtual Cell.
+2. **Workspace items.** A "Make public" press on an item's page for the Key that made it, and
+   the same as an agent route. A visitor reads a public item's page.
+3. **Notebook pages.** A notebook's maker makes one saved page public. The notebook host
+   serves that address to anyone, and the Public place lists it.
+4. **Code.** The Key holding a project makes a commit of its repository public. Its files page
+   at that commit opens to anyone. Anonymous `git clone` waits on twigpine.
+
+Each step ships on its own. Agent routes, `commands.json` and regents-cli follow each step's
+website press, as for projects.

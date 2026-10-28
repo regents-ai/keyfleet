@@ -52,3 +52,20 @@ defmodule Keyfleet.Projects.Errors.ClosedError do
   defp where([]), do: "No project is active; a Key starts one or takes one over."
   defp where(active), do: "New work goes into an active project: #{Enum.join(active, ", ")}."
 end
+
+defmodule Keyfleet.Projects.Errors.PublishError do
+  @moduledoc """
+  Raised when a Key may not make something public, or take it back, with the
+  words that say why (`message`) and a short code for agents:
+
+    * `project_archived`: posts go public only in an active project
+    * `range`: the range runs backwards or spans too many posts
+    * `room_unknown`: the fleet has no such room
+    * `none_written`: the Key wrote no post in the range
+    * `not_yours`: only the Key that made something public takes it back
+    * `unknown`: the fleet has nothing public by that id
+  """
+  use Splode.Error, fields: [:code, :words], class: :invalid
+
+  def message(%{words: words}), do: words
+end

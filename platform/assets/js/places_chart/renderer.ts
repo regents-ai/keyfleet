@@ -1,6 +1,6 @@
 /**
  * Draws the workspace's places chart with WebGPU through vgpu, above the
- * three place tabs, only when something changed. There is no clock and no
+ * four place tabs, only when something changed. There is no clock and no
  * idle loop: choosing or pointing at a place sets how far each ridge should
  * rise, the picture eases toward it for a few frames and stops.
  *
@@ -15,19 +15,19 @@ import type {IslandRenderer} from "../canvas_island"
 import {chartWgsl} from "./shader"
 
 type Rgb = readonly [number, number, number]
-type Three = readonly [number, number, number]
+type Four = readonly [number, number, number, number]
 
 /** How far one frame closes the gap to a target, and when the gap counts as closed. */
 const EASE = 0.2
 const CLOSE = 0.002
 
 export type ChartRenderer = IslandRenderer & {
-  /** The resting lines' colour and strength, and each place's colour: the Project, Docs and Code. */
-  tones(line: Rgb, strength: number, project: Rgb, docs: Rgb, code: Rgb): void
+  /** The resting lines' colour and strength, and each place's colour: the Project, Docs, Code and Public. */
+  tones(line: Rgb, strength: number, project: Rgb, docs: Rgb, code: Rgb, everyone: Rgb): void
   /** The centre of each place's tab, 0..1 across the canvas, and a tab's width. */
-  place(centers: Three, width: number): void
+  place(centers: Four, width: number): void
   /** How far each place's ridge should rise, 0..1. */
-  rise(targets: Three): void
+  rise(targets: Four): void
 }
 
 export async function createChartRenderer(
@@ -35,9 +35,12 @@ export async function createChartRenderer(
   size: readonly [number, number],
   onDeviceLost: () => void,
 ): Promise<ChartRenderer> {
-  // Device pixels per CSS pixel, so a line stays one CSS pixel wide.
+  // Device pixels per CSS pixel, so a line stays one CSS pixel wide, and a
+  // tab's width, 0..1 across the canvas.
   let ratio = 1
-  const rises = [0, 0, 0].map(() => ({value: 0, target: 0}))
+  let tab = 1 / 4
+  let pixels: readonly [number, number] = [size[0], size[1]]
+  const rises = [0, 0, 0, 0].map(() => ({value: 0, target: 0}))
 
   const gpu = await init()
   let disposed = false
@@ -54,28 +57,39 @@ export async function createChartRenderer(
       label: "places-chart.pass",
       set: {
         params: {
-          size: [size[0], size[1], 1, 0],
+          size: [size[0], size[1], 1, 1 / 4],
           rise: [0, 0, 0, 0],
-          centers: [1 / 6, 1 / 2, 5 / 6, 1 / 3],
+          centers: [1 / 8, 3 / 8, 5 / 8, 7 / 8],
           line: [0.5, 0.5, 0.5, 0.5],
           project: [1, 1, 1, 1],
           docs: [1, 1, 1, 1],
           code: [1, 1, 1, 1],
+          everyone: [1, 1, 1, 1],
         },
       },
     })
     await shader.compile(stage)
     const unsubscribe = stage.onResize(({width, height}) => {
       ratio = width / Math.max(1, canvas.clientWidth)
-      shader.set({params: {size: [width, height, ratio, 0]}})
+      pixels = [width, height]
+      shader.set({params: {size: [width, height, ratio, tab]}})
     })
 
     return {
-      tones(line, strength, project, docs, code) {
-        shader.set({params: {line: [...line, strength], project: [...project, 1], docs: [...docs, 1], code: [...code, 1]}})
+      tones(line, strength, project, docs, code, everyone) {
+        shader.set({
+          params: {
+            line: [...line, strength],
+            project: [...project, 1],
+            docs: [...docs, 1],
+            code: [...code, 1],
+            everyone: [...everyone, 1],
+          },
+        })
       },
       place(centers, width) {
-        shader.set({params: {centers: [...centers, width]}})
+        tab = width
+        shader.set({params: {centers: [...centers], size: [pixels[0], pixels[1], ratio, tab]}})
       },
       rise(targets) {
         rises.forEach((rise, i) => (rise.target = targets[i]))
@@ -94,7 +108,7 @@ export async function createChartRenderer(
         return moved
       },
       present() {
-        shader.set({params: {rise: [rises[0].value, rises[1].value, rises[2].value, 0]}})
+        shader.set({params: {rise: [rises[0].value, rises[1].value, rises[2].value, rises[3].value]}})
         frame(gpu, current => current.pass(stage, shader))
       },
       settled() {

@@ -50,9 +50,17 @@ defmodule KeyfleetWeb.ProjectPage do
       shown?: project.shown_to_everyone,
       pair_path: pair_path(path),
       workspace_path: WorkspacePage.place_path(fleet_id, :project, project.name),
+      public_path: public_path(fleet_id, project.name),
       goals: if(not project.shown_to_everyone, do: goal_titles(fleet_id, project.name)),
       parts: if(project.shown_to_everyone, do: parts(fleet_id, project.name))
     }
+  end
+
+  # The project's Public place, once one of the fleet's Keys has made
+  # something public in it.
+  defp public_path(fleet_id, name) do
+    if Projects.publications!(fleet_id, name, query: [limit: 1]) != [],
+      do: WorkspacePage.place_path(fleet_id, :public, name)
   end
 
   defp goal_titles(fleet_id, name) do

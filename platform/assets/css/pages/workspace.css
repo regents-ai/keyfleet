@@ -105,7 +105,7 @@
 
 .workspace-tools-list {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1rem;
   width: 100%;
   margin: 0;
@@ -123,6 +123,10 @@
 .workspace-tools-list dt { font-weight: 600; }
 .workspace-tools-list dt span { display: block; font-weight: 400; }
 .workspace-tools-list dd { margin: 0; line-height: 1.5; }
+
+@media (max-width: 960px) {
+  .workspace-tools-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 @media (max-width: 720px) {
   .workspace-tools-list { grid-template-columns: minmax(0, 1fr); }
@@ -475,7 +479,7 @@
   min-width: 0;
 }
 
-/* The three places to work, one tab each in a cut-corner window, under a
+/* The four places, one tab each in a cut-corner window, under a
    chart whose ridge rises over the place that is open. The chart only
    decorates: until a first frame lands, and for anyone who asked for less
    motion, a still face of hairlines stands in its place. Each place has its
@@ -484,6 +488,7 @@
   --kf-place-project: var(--palette-tangerine-tango);
   --kf-place-docs: var(--color-info);
   --kf-place-code: var(--color-success);
+  --kf-place-public: var(--color-warning);
 }
 
 .workspace-places {
@@ -499,13 +504,14 @@
 }
 
 .workspace-places-chart {
-  --still-at: 16.66%;
+  --still-at: 12.5%;
   position: relative;
   height: 4.5rem;
 }
 
-.workspace-places-chart[data-place="docs"] { --still-at: 50%; }
-.workspace-places-chart[data-place="code"] { --still-at: 83.33%; }
+.workspace-places-chart[data-place="docs"] { --still-at: 37.5%; }
+.workspace-places-chart[data-place="code"] { --still-at: 62.5%; }
+.workspace-places-chart[data-place="public"] { --still-at: 87.5%; }
 
 .workspace-places-chart::before {
   content: "";
@@ -516,7 +522,7 @@
     transparent 0 calc(0.643rem - 1px),
     var(--color-border) calc(0.643rem - 1px) 0.643rem
   );
-  mask-image: radial-gradient(ellipse 30% 120% at var(--still-at) 100%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 24% 120% at var(--still-at) 100%, #000 30%, transparent 100%);
 }
 
 .workspace-places-chart canvas {
@@ -533,7 +539,7 @@
 .workspace-places-list {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.75rem;
   padding-block-end: 0.75rem;
 }
@@ -587,6 +593,7 @@
 .workspace-place-tab[data-tab="project"] .workspace-place-name::before { color: var(--kf-place-project); }
 .workspace-place-tab[data-tab="docs"] .workspace-place-name::before { color: var(--kf-place-docs); }
 .workspace-place-tab[data-tab="code"] .workspace-place-name::before { color: var(--kf-place-code); }
+.workspace-place-tab[data-tab="public"] .workspace-place-name::before { color: var(--kf-place-public); }
 .workspace-place-tab[aria-selected="true"] .workspace-place-name::before { background: currentColor; }
 
 .workspace-place-tool {
@@ -603,7 +610,7 @@
   position: absolute;
   left: 0;
   bottom: 0;
-  width: calc((100% - 1.5rem) / 3);
+  width: calc((100% - 2.25rem) / 4);
   height: 2px;
   background: var(--palette-tangerine-tango);
   transform-origin: 0 0;
@@ -611,6 +618,7 @@
 
 #workspace-page[data-active="docs"] .workspace-places-ink { transform: translateX(calc(100% + 0.75rem)); }
 #workspace-page[data-active="code"] .workspace-places-ink { transform: translateX(calc(200% + 1.5rem)); }
+#workspace-page[data-active="public"] .workspace-places-ink { transform: translateX(calc(300% + 2.25rem)); }
 
 /* The windows beside each place: what is pinned there, and how to work in it. */
 .workspace-info .rg-panel__body {
@@ -783,13 +791,20 @@
 @media (max-width: 40rem) {
   .workspace-places-chart { height: 3rem; }
   .workspace-places-list { gap: 0.5rem; }
-  .workspace-places-ink { width: calc((100% - 1rem) / 3); }
+  .workspace-places-ink { width: calc((100% - 1.5rem) / 4); }
   #workspace-page[data-active="docs"] .workspace-places-ink { transform: translateX(calc(100% + 0.5rem)); }
   #workspace-page[data-active="code"] .workspace-places-ink { transform: translateX(calc(200% + 1rem)); }
-  .workspace-place-tab { padding: 0.65rem 0.6rem; }
+  #workspace-page[data-active="public"] .workspace-places-ink { transform: translateX(calc(300% + 1.5rem)); }
+  .workspace-place-tab { padding: 0.65rem 0.45rem; }
   .workspace-place-name { font-size: 1rem; }
   .workspace-place-name::before { display: none; }
-  .workspace-place-tool { font-size: 0.62rem; letter-spacing: 0.04em; }
+  .workspace-place-tool {
+    overflow: hidden;
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 @media (max-width: 47.99rem) {
@@ -877,4 +892,35 @@
   }
 }
 
+}
+
+/* The Public place: each thing a Key made public in its own window, and for
+   posts the posts themselves, as the room shows them. */
+.workspace-public {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.workspace-public-record {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.workspace-public-head {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: start;
+}
+
+.workspace-public-head h3 {
+  font-size: 1.2rem;
+  line-height: 1.15;
+}
+
+/* The posts keep the room's own hairlines; the first sits under the heading. */
+.workspace-public-posts {
+  padding-block-start: 1rem;
+  border-block-start: 1px solid var(--color-border);
 }

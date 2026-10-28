@@ -22,6 +22,9 @@ defmodule Keyfleet.Projects do
   nothing else of the workspace, unless the Key holding a project shows its
   page's work to everyone.
 
+  A Key also makes public what it made (`Keyfleet.Projects.Publication`), for
+  the workspace's Public place, which anyone reads.
+
   Acting as a Key is the same rule as every workspace write
   (`Keyfleet.Graph.Checks.KeyActor`). A project is never renamed or moved,
   and a deleted project's name is never used again.
@@ -58,6 +61,16 @@ defmodule Keyfleet.Projects do
 
       define :project_page, action: :page, args: [:fleet_id, :name], not_found_error?: false
       define :record_space, action: :record_space, args: [:hub_project_id]
+    end
+
+    resource Keyfleet.Projects.Publication do
+      define :publications, action: :in_fleet, args: [:fleet_id, {:optional, :project}]
+
+      define :publish_posts,
+        action: :publish_posts,
+        args: [:fleet_id, :as_key, :project, :room, :from_seq, :to_seq]
+
+      define :withdraw_publication, action: :withdraw, args: [:fleet_id, :as_key, :id]
     end
   end
 

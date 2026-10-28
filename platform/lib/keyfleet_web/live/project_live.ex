@@ -31,6 +31,14 @@ defmodule KeyfleetWeb.ProjectLive do
           Bring your agent
         </.link>
         <.link id="project-workspace" navigate={@project.workspace_path} class="project-workspace">Open in the workspace</.link>
+        <.link
+          :if={@project.public_path}
+          id="project-public"
+          navigate={@project.public_path}
+          class="project-workspace"
+        >
+          Read its public record
+        </.link>
       </p>
 
       <section
