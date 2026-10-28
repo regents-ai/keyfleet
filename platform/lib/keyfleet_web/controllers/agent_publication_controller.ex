@@ -91,7 +91,7 @@ defmodule KeyfleetWeb.AgentPublicationController do
   defp answer(_error), do: nil
 
   defp status(:not_yours), do: 403
-  defp status(code) when code in [:unknown, :room_unknown], do: 404
+  defp status(code) when code in [:unknown, :room_unknown, :key_unknown], do: 404
   defp status(:range), do: 422
   defp status(code) when code in [:project_archived, :none_written], do: 409
 end

@@ -3942,8 +3942,8 @@ components:
         fleet_unknown: there is no such fleet. fleet_coming_soon: the fleet opens later; until it
         does it has no rooms, workspace, proposals or Keys. project_unknown: the fleet has no
         project by that name; GET /api/v1/agent/fleets/{fleet_id}/projects lists them.
-        publish_room_unknown: the fleet has no room by that slug. publish_unknown: the fleet has
-        nothing public by that id.
+        publish_room_unknown: the fleet has no room by that slug. publish_key_unknown: the fleet
+        has no Key by that number. publish_unknown: the fleet has nothing public by that id.
       content:
         application/json:
           schema:
@@ -4523,7 +4523,7 @@ components:
           properties:
             code:
               type: string
-              enum: [fleet_unknown, project_unknown, not_a_key_holder, edits_restricted, project_not_holder, project_active_held, project_no_active, project_archive_full, project_not_archived, project_general_kept, project_shared, project_name_taken, project_invalid, publish_project_archived, publish_range, publish_room_unknown, publish_none_written, publish_not_yours, publish_unknown, publish_invalid, ownership_refreshing, graph_unavailable]
+              enum: [fleet_unknown, project_unknown, not_a_key_holder, edits_restricted, project_not_holder, project_active_held, project_no_active, project_archive_full, project_not_archived, project_general_kept, project_shared, project_name_taken, project_invalid, publish_project_archived, publish_range, publish_room_unknown, publish_key_unknown, publish_none_written, publish_not_yours, publish_unknown, publish_invalid, ownership_refreshing, graph_unavailable]
             message: {type: string}
             hint: {type: string}
     ProjectClosedError:

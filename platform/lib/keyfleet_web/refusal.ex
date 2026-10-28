@@ -90,6 +90,8 @@ defmodule KeyfleetWeb.Refusal do
     "publish_room_unknown" =>
       {"This fleet has no room by that name.",
        "Name one of the fleet's rooms by its slug, as rooms_list gives it."},
+    "publish_key_unknown" =>
+      {"This fleet has no Key with that number.", "Act as one of the fleet's Keys."},
     "publish_none_written" =>
       {"The Key wrote no post in that range.",
        "A Key makes public only the posts it wrote. Choose a range of the room that holds posts written as that Key."},
